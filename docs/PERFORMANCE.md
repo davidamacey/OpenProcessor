@@ -964,6 +964,424 @@ Reading the numbers:
 - Rebuild of the FP16 plan: `export/trt_utils.py` bake inside the API image, then `trtexec` in the Triton
   image with the 1/8/32 x 3 x 336 x 336 profile and an 8 GB workspace; the bake log reports `fp16`.
 
+### 0.6.0 Wave 0: full-pipeline throughput (one RTX A6000, FP16 PE engine)
+
+The Wave 1 section above ends with the GPU 74 percent busy and the host named as the next
+suspect. This section measures what the whole pipeline can do on one GPU at full speed and what
+limits it, stage by stage: a client and Triton sweep, a set of large photos, the stages `ingest`
+does not call (faces, OCR), where the API CPU goes, and how fast OpenSearch takes the documents.
+Raw JSON: `docs/benchmarks/v060_wave0_*.json`; the tables are rendered by
+`scripts/bench/wave0_report.py`. Medians with the minimum and maximum of 3 repetitions in
+parentheses.
+
+**Headline.**
+
+- **On 640 x 480 images the GPU binds, as the trade study estimated.** With 16 or more clients
+  `/ingest/upload` does **22.7 (22.5-23.4) images/s** and `/ingest/batch` **22.8 (22.8-23.1)** (2,000
+  images, 32 per request) with the GPU **94 (92-94) percent** busy, 97 percent of the 23.5
+  images/s ceiling of the trade study. The baseline's 4 clients leave the GPU 80 percent busy and
+  give 18.7 images/s. The "GPU 26 percent idle" of Wave 1 was too few requests in flight, not the
+  host: the API uses 4 of 48 cores at the plateau.
+- **No Triton knob helps.** A second or third PE instance, one or four detector instances, a
+  2 ms instead of 15 ms queue delay, and removing `preferred_batch_size` all stay within 3 percent
+  of the shipped configuration (20.4 to 21.5 against 21.1 images/s).
+- **On 12 to 24 MP photos the host binds and the GPU idles.** 1.0 to 1.3 CPU-seconds of API time
+  per image (0.18 on COCO), 3 to 11 images/s, GPU 5 to 15 percent busy. 98 percent of the API CPU
+  is in the event-loop thread of the workers. Adding clients beyond 32 lowers throughput (#241).
+- **Faces and OCR are not part of ingest.** Called through their routes, faces cost 44 to 54 ms of
+  API CPU per COCO image and almost no GPU; OCR is capped at 21 images/s by the single
+  `ocr_pipeline` instance (42 with two, 80 with four, #240).
+- **OpenSearch is not close to binding.** One writer sustains 1,011 documents/s (137 images/s
+  equivalent); 16 writers 6,987 (944). `ef_construction` 128 instead of 512 cuts index CPU per
+  document by 38 percent and raises documents/s by 5 percent.
+- **Not measured:** the region stage (no segmenter weights), scaling across GPUs (the other two
+  GPUs hold other projects), the cluster pass. See "Not measured".
+
+#### Method and environment
+
+| Item | Value |
+|---|---|
+| GPU | one RTX A6000 (GPU 2, 300 W cap, 48 GB), driver 615.71.09, CUDA 13.4; foreign SM load on it 0.0 percent in every sample of all 198 measured runs |
+| Other GPUs | GPU 0 holds another project (16 GB resident, up to 95 percent utilization during one of my windows), GPU 1 another (7 GB): neither was used |
+| Host | 2 x Xeon E5-2680 v3, 48 logical cores, 504 GB RAM, load average 5 to 59 over the runs (other projects), whole-host CPU busy 10 to 77 percent (columns below) |
+| Stack | published v0.5.0 images (`images.lock` digests), isolated compose project, own ports, loopback only, OpenSearch heap 8 GB, no replicas, 32 API workers, curation workers and VLM not running |
+| PE engine | FP16, baked with the fixed `export/trt_utils.py` and built with `trtexec` as in Wave 1: plan 644,771,508 bytes; all other engines as installed by v0.5.0 |
+| Set A | the pinned COCO set (2,000 images, 640 x 480 median 166 KB); sweeps use its first 1,000 images, the headline rows all 2,000 |
+| Set B | 500 public photos from the Wikimedia Commons featured-picture category, CC0, public domain, CC BY and CC BY-SA, 12.0 to 24.0 MP (median 17.0, mean 17.4), 5.2 GB (mean 10.4 MB), pinned in `scripts/datasets/manifests/commons_hires_500.json` (manifest sha256 `c013c1f9...`, seed 20261010, fetched with `scripts/datasets/fetch_hires_set.py`) |
+| Protocol | the Wave 1 protocol: fresh project per repetition, warm-up project first, 3 repetitions, policy `all`; clients are threads of one Python process; cluster training and the storage merge are skipped in these runs (`--skip-cluster --skip-settle`) so that the window is the ingest alone |
+| Setting changed | `MAX_FILE_SIZE_MB=1024` for set B: the shipped 50 MB counts the whole request and rejects 8 photos in one request (#239) |
+
+"GPU busy" is the `nvidia-smi` utilization mean; "model exec / wall" is Triton execution seconds
+of all models per wall second (above 1.0 when PE and the detector overlap). "API cores" is API CPU
+seconds per image times images per second.
+
+#### Probe 1: client concurrency and request size (set A, `/ingest/upload`)
+
+| batch x clients | images/s | request p50 s | GPU 2 util % | model exec / wall | API CPU s/image | API cores | host busy % | SM MHz | PE mean batch | load avg |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 8 x 4 | 14.90 (13.06-15.72) | 2.1 (1.9-2.4) | 60 (55-70) | 0.65 (0.57-0.70) | 0.181 (0.172-0.198) | 2.7 | 28 (23-53) | 1601 (1562-1647) | 12.1 (12.0-12.4) | 14 (12-21) |
+| 8 x 16 | 22.05 (21.06-22.38) | 5.4 (5.1-5.6) | 93 (87-94) | 1.09 (1.05-1.13) | 0.181 (0.170-0.194) | 4.0 | 34 (31-58) | 1441 (1433-1462) | 22.5 (21.8-23.3) | 19 (19-31) |
+| 32 x 1 | 5.97 (5.35-6.10) | 5.2 (5.1-5.6) | 24 (20-28) | 0.25 (0.23-0.26) | 0.187 (0.183-0.212) | 1.1 | 43 (28-56) | 1749 (1721-1749) | 7.5 (7.3-7.7) | 23 (16-48) |
+| 32 x 2 | 9.82 (9.34-10.87) | 6.3 (5.8-6.8) | 37 (36-49) | 0.42 (0.40-0.46) | 0.189 (0.177-0.209) | 1.9 | 57 (26-77) | 1675 (1641-1679) | 8.7 (8.2-9.0) | 51 (23-59) |
+| 32 x 4 | 16.80 (16.33-17.98) | 7.3 (6.7-7.3) | 66 (65-72) | 0.72 (0.70-0.78) | 0.172 (0.158-0.186) | 2.9 | 43 (38-71) | 1549 (1544-1554) | 15.3 (12.2-17.0) | 31 (27-43) |
+| 32 x 8 | 20.18 (17.36-21.76) | 12.2 (11.0-12.4) | 87 (70-89) | 0.90 (0.76-0.99) | 0.176 (0.170-0.208) | 3.6 | 32 (28-73) | 1501 (1422-1517) | 20.4 (17.1-20.6) | 36 (23-53) |
+| 32 x 16 | 21.10 (19.16-21.15) | 20.8 (20.4-21.1) | 86 (80-88) | 0.97 (0.88-0.98) | 0.190 (0.184-0.196) | 3.9 | 42 (36-54) | 1468 (1432-1477) | 25.0 (20.4-27.2) | 24 (19-29) |
+| 32 x 32 | 19.97 (19.37-20.24) | 45.3 (43.6-46.4) | 80 (79-82) | 0.88 (0.87-0.88) | 0.204 (0.199-0.214) | 4.1 | 35 (34-72) | 1500 (1486-1504) | 25.2 (24.7-26.0) | 31 (18-39) |
+
+The GPU is the limit from about 8 clients on: images/s stops rising at 20 to 22, PE batches grow
+from 7.5 (1 client) to 25 (16), the GPU runs at 86 to 93 percent and API CPU stays at 0.17 to
+0.20 CPU-s per image (3.6 to 4.1 cores). Below that the pipeline is request-bound: one client of
+32 images does 6.0 images/s with the GPU 24 percent busy. More than 16 clients does not help
+(32 clients: 20.0, with a 45 s request p50). Smaller requests fill the batcher as well as large
+ones when there are enough of them: 8 images x 16 clients is the best row (22.1).
+
+The SM clock falls from 1,720 to 1,750 MHz at light load to 1,420 to 1,500 MHz at the plateau; the
+board draws 254 to 271 W on average at 8 or more clients and reaches its 300 W limit (the throttle bit is set in 92 to 98
+percent of samples at 4 or more clients). The plateau is therefore a power-capped GPU, not 1.8 GHz.
+
+Headline rows, all 2,000 images, the same 32 images per request:
+
+Upload:
+
+| batch x clients | images/s | request p50 s | GPU 2 util % | model exec / wall | API CPU s/image | API cores | host busy % | SM MHz | PE mean batch | load avg |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 32 x 4 | 18.69 (17.91-19.78) | 6.4 (6.1-6.6) | 80 (72-82) | 0.81 (0.78-0.87) | 0.152 (0.148-0.158) | 3.0 | 24 (23-25) | 1534 (1502-1545) | 15.4 (13.6-16.2) | 10 (10-11) |
+| 32 x 16 | 22.71 (22.53-23.36) | 23.1 (20.9-23.3) | 94 (92-94) | 1.05 (1.04-1.10) | 0.175 (0.172-0.177) | 4.0 | 27 (27-28) | 1442 (1438-1452) | 26.6 (26.1-27.4) | 11 (11-11) |
+
+Batch (the API reads the files):
+
+| batch x clients | images/s | request p50 s | GPU 2 util % | model exec / wall | API CPU s/image | API cores | host busy % | SM MHz | PE mean batch | load avg |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 32 x 4 | 18.77 (18.73-19.90) | 6.6 (6.3-6.8) | 81 (76-86) | 0.82 (0.81-0.88) | 0.152 (0.152-0.155) | 2.9 | 24 (24-24) | 1510 (1504-1530) | 16.9 (16.2-17.5) | 10 (9-10) |
+| 32 x 16 | 22.80 (22.78-23.09) | 22.5 (21.0-22.6) | 94 (94-94) | 1.06 (1.04-1.07) | 0.178 (0.172-0.179) | 4.1 | 27 (27-28) | 1447 (1447-1454) | 27.1 (26.8-27.5) | 10 (10-12) |
+
+PE mean batch rises from 15 to 27, PE time stays at 41 ms per image (5.5 ms per embedding) and
+the detector takes 5 ms per image once it competes with PE for the card.
+
+#### Probe 1b: Triton instance counts, queue delay, preferred batch (set A, 32 x 16)
+
+| Triton arm | batch x clients | images/s | request p50 s | GPU 2 util % | model exec / wall | API CPU s/image | API cores | host busy % | SM MHz | PE mean batch | load avg |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| det=1 | 32 x 16 | 21.40 (20.87-21.78) | 21.9 (20.2-22.7) | 89 (86-90) | 0.94 (0.94-0.98) | 0.183 (0.176-0.188) | 3.9 | 29 (27-36) | 1428 (1420-1456) | 26.0 (24.5-26.5) | 15 (15-20) |
+| det=4 | 32 x 16 | 20.75 (20.16-21.56) | 22.0 (19.9-22.8) | 85 (84-87) | 0.92 (0.90-0.95) | 0.188 (0.179-0.193) | 3.9 | 30 (23-43) | 1460 (1428-1487) | 25.0 (24.5-25.4) | 14 (13-21) |
+| pe=2 | 32 x 16 | 21.52 (20.19-21.56) | 20.6 (20.2-23.1) | 87 (82-91) | 1.90 (1.75-1.92) | 0.175 (0.172-0.183) | 3.8 | 27 (26-28) | 1463 (1415-1474) | 25.4 (25.0-26.4) | 13 (11-16) |
+| pe=3 | 32 x 16 | 20.41 (19.68-21.01) | 22.3 (22.2-22.6) | 84 (82-85) | 2.47 (2.44-2.57) | 0.185 (0.181-0.188) | 3.8 | 28 (27-29) | 1486 (1439-1491) | 24.1 (23.0-25.5) | 14 (13-15) |
+| pe_delay=2000 | 32 x 16 | 21.47 (20.82-21.81) | 21.0 (20.6-21.3) | 88 (86-88) | 0.97 (0.95-1.00) | 0.190 (0.183-0.200) | 4.0 | 34 (30-56) | 1431 (1423-1471) | 26.0 (26.0-26.4) | 17 (15-21) |
+| pe_nopref=1 | 32 x 16 | 21.10 (20.92-21.72) | 21.6 (21.3-21.7) | 85 (83-88) | 0.95 (0.93-0.96) | 0.186 (0.182-0.196) | 3.9 | 28 (27-40) | 1447 (1431-1461) | 25.8 (24.7-26.0) | 16 (15-20) |
+
+(The shipped row is the 32 x 16 row of probe 1.) Every arm is within the repetition spread of the
+shipped configuration: the GPU is already the limit, so more instances of PE only share its time
+slices (three instances are slightly lower, 20.4), the detector's instance count does not matter
+(4 to 5 ms of GPU per image), and the batcher settings change the PE mean batch by less than 1.5.
+Isolated PE through Triton, `perf_analyzer`, concurrency 6 (the best level), synthetic input:
+
+| Model | batch | best concurrency | inferences/s | p50 ms | exec infer ms per batch |
+|---|---:|---:|---:|---:|---:|
+| `pe_image_encoder` | 8 | 6 | 195 | 243 | 83 |
+| `pe_image_encoder` | 16 | 6 | 194 | 491 | 163 |
+| `pe_image_encoder` | 32 | 6 | 195 | 984 | 164 |
+| `yolov11_small_trt_end2end` | 8 | 11 | 485 | 161 | 9 |
+| `yolov11_small_trt_end2end` | 16 | 6 | 388 | 232 | 11 |
+| `yolov11_small_trt_end2end` | 32 | 6 | 262 | 740 | 35 |
+
+The isolated PE engine does 195 embeddings/s at every batch size (5.1 ms each); at 7.4 embeddings
+plus 5 ms of detector per image that is 23.3 images/s. The pipeline reaches 22.7 of it.
+
+#### Probe 2: high-resolution photos (set B)
+
+Set B, `/ingest/upload`:
+
+| batch x clients | images/s | request p50 s | GPU 2 util % | model exec / wall | API CPU s/image | API cores | host busy % | SM MHz | PE mean batch | load avg |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 8 x 4 | 2.90 (2.47-2.98) | 10.1 (10.1-10.3) | 5 (4-5) | 0.05 (0.04-0.05) | 1.301 (1.262-1.335) | 3.9 | 17 (14-21) | 1770 (1770-1772) | 4.0 (3.8-4.1) | 8 (7-11) |
+| 8 x 16 | 4.76 (4.45-6.52) | 17.7 (13.0-19.5) | 9 (7-12) | 0.08 (0.07-0.11) | 1.233 (1.206-1.237) | 5.7 | 26 (19-26) | 1737 (1727-1742) | 4.1 (4.0-4.2) | 10 (9-13) |
+| 32 x 16 | 3.37 (3.22-3.87) | 77.1 (70.6-88.4) | 5 (5-6) | 0.06 (0.05-0.07) | 1.265 (1.237-1.281) | 4.3 | 22 (22-24) | 1655 (1630-1673) | 3.6 (3.6-3.8) | 9 (8-9) |
+
+Set B, `/ingest/batch`:
+
+| batch x clients | images/s | request p50 s | GPU 2 util % | model exec / wall | API CPU s/image | API cores | host busy % | SM MHz | PE mean batch | load avg |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 8 x 4 | 3.32 (3.18-3.35) | 9.2 (8.9-9.5) | 6 (5-6) | 0.05 (0.05-0.05) | 1.191 (1.186-1.244) | 3.9 | 16 (15-16) | 1770 (1761-1771) | 4.0 (4.0-4.1) | 8 (7-8) |
+| 8 x 16 | 9.07 (6.02-9.53) | 10.4 (10.3-11.7) | 15 (6-16) | 0.15 (0.10-0.16) | 1.195 (1.153-1.226) | 11.1 | 32 (27-41) | 1714 (1676-1747) | 4.1 (4.0-4.3) | 12 (11-19) |
+| 32 x 16 | 5.35 (4.09-5.77) | 45.5 (39.0-70.1) | 7 (6-10) | 0.09 (0.07-0.10) | 1.182 (1.175-1.204) | 6.3 | 25 (17-28) | 1597 (1592-1663) | 3.8 (3.6-3.9) | 8 (7-9) |
+
+More clients on `/ingest/batch` (8 images per request):
+
+| batch x clients | images/s | request p50 s | GPU 2 util % | model exec / wall | API CPU s/image | API cores | host busy % | SM MHz | PE mean batch | load avg |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 8 x 32 | 11.42 (10.99-12.02) | 14.3 (13.1-18.6) | 14 (13-19) | 0.19 (0.18-0.20) | 1.217 (1.196-1.252) | 13.9 | 47 (45-50) | 1674 (1665-1679) | 4.6 (4.5-4.8) | 18 (15-19) |
+| 8 x 64 | 5.99 (5.54-6.02) | 49.6 (45.0-52.1) | 11 (8-14) | 0.10 (0.09-0.10) | 1.191 (1.188-1.198) | 7.1 | 29 (28-30) | 1737 (1733-1752) | 4.5 (4.4-4.6) | 11 (10-12) |
+
+On photos the pipeline is host-bound with the GPU mostly idle. Per image the API spends 1.0 to
+1.3 CPU-seconds (0.18 on COCO) and the photos yield only 1.6 items and 2.6 embeddings each
+(6.4 and 7.4 on COCO), so the PE work per image falls to 15 ms while the decode path grows
+from 35 ms to about 0.55 s of single-thread work (probe 4). Throughput scales
+with clients up to about 32 clients (11.4 images/s, 14 cores in use) and then falls (64 clients:
+6.0), while the stage timers show `opensearch_write` latency per image growing from 2.1 s to 7.2 s
+on an unchanged document rate: the writes wait for event loops that are busy with decode (#241).
+`/ingest/upload` is slower than `/ingest/batch` at the same settings because the single-process
+Python client also has to read and encode 80 MB per request.
+
+Per-image stage timers (summed per image across concurrent requests; `/ingest/batch`, 8 x 16):
+
+| Stage | calls/image | mean ms per call | summed ms/image |
+|---|---:|---:|---:|
+| decode | 1.00 | 305 | 305 |
+| resize (PE crop preprocessing) | 0.59 | 11 | 7 |
+| jpeg_encode | 1.63 | 14 | 23 |
+| crop | 1.63 | 5 | 8 |
+| `embed` (wait for Triton) | 1.61 | 1,945 | 3,127 |
+| `opensearch_write` (wait) | 1.59 | 806 | 1,281 |
+
+Triton at that point: PE 2.6 inferences per image at mean batch 4.1, 15 ms of GPU per image;
+detector 1.2 ms. The `embed` and `opensearch_write` rows are waits, inflated by the loop being
+busy; they are not work.
+
+#### Probe 3: faces and OCR (the stages ingest does not call)
+
+`/ingest/*` calls the detector and PE only. Faces and OCR are reachable through `/faces/*`, `/ocr/*`
+and `/analyze`; the region stage that reads text is a worker (see "Not measured"). Per endpoint,
+200 images of set A, 1 client and 16 clients:
+
+| Endpoint | clients | images/s | p50 ms | API CPU s/image | Triton CPU s/image | Triton exec ms/image by model |
+|---|---:|---:|---:|---:|---:|---:|
+| analyze | 1 | 5.4 (5.3-5.4) | 176 (175-177) | 0.132 (0.131-0.134) | 0.078 (0.077-0.078) | arcface_w600k_r50 1.7, mobileclip2_s2_image_encoder 31.8, scrfd_10g_bnkps 1.3, yolov11_small_trt_end2end 5.1 |
+| analyze | 16 | 55.5 (54.4-65.1) | 224 (217-229) | 0.116 (0.102-0.119) | 0.046 (0.045-0.049) | arcface_w600k_r50 2.3, mobileclip2_s2_image_encoder 11.4, scrfd_10g_bnkps 2.2, yolov11_small_trt_end2end 3.7 |
+| analyze_ocr | 1 | 5.1 (5.0-5.1) | 180 (178-180) | 0.178 (0.177-0.182) | 0.133 (0.132-0.136) | arcface_w600k_r50 2.0, mobileclip2_s2_image_encoder 32.3, ocr_pipeline 46.0, paddleocr_det_trt 4.1, paddleocr_rec_trt 5.2, scrfd_10g_bnkps 1.3, yolov11_small_trt_end2end 4.6 |
+| analyze_ocr | 16 | 20.0 (19.9-20.1) | 708 (705-721) | 0.160 (0.157-0.163) | 0.110 (0.109-0.112) | arcface_w600k_r50 2.1, mobileclip2_s2_image_encoder 16.8, ocr_pipeline 45.9, paddleocr_det_trt 4.5, paddleocr_rec_trt 5.9, scrfd_10g_bnkps 1.8, yolov11_small_trt_end2end 5.4 |
+| detect | 1 | 12.7 (12.4-12.7) | 79 (79-80) | 0.062 (0.061-0.065) | 0.016 (0.016-0.017) | yolov11_small_trt_end2end 4.7 |
+| detect | 16 | 133.2 (115.5-134.0) | 93 (86-100) | 0.050 (0.049-0.051) | 0.010 (0.009-0.011) | yolov11_small_trt_end2end 1.4 |
+| embed_image | 1 | 111.4 (14.3-112.3) | 9 (8-68) | 0.011 (0.009-0.043) | 0.001 (0.000-0.016) | mobileclip2_s2_image_encoder 11.8 |
+| embed_image | 16 | 223.0 (212.7-303.1) | 71 (50-82) | 0.027 (0.019-0.028) | 0.004 (0.002-0.004) | mobileclip2_s2_image_encoder 1.7 |
+| faces_detect | 1 | 16.8 (16.1-16.8) | 54 (53-56) | 0.054 (0.052-0.056) | 0.017 (0.017-0.018) | arcface_w600k_r50 1.8, scrfd_10g_bnkps 1.3 |
+| faces_detect | 16 | 154.0 (132.3-158.8) | 66 (65-78) | 0.044 (0.043-0.052) | 0.012 (0.012-0.015) | arcface_w600k_r50 0.9, scrfd_10g_bnkps 0.9 |
+| faces_recognize | 1 | 16.7 (16.3-17.3) | 54 (52-55) | 0.052 (0.052-0.054) | 0.017 (0.016-0.017) | arcface_w600k_r50 1.7, scrfd_10g_bnkps 1.3 |
+| faces_recognize | 16 | 179.3 (172.7-179.6) | 76 (74-80) | 0.047 (0.046-0.050) | 0.014 (0.013-0.015) | arcface_w600k_r50 1.2, scrfd_10g_bnkps 1.0 |
+| ocr_predict | 1 | 9.2 (8.8-9.2) | 93 (91-98) | 0.082 (0.080-0.084) | 0.055 (0.055-0.061) | ocr_pipeline 45.4, paddleocr_det_trt 4.3, paddleocr_rec_trt 5.1 |
+| ocr_predict | 16 | 20.2 (20.1-20.2) | 723 (720-746) | 0.079 (0.079-0.083) | 0.056 (0.055-0.057) | ocr_pipeline 45.8, paddleocr_det_trt 4.1, paddleocr_rec_trt 5.3 |
+
+The same endpoints on 100 photos of set B (16.1 MP mean, 8.5 MB):
+
+| Endpoint | clients | images/s | p50 ms | API CPU s/image | Triton CPU s/image | Triton exec ms/image by model |
+|---|---:|---:|---:|---:|---:|---:|
+| analyze | 1 | 2.0 (2.0-2.0) | 460 (457-465) | 0.779 (0.767-0.781) | 0.063 (0.062-0.065) | arcface_w600k_r50 0.8, mobileclip2_s2_image_encoder 21.0, scrfd_10g_bnkps 1.3, yolov11_small_trt_end2end 4.3 |
+| analyze | 16 | 22.8 (22.5-23.3) | 588 (576-603) | 0.789 (0.783-0.799) | 0.043 (0.041-0.043) | arcface_w600k_r50 0.8, mobileclip2_s2_image_encoder 11.2, scrfd_10g_bnkps 1.4, yolov11_small_trt_end2end 3.7 |
+| analyze_ocr | 1 | 0.4 (0.4-0.4) | 2499 (2481-2529) | 3.050 (3.030-3.061) | 1.297 (1.268-1.301) | arcface_w600k_r50 0.8, mobileclip2_s2_image_encoder 21.2, ocr_pipeline 775.6, paddleocr_det_trt 3.8, paddleocr_rec_trt 15.1, scrfd_10g_bnkps 1.3, yolov11_small_trt_end2end 4.2 |
+| analyze_ocr | 16 | 1.2 (1.2-1.2) | 10636 (10540-10770) | 2.755 (2.749-2.798) | 1.232 (1.215-1.268) | arcface_w600k_r50 0.8, mobileclip2_s2_image_encoder 21.1, ocr_pipeline 765.8, paddleocr_det_trt 3.5, paddleocr_rec_trt 15.3, scrfd_10g_bnkps 1.4, yolov11_small_trt_end2end 4.3 |
+| detect | 1 | 2.5 (2.5-2.6) | 348 (339-351) | 0.446 (0.434-0.457) | 0.021 (0.020-0.021) | yolov11_small_trt_end2end 4.2 |
+| detect | 16 | 33.7 (33.7-34.9) | 369 (365-380) | 0.376 (0.372-0.384) | 0.011 (0.011-0.012) | yolov11_small_trt_end2end 3.0 |
+| embed_image | 1 | 8.3 (2.1-9.0) | 110 (101-430) | 0.149 (0.134-0.540) | 0.004 (0.003-0.024) | mobileclip2_s2_image_encoder 11.7 |
+| embed_image | 16 | 40.2 (36.2-42.6) | 333 (267-391) | 0.299 (0.274-0.340) | 0.007 (0.006-0.009) | mobileclip2_s2_image_encoder 4.5 |
+| faces_detect | 1 | 2.7 (2.7-2.8) | 324 (316-332) | 0.428 (0.420-0.437) | 0.020 (0.020-0.021) | arcface_w600k_r50 0.9, scrfd_10g_bnkps 1.2 |
+| faces_detect | 16 | 36.3 (34.5-37.1) | 351 (321-356) | 0.355 (0.340-0.362) | 0.013 (0.013-0.014) | arcface_w600k_r50 0.7, scrfd_10g_bnkps 1.2 |
+| faces_recognize | 1 | 2.7 (2.7-2.8) | 313 (313-333) | 0.429 (0.423-0.433) | 0.020 (0.020-0.021) | arcface_w600k_r50 0.9, scrfd_10g_bnkps 1.2 |
+| faces_recognize | 16 | 36.8 (36.6-37.1) | 339 (335-348) | 0.364 (0.363-0.368) | 0.013 (0.013-0.013) | arcface_w600k_r50 0.8, scrfd_10g_bnkps 1.3 |
+| ocr_predict | 1 | 0.4 (0.4-0.4) | 2439 (2429-2494) | 2.467 (2.457-2.498) | 1.159 (1.155-1.180) | ocr_pipeline 774.3, paddleocr_det_trt 3.7, paddleocr_rec_trt 14.9 |
+| ocr_predict | 16 | 1.2 (1.2-1.2) | 10619 (10486-10732) | 2.139 (2.134-2.147) | 1.143 (1.113-1.150) | ocr_pipeline 763.6, paddleocr_det_trt 3.6, paddleocr_rec_trt 15.4 |
+
+- **Faces** are host-bound: 1.8 to 3.1 ms of GPU per image (SCRFD plus ArcFace), 44 to 54 ms of API
+  CPU per COCO image (0.36 to 0.43 s per photo), 154 to 179 images/s at 16 clients on COCO and
+  36 on photos. At the top of the COCO rows the single Python client process may be the limit too.
+- **OCR** is bound by one Python-backend instance: `ocr_pipeline` takes 42 to 46 ms per COCO image
+  for about 9 ms of GPU in the detection and recognition engines, so 16 clients get 21 images/s
+  and a 680 ms p50. The instance count scales it linearly:
+
+| `ocr_pipeline` instances | Endpoint (16 clients) | images/s | p50 ms | API CPU s/image | Triton CPU s/image |
+|---|---:|---:|---:|---:|---:|
+| 1 (shipped) | `ocr_predict` | 21.4 (21.4-21.8) | 678 (658-680) | 0.073 (0.072-0.076) | 0.052 (0.052-0.052) |
+| 1 (shipped) | `analyze_ocr` | 21.2 (20.9-21.5) | 646 (629-662) | 0.157 (0.152-0.164) | 0.104 (0.102-0.106) |
+| 2 | `ocr_predict` | 42.6 (40.5-43.1) | 335 (334-355) | 0.067 (0.066-0.071) | 0.052 (0.052-0.056) |
+| 2 | `analyze_ocr` | 41.3 (40.3-41.3) | 345 (340-357) | 0.155 (0.153-0.158) | 0.101 (0.099-0.104) |
+| 4 | `ocr_predict` | 80.0 (72.6-83.9) | 162 (160-185) | 0.066 (0.058-0.070) | 0.052 (0.049-0.058) |
+| 4 | `analyze_ocr` | 51.8 (51.4-52.8) | 272 (272-278) | 0.174 (0.166-0.176) | 0.106 (0.104-0.108) |
+
+  On 16 MP photos OCR is 1.2 images/s: 765 ms in `ocr_pipeline`, 2.1 s of API CPU and 1.1 s of
+  Triton CPU per image, because the whole decoded frame travels to Triton as FP32 (the case the
+  faces and OCR plan WP-2.5, #220, addresses).
+- **`/analyze`** (detector, faces, MobileCLIP, optional OCR): 55 images/s without OCR and 20 with
+  it at 16 clients on COCO (52 with four OCR instances); 23 and 1.2 on photos.
+- `/embed/image` at 1 client varies between 14 and 112 images/s across repetitions (the first
+  repetition is eight times slower than the others; a warm-up or cache effect that was not
+  investigated); the 16-client row is the stable one.
+
+#### Probe 4: where the API CPU goes (f)
+
+Per image the API container uses 0.18 CPU-s on COCO and 1.0 to 1.2 on photos (cgroup `usage_usec`).
+The timed stages explain about 32 ms of the first. Three instruments:
+
+1. **CPU census by thread** (every thread of the container, 30 s in the middle of a run, no
+   profiler running): the work is in the event-loop thread of each worker (the main thread of the
+   process; threads are named by the kernel, `python3.13` is the interpreter).
+
+Set A, `/ingest/upload`, 32 x 16:
+
+Over 30 s: 2.81 cores in the 34 processes present throughout (19 % system), 2.81 of them in threads that lived the whole window, and 0.00 cores of lifetime CPU in 0 processes started during it.
+
+| Thread name | threads | cores | system % | share % |
+|---|---:|---:|---:|---:|
+| `python3.13 (main thread)` | 33 | 2.52 | 15 | 89.9 |
+| `event_engine` | 512 | 0.14 | 80 | 5.2 |
+| `python3.13` | 2325 | 0.13 | 32 | 4.6 |
+| `uvicorn (main thread)` | 1 | 0.01 | 27 | 0.3 |
+
+Set B, `/ingest/batch`, 8 x 16:
+
+Over 30 s: 5.94 cores in the 34 processes present throughout (10 % system), 5.94 of them in threads that lived the whole window, and 0.00 cores of lifetime CPU in 0 processes started during it.
+
+| Thread name | threads | cores | system % | share % |
+|---|---:|---:|---:|---:|
+| `python3.13 (main thread)` | 33 | 5.85 | 9 | 98.5 |
+| `event_engine` | 512 | 0.06 | 70 | 0.9 |
+| `python3.13` | 2326 | 0.02 | 30 | 0.4 |
+| `uvicorn (main thread)` | 1 | 0.01 | 22 | 0.1 |
+
+2. **Single-thread cost of the primitives** (`scripts/bench/ingest_micro_profile.py`, inside the API
+   container, median of 20 images, milliseconds):
+
+| Operation (ms) | set A frame | set B photo |
+|---|---:|---:|
+| file read | 0.1 | 3.2 |
+| SHA-256 of the file | 0.4 | 28.5 |
+| PIL decode + EXIF transpose | 3.3 | 316.5 |
+| detector letterbox (640) | 4.6 | 80.5 |
+| PE whole-frame preprocess | 5.5 | 136.8 |
+| crop to array (central third) | 0.1 | 4.5 |
+| PE crop resize + normalize | 2.3 | 2.8 |
+| crop JPEG encode | 0.3 | 10.2 |
+| megapixels | 0.27 | 18.4 |
+
+   On an 18 MP photo, decode (316), the letterbox (80), the whole-frame preprocess (137) and the
+   file hash (28) alone are about 0.56 s of the 1.0 to 1.2 s; on a COCO frame the same list is
+   14 ms of 180.
+3. **py-spy** (0.4.2, one process per worker, raw stacks kept in the JSON): it kept falling behind
+   (about 1,000 non-idle samples where the workers' CPU implies tens of thousands; each worker has
+   72 threads), 73 percent of what it sampled is the event loop waiting, and it costs 17 cores
+   itself. Its stacks are not used for the numbers here.
+
+What this attributes: more than 90 percent of the CPU is synchronous work on the event-loop
+thread (COCO: 90 percent; photos: 98.5 percent), 9 to 19 percent of it system time (page faults
+and copies of large arrays). On COCO the named primitives explain about 31 of the 180 ms per image
+(decode, letterbox, whole-frame preprocess, 6.4 crop resizes and encodes), the 32 ms of timed stages
+are part of that, and about 150 ms per image is unattributed: serialization of 14.9 MB of FP32
+tensors per image to Triton, document and bulk-body construction (vectors as lists of numpy
+floats), the gRPC client, and the 32 busy workers competing on a hyper-threaded host. Naming
+that 150 ms is work package WP-1.2 (#210); this probe tells it where to look (the loop thread, not
+a thread pool) and shows that on photos decode is the first item.
+
+#### Probe 5: OpenSearch write ceiling (g, WP-S5)
+
+100,000 item documents (1,024-dimension vector, 154 mapped fields) plus 15,625 image documents
+(1,024- and 512-dimension vectors), the proportion of a 6.4-items-per-image ingest, written to
+fresh indexes with the real mapping and settings of a project (one shard, no replica, `faiss`
+HNSW `m` 16, `ef_construction` 512, cosine, 1 s refresh, 8 GB heap), vectors taken from a real
+project plus noise so that the graph is built over clustered data (the `iid` arm uses independent
+unit vectors). Bulk bodies are built before the clock starts. "Searchable" is the time from the
+first request until a refresh has made everything visible. Bytes per document are measured right
+after the load, before merges.
+
+| Arm | bulk x writers | refresh / ef / vectors | docs/s | images/s equiv. | searchable s | bulk p95 s | bytes/doc | node cores | node CPU-s per 1k docs | 429 retries |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| shipped | 1000 x 4 | shipped, ef shipped, real | 3206 (3093-3241) | 433 (418-438) | 43 (43-45) | 1.68 (1.67-1.71) | 10097 (9174-10354) | 7.7 (7.1-7.7) | 2.39 (2.19-2.50) | 0 (0-0) |
+| bulk500 | 500 x 4 | shipped, ef shipped, real | 2818 (2799-2864) | 381 (378-387) | 49 (48-50) | 1.06 (1.06-1.11) | 9177 (9176-10051) | 6.1 (5.5-6.2) | 2.13 (1.96-2.20) | 0 (0-0) |
+| bulk5000 | 5000 x 4 | shipped, ef shipped, real | 3617 (3426-3633) | 489 (463-491) | 37 (37-37) | 6.61 (6.21-6.88) | 10642 (10435-12136) | 8.6 (8.4-9.7) | 2.52 (2.30-2.69) | 0 (0-0) |
+| writers1 | 1000 x 1 | shipped, ef shipped, real | 1011 (1007-1041) | 137 (136-141) | 127 (125-129) | 1.23 (1.16-1.26) | 9163 (8940-9164) | 2.2 (2.1-2.2) | 2.12 (2.10-2.18) | 0 (0-0) |
+| writers8 | 1000 x 8 | shipped, ef shipped, real | 5048 (4688-5060) | 682 (634-684) | 24 (24-25) | 2.07 (2.04-2.22) | 14325 (11869-14686) | 13.2 (12.1-13.3) | 2.62 (2.40-2.81) | 0 (0-0) |
+| writers16 | 1000 x 16 | shipped, ef shipped, real | 6987 (6971-7376) | 944 (942-997) | 17 (17-18) | 3.34 (2.69-3.43) | 12783 (11196-13273) | 19.3 (17.0-19.4) | 2.62 (2.44-2.78) | 0 (0-0) |
+| refresh_off | 1000 x 4 | -1, ef shipped, real | 2703 (2693-2828) | 365 (364-382) | 59 (59-61) | 3.11 (2.91-3.54) | 9164 (9163-9164) | 5.9 (5.9-6.2) | 2.17 (2.10-2.30) | 0 (0-0) |
+| ef128 | 1000 x 4 | shipped, ef 128, real | 3365 (3295-3456) | 455 (445-467) | 38 (36-39) | 1.52 (1.50-1.59) | 9175 (9174-9175) | 5.0 (4.7-5.2) | 1.49 (1.43-1.50) | 0 (0-0) |
+| iid_vectors | 1000 x 4 | shipped, ef shipped, iid | 2667 (2541-2692) | 360 (343-364) | 70 (62-77) | 3.80 (2.62-4.01) | 10378 (9177-11714) | 11.2 (10.4-11.7) | 4.37 (3.86-4.39) | 0 (0-0) |
+
+- One node takes 1,011 documents/s from one writer and 6,987 from sixteen. The GPU ceiling of 23
+  images/s needs about 170 documents/s; the WP-S5 target of 100 images/s (about 740 vectors and 840
+  documents/s) is met by a single writer.
+- Bulk size 500, 1,000 and 5,000 differ by 25 percent in documents/s; larger bulks raise the
+  request p95 to 6.6 s. `refresh_interval` -1 during the load was not faster (2,703 against 3,206).
+- `ef_construction` 128 against 512: 3,365 against 3,206 documents/s, 1.49 against 2.39 node CPU
+  seconds per 1,000 documents (-38 percent), searchable 38 against 43 s. Stored bytes per document
+  do not differ beyond merge-state noise (9.2 to 10.1 KB). Recall at 128 was not measured here (WP-V, #221, owns that gate); the
+  defaults are unchanged.
+- Independent random vectors cost 1.8 times the CPU of clustered ones (4.37 against 2.39 CPU-s per
+  1,000 documents): index CPU depends on the data, which is why the real-vector arm is the shipped row.
+- 429 retries: none in any arm.
+
+#### Binding resource per stage and per GPU
+
+| Stage | Set A (COCO, 640 x 480) | Set B (12 to 24 MP photos) |
+|---|---|---|
+| Client requests in flight | binds below 8 clients (GPU 24 to 66 percent busy at 1 to 4) | not reached; clients scale throughput to 32 |
+| API decode, letterbox, crop, tensor build (event-loop thread) | 0.18 CPU-s/image, 4 of 48 cores: not binding | **binds**: 1.0 to 1.3 CPU-s/image, 14 cores at 11.4 images/s |
+| Detector (GPU) | 2 to 5 ms/image: not binding | 1 ms/image: not binding |
+| PE embedding (GPU tensor compute at the 300 W cap) | **binds** at 16 or more clients: 41 ms/image, 94 percent busy, 22.7 images/s | not binding: 15 ms/image, 5 to 15 percent busy |
+| Triton configuration (instances, delay, preferred batch) | not binding (all arms within 3 percent) | not binding |
+| OpenSearch | not binding: 137 images/s equivalent from one writer | not binding in these runs; write latency inflates only because the API loops are busy |
+| Faces (`/faces/*`) | API CPU, 44 to 54 ms/image | API CPU, 0.36 to 0.43 s/image |
+| OCR (`/ocr/*`) | `ocr_pipeline` instance: 21 images/s with one | `ocr_pipeline` CPU and full-frame transfer: 1.2 images/s |
+| Cluster pass, region stage | not measured | not measured |
+
+Per GPU: **GPU 2** (RTX A6000) is the only one measured. Its binding resource is tensor compute
+under the power cap on small images and nothing (85 to 95 percent idle) on photos. GPU 0 (the other
+A6000) and GPU 1 (the 3080 Ti) host other projects' containers and were not touched.
+
+#### What the trade study's ceiling table got right and wrong
+
+Right:
+
+- One A6000 at policy `all` has a PE-bound ceiling of about 23.5 images/s: measured 22.7 (97 percent)
+  with the shipped Triton configuration, and 23.3 from `perf_analyzer` plus the detector.
+- Host CPU is not the binder on COCO-size images: 0.15 to 0.19 CPU-s per image (estimate 0.22),
+  4 cores at the plateau; the host-to-device copy phase of a PE execution is 0.4 ms of 145 ms, and the
+  Triton instance counts do not matter.
+- The X-1 target (GPU at least 90 percent busy and at least 21 images/s) is reached with no
+  rebuild and no Triton change, only 16 clients instead of 4.
+- Datastore writes (the "unknown" row) are far from binding on one node.
+
+Wrong or incomplete:
+
+- The 45 percent of peak FP16 efficiency uses the 1.8 GHz boost clock. The card runs 1.42 to 1.50 GHz
+  at its 300 W limit, where the dense FP16 peak is about 125 TFLOP/s and PE's 70 TFLOP/s while
+  executing is about 56 percent: at the power cap, the engine-tuning headroom (WP-S2) is smaller than
+  the 10 to 25 percent estimate; more throughput has to come from fewer FLOPs per image (INT8, fewer
+  embeddings) or more cards.
+- Wave 1 read the 74 percent GPU busy as the host feeding PE too slowly. At 4 clients it was the
+  request depth; with 16 the host is at 4 cores and the GPU is full.
+- The host-CPU row ("110 to 135 images/s") is for COCO-size frames. On 12 to 24 MP photos the host
+  binds at about 11 images/s with 14 cores, an order of magnitude below the GPU ceiling, and the
+  ceiling table has no photo row. The "decode stays on the CPU unless set B says otherwise"
+  rule of the study is answered by the public analogue of set B: it says otherwise (#241, #217).
+- The single event loop is called "not binding with 32 workers". It is what makes photos slow: 98.5
+  percent of the CPU runs on the loop thread, so a worker cannot overlap two images.
+- The multi-GPU rows (2x, 55 to 58 images/s) and the "next binder is host CPU at about 55
+  images/s" could not be checked (one GPU only). At 22.7 images/s the host uses 4 cores, so the
+  host would carry 2 GPUs of COCO-size work (about 8 cores) if the loop-thread limit does not bite earlier.
+
+#### Not measured
+
+- **(d) Region stage.** It needs the segmenter next to Triton. GPU 2 has the memory (about 35 GB
+  free beside the 14 GB Triton uses), but the segmenter image downloads gated SAM weights with an
+  `HF_TOKEN`, none is available to this run and no copy of the weights exists on the host.
+- **(e) Per-GPU scaling.** GPU 0 and GPU 1 hold containers of other projects (GPU 0 was busy at up
+  to 95 percent during one of the windows), so PE on GPU 0, on both A6000s and on the 3080 Ti was
+  not run. The harness reports per GPU (`--gpu 0,2`); its arm grammar has no GPU-list
+  knob yet.
+- **Cluster pass** after ingest: skipped in these runs; the Wave 1 figure (159 s) stands.
+- **Faces and OCR inside ingest**: ingest does not call them; their cost is probe 3.
+
+#### Caveats
+
+- One host and one card, 3 repetitions, 1,000-image subsets for the sweeps. The host was shared:
+  load average 5 to 59 and whole-host CPU busy up to 77 percent from other projects; the foreign
+  load on the card itself was zero. The GPU-bound rows are insensitive to it; the host-bound rows
+  (set B, light endpoints) are not, and their spread is wide (set B 8 x 16 batch: 6.0 to 9.5).
+- The load generator is one Python process with threads. Rows above about 150 requests/s
+  (`/detect`, `/embed/image`, `/faces/*` on COCO) may be partly client-bound.
+- The py-spy run perturbs the API (17 cores); the census and micro-profile runs do not use it.
+- Set B is a public stand-in for high-resolution photo archives: featured pictures are landscapes, wildlife
+  and architecture, with fewer detections per image (1.6 items) than a street scene; the CPU per
+  image is a property of the pixel count and holds, the PE share is lower than a crowded scene.
+- `MAX_FILE_SIZE_MB` was raised for set B (#239).
+- Issues filed from this work: #239 (oversize upload answers 500, and the 50 MB cap counts the
+  whole request), #240 (one `ocr_pipeline` instance), #241 (photos are API-bound).
+
 ## Benchmarking
 
 ### Using the Go Benchmark Tool

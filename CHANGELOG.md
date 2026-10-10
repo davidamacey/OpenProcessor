@@ -30,6 +30,15 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   applies the thresholds of `scripts/bench/parity_gates.json` and exits non-zero on failure. The
   FP32 against FP16 PE engine results are in `docs/PERFORMANCE.md` (#208).
 
+- Wave 0 full-pipeline throughput probes: `scripts/bench/wave0_suite.py` (client concurrency and
+  batch sweep, Triton instance-count, queue-delay and preferred-batch arms applied and restored
+  through the model store, per-endpoint stage cost for faces, OCR and the combined analyze route,
+  py-spy attribution of the API container, per-GPU clocks, power, foreign load and host CPU),
+  `scripts/bench/os_write_ceiling.py` (OpenSearch bulk write ceiling with the real mapping) and
+  `wave0_report.py` (the tables). `scripts/datasets/fetch_hires_set.py` pins a 500-image set of
+  12 to 24 MP public photos (`manifests/commons_hires_500.json`). Results and the binding resource
+  per stage are in `docs/PERFORMANCE.md` ("Wave 0: full-pipeline throughput") (#45, #210, #230).
+
 ### Changed
 
 - Response serialization no longer uses FastAPI's deprecated `ORJSONResponse` (about 15
