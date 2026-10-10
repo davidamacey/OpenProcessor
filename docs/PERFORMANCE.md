@@ -973,6 +973,23 @@ cd benchmarks
 
 ## Tuning Parameters
 
+### OCR pipeline instances
+
+`ocr_pipeline` is a Python BLS model: an instance runs one request at a time, so its instance
+count is the OCR concurrency (the detection and recognition engines need under 10 ms of GPU
+time per image, the Python instance 42-47 ms). On one RTX A6000 with 640 x 480 frames and 16
+clients, `/ocr/predict` does 21 images/s with one instance, 42 with two and 80 with four.
+
+The installer sets the count per profile (`ocr_pipeline_instances` in
+`config_templates/profiles/*.json`: minimal 1, standard 2, full 4) and `models/ocr_pipeline`
+ships 2. A warm instance holds about 256 MiB of GPU memory (measured on a 12 GB card, 640 x 480
+frames; whole-card use with the det and rec engines loaded was 11082, 11337 and 11850 MiB for
+one, two and four instances, so +255 MiB per extra instance); the model config records 512 MiB per instance as the budget figure.
+`python_backend_budget_mib` in each profile caps the Python instances, and an offline test
+fails when a count exceeds it. Memory for very large frames was not measured. To change the
+count on an installed stack, edit `count` in `models/ocr_pipeline/config.pbtxt` and restart
+Triton.
+
 ### Worker Count Optimization
 
 Current: **32 workers** (assumes 16-core CPU)

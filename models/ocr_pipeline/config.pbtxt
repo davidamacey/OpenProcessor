@@ -79,11 +79,19 @@ output [
 
 instance_group [
   {
-    count: 1  # baseline for 12 GB cards; raise on 24 GB+ GPUs
+    count: 2  # one instance serves one request at a time; the installer profile sets this
     kind: KIND_GPU
     gpus: [ 0 ]
   }
 ]
+
+# Budget accounting for the installer profiles. Measured on a 12 GB card with
+# 640x480 frames: about 256 MiB of GPU memory per warm instance; recorded
+# with headroom for larger frames.
+parameters: {
+  key: "GPU_MIB_PER_INSTANCE"
+  value: { string_value: "512" }
+}
 
 # Model dependencies (BLS)
 parameters: {

@@ -448,15 +448,18 @@ The system automatically selects a profile based on your GPU's VRAM:
 - MobileCLIP embeddings
 - No OCR (optional add-on)
 - 1 instance per model, batch size 16
+- 1 `ocr_pipeline` instance (about 256 MiB of GPU memory each)
 
 **standard** (12-24GB GPUs):
 - All models including OCR
 - 2 instances per model, batch size 32
+- 2 `ocr_pipeline` instances (OCR throughput scales with this count)
 - Good for most production workloads
 
 **full** (48GB+ GPUs):
 - All models with maximum parallelism
 - 4 instances per model, batch size 64
+- 4 `ocr_pipeline` instances
 - High-throughput production systems
 
 ### Manually Selecting a Profile
