@@ -16,7 +16,6 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path, Query
-from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel, Field
 
 from src.clients.opensearch.names import IndexName
@@ -28,7 +27,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix='/query',
     tags=['Data Retrieval'],
-    default_response_class=ORJSONResponse,
 )
 
 

@@ -16,7 +16,6 @@ import logging
 
 import numpy as np
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
-from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel, Field
 
 from src.core.dependencies import VisualSearchDep
@@ -30,7 +29,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix='/faces',
     tags=['Face Recognition'],
-    default_response_class=ORJSONResponse,
 )
 
 

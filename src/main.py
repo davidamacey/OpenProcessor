@@ -23,7 +23,7 @@ from pathlib import Path
 
 import orjson
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import ORJSONResponse, Response
+from fastapi.responses import JSONResponse, Response
 
 from src.clients.occ import OCCFinalConflictError
 from src.clients.triton_pool import AsyncTritonPool
@@ -456,7 +456,6 @@ def create_app() -> FastAPI:
         ),
         version=_read_version(),
         lifespan=lifespan,
-        default_response_class=ORJSONResponse,
         docs_url=None,
         redoc_url=None,
     )
@@ -582,7 +581,7 @@ def create_app() -> FastAPI:
             doc_id=exc.doc_id,
             retries=exc.retries,
         )
-        return ORJSONResponse(
+        return JSONResponse(
             status_code=409,
             content={
                 'detail': 'concurrent write conflict; refresh and retry',
@@ -609,7 +608,7 @@ def create_app() -> FastAPI:
             error=str(exc),
             exc_info=True,
         )
-        return ORJSONResponse(
+        return JSONResponse(
             status_code=500,
             content={
                 'detail': 'Internal server error',

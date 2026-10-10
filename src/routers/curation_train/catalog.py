@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter
-from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel, Field
 
 from src.config import get_gpu_arbiter_config
@@ -19,7 +18,7 @@ from src.services.training.preflight_checks import read_trainer_gpu_order
 from src.services.training.profiles import get_class_subset_presets, get_profiles
 
 
-router = APIRouter(default_response_class=ORJSONResponse)
+router = APIRouter()
 
 
 class ProfilesResponse(BaseModel):

@@ -13,9 +13,9 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
-from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel, Field
 
+from src.core.wire_json import WireJSONResponse
 from src.schemas.detection import ImageMetadata
 from src.services.ocr_service import OcrService, ocr_error_http
 from src.utils.retry import RetryExhaustedError
@@ -26,7 +26,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix='/ocr',
     tags=['OCR Text Extraction'],
-    default_response_class=ORJSONResponse,
 )
 
 
@@ -383,14 +382,16 @@ async def search_by_ocr(
             text, offset=page * size, size=size, exact=not fuzzy
         )
 
-        return {
-            'status': 'success',
-            'query': text,
-            'total_results': total,
-            'page': page,
-            'size': size,
-            'results': hits,
-        }
+        return WireJSONResponse(
+            {
+                'status': 'success',
+                'query': text,
+                'total_results': total,
+                'page': page,
+                'size': size,
+                'results': hits,
+            }
+        )
 
     except RetryExhaustedError:
         raise

@@ -5,8 +5,7 @@ import logging
 import time
 import uuid
 
-from fastapi import File, Form, HTTPException, UploadFile, status
-from fastapi.responses import ORJSONResponse
+from fastapi import File, Form, HTTPException, Response, UploadFile, status
 
 from src.core.dependencies import VisualSearchDep
 from src.routers.ingest._router import router
@@ -154,8 +153,9 @@ async def ingest_image(
 
         # Build response based on result status
         if result.get('status') == 'duplicate':
-            return ORJSONResponse(
+            return Response(
                 status_code=status.HTTP_200_OK,
+                media_type='application/json',
                 content=IngestResponse(
                     status='duplicate',
                     image_id=result['image_id'],
@@ -164,7 +164,7 @@ async def ingest_image(
                     existing_image_path=result.get('existing_image_path'),
                     message=result.get('message', 'Image already exists in index'),
                     total_time_ms=round(elapsed_ms, 2),
-                ).model_dump(by_alias=True, exclude_none=True),
+                ).model_dump_json(by_alias=True, exclude_none=True),
             )
 
         if result.get('status') == 'error':

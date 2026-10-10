@@ -34,7 +34,6 @@ STREAM_OR_FILE = frozenset(
 
 LEGACY_DICT = frozenset(
     {
-        'POST /datasets/imports/{import_id}/undo',
         'GET /train/manifest/{job_id}',
         'GET /class_sources',
         'POST /classes',

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import JSONResponse
 
 from src.core.logging import get_logger, get_request_id
 
@@ -27,7 +27,7 @@ logger = get_logger(__name__)
 TRITON_UNAVAILABLE_RETRY_AFTER_SECONDS = 5
 
 
-async def triton_unavailable_response(request: Request, exc: RetryExhaustedError) -> ORJSONResponse:
+async def triton_unavailable_response(request: Request, exc: RetryExhaustedError) -> JSONResponse:
     """Triton unreachable after retries (gRPC UNAVAILABLE / connection
     refused / etc.) -> 503, not a bare 500.
 
@@ -46,7 +46,7 @@ async def triton_unavailable_response(request: Request, exc: RetryExhaustedError
         path=request.url.path,
         error=str(exc),
     )
-    return ORJSONResponse(
+    return JSONResponse(
         status_code=503,
         content={
             'detail': 'Inference backend (Triton) is temporarily unavailable; retry shortly',

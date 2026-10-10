@@ -20,7 +20,7 @@ import hashlib
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import FileResponse, ORJSONResponse, Response
+from fastapi.responses import FileResponse, Response
 
 from src.config import get_curation_config, get_region_fields
 from src.core.dependencies import get_curation_opensearch as _raw_opensearch_dep
@@ -51,7 +51,6 @@ config = get_curation_config()
 router = APIRouter(
     prefix='/images',
     tags=[f'{config.api_tag} - Images'],
-    default_response_class=ORJSONResponse,
 )
 
 
@@ -121,7 +120,6 @@ async def thumbnail_cache_stats() -> dict[str, int]:
 crops_router = APIRouter(
     prefix='/crops',
     tags=[f'{config.api_tag} - Crops'],
-    default_response_class=ORJSONResponse,
 )
 
 

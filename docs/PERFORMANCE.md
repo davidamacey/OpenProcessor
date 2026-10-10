@@ -54,24 +54,23 @@ The system includes several production-grade optimizations:
 ### 1. High-Performance JSON Serialization (orjson)
 
 **Implementation**:
-- Added `orjson` to requirements.txt
-- Configured `ORJSONResponse` as default response class
+- Routes with a response model return that model; FastAPI serializes it through Pydantic
+  straight to JSON bytes (no `default_response_class`, which FastAPI now deprecates for orjson).
+- The curation routes that return a hand-built wire dict (`response_model=None`) use
+  `WireRoute` (`src/core/wire_json.py`), which renders with `orjson` and skips
+  `jsonable_encoder`.
+- `scripts/bench/serialization_bench.py` compares the old and new paths offline.
 
-```python
-from fastapi.responses import ORJSONResponse
+**Benchmark** (`.venv/bin/python -m scripts.bench.serialization_bench`, median ms per
+in-process request, 30 runs; the old path is the former orjson response class):
 
-app = FastAPI(
-    default_response_class=ORJSONResponse  # All responses use orjson
-)
-```
+| Case | Old | New |
+|---|---|---|
+| Review page, 100 items (wire dict) | 68.9 | 4.2 |
+| `/embed/boxes`, 1000 boxes x 512 dims | 88.6 | 65.7 |
+| `/ingest/batch`, 1000 detail rows | 6.0 | 5.9 |
 
-**Impact**: 2-3x faster JSON encoding/decoding
-
-**Benchmark**:
-```bash
-# Before (stdlib json): ~500 MB/s
-# After (orjson): ~1500 MB/s
-```
+Bodies are byte-identical in every case.
 
 ### 2. Optimized Image Processing (pillow-simd)
 
