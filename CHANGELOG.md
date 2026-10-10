@@ -20,6 +20,12 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   environment, ingest through `/ingest/upload` and `/ingest/batch`, Triton statistics,
   perf_analyzer points, endpoints and VLM throughput as one JSON; the v0.5.0 numbers are in
   `docs/PERFORMANCE.md` and `docs/benchmarks/` (#45, #40).
+### Fixed
+
+- The `curation-vlm-worker` no longer polls every project each cycle and takes a 409
+  `vlm_not_configured` from the ones with no VLM (#207, about 2.7 idle cores at 18 projects). Each
+  cycle it asks the registry and each project's activation which projects have an active VLM,
+  searches and calls only those, and with none active sleeps `--poll-interval` doubling up to 60 s.
 
 ## [0.5.0] - 2026-10-09
 
