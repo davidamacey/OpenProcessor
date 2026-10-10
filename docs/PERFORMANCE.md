@@ -481,7 +481,7 @@ The Wave 0 baseline of `docs/design/triton_pipeline_optimization_plan.md`, measu
 published v0.5.0 images before any optimization (issues #45 and #40). Raw JSON:
 `docs/benchmarks/v050_baseline.json` (environment, ingest, Triton statistics,
 perf_analyzer points, endpoints, VLM) and `docs/benchmarks/v050_storage.json` (the
-storage run); idle-CPU readings in `docs/benchmarks/v050_idle_background.json`. Every
+storage run); idle-CPU readings in `docs/benchmarks/v050_idle_background.json`. (The VLM model label in the raw JSON metrics is replaced by `catalog-default`.) Every
 number below is a median with the minimum and maximum of 3 repetitions in parentheses,
 unless stated.
 
@@ -670,7 +670,7 @@ request is host work (decode, letterbox, FP32 tensor, gRPC).
 #### VLM labeling
 
 `POST /curation/projects/{project}/vlm/label_batch`, 200 crops per repetition (a different 200 each
-time), 32 crops per request, 8 client threads, the catalog default (`gemma-4-e4b`, bfloat16) on
+time), 32 crops per request, 8 client threads, the catalog default model (bfloat16) on
 vLLM with GPU memory utilization 0.4 on GPU 0, Triton stopped for this run so it fits next to the 16 GB
 of the other project: **10.0 crops/s** (9.9-10.1), 0 errors, GPU 0 utilization
 83 percent. This reproduces the 10.0 crops/s measured earlier on 0.5.0. Re-labeling crops the model has
