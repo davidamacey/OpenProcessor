@@ -707,7 +707,7 @@ already seen is much faster (27 to 31 crops/s) because of vLLM's multimodal cach
   small here. The private high-resolution set B was not run.
 - Counts of 2,000 images only; the 10k pin and larger are not measured.
 
-### v0.6.0 Wave 1: FP16 PE engine (set A, public COCO, 2,000 images)
+### 0.6.0 Wave 1: FP16 PE engine (set A, public COCO, 2,000 images)
 
 The first change of `docs/design/triton_pipeline_optimization_plan.md` after the baseline above:
 the PE image encoder is built as a real FP16 engine. Same pinned set, same harness
