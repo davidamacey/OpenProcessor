@@ -1,0 +1,38 @@
+{
+  "schema": "1",
+  "engine": {
+    "model": "pe_image_encoder",
+    "profile": "images min 1x3x336x336, opt 8, max 32 at 336x336",
+    "trtexec_workspace": "8G",
+    "tensorrt": "11.1 (Triton 26.06 image)",
+    "fp32": {
+      "plan_bytes": 1272018292,
+      "trtexec_engine_build_s": 38.0
+    },
+    "fp16": {
+      "plan_bytes": 644778380,
+      "trtexec_engine_build_s": 81.2,
+      "installer_step_wall_s": 142,
+      "bake_s_offline_cpu": 36.7
+    },
+    "fp16_over_fp32_size": 0.507
+  },
+  "parity_vs_fp32_plan": {
+    "images": 200,
+    "embedding_dim": 1024,
+    "norm_fp32_mean": 1.0,
+    "norm_fp16_mean": 0.9999902248382568,
+    "cosine_min": 0.9976234436035156,
+    "cosine_mean": 0.9996653199195862,
+    "cosine_p1": 0.998420238494873,
+    "top1_neighbour_agreement": 0.97,
+    "top1_agreement_fp16_query_vs_fp32_gallery": 0.99,
+    "top5_overlap_mean": 0.975,
+    "max_abs_diff": 0.012754115276038647
+  },
+  "parity_input": "first 200 images (sorted file name) of the pinned 2,000-image COCO set, canonical PE whole-frame preprocessing, batches of 16, both engines served by one Triton",
+  "build_failure_before_fix": {
+    "einsum_fix_only": "ElementWiseOperation PROD must have same input types. But they are of types Half and Float (/visual/transformer/resblocks.0/attn/Mul)",
+    "original": "IEinsumLayer must have all inputs of same type. Input 1 has type Half and input 0 has type Float (/visual/Einsum)"
+  }
+}

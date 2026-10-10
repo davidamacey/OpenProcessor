@@ -686,13 +686,11 @@ already seen is much faster (27 to 31 crops/s) because of vLLM's multimodal cach
   `trtexec` with the profile `images` min 1x3x336x336, opt 8, max 32, workspace 8G, `--skipInference`
   (`scripts/lib/model_setup.sh`, `_ms_pe_trtexec`). On this stack (TensorRT 11.1 in the Triton 26.06
   image) that build fails at parse time on both `Einsum` nodes: `IEinsumLayer must have all
-  inputs of same type. Input 1 has type Half and input 0 has type Float` (`/visual/Einsum`, whose
-  second input is a float32 `Constant` left unconverted by the FP16 graph rewrite while the first input
-  was cast to half). The installer then retries from the FP32 ONNX, which builds. A fresh v0.5.0
+  inputs of same type. Input 1 has type Half and input 0 has type Float` (`/visual/Einsum`: the FP16
+  graph rewrite converted its float `Constant` to half but left the explicit float32 `Cast` that
+  feeds the other input). The installer then retries from the FP32 ONNX, which builds. A fresh v0.5.0
   install therefore ends up with the same FP32 engine as this baseline, so the baseline is the true
-  "before" for the default install, and the earlier FP16 expectation (about 170 images/s) is not
-  reachable without fixing the FP16 bake. That fix (keep `Einsum` in FP32 or convert its constant) is
-  a separate change; the FP16 effect is still not measured.
+  "before" for the default install. The fix and its measured effect are in the next section.
 - OpenSearch data and the upload store live on a RAID array (Docker data root), not on NVMe.
   This affects `opensearch_write` and the upload route's persistence; treat them as upper bounds.
 - The VLM worker, polling a project that has data while no VLM is configured, burned about
@@ -708,6 +706,121 @@ already seen is much faster (27 to 31 crops/s) because of vLLM's multimodal cach
 - COCO frames are 640 x 480, so costs that scale with pixels (decode, full-size crops) are
   small here. The private high-resolution set B was not run.
 - Counts of 2,000 images only; the 10k pin and larger are not measured.
+
+### v0.6.0 Wave 1: FP16 PE engine (set A, public COCO, 2,000 images)
+
+The first change of `docs/design/triton_pipeline_optimization_plan.md` after the baseline above:
+the PE image encoder is built as a real FP16 engine. Same pinned set, same harness
+(`scripts/bench/baseline_suite.py --phases env,ingest`), same host and GPU 0, same published v0.5.0
+images; the only difference is the engine behind `pe_image_encoder`. Raw JSON:
+`docs/benchmarks/v060_fp16_pe.json` (ingest, Triton statistics, GPU) and
+`docs/benchmarks/v060_fp16_pe_engine.json` (engine size, build time, parity). Medians with the
+minimum and maximum of 3 repetitions in parentheses.
+
+**Headline.** FP16 doubles ingest throughput: **17.4 images/s** through `/ingest/upload`
+(8.9 before) and **18.8 images/s** through `/ingest/batch` (9.2 before), with the PE engine at
+**5.5 ms per embedding** (13.7 before) in a plan of half the size (645 MB against 1.27 GB). Embeddings
+stay equivalent to the FP32 engine (cosine similarity 0.9996 mean, 0.9976 minimum on 200 images).
+
+#### Root cause and fix
+
+The v0.5.0 FP16 bake (`bake_fp16_onnx` in `export/trt_utils.py`) never produced a buildable graph on
+TensorRT 11.1, and the installer hid it by retrying from FP32. Two defects, both found by building
+the baked ONNX with `trtexec`:
+
+1. `onnxconverter-common` retypes tensors and initializers but never the `to` of a `Cast` already in
+   the graph. PE computes its rotary-embedding table in float32 (`.float()` in the model code, an
+   explicit `Cast(to=FLOAT)`), so the rewrite left an FP32 island whose consumers mix float32 with
+   the FP16 weights. TensorRT 11.1 rejects mixed input types at ONNX parse: first at the two `Einsum`
+   nodes (the converted half `Constant` against the float `Cast`), then, once `Einsum` was held
+   in FP32, at the `Mul` and `Concat` nodes that consume the same table (221 nodes with mixed
+   operands; `ElementWiseOperation PROD must have same input types`,
+   `/visual/transformer/resblocks.0/attn/Mul`).
+2. `Einsum` itself is a precision question: it multiplies position by frequency, where FP16 loses
+   angle precision.
+
+The fix keeps `Einsum` in FP32 (the converter inserts the casts around it) and adds a reconcile pass
+after the rewrite that re-derives every tensor type from the nodes and casts mixed operands of
+`Add`, `Concat`, `Div`, `Einsum`, `Equal`, `Gemm`, `MatMul`, `Mul`, `Sub`, `Where` and similar ops to
+FP16 (FP32 for ops held in FP32). On PE it inserts 127 casts. It runs for every model baked by this
+function; the other baked models are unchanged except the MobileCLIP image encoder (12 casts, see
+Caveats).
+
+#### Engine and parity
+
+| Item | FP32 (v0.5.0) | FP16 (this change) |
+|---|---:|---:|
+| Plan size | 1,272,018,292 B | 644,778,380 B (0.51x) |
+| `trtexec` engine build | 38 s | 81 s |
+| Installer step wall (bake, parse, build) | 107 s (bake, failed FP16 parse, FP32 retry) | 142 s |
+
+Parity, FP16 plan against the FP32 plan, same Triton, same inputs, 200 images (the first 200 by file
+name of the pinned set, canonical PE whole-frame preprocessing):
+
+| Metric | Value |
+|---|---:|
+| Cosine similarity, minimum | 0.9976 |
+| Cosine similarity, mean | 0.9997 |
+| Cosine similarity, 1st percentile | 0.9984 |
+| Top-1 nearest neighbour agreement (200 queries, each against the other 199; FP16 gallery against FP32 gallery) | 97.0 % |
+| Top-1 agreement, FP16 query against the FP32 gallery | 99.0 % |
+| Top-5 neighbour overlap, mean | 97.5 % |
+
+The Wave 1 accuracy gates of section 7 of the plan (retrieval and clustering on the labelled sets)
+are not run here; this is an engine parity check on public images only.
+
+#### Ingest, FP32 against FP16
+
+| Metric | FP32 baseline | FP16 | Change |
+|---|---:|---:|---:|
+| `/ingest/upload` images/s | 8.93 (8.89-9.13) | 17.41 (16.44-17.97) | 1.95x |
+| `/ingest/batch` images/s | 9.19 (8.94-9.45) | 18.84 (17.36-19.50) | 2.05x |
+| Wall s, `/ingest/upload` (2,000 images) | 224 (219-225) | 115 (111-122) | 0.51x |
+| Request p50 s, `/ingest/upload` | 14.1 (13.7-14.8) | 7.2 (6.9-7.3) | 0.51x |
+| PE `infer ms/image` (7.4 embeddings) | 101.3 (101.2-101.4) | 41.0 (40.8-41.2) | 0.40x |
+| PE ms per embedding | 13.7 | 5.5 | 0.40x |
+| PE exec infer ms (per execution) | 292.0 (285.3-307.2) | 75.2 (69.0-85.3) | |
+| PE mean batch | 21.3 (20.8-22.4) | 13.5 (12.5-15.5) | |
+| PE queue ms per request | 1514 (1139-1523) | 214 (168-265) | |
+| GPU util mean %, `/ingest/upload` (`nvidia-smi`) | 91 (90-92) | 74 (65-74) | |
+| GPU own SM %, `/ingest/upload` (`pmon`) | 89 (89-91) | 71 (68-72) | |
+| GPU memory peak MiB | 33020 | 30457 | |
+| API CPU s/image, `/ingest/upload` | 0.490 (0.299-0.954) | 0.188 (0.186-0.204) | |
+| API CPU s/image, `/ingest/batch` | 0.358 (0.270-0.360) | 0.177 (0.163-0.180) | |
+| Triton CPU s/image | 0.031 | 0.035 | |
+| Cluster training s, `/ingest/upload` | 88 (68-125) | 159 (153-169) | |
+| Failed items | 0 | 0 | |
+
+PE is still the largest GPU item at 41 of about 43 ms per image (the detector model is not
+changed; its execution time here, 37 ms per batch of 16 against 78 ms, includes time-slicing against
+PE on the same card). The pipeline is no longer GPU-bound: the GPU is 74 percent busy and PE batches
+are smaller (13.5 against 21.3), so the host side now feeds it more slowly than it drains. The
+per-image stage timers show decode (4.9 ms) and letterbox resize (23.7 ms) unchanged, and the
+OpenSearch write latency summed per image higher (405 to 680 ms, the same writes arriving twice as
+fast). That is the "API CPU outside the timed stages" item of section 11.1 of the plan becoming the
+next limit; it is not measured here. The API CPU per image reading of the baseline varied from 0.30 to
+0.95 s, so its drop (0.49 to 0.19 s) is not evidence of a saving. Cluster training (CPU, IVF) is
+outside this change; its slower reading here coincides with host contention (load average 9 to 15
+from other projects, against 4 to 5 for the baseline) and is not part of the images/s figure.
+
+The earlier private FP16 measurement of about 170 embeddings/s (5.9 ms) matches the 5.5 ms here.
+
+#### Caveats
+
+- One host, one card, 3 repetitions; the host was busier than during the baseline (load average 9
+  to 15 against 4 to 5). The foreign GPU load was zero at every sample, as before.
+- Parity covers 200 public images on whole-frame preprocessing. Retrieval and clustering gates on
+  labelled data (plan section 7) are open.
+- The fix bakes FP16 for every model that calls `bake_fp16_onnx`. On TensorRT 11.1 the MobileCLIP
+  image encoder's v0.5.0 bake also failed at parse (`ElementWiseOperation DIV must have same input
+  types`); with the reconcile pass it parses, but `trtexec` then stops at
+  `Could not find any implementation for node .../reparam_conv/Conv + PWN(...)`, so its exporter
+  still falls back to FP32 (its existing, printed fallback). That is a separate TensorRT-side
+  failure, tracked in an issue; no other baked model has a mixed-type op.
+- The installer's FP32 fallback is kept (an FP32 engine beats none) but is no longer silent: it
+  prints a warning naming the model, the FP16 failure reason and the consequence, writes the model
+  to `.install/precision.tsv`, records the group as `degraded` in `groups.tsv` (a re-run retries FP16
+  instead of skipping), and `./openprocessor models status` lists it under "Degraded precision".
 
 ## Benchmarking
 

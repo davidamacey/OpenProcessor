@@ -21,6 +21,19 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   perf_analyzer points, endpoints and VLM throughput as one JSON; the v0.5.0 numbers are in
   `docs/PERFORMANCE.md` and `docs/benchmarks/` (#45, #40).
 
+### Fixed
+
+- The FP16 bake (`bake_fp16_onnx`) now produces an ONNX that TensorRT 11.1 parses: `Einsum` stays in
+  FP32 and mixed FP32/FP16 operands left by explicit `Cast(to=FLOAT)` nodes are reconciled with casts.
+  The PE image encoder builds as a real FP16 engine (0.64 GB against 1.27 GB, 5.5 ms against 13.7 ms
+  per embedding, ingest 17.4 against 8.9 images/s on the 2,000-image COCO set, cosine similarity to
+  FP32 0.9997 mean). Before, the FP16 build failed at ONNX parse and the installer silently shipped
+  the FP32 engine.
+- The installer no longer reports a precision fallback as a clean success: the FP32 retry warns with
+  the model, the FP16 failure reason and the consequence, is recorded in `.install/precision.tsv`,
+  marks the model group `degraded` (a re-run retries FP16) and shows under "Degraded precision" in
+  `./openprocessor models status` and in the install summary.
+
 ## [0.5.0] - 2026-10-09
 
 The monorepo release. The backend and the Cropwright frontend (`frontend/`, formerly a separate
