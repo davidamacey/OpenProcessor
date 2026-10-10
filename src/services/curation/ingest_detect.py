@@ -55,6 +55,7 @@ from src.services.detection.geometry import (
     undo_letterbox,
 )
 from src.utils.class_names import normalize_class_name
+from src.utils.stage_timing import stage_timer
 
 
 if TYPE_CHECKING:
@@ -129,8 +130,9 @@ class WholeImageDetector:
         chw, scale, pad = letterbox_to_square(
             img, target=self.profile.input_size, fill=self.profile.letterbox_fill
         )
-        inp = InferInput('images', list(chw.shape), 'FP32')
-        inp.set_data_from_numpy(chw)
+        with stage_timer('triton_request', nbytes=chw.nbytes):
+            inp = InferInput('images', list(chw.shape), 'FP32')
+            inp.set_data_from_numpy(chw)
         outs = [InferRequestedOutput(name) for name in END2END_OUTPUTS]
         result = await self.triton_pool.infer(self.profile.detector_model, [inp], outputs=outs)
         return self.decode_primary_row(
@@ -179,8 +181,9 @@ class WholeImageDetector:
         step = max(1, self.profile.batch_limit)
         for start in range(0, full_batch.shape[0], step):
             chunk = full_batch[start : start + step]
-            inp = InferInput('images', list(chunk.shape), 'FP32')
-            inp.set_data_from_numpy(chunk)
+            with stage_timer('triton_request', nbytes=chunk.nbytes):
+                inp = InferInput('images', list(chunk.shape), 'FP32')
+                inp.set_data_from_numpy(chunk)
             result = await self.triton_pool.infer(self.profile.detector_model, [inp], outputs=outs)
             for name in END2END_OUTPUTS:
                 rows[name].extend(result.as_numpy(name))

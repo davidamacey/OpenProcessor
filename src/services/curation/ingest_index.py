@@ -183,23 +183,25 @@ async def index_items(
                 whole_frame_embedding = await service.pe_encoder.embed_whole_frame(image_path)
         except Exception as exc:
             logger.warning('ingest_embed_whole_frame_failed', path=image_path, error=str(exc))
-        image_doc = build_image_doc(
-            image_id=ctx.image_id,
-            image_path=image_path,
-            source=ctx.source,
-            width=full_w,
-            height=full_h,
-            imohash=ctx.imohash,
-            now=now,
-            whole_frame_embedding=whole_frame_embedding,
-            source_identifier=ctx.source_identifier,
-            ingest_run_id=ctx.ingest_run_id,
-        )
-        image_doc.update(ctx.image_extra)
+        with stage_timer('doc_build'):
+            image_doc = build_image_doc(
+                image_id=ctx.image_id,
+                image_path=image_path,
+                source=ctx.source,
+                width=full_w,
+                height=full_h,
+                imohash=ctx.imohash,
+                now=now,
+                whole_frame_embedding=whole_frame_embedding,
+                source_identifier=ctx.source_identifier,
+                ingest_run_id=ctx.ingest_run_id,
+            )
+            image_doc.update(ctx.image_extra)
 
     try:
-        img_bgr = np.ascontiguousarray(np.asarray(img.convert('RGB'))[:, :, ::-1])
-        full_var = image_lap_var(img_bgr)
+        with stage_timer('blur'):
+            img_bgr = np.ascontiguousarray(np.asarray(img.convert('RGB'))[:, :, ::-1])
+            full_var = image_lap_var(img_bgr)
     except Exception as exc:
         logger.warning('ingest_blur_full_var_failed', path=image_path, error=str(exc))
         img_bgr = None
@@ -223,8 +225,9 @@ async def index_items(
     for idx, item in enumerate(items):
         bn = bnorms[idx]
         cid = cids[idx]
-        box_var = crop_lap_var(img_bgr, item.bbox_pixel) if img_bgr is not None else None
-        ratio = blur_ratio(box_var, full_var)
+        with stage_timer('blur'):
+            box_var = crop_lap_var(img_bgr, item.bbox_pixel) if img_bgr is not None else None
+            ratio = blur_ratio(box_var, full_var)
 
         write_crop_cache(cid, crops_pil[idx], service.config.crop_cache_dir)
 
@@ -235,28 +238,29 @@ async def index_items(
             if placed is not None:
                 item.cluster_id, item.cluster_distance = placed
 
-        doc = build_item_doc(
-            crop_id=cid,
-            image_id=ctx.image_id,
-            image_path=image_path,
-            source=ctx.source,
-            request_id=get_request_id(),
-            bbox_norm=bn,
-            item=item,
-            now=now,
-            crop_area_norm=areas[idx],
-            crop_rank_in_image=rank_by_idx[idx],
-            blur_full_var=full_var,
-            blur_lap_var=box_var,
-            blur_lap_ratio=ratio,
-            region_status=(
-                region_seed_status(item)
-                if seed_region and service.region_seed_status is not None
-                else None
-            ),
-        )
-        if ctx.dataset_split and 'dataset_split' not in doc:
-            doc['dataset_split'] = ctx.dataset_split
+        with stage_timer('doc_build'):
+            doc = build_item_doc(
+                crop_id=cid,
+                image_id=ctx.image_id,
+                image_path=image_path,
+                source=ctx.source,
+                request_id=get_request_id(),
+                bbox_norm=bn,
+                item=item,
+                now=now,
+                crop_area_norm=areas[idx],
+                crop_rank_in_image=rank_by_idx[idx],
+                blur_full_var=full_var,
+                blur_lap_var=box_var,
+                blur_lap_ratio=ratio,
+                region_status=(
+                    region_seed_status(item)
+                    if seed_region and service.region_seed_status is not None
+                    else None
+                ),
+            )
+            if ctx.dataset_split and 'dataset_split' not in doc:
+                doc['dataset_split'] = ctx.dataset_split
         crop_docs.append(doc)
 
     await asyncio.to_thread(

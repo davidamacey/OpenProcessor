@@ -350,8 +350,9 @@ class PEEncoder:
         from tritonclient.grpc import InferInput, InferRequestedOutput
 
         batch = np.ascontiguousarray(chws, dtype=np.float32)
-        inp = InferInput('images', list(batch.shape), 'FP32')
-        inp.set_data_from_numpy(batch)
+        with stage_timer('triton_request', nbytes=batch.nbytes):
+            inp = InferInput('images', list(batch.shape), 'FP32')
+            inp.set_data_from_numpy(batch)
         outs = [InferRequestedOutput('image_embeddings')]
         with stage_timer('embed', nbytes=batch.nbytes):
             result = await self.triton_pool.infer(PE_IMAGE_MODEL, [inp], outputs=outs)
@@ -384,7 +385,7 @@ class PEEncoder:
         if not crops:
             return np.zeros((0, PE_EMBEDDING_DIM), dtype=np.float32)
 
-        with stage_timer('resize'):
+        with stage_timer('pe_preprocess'):
             chws = np.stack(
                 [normalize_chw(resize_crop_rgb(crop)) for crop in crops],
                 axis=0,
@@ -408,7 +409,8 @@ class PEEncoder:
         Returns ``None`` on a decode failure — callers should treat a
         missing whole-frame embedding as non-fatal.
         """
-        chw = whole_frame_chw(path)
+        with stage_timer('whole_frame_preprocess'):
+            chw = whole_frame_chw(path)
         if chw is None:
             return None
         batch = chw[None, ...].astype(np.float32, copy=False)
@@ -422,7 +424,8 @@ class PEEncoder:
         identifier, not a file the API container can open. Same
         preprocessing, so the vector matches the from-disk path.
         """
-        chw = whole_frame_chw_from_bytes(data)
+        with stage_timer('whole_frame_preprocess', nbytes=len(data)):
+            chw = whole_frame_chw_from_bytes(data)
         if chw is None:
             return None
         batch = chw[None, ...].astype(np.float32, copy=False)

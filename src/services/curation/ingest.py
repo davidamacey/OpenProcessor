@@ -132,12 +132,13 @@ def _imohash_bytes(data: bytes) -> str:
     Uses ``imohash`` if available; otherwise falls back to a sha256
     prefix (slim test environments only — production installs imohash).
     """
-    try:
-        import imohash  # type: ignore[import-untyped]
+    with stage_timer('hash', nbytes=len(data)):
+        try:
+            import imohash  # type: ignore[import-untyped]
 
-        return imohash.hashfileobject(io.BytesIO(data)).hex()
-    except Exception:
-        return hashlib.sha256(data).hexdigest()[:32]
+            return imohash.hashfileobject(io.BytesIO(data)).hex()
+        except Exception:
+            return hashlib.sha256(data).hexdigest()[:32]
 
 
 def _decode_image(image_bytes: bytes) -> tuple[Image.Image, int, int]:

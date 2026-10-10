@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from src.utils.stage_timing import stage_timer
+
 
 if TYPE_CHECKING:
     from PIL import Image
@@ -136,19 +138,20 @@ def letterbox_to_square(
         msg = f'degenerate image size: ({orig_w}, {orig_h})'
         raise ValueError(msg)
 
-    scale = min(target / orig_h, target / orig_w)
-    new_w = max(1, round(orig_w * scale))
-    new_h = max(1, round(orig_h * scale))
-    resized = img.resize((new_w, new_h), PILImage.BILINEAR)
+    with stage_timer('letterbox'):
+        scale = min(target / orig_h, target / orig_w)
+        new_w = max(1, round(orig_w * scale))
+        new_h = max(1, round(orig_h * scale))
+        resized = img.resize((new_w, new_h), PILImage.BILINEAR)
 
-    canvas = PILImage.new('RGB', (target, target), fill)
-    pad_w = (target - new_w) / 2.0
-    pad_h = (target - new_h) / 2.0
-    canvas.paste(resized, (int(pad_w), int(pad_h)))
+        canvas = PILImage.new('RGB', (target, target), fill)
+        pad_w = (target - new_w) / 2.0
+        pad_h = (target - new_h) / 2.0
+        canvas.paste(resized, (int(pad_w), int(pad_h)))
 
-    arr = np.asarray(canvas, dtype=np.float32) / 255.0
-    chw = np.transpose(arr, (2, 0, 1))[None, ...]  # NCHW
-    return chw.astype(np.float32, copy=False), float(scale), (float(pad_w), float(pad_h))
+        arr = np.asarray(canvas, dtype=np.float32) / 255.0
+        chw = np.transpose(arr, (2, 0, 1))[None, ...]  # NCHW
+        return chw.astype(np.float32, copy=False), float(scale), (float(pad_w), float(pad_h))
 
 
 def undo_letterbox(

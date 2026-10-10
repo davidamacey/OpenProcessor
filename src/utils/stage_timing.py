@@ -22,13 +22,25 @@ if TYPE_CHECKING:
     from types import TracebackType
 
 
+# ``decode`` .. ``opensearch_write`` are the original ingest stages. The rest (WP-1.2, #210)
+# name the work that ran untimed on the event loop. All are wall time of a synchronous block,
+# so on the loop thread a stage's seconds are API CPU seconds; ``embed`` and
+# ``opensearch_write`` also include the awaited round trip.
 STAGES: tuple[str, ...] = (
     'decode',
     'crop',
     'jpeg_encode',
-    'resize',
+    'pe_preprocess',
     'embed',
     'opensearch_write',
+    'hash',
+    'persist',
+    'letterbox',
+    'triton_request',
+    'whole_frame_preprocess',
+    'blur',
+    'doc_build',
+    'bulk_serialize',
 )
 
 _SECONDS = Histogram(

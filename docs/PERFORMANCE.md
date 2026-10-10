@@ -440,8 +440,15 @@ counters are the host-to-device time); store bytes per image after a refresh
 and force-merge (`--opensearch-url`) and crop-cache bytes (`--crop-cache-dir`).
 
 The per-stage timers are the `op_pipeline_stage_seconds` histogram and the
-`op_pipeline_stage_bytes_total` counter, labelled `stage` = `decode`, `crop`,
-`jpeg_encode`, `resize`, `embed`, `opensearch_write`. The compose file sets
+`op_pipeline_stage_bytes_total` counter, labelled `stage`. The stages are `decode`,
+`crop`, `jpeg_encode`, `pe_preprocess` (the PE crop resize and normalize, named `resize` before
+0.6.0), `embed`, `opensearch_write`, and the work that ran untimed before WP-1.2 (#210):
+`hash` (the file fingerprint), `persist` (the upload's content-addressed write), `letterbox`
+(the detector letterbox and tensor), `triton_request` (building the Triton input),
+`whole_frame_preprocess` (the whole-frame vector's decode and normalize), `blur` (the
+Laplacian scores), `doc_build` (the images and items documents) and `bulk_serialize` (encoding
+request bodies for OpenSearch). All but `embed` and `opensearch_write` time a synchronous
+block, so on the event-loop thread their seconds are API CPU seconds. The compose file sets
 `PROMETHEUS_MULTIPROC_DIR` on the API, so a scrape aggregates all workers.
 
 Where numbers go: set A numbers go into this file, in a table with the commit,
