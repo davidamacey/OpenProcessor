@@ -816,7 +816,7 @@ The earlier private FP16 measurement of about 170 embeddings/s (5.9 ms) matches 
   types`); with the reconcile pass it parses, but `trtexec` then stops at
   `Could not find any implementation for node .../reparam_conv/Conv + PWN(...)`, so its exporter
   still falls back to FP32 (its existing, printed fallback). That is a separate TensorRT-side
-  failure, tracked in an issue; no other baked model has a mixed-type op.
+  failure, tracked in #224; no other baked model has a mixed-type op.
 - The installer's FP32 fallback is kept (an FP32 engine beats none) but is no longer silent: it
   prints a warning naming the model, the FP16 failure reason and the consequence, writes the model
   to `.install/precision.tsv`, records the group as `degraded` in `groups.tsv` (a re-run retries FP16

@@ -823,7 +823,7 @@ changed. Raw numbers: `docs/benchmarks/v060_fp16_pe.json` and
   engine parity check is recorded.
 - [ ] MobileCLIP image encoder: its FP16 bake also failed at parse on TensorRT 11.1; after this fix it
   parses but the build fails in TensorRT (`Could not find any implementation` for a reparam conv), so
-  its exporter still falls back to FP32.
+  its exporter still falls back to FP32 (#224).
 
 ## 12. References
 
