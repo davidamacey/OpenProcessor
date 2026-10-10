@@ -564,6 +564,9 @@ WP-0.1's capture of `ref-v050` first (the FP32-sized plan must be captured befor
 | O7 | Public runs use public datasets only (COCO, Open Images, ImageNet). The owner runs private-data benchmarks separately on his own non-public data; none of it is committed. |
 | O8 | One million images is the destination, not the first step: the work builds up the optimisation levers in order, measuring how fast this server can process a 1M-image batch with industry-standard practice. Scale points (2k, 10k, 100k, then 1M) are reached as levers land. |
 | O9 | Embed-all must be fast: some datasets (vehicles) need every crop embedded to cluster and label, so the selective policy stays configurable and is never the only way to be fast. |
+| O10 | Bulk ingest is a first-class feature, delivered both as a CLI and as an API route that the API clients and Cropwright can trigger (start, progress, pause/resume, cancel), built on one shared runner so the two entry points cannot diverge (WP-S4, #229). The route is a curation job route with a served contract (`make contracts`), not a side door. |
+| O11 | Triton is made to work properly first. ortloom / ortloom-serve is a later task: the head-to-head (#231) and any ortloom generic tensor backend wait until the Triton hardening waves have landed. |
+| O12 | Target for 1M images at embed-everything is set by measurement as levers land; the study's 4-6 h figure is an estimate, not yet a commitment. |
 
 ## 13. Adjustments from the serving backend trade study (2026-10-10)
 
