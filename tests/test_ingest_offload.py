@@ -7,7 +7,7 @@ import io
 import threading
 import time
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 from PIL import Image
@@ -56,6 +56,10 @@ class _Service:
         return None
 
 
+def _ingest(service: _Service, images: list[bytes], paths: list[str]):
+    return ingest_batch.run_ingest_batch(cast('Any', service), images, paths)
+
+
 def _run_two_requests(monkeypatch: pytest.MonkeyPatch, capacity: int) -> int:
     gate = InflightGate(capacity)
     monkeypatch.setattr(ingest_batch, 'ingest_gate', lambda: gate)
@@ -63,15 +67,15 @@ def _run_two_requests(monkeypatch: pytest.MonkeyPatch, capacity: int) -> int:
 
     async def main() -> None:
         await asyncio.gather(
-            ingest_batch.run_ingest_batch(
+            _ingest(
                 service,
                 [_jpeg(1), _jpeg(2)],
-                ['a', 'b'],  # type: ignore[arg-type]
+                ['a', 'b'],
             ),
-            ingest_batch.run_ingest_batch(
+            _ingest(
                 service,
                 [_jpeg(3), _jpeg(4)],
-                ['c', 'd'],  # type: ignore[arg-type]
+                ['c', 'd'],
             ),
         )
 
@@ -131,10 +135,10 @@ def test_batch_decode_runs_off_the_loop_thread(monkeypatch: pytest.MonkeyPatch) 
                 last = time.perf_counter()
 
         beat = asyncio.create_task(heartbeat())
-        await ingest_batch.run_ingest_batch(
+        await _ingest(
             service,
             [_jpeg(i) for i in range(4)],
-            list('abcd'),  # type: ignore[arg-type]
+            list('abcd'),
         )
         await beat
         return threading.get_ident(), max(gaps)
@@ -151,10 +155,10 @@ def test_an_undecodable_image_is_left_for_ingest_one_to_report(
     monkeypatch.setattr(ingest_batch, 'ingest_gate', lambda: InflightGate(4))
     service = _Service()
     result = asyncio.run(
-        ingest_batch.run_ingest_batch(
+        _ingest(
             service,
             [b'not an image', _jpeg(5)],
-            ['bad', 'good'],  # type: ignore[arg-type]
+            ['bad', 'good'],
         )
     )
     assert [r.status for r in result.results] == ['success', 'success']
@@ -175,8 +179,8 @@ def _peak_for_two_big_images(monkeypatch: pytest.MonkeyPatch, capacity_mib: int)
 
     async def main() -> None:
         await asyncio.gather(
-            ingest_batch.run_ingest_batch(service, [big], ['a']),  # type: ignore[arg-type]
-            ingest_batch.run_ingest_batch(service, [big], ['b']),  # type: ignore[arg-type]
+            _ingest(service, [big], ['a']),
+            _ingest(service, [big], ['b']),
         )
 
     asyncio.run(main())
