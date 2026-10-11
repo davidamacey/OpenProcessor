@@ -56,7 +56,7 @@ def _detector(pool: _Pool) -> WholeImageDetector:
         letterbox_fill=(114, 114, 114),
         batch_limit=2,
         detector_model='det',
-        confidence_floor=0.5
+        confidence_floor=0.5,
     )
     return WholeImageDetector(triton_pool=pool, registry=None, profile=profile)  # type: ignore[arg-type]
 

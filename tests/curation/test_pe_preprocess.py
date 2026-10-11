@@ -8,12 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from src.services.detection.pe_preprocess import (
-    PE_SIZE,
-    resize_crop_rgb,
-    to_chw,
-    to_chw_into,
-)
+from src.services.detection.pe_preprocess import PE_SIZE, resize_crop_rgb, to_chw, to_chw_into
 
 
 class TestToChw:

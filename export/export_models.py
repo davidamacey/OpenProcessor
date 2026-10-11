@@ -95,10 +95,10 @@ from trt_utils import (  # noqa: E402
     enable_fp16,
     engine_output_dtypes,
 )
+from uint8_input import add_uint8_input  # noqa: E402
 from ultralytics import YOLO  # noqa: E402
 from ultralytics.cfg import get_cfg  # noqa: E402
 from ultralytics.engine.exporter import Exporter  # noqa: E402
-from uint8_input import add_uint8_input  # noqa: E402
 
 
 # ============================================================================

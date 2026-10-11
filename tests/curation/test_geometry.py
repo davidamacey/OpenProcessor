@@ -177,7 +177,9 @@ class TestLetterboxPixels:
 
         from src.services.detection.cascade_detect.preprocess import _letterbox
 
-        img = Image.fromarray(np.random.default_rng(5).integers(0, 256, (30, 50, 3), dtype=np.uint8))
+        img = Image.fromarray(
+            np.random.default_rng(5).integers(0, 256, (30, 50, 3), dtype=np.uint8)
+        )
         floats, _scale, _pad = _letterbox(img, target=64)
         pixels, _s, _p = letterbox_to_square(img, 64)
         assert floats.dtype == np.float32
