@@ -291,15 +291,13 @@ def _build_engine(onnx_path, plan_path, fp16, max_batch_size):
     if fp16:
         from trt_utils import bake_fp16_onnx
 
-        # NOTE: the ModelOpt AutoCast path (used by export_yolo26.py) fails
-        # to build this graph's MobileOne reparam-conv + pointwise fusion
-        # ("Could not find any implementation for node
-        # …stages.1/downsample/proj/proj.0/reparam_conv/Conv + PWN…").
-        # trt_utils.bake_fp16_onnx (onnxconverter-common's plain
-        # weight/activation cast, keep_io_types=True) sidesteps that fusion
-        # entirely -- it doesn't rewrite the graph the way ModelOpt does --
-        # and is the same helper used successfully by the ArcFace, SCRFD and
-        # PaddleOCR-det exporters.
+        # trt_utils.bake_fp16_onnx (onnxconverter-common's plain weight/
+        # activation cast, keep_io_types=True) is the helper the ArcFace,
+        # SCRFD and PaddleOCR-det exporters use. It keeps this graph's
+        # depthwise convs with a channel multiplier (the stride-2 downsample
+        # projections and the final conv) in FP32: TensorRT 11.1 has no FP16
+        # kernel for them and stops with "Could not find any implementation
+        # for node .../reparam_conv/Conv + PWN(...)" otherwise (#224).
         print('  Baking FP16 (onnxconverter-common, TRT 11 typed builds)...')
         onnx_path = bake_fp16_onnx(onnx_path)
 

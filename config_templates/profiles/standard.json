@@ -6,6 +6,8 @@
   "preferred_batch_sizes": [8, 16, 32],
   "shm_size": "6g",
   "workers": 16,
+  "ocr_pipeline_instances": 2,
+  "python_backend_budget_mib": 1024,
   "models": "all",
   "notes": "All models with balanced parallelism. Good for most workloads."
 }

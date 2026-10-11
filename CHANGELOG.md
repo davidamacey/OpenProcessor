@@ -28,6 +28,14 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   environment, ingest through `/ingest/upload` and `/ingest/batch`, Triton statistics,
   perf_analyzer points, endpoints and VLM throughput as one JSON; the v0.5.0 numbers are in
   `docs/PERFORMANCE.md` and `docs/benchmarks/` (#45, #40).
+- Wave 0 full-pipeline throughput probes: `scripts/bench/wave0_suite.py` (client concurrency and
+  batch sweep, Triton instance-count, queue-delay and preferred-batch arms applied and restored
+  through the model store, per-endpoint stage cost for faces, OCR and the combined analyze route,
+  py-spy attribution of the API container, per-GPU clocks, power, foreign load and host CPU),
+  `scripts/bench/os_write_ceiling.py` (OpenSearch bulk write ceiling with the real mapping) and
+  `wave0_report.py` (the tables). `scripts/datasets/fetch_hires_set.py` pins a 500-image set of
+  12 to 24 MP public photos (`manifests/commons_hires_500.json`). Results and the binding resource
+  per stage are in `docs/PERFORMANCE.md` ("Wave 0: full-pipeline throughput") (#45, #210, #230).
 - `scripts/bench/parity.py` with `capture` and `compare` subcommands: the accuracy gate every
   v0.6.0 change passes. `capture` ingests the pinned COCO set into a fresh project and stores the
   per-stage outputs (detector boxes, crop rectangles, PE crop and whole-frame vectors, cluster
@@ -37,18 +45,14 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   neighbour overlap, cluster agreement and purity against the COCO ground truth, label agreement),
   applies the thresholds of `scripts/bench/parity_gates.json` and exits non-zero on failure. The
   FP32 against FP16 PE engine results are in `docs/PERFORMANCE.md` (#208).
-
-- Wave 0 full-pipeline throughput probes: `scripts/bench/wave0_suite.py` (client concurrency and
-  batch sweep, Triton instance-count, queue-delay and preferred-batch arms applied and restored
-  through the model store, per-endpoint stage cost for faces, OCR and the combined analyze route,
-  py-spy attribution of the API container, per-GPU clocks, power, foreign load and host CPU),
-  `scripts/bench/os_write_ceiling.py` (OpenSearch bulk write ceiling with the real mapping) and
-  `wave0_report.py` (the tables). `scripts/datasets/fetch_hires_set.py` pins a 500-image set of
-  12 to 24 MP public photos (`manifests/commons_hires_500.json`). Results and the binding resource
-  per stage are in `docs/PERFORMANCE.md` ("Wave 0: full-pipeline throughput") (#45, #210, #230).
-
 ### Changed
 
+- `ocr_pipeline` ships two Python instances instead of one, and the installer profile now sets
+  its count (`ocr_pipeline_instances`: minimal 1, standard 2, full 4). The Python BLS model runs
+  one request per instance, so OCR was capped at about 21 images/s; Wave 0 measured 42 with two
+  instances and 80 with four. A warm instance costs about 256 MiB of GPU memory (measured on a
+  12 GB card); `GPU_MIB_PER_INSTANCE` in the model config and `python_backend_budget_mib` per
+  profile bound the count, and `tests/test_triton_instance_budget.py` enforces it (#240).
 - Response serialization no longer uses FastAPI's deprecated `ORJSONResponse` (about 15
   routers, the error handlers and four routes that built it directly). Routes with a response
   model serialize through Pydantic straight to bytes; the curation routes that return a
@@ -84,12 +88,17 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   rather than the `Content-Length` of the whole multipart request, so a batch of large photos is no longer
   refused for its total. A body larger than the larger of the cap and `OP_UPLOAD_MAX_BYTES_PER_REQUEST`
   is still refused before it is read. `MAX_FILE_SIZE_MB` is documented in `env.template` (#239).
+
+- The MobileCLIP image encoder now builds as an FP16 engine on TensorRT 11.1 instead of falling
+  back to FP32. The build stopped at `Could not find any implementation for node
+  .../reparam_conv/Conv + PWN(...)`: TensorRT 11.1 has no FP16 kernel for a depthwise conv with a
+  channel multiplier, so `bake_fp16_onnx` keeps those four convs in FP32. The engine is 75 MB
+  against 147 MB, 1.5x (batch 8) to 2.1x (batch 32) faster per image, cosine similarity to the FP32
+  engine at least 0.9998 on 200 COCO images (#224).
 - The `curation-vlm-worker` no longer polls every project each cycle and takes a 409
   `vlm_not_configured` from the ones with no VLM (#207, about 2.7 idle cores at 18 projects). Each
   cycle it asks the registry and each project's activation which projects have an active VLM,
   searches and calls only those, and with none active sleeps `--poll-interval` doubling up to 60 s.
-
-### Fixed
 
 - The FP16 bake (`bake_fp16_onnx`) now produces an ONNX that TensorRT 11.1 parses: `Einsum` stays in
   FP32 and mixed FP32/FP16 operands left by explicit `Cast(to=FLOAT)` nodes are reconciled with casts.

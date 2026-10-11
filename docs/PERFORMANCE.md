@@ -819,10 +819,13 @@ The earlier private FP16 measurement of about 170 embeddings/s (5.9 ms) matches 
   labelled data (plan section 7) are open.
 - The fix bakes FP16 for every model that calls `bake_fp16_onnx`. On TensorRT 11.1 the MobileCLIP
   image encoder's v0.5.0 bake also failed at parse (`ElementWiseOperation DIV must have same input
-  types`); with the reconcile pass it parses, but `trtexec` then stops at
-  `Could not find any implementation for node .../reparam_conv/Conv + PWN(...)`, so its exporter
-  still falls back to FP32 (its existing, printed fallback). That is a separate TensorRT-side
-  failure, tracked in #224; no other baked model has a mixed-type op.
+  types`); with the reconcile pass it parses, but the build stopped at
+  `Could not find any implementation for node .../reparam_conv/Conv + PWN(...)` (#224). The failing
+  layers are the depthwise 7x7 stride-2 convs with a channel multiplier of 2 (the three
+  `downsample/proj/proj.0/reparam_conv` convs) and the final 3x3 conv (640 groups, 1280 outputs):
+  TensorRT 11.1 has no FP16 kernel for a grouped conv with one input channel per group and more
+  outputs than groups. `bake_fp16_onnx` now leaves those four convs in FP32 and the engine builds as
+  FP16 (see "MobileCLIP image encoder FP16" below). No other baked model has such a conv.
 - The installer's FP32 fallback is kept (an FP32 engine beats none) but is no longer silent: it
   prints a warning naming the model, the FP16 failure reason and the consequence, writes the model
   to `.install/precision.tsv`, records the group as `degraded` in `groups.tsv` (a re-run retries FP16
@@ -970,6 +973,7 @@ Reading the numbers:
   metric are the normalised mean of each reference cluster's vectors.
 - Rebuild of the FP16 plan: `export/trt_utils.py` bake inside the API image, then `trtexec` in the Triton
   image with the 1/8/32 x 3 x 336 x 336 profile and an 8 GB workspace; the bake log reports `fp16`.
+
 
 ### 0.6.0 Wave 0: full-pipeline throughput (one RTX A6000, FP16 PE engine)
 
@@ -1557,6 +1561,149 @@ channel, random frames and crops, extreme and tiny images).
 
 Raw results: `docs/benchmarks/v060_apicpu_{before,after}_set_{a,b}.json` and `v060_apicpu_attribution_set_{a,b}.json`.
 
+### Wave 0 parity and FP16 gates (set A, public COCO, 2,000 images)
+
+Every 0.6.0 change is gated by `scripts/bench/parity.py` (WP-0.1, #208): it captures the per-stage
+outputs of one ingest of the pinned set and compares two captures against the accuracy gates of
+`docs/design/triton_pipeline_optimization_plan.md` section 7 and the cluster-agreement metric of
+`docs/design/v060_wave_plan.md` section 2.1. This section describes the tool and records the gate run
+that accepts the FP16 PE engine of the section above.
+
+#### The tool
+
+```bash
+# Reference and candidate: same stack, same pinned set, one capture per configuration.
+.venv/bin/python scripts/bench/parity.py capture --tag fp32 --images DIR_OF_PINNED_IMAGES \
+    --api-url http://127.0.0.1:API_PORT --triton-url http://127.0.0.1:TRITON_HTTP_PORT \
+    --opensearch-url http://127.0.0.1:OPENSEARCH_PORT --compose-project NAME \
+    --engine-label fp32 --engine-file PATH/TO/model.plan \
+    --annotations COCO_ANNOTATIONS_DIR --probe-images 200
+.venv/bin/python scripts/bench/parity.py compare artifacts_local/bench/parity/fp32 \
+    artifacts_local/bench/parity/fp16 --out docs/benchmarks/parity/fp32_vs_fp16
+```
+
+`capture` creates a fresh project, ingests the 2,000 images through `POST .../ingest/upload`
+(embedding policy `all`), trains clusters once, and stores under `artifacts_local/bench/parity/<tag>/`:
+
+| File | Content |
+|---|---|
+| `capture.json` | Schema number, hardware (GPU, driver, CPU, RAM, load), git sha and dirty flag, the image reference and image id of every container of the compose project, Triton model configuration, the engine record (label, free `KEY=VALUE` pairs, plan size and sha256), the dataset manifest hash, the sections captured, the SHA-256 of `arrays.npz` |
+| `arrays.npz` | A fixed set of arrays (float16 vectors, float32 boxes, unicode strings): per item the image, box, detector class and score, integer crop rectangle, cluster id, distance, similarity and core flag, stored class, ground-truth class, VLM label and the PE crop vector; per image the PE whole-frame vector; MobileCLIP, face (box, score, embedding) and OCR (box, text) rows for a sample of images |
+
+Items are keyed by image file name, box overlap and class name, never by stored id, so two captures of
+different projects line up. The curation API never serves embedding vectors, so the PE vectors are read
+by document id from the project's own OpenSearch indexes; everything else goes through the project-scoped
+routes. The COCO ground-truth class of an item is the class of the best-IoU annotation (IoU at least 0.5,
+else `none`).
+
+`compare` pairs the two captures and measures box matching (greedy, best IoU first, same class name
+only), cosine similarity of matched vectors, neighbour overlap at k = 10 on 1,000 seeded query items,
+near-duplicate decisions at cosine 0.98, cluster agreement (adjusted Rand index, NMI, nearest-reference-
+centroid agreement, k-means objective, purity against the COCO classes), class-name agreement, the VLM
+label agreement and the OCR exact-match share. Thresholds live in `scripts/bench/parity_gates.json`
+(values from the plan); the exit code is 0 on PASS, 1 on any FAIL (a gate with no data is SKIP and fails
+only under `--strict`), 2 when the captures cannot be compared. `--out` writes a small
+`parity_summary.json` and `.md`; the large capture files stay out of git.
+
+| Gate | Rule |
+|---|---|
+| P-box | at least 98 % of images with every box matched at IoU 0.95 and confidence delta at most 0.02 |
+| P-box-confident | zero unmatched boxes with confidence at least 0.5 |
+| P-item | item count and class names identical on at least 99 % of images |
+| P-pe, P-pew | cosine of crop vectors and of whole-frame vectors: 1st percentile at least 0.995, median at least 0.999 |
+| P-knn, P-dup | neighbour overlap at least 0.95; near-duplicate decisions identical on at least 99.5 % of pairs |
+| P-cluster-assign | at least 98 % of items keep their nearest reference centroid |
+| P-cluster-purity | purity against the COCO classes not lower by more than 0.5 points |
+| P-label-vote, P-knn-precision | majority neighbour class identical on at least 97 % of queries; kNN class precision not lower by more than 0.5 points |
+| P-label, P-vlm | stored class name at least 99 % identical; VLM label at least 97 % identical |
+| P-clip, P-face, P-ocr | MobileCLIP and ArcFace cosine 1st percentile at least 0.995; OCR exact match at least 98 % |
+
+Crop-rectangle identity, the adjusted Rand index, NMI, the k-means objective difference and the cluster
+similarity deltas are recorded but not gated (see the noise floor below).
+
+#### FP16 against FP32 PE engine
+
+Same isolated stack (the published v0.5.0 images, GPU 0, own ports, no VLM), only the file behind
+`pe_image_encoder` changes. The FP32 plan is the one of the v0.5.0 baseline (1,272,018,292 B). The FP16 plan
+is built through the fixed installer path (`export/trt_utils.py` bake, then `trtexec` with the shapes of
+`scripts/lib/model_setup.sh`): 641,185,140 B, built in 95 s. Each configuration was captured twice,
+once with 4 and once with 1 upload request in flight (run 1 and run 2), and the FP32 plan was captured
+a second time in each run as the noise floor (a repeat of the same configuration). All 12,789 to 12,792
+items per capture are the same 6.4 items per image as the baseline.
+
+**Result: the FP16 engine passes every gate in both runs** (P-vlm is skipped: no VLM is configured).
+
+| Gate | Metric | Rule | FP16 run 1 | FP16 run 2 | FP32 repeat run 1 | FP32 repeat run 2 | FP16 verdict |
+|---|---|---|---:|---:|---:|---:|---|
+| P-box | `boxes.images_identical_share` | >= 0.98 | 0.9934 | 0.9934 | 0.9924 | 0.9939 | PASS |
+| P-box-confident | `boxes.unmatched_confident` | <= 0 | 0 | 0 | 1 | 0 | PASS |
+| P-item | `boxes.item_count_class_identical_share` | >= 0.99 | 0.9995 | 0.9995 | 0.9990 | 0.9995 | PASS |
+| P-pe-p01 | `pe_crop.p01` | >= 0.995 | 0.9984 | 0.9990 | 1.0000 | 1.0000 | PASS |
+| P-pe-median | `pe_crop.median` | >= 0.999 | 0.9999 | 0.9999 | 1.0000 | 1.0000 | PASS |
+| P-pew-p01 | `pe_frame.p01` | >= 0.995 | 0.9975 | 0.9975 | 1.0000 | 1.0000 | PASS |
+| P-pew-median | `pe_frame.median` | >= 0.999 | 0.9998 | 0.9998 | 1.0000 | 1.0000 | PASS |
+| P-knn | `knn.overlap_at_k` | >= 0.95 | 0.9681 | 0.9706 | 0.9978 | 0.9974 | PASS |
+| P-dup | `knn.near_dup_agreement` | >= 0.995 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | PASS |
+| P-cluster-assign | `cluster.assignment_agreement` | >= 0.98 | 0.9977 | 0.9977 | 0.9996 | 0.9996 | PASS |
+| P-cluster-purity | `cluster.purity_drop_points` | <= 0.5 | -0.7115 | -0.4535 | -0.3988 | -0.1564 | PASS |
+| P-label-vote | `knn.label_vote_agreement` | >= 0.97 | 0.9790 | 0.9820 | 0.9990 | 1.0000 | PASS |
+| P-knn-precision | `knn.precision_drop_points` | <= 0.5 | 0.0382 | -0.0654 | 0.0127 | 0.0131 | PASS |
+| P-label | `labels.class_agreement` | >= 0.99 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | PASS |
+| P-vlm | `labels.vlm_agreement` | >= 0.97 | n/a | n/a | n/a | n/a | SKIP |
+| P-clip | `clip.p01` | >= 0.995 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | PASS |
+| P-face | `face.p01` | >= 0.995 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | PASS |
+| P-ocr | `ocr.exact_share` | >= 0.98 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | PASS |
+
+| Recorded metric | FP16 run 1 | FP16 run 2 | FP32 repeat run 1 | FP32 repeat run 2 |
+|---|---:|---:|---:|---:|
+| `boxes.crop_rect_identical_share` | 0.9899 | 0.9923 | 0.9917 | 0.9924 |
+| `pe_crop.min` / `pe_crop.mean` | 0.9220 / 0.9998 | 0.9257 / 0.9998 | 0.9516 / 0.9999 | 0.9234 / 0.9999 |
+| `pe_frame.min` / `pe_frame.mean` | 0.9915 / 0.9997 | 0.9915 / 0.9997 | 1.0000 / 1.0000 | 1.0000 / 1.0000 |
+| `cluster.ari` / `cluster.nmi` | 0.3409 / 0.7764 | 0.3317 / 0.7701 | 0.3507 / 0.7791 | 0.3344 / 0.7698 |
+| `cluster.objective_rel_diff` | -0.0016 | -0.0059 | 0.0024 | -0.0039 |
+| `cluster.purity_ref` / `cluster.purity_cand` | 0.6162 / 0.6233 | 0.6202 / 0.6247 | 0.6162 / 0.6202 | 0.6202 / 0.6218 |
+| `knn.precision_ref` / `knn.precision_cand` | 0.5743 / 0.5739 | 0.5849 / 0.5856 | 0.5743 / 0.5741 | 0.5857 / 0.5856 |
+| `cluster.core_agreement`, `similarity_abs_delta_mean` | 0.962, 0.0215 | 0.960, 0.0222 | 0.962, 0.0213 | 0.961, 0.0219 |
+
+Reading the numbers:
+
+- **The embedding space is the same.** Crop vectors stay at median cosine 0.9999 (1st percentile 0.998 to
+  0.999), whole-frame vectors at median 0.9998 (1st percentile 0.9975, worst single frame 0.9915). The
+  neighbour overlap at 10 is 0.97, the reference nearest neighbour is always inside the FP16 top 10, and
+  no near-duplicate decision at cosine 0.98 changes.
+- **Clustering is unchanged within its own noise.** 99.8 % of items keep their nearest reference
+  centroid. The adjusted Rand index is 0.33 to 0.35 for FP16 *and* for the repeat of the FP32 plan:
+  k-means on 12.8k residual items is chaotic, so ARI is recorded and not gated, as the plan says.
+  Purity against the COCO classes is 0.616 to 0.625 in every capture; FP16 is not lower than the
+  reference.
+- **Detection and labels do not change.** Matched detector scores differ by at most 0.0 in both FP16 runs
+  (0.08 in one FP32 repeat). Boxes and crop rectangles differ for about 1 % of items in FP16 against FP32
+  *and* in an FP32 repeat: the detector is not bit-reproducible between runs (0.8 to 1.0 % of crop
+  rectangles move, worst matched IoU 0.77 to 0.78). The worst crop cosine (0.92) belongs to such a moved
+  crop, not to precision. A class change would show as an unmatched box and fail P-item; none does. The
+  kNN class precision against the COCO classes is the same to 0.1 point.
+- **The noise floor decides how to read a single FAIL.** One unmatched box with confidence at least 0.5
+  appeared between two FP32 captures of the same plan (run 1 repeat), which the strict P-box-confident
+  rule counts as a failure. Capture the reference twice and compare the two before blaming a candidate.
+- Ingest through `POST .../ingest/upload` took 119 s with the FP16 plan against 224 s with FP32 in
+  run 1 (the rows of the Wave 1 section above); the captures are not a benchmark and the host carried
+  other load.
+
+#### Caveats
+
+- One host, one GPU shared with other projects, the published v0.5.0 images; the container image ids are
+  in each `capture.json`. The summaries of the four comparisons are in `docs/benchmarks/parity/`.
+- The VLM gate and the label agreement of a registry-labelled project are not exercised: no VLM is
+  configured and the project has no class registry, so stored class names are empty. The label gates here
+  are the stored class name (trivially equal) and the majority detector class among the top 10 neighbours
+  (P-label-vote), the label a propagation step would assign.
+- Faces and OCR are probed on the first 200 pinned images through the core routes (200 faces, 34 text
+  lines); MobileCLIP, ArcFace and OCR engines are unchanged by this run, so their agreement is exact.
+- Cluster centroids are not served by the API; the reference centroids of the assignment-agreement
+  metric are the normalised mean of each reference cluster's vectors.
+- Rebuild of the FP16 plan: `export/trt_utils.py` bake inside the API image, then `trtexec` in the Triton
+  image with the 1/8/32 x 3 x 336 x 336 profile and an 8 GB workspace; the bake log reports `fp16`.
+
 ## Benchmarking
 
 ### Using the Go Benchmark Tool
@@ -1707,7 +1854,41 @@ cd benchmarks
 
 ---
 
+### MobileCLIP image encoder FP16
+
+One RTX 3080 Ti (12 GB, no foreign load during the runs), TensorRT 11.1, dynamic batch 1/8/32 at
+256 x 256, engine-only `trtexec` timings (no Triton, no preprocessing):
+
+| Engine | Size | Build | Batch 8 GPU compute | Batch 8 images/s | Batch 32 GPU compute | Batch 32 images/s |
+|---|---:|---:|---:|---:|---:|---:|
+| FP32 | 146.6 MB | 62 s | 12.7 ms | 627 | 41.5 ms | 771 |
+| FP16 (4 convs FP32) | 75.1 MB | 65 s | 8.3 ms | 966 | 19.9 ms | 1604 |
+
+Parity of the FP16 engine against the FP32 engine on the first 200 images of the pinned COCO
+benchmark set (hashes verified): cosine similarity min 0.99986, mean 0.99998; top-1 nearest
+neighbour agrees for 98.5 percent of images and the top-5 neighbour overlap is 99.1 percent. The
+engine built by `export_mobileclip_image_encoder.py` itself (71.5 MB, 72 s, no fallback) measures
+cosine min 0.99984, mean 0.99998, top-1 99.5 percent, top-5 99.3 percent. Per-model Triton
+`perf_analyzer` runs were not made; the engine-only figures above are the speedup bound.
+
 ## Tuning Parameters
+
+### OCR pipeline instances
+
+`ocr_pipeline` is a Python BLS model: an instance runs one request at a time, so its instance
+count is the OCR concurrency (the detection and recognition engines need under 10 ms of GPU
+time per image, the Python instance 42-47 ms). On one RTX A6000 with 640 x 480 frames and 16
+clients, `/ocr/predict` does 21 images/s with one instance, 42 with two and 80 with four.
+
+The installer sets the count per profile (`ocr_pipeline_instances` in
+`config_templates/profiles/*.json`: minimal 1, standard 2, full 4) and `models/ocr_pipeline`
+ships 2. A warm instance holds about 256 MiB of GPU memory (measured on a 12 GB card, 640 x 480
+frames; whole-card use with the det and rec engines loaded was 11082, 11337 and 11850 MiB for
+one, two and four instances, so +255 MiB per extra instance); the model config records 512 MiB per instance as the budget figure.
+`python_backend_budget_mib` in each profile caps the Python instances, and an offline test
+fails when a count exceeds it. Memory for very large frames was not measured. To change the
+count on an installed stack, edit `count` in `models/ocr_pipeline/config.pbtxt` and restart
+Triton.
 
 ### Worker Count Optimization
 
