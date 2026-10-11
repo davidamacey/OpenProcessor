@@ -1,0 +1,24 @@
+{
+  "/data/source/coco_bench_2000/images": {
+    "crop_to_array": 0.0962,
+    "decode": 3.2649,
+    "jpeg_encode_crop": 0.2642,
+    "letterbox": 4.634,
+    "megapixels": 0.2733,
+    "read": 0.0944,
+    "resize_normalize": 2.3172,
+    "sha256": 0.4081,
+    "whole_frame": 5.4991
+  },
+  "/data/source/hires_500/images": {
+    "crop_to_array": 4.4584,
+    "decode": 316.4684,
+    "jpeg_encode_crop": 10.2038,
+    "letterbox": 80.4901,
+    "megapixels": 18.4044,
+    "read": 3.1516,
+    "resize_normalize": 2.8343,
+    "sha256": 28.4719,
+    "whole_frame": 136.8441
+  }
+}

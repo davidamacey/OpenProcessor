@@ -1,0 +1,544 @@
+{
+  "attrib": {
+    "census_seconds": 30,
+    "rate_hz": 50,
+    "seconds": 60,
+    "upload": {
+      "cgroup_cpu_stat_since_start": {
+        "system_usec": "6665625804",
+        "user_usec": "25466250675"
+      },
+      "flat": {
+        "api_cpu_s_per_image": 0.1820725539999985,
+        "busy_pe_image_encoder": 0.8724025362950565,
+        "busy_total": 0.9517252479368778,
+        "busy_yolov11_small_trt_end2end": 0.07932271164182139,
+        "bytes_per_image": 0.0,
+        "bytes_per_vector": 0.0,
+        "client_received_bytes_per_image": 745.349,
+        "client_sent_bytes_per_image": 168182.282,
+        "cluster_train_wall_s": 0.0,
+        "duplicates": 0.0,
+        "failed": 0.0,
+        "gpu0_mem_peak_mb": 16392.0,
+        "gpu0_sm_mhz_mean": 210.0,
+        "gpu0_throttled_share": 0.0,
+        "gpu0_util_mean_pct": 0.0,
+        "gpu1_mem_peak_mb": 6785.0,
+        "gpu1_sm_mhz_mean": 210.0,
+        "gpu1_throttled_share": 0.0,
+        "gpu1_util_mean_pct": 0.0,
+        "gpu2_foreign_sm_mean_pct": 0.0,
+        "gpu2_mem_peak_mb": 14116.0,
+        "gpu2_own_sm_mean_pct": 84.92307692307692,
+        "gpu2_sm_mhz_mean": 1490.5813953488373,
+        "gpu2_throttled_share": 0.9302325581395349,
+        "gpu2_util_mean_pct": 85.0,
+        "host_busy_pct": 16.499053885027557,
+        "idle_api_cores_before": 0.26039399999972374,
+        "images_per_s": 21.689030094036184,
+        "items_per_image": 6.397,
+        "load_avg_1m": 6.50732421875,
+        "request_p50_s": 22.089059686288238,
+        "request_p95_s": 25.679421896184795,
+        "stage_crop_mean_ms": 0.08690284298083849,
+        "stage_crop_seconds": 0.5559174865484238,
+        "stage_decode_mean_ms": 4.6033993335440755,
+        "stage_decode_seconds": 4.6033993335440755,
+        "stage_embed_mean_ms": 3611.9691366678703,
+        "stage_embed_seconds": 7520.119742542505,
+        "stage_jpeg_encode_mean_ms": 0.5156270881140206,
+        "stage_jpeg_encode_seconds": 3.2984664826653898,
+        "stage_opensearch_write_mean_ms": 255.52119060031058,
+        "stage_opensearch_write_seconds": 508.48716929461807,
+        "stage_resize_mean_ms": 24.076440910140825,
+        "stage_resize_seconds": 23.835676501039416,
+        "triton_cpu_s_per_image": 0.03126102499999979,
+        "triton_pe_image_encoder_infer_ms_per_image": 40.223215723,
+        "triton_pe_image_encoder_mean_batch": 26.323843416370106,
+        "triton_pe_image_encoder_queue_ms": 3205.1297953631124,
+        "triton_yolov11_small_trt_end2end_infer_ms_per_image": 3.6572733450000006,
+        "triton_yolov11_small_trt_end2end_mean_batch": 17.24137931034483,
+        "triton_yolov11_small_trt_end2end_queue_ms": 15.260356365079366,
+        "wall_s": 46.10625720303506
+      },
+      "flat_pyspy": {
+        "api_cpu_s_per_image": 0.19315872200000012,
+        "bytes_per_image": 0.0,
+        "bytes_per_vector": 0.0,
+        "client_received_bytes_per_image": 748.475,
+        "client_sent_bytes_per_image": 168182.282,
+        "cluster_train_wall_s": 0.0,
+        "duplicates": 0.0,
+        "failed": 0.0,
+        "idle_api_cores_before": 0.27807299999985846,
+        "images_per_s": 21.207469475298154,
+        "items_per_image": 6.397,
+        "request_p50_s": 20.902294393861666,
+        "request_p95_s": 25.768472215230577,
+        "stage_crop_mean_ms": 0.0895001551077266,
+        "stage_crop_seconds": 0.572532492224127,
+        "stage_decode_mean_ms": 4.945734228938818,
+        "stage_decode_seconds": 4.945734228938818,
+        "stage_embed_mean_ms": 3583.8077153948357,
+        "stage_embed_seconds": 7461.487663452048,
+        "stage_jpeg_encode_mean_ms": 0.5451206277868972,
+        "stage_jpeg_encode_seconds": 3.4871366559527814,
+        "stage_opensearch_write_mean_ms": 241.82426346344266,
+        "stage_opensearch_write_seconds": 481.2302842922509,
+        "stage_resize_mean_ms": 25.127001756783386,
+        "stage_resize_seconds": 24.875731739215553,
+        "triton_cpu_s_per_image": 0.03082342200000039,
+        "wall_s": 47.153197658248246
+      },
+      "profile": {
+        "leaf_bucket_share": {
+          "event_loop_wait": 0.7289272030651341,
+          "json_serialization": 0.014367816091954023,
+          "opensearch_client": 0.016283524904214558,
+          "other_python": 0.24042145593869732
+        },
+        "samples": 1044,
+        "top_inclusive": [
+          [
+            "subprocess_started (uvicorn/_subprocess.py:80)",
+            0.9664750957854407
+          ],
+          [
+            "_main (multiprocessing/spawn.py:135)",
+            0.9664750957854407
+          ],
+          [
+            "<module> (<string>:1)",
+            0.9664750957854407
+          ],
+          [
+            "run (multiprocessing/process.py:108)",
+            0.9664750957854407
+          ],
+          [
+            "spawn_main (multiprocessing/spawn.py:122)",
+            0.9664750957854407
+          ],
+          [
+            "run (uvicorn/server.py:86)",
+            0.9664750957854407
+          ],
+          [
+            "_bootstrap (multiprocessing/process.py:313)",
+            0.9664750957854407
+          ],
+          [
+            "run (asyncio/runners.py:195)",
+            0.9664750957854407
+          ],
+          [
+            "target (uvicorn/supervisors/multiprocess.py:77)",
+            0.9664750957854407
+          ],
+          [
+            "run (asyncio/runners.py:118)",
+            0.9664750957854407
+          ],
+          [
+            "ensure_fresh (services/projects/registry.py:305)",
+            0.1053639846743295
+          ],
+          [
+            "_refresh (services/projects/registry.py:371)",
+            0.09003831417624521
+          ],
+          [
+            "_poll_all_active_projects (services/config_store/store.py:521)",
+            0.0842911877394636
+          ],
+          [
+            "doc_to_record (services/projects/registry.py:95)",
+            0.08333333333333333
+          ],
+          [
+            "refresh (services/config_store/store.py:212)",
+            0.08333333333333333
+          ],
+          [
+            "_refresh_locked (services/config_store/store.py:228)",
+            0.08237547892720307
+          ],
+          [
+            "get (opensearchpy/_async/client/__init__.py:1393)",
+            0.08141762452107279
+          ],
+          [
+            "get_config_revision (services/config_store/index.py:140)",
+            0.08141762452107279
+          ],
+          [
+            "get_doc_or_none (clients/optional_doc.py:18)",
+            0.08045977011494253
+          ],
+          [
+            "perform_request (services/projects/guard.py:554)",
+            0.07662835249042145
+          ],
+          [
+            "poll_loop (services/projects/registry.py:383)",
+            0.07088122605363985
+          ],
+          [
+            "perform_request (opensearchpy/_async/transport.py:391)",
+            0.05363984674329502
+          ],
+          [
+            "__init__ (pathlib/_local.py:503)",
+            0.05172413793103448
+          ],
+          [
+            "perform_request (opensearchpy/_async/http_aiohttp.py:294)",
+            0.04885057471264368
+          ],
+          [
+            "__aenter__ (aiohttp/client.py:1693)",
+            0.04789272030651341
+          ],
+          [
+            "_resources_from_dict (services/projects/registry.py:61)",
+            0.044061302681992334
+          ],
+          [
+            "__init__ (pathlib/_local.py:128)",
+            0.044061302681992334
+          ],
+          [
+            "_poll_all_active_projects (services/config_store/store.py:516)",
+            0.0421455938697318
+          ],
+          [
+            "run (threading.py:995)",
+            0.033524904214559385
+          ],
+          [
+            "_bootstrap_inner (threading.py:1044)",
+            0.033524904214559385
+          ],
+          [
+            "_bootstrap (threading.py:1015)",
+            0.033524904214559385
+          ],
+          [
+            "_request (aiohttp/client.py:858)",
+            0.02681992337164751
+          ],
+          [
+            "always_pong (uvicorn/supervisors/multiprocess.py:64)",
+            0.0210727969348659
+          ],
+          [
+            "_recv_bytes (multiprocessing/connection.py:430)",
+            0.0210727969348659
+          ],
+          [
+            "pong (uvicorn/supervisors/multiprocess.py:59)",
+            0.0210727969348659
+          ],
+          [
+            "_recv (multiprocessing/connection.py:395)",
+            0.0210727969348659
+          ],
+          [
+            "recv (multiprocessing/connection.py:250)",
+            0.0210727969348659
+          ],
+          [
+            "perform_request (opensearchpy/_async/transport.py:440)",
+            0.016283524904214558
+          ],
+          [
+            "perform_request (services/projects/guard.py:551)",
+            0.01532567049808429
+          ],
+          [
+            "loads (opensearchpy/serializer.py:202)",
+            0.01532567049808429
+          ]
+        ],
+        "top_leaf": [
+          [
+            "run (asyncio/runners.py:118)",
+            0.7289272030651341
+          ],
+          [
+            "__init__ (pathlib/_local.py:128)",
+            0.044061302681992334
+          ],
+          [
+            "_recv (multiprocessing/connection.py:395)",
+            0.0210727969348659
+          ],
+          [
+            "raw_decode (json/decoder.py:361)",
+            0.011494252873563218
+          ],
+          [
+            "_worker (concurrent/futures/thread.py:90)",
+            0.01053639846743295
+          ],
+          [
+            "owner_slug (services/projects/guard.py:263)",
+            0.009578544061302681
+          ],
+          [
+            "_write (aiohttp/http_writer.py:103)",
+            0.008620689655172414
+          ],
+          [
+            "_resources_from_dict (services/projects/registry.py:56)",
+            0.007662835249042145
+          ],
+          [
+            "data_received (aiohttp/client_proto.py:326)",
+            0.005747126436781609
+          ],
+          [
+            "_rmtree_safe_fd (shutil.py:696)",
+            0.005747126436781609
+          ],
+          [
+            "_generate_unquoted_parts (urllib/parse.py:684)",
+            0.0038314176245210726
+          ],
+          [
+            "_refresh (services/projects/registry.py:375)",
+            0.0038314176245210726
+          ],
+          [
+            "_resources_from_dict (services/projects/registry.py:64)",
+            0.0038314176245210726
+          ],
+          [
+            "create_default_context (ssl.py:717)",
+            0.0038314176245210726
+          ],
+          [
+            "__new__ (pathlib/_local.py:508)",
+            0.0028735632183908046
+          ],
+          [
+            "_resources_from_dict (services/projects/registry.py:61)",
+            0.0028735632183908046
+          ],
+          [
+            "get_config_store (services/config_store/store.py:642)",
+            0.0028735632183908046
+          ],
+          [
+            "__call__ (enum.py:727)",
+            0.0028735632183908046
+          ],
+          [
+            "__init__ (<string>:7)",
+            0.0028735632183908046
+          ],
+          [
+            "__aenter__ (aiohttp/client.py:1693)",
+            0.0028735632183908046
+          ],
+          [
+            "_resources_from_dict (services/projects/registry.py:55)",
+            0.0028735632183908046
+          ],
+          [
+            "run (threading.py:995)",
+            0.0019157088122605363
+          ],
+          [
+            "_resources_from_dict (services/projects/registry.py:60)",
+            0.0019157088122605363
+          ],
+          [
+            "__init__ (aiohttp/client_reqrep.py:880)",
+            0.0019157088122605363
+          ],
+          [
+            "doc_to_record (services/projects/registry.py:86)",
+            0.0019157088122605363
+          ]
+        ]
+      },
+      "stages": {
+        "crop": {
+          "bytes": 0.0,
+          "calls": 6397.0,
+          "mean_ms": 0.08690284298083849,
+          "seconds": 0.5559174865484238
+        },
+        "decode": {
+          "bytes": 168038999.0,
+          "calls": 1000.0,
+          "mean_ms": 4.6033993335440755,
+          "seconds": 4.6033993335440755
+        },
+        "embed": {
+          "bytes": 10021100544.0,
+          "calls": 2082.0,
+          "mean_ms": 3611.9691366678703,
+          "seconds": 7520.119742542505
+        },
+        "jpeg_encode": {
+          "bytes": 59760208.0,
+          "calls": 6397.0,
+          "mean_ms": 0.5156270881140206,
+          "seconds": 3.2984664826653898
+        },
+        "opensearch_write": {
+          "bytes": 0.0,
+          "calls": 1990.0,
+          "mean_ms": 255.52119060031058,
+          "seconds": 508.48716929461807
+        },
+        "resize": {
+          "bytes": 0.0,
+          "calls": 990.0,
+          "mean_ms": 24.076440910140825,
+          "seconds": 23.835676501039416
+        }
+      },
+      "thread_cpu_by_name": {
+        "processes": {
+          "count": 34,
+          "new_count": 0,
+          "new_system_s": 0.0,
+          "new_user_s": 0.0,
+          "system_s": 16.299999999999997,
+          "user_s": 67.89999999999999
+        },
+        "seconds": 30,
+        "threads": {
+          "cuda00008400022": {
+            "system_s": 0.0,
+            "threads": 2,
+            "user_s": 0.0
+          },
+          "cuda00008800023": {
+            "system_s": 0.0,
+            "threads": 7,
+            "user_s": 0.0
+          },
+          "cuda00009000025": {
+            "system_s": 0.0,
+            "threads": 5,
+            "user_s": 0.0
+          },
+          "cuda00009400026": {
+            "system_s": 0.0,
+            "threads": 3,
+            "user_s": 0.0
+          },
+          "cuda0000bc00030": {
+            "system_s": 0.0,
+            "threads": 1,
+            "user_s": 0.0
+          },
+          "cuda0000c000031": {
+            "system_s": 0.0,
+            "threads": 2,
+            "user_s": 0.0
+          },
+          "event_engine": {
+            "system_s": 3.489999999999989,
+            "threads": 512,
+            "user_s": 0.8500000000000005
+          },
+          "grpc_global_tim": {
+            "system_s": 0.03,
+            "threads": 32,
+            "user_s": 0.0
+          },
+          "libuv-worker": {
+            "system_s": 0.0,
+            "threads": 128,
+            "user_s": 0.0
+          },
+          "lifeguard": {
+            "system_s": 0.03,
+            "threads": 32,
+            "user_s": 0.03
+          },
+          "python3.13": {
+            "system_s": 1.2400000000000002,
+            "threads": 2325,
+            "user_s": 2.5899999999999967
+          },
+          "python3.13 (main thread)": {
+            "system_s": 11.709999999999994,
+            "threads": 33,
+            "user_s": 63.97999999999998
+          },
+          "uvicorn (main thread)": {
+            "system_s": 0.06,
+            "threads": 1,
+            "user_s": 0.16
+          }
+        }
+      },
+      "triton": {
+        "pe_image_encoder": {
+          "batch_histogram": {
+            "1": 2,
+            "10": 1,
+            "11": 1,
+            "16": 4,
+            "17": 5,
+            "18": 6,
+            "19": 8,
+            "2": 2,
+            "20": 6,
+            "21": 5,
+            "22": 7,
+            "23": 10,
+            "24": 7,
+            "25": 10,
+            "26": 16,
+            "27": 14,
+            "28": 24,
+            "29": 33,
+            "3": 4,
+            "30": 27,
+            "31": 28,
+            "32": 56,
+            "4": 1,
+            "5": 1,
+            "6": 1,
+            "7": 2
+          },
+          "exec_infer_ms": 143.1431164519573,
+          "exec_input_ms": 0.5649433736654804,
+          "exec_output_ms": 138.8638193843416,
+          "executions": 281,
+          "inferences": 7397,
+          "mean_batch": 26.323843416370106,
+          "queue_ms_per_request": 3205.1297953631124,
+          "requests": 2082
+        },
+        "yolov11_small_trt_end2end": {
+          "batch_histogram": {
+            "16": 52,
+            "32": 5,
+            "8": 1
+          },
+          "exec_infer_ms": 63.05643698275862,
+          "exec_input_ms": 33.411821413793106,
+          "exec_output_ms": 10.182014086206896,
+          "executions": 58,
+          "inferences": 1000,
+          "mean_batch": 17.24137931034483,
+          "queue_ms_per_request": 15.260356365079366,
+          "requests": 63
+        }
+      }
+    }
+  },
+  "phase_seconds": {
+    "attrib": 242.18491709325463
+  },
+  "schema": "2-wave0-1"
+}

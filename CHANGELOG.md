@@ -20,6 +20,15 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   environment, ingest through `/ingest/upload` and `/ingest/batch`, Triton statistics,
   perf_analyzer points, endpoints and VLM throughput as one JSON; the v0.5.0 numbers are in
   `docs/PERFORMANCE.md` and `docs/benchmarks/` (#45, #40).
+- Wave 0 full-pipeline throughput probes: `scripts/bench/wave0_suite.py` (client concurrency and
+  batch sweep, Triton instance-count, queue-delay and preferred-batch arms applied and restored
+  through the model store, per-endpoint stage cost for faces, OCR and the combined analyze route,
+  py-spy attribution of the API container, per-GPU clocks, power, foreign load and host CPU),
+  `scripts/bench/os_write_ceiling.py` (OpenSearch bulk write ceiling with the real mapping) and
+  `wave0_report.py` (the tables). `scripts/datasets/fetch_hires_set.py` pins a 500-image set of
+  12 to 24 MP public photos (`manifests/commons_hires_500.json`). Results and the binding resource
+  per stage are in `docs/PERFORMANCE.md` ("Wave 0: full-pipeline throughput") (#45, #210, #230).
+
 - `scripts/bench/parity.py` with `capture` and `compare` subcommands: the accuracy gate every
   v0.6.0 change passes. `capture` ingests the pinned COCO set into a fresh project and stores the
   per-stage outputs (detector boxes, crop rectangles, PE crop and whole-frame vectors, cluster

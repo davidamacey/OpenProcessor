@@ -1,0 +1,366 @@
+{
+  "phase_seconds": {
+    "triton": 658.6174087319523
+  },
+  "schema": 2,
+  "triton": {
+    "pe_image_encoder": {
+      "16": {
+        "best": {
+          "compute_infer_ms": 163.027,
+          "compute_input_ms": 0.057,
+          "compute_output_ms": 160.591,
+          "concurrency": 6.0,
+          "infer_per_sec": 194.39,
+          "p50_ms": 491.302,
+          "p95_ms": 494.566,
+          "p99_ms": 498.67,
+          "queue_ms": 114.472
+        },
+        "points": [
+          {
+            "compute_infer_ms": 79.344,
+            "compute_input_ms": 5.469,
+            "compute_output_ms": 0.262,
+            "concurrency": 1.0,
+            "infer_per_sec": 126.162,
+            "p50_ms": 124.661,
+            "p95_ms": 137.783,
+            "p99_ms": 146.127,
+            "queue_ms": 0.219
+          },
+          {
+            "compute_infer_ms": 167.8,
+            "compute_input_ms": 0.002,
+            "compute_output_ms": 166.791,
+            "concurrency": 16.0,
+            "infer_per_sec": 190.237,
+            "p50_ms": 1341.523,
+            "p95_ms": 1345.765,
+            "p99_ms": 1347.526,
+            "queue_ms": 933.278
+          },
+          {
+            "compute_infer_ms": 165.003,
+            "compute_input_ms": 0.001,
+            "compute_output_ms": 163.614,
+            "concurrency": 11.0,
+            "infer_per_sec": 192.207,
+            "p50_ms": 835.229,
+            "p95_ms": 997.818,
+            "p99_ms": 999.374,
+            "queue_ms": 517.842
+          },
+          {
+            "compute_infer_ms": 163.027,
+            "compute_input_ms": 0.057,
+            "compute_output_ms": 160.591,
+            "concurrency": 6.0,
+            "infer_per_sec": 194.39,
+            "p50_ms": 491.302,
+            "p95_ms": 494.566,
+            "p99_ms": 498.67,
+            "queue_ms": 114.472
+          }
+        ]
+      },
+      "32": {
+        "best": {
+          "compute_infer_ms": 164.17,
+          "compute_input_ms": 0.252,
+          "compute_output_ms": 160.448,
+          "concurrency": 6.0,
+          "infer_per_sec": 194.53,
+          "p50_ms": 983.868,
+          "p95_ms": 985.961,
+          "p99_ms": 986.887,
+          "queue_ms": 550.837
+        },
+        "points": [
+          {
+            "compute_infer_ms": 160.646,
+            "compute_input_ms": 10.51,
+            "compute_output_ms": 0.27,
+            "concurrency": 1.0,
+            "infer_per_sec": 137.679,
+            "p50_ms": 229.172,
+            "p95_ms": 243.671,
+            "p99_ms": 244.151,
+            "queue_ms": 0.21
+          },
+          {
+            "compute_infer_ms": 168.094,
+            "compute_input_ms": 0.001,
+            "compute_output_ms": 167.346,
+            "concurrency": 16.0,
+            "infer_per_sec": 190.382,
+            "p50_ms": 2687.649,
+            "p95_ms": 2690.946,
+            "p99_ms": 2691.864,
+            "queue_ms": 2274.426
+          },
+          {
+            "compute_infer_ms": 166.159,
+            "compute_input_ms": 0.001,
+            "compute_output_ms": 165.403,
+            "concurrency": 11.0,
+            "infer_per_sec": 191.742,
+            "p50_ms": 1825.049,
+            "p95_ms": 1840.752,
+            "p99_ms": 1841.24,
+            "queue_ms": 1421.14
+          },
+          {
+            "compute_infer_ms": 164.17,
+            "compute_input_ms": 0.252,
+            "compute_output_ms": 160.448,
+            "concurrency": 6.0,
+            "infer_per_sec": 194.53,
+            "p50_ms": 983.868,
+            "p95_ms": 985.961,
+            "p99_ms": 986.887,
+            "queue_ms": 550.837
+          }
+        ]
+      },
+      "8": {
+        "best": {
+          "compute_infer_ms": 83.201,
+          "compute_input_ms": 0.008,
+          "compute_output_ms": 79.336,
+          "concurrency": 6.0,
+          "infer_per_sec": 195.255,
+          "p50_ms": 242.773,
+          "p95_ms": 245.602,
+          "p99_ms": 250.104,
+          "queue_ms": 52.257
+        },
+        "points": [
+          {
+            "compute_infer_ms": 37.975,
+            "compute_input_ms": 2.501,
+            "compute_output_ms": 0.201,
+            "concurrency": 1.0,
+            "infer_per_sec": 133.301,
+            "p50_ms": 57.481,
+            "p95_ms": 65.87,
+            "p99_ms": 68.327,
+            "queue_ms": 0.191
+          },
+          {
+            "compute_infer_ms": 141.685,
+            "compute_input_ms": 0.002,
+            "compute_output_ms": 133.18,
+            "concurrency": 16.0,
+            "infer_per_sec": 191.296,
+            "p50_ms": 669.867,
+            "p95_ms": 672.516,
+            "p99_ms": 674.175,
+            "queue_ms": 357.057
+          },
+          {
+            "compute_infer_ms": 152.128,
+            "compute_input_ms": 0.001,
+            "compute_output_ms": 146.632,
+            "concurrency": 11.0,
+            "infer_per_sec": 194.979,
+            "p50_ms": 449.554,
+            "p95_ms": 454.459,
+            "p99_ms": 456.649,
+            "queue_ms": 118.184
+          },
+          {
+            "compute_infer_ms": 83.201,
+            "compute_input_ms": 0.008,
+            "compute_output_ms": 79.336,
+            "concurrency": 6.0,
+            "infer_per_sec": 195.255,
+            "p50_ms": 242.773,
+            "p95_ms": 245.602,
+            "p99_ms": 250.104,
+            "queue_ms": 52.257
+          }
+        ]
+      }
+    },
+    "yolov11_small_trt_end2end": {
+      "16": {
+        "best": {
+          "compute_infer_ms": 10.561,
+          "compute_input_ms": 21.474,
+          "compute_output_ms": 0.463,
+          "concurrency": 6.0,
+          "infer_per_sec": 387.542,
+          "p50_ms": 231.954,
+          "p95_ms": 383.485,
+          "p99_ms": 460.525,
+          "queue_ms": 3.903
+        },
+        "points": [
+          {
+            "compute_infer_ms": 9.997,
+            "compute_input_ms": 18.251,
+            "compute_output_ms": 0.209,
+            "concurrency": 1.0,
+            "infer_per_sec": 127.737,
+            "p50_ms": 113.434,
+            "p95_ms": 170.932,
+            "p99_ms": 189.756,
+            "queue_ms": 0.21
+          },
+          {
+            "compute_infer_ms": 35.543,
+            "compute_input_ms": 283.887,
+            "compute_output_ms": 0.334,
+            "concurrency": 16.0,
+            "infer_per_sec": 243.821,
+            "p50_ms": 1042.558,
+            "p95_ms": 1127.439,
+            "p99_ms": 1133.582,
+            "queue_ms": 561.527
+          },
+          {
+            "compute_infer_ms": 35.408,
+            "compute_input_ms": 173.828,
+            "compute_output_ms": 9.703,
+            "concurrency": 11.0,
+            "infer_per_sec": 320.997,
+            "p50_ms": 528.417,
+            "p95_ms": 772.159,
+            "p99_ms": 841.687,
+            "queue_ms": 124.2
+          },
+          {
+            "compute_infer_ms": 10.561,
+            "compute_input_ms": 21.474,
+            "compute_output_ms": 0.463,
+            "concurrency": 6.0,
+            "infer_per_sec": 387.542,
+            "p50_ms": 231.954,
+            "p95_ms": 383.485,
+            "p99_ms": 460.525,
+            "queue_ms": 3.903
+          }
+        ]
+      },
+      "32": {
+        "best": {
+          "compute_infer_ms": 34.882,
+          "compute_input_ms": 246.681,
+          "compute_output_ms": 1.822,
+          "concurrency": 6.0,
+          "infer_per_sec": 261.992,
+          "p50_ms": 740.251,
+          "p95_ms": 844.701,
+          "p99_ms": 940.796,
+          "queue_ms": 144.514
+        },
+        "points": [
+          {
+            "compute_infer_ms": 18.34,
+            "compute_input_ms": 36.225,
+            "compute_output_ms": 0.237,
+            "concurrency": 1.0,
+            "infer_per_sec": 142.725,
+            "p50_ms": 210.395,
+            "p95_ms": 260.749,
+            "p99_ms": 414.459,
+            "queue_ms": 0.207
+          },
+          {
+            "compute_infer_ms": 35.549,
+            "compute_input_ms": 275.605,
+            "compute_output_ms": 0.328,
+            "concurrency": 16.0,
+            "infer_per_sec": 251.713,
+            "p50_ms": 2012.096,
+            "p95_ms": 2184.881,
+            "p99_ms": 2502.646,
+            "queue_ms": 1369.95
+          },
+          {
+            "compute_infer_ms": 35.712,
+            "compute_input_ms": 272.558,
+            "compute_output_ms": 1.456,
+            "concurrency": 11.0,
+            "infer_per_sec": 254.95,
+            "p50_ms": 1360.476,
+            "p95_ms": 1627.385,
+            "p99_ms": 1879.462,
+            "queue_ms": 607.342
+          },
+          {
+            "compute_infer_ms": 34.882,
+            "compute_input_ms": 246.681,
+            "compute_output_ms": 1.822,
+            "concurrency": 6.0,
+            "infer_per_sec": 261.992,
+            "p50_ms": 740.251,
+            "p95_ms": 844.701,
+            "p99_ms": 940.796,
+            "queue_ms": 144.514
+          }
+        ]
+      },
+      "8": {
+        "best": {
+          "compute_infer_ms": 9.087,
+          "compute_input_ms": 22.875,
+          "compute_output_ms": 0.406,
+          "concurrency": 11.0,
+          "infer_per_sec": 485.425,
+          "p50_ms": 161.306,
+          "p95_ms": 286.248,
+          "p99_ms": 377.746,
+          "queue_ms": 11.23
+        },
+        "points": [
+          {
+            "compute_infer_ms": 5.649,
+            "compute_input_ms": 9.64,
+            "compute_output_ms": 0.199,
+            "concurrency": 1.0,
+            "infer_per_sec": 115.153,
+            "p50_ms": 60.729,
+            "p95_ms": 69.227,
+            "p99_ms": 88.146,
+            "queue_ms": 0.213
+          },
+          {
+            "compute_infer_ms": 31.363,
+            "compute_input_ms": 195.831,
+            "compute_output_ms": 1.255,
+            "concurrency": 16.0,
+            "infer_per_sec": 290.472,
+            "p50_ms": 475.303,
+            "p95_ms": 604.809,
+            "p99_ms": 744.229,
+            "queue_ms": 99.328
+          },
+          {
+            "compute_infer_ms": 5.946,
+            "compute_input_ms": 10.04,
+            "compute_output_ms": 0.235,
+            "concurrency": 6.0,
+            "infer_per_sec": 360.371,
+            "p50_ms": 123.628,
+            "p95_ms": 195.483,
+            "p99_ms": 231.879,
+            "queue_ms": 2.483
+          },
+          {
+            "compute_infer_ms": 9.087,
+            "compute_input_ms": 22.875,
+            "compute_output_ms": 0.406,
+            "concurrency": 11.0,
+            "infer_per_sec": 485.425,
+            "p50_ms": 161.306,
+            "p95_ms": 286.248,
+            "p99_ms": 377.746,
+            "queue_ms": 11.23
+          }
+        ]
+      }
+    }
+  }
+}

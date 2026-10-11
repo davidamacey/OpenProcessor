@@ -278,7 +278,10 @@ def ingest_rep(
         before_m = scrape(client, f'{args.api_url}/metrics')
         cpu0 = {c: cgroup_cpu_s(f'{args.project}-{c}') for c in ('api', 'triton')}
         started = time.monotonic()
-        with Gauges(args.project, args.gpu) as gauges, ThreadPoolExecutor(args.concurrency) as pool:
+        with (
+            getattr(args, 'gauges_cls', Gauges)(args.project, args.gpu) as gauges,
+            ThreadPoolExecutor(args.concurrency) as pool,
+        ):
             results = list(
                 pool.map(
                     lambda b: post_batch(client, base, mode, list(b), args.source_map), batches
@@ -298,9 +301,17 @@ def ingest_rep(
         if ok == 0:
             raise RuntimeError(f'{mode}: every image failed; check the paths and --source-map')
         lat = [t for _, t in results]
-        cluster = run_autolabel(client, base, {'train_clusters': 'true', 'run_vlm': 'false'})
+        cluster = (
+            {'status': 'skipped', 'wall_s': 0.0, 'stage_durations': {}}
+            if getattr(args, 'skip_cluster', False)
+            else run_autolabel(client, base, {'train_clusters': 'true', 'run_vlm': 'false'})
+        )
         names = list(client.get(base).raise_for_status().json()['resources']['indexes'].values())
-        store = settle_and_count(client, args.opensearch_url.rstrip('/'), names)
+        store: dict[str, Any] = (
+            {'rows': [], 'vectors': 0, 'images': 0, 'merge_rounds': 0}
+            if getattr(args, 'skip_settle', False)
+            else settle_and_count(client, args.opensearch_url.rstrip('/'), names)
+        )
         configs = triton_configs(client, args.triton_url, list(delta))
         if not keep:
             client.delete(base, params={'confirm': slug}).raise_for_status()
@@ -577,6 +588,8 @@ def build_parser() -> argparse.ArgumentParser:
         '--limit', type=int, default=0, help='use only the first N pinned images (smoke runs)'
     )
     p.add_argument('--idle-samples', type=int, default=30)
+    p.add_argument('--skip-cluster', action='store_true', help='no cluster training after ingest')
+    p.add_argument('--skip-settle', action='store_true', help='no merge/storage accounting')
     p.add_argument('--perf-dir', type=Path, default=Path('artifacts_local/bench/perf_analyzer'))
     p.add_argument('--perf-models', default=','.join(PERF_MODELS))
     p.add_argument('--perf-batches', default=','.join(str(b) for b in PERF_BATCHES))
