@@ -2397,6 +2397,488 @@
         "title": "BreakdownRow",
         "type": "object"
       },
+      "BulkIngestConfig": {
+        "properties": {
+          "default_batch_size": {
+            "title": "Default Batch Size",
+            "type": "integer"
+          },
+          "default_concurrency": {
+            "title": "Default Concurrency",
+            "type": "integer"
+          },
+          "default_extensions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Default Extensions",
+            "type": "array"
+          },
+          "max_batch_size": {
+            "title": "Max Batch Size",
+            "type": "integer"
+          },
+          "max_concurrency": {
+            "title": "Max Concurrency",
+            "type": "integer"
+          },
+          "source_roots": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Roots",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_roots",
+          "default_extensions",
+          "default_batch_size",
+          "default_concurrency",
+          "max_batch_size",
+          "max_concurrency"
+        ],
+        "title": "BulkIngestConfig",
+        "type": "object"
+      },
+      "BulkIngestFailure": {
+        "properties": {
+          "error": {
+            "title": "Error",
+            "type": "string"
+          },
+          "error_kind": {
+            "title": "Error Kind",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "error",
+          "error_kind"
+        ],
+        "title": "BulkIngestFailure",
+        "type": "object"
+      },
+      "BulkIngestFailurePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BulkIngestFailure"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "title": "BulkIngestFailurePage",
+        "type": "object"
+      },
+      "BulkIngestList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BulkIngestRun"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "BulkIngestList",
+        "type": "object"
+      },
+      "BulkIngestProgress": {
+        "properties": {
+          "crops_indexed": {
+            "title": "Crops Indexed",
+            "type": "integer"
+          },
+          "discovered": {
+            "title": "Discovered",
+            "type": "integer"
+          },
+          "discovery_complete": {
+            "title": "Discovery Complete",
+            "type": "boolean"
+          },
+          "duplicates": {
+            "title": "Duplicates",
+            "type": "integer"
+          },
+          "elapsed_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsed S"
+          },
+          "eta_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eta S"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "images_per_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Images Per S"
+          },
+          "images_per_s_recent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Images Per S Recent"
+          },
+          "in_flight": {
+            "title": "In Flight",
+            "type": "integer"
+          },
+          "ingested": {
+            "title": "Ingested",
+            "type": "integer"
+          },
+          "n_embed_failed": {
+            "title": "N Embed Failed",
+            "type": "integer"
+          },
+          "n_embedded": {
+            "title": "N Embedded",
+            "type": "integer"
+          },
+          "n_not_embedded": {
+            "title": "N Not Embedded",
+            "type": "integer"
+          },
+          "processed": {
+            "title": "Processed",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "discovered",
+          "discovery_complete",
+          "skipped",
+          "ingested",
+          "duplicates",
+          "failed",
+          "processed",
+          "crops_indexed",
+          "n_embedded",
+          "n_not_embedded",
+          "n_embed_failed",
+          "in_flight"
+        ],
+        "title": "BulkIngestProgress",
+        "type": "object"
+      },
+      "BulkIngestRequest": {
+        "additionalProperties": false,
+        "description": "Exactly one of ``folder`` and ``manifest``: a path inside the API container,\nunder a configured source root. Starting a source whose earlier run was\ninterrupted, cancelled or finished with failures resumes that run.",
+        "properties": {
+          "batch_size": {
+            "default": 16,
+            "maximum": 64.0,
+            "minimum": 1.0,
+            "title": "Batch Size",
+            "type": "integer"
+          },
+          "concurrency": {
+            "default": 8,
+            "maximum": 32.0,
+            "minimum": 1.0,
+            "title": "Concurrency",
+            "type": "integer"
+          },
+          "extensions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extensions"
+          },
+          "folder": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder"
+          },
+          "manifest": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manifest"
+          },
+          "source": {
+            "default": "bulk_ingest",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "title": "BulkIngestRequest",
+        "type": "object"
+      },
+      "BulkIngestRun": {
+        "properties": {
+          "attempts": {
+            "default": 1,
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "can_cancel": {
+            "title": "Can Cancel",
+            "type": "boolean"
+          },
+          "can_resume": {
+            "title": "Can Resume",
+            "type": "boolean"
+          },
+          "cancel_requested": {
+            "default": false,
+            "title": "Cancel Requested",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "options": {
+            "$ref": "#/components/schemas/BulkOptionsWire"
+          },
+          "poll_after_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poll After S"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/BulkIngestProgress"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "resumed": {
+            "default": false,
+            "title": "Resumed",
+            "type": "boolean"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/BulkSourceWire"
+          },
+          "stage_s": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Stage S",
+            "type": "object"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "completed_with_errors",
+              "failed",
+              "cancelled",
+              "interrupted"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "run_id",
+          "status",
+          "source",
+          "options",
+          "progress",
+          "can_cancel",
+          "can_resume"
+        ],
+        "title": "BulkIngestRun",
+        "type": "object"
+      },
+      "BulkOptionsWire": {
+        "properties": {
+          "batch_size": {
+            "title": "Batch Size",
+            "type": "integer"
+          },
+          "concurrency": {
+            "title": "Concurrency",
+            "type": "integer"
+          },
+          "source_tag": {
+            "title": "Source Tag",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_tag",
+          "batch_size",
+          "concurrency"
+        ],
+        "title": "BulkOptionsWire",
+        "type": "object"
+      },
+      "BulkSourceWire": {
+        "properties": {
+          "extensions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Extensions",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "folder",
+              "manifest"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "path",
+          "extensions"
+        ],
+        "title": "BulkSourceWire",
+        "type": "object"
+      },
       "CampaignRunSpec": {
         "additionalProperties": false,
         "description": "One row inside a campaign payload.",
@@ -3983,6 +4465,9 @@
               "upload_not_found",
               "image_not_found",
               "import_busy",
+              "bulk_ingest_not_found",
+              "bulk_ingest_busy",
+              "bulk_ingest_invalid_source",
               "import_resumable",
               "dataset_changed",
               "import_not_resumable",
@@ -4220,6 +4705,17 @@
               }
             ],
             "title": "Requested"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
           },
           "soft_limit": {
             "anyOf": [
@@ -8505,6 +9001,19 @@
       "IngestBatchRequest": {
         "additionalProperties": false,
         "properties": {
+          "ingest_run_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingest Run Id"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/IngestBatchItem"
@@ -35941,6 +36450,343 @@
           }
         },
         "summary": "Curation Ingest Batch",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest/bulk": {
+      "get": {
+        "operationId": "list_bulk_ingests_curation_projects__project__ingest_bulk_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkIngestList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Bulk Ingests",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "post": {
+        "description": "Start a run over a folder or manifest, or resume the interrupted, cancelled\nor partly failed run of the same source (``resumed: true``). One run per\nproject at a time (409 ``bulk_ingest_busy``).",
+        "operationId": "start_bulk_ingest_curation_projects__project__ingest_bulk_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkIngestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkIngestRun"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Bulk Ingest",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest/bulk/config": {
+      "get": {
+        "description": "The roots a source must lie under and the run-option defaults and bounds.",
+        "operationId": "bulk_ingest_config_curation_projects__project__ingest_bulk_config_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkIngestConfig"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bulk Ingest Config",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest/bulk/{run_id}": {
+      "get": {
+        "operationId": "get_bulk_ingest_curation_projects__project__ingest_bulk__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkIngestRun"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Bulk Ingest",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest/bulk/{run_id}/cancel": {
+      "post": {
+        "description": "Stop after the batches in flight; images already stored stay stored and a\nlater start of the same source continues from them.",
+        "operationId": "cancel_bulk_ingest_curation_projects__project__ingest_bulk__run_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkIngestRun"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Bulk Ingest",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest/bulk/{run_id}/failures": {
+      "get": {
+        "description": "The failed images of the run's latest attempt, with the reason for each.",
+        "operationId": "get_bulk_ingest_failures_curation_projects__project__ingest_bulk__run_id__failures_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkIngestFailurePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Bulk Ingest Failures",
         "tags": [
           "Curation"
         ]

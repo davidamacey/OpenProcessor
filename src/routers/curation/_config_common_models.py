@@ -91,6 +91,9 @@ ErrorCode = Literal[
     'upload_not_found',
     'image_not_found',
     'import_busy',
+    'bulk_ingest_not_found',
+    'bulk_ingest_busy',
+    'bulk_ingest_invalid_source',
     'import_resumable',
     'dataset_changed',
     'import_not_resumable',
@@ -371,6 +374,8 @@ class ConfigErrorDetail(BaseModel):
     issues: list[DatasetIssueWire] | None = None
     unmapped: list[str] | None = None
     import_id: str | None = None
+    # bulk ingest: the run a 404/409 names.
+    run_id: str | None = None
     limit: int | None = None
     # 422 too_few_items: the smallest pool the clustering route accepts.
     min_items: int | None = None
