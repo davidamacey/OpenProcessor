@@ -34,7 +34,6 @@ RUN_ID_RE = re.compile(r'^bulk_\d{8}T\d{6}_[0-9a-f]{8}$')
 ACTIVE_STATUSES = frozenset({'queued', 'running'})
 # A run that finished with failed images is resumed (the ledger skips the rest), not restarted.
 RESUMABLE_STATUSES = frozenset({'interrupted', 'failed', 'cancelled', 'completed_with_errors'})
-FINISHED_STATUSES = frozenset({'completed'}) | RESUMABLE_STATUSES
 
 OUTCOME_INGESTED = 'ingested'
 OUTCOME_DUPLICATE = 'duplicate'

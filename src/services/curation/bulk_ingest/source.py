@@ -40,14 +40,6 @@ class BulkSource:
     def to_dict(self) -> dict[str, object]:
         return {'kind': self.kind, 'path': self.path, 'extensions': list(self.extensions)}
 
-    @classmethod
-    def from_dict(cls, raw: dict[str, object]) -> BulkSource:
-        kind = raw.get('kind')
-        if kind not in ('folder', 'manifest'):
-            raise InvalidSourceError(f'unknown source kind {kind!r}')
-        extensions = raw.get('extensions') or DEFAULT_EXTENSIONS
-        return cls(kind, str(raw['path']), tuple(str(e) for e in extensions))  # type: ignore[arg-type, union-attr]
-
     @property
     def key(self) -> str:
         """Identity of the source: the same folder (or manifest) and extensions."""

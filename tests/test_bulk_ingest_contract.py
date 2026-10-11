@@ -16,7 +16,7 @@ from src.routers.curation._ingest_bulk_models import (
 from src.services.curation.bulk_ingest import limits
 from src.services.curation.bulk_ingest.runner import BulkIngestRun as Runner, BulkOptions
 from src.services.curation.bulk_ingest.source import BulkSource
-from src.services.curation.bulk_ingest.store import ACTIVE_STATUSES, FINISHED_STATUSES, BulkStore
+from src.services.curation.bulk_ingest.store import ACTIVE_STATUSES, RESUMABLE_STATUSES, BulkStore
 
 
 CONTRACT = Path(__file__).resolve().parents[1] / 'contracts' / 'openapi' / 'curation.json'
@@ -24,7 +24,7 @@ PREFIX = '/curation/projects/{project}/ingest/bulk'
 
 
 def test_every_status_the_runner_can_write_is_on_the_wire_and_nothing_else() -> None:
-    assert set(get_args(BulkIngestStatus)) == ACTIVE_STATUSES | FINISHED_STATUSES
+    assert set(get_args(BulkIngestStatus)) == ACTIVE_STATUSES | RESUMABLE_STATUSES | {'completed'}
 
 
 def test_the_runner_snapshot_fills_the_progress_model_exactly(tmp_path: Path) -> None:
