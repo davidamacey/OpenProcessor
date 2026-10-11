@@ -14,7 +14,6 @@ from __future__ import annotations
 from hashlib import sha256
 from typing import TYPE_CHECKING
 
-import cv2
 import numpy as np
 
 from src.utils.stage_timing import stage_timer
@@ -22,10 +21,6 @@ from src.utils.stage_timing import stage_timer
 
 if TYPE_CHECKING:
     from PIL import Image
-
-
-# float32(v) / 255 for every uint8 v: exactly what dividing the cast frame by 255 produced.
-_UNIT_RANGE_LUT = np.arange(256, dtype=np.float32) / np.float32(255.0)
 
 
 def bbox_norm(
@@ -127,8 +122,9 @@ def letterbox_to_square(
     Returns:
         Tuple ``(chw, scale, (pad_w, pad_h))``:
 
-        * ``chw``: ``(1, 3, target, target)`` FP32 array in ``[0, 1]``,
-          ready for ``InferInput.set_data_from_numpy``.
+        * ``chw``: ``(1, 3, target, target)`` uint8 array of RGB pixels
+          (the engine scales them to ``[0, 1]`` itself), ready for
+          :func:`src.clients.triton_pool.uint8_images_input`.
         * ``scale``: Uniform scale factor applied to width and height.
         * ``(pad_w, pad_h)``: Pixel padding on the left/top edges (the
           canvas is centered, so right/bottom padding is implied).
@@ -154,9 +150,7 @@ def letterbox_to_square(
         pad_h = (target - new_h) / 2.0
         canvas.paste(resized, (int(pad_w), int(pad_h)))
 
-        # One lookup pass in place of the cast and the divide, written straight into NCHW.
-        chw = np.empty((1, 3, target, target), dtype=np.float32)
-        chw[0] = cv2.LUT(np.asarray(canvas), _UNIT_RANGE_LUT).transpose(2, 0, 1)
+        chw = np.ascontiguousarray(np.asarray(canvas).transpose(2, 0, 1))[None]
         return chw, float(scale), (float(pad_w), float(pad_h))
 
 

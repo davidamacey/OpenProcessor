@@ -61,6 +61,25 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   `--root`, no progress file: the run resumes from the server). The parallel directory walk moved to
   `src/services/curation/bulk_ingest/walk.py`.
 
+
+- The detector engines (`trt`, `trt_end2end`, YOLO26 and dual-head exports) take uint8 pixels and do
+  the `/255` in the TensorRT graph, so a detector request carries a quarter of the bytes of the FP32
+  tensor it replaces (4.9 MB to 1.2 MB per image). `export/uint8_input.py` puts the cast and divide in
+  front of the ONNX after the FP16 bake; the shipped `config.pbtxt` files declare `TYPE_UINT8`. The
+  FP32 detector request path and `infer_yolo_batch` (no callers) are removed. Upgrading: rebuild the
+  detector engine (`./openprocessor models repair`); a model whose plan and config disagree on the
+  input type does not reach READY, so the installer rebuilds it. Promoted trained models (ORT,
+  `output0`) and the bake-off engines keep float32 input (#214).
+- The PE image encoder takes uint8 pixels and applies `(x / 255 - 0.5) / 0.5` in the TensorRT graph
+  (`build_pe_trt.sh` and `build_pe_ort_fallback.sh` run `export/uint8_input.py` after the FP16 bake),
+  so a PE request carries a quarter of the bytes of the FP32 tensor it replaces (10.0 MB to 2.5 MB
+  per image). `fp32_images_input`, the PE normalize lookup table (`normalize_chw`, `normalize_into`)
+  and the `PE_MEAN` / `PE_STD` constants are removed; `pe_preprocess` now stops at resize, center-crop
+  and the CHW layout. Rebuild the engine with `./openprocessor models repair`. On the pinned COCO
+  set the request bytes to Triton fall 75 percent (14.9 to 3.7 MB per image), API CPU per image 47 to
+  49 percent (0.118 to 0.062 CPU-s), and images/s rise 10 to 12 percent (19.1 to 21.0 upload); the
+  gates pass against a rebuilt FP32 control, and rebuilding the detector engine alone already moves
+  detections past the box gate of the v0.5.0 reference (`docs/PERFORMANCE.md`) (#214).
 - `ocr_pipeline` ships two Python instances instead of one, and the installer profile now sets
   its count (`ocr_pipeline_instances`: minimal 1, standard 2, full 4). The Python BLS model runs
   one request per instance, so OCR was capped at about 21 images/s; Wave 0 measured 42 with two

@@ -330,6 +330,9 @@ def test_render_triton_config_declares_both_outputs(mod: ModuleType) -> None:
     assert 'dims: [ 768, 40, 40 ]' in config
     # Preferred sizes never exceed max_batch.
     assert 'preferred_batch_size: [ 8, 16 ]' in config
+    # The engine scales its own pixels (export/uint8_input.py): the input is uint8, the outputs float.
+    assert config.count('data_type: TYPE_UINT8') == 1
+    assert config.index('TYPE_UINT8') < config.index('output [')
 
 
 def test_render_triton_config_small_batch_has_a_preferred_size(mod: ModuleType) -> None:
