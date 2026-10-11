@@ -18,7 +18,9 @@ in place: a few milliseconds on the loop are cheaper than the hop.
 :class:`InflightGate` bounds how many images a process holds decoded at once.
 Past the cap a request queues (first in, first out) before it decodes rather
 than all requests decoding together, so more clients cannot lower the
-throughput and the resident set stays bounded.
+throughput and the resident set stays bounded. The gate counts megabytes of decoded
+pixels, not images: what it protects (memory and the host's cores) is spent per pixel, and a
+count of images would hold back a GPU-bound stream of small frames to protect a stream of photos.
 """
 
 from __future__ import annotations
@@ -43,7 +45,8 @@ if TYPE_CHECKING:
 
 
 DEFAULT_CPU_THREADS = 4
-DEFAULT_INFLIGHT_IMAGES = 4
+DEFAULT_INFLIGHT_MB = 256
+MIB = 1024 * 1024
 # Below this much pixel data (about 1.3 MP of RGB) a call runs in place.
 OFFLOAD_MIN_BYTES = 4 * 1024 * 1024
 
@@ -59,10 +62,15 @@ def cpu_threads() -> int:
     return max(1, int(raw) if raw else DEFAULT_CPU_THREADS)
 
 
-def inflight_images() -> int:
-    """Images one process holds in the ingest pipeline at once (``OP_INGEST_INFLIGHT_IMAGES``)."""
-    raw = os.environ.get('OP_INGEST_INFLIGHT_IMAGES', '').strip()
-    return max(1, int(raw) if raw else DEFAULT_INFLIGHT_IMAGES)
+def inflight_mb() -> int:
+    """Decoded RGB megabytes one process holds in the ingest pipeline (``OP_INGEST_INFLIGHT_MB``)."""
+    raw = os.environ.get('OP_INGEST_INFLIGHT_MB', '').strip()
+    return max(1, int(raw) if raw else DEFAULT_INFLIGHT_MB)
+
+
+def mib(nbytes: int | None) -> int:
+    """``nbytes`` in whole MiB, at least 1 (an image whose size is unknown counts as 1)."""
+    return max(1, -(-(nbytes or 0) // MIB))
 
 
 def cpu_executor() -> ThreadPoolExecutor:
@@ -114,8 +122,9 @@ async def run_cpu[T](
 class InflightGate:
     """A first-in first-out gate that admits at most ``capacity`` units at once.
 
-    A request holds as many units as it has images. One that wants more than
-    the whole capacity is clamped to it, so it still runs, alone, instead of
+    A request holds the units of the work it brings (ingest counts MiB of decoded pixels, so
+    a 32-frame request of 640 x 480 images is 29 units and one 18 MP photo is 52). One that
+    wants more than the whole capacity is clamped to it, so it still runs, alone, instead of
     waiting forever.
     """
 
@@ -171,20 +180,21 @@ def ingest_gate() -> InflightGate:
     """The process's ingest admission gate, created on first use."""
     pid = os.getpid()
     if pid not in _gates:
-        _gates[pid] = InflightGate(inflight_images())
+        _gates[pid] = InflightGate(inflight_mb())
     return _gates[pid]
 
 
 __all__ = [
     'DEFAULT_CPU_THREADS',
-    'DEFAULT_INFLIGHT_IMAGES',
+    'DEFAULT_INFLIGHT_MB',
     'OFFLOAD_MIN_BYTES',
     'InflightGate',
     'cpu_executor',
     'cpu_threads',
     'encoded_nbytes',
-    'inflight_images',
+    'inflight_mb',
     'ingest_gate',
+    'mib',
     'run_cpu',
     'shutdown_cpu_executor',
 ]

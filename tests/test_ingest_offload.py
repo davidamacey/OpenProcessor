@@ -159,3 +159,37 @@ def test_an_undecodable_image_is_left_for_ingest_one_to_report(
     )
     assert [r.status for r in result.results] == ['success', 'success']
     assert service.peak_in_detector == 1  # only the decodable image reached the detector
+
+
+def _big_jpeg() -> bytes:
+    buf = io.BytesIO()
+    Image.new('RGB', (1500, 1200), (90, 120, 150)).save(buf, 'JPEG')  # 5.4 MiB decoded
+    return buf.getvalue()
+
+
+def _peak_for_two_big_images(monkeypatch: pytest.MonkeyPatch, capacity_mib: int) -> int:
+    gate = InflightGate(capacity_mib)
+    monkeypatch.setattr(ingest_batch, 'ingest_gate', lambda: gate)
+    service = _Service()
+    big = _big_jpeg()
+
+    async def main() -> None:
+        await asyncio.gather(
+            ingest_batch.run_ingest_batch(service, [big], ['a']),  # type: ignore[arg-type]
+            ingest_batch.run_ingest_batch(service, [big], ['b']),  # type: ignore[arg-type]
+        )
+
+    asyncio.run(main())
+    return service.peak_in_detector
+
+
+def test_the_gate_counts_decoded_megabytes_not_images(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert _peak_for_two_big_images(monkeypatch, capacity_mib=8) == 1  # 6 + 6 does not fit
+    assert _peak_for_two_big_images(monkeypatch, capacity_mib=12) == 2
+
+
+def test_mib_rounds_up_and_an_unknown_size_counts_one() -> None:
+    assert cpu_pool.mib(1) == 1
+    assert cpu_pool.mib(cpu_pool.MIB) == 1
+    assert cpu_pool.mib(cpu_pool.MIB + 1) == 2
+    assert cpu_pool.mib(None) == 1

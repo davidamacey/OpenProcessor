@@ -43,7 +43,7 @@ from typing import TYPE_CHECKING, Literal
 from src.core.logging import get_logger
 from src.services.curation.ingest_models import BatchIngestResult, IngestResult, IngestSummary
 from src.services.curation.ops_metrics import record_ingest_result
-from src.utils.cpu_pool import encoded_nbytes, ingest_gate, run_cpu
+from src.utils.cpu_pool import encoded_nbytes, ingest_gate, mib, run_cpu
 from src.utils.stage_timing import observe_stage
 
 
@@ -63,6 +63,7 @@ async def _prefill_detections(
     images: list[bytes],
     image_paths: list[str],
     indices: list[int],
+    sizes: dict[int, int | None],
 ) -> tuple[
     dict[int, Image.Image],
     dict[int, list[DetectedItem]],
@@ -87,10 +88,7 @@ async def _prefill_detections(
     valid_imgs: list[Image.Image] = []
     valid_indices: list[int] = []
     decoded = await asyncio.gather(
-        *(
-            run_cpu(_decode_image, images[idx], nbytes=encoded_nbytes(images[idx]))
-            for idx in indices
-        ),
+        *(run_cpu(_decode_image, images[idx], nbytes=sizes[idx]) for idx in indices),
         return_exceptions=True,
     )
     for idx, outcome in zip(indices, decoded, strict=True):
@@ -182,16 +180,17 @@ async def run_ingest_batch(
         else:
             batch_dup_of[i] = rep
 
-    # Hold the images this request will decode against the process's in-flight cap, so
-    # more clients queue here instead of all decoding at once (#241).
+    # Hold the decoded megabytes this request will bring against the process's in-flight cap,
+    # so more clients queue here instead of all decoding at once (#241).
+    sizes = {i: encoded_nbytes(images[i]) for i in non_dup}
     wait_start = time.perf_counter()
-    async with ingest_gate().hold(len(non_dup)):
+    async with ingest_gate().hold(sum(mib(n) for n in sizes.values())):
         observe_stage('admission_wait', time.perf_counter() - wait_start)
         # Only pay the (expensive) batched decode + inference for images that
         # dedup did not already resolve to an existing document or an
         # earlier-in-batch representative.
         prefilled_imgs, prefilled_items, prefilled_secondary = await _prefill_detections(
-            service, images, image_paths, non_dup
+            service, images, image_paths, non_dup, sizes
         )
 
         sem = asyncio.Semaphore(MAX_INGEST_CONCURRENCY)
