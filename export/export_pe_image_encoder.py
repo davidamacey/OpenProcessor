@@ -21,7 +21,7 @@ but with identical numerics.
 Why this model matters
 ----------------------
 ``src/clients/pe_encoder.py`` (``PEEncoder.encode_images``) calls the Triton
-model ``pe_image_encoder`` with a single FP32 input named ``images`` shaped
+model ``pe_image_encoder`` with a single UINT8 input named ``images`` shaped
 ``[B, 3, 336, 336]`` and reads a single FP32 output named
 ``image_embeddings`` shaped ``[B, 1024]``. That embedding is written to the
 ``pe_embedding`` field and is the vector behind curation semantic search,
@@ -31,9 +31,11 @@ the model its own curation code requires.
 
 The input tensor must be preprocessed exactly the way
 ``src/services/detection/pe_preprocess.py`` does it: resize shorter edge to
-336, center-crop 336x336, scale to [0, 1], PE-Core 0.5/0.5 normalize, CHW
-float32. The exported graph L2-normalizes its own output; ``PEEncoder``
-re-normalizes defensively, so either is safe.
+336, center-crop 336x336, CHW uint8 RGB pixels. The exported ONNX takes float
+input already scaled to [0, 1] and PE-Core 0.5/0.5 normalized; the two build
+scripts put that arithmetic in the graph (``export/uint8_input.py``) so the
+served model takes the pixels. The exported graph L2-normalizes its own output;
+``PEEncoder`` re-normalizes defensively, so either is safe.
 
 Export methods
 --------------
@@ -149,7 +151,7 @@ class PETritonConfig:
     """Everything that varies in the rendered ``config.pbtxt``.
 
     Defaults describe the model ``src/clients/pe_encoder.py`` expects:
-    ``pe_image_encoder``, FP32 ``images`` in, FP32 ``image_embeddings``
+    ``pe_image_encoder``, UINT8 ``images`` in, FP32 ``image_embeddings``
     out, dynamic batch up to 32.
     """
 
@@ -216,8 +218,10 @@ def render_config(cfg: PETritonConfig) -> str:
 # semantic search, near-duplicate detection, clustering and the embedding
 # visualization. The tensor names below are a contract with that client.
 #
-# Input:  {cfg.input_name} [B, 3, {cfg.image_size}, {cfg.image_size}] FP32,
-#         PE-Core 0.5/0.5 mean/std normalized (see src/services/detection/pe_preprocess.py)
+# Input:  {cfg.input_name} [B, 3, {cfg.image_size}, {cfg.image_size}] UINT8 RGB pixels,
+#         resized and center-cropped (see src/services/detection/pe_preprocess.py);
+#         the engine scales them and applies PE-Core's 0.5/0.5 mean/std itself
+#         (export/uint8_input.py)
 # Output: {cfg.output_name} [B, {cfg.embedding_dim}] FP32, L2-normalized
 #
 {provenance}
@@ -229,7 +233,7 @@ max_batch_size: {cfg.max_batch_size}
 input [
   {{
     name: "{cfg.input_name}"
-    data_type: TYPE_FP32
+    data_type: TYPE_UINT8
     dims: [ 3, {cfg.image_size}, {cfg.image_size} ]
   }}
 ]
@@ -754,7 +758,7 @@ def main(argv: list[str] | None = None) -> int:
     logger.info(f'ONNX:     {onnx_path}')
     logger.info(f'Model:    {cfg.model_name} ({cfg.platform}, max_batch={cfg.max_batch_size})')
     logger.info(
-        f'Contract: {cfg.input_name} [B, 3, {cfg.image_size}, {cfg.image_size}] FP32 -> '
+        f'Contract: {cfg.input_name} [B, 3, {cfg.image_size}, {cfg.image_size}] UINT8 -> '
         f'{cfg.output_name} [B, {cfg.embedding_dim}] FP32'
     )
     logger.info('Next:')

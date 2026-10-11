@@ -119,12 +119,19 @@ else
     exit 2
 fi
 
+# The engine takes uint8 pixels and applies PE-Core's own Normalize([0.5]*3, [0.5]*3) itself
+# (export/uint8_input.py), so the request carries a quarter of the bytes of the float tensor.
+PE_NORMALIZE="--mean 0.5 0.5 0.5 --std 0.5 0.5 0.5"
+
 # _stage_and_resolve_args ONNX_TO_BUILD -- sets ONNX_ARG/PLAN_ARG/PLAN_TMP
 # (and STAGE_DIR when docker-staging) for whichever ONNX path (FP16 or
 # FP32) is about to be built, since the docker path needs the file copied
-# into the mounted models dir under a fixed name each time.
+# into the mounted models dir under a fixed name each time. The uint8 input
+# is added after the FP16 bake, which keeps the graph I/O float32.
 _stage_and_resolve_args() {
     local src_onnx="$1"
+    # shellcheck disable=SC2086
+    src_onnx="$("$PYTHON" "$SCRIPT_DIR/uint8_input.py" "$src_onnx" "${src_onnx%.onnx}.u8.onnx" $PE_NORMALIZE)"
     if [ -n "${TRTEXEC:-}" ] || command -v trtexec >/dev/null 2>&1; then
         ONNX_ARG="$src_onnx"
         PLAN_ARG="$PLAN_TMP"

@@ -5,8 +5,10 @@
 # semantic search, near-duplicate detection, clustering and the embedding
 # visualization. The tensor names below are a contract with that client.
 #
-# Input:  images [B, 3, 336, 336] FP32,
-#         PE-Core 0.5/0.5 mean/std normalized (see src/services/detection/pe_preprocess.py)
+# Input:  images [B, 3, 336, 336] UINT8 RGB pixels,
+#         resized and center-cropped (see src/services/detection/pe_preprocess.py);
+#         the engine scales them and applies PE-Core's 0.5/0.5 mean/std itself
+#         (export/uint8_input.py)
 # Output: image_embeddings [B, 1024] FP32, L2-normalized
 #
 # TensorRT plan built by export/build_pe_trt.sh from the ONNX
@@ -20,7 +22,7 @@ max_batch_size: 32
 input [
   {
     name: "images"
-    data_type: TYPE_FP32
+    data_type: TYPE_UINT8
     dims: [ 3, 336, 336 ]
   }
 ]

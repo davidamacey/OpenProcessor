@@ -124,7 +124,7 @@ def test_embed_crops_times_preprocess_and_embed_and_keeps_output() -> None:
     assert out[0, 0] == pytest.approx(0.6)
     assert _hist_count('pe_preprocess') - preprocess_before == 1
     assert _hist_count('embed') - embed_before == 1
-    assert _bytes('embed') - bytes_before == int(np.prod(seen_shapes[0])) * 4
+    assert _bytes('embed') - bytes_before == int(np.prod(seen_shapes[0]))  # uint8: one byte per pixel
 
 
 def test_bulk_index_is_timed() -> None:

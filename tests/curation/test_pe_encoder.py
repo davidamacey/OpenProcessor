@@ -87,7 +87,7 @@ async def test_encode_images_returns_unit_norm_rows():
     pool = _make_pool_returning(raw)
     enc = PEEncoder(triton_pool=pool)
 
-    chws = np.zeros((2, 3, 16, 16), dtype=np.float32)
+    chws = np.zeros((2, 3, 16, 16), dtype=np.uint8)
     out = await enc.encode_images(chws)
 
     assert out.shape == (2, PE_EMBEDDING_DIM)
@@ -271,3 +271,16 @@ def test_l2_normalize_handles_zero_rows():
     np.testing.assert_array_equal(out[0], [0.0, 0.0, 0.0])
     # Non-zero row is normalized.
     np.testing.assert_allclose(np.linalg.norm(out[1]), 1.0, atol=1e-6)
+
+
+@pytest.mark.asyncio
+async def test_encode_images_sends_uint8_pixels_and_refuses_float():
+    pool = _make_pool_returning(np.ones((2, PE_EMBEDDING_DIM), dtype=np.float32))
+    enc = PEEncoder(triton_pool=pool)
+
+    await enc.encode_images(np.zeros((2, 3, 336, 336), dtype=np.uint8))
+
+    (inp,) = pool.infer.call_args.args[1]
+    assert (inp.datatype(), inp.shape()) == ('UINT8', [2, 3, 336, 336])
+    with pytest.raises(TypeError, match='uint8'):
+        await enc.encode_images(np.zeros((1, 3, 336, 336), dtype=np.float32))
