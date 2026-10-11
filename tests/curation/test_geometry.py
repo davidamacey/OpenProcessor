@@ -74,9 +74,7 @@ class TestLetterboxRoundTrip:
         img = Image.new('RGB', (200, 100), (50, 100, 150))
         chw, scale, pad = letterbox_to_square(img, target=64)
         assert chw.shape == (1, 3, 64, 64)
-        assert chw.dtype == np.float32
-        assert chw.min() >= 0.0
-        assert chw.max() <= 1.0
+        assert chw.dtype == np.uint8
         assert scale == pytest.approx(64 / 200)
         assert pad[0] == pytest.approx(0.0)
         assert pad[1] > 0.0
@@ -131,8 +129,8 @@ class TestRoiPoolSppf:
         assert np.isfinite(pooled).all()
 
 
-def _legacy_letterbox_tensor(img, target: int, fill=(114, 114, 114)) -> np.ndarray:
-    """The cast-and-divide tensor letterbox_to_square built before the lookup table."""
+def _expected_letterbox_pixels(img, target: int, fill=(114, 114, 114)) -> np.ndarray:
+    """The canvas the letterbox pastes (PIL bilinear resize on a filled square), as NCHW uint8."""
     from PIL import Image as PILImage
 
     w, h = img.size
@@ -143,11 +141,10 @@ def _legacy_letterbox_tensor(img, target: int, fill=(114, 114, 114)) -> np.ndarr
         img.resize((new_w, new_h), PILImage.BILINEAR),
         (int((target - new_w) / 2.0), int((target - new_h) / 2.0)),
     )
-    arr = np.asarray(canvas, dtype=np.float32) / 255.0
-    return np.transpose(arr, (2, 0, 1))[None, ...].astype(np.float32, copy=False)
+    return np.transpose(np.asarray(canvas), (2, 0, 1))[None, ...]
 
 
-class TestLetterboxTensorIsBitIdentical:
+class TestLetterboxPixels:
     def test_random_images_of_several_shapes(self) -> None:
         from PIL import Image
 
@@ -155,12 +152,8 @@ class TestLetterboxTensorIsBitIdentical:
         for w, h in ((64, 48), (300, 120), (17, 400), (640, 640)):
             img = Image.fromarray(rng.integers(0, 256, (h, w, 3), dtype=np.uint8))
             chw, _scale, _pad = letterbox_to_square(img, 160)
-            expected = _legacy_letterbox_tensor(img, 160)
-            assert chw.dtype == np.float32
-            assert chw.shape == expected.shape
-            assert np.array_equal(
-                chw.view(np.uint32), np.ascontiguousarray(expected).view(np.uint32)
-            )
+            assert chw.dtype == np.uint8
+            np.testing.assert_array_equal(chw, _expected_letterbox_pixels(img, 160))
 
     def test_every_pixel_value(self) -> None:
         from PIL import Image
@@ -170,11 +163,23 @@ class TestLetterboxTensorIsBitIdentical:
             np.stack([values, values[::-1], np.roll(values, 5)], -1).reshape(16, 16, 3)
         )
         chw, _scale, _pad = letterbox_to_square(img, 16)
-        expected = _legacy_letterbox_tensor(img, 16)
-        assert np.array_equal(chw.view(np.uint32), np.ascontiguousarray(expected).view(np.uint32))
+        np.testing.assert_array_equal(chw, _expected_letterbox_pixels(img, 16))
 
     def test_the_tensor_is_contiguous(self) -> None:
         from PIL import Image
 
         chw, _scale, _pad = letterbox_to_square(Image.new('RGB', (50, 30)), 64)
         assert chw.flags['C_CONTIGUOUS']
+
+    def test_the_region_detector_float_letterbox_is_the_unit_range_division(self) -> None:
+        """Promoted ORT models still take float32 in [0, 1]: the same bits the lookup table gave."""
+        from PIL import Image
+
+        from src.services.detection.cascade_detect.preprocess import _letterbox
+
+        img = Image.fromarray(np.random.default_rng(5).integers(0, 256, (30, 50, 3), dtype=np.uint8))
+        floats, _scale, _pad = _letterbox(img, target=64)
+        pixels, _s, _p = letterbox_to_square(img, 64)
+        assert floats.dtype == np.float32
+        legacy = pixels.astype(np.float32) / 255.0
+        assert np.array_equal(floats.view(np.uint32), legacy.view(np.uint32))

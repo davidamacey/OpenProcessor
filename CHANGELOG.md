@@ -47,6 +47,14 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   FP32 against FP16 PE engine results are in `docs/PERFORMANCE.md` (#208).
 ### Changed
 
+- The detector engines (`trt`, `trt_end2end`, YOLO26 and dual-head exports) take uint8 pixels and do
+  the `/255` in the TensorRT graph, so a detector request carries a quarter of the bytes of the FP32
+  tensor it replaces (4.9 MB to 1.2 MB per image). `export/uint8_input.py` puts the cast and divide in
+  front of the ONNX after the FP16 bake; the shipped `config.pbtxt` files declare `TYPE_UINT8`. The
+  FP32 detector request path and `infer_yolo_batch` (no callers) are removed. Upgrading: rebuild the
+  detector engine (`./openprocessor models repair`); a model whose plan and config disagree on the
+  input type does not reach READY, so the installer rebuilds it. Promoted trained models (ORT,
+  `output0`) and the bake-off engines keep float32 input (#214).
 - `ocr_pipeline` ships two Python instances instead of one, and the installer profile now sets
   its count (`ocr_pipeline_instances`: minimal 1, standard 2, full 4). The Python BLS model runs
   one request per instance, so OCR was capped at about 21 images/s; Wave 0 measured 42 with two

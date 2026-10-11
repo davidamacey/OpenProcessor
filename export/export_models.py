@@ -98,6 +98,7 @@ from trt_utils import (  # noqa: E402
 from ultralytics import YOLO  # noqa: E402
 from ultralytics.cfg import get_cfg  # noqa: E402
 from ultralytics.engine.exporter import Exporter  # noqa: E402
+from uint8_input import add_uint8_input  # noqa: E402
 
 
 # ============================================================================
@@ -515,6 +516,9 @@ def generate_triton_config(
     else:
         backend = 'onnxruntime'
 
+    # A TensorRT engine scales its own uint8 pixels (parse_onnx_model); the ORT graphs keep float32.
+    input_dtype = 'TYPE_UINT8' if backend == 'tensorrt' else 'TYPE_FP32'
+
     # Calculate preferred batch sizes
     preferred_batches = [size for size in [8, 16, 32, 64] if size <= max_batch]
     if not preferred_batches:
@@ -538,7 +542,7 @@ max_batch_size: {max_batch}
 input [
   {{
     name: "images"
-    data_type: TYPE_FP32
+    data_type: {input_dtype}
     dims: [ 3, {IMG_SIZE}, {IMG_SIZE} ]
   }}
 ]
@@ -590,7 +594,7 @@ max_batch_size: {max_batch}
 input [
   {{
     name: "images"
-    data_type: TYPE_FP32
+    data_type: {input_dtype}
     dims: [ 3, {IMG_SIZE}, {IMG_SIZE} ]
   }}
 ]
@@ -677,10 +681,18 @@ def enable_fp16_if_available(builder: trt.Builder, config: trt.IBuilderConfig) -
 def parse_onnx_model(
     parser: trt.OnnxParser,
     onnx_path: Path,
+    *,
+    uint8_input: bool = False,
 ) -> bool:
-    """Parse ONNX model and report any errors."""
+    """Parse ONNX model and report any errors.
+
+    ``uint8_input`` puts the ``/255`` scaling in the graph so the engine takes uint8 pixels
+    (the FP16 bake runs first and keeps the I/O float32; see ``uint8_input.py``).
+    """
     logger.info('Baking FP16 (ModelOpt AutoCast, TRT 11 typed builds)...')
     onnx_path = bake_fp16_onnx(onnx_path)
+    if uint8_input:
+        onnx_path = add_uint8_input(onnx_path, Path(onnx_path).with_suffix('.u8.onnx'))
     if not parser.parse_from_file(str(onnx_path)):
         logger.error('Failed to parse ONNX model:')
         for i in range(parser.num_errors):
@@ -818,7 +830,7 @@ def export_trt_standard(model: YOLO, config: dict[str, Any]) -> dict[str, Any]:
         # Parse ONNX
         logger.info('Parsing ONNX model...')
         parser = trt.OnnxParser(network, trt_logger)
-        if not parse_onnx_model(parser, onnx_path):
+        if not parse_onnx_model(parser, onnx_path, uint8_input=True):
             return {'status': 'error', 'error': 'ONNX parsing failed'}
 
         # Set optimization profile
@@ -999,7 +1011,7 @@ def export_trt_end2end(config: dict[str, Any]) -> dict[str, Any]:
         # Parse ONNX
         logger.info('Parsing ONNX model...')
         parser = trt.OnnxParser(network, trt_logger)
-        if not parse_onnx_model(parser, onnx_end2end_path):
+        if not parse_onnx_model(parser, onnx_end2end_path, uint8_input=True):
             return {'status': 'error', 'error': 'ONNX parsing failed'}
 
         # Log network structure

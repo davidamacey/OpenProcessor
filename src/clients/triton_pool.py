@@ -60,6 +60,26 @@ def fp32_images_input(tensor: np.ndarray) -> grpcclient.InferInput:
     return inp
 
 
+def uint8_images_input(tensor: np.ndarray) -> grpcclient.InferInput:
+    """The Triton ``images`` input for a uint8 NCHW pixel tensor.
+
+    The detector and PE engines scale the pixels themselves, so the request carries a
+    quarter of the bytes of the float tensor. Copies the tensor into the request, so it is
+    a CPU call: run it on the CPU pool for the multi-megabyte batches the ingest path sends.
+
+    Raises:
+        TypeError: ``tensor`` is not uint8 (a float tensor would be read as raw pixels).
+    """
+    if tensor.dtype != np.uint8:
+        msg = f'images must be uint8 pixels, got {tensor.dtype}'
+        raise TypeError(msg)
+    batch = np.ascontiguousarray(tensor)
+    with stage_timer('triton_request', nbytes=batch.nbytes):
+        inp = grpcclient.InferInput('images', list(batch.shape), 'UINT8')
+        inp.set_data_from_numpy(batch)
+    return inp
+
+
 # =============================================================================
 # gRPC Channel Options - Optimized for High Throughput ML Inference
 # =============================================================================

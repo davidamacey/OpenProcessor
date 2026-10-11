@@ -377,12 +377,13 @@ docker compose exec api python /app/export/export_paddleocr_rec.py
 ## Model Specifications
 
 ### YOLO11 Object Detection
-- Input: `[B, 3, 640, 640]` FP16, normalized [0, 1]
+- Input: `images` `[B, 3, 640, 640]` UINT8 RGB, letterboxed; the engine divides by 255 in the graph
+  (`export/uint8_input.py`, added after the FP16 bake)
 - Output (end2end): `num_dets`, `det_boxes`, `det_scores`, `det_classes`
 - Dynamic batching: 1-64 (configurable)
 
 ### Dual-Head Detector
-- Input: `[B, 3, S, S]` FP32, letterboxed, normalized [0, 1] (`S` = `--imgsz`)
+- Input: `[B, 3, S, S]` UINT8 RGB, letterboxed; the engine divides by 255 (`S` = `--imgsz`)
 - Output: `output0` (detection tensor) + `sppf_feat` `[B, C, S/32, S/32]`
 - Dynamic batching: 1-`--max-batch`
 

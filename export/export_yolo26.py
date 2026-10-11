@@ -37,6 +37,7 @@ import onnx
 import tensorrt as trt
 import torch
 from trt_utils import create_explicit_network
+from uint8_input import add_uint8_input
 from ultralytics import YOLO
 
 
@@ -182,6 +183,9 @@ def build_engine(onnx_path: Path, plan_path: Path, max_batch: int) -> bool:
         )
     )
 
+    # The engine takes uint8 pixels and scales them itself (a quarter of the bytes over gRPC).
+    fp16_onnx = add_uint8_input(fp16_onnx, fp16_onnx.with_suffix('.u8.onnx'))
+
     trt_logger = trt.Logger(trt.Logger.INFO)
     trt.init_libnvinfer_plugins(trt_logger, '')
 
@@ -240,7 +244,7 @@ max_batch_size: {max_batch}
 input [
   {{
     name: "images"
-    data_type: TYPE_FP32
+    data_type: TYPE_UINT8
     dims: [ 3, {IMG_SIZE}, {IMG_SIZE} ]
   }}
 ]
