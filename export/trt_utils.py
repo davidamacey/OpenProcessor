@@ -197,6 +197,27 @@ def _reconcile_float_types(model, fp32_ops: set[str]) -> int:
     raise ValueError(f'float types did not settle after {_MAX_RECONCILE_PASSES} passes')
 
 
+def _multiplier_depthwise_convs(model) -> list[str]:
+    """Names of depthwise Convs whose output has more channels than their group.
+
+    TensorRT 11.1 (strongly typed) finds no FP16 kernel for a grouped Conv with
+    one input channel per group and a channel multiplier above 1 (MobileCLIP's
+    stride-2 downsample projections and its final conv) and the build stops
+    with "Could not find any implementation for node .../Conv + PWN(...)".
+    Only Convs with initializer weights are inspected.
+    """
+    weights = {init.name: init for init in model.graph.initializer}
+    names = []
+    for node in model.graph.node:
+        if node.op_type != 'Conv' or len(node.input) < 2 or node.input[1] not in weights:
+            continue
+        group = next((a.i for a in node.attribute if a.name == 'group'), 1)
+        out_channels, channels_per_group = weights[node.input[1]].dims[:2]
+        if group > 1 and channels_per_group == 1 and out_channels > group:
+            names.append(node.name)
+    return names
+
+
 def bake_fp16_onnx(onnx_path: str | Path, output_path: str | Path | None = None) -> Path:
     """Bake FP16 mixed precision into an ONNX for TRT >= 11 typed builds.
 
@@ -212,6 +233,8 @@ def bake_fp16_onnx(onnx_path: str | Path, output_path: str | Path | None = None)
     output can mix FP32 and FP16 operands at one op, which TensorRT 11
     rejects at parse. :func:`_reconcile_float_types` repairs that, and
     raises (callers fall back to FP32) if the graph does not settle.
+    Depthwise Convs with a channel multiplier stay FP32
+    (:func:`_multiplier_depthwise_convs`): TensorRT 11.1 has no FP16 kernel for them.
 
     On older TRT (classic FP16 flag still present) this is a no-op and
     returns the input path — :func:`enable_fp16` handles precision there.
@@ -237,7 +260,10 @@ def bake_fp16_onnx(onnx_path: str | Path, output_path: str | Path | None = None)
     }
     model = onnx.load(str(onnx_path))
     fp16_model = float16.convert_float_to_float16(
-        model, keep_io_types=True, op_block_list=sorted(fp32_ops)
+        model,
+        keep_io_types=True,
+        op_block_list=sorted(fp32_ops),
+        node_block_list=_multiplier_depthwise_convs(model),
     )
     _reconcile_float_types(fp16_model, fp32_ops)
     out = Path(output_path) if output_path else Path(onnx_path).with_suffix('.fp16.onnx')

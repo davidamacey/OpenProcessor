@@ -435,3 +435,88 @@ class TestBakeFp16OnnxReconcilesFloatTypes:
             return session.run(None, {'x': x})[0]
 
         np.testing.assert_allclose(run(baked), run(src), rtol=2e-2, atol=2e-2)
+
+
+def _channel_multiplier_depthwise_onnx(path: Path) -> Path:
+    """Depthwise 3x3 conv with a channel multiplier of 2, then a pointwise conv.
+
+    The first is MobileOne's stride-2 downsample projection in miniature: the
+    shape TensorRT 11.1 has no FP16 tactic for.
+    """
+    import numpy as np
+    import onnx
+    from onnx import TensorProto, helper, numpy_helper
+
+    rng = np.random.default_rng(0)
+    depthwise_w = numpy_helper.from_array(rng.normal(size=(8, 1, 3, 3)).astype(np.float32), 'dw_w')
+    pointwise_w = numpy_helper.from_array(rng.normal(size=(4, 8, 1, 1)).astype(np.float32), 'pw_w')
+    images = helper.make_tensor_value_info('images', TensorProto.FLOAT, [1, 4, 8, 8])
+    out = helper.make_tensor_value_info('out', TensorProto.FLOAT, [1, 4, 4, 4])
+    graph = helper.make_graph(
+        [
+            helper.make_node(
+                'Conv',
+                ['images', 'dw_w'],
+                ['mid'],
+                name='dw',
+                group=4,
+                kernel_shape=[3, 3],
+                strides=[2, 2],
+                pads=[1, 1, 1, 1],
+            ),
+            helper.make_node('Conv', ['mid', 'pw_w'], ['out'], name='pw', kernel_shape=[1, 1]),
+        ],
+        'dw',
+        [images],
+        [out],
+        initializer=[depthwise_w, pointwise_w],
+    )
+    model = helper.make_model(graph, opset_imports=[helper.make_opsetid('', 17)], ir_version=8)
+    onnx.checker.check_model(model)
+    onnx.save(model, str(path))
+    return path
+
+
+class TestBakeFp16OnnxKeepsMultiplierDepthwiseConvsFp32:
+    """TensorRT 11.1 finds no FP16 kernel for a depthwise Conv whose output has
+    more channels than its group (MobileCLIP's downsample projections and final
+    conv): the build stops with "Could not find any implementation for node
+    .../reparam_conv/Conv + PWN(...)". Those convs stay FP32, the rest FP16."""
+
+    def test_multiplier_depthwise_conv_stays_fp32_and_others_are_fp16(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        pytest.importorskip('onnxconverter_common')
+        _install_trt11(monkeypatch)
+        import onnx
+        import trt_utils
+
+        src = _channel_multiplier_depthwise_onnx(tmp_path / 'dw.onnx')
+
+        baked = trt_utils.bake_fp16_onnx(src, tmp_path / 'dw.fp16.onnx')
+
+        model = onnx.load(str(baked))
+        onnx.checker.check_model(model)
+        types = {i.name: i.data_type for i in model.graph.initializer}
+        assert types['dw_w'] == onnx.TensorProto.FLOAT
+        assert types['pw_w'] == onnx.TensorProto.FLOAT16
+        assert model.graph.output[0].type.tensor_type.elem_type == onnx.TensorProto.FLOAT
+
+    def test_the_baked_graph_computes_the_same_values(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        ort = pytest.importorskip('onnxruntime')
+        pytest.importorskip('onnxconverter_common')
+        import numpy as np
+        import trt_utils
+
+        _install_trt11(monkeypatch)
+        src = _channel_multiplier_depthwise_onnx(tmp_path / 'dw.onnx')
+        baked = trt_utils.bake_fp16_onnx(src, tmp_path / 'dw.fp16.onnx')
+        x = np.random.default_rng(1).normal(size=(1, 4, 8, 8)).astype(np.float32)
+
+        def run(path: Path) -> np.ndarray:
+            session = ort.InferenceSession(str(path), providers=['CPUExecutionProvider'])
+            return session.run(None, {'images': x})[0]
+
+        np.testing.assert_allclose(run(baked), run(src), rtol=2e-2, atol=2e-2)
