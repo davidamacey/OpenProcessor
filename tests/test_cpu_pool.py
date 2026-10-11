@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
+import itertools
 import threading
 import time
 
@@ -51,14 +52,17 @@ def test_a_slow_cpu_call_does_not_stop_the_event_loop() -> None:
         beat = asyncio.create_task(heartbeat())
         await run_cpu(time.sleep, 0.2)
         await beat
-        return max(b - a for a, b in zip(ticks, ticks[1:], strict=False))
+        return max(b - a for a, b in itertools.pairwise(ticks))
 
     # Run inline (the old behaviour) the loop would stall for the whole 0.2 s.
     assert asyncio.run(main()) < 0.1
 
 
 def test_embed_crops_preprocessing_does_not_block_the_loop(monkeypatch: pytest.MonkeyPatch) -> None:
-    import src.clients.pe_encoder as pe_encoder
+    from src.clients import pe_encoder
+    from src.utils import cpu_pool
+
+    monkeypatch.setattr(cpu_pool, 'OFFLOAD_MIN_BYTES', 0)  # the crops here are tiny
 
     def slow_preprocess(crops: list[np.ndarray]) -> np.ndarray:
         time.sleep(0.2)
@@ -162,3 +166,44 @@ def test_gate_gives_units_back_when_a_waiter_is_cancelled() -> None:
 def test_gate_rejects_a_capacity_below_one() -> None:
     with pytest.raises(ValueError, match='at least 1'):
         InflightGate(0)
+
+
+def test_small_work_runs_in_place_and_large_or_unknown_work_runs_on_the_pool() -> None:
+    from src.utils.cpu_pool import OFFLOAD_MIN_BYTES
+
+    async def main() -> tuple[int, int, int, int]:
+        here = threading.get_ident()
+        small = await run_cpu(threading.get_ident, nbytes=OFFLOAD_MIN_BYTES - 1)
+        large = await run_cpu(threading.get_ident, nbytes=OFFLOAD_MIN_BYTES)
+        unknown = await run_cpu(threading.get_ident)
+        return here, small, large, unknown
+
+    here, small, large, unknown = asyncio.run(main())
+    assert small == here
+    assert large != here
+    assert unknown != here
+
+
+def test_a_failure_in_place_propagates_like_one_on_the_pool() -> None:
+    def boom() -> None:
+        raise ValueError('boom')
+
+    async def main(nbytes: int | None) -> None:
+        await run_cpu(boom, nbytes=nbytes)
+
+    for nbytes in (1, None):
+        with pytest.raises(ValueError, match='boom'):
+            asyncio.run(main(nbytes))
+
+
+def test_encoded_nbytes_reads_only_the_header() -> None:
+    import io
+
+    from PIL import Image
+
+    from src.utils.cpu_pool import encoded_nbytes
+
+    buf = io.BytesIO()
+    Image.new('RGB', (200, 100)).save(buf, 'JPEG')
+    assert encoded_nbytes(buf.getvalue()) == 200 * 100 * 3
+    assert encoded_nbytes(b'not an image') is None

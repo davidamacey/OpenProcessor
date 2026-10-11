@@ -134,7 +134,7 @@ def index_service(tmp_path):
     from src.services.curation.ingest_policy import IngestPolicy
 
     class _Encoder:
-        async def embed_crops(self, crops, max_batch=16):
+        async def embed_crops(self, crops, **_kw):
             return np.ones((len(crops), 1024), dtype=np.float32)
 
         async def embed_whole_frame_bytes(self, _data):

@@ -63,6 +63,7 @@ from src.routers import (
 )
 from src.routers.api_docs import install_api_docs
 from src.routers.curation._mounting import mount_all_curation_routers
+from src.utils.cpu_pool import shutdown_cpu_executor
 from src.utils.retry import RetryExhaustedError
 
 
@@ -414,6 +415,9 @@ async def lifespan(app: FastAPI):
             logger.info('triton_pool_closed')
         except Exception as e:
             logger.warning('triton_pool_close_error', error=str(e))
+
+    # The ingest CPU pool: let running pixel work finish
+    shutdown_cpu_executor()
 
     # Shutdown shared executor
     if AppResources.shared_executor is not None:

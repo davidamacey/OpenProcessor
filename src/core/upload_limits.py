@@ -11,7 +11,7 @@ naming the served cap.
 
 from __future__ import annotations
 
-from fastapi import Request
+from fastapi import Request  # noqa: TC002 - FastAPI resolves the dependency's annotation at runtime
 from fastapi.responses import JSONResponse
 from starlette.datastructures import UploadFile
 

@@ -43,7 +43,7 @@ from typing import TYPE_CHECKING, Literal
 from src.core.logging import get_logger
 from src.services.curation.ingest_models import BatchIngestResult, IngestResult, IngestSummary
 from src.services.curation.ops_metrics import record_ingest_result
-from src.utils.cpu_pool import ingest_gate, run_cpu
+from src.utils.cpu_pool import encoded_nbytes, ingest_gate, run_cpu
 from src.utils.stage_timing import observe_stage
 
 
@@ -87,7 +87,11 @@ async def _prefill_detections(
     valid_imgs: list[Image.Image] = []
     valid_indices: list[int] = []
     decoded = await asyncio.gather(
-        *(run_cpu(_decode_image, images[idx]) for idx in indices), return_exceptions=True
+        *(
+            run_cpu(_decode_image, images[idx], nbytes=encoded_nbytes(images[idx]))
+            for idx in indices
+        ),
+        return_exceptions=True,
     )
     for idx, outcome in zip(indices, decoded, strict=True):
         if isinstance(outcome, BaseException):
@@ -200,7 +204,9 @@ async def run_ingest_batch(
             rep: asyncio.get_running_loop().create_future() for rep in set(batch_dup_of.values())
         }
 
-        async def _one(i: int, image_bytes: bytes, image_path: str, image_hash: str) -> IngestResult:
+        async def _one(
+            i: int, image_bytes: bytes, image_path: str, image_hash: str
+        ) -> IngestResult:
             # Clients match results to request entries by source_identifier, so
             # every duplicate carries its own, even though image_id is shared.
             source_identifier = source_identifiers[i] if source_identifiers else None

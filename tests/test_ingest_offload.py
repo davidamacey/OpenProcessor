@@ -7,14 +7,19 @@ import io
 import threading
 import time
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import numpy as np
-import pytest
 from PIL import Image
 
 from src.services.curation import ingest_batch
 from src.services.curation.ingest_models import IngestResult
+from src.utils import cpu_pool
 from src.utils.cpu_pool import InflightGate
+
+
+if TYPE_CHECKING:
+    import pytest
 
 
 def _jpeg(seed: int = 0) -> bytes:
@@ -59,10 +64,14 @@ def _run_two_requests(monkeypatch: pytest.MonkeyPatch, capacity: int) -> int:
     async def main() -> None:
         await asyncio.gather(
             ingest_batch.run_ingest_batch(
-                service, [_jpeg(1), _jpeg(2)], ['a', 'b']  # type: ignore[arg-type]
+                service,
+                [_jpeg(1), _jpeg(2)],
+                ['a', 'b'],  # type: ignore[arg-type]
             ),
             ingest_batch.run_ingest_batch(
-                service, [_jpeg(3), _jpeg(4)], ['c', 'd']  # type: ignore[arg-type]
+                service,
+                [_jpeg(3), _jpeg(4)],
+                ['c', 'd'],  # type: ignore[arg-type]
             ),
         )
 
@@ -97,8 +106,9 @@ def test_waiting_for_the_gate_is_recorded_as_a_stage(monkeypatch: pytest.MonkeyP
 
 
 def test_batch_decode_runs_off_the_loop_thread(monkeypatch: pytest.MonkeyPatch) -> None:
-    import src.services.curation.ingest as ingest
+    from src.services.curation import ingest
 
+    monkeypatch.setattr(cpu_pool, 'OFFLOAD_MIN_BYTES', 0)  # these frames are tiny
     threads: list[int] = []
     real = ingest._decode_image
 
@@ -122,7 +132,9 @@ def test_batch_decode_runs_off_the_loop_thread(monkeypatch: pytest.MonkeyPatch) 
 
         beat = asyncio.create_task(heartbeat())
         await ingest_batch.run_ingest_batch(
-            service, [_jpeg(i) for i in range(4)], list('abcd')  # type: ignore[arg-type]
+            service,
+            [_jpeg(i) for i in range(4)],
+            list('abcd'),  # type: ignore[arg-type]
         )
         await beat
         return threading.get_ident(), max(gaps)
@@ -140,7 +152,9 @@ def test_an_undecodable_image_is_left_for_ingest_one_to_report(
     service = _Service()
     result = asyncio.run(
         ingest_batch.run_ingest_batch(
-            service, [b'not an image', _jpeg(5)], ['bad', 'good']  # type: ignore[arg-type]
+            service,
+            [b'not an image', _jpeg(5)],
+            ['bad', 'good'],  # type: ignore[arg-type]
         )
     )
     assert [r.status for r in result.results] == ['success', 'success']

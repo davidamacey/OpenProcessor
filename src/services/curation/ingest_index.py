@@ -98,6 +98,16 @@ def crop_pil(img: Image.Image, bbox_pixel: tuple[float, float, float, float]) ->
         return img.crop((x1i, y1i, x2i, y2i))
 
 
+def _box_bytes(items: list[DetectedItem]) -> int:
+    """RGB bytes of the item boxes: what cutting, blur-scoring and encoding the crops touch."""
+    return int(
+        sum(
+            max(0.0, x2 - x1) * max(0.0, y2 - y1) * 3
+            for x1, y1, x2, y2 in (i.bbox_pixel for i in items)
+        )
+    )
+
+
 def _crop_all(img: Image.Image, items: list[DetectedItem]) -> list[Image.Image]:
     return [crop_pil(img, item.bbox_pixel) for item in items]
 
@@ -186,7 +196,7 @@ async def index_items(
     img = ctx.pil
     full_w, full_h = ctx.width, ctx.height
     image_path = ctx.image_path
-    crops_pil = await run_cpu(_crop_all, img, items)
+    crops_pil = await run_cpu(_crop_all, img, items, nbytes=_box_bytes(items))
     await embed_items(service, items, crops_pil, full_w, full_h, image_path)
 
     now = datetime.now(UTC).isoformat()
@@ -218,7 +228,7 @@ async def index_items(
             image_doc.update(ctx.image_extra)
 
     try:
-        rgb_frame, full_var = await run_cpu(_full_frame_blur, img)
+        rgb_frame, full_var = await run_cpu(_full_frame_blur, img, nbytes=full_w * full_h * 3)
     except Exception as exc:
         logger.warning('ingest_blur_full_var_failed', path=image_path, error=str(exc))
         rgb_frame = None
@@ -239,13 +249,21 @@ async def index_items(
         store = get_ivf_ingest_store()
 
     box_vars: list[float | None] = (
-        await run_cpu(_box_blurs, rgb_frame, [item.bbox_pixel for item in items])
+        await run_cpu(
+            _box_blurs, rgb_frame, [item.bbox_pixel for item in items], nbytes=_box_bytes(items)
+        )
         if rgb_frame is not None
         else [None] * len(items)
     )
     await asyncio.gather(
         *(
-            run_cpu(write_crop_cache, cid, crop, service.config.crop_cache_dir)
+            run_cpu(
+                write_crop_cache,
+                cid,
+                crop,
+                service.config.crop_cache_dir,
+                nbytes=crop.width * crop.height * 3,
+            )
             for cid, crop in zip(cids, crops_pil, strict=True)
         )
     )

@@ -54,7 +54,7 @@ def test_numpy_scalars_and_arrays_go_through_the_default_hook() -> None:
 def test_dates_and_uuids_and_integer_keys_match() -> None:
     doc = {
         'when': dt.datetime(2026, 10, 10, 12, 30, 5, 123456, tzinfo=dt.UTC),
-        'naive': dt.datetime(2026, 1, 2, 3, 4, 5),
+        'naive': dt.datetime(2026, 1, 2, 3, 4, 5),  # noqa: DTZ001 - a naive value is the case
         'day': dt.date(2026, 10, 10),
         'id': uuid.UUID('12345678-1234-5678-1234-567812345678'),
         7: 'seven',

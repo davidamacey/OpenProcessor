@@ -79,7 +79,7 @@ from src.services.detection.pe_preprocess import (
     whole_frame_chw,
     whole_frame_chw_from_bytes,
 )
-from src.utils.cpu_pool import run_cpu
+from src.utils.cpu_pool import encoded_nbytes, run_cpu
 from src.utils.stage_timing import stage_timer
 
 
@@ -369,7 +369,7 @@ class PEEncoder:
 
         from src.clients.triton_pool import fp32_images_input
 
-        inp = await run_cpu(fp32_images_input, chws)
+        inp = await run_cpu(fp32_images_input, chws, nbytes=chws.nbytes)
         outs = [InferRequestedOutput('image_embeddings')]
         with stage_timer('embed', nbytes=chws.nbytes):
             result = await self.triton_pool.infer(PE_IMAGE_MODEL, [inp], outputs=outs)
@@ -402,7 +402,7 @@ class PEEncoder:
         if not crops:
             return np.zeros((0, PE_EMBEDDING_DIM), dtype=np.float32)
 
-        chws = await run_cpu(_preprocess_crops, crops)
+        chws = await run_cpu(_preprocess_crops, crops, nbytes=sum(c.nbytes for c in crops))
 
         rows: list[np.ndarray] = []
         for start in range(0, chws.shape[0], max_batch):
@@ -422,7 +422,7 @@ class PEEncoder:
         Returns ``None`` on a decode failure — callers should treat a
         missing whole-frame embedding as non-fatal.
         """
-        chw = await run_cpu(_timed_whole_frame, whole_frame_chw, path)
+        chw = await run_cpu(_timed_whole_frame, whole_frame_chw, path, nbytes=encoded_nbytes(path))
         if chw is None:
             return None
         batch = chw[None, ...].astype(np.float32, copy=False)
@@ -436,7 +436,9 @@ class PEEncoder:
         identifier, not a file the API container can open. Same
         preprocessing, so the vector matches the from-disk path.
         """
-        chw = await run_cpu(_timed_whole_frame, whole_frame_chw_from_bytes, data)
+        chw = await run_cpu(
+            _timed_whole_frame, whole_frame_chw_from_bytes, data, nbytes=encoded_nbytes(data)
+        )
         if chw is None:
             return None
         batch = chw[None, ...].astype(np.float32, copy=False)

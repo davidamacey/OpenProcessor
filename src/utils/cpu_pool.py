@@ -8,6 +8,13 @@ images and a request waiting on the loop looks like a slow datastore call.
 the caller's ``contextvars`` (the bound project, the request id) copied
 across the hop.
 
+The hop costs CPU of its own: every call that releases the GIL while the loop
+thread wants it is a hand-over. Measured on 640 x 480 frames it added more
+CPU than the work it moved (0.147 against 0.092 CPU-s per image), and on
+12-24 MP photos it is what lets a worker use several cores. A call that
+declares it touches less than ``OFFLOAD_MIN_BYTES`` of pixels therefore runs
+in place: a few milliseconds on the loop are cheaper than the hop.
+
 :class:`InflightGate` bounds how many images a process holds decoded at once.
 Past the cap a request queues (first in, first out) before it decodes rather
 than all requests decoding together, so more clients cannot lower the
@@ -18,12 +25,15 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import io
 import os
 import threading
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
+
+from PIL import Image
 
 from src.config.project_context import run_in_executor_bound
 
@@ -34,10 +44,13 @@ if TYPE_CHECKING:
 
 DEFAULT_CPU_THREADS = 4
 DEFAULT_INFLIGHT_IMAGES = 4
+# Below this much pixel data (about 1.3 MP of RGB) a call runs in place.
+OFFLOAD_MIN_BYTES = 4 * 1024 * 1024
 
-_executor: ThreadPoolExecutor | None = None
-_executor_pid = 0
-_executor_lock = threading.Lock()
+# One pool and one gate per process id, so a forked child builds its own.
+_executors: dict[int, ThreadPoolExecutor] = {}
+_gates: dict[int, InflightGate] = {}
+_lock = threading.Lock()
 
 
 def cpu_threads() -> int:
@@ -53,30 +66,48 @@ def inflight_images() -> int:
 
 
 def cpu_executor() -> ThreadPoolExecutor:
-    """The process's CPU pool, created on first use (and again after a fork)."""
-    global _executor, _executor_pid
+    """The process's CPU pool, created on first use."""
     pid = os.getpid()
-    with _executor_lock:
-        if _executor is None or _executor_pid != pid:
-            _executor = ThreadPoolExecutor(
+    with _lock:
+        if pid not in _executors:
+            _executors[pid] = ThreadPoolExecutor(
                 max_workers=cpu_threads(), thread_name_prefix='op-cpu-'
             )
-            _executor_pid = pid
-        return _executor
+        return _executors[pid]
 
 
 def shutdown_cpu_executor() -> None:
     """Stop the pool at application shutdown (running calls finish first)."""
-    global _executor
-    with _executor_lock:
-        executor, _executor = _executor, None
+    with _lock:
+        executor = _executors.pop(os.getpid(), None)
     if executor is not None:
         executor.shutdown(wait=True)
 
 
-async def run_cpu[T](fn: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
-    """Run ``fn(*args, **kwargs)`` on the CPU pool and await the result."""
+def encoded_nbytes(source: bytes | str) -> int | None:
+    """RGB bytes of an encoded image (given as bytes or a path) from its header alone.
+
+    ``None`` when the header cannot be read: the call is then offloaded, the safe side
+    for work of unknown size.
+    """
+    try:
+        with Image.open(io.BytesIO(source) if isinstance(source, bytes) else source) as img:
+            return img.width * img.height * 3
+    except Exception:
+        return None
+
+
+async def run_cpu[T](
+    fn: Callable[..., T], /, *args: Any, nbytes: int | None = None, **kwargs: Any
+) -> T:
+    """Run ``fn(*args, **kwargs)`` on the CPU pool and await the result.
+
+    ``nbytes`` is the pixel data the call touches. Under ``OFFLOAD_MIN_BYTES`` the call runs
+    in place (see the module docstring); unknown (``None``) is offloaded.
+    """
     call = functools.partial(fn, **kwargs) if kwargs else fn
+    if nbytes is not None and nbytes < OFFLOAD_MIN_BYTES:
+        return call(*args)
     return await run_in_executor_bound(asyncio.get_running_loop(), cpu_executor(), call, *args)
 
 
@@ -136,28 +167,24 @@ class InflightGate:
             future.set_result(None)
 
 
-_gate: InflightGate | None = None
-_gate_pid = 0
-
-
 def ingest_gate() -> InflightGate:
-    """The process's ingest admission gate, created on first use (and again after a fork)."""
-    global _gate, _gate_pid
+    """The process's ingest admission gate, created on first use."""
     pid = os.getpid()
-    if _gate is None or _gate_pid != pid:
-        _gate = InflightGate(inflight_images())
-        _gate_pid = pid
-    return _gate
+    if pid not in _gates:
+        _gates[pid] = InflightGate(inflight_images())
+    return _gates[pid]
 
 
 __all__ = [
     'DEFAULT_CPU_THREADS',
     'DEFAULT_INFLIGHT_IMAGES',
+    'OFFLOAD_MIN_BYTES',
     'InflightGate',
     'cpu_executor',
     'cpu_threads',
-    'ingest_gate',
+    'encoded_nbytes',
     'inflight_images',
+    'ingest_gate',
     'run_cpu',
     'shutdown_cpu_executor',
 ]

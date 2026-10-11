@@ -58,7 +58,6 @@ from src.services.detection.geometry import (
 )
 from src.utils.class_names import normalize_class_name
 from src.utils.cpu_pool import run_cpu
-from src.utils.stage_timing import stage_timer
 
 
 if TYPE_CHECKING:
@@ -77,6 +76,10 @@ SECONDARY_IOU_MATCH = 0.3
 _RAW_OUTPUT = 'output0'
 
 logger = get_logger(__name__)
+
+
+def _rgb_bytes(img: Image.Image) -> int:
+    return img.width * img.height * 3
 
 
 @dataclass
@@ -135,8 +138,9 @@ class WholeImageDetector:
             img,
             target=self.profile.input_size,
             fill=self.profile.letterbox_fill,
+            nbytes=_rgb_bytes(img),
         )
-        inp = await run_cpu(fp32_images_input, chw)
+        inp = await run_cpu(fp32_images_input, chw, nbytes=chw.nbytes)
         outs = [InferRequestedOutput(name) for name in END2END_OUTPUTS]
         result = await self.triton_pool.infer(self.profile.detector_model, [inp], outputs=outs)
         return self.decode_primary_row(
@@ -166,7 +170,11 @@ class WholeImageDetector:
         letterboxed = await asyncio.gather(
             *(
                 run_cpu(
-                    letterbox_to_square, img, target=net_size, fill=self.profile.letterbox_fill
+                    letterbox_to_square,
+                    img,
+                    target=net_size,
+                    fill=self.profile.letterbox_fill,
+                    nbytes=_rgb_bytes(img),
                 )
                 for img in imgs
             )
@@ -174,7 +182,8 @@ class WholeImageDetector:
         # ``letterbox_to_square`` returns (1, 3, S, S); strip the leading dim.
         scales = [scale for _chw, scale, _pad in letterboxed]
         pads = [pad for _chw, _scale, pad in letterboxed]
-        full_batch = await run_cpu(np.stack, [chw[0] for chw, _scale, _pad in letterboxed], axis=0)
+        tensors = [chw[0] for chw, _scale, _pad in letterboxed]
+        full_batch = await run_cpu(np.stack, tensors, axis=0, nbytes=sum(t.nbytes for t in tensors))
 
         outs = [InferRequestedOutput(name) for name in END2END_OUTPUTS]
         # Per-chunk rows are collected individually rather than
@@ -185,7 +194,7 @@ class WholeImageDetector:
         step = max(1, self.profile.batch_limit)
         for start in range(0, full_batch.shape[0], step):
             chunk = full_batch[start : start + step]
-            inp = await run_cpu(fp32_images_input, chunk)
+            inp = await run_cpu(fp32_images_input, chunk, nbytes=chunk.nbytes)
             result = await self.triton_pool.infer(self.profile.detector_model, [inp], outputs=outs)
             for name in END2END_OUTPUTS:
                 rows[name].extend(result.as_numpy(name))
@@ -331,9 +340,13 @@ class WholeImageDetector:
         assert profile is not None
         feature = await self.secondary_feature_output()
         chw, _scale, _pad = await run_cpu(
-            letterbox_to_square, img, target=profile.input_size, fill=profile.letterbox_fill
+            letterbox_to_square,
+            img,
+            target=profile.input_size,
+            fill=profile.letterbox_fill,
+            nbytes=_rgb_bytes(img),
         )
-        inp = await run_cpu(fp32_images_input, chw)
+        inp = await run_cpu(fp32_images_input, chw, nbytes=chw.nbytes)
         result = await self.triton_pool.infer(
             profile.detector_model, [inp], outputs=self._secondary_outputs(feature)
         )
@@ -362,18 +375,23 @@ class WholeImageDetector:
         letterboxed = await asyncio.gather(
             *(
                 run_cpu(
-                    letterbox_to_square, img, target=profile.input_size, fill=profile.letterbox_fill
+                    letterbox_to_square,
+                    img,
+                    target=profile.input_size,
+                    fill=profile.letterbox_fill,
+                    nbytes=_rgb_bytes(img),
                 )
                 for img in imgs
             )
         )
-        full_batch = await run_cpu(np.stack, [chw[0] for chw, _scale, _pad in letterboxed], axis=0)
+        tensors = [chw[0] for chw, _scale, _pad in letterboxed]
+        full_batch = await run_cpu(np.stack, tensors, axis=0, nbytes=sum(t.nbytes for t in tensors))
 
         rows: list[SecondaryOutput] = []
         step = max(1, profile.batch_limit)
         for start in range(0, full_batch.shape[0], step):
             chunk = full_batch[start : start + step]
-            inp = await run_cpu(fp32_images_input, chunk)
+            inp = await run_cpu(fp32_images_input, chunk, nbytes=chunk.nbytes)
             result = await self.triton_pool.infer(profile.detector_model, [inp], outputs=outs)
             raws = result.as_numpy(_RAW_OUTPUT)
             fmaps = result.as_numpy(feature) if feature is not None else None
