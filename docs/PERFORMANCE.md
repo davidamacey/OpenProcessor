@@ -830,7 +830,7 @@ The earlier private FP16 measurement of about 170 embeddings/s (5.9 ms) matches 
 
 ### Wave 0 parity and FP16 gates (set A, public COCO, 2,000 images)
 
-Every v0.6.0 change is gated by `scripts/bench/parity.py` (WP-0.1, #208): it captures the per-stage
+Every 0.6.0 change is gated by `scripts/bench/parity.py` (WP-0.1, #208): it captures the per-stage
 outputs of one ingest of the pinned set and compares two captures against the accuracy gates of
 `docs/design/triton_pipeline_optimization_plan.md` section 7 and the cluster-agreement metric of
 `docs/design/v060_wave_plan.md` section 2.1. This section describes the tool and records the gate run
