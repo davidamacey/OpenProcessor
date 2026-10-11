@@ -1,6 +1,7 @@
 # v0.6.0 wave plan: precision, host CPU, zero-copy data path, clustering, vector store
 
-Status: plan (nothing implemented). Milestone v0.6.0. Umbrella issues: #40 (pipeline), #56
+Status: plan. WP-0.1 (parity tooling, #208) is implemented; its FP16 gate run is recorded in
+`docs/PERFORMANCE.md` ("Wave 0 parity and FP16 gates"). Milestone v0.6.0. Umbrella issues: #40 (pipeline), #56
 (vector quantization), #67 (request-driven plans), #42 (12 GB engines), #41 (image slimming).
 Work-package issues: #208 to #221, plus #207 and #153 (table in section 10), and #226 to #232 from
 the serving backend trade study (section 13,
@@ -149,6 +150,29 @@ section 1 ("Corrections") in the same PR or in WP-1.2.
 - Capture the **v0.5.0 reference** on the pinned set with the engines as measured (FP32-sized PE)
   and keep it as `ref-v050`; after WP-1.1 capture `ref-fp16`. Both are the references for later
   waves (most later WPs compare against `ref-fp16`).
+
+**Status: implemented (#208).** The tool is `scripts/bench/parity.py` with `capture` and `compare`
+subcommands (not the two scripts named above); the pure logic is split into `parity_metrics.py`,
+`parity_store.py` (file format), `parity_assemble.py`, `parity_gates.py` and `parity_env.py`, the
+thresholds are in `scripts/bench/parity_gates.json`, and the tests are `tests/bench/test_parity_*.py`
+(synthetic fixtures; 18 injected mutants, among them a flipped IoU comparison and a dropped
+class-name check, are all caught). What the first runs established:
+
+- `ref-v050` is the capture of the FP32 plan and `ref-fp16` the capture of the FP16 plan, both under
+  `artifacts_local/bench/parity/` (local, 28 MB each, not in git); `docs/benchmarks/parity/` holds the
+  committed summaries. FP16 passes every gate against FP32 (WP-1.1 parity gates P-pe/P-pew:
+  1st percentile 0.998/0.9975, median 0.9999/0.9998).
+- The detector is **not bit-reproducible between runs** on this stack: two captures of the same plan
+  differ in about 1 % of crop rectangles. Consequences for later WPs: capture the reference twice and
+  compare the two first (the noise floor); the crop-rectangle identity of rule D2 is recorded, not
+  gated, so every downstream gate runs every time; whole-capture bit-identity (gate P-json) cannot be
+  proven from two live ingests, it needs the route-JSON comparison of that WP.
+- The curation API serves no embedding vectors, so PE vectors are read by id from the project's
+  OpenSearch indexes; the cluster centroids are likewise derived (mean of each cluster's vectors).
+- The auto-label worker (compose profile `curation`) must run for the cluster step.
+- The registry is empty in a fresh project, so label agreement is measured as the majority detector class
+  among the top-10 neighbours and, when a VLM is active, as the VLM label on a seeded crop sample
+  (`--vlm-crops`, not run in the FP16 acceptance: no VLM was configured).
 
 ## 4. Wave 1: precision, host CPU, idle CPU, cluster scheduling (low risk)
 

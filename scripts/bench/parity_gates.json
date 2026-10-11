@@ -1,0 +1,164 @@
+{
+  "schema": 1,
+  "source": "docs/design/triton_pipeline_optimization_plan.md section 7; docs/design/v060_wave_plan.md sections 2 and 2.1",
+  "settings": {
+    "knn_k": 10,
+    "knn_queries": 1000,
+    "near_duplicate_cosine": 0.98,
+    "seed": 20261009
+  },
+  "profiles": {
+    "precision": {
+      "description": "A change that moves numerics of one stage by rounding only (engine precision, input dtype): matched detections and vectors must stay equivalent.",
+      "checks": [
+        {
+          "id": "P-box",
+          "metric": "boxes.images_identical_share",
+          "op": ">=",
+          "value": 0.98,
+          "note": "images with every box matched at IoU >= 0.95 and confidence delta <= 0.02"
+        },
+        {
+          "id": "P-box-confident",
+          "metric": "boxes.unmatched_confident",
+          "op": "<=",
+          "value": 0,
+          "note": "unmatched boxes with confidence >= 0.5"
+        },
+        {
+          "id": "P-item",
+          "metric": "boxes.item_count_class_identical_share",
+          "op": ">=",
+          "value": 0.99,
+          "note": "images with the same item count and class names"
+        },
+        {
+          "id": "P-pe-p01",
+          "metric": "pe_crop.p01",
+          "op": ">=",
+          "value": 0.995,
+          "note": "cosine, crop vectors of matched items"
+        },
+        {
+          "id": "P-pe-median",
+          "metric": "pe_crop.median",
+          "op": ">=",
+          "value": 0.999
+        },
+        {
+          "id": "P-pew-p01",
+          "metric": "pe_frame.p01",
+          "op": ">=",
+          "value": 0.995,
+          "note": "cosine, whole-frame vectors"
+        },
+        {
+          "id": "P-pew-median",
+          "metric": "pe_frame.median",
+          "op": ">=",
+          "value": 0.999
+        },
+        {
+          "id": "P-knn",
+          "metric": "knn.overlap_at_k",
+          "op": ">=",
+          "value": 0.95,
+          "note": "neighbour overlap at k over the query items"
+        },
+        {
+          "id": "P-dup",
+          "metric": "knn.near_dup_agreement",
+          "op": ">=",
+          "value": 0.995,
+          "note": "near-duplicate decisions at the configured cosine, identical on this share of pairs"
+        },
+        {
+          "id": "P-cluster-assign",
+          "metric": "cluster.assignment_agreement",
+          "op": ">=",
+          "value": 0.98,
+          "note": "nearest reference centroid unchanged when candidate vectors are assigned to it"
+        },
+        {
+          "id": "P-cluster-purity",
+          "metric": "cluster.purity_drop_points",
+          "op": "<=",
+          "value": 0.5,
+          "note": "purity against COCO ground-truth classes, percentage points lost"
+        },
+        {
+          "id": "P-label-vote",
+          "metric": "knn.label_vote_agreement",
+          "op": ">=",
+          "value": 0.97,
+          "note": "majority detector class among the top-k neighbours, identical in both spaces (label propagation); the VLM agreement bar"
+        },
+        {
+          "id": "P-knn-precision",
+          "metric": "knn.precision_drop_points",
+          "op": "<=",
+          "value": 0.5,
+          "note": "kNN precision against COCO ground-truth classes, percentage points lost"
+        },
+        {
+          "id": "P-label",
+          "metric": "labels.class_agreement",
+          "op": ">=",
+          "value": 0.99,
+          "note": "class name per matched item (the auto-promote outcome)"
+        },
+        {
+          "id": "P-vlm",
+          "metric": "labels.vlm_agreement",
+          "op": ">=",
+          "value": 0.97,
+          "note": "VLM label on the sampled crops"
+        },
+        {
+          "id": "P-clip",
+          "metric": "clip.p01",
+          "op": ">=",
+          "value": 0.995,
+          "note": "core-route image embedding, cosine"
+        },
+        {
+          "id": "P-face",
+          "metric": "face.p01",
+          "op": ">=",
+          "value": 0.995,
+          "note": "face embedding of matched faces, cosine"
+        },
+        {
+          "id": "P-ocr",
+          "metric": "ocr.exact_share",
+          "op": ">=",
+          "value": 0.98,
+          "note": "OCR lines matched at IoU >= 0.5, exact string"
+        }
+      ],
+      "record": [
+        "boxes.crop_rect_identical_share",
+        "pe_crop.identical_share",
+        "pe_frame.identical_share",
+        "cluster.ari",
+        "cluster.nmi",
+        "cluster.objective_rel_diff",
+        "cluster.purity_ref",
+        "cluster.similarity_abs_delta_mean",
+        "cluster.similarity_abs_delta_p99",
+        "cluster.core_agreement",
+        "knn.precision_ref",
+        "knn.precision_cand",
+        "cluster.purity_cand",
+        "knn.top1_recall_at_k",
+        "pe_crop.min",
+        "pe_crop.mean",
+        "pe_frame.min",
+        "pe_frame.mean",
+        "boxes.iou_min",
+        "boxes.score_delta_max",
+        "ocr.char_error_rate"
+      ]
+    }
+  }
+}
