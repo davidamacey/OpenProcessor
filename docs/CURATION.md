@@ -692,7 +692,9 @@ manifest (a text file with one absolute image path per line, or JSON Lines with 
 | Stop after the batches in flight | `POST /curation/projects/{project}/ingest/bulk/{run_id}/cancel` |
 
 The command line is a client of the same routes (so is Cropwright's `/ingest`
-page, under "Bulk ingest"):
+page, under "Bulk ingest"). Run it inside `api`: like every curation script it
+resolves `--project` through the project registry first and refuses an unknown or
+unbindable project.
 
 ```bash
 docker compose exec api python scripts/curation/bulk_ingest.py \

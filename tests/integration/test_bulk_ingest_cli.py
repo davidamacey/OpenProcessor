@@ -58,6 +58,8 @@ def cli(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> Any:
     """The CLI module with its HTTP client replaced by the in-process app."""
     from scripts.curation import bulk_ingest
 
+    # Binding reads the project registry from OpenSearch; the app under test has its own.
+    monkeypatch.setattr(bulk_ingest, 'bind_script_project', lambda _slug: None)
     monkeypatch.setattr(
         bulk_ingest,
         'httpx',

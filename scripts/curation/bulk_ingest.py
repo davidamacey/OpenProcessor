@@ -7,6 +7,9 @@ batches through the ingest pipeline, a ledger that makes it resumable, cancel)
 lives in the API; this script is a client, exactly like Cropwright, so the two
 cannot diverge.
 
+Like every curation script it binds ``--project`` through the project registry
+(OpenSearch), so run it inside the ``api`` container or set ``OPENSEARCH_URL``.
+
 The API reads the files, so ``--folder`` / ``--manifest`` are paths inside the API
 container, under a configured source root (``OP_SOURCE_ROOT``). A manifest is a
 text file with one image path per line (or JSON Lines with a ``path`` field).
@@ -48,7 +51,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from src.config import get_curation_config
-from src.services.projects.script_binding import add_project_argument
+from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
 TERMINAL = frozenset({'completed', 'completed_with_errors', 'failed', 'cancelled', 'interrupted'})
@@ -201,6 +204,7 @@ def _watch(client: httpx.Client, base: str, run: dict[str, Any], interval: float
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    bind_script_project(args.project)
     base = f'{args.api_base.rstrip("/")}/projects/{args.project}'
     with httpx.Client() as client:
         try:
