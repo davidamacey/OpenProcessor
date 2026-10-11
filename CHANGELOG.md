@@ -16,6 +16,14 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 - A checksum-pinned public benchmark set: `fetch_coco_subset.py --bench-set N` draws a seeded,
   license-filtered, all-class COCO 2017 set and pins per-image SHA-256 and bytes
   (`scripts/datasets/manifests/coco_bench_2000.json`); `--verify-only` re-hashes a download offline (#45).
+- Ingest stage timers for the work that ran untimed: `hash`, `persist`, `letterbox`, `triton_request`,
+  `whole_frame_preprocess`, `blur`, `doc_build`, `bulk_serialize` and `admission_wait` join the
+  `op_pipeline_stage_seconds` stages, and `resize` is renamed `pe_preprocess` (it is the PE crop
+  preprocessing). On 12-24 MP photos the timers name 93 percent of the API CPU, on 640 x 480 frames 54
+  percent; the table and the native profile of the rest are in `docs/PERFORMANCE.md` (#210).
+- `OP_CPU_POOL_THREADS` (default 8) and `OP_INGEST_INFLIGHT_MB` (default 1024): the threads per API
+  worker for pixel work on large images, and the megabytes of decoded pixels a worker admits into
+  ingest at once (#241).
 - `scripts/bench/baseline_suite.py` and `suite_report.py`: one entry point that records the
   environment, ingest through `/ingest/upload` and `/ingest/batch`, Triton statistics,
   perf_analyzer points, endpoints and VLM throughput as one JSON; the v0.5.0 numbers are in
@@ -49,9 +57,33 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   about 4 ms instead of about 69 ms and the acceptance log no longer repeats the deprecation
   warning. Response bytes are unchanged; the one contract change is that
   `POST .../datasets/imports/{import_id}/undo` now documents its response schema (#153).
+- Ingest on 12-24 MP photos is no longer bound by one event-loop thread per worker. Decode, the
+  detector letterbox, PE and whole-frame preprocessing, blur scoring and crop encoding of a large image
+  run on a bounded per-worker thread pool (work under 4 MiB of pixels stays in place: a pool hop cost
+  more CPU than it saved on small frames), and a request waits at a first-in first-out gate until its
+  decoded megabytes fit under `OP_INGEST_INFLIGHT_MB`. On the 500-photo set at 8 images per request
+  throughput is 21.5, 27.3, 23.6 and 24.1 images/s at 8, 16, 32 and 64 clients against 5.2, 8.7, 10.8
+  and 4.9, and no longer falls past 32 clients (#241).
+- API CPU per 640 x 480 frame is down 29 to 33 percent (0.170-0.192 to 0.113-0.136 CPU-s; the 40 percent
+  target was not met) with no change to any stored value: vectors reach OpenSearch through
+  `ndarray.tolist()` and an orjson serializer (34 to 1 ms per image), PE normalization is a lookup table
+  that returns the same float32 bits (25 to 10 ms), the blur score takes exact integer sums of a 16-bit
+  Laplacian from RGB (the float64 BGR path took 398 ms on an 18 MP frame), the letterbox tensor is built
+  in one lookup pass, the OpenSearch project guard parses only the action lines of a bulk body and
+  checks each distinct index once, and the API container keeps freed buffers instead of trimming them
+  (`MALLOC_TRIM_THRESHOLD_`, `MALLOC_TOP_PAD_`, `MALLOC_MMAP_THRESHOLD_` in `docker-compose.yml`,
+  up to about 128 MB resident per worker) (#211).
+- Triton runs with `--log-verbose=0` instead of logging an allocation and a free for every tensor of
+  every request (#211).
 
 ### Fixed
 
+- An oversize upload answers `413` with `{"detail": "File too large. Maximum: <N>MB", "max_file_size_mb": <N>,
+  "request_id": ...}` instead of a 500 and a traceback (the exception was raised inside a middleware
+  function, where the exception handlers never see it), and `MAX_FILE_SIZE_MB` caps each uploaded file
+  rather than the `Content-Length` of the whole multipart request, so a batch of large photos is no longer
+  refused for its total. A body larger than the larger of the cap and `OP_UPLOAD_MAX_BYTES_PER_REQUEST`
+  is still refused before it is read. `MAX_FILE_SIZE_MB` is documented in `env.template` (#239).
 - The `curation-vlm-worker` no longer polls every project each cycle and takes a 409
   `vlm_not_configured` from the ones with no VLM (#207, about 2.7 idle cores at 18 projects). Each
   cycle it asks the registry and each project's activation which projects have an active VLM,

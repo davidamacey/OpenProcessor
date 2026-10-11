@@ -1389,6 +1389,174 @@ Wrong or incomplete:
 - Issues filed from this work: #239 (oversize upload answers 500, and the 50 MB cap counts the
   whole request), #240 (one `ocr_pipeline` instance), #241 (photos are API-bound).
 
+### 0.6.0 WP-1.2 and WP-1.3: API CPU attribution and fixes (#210, #211, #239, #241)
+
+The Wave 0 section above ends with the API as the limit on photos (3 to 11 images/s, GPU 5 to 15
+percent busy) and 150 of the 180 ms of API CPU per COCO frame unattributed. This section names
+those costs, fixes the ones that measure as worth fixing, and repeats the Wave 0 measurements.
+Medians with the minimum and maximum of 3 repetitions in parentheses.
+
+**Method.** The Wave 0 stack and protocol on GPU 2 of the same host (an isolated compose project,
+loopback ports, the published v0.5.0 images with the branch's `src/` mounted over `/app/src`,
+the FP16 PE plan of the Wave 0 reference, plan sha256 `b9a6f397...`, 32 uvicorn workers, a fresh
+OpenSearch for each series). Set A is the pinned COCO set (first 1,000 images, `/ingest/upload`, 32
+images per request), set B the 500 photos of `commons_hires_500.json` (`/ingest/batch`, 8 images per
+request). Foreign load on GPU 2 was 0.0 percent in all 42 measured runs; whole-host CPU busy
+was 16 to 22 percent (A) and 18 to 34 percent (B) before the changes, 15 to 17 and 54 to 78 percent
+after them (the difference is this stack's own load: it now uses the cores it left idle). The
+"before" rows are the code of `origin/main` plus the two Wave 0 branches, measured in the same
+session as the "after" rows. Commands: `scripts/bench/wave0_suite.py --phases sweep` with
+`--sweep-points 32x4,32x16,32x32 --modes upload --limit 1000` and
+`--sweep-points 8x8,8x16,8x32,8x64 --modes batch`.
+
+#### Attribution (WP-1.2, #210)
+
+The stage timer `op_pipeline_stage_seconds` gained the stages that ran untimed (`hash`, `persist`,
+`letterbox`, `triton_request`, `whole_frame_preprocess`, `blur`, `doc_build`, `bulk_serialize`,
+`admission_wait`); `resize` was renamed `pe_preprocess` because it is the PE crop preprocessing,
+not the detector letterbox. Every stage but `embed` and `opensearch_write` times a synchronous
+block, so on the event-loop thread its seconds are API CPU seconds. The table is the code before
+any fix with the new timers, 16 clients, 2 repetitions.
+
+| Span | 640 x 480 frames, ms/image | share of API CPU | 12-24 MP photos, ms/image | share of API CPU |
+|---|---:|---:|---:|---:|
+| `bulk_serialize` (OpenSearch bodies) | 34.3 | 17.2 % | 10.0 | 0.8 % |
+| `pe_preprocess` (PE crop resize + normalize) | 25.0 | 12.5 % | 6.8 | 0.6 % |
+| `triton_request` (input build, FP32 copy) | 13.9 | 6.9 % | 10.0 | 0.9 % |
+| `blur` (Laplacian scores) | 10.4 | 5.2 % | 447.7 | 38.2 % |
+| `whole_frame_preprocess` | 8.6 | 4.3 % | 187.8 | 16.0 % |
+| `letterbox` | 5.1 | 2.5 % | 93.3 | 8.0 % |
+| `decode` | 4.9 | 2.4 % | 303.7 | 25.9 % |
+| `jpeg_encode` (crop cache) | 3.4 | 1.7 % | 22.6 | 1.9 % |
+| `persist`, `doc_build`, `crop`, `hash` | 2.9 | 1.4 % | 8.3 | 0.7 % |
+| **in a span** | **108.4** | **54 %** | **1,090** | **93 %** |
+| API CPU per image | 199.8 | | 1,172.8 | |
+
+On photos 93 percent is attributed and four primitives are 88 percent of the API CPU, led by the
+blur score, which converted the frame to BGR and took a float64 Laplacian: 398 ms single-threaded
+on an 18 MP frame, more than the decode. On frames the spans reach 54 percent. The rest, 91 ms,
+was looked at with `py-spy record --native` on one worker (130 ms of API CPU per image with the same
+code and two clients, so 32 contended workers cost 1.5 times as much per image):
+
+| Not in a span (frames, one worker) | share of busy samples | ms/image |
+|---|---:|---:|
+| gRPC client: protobuf serialization and copies of 13.6 MB of FP32 tensors, the socket send | 13 % | 17 |
+| the OpenSearch project guard decoding every line of each bulk body (the vectors again) | 6 % | 8 |
+| other Python in the ingest functions (documents, OCC merge, ranking, events) | 12 % | 15 |
+| uvicorn, multipart, aiohttp, Prometheus, kernel socket I/O | 2 % | 3 |
+
+So with the native profile roughly 85 to 90 percent of the frame CPU is named. The wave plan expected that
+the guard "does not parse bodies"; it parses every NDJSON line to find the target indexes. The
+FP32 wire (the first row) is WP-2.1 and WP-2.2 and is not touched here.
+
+#### Fixes, ranked by measured gain (WP-1.3, #211, #241)
+
+| Fix | Where it shows | Before | After |
+|---|---|---:|---:|
+| Pixel work off the event loop on a bounded pool, images admitted by decoded megabytes (#241) | photos, images/s at 8 / 16 / 32 / 64 clients | 5.2 / 8.7 / 10.8 / 4.9 | 21.5 / 27.3 / 23.6 / 24.1 |
+| `ndarray.tolist()` and orjson for OpenSearch bodies | frames, `bulk_serialize` ms/image | 34.3 | 0.9 |
+| PE normalization through a lookup table (bit-identical) | frames, `pe_preprocess` ms/image | 25.0 | 9.8 |
+| Blur score from exact integer sums of a 16-bit Laplacian | frames / photos, `blur` ms/image | 10.4 / 447.7 | 4.6 / 252.2 (398 to about 75 ms single-threaded on 18 MP) |
+| Small work stays on the loop (under 4 MiB of pixels) | frames, one worker, API CPU s/image | 0.157 (4 threads; 0.147 with 1) | 0.109 |
+| glibc keeps freed buffers (`MALLOC_TRIM_THRESHOLD_` and two more) | frames, one worker, API CPU s/image | 0.109 | 0.096 |
+| Project guard parses only the action lines of a bulk body | frames, share of native samples | 6 % | below 1 % |
+| Letterbox tensor in one lookup pass, guard checks each bulk target once | frames | not separately measurable (under 5 %) | |
+| Triton `--log-verbose=0` | Triton-side logging only | 12,038 lines per 2,000 images | none |
+
+The two rows that touch the thread pool carry the lesson of the work: moving everything off the loop
+cost more CPU than it saved on small frames (a pool hop is a GIL hand-over; the same code with the
+pool switched off measured 0.092 CPU-s per image against 0.147 to 0.157 with it), and on photos it is what
+lets a worker use more than one core. `run_cpu` therefore takes the bytes of pixels a call touches and
+runs it in place below 4 MiB. Connections stay on the worker that accepted them, so with 32 clients
+only about 14 of the 32 workers hold requests; each needs 8 threads and room for about 20 photos
+(1 GiB) to use its share of the cores. Four threads and 256 MiB gave 21.0 and 13.1 images/s at 16 and
+32 clients, 8 threads and 1 GiB gave 25.1 and 26.0 (set B, 2 repetitions per arm; 4 threads with 512
+MiB gave 19.8 and 15.2, 8 threads with 512 MiB 23.6 and 16.8).
+
+Counting the gate in images instead of megabytes held the GPU-bound stream of frames back (4 images
+per worker let a 32-frame request run alone): PE batches fell from 26.6 to 21.9 and the GPU from 92
+to 84 percent busy at 16 clients, so it counts decoded bytes read from the image headers.
+
+Not done: the file is decoded twice (Pillow in full for the detector letterbox and the crops,
+OpenCV at 1/8 scale for the whole-frame vector) because both entropy-decode the same bitstream;
+sharing one decode changes the pixels the whole-frame vector is computed from and so breaks the
+bit-identical gate (WP-2.x GPU decode). No JPEG is encoded twice on this path: the crop cache
+encodes each crop once and an upload is persisted as the bytes that arrived.
+
+#### Before and after
+
+Set A (COCO, 1,000 images, 32 per request, `/ingest/upload`):
+
+| clients | images/s before | images/s after | API CPU s/image before | after | change | GPU busy % before / after | request p50 s before / after |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 4 | 17.01 (17.00-17.35) | 19.56 (17.96-19.63) | 0.170 (0.169-0.170) | 0.113 (0.112-0.116) | -33 % | 71 / 80 | 7.4 / 6.5 |
+| 16 | 21.59 (21.25-21.61) | 21.58 (21.48-21.64) | 0.187 (0.182-0.191) | 0.126 (0.121-0.129) | -33 % | 92 / 87 | 21.0 / 21.4 |
+| 32 | 20.68 (20.11-21.01) | 20.46 (20.31-20.77) | 0.192 (0.186-0.194) | 0.136 (0.131-0.139) | -29 % | 85 / 84 | 45.9 / 47.0 |
+
+Set B (500 photos of 12-24 MP, 8 per request, `/ingest/batch`):
+
+| clients | images/s before | images/s after | API CPU s/image before | after | GPU busy % before / after | request p50 s before / after |
+|---:|---:|---:|---:|---:|---:|---:|
+| 8 | 5.22 (5.13-5.87) | 21.50 (20.59-21.51) | 1.102 | 0.990 | 9 / 41 | 9.3 / 2.7 |
+| 16 | 8.68 (8.29-9.31) | 27.26 (24.56-27.32) | 1.129 | 1.103 | 15 / 45 | 10.7 / 4.0 |
+| 32 | 10.78 (10.20-11.28) | 23.57 (19.90-26.21) | 1.168 | 1.129 | 16 / 33 | 15.9 / 7.2 |
+| 64 | 4.87 (4.85-5.24) | 24.13 (23.71-25.28) | 1.225 | 1.090 | 8 / 37 | 48.1 / 11.7 |
+
+Against the targets:
+
+- **Photos: met.** Throughput is 2.2 to 4.9 times higher and no longer falls past 32 clients (24.1
+  at 64 against 23.6 at 32; it fell from 10.8 to 4.9). The CPU per image on photos barely moves
+  (1.10-1.23 to 0.99-1.13): the gain is parallelism, not less work, and the host is now the limit
+  (68 to 76 percent busy, 27 to 30 cores, GPU 33 to 45 percent busy).
+- **COCO frames, API CPU per image down at least 40 percent: not met.** It is down 29 to 33 percent
+  (0.170-0.192 to 0.113-0.136 CPU-s). What is left is the FP32 wire (13.6 MB per image through
+  protobuf and the socket, about 25 ms of the 96 ms single-worker figure) and the decode, letterbox
+  and whole-frame preprocessing that parity fixes in place. Images/s is not lower (GPU-bound, within
+  the spread). The p99 per batch was not measured; the p50 is in the table.
+- The attribution reaches 93 percent on photos and 54 percent from the stage timers on frames (roughly 85 to 90 percent with the native profile above).
+
+#### Accuracy
+
+`scripts/bench/parity.py` (PR #238 tool), one capture of this branch on the isolated stack (2,000 COCO
+images, policy `all`, clusters trained by the auto-label worker, 200-image core-route probe) against the FP16
+reference capture `ref-fp16` (same plan sha256, code of `0567748f`), profile `precision`:
+
+| Gate | Metric | Observed | Rule | Status |
+|---|---|---:|---|---|
+| P-box | `boxes.images_identical_share` | 0.99191 | >= 0.98 | PASS |
+| P-box-confident | `boxes.unmatched_confident` | 0 | <= 0 | PASS |
+| P-item | `boxes.item_count_class_identical_share` | 0.99949 | >= 0.99 | PASS |
+| P-pe-p01 | `pe_crop.p01` | 0.99993 | >= 0.995 | PASS |
+| P-pe-median | `pe_crop.median` | 1.00000 | >= 0.999 | PASS |
+| P-pew-p01 | `pe_frame.p01` | 0.99993 | >= 0.995 | PASS |
+| P-pew-median | `pe_frame.median` | 1.00000 | >= 0.999 | PASS |
+| P-knn | `knn.overlap_at_k` | 0.99610 | >= 0.95 | PASS |
+| P-dup | `knn.near_dup_agreement` | 1.00000 | >= 0.995 | PASS |
+| P-cluster-assign | `cluster.assignment_agreement` | 0.99922 | >= 0.98 | PASS |
+| P-cluster-purity | `cluster.purity_drop_points` | -0.19547 | <= 0.5 | PASS |
+| P-label-vote | `knn.label_vote_agreement` | 0.99700 | >= 0.97 | PASS |
+| P-knn-precision | `knn.precision_drop_points` | -0.07792 | <= 0.5 | PASS |
+| P-label | `labels.class_agreement` | 1.00000 | >= 0.99 | PASS |
+| P-vlm | `labels.vlm_agreement` | n/a | >= 0.97 | SKIP |
+| P-clip | `clip.p01` | 1.00000 | >= 0.995 | PASS |
+| P-face | `face.p01` | 1.00000 | >= 0.995 | PASS |
+| P-ocr | `ocr.exact_share` | 1.00000 | >= 0.98 | PASS |
+
+Verdict PASS (`docs/benchmarks/parity/api_cpu_vs_fp16_ref/`). The candidate has 12,791 items against 12,790;
+12,790 matched. The PE vectors are not bit-identical between two captures (identical share 0.946 for crops,
+0.939 for frames) because the FP16 engine's result depends on the batch it ran in and the batches differ from
+run to run; the median cosine is 1.00000 and the 1st percentile 0.99993. The reference configuration measured
+against itself is the noise floor (about 1 percent of crop rectangles differ). P-vlm is skipped: no VLM was
+configured. The changes that touch numbers were also checked against their old implementations
+directly, on real images, which a GPU-in-the-loop capture cannot do: in the API container, on 400 COCO
+frames and 40 photos (440 images, 1,320 random boxes), the PE normalization of the whole-frame and crop
+tensors, the detector letterbox tensor, the full-frame Laplacian variance and the box variances were
+compared with the previous code, bit for bit for the tensors and at the stored two decimals for the
+variances: 0 of 3,960 comparisons differ. The same equalities are unit tests (every uint8 value on every
+channel, random frames and crops, extreme and tiny images).
+
+Raw results: `docs/benchmarks/v060_apicpu_{before,after}_set_{a,b}.json` and `v060_apicpu_attribution_set_{a,b}.json`.
+
 ## Benchmarking
 
 ### Using the Go Benchmark Tool
