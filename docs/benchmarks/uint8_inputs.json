@@ -1,0 +1,634 @@
+{
+ "description": "uint8 inputs (WP-2.1): ingest throughput, wire bytes, API CPU and Triton-only engine timings; medians with min and max of the repetitions. base = origin/main with the Sep-26 detector plan and an FP16 PE plan built by the same path; detector_uint8 = detector change only; final = detector and PE uint8. GPU 2 of one RTX A6000, loopback compose project, 32 API workers.",
+ "engines": {
+  "base_stack_unchanged_code": {
+   "pe_image_encoder_b32": {
+    "best_infer_per_s": 195.071,
+    "c1_compute_infer_ms": 160.287,
+    "c1_infer_per_s": 130.182
+   },
+   "pe_image_encoder_b8": {
+    "best_infer_per_s": 193.204,
+    "c1_compute_infer_ms": 37.752,
+    "c1_infer_per_s": 117.85
+   },
+   "yolov11_small_trt_end2end_b32": {
+    "best_infer_per_s": 278.191,
+    "c1_compute_infer_ms": 18.331,
+    "c1_infer_per_s": 120.45
+   },
+   "yolov11_small_trt_end2end_b8": {
+    "best_infer_per_s": 534.957,
+    "c1_compute_infer_ms": 5.64,
+    "c1_infer_per_s": 102.19
+   }
+  },
+  "detector_same_stack_ab": {
+   "det_base_b32": {
+    "best_compute_infer_ms": 29.798,
+    "best_concurrency": 6.0,
+    "best_infer_per_s": 265.231,
+    "c1_compute_infer_ms": 18.317,
+    "c1_infer_per_s": 141.078
+   },
+   "det_base_b8": {
+    "best_compute_infer_ms": 7.37,
+    "best_concurrency": 11.0,
+    "best_infer_per_s": 516.88,
+    "c1_compute_infer_ms": 5.669,
+    "c1_infer_per_s": 118.107
+   },
+   "det_ctrl_b32": {
+    "best_compute_infer_ms": 24.986,
+    "best_concurrency": 6.0,
+    "best_infer_per_s": 306.072,
+    "c1_compute_infer_ms": 18.351,
+    "c1_infer_per_s": 142.105
+   },
+   "det_ctrl_b8": {
+    "best_compute_infer_ms": 7.341,
+    "best_concurrency": 11.0,
+    "best_infer_per_s": 545.518,
+    "c1_compute_infer_ms": 5.633,
+    "c1_infer_per_s": 115.824
+   },
+   "yolov11_small_trt_end2end_b32": {
+    "best_compute_infer_ms": 69.472,
+    "best_concurrency": 16.0,
+    "best_infer_per_s": 1501.91,
+    "c1_compute_infer_ms": 18.373,
+    "c1_infer_per_s": 411.337
+   },
+   "yolov11_small_trt_end2end_b8": {
+    "best_compute_infer_ms": 25.58,
+    "best_concurrency": 16.0,
+    "best_infer_per_s": 1611.96,
+    "c1_compute_infer_ms": 5.654,
+    "c1_infer_per_s": 341.517
+   }
+  },
+  "final_stack_first_pass_discarded": {
+   "pe_image_encoder_b32": {
+    "best_infer_per_s": 94.0574,
+    "c1_compute_infer_ms": 341.728,
+    "c1_infer_per_s": 83.4607
+   },
+   "pe_image_encoder_b8": {
+    "best_infer_per_s": 92.4176,
+    "c1_compute_infer_ms": 85.145,
+    "c1_infer_per_s": 85.7772
+   },
+   "yolov11_small_trt_end2end_b32": {
+    "best_infer_per_s": 780.345,
+    "c1_compute_infer_ms": 36.948,
+    "c1_infer_per_s": 252.067
+   },
+   "yolov11_small_trt_end2end_b8": {
+    "best_infer_per_s": 1049.83,
+    "c1_compute_infer_ms": 5.679,
+    "c1_infer_per_s": 323.028
+   }
+  },
+  "pe_same_stack_ab_second_pass": {
+   "pe_base_b32": {
+    "best_compute_infer_ms": 163.925,
+    "best_concurrency": 6.0,
+    "best_infer_per_s": 195.574,
+    "c1_compute_infer_ms": 160.172,
+    "c1_infer_per_s": 128.989
+   },
+   "pe_base_b8": {
+    "best_compute_infer_ms": 152.684,
+    "best_concurrency": 11.0,
+    "best_infer_per_s": 193.824,
+    "c1_compute_infer_ms": 38.772,
+    "c1_infer_per_s": 132.573
+   },
+   "pe_image_encoder_b32": {
+    "best_compute_infer_ms": 174.489,
+    "best_concurrency": 6.0,
+    "best_infer_per_s": 182.653,
+    "c1_compute_infer_ms": 169.753,
+    "c1_infer_per_s": 156.091
+   },
+   "pe_image_encoder_b8": {
+    "best_compute_infer_ms": 88.342,
+    "best_concurrency": 6.0,
+    "best_infer_per_s": 181.115,
+    "c1_compute_infer_ms": 42.024,
+    "c1_infer_per_s": 152.375
+   }
+  }
+ },
+ "ingest": {
+  "set_A_coco_2000": {
+   "base": {
+    "batch": {
+     "api_cpu_s_per_image": {
+      "max": 0.1191,
+      "median": 0.117,
+      "min": 0.1158,
+      "n": 3
+     },
+     "detector_request_mb_per_image": {
+      "max": 4.915,
+      "median": 4.915,
+      "min": 4.915,
+      "n": 3
+     },
+     "failed": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "gpu2_util_mean_pct": {
+      "max": 88.5,
+      "median": 78.3,
+      "min": 77.8,
+      "n": 3
+     },
+     "images_per_s": {
+      "max": 20.38,
+      "median": 19.04,
+      "min": 18.97,
+      "n": 3
+     },
+     "pe_exec_infer_ms_per_execution": {
+      "max": 106.6,
+      "median": 99.0,
+      "min": 94.2,
+      "n": 3
+     },
+     "pe_mean_batch": {
+      "max": 19.3,
+      "median": 17.8,
+      "min": 16.9,
+      "n": 3
+     },
+     "pe_request_mb_per_image": {
+      "max": 10.02,
+      "median": 10.018,
+      "min": 10.018,
+      "n": 3
+     },
+     "request_p50_s": {
+      "max": 6.89,
+      "median": 6.56,
+      "min": 6.28,
+      "n": 3
+     },
+     "triton_cpu_s_per_image": {
+      "max": 0.0375,
+      "median": 0.0367,
+      "min": 0.035,
+      "n": 3
+     },
+     "triton_request_stage_ms": {
+      "max": 3.86,
+      "median": 3.738,
+      "min": 3.609,
+      "n": 3
+     }
+    },
+    "upload": {
+     "api_cpu_s_per_image": {
+      "max": 0.1204,
+      "median": 0.1184,
+      "min": 0.1103,
+      "n": 3
+     },
+     "detector_request_mb_per_image": {
+      "max": 4.915,
+      "median": 4.915,
+      "min": 4.915,
+      "n": 3
+     },
+     "failed": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "gpu2_util_mean_pct": {
+      "max": 80.2,
+      "median": 79.4,
+      "min": 72.2,
+      "n": 3
+     },
+     "images_per_s": {
+      "max": 19.1,
+      "median": 19.09,
+      "min": 17.89,
+      "n": 3
+     },
+     "pe_exec_infer_ms_per_execution": {
+      "max": 110.3,
+      "median": 100.1,
+      "min": 86.5,
+      "n": 3
+     },
+     "pe_mean_batch": {
+      "max": 20.2,
+      "median": 18.0,
+      "min": 15.5,
+      "n": 3
+     },
+     "pe_request_mb_per_image": {
+      "max": 10.018,
+      "median": 10.018,
+      "min": 10.018,
+      "n": 3
+     },
+     "request_p50_s": {
+      "max": 7.24,
+      "median": 6.6,
+      "min": 6.58,
+      "n": 3
+     },
+     "triton_cpu_s_per_image": {
+      "max": 0.0387,
+      "median": 0.0356,
+      "min": 0.035,
+      "n": 3
+     },
+     "triton_request_stage_ms": {
+      "max": 3.961,
+      "median": 3.944,
+      "min": 3.681,
+      "n": 3
+     }
+    }
+   },
+   "detector_uint8": {
+    "batch": {
+     "api_cpu_s_per_image": {
+      "max": 0.0836,
+      "median": 0.0827,
+      "min": 0.0819,
+      "n": 2
+     },
+     "detector_request_mb_per_image": {
+      "max": 1.229,
+      "median": 1.229,
+      "min": 1.229,
+      "n": 2
+     },
+     "failed": [
+      0.0,
+      0.0
+     ],
+     "gpu2_util_mean_pct": {
+      "max": 86.2,
+      "median": 81.7,
+      "min": 77.1,
+      "n": 2
+     },
+     "images_per_s": {
+      "max": 21.72,
+      "median": 20.43,
+      "min": 19.14,
+      "n": 2
+     },
+     "pe_exec_infer_ms_per_execution": {
+      "max": 104.8,
+      "median": 101.6,
+      "min": 98.5,
+      "n": 2
+     },
+     "pe_mean_batch": {
+      "max": 18.8,
+      "median": 18.3,
+      "min": 17.8,
+      "n": 2
+     },
+     "pe_request_mb_per_image": {
+      "max": 10.02,
+      "median": 10.019,
+      "min": 10.019,
+      "n": 2
+     },
+     "request_p50_s": {
+      "max": 6.38,
+      "median": 6.06,
+      "min": 5.74,
+      "n": 2
+     },
+     "triton_cpu_s_per_image": {
+      "max": 0.0233,
+      "median": 0.0229,
+      "min": 0.0224,
+      "n": 2
+     },
+     "triton_request_stage_ms": {
+      "max": 1.762,
+      "median": 1.699,
+      "min": 1.637,
+      "n": 2
+     }
+    },
+    "upload": {
+     "api_cpu_s_per_image": {
+      "max": 0.0874,
+      "median": 0.0843,
+      "min": 0.0826,
+      "n": 3
+     },
+     "detector_request_mb_per_image": {
+      "max": 1.229,
+      "median": 1.229,
+      "min": 1.229,
+      "n": 3
+     },
+     "failed": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "gpu2_util_mean_pct": {
+      "max": 89.1,
+      "median": 83.1,
+      "min": 80.6,
+      "n": 3
+     },
+     "images_per_s": {
+      "max": 22.47,
+      "median": 20.77,
+      "min": 20.17,
+      "n": 3
+     },
+     "pe_exec_infer_ms_per_execution": {
+      "max": 103.5,
+      "median": 103.4,
+      "min": 100.2,
+      "n": 3
+     },
+     "pe_mean_batch": {
+      "max": 18.7,
+      "median": 18.6,
+      "min": 18.0,
+      "n": 3
+     },
+     "pe_request_mb_per_image": {
+      "max": 10.02,
+      "median": 10.02,
+      "min": 10.019,
+      "n": 3
+     },
+     "request_p50_s": {
+      "max": 6.36,
+      "median": 6.12,
+      "min": 5.62,
+      "n": 3
+     },
+     "triton_cpu_s_per_image": {
+      "max": 0.0242,
+      "median": 0.0229,
+      "min": 0.0216,
+      "n": 3
+     },
+     "triton_request_stage_ms": {
+      "max": 1.689,
+      "median": 1.644,
+      "min": 1.606,
+      "n": 3
+     }
+    }
+   },
+   "final": {
+    "batch": {
+     "api_cpu_s_per_image": {
+      "max": 0.0614,
+      "median": 0.0604,
+      "min": 0.0602,
+      "n": 3
+     },
+     "detector_request_mb_per_image": {
+      "max": 1.229,
+      "median": 1.229,
+      "min": 1.229,
+      "n": 3
+     },
+     "failed": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "gpu2_util_mean_pct": {
+      "max": 91.6,
+      "median": 90.5,
+      "min": 89.4,
+      "n": 3
+     },
+     "images_per_s": {
+      "max": 22.31,
+      "median": 21.41,
+      "min": 21.2,
+      "n": 3
+     },
+     "pe_exec_infer_ms_per_execution": {
+      "max": 114.5,
+      "median": 105.6,
+      "min": 104.5,
+      "n": 3
+     },
+     "pe_mean_batch": {
+      "max": 20.5,
+      "median": 18.8,
+      "min": 18.7,
+      "n": 3
+     },
+     "pe_request_mb_per_image": {
+      "max": 2.505,
+      "median": 2.505,
+      "min": 2.505,
+      "n": 3
+     },
+     "request_p50_s": {
+      "max": 5.98,
+      "median": 5.66,
+      "min": 5.61,
+      "n": 3
+     },
+     "triton_cpu_s_per_image": {
+      "max": 0.0134,
+      "median": 0.0133,
+      "min": 0.0131,
+      "n": 3
+     },
+     "triton_request_stage_ms": {
+      "max": 0.554,
+      "median": 0.538,
+      "min": 0.53,
+      "n": 3
+     }
+    },
+    "upload": {
+     "api_cpu_s_per_image": {
+      "max": 0.0621,
+      "median": 0.0616,
+      "min": 0.0604,
+      "n": 3
+     },
+     "detector_request_mb_per_image": {
+      "max": 1.229,
+      "median": 1.229,
+      "min": 1.229,
+      "n": 3
+     },
+     "failed": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "gpu2_util_mean_pct": {
+      "max": 91.4,
+      "median": 87.6,
+      "min": 87.2,
+      "n": 3
+     },
+     "images_per_s": {
+      "max": 21.05,
+      "median": 20.98,
+      "min": 20.97,
+      "n": 3
+     },
+     "pe_exec_infer_ms_per_execution": {
+      "max": 115.0,
+      "median": 113.6,
+      "min": 104.0,
+      "n": 3
+     },
+     "pe_mean_batch": {
+      "max": 20.5,
+      "median": 20.4,
+      "min": 18.7,
+      "n": 3
+     },
+     "pe_request_mb_per_image": {
+      "max": 2.505,
+      "median": 2.505,
+      "min": 2.505,
+      "n": 3
+     },
+     "request_p50_s": {
+      "max": 6.08,
+      "median": 6.08,
+      "min": 6.07,
+      "n": 3
+     },
+     "triton_cpu_s_per_image": {
+      "max": 0.0133,
+      "median": 0.0128,
+      "min": 0.0127,
+      "n": 3
+     },
+     "triton_request_stage_ms": {
+      "max": 0.654,
+      "median": 0.528,
+      "min": 0.527,
+      "n": 3
+     }
+    }
+   }
+  },
+  "set_B_photos_500_batch_8x16": {
+   "base": {
+    "api_cpu_s_per_image": {
+     "max": 1.1132,
+     "median": 1.0834,
+     "min": 1.0706,
+     "n": 3
+    },
+    "detector_request_mb_per_image": {
+     "max": 4.915,
+     "median": 4.915,
+     "min": 4.915,
+     "n": 3
+    },
+    "failed": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "host_busy_pct": {
+     "max": 100.0,
+     "median": 97.0,
+     "min": 96.0,
+     "n": 3
+    },
+    "images_per_s": {
+     "max": 13.52,
+     "median": 8.55,
+     "min": 7.86,
+     "n": 3
+    },
+    "load_average_1m": {
+     "max": 192.0,
+     "median": 191.0,
+     "min": 132.0,
+     "n": 3
+    },
+    "pe_request_mb_per_image": {
+     "max": 3.568,
+     "median": 3.568,
+     "min": 3.568,
+     "n": 3
+    },
+    "triton_cpu_s_per_image": {
+     "max": 0.0285,
+     "median": 0.0272,
+     "min": 0.027,
+     "n": 3
+    }
+   },
+   "final": {
+    "api_cpu_s_per_image": {
+     "max": 1.1098,
+     "median": 1.101,
+     "min": 1.096,
+     "n": 3
+    },
+    "detector_request_mb_per_image": {
+     "max": 1.229,
+     "median": 1.229,
+     "min": 1.229,
+     "n": 3
+    },
+    "failed": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "host_busy_pct": {
+     "max": 99.0,
+     "median": 96.0,
+     "min": 95.0,
+     "n": 3
+    },
+    "images_per_s": {
+     "max": 15.52,
+     "median": 14.9,
+     "min": 7.64,
+     "n": 3
+    },
+    "load_average_1m": {
+     "max": 98.0,
+     "median": 84.0,
+     "min": 84.0,
+     "n": 3
+    },
+    "pe_request_mb_per_image": {
+     "max": 0.895,
+     "median": 0.895,
+     "min": 0.895,
+     "n": 3
+    },
+    "triton_cpu_s_per_image": {
+     "max": 0.021,
+     "median": 0.0188,
+     "min": 0.0184,
+     "n": 3
+    }
+   }
+  }
+ }
+}

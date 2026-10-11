@@ -82,7 +82,7 @@ class TestAddUint8Input:
         pixels = np.random.default_rng(0).integers(0, 256, size=(2, 3, 4, 4), dtype=np.uint8)
         expected = _run(src, pixels.astype(np.float32) / np.float32(255.0))
         got = _run(dst, pixels)
-        np.testing.assert_allclose(got, expected, rtol=0, atol=1e-6)
+        np.testing.assert_array_equal(got, expected)  # the same bits, not just close
 
     def test_mean_std_matches_the_lookup_table_for_every_pixel_value(self, tmp_path: Path) -> None:
         src, dst = tmp_path / 'f.onnx', tmp_path / 'u.onnx'
@@ -93,7 +93,7 @@ class TestAddUint8Input:
         table = _lookup_table(mean, std)
         normalized = np.stack([table[pixels[0, c], c] for c in range(3)])[None]
         expected = _run(src, np.ascontiguousarray(normalized, dtype=np.float32))
-        np.testing.assert_allclose(_run(dst, pixels), expected, rtol=0, atol=2e-6)
+        np.testing.assert_array_equal(_run(dst, pixels), expected)  # the same bits, not just close
 
     def test_refuses_a_graph_whose_input_is_not_float(self, tmp_path: Path) -> None:
         src = tmp_path / 'f.onnx'

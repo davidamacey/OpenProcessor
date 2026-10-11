@@ -1,0 +1,380 @@
+{
+  "candidate": {
+    "created_at": "2026-10-11T17:13:52.331585+00:00",
+    "engine": {
+      "label": "fp16",
+      "plan_bytes": 644771460,
+      "plan_file": "model.plan",
+      "plan_sha256": "550a6890743a37e5ca3eef13c1a5e71885de39f306ec32a0a3c9c5e5d6459dd2",
+      "source": "detector-uint8"
+    },
+    "git_dirty": true,
+    "git_sha": "57dfb3cfe2bcb690a176da724508fbaaa6b1e1d1",
+    "gpu": "NVIDIA RTX A6000",
+    "image_digests": {
+      "uint8-api": {
+        "image": "uint8-local/api:test",
+        "image_id": "sha256:89975719cc407f5842f3588773421d735973f49caa066d3b3cfe1f82a7bdb524"
+      },
+      "uint8-auto-label-worker": {
+        "image": "uint8-local/api:test",
+        "image_id": "sha256:89975719cc407f5842f3588773421d735973f49caa066d3b3cfe1f82a7bdb524"
+      },
+      "uint8-opensearch": {
+        "image": "opensearchproject/opensearch:3.6.0",
+        "image_id": "sha256:b1b447d0d021b051fdb1ae6be100e106667bbe302aa8d6855a4f6d726863d766"
+      },
+      "uint8-triton": {
+        "image": "uint8-local/triton:test",
+        "image_id": "sha256:c26adfad81ad2971f859c77a7899886a368fe45580af9e818c265a60842ee535"
+      }
+    },
+    "manifest": {
+      "annotations_sha256": "113a836d90195ee1f884e704da6304dfaaecff1f023f49b6ca93c4aaae470268",
+      "count": 2000,
+      "name": "coco_bench_2000.json",
+      "seed": 20261009,
+      "sha256": "edde8ae3d8cecfb225040852ed7c46844009ad4f8e7e153e9c44f97c2558c691"
+    },
+    "sections": [
+      "items",
+      "frames",
+      "clusters",
+      "clip",
+      "faces",
+      "ocr"
+    ],
+    "tag": "det-u8"
+  },
+  "evaluation": {
+    "checks": [
+      {
+        "id": "P-box",
+        "metric": "boxes.images_identical_share",
+        "note": "images with every box matched at IoU >= 0.95 and confidence delta <= 0.02",
+        "observed": 0.9848331648129424,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.98
+      },
+      {
+        "id": "P-box-confident",
+        "metric": "boxes.unmatched_confident",
+        "note": "unmatched boxes with confidence >= 0.5",
+        "observed": 0,
+        "op": "<=",
+        "status": "PASS",
+        "value": 0
+      },
+      {
+        "id": "P-item",
+        "metric": "boxes.item_count_class_identical_share",
+        "note": "images with the same item count and class names",
+        "observed": 0.9959555106167847,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.99
+      },
+      {
+        "id": "P-pe-p01",
+        "metric": "pe_crop.p01",
+        "note": "cosine, crop vectors of matched items",
+        "observed": 0.9968058804212956,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.995
+      },
+      {
+        "id": "P-pe-median",
+        "metric": "pe_crop.median",
+        "observed": 0.9999973374241938,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.999
+      },
+      {
+        "id": "P-pew-p01",
+        "metric": "pe_frame.p01",
+        "note": "cosine, whole-frame vectors",
+        "observed": 0.9999615936384186,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.995
+      },
+      {
+        "id": "P-pew-median",
+        "metric": "pe_frame.median",
+        "observed": 0.9999970469519093,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.999
+      },
+      {
+        "id": "P-knn",
+        "metric": "knn.overlap_at_k",
+        "note": "neighbour overlap at k over the query items",
+        "observed": 0.9934,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.95
+      },
+      {
+        "id": "P-dup",
+        "metric": "knn.near_dup_agreement",
+        "note": "near-duplicate decisions at the configured cosine, identical on this share of pairs",
+        "observed": 1.0,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.995
+      },
+      {
+        "id": "P-cluster-assign",
+        "metric": "cluster.assignment_agreement",
+        "note": "nearest reference centroid unchanged when candidate vectors are assigned to it",
+        "observed": 0.9990616202690021,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.98
+      },
+      {
+        "id": "P-cluster-purity",
+        "metric": "cluster.purity_drop_points",
+        "note": "purity against COCO ground-truth classes, percentage points lost",
+        "observed": -1.3684704410384718,
+        "op": "<=",
+        "status": "PASS",
+        "value": 0.5
+      },
+      {
+        "id": "P-label-vote",
+        "metric": "knn.label_vote_agreement",
+        "note": "majority detector class among the top-k neighbours, identical in both spaces (label propagation); the VLM agreement bar",
+        "observed": 0.999,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.97
+      },
+      {
+        "id": "P-knn-precision",
+        "metric": "knn.precision_drop_points",
+        "note": "kNN precision against COCO ground-truth classes, percentage points lost",
+        "observed": 0.0,
+        "op": "<=",
+        "status": "PASS",
+        "value": 0.5
+      },
+      {
+        "id": "P-label",
+        "metric": "labels.class_agreement",
+        "note": "class name per matched item (the auto-promote outcome)",
+        "observed": 1.0,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.99
+      },
+      {
+        "id": "P-vlm",
+        "metric": "labels.vlm_agreement",
+        "note": "VLM label on the sampled crops",
+        "observed": null,
+        "op": ">=",
+        "status": "SKIP",
+        "value": 0.97
+      },
+      {
+        "id": "P-clip",
+        "metric": "clip.p01",
+        "note": "core-route image embedding, cosine",
+        "observed": 0.9999999999999998,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.995
+      },
+      {
+        "id": "P-face",
+        "metric": "face.p01",
+        "note": "face embedding of matched faces, cosine",
+        "observed": 0.9999999999999998,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.995
+      },
+      {
+        "id": "P-ocr",
+        "metric": "ocr.exact_share",
+        "note": "OCR lines matched at IoU >= 0.5, exact string",
+        "observed": 1.0,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.98
+      }
+    ],
+    "description": "A change that moves numerics of one stage by rounding only (engine precision, input dtype): matched detections and vectors must stay equivalent.",
+    "failed": 0,
+    "passed": true,
+    "profile": "precision",
+    "recorded": {
+      "boxes.crop_rect_identical_share": 0.9867844854551142,
+      "boxes.iou_min": 0.7140987860661506,
+      "boxes.score_delta_max": 0.177490234375,
+      "cluster.ari": 0.34877169883042586,
+      "cluster.core_agreement": 0.9620738192055052,
+      "cluster.nmi": 0.7804407809728031,
+      "cluster.objective_rel_diff": -7.590229659122572e-05,
+      "cluster.purity_cand": 0.625977478886456,
+      "cluster.purity_ref": 0.6122927744760713,
+      "cluster.similarity_abs_delta_mean": 0.02118709497153759,
+      "cluster.similarity_abs_delta_p99": 0.14094898104667664,
+      "knn.precision_cand": 0.5975195822454308,
+      "knn.precision_ref": 0.5975195822454308,
+      "knn.top1_recall_at_k": 1.0,
+      "ocr.char_error_rate": 0.0,
+      "pe_crop.identical_share": 0.08867688457929308,
+      "pe_crop.mean": 0.999858828906166,
+      "pe_crop.min": 0.8961349830317604,
+      "pe_frame.identical_share": 0.0725,
+      "pe_frame.mean": 0.9999962117627347,
+      "pe_frame.min": 0.9997725220028333
+    },
+    "skipped": 1
+  },
+  "metrics": {
+    "boxes": {
+      "crop_rect_identical_share": 0.9867844854551142,
+      "images": 1978,
+      "images_identical_share": 0.9848331648129424,
+      "iou_mean": 0.9995975263939738,
+      "iou_min": 0.7140987860661506,
+      "item_count_class_identical_share": 0.9959555106167847,
+      "items_cand": 12792,
+      "items_ref": 12792,
+      "matched": 12788,
+      "score_delta_max": 0.177490234375,
+      "unmatched_confident": 0
+    },
+    "clip": {
+      "identical_share": 1.0,
+      "mean": 1.0,
+      "median": 1.0,
+      "min": 0.9999999999999998,
+      "n": 200,
+      "p01": 0.9999999999999998
+    },
+    "cluster": {
+      "ari": 0.34877169883042586,
+      "assignment_agreement": 0.9990616202690021,
+      "clusters_cand": 512,
+      "clusters_ref": 512,
+      "core_agreement": 0.9620738192055052,
+      "items": 12788,
+      "nmi": 0.7804407809728031,
+      "objective_cand": 0.13898421823978424,
+      "objective_ref": 0.13899476826190948,
+      "objective_rel_diff": -7.590229659122572e-05,
+      "purity_cand": 0.625977478886456,
+      "purity_drop_points": -1.3684704410384718,
+      "purity_ref": 0.6122927744760713,
+      "similarity_abs_delta_mean": 0.02118709497153759,
+      "similarity_abs_delta_p99": 0.14094898104667664
+    },
+    "face": {
+      "cand": 200,
+      "identical_share": 1.0,
+      "mean": 1.0,
+      "median": 1.0,
+      "min": 0.9999999999999998,
+      "n": 200,
+      "p01": 0.9999999999999998,
+      "ref": 200
+    },
+    "knn": {
+      "k": 10,
+      "label_vote_agreement": 0.999,
+      "near_dup_agreement": 1.0,
+      "near_dup_pairs": 10066,
+      "overlap_at_k": 0.9934,
+      "precision_cand": 0.5975195822454308,
+      "precision_drop_points": 0.0,
+      "precision_ref": 0.5975195822454308,
+      "queries": 1000,
+      "top1_recall_at_k": 1.0
+    },
+    "labels": {
+      "class_agreement": 1.0,
+      "pairs": 12788
+    },
+    "ocr": {
+      "char_error_rate": 0.0,
+      "exact_share": 1.0,
+      "lines_cand": 34,
+      "lines_ref": 34,
+      "matched": 34
+    },
+    "pe_crop": {
+      "identical_share": 0.08867688457929308,
+      "matched": 12788,
+      "mean": 0.999858828906166,
+      "median": 0.9999973374241938,
+      "min": 0.8961349830317604,
+      "n": 12788,
+      "p01": 0.9968058804212956
+    },
+    "pe_frame": {
+      "identical_share": 0.0725,
+      "matched": 2000,
+      "mean": 0.9999962117627347,
+      "median": 0.9999970469519093,
+      "min": 0.9997725220028333,
+      "n": 2000,
+      "p01": 0.9999615936384186
+    }
+  },
+  "reference": {
+    "created_at": "2026-10-11T18:12:47.581871+00:00",
+    "engine": {
+      "label": "fp16",
+      "plan_bytes": 644771460,
+      "plan_file": "model.plan",
+      "plan_sha256": "550a6890743a37e5ca3eef13c1a5e71885de39f306ec32a0a3c9c5e5d6459dd2",
+      "source": "detector-rebuilt-float-control"
+    },
+    "git_dirty": true,
+    "git_sha": "57dfb3cfe2bcb690a176da724508fbaaa6b1e1d1",
+    "gpu": "NVIDIA RTX A6000",
+    "image_digests": {
+      "uint8-api": {
+        "image": "uint8-local/api:test",
+        "image_id": "sha256:89975719cc407f5842f3588773421d735973f49caa066d3b3cfe1f82a7bdb524"
+      },
+      "uint8-auto-label-worker": {
+        "image": "uint8-local/api:test",
+        "image_id": "sha256:89975719cc407f5842f3588773421d735973f49caa066d3b3cfe1f82a7bdb524"
+      },
+      "uint8-opensearch": {
+        "image": "opensearchproject/opensearch:3.6.0",
+        "image_id": "sha256:b1b447d0d021b051fdb1ae6be100e106667bbe302aa8d6855a4f6d726863d766"
+      },
+      "uint8-triton": {
+        "image": "uint8-local/triton:test",
+        "image_id": "sha256:c26adfad81ad2971f859c77a7899886a368fe45580af9e818c265a60842ee535"
+      }
+    },
+    "manifest": {
+      "annotations_sha256": "113a836d90195ee1f884e704da6304dfaaecff1f023f49b6ca93c4aaae470268",
+      "count": 2000,
+      "name": "coco_bench_2000.json",
+      "seed": 20261009,
+      "sha256": "edde8ae3d8cecfb225040852ed7c46844009ad4f8e7e153e9c44f97c2558c691"
+    },
+    "sections": [
+      "items",
+      "frames",
+      "clusters",
+      "clip",
+      "faces",
+      "ocr"
+    ],
+    "tag": "det-ctrl"
+  },
+  "schema": 1
+}
