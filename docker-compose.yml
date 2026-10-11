@@ -186,6 +186,15 @@ services:
       # API, not whichever worker answered. The directory is a tmpfs (see
       # `tmpfs:` below), so it is empty on every container start.
       - PROMETHEUS_MULTIPROC_DIR=/run/op-prom-multiproc
+      # glibc malloc: keep freed memory instead of returning it to the kernel and faulting it
+      # back in. Ingest allocates and frees tens of megabytes of pixel data per image (a
+      # 1.35 MB PE crop, a 52 MB decoded photo, 14 MB of Triton tensors), and with the pixel
+      # work on pool threads each thread's arena trimmed itself after every call. Measured: 0.109
+      # to 0.096 CPU-s per 640 x 480 image. Costs up to about 128 MB of resident memory
+      # per worker process; remove the three lines to restore the glibc defaults.
+      - MALLOC_TRIM_THRESHOLD_=134217728
+      - MALLOC_TOP_PAD_=67108864
+      - MALLOC_MMAP_THRESHOLD_=33554432
       # Triton gRPC endpoint (Docker service name)
       - TRITON_URL=triton-server:8001
       # HuggingFace cache configuration (appuser home directory)
