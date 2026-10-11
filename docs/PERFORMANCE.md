@@ -891,6 +891,9 @@ only under `--strict`), 2 when the captures cannot be compared. `--out` writes a
 Crop-rectangle identity, the adjusted Rand index, NMI, the k-means objective difference and the cluster
 similarity deltas are recorded but not gated (see the noise floor below).
 
+When a rebuilt engine fails the gates against an old reference, decide on ground truth before capturing a new
+reference: [parity_references.md](benchmarks/parity_references.md).
+
 #### FP16 against FP32 PE engine
 
 Same isolated stack (the published v0.5.0 images, GPU 0, own ports, no VLM), only the file behind
