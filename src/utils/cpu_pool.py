@@ -44,8 +44,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
 
 
-DEFAULT_CPU_THREADS = 4
-DEFAULT_INFLIGHT_MB = 256
+DEFAULT_CPU_THREADS = 8
+DEFAULT_INFLIGHT_MB = 1024
 MIB = 1024 * 1024
 # Below this much pixel data (about 1.3 MP of RGB) a call runs in place.
 OFFLOAD_MIN_BYTES = 4 * 1024 * 1024
