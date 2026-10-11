@@ -82,7 +82,8 @@ class TestClientContract:
         assert 'name: "image_embeddings"' in out
         assert f'dims: [ 3, {PE_SIZE}, {PE_SIZE} ]' in out
         assert f'dims: [ {PE_EMBEDDING_DIM} ]' in out
-        assert out.count('data_type: TYPE_FP32') == 2
+        assert out.count('data_type: TYPE_FP32') == 1  # the embedding output
+        assert out.count('data_type: TYPE_UINT8') == 1  # the pixels in; the engine normalizes
 
 
 # =============================================================================

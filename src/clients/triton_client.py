@@ -36,7 +36,7 @@ from tritonclient.grpc import InferInput, InferRequestedOutput
 from ultralytics.data.augment import LetterBox
 
 from src.clients.model_adapters import DetectionAdapter, resolve_adapter
-from src.clients.triton_pool import TritonClientManager
+from src.clients.triton_pool import TritonClientManager, uint8_images_input
 from src.config.settings import TritonModelConfig
 from src.utils.affine import format_detections_from_triton, inverse_letterbox_coords
 from src.utils.retry import retry_sync
@@ -172,15 +172,12 @@ class TritonClient:
             pad_h = (size - new_unpad_h) / 2.0
             paddings.append((pad_w, pad_h))
 
-            img_norm = img_letterbox.astype(np.float32) / 255.0
-            img_chw = np.transpose(img_norm, (2, 0, 1))
-            preprocessed.append(img_chw)
+            preprocessed.append(np.transpose(img_letterbox, (2, 0, 1)))
 
         input_data = np.stack(preprocessed, axis=0)
         batch_size = input_data.shape[0]
 
-        inputs = [InferInput('images', input_data.shape, 'FP32')]
-        inputs[0].set_data_from_numpy(input_data)
+        inputs = [uint8_images_input(input_data)]
 
         adapter = self._get_detection_adapter(model_name)
         outputs = [InferRequestedOutput(name) for name in adapter.requested_outputs]
@@ -234,8 +231,7 @@ class TritonClient:
         # Run YOLO TRT inference (default detector; adapter handles either
         # the end2end 4-tensor or the fused single-tensor contract)
         adapter = self._get_detection_adapter(yolo_model)
-        yolo_inputs = [InferInput('images', yolo_input.shape, 'FP32')]
-        yolo_inputs[0].set_data_from_numpy(yolo_input)
+        yolo_inputs = [uint8_images_input(yolo_input)]
         yolo_outputs = [InferRequestedOutput(name) for name in adapter.requested_outputs]
         yolo_response = self._infer_with_retry(yolo_model, yolo_inputs, yolo_outputs)
 
@@ -312,8 +308,7 @@ class TritonClient:
         if letterboxed.shape[:2] != (target_size, target_size):
             letterboxed = cv2.resize(letterboxed, (target_size, target_size))
 
-        normalized = letterboxed.astype(np.float32) / 255.0
-        transposed = np.transpose(normalized, (2, 0, 1))
+        transposed = np.transpose(letterboxed, (2, 0, 1))
         batched = np.expand_dims(transposed, axis=0)
 
         return batched, scale, (pad_w, pad_h)
@@ -630,46 +625,6 @@ class TritonClient:
             all_embeddings.append(embeddings)
 
         return np.vstack(all_embeddings) if all_embeddings else np.empty((0, 512), dtype=np.float32)
-
-    def infer_yolo_batch(
-        self,
-        images: np.ndarray,
-        max_batch_size: int = 64,
-        model_name: str | None = None,
-    ) -> list[dict]:
-        """
-        Batched YOLO inference for object detection.
-
-        Args:
-            images: [N, 3, 640, 640] FP32 normalized tensor
-            max_batch_size: Maximum batch size per Triton request
-            model_name: Triton detection model (default: settings YOLO_MODEL)
-
-        Returns:
-            List of N dicts with detections per image
-        """
-        if images.shape[0] == 0:
-            return []
-
-        model = model_name or TritonModelConfig.YOLO_MODEL
-        adapter = self._get_detection_adapter(model)
-
-        n_images = images.shape[0]
-        all_results = []
-
-        for i in range(0, n_images, max_batch_size):
-            batch = images[i : i + max_batch_size]
-            batch_size = batch.shape[0]
-
-            input_tensor = InferInput('images', [batch_size, 3, 640, 640], 'FP32')
-            input_tensor.set_data_from_numpy(batch.astype(np.float32))
-
-            outputs = [InferRequestedOutput(name) for name in adapter.requested_outputs]
-
-            response = self._infer_with_retry(model, [input_tensor], outputs)
-            all_results.extend(adapter.parse(response, batch_size))
-
-        return all_results
 
 
 # =============================================================================

@@ -37,11 +37,7 @@ sys.path.insert(0, '/app')
 # ruff: noqa: E402
 
 from src.services.detection.geometry import letterbox_to_square
-from src.services.detection.pe_preprocess import (
-    normalize_chw,
-    resize_crop_rgb,
-    whole_frame_chw_from_bytes,
-)
+from src.services.detection.pe_preprocess import resize_crop_rgb, to_chw, whole_frame_chw_from_bytes
 
 
 OPERATIONS = (
@@ -51,7 +47,7 @@ OPERATIONS = (
     'letterbox',
     'whole_frame',
     'crop_to_array',
-    'resize_normalize',
+    'resize_chw',
     'jpeg_encode_crop',
 )
 LETTERBOX_SIZE = 640
@@ -79,7 +75,7 @@ def profile_image(path: Path) -> dict[str, float]:
     crop = img.crop((w // 4, h // 4, w // 4 + w // 3, h // 4 + h // 3))
     arr = np.asarray(crop)
     lap()
-    normalize_chw(resize_crop_rgb(arr))
+    to_chw(resize_crop_rgb(arr))
     lap()
     crop.save(io.BytesIO(), format='JPEG', quality=85)
     lap()

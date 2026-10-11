@@ -74,8 +74,8 @@ from src.config.settings import TritonModelConfig
 from src.core.logging import get_logger
 from src.services.detection.pe_preprocess import (
     PE_SIZE,
-    normalize_into,
     resize_crop_rgb,
+    to_chw_into,
     whole_frame_chw,
     whole_frame_chw_from_bytes,
 )
@@ -116,14 +116,14 @@ TextCacheInfo = namedtuple('TextCacheInfo', ['hits', 'misses', 'maxsize', 'currs
 def _preprocess_crops(crops: list[np.ndarray]) -> np.ndarray:
     """PE preprocessing of a list of HWC-uint8 crops into one ``(N, 3, 336, 336)`` batch."""
     with stage_timer('pe_preprocess'):
-        batch = np.empty((len(crops), 3, PE_SIZE, PE_SIZE), dtype=np.float32)
+        batch = np.empty((len(crops), 3, PE_SIZE, PE_SIZE), dtype=np.uint8)
         for slot, crop in zip(batch, crops, strict=True):
-            normalize_into(slot, resize_crop_rgb(crop))
+            to_chw_into(slot, resize_crop_rgb(crop))
         return batch
 
 
 def _timed_whole_frame(preprocess: Any, source: str | bytes) -> np.ndarray | None:
-    """``preprocess(source)`` (a whole-frame decode and normalize) under the stage timer."""
+    """``preprocess(source)`` (a whole-frame decode and crop) under the stage timer."""
     nbytes = len(source) if isinstance(source, bytes) else 0
     with stage_timer('whole_frame_preprocess', nbytes=nbytes):
         return preprocess(source)
@@ -350,9 +350,8 @@ class PEEncoder:
         """Encode pre-preprocessed image tensors via Triton.
 
         Args:
-            chws: ``(N, 3, H, W)`` float32, already normalized in the
-                preprocessing convention expected by the PE checkpoint
-                exported to Triton.
+            chws: ``(N, 3, H, W)`` uint8 RGB pixels, already resized and
+                center-cropped; the engine applies the PE-Core normalization.
 
         Returns:
             ``(N, 1024)`` L2-normalized float32.
@@ -363,13 +362,13 @@ class PEEncoder:
                 'construct PEEncoder(triton_pool=...) before calling.'
             )
         if chws.ndim != 4 or chws.shape[1] != 3:
-            raise ValueError(f'encode_images expects (N, 3, H, W) float32; got shape {chws.shape}')
+            raise ValueError(f'encode_images expects (N, 3, H, W) uint8; got shape {chws.shape}')
 
         from tritonclient.grpc import InferRequestedOutput
 
-        from src.clients.triton_pool import fp32_images_input
+        from src.clients.triton_pool import uint8_images_input
 
-        inp = await run_cpu(fp32_images_input, chws, nbytes=chws.nbytes)
+        inp = await run_cpu(uint8_images_input, chws, nbytes=chws.nbytes)
         outs = [InferRequestedOutput('image_embeddings')]
         with stage_timer('embed', nbytes=chws.nbytes):
             result = await self.triton_pool.infer(PE_IMAGE_MODEL, [inp], outputs=outs)
@@ -384,7 +383,7 @@ class PEEncoder:
         """Preprocess + encode a list of HWC-uint8 RGB item crops.
 
         Applies the canonical PE preprocessing (resize-shorter-edge,
-        center-crop, PE-Core 0.5/0.5 normalize — see
+        center-crop to uint8 pixels; the engine applies the PE-Core 0.5/0.5 normalize — see
         :mod:`src.services.detection.pe_preprocess`) to each crop, then
         chunks at ``max_batch`` to respect the encoder's configured Triton
         max batch size. :meth:`encode_images` already L2-normalizes its
@@ -414,8 +413,7 @@ class PEEncoder:
         """PE-Core whole-frame embedding for a source image on disk.
 
         Goes through :func:`src.services.detection.pe_preprocess.whole_frame_chw`
-        (cv2 1/8 decode + resize-shorter-edge + center-crop + PE-Core 0.5/0.5
-        normalize) so the vector lands in the same space as any other
+        (cv2 1/8 decode + resize-shorter-edge + center-crop to uint8 pixels) so the vector lands in the same space as any other
         whole-frame caller (e.g. a backfill script), then runs it through
         the same Triton image encoder as :meth:`embed_crops`.
 
@@ -425,7 +423,7 @@ class PEEncoder:
         chw = await run_cpu(_timed_whole_frame, whole_frame_chw, path, nbytes=encoded_nbytes(path))
         if chw is None:
             return None
-        batch = chw[None, ...].astype(np.float32, copy=False)
+        batch = chw[None, ...]
         embedding = await self.encode_images(batch)
         return embedding[0]
 
@@ -441,7 +439,7 @@ class PEEncoder:
         )
         if chw is None:
             return None
-        batch = chw[None, ...].astype(np.float32, copy=False)
+        batch = chw[None, ...]
         embedding = await self.encode_images(batch)
         return embedding[0]
 

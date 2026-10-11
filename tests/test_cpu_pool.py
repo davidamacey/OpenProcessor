@@ -66,7 +66,7 @@ def test_embed_crops_preprocessing_does_not_block_the_loop(monkeypatch: pytest.M
 
     def slow_preprocess(crops: list[np.ndarray]) -> np.ndarray:
         time.sleep(0.2)
-        return np.zeros((len(crops), 3, 336, 336), dtype=np.float32)
+        return np.zeros((len(crops), 3, 336, 336), dtype=np.uint8)
 
     monkeypatch.setattr(pe_encoder, '_preprocess_crops', slow_preprocess)
 

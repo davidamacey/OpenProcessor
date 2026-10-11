@@ -3,15 +3,11 @@
 from __future__ import annotations
 
 import io
-from typing import TYPE_CHECKING
 
+import numpy as np
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from src.services.detection.geometry import letterbox_to_square
-
-
-if TYPE_CHECKING:
-    import numpy as np
 
 
 # =============================================================================
@@ -48,7 +44,8 @@ def _letterbox(
 
     Thin wrapper over :func:`src.services.detection.geometry.letterbox_to_square`
     (shared with the curation ingest service) kept here so call sites in
-    this module don't need to change; see that function for the return
-    shape contract.
+    this module don't need to change. The promoted ORT models behind the region
+    detector take float32 in ``[0, 1]``, so the uint8 letterbox is scaled here.
     """
-    return letterbox_to_square(img, target=target, fill=fill)
+    chw, scale, pad = letterbox_to_square(img, target=target, fill=fill)
+    return chw.astype(np.float32) / np.float32(255.0), scale, pad
