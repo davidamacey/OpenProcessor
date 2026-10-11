@@ -218,7 +218,7 @@ def _run_driver(client: TestClient, paths: list[Path], **overrides: object):
 def test_driver_uploads_tree_and_resumes(
     client: TestClient, fake_opensearch: FakeOpenSearch, tmp_path: Path
 ) -> None:
-    from scripts.curation._fast_walk import iter_image_paths
+    from src.services.curation.bulk_ingest.walk import iter_image_paths
 
     root = tmp_path / 'corpus'
     expected = _tree(root, 5)

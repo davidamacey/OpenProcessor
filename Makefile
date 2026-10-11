@@ -1233,7 +1233,7 @@ sample-clean: ## Remove fetched public sample datasets (data/samples/, gitignore
 curation-seed: sample-coco ## Seed a demo curation dataset from the public COCO sample (alias for sample-coco)
 	@echo "curation-seed: fetched the public COCO sample into data/samples/coco_va."
 	@echo "Next: create classes (see docs/CURATION.md 'Create classes from zero'),"
-	@echo "set OP_INGEST_PRIMARY_DETECTOR_MODEL, then ingest with scripts/curation/ingest_walker.py"
+	@echo "set OP_INGEST_PRIMARY_DETECTOR_MODEL, then ingest with scripts/curation/bulk_ingest.py"
 	@echo "--root data/samples/coco_va/images (or the container-mounted equivalent path)."
 
 # ==================================================================================
