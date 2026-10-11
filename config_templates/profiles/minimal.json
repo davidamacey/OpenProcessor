@@ -6,6 +6,8 @@
   "preferred_batch_sizes": [4, 8, 16],
   "shm_size": "4g",
   "workers": 8,
+  "ocr_pipeline_instances": 1,
+  "python_backend_budget_mib": 512,
   "models": [
     "yolov11_small_trt_end2end",
     "scrfd_10g_bnkps",

@@ -41,6 +41,12 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Changed
 
+- `ocr_pipeline` ships two Python instances instead of one, and the installer profile now sets
+  its count (`ocr_pipeline_instances`: minimal 1, standard 2, full 4). The Python BLS model runs
+  one request per instance, so OCR was capped at about 21 images/s; Wave 0 measured 42 with two
+  instances and 80 with four. A warm instance costs about 256 MiB of GPU memory (measured on a
+  12 GB card); `GPU_MIB_PER_INSTANCE` in the model config and `python_backend_budget_mib` per
+  profile bound the count, and `tests/test_triton_instance_budget.py` enforces it (#240).
 - Response serialization no longer uses FastAPI's deprecated `ORJSONResponse` (about 15
   routers, the error handlers and four routes that built it directly). Routes with a response
   model serialize through Pydantic straight to bytes; the curation routes that return a

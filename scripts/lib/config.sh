@@ -70,6 +70,13 @@ generate_model_config() {
         paddleocr_rec_trt)
             generate_paddleocr_rec_config "$config_file" "$profile" "$gpu_id"
             ;;
+        ocr_pipeline)
+            # Python BLS model: its instance count is the OCR concurrency and
+            # has its own per-profile value, bounded by the profile's
+            # python_backend_budget_mib (see tests/test_triton_instance_budget.py).
+            update_config_instance_settings "$config_file" "$profile" "$gpu_id" \
+                "$PROFILE_OCR_PIPELINE_INSTANCES"
+            ;;
         *)
             log_warn "No config template for: $model_name"
             return 1
@@ -139,7 +146,7 @@ update_config_instance_settings() {
         return 1
     fi
 
-    local instance_count="$PROFILE_INSTANCE_COUNT"
+    local instance_count="${4:-$PROFILE_INSTANCE_COUNT}"
 
     # Only update instance_group count and gpu_id (not max_batch_size or preferred_batch_size)
     local temp_file
@@ -643,6 +650,7 @@ generate_all_configs() {
         "mobileclip2_s2_text_encoder"
         "paddleocr_det_trt"
         "paddleocr_rec_trt"
+        "ocr_pipeline"
     )
 
     local failed=0
