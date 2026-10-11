@@ -25,6 +25,7 @@ from src.routers.curation._common import (
 from src.routers.curation.ingest import _batch_response, _get_ingest_service
 from src.services.curation.ingest_models import ERROR_KIND_UNSUPPORTED_TYPE
 from src.services.curation.open_vocab_ingest import schedule_open_vocab_after_ingest
+from src.utils.stage_timing import stage_timer
 
 
 # Kept as the interim fallback default; the served source of truth
@@ -169,7 +170,10 @@ async def curation_ingest_upload(
                 ),
             )
         image_hash = _imohash_bytes(payload)
-        persisted = persist_uploaded_bytes(payload, imohash=image_hash, extension=ext, config=cfg)
+        with stage_timer('persist', nbytes=len(payload)):
+            persisted = persist_uploaded_bytes(
+                payload, imohash=image_hash, extension=ext, config=cfg
+            )
         data.append(payload)
         kept_paths.append(str(persisted))
         source_identifiers.append(path)

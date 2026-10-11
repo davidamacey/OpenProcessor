@@ -440,8 +440,15 @@ counters are the host-to-device time); store bytes per image after a refresh
 and force-merge (`--opensearch-url`) and crop-cache bytes (`--crop-cache-dir`).
 
 The per-stage timers are the `op_pipeline_stage_seconds` histogram and the
-`op_pipeline_stage_bytes_total` counter, labelled `stage` = `decode`, `crop`,
-`jpeg_encode`, `resize`, `embed`, `opensearch_write`. The compose file sets
+`op_pipeline_stage_bytes_total` counter, labelled `stage`. The stages are `decode`,
+`crop`, `jpeg_encode`, `pe_preprocess` (the PE crop resize and normalize, named `resize` before
+0.6.0), `embed`, `opensearch_write`, and the work that ran untimed before WP-1.2 (#210):
+`hash` (the file fingerprint), `persist` (the upload's content-addressed write), `letterbox`
+(the detector letterbox and tensor), `triton_request` (building the Triton input),
+`whole_frame_preprocess` (the whole-frame vector's decode and normalize), `blur` (the
+Laplacian scores), `doc_build` (the images and items documents) and `bulk_serialize` (encoding
+request bodies for OpenSearch). All but `embed` and `opensearch_write` time a synchronous
+block, so on the event-loop thread their seconds are API CPU seconds. The compose file sets
 `PROMETHEUS_MULTIPROC_DIR` on the API, so a scrape aggregates all workers.
 
 Where numbers go: set A numbers go into this file, in a table with the commit,
@@ -823,6 +830,150 @@ The earlier private FP16 measurement of about 170 embeddings/s (5.9 ms) matches 
   prints a warning naming the model, the FP16 failure reason and the consequence, writes the model
   to `.install/precision.tsv`, records the group as `degraded` in `groups.tsv` (a re-run retries FP16
   instead of skipping), and `./openprocessor models status` lists it under "Degraded precision".
+
+### Wave 0 parity and FP16 gates (set A, public COCO, 2,000 images)
+
+Every 0.6.0 change is gated by `scripts/bench/parity.py` (WP-0.1, #208): it captures the per-stage
+outputs of one ingest of the pinned set and compares two captures against the accuracy gates of
+`docs/design/triton_pipeline_optimization_plan.md` section 7 and the cluster-agreement metric of
+`docs/design/v060_wave_plan.md` section 2.1. This section describes the tool and records the gate run
+that accepts the FP16 PE engine of the section above.
+
+#### The tool
+
+```bash
+# Reference and candidate: same stack, same pinned set, one capture per configuration.
+.venv/bin/python scripts/bench/parity.py capture --tag fp32 --images DIR_OF_PINNED_IMAGES \
+    --api-url http://127.0.0.1:API_PORT --triton-url http://127.0.0.1:TRITON_HTTP_PORT \
+    --opensearch-url http://127.0.0.1:OPENSEARCH_PORT --compose-project NAME \
+    --engine-label fp32 --engine-file PATH/TO/model.plan \
+    --annotations COCO_ANNOTATIONS_DIR --probe-images 200
+.venv/bin/python scripts/bench/parity.py compare artifacts_local/bench/parity/fp32 \
+    artifacts_local/bench/parity/fp16 --out docs/benchmarks/parity/fp32_vs_fp16
+```
+
+`capture` creates a fresh project, ingests the 2,000 images through `POST .../ingest/upload`
+(embedding policy `all`), trains clusters once, and stores under `artifacts_local/bench/parity/<tag>/`:
+
+| File | Content |
+|---|---|
+| `capture.json` | Schema number, hardware (GPU, driver, CPU, RAM, load), git sha and dirty flag, the image reference and image id of every container of the compose project, Triton model configuration, the engine record (label, free `KEY=VALUE` pairs, plan size and sha256), the dataset manifest hash, the sections captured, the SHA-256 of `arrays.npz` |
+| `arrays.npz` | A fixed set of arrays (float16 vectors, float32 boxes, unicode strings): per item the image, box, detector class and score, integer crop rectangle, cluster id, distance, similarity and core flag, stored class, ground-truth class, VLM label and the PE crop vector; per image the PE whole-frame vector; MobileCLIP, face (box, score, embedding) and OCR (box, text) rows for a sample of images |
+
+Items are keyed by image file name, box overlap and class name, never by stored id, so two captures of
+different projects line up. The curation API never serves embedding vectors, so the PE vectors are read
+by document id from the project's own OpenSearch indexes; everything else goes through the project-scoped
+routes. The COCO ground-truth class of an item is the class of the best-IoU annotation (IoU at least 0.5,
+else `none`).
+
+`compare` pairs the two captures and measures box matching (greedy, best IoU first, same class name
+only), cosine similarity of matched vectors, neighbour overlap at k = 10 on 1,000 seeded query items,
+near-duplicate decisions at cosine 0.98, cluster agreement (adjusted Rand index, NMI, nearest-reference-
+centroid agreement, k-means objective, purity against the COCO classes), class-name agreement, the VLM
+label agreement and the OCR exact-match share. Thresholds live in `scripts/bench/parity_gates.json`
+(values from the plan); the exit code is 0 on PASS, 1 on any FAIL (a gate with no data is SKIP and fails
+only under `--strict`), 2 when the captures cannot be compared. `--out` writes a small
+`parity_summary.json` and `.md`; the large capture files stay out of git.
+
+| Gate | Rule |
+|---|---|
+| P-box | at least 98 % of images with every box matched at IoU 0.95 and confidence delta at most 0.02 |
+| P-box-confident | zero unmatched boxes with confidence at least 0.5 |
+| P-item | item count and class names identical on at least 99 % of images |
+| P-pe, P-pew | cosine of crop vectors and of whole-frame vectors: 1st percentile at least 0.995, median at least 0.999 |
+| P-knn, P-dup | neighbour overlap at least 0.95; near-duplicate decisions identical on at least 99.5 % of pairs |
+| P-cluster-assign | at least 98 % of items keep their nearest reference centroid |
+| P-cluster-purity | purity against the COCO classes not lower by more than 0.5 points |
+| P-label-vote, P-knn-precision | majority neighbour class identical on at least 97 % of queries; kNN class precision not lower by more than 0.5 points |
+| P-label, P-vlm | stored class name at least 99 % identical; VLM label at least 97 % identical |
+| P-clip, P-face, P-ocr | MobileCLIP and ArcFace cosine 1st percentile at least 0.995; OCR exact match at least 98 % |
+
+Crop-rectangle identity, the adjusted Rand index, NMI, the k-means objective difference and the cluster
+similarity deltas are recorded but not gated (see the noise floor below).
+
+#### FP16 against FP32 PE engine
+
+Same isolated stack (the published v0.5.0 images, GPU 0, own ports, no VLM), only the file behind
+`pe_image_encoder` changes. The FP32 plan is the one of the v0.5.0 baseline (1,272,018,292 B). The FP16 plan
+is built through the fixed installer path (`export/trt_utils.py` bake, then `trtexec` with the shapes of
+`scripts/lib/model_setup.sh`): 641,185,140 B, built in 95 s. Each configuration was captured twice,
+once with 4 and once with 1 upload request in flight (run 1 and run 2), and the FP32 plan was captured
+a second time in each run as the noise floor (a repeat of the same configuration). All 12,789 to 12,792
+items per capture are the same 6.4 items per image as the baseline.
+
+**Result: the FP16 engine passes every gate in both runs** (P-vlm is skipped: no VLM is configured).
+
+| Gate | Metric | Rule | FP16 run 1 | FP16 run 2 | FP32 repeat run 1 | FP32 repeat run 2 | FP16 verdict |
+|---|---|---|---:|---:|---:|---:|---|
+| P-box | `boxes.images_identical_share` | >= 0.98 | 0.9934 | 0.9934 | 0.9924 | 0.9939 | PASS |
+| P-box-confident | `boxes.unmatched_confident` | <= 0 | 0 | 0 | 1 | 0 | PASS |
+| P-item | `boxes.item_count_class_identical_share` | >= 0.99 | 0.9995 | 0.9995 | 0.9990 | 0.9995 | PASS |
+| P-pe-p01 | `pe_crop.p01` | >= 0.995 | 0.9984 | 0.9990 | 1.0000 | 1.0000 | PASS |
+| P-pe-median | `pe_crop.median` | >= 0.999 | 0.9999 | 0.9999 | 1.0000 | 1.0000 | PASS |
+| P-pew-p01 | `pe_frame.p01` | >= 0.995 | 0.9975 | 0.9975 | 1.0000 | 1.0000 | PASS |
+| P-pew-median | `pe_frame.median` | >= 0.999 | 0.9998 | 0.9998 | 1.0000 | 1.0000 | PASS |
+| P-knn | `knn.overlap_at_k` | >= 0.95 | 0.9681 | 0.9706 | 0.9978 | 0.9974 | PASS |
+| P-dup | `knn.near_dup_agreement` | >= 0.995 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | PASS |
+| P-cluster-assign | `cluster.assignment_agreement` | >= 0.98 | 0.9977 | 0.9977 | 0.9996 | 0.9996 | PASS |
+| P-cluster-purity | `cluster.purity_drop_points` | <= 0.5 | -0.7115 | -0.4535 | -0.3988 | -0.1564 | PASS |
+| P-label-vote | `knn.label_vote_agreement` | >= 0.97 | 0.9790 | 0.9820 | 0.9990 | 1.0000 | PASS |
+| P-knn-precision | `knn.precision_drop_points` | <= 0.5 | 0.0382 | -0.0654 | 0.0127 | 0.0131 | PASS |
+| P-label | `labels.class_agreement` | >= 0.99 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | PASS |
+| P-vlm | `labels.vlm_agreement` | >= 0.97 | n/a | n/a | n/a | n/a | SKIP |
+| P-clip | `clip.p01` | >= 0.995 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | PASS |
+| P-face | `face.p01` | >= 0.995 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | PASS |
+| P-ocr | `ocr.exact_share` | >= 0.98 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | PASS |
+
+| Recorded metric | FP16 run 1 | FP16 run 2 | FP32 repeat run 1 | FP32 repeat run 2 |
+|---|---:|---:|---:|---:|
+| `boxes.crop_rect_identical_share` | 0.9899 | 0.9923 | 0.9917 | 0.9924 |
+| `pe_crop.min` / `pe_crop.mean` | 0.9220 / 0.9998 | 0.9257 / 0.9998 | 0.9516 / 0.9999 | 0.9234 / 0.9999 |
+| `pe_frame.min` / `pe_frame.mean` | 0.9915 / 0.9997 | 0.9915 / 0.9997 | 1.0000 / 1.0000 | 1.0000 / 1.0000 |
+| `cluster.ari` / `cluster.nmi` | 0.3409 / 0.7764 | 0.3317 / 0.7701 | 0.3507 / 0.7791 | 0.3344 / 0.7698 |
+| `cluster.objective_rel_diff` | -0.0016 | -0.0059 | 0.0024 | -0.0039 |
+| `cluster.purity_ref` / `cluster.purity_cand` | 0.6162 / 0.6233 | 0.6202 / 0.6247 | 0.6162 / 0.6202 | 0.6202 / 0.6218 |
+| `knn.precision_ref` / `knn.precision_cand` | 0.5743 / 0.5739 | 0.5849 / 0.5856 | 0.5743 / 0.5741 | 0.5857 / 0.5856 |
+| `cluster.core_agreement`, `similarity_abs_delta_mean` | 0.962, 0.0215 | 0.960, 0.0222 | 0.962, 0.0213 | 0.961, 0.0219 |
+
+Reading the numbers:
+
+- **The embedding space is the same.** Crop vectors stay at median cosine 0.9999 (1st percentile 0.998 to
+  0.999), whole-frame vectors at median 0.9998 (1st percentile 0.9975, worst single frame 0.9915). The
+  neighbour overlap at 10 is 0.97, the reference nearest neighbour is always inside the FP16 top 10, and
+  no near-duplicate decision at cosine 0.98 changes.
+- **Clustering is unchanged within its own noise.** 99.8 % of items keep their nearest reference
+  centroid. The adjusted Rand index is 0.33 to 0.35 for FP16 *and* for the repeat of the FP32 plan:
+  k-means on 12.8k residual items is chaotic, so ARI is recorded and not gated, as the plan says.
+  Purity against the COCO classes is 0.616 to 0.625 in every capture; FP16 is not lower than the
+  reference.
+- **Detection and labels do not change.** Matched detector scores differ by at most 0.0 in both FP16 runs
+  (0.08 in one FP32 repeat). Boxes and crop rectangles differ for about 1 % of items in FP16 against FP32
+  *and* in an FP32 repeat: the detector is not bit-reproducible between runs (0.8 to 1.0 % of crop
+  rectangles move, worst matched IoU 0.77 to 0.78). The worst crop cosine (0.92) belongs to such a moved
+  crop, not to precision. A class change would show as an unmatched box and fail P-item; none does. The
+  kNN class precision against the COCO classes is the same to 0.1 point.
+- **The noise floor decides how to read a single FAIL.** One unmatched box with confidence at least 0.5
+  appeared between two FP32 captures of the same plan (run 1 repeat), which the strict P-box-confident
+  rule counts as a failure. Capture the reference twice and compare the two before blaming a candidate.
+- Ingest through `POST .../ingest/upload` took 119 s with the FP16 plan against 224 s with FP32 in
+  run 1 (the rows of the Wave 1 section above); the captures are not a benchmark and the host carried
+  other load.
+
+#### Caveats
+
+- One host, one GPU shared with other projects, the published v0.5.0 images; the container image ids are
+  in each `capture.json`. The summaries of the four comparisons are in `docs/benchmarks/parity/`.
+- The VLM gate and the label agreement of a registry-labelled project are not exercised: no VLM is
+  configured and the project has no class registry, so stored class names are empty. The label gates here
+  are the stored class name (trivially equal) and the majority detector class among the top 10 neighbours
+  (P-label-vote), the label a propagation step would assign.
+- Faces and OCR are probed on the first 200 pinned images through the core routes (200 faces, 34 text
+  lines); MobileCLIP, ArcFace and OCR engines are unchanged by this run, so their agreement is exact.
+- Cluster centroids are not served by the API; the reference centroids of the assignment-agreement
+  metric are the normalised mean of each reference cluster's vectors.
+- Rebuild of the FP16 plan: `export/trt_utils.py` bake inside the API image, then `trtexec` in the Triton
+  image with the 1/8/32 x 3 x 336 x 336 profile and an 8 GB workspace; the bake log reports `fp16`.
+
 
 ### 0.6.0 Wave 0: full-pipeline throughput (one RTX A6000, FP16 PE engine)
 
@@ -1241,6 +1392,174 @@ Wrong or incomplete:
 - `MAX_FILE_SIZE_MB` was raised for set B (#239).
 - Issues filed from this work: #239 (oversize upload answers 500, and the 50 MB cap counts the
   whole request), #240 (one `ocr_pipeline` instance), #241 (photos are API-bound).
+
+### 0.6.0 WP-1.2 and WP-1.3: API CPU attribution and fixes (#210, #211, #239, #241)
+
+The Wave 0 section above ends with the API as the limit on photos (3 to 11 images/s, GPU 5 to 15
+percent busy) and 150 of the 180 ms of API CPU per COCO frame unattributed. This section names
+those costs, fixes the ones that measure as worth fixing, and repeats the Wave 0 measurements.
+Medians with the minimum and maximum of 3 repetitions in parentheses.
+
+**Method.** The Wave 0 stack and protocol on GPU 2 of the same host (an isolated compose project,
+loopback ports, the published v0.5.0 images with the branch's `src/` mounted over `/app/src`,
+the FP16 PE plan of the Wave 0 reference, plan sha256 `b9a6f397...`, 32 uvicorn workers, a fresh
+OpenSearch for each series). Set A is the pinned COCO set (first 1,000 images, `/ingest/upload`, 32
+images per request), set B the 500 photos of `commons_hires_500.json` (`/ingest/batch`, 8 images per
+request). Foreign load on GPU 2 was 0.0 percent in all 42 measured runs; whole-host CPU busy
+was 16 to 22 percent (A) and 18 to 34 percent (B) before the changes, 15 to 17 and 54 to 78 percent
+after them (the difference is this stack's own load: it now uses the cores it left idle). The
+"before" rows are the code of `origin/main` plus the two Wave 0 branches, measured in the same
+session as the "after" rows. Commands: `scripts/bench/wave0_suite.py --phases sweep` with
+`--sweep-points 32x4,32x16,32x32 --modes upload --limit 1000` and
+`--sweep-points 8x8,8x16,8x32,8x64 --modes batch`.
+
+#### Attribution (WP-1.2, #210)
+
+The stage timer `op_pipeline_stage_seconds` gained the stages that ran untimed (`hash`, `persist`,
+`letterbox`, `triton_request`, `whole_frame_preprocess`, `blur`, `doc_build`, `bulk_serialize`,
+`admission_wait`); `resize` was renamed `pe_preprocess` because it is the PE crop preprocessing,
+not the detector letterbox. Every stage but `embed` and `opensearch_write` times a synchronous
+block, so on the event-loop thread its seconds are API CPU seconds. The table is the code before
+any fix with the new timers, 16 clients, 2 repetitions.
+
+| Span | 640 x 480 frames, ms/image | share of API CPU | 12-24 MP photos, ms/image | share of API CPU |
+|---|---:|---:|---:|---:|
+| `bulk_serialize` (OpenSearch bodies) | 34.3 | 17.2 % | 10.0 | 0.8 % |
+| `pe_preprocess` (PE crop resize + normalize) | 25.0 | 12.5 % | 6.8 | 0.6 % |
+| `triton_request` (input build, FP32 copy) | 13.9 | 6.9 % | 10.0 | 0.9 % |
+| `blur` (Laplacian scores) | 10.4 | 5.2 % | 447.7 | 38.2 % |
+| `whole_frame_preprocess` | 8.6 | 4.3 % | 187.8 | 16.0 % |
+| `letterbox` | 5.1 | 2.5 % | 93.3 | 8.0 % |
+| `decode` | 4.9 | 2.4 % | 303.7 | 25.9 % |
+| `jpeg_encode` (crop cache) | 3.4 | 1.7 % | 22.6 | 1.9 % |
+| `persist`, `doc_build`, `crop`, `hash` | 2.9 | 1.4 % | 8.3 | 0.7 % |
+| **in a span** | **108.4** | **54 %** | **1,090** | **93 %** |
+| API CPU per image | 199.8 | | 1,172.8 | |
+
+On photos 93 percent is attributed and four primitives are 88 percent of the API CPU, led by the
+blur score, which converted the frame to BGR and took a float64 Laplacian: 398 ms single-threaded
+on an 18 MP frame, more than the decode. On frames the spans reach 54 percent. The rest, 91 ms,
+was looked at with `py-spy record --native` on one worker (130 ms of API CPU per image with the same
+code and two clients, so 32 contended workers cost 1.5 times as much per image):
+
+| Not in a span (frames, one worker) | share of busy samples | ms/image |
+|---|---:|---:|
+| gRPC client: protobuf serialization and copies of 13.6 MB of FP32 tensors, the socket send | 13 % | 17 |
+| the OpenSearch project guard decoding every line of each bulk body (the vectors again) | 6 % | 8 |
+| other Python in the ingest functions (documents, OCC merge, ranking, events) | 12 % | 15 |
+| uvicorn, multipart, aiohttp, Prometheus, kernel socket I/O | 2 % | 3 |
+
+So with the native profile roughly 85 to 90 percent of the frame CPU is named. The wave plan expected that
+the guard "does not parse bodies"; it parses every NDJSON line to find the target indexes. The
+FP32 wire (the first row) is WP-2.1 and WP-2.2 and is not touched here.
+
+#### Fixes, ranked by measured gain (WP-1.3, #211, #241)
+
+| Fix | Where it shows | Before | After |
+|---|---|---:|---:|
+| Pixel work off the event loop on a bounded pool, images admitted by decoded megabytes (#241) | photos, images/s at 8 / 16 / 32 / 64 clients | 5.2 / 8.7 / 10.8 / 4.9 | 21.5 / 27.3 / 23.6 / 24.1 |
+| `ndarray.tolist()` and orjson for OpenSearch bodies | frames, `bulk_serialize` ms/image | 34.3 | 0.9 |
+| PE normalization through a lookup table (bit-identical) | frames, `pe_preprocess` ms/image | 25.0 | 9.8 |
+| Blur score from exact integer sums of a 16-bit Laplacian | frames / photos, `blur` ms/image | 10.4 / 447.7 | 4.6 / 252.2 (398 to about 75 ms single-threaded on 18 MP) |
+| Small work stays on the loop (under 4 MiB of pixels) | frames, one worker, API CPU s/image | 0.157 (4 threads; 0.147 with 1) | 0.109 |
+| glibc keeps freed buffers (`MALLOC_TRIM_THRESHOLD_` and two more) | frames, one worker, API CPU s/image | 0.109 | 0.096 |
+| Project guard parses only the action lines of a bulk body | frames, share of native samples | 6 % | below 1 % |
+| Letterbox tensor in one lookup pass, guard checks each bulk target once | frames | not separately measurable (under 5 %) | |
+| Triton `--log-verbose=0` | Triton-side logging only | 12,038 lines per 2,000 images | none |
+
+The two rows that touch the thread pool carry the lesson of the work: moving everything off the loop
+cost more CPU than it saved on small frames (a pool hop is a GIL hand-over; the same code with the
+pool switched off measured 0.092 CPU-s per image against 0.147 to 0.157 with it), and on photos it is what
+lets a worker use more than one core. `run_cpu` therefore takes the bytes of pixels a call touches and
+runs it in place below 4 MiB. Connections stay on the worker that accepted them, so with 32 clients
+only about 14 of the 32 workers hold requests; each needs 8 threads and room for about 20 photos
+(1 GiB) to use its share of the cores. Four threads and 256 MiB gave 21.0 and 13.1 images/s at 16 and
+32 clients, 8 threads and 1 GiB gave 25.1 and 26.0 (set B, 2 repetitions per arm; 4 threads with 512
+MiB gave 19.8 and 15.2, 8 threads with 512 MiB 23.6 and 16.8).
+
+Counting the gate in images instead of megabytes held the GPU-bound stream of frames back (4 images
+per worker let a 32-frame request run alone): PE batches fell from 26.6 to 21.9 and the GPU from 92
+to 84 percent busy at 16 clients, so it counts decoded bytes read from the image headers.
+
+Not done: the file is decoded twice (Pillow in full for the detector letterbox and the crops,
+OpenCV at 1/8 scale for the whole-frame vector) because both entropy-decode the same bitstream;
+sharing one decode changes the pixels the whole-frame vector is computed from and so breaks the
+bit-identical gate (WP-2.x GPU decode). No JPEG is encoded twice on this path: the crop cache
+encodes each crop once and an upload is persisted as the bytes that arrived.
+
+#### Before and after
+
+Set A (COCO, 1,000 images, 32 per request, `/ingest/upload`):
+
+| clients | images/s before | images/s after | API CPU s/image before | after | change | GPU busy % before / after | request p50 s before / after |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 4 | 17.01 (17.00-17.35) | 19.56 (17.96-19.63) | 0.170 (0.169-0.170) | 0.113 (0.112-0.116) | -33 % | 71 / 80 | 7.4 / 6.5 |
+| 16 | 21.59 (21.25-21.61) | 21.58 (21.48-21.64) | 0.187 (0.182-0.191) | 0.126 (0.121-0.129) | -33 % | 92 / 87 | 21.0 / 21.4 |
+| 32 | 20.68 (20.11-21.01) | 20.46 (20.31-20.77) | 0.192 (0.186-0.194) | 0.136 (0.131-0.139) | -29 % | 85 / 84 | 45.9 / 47.0 |
+
+Set B (500 photos of 12-24 MP, 8 per request, `/ingest/batch`):
+
+| clients | images/s before | images/s after | API CPU s/image before | after | GPU busy % before / after | request p50 s before / after |
+|---:|---:|---:|---:|---:|---:|---:|
+| 8 | 5.22 (5.13-5.87) | 21.50 (20.59-21.51) | 1.102 | 0.990 | 9 / 41 | 9.3 / 2.7 |
+| 16 | 8.68 (8.29-9.31) | 27.26 (24.56-27.32) | 1.129 | 1.103 | 15 / 45 | 10.7 / 4.0 |
+| 32 | 10.78 (10.20-11.28) | 23.57 (19.90-26.21) | 1.168 | 1.129 | 16 / 33 | 15.9 / 7.2 |
+| 64 | 4.87 (4.85-5.24) | 24.13 (23.71-25.28) | 1.225 | 1.090 | 8 / 37 | 48.1 / 11.7 |
+
+Against the targets:
+
+- **Photos: met.** Throughput is 2.2 to 4.9 times higher and no longer falls past 32 clients (24.1
+  at 64 against 23.6 at 32; it fell from 10.8 to 4.9). The CPU per image on photos barely moves
+  (1.10-1.23 to 0.99-1.13): the gain is parallelism, not less work, and the host is now the limit
+  (68 to 76 percent busy, 27 to 30 cores, GPU 33 to 45 percent busy).
+- **COCO frames, API CPU per image down at least 40 percent: not met.** It is down 29 to 33 percent
+  (0.170-0.192 to 0.113-0.136 CPU-s). What is left is the FP32 wire (13.6 MB per image through
+  protobuf and the socket, about 25 ms of the 96 ms single-worker figure) and the decode, letterbox
+  and whole-frame preprocessing that parity fixes in place. Images/s is not lower (GPU-bound, within
+  the spread). The p99 per batch was not measured; the p50 is in the table.
+- The attribution reaches 93 percent on photos and 54 percent from the stage timers on frames (roughly 85 to 90 percent with the native profile above).
+
+#### Accuracy
+
+`scripts/bench/parity.py` (PR #238 tool), one capture of this branch on the isolated stack (2,000 COCO
+images, policy `all`, clusters trained by the auto-label worker, 200-image core-route probe) against the FP16
+reference capture `ref-fp16` (same plan sha256, code of `0567748f`), profile `precision`:
+
+| Gate | Metric | Observed | Rule | Status |
+|---|---|---:|---|---|
+| P-box | `boxes.images_identical_share` | 0.99191 | >= 0.98 | PASS |
+| P-box-confident | `boxes.unmatched_confident` | 0 | <= 0 | PASS |
+| P-item | `boxes.item_count_class_identical_share` | 0.99949 | >= 0.99 | PASS |
+| P-pe-p01 | `pe_crop.p01` | 0.99993 | >= 0.995 | PASS |
+| P-pe-median | `pe_crop.median` | 1.00000 | >= 0.999 | PASS |
+| P-pew-p01 | `pe_frame.p01` | 0.99993 | >= 0.995 | PASS |
+| P-pew-median | `pe_frame.median` | 1.00000 | >= 0.999 | PASS |
+| P-knn | `knn.overlap_at_k` | 0.99610 | >= 0.95 | PASS |
+| P-dup | `knn.near_dup_agreement` | 1.00000 | >= 0.995 | PASS |
+| P-cluster-assign | `cluster.assignment_agreement` | 0.99922 | >= 0.98 | PASS |
+| P-cluster-purity | `cluster.purity_drop_points` | -0.19547 | <= 0.5 | PASS |
+| P-label-vote | `knn.label_vote_agreement` | 0.99700 | >= 0.97 | PASS |
+| P-knn-precision | `knn.precision_drop_points` | -0.07792 | <= 0.5 | PASS |
+| P-label | `labels.class_agreement` | 1.00000 | >= 0.99 | PASS |
+| P-vlm | `labels.vlm_agreement` | n/a | >= 0.97 | SKIP |
+| P-clip | `clip.p01` | 1.00000 | >= 0.995 | PASS |
+| P-face | `face.p01` | 1.00000 | >= 0.995 | PASS |
+| P-ocr | `ocr.exact_share` | 1.00000 | >= 0.98 | PASS |
+
+Verdict PASS (`docs/benchmarks/parity/api_cpu_vs_fp16_ref/`). The candidate has 12,791 items against 12,790;
+12,790 matched. The PE vectors are not bit-identical between two captures (identical share 0.946 for crops,
+0.939 for frames) because the FP16 engine's result depends on the batch it ran in and the batches differ from
+run to run; the median cosine is 1.00000 and the 1st percentile 0.99993. The reference configuration measured
+against itself is the noise floor (about 1 percent of crop rectangles differ). P-vlm is skipped: no VLM was
+configured. The changes that touch numbers were also checked against their old implementations
+directly, on real images, which a GPU-in-the-loop capture cannot do: in the API container, on 400 COCO
+frames and 40 photos (440 images, 1,320 random boxes), the PE normalization of the whole-frame and crop
+tensors, the detector letterbox tensor, the full-frame Laplacian variance and the box variances were
+compared with the previous code, bit for bit for the tensors and at the stored two decimals for the
+variances: 0 of 3,960 comparisons differ. The same equalities are unit tests (every uint8 value on every
+channel, random frames and crops, extreme and tiny images).
+
+Raw results: `docs/benchmarks/v060_apicpu_{before,after}_set_{a,b}.json` and `v060_apicpu_attribution_set_{a,b}.json`.
 
 ### Wave 0 parity and FP16 gates (set A, public COCO, 2,000 images)
 

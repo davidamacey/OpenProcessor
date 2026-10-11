@@ -17,15 +17,12 @@ A crop is "too blurry" iff BOTH hold (note: AND, not OR):
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, NamedTuple
+from typing import Literal, NamedTuple
 
 import cv2
+import numpy as np
 
 from src.core.logging import get_logger
-
-
-if TYPE_CHECKING:
-    import numpy as np
 
 
 logger = get_logger(__name__)
@@ -62,6 +59,10 @@ class CropBlur(NamedTuple):
     ratio: float | None
 
 
+ColorOrder = Literal['bgr', 'rgb']
+_GRAY_CODE = {'bgr': cv2.COLOR_BGR2GRAY, 'rgb': cv2.COLOR_RGB2GRAY}
+
+
 def laplacian_var(gray: np.ndarray) -> float:
     """Return the variance of the Laplacian of a single-channel image.
 
@@ -69,40 +70,55 @@ def laplacian_var(gray: np.ndarray) -> float:
         gray: 2-D grayscale uint8 (or float) array.
 
     Returns:
-        Variance of the CV_64F Laplacian response, rounded to 2 decimals.
+        Variance of the Laplacian response, rounded to 2 decimals.
+
+    The Laplacian of an 8-bit image is integer valued (at most 1,020 in magnitude), so
+    for ``uint8`` input the variance comes from exact integer sums over a 16-bit
+    response: a quarter of the memory of the float64 response, and the true variance
+    where ``ndarray.var`` carries a rounding error near 1e-11. Both round to the same
+    2 decimals, except for a value that lies within that error of a rounding tie.
     """
-    return round(float(cv2.Laplacian(gray, cv2.CV_64F).var()), 2)
+    if gray.dtype != np.uint8:
+        return round(float(cv2.Laplacian(gray, cv2.CV_64F).var()), 2)
+    lap = cv2.Laplacian(gray, cv2.CV_16S)
+    n = lap.size
+    total = int(cv2.sumElems(lap)[0])
+    squares = int(np.einsum('ij,ij->', lap, lap, dtype=np.int64))
+    return round((n * squares - total * total) / (n * n), 2)
 
 
-def image_lap_var(image_bgr: np.ndarray) -> float:
+def image_lap_var(image: np.ndarray, color_order: ColorOrder = 'bgr') -> float:
     """Compute the full-image Laplacian variance (the ratio denominator).
 
     Args:
-        image_bgr: BGR image array (OpenCV channel order).
+        image: 3-channel image array.
+        color_order: Channel order of ``image``: ``'bgr'`` (OpenCV) or ``'rgb'`` (PIL, numpy).
 
     Returns:
         Full-image Laplacian variance, rounded to 2 decimals.
     """
-    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(image, _GRAY_CODE[color_order])
     return laplacian_var(gray)
 
 
 def crop_lap_var(
-    image_bgr: np.ndarray,
+    image: np.ndarray,
     bbox_px: tuple[float, float, float, float],
+    color_order: ColorOrder = 'bgr',
 ) -> float | None:
     """Laplacian variance of a crop region, or ``None`` if degenerate.
 
     Clamps the bbox to image bounds and guards against zero-area crops.
 
     Args:
-        image_bgr: BGR source image.
+        image: Source image, 3 channels in ``color_order``.
         bbox_px: ``(x1, y1, x2, y2)`` pixel coordinates.
+        color_order: Channel order of ``image``: ``'bgr'`` (OpenCV) or ``'rgb'`` (PIL, numpy).
 
     Returns:
         Crop Laplacian variance rounded to 2 decimals, or ``None``.
     """
-    h, w = image_bgr.shape[:2]
+    h, w = image.shape[:2]
     x1, y1, x2, y2 = (round(v) for v in bbox_px)
     x1 = max(0, min(x1, w))
     x2 = max(0, min(x2, w))
@@ -110,10 +126,10 @@ def crop_lap_var(
     y2 = max(0, min(y2, h))
     if x2 <= x1 or y2 <= y1:
         return None
-    crop = image_bgr[y1:y2, x1:x2]
+    crop = image[y1:y2, x1:x2]
     if crop.size == 0:
         return None
-    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(crop, _GRAY_CODE[color_order])
     return laplacian_var(gray)
 
 

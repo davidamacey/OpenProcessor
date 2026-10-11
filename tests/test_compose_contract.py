@@ -438,6 +438,24 @@ def test_triton_accepts_the_clients_idle_keepalive_pings() -> None:
     assert interval <= 30_000
 
 
+def test_triton_does_not_log_every_pinned_memory_allocation() -> None:
+    """`--log-verbose=1` printed an allocation and a free line for every tensor of every
+    request (12,038 lines in one 2,000-image window) and bought nothing in production."""
+    command = _services()['triton-server']['command']
+    assert '--log-verbose=0' in command
+    assert not any(a.startswith('--log-verbose=') and a != '--log-verbose=0' for a in command)
+
+
+def test_api_keeps_freed_pixel_buffers_instead_of_trimming_them() -> None:
+    """Ingest frees tens of megabytes per image; glibc's default trims each thread arena after
+    every call and the next allocation faults the pages back (0.109 against 0.096 CPU-s per
+    image on 640 x 480 frames)."""
+    env = dict(a.split('=', 1) for a in _services()['api']['environment'] if '=' in a)
+    assert int(env['MALLOC_TRIM_THRESHOLD_']) >= 64 * 1024 * 1024
+    assert int(env['MALLOC_TOP_PAD_']) > 0
+    assert int(env['MALLOC_MMAP_THRESHOLD_']) >= 16 * 1024 * 1024
+
+
 def test_api_has_a_healthcheck() -> None:
     """A `service_healthy` dependency on api is meaningless without one."""
     services = _services()

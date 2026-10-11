@@ -99,6 +99,7 @@ from src.services.curation.ingest_policy import (
 from src.services.curation.item_doc import DetectedItem, region_seed_status
 from src.services.curation.ops_metrics import record_ingest_result
 from src.services.detection.geometry import crop_id as _crop_id_fn, letterbox_params
+from src.utils.cpu_pool import encoded_nbytes, run_cpu
 from src.utils.stage_timing import stage_timer
 
 
@@ -132,12 +133,13 @@ def _imohash_bytes(data: bytes) -> str:
     Uses ``imohash`` if available; otherwise falls back to a sha256
     prefix (slim test environments only — production installs imohash).
     """
-    try:
-        import imohash  # type: ignore[import-untyped]
+    with stage_timer('hash', nbytes=len(data)):
+        try:
+            import imohash  # type: ignore[import-untyped]
 
-        return imohash.hashfileobject(io.BytesIO(data)).hex()
-    except Exception:
-        return hashlib.sha256(data).hexdigest()[:32]
+            return imohash.hashfileobject(io.BytesIO(data)).hex()
+        except Exception:
+            return hashlib.sha256(data).hexdigest()[:32]
 
 
 def _decode_image(image_bytes: bytes) -> tuple[Image.Image, int, int]:
@@ -391,7 +393,9 @@ class CurationIngestService:
             full_w, full_h = img.size
         else:
             try:
-                img, full_w, full_h = _decode_image(image_bytes)
+                img, full_w, full_h = await run_cpu(
+                    _decode_image, image_bytes, nbytes=encoded_nbytes(image_bytes)
+                )
             except Exception as exc:
                 return IngestResult(
                     status='failed',

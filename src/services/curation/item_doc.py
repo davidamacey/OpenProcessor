@@ -18,6 +18,7 @@ from src.services.curation.embedding_state import EMBEDDED
 from src.services.curation.region_scope import in_parent_classes
 from src.services.detection.cascade_detect.sanity import class_provenance
 from src.services.detection.profile_registry import get_active_region_profile
+from src.utils.vectors import float_list
 
 
 if TYPE_CHECKING:
@@ -135,7 +136,7 @@ def build_image_doc(
         'original_resolution': f'{width}x{height}',
     }
     if whole_frame_embedding is not None:
-        doc['pe_embedding'] = list(whole_frame_embedding)
+        doc['pe_embedding'] = float_list(whole_frame_embedding)
     if source_identifier is not None:
         doc['source_identifier'] = source_identifier
     if ingest_run_id is not None:
@@ -219,12 +220,12 @@ def build_item_doc(
         if item.cluster_distance is not None:
             doc['cluster_distance_cluster_id'] = item.cluster_id
     if item.pe_embedding is not None:
-        doc['pe_embedding'] = list(item.pe_embedding)
+        doc['pe_embedding'] = float_list(item.pe_embedding)
         doc['embedding_state'] = EMBEDDED
     elif item.embedding_state is not None:
         doc['embedding_state'] = item.embedding_state
     if item.backbone_embedding is not None:
-        doc[BACKBONE_EMBEDDING_FIELD] = [float(x) for x in item.backbone_embedding]
+        doc[BACKBONE_EMBEDDING_FIELD] = float_list(item.backbone_embedding)
     if item.class_detector:
         doc.update(
             class_provenance(

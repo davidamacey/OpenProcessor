@@ -237,3 +237,54 @@ def test_guarded_transport_delegates_and_checks() -> None:
 
     asyncio.run(_run())
     assert calls == [('GET', '/op_prj_alpha__items/_doc/x')]
+
+
+def _bulk(n_items: int, index: str) -> bytes:
+    """An ingest-shaped bulk body: an action line, then a document with a vector."""
+    doc = '{"crop_id": "c", "pe_embedding": [' + ', '.join(['0.25'] * 1024) + ']}'
+    action = f'{{"create": {{"_index": "{index}", "_id": "x"}}}}'
+    return ('\n'.join([action, doc] * n_items) + '\n').encode()
+
+
+def test_bulk_document_lines_are_not_parsed(snapshot, monkeypatch) -> None:
+    from src.services.projects import guard
+
+    parsed: list[int] = []
+    real_loads = guard.json.loads
+
+    def counting_loads(text, *args, **kwargs):
+        parsed.append(len(text))
+        return real_loads(text, *args, **kwargs)
+
+    monkeypatch.setattr(guard.json, 'loads', counting_loads)
+    with bind_project(snapshot['alpha']):
+        check_request('POST', '/_bulk', _bulk(6, 'op_prj_alpha__items'), snapshot)
+    assert len(parsed) == 6  # one action line per item
+    assert max(parsed) < 200  # none of the 8 KB document lines
+
+
+def test_bulk_second_action_naming_a_foreign_index_is_still_rejected(snapshot) -> None:
+    own = _bulk(1, 'op_prj_alpha__items')
+    foreign = _bulk(1, 'op_prj_beta__items')
+    with bind_project(snapshot['alpha']), pytest.raises(CrossProjectAccess):
+        check_request('POST', '/_bulk', own + foreign, snapshot)
+
+
+def test_bulk_delete_has_no_document_line(snapshot) -> None:
+    body = (
+        b'{"delete": {"_index": "op_prj_alpha__items", "_id": "x"}}\n'
+        b'{"delete": {"_index": "op_prj_beta__items", "_id": "y"}}\n'
+    )
+    with bind_project(snapshot['alpha']), pytest.raises(CrossProjectAccess):
+        check_request('POST', '/_bulk', body, snapshot)
+
+
+def test_bulk_document_line_that_is_not_an_object_is_refused(snapshot) -> None:
+    body = b'{"index": {"_index": "op_prj_alpha__items", "_id": "x"}}\nnot json\n'
+    with bind_project(snapshot['alpha']), pytest.raises(CrossProjectAccess):
+        check_request('POST', '/_bulk', body, snapshot)
+
+
+def test_bulk_action_line_that_is_not_json_is_refused(snapshot) -> None:
+    with bind_project(snapshot['alpha']), pytest.raises(CrossProjectAccess):
+        check_request('POST', '/_bulk', b'oops\n{}\n', snapshot)

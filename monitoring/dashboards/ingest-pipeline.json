@@ -73,7 +73,7 @@
         "type": "custom",
         "name": "stage",
         "label": "Stage",
-        "query": "decode,resize,crop,embed,jpeg_encode,opensearch_write",
+        "query": "decode,pe_preprocess,crop,embed,jpeg_encode,opensearch_write,hash,persist,letterbox,triton_request,whole_frame_preprocess,blur,doc_build,bulk_serialize",
         "multi": true,
         "includeAll": true,
         "allValue": ".*",
@@ -111,7 +111,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "Each stage of the ingest path (decode, resize, crop, embed, jpeg_encode, opensearch_write). Series are empty until the API has processed images. All API workers are aggregated."
+        "content": "Each stage of the ingest path (decode, pe_preprocess, crop, embed, jpeg_encode, opensearch_write, hash, persist, letterbox, triton_request, whole_frame_preprocess, blur, doc_build, bulk_serialize). Series are empty until the API has processed images. All API workers are aggregated."
       },
       "transparent": true
     },

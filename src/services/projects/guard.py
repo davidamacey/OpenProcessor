@@ -228,6 +228,42 @@ def _ndjson_lines(body: Any) -> list[Any]:
     return lines
 
 
+_BULK_DOCUMENT_OPS = ('index', 'create', 'update')
+
+
+def _bulk_lines(body: Any) -> list[Any]:
+    """The lines of a bulk body, action lines parsed and document lines left alone.
+
+    Only an action line can name an index, and a document line of an ingest request
+    carries a 1,024-float vector, so parsing every line parsed some 25 KB of floats per
+    item for nothing. A document line keeps its slot as ``None`` and must still look
+    like a JSON object; OpenSearch rejects one that is not valid JSON.
+    """
+    if body is None or isinstance(body, list):
+        return _ndjson_lines(body)
+    text = body.decode('utf-8', 'replace') if isinstance(body, bytes) else str(body)
+    lines: list[Any] = []
+    expect_document = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if expect_document:
+            if not (stripped.startswith('{') and stripped.endswith('}')):
+                raise _refuse('multi-doc body line is not JSON')
+            lines.append(None)
+            expect_document = False
+            continue
+        try:
+            action = json.loads(stripped)
+        except ValueError as exc:
+            raise _refuse('multi-doc body line is not JSON') from exc
+        lines.append(action)
+        if isinstance(action, dict) and len(action) == 1:
+            expect_document = next(iter(action)) in _BULK_DOCUMENT_OPS
+    return lines
+
+
 def _index_refs(value: Any) -> list[str]:
     """Every string under an ``index``/``_index``/``indices`` key anywhere
     in a query body (terms lookups, ``more_like_this`` docs, ``mget``
@@ -273,7 +309,7 @@ def _check_targets(
         raise _refuse('the request names no index (it would reach every index)')
     bound = try_current_project()
     admin = _REGISTRY_ADMIN.get()
-    for name in targets:
+    for name in dict.fromkeys(targets):  # a bulk names the same index once per document
         _check_name(name)
         owner = owner_slug(name, snapshot)
         if owner is None:
@@ -436,7 +472,7 @@ def _body_targets(action: str, body: Any, *, require_each: bool = False) -> list
     index, so every line / doc must name its own."""
     targets: list[str] = []
     if action == '_bulk':
-        lines = _ndjson_lines(body)
+        lines = _bulk_lines(body)
         i = 0
         while i < len(lines):
             line = lines[i]
@@ -588,9 +624,11 @@ def make_script_opensearch(hosts: list[str], **kwargs: Any) -> Any:
     learns about projects created after it started."""
     from opensearchpy import AsyncOpenSearch
 
+    from src.clients.opensearch.serializer import OrjsonSerializer
     from src.services.projects.registry import ProjectRegistry
 
     kwargs.setdefault('use_ssl', False)
+    kwargs.setdefault('serializer', OrjsonSerializer())
     client = AsyncOpenSearch(hosts=hosts, **kwargs)
     reader = _RegistryReader(client.transport)
     registry = ProjectRegistry(lambda: reader)

@@ -96,7 +96,7 @@ def test_crop_and_resize_helpers_are_timed() -> None:
     assert _hist_count('crop') - before == 1
 
 
-def test_embed_crops_times_resize_and_embed_and_keeps_output() -> None:
+def test_embed_crops_times_preprocess_and_embed_and_keeps_output() -> None:
     import asyncio
 
     from src.clients.pe_encoder import PEEncoder
@@ -117,12 +117,12 @@ def test_embed_crops_times_resize_and_embed_and_keeps_output() -> None:
 
     encoder = PEEncoder(triton_pool=_Pool())  # type: ignore[arg-type]
     crops = [np.zeros((40, 30, 3), dtype=np.uint8) for _ in range(2)]
-    resize_before, embed_before = _hist_count('resize'), _hist_count('embed')
+    preprocess_before, embed_before = _hist_count('pe_preprocess'), _hist_count('embed')
     bytes_before = _bytes('embed')
     out = asyncio.run(encoder.embed_crops(crops))
     assert out.shape == (2, 1024)
     assert out[0, 0] == pytest.approx(0.6)
-    assert _hist_count('resize') - resize_before == 1
+    assert _hist_count('pe_preprocess') - preprocess_before == 1
     assert _hist_count('embed') - embed_before == 1
     assert _bytes('embed') - bytes_before == int(np.prod(seen_shapes[0])) * 4
 

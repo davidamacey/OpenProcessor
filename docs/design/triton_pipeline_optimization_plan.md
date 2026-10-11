@@ -872,6 +872,32 @@ Revisions to the ranked list of section 11.1:
 Open: the region stage (the segmenter weights are gated) and scaling across GPUs (the other GPUs
 host other projects) were not measured; the cluster pass was skipped.
 
+### 11.4 WP-1.2 and WP-1.3 result: API CPU, attributed and cut (v0.6.0, sets A and B)
+
+Measured in the same session on the same GPU and stack as 11.3, tables in `docs/PERFORMANCE.md`
+("0.6.0 WP-1.2 and WP-1.3"). Items 2 and 3 of the section 11.3 list move as follows.
+
+- **Item 2 (API CPU outside the timed stages).** The stage timers now name 93 percent of the API CPU
+  on photos (blur score 38 percent, decode 26, whole-frame preprocess 16, letterbox 8) and 54 percent
+  on COCO frames; a native profile of one worker names most of the rest: the FP32 tensors through
+  protobuf and the socket (13 percent), the project guard decoding every bulk line (6, fixed), other
+  Python of the ingest functions (12). The 150 ms "unattributed" of 11.3 was not a single cost: 34 ms of OpenSearch
+  body serialization, 14 of Triton input build, 10 of blur scoring, 9 of whole-frame preprocessing,
+  5 of letterbox and a native remainder of about 90 ms.
+- **Fixes.** Photos: 5.2 / 8.7 / 10.8 / 4.9 images/s at 8 / 16 / 32 / 64 clients become 21.5 / 27.3 /
+  23.6 / 24.1, with no fall past 32 clients; the host (68 to 76 percent busy) is the limit again, not
+  one thread per worker, and the GPU is 33 to 45 percent busy. COCO frames: API CPU per image is down
+  29 to 33 percent (target 40, not met), images/s unchanged (GPU-bound).
+- **What the 40 percent needs.** The remaining frame cost is 25 ms of the 96 ms single-worker figure in
+  the FP32 wire, then decode, letterbox, whole-frame and crop preprocessing that the bit-identical gates
+  keep in place. WP-2.1 (uint8 inputs, a 4-fold smaller request) and WP-2.2 (shared memory) are the next
+  levers for frames; for photos the decode (300 to 600 ms and the whole-frame decode of the same
+  bitstream, 190 to 290 ms) is the next, which is the evidence the GPU-decode go/no-go (#217) asked for.
+- **Lesson for the serving design.** A thread pool is not free: moving small calls off the loop cost
+  more CPU than it saved (0.147 against 0.092 CPU-s per frame), so the offload is sized by the pixels of
+  the call. Connections stay on the worker that accepted them (14 of 32 workers busy with 32 clients),
+  so per-worker pool size and admission, not the worker count, decide whether a skewed load uses the host.
+
 ## 12. References
 
 - `docs/design/generic_detector_and_selective_embedding_plan.md` (#52) and

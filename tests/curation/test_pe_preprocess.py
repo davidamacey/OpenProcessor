@@ -126,3 +126,52 @@ def test_bakeoff_sampler_uses_the_same_normalization() -> None:
 
     assert np.array_equal(sample._PE_MEAN, PE_MEAN)
     assert np.array_equal(sample._PE_STD, PE_STD)
+
+
+def _legacy_normalize_chw(rgb_uint8: np.ndarray) -> np.ndarray:
+    """The per-pixel arithmetic normalize_chw ran before the lookup table (the oracle)."""
+    arr = rgb_uint8.astype(np.float32) / 255.0
+    if arr.ndim == 4:
+        chw = np.transpose(arr, (0, 3, 1, 2))
+        return ((chw - PE_MEAN[None]) / PE_STD[None]).astype(np.float32, copy=False)
+    chw = np.transpose(arr, (2, 0, 1))
+    return ((chw - PE_MEAN) / PE_STD).astype(np.float32, copy=False)
+
+
+def _same_bits(a: np.ndarray, b: np.ndarray) -> bool:
+    return a.shape == b.shape and np.array_equal(a.view(np.uint32), b.view(np.uint32))
+
+
+class TestNormalizeLookupIsBitIdentical:
+    """P-pe: the lookup table returns the exact float32 the arithmetic produced."""
+
+    def test_every_uint8_value_on_every_channel(self) -> None:
+        values = np.arange(256, dtype=np.uint8)
+        rgb = np.stack([values, values[::-1], np.roll(values, 7)], axis=-1).reshape(16, 16, 3)
+        got = np.ascontiguousarray(normalize_chw(rgb))
+        assert _same_bits(got, np.ascontiguousarray(_legacy_normalize_chw(rgb)))
+
+    def test_batch_path(self) -> None:
+        rgb = np.random.default_rng(2).integers(0, 256, size=(3, 40, 30, 3), dtype=np.uint8)
+        got = np.ascontiguousarray(normalize_chw(rgb))
+        assert _same_bits(got, np.ascontiguousarray(_legacy_normalize_chw(rgb)))
+
+    def test_normalize_into_matches_for_a_non_contiguous_crop(self) -> None:
+        from src.services.detection.pe_preprocess import normalize_into
+
+        big = np.random.default_rng(3).integers(0, 256, size=(90, 80, 3), dtype=np.uint8)
+        view = big[10:50, 20:70]  # a resize_crop_rgb result is such a view
+        out = np.empty((3, 40, 50), dtype=np.float32)
+        normalize_into(out, view)
+        assert _same_bits(out, np.ascontiguousarray(_legacy_normalize_chw(view)))
+
+    def test_embed_crops_batch_equals_the_old_stack(self) -> None:
+        from src.clients.pe_encoder import _preprocess_crops
+
+        rng = np.random.default_rng(4)
+        crops = [
+            rng.integers(0, 256, size=(h, w, 3), dtype=np.uint8)
+            for h, w in ((20, 30), (500, 410), (7, 9))
+        ] + [np.zeros((0, 5, 3), dtype=np.uint8)]
+        old = np.stack([_legacy_normalize_chw(resize_crop_rgb(c)) for c in crops], axis=0)
+        assert _same_bits(_preprocess_crops(crops), old.astype(np.float32, copy=False))

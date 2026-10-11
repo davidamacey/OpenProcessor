@@ -1,0 +1,4669 @@
+{
+  "env": {
+    "dataset": {
+      "bytes": 5211571077,
+      "count": 500,
+      "manifest_sha256": "c013c1f95f60b7d1eafafc4b0865fc9b17003a2f9d654ae2ae7223c22c58cde8",
+      "seed": 20261010
+    },
+    "foreign_gpu_before": {
+      "foreign_active_share": 0.0,
+      "foreign_sm_mean_pct": 0.0,
+      "foreign_sm_peak_pct": 0,
+      "own_sm_mean_pct": 0.0,
+      "own_sm_peak_pct": 0,
+      "samples": 30
+    },
+    "gpu_memory_mib": {
+      "0": [
+        16392.0,
+        49140.0,
+        0.0
+      ],
+      "1": [
+        6785.0,
+        12288.0,
+        0.0
+      ],
+      "2": [
+        14116.0,
+        49140.0,
+        0.0
+      ]
+    },
+    "gpu_processes": [
+      {
+        "container": "opmono-triton",
+        "gpu": "0",
+        "own": false,
+        "pid": 3404138,
+        "process": "tritonserver",
+        "used_mib": 16368.0
+      },
+      {
+        "container": "otfresh-v060-diar-native",
+        "gpu": "1",
+        "own": false,
+        "pid": 810297,
+        "process": "diar-server",
+        "used_mib": 4704.0
+      },
+      {
+        "container": "otfresh-v060-celery-worker",
+        "gpu": "1",
+        "own": false,
+        "pid": 600399,
+        "process": "/usr/local/bin/python3.13",
+        "used_mib": 1732.0
+      },
+      {
+        "container": "otfresh-v060-celery-redaction",
+        "gpu": "1",
+        "own": false,
+        "pid": 611725,
+        "process": "/usr/local/bin/python3.13",
+        "used_mib": 294.0
+      },
+      {
+        "container": "apicpu-triton",
+        "gpu": "2",
+        "own": true,
+        "pid": 332352,
+        "process": "tritonserver",
+        "used_mib": 14092.0
+      }
+    ],
+    "hardware": {
+      "cpu": {
+        "logical_cores": 48,
+        "model": "Intel(R) Xeon(R) CPU E5-2680 v3 @ 2.50GHz"
+      },
+      "gpu": {
+        "cuda": "13.4",
+        "driver": "615.71.09",
+        "index": "2",
+        "memory_total_mib": 49140.0,
+        "memory_used_before_mib": 14116.0,
+        "model": "NVIDIA RTX A6000",
+        "utilization_before_pct": 0.0
+      },
+      "load_average": [
+        8.7587890625,
+        8.95654296875,
+        7.8251953125
+      ],
+      "ram_gb": 503.7883758544922
+    },
+    "schema_wave0": "2-wave0-1",
+    "software": {
+      "containers": {
+        "/apicpu-api": "davidamacey/openprocessor:0.5.0",
+        "/apicpu-opensearch": "opensearchproject/opensearch:3.6.0",
+        "/apicpu-triton": "davidamacey/openprocessor-triton:0.5.0"
+      },
+      "harness_git_sha": "c99855b3259237293ebd43722a051fba5102191f",
+      "opensearch": "3.6.0",
+      "stack_version": "0.5.0",
+      "tensorrt_runtime_lib": "libnvinfer.so.11",
+      "triton_server": "2.70.0"
+    },
+    "timestamp": "2026-10-10T22:33:21.702764+00:00"
+  },
+  "phase_seconds": {
+    "env": 36.16407893411815,
+    "sweep": 1191.7036184608005
+  },
+  "schema": "2-wave0-1",
+  "sweep": {
+    "arms": {
+      "shipped": {
+        "instances": {},
+        "points": {
+          "b8_c16": {
+            "batch": {
+              "runs": [
+                {
+                  "attribution": {
+                    "foreign_active_share": 0.0,
+                    "foreign_sm_mean_pct": 0.0,
+                    "foreign_sm_peak_pct": 0,
+                    "own_sm_mean_pct": 13.428571428571429,
+                    "own_sm_peak_pct": 60.0,
+                    "samples": 49
+                  },
+                  "attribution_by_gpu": {
+                    "2": {
+                      "foreign_active_share": 0.0,
+                      "foreign_sm_mean_pct": 0.0,
+                      "foreign_sm_peak_pct": 0,
+                      "own_sm_mean_pct": 13.428571428571429,
+                      "own_sm_peak_pct": 60.0,
+                      "samples": 49
+                    }
+                  },
+                  "clocks_by_gpu": {
+                    "0": {
+                      "power_w_max": 28.09,
+                      "power_w_mean": 22.36611111111111,
+                      "samples": 54,
+                      "sm_mhz_mean": 210.0,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.0
+                    },
+                    "1": {
+                      "power_w_max": 184.23,
+                      "power_w_mean": 28.934074074074076,
+                      "samples": 54,
+                      "sm_mhz_mean": 409.1666666666667,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.037037037037037035
+                    },
+                    "2": {
+                      "power_w_max": 228.58,
+                      "power_w_mean": 124.73814814814814,
+                      "samples": 54,
+                      "sm_mhz_mean": 1677.7777777777778,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.48148148148148145
+                    }
+                  },
+                  "cluster": {
+                    "stage_durations": {},
+                    "status": "skipped",
+                    "wall_s": 0.0
+                  },
+                  "flat": {
+                    "api_cpu_s_per_image": 1.1307204819999996,
+                    "busy_pe_image_encoder": 0.13262816172960157,
+                    "busy_total": 0.14293612079337772,
+                    "busy_yolov11_small_trt_end2end": 0.010307959063776163,
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "client_received_bytes_per_image": 623.34,
+                    "client_sent_bytes_per_image": 75.84,
+                    "cluster_train_wall_s": 0.0,
+                    "duplicates": 0.0,
+                    "failed": 0.0,
+                    "gpu0_mem_peak_mb": 16392.0,
+                    "gpu0_sm_mhz_mean": 210.0,
+                    "gpu0_throttled_share": 0.0,
+                    "gpu0_util_mean_pct": 0.0,
+                    "gpu1_mem_peak_mb": 7210.0,
+                    "gpu1_sm_mhz_mean": 409.1666666666667,
+                    "gpu1_throttled_share": 0.037037037037037035,
+                    "gpu1_util_mean_pct": 0.9259259259259259,
+                    "gpu2_foreign_sm_mean_pct": 0.0,
+                    "gpu2_mem_peak_mb": 14116.0,
+                    "gpu2_own_sm_mean_pct": 13.428571428571429,
+                    "gpu2_sm_mhz_mean": 1677.7777777777778,
+                    "gpu2_throttled_share": 0.48148148148148145,
+                    "gpu2_util_mean_pct": 10.907407407407407,
+                    "host_busy_pct": 28.662916581326623,
+                    "idle_api_cores_before": 0.26123300000003835,
+                    "images_per_s": 8.680597560575121,
+                    "items_per_image": 1.634,
+                    "load_avg_1m": 13.45751953125,
+                    "request_p50_s": 10.025337160099298,
+                    "request_p95_s": 27.075382519047707,
+                    "stage_crop_mean_ms": 3.9054696217881495,
+                    "stage_crop_seconds": 3.190768681000918,
+                    "stage_decode_mean_ms": 301.06041594967246,
+                    "stage_decode_seconds": 150.53020797483623,
+                    "stage_embed_mean_ms": 1976.4767564023468,
+                    "stage_embed_seconds": 1589.087312147487,
+                    "stage_jpeg_encode_mean_ms": 13.957552018494434,
+                    "stage_jpeg_encode_seconds": 11.403319999109954,
+                    "stage_opensearch_write_mean_ms": 840.6350471460079,
+                    "stage_opensearch_write_seconds": 668.3048624810763,
+                    "stage_resize_mean_ms": 11.629077833208997,
+                    "stage_resize_seconds": 3.4305779607966542,
+                    "triton_cpu_s_per_image": 0.02273788000000002,
+                    "triton_pe_image_encoder_infer_ms_per_image": 15.278690297999999,
+                    "triton_pe_image_encoder_mean_batch": 4.180952380952381,
+                    "triton_pe_image_encoder_queue_ms": 9.757002110696519,
+                    "triton_yolov11_small_trt_end2end_infer_ms_per_image": 1.187471138,
+                    "triton_yolov11_small_trt_end2end_mean_batch": 7.936507936507937,
+                    "triton_yolov11_small_trt_end2end_queue_ms": 0.6498028571428571,
+                    "wall_s": 57.59972127620131
+                  },
+                  "gpu": {
+                    "0": {
+                      "mem_peak_mb": 16392.0,
+                      "samples": 54,
+                      "util_mean_pct": 0.0
+                    },
+                    "1": {
+                      "mem_peak_mb": 7210.0,
+                      "samples": 54,
+                      "util_mean_pct": 0.9259259259259259
+                    },
+                    "2": {
+                      "mem_peak_mb": 14116.0,
+                      "samples": 54,
+                      "util_mean_pct": 10.907407407407407
+                    }
+                  },
+                  "host_busy_pct": 28.662916581326623,
+                  "load_average": [
+                    13.45751953125,
+                    10.70849609375,
+                    8.92333984375
+                  ],
+                  "mode": "batch",
+                  "rep": 1,
+                  "slug": "ac-batch-r1-223947",
+                  "stages": {
+                    "crop": {
+                      "bytes": 0.0,
+                      "calls": 817.0,
+                      "mean_ms": 3.9054696217881495,
+                      "seconds": 3.190768681000918
+                    },
+                    "decode": {
+                      "bytes": 5211571077.0,
+                      "calls": 500.0,
+                      "mean_ms": 301.06041594967246,
+                      "seconds": 150.53020797483623
+                    },
+                    "embed": {
+                      "bytes": 1784208384.0,
+                      "calls": 804.0,
+                      "mean_ms": 1976.4767564023468,
+                      "seconds": 1589.087312147487
+                    },
+                    "jpeg_encode": {
+                      "bytes": 384782051.0,
+                      "calls": 817.0,
+                      "mean_ms": 13.957552018494434,
+                      "seconds": 11.403319999109954
+                    },
+                    "opensearch_write": {
+                      "bytes": 0.0,
+                      "calls": 795.0,
+                      "mean_ms": 840.6350471460079,
+                      "seconds": 668.3048624810763
+                    },
+                    "resize": {
+                      "bytes": 0.0,
+                      "calls": 295.0,
+                      "mean_ms": 11.629077833208997,
+                      "seconds": 3.4305779607966542
+                    }
+                  },
+                  "storage": {
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "images": 0,
+                    "indexes": {},
+                    "merge_rounds": 0,
+                    "total_bytes": 0,
+                    "vectors": 0
+                  },
+                  "triton": {
+                    "pe_image_encoder": {
+                      "batch_histogram": {
+                        "1": 57,
+                        "10": 1,
+                        "11": 1,
+                        "12": 2,
+                        "13": 1,
+                        "14": 1,
+                        "15": 2,
+                        "16": 3,
+                        "17": 4,
+                        "19": 4,
+                        "2": 56,
+                        "20": 1,
+                        "23": 1,
+                        "3": 42,
+                        "4": 96,
+                        "5": 7,
+                        "6": 7,
+                        "7": 8,
+                        "8": 21
+                      },
+                      "exec_infer_ms": 24.251889361904762,
+                      "exec_input_ms": 1.1632453968253968,
+                      "exec_output_ms": 7.567860231746033,
+                      "executions": 315,
+                      "inferences": 1317,
+                      "mean_batch": 4.180952380952381,
+                      "queue_ms_per_request": 9.757002110696519,
+                      "requests": 804
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "batch_histogram": {
+                        "4": 1,
+                        "8": 62
+                      },
+                      "exec_infer_ms": 9.424374111111112,
+                      "exec_input_ms": 10.893032190476191,
+                      "exec_output_ms": 0.5395713650793651,
+                      "executions": 63,
+                      "inferences": 500,
+                      "mean_batch": 7.936507936507937,
+                      "queue_ms_per_request": 0.6498028571428571,
+                      "requests": 63
+                    }
+                  },
+                  "triton_wire_bytes": {
+                    "pe_image_encoder": {
+                      "request_bytes": 1784208384,
+                      "response_bytes": 5394432
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "request_bytes": 2457600000,
+                      "response_bytes": 3302000
+                    }
+                  }
+                },
+                {
+                  "attribution": {
+                    "foreign_active_share": 0.0,
+                    "foreign_sm_mean_pct": 0.0,
+                    "foreign_sm_peak_pct": 0,
+                    "own_sm_mean_pct": 12.547169811320755,
+                    "own_sm_peak_pct": 39.0,
+                    "samples": 53
+                  },
+                  "attribution_by_gpu": {
+                    "2": {
+                      "foreign_active_share": 0.0,
+                      "foreign_sm_mean_pct": 0.0,
+                      "foreign_sm_peak_pct": 0,
+                      "own_sm_mean_pct": 12.547169811320755,
+                      "own_sm_peak_pct": 39.0,
+                      "samples": 53
+                    }
+                  },
+                  "clocks_by_gpu": {
+                    "0": {
+                      "power_w_max": 27.98,
+                      "power_w_mean": 22.339473684210525,
+                      "samples": 57,
+                      "sm_mhz_mean": 210.0,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.0
+                    },
+                    "1": {
+                      "power_w_max": 169.46,
+                      "power_w_mean": 97.94070175438597,
+                      "samples": 57,
+                      "sm_mhz_mean": 1498.6842105263158,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.3508771929824561
+                    },
+                    "2": {
+                      "power_w_max": 202.27,
+                      "power_w_mean": 123.35508771929824,
+                      "samples": 57,
+                      "sm_mhz_mean": 1714.2105263157894,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.45614035087719296
+                    }
+                  },
+                  "cluster": {
+                    "stage_durations": {},
+                    "status": "skipped",
+                    "wall_s": 0.0
+                  },
+                  "flat": {
+                    "api_cpu_s_per_image": 1.1147171099999995,
+                    "busy_pe_image_encoder": 0.1261554924118274,
+                    "busy_total": 0.13571638756191962,
+                    "busy_yolov11_small_trt_end2end": 0.009560895150092211,
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "client_received_bytes_per_image": 629.52,
+                    "client_sent_bytes_per_image": 75.84,
+                    "cluster_train_wall_s": 0.0,
+                    "duplicates": 0.0,
+                    "failed": 0.0,
+                    "gpu0_mem_peak_mb": 16392.0,
+                    "gpu0_sm_mhz_mean": 210.0,
+                    "gpu0_throttled_share": 0.0,
+                    "gpu0_util_mean_pct": 0.0,
+                    "gpu1_mem_peak_mb": 7572.0,
+                    "gpu1_sm_mhz_mean": 1498.6842105263158,
+                    "gpu1_throttled_share": 0.3508771929824561,
+                    "gpu1_util_mean_pct": 10.912280701754385,
+                    "gpu2_foreign_sm_mean_pct": 0.0,
+                    "gpu2_mem_peak_mb": 14116.0,
+                    "gpu2_own_sm_mean_pct": 12.547169811320755,
+                    "gpu2_sm_mhz_mean": 1714.2105263157894,
+                    "gpu2_throttled_share": 0.45614035087719296,
+                    "gpu2_util_mean_pct": 15.403508771929825,
+                    "host_busy_pct": 27.665641442413456,
+                    "idle_api_cores_before": 0.2907873999999538,
+                    "images_per_s": 8.286861409148809,
+                    "items_per_image": 1.634,
+                    "load_avg_1m": 13.11962890625,
+                    "request_p50_s": 12.00294151995331,
+                    "request_p95_s": 21.0797568412032,
+                    "stage_crop_mean_ms": 4.248377004116227,
+                    "stage_crop_seconds": 3.470924012362957,
+                    "stage_decode_mean_ms": 298.1119436128065,
+                    "stage_decode_seconds": 149.05597180640325,
+                    "stage_embed_mean_ms": 1933.0473104213822,
+                    "stage_embed_seconds": 1554.1700375787914,
+                    "stage_jpeg_encode_mean_ms": 13.564763808420048,
+                    "stage_jpeg_encode_seconds": 11.08241203147918,
+                    "stage_opensearch_write_mean_ms": 1017.1383831474296,
+                    "stage_opensearch_write_seconds": 808.6250146022066,
+                    "stage_resize_mean_ms": 11.653219172888894,
+                    "stage_resize_seconds": 3.4376996560022235,
+                    "triton_cpu_s_per_image": 0.022284363999999984,
+                    "triton_pe_image_encoder_infer_ms_per_image": 15.223555238,
+                    "triton_pe_image_encoder_mean_batch": 4.234726688102894,
+                    "triton_pe_image_encoder_queue_ms": 10.060076222636816,
+                    "triton_yolov11_small_trt_end2end_infer_ms_per_image": 1.153741408,
+                    "triton_yolov11_small_trt_end2end_mean_batch": 7.936507936507937,
+                    "triton_yolov11_small_trt_end2end_queue_ms": 0.743455492063492,
+                    "wall_s": 60.33647424681112
+                  },
+                  "gpu": {
+                    "0": {
+                      "mem_peak_mb": 16392.0,
+                      "samples": 57,
+                      "util_mean_pct": 0.0
+                    },
+                    "1": {
+                      "mem_peak_mb": 7572.0,
+                      "samples": 57,
+                      "util_mean_pct": 10.912280701754385
+                    },
+                    "2": {
+                      "mem_peak_mb": 14116.0,
+                      "samples": 57,
+                      "util_mean_pct": 15.403508771929825
+                    }
+                  },
+                  "host_busy_pct": 27.665641442413456,
+                  "load_average": [
+                    13.11962890625,
+                    11.0439453125,
+                    9.18212890625
+                  ],
+                  "mode": "batch",
+                  "rep": 2,
+                  "slug": "ac-batch-r2-224105",
+                  "stages": {
+                    "crop": {
+                      "bytes": 0.0,
+                      "calls": 817.0,
+                      "mean_ms": 4.248377004116227,
+                      "seconds": 3.470924012362957
+                    },
+                    "decode": {
+                      "bytes": 5211571077.0,
+                      "calls": 500.0,
+                      "mean_ms": 298.1119436128065,
+                      "seconds": 149.05597180640325
+                    },
+                    "embed": {
+                      "bytes": 1784208384.0,
+                      "calls": 804.0,
+                      "mean_ms": 1933.0473104213822,
+                      "seconds": 1554.1700375787914
+                    },
+                    "jpeg_encode": {
+                      "bytes": 384786646.0,
+                      "calls": 817.0,
+                      "mean_ms": 13.564763808420048,
+                      "seconds": 11.08241203147918
+                    },
+                    "opensearch_write": {
+                      "bytes": 0.0,
+                      "calls": 795.0,
+                      "mean_ms": 1017.1383831474296,
+                      "seconds": 808.6250146022066
+                    },
+                    "resize": {
+                      "bytes": 0.0,
+                      "calls": 295.0,
+                      "mean_ms": 11.653219172888894,
+                      "seconds": 3.4376996560022235
+                    }
+                  },
+                  "storage": {
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "images": 0,
+                    "indexes": {},
+                    "merge_rounds": 0,
+                    "total_bytes": 0,
+                    "vectors": 0
+                  },
+                  "triton": {
+                    "pe_image_encoder": {
+                      "batch_histogram": {
+                        "1": 59,
+                        "10": 3,
+                        "11": 2,
+                        "12": 2,
+                        "13": 1,
+                        "15": 2,
+                        "16": 7,
+                        "17": 2,
+                        "18": 2,
+                        "19": 1,
+                        "2": 51,
+                        "20": 1,
+                        "21": 1,
+                        "23": 1,
+                        "3": 46,
+                        "4": 91,
+                        "5": 8,
+                        "6": 6,
+                        "7": 9,
+                        "8": 13,
+                        "9": 3
+                      },
+                      "exec_infer_ms": 24.475169192926046,
+                      "exec_input_ms": 1.1899086720257235,
+                      "exec_output_ms": 6.440733935691318,
+                      "executions": 311,
+                      "inferences": 1317,
+                      "mean_batch": 4.234726688102894,
+                      "queue_ms_per_request": 10.060076222636816,
+                      "requests": 804
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "batch_histogram": {
+                        "4": 1,
+                        "8": 62
+                      },
+                      "exec_infer_ms": 9.156677841269842,
+                      "exec_input_ms": 10.155167698412699,
+                      "exec_output_ms": 0.7033216031746031,
+                      "executions": 63,
+                      "inferences": 500,
+                      "mean_batch": 7.936507936507937,
+                      "queue_ms_per_request": 0.743455492063492,
+                      "requests": 63
+                    }
+                  },
+                  "triton_wire_bytes": {
+                    "pe_image_encoder": {
+                      "request_bytes": 1784208384,
+                      "response_bytes": 5394432
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "request_bytes": 2457600000,
+                      "response_bytes": 3302000
+                    }
+                  }
+                },
+                {
+                  "attribution": {
+                    "foreign_active_share": 0.0,
+                    "foreign_sm_mean_pct": 0.0,
+                    "foreign_sm_peak_pct": 0,
+                    "own_sm_mean_pct": 14.488888888888889,
+                    "own_sm_peak_pct": 40.0,
+                    "samples": 45
+                  },
+                  "attribution_by_gpu": {
+                    "2": {
+                      "foreign_active_share": 0.0,
+                      "foreign_sm_mean_pct": 0.0,
+                      "foreign_sm_peak_pct": 0,
+                      "own_sm_mean_pct": 14.488888888888889,
+                      "own_sm_peak_pct": 40.0,
+                      "samples": 45
+                    }
+                  },
+                  "clocks_by_gpu": {
+                    "0": {
+                      "power_w_max": 28.37,
+                      "power_w_mean": 22.4078,
+                      "samples": 50,
+                      "sm_mhz_mean": 210.0,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.04
+                    },
+                    "1": {
+                      "power_w_max": 22.53,
+                      "power_w_mean": 17.2062,
+                      "samples": 50,
+                      "sm_mhz_mean": 210.0,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.0
+                    },
+                    "2": {
+                      "power_w_max": 194.28,
+                      "power_w_mean": 127.2464,
+                      "samples": 50,
+                      "sm_mhz_mean": 1697.4,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.54
+                    }
+                  },
+                  "cluster": {
+                    "stage_durations": {},
+                    "status": "skipped",
+                    "wall_s": 0.0
+                  },
+                  "flat": {
+                    "api_cpu_s_per_image": 1.1285055560000001,
+                    "busy_pe_image_encoder": 0.14163116457254127,
+                    "busy_total": 0.15260279551272438,
+                    "busy_yolov11_small_trt_end2end": 0.010971630940183096,
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "client_received_bytes_per_image": 635.67,
+                    "client_sent_bytes_per_image": 75.84,
+                    "cluster_train_wall_s": 0.0,
+                    "duplicates": 0.0,
+                    "failed": 0.0,
+                    "gpu0_mem_peak_mb": 16392.0,
+                    "gpu0_sm_mhz_mean": 210.0,
+                    "gpu0_throttled_share": 0.04,
+                    "gpu0_util_mean_pct": 0.0,
+                    "gpu1_mem_peak_mb": 6785.0,
+                    "gpu1_sm_mhz_mean": 210.0,
+                    "gpu1_throttled_share": 0.0,
+                    "gpu1_util_mean_pct": 0.0,
+                    "gpu2_foreign_sm_mean_pct": 0.0,
+                    "gpu2_mem_peak_mb": 14116.0,
+                    "gpu2_own_sm_mean_pct": 14.488888888888889,
+                    "gpu2_sm_mhz_mean": 1697.4,
+                    "gpu2_throttled_share": 0.54,
+                    "gpu2_util_mean_pct": 16.92156862745098,
+                    "host_busy_pct": 29.344648861580957,
+                    "idle_api_cores_before": 0.2616356000000451,
+                    "images_per_s": 9.312109195631393,
+                    "items_per_image": 1.634,
+                    "load_avg_1m": 13.216796875,
+                    "request_p50_s": 10.727890838868916,
+                    "request_p95_s": 18.67465686928481,
+                    "stage_crop_mean_ms": 4.234539400763363,
+                    "stage_crop_seconds": 3.4596186904236674,
+                    "stage_decode_mean_ms": 303.4941352587193,
+                    "stage_decode_seconds": 151.74706762935966,
+                    "stage_embed_mean_ms": 1883.6131935188573,
+                    "stage_embed_seconds": 1514.4250075891614,
+                    "stage_jpeg_encode_mean_ms": 13.494509143465297,
+                    "stage_jpeg_encode_seconds": 11.025013970211148,
+                    "stage_opensearch_write_mean_ms": 882.7224515308186,
+                    "stage_opensearch_write_seconds": 701.7643489670008,
+                    "stage_resize_mean_ms": 12.020552922355927,
+                    "stage_resize_seconds": 3.5460631120949984,
+                    "triton_cpu_s_per_image": 0.02224349200000006,
+                    "triton_pe_image_encoder_infer_ms_per_image": 15.209353928000002,
+                    "triton_pe_image_encoder_mean_batch": 4.303921568627451,
+                    "triton_pe_image_encoder_queue_ms": 9.603905656716417,
+                    "triton_yolov11_small_trt_end2end_infer_ms_per_image": 1.1782111560000001,
+                    "triton_yolov11_small_trt_end2end_mean_batch": 7.936507936507937,
+                    "triton_yolov11_small_trt_end2end_queue_ms": 0.6623961746031746,
+                    "wall_s": 53.693528447300196
+                  },
+                  "gpu": {
+                    "0": {
+                      "mem_peak_mb": 16392.0,
+                      "samples": 51,
+                      "util_mean_pct": 0.0
+                    },
+                    "1": {
+                      "mem_peak_mb": 6785.0,
+                      "samples": 51,
+                      "util_mean_pct": 0.0
+                    },
+                    "2": {
+                      "mem_peak_mb": 14116.0,
+                      "samples": 51,
+                      "util_mean_pct": 16.92156862745098
+                    }
+                  },
+                  "host_busy_pct": 29.344648861580957,
+                  "load_average": [
+                    13.216796875,
+                    11.41455078125,
+                    9.4384765625
+                  ],
+                  "mode": "batch",
+                  "rep": 3,
+                  "slug": "ac-batch-r3-224227",
+                  "stages": {
+                    "crop": {
+                      "bytes": 0.0,
+                      "calls": 817.0,
+                      "mean_ms": 4.234539400763363,
+                      "seconds": 3.4596186904236674
+                    },
+                    "decode": {
+                      "bytes": 5211571077.0,
+                      "calls": 500.0,
+                      "mean_ms": 303.4941352587193,
+                      "seconds": 151.74706762935966
+                    },
+                    "embed": {
+                      "bytes": 1784208384.0,
+                      "calls": 804.0,
+                      "mean_ms": 1883.6131935188573,
+                      "seconds": 1514.4250075891614
+                    },
+                    "jpeg_encode": {
+                      "bytes": 384786601.0,
+                      "calls": 817.0,
+                      "mean_ms": 13.494509143465297,
+                      "seconds": 11.025013970211148
+                    },
+                    "opensearch_write": {
+                      "bytes": 0.0,
+                      "calls": 795.0,
+                      "mean_ms": 882.7224515308186,
+                      "seconds": 701.7643489670008
+                    },
+                    "resize": {
+                      "bytes": 0.0,
+                      "calls": 295.0,
+                      "mean_ms": 12.020552922355927,
+                      "seconds": 3.5460631120949984
+                    }
+                  },
+                  "storage": {
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "images": 0,
+                    "indexes": {},
+                    "merge_rounds": 0,
+                    "total_bytes": 0,
+                    "vectors": 0
+                  },
+                  "triton": {
+                    "pe_image_encoder": {
+                      "batch_histogram": {
+                        "1": 57,
+                        "10": 4,
+                        "13": 3,
+                        "14": 2,
+                        "15": 2,
+                        "16": 6,
+                        "17": 2,
+                        "18": 2,
+                        "19": 2,
+                        "2": 42,
+                        "20": 1,
+                        "23": 1,
+                        "3": 45,
+                        "4": 92,
+                        "5": 17,
+                        "6": 7,
+                        "7": 6,
+                        "8": 15
+                      },
+                      "exec_infer_ms": 24.851885503267976,
+                      "exec_input_ms": 1.2320878267973856,
+                      "exec_output_ms": 7.030947326797385,
+                      "executions": 306,
+                      "inferences": 1317,
+                      "mean_batch": 4.303921568627451,
+                      "queue_ms_per_request": 9.603905656716417,
+                      "requests": 804
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "batch_histogram": {
+                        "4": 1,
+                        "8": 62
+                      },
+                      "exec_infer_ms": 9.350882190476192,
+                      "exec_input_ms": 10.749666222222222,
+                      "exec_output_ms": 0.6371499047619048,
+                      "executions": 63,
+                      "inferences": 500,
+                      "mean_batch": 7.936507936507937,
+                      "queue_ms_per_request": 0.6623961746031746,
+                      "requests": 63
+                    }
+                  },
+                  "triton_wire_bytes": {
+                    "pe_image_encoder": {
+                      "request_bytes": 1784208384,
+                      "response_bytes": 5394432
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "request_bytes": 2457600000,
+                      "response_bytes": 3302000
+                    }
+                  }
+                }
+              ],
+              "summary": {
+                "api_cpu_s_per_image": {
+                  "max": 1.1307204819999996,
+                  "mean": 1.124647716,
+                  "median": 1.1285055560000001,
+                  "min": 1.1147171099999995,
+                  "n": 3,
+                  "spread_pct": 1.418103075781412
+                },
+                "busy_pe_image_encoder": {
+                  "max": 0.14163116457254127,
+                  "mean": 0.13347160623799006,
+                  "median": 0.13262816172960157,
+                  "min": 0.1261554924118274,
+                  "n": 3,
+                  "spread_pct": 11.668466152961694
+                },
+                "busy_total": {
+                  "max": 0.15260279551272438,
+                  "mean": 0.14375176795600722,
+                  "median": 0.14293612079337772,
+                  "min": 0.13571638756191962,
+                  "n": 3,
+                  "spread_pct": 11.813954273472289
+                },
+                "busy_yolov11_small_trt_end2end": {
+                  "max": 0.010971630940183096,
+                  "mean": 0.010280161718017157,
+                  "median": 0.010307959063776163,
+                  "min": 0.009560895150092211,
+                  "n": 3,
+                  "spread_pct": 13.685888558176746
+                },
+                "bytes_per_image": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "bytes_per_vector": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "client_received_bytes_per_image": {
+                  "max": 635.67,
+                  "mean": 629.51,
+                  "median": 629.52,
+                  "min": 623.34,
+                  "n": 3,
+                  "spread_pct": 1.958635150590915
+                },
+                "client_sent_bytes_per_image": {
+                  "max": 75.84,
+                  "mean": 75.84,
+                  "median": 75.84,
+                  "min": 75.84,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "cluster_train_wall_s": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "duplicates": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "failed": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu0_mem_peak_mb": {
+                  "max": 16392.0,
+                  "mean": 16392.0,
+                  "median": 16392.0,
+                  "min": 16392.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu0_sm_mhz_mean": {
+                  "max": 210.0,
+                  "mean": 210.0,
+                  "median": 210.0,
+                  "min": 210.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu0_throttled_share": {
+                  "max": 0.04,
+                  "mean": 0.013333333333333334,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu0_util_mean_pct": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu1_mem_peak_mb": {
+                  "max": 7572.0,
+                  "mean": 7189.0,
+                  "median": 7210.0,
+                  "min": 6785.0,
+                  "n": 3,
+                  "spread_pct": 10.915395284327323
+                },
+                "gpu1_sm_mhz_mean": {
+                  "max": 1498.6842105263158,
+                  "mean": 705.9502923976607,
+                  "median": 409.1666666666667,
+                  "min": 210.0,
+                  "n": 3,
+                  "spread_pct": 314.95337120806084
+                },
+                "gpu1_throttled_share": {
+                  "max": 0.3508771929824561,
+                  "mean": 0.12930474333983105,
+                  "median": 0.037037037037037035,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 947.3684210526314
+                },
+                "gpu1_util_mean_pct": {
+                  "max": 10.912280701754385,
+                  "mean": 3.946068875893437,
+                  "median": 0.9259259259259259,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 1178.5263157894735
+                },
+                "gpu2_foreign_sm_mean_pct": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu2_mem_peak_mb": {
+                  "max": 14116.0,
+                  "mean": 14116.0,
+                  "median": 14116.0,
+                  "min": 14116.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu2_own_sm_mean_pct": {
+                  "max": 14.488888888888889,
+                  "mean": 13.488210042927024,
+                  "median": 13.428571428571429,
+                  "min": 12.547169811320755,
+                  "n": 3,
+                  "spread_pct": 14.459610152103124
+                },
+                "gpu2_sm_mhz_mean": {
+                  "max": 1714.2105263157894,
+                  "mean": 1696.462768031189,
+                  "median": 1697.4,
+                  "min": 1677.7777777777778,
+                  "n": 3,
+                  "spread_pct": 2.146385562508044
+                },
+                "gpu2_throttled_share": {
+                  "max": 0.54,
+                  "mean": 0.49254061078622485,
+                  "median": 0.48148148148148145,
+                  "min": 0.45614035087719296,
+                  "n": 3,
+                  "spread_pct": 17.41700404858301
+                },
+                "gpu2_util_mean_pct": {
+                  "max": 16.92156862745098,
+                  "mean": 14.410828268929405,
+                  "median": 15.403508771929825,
+                  "min": 10.907407407407407,
+                  "n": 3,
+                  "spread_pct": 39.04409903672935
+                },
+                "host_busy_pct": {
+                  "max": 29.344648861580957,
+                  "mean": 28.557735628440344,
+                  "median": 28.662916581326623,
+                  "min": 27.665641442413456,
+                  "n": 3,
+                  "spread_pct": 5.857768920352454
+                },
+                "idle_api_cores_before": {
+                  "max": 0.2907873999999538,
+                  "mean": 0.2712186666666791,
+                  "median": 0.2616356000000451,
+                  "min": 0.26123300000003835,
+                  "n": 3,
+                  "spread_pct": 11.296016291326694
+                },
+                "images_per_s": {
+                  "max": 9.312109195631393,
+                  "mean": 8.75985605511844,
+                  "median": 8.680597560575121,
+                  "min": 8.286861409148809,
+                  "n": 3,
+                  "spread_pct": 11.81079734808784
+                },
+                "items_per_image": {
+                  "max": 1.634,
+                  "mean": 1.6339999999999997,
+                  "median": 1.634,
+                  "min": 1.634,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "load_avg_1m": {
+                  "max": 13.45751953125,
+                  "mean": 13.2646484375,
+                  "median": 13.216796875,
+                  "min": 13.11962890625,
+                  "n": 3,
+                  "spread_pct": 2.5565243091473326
+                },
+                "request_p50_s": {
+                  "max": 12.00294151995331,
+                  "mean": 10.918723172973841,
+                  "median": 10.727890838868916,
+                  "min": 10.025337160099298,
+                  "n": 3,
+                  "spread_pct": 18.43423268895342
+                },
+                "request_p95_s": {
+                  "max": 27.075382519047707,
+                  "mean": 22.27659874317857,
+                  "median": 21.0797568412032,
+                  "min": 18.67465686928481,
+                  "n": 3,
+                  "spread_pct": 39.85209940060863
+                },
+                "stage_crop_mean_ms": {
+                  "max": 4.248377004116227,
+                  "mean": 4.129462008889246,
+                  "median": 4.234539400763363,
+                  "min": 3.9054696217881495,
+                  "n": 3,
+                  "spread_pct": 8.09786732097147
+                },
+                "stage_crop_seconds": {
+                  "max": 3.470924012362957,
+                  "mean": 3.3737704612625143,
+                  "median": 3.4596186904236674,
+                  "min": 3.190768681000918,
+                  "n": 3,
+                  "spread_pct": 8.097867320971456
+                },
+                "stage_decode_mean_ms": {
+                  "max": 303.4941352587193,
+                  "mean": 300.8888316070661,
+                  "median": 301.06041594967246,
+                  "min": 298.1119436128065,
+                  "n": 3,
+                  "spread_pct": 1.7877447053061115
+                },
+                "stage_decode_seconds": {
+                  "max": 151.74706762935966,
+                  "mean": 150.44441580353305,
+                  "median": 150.53020797483623,
+                  "min": 149.05597180640325,
+                  "n": 3,
+                  "spread_pct": 1.7877447053061115
+                },
+                "stage_embed_mean_ms": {
+                  "max": 1976.4767564023468,
+                  "mean": 1931.0457534475288,
+                  "median": 1933.0473104213822,
+                  "min": 1883.6131935188573,
+                  "n": 3,
+                  "spread_pct": 4.803998452745904
+                },
+                "stage_embed_seconds": {
+                  "max": 1589.087312147487,
+                  "mean": 1552.5607857718132,
+                  "median": 1554.1700375787914,
+                  "min": 1514.4250075891614,
+                  "n": 3,
+                  "spread_pct": 4.803998452745903
+                },
+                "stage_jpeg_encode_mean_ms": {
+                  "max": 13.957552018494434,
+                  "mean": 13.672274990126594,
+                  "median": 13.564763808420048,
+                  "min": 13.494509143465297,
+                  "n": 3,
+                  "spread_pct": 3.413571231824269
+                },
+                "stage_jpeg_encode_seconds": {
+                  "max": 11.403319999109954,
+                  "mean": 11.170248666933427,
+                  "median": 11.08241203147918,
+                  "min": 11.025013970211148,
+                  "n": 3,
+                  "spread_pct": 3.4135712318242737
+                },
+                "stage_opensearch_write_mean_ms": {
+                  "max": 1017.1383831474296,
+                  "mean": 913.498627274752,
+                  "median": 882.7224515308186,
+                  "min": 840.6350471460079,
+                  "n": 3,
+                  "spread_pct": 19.995337797892123
+                },
+                "stage_opensearch_write_seconds": {
+                  "max": 808.6250146022066,
+                  "mean": 726.231408683428,
+                  "median": 701.7643489670008,
+                  "min": 668.3048624810763,
+                  "n": 3,
+                  "spread_pct": 19.995337797892134
+                },
+                "stage_resize_mean_ms": {
+                  "max": 12.020552922355927,
+                  "mean": 11.76761664281794,
+                  "median": 11.653219172888894,
+                  "min": 11.629077833208997,
+                  "n": 3,
+                  "spread_pct": 3.3593729195250424
+                },
+                "stage_resize_seconds": {
+                  "max": 3.5460631120949984,
+                  "mean": 3.471446909631292,
+                  "median": 3.4376996560022235,
+                  "min": 3.4305779607966542,
+                  "n": 3,
+                  "spread_pct": 3.3593729195250397
+                },
+                "triton_cpu_s_per_image": {
+                  "max": 0.02273788000000002,
+                  "mean": 0.02242191200000002,
+                  "median": 0.022284363999999984,
+                  "min": 0.02224349200000006,
+                  "n": 3,
+                  "spread_pct": 2.218542113205298
+                },
+                "triton_pe_image_encoder_infer_ms_per_image": {
+                  "max": 15.278690297999999,
+                  "mean": 15.237199821333334,
+                  "median": 15.223555238,
+                  "min": 15.209353928000002,
+                  "n": 3,
+                  "spread_pct": 0.4554545171348936
+                },
+                "triton_pe_image_encoder_mean_batch": {
+                  "max": 4.303921568627451,
+                  "mean": 4.239866879227575,
+                  "median": 4.234726688102894,
+                  "min": 4.180952380952381,
+                  "n": 3,
+                  "spread_pct": 2.9038281979458347
+                },
+                "triton_pe_image_encoder_queue_ms": {
+                  "max": 10.060076222636816,
+                  "mean": 9.806994663349917,
+                  "median": 9.757002110696519,
+                  "min": 9.603905656716417,
+                  "n": 3,
+                  "spread_pct": 4.6753148225755
+                },
+                "triton_yolov11_small_trt_end2end_infer_ms_per_image": {
+                  "max": 1.187471138,
+                  "mean": 1.173141234,
+                  "median": 1.1782111560000001,
+                  "min": 1.153741408,
+                  "n": 3,
+                  "spread_pct": 2.8627915996409152
+                },
+                "triton_yolov11_small_trt_end2end_mean_batch": {
+                  "max": 7.936507936507937,
+                  "mean": 7.936507936507937,
+                  "median": 7.936507936507937,
+                  "min": 7.936507936507937,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "triton_yolov11_small_trt_end2end_queue_ms": {
+                  "max": 0.743455492063492,
+                  "mean": 0.6852181746031746,
+                  "median": 0.6623961746031746,
+                  "min": 0.6498028571428571,
+                  "n": 3,
+                  "spread_pct": 14.138462526106816
+                },
+                "wall_s": {
+                  "max": 60.33647424681112,
+                  "mean": 57.209907990104206,
+                  "median": 57.59972127620131,
+                  "min": 53.693528447300196,
+                  "n": 3,
+                  "spread_pct": 11.532947820453458
+                }
+              }
+            }
+          },
+          "b8_c32": {
+            "batch": {
+              "runs": [
+                {
+                  "attribution": {
+                    "foreign_active_share": 0.0,
+                    "foreign_sm_mean_pct": 0.0,
+                    "foreign_sm_peak_pct": 0,
+                    "own_sm_mean_pct": 16.62162162162162,
+                    "own_sm_peak_pct": 46.0,
+                    "samples": 37
+                  },
+                  "attribution_by_gpu": {
+                    "2": {
+                      "foreign_active_share": 0.0,
+                      "foreign_sm_mean_pct": 0.0,
+                      "foreign_sm_peak_pct": 0,
+                      "own_sm_mean_pct": 16.62162162162162,
+                      "own_sm_peak_pct": 46.0,
+                      "samples": 37
+                    }
+                  },
+                  "clocks_by_gpu": {
+                    "0": {
+                      "power_w_max": 27.94,
+                      "power_w_mean": 22.544146341463414,
+                      "samples": 41,
+                      "sm_mhz_mean": 210.0,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.0
+                    },
+                    "1": {
+                      "power_w_max": 22.51,
+                      "power_w_mean": 17.13780487804878,
+                      "samples": 41,
+                      "sm_mhz_mean": 210.0,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.0
+                    },
+                    "2": {
+                      "power_w_max": 263.16,
+                      "power_w_mean": 131.54658536585364,
+                      "samples": 41,
+                      "sm_mhz_mean": 1681.0975609756097,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.7073170731707317
+                    }
+                  },
+                  "cluster": {
+                    "stage_durations": {},
+                    "status": "skipped",
+                    "wall_s": 0.0
+                  },
+                  "flat": {
+                    "api_cpu_s_per_image": 1.1682974159999995,
+                    "busy_pe_image_encoder": 0.17004581622572493,
+                    "busy_total": 0.18035989718445034,
+                    "busy_yolov11_small_trt_end2end": 0.010314080958725397,
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "client_received_bytes_per_image": 641.892,
+                    "client_sent_bytes_per_image": 75.84,
+                    "cluster_train_wall_s": 0.0,
+                    "duplicates": 0.0,
+                    "failed": 0.0,
+                    "gpu0_mem_peak_mb": 16392.0,
+                    "gpu0_sm_mhz_mean": 210.0,
+                    "gpu0_throttled_share": 0.0,
+                    "gpu0_util_mean_pct": 0.0,
+                    "gpu1_mem_peak_mb": 6785.0,
+                    "gpu1_sm_mhz_mean": 210.0,
+                    "gpu1_throttled_share": 0.0,
+                    "gpu1_util_mean_pct": 0.023809523809523808,
+                    "gpu2_foreign_sm_mean_pct": 0.0,
+                    "gpu2_mem_peak_mb": 14116.0,
+                    "gpu2_own_sm_mean_pct": 16.62162162162162,
+                    "gpu2_sm_mhz_mean": 1681.0975609756097,
+                    "gpu2_throttled_share": 0.7073170731707317,
+                    "gpu2_util_mean_pct": 17.476190476190474,
+                    "host_busy_pct": 34.086186647393625,
+                    "idle_api_cores_before": 0.20335540000005495,
+                    "images_per_s": 11.282998923278884,
+                    "items_per_image": 1.634,
+                    "load_avg_1m": 12.99951171875,
+                    "request_p50_s": 16.32088670413941,
+                    "request_p95_s": 35.97266818988137,
+                    "stage_crop_mean_ms": 4.730723712210301,
+                    "stage_crop_seconds": 3.8650012728758156,
+                    "stage_decode_mean_ms": 307.7427226565778,
+                    "stage_decode_seconds": 153.8713613282889,
+                    "stage_embed_mean_ms": 2884.7385072560555,
+                    "stage_embed_seconds": 2319.3297598338686,
+                    "stage_jpeg_encode_mean_ms": 13.288546543946829,
+                    "stage_jpeg_encode_seconds": 10.85674252640456,
+                    "stage_opensearch_write_mean_ms": 1399.946389538851,
+                    "stage_opensearch_write_seconds": 1112.9573796833865,
+                    "stage_resize_mean_ms": 11.610116432341984,
+                    "stage_resize_seconds": 3.424984347540885,
+                    "triton_cpu_s_per_image": 0.021848658,
+                    "triton_pe_image_encoder_infer_ms_per_image": 15.070976908,
+                    "triton_pe_image_encoder_mean_batch": 4.541379310344827,
+                    "triton_pe_image_encoder_queue_ms": 13.804188837064677,
+                    "triton_yolov11_small_trt_end2end_infer_ms_per_image": 0.9141258480000001,
+                    "triton_yolov11_small_trt_end2end_mean_batch": 7.936507936507937,
+                    "triton_yolov11_small_trt_end2end_queue_ms": 1.0108820952380952,
+                    "wall_s": 44.31445960421115
+                  },
+                  "gpu": {
+                    "0": {
+                      "mem_peak_mb": 16392.0,
+                      "samples": 42,
+                      "util_mean_pct": 0.0
+                    },
+                    "1": {
+                      "mem_peak_mb": 6785.0,
+                      "samples": 42,
+                      "util_mean_pct": 0.023809523809523808
+                    },
+                    "2": {
+                      "mem_peak_mb": 14116.0,
+                      "samples": 42,
+                      "util_mean_pct": 17.476190476190474
+                    }
+                  },
+                  "host_busy_pct": 34.086186647393625,
+                  "load_average": [
+                    12.99951171875,
+                    11.45556640625,
+                    9.59375
+                  ],
+                  "mode": "batch",
+                  "rep": 1,
+                  "slug": "ac-batch-r1-224351",
+                  "stages": {
+                    "crop": {
+                      "bytes": 0.0,
+                      "calls": 817.0,
+                      "mean_ms": 4.730723712210301,
+                      "seconds": 3.8650012728758156
+                    },
+                    "decode": {
+                      "bytes": 5211571077.0,
+                      "calls": 500.0,
+                      "mean_ms": 307.7427226565778,
+                      "seconds": 153.8713613282889
+                    },
+                    "embed": {
+                      "bytes": 1784208384.0,
+                      "calls": 804.0,
+                      "mean_ms": 2884.7385072560555,
+                      "seconds": 2319.3297598338686
+                    },
+                    "jpeg_encode": {
+                      "bytes": 384781916.0,
+                      "calls": 817.0,
+                      "mean_ms": 13.288546543946829,
+                      "seconds": 10.85674252640456
+                    },
+                    "opensearch_write": {
+                      "bytes": 0.0,
+                      "calls": 795.0,
+                      "mean_ms": 1399.946389538851,
+                      "seconds": 1112.9573796833865
+                    },
+                    "resize": {
+                      "bytes": 0.0,
+                      "calls": 295.0,
+                      "mean_ms": 11.610116432341984,
+                      "seconds": 3.424984347540885
+                    }
+                  },
+                  "storage": {
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "images": 0,
+                    "indexes": {},
+                    "merge_rounds": 0,
+                    "total_bytes": 0,
+                    "vectors": 0
+                  },
+                  "triton": {
+                    "pe_image_encoder": {
+                      "batch_histogram": {
+                        "1": 49,
+                        "11": 4,
+                        "12": 2,
+                        "13": 3,
+                        "14": 2,
+                        "15": 2,
+                        "16": 9,
+                        "17": 1,
+                        "19": 3,
+                        "2": 40,
+                        "3": 37,
+                        "31": 1,
+                        "4": 98,
+                        "5": 9,
+                        "6": 4,
+                        "7": 9,
+                        "8": 14,
+                        "9": 3
+                      },
+                      "exec_infer_ms": 25.984442944827588,
+                      "exec_input_ms": 1.0766247655172414,
+                      "exec_output_ms": 10.064761293103448,
+                      "executions": 290,
+                      "inferences": 1317,
+                      "mean_batch": 4.541379310344827,
+                      "queue_ms_per_request": 13.804188837064677,
+                      "requests": 804
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "batch_histogram": {
+                        "4": 1,
+                        "8": 62
+                      },
+                      "exec_infer_ms": 7.254967047619048,
+                      "exec_input_ms": 10.27448338095238,
+                      "exec_output_ms": 0.5602077936507937,
+                      "executions": 63,
+                      "inferences": 500,
+                      "mean_batch": 7.936507936507937,
+                      "queue_ms_per_request": 1.0108820952380952,
+                      "requests": 63
+                    }
+                  },
+                  "triton_wire_bytes": {
+                    "pe_image_encoder": {
+                      "request_bytes": 1784208384,
+                      "response_bytes": 5394432
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "request_bytes": 2457600000,
+                      "response_bytes": 3302000
+                    }
+                  }
+                },
+                {
+                  "attribution": {
+                    "foreign_active_share": 0.0,
+                    "foreign_sm_mean_pct": 0.0,
+                    "foreign_sm_peak_pct": 0,
+                    "own_sm_mean_pct": 15.975609756097562,
+                    "own_sm_peak_pct": 59.0,
+                    "samples": 41
+                  },
+                  "attribution_by_gpu": {
+                    "2": {
+                      "foreign_active_share": 0.0,
+                      "foreign_sm_mean_pct": 0.0,
+                      "foreign_sm_peak_pct": 0,
+                      "own_sm_mean_pct": 15.975609756097562,
+                      "own_sm_peak_pct": 59.0,
+                      "samples": 41
+                    }
+                  },
+                  "clocks_by_gpu": {
+                    "0": {
+                      "power_w_max": 28.32,
+                      "power_w_mean": 22.565652173913044,
+                      "samples": 46,
+                      "sm_mhz_mean": 210.0,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.021739130434782608
+                    },
+                    "1": {
+                      "power_w_max": 22.53,
+                      "power_w_mean": 17.35217391304348,
+                      "samples": 46,
+                      "sm_mhz_mean": 210.0,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.021739130434782608
+                    },
+                    "2": {
+                      "power_w_max": 264.47,
+                      "power_w_mean": 128.08434782608697,
+                      "samples": 46,
+                      "sm_mhz_mean": 1699.5652173913043,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.4782608695652174
+                    }
+                  },
+                  "cluster": {
+                    "stage_durations": {},
+                    "status": "skipped",
+                    "wall_s": 0.0
+                  },
+                  "flat": {
+                    "api_cpu_s_per_image": 1.2134901339999997,
+                    "busy_pe_image_encoder": 0.1564586763324174,
+                    "busy_total": 0.1667544668609846,
+                    "busy_yolov11_small_trt_end2end": 0.010295790528567226,
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "client_received_bytes_per_image": 648.056,
+                    "client_sent_bytes_per_image": 75.84,
+                    "cluster_train_wall_s": 0.0,
+                    "duplicates": 0.0,
+                    "failed": 0.0,
+                    "gpu0_mem_peak_mb": 16392.0,
+                    "gpu0_sm_mhz_mean": 210.0,
+                    "gpu0_throttled_share": 0.021739130434782608,
+                    "gpu0_util_mean_pct": 0.0,
+                    "gpu1_mem_peak_mb": 6785.0,
+                    "gpu1_sm_mhz_mean": 210.0,
+                    "gpu1_throttled_share": 0.021739130434782608,
+                    "gpu1_util_mean_pct": 0.0,
+                    "gpu2_foreign_sm_mean_pct": 0.0,
+                    "gpu2_mem_peak_mb": 14116.0,
+                    "gpu2_own_sm_mean_pct": 15.975609756097562,
+                    "gpu2_sm_mhz_mean": 1699.5652173913043,
+                    "gpu2_throttled_share": 0.4782608695652174,
+                    "gpu2_util_mean_pct": 16.217391304347824,
+                    "host_busy_pct": 32.40837066141638,
+                    "idle_api_cores_before": 0.2587035999999898,
+                    "images_per_s": 10.200165729283697,
+                    "items_per_image": 1.634,
+                    "load_avg_1m": 13.107421875,
+                    "request_p50_s": 13.992908483371139,
+                    "request_p95_s": 33.29979545939714,
+                    "stage_crop_mean_ms": 5.16083694064267,
+                    "stage_crop_seconds": 4.216403780505061,
+                    "stage_decode_mean_ms": 315.0249618617818,
+                    "stage_decode_seconds": 157.5124809308909,
+                    "stage_embed_mean_ms": 2636.6803544140257,
+                    "stage_embed_seconds": 2119.891004948877,
+                    "stage_jpeg_encode_mean_ms": 13.892312630477521,
+                    "stage_jpeg_encode_seconds": 11.350019419100136,
+                    "stage_opensearch_write_mean_ms": 1105.1254999320136,
+                    "stage_opensearch_write_seconds": 878.5747724459507,
+                    "stage_resize_mean_ms": 12.721591179211766,
+                    "stage_resize_seconds": 3.752869397867471,
+                    "triton_cpu_s_per_image": 0.0218281639999999,
+                    "triton_pe_image_encoder_infer_ms_per_image": 15.33883669,
+                    "triton_pe_image_encoder_mean_batch": 4.346534653465347,
+                    "triton_pe_image_encoder_queue_ms": 14.80934115920398,
+                    "triton_yolov11_small_trt_end2end_infer_ms_per_image": 1.009374828,
+                    "triton_yolov11_small_trt_end2end_mean_batch": 7.936507936507937,
+                    "triton_yolov11_small_trt_end2end_queue_ms": 0.8975583015873017,
+                    "wall_s": 49.01881138700992
+                  },
+                  "gpu": {
+                    "0": {
+                      "mem_peak_mb": 16392.0,
+                      "samples": 46,
+                      "util_mean_pct": 0.0
+                    },
+                    "1": {
+                      "mem_peak_mb": 6785.0,
+                      "samples": 46,
+                      "util_mean_pct": 0.0
+                    },
+                    "2": {
+                      "mem_peak_mb": 14116.0,
+                      "samples": 46,
+                      "util_mean_pct": 16.217391304347824
+                    }
+                  },
+                  "host_busy_pct": 32.40837066141638,
+                  "load_average": [
+                    13.107421875,
+                    11.845703125,
+                    9.86279296875
+                  ],
+                  "mode": "batch",
+                  "rep": 2,
+                  "slug": "ac-batch-r2-224457",
+                  "stages": {
+                    "crop": {
+                      "bytes": 0.0,
+                      "calls": 817.0,
+                      "mean_ms": 5.16083694064267,
+                      "seconds": 4.216403780505061
+                    },
+                    "decode": {
+                      "bytes": 5211571077.0,
+                      "calls": 500.0,
+                      "mean_ms": 315.0249618617818,
+                      "seconds": 157.5124809308909
+                    },
+                    "embed": {
+                      "bytes": 1784208384.0,
+                      "calls": 804.0,
+                      "mean_ms": 2636.6803544140257,
+                      "seconds": 2119.891004948877
+                    },
+                    "jpeg_encode": {
+                      "bytes": 384781735.0,
+                      "calls": 817.0,
+                      "mean_ms": 13.892312630477521,
+                      "seconds": 11.350019419100136
+                    },
+                    "opensearch_write": {
+                      "bytes": 0.0,
+                      "calls": 795.0,
+                      "mean_ms": 1105.1254999320136,
+                      "seconds": 878.5747724459507
+                    },
+                    "resize": {
+                      "bytes": 0.0,
+                      "calls": 295.0,
+                      "mean_ms": 12.721591179211766,
+                      "seconds": 3.752869397867471
+                    }
+                  },
+                  "storage": {
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "images": 0,
+                    "indexes": {},
+                    "merge_rounds": 0,
+                    "total_bytes": 0,
+                    "vectors": 0
+                  },
+                  "triton": {
+                    "pe_image_encoder": {
+                      "batch_histogram": {
+                        "1": 65,
+                        "10": 4,
+                        "11": 1,
+                        "12": 1,
+                        "13": 6,
+                        "14": 1,
+                        "15": 2,
+                        "16": 7,
+                        "17": 2,
+                        "18": 1,
+                        "19": 1,
+                        "2": 48,
+                        "21": 1,
+                        "26": 1,
+                        "28": 1,
+                        "3": 36,
+                        "4": 89,
+                        "5": 7,
+                        "6": 7,
+                        "7": 6,
+                        "8": 14,
+                        "9": 2
+                      },
+                      "exec_infer_ms": 25.311611699669967,
+                      "exec_input_ms": 1.0043948778877887,
+                      "exec_output_ms": 10.997328689768976,
+                      "executions": 303,
+                      "inferences": 1317,
+                      "mean_batch": 4.346534653465347,
+                      "queue_ms_per_request": 14.80934115920398,
+                      "requests": 804
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "batch_histogram": {
+                        "4": 1,
+                        "8": 62
+                      },
+                      "exec_infer_ms": 8.010911333333333,
+                      "exec_input_ms": 11.301434095238095,
+                      "exec_output_ms": 0.5491667142857143,
+                      "executions": 63,
+                      "inferences": 500,
+                      "mean_batch": 7.936507936507937,
+                      "queue_ms_per_request": 0.8975583015873017,
+                      "requests": 63
+                    }
+                  },
+                  "triton_wire_bytes": {
+                    "pe_image_encoder": {
+                      "request_bytes": 1784208384,
+                      "response_bytes": 5394432
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "request_bytes": 2457600000,
+                      "response_bytes": 3302000
+                    }
+                  }
+                },
+                {
+                  "attribution": {
+                    "foreign_active_share": 0.0,
+                    "foreign_sm_mean_pct": 0.0,
+                    "foreign_sm_peak_pct": 0,
+                    "own_sm_mean_pct": 15.615384615384615,
+                    "own_sm_peak_pct": 37.0,
+                    "samples": 39
+                  },
+                  "attribution_by_gpu": {
+                    "2": {
+                      "foreign_active_share": 0.0,
+                      "foreign_sm_mean_pct": 0.0,
+                      "foreign_sm_peak_pct": 0,
+                      "own_sm_mean_pct": 15.615384615384615,
+                      "own_sm_peak_pct": 37.0,
+                      "samples": 39
+                    }
+                  },
+                  "clocks_by_gpu": {
+                    "0": {
+                      "power_w_max": 28.09,
+                      "power_w_mean": 22.32581395348837,
+                      "samples": 43,
+                      "sm_mhz_mean": 210.0,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.023255813953488372
+                    },
+                    "1": {
+                      "power_w_max": 21.98,
+                      "power_w_mean": 16.956511627906977,
+                      "samples": 43,
+                      "sm_mhz_mean": 210.0,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.0
+                    },
+                    "2": {
+                      "power_w_max": 210.45,
+                      "power_w_mean": 131.18395348837208,
+                      "samples": 43,
+                      "sm_mhz_mean": 1659.0697674418604,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.6511627906976745
+                    }
+                  },
+                  "cluster": {
+                    "stage_durations": {},
+                    "status": "skipped",
+                    "wall_s": 0.0
+                  },
+                  "flat": {
+                    "api_cpu_s_per_image": 1.1572907299999988,
+                    "busy_pe_image_encoder": 0.16163434304704005,
+                    "busy_total": 0.17160905686006664,
+                    "busy_yolov11_small_trt_end2end": 0.009974713813026583,
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "client_received_bytes_per_image": 654.22,
+                    "client_sent_bytes_per_image": 75.84,
+                    "cluster_train_wall_s": 0.0,
+                    "duplicates": 0.0,
+                    "failed": 0.0,
+                    "gpu0_mem_peak_mb": 16392.0,
+                    "gpu0_sm_mhz_mean": 210.0,
+                    "gpu0_throttled_share": 0.023255813953488372,
+                    "gpu0_util_mean_pct": 0.0,
+                    "gpu1_mem_peak_mb": 6785.0,
+                    "gpu1_sm_mhz_mean": 210.0,
+                    "gpu1_throttled_share": 0.0,
+                    "gpu1_util_mean_pct": 0.0,
+                    "gpu2_foreign_sm_mean_pct": 0.0,
+                    "gpu2_mem_peak_mb": 14116.0,
+                    "gpu2_own_sm_mean_pct": 15.615384615384615,
+                    "gpu2_sm_mhz_mean": 1659.0697674418604,
+                    "gpu2_throttled_share": 0.6511627906976745,
+                    "gpu2_util_mean_pct": 14.863636363636363,
+                    "host_busy_pct": 32.91071363652888,
+                    "idle_api_cores_before": 0.23907259999996314,
+                    "images_per_s": 10.77874293215828,
+                    "items_per_image": 1.634,
+                    "load_avg_1m": 12.88330078125,
+                    "request_p50_s": 15.925840047188103,
+                    "request_p95_s": 45.933664940251035,
+                    "stage_crop_mean_ms": 4.5945254004032625,
+                    "stage_crop_seconds": 3.7537272521294653,
+                    "stage_decode_mean_ms": 307.31727001909167,
+                    "stage_decode_seconds": 153.65863500954583,
+                    "stage_embed_mean_ms": 2892.1034999923845,
+                    "stage_embed_seconds": 2325.251213993877,
+                    "stage_jpeg_encode_mean_ms": 13.603825717161307,
+                    "stage_jpeg_encode_seconds": 11.114325610920787,
+                    "stage_opensearch_write_mean_ms": 1607.1033435340667,
+                    "stage_opensearch_write_seconds": 1277.647158109583,
+                    "stage_resize_mean_ms": 11.604525406166154,
+                    "stage_resize_seconds": 3.4233349948190153,
+                    "triton_cpu_s_per_image": 0.021923755999999912,
+                    "triton_pe_image_encoder_infer_ms_per_image": 14.995658034000002,
+                    "triton_pe_image_encoder_mean_batch": 4.557093425605537,
+                    "triton_pe_image_encoder_queue_ms": 10.578907995024874,
+                    "triton_yolov11_small_trt_end2end_infer_ms_per_image": 0.9254060399999999,
+                    "triton_yolov11_small_trt_end2end_mean_batch": 8.064516129032258,
+                    "triton_yolov11_small_trt_end2end_queue_ms": 0.7536870634920635,
+                    "wall_s": 46.38759854901582
+                  },
+                  "gpu": {
+                    "0": {
+                      "mem_peak_mb": 16392.0,
+                      "samples": 44,
+                      "util_mean_pct": 0.0
+                    },
+                    "1": {
+                      "mem_peak_mb": 6785.0,
+                      "samples": 44,
+                      "util_mean_pct": 0.0
+                    },
+                    "2": {
+                      "mem_peak_mb": 14116.0,
+                      "samples": 44,
+                      "util_mean_pct": 14.863636363636363
+                    }
+                  },
+                  "host_busy_pct": 32.91071363652888,
+                  "load_average": [
+                    12.88330078125,
+                    11.7822265625,
+                    9.97607421875
+                  ],
+                  "mode": "batch",
+                  "rep": 3,
+                  "slug": "ac-batch-r3-224616",
+                  "stages": {
+                    "crop": {
+                      "bytes": 0.0,
+                      "calls": 817.0,
+                      "mean_ms": 4.5945254004032625,
+                      "seconds": 3.7537272521294653
+                    },
+                    "decode": {
+                      "bytes": 5211571077.0,
+                      "calls": 500.0,
+                      "mean_ms": 307.31727001909167,
+                      "seconds": 153.65863500954583
+                    },
+                    "embed": {
+                      "bytes": 1784208384.0,
+                      "calls": 804.0,
+                      "mean_ms": 2892.1034999923845,
+                      "seconds": 2325.251213993877
+                    },
+                    "jpeg_encode": {
+                      "bytes": 384766829.0,
+                      "calls": 817.0,
+                      "mean_ms": 13.603825717161307,
+                      "seconds": 11.114325610920787
+                    },
+                    "opensearch_write": {
+                      "bytes": 0.0,
+                      "calls": 795.0,
+                      "mean_ms": 1607.1033435340667,
+                      "seconds": 1277.647158109583
+                    },
+                    "resize": {
+                      "bytes": 0.0,
+                      "calls": 295.0,
+                      "mean_ms": 11.604525406166154,
+                      "seconds": 3.4233349948190153
+                    }
+                  },
+                  "storage": {
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "images": 0,
+                    "indexes": {},
+                    "merge_rounds": 0,
+                    "total_bytes": 0,
+                    "vectors": 0
+                  },
+                  "triton": {
+                    "pe_image_encoder": {
+                      "batch_histogram": {
+                        "1": 45,
+                        "10": 1,
+                        "11": 4,
+                        "12": 2,
+                        "13": 2,
+                        "14": 1,
+                        "15": 1,
+                        "16": 5,
+                        "17": 2,
+                        "19": 1,
+                        "2": 41,
+                        "21": 2,
+                        "23": 2,
+                        "24": 1,
+                        "3": 44,
+                        "4": 92,
+                        "5": 7,
+                        "6": 6,
+                        "7": 3,
+                        "8": 23,
+                        "9": 4
+                      },
+                      "exec_infer_ms": 25.944045041522493,
+                      "exec_input_ms": 1.1921318615916956,
+                      "exec_output_ms": 8.75776813148789,
+                      "executions": 289,
+                      "inferences": 1317,
+                      "mean_batch": 4.557093425605537,
+                      "queue_ms_per_request": 10.578907995024874,
+                      "requests": 804
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "batch_histogram": {
+                        "16": 1,
+                        "4": 1,
+                        "8": 60
+                      },
+                      "exec_infer_ms": 7.46295193548387,
+                      "exec_input_ms": 10.431156838709677,
+                      "exec_output_ms": 0.5718759838709677,
+                      "executions": 62,
+                      "inferences": 500,
+                      "mean_batch": 8.064516129032258,
+                      "queue_ms_per_request": 0.7536870634920635,
+                      "requests": 63
+                    }
+                  },
+                  "triton_wire_bytes": {
+                    "pe_image_encoder": {
+                      "request_bytes": 1784208384,
+                      "response_bytes": 5394432
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "request_bytes": 2457600000,
+                      "response_bytes": 3302000
+                    }
+                  }
+                }
+              ],
+              "summary": {
+                "api_cpu_s_per_image": {
+                  "max": 1.2134901339999997,
+                  "mean": 1.1796927599999993,
+                  "median": 1.1682974159999995,
+                  "min": 1.1572907299999988,
+                  "n": 3,
+                  "spread_pct": 4.810367910631493
+                },
+                "busy_pe_image_encoder": {
+                  "max": 0.17004581622572493,
+                  "mean": 0.16271294520172744,
+                  "median": 0.16163434304704005,
+                  "min": 0.1564586763324174,
+                  "n": 3,
+                  "spread_pct": 8.406097143200133
+                },
+                "busy_total": {
+                  "max": 0.18035989718445034,
+                  "mean": 0.17290780696850053,
+                  "median": 0.17160905686006664,
+                  "min": 0.1667544668609846,
+                  "n": 3,
+                  "spread_pct": 7.928154010286217
+                },
+                "busy_yolov11_small_trt_end2end": {
+                  "max": 0.010314080958725397,
+                  "mean": 0.010194861766773068,
+                  "median": 0.010295790528567226,
+                  "min": 0.009974713813026583,
+                  "n": 3,
+                  "spread_pct": 3.2961737591415528
+                },
+                "bytes_per_image": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "bytes_per_vector": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "client_received_bytes_per_image": {
+                  "max": 654.22,
+                  "mean": 648.056,
+                  "median": 648.056,
+                  "min": 641.892,
+                  "n": 3,
+                  "spread_pct": 1.9023047390966175
+                },
+                "client_sent_bytes_per_image": {
+                  "max": 75.84,
+                  "mean": 75.84,
+                  "median": 75.84,
+                  "min": 75.84,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "cluster_train_wall_s": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "duplicates": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "failed": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu0_mem_peak_mb": {
+                  "max": 16392.0,
+                  "mean": 16392.0,
+                  "median": 16392.0,
+                  "min": 16392.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu0_sm_mhz_mean": {
+                  "max": 210.0,
+                  "mean": 210.0,
+                  "median": 210.0,
+                  "min": 210.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu0_throttled_share": {
+                  "max": 0.023255813953488372,
+                  "mean": 0.014998314796090326,
+                  "median": 0.021739130434782608,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 106.97674418604652
+                },
+                "gpu0_util_mean_pct": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu1_mem_peak_mb": {
+                  "max": 6785.0,
+                  "mean": 6785.0,
+                  "median": 6785.0,
+                  "min": 6785.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu1_sm_mhz_mean": {
+                  "max": 210.0,
+                  "mean": 210.0,
+                  "median": 210.0,
+                  "min": 210.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu1_throttled_share": {
+                  "max": 0.021739130434782608,
+                  "mean": 0.007246376811594203,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu1_util_mean_pct": {
+                  "max": 0.023809523809523808,
+                  "mean": 0.007936507936507936,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu2_foreign_sm_mean_pct": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu2_mem_peak_mb": {
+                  "max": 14116.0,
+                  "mean": 14116.0,
+                  "median": 14116.0,
+                  "min": 14116.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu2_own_sm_mean_pct": {
+                  "max": 16.62162162162162,
+                  "mean": 16.070871997701264,
+                  "median": 15.975609756097562,
+                  "min": 15.615384615384615,
+                  "n": 3,
+                  "spread_pct": 6.298582787132403
+                },
+                "gpu2_sm_mhz_mean": {
+                  "max": 1699.5652173913043,
+                  "mean": 1679.9108486029247,
+                  "median": 1681.0975609756097,
+                  "min": 1659.0697674418604,
+                  "n": 3,
+                  "spread_pct": 2.4088697104493235
+                },
+                "gpu2_throttled_share": {
+                  "max": 0.7073170731707317,
+                  "mean": 0.6122469111445411,
+                  "median": 0.6511627906976745,
+                  "min": 0.4782608695652174,
+                  "n": 3,
+                  "spread_pct": 35.17648841084683
+                },
+                "gpu2_util_mean_pct": {
+                  "max": 17.476190476190474,
+                  "mean": 16.185739381391553,
+                  "median": 16.217391304347824,
+                  "min": 14.863636363636363,
+                  "n": 3,
+                  "spread_pct": 16.10958299966342
+                },
+                "host_busy_pct": {
+                  "max": 34.086186647393625,
+                  "mean": 33.13509031511296,
+                  "median": 32.91071363652888,
+                  "min": 32.40837066141638,
+                  "n": 3,
+                  "spread_pct": 5.0980844855183385
+                },
+                "idle_api_cores_before": {
+                  "max": 0.2587035999999898,
+                  "mean": 0.23371053333333594,
+                  "median": 0.23907259999996314,
+                  "min": 0.20335540000005495,
+                  "n": 3,
+                  "spread_pct": 23.151210134471036
+                },
+                "images_per_s": {
+                  "max": 11.282998923278884,
+                  "mean": 10.753969194906952,
+                  "median": 10.77874293215828,
+                  "min": 10.200165729283697,
+                  "n": 3,
+                  "spread_pct": 10.04600629971946
+                },
+                "items_per_image": {
+                  "max": 1.634,
+                  "mean": 1.6339999999999997,
+                  "median": 1.634,
+                  "min": 1.634,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "load_avg_1m": {
+                  "max": 13.107421875,
+                  "mean": 12.996744791666666,
+                  "median": 12.99951171875,
+                  "min": 12.88330078125,
+                  "n": 3,
+                  "spread_pct": 1.724073169815573
+                },
+                "request_p50_s": {
+                  "max": 16.32088670413941,
+                  "mean": 15.41321174489955,
+                  "median": 15.925840047188103,
+                  "min": 13.992908483371139,
+                  "n": 3,
+                  "spread_pct": 14.617616489117665
+                },
+                "request_p95_s": {
+                  "max": 45.933664940251035,
+                  "mean": 38.40204286317651,
+                  "median": 35.97266818988137,
+                  "min": 33.29979545939714,
+                  "n": 3,
+                  "spread_pct": 35.12074615696045
+                },
+                "stage_crop_mean_ms": {
+                  "max": 5.16083694064267,
+                  "mean": 4.828695351085411,
+                  "median": 4.730723712210301,
+                  "min": 4.5945254004032625,
+                  "n": 3,
+                  "spread_pct": 11.970928227698467
+                },
+                "stage_crop_seconds": {
+                  "max": 4.216403780505061,
+                  "mean": 3.9450441018367806,
+                  "median": 3.8650012728758156,
+                  "min": 3.7537272521294653,
+                  "n": 3,
+                  "spread_pct": 11.97092822769846
+                },
+                "stage_decode_mean_ms": {
+                  "max": 315.0249618617818,
+                  "mean": 310.0283181791504,
+                  "median": 307.7427226565778,
+                  "min": 307.31727001909167,
+                  "n": 3,
+                  "spread_pct": 2.5045894753103313
+                },
+                "stage_decode_seconds": {
+                  "max": 157.5124809308909,
+                  "mean": 155.0141590895752,
+                  "median": 153.8713613282889,
+                  "min": 153.65863500954583,
+                  "n": 3,
+                  "spread_pct": 2.5045894753103313
+                },
+                "stage_embed_mean_ms": {
+                  "max": 2892.1034999923845,
+                  "mean": 2804.5074538874887,
+                  "median": 2884.7385072560555,
+                  "min": 2636.6803544140257,
+                  "n": 3,
+                  "spread_pct": 8.854291123298925
+                },
+                "stage_embed_seconds": {
+                  "max": 2325.251213993877,
+                  "mean": 2254.823992925541,
+                  "median": 2319.3297598338686,
+                  "min": 2119.891004948877,
+                  "n": 3,
+                  "spread_pct": 8.85429112329892
+                },
+                "stage_jpeg_encode_mean_ms": {
+                  "max": 13.892312630477521,
+                  "mean": 13.594894963861885,
+                  "median": 13.603825717161307,
+                  "min": 13.288546543946829,
+                  "n": 3,
+                  "spread_pct": 4.4382080385596065
+                },
+                "stage_jpeg_encode_seconds": {
+                  "max": 11.350019419100136,
+                  "mean": 11.107029185475161,
+                  "median": 11.114325610920787,
+                  "min": 10.85674252640456,
+                  "n": 3,
+                  "spread_pct": 4.438208038559611
+                },
+                "stage_opensearch_write_mean_ms": {
+                  "max": 1607.1033435340667,
+                  "mean": 1370.7250776683104,
+                  "median": 1399.946389538851,
+                  "min": 1105.1254999320136,
+                  "n": 3,
+                  "spread_pct": 35.85693333352622
+                },
+                "stage_opensearch_write_seconds": {
+                  "max": 1277.647158109583,
+                  "mean": 1089.7264367463067,
+                  "median": 1112.9573796833865,
+                  "min": 878.5747724459507,
+                  "n": 3,
+                  "spread_pct": 35.85693333352623
+                },
+                "stage_resize_mean_ms": {
+                  "max": 12.721591179211766,
+                  "mean": 11.978744339239967,
+                  "median": 11.610116432341984,
+                  "min": 11.604525406166154,
+                  "n": 3,
+                  "spread_pct": 9.621486395552694
+                },
+                "stage_resize_seconds": {
+                  "max": 3.752869397867471,
+                  "mean": 3.5337295800757906,
+                  "median": 3.424984347540885,
+                  "min": 3.4233349948190153,
+                  "n": 3,
+                  "spread_pct": 9.6214863955527
+                },
+                "triton_cpu_s_per_image": {
+                  "max": 0.021923755999999912,
+                  "mean": 0.02186685933333327,
+                  "median": 0.021848658,
+                  "min": 0.0218281639999999,
+                  "n": 3,
+                  "spread_pct": 0.4375188627146454
+                },
+                "triton_pe_image_encoder_infer_ms_per_image": {
+                  "max": 15.33883669,
+                  "mean": 15.135157210666668,
+                  "median": 15.070976908,
+                  "min": 14.995658034000002,
+                  "n": 3,
+                  "spread_pct": 2.2770830192025078
+                },
+                "triton_pe_image_encoder_mean_batch": {
+                  "max": 4.557093425605537,
+                  "mean": 4.481669129805237,
+                  "median": 4.541379310344827,
+                  "min": 4.346534653465347,
+                  "n": 3,
+                  "spread_pct": 4.636449804149965
+                },
+                "triton_pe_image_encoder_queue_ms": {
+                  "max": 14.80934115920398,
+                  "mean": 13.064145997097844,
+                  "median": 13.804188837064677,
+                  "min": 10.578907995024874,
+                  "n": 3,
+                  "spread_pct": 30.646010527038435
+                },
+                "triton_yolov11_small_trt_end2end_infer_ms_per_image": {
+                  "max": 1.009374828,
+                  "mean": 0.949635572,
+                  "median": 0.9254060399999999,
+                  "min": 0.9141258480000001,
+                  "n": 3,
+                  "spread_pct": 10.292668934816962
+                },
+                "triton_yolov11_small_trt_end2end_mean_batch": {
+                  "max": 8.064516129032258,
+                  "mean": 7.979177334016043,
+                  "median": 7.936507936507937,
+                  "min": 7.936507936507937,
+                  "n": 3,
+                  "spread_pct": 1.6129032258064482
+                },
+                "triton_yolov11_small_trt_end2end_queue_ms": {
+                  "max": 1.0108820952380952,
+                  "mean": 0.8873758201058202,
+                  "median": 0.8975583015873017,
+                  "min": 0.7536870634920635,
+                  "n": 3,
+                  "spread_pct": 28.654966623470695
+                },
+                "wall_s": {
+                  "max": 49.01881138700992,
+                  "mean": 46.57362318007896,
+                  "median": 46.38759854901582,
+                  "min": 44.31445960421115,
+                  "n": 3,
+                  "spread_pct": 10.141399705845684
+                }
+              }
+            }
+          },
+          "b8_c64": {
+            "batch": {
+              "runs": [
+                {
+                  "attribution": {
+                    "foreign_active_share": 0.0,
+                    "foreign_sm_mean_pct": 0.0,
+                    "foreign_sm_peak_pct": 0,
+                    "own_sm_mean_pct": 8.546666666666667,
+                    "own_sm_peak_pct": 50.0,
+                    "samples": 75
+                  },
+                  "attribution_by_gpu": {
+                    "2": {
+                      "foreign_active_share": 0.0,
+                      "foreign_sm_mean_pct": 0.0,
+                      "foreign_sm_peak_pct": 0,
+                      "own_sm_mean_pct": 8.546666666666667,
+                      "own_sm_peak_pct": 50.0,
+                      "samples": 75
+                    }
+                  },
+                  "clocks_by_gpu": {
+                    "0": {
+                      "power_w_max": 28.32,
+                      "power_w_mean": 22.466867469879517,
+                      "samples": 83,
+                      "sm_mhz_mean": 210.0,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.0
+                    },
+                    "1": {
+                      "power_w_max": 22.01,
+                      "power_w_mean": 16.886746987951806,
+                      "samples": 83,
+                      "sm_mhz_mean": 210.0,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.012048192771084338
+                    },
+                    "2": {
+                      "power_w_max": 224.61,
+                      "power_w_mean": 111.75180722891565,
+                      "samples": 83,
+                      "sm_mhz_mean": 1737.4698795180723,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.3614457831325301
+                    }
+                  },
+                  "cluster": {
+                    "stage_durations": {},
+                    "status": "skipped",
+                    "wall_s": 0.0
+                  },
+                  "flat": {
+                    "api_cpu_s_per_image": 1.2691104025695925,
+                    "busy_pe_image_encoder": 0.08476022038134183,
+                    "busy_total": 0.0935529492734088,
+                    "busy_yolov11_small_trt_end2end": 0.008792728892066977,
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "client_received_bytes_per_image": 708.3961456102784,
+                    "client_sent_bytes_per_image": 81.19914346895075,
+                    "cluster_train_wall_s": 0.0,
+                    "duplicates": 0.0,
+                    "failed": 33.0,
+                    "gpu0_mem_peak_mb": 16392.0,
+                    "gpu0_sm_mhz_mean": 210.0,
+                    "gpu0_throttled_share": 0.0,
+                    "gpu0_util_mean_pct": 0.0,
+                    "gpu1_mem_peak_mb": 6785.0,
+                    "gpu1_sm_mhz_mean": 210.0,
+                    "gpu1_throttled_share": 0.012048192771084338,
+                    "gpu1_util_mean_pct": 0.011904761904761904,
+                    "gpu2_foreign_sm_mean_pct": 0.0,
+                    "gpu2_mem_peak_mb": 14116.0,
+                    "gpu2_own_sm_mean_pct": 8.546666666666667,
+                    "gpu2_sm_mhz_mean": 1737.4698795180723,
+                    "gpu2_throttled_share": 0.3614457831325301,
+                    "gpu2_util_mean_pct": 9.928571428571429,
+                    "host_busy_pct": 20.031613567843944,
+                    "idle_api_cores_before": 0.2716087000000698,
+                    "images_per_s": 5.242831543923651,
+                    "items_per_image": 1.6017130620985012,
+                    "load_avg_1m": 9.9912109375,
+                    "request_p50_s": 47.674653575289994,
+                    "request_p95_s": 88.91353144519962,
+                    "stage_crop_mean_ms": 5.242301759308927,
+                    "stage_crop_seconds": 4.282960537355393,
+                    "stage_decode_mean_ms": 306.420773293823,
+                    "stage_decode_seconds": 153.2103866469115,
+                    "stage_embed_mean_ms": 5796.526914454918,
+                    "stage_embed_seconds": 4660.407639221754,
+                    "stage_jpeg_encode_mean_ms": 13.4252257339629,
+                    "stage_jpeg_encode_seconds": 10.968409424647689,
+                    "stage_opensearch_write_mean_ms": 5027.9249819510305,
+                    "stage_opensearch_write_seconds": 3866.4743111203425,
+                    "stage_resize_mean_ms": 10.955717736634156,
+                    "stage_resize_seconds": 3.2319367323070765,
+                    "triton_cpu_s_per_image": 0.0254168650963598,
+                    "triton_pe_image_encoder_infer_ms_per_image": 16.16687846466809,
+                    "triton_pe_image_encoder_mean_batch": 4.588850174216028,
+                    "triton_pe_image_encoder_queue_ms": 11.691479417910449,
+                    "triton_yolov11_small_trt_end2end_infer_ms_per_image": 1.677095443254818,
+                    "triton_yolov11_small_trt_end2end_mean_batch": 7.936507936507937,
+                    "triton_yolov11_small_trt_end2end_queue_ms": 0.6117838253968254,
+                    "wall_s": 89.07400439772755
+                  },
+                  "gpu": {
+                    "0": {
+                      "mem_peak_mb": 16392.0,
+                      "samples": 84,
+                      "util_mean_pct": 0.0
+                    },
+                    "1": {
+                      "mem_peak_mb": 6785.0,
+                      "samples": 84,
+                      "util_mean_pct": 0.011904761904761904
+                    },
+                    "2": {
+                      "mem_peak_mb": 14116.0,
+                      "samples": 84,
+                      "util_mean_pct": 9.928571428571429
+                    }
+                  },
+                  "host_busy_pct": 20.031613567843944,
+                  "load_average": [
+                    9.9912109375,
+                    11.1806640625,
+                    9.9658203125
+                  ],
+                  "mode": "batch",
+                  "rep": 1,
+                  "slug": "ac-batch-r1-224724",
+                  "stages": {
+                    "crop": {
+                      "bytes": 0.0,
+                      "calls": 817.0,
+                      "mean_ms": 5.242301759308927,
+                      "seconds": 4.282960537355393
+                    },
+                    "decode": {
+                      "bytes": 5211571077.0,
+                      "calls": 500.0,
+                      "mean_ms": 306.420773293823,
+                      "seconds": 153.2103866469115
+                    },
+                    "embed": {
+                      "bytes": 1784208384.0,
+                      "calls": 804.0,
+                      "mean_ms": 5796.526914454918,
+                      "seconds": 4660.407639221754
+                    },
+                    "jpeg_encode": {
+                      "bytes": 384781644.0,
+                      "calls": 817.0,
+                      "mean_ms": 13.4252257339629,
+                      "seconds": 10.968409424647689
+                    },
+                    "opensearch_write": {
+                      "bytes": 0.0,
+                      "calls": 769.0,
+                      "mean_ms": 5027.9249819510305,
+                      "seconds": 3866.4743111203425
+                    },
+                    "resize": {
+                      "bytes": 0.0,
+                      "calls": 295.0,
+                      "mean_ms": 10.955717736634156,
+                      "seconds": 3.2319367323070765
+                    }
+                  },
+                  "storage": {
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "images": 0,
+                    "indexes": {},
+                    "merge_rounds": 0,
+                    "total_bytes": 0,
+                    "vectors": 0
+                  },
+                  "triton": {
+                    "pe_image_encoder": {
+                      "batch_histogram": {
+                        "1": 44,
+                        "10": 2,
+                        "12": 1,
+                        "13": 2,
+                        "14": 2,
+                        "15": 3,
+                        "16": 6,
+                        "17": 2,
+                        "18": 1,
+                        "2": 41,
+                        "20": 1,
+                        "22": 2,
+                        "25": 1,
+                        "3": 24,
+                        "4": 112,
+                        "5": 6,
+                        "6": 9,
+                        "7": 6,
+                        "8": 21,
+                        "9": 1
+                      },
+                      "exec_infer_ms": 26.30638412195122,
+                      "exec_input_ms": 1.0675216655052264,
+                      "exec_output_ms": 9.411432045296168,
+                      "executions": 287,
+                      "inferences": 1317,
+                      "mean_batch": 4.588850174216028,
+                      "queue_ms_per_request": 11.691479417910449,
+                      "requests": 804
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "batch_histogram": {
+                        "4": 1,
+                        "8": 62
+                      },
+                      "exec_infer_ms": 12.431802730158731,
+                      "exec_input_ms": 11.039144190476192,
+                      "exec_output_ms": 0.541282126984127,
+                      "executions": 63,
+                      "inferences": 500,
+                      "mean_batch": 7.936507936507937,
+                      "queue_ms_per_request": 0.6117838253968254,
+                      "requests": 63
+                    }
+                  },
+                  "triton_wire_bytes": {
+                    "pe_image_encoder": {
+                      "request_bytes": 1784208384,
+                      "response_bytes": 5394432
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "request_bytes": 2457600000,
+                      "response_bytes": 3302000
+                    }
+                  }
+                },
+                {
+                  "attribution": {
+                    "foreign_active_share": 0.0,
+                    "foreign_sm_mean_pct": 0.0,
+                    "foreign_sm_peak_pct": 0,
+                    "own_sm_mean_pct": 8.273809523809524,
+                    "own_sm_peak_pct": 42.0,
+                    "samples": 84
+                  },
+                  "attribution_by_gpu": {
+                    "2": {
+                      "foreign_active_share": 0.0,
+                      "foreign_sm_mean_pct": 0.0,
+                      "foreign_sm_peak_pct": 0,
+                      "own_sm_mean_pct": 8.273809523809524,
+                      "own_sm_peak_pct": 42.0,
+                      "samples": 84
+                    }
+                  },
+                  "clocks_by_gpu": {
+                    "0": {
+                      "power_w_max": 28.38,
+                      "power_w_mean": 22.083333333333332,
+                      "samples": 93,
+                      "sm_mhz_mean": 210.0,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.0
+                    },
+                    "1": {
+                      "power_w_max": 22.25,
+                      "power_w_mean": 16.85989247311828,
+                      "samples": 93,
+                      "sm_mhz_mean": 210.0,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.0
+                    },
+                    "2": {
+                      "power_w_max": 196.81,
+                      "power_w_mean": 110.38440860215054,
+                      "samples": 93,
+                      "sm_mhz_mean": 1752.0967741935483,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.3870967741935484
+                    }
+                  },
+                  "cluster": {
+                    "stage_durations": {},
+                    "status": "skipped",
+                    "wall_s": 0.0
+                  },
+                  "flat": {
+                    "api_cpu_s_per_image": 1.2251537925311204,
+                    "busy_pe_image_encoder": 0.07574648305216518,
+                    "busy_total": 0.08045070767438567,
+                    "busy_yolov11_small_trt_end2end": 0.0047042246222204955,
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "client_received_bytes_per_image": 692.5435684647302,
+                    "client_sent_bytes_per_image": 78.67219917012449,
+                    "cluster_train_wall_s": 0.0,
+                    "duplicates": 0.0,
+                    "failed": 18.0,
+                    "gpu0_mem_peak_mb": 16392.0,
+                    "gpu0_sm_mhz_mean": 210.0,
+                    "gpu0_throttled_share": 0.0,
+                    "gpu0_util_mean_pct": 0.0,
+                    "gpu1_mem_peak_mb": 6785.0,
+                    "gpu1_sm_mhz_mean": 210.0,
+                    "gpu1_throttled_share": 0.0,
+                    "gpu1_util_mean_pct": 0.02127659574468085,
+                    "gpu2_foreign_sm_mean_pct": 0.0,
+                    "gpu2_mem_peak_mb": 14116.0,
+                    "gpu2_own_sm_mean_pct": 8.273809523809524,
+                    "gpu2_sm_mhz_mean": 1752.0967741935483,
+                    "gpu2_throttled_share": 0.3870967741935484,
+                    "gpu2_util_mean_pct": 7.925531914893617,
+                    "host_busy_pct": 17.8828881248347,
+                    "idle_api_cores_before": 0.21218749999998182,
+                    "images_per_s": 4.846487345948448,
+                    "items_per_image": 1.6286307053941909,
+                    "load_avg_1m": 7.04296875,
+                    "request_p50_s": 48.10882498184219,
+                    "request_p95_s": 99.3384101823438,
+                    "stage_crop_mean_ms": 5.597807514860843,
+                    "stage_crop_seconds": 4.573408739641309,
+                    "stage_decode_mean_ms": 308.3969119749963,
+                    "stage_decode_seconds": 154.19845598749816,
+                    "stage_embed_mean_ms": 6152.668978791308,
+                    "stage_embed_seconds": 4946.745858948212,
+                    "stage_jpeg_encode_mean_ms": 13.241044709041734,
+                    "stage_jpeg_encode_seconds": 10.817933527287096,
+                    "stage_opensearch_write_mean_ms": 4911.504696156778,
+                    "stage_opensearch_write_seconds": 3826.0621583061293,
+                    "stage_resize_mean_ms": 11.075811214366201,
+                    "stage_resize_seconds": 3.2673643082380295,
+                    "triton_cpu_s_per_image": 0.024918506224066373,
+                    "triton_pe_image_encoder_infer_ms_per_image": 15.62915110373444,
+                    "triton_pe_image_encoder_mean_batch": 4.494880546075085,
+                    "triton_pe_image_encoder_queue_ms": 9.6386654539801,
+                    "triton_yolov11_small_trt_end2end_infer_ms_per_image": 0.9706462199170124,
+                    "triton_yolov11_small_trt_end2end_mean_batch": 7.936507936507937,
+                    "triton_yolov11_small_trt_end2end_queue_ms": 1.0367929841269843,
+                    "wall_s": 99.4534733290784
+                  },
+                  "gpu": {
+                    "0": {
+                      "mem_peak_mb": 16392.0,
+                      "samples": 94,
+                      "util_mean_pct": 0.0
+                    },
+                    "1": {
+                      "mem_peak_mb": 6785.0,
+                      "samples": 94,
+                      "util_mean_pct": 0.02127659574468085
+                    },
+                    "2": {
+                      "mem_peak_mb": 14116.0,
+                      "samples": 94,
+                      "util_mean_pct": 7.925531914893617
+                    }
+                  },
+                  "host_busy_pct": 17.8828881248347,
+                  "load_average": [
+                    7.04296875,
+                    9.77880859375,
+                    9.60888671875
+                  ],
+                  "mode": "batch",
+                  "rep": 2,
+                  "slug": "ac-batch-r2-224924",
+                  "stages": {
+                    "crop": {
+                      "bytes": 0.0,
+                      "calls": 817.0,
+                      "mean_ms": 5.597807514860843,
+                      "seconds": 4.573408739641309
+                    },
+                    "decode": {
+                      "bytes": 5211571077.0,
+                      "calls": 500.0,
+                      "mean_ms": 308.3969119749963,
+                      "seconds": 154.19845598749816
+                    },
+                    "embed": {
+                      "bytes": 1784208384.0,
+                      "calls": 804.0,
+                      "mean_ms": 6152.668978791308,
+                      "seconds": 4946.745858948212
+                    },
+                    "jpeg_encode": {
+                      "bytes": 384787107.0,
+                      "calls": 817.0,
+                      "mean_ms": 13.241044709041734,
+                      "seconds": 10.817933527287096
+                    },
+                    "opensearch_write": {
+                      "bytes": 0.0,
+                      "calls": 779.0,
+                      "mean_ms": 4911.504696156778,
+                      "seconds": 3826.0621583061293
+                    },
+                    "resize": {
+                      "bytes": 0.0,
+                      "calls": 295.0,
+                      "mean_ms": 11.075811214366201,
+                      "seconds": 3.2673643082380295
+                    }
+                  },
+                  "storage": {
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "images": 0,
+                    "indexes": {},
+                    "merge_rounds": 0,
+                    "total_bytes": 0,
+                    "vectors": 0
+                  },
+                  "triton": {
+                    "pe_image_encoder": {
+                      "batch_histogram": {
+                        "1": 51,
+                        "10": 1,
+                        "11": 2,
+                        "12": 1,
+                        "13": 1,
+                        "14": 3,
+                        "16": 9,
+                        "17": 3,
+                        "18": 1,
+                        "2": 38,
+                        "20": 1,
+                        "25": 1,
+                        "3": 36,
+                        "4": 97,
+                        "5": 11,
+                        "6": 4,
+                        "7": 7,
+                        "8": 25,
+                        "9": 1
+                      },
+                      "exec_infer_ms": 25.710753692832764,
+                      "exec_input_ms": 1.0751270341296928,
+                      "exec_output_ms": 9.37123209556314,
+                      "executions": 293,
+                      "inferences": 1317,
+                      "mean_batch": 4.494880546075085,
+                      "queue_ms_per_request": 9.6386654539801,
+                      "requests": 804
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "batch_histogram": {
+                        "4": 1,
+                        "8": 62
+                      },
+                      "exec_infer_ms": 7.426213936507937,
+                      "exec_input_ms": 11.502591507936508,
+                      "exec_output_ms": 0.4287577619047619,
+                      "executions": 63,
+                      "inferences": 500,
+                      "mean_batch": 7.936507936507937,
+                      "queue_ms_per_request": 1.0367929841269843,
+                      "requests": 63
+                    }
+                  },
+                  "triton_wire_bytes": {
+                    "pe_image_encoder": {
+                      "request_bytes": 1784208384,
+                      "response_bytes": 5394432
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "request_bytes": 2457600000,
+                      "response_bytes": 3302000
+                    }
+                  }
+                },
+                {
+                  "attribution": {
+                    "foreign_active_share": 0.0,
+                    "foreign_sm_mean_pct": 0.0,
+                    "foreign_sm_peak_pct": 0,
+                    "own_sm_mean_pct": 8.166666666666666,
+                    "own_sm_peak_pct": 48.0,
+                    "samples": 84
+                  },
+                  "attribution_by_gpu": {
+                    "2": {
+                      "foreign_active_share": 0.0,
+                      "foreign_sm_mean_pct": 0.0,
+                      "foreign_sm_peak_pct": 0,
+                      "own_sm_mean_pct": 8.166666666666666,
+                      "own_sm_peak_pct": 48.0,
+                      "samples": 84
+                    }
+                  },
+                  "clocks_by_gpu": {
+                    "0": {
+                      "power_w_max": 28.28,
+                      "power_w_mean": 22.453763440860214,
+                      "samples": 93,
+                      "sm_mhz_mean": 210.0,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.0
+                    },
+                    "1": {
+                      "power_w_max": 22.33,
+                      "power_w_mean": 16.907096774193548,
+                      "samples": 93,
+                      "sm_mhz_mean": 210.0,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.0
+                    },
+                    "2": {
+                      "power_w_max": 191.43,
+                      "power_w_mean": 108.05215053763442,
+                      "samples": 93,
+                      "sm_mhz_mean": 1749.3548387096773,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.2903225806451613
+                    }
+                  },
+                  "cluster": {
+                    "stage_durations": {},
+                    "status": "skipped",
+                    "wall_s": 0.0
+                  },
+                  "flat": {
+                    "api_cpu_s_per_image": 1.2234465802469163,
+                    "busy_pe_image_encoder": 0.07588117662744678,
+                    "busy_total": 0.08145281292089633,
+                    "busy_yolov11_small_trt_end2end": 0.005571636293449549,
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "client_received_bytes_per_image": 693.3415637860082,
+                    "client_sent_bytes_per_image": 78.0246913580247,
+                    "cluster_train_wall_s": 0.0,
+                    "duplicates": 0.0,
+                    "failed": 14.0,
+                    "gpu0_mem_peak_mb": 16392.0,
+                    "gpu0_sm_mhz_mean": 210.0,
+                    "gpu0_throttled_share": 0.0,
+                    "gpu0_util_mean_pct": 0.0,
+                    "gpu1_mem_peak_mb": 6785.0,
+                    "gpu1_sm_mhz_mean": 210.0,
+                    "gpu1_throttled_share": 0.0,
+                    "gpu1_util_mean_pct": 0.02127659574468085,
+                    "gpu2_foreign_sm_mean_pct": 0.0,
+                    "gpu2_mem_peak_mb": 14116.0,
+                    "gpu2_own_sm_mean_pct": 8.166666666666666,
+                    "gpu2_sm_mhz_mean": 1749.3548387096773,
+                    "gpu2_throttled_share": 0.2903225806451613,
+                    "gpu2_util_mean_pct": 7.212765957446808,
+                    "host_busy_pct": 17.93499914622346,
+                    "idle_api_cores_before": 0.2876737000000503,
+                    "images_per_s": 4.868722129593183,
+                    "items_per_image": 1.639917695473251,
+                    "load_avg_1m": 7.6435546875,
+                    "request_p50_s": 54.80287665966898,
+                    "request_p95_s": 99.46614158125594,
+                    "stage_crop_mean_ms": 5.083836617365462,
+                    "stage_crop_seconds": 4.153494516387582,
+                    "stage_decode_mean_ms": 306.72273764386773,
+                    "stage_decode_seconds": 153.36136882193387,
+                    "stage_embed_mean_ms": 5585.69368657619,
+                    "stage_embed_seconds": 4490.897724007256,
+                    "stage_jpeg_encode_mean_ms": 13.307890968198913,
+                    "stage_jpeg_encode_seconds": 10.872546921018511,
+                    "stage_opensearch_write_mean_ms": 4685.284912582653,
+                    "stage_opensearch_write_seconds": 3677.9486563773826,
+                    "stage_resize_mean_ms": 10.982864315353208,
+                    "stage_resize_seconds": 3.2399449730291963,
+                    "triton_cpu_s_per_image": 0.02509561934156373,
+                    "triton_pe_image_encoder_infer_ms_per_image": 15.58544,
+                    "triton_pe_image_encoder_mean_batch": 4.494880546075085,
+                    "triton_pe_image_encoder_queue_ms": 9.9203891380597,
+                    "triton_yolov11_small_trt_end2end_infer_ms_per_image": 1.144373440329218,
+                    "triton_yolov11_small_trt_end2end_mean_batch": 7.936507936507937,
+                    "triton_yolov11_small_trt_end2end_queue_ms": 0.8511848730158731,
+                    "wall_s": 99.82085382239893
+                  },
+                  "gpu": {
+                    "0": {
+                      "mem_peak_mb": 16392.0,
+                      "samples": 94,
+                      "util_mean_pct": 0.0
+                    },
+                    "1": {
+                      "mem_peak_mb": 6785.0,
+                      "samples": 94,
+                      "util_mean_pct": 0.02127659574468085
+                    },
+                    "2": {
+                      "mem_peak_mb": 14116.0,
+                      "samples": 94,
+                      "util_mean_pct": 7.212765957446808
+                    }
+                  },
+                  "host_busy_pct": 17.93499914622346,
+                  "load_average": [
+                    7.6435546875,
+                    9.4765625,
+                    9.5400390625
+                  ],
+                  "mode": "batch",
+                  "rep": 3,
+                  "slug": "ac-batch-r3-225125",
+                  "stages": {
+                    "crop": {
+                      "bytes": 0.0,
+                      "calls": 817.0,
+                      "mean_ms": 5.083836617365462,
+                      "seconds": 4.153494516387582
+                    },
+                    "decode": {
+                      "bytes": 5211571077.0,
+                      "calls": 500.0,
+                      "mean_ms": 306.72273764386773,
+                      "seconds": 153.36136882193387
+                    },
+                    "embed": {
+                      "bytes": 1784208384.0,
+                      "calls": 804.0,
+                      "mean_ms": 5585.69368657619,
+                      "seconds": 4490.897724007256
+                    },
+                    "jpeg_encode": {
+                      "bytes": 384788880.0,
+                      "calls": 817.0,
+                      "mean_ms": 13.307890968198913,
+                      "seconds": 10.872546921018511
+                    },
+                    "opensearch_write": {
+                      "bytes": 0.0,
+                      "calls": 785.0,
+                      "mean_ms": 4685.284912582653,
+                      "seconds": 3677.9486563773826
+                    },
+                    "resize": {
+                      "bytes": 0.0,
+                      "calls": 295.0,
+                      "mean_ms": 10.982864315353208,
+                      "seconds": 3.2399449730291963
+                    }
+                  },
+                  "storage": {
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "images": 0,
+                    "indexes": {},
+                    "merge_rounds": 0,
+                    "total_bytes": 0,
+                    "vectors": 0
+                  },
+                  "triton": {
+                    "pe_image_encoder": {
+                      "batch_histogram": {
+                        "1": 54,
+                        "10": 4,
+                        "11": 1,
+                        "12": 2,
+                        "13": 3,
+                        "14": 1,
+                        "15": 1,
+                        "16": 10,
+                        "17": 1,
+                        "19": 1,
+                        "2": 38,
+                        "29": 1,
+                        "3": 26,
+                        "32": 1,
+                        "4": 109,
+                        "5": 8,
+                        "6": 7,
+                        "7": 9,
+                        "8": 16
+                      },
+                      "exec_infer_ms": 25.851617201365187,
+                      "exec_input_ms": 1.074504624573379,
+                      "exec_output_ms": 9.54307380546075,
+                      "executions": 293,
+                      "inferences": 1317,
+                      "mean_batch": 4.494880546075085,
+                      "queue_ms_per_request": 9.9203891380597,
+                      "requests": 804
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "batch_histogram": {
+                        "4": 1,
+                        "8": 62
+                      },
+                      "exec_infer_ms": 8.828023682539682,
+                      "exec_input_ms": 10.200913984126984,
+                      "exec_output_ms": 0.5440973174603175,
+                      "executions": 63,
+                      "inferences": 500,
+                      "mean_batch": 7.936507936507937,
+                      "queue_ms_per_request": 0.8511848730158731,
+                      "requests": 63
+                    }
+                  },
+                  "triton_wire_bytes": {
+                    "pe_image_encoder": {
+                      "request_bytes": 1784208384,
+                      "response_bytes": 5394432
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "request_bytes": 2457600000,
+                      "response_bytes": 3302000
+                    }
+                  }
+                }
+              ],
+              "summary": {
+                "api_cpu_s_per_image": {
+                  "max": 1.2691104025695925,
+                  "mean": 1.2392369251158764,
+                  "median": 1.2251537925311204,
+                  "min": 1.2234465802469163,
+                  "n": 3,
+                  "spread_pct": 3.7271910352035467
+                },
+                "busy_pe_image_encoder": {
+                  "max": 0.08476022038134183,
+                  "mean": 0.07879596002031793,
+                  "median": 0.07588117662744678,
+                  "min": 0.07574648305216518,
+                  "n": 3,
+                  "spread_pct": 11.878752715487435
+                },
+                "busy_total": {
+                  "max": 0.0935529492734088,
+                  "mean": 0.08515215662289694,
+                  "median": 0.08145281292089633,
+                  "min": 0.08045070767438567,
+                  "n": 3,
+                  "spread_pct": 16.085683390391324
+                },
+                "busy_yolov11_small_trt_end2end": {
+                  "max": 0.008792728892066977,
+                  "mean": 0.006356196602579006,
+                  "median": 0.005571636293449549,
+                  "min": 0.0047042246222204955,
+                  "n": 3,
+                  "spread_pct": 73.38067408766877
+                },
+                "bytes_per_image": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "bytes_per_vector": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "client_received_bytes_per_image": {
+                  "max": 708.3961456102784,
+                  "mean": 698.0937592870056,
+                  "median": 693.3415637860082,
+                  "min": 692.5435684647302,
+                  "n": 3,
+                  "spread_pct": 2.286402254465283
+                },
+                "client_sent_bytes_per_image": {
+                  "max": 81.19914346895075,
+                  "mean": 79.29867799903332,
+                  "median": 78.67219917012449,
+                  "min": 78.0246913580247,
+                  "n": 3,
+                  "spread_pct": 4.035036702179215
+                },
+                "cluster_train_wall_s": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "duplicates": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "failed": {
+                  "max": 33.0,
+                  "mean": 21.666666666666668,
+                  "median": 18.0,
+                  "min": 14.0,
+                  "n": 3,
+                  "spread_pct": 105.55555555555556
+                },
+                "gpu0_mem_peak_mb": {
+                  "max": 16392.0,
+                  "mean": 16392.0,
+                  "median": 16392.0,
+                  "min": 16392.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu0_sm_mhz_mean": {
+                  "max": 210.0,
+                  "mean": 210.0,
+                  "median": 210.0,
+                  "min": 210.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu0_throttled_share": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu0_util_mean_pct": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu1_mem_peak_mb": {
+                  "max": 6785.0,
+                  "mean": 6785.0,
+                  "median": 6785.0,
+                  "min": 6785.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu1_sm_mhz_mean": {
+                  "max": 210.0,
+                  "mean": 210.0,
+                  "median": 210.0,
+                  "min": 210.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu1_throttled_share": {
+                  "max": 0.012048192771084338,
+                  "mean": 0.004016064257028113,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu1_util_mean_pct": {
+                  "max": 0.02127659574468085,
+                  "mean": 0.018152651131374535,
+                  "median": 0.02127659574468085,
+                  "min": 0.011904761904761904,
+                  "n": 3,
+                  "spread_pct": 44.04761904761905
+                },
+                "gpu2_foreign_sm_mean_pct": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu2_mem_peak_mb": {
+                  "max": 14116.0,
+                  "mean": 14116.0,
+                  "median": 14116.0,
+                  "min": 14116.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu2_own_sm_mean_pct": {
+                  "max": 8.546666666666667,
+                  "mean": 8.32904761904762,
+                  "median": 8.273809523809524,
+                  "min": 8.166666666666666,
+                  "n": 3,
+                  "spread_pct": 4.592805755395693
+                },
+                "gpu2_sm_mhz_mean": {
+                  "max": 1752.0967741935483,
+                  "mean": 1746.3071641404324,
+                  "median": 1749.3548387096773,
+                  "min": 1737.4698795180723,
+                  "n": 3,
+                  "spread_pct": 0.8361308038719468
+                },
+                "gpu2_throttled_share": {
+                  "max": 0.3870967741935484,
+                  "mean": 0.34628837932374656,
+                  "median": 0.3614457831325301,
+                  "min": 0.2903225806451613,
+                  "n": 3,
+                  "spread_pct": 26.77419354838709
+                },
+                "gpu2_util_mean_pct": {
+                  "max": 9.928571428571429,
+                  "mean": 8.355623100303951,
+                  "median": 7.925531914893617,
+                  "min": 7.212765957446808,
+                  "n": 3,
+                  "spread_pct": 34.26653883029723
+                },
+                "host_busy_pct": {
+                  "max": 20.031613567843944,
+                  "mean": 18.616500279634035,
+                  "median": 17.93499914622346,
+                  "min": 17.8828881248347,
+                  "n": 3,
+                  "spread_pct": 11.980627517686262
+                },
+                "idle_api_cores_before": {
+                  "max": 0.2876737000000503,
+                  "mean": 0.2571566333333673,
+                  "median": 0.2716087000000698,
+                  "min": 0.21218749999998182,
+                  "n": 3,
+                  "spread_pct": 27.79226144083349
+                },
+                "images_per_s": {
+                  "max": 5.242831543923651,
+                  "mean": 4.986013673155094,
+                  "median": 4.868722129593183,
+                  "min": 4.846487345948448,
+                  "n": 3,
+                  "spread_pct": 8.140620627456508
+                },
+                "items_per_image": {
+                  "max": 1.639917695473251,
+                  "mean": 1.6234204876553144,
+                  "median": 1.6286307053941909,
+                  "min": 1.6017130620985012,
+                  "n": 3,
+                  "spread_pct": 2.345813157532413
+                },
+                "load_avg_1m": {
+                  "max": 9.9912109375,
+                  "mean": 8.225911458333334,
+                  "median": 7.6435546875,
+                  "min": 7.04296875,
+                  "n": 3,
+                  "spread_pct": 38.571611089817296
+                },
+                "request_p50_s": {
+                  "max": 54.80287665966898,
+                  "mean": 50.19545173893372,
+                  "median": 48.10882498184219,
+                  "min": 47.674653575289994,
+                  "n": 3,
+                  "spread_pct": 14.816872137428854
+                },
+                "request_p95_s": {
+                  "max": 99.46614158125594,
+                  "mean": 95.90602773626647,
+                  "median": 99.3384101823438,
+                  "min": 88.91353144519962,
+                  "n": 3,
+                  "spread_pct": 10.622890095267415
+                },
+                "stage_crop_mean_ms": {
+                  "max": 5.597807514860843,
+                  "mean": 5.307981963845077,
+                  "median": 5.242301759308927,
+                  "min": 5.083836617365462,
+                  "n": 3,
+                  "spread_pct": 9.804298208944317
+                },
+                "stage_crop_seconds": {
+                  "max": 4.573408739641309,
+                  "mean": 4.336621264461428,
+                  "median": 4.282960537355393,
+                  "min": 4.153494516387582,
+                  "n": 3,
+                  "spread_pct": 9.804298208944322
+                },
+                "stage_decode_mean_ms": {
+                  "max": 308.3969119749963,
+                  "mean": 307.1801409708957,
+                  "median": 306.72273764386773,
+                  "min": 306.420773293823,
+                  "n": 3,
+                  "spread_pct": 0.6442752488300351
+                },
+                "stage_decode_seconds": {
+                  "max": 154.19845598749816,
+                  "mean": 153.59007048544785,
+                  "median": 153.36136882193387,
+                  "min": 153.2103866469115,
+                  "n": 3,
+                  "spread_pct": 0.6442752488300351
+                },
+                "stage_embed_mean_ms": {
+                  "max": 6152.668978791308,
+                  "mean": 5844.9631932741395,
+                  "median": 5796.526914454918,
+                  "min": 5585.69368657619,
+                  "n": 3,
+                  "spread_pct": 9.78129318784392
+                },
+                "stage_embed_seconds": {
+                  "max": 4946.745858948212,
+                  "mean": 4699.350407392408,
+                  "median": 4660.407639221754,
+                  "min": 4490.897724007256,
+                  "n": 3,
+                  "spread_pct": 9.781293187843936
+                },
+                "stage_jpeg_encode_mean_ms": {
+                  "max": 13.4252257339629,
+                  "mean": 13.324720470401182,
+                  "median": 13.307890968198913,
+                  "min": 13.241044709041734,
+                  "n": 3,
+                  "spread_pct": 1.383998601741574
+                },
+                "stage_jpeg_encode_seconds": {
+                  "max": 10.968409424647689,
+                  "mean": 10.886296624317765,
+                  "median": 10.872546921018511,
+                  "min": 10.817933527287096,
+                  "n": 3,
+                  "spread_pct": 1.383998601741577
+                },
+                "stage_opensearch_write_mean_ms": {
+                  "max": 5027.9249819510305,
+                  "mean": 4874.904863563487,
+                  "median": 4911.504696156778,
+                  "min": 4685.284912582653,
+                  "n": 3,
+                  "spread_pct": 6.976274900775133
+                },
+                "stage_opensearch_write_seconds": {
+                  "max": 3866.4743111203425,
+                  "mean": 3790.1617086012848,
+                  "median": 3826.0621583061293,
+                  "min": 3677.9486563773826,
+                  "n": 3,
+                  "spread_pct": 4.927407003403828
+                },
+                "stage_resize_mean_ms": {
+                  "max": 11.075811214366201,
+                  "mean": 11.004797755451188,
+                  "median": 10.982864315353208,
+                  "min": 10.955717736634156,
+                  "n": 3,
+                  "spread_pct": 1.093462272534527
+                },
+                "stage_resize_seconds": {
+                  "max": 3.2673643082380295,
+                  "mean": 3.246415337858101,
+                  "median": 3.2399449730291963,
+                  "min": 3.2319367323070765,
+                  "n": 3,
+                  "spread_pct": 1.093462272534521
+                },
+                "triton_cpu_s_per_image": {
+                  "max": 0.0254168650963598,
+                  "mean": 0.025143663553996637,
+                  "median": 0.02509561934156373,
+                  "min": 0.024918506224066373,
+                  "n": 3,
+                  "spread_pct": 1.9858401002601938
+                },
+                "triton_pe_image_encoder_infer_ms_per_image": {
+                  "max": 16.16687846466809,
+                  "mean": 15.79382318946751,
+                  "median": 15.62915110373444,
+                  "min": 15.58544,
+                  "n": 3,
+                  "spread_pct": 3.7202178212299817
+                },
+                "triton_pe_image_encoder_mean_batch": {
+                  "max": 4.588850174216028,
+                  "mean": 4.526203755455399,
+                  "median": 4.494880546075085,
+                  "min": 4.494880546075085,
+                  "n": 3,
+                  "spread_pct": 2.0905923344947888
+                },
+                "triton_pe_image_encoder_queue_ms": {
+                  "max": 11.691479417910449,
+                  "mean": 10.416844669983417,
+                  "median": 9.9203891380597,
+                  "min": 9.6386654539801,
+                  "n": 3,
+                  "spread_pct": 20.692877420046983
+                },
+                "triton_yolov11_small_trt_end2end_infer_ms_per_image": {
+                  "max": 1.677095443254818,
+                  "mean": 1.2640383678336828,
+                  "median": 1.144373440329218,
+                  "min": 0.9706462199170124,
+                  "n": 3,
+                  "spread_pct": 61.73240294134853
+                },
+                "triton_yolov11_small_trt_end2end_mean_batch": {
+                  "max": 7.936507936507937,
+                  "mean": 7.936507936507937,
+                  "median": 7.936507936507937,
+                  "min": 7.936507936507937,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "triton_yolov11_small_trt_end2end_queue_ms": {
+                  "max": 1.0367929841269843,
+                  "mean": 0.8332538941798943,
+                  "median": 0.8511848730158731,
+                  "min": 0.6117838253968254,
+                  "n": 3,
+                  "spread_pct": 49.9314746071895
+                },
+                "wall_s": {
+                  "max": 99.82085382239893,
+                  "mean": 96.11611051640163,
+                  "median": 99.4534733290784,
+                  "min": 89.07400439772755,
+                  "n": 3,
+                  "spread_pct": 10.805906586199837
+                }
+              }
+            }
+          },
+          "b8_c8": {
+            "batch": {
+              "runs": [
+                {
+                  "attribution": {
+                    "foreign_active_share": 0.0,
+                    "foreign_sm_mean_pct": 0.0,
+                    "foreign_sm_peak_pct": 0,
+                    "own_sm_mean_pct": 8.8,
+                    "own_sm_peak_pct": 33.0,
+                    "samples": 75
+                  },
+                  "attribution_by_gpu": {
+                    "2": {
+                      "foreign_active_share": 0.0,
+                      "foreign_sm_mean_pct": 0.0,
+                      "foreign_sm_peak_pct": 0,
+                      "own_sm_mean_pct": 8.8,
+                      "own_sm_peak_pct": 33.0,
+                      "samples": 75
+                    }
+                  },
+                  "clocks_by_gpu": {
+                    "0": {
+                      "power_w_max": 28.63,
+                      "power_w_mean": 22.709625,
+                      "samples": 80,
+                      "sm_mhz_mean": 210.0,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.0125
+                    },
+                    "1": {
+                      "power_w_max": 186.06,
+                      "power_w_mean": 99.85825,
+                      "samples": 80,
+                      "sm_mhz_mean": 1510.3125,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.4125
+                    },
+                    "2": {
+                      "power_w_max": 213.79,
+                      "power_w_mean": 110.871875,
+                      "samples": 80,
+                      "sm_mhz_mean": 1744.3125,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.4125
+                    }
+                  },
+                  "cluster": {
+                    "stage_durations": {},
+                    "status": "skipped",
+                    "wall_s": 0.0
+                  },
+                  "flat": {
+                    "api_cpu_s_per_image": 1.1044031640000003,
+                    "busy_pe_image_encoder": 0.08787864676303876,
+                    "busy_total": 0.0937532801894311,
+                    "busy_yolov11_small_trt_end2end": 0.005874633426392341,
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "client_received_bytes_per_image": 604.678,
+                    "client_sent_bytes_per_image": 75.84,
+                    "cluster_train_wall_s": 0.0,
+                    "duplicates": 0.0,
+                    "failed": 0.0,
+                    "gpu0_mem_peak_mb": 16392.0,
+                    "gpu0_sm_mhz_mean": 210.0,
+                    "gpu0_throttled_share": 0.0125,
+                    "gpu0_util_mean_pct": 0.0,
+                    "gpu1_mem_peak_mb": 7572.0,
+                    "gpu1_sm_mhz_mean": 1510.3125,
+                    "gpu1_throttled_share": 0.4125,
+                    "gpu1_util_mean_pct": 16.65432098765432,
+                    "gpu2_foreign_sm_mean_pct": 0.0,
+                    "gpu2_mem_peak_mb": 14116.0,
+                    "gpu2_own_sm_mean_pct": 8.8,
+                    "gpu2_sm_mhz_mean": 1744.3125,
+                    "gpu2_throttled_share": 0.4125,
+                    "gpu2_util_mean_pct": 11.049382716049383,
+                    "host_busy_pct": 23.065329244841745,
+                    "idle_api_cores_before": 0.2310913000000255,
+                    "images_per_s": 5.867223018110454,
+                    "items_per_image": 1.634,
+                    "load_avg_1m": 9.888671875,
+                    "request_p50_s": 9.097045980393887,
+                    "request_p95_s": 17.561458593653516,
+                    "stage_crop_mean_ms": 3.7673551964287437,
+                    "stage_crop_seconds": 3.077929195482284,
+                    "stage_decode_mean_ms": 297.704466490075,
+                    "stage_decode_seconds": 148.8522332450375,
+                    "stage_embed_mean_ms": 1657.6033868347365,
+                    "stage_embed_seconds": 1332.713123015128,
+                    "stage_jpeg_encode_mean_ms": 13.289784774357495,
+                    "stage_jpeg_encode_seconds": 10.857754160650074,
+                    "stage_opensearch_write_mean_ms": 619.8019552741598,
+                    "stage_opensearch_write_seconds": 492.74255444295704,
+                    "stage_resize_mean_ms": 11.296095986361221,
+                    "stage_resize_seconds": 3.33234831597656,
+                    "triton_cpu_s_per_image": 0.022352887999999894,
+                    "triton_pe_image_encoder_infer_ms_per_image": 14.977894396,
+                    "triton_pe_image_encoder_mean_batch": 4.1415094339622645,
+                    "triton_pe_image_encoder_queue_ms": 10.055820921641791,
+                    "triton_yolov11_small_trt_end2end_infer_ms_per_image": 1.001263018,
+                    "triton_yolov11_small_trt_end2end_mean_batch": 7.936507936507937,
+                    "triton_yolov11_small_trt_end2end_queue_ms": 0.8915125238095238,
+                    "wall_s": 85.21919116703793
+                  },
+                  "gpu": {
+                    "0": {
+                      "mem_peak_mb": 16392.0,
+                      "samples": 81,
+                      "util_mean_pct": 0.0
+                    },
+                    "1": {
+                      "mem_peak_mb": 7572.0,
+                      "samples": 81,
+                      "util_mean_pct": 16.65432098765432
+                    },
+                    "2": {
+                      "mem_peak_mb": 14116.0,
+                      "samples": 81,
+                      "util_mean_pct": 11.049382716049383
+                    }
+                  },
+                  "host_busy_pct": 23.065329244841745,
+                  "load_average": [
+                    9.888671875,
+                    9.08251953125,
+                    8.0087890625
+                  ],
+                  "mode": "batch",
+                  "rep": 1,
+                  "slug": "ac-batch-r1-223404",
+                  "stages": {
+                    "crop": {
+                      "bytes": 0.0,
+                      "calls": 817.0,
+                      "mean_ms": 3.7673551964287437,
+                      "seconds": 3.077929195482284
+                    },
+                    "decode": {
+                      "bytes": 5211571077.0,
+                      "calls": 500.0,
+                      "mean_ms": 297.704466490075,
+                      "seconds": 148.8522332450375
+                    },
+                    "embed": {
+                      "bytes": 1784208384.0,
+                      "calls": 804.0,
+                      "mean_ms": 1657.6033868347365,
+                      "seconds": 1332.713123015128
+                    },
+                    "jpeg_encode": {
+                      "bytes": 384783024.0,
+                      "calls": 817.0,
+                      "mean_ms": 13.289784774357495,
+                      "seconds": 10.857754160650074
+                    },
+                    "opensearch_write": {
+                      "bytes": 0.0,
+                      "calls": 795.0,
+                      "mean_ms": 619.8019552741598,
+                      "seconds": 492.74255444295704
+                    },
+                    "resize": {
+                      "bytes": 0.0,
+                      "calls": 295.0,
+                      "mean_ms": 11.296095986361221,
+                      "seconds": 3.33234831597656
+                    }
+                  },
+                  "storage": {
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "images": 0,
+                    "indexes": {},
+                    "merge_rounds": 0,
+                    "total_bytes": 0,
+                    "vectors": 0
+                  },
+                  "triton": {
+                    "pe_image_encoder": {
+                      "batch_histogram": {
+                        "1": 59,
+                        "10": 1,
+                        "11": 2,
+                        "12": 1,
+                        "13": 3,
+                        "15": 4,
+                        "16": 4,
+                        "17": 2,
+                        "18": 1,
+                        "19": 2,
+                        "2": 62,
+                        "20": 1,
+                        "21": 2,
+                        "22": 1,
+                        "3": 45,
+                        "4": 87,
+                        "5": 9,
+                        "6": 11,
+                        "7": 10,
+                        "8": 10,
+                        "9": 1
+                      },
+                      "exec_infer_ms": 23.550148421383646,
+                      "exec_input_ms": 1.2743891226415094,
+                      "exec_output_ms": 5.098709974842767,
+                      "executions": 318,
+                      "inferences": 1317,
+                      "mean_batch": 4.1415094339622645,
+                      "queue_ms_per_request": 10.055820921641791,
+                      "requests": 804
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "batch_histogram": {
+                        "4": 1,
+                        "8": 62
+                      },
+                      "exec_infer_ms": 7.946531888888889,
+                      "exec_input_ms": 10.180358650793652,
+                      "exec_output_ms": 0.5327806825396825,
+                      "executions": 63,
+                      "inferences": 500,
+                      "mean_batch": 7.936507936507937,
+                      "queue_ms_per_request": 0.8915125238095238,
+                      "requests": 63
+                    }
+                  },
+                  "triton_wire_bytes": {
+                    "pe_image_encoder": {
+                      "request_bytes": 1784208384,
+                      "response_bytes": 5394432
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "request_bytes": 2457600000,
+                      "response_bytes": 3302000
+                    }
+                  }
+                },
+                {
+                  "attribution": {
+                    "foreign_active_share": 0.0,
+                    "foreign_sm_mean_pct": 0.0,
+                    "foreign_sm_peak_pct": 0,
+                    "own_sm_mean_pct": 7.534883720930233,
+                    "own_sm_peak_pct": 27.0,
+                    "samples": 86
+                  },
+                  "attribution_by_gpu": {
+                    "2": {
+                      "foreign_active_share": 0.0,
+                      "foreign_sm_mean_pct": 0.0,
+                      "foreign_sm_peak_pct": 0,
+                      "own_sm_mean_pct": 7.534883720930233,
+                      "own_sm_peak_pct": 27.0,
+                      "samples": 86
+                    }
+                  },
+                  "clocks_by_gpu": {
+                    "0": {
+                      "power_w_max": 28.67,
+                      "power_w_mean": 22.44391304347826,
+                      "samples": 92,
+                      "sm_mhz_mean": 210.0,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.0
+                    },
+                    "1": {
+                      "power_w_max": 276.5,
+                      "power_w_mean": 122.86902173913045,
+                      "samples": 92,
+                      "sm_mhz_mean": 1667.1195652173913,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.6413043478260869
+                    },
+                    "2": {
+                      "power_w_max": 165.68,
+                      "power_w_mean": 111.70880434782607,
+                      "samples": 92,
+                      "sm_mhz_mean": 1761.6847826086957,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.3804347826086957
+                    }
+                  },
+                  "cluster": {
+                    "stage_durations": {},
+                    "status": "skipped",
+                    "wall_s": 0.0
+                  },
+                  "flat": {
+                    "api_cpu_s_per_image": 1.101969508,
+                    "busy_pe_image_encoder": 0.07750356045142912,
+                    "busy_total": 0.08217905862254797,
+                    "busy_yolov11_small_trt_end2end": 0.0046754981711188545,
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "client_received_bytes_per_image": 610.956,
+                    "client_sent_bytes_per_image": 75.84,
+                    "cluster_train_wall_s": 0.0,
+                    "duplicates": 0.0,
+                    "failed": 0.0,
+                    "gpu0_mem_peak_mb": 16392.0,
+                    "gpu0_sm_mhz_mean": 210.0,
+                    "gpu0_throttled_share": 0.0,
+                    "gpu0_util_mean_pct": 0.0,
+                    "gpu1_mem_peak_mb": 7760.0,
+                    "gpu1_sm_mhz_mean": 1667.1195652173913,
+                    "gpu1_throttled_share": 0.6413043478260869,
+                    "gpu1_util_mean_pct": 24.793478260869566,
+                    "gpu2_foreign_sm_mean_pct": 0.0,
+                    "gpu2_mem_peak_mb": 14116.0,
+                    "gpu2_own_sm_mean_pct": 7.534883720930233,
+                    "gpu2_sm_mhz_mean": 1761.6847826086957,
+                    "gpu2_throttled_share": 0.3804347826086957,
+                    "gpu2_util_mean_pct": 8.880434782608695,
+                    "host_busy_pct": 21.13743071370025,
+                    "idle_api_cores_before": 0.222137900000007,
+                    "images_per_s": 5.126136750316438,
+                    "items_per_image": 1.634,
+                    "load_avg_1m": 10.22705078125,
+                    "request_p50_s": 10.073865647427738,
+                    "request_p95_s": 19.763566750939933,
+                    "stage_crop_mean_ms": 3.4325929339222765,
+                    "stage_crop_seconds": 2.8044284270145,
+                    "stage_decode_mean_ms": 295.9815512318164,
+                    "stage_decode_seconds": 147.9907756159082,
+                    "stage_embed_mean_ms": 1645.5688295475861,
+                    "stage_embed_seconds": 1323.0373389562592,
+                    "stage_jpeg_encode_mean_ms": 13.14137041035269,
+                    "stage_jpeg_encode_seconds": 10.736499625258148,
+                    "stage_opensearch_write_mean_ms": 895.7227325430082,
+                    "stage_opensearch_write_seconds": 712.0995723716915,
+                    "stage_resize_mean_ms": 10.94057350340536,
+                    "stage_resize_seconds": 3.2274691835045815,
+                    "triton_cpu_s_per_image": 0.02311823199999992,
+                    "triton_pe_image_encoder_infer_ms_per_image": 15.119292408,
+                    "triton_pe_image_encoder_mean_batch": 4.1415094339622645,
+                    "triton_pe_image_encoder_queue_ms": 9.873298600746269,
+                    "triton_yolov11_small_trt_end2end_infer_ms_per_image": 0.91209002,
+                    "triton_yolov11_small_trt_end2end_mean_batch": 7.936507936507937,
+                    "triton_yolov11_small_trt_end2end_queue_ms": 0.6098852380952381,
+                    "wall_s": 97.53934090211987
+                  },
+                  "gpu": {
+                    "0": {
+                      "mem_peak_mb": 16392.0,
+                      "samples": 92,
+                      "util_mean_pct": 0.0
+                    },
+                    "1": {
+                      "mem_peak_mb": 7760.0,
+                      "samples": 92,
+                      "util_mean_pct": 24.793478260869566
+                    },
+                    "2": {
+                      "mem_peak_mb": 14116.0,
+                      "samples": 92,
+                      "util_mean_pct": 8.880434782608695
+                    }
+                  },
+                  "host_busy_pct": 21.13743071370025,
+                  "load_average": [
+                    10.22705078125,
+                    9.45947265625,
+                    8.26708984375
+                  ],
+                  "mode": "batch",
+                  "rep": 2,
+                  "slug": "ac-batch-r2-223551",
+                  "stages": {
+                    "crop": {
+                      "bytes": 0.0,
+                      "calls": 817.0,
+                      "mean_ms": 3.4325929339222765,
+                      "seconds": 2.8044284270145
+                    },
+                    "decode": {
+                      "bytes": 5211571077.0,
+                      "calls": 500.0,
+                      "mean_ms": 295.9815512318164,
+                      "seconds": 147.9907756159082
+                    },
+                    "embed": {
+                      "bytes": 1784208384.0,
+                      "calls": 804.0,
+                      "mean_ms": 1645.5688295475861,
+                      "seconds": 1323.0373389562592
+                    },
+                    "jpeg_encode": {
+                      "bytes": 384788887.0,
+                      "calls": 817.0,
+                      "mean_ms": 13.14137041035269,
+                      "seconds": 10.736499625258148
+                    },
+                    "opensearch_write": {
+                      "bytes": 0.0,
+                      "calls": 795.0,
+                      "mean_ms": 895.7227325430082,
+                      "seconds": 712.0995723716915
+                    },
+                    "resize": {
+                      "bytes": 0.0,
+                      "calls": 295.0,
+                      "mean_ms": 10.94057350340536,
+                      "seconds": 3.2274691835045815
+                    }
+                  },
+                  "storage": {
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "images": 0,
+                    "indexes": {},
+                    "merge_rounds": 0,
+                    "total_bytes": 0,
+                    "vectors": 0
+                  },
+                  "triton": {
+                    "pe_image_encoder": {
+                      "batch_histogram": {
+                        "1": 59,
+                        "10": 2,
+                        "11": 2,
+                        "12": 4,
+                        "13": 3,
+                        "14": 1,
+                        "15": 3,
+                        "16": 4,
+                        "17": 2,
+                        "18": 1,
+                        "2": 50,
+                        "21": 1,
+                        "24": 1,
+                        "3": 52,
+                        "4": 89,
+                        "5": 7,
+                        "6": 13,
+                        "7": 10,
+                        "8": 12,
+                        "9": 2
+                      },
+                      "exec_infer_ms": 23.77247233962264,
+                      "exec_input_ms": 1.238213534591195,
+                      "exec_output_ms": 5.0542937704402515,
+                      "executions": 318,
+                      "inferences": 1317,
+                      "mean_batch": 4.1415094339622645,
+                      "queue_ms_per_request": 9.873298600746269,
+                      "requests": 804
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "batch_histogram": {
+                        "4": 1,
+                        "8": 62
+                      },
+                      "exec_infer_ms": 7.238809682539682,
+                      "exec_input_ms": 10.05308065079365,
+                      "exec_output_ms": 0.5508769523809524,
+                      "executions": 63,
+                      "inferences": 500,
+                      "mean_batch": 7.936507936507937,
+                      "queue_ms_per_request": 0.6098852380952381,
+                      "requests": 63
+                    }
+                  },
+                  "triton_wire_bytes": {
+                    "pe_image_encoder": {
+                      "request_bytes": 1784208384,
+                      "response_bytes": 5394432
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "request_bytes": 2457600000,
+                      "response_bytes": 3302000
+                    }
+                  }
+                },
+                {
+                  "attribution": {
+                    "foreign_active_share": 0.0,
+                    "foreign_sm_mean_pct": 0.0,
+                    "foreign_sm_peak_pct": 0,
+                    "own_sm_mean_pct": 8.0,
+                    "own_sm_peak_pct": 37.0,
+                    "samples": 82
+                  },
+                  "attribution_by_gpu": {
+                    "2": {
+                      "foreign_active_share": 0.0,
+                      "foreign_sm_mean_pct": 0.0,
+                      "foreign_sm_peak_pct": 0,
+                      "own_sm_mean_pct": 8.0,
+                      "own_sm_peak_pct": 37.0,
+                      "samples": 82
+                    }
+                  },
+                  "clocks_by_gpu": {
+                    "0": {
+                      "power_w_max": 28.32,
+                      "power_w_mean": 22.330333333333332,
+                      "samples": 90,
+                      "sm_mhz_mean": 210.0,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.0
+                    },
+                    "1": {
+                      "power_w_max": 348.35,
+                      "power_w_mean": 149.57788888888888,
+                      "samples": 90,
+                      "sm_mhz_mean": 1082.5,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.45555555555555555
+                    },
+                    "2": {
+                      "power_w_max": 183.96,
+                      "power_w_mean": 113.15744444444445,
+                      "samples": 90,
+                      "sm_mhz_mean": 1759.1666666666667,
+                      "sm_mhz_min": 210.0,
+                      "throttled_share": 0.4111111111111111
+                    }
+                  },
+                  "cluster": {
+                    "stage_durations": {},
+                    "status": "skipped",
+                    "wall_s": 0.0
+                  },
+                  "flat": {
+                    "api_cpu_s_per_image": 1.098120186,
+                    "busy_pe_image_encoder": 0.07836979713952055,
+                    "busy_total": 0.08314618017048363,
+                    "busy_yolov11_small_trt_end2end": 0.004776383030963078,
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "client_received_bytes_per_image": 617.138,
+                    "client_sent_bytes_per_image": 75.84,
+                    "cluster_train_wall_s": 0.0,
+                    "duplicates": 0.0,
+                    "failed": 0.0,
+                    "gpu0_mem_peak_mb": 16392.0,
+                    "gpu0_sm_mhz_mean": 210.0,
+                    "gpu0_throttled_share": 0.0,
+                    "gpu0_util_mean_pct": 0.0,
+                    "gpu1_mem_peak_mb": 7606.0,
+                    "gpu1_sm_mhz_mean": 1082.5,
+                    "gpu1_throttled_share": 0.45555555555555555,
+                    "gpu1_util_mean_pct": 37.266666666666666,
+                    "gpu2_foreign_sm_mean_pct": 0.0,
+                    "gpu2_mem_peak_mb": 14116.0,
+                    "gpu2_own_sm_mean_pct": 8.0,
+                    "gpu2_sm_mhz_mean": 1759.1666666666667,
+                    "gpu2_throttled_share": 0.4111111111111111,
+                    "gpu2_util_mean_pct": 8.155555555555555,
+                    "host_busy_pct": 19.58509342980347,
+                    "idle_api_cores_before": 0.24261859999996888,
+                    "images_per_s": 5.221392885423844,
+                    "items_per_image": 1.634,
+                    "load_avg_1m": 8.892578125,
+                    "request_p50_s": 9.346554887015373,
+                    "request_p95_s": 21.592193605378267,
+                    "stage_crop_mean_ms": 3.3873836509883404,
+                    "stage_crop_seconds": 2.767492442857474,
+                    "stage_decode_mean_ms": 293.46542965248227,
+                    "stage_decode_seconds": 146.73271482624114,
+                    "stage_embed_mean_ms": 1633.8588579897234,
+                    "stage_embed_seconds": 1313.6225218237378,
+                    "stage_jpeg_encode_mean_ms": 13.3210865232405,
+                    "stage_jpeg_encode_seconds": 10.883327689487487,
+                    "stage_opensearch_write_mean_ms": 883.3285253559409,
+                    "stage_opensearch_write_seconds": 702.246177657973,
+                    "stage_resize_mean_ms": 11.379636434238341,
+                    "stage_resize_seconds": 3.3569927481003106,
+                    "triton_cpu_s_per_image": 0.024017833999999995,
+                    "triton_pe_image_encoder_infer_ms_per_image": 15.009366056000001,
+                    "triton_pe_image_encoder_mean_batch": 4.234726688102894,
+                    "triton_pe_image_encoder_queue_ms": 10.38749828482587,
+                    "triton_yolov11_small_trt_end2end_infer_ms_per_image": 0.9147718119999999,
+                    "triton_yolov11_small_trt_end2end_mean_batch": 7.936507936507937,
+                    "triton_yolov11_small_trt_end2end_queue_ms": 0.6143944761904762,
+                    "wall_s": 95.75988839985803
+                  },
+                  "gpu": {
+                    "0": {
+                      "mem_peak_mb": 16392.0,
+                      "samples": 90,
+                      "util_mean_pct": 0.0
+                    },
+                    "1": {
+                      "mem_peak_mb": 7606.0,
+                      "samples": 90,
+                      "util_mean_pct": 37.266666666666666
+                    },
+                    "2": {
+                      "mem_peak_mb": 14116.0,
+                      "samples": 90,
+                      "util_mean_pct": 8.155555555555555
+                    }
+                  },
+                  "host_busy_pct": 19.58509342980347,
+                  "load_average": [
+                    8.892578125,
+                    9.33984375,
+                    8.37060546875
+                  ],
+                  "mode": "batch",
+                  "rep": 3,
+                  "slug": "ac-batch-r3-223748",
+                  "stages": {
+                    "crop": {
+                      "bytes": 0.0,
+                      "calls": 817.0,
+                      "mean_ms": 3.3873836509883404,
+                      "seconds": 2.767492442857474
+                    },
+                    "decode": {
+                      "bytes": 5211571077.0,
+                      "calls": 500.0,
+                      "mean_ms": 293.46542965248227,
+                      "seconds": 146.73271482624114
+                    },
+                    "embed": {
+                      "bytes": 1784208384.0,
+                      "calls": 804.0,
+                      "mean_ms": 1633.8588579897234,
+                      "seconds": 1313.6225218237378
+                    },
+                    "jpeg_encode": {
+                      "bytes": 384779878.0,
+                      "calls": 817.0,
+                      "mean_ms": 13.3210865232405,
+                      "seconds": 10.883327689487487
+                    },
+                    "opensearch_write": {
+                      "bytes": 0.0,
+                      "calls": 795.0,
+                      "mean_ms": 883.3285253559409,
+                      "seconds": 702.246177657973
+                    },
+                    "resize": {
+                      "bytes": 0.0,
+                      "calls": 295.0,
+                      "mean_ms": 11.379636434238341,
+                      "seconds": 3.3569927481003106
+                    }
+                  },
+                  "storage": {
+                    "bytes_per_image": 0.0,
+                    "bytes_per_vector": 0.0,
+                    "images": 0,
+                    "indexes": {},
+                    "merge_rounds": 0,
+                    "total_bytes": 0,
+                    "vectors": 0
+                  },
+                  "triton": {
+                    "pe_image_encoder": {
+                      "batch_histogram": {
+                        "1": 53,
+                        "10": 1,
+                        "11": 2,
+                        "13": 4,
+                        "14": 3,
+                        "15": 1,
+                        "16": 4,
+                        "17": 3,
+                        "18": 2,
+                        "19": 1,
+                        "2": 53,
+                        "21": 1,
+                        "23": 1,
+                        "3": 51,
+                        "4": 88,
+                        "5": 8,
+                        "6": 7,
+                        "7": 9,
+                        "8": 18,
+                        "9": 1
+                      },
+                      "exec_infer_ms": 24.130813594855308,
+                      "exec_input_ms": 1.402835536977492,
+                      "exec_output_ms": 5.524885250803859,
+                      "executions": 311,
+                      "inferences": 1317,
+                      "mean_batch": 4.234726688102894,
+                      "queue_ms_per_request": 10.38749828482587,
+                      "requests": 804
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "batch_histogram": {
+                        "4": 1,
+                        "8": 62
+                      },
+                      "exec_infer_ms": 7.260093746031746,
+                      "exec_input_ms": 10.552214015873016,
+                      "exec_output_ms": 0.5541032539682539,
+                      "executions": 63,
+                      "inferences": 500,
+                      "mean_batch": 7.936507936507937,
+                      "queue_ms_per_request": 0.6143944761904762,
+                      "requests": 63
+                    }
+                  },
+                  "triton_wire_bytes": {
+                    "pe_image_encoder": {
+                      "request_bytes": 1784208384,
+                      "response_bytes": 5394432
+                    },
+                    "yolov11_small_trt_end2end": {
+                      "request_bytes": 2457600000,
+                      "response_bytes": 3302000
+                    }
+                  }
+                }
+              ],
+              "summary": {
+                "api_cpu_s_per_image": {
+                  "max": 1.1044031640000003,
+                  "mean": 1.1014976193333335,
+                  "median": 1.101969508,
+                  "min": 1.098120186,
+                  "n": 3,
+                  "spread_pct": 0.5701589703151946
+                },
+                "busy_pe_image_encoder": {
+                  "max": 0.08787864676303876,
+                  "mean": 0.08125066811799614,
+                  "median": 0.07836979713952055,
+                  "min": 0.07750356045142912,
+                  "n": 3,
+                  "spread_pct": 13.238628515445866
+                },
+                "busy_total": {
+                  "max": 0.0937532801894311,
+                  "mean": 0.08635950632748757,
+                  "median": 0.08314618017048363,
+                  "min": 0.08217905862254797,
+                  "n": 3,
+                  "spread_pct": 13.920328682750371
+                },
+                "busy_yolov11_small_trt_end2end": {
+                  "max": 0.005874633426392341,
+                  "mean": 0.005108838209491424,
+                  "median": 0.004776383030963078,
+                  "min": 0.0046754981711188545,
+                  "n": 3,
+                  "spread_pct": 25.10550865581861
+                },
+                "bytes_per_image": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "bytes_per_vector": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "client_received_bytes_per_image": {
+                  "max": 617.138,
+                  "mean": 610.924,
+                  "median": 610.956,
+                  "min": 604.678,
+                  "n": 3,
+                  "spread_pct": 2.0394267344947976
+                },
+                "client_sent_bytes_per_image": {
+                  "max": 75.84,
+                  "mean": 75.84,
+                  "median": 75.84,
+                  "min": 75.84,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "cluster_train_wall_s": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "duplicates": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "failed": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu0_mem_peak_mb": {
+                  "max": 16392.0,
+                  "mean": 16392.0,
+                  "median": 16392.0,
+                  "min": 16392.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu0_sm_mhz_mean": {
+                  "max": 210.0,
+                  "mean": 210.0,
+                  "median": 210.0,
+                  "min": 210.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu0_throttled_share": {
+                  "max": 0.0125,
+                  "mean": 0.004166666666666667,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu0_util_mean_pct": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu1_mem_peak_mb": {
+                  "max": 7760.0,
+                  "mean": 7646.0,
+                  "median": 7606.0,
+                  "min": 7572.0,
+                  "n": 3,
+                  "spread_pct": 2.4717328424927687
+                },
+                "gpu1_sm_mhz_mean": {
+                  "max": 1667.1195652173913,
+                  "mean": 1419.9773550724638,
+                  "median": 1510.3125,
+                  "min": 1082.5,
+                  "n": 3,
+                  "spread_pct": 38.708516629332756
+                },
+                "gpu1_throttled_share": {
+                  "max": 0.6413043478260869,
+                  "mean": 0.5031199677938808,
+                  "median": 0.45555555555555555,
+                  "min": 0.4125,
+                  "n": 3,
+                  "spread_pct": 50.22534464475079
+                },
+                "gpu1_util_mean_pct": {
+                  "max": 37.266666666666666,
+                  "mean": 26.238155305063515,
+                  "median": 24.793478260869566,
+                  "min": 16.65432098765432,
+                  "n": 3,
+                  "spread_pct": 83.1361596873799
+                },
+                "gpu2_foreign_sm_mean_pct": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu2_mem_peak_mb": {
+                  "max": 14116.0,
+                  "mean": 14116.0,
+                  "median": 14116.0,
+                  "min": 14116.0,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "gpu2_own_sm_mean_pct": {
+                  "max": 8.8,
+                  "mean": 8.111627906976745,
+                  "median": 8.0,
+                  "min": 7.534883720930233,
+                  "n": 3,
+                  "spread_pct": 15.813953488372102
+                },
+                "gpu2_sm_mhz_mean": {
+                  "max": 1761.6847826086957,
+                  "mean": 1755.054649758454,
+                  "median": 1759.1666666666667,
+                  "min": 1744.3125,
+                  "n": 3,
+                  "spread_pct": 0.9875290919201748
+                },
+                "gpu2_throttled_share": {
+                  "max": 0.4125,
+                  "mean": 0.40134863123993564,
+                  "median": 0.4111111111111111,
+                  "min": 0.3804347826086957,
+                  "n": 3,
+                  "spread_pct": 7.799647473560506
+                },
+                "gpu2_util_mean_pct": {
+                  "max": 11.049382716049383,
+                  "mean": 9.36179101807121,
+                  "median": 8.880434782608695,
+                  "min": 8.155555555555555,
+                  "n": 3,
+                  "spread_pct": 32.58654819650333
+                },
+                "host_busy_pct": {
+                  "max": 23.065329244841745,
+                  "mean": 21.262617796115155,
+                  "median": 21.13743071370025,
+                  "min": 19.58509342980347,
+                  "n": 3,
+                  "spread_pct": 16.464800581380757
+                },
+                "idle_api_cores_before": {
+                  "max": 0.24261859999996888,
+                  "mean": 0.23194926666666713,
+                  "median": 0.2310913000000255,
+                  "min": 0.222137900000007,
+                  "n": 3,
+                  "spread_pct": 8.86260105852519
+                },
+                "images_per_s": {
+                  "max": 5.867223018110454,
+                  "mean": 5.404917551283579,
+                  "median": 5.221392885423844,
+                  "min": 5.126136750316438,
+                  "n": 3,
+                  "spread_pct": 14.193267659724446
+                },
+                "items_per_image": {
+                  "max": 1.634,
+                  "mean": 1.6339999999999997,
+                  "median": 1.634,
+                  "min": 1.634,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "load_avg_1m": {
+                  "max": 10.22705078125,
+                  "mean": 9.66943359375,
+                  "median": 9.888671875,
+                  "min": 8.892578125,
+                  "n": 3,
+                  "spread_pct": 13.494963460398973
+                },
+                "request_p50_s": {
+                  "max": 10.073865647427738,
+                  "mean": 9.505822171612332,
+                  "median": 9.346554887015373,
+                  "min": 9.097045980393887,
+                  "n": 3,
+                  "spread_pct": 10.451119999208373
+                },
+                "request_p95_s": {
+                  "max": 21.592193605378267,
+                  "mean": 19.639072983323903,
+                  "median": 19.763566750939933,
+                  "min": 17.561458593653516,
+                  "n": 3,
+                  "spread_pct": 20.394775206924905
+                },
+                "stage_crop_mean_ms": {
+                  "max": 3.7673551964287437,
+                  "mean": 3.529110593779787,
+                  "median": 3.4325929339222765,
+                  "min": 3.3873836509883404,
+                  "n": 3,
+                  "spread_pct": 11.0695195368309
+                },
+                "stage_crop_seconds": {
+                  "max": 3.077929195482284,
+                  "mean": 2.883283355118086,
+                  "median": 2.8044284270145,
+                  "min": 2.767492442857474,
+                  "n": 3,
+                  "spread_pct": 11.069519536830907
+                },
+                "stage_decode_mean_ms": {
+                  "max": 297.704466490075,
+                  "mean": 295.7171491247912,
+                  "median": 295.9815512318164,
+                  "min": 293.46542965248227,
+                  "n": 3,
+                  "spread_pct": 1.4321963041110812
+                },
+                "stage_decode_seconds": {
+                  "max": 148.8522332450375,
+                  "mean": 147.8585745623956,
+                  "median": 147.9907756159082,
+                  "min": 146.73271482624114,
+                  "n": 3,
+                  "spread_pct": 1.4321963041110812
+                },
+                "stage_embed_mean_ms": {
+                  "max": 1657.6033868347365,
+                  "mean": 1645.6770247906818,
+                  "median": 1645.5688295475861,
+                  "min": 1633.8588579897234,
+                  "n": 3,
+                  "spread_pct": 1.4429374462289197
+                },
+                "stage_embed_seconds": {
+                  "max": 1332.713123015128,
+                  "mean": 1323.1243279317084,
+                  "median": 1323.0373389562592,
+                  "min": 1313.6225218237378,
+                  "n": 3,
+                  "spread_pct": 1.4429374462289049
+                },
+                "stage_jpeg_encode_mean_ms": {
+                  "max": 13.3210865232405,
+                  "mean": 13.250747235983562,
+                  "median": 13.289784774357495,
+                  "min": 13.14137041035269,
+                  "n": 3,
+                  "spread_pct": 1.3522876099135093
+                },
+                "stage_jpeg_encode_seconds": {
+                  "max": 10.883327689487487,
+                  "mean": 10.82586049179857,
+                  "median": 10.857754160650074,
+                  "min": 10.736499625258148,
+                  "n": 3,
+                  "spread_pct": 1.352287609913508
+                },
+                "stage_opensearch_write_mean_ms": {
+                  "max": 895.7227325430082,
+                  "mean": 799.6177377243697,
+                  "median": 883.3285253559409,
+                  "min": 619.8019552741598,
+                  "n": 3,
+                  "spread_pct": 31.23648442776881
+                },
+                "stage_opensearch_write_seconds": {
+                  "max": 712.0995723716915,
+                  "mean": 635.6961014908738,
+                  "median": 702.246177657973,
+                  "min": 492.74255444295704,
+                  "n": 3,
+                  "spread_pct": 31.236484427768808
+                },
+                "stage_resize_mean_ms": {
+                  "max": 11.379636434238341,
+                  "mean": 11.20543530800164,
+                  "median": 11.296095986361221,
+                  "min": 10.94057350340536,
+                  "n": 3,
+                  "spread_pct": 3.8868555239181743
+                },
+                "stage_resize_seconds": {
+                  "max": 3.3569927481003106,
+                  "mean": 3.305603415860484,
+                  "median": 3.33234831597656,
+                  "min": 3.2274691835045815,
+                  "n": 3,
+                  "spread_pct": 3.886855523918172
+                },
+                "triton_cpu_s_per_image": {
+                  "max": 0.024017833999999995,
+                  "mean": 0.023162984666666605,
+                  "median": 0.02311823199999992,
+                  "min": 0.022352887999999894,
+                  "n": 3,
+                  "spread_pct": 7.20187426097336
+                },
+                "triton_pe_image_encoder_infer_ms_per_image": {
+                  "max": 15.119292408,
+                  "mean": 15.03551762,
+                  "median": 15.009366056000001,
+                  "min": 14.977894396,
+                  "n": 3,
+                  "spread_pct": 0.942065184315202
+                },
+                "triton_pe_image_encoder_mean_batch": {
+                  "max": 4.234726688102894,
+                  "mean": 4.172581852009141,
+                  "median": 4.1415094339622645,
+                  "min": 4.1415094339622645,
+                  "n": 3,
+                  "spread_pct": 2.250803858520895
+                },
+                "triton_pe_image_encoder_queue_ms": {
+                  "max": 10.38749828482587,
+                  "mean": 10.10553926907131,
+                  "median": 10.055820921641791,
+                  "min": 9.873298600746269,
+                  "n": 3,
+                  "spread_pct": 5.1134530744571896
+                },
+                "triton_yolov11_small_trt_end2end_infer_ms_per_image": {
+                  "max": 1.001263018,
+                  "mean": 0.9427082833333333,
+                  "median": 0.9147718119999999,
+                  "min": 0.91209002,
+                  "n": 3,
+                  "spread_pct": 9.748113882634591
+                },
+                "triton_yolov11_small_trt_end2end_mean_batch": {
+                  "max": 7.936507936507937,
+                  "mean": 7.936507936507937,
+                  "median": 7.936507936507937,
+                  "min": 7.936507936507937,
+                  "n": 3,
+                  "spread_pct": 0.0
+                },
+                "triton_yolov11_small_trt_end2end_queue_ms": {
+                  "max": 0.8915125238095238,
+                  "mean": 0.7052640793650794,
+                  "median": 0.6143944761904762,
+                  "min": 0.6098852380952381,
+                  "n": 3,
+                  "spread_pct": 45.838186479231126
+                },
+                "wall_s": {
+                  "max": 97.53934090211987,
+                  "mean": 92.83947348967195,
+                  "median": 95.75988839985803,
+                  "min": 85.21919116703793,
+                  "n": 3,
+                  "spread_pct": 12.86566843482266
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "config": {
+      "arms": [
+        ""
+      ],
+      "cluster_training": false,
+      "dataset_manifest_sha256": "c013c1f95f60b7d1eafafc4b0865fc9b17003a2f9d654ae2ae7223c22c58cde8",
+      "images": 500,
+      "modes": "batch",
+      "points": [
+        "8x8",
+        "8x16",
+        "8x32",
+        "8x64"
+      ],
+      "reps": 3
+    }
+  }
+}

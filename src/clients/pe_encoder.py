@@ -73,11 +73,13 @@ import numpy as np
 from src.config.settings import TritonModelConfig
 from src.core.logging import get_logger
 from src.services.detection.pe_preprocess import (
-    normalize_chw,
+    PE_SIZE,
+    normalize_into,
     resize_crop_rgb,
     whole_frame_chw,
     whole_frame_chw_from_bytes,
 )
+from src.utils.cpu_pool import encoded_nbytes, run_cpu
 from src.utils.stage_timing import stage_timer
 
 
@@ -109,6 +111,22 @@ PE_TEXT_BACKENDS = ('auto', 'onnx', 'triton', 'torch')
 _TEXT_CACHE_SIZE = 256
 
 TextCacheInfo = namedtuple('TextCacheInfo', ['hits', 'misses', 'maxsize', 'currsize'])
+
+
+def _preprocess_crops(crops: list[np.ndarray]) -> np.ndarray:
+    """PE preprocessing of a list of HWC-uint8 crops into one ``(N, 3, 336, 336)`` batch."""
+    with stage_timer('pe_preprocess'):
+        batch = np.empty((len(crops), 3, PE_SIZE, PE_SIZE), dtype=np.float32)
+        for slot, crop in zip(batch, crops, strict=True):
+            normalize_into(slot, resize_crop_rgb(crop))
+        return batch
+
+
+def _timed_whole_frame(preprocess: Any, source: str | bytes) -> np.ndarray | None:
+    """``preprocess(source)`` (a whole-frame decode and normalize) under the stage timer."""
+    nbytes = len(source) if isinstance(source, bytes) else 0
+    with stage_timer('whole_frame_preprocess', nbytes=nbytes):
+        return preprocess(source)
 
 
 def _l2_normalize(matrix: np.ndarray) -> np.ndarray:
@@ -347,13 +365,13 @@ class PEEncoder:
         if chws.ndim != 4 or chws.shape[1] != 3:
             raise ValueError(f'encode_images expects (N, 3, H, W) float32; got shape {chws.shape}')
 
-        from tritonclient.grpc import InferInput, InferRequestedOutput
+        from tritonclient.grpc import InferRequestedOutput
 
-        batch = np.ascontiguousarray(chws, dtype=np.float32)
-        inp = InferInput('images', list(batch.shape), 'FP32')
-        inp.set_data_from_numpy(batch)
+        from src.clients.triton_pool import fp32_images_input
+
+        inp = await run_cpu(fp32_images_input, chws, nbytes=chws.nbytes)
         outs = [InferRequestedOutput('image_embeddings')]
-        with stage_timer('embed', nbytes=batch.nbytes):
+        with stage_timer('embed', nbytes=chws.nbytes):
             result = await self.triton_pool.infer(PE_IMAGE_MODEL, [inp], outputs=outs)
         embeddings = np.asarray(result.as_numpy('image_embeddings'), dtype=np.float32)
         return _l2_normalize(embeddings)
@@ -384,11 +402,7 @@ class PEEncoder:
         if not crops:
             return np.zeros((0, PE_EMBEDDING_DIM), dtype=np.float32)
 
-        with stage_timer('resize'):
-            chws = np.stack(
-                [normalize_chw(resize_crop_rgb(crop)) for crop in crops],
-                axis=0,
-            ).astype(np.float32, copy=False)
+        chws = await run_cpu(_preprocess_crops, crops, nbytes=sum(c.nbytes for c in crops))
 
         rows: list[np.ndarray] = []
         for start in range(0, chws.shape[0], max_batch):
@@ -408,7 +422,7 @@ class PEEncoder:
         Returns ``None`` on a decode failure — callers should treat a
         missing whole-frame embedding as non-fatal.
         """
-        chw = whole_frame_chw(path)
+        chw = await run_cpu(_timed_whole_frame, whole_frame_chw, path, nbytes=encoded_nbytes(path))
         if chw is None:
             return None
         batch = chw[None, ...].astype(np.float32, copy=False)
@@ -422,7 +436,9 @@ class PEEncoder:
         identifier, not a file the API container can open. Same
         preprocessing, so the vector matches the from-disk path.
         """
-        chw = whole_frame_chw_from_bytes(data)
+        chw = await run_cpu(
+            _timed_whole_frame, whole_frame_chw_from_bytes, data, nbytes=encoded_nbytes(data)
+        )
         if chw is None:
             return None
         batch = chw[None, ...].astype(np.float32, copy=False)

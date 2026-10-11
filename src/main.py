@@ -22,7 +22,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import orjson
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
 from src.clients.occ import OCCFinalConflictError
@@ -39,6 +39,13 @@ from src.core.logging import (
     request_id_ctx,
 )
 from src.core.request_origin import RequestOriginMiddleware
+from src.core.upload_limits import (
+    UploadTooLargeError,
+    enforce_file_cap,
+    request_exceeds_ceiling,
+    too_large_response,
+    upload_too_large_handler,
+)
 from src.routers import (
     analyze_router,
     clusters_router,
@@ -56,6 +63,7 @@ from src.routers import (
 )
 from src.routers.api_docs import install_api_docs
 from src.routers.curation._mounting import mount_all_curation_routers
+from src.utils.cpu_pool import shutdown_cpu_executor
 from src.utils.retry import RetryExhaustedError
 
 
@@ -408,6 +416,9 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning('triton_pool_close_error', error=str(e))
 
+    # The ingest CPU pool: let running pixel work finish
+    shutdown_cpu_executor()
+
     # Shutdown shared executor
     if AppResources.shared_executor is not None:
         try:
@@ -458,7 +469,9 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
         docs_url=None,
         redoc_url=None,
+        dependencies=[Depends(enforce_file_cap)],
     )
+    application.exception_handler(UploadTooLargeError)(upload_too_large_handler)
     install_api_docs(application)
 
     application.add_middleware(RequestOriginMiddleware)
@@ -475,21 +488,11 @@ def create_app() -> FastAPI:
         start_time = time.time()
         req_id = get_request_id()  # Get from context set by request_id_middleware
 
-        # Validate file size for upload endpoints
-        if request.method == 'POST':
-            content_length = request.headers.get('content-length')
-            # Batch endpoints allow up to 10GB for large photo library processing
-            # Single endpoints use default limit (50MB)
-            is_batch_endpoint = '/batch' in request.url.path
-            max_size = (
-                10 * 1024 * 1024 * 1024 if is_batch_endpoint else settings.max_file_size_bytes
-            )
-            max_size_label = '10GB' if is_batch_endpoint else f'{settings.max_file_size_mb}MB'
-            if content_length and int(content_length) > max_size:
-                raise HTTPException(
-                    status_code=413,
-                    detail=f'File too large. Maximum: {max_size_label}',
-                )
+        # A body larger than any upload the server accepts is refused before it is read.
+        # An exception raised in this layer never reaches the exception handlers (it would
+        # answer 500), so the 413 is returned. The per-file cap is enforce_file_cap.
+        if request.method == 'POST' and request_exceeds_ceiling(request):
+            return too_large_response()
 
         response = await call_next(request)
 

@@ -43,18 +43,40 @@ def resize_crop_rgb(rgb: np.ndarray, target: int = PE_SIZE) -> np.ndarray:
     return resized[top : top + target, left : left + target]
 
 
+def _build_normalize_lut() -> np.ndarray:
+    """The normalized float32 of every uint8 value: ``(v / 255 - mean) / std``.
+
+    The same three float32 operations the per-pixel arithmetic used to run on every
+    frame, applied once to the 256 possible inputs, so a lookup returns exactly the
+    value the arithmetic would have produced.
+    """
+    if len(set(PE_MEAN.ravel().tolist())) != 1 or len(set(PE_STD.ravel().tolist())) != 1:
+        msg = 'a per-channel lookup table is needed when the channels differ'
+        raise ValueError(msg)
+    scaled = np.arange(256, dtype=np.uint8).astype(np.float32) / 255.0
+    return ((scaled - PE_MEAN[0, 0, 0]) / PE_STD[0, 0, 0]).astype(np.float32)
+
+
+_NORMALIZE_LUT = _build_normalize_lut()
+
+
 def normalize_chw(rgb_uint8: np.ndarray) -> np.ndarray:
     """PE-normalize HWC-uint8 RGB -> CHW float32.
 
     Accepts a single image ``(H,W,3)`` -> ``(3,H,W)`` or a batch
     ``(N,H,W,3)`` -> ``(N,3,H,W)``.
     """
-    arr = rgb_uint8.astype(np.float32) / 255.0
-    if arr.ndim == 4:
-        chw = np.transpose(arr, (0, 3, 1, 2))
-        return ((chw - PE_MEAN[None]) / PE_STD[None]).astype(np.float32, copy=False)
-    chw = np.transpose(arr, (2, 0, 1))
-    return ((chw - PE_MEAN) / PE_STD).astype(np.float32, copy=False)
+    values = _NORMALIZE_LUT[rgb_uint8]
+    return values.transpose(0, 3, 1, 2) if values.ndim == 4 else values.transpose(2, 0, 1)
+
+
+def normalize_into(out_chw: np.ndarray, rgb_uint8: np.ndarray) -> None:
+    """:func:`normalize_chw` of one HWC image written into a contiguous ``(3,H,W)`` slot.
+
+    Fills a preallocated batch in one pass instead of allocating, transposing and
+    stacking one array per image.
+    """
+    out_chw[...] = cv2.LUT(rgb_uint8, _NORMALIZE_LUT).transpose(2, 0, 1)
 
 
 def whole_frame_rgb(path: str, target: int = PE_SIZE) -> np.ndarray | None:
