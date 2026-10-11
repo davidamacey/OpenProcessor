@@ -309,7 +309,7 @@ def _check_targets(
         raise _refuse('the request names no index (it would reach every index)')
     bound = try_current_project()
     admin = _REGISTRY_ADMIN.get()
-    for name in targets:
+    for name in dict.fromkeys(targets):  # a bulk names the same index once per document
         _check_name(name)
         owner = owner_slug(name, snapshot)
         if owner is None:

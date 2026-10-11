@@ -129,3 +129,52 @@ class TestRoiPoolSppf:
         pooled = roi_pool_sppf(sppf, (5.0, 5.0, 5.0, 5.0), input_size=320, target_dim=16)
         assert pooled.shape == (16,)
         assert np.isfinite(pooled).all()
+
+
+def _legacy_letterbox_tensor(img, target: int, fill=(114, 114, 114)) -> np.ndarray:
+    """The cast-and-divide tensor letterbox_to_square built before the lookup table."""
+    from PIL import Image as PILImage
+
+    w, h = img.size
+    scale = min(target / h, target / w)
+    new_w, new_h = max(1, round(w * scale)), max(1, round(h * scale))
+    canvas = PILImage.new('RGB', (target, target), fill)
+    canvas.paste(
+        img.resize((new_w, new_h), PILImage.BILINEAR),
+        (int((target - new_w) / 2.0), int((target - new_h) / 2.0)),
+    )
+    arr = np.asarray(canvas, dtype=np.float32) / 255.0
+    return np.transpose(arr, (2, 0, 1))[None, ...].astype(np.float32, copy=False)
+
+
+class TestLetterboxTensorIsBitIdentical:
+    def test_random_images_of_several_shapes(self) -> None:
+        from PIL import Image
+
+        rng = np.random.default_rng(21)
+        for w, h in ((64, 48), (300, 120), (17, 400), (640, 640)):
+            img = Image.fromarray(rng.integers(0, 256, (h, w, 3), dtype=np.uint8))
+            chw, _scale, _pad = letterbox_to_square(img, 160)
+            expected = _legacy_letterbox_tensor(img, 160)
+            assert chw.dtype == np.float32
+            assert chw.shape == expected.shape
+            assert np.array_equal(
+                chw.view(np.uint32), np.ascontiguousarray(expected).view(np.uint32)
+            )
+
+    def test_every_pixel_value(self) -> None:
+        from PIL import Image
+
+        values = np.arange(256, dtype=np.uint8)
+        img = Image.fromarray(
+            np.stack([values, values[::-1], np.roll(values, 5)], -1).reshape(16, 16, 3)
+        )
+        chw, _scale, _pad = letterbox_to_square(img, 16)
+        expected = _legacy_letterbox_tensor(img, 16)
+        assert np.array_equal(chw.view(np.uint32), np.ascontiguousarray(expected).view(np.uint32))
+
+    def test_the_tensor_is_contiguous(self) -> None:
+        from PIL import Image
+
+        chw, _scale, _pad = letterbox_to_square(Image.new('RGB', (50, 30)), 64)
+        assert chw.flags['C_CONTIGUOUS']
