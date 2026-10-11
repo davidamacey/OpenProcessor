@@ -13,6 +13,16 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Added
 
+- Bulk ingest of a folder or a manifest as a background run, one runner behind both entry points: the
+  `POST`/`GET /curation/projects/{project}/ingest/bulk` routes (start or resume, progress, failures,
+  cancel, `/ingest/bulk/config`) and the `scripts/curation/bulk_ingest.py` command line, a client of
+  those routes, with Cropwright's "Bulk ingest" panel on `/ingest`. Batches go through the existing
+  `/ingest/batch` route (so every data-path improvement applies and the work spreads over all API workers)
+  with bounded concurrency; a per-run ledger makes a cancelled, crashed or partly failed run resumable and
+  skips what is stored, content-hash dedup makes a re-run idempotent, five whole-batch failures in a row stop
+  the run, and the run reports images per second, time left and seconds per stage. `/ingest/batch` accepts
+  an optional `ingest_run_id`. A live run counts as a busy project job. `OP_BULK_INGEST_DIR` (#229).
+
 - A checksum-pinned public benchmark set: `fetch_coco_subset.py --bench-set N` draws a seeded,
   license-filtered, all-class COCO 2017 set and pins per-image SHA-256 and bytes
   (`scripts/datasets/manifests/coco_bench_2000.json`); `--verify-only` re-hashes a download offline (#45).
@@ -46,6 +56,10 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   applies the thresholds of `scripts/bench/parity_gates.json` and exits non-zero on failure. The
   FP32 against FP16 PE engine results are in `docs/PERFORMANCE.md` (#208).
 ### Changed
+
+- `scripts/curation/ingest_walker.py` is replaced by `scripts/curation/bulk_ingest.py` (`--folder` instead of
+  `--root`, no progress file: the run resumes from the server). The parallel directory walk moved to
+  `src/services/curation/bulk_ingest/walk.py`.
 
 - `ocr_pipeline` ships two Python instances instead of one, and the installer profile now sets
   its count (`ocr_pipeline_instances`: minimal 1, standard 2, full 4). The Python BLS model runs

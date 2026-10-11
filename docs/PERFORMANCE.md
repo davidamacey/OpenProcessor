@@ -1704,6 +1704,38 @@ Reading the numbers:
 - Rebuild of the FP16 plan: `export/trt_utils.py` bake inside the API image, then `trtexec` in the Triton
   image with the 1/8/32 x 3 x 336 x 336 profile and an 8 GB workspace; the bake log reports `fp16`.
 
+### Bulk ingest runner
+
+`POST /curation/projects/{project}/ingest/bulk` runs a folder or manifest through the same `POST /ingest/batch`
+route as any other client (see [CURATION.md](CURATION.md#bulk-ingest)), so it is held to the same ceiling: the
+GPU. Set A (public COCO, 2,000 images, 640 x 480), one RTX A6000 (GPU 0) shared with other projects'
+resident processes (16.4, 1.4 and 0.3 GB), FP16 PE engine, 32 API workers, OpenSearch heap 8 GB, a fresh
+project per run, policy `all`. The plain path is a Python client with threads posting `/ingest/batch` (16 images
+per request).
+
+| Path | Batches in flight | Run 1 | GPU 0 busy % in run 1 | Run 2 |
+|---|---:|---:|---:|---:|
+| `/ingest/batch` from client threads | 8 | 19.74 | 78 | 20.72 |
+| Bulk ingest runner | 8 | 20.75 | 86 | 18.38 |
+| `/ingest/batch` from client threads | 16 | 20.65 | 89 | |
+| Bulk ingest runner | 16 | 21.29 | 90 | |
+
+Images per second. The runner is within the spread of the plain path (18.4 to 21.3 across the six runs of both):
+it adds no throughput and costs none, which is the point of sending each batch through the route that the data
+path is tuned behind. The second pair of 8-in-flight runs was sampled with `nvidia-smi pmon`: the other processes on GPU 0 held 0 percent
+SM throughout; the other runs sampled only the card's total utilization, so a foreign load there is not
+excluded. A cancel at 784 images followed by a start of the same source finished at exactly 2,000 stored documents
+with 0 duplicates and 784 images skipped from the ledger.
+
+The first design ran the pipeline inside the task that owns the run, so all batches shared one `api`
+worker's event loop. That reached 9.85 images/s (one process is limited by its host CPU, about 0.1 CPU-s per
+image on frames; the stage timers showed `opensearch_write` at 2.5 s per image only because the loop was busy).
+Sending the batches back to the API's own socket spreads them over every worker and gives the 18 to 21 above.
+
+OpenSearch is not the limit at this rate (one writer sustains the equivalent of 137 images/s, probe 5 above), so
+the writes stay per image inside the pipeline; the bulk size of 1,000 documents from probe 5 is a datastore
+property, not a runner setting.
+
 ## Benchmarking
 
 ### Using the Go Benchmark Tool
