@@ -109,8 +109,8 @@ async def iter_pages(
 
     task = asyncio.create_task(run())
     try:
-        while (page := await queue.get()) is not None:
-            yield page
+        while (got := await queue.get()) is not None:
+            yield got
         await task
     finally:
         task.cancel()
