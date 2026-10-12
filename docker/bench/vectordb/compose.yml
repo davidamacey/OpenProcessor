@@ -1,0 +1,74 @@
+# Vector store benchmark stack (docs/design/v060_vector_db_evaluation_plan.md section 5).
+#
+# Always run under its own project name, never the live one, and one engine at a time:
+#   docker compose -p vecdb -f docker/bench/vectordb/compose.yml up -d opensearch
+#   docker compose -p vecdb -f docker/bench/vectordb/compose.yml down -v
+# Loopback only. Every engine gets the same cgroup budget (16 cores, 64 GB). Images are pinned
+# by tag here; the digests of the run are recorded in each result file. No GPU is attached.
+name: vecdb
+
+x-limits: &limits
+  cpus: 16
+  mem_limit: 64g
+
+services:
+  opensearch:
+    image: opensearchproject/opensearch:3.6.0
+    <<: *limits
+    profiles: [opensearch]
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - OPENSEARCH_JAVA_OPTS=-Xms8g -Xmx8g
+      - DISABLE_SECURITY_PLUGIN=true
+    ulimits:
+      memlock: {soft: -1, hard: -1}
+      nofile: {soft: 65536, hard: 65536}
+    ports: ["127.0.0.1:4701:9200"]
+    volumes: ["os_data:/usr/share/opensearch/data"]
+
+  milvus:
+    image: milvusdb/milvus:v2.6.25
+    <<: *limits
+    profiles: [milvus]
+    command: ["milvus", "run", "standalone"]
+    environment:
+      - ETCD_USE_EMBED=true
+      - ETCD_DATA_DIR=/var/lib/milvus/etcd
+      - ETCD_CONFIG_PATH=/milvus/configs/embedEtcd.yaml
+      - COMMON_STORAGETYPE=local
+      - DEPLOY_MODE=STANDALONE
+    security_opt: ["seccomp:unconfined"]
+    ports: ["127.0.0.1:4702:19530", "127.0.0.1:4705:9091"]
+    volumes:
+      - milvus_data:/var/lib/milvus
+      - ./milvus/embedEtcd.yaml:/milvus/configs/embedEtcd.yaml:ro
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.2
+    <<: *limits
+    profiles: [qdrant]
+    ports: ["127.0.0.1:4703:6333", "127.0.0.1:4706:6334"]
+    volumes: ["qdrant_data:/qdrant/storage"]
+
+  pgvector:
+    image: pgvector/pgvector:0.8.7-pg17-trixie
+    <<: *limits
+    profiles: [pgvector]
+    shm_size: 8g
+    environment:
+      - POSTGRES_PASSWORD=bench
+      - POSTGRES_DB=bench
+    command: >
+      postgres -c shared_buffers=16GB -c maintenance_work_mem=8GB -c work_mem=256MB
+      -c max_parallel_maintenance_workers=15 -c max_parallel_workers=16
+      -c max_worker_processes=16 -c effective_cache_size=48GB -c max_wal_size=32GB
+      -c checkpoint_timeout=30min -c synchronous_commit=off
+    ports: ["127.0.0.1:4704:5432"]
+    volumes: ["pg_data:/var/lib/postgresql/data"]
+
+volumes:
+  os_data:
+  milvus_data:
+  qdrant_data:
+  pg_data:
