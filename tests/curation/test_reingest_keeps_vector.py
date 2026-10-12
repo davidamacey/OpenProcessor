@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from curation.occ_fakes import make_bulk_update_item, make_mget_response
-from src.clients.occ import occ_upsert_bulk
+from src.clients.occ_upsert import occ_upsert_bulk
 from src.services.curation.embedding_state import keep_stored_vector_state
 
 
