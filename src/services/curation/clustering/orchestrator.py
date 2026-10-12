@@ -34,8 +34,10 @@ from src.services.curation.clustering.assignment_writer import (
     batch_size,
     batches,
 )
+from src.services.curation.clustering.cluster_geometry import DISTANCE_REF_FIELD
 from src.services.curation.clustering.last_run import record_last_run
 from src.services.curation.clustering.page_rows import hits_to_rows
+from src.services.curation.clustering.pit_pages import iter_pages
 from src.services.curation.clustering.pool_size import MIN_RESIDUALS_FOR_CLUSTERING
 from src.services.curation.clustering.residual_gate import (
     _park_gated_residuals,
@@ -309,6 +311,16 @@ async def cluster_residuals(
     return summary
 
 
+def _already_assigned(stored: dict[str, Any], cid: int, dist: float) -> bool:
+    """Whether the document stores exactly what the guarded update would write."""
+    return (
+        stored.get('cluster_id') == cid
+        and stored.get('cluster_distance') == dist
+        and stored.get(DISTANCE_REF_FIELD) == cid
+        and 'cluster_subid' not in stored
+    )
+
+
 async def assign_only_residuals(
     client: AsyncOpenSearch,
     *,
@@ -360,49 +372,46 @@ async def assign_only_residuals(
         except Exception as exc:
             logger.debug('curation_ivf_assign_count_failed', error=str(exc))
 
-    body: dict[str, Any] = {'size': chunk_size, '_source': [field], 'query': query}
-    resp = await client.search(index=items_index(), body=body, scroll='2m')
-    scroll_id = resp.get('_scroll_id')
-    n_submitted = 0
-    try:
-        async with AssignmentWriter(client, 'assign_only_residuals') as writer:
-            while True:
-                hits = resp['hits']['hits']
-                if not hits:
-                    break
-                chunk_ids, matrix = hits_to_rows(hits, field)
-                if matrix is not None:
-                    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
-                    matrix = matrix / np.where(norms == 0, 1.0, norms)
-                    labels, dists = store.assign_batch_with_distances(matrix)
-                    # Guarded script -- see cluster_residuals above.
-                    page_rows: list[Assignment] = [
-                        (crop_id, int(label) + RESIDUAL_CLUSTER_ID_OFFSET, float(dist))
-                        for crop_id, label, dist in zip(
-                            chunk_ids, labels.tolist(), dists.tolist(), strict=True
-                        )
-                    ]
-                    for batch in batches(page_rows):
-                        await writer.submit(batch)
-                    n_submitted += len(chunk_ids)
-                    if progress is not None:
-                        progress.update(
-                            processed=writer.n_written, total=total_estimate or n_submitted
-                        )
-                        progress.raise_if_cancelled()
-                if not scroll_id:
-                    break
-                resp = await client.scroll(scroll_id=scroll_id, scroll='2m')
-                scroll_id = resp.get('_scroll_id')
-    finally:
-        if scroll_id:
-            try:
-                await client.clear_scroll(scroll_id=scroll_id)
-            except Exception as exc:
-                logger.debug('curation_ivf_assign_clear_scroll_failed', error=str(exc))
-
-    n_written = writer.n_written
-    if n_written:
+    # The pool is read by several point-in-time slices at once (one scroll is one cursor, each
+    # page waiting for the last). An assignment depends on the document alone, so the order
+    # pages arrive in changes nothing. A document that already stores exactly what the update
+    # would write is not written again.
+    current = [DISTANCE_REF_FIELD, 'cluster_id', 'cluster_distance', 'cluster_subid']
+    n_assigned = 0
+    n_unchanged = 0
+    async with AssignmentWriter(client, 'assign_only_residuals') as writer:
+        async for hits in iter_pages(
+            client,
+            index=items_index(),
+            query=query,
+            source=[field, *current],
+            page_size=chunk_size,
+        ):
+            kept = [h for h in hits if (h.get('_source') or {}).get(field) is not None]
+            chunk_ids, matrix = hits_to_rows(kept, field)
+            if matrix is None:
+                continue
+            norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+            matrix = matrix / np.where(norms == 0, 1.0, norms)
+            labels, dists = store.assign_batch_with_distances(matrix)
+            # Guarded script -- see cluster_residuals above.
+            page_rows: list[Assignment] = []
+            for hit, crop_id, label, dist in zip(
+                kept, chunk_ids, labels.tolist(), dists.tolist(), strict=True
+            ):
+                cid = int(label) + RESIDUAL_CLUSTER_ID_OFFSET
+                if _already_assigned(hit['_source'], cid, float(dist)):
+                    n_unchanged += 1
+                else:
+                    page_rows.append((crop_id, cid, float(dist)))
+            n_assigned += len(chunk_ids)
+            for batch in batches(page_rows):
+                await writer.submit(batch)
+            if progress is not None:
+                progress.update(processed=n_assigned, total=total_estimate or n_assigned)
+                progress.raise_if_cancelled()
+    n_written = n_assigned
+    if n_written - n_unchanged:
         try:
             await client.indices.refresh(index=items_index())
         except Exception as exc:
@@ -420,6 +429,7 @@ async def assign_only_residuals(
         'status': 'success',
         'method': 'ivf_assign_only',
         'n_assigned': n_written,
+        'n_unchanged': n_unchanged,
         'n_parked': n_parked,
         'gate_active': bool(gate_clauses),
         'n_clusters': store.n_clusters,

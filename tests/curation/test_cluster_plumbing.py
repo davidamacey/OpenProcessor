@@ -108,7 +108,7 @@ async def test_assign_only_writes_pages_concurrently(
     client = FakeItemsClient(*pool)
     await cluster_residuals(client, clustering_method='ivf')
     full = dict(client.written)
-    client.written.clear()
+    client.forget_assignments()
     client.bulk_delay_s = 0.02
     client.max_in_flight = 0
     summary = await assign_only_residuals(client, chunk_size=500)
@@ -271,3 +271,38 @@ async def test_parallel_fetch_keeps_slice_then_shard_order(
     unit = pool[1][expected]
     unit = unit / np.linalg.norm(unit, axis=1, keepdims=True)
     assert np.array_equal(matrix, unit.astype(np.float32)) or np.allclose(matrix, unit, atol=1e-7)
+
+
+@pytest.mark.asyncio
+async def test_assign_only_reads_through_point_in_time_slices(
+    pool: tuple[list[str], np.ndarray], ivf_state: None
+) -> None:
+    client = FakeItemsClient(*pool)
+    await cluster_residuals(client, clustering_method='ivf')
+    full = dict(client.written)
+    client.forget_assignments()
+    summary = await assign_only_residuals(client, chunk_size=500)
+    assert client.pit_searches >= 2, 'the pool was not read through point-in-time slices'
+    assert summary['n_assigned'] == N_DOCS
+    assert client.written == full, 'a different order of pages changed an assignment'
+
+
+@pytest.mark.asyncio
+async def test_assign_only_skips_what_is_already_stored_exactly(
+    pool: tuple[list[str], np.ndarray], ivf_state: None
+) -> None:
+    client = FakeItemsClient(*pool)
+    await cluster_residuals(client, clustering_method='ivf')
+    stored = dict(client.written)
+    client.written.clear()
+    again = await assign_only_residuals(client)
+    assert again['n_assigned'] == N_DOCS
+    assert again['n_unchanged'] == N_DOCS
+    assert client.written == {}, 'unchanged documents were written again'
+    # A stale sub-cluster id is not "already stored": the update removes it.
+    client.docs[3]['cluster_subid'] = '5a'
+    third = await assign_only_residuals(client)
+    assert third['n_unchanged'] == N_DOCS - 1
+    assert set(client.written) == {client.ids[3]}
+    assert client.written[client.ids[3]] == stored[client.ids[3]]
+    assert 'cluster_subid' not in client.docs[3]
