@@ -69,11 +69,9 @@ class ImageContext:
     width: int
     height: int
     imohash: str
-    image_bytes: bytes
     source: str
     source_identifier: str | None = None
     ingest_run_id: str | None = None
-    whole_frame_from_bytes: bool = False
     dataset_split: str | None = None
     """The split the images doc is filed under (a dataset import's); items
     indexed on this image later inherit it."""
@@ -204,12 +202,7 @@ async def index_items(
     if ctx.created:
         whole_frame_embedding = None
         try:
-            if ctx.whole_frame_from_bytes:
-                whole_frame_embedding = await service.pe_encoder.embed_whole_frame_bytes(
-                    ctx.image_bytes
-                )
-            else:
-                whole_frame_embedding = await service.pe_encoder.embed_whole_frame(image_path)
+            whole_frame_embedding = await service.pe_encoder.embed_whole_frame_image(img)
         except Exception as exc:
             logger.warning('ingest_embed_whole_frame_failed', path=image_path, error=str(exc))
         with stage_timer('doc_build'):

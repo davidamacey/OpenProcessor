@@ -140,7 +140,6 @@ async def run_ingest_batch(
     images: list[bytes],
     image_paths: list[str],
     source: str = 'batch',
-    whole_frame_from_bytes: bool = False,
     source_identifiers: list[str | None] | None = None,
     ingest_run_id: str | None = None,
 ) -> BatchIngestResult:
@@ -245,7 +244,6 @@ async def run_ingest_batch(
                     prefilled_image=prefilled_imgs.get(i),
                     prefilled_items=prefilled_items.get(i),
                     prefilled_secondary=prefilled_secondary.get(i),
-                    whole_frame_from_bytes=whole_frame_from_bytes,
                     source_identifier=source_identifier,
                     ingest_run_id=ingest_run_id,
                 )

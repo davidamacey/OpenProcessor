@@ -94,9 +94,8 @@ def test_upload_ingests_bytes_under_client_identifiers(
     assert len(persisted_paths) == 2
     assert all('op_test_state/projects/default/uploads' in p for p in persisted_paths)
     # The identifiers do not exist on the server: the whole-frame
-    # embedding must come from the uploaded bytes, never a path re-read.
-    assert pe.whole_frame_paths == []
-    assert sorted(pe.whole_frame_bytes) == sorted([a, b])
+    # embedding comes from the frame decoded from the upload, never a path re-read.
+    assert len(pe.whole_frame_sizes) == 2
     assert all(d.get('pe_embedding') is not None for d in docs.values())
     # One batched detector call for the whole upload.
     assert fake_triton.batch_sizes == [2]

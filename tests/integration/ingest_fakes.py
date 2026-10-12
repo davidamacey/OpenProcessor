@@ -76,18 +76,13 @@ class FakePEEncoder:
     text_ready = False
 
     def __init__(self) -> None:
-        self.whole_frame_paths: list[str] = []
-        self.whole_frame_bytes: list[bytes] = []
+        self.whole_frame_sizes: list[tuple[int, int]] = []
 
     async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
         return np.tile(np.array([1.0, 0.0], dtype=np.float32), (len(crops), 1))
 
-    async def embed_whole_frame(self, path: str) -> np.ndarray | None:
-        self.whole_frame_paths.append(path)
-        return np.array([0.0, 1.0], dtype=np.float32)
-
-    async def embed_whole_frame_bytes(self, data: bytes) -> np.ndarray | None:
-        self.whole_frame_bytes.append(data)
+    async def embed_whole_frame_image(self, img: Any) -> np.ndarray:
+        self.whole_frame_sizes.append(img.size)
         return np.array([0.0, 1.0], dtype=np.float32)
 
 

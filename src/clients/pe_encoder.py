@@ -75,15 +75,17 @@ from src.core.logging import get_logger
 from src.services.detection.pe_preprocess import (
     PE_SIZE,
     resize_crop_rgb,
+    to_chw,
     to_chw_into,
-    whole_frame_chw,
-    whole_frame_chw_from_bytes,
+    whole_frame_rgb_from_image,
 )
-from src.utils.cpu_pool import encoded_nbytes, run_cpu
+from src.utils.cpu_pool import run_cpu
 from src.utils.stage_timing import stage_timer
 
 
 if TYPE_CHECKING:
+    from PIL import Image
+
     from src.clients.triton_pool import AsyncTritonPool
 
 # Chunk size for embed_crops -- respects the PE Triton model's configured
@@ -122,8 +124,8 @@ def _preprocess_crops(crops: list[np.ndarray]) -> np.ndarray:
         return batch
 
 
-def _timed_whole_frame(preprocess: Any, source: str | bytes) -> np.ndarray | None:
-    """``preprocess(source)`` (a whole-frame decode and crop) under the stage timer."""
+def _timed_whole_frame(preprocess: Any, source: Any) -> np.ndarray | None:
+    """``preprocess(source)`` (a whole-frame square, decoding a path first) under the stage timer."""
     nbytes = len(source) if isinstance(source, bytes) else 0
     with stage_timer('whole_frame_preprocess', nbytes=nbytes):
         return preprocess(source)
@@ -409,38 +411,16 @@ class PEEncoder:
             rows.append(await self.encode_images(chunk))
         return np.concatenate(rows, axis=0)
 
-    async def embed_whole_frame(self, path: str) -> np.ndarray | None:
-        """PE-Core whole-frame embedding for a source image on disk.
+    async def embed_whole_frame_image(self, img: Image.Image) -> np.ndarray:
+        """PE-Core whole-frame embedding of a decoded frame (EXIF orientation applied).
 
-        Goes through :func:`src.services.detection.pe_preprocess.whole_frame_chw`
-        (cv2 1/8 decode + resize-shorter-edge + center-crop to uint8 pixels) so the vector lands in the same space as any other
-        whole-frame caller (e.g. a backfill script), then runs it through
-        the same Triton image encoder as :meth:`embed_crops`.
-
-        Returns ``None`` on a decode failure — callers should treat a
-        missing whole-frame embedding as non-fatal.
+        Goes through :func:`src.services.detection.pe_preprocess.whole_frame_rgb_from_image`, the
+        one whole-frame preprocessing, so ingest, re-embedding and any backfill share a space.
+        The caller passes the frame it already decoded: a photo is decoded once.
         """
-        chw = await run_cpu(_timed_whole_frame, whole_frame_chw, path, nbytes=encoded_nbytes(path))
-        if chw is None:
-            return None
-        batch = chw[None, ...]
-        embedding = await self.encode_images(batch)
-        return embedding[0]
-
-    async def embed_whole_frame_bytes(self, data: bytes) -> np.ndarray | None:
-        """:meth:`embed_whole_frame` for an image the server only has in memory.
-
-        Used by byte-upload ingest, where the client's path is an
-        identifier, not a file the API container can open. Same
-        preprocessing, so the vector matches the from-disk path.
-        """
-        chw = await run_cpu(
-            _timed_whole_frame, whole_frame_chw_from_bytes, data, nbytes=encoded_nbytes(data)
-        )
-        if chw is None:
-            return None
-        batch = chw[None, ...]
-        embedding = await self.encode_images(batch)
+        w, h = img.size
+        rgb = await run_cpu(_timed_whole_frame, whole_frame_rgb_from_image, img, nbytes=w * h * 3)
+        embedding = await self.encode_images(to_chw(rgb)[None, ...])
         return embedding[0]
 
     # ------------------------------------------------------------------

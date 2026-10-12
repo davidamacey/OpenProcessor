@@ -187,7 +187,7 @@ async def reembed_items(
         counts['images'] += 1
         counts['items'] += len(target.items)
         if 'frame' in parts:
-            frame = await pe.embed_whole_frame(target.image_path)
+            frame = await pe.embed_whole_frame_image(img)
             if frame is not None:
                 image_updates.append((target.image_id, {'pe_embedding': float_list(frame)}))
                 counts['frame_written'] += 1

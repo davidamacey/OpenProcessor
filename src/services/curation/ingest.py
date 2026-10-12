@@ -24,7 +24,7 @@ Pipeline, per image:
    with a raw score for lineage.
 4. Per-crop PE embedding (:meth:`~src.clients.pe_encoder.PEEncoder.embed_crops`)
    plus a whole-frame PE embedding
-   (:meth:`~src.clients.pe_encoder.PEEncoder.embed_whole_frame`).
+   (:meth:`~src.clients.pe_encoder.PEEncoder.embed_whole_frame_image`).
 5. Primary-subject rank + blur quality
    (:mod:`~src.services.detection.crop_quality`), and residual-pool
    cluster assignment via the ingest-time IVF cache
@@ -142,13 +142,23 @@ def _imohash_bytes(data: bytes) -> str:
             return hashlib.sha256(data).hexdigest()[:32]
 
 
+_EXIF_ORIENTATION = 0x0112
+
+
 def _decode_image(image_bytes: bytes) -> tuple[Image.Image, int, int]:
-    """Decode bytes -> EXIF-transposed RGB PIL image + (width, height)."""
+    """Decode bytes -> EXIF-transposed RGB PIL image + (width, height).
+
+    ``exif_transpose`` copies the frame even when there is nothing to rotate (54 MB on an
+    18 MP photo), so it runs only for an orientation that moves pixels.
+    """
     with stage_timer('decode', nbytes=len(image_bytes)):
         img = Image.open(io.BytesIO(image_bytes))
-        img = ImageOps.exif_transpose(img)
+        if img.getexif().get(_EXIF_ORIENTATION, 1) != 1:
+            img = ImageOps.exif_transpose(img)
         if img.mode != 'RGB':
             img = img.convert('RGB')
+        else:
+            img.load()
         w, h = img.size
         return img, w, h
 
@@ -361,7 +371,6 @@ class CurationIngestService:
         source: str = 'unknown',
         *,
         prefilled_image: Image.Image | None = None,
-        whole_frame_from_bytes: bool = False,
         source_identifier: str | None = None,
         ingest_run_id: str | None = None,
         adopt_existing: bool = False,
@@ -430,11 +439,9 @@ class CurationIngestService:
             width=full_w,
             height=full_h,
             imohash=image_hash,
-            image_bytes=image_bytes,
             source=source,
             source_identifier=source_identifier,
             ingest_run_id=ingest_run_id,
-            whole_frame_from_bytes=whole_frame_from_bytes,
         )
 
     async def detect_items(
@@ -518,7 +525,6 @@ class CurationIngestService:
         prefilled_image: Image.Image | None = None,
         prefilled_items: list[DetectedItem] | None = None,
         prefilled_secondary: SecondaryOutput | None = None,
-        whole_frame_from_bytes: bool = False,
         source_identifier: str | None = None,
         ingest_run_id: str | None = None,
     ) -> IngestResult:
@@ -540,10 +546,6 @@ class CurationIngestService:
             prefilled_secondary: Secondary-detector output (raw tensor
                 plus optional backbone feature map) from
                 :meth:`WholeImageDetector.run_secondary_raw_batch`; same deal.
-            whole_frame_from_bytes: Compute the whole-frame embedding from
-                ``image_bytes`` instead of re-reading ``image_path``. Set by
-                byte-upload ingest, where ``image_path`` is a client-side
-                identifier the server cannot open.
 
         Every ``prefilled_*`` argument defaults to ``None``, in which
         case this method does the work itself — so direct callers
@@ -555,7 +557,6 @@ class CurationIngestService:
             image_path,
             source,
             prefilled_image=prefilled_image,
-            whole_frame_from_bytes=whole_frame_from_bytes,
             source_identifier=source_identifier,
             ingest_run_id=ingest_run_id,
         )
@@ -623,7 +624,6 @@ class CurationIngestService:
         images: list[bytes],
         image_paths: list[str],
         source: str = 'batch',
-        whole_frame_from_bytes: bool = False,
         source_identifiers: list[str | None] | None = None,
         ingest_run_id: str | None = None,
     ) -> BatchIngestResult:
@@ -639,7 +639,6 @@ class CurationIngestService:
             images: Raw image bytes, one per entry.
             image_paths: Source paths, index-aligned with ``images``.
             source: Provenance tag stamped on every document.
-            whole_frame_from_bytes: See :meth:`ingest_one`.
 
         Raises:
             ValueError: If ``image_paths`` is not the same length as
@@ -652,7 +651,6 @@ class CurationIngestService:
             images,
             image_paths,
             source=source,
-            whole_frame_from_bytes=whole_frame_from_bytes,
             source_identifiers=source_identifiers,
             ingest_run_id=ingest_run_id,
         )
