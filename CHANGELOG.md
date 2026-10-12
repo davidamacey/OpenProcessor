@@ -60,6 +60,12 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   1.2-1.4x faster than FP16 but fails the parity gates (crop cosine median 0.94-0.99 against 0.999,
   neighbour overlap 0.52-0.82 against 0.95), and weight-only INT8 passes the gates with no speed or
   size gain. INT8 is not offered; FP16 stays the only PE precision and no code changed (#213).
+- Measured system shared memory between the API and Triton for the detector and PE image batches,
+  recorded in `docs/PERFORMANCE.md` and `docs/benchmarks/shared_memory_transport.json`. Result: it
+  removes about 6 ms of client CPU per frame when the transport is measured alone, but ingest API CPU
+  per image falls 0 to 3 percent (inside the 8 to 10 percent run-to-run spread) and Triton's user CPU
+  rises by more than the kernel time saved, so the package is closed as measured and not adopted; the
+  wire stays the only transport and no code changed (#215).
 
 ### Changed
 
