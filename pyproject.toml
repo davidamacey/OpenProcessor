@@ -42,6 +42,7 @@ dependencies = [
     "torch",
     "torchvision",
     "opencv-python",
+    "simplejpeg",
     "numpy",
     "scipy",
     "requests",

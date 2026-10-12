@@ -62,28 +62,51 @@ def test_whole_frame_from_a_file_applies_exif_and_matches_the_decoded_frame(tmp_
     np.testing.assert_array_equal(chw.transpose(1, 2, 0), whole_frame_rgb_from_image(upright))
 
 
-def test_decode_skips_the_exif_copy_without_an_orientation(monkeypatch) -> None:
+def _pillow_reference(data: bytes) -> np.ndarray:
+    return np.asarray(ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert('RGB'))
+
+
+@pytest.mark.parametrize('orientation', [None, *range(1, 9)])
+def test_jpeg_decode_matches_pillow_and_returns_the_array(orientation) -> None:
     from src.services.curation import ingest
 
-    def _no_transpose(_img):
-        raise AssertionError('exif_transpose called for an upright image')
-
-    monkeypatch.setattr(ingest.ImageOps, 'exif_transpose', _no_transpose)
-    img, w, h = ingest._decode_image(_jpeg(320, 200))
-    assert (w, h) == (320, 200)
-    assert img.mode == 'RGB'
-    img, w, h = ingest._decode_image(_jpeg(320, 200, orientation=1))
-    assert (w, h) == (320, 200)
+    data = _jpeg(320, 200, orientation=orientation)
+    decoded = ingest._decode_image(data)
+    expected = _pillow_reference(data)
+    assert decoded.rgb is not None
+    np.testing.assert_array_equal(decoded.rgb, expected)
+    np.testing.assert_array_equal(np.asarray(decoded.pil), expected)
+    assert decoded.pil.mode == 'RGB'
 
 
-def test_decode_still_applies_a_rotation() -> None:
+@pytest.mark.parametrize('kind', ['progressive', 'grey', 'cmyk', 'png'])
+def test_other_encodings_decode_as_pillow_does(kind) -> None:
     from src.services.curation import ingest
 
-    data = _jpeg(320, 200, orientation=6)
-    img, w, h = ingest._decode_image(data)
-    assert (w, h) == (200, 320)
-    expected = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert('RGB')
-    np.testing.assert_array_equal(np.asarray(img), np.asarray(expected))
+    rng = np.random.default_rng(5)
+    img = Image.fromarray(rng.integers(0, 256, (90, 120, 3), dtype=np.uint8))
+    buf = io.BytesIO()
+    if kind == 'progressive':
+        img.save(buf, 'JPEG', quality=90, progressive=True)
+    elif kind == 'grey':
+        img.convert('L').save(buf, 'JPEG', quality=90)
+    elif kind == 'cmyk':
+        img.convert('CMYK').save(buf, 'JPEG', quality=90)
+    else:
+        img.save(buf, 'PNG')
+    data = buf.getvalue()
+    decoded = ingest._decode_image(data)
+    np.testing.assert_array_equal(np.asarray(decoded.pil), _pillow_reference(data))
+    if decoded.rgb is not None:
+        np.testing.assert_array_equal(decoded.rgb, _pillow_reference(data))
+
+
+def test_a_truncated_jpeg_is_refused() -> None:
+    from src.services.curation import ingest
+
+    data = _jpeg(320, 200)
+    with pytest.raises(ValueError, match='Premature end of JPEG file'):
+        ingest._decode_image(data[: len(data) // 2])
 
 
 def test_index_items_embeds_the_whole_frame_from_the_decoded_frame(tmp_path) -> None:

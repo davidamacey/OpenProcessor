@@ -64,12 +64,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from PIL import Image, ImageOps
-
 from src.config import get_curation_config, get_region_fields
 from src.core.logging import get_logger
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.event_hub import publish_crop_created
+from src.services.curation.image_decode import DecodedImage, decode_image
 from src.services.curation.ingest_detect import (
     SECONDARY_IOU_MATCH,
     SecondaryOutput,
@@ -105,6 +104,7 @@ from src.utils.stage_timing import stage_timer
 
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
+    from PIL import Image
 
     from src.clients.curation_opensearch.registry import ClassRegistry
     from src.clients.pe_encoder import PEEncoder
@@ -142,25 +142,10 @@ def _imohash_bytes(data: bytes) -> str:
             return hashlib.sha256(data).hexdigest()[:32]
 
 
-_EXIF_ORIENTATION = 0x0112
-
-
-def _decode_image(image_bytes: bytes) -> tuple[Image.Image, int, int]:
-    """Decode bytes -> EXIF-transposed RGB PIL image + (width, height).
-
-    ``exif_transpose`` copies the frame even when there is nothing to rotate (54 MB on an
-    18 MP photo), so it runs only for an orientation that moves pixels.
-    """
+def _decode_image(image_bytes: bytes) -> DecodedImage:
+    """Decode bytes into the upright RGB frame (:func:`~src.services.curation.image_decode.decode_image`)."""
     with stage_timer('decode', nbytes=len(image_bytes)):
-        img = Image.open(io.BytesIO(image_bytes))
-        if img.getexif().get(_EXIF_ORIENTATION, 1) != 1:
-            img = ImageOps.exif_transpose(img)
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-        else:
-            img.load()
-        w, h = img.size
-        return img, w, h
+        return decode_image(image_bytes)
 
 
 def _now_iso() -> str:
@@ -370,7 +355,7 @@ class CurationIngestService:
         image_path: str,
         source: str = 'unknown',
         *,
-        prefilled_image: Image.Image | None = None,
+        prefilled_image: DecodedImage | None = None,
         source_identifier: str | None = None,
         ingest_run_id: str | None = None,
         adopt_existing: bool = False,
@@ -398,11 +383,10 @@ class CurationIngestService:
             )
 
         if prefilled_image is not None:
-            img = prefilled_image
-            full_w, full_h = img.size
+            decoded = prefilled_image
         else:
             try:
-                img, full_w, full_h = await run_cpu(
+                decoded = await run_cpu(
                     _decode_image, image_bytes, nbytes=encoded_nbytes(image_bytes)
                 )
             except Exception as exc:
@@ -435,9 +419,10 @@ class CurationIngestService:
             image_path=resolved_path,
             created=existing is None,
             dataset_split=(existing or {}).get('dataset_split'),
-            pil=img,
-            width=full_w,
-            height=full_h,
+            pil=decoded.pil,
+            rgb=decoded.rgb,
+            width=decoded.pil.width,
+            height=decoded.pil.height,
             imohash=image_hash,
             source=source,
             source_identifier=source_identifier,
@@ -522,7 +507,7 @@ class CurationIngestService:
         image_path: str,
         source: str = 'unknown',
         *,
-        prefilled_image: Image.Image | None = None,
+        prefilled_image: DecodedImage | None = None,
         prefilled_items: list[DetectedItem] | None = None,
         prefilled_secondary: SecondaryOutput | None = None,
         source_identifier: str | None = None,
@@ -536,8 +521,7 @@ class CurationIngestService:
                 dedup fingerprint is computed from.
             image_path: Source path, persisted verbatim on the images doc.
             source: Free-form provenance tag.
-            prefilled_image: Already-decoded PIL image; skips the decode
-                + EXIF transpose.
+            prefilled_image: The already-decoded frame; skips the decode.
             prefilled_items: Primary-detector output from
                 :meth:`_run_primary_detector_batch`; skips this image's
                 own single-image Triton round-trip. An empty list is

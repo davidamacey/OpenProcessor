@@ -25,6 +25,8 @@ torchvision
 
 # Image Processing
 opencv-python
+# JPEG decode for ingest (libjpeg-turbo, bundled): src/services/curation/image_decode.py
+simplejpeg
 # Note: Pillow is installed as dependency of ultralytics (no need to specify)
 
 # Scientific Computing

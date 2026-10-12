@@ -72,6 +72,8 @@ class ImageContext:
     source: str
     source_identifier: str | None = None
     ingest_run_id: str | None = None
+    rgb: np.ndarray | None = None
+    """``pil``'s pixels as an HWC uint8 array when the decoder produced one (no copy for blur)."""
     dataset_split: str | None = None
     """The split the images doc is filed under (a dataset import's); items
     indexed on this image later inherit it."""
@@ -110,10 +112,11 @@ def _crop_all(img: Image.Image, items: list[DetectedItem]) -> list[Image.Image]:
     return [crop_pil(img, item.bbox_pixel) for item in items]
 
 
-def _full_frame_blur(img: Image.Image) -> tuple[np.ndarray, float]:
+def _full_frame_blur(img: Image.Image, rgb: np.ndarray | None) -> tuple[np.ndarray, float]:
     """The RGB frame and its Laplacian variance (the denominator of every box's ratio)."""
     with stage_timer('blur'):
-        rgb = np.asarray(img if img.mode == 'RGB' else img.convert('RGB'))
+        if rgb is None:
+            rgb = np.asarray(img if img.mode == 'RGB' else img.convert('RGB'))
         return rgb, image_lap_var(rgb, 'rgb')
 
 
@@ -221,7 +224,9 @@ async def index_items(
             image_doc.update(ctx.image_extra)
 
     try:
-        rgb_frame, full_var = await run_cpu(_full_frame_blur, img, nbytes=full_w * full_h * 3)
+        rgb_frame, full_var = await run_cpu(
+            _full_frame_blur, img, ctx.rgb, nbytes=full_w * full_h * 3
+        )
     except Exception as exc:
         logger.warning('ingest_blur_full_var_failed', path=image_path, error=str(exc))
         rgb_frame = None

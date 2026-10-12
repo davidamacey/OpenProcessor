@@ -50,6 +50,7 @@ from src.utils.stage_timing import observe_stage
 if TYPE_CHECKING:
     from PIL import Image
 
+    from src.services.curation.image_decode import DecodedImage
     from src.services.curation.ingest import CurationIngestService
     from src.services.curation.ingest_detect import SecondaryOutput
     from src.services.curation.item_doc import DetectedItem
@@ -65,7 +66,7 @@ async def _prefill_detections(
     indices: list[int],
     sizes: dict[int, int | None],
 ) -> tuple[
-    dict[int, Image.Image],
+    dict[int, DecodedImage],
     dict[int, list[DetectedItem]],
     dict[int, SecondaryOutput],
 ]:
@@ -79,7 +80,7 @@ async def _prefill_detections(
     """
     from src.services.curation.ingest import _decode_image
 
-    prefilled_imgs: dict[int, Image.Image] = {}
+    prefilled_imgs: dict[int, DecodedImage] = {}
     prefilled_items: dict[int, list[DetectedItem]] = {}
     prefilled_secondary: dict[int, SecondaryOutput] = {}
     if not indices:
@@ -100,9 +101,8 @@ async def _prefill_detections(
                 raise outcome
             logger.warning('ingest_batch_decode_failed', path=image_paths[idx], error=str(outcome))
             continue
-        img = outcome[0]
-        prefilled_imgs[idx] = img
-        valid_imgs.append(img)
+        prefilled_imgs[idx] = outcome
+        valid_imgs.append(outcome.pil)
         valid_indices.append(idx)
 
     if not valid_imgs:

@@ -67,8 +67,8 @@ def test_decode_output_is_unchanged_by_the_timer() -> None:
     buf = io.BytesIO()
     Image.fromarray(np.arange(48 * 64 * 3, dtype=np.uint8).reshape(48, 64, 3)).save(buf, 'PNG')
     before = _hist_count('decode')
-    img, w, h = _decode_image(buf.getvalue())
-    assert (w, h, img.mode) == (64, 48, 'RGB')
+    img = _decode_image(buf.getvalue()).pil
+    assert (img.width, img.height, img.mode) == (64, 48, 'RGB')
     assert np.asarray(img)[0, 1, 0] == 3
     assert _hist_count('decode') - before == 1
 
