@@ -79,7 +79,7 @@ async def iter_pages(
     queue: asyncio.Queue[list[dict[str, Any]] | None] = asyncio.Queue(maxsize=n_slices)
 
     async def produce(slice_id: int) -> None:
-        search_after: list[Any] | None = None
+        search_after: Any = None
         while True:
             body: dict[str, Any] = {
                 'size': page_size,
