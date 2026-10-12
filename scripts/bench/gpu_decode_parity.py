@@ -43,11 +43,12 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from scripts.bench import gpu_decode_lib as lib, parity_metrics as pm  # noqa: E402
+from src.config.settings import TritonModelConfig  # noqa: E402
 
 
 ARMS = ('cpu', 'cpu_b1', 'dec', 'gpu')
-DET_MODEL = 'yolov11_small_trt_end2end'
-PE_MODEL = 'pe_image_encoder'
+DET_MODEL = TritonModelConfig.YOLO_MODEL
+PE_MODEL = TritonModelConfig.PE_IMAGE_MODEL
 DET_OUTPUTS = ('num_dets', 'det_boxes', 'det_scores', 'det_classes')
 
 

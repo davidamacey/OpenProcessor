@@ -49,6 +49,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from scripts.bench import gpu_decode_lib as lib  # noqa: E402
+from src.config.settings import TritonModelConfig  # noqa: E402
 
 
 def load_images(dirs: list[str], limit: int) -> list[tuple[str, bytes]]:
@@ -527,7 +528,7 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument('--seconds', type=float, default=20.0)
     pe = sub.add_parser('pe-load')
     pe.add_argument('--url', required=True)
-    pe.add_argument('--model', default='pe_image_encoder')
+    pe.add_argument('--model', default=TritonModelConfig.PE_IMAGE_MODEL)
     pe.add_argument('--input', default='images')
     pe.add_argument('--batch', type=int, default=32)
     pe.add_argument('--concurrency', type=int, default=6)
