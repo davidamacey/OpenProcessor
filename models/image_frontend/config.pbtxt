@@ -48,8 +48,9 @@ instance_group [
 ]
 
 # GPU memory: the CuPy pool is capped at POOL_MIB (frames in flight, letterbox and squares), plus
-# the CUDA context and the nvJPEG lane buffers. Not in Triton's default load list (opt-in).
-parameters { key: "GPU_MIB_PER_INSTANCE" value: { string_value: "6144" } }
+# the CUDA context, the nvJPEG lane buffers and the BLS tensors: 8.2 GB measured at 32 streams of
+# 12-24 MP photos. Not in Triton's default load list (opt-in, loaded on first use).
+parameters { key: "GPU_MIB_PER_INSTANCE" value: { string_value: "8704" } }
 parameters { key: "POOL_MIB" value: { string_value: "4096" } }
 
 parameters { key: "FORCE_CPU_ONLY_INPUT_TENSORS" value: { string_value: "yes" } }
