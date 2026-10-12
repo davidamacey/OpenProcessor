@@ -12,6 +12,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from scripts.bench.vectordb.adapters.base import Adapter, Meta, run_threads
+from scripts.bench.vectordb.adapters.os_rest import Rest
 
 
 if TYPE_CHECKING:
@@ -47,12 +48,7 @@ class OpenSearchAdapter(Adapter):
 
     def __init__(self, arm: dict[str, Any], endpoint: str) -> None:
         super().__init__(arm, endpoint)
-        from opensearchpy import OpenSearch
-
-        host, _, port = endpoint.partition(':')
-        self.client = OpenSearch(
-            hosts=[{'host': host, 'port': int(port)}], timeout=600, pool_maxsize=64, max_retries=3
-        )
+        self.client = Rest(endpoint)
 
     def method(self) -> dict[str, Any]:
         """The ``method`` block of the vector field for this arm."""
@@ -89,8 +85,8 @@ class OpenSearchAdapter(Adapter):
         return field
 
     def create(self, dim: int) -> None:
-        if self.client.indices.exists(index=INDEX):
-            self.client.indices.delete(index=INDEX)
+        if self.client.exists(INDEX):
+            self.client.delete(INDEX)
         settings: dict[str, Any] = {
             'number_of_shards': self.arm.get('shards', 1),
             'number_of_replicas': 0,
@@ -100,8 +96,8 @@ class OpenSearchAdapter(Adapter):
             settings['refresh_interval'] = self.arm['refresh_interval']
         props = {f: {'type': t} for f, t in FIELD_TYPES.items()}
         props['vec'] = self.vector_field(dim)
-        self.client.indices.create(
-            index=INDEX, body={'settings': {'index': settings}, 'mappings': {'properties': props}}
+        self.client.create(
+            INDEX, {'settings': {'index': settings}, 'mappings': {'properties': props}}
         )
 
     def encode(self, vectors: np.ndarray, meta: Meta, ids: np.ndarray) -> str:
@@ -129,15 +125,13 @@ class OpenSearchAdapter(Adapter):
             time.sleep(1 + attempt)
 
     def finish_load(self) -> None:
-        self.client.indices.refresh(index=INDEX)
+        self.client.refresh(INDEX)
         if self.arm.get('refresh_interval') == '-1':
-            self.client.indices.put_settings(
-                index=INDEX, body={'index': {'refresh_interval': '1s'}}
-            )
+            self.client.put_settings(INDEX, {'index': {'refresh_interval': '1s'}})
         if self.arm.get('merge', True):
-            self.client.indices.forcemerge(index=INDEX, max_num_segments=1, request_timeout=7200)
-        self.client.indices.refresh(index=INDEX)
-        self.client.transport.perform_request('GET', f'/_plugins/_knn/warmup/{INDEX}')
+            self.client.forcemerge(INDEX)
+        self.client.refresh(INDEX)
+        self.client.warmup(INDEX)
 
     def search(
         self, vector: np.ndarray, k: int, flt: FilterSpec, params: dict[str, Any]
@@ -158,7 +152,7 @@ class OpenSearchAdapter(Adapter):
         if 'oversample' in params:
             knn['rescore'] = {'oversample_factor': params['oversample']}
         body = {'size': k, 'query': {'knn': {'vec': knn}}, '_source': False}
-        resp = self.client.search(index=INDEX, body=body, request_cache=False)
+        resp = self.client.search(INDEX, body)
         return [int(h['_id']) for h in resp['hits']['hits']]
 
     def update_field(self, ids: np.ndarray, field: str, values: np.ndarray, threads: int) -> None:
@@ -170,34 +164,27 @@ class OpenSearchAdapter(Adapter):
             self.send_bulk(body)
 
         run_threads(work, len(ids), 1000, threads)
-        self.client.indices.refresh(index=INDEX)
+        self.client.refresh(INDEX)
 
     def delete_where(self, flt: FilterSpec) -> None:
-        self.client.delete_by_query(
-            index=INDEX,
-            body={'query': {'bool': {'filter': filter_clauses(flt)}}},
-            refresh=True,
-            wait_for_completion=True,
-            conflicts='proceed',
-            request_timeout=3600,
-        )
+        self.client.delete_by_query(INDEX, {'query': {'bool': {'filter': filter_clauses(flt)}}})
 
     def settle(self) -> None:
-        self.client.indices.forcemerge(index=INDEX, max_num_segments=1, request_timeout=7200)
-        self.client.indices.flush(index=INDEX)
+        self.client.forcemerge(INDEX)
+        self.client.flush(INDEX)
 
     def bytes_on_disk(self) -> int:
-        stats = self.client.indices.stats(index=INDEX, metric='store')
+        stats = self.client.stats(INDEX, 'store')
         return int(stats['_all']['primaries']['store']['size_in_bytes'])
 
     def engine_stats(self) -> dict[str, Any]:
         """Native graph memory, JVM heap, segment layout and merge/refresh time of the index."""
-        knn = self.client.transport.perform_request('GET', '/_plugins/_knn/stats')
+        knn = self.client.knn_stats()
         node = next(iter(knn['nodes'].values()))
-        jvm = self.client.nodes.stats(metric='jvm')['nodes']
+        jvm = self.client.jvm()
         heap = next(iter(jvm.values()))['jvm']['mem']
-        segs = self.client.cat.segments(index=INDEX, format='json', bytes='b')
-        stats = self.client.indices.stats(index=INDEX, metric='merge,refresh,segments')
+        segs = self.client.segments(INDEX)
+        stats = self.client.stats(INDEX, 'merge,refresh,segments')
         prim = stats['_all']['primaries']
         return {
             'knn_graph_memory_kb': node.get('graph_memory_usage'),
@@ -213,8 +200,11 @@ class OpenSearchAdapter(Adapter):
         }
 
     def count(self) -> int:
-        return int(self.client.count(index=INDEX)['count'])
+        return self.client.count(INDEX)
 
     def drop(self) -> None:
-        if self.client.indices.exists(index=INDEX):
-            self.client.indices.delete(index=INDEX)
+        if self.client.exists(INDEX):
+            self.client.delete(INDEX)
+
+    def close(self) -> None:
+        self.client.close()
