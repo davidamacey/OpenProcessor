@@ -25,12 +25,21 @@ class FakeItemsClient:
         self.docs = [{field: row.tolist()} for row in vectors]
         # id -> (cluster_id, distance): what the guarded update stored.
         self.written: dict[str, tuple[int, float | None]] = {}
+        self.position = {doc_id: i for i, doc_id in enumerate(ids)}
+        self.pit_searches = 0
         self.bulk_calls = 0
         self.in_flight = 0
         self.max_in_flight = 0
         self.bulk_delay_s = 0.0
         self._scrolls: dict[str, int] = {}
         self.indices = _Indices()
+
+    def forget_assignments(self) -> None:
+        """The stored state before any pass: no cluster fields, nothing written."""
+        self.written.clear()
+        for doc in self.docs:
+            for key in ('cluster_id', 'cluster_distance', 'cluster_distance_cluster_id'):
+                doc.pop(key, None)
 
     async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         return {'count': len(self.ids)}
@@ -47,6 +56,7 @@ class FakeItemsClient:
     async def search(self, *, body: dict[str, Any], index: str | None = None, scroll: Any = None):
         size = body['size']
         if 'pit' in body:
+            self.pit_searches += 1
             sl = body.get('slice')
             after = body.get('search_after', [-1])[0]
             members = [
@@ -82,6 +92,13 @@ class FakeItemsClient:
                 doc_id = body[i]['update']['_id']
                 params = body[i + 1]['script']['params']
                 self.written[doc_id] = (params['cid'], params['dist'])
+                doc = self.docs[self.position[doc_id]]
+                doc.update(
+                    cluster_id=params['cid'],
+                    cluster_distance=params['dist'],
+                    cluster_distance_cluster_id=params['cid'],
+                )
+                doc.pop('cluster_subid', None)
                 items.append({'update': {'_id': doc_id, 'status': 200}})
             return {'errors': False, 'items': items}
         finally:

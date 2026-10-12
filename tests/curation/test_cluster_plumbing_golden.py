@@ -5,6 +5,12 @@ IVF assign-only re-sort) are run end to end through ``cluster_residuals`` agains
 in-memory index, and every stored ``cluster_id`` and ``cluster_distance`` is compared,
 exactly, with a golden file written from the code before the plumbing was touched.
 
+IVF is not in the golden file: its k-means result depends on the CPU the test runs on
+(instruction set, thread count), so a stored file is not portable. Its stored output is
+instead compared, in the same process, with what the method itself returns for the same
+rows in the order the fetch delivers them, and its assign-only pass with the persisted
+centroids; that still fails if the fetch or the write-back alters an assignment.
+
 Regenerate only on purpose, after a change meant to alter the clustering itself:
 ``OP_REGEN_CLUSTER_GOLDEN=1 pytest tests/curation/test_cluster_plumbing_golden.py``.
 """
@@ -100,24 +106,17 @@ async def _refine_largest(client: FakeItemsClient, vectors: np.ndarray) -> dict[
 
 
 async def _run_everything() -> dict[str, Any]:
-    from src.services.curation.clustering.orchestrator import (
-        assign_only_residuals,
-        cluster_residuals,
-    )
+    from src.services.curation.clustering.orchestrator import cluster_residuals
 
     ids, vectors = _load_embeddings()
     out: dict[str, Any] = {}
-    for method in available_methods():
+    for method in sorted(set(available_methods()) - {'ivf'}):
         client = FakeItemsClient(ids, vectors)
         summary = await cluster_residuals(client, clustering_method=method)
         assert summary['status'] == 'success'
         out[method] = {'n_clusters': summary['n_clusters'], 'stored': _stored(client)}
         if method == 'ahc':
             out['ahc_refine'] = await _refine_largest(client, vectors)
-        if method == 'ivf':
-            client.written.clear()
-            await assign_only_residuals(client)
-            out['ivf_assign_only'] = _stored(client)
     return out
 
 
@@ -132,5 +131,41 @@ async def test_every_method_stores_exactly_what_the_golden_file_says(ivf_state: 
         assert got[key] == want[key], key
 
 
-def test_the_golden_run_covers_every_registered_method() -> None:
-    assert set(available_methods()) <= set(json.loads(GOLDEN.read_text()))
+def test_the_golden_run_covers_every_registered_method_but_ivf() -> None:
+    assert set(available_methods()) - {'ivf'} <= set(json.loads(GOLDEN.read_text()))
+
+
+def _fetch_order(n: int, n_slices: int = 8) -> list[int]:
+    """Row order of the parallel fetch: slice by slice, document order inside a slice."""
+    return [p for s in range(n_slices) for p in range(n) if p % n_slices == s]
+
+
+@pytest.mark.asyncio
+async def test_ivf_stores_what_the_method_returns_for_the_fetched_rows(ivf_state: None) -> None:
+    from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
+    from src.services.curation.clustering.backend import detect_cluster_backend
+    from src.services.curation.clustering.embedding_reduce import _normalize_rows
+    from src.services.curation.clustering.methods import get_method
+    from src.services.curation.clustering.orchestrator import (
+        assign_only_residuals,
+        cluster_residuals,
+    )
+
+    ids, vectors = _load_embeddings()
+    order = _fetch_order(len(ids))
+    rows = _normalize_rows(vectors[order])
+    client = FakeItemsClient(ids, vectors)
+    await cluster_residuals(client, clustering_method='ivf')
+    ref = await get_method('ivf').fit_predict(rows, backend_info=detect_cluster_backend())
+    assert ref.distances is not None
+    want = {
+        ids[p]: (int(label) + RESIDUAL_CLUSTER_ID_OFFSET, float(dist))
+        for p, label, dist in zip(order, ref.labels.tolist(), ref.distances.tolist(), strict=True)
+    }
+    assert client.written == want
+
+    # The incremental pass assigns every document against the centroids just persisted.
+    stored = dict(client.written)
+    client.forget_assignments()
+    await assign_only_residuals(client)
+    assert {k: v[0] for k, v in client.written.items()} == {k: v[0] for k, v in stored.items()}
