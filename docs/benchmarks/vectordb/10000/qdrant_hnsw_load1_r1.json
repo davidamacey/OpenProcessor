@@ -1,0 +1,66 @@
+{
+ "arm": "qdrant_hnsw",
+ "config": {
+  "store": "qdrant",
+  "grid": [
+   {
+    "hnsw_ef": 16
+   },
+   {
+    "hnsw_ef": 32
+   },
+   {
+    "hnsw_ef": 64
+   },
+   {
+    "hnsw_ef": 128
+   },
+   {
+    "hnsw_ef": 256
+   },
+   {
+    "hnsw_ef": 512
+   }
+  ]
+ },
+ "size": 10000,
+ "dim": 1024,
+ "started": "2026-10-12T00:45:00-0400",
+ "repetition": 1,
+ "image": {
+  "image": "qdrant/qdrant:v1.19.2",
+  "id": "sha256:e37a07939a01ae09875d5cd58cd05a5e7c393151fce5e0a524c083835570e8e7",
+  "repo_digests": "qdrant/qdrant@sha256:b7b0444c4c351c970b98e90a6f89c2ee4287c65b44e52b4cb503fa5b2aa927ad"
+ },
+ "host": {
+  "load": {
+   "before": {
+    "load1": 22.02099609375,
+    "load5": 22.8134765625,
+    "load15": 22.8720703125,
+    "host_cpu_busy_pct": 15.6,
+    "cores": 48
+   },
+   "after": {
+    "load1": 15.19384765625,
+    "load5": 20.68408203125,
+    "load15": 22.1318359375,
+    "host_cpu_busy_pct": 14.4,
+    "cores": 48
+   },
+   "seconds": 64.99549888912588
+  }
+ },
+ "load": {
+  "cgroup_anon_before_bytes": 80347136,
+  "cgroup_shmem_before_bytes": 0,
+  "data_dir_before_bytes": 357,
+  "threads": 1,
+  "batch": 1000,
+  "load_s": 14.052847927901894,
+  "finish_s": 1.00401764921844,
+  "searchable_s": 15.056865577120334,
+  "vectors_per_s": 711.5995313764853,
+  "vectors_per_s_to_searchable": 664.148852812733
+ }
+}

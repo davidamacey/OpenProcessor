@@ -1,0 +1,69 @@
+{
+ "arm": "pg_vector",
+ "config": {
+  "store": "pgvector",
+  "grid": [
+   {
+    "ef_search": 16
+   },
+   {
+    "ef_search": 32
+   },
+   {
+    "ef_search": 64
+   },
+   {
+    "ef_search": 100
+   },
+   {
+    "ef_search": 128
+   },
+   {
+    "ef_search": 256
+   },
+   {
+    "ef_search": 512
+   }
+  ]
+ },
+ "size": 10000,
+ "dim": 1024,
+ "started": "2026-10-12T00:46:55-0400",
+ "repetition": 1,
+ "image": {
+  "image": "pgvector/pgvector:0.8.7-pg17-trixie",
+  "id": "sha256:36b64a4e0d781c545ab99c02ad35ec27169dd24a48a71d73a2bdfc604fe7f144",
+  "repo_digests": "pgvector/pgvector@sha256:7a7e9f22015b67edb4bef5c59daeebcd7e74bfa570df6ce60ae01237c8648a84"
+ },
+ "host": {
+  "load": {
+   "before": {
+    "load1": 24.7255859375,
+    "load5": 22.56494140625,
+    "load15": 22.69970703125,
+    "host_cpu_busy_pct": 20.5,
+    "cores": 48
+   },
+   "after": {
+    "load1": 19.4462890625,
+    "load5": 21.4775390625,
+    "load15": 22.33154296875,
+    "host_cpu_busy_pct": 24.3,
+    "cores": 48
+   },
+   "seconds": 27.89757826179266
+  }
+ },
+ "load": {
+  "cgroup_anon_before_bytes": 4456448,
+  "cgroup_shmem_before_bytes": 376422400,
+  "data_dir_before_bytes": 47704911,
+  "threads": 1,
+  "batch": 1000,
+  "load_s": 3.5309073491953313,
+  "finish_s": 18.21414121799171,
+  "searchable_s": 21.74504856718704,
+  "vectors_per_s": 2832.1332198872137,
+  "vectors_per_s_to_searchable": 459.874806400288
+ }
+}

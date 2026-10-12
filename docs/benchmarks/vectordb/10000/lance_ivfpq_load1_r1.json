@@ -1,0 +1,60 @@
+{
+ "arm": "lance_ivfpq",
+ "config": {
+  "store": "lancedb",
+  "index": "IVF_PQ",
+  "grid": [
+   {
+    "nprobes": 10,
+    "refine": 10
+   },
+   {
+    "nprobes": 20,
+    "refine": 10
+   },
+   {
+    "nprobes": 50,
+    "refine": 10
+   },
+   {
+    "nprobes": 100,
+    "refine": 10
+   }
+  ]
+ },
+ "size": 10000,
+ "dim": 1024,
+ "started": "2026-10-12T00:47:30-0400",
+ "repetition": 1,
+ "host": {
+  "load": {
+   "before": {
+    "load1": 19.330078125,
+    "load5": 21.41943359375,
+    "load15": 22.30810546875,
+    "host_cpu_busy_pct": 17.7,
+    "cores": 48
+   },
+   "after": {
+    "load1": 22.9443359375,
+    "load5": 22.06494140625,
+    "load15": 22.50244140625,
+    "host_cpu_busy_pct": 22.4,
+    "cores": 48
+   },
+   "seconds": 13.567651926074177
+  }
+ },
+ "load": {
+  "cgroup_anon_before_bytes": null,
+  "cgroup_shmem_before_bytes": null,
+  "data_dir_before_bytes": null,
+  "threads": 1,
+  "batch": 1000,
+  "load_s": 0.17247894778847694,
+  "finish_s": 12.378789528273046,
+  "searchable_s": 12.551268476061523,
+  "vectors_per_s": 57978.09024359137,
+  "vectors_per_s_to_searchable": 796.7322202590564
+ }
+}

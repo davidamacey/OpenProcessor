@@ -1,6 +1,7 @@
 """Render the result JSON documents as the markdown tables of docs/PERFORMANCE.md.
 
     report.py DIR_OF_RESULTS SIZE [tables ...]     tables: write query filters ops
+    report.py DIR_OF_RESULTS scale 2000,10000,100000 ARM [ARM ...]
 
 Reads every ``<arm>_r<N>.json`` under ``DIR/SIZE``. With several repetitions a cell shows the
 median and the min-max range; a difference between two arms is only claimed when the ranges
@@ -89,7 +90,9 @@ def write_table(
             )
             / n
             for f, ld in zip(foot, load, strict=False)
-            if f.get('cgroup_anon_bytes') and ld.get('cgroup_anon_before_bytes') is not None
+            if f.get('cgroup_anon_bytes')
+            and ld.get('cgroup_anon_before_bytes') is not None
+            and (docs[0]['config']['store'] != 'pgvector' or 'cgroup_shmem_bytes' in f)
         ]
         one = [d['load']['vectors_per_s'] for d in single.get(arm, [])]
         rows.append(
@@ -98,6 +101,7 @@ def write_table(
                 cell([x['vectors_per_s'] for x in load], 0),
                 cell(one, 0),
                 cell([x['searchable_s'] for x in load], 0),
+                cell([n / x['searchable_s'] for x in load], 0),
                 cell([x / 1024 for x in disk], 2),
                 cell([x / 1024 for x in reported], 2),
                 cell([x / 1024 for x in anon], 2),
@@ -110,6 +114,7 @@ def write_table(
             'load vec/s, 8 clients',
             'load vec/s, 1 client',
             'to searchable s',
+            'vec/s incl. index build',
             'disk KiB/vec (data dir)',
             'disk KiB/vec (engine)',
             'RAM delta KiB/vec',
@@ -157,21 +162,24 @@ def query_table(runs: dict[str, list[dict[str, Any]]], flt: str = 'review_defaul
     )
 
 
-def filter_table(runs: dict[str, list[dict[str, Any]]], arms: list[str]) -> str:
-    names = [r['filter'] for r in next(iter(runs.values()))[0]['query']['detail']]
+def filter_table(runs: dict[str, list[dict[str, Any]]], arms: list[str], metric: str) -> str:
+    """One row per filter, one column per arm; ``metric`` is ``recall`` (at 10) or ``p95``."""
+    first = next(iter(runs.values()))[0]
+    names = [r['filter'] for r in first['query']['detail']]
     rows = []
     for name in names:
-        row = [name]
+        sel = detail_row(first, name)
+        row = [name, f'{100 * sel["selectivity"]:.2f}%']
         for arm in arms:
             det = [r for r in (detail_row(d, name) for d in runs.get(arm, [])) if r]
             if not det:
                 row.append('n/a')
-                continue
-            row.append(f'{det[0]["recall@10"]:.3f} / {cell([r["p95_ms"][0] for r in det], 1)} ms')
-        sel = detail_row(next(iter(runs.values()))[0], name)
-        row.insert(1, f'{100 * sel["selectivity"]:.2f}%')
+            elif metric == 'recall':
+                row.append(cell([r['recall@10'] for r in det], 3))
+            else:
+                row.append(cell([r['p95_ms'][0] for r in det], 1))
         rows.append(row)
-    return table(['filter', 'selectivity', *[f'{a}: recall@10 / p95' for a in arms]], rows)
+    return table(['filter', 'selectivity', *arms], rows)
 
 
 def ops_table(runs: dict[str, list[dict[str, Any]]]) -> str:
@@ -229,8 +237,36 @@ def ops_table(runs: dict[str, list[dict[str, Any]]]) -> str:
     )
 
 
+def scale_table(root: Path, sizes: list[int], arms: list[str]) -> str:
+    """Review-default p95 (ms) and recall@10, QPS at 8 clients and disk per vector, per size."""
+    rows = []
+    for arm in arms:
+        row = [arm]
+        for size in sizes:
+            docs = load_runs(root, size).get(arm, [])
+            det = [r for r in (detail_row(d, 'review_default') for d in docs) if r]
+            if not det:
+                row.append('n/a')
+                continue
+            foot = [d['footprint'] for d in docs if d.get('footprint')]
+            disk = [
+                f.get('engine_reported_bytes_per_vector') or f.get('data_dir_bytes_per_vector', 0)
+                for f in foot
+            ]
+            row.append(
+                f'{cell([r["recall@10"] for r in det], 3)} / {cell([r["p95_ms"][0] for r in det], 1)} ms / '
+                f'{cell([r["qps_c8"][0] for r in det], 0)} QPS / {cell([x / 1024 for x in disk], 1)} KiB'
+            )
+        rows.append(row)
+    return table(['arm', *[f'{n:,} vectors' for n in sizes]], rows)
+
+
 def main() -> None:
-    root, size = Path(sys.argv[1]), int(sys.argv[2])
+    root = Path(sys.argv[1])
+    if sys.argv[2] == 'scale':
+        print(scale_table(root, [int(x) for x in sys.argv[3].split(',')], sys.argv[4:]))
+        return
+    size = int(sys.argv[2])
     which = sys.argv[3:] or ['write', 'query', 'ops']
     runs, single = load_runs(root, size), load_single_client(root, size)
     if 'write' in which:
@@ -241,7 +277,8 @@ def main() -> None:
         print(ops_table(runs), end='\n\n')
     if 'filters' in which:
         arms = [a for a in sys.argv[3:] if a in runs]
-        print(filter_table(runs, arms or list(runs)[:4]), end='\n\n')
+        print(filter_table(runs, arms or list(runs)[:4], 'recall'), end='\n\n')
+        print(filter_table(runs, arms or list(runs)[:4], 'p95'), end='\n\n')
 
 
 if __name__ == '__main__':
