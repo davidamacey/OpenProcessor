@@ -80,6 +80,12 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   `--gpu-plan triton=0+2` and refuses the same cases. `scripts/bench/pe_gpu_parity.py` compares
   embeddings of the same crops per card (#228).
 
+- The installer stamps the PE engine it builds (precision actually built, TensorRT version, GPU compute
+  capability, ONNX sha256, builder flags) in `.install/precision.tsv` and rebuilds it when the stamp is
+  missing, built as a fallback precision, or no longer matches the GPU architecture or the exported ONNX,
+  instead of skipping it as up to date. `openprocessor models status` lists the stamps. Only the PE group
+  is stamped; the other groups are a follow-up (#209).
+
 ### Changed
 
 - `scripts/curation/ingest_walker.py` is replaced by `scripts/curation/bulk_ingest.py` (`--folder` instead of
@@ -154,6 +160,11 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 - Triton runs with `CUDA_DEVICE_ORDER=PCI_BUS_ID`: CUDA's default fastest-first order would otherwise
   put the `gpus: [ 0 ]` models on a faster card with a higher host index instead of the lowest listed
   one (#228).
+
+- The bulk-ingest default concurrency is 16 batches in flight (was 8). One RTX A6000 plateaus at 16 clients
+  (29.1 images/s against 27.6 at 8 and 22.0 at 4); no detector engine variant, Triton instance count,
+  queue delay, preferred batch size or API worker count moved images per second by 3 percent or more on a
+  GPU-bound card, so those defaults stay (#226, `docs/PERFORMANCE.md`).
 
 ### Fixed
 
