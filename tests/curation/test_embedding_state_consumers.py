@@ -67,9 +67,9 @@ def _review_all() -> dict[str, Any]:
 
 
 def _cluster_members() -> dict[str, Any]:
-    from src.services.curation.clustering.cluster_geometry import _members_query
+    from src.services.curation.clustering.cluster_geometry import _clustered_query
 
-    return _members_query(7)
+    return _clustered_query()
 
 
 def _select_diverse() -> dict[str, Any]:

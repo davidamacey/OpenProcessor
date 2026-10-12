@@ -179,6 +179,17 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   put the `gpus: [ 0 ]` models on a faster card with a higher host index instead of the lowest listed
   one (#228).
 
+- Cluster pass plumbing, output-preserving (#218): the write-back sends its guarded updates 8 requests at
+  a time (1,000 documents each, 429 retried with backoff) instead of one 2,000-document request after
+  another, the fetch decodes responses with `orjson` and converts a page to a matrix in one call, and
+  the pass reports `stage_seconds` (fetch, fit, write_back). Same guarded script, same stored result; the
+  clustering methods and the refinement are untouched. At 100k real vectors the IVF pass goes from 311 s
+  to 138 s, the write-back from 175 s to 32 s. `scripts/bench/cluster_plumbing_bench.py` measures it;
+  `tests/curation/test_cluster_plumbing_golden.py` pins every method's stored output. The geometry stage
+  after the pass reads the clustered vectors once, by point-in-time slices, writes only what changed and
+  does it 8 requests at a time (10k: 143 s to 11 s, same stored geometry); assign-only reads through
+  slices and skips documents that already store the result.
+
 - Ingest decodes each image once: the whole-frame PE square is resized from the frame decoded for the
   detector (Pillow `BILINEAR`, shorter edge to 336, centre crop) instead of a second 1/8-scale OpenCV
   decode, so whole-frame vectors move to a new space (re-embedding and backfills use the same square);

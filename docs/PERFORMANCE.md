@@ -2811,6 +2811,81 @@ P-cluster-purity 0.219). The VLM gate is skipped (no VLM in the stack).
 - Before-and-after of the embed pass compares two builds on one stack, run back to back on GPU 2 (before
   first, after later); the before series ran with the coalescer absent.
 
+### Cluster pass plumbing: fetch and write-back (#218)
+
+The question: where does "ingest complete" to "clusters available" go, and how much of it is moving
+vectors out of and assignments back into OpenSearch rather than clustering? The clustering methods
+(IVF, AHC and its refinement, HDBSCAN) were not touched; a golden test pins what each stores.
+Medians of 3 repetitions, range in the table of stage times in the bench output; CPU only.
+
+**Result.** The write-back was the binding stage: a guarded painless update re-indexes the whole
+document with its vector, so one 2,000-document request at a time gave about 550 documents/s. Eight
+requests of 1,000 reach about 2,300 documents/s on this loaded host (more writers add nothing). The fetch
+is bound by the node rendering 25 MB of floats per 2,000-document page (2.4 s) and then by the single
+client thread decoding it; decoding is now 2.5 times faster, and the fetch is flat at about 19 s for
+100k whatever the slices (8 to 32) and page size (1,000 to 2,000), so the node is the floor.
+
+| Seconds (median) | 2k before | 2k after | 10k before | 10k after | 100k before | 100k after |
+|---|---|---|---|---|---|---|
+| IVF fetch | 0.79 | 0.55 | 3.31 | 2.46 | 30.0 | 19.3 |
+| IVF fit (unchanged) | 2.38 | 2.33 | 7.55 | 7.96 | 93.3 | 86.9 |
+| IVF write-back | 3.26 | 0.65 | 18.5 | 3.9 | 175.3 | 31.5 |
+| **IVF total** | 6.71 | 3.87 | 28.3 | 14.4 | 310.6 | 138.0 |
+| AHC total (fetch + fit + write) | 5.99 | 4.83 | 47.5 | 24.4 | not run | not run |
+| HDBSCAN total | 11.6 | 9.25 | 201.6 | 189.1 | not run | not run |
+| assign-only (incremental), IVF | 5.0 | 3.3 | 26.3 | 10.6 | 292.8 | 82.6 |
+
+| Write-back alone, 100k documents | 2000 x 1 | 2000 x 4 | 1000 x 4 | 1000 x 8 | 2000 x 8 | 1000 x 16 | 500 x 16 |
+|---|---|---|---|---|---|---|---|
+| documents/s | 550 | 1,600 | 1,560 | 2,340 | 2,330 | 2,100 | 2,050 |
+
+The first cell is chunk size by writers. Default: 1,000 documents, 8 writers; a pool too small to fill
+them is split down to 250 documents per request. AHC and HDBSCAN were not run at 100k (see caveats).
+
+**New bottleneck, found here.** The `cluster_geometry` stage the pipeline runs inside the same progress
+stage read every clustered vector twice, one scroll per cluster, and wrote every item in 20-document
+requests one after another: 43 s at 2k, 96 s at 10k, 442 s at 100k after IVF (the 100k figure is on the
+vector set of the table above). It is now one point-in-time sliced read of the clustered items with the
+centroids, distances and nearest clusters computed from that matrix (rows in index order, so every sum is
+the one the per-cluster read made), items that already store the same geometry skipped, and the rest
+written 8 requests at a time through the same writer. The stored geometry is identical to the old
+algorithm's (`tests/curation/test_cluster_geometry_golden.py`).
+
+Follow-up measured on the 12,792 real crop vectors of a parity capture (the 114,987-vector set used above
+was no longer available, so 100k was not re-measured), IVF, median of 3, seconds, same node and host:
+
+| Seconds | 2k main | 2k first PR commit | 2k now | 10k main | 10k first PR commit | 10k now |
+|---|---|---|---|---|---|---|
+| IVF fetch | 0.72 | 0.55 | 0.50 | 3.67 | 2.34 | 2.50 |
+| IVF fit (untouched) | 2.28 | 2.83 | 2.37 | 9.99 | 8.87 | 7.17 |
+| IVF write-back | 3.08 | 0.81 | 0.56 | 18.0 | 3.84 | 3.64 |
+| geometry stage | 60.2 | 40.8 | 3.1 | 142.9 | 94.3 | 11.4 |
+| **cluster pass + geometry** | 66.6 | 45.4 | 6.8 | 176.4 | 110.6 | 24.9 |
+| assign-only (incremental) | 5.8 | 5.0 | 1.6 | 27.7 | 9.7 | 5.4 |
+
+Assign-only now reads through 8 point-in-time slices (one scroll is one cursor) and skips a document that
+already stores exactly what the update writes; a second pass on 10k found 7,181 of 10,000 already exact
+(3.9 s against 5.4 s; the rest differ in the last bit of the distance because a page's composition changes
+when its documents are rewritten, so the match is exact or the document is written). The new bottleneck
+at 10k is the IVF fit (7.2 of 13.5 s of the pass, a method), then the geometry stage (11.4 s).
+
+Options measured and not adopted (10k, one 2,000-document page): `fields` instead of `_source` 2.4 s
+against 2.65 s (inside the noise); `docvalue_fields` is refused by the node for the vector field and
+`stored_fields` returns nothing; `refresh_interval: -1` during the write-back 4.0-4.5 s against 3.7-4.5 s
+with the default (not faster, and it adds 1-2 s to the closing refresh).
+
+#### Caveats and not measured
+
+- Host: 48 logical cores shared with other projects, 1-minute load 13-48 during the series; one
+  single-node OpenSearch 3.6, 8 GB heap, loopback, `clusplumb` project. Before and after ran back to back.
+- AHC and HDBSCAN are not run-to-run deterministic on real vectors (two runs of the unmodified code gave
+  6 different `cluster_id` of 2,000), so real-index hashes cannot show equality for them; the golden test
+  on a fixed set (deterministic) does, and IVF's stored hash is identical before and after at 2k and 10k.
+- Not measured: AHC and HDBSCAN at 100k (AHC at 100k did not finish its merge loop in 25 minutes; HDBSCAN
+  fit 180 s at 10k), GPU paths, the follow-up at 100k, concurrent search load during the write-back.
+- Tool: `scripts/bench/cluster_plumbing_bench.py` (stage split, `--fetch-profile`, `--write-grid`,
+  `--fetch-grid`, `--assign-only`, `--geometry`).
+
 ### GPU decode measurements (#217)
 
 Question: does decoding JPEGs on the GPU, and building each model's input there, speed up ingest?
