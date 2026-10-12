@@ -20,6 +20,7 @@ from src.services.projects.busy import (
     JobRef,
     _autolabel_jobs,
     _bakeoff_jobs,
+    _bulk_ingest_jobs,
     _dataset_import_jobs,
     _detection_worker_inflight,
     _export_jobs,
@@ -457,3 +458,59 @@ def test_a_crashed_detection_workers_stale_liveness_file_is_not_busy(tmp_path) -
     )
 
     assert _detection_worker_inflight(record) == [JobRef(kind='detection_worker', job_id='live')]
+
+
+BULK_A = 'bulk_20260101T000000_aaaaaaaa'
+
+
+def _write_bulk(record, run_id: str, state: dict, *, heartbeat: bool = True) -> None:
+    from src.services.curation.bulk_ingest.limits import bulk_ingest_base_dir
+
+    directory = bulk_ingest_base_dir() / 'projects' / record.slug / run_id
+    directory.mkdir(parents=True)
+    (directory / 'state.json').write_text(json.dumps({'run_id': run_id, **state}))
+    if heartbeat:
+        (directory / 'heartbeat').touch()
+
+
+@pytest.fixture
+def _bulk_dir(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv('OP_BULK_INGEST_DIR', str(tmp_path / 'bulk'))
+
+
+@pytest.mark.usefixtures('_bulk_dir')
+@pytest.mark.parametrize('status', ['queued', 'running'])
+def test_bulk_ingest_jobs_reports_a_live_run_of_its_own_project_only(tmp_path, status) -> None:
+    alpha, beta = _record('alpha', tmp_path), _record('beta', tmp_path)
+    _write_bulk(alpha, BULK_A, {'status': status, 'started_at': '2026-01-01T00:00:00'})
+    assert _bulk_ingest_jobs(alpha) == [
+        JobRef(kind='bulk_ingest', job_id=BULK_A, started_at='2026-01-01T00:00:00')
+    ]
+    assert _bulk_ingest_jobs(beta) == []
+    assert JobRef(kind='bulk_ingest', job_id=BULK_A, started_at='2026-01-01T00:00:00') in (
+        running_jobs(alpha)
+    )
+
+
+@pytest.mark.usefixtures('_bulk_dir')
+@pytest.mark.parametrize(
+    'status', ['completed', 'completed_with_errors', 'failed', 'cancelled', 'interrupted']
+)
+def test_bulk_ingest_jobs_ignores_terminal_status(tmp_path, status) -> None:
+    record = _record('alpha', tmp_path)
+    _write_bulk(record, BULK_A, {'status': status})
+    assert _bulk_ingest_jobs(record) == []
+
+
+@pytest.mark.usefixtures('_bulk_dir')
+def test_bulk_ingest_jobs_ignores_a_run_whose_worker_died(tmp_path) -> None:
+    import os
+
+    record = _record('alpha', tmp_path)
+    _write_bulk(record, BULK_A, {'status': 'running'})
+    from src.services.curation.bulk_ingest.limits import bulk_ingest_base_dir
+
+    heartbeat = bulk_ingest_base_dir() / 'projects' / 'alpha' / BULK_A / 'heartbeat'
+    old = time.time() - 600
+    os.utime(heartbeat, (old, old))
+    assert _bulk_ingest_jobs(record) == []

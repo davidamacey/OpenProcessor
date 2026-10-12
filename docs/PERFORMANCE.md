@@ -831,6 +831,145 @@ The earlier private FP16 measurement of about 170 embeddings/s (5.9 ms) matches 
   to `.install/precision.tsv`, records the group as `degraded` in `groups.tsv` (a re-run retries FP16
   instead of skipping), and `./openprocessor models status` lists it under "Degraded precision".
 
+### INT8 evaluation of the PE image encoder on Ampere (#213)
+
+Measured question: does explicit-Q/DQ INT8 beat the FP16 PE engine on the RTX A6000 and the 12 GB
+RTX 3080 Ti (both SM86), and do the vectors stay in the same space? **Result: no recipe ships.**
+The activation-quantized (A8W8) engines are 1.2-1.4x faster but fail every vector-agreement gate by a
+wide margin; the one recipe that passes the gates (weight-only INT8) gives no speed and no size gain.
+FP16 stays the only PE precision; there is no INT8 option, build flag or config in the tree. Raw
+numbers: `docs/benchmarks/int8_pe_eval.json`. The detector was not evaluated: it is 22 of the 406
+GFLOP per image (PE is 384), so even a free speed-up there changes the GPU arithmetic per image by about 5 percent,
+and the same Q/DQ route would have to clear a box-level gate first.
+
+#### Method
+
+- **Stack.** TensorRT 11.1.0.106 (strongly typed: no implicit calibration, no precision flags), NVIDIA
+  Model Optimizer 0.47.0 for the Q/DQ insertion and calibration, FP16 as the high-precision type.
+  Engines are built with `trtexec` (profile min 1 / opt 8 / max 32, 336 x 336) from the FP16-baked PE
+  ONNX that `export/trt_utils.py` produces, and served as separate models in an isolated Triton
+  (own container, loopback ports, one GPU each; nothing in `models/` or the live stack was touched).
+- **Calibration set.** 1,000 crops from 300 COCO train2017 images that are not in the pinned 2,000
+  (seed 20261011, license-filtered like the pin; overlap with the pinned set checked: 0). Boxes are
+  COCO ground-truth boxes (shorter side at least 24 px, up to 6 per image), cut with the production
+  crop rule and `resize_crop_rgb` / `normalize_chw`. The set and its manifest stay out of git.
+- **Evaluation set.** The pinned 2,000 images: the 12,790 production crop rectangles of the FP16
+  reference capture (`ref-fp16`) and the 2,000 whole frames, embedded through Triton by each engine.
+  The reference for each GPU is the FP16 engine built from the same ONNX on that GPU. Each candidate
+  is wrapped as a parity capture (clusters re-computed with k-means, K = 512, same seed, per
+  vector set) and judged by `scripts/bench/parity.py compare --profile precision`, so the thresholds
+  are exactly the ones every other precision change is held to. Noise floor: the FP16 engine built on
+  the 3080 Ti against the one built on the A6000 passes every gate (crop cosine p01 0.99996, kNN
+  overlap@10 0.992, cluster assignment 0.9992).
+- **Recipes** (Q/DQ on `MatMul` only; Softmax, LayerNorm, GELU, the patch convolution and the
+  attention score and context matmuls stay FP16 in every recipe):
+  - `bmax`: per-channel weights, `max` calibration, all 98 linear MatMuls (QKV, output projection,
+    MLP in both directions in all 24 blocks, the pooling head MLP, the projection).
+  - `b`: as `bmax` with `entropy` calibration on the 1,000 crops.
+  - `h2` / `c_e`: as `bmax` / `b` but blocks 0, 1, 22, 23, the pooling head and the final projection
+    left in FP16 (`c_e` calibrated on 300 crops because the histogram stage is single-threaded).
+  - `w8`: weight-only INT8 (per-channel INT8 weights, no activation Q/DQ), built by dropping the
+    activation Q/DQ pairs of a `--dq_only` model.
+  - Excluding only the MLP output projections (`mlp/c_proj`) gave an engine whose output is NaN for
+    every input (the graph is finite under ONNX Runtime): not usable, not pursued.
+
+#### Accuracy gates (candidate against the FP16 engine of the same GPU; pinned set)
+
+Cosine is per vector; kNN overlap is at k = 10 on 1,000 queries; the purity and kNN-precision columns
+are percentage points lost against COCO ground-truth classes (negative = gained).
+
+| Recipe, GPU | crop cos p01 | crop cos median | frame cos p01 | frame cos median | kNN overlap@10 | near-dup agreement | cluster assign | purity drop | label vote | kNN precision drop | gates failed |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| gate | >= 0.995 | >= 0.999 | >= 0.995 | >= 0.999 | >= 0.95 | >= 0.995 | >= 0.98 | <= 0.5 | >= 0.97 | <= 0.5 | |
+| FP16 3080 Ti vs FP16 A6000 (noise floor) | 1.0000 | 1.0000 | 0.9999 | 1.0000 | 0.992 | 1.000 | 0.999 | 0.24 | 0.991 | 0.03 | 0 |
+| `bmax`, A6000 | 0.736 | 0.938 | 0.805 | 0.927 | 0.524 | 0.999 | 0.671 | 0.37 | 0.847 | 0.82 | 8 |
+| `bmax`, 3080 Ti | 0.735 | 0.937 | 0.805 | 0.927 | 0.524 | 0.999 | 0.670 | -0.49 | 0.849 | 0.75 | 8 |
+| `b` (entropy), A6000 | 0.885 | 0.986 | 0.942 | 0.981 | 0.716 | 0.999 | 0.901 | -0.13 | 0.887 | 0.81 | 8 |
+| `h2` (head and edge blocks FP16), A6000 | 0.929 | 0.980 | 0.928 | 0.976 | 0.694 | 0.999 | 0.879 | 0.00 | 0.896 | -0.23 | 7 |
+| `c_e` (entropy, head and edge blocks FP16), A6000 | 0.977 | 0.992 | 0.945 | 0.984 | 0.820 | 0.999 | 0.955 | -0.54 | 0.926 | 0.36 | 7 |
+| `w8` (weight-only), A6000 | 0.9990 | 0.9997 | 0.9984 | 0.9995 | 0.960 | 1.000 | 0.996 | 0.16 | 0.976 | -0.17 | 0 |
+
+Reading it: the best A8W8 recipe (`c_e`) reaches a median crop cosine of 0.992 and a first percentile
+of 0.977, against 0.999 and 0.995 required. The ground-truth task metrics (cluster purity, kNN class
+precision) move by under a point either way (at most 0.82), so INT8 does not make the space useless; it makes it a
+different space: neighbour identity changes (overlap 0.52-0.82, label vote 0.85-0.93), so stored
+vectors and new vectors from an INT8 engine could not be mixed in one collection without a
+re-embedding migration. The weight-only recipe stays inside the gates but only just on kNN overlap
+(0.960 against 0.95), and TensorRT folds the INT8 weights back to FP16 constants: its plan is
+644.8 MB, the same as FP16 (644.8 MB), and the speed is unchanged. Weight-only INT8 therefore
+buys nothing on this stack.
+
+#### Speed (two numbers, never compared with each other)
+
+Engine only is `trtexec --loadEngine` (TensorRT 11 default CUDA graphs, no host transfers, 15 s
+after a 1 s warm-up). Through Triton is `perf_analyzer` over HTTP against the isolated Triton with
+the production dynamic-batching config (preferred 4, 8, 16, 32; 15 ms queue delay), random FP32
+input, 6 s windows, batch 1, 8, 16, 32 at concurrency 1, 2, 4, 8, 16; saturation is the range at
+concurrency >= 4 and batch >= 8 (the production request shape is a batch of crops, up to 32).
+Images per second; ratio is INT8 over FP16 on the same GPU.
+
+| Recipe, GPU | Engine only b8 | Engine only b32 | Through Triton, saturated | Plan size |
+|---|---:|---:|---:|---:|
+| FP16, A6000 | 190.0 | 186.5 | 189-192 | 644.8 MB |
+| `bmax`, A6000 | 279.0 (1.47x) | 268.2 (1.44x) | 263-273 (1.39-1.43x) | 337.4 MB |
+| `h2`, A6000 | 241.7 (1.27x) | 233.2 (1.25x) | not run | 393.6 MB |
+| `c_e`, A6000 | 241.1 (1.27x) | 235.5 (1.26x) | 232-239 (1.22-1.25x) | 393.6 MB |
+| FP16, 3080 Ti | 206.5 | 200.3 | 188-195 | 645.1 MB |
+| `bmax`, 3080 Ti | 284.4 (1.38x) | 271.5 (1.36x) | 236-258 (1.25-1.36x) | 337.4 MB |
+| `h2`, 3080 Ti | 256.1 (1.24x) | 246.3 (1.23x) | not run | 393.5 MB |
+
+On SM86 the INT8 tensor cores do deliver: all-linear INT8 is 1.4x faster on the A6000 and 1.35-1.4x on
+the 3080 Ti, near the 1.33x that a public ViT-L measurement on the same architecture reports (see the serving
+backend trade study), and it saves about 300 MB of weights (relevant for the 12 GB card, but the
+activation memory of 340-360 MB per engine is unchanged). But keeping the sensitive
+layers in FP16, which is what the accuracy needs, takes the gain to 1.22-1.27x, under the 1.3x bar
+the plan sets, and still fails the gates. The speed-up is real and the accuracy is not there.
+
+#### Decision
+
+| Plan rule | Observed | Action |
+|---|---|---|
+| p01 >= 0.995, all gates pass, >= 1.3x | p01 0.74-0.98, 7-8 gates fail; >= 1.3x only with the recipes that fail worst | Do not ship |
+| p01 < 0.995 or cluster/kNN gates fail | all A8W8 recipes | Record the numbers (this section), no code |
+| Changed space would need a migration | yes, kNN overlap 0.52-0.82 | Out of scope |
+
+FP16 remains the default and the only PE precision. Nothing in `export/`, `models/`, the compose files
+or the API changed.
+
+#### What was not measured, and caveats
+
+- The full ingest protocol through the API: the plan runs it for the best variant only, and no
+  variant passed the gates. The Triton numbers above are the PE model alone; the end-to-end ingest
+  rate also depends on the decode, detector, crop, serialization and write stages above, so a 1.4x PE
+  speed-up would have moved ingest by less than 1.4x.
+- The PE engines evaluated take FP32 normalized input (the graph before the uint8 input change); the
+  input dtype changes transfer bytes, not the 98 quantized matmuls, so neither the accuracy nor the
+  engine-only speed ratios depend on it. They were not repeated on the uint8-input graph.
+- The detector, MobileCLIP, ArcFace and OCR models in INT8; a SmoothQuant or per-token-activation
+  recipe, quantization-aware training or a learned rounding method (not in the ONNX flow of the
+  tool used; they are the usual remedy for ViT activation outliers and are a research task, not a
+  calibration choice); a VLM label-agreement run (the VLM does not consume vectors); a sample-count
+  sweep for the entropy method (1,000 crops for `b`, 300 for `c_e`).
+- Timing was taken while another project's process held 16 GB on GPU 0 and 6 GB on GPU 1 with no
+  compute (0 percent utilization before and after every run); the A6000 is capped at 300 W, so
+  its engine-only FP16 rate (190 images/s) is below the 3080 Ti's (206 images/s). Triton and
+  `trtexec` figures were never compared with each other.
+- Tooling findings, for anyone repeating it: ONNX Runtime in the evaluator image lacks the CUDA 12
+  libraries its provider needs (the image carries CUDA 13 ones), so calibration falls back to the CPU
+  unless they are supplied; either way the entropy method is bound by a single-threaded histogram
+  stage (about 85 minutes for 1,000 crops, about 3.5 hours for 300 on the partially quantized graph) and
+  the max method takes 5-15 minutes. `bmax` and `b` were quantized from the FP32 ONNX and converted by
+  Model Optimizer, `h2`, `c_e` and `w8` from the production FP16 ONNX; the model's final `If` (squeeze of a one-row pooling output) breaks Model
+  Optimizer's FP16 conversion and was inlined (its condition is always true for this model) for the
+  quantization copy only.
+
+To repeat: bake the FP16 ONNX (`python export/trt_utils.py pytorch_models/pe_image_encoder.onnx
+OUT.fp16.onnx`), inline the `If`, run `python -m modelopt.onnx.quantization --onnx_path ... --quantize_mode
+int8 --calibration_method {max,entropy} --calibration_data_path CALIB.npy --high_precision_dtype fp16
+--op_types_to_quantize MatMul Gemm [--nodes_to_exclude REGEX ...]` on a `(N, 3, 336, 336)` array of
+normalized crops, build with `trtexec` using the profile above, then capture and `parity.py compare`
+as in the gates section below.
+
 ### Wave 0 parity and FP16 gates (set A, public COCO, 2,000 images)
 
 Every 0.6.0 change is gated by `scripts/bench/parity.py` (WP-0.1, #208): it captures the per-stage
@@ -1563,6 +1702,38 @@ variances: 0 of 3,960 comparisons differ. The same equalities are unit tests (ev
 channel, random frames and crops, extreme and tiny images).
 
 Raw results: `docs/benchmarks/v060_apicpu_{before,after}_set_{a,b}.json` and `v060_apicpu_attribution_set_{a,b}.json`.
+
+### Bulk ingest runner
+
+`POST /curation/projects/{project}/ingest/bulk` runs a folder or manifest through the same `POST /ingest/batch`
+route as any other client (see [CURATION.md](CURATION.md#bulk-ingest)), so it is held to the same ceiling: the
+GPU. Set A (public COCO, 2,000 images, 640 x 480), one RTX A6000 (GPU 0) shared with other projects'
+resident processes (16.4, 1.4 and 0.3 GB), FP16 PE engine, 32 API workers, OpenSearch heap 8 GB, a fresh
+project per run, policy `all`. The plain path is a Python client with threads posting `/ingest/batch` (16 images
+per request).
+
+| Path | Batches in flight | Run 1 | GPU 0 busy % in run 1 | Run 2 |
+|---|---:|---:|---:|---:|
+| `/ingest/batch` from client threads | 8 | 19.74 | 78 | 20.72 |
+| Bulk ingest runner | 8 | 20.75 | 86 | 18.38 |
+| `/ingest/batch` from client threads | 16 | 20.65 | 89 | |
+| Bulk ingest runner | 16 | 21.29 | 90 | |
+
+Images per second. The runner is within the spread of the plain path (18.4 to 21.3 across the six runs of both):
+it adds no throughput and costs none, which is the point of sending each batch through the route that the data
+path is tuned behind. The second pair of 8-in-flight runs was sampled with `nvidia-smi pmon`: the other processes on GPU 0 held 0 percent
+SM throughout; the other runs sampled only the card's total utilization, so a foreign load there is not
+excluded. A cancel at 784 images followed by a start of the same source finished at exactly 2,000 stored documents
+with 0 duplicates and 784 images skipped from the ledger.
+
+The first design ran the pipeline inside the task that owns the run, so all batches shared one `api`
+worker's event loop. That reached 9.85 images/s (one process is limited by its host CPU, about 0.1 CPU-s per
+image on frames; the stage timers showed `opensearch_write` at 2.5 s per image only because the loop was busy).
+Sending the batches back to the API's own socket spreads them over every worker and gives the 18 to 21 above.
+
+OpenSearch is not the limit at this rate (one writer sustains the equivalent of 137 images/s, probe 5 above), so
+the writes stay per image inside the pipeline; the bulk size of 1,000 documents from probe 5 is a datastore
+property, not a runner setting.
 
 ### WP-2.1: uint8 inputs for the detector and the PE image encoder (#214)
 

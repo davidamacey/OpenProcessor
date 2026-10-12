@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Byte-upload bulk ingest: read images locally, upload them to the API.
 
-The path-based walker (``ingest_walker.py``) sends file *paths*, so the
+The path-based bulk ingest (``bulk_ingest.py``) sends file *paths*, so the
 API container must already have the same storage mounted at the same
 location. This driver is for everything else — a laptop, a remote or
 unmountable share, a high-latency NAS: it reads the files itself and
@@ -71,8 +71,8 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from scripts.curation._fast_walk import iter_image_paths
 from src.config import get_curation_config
+from src.services.curation.bulk_ingest.walk import iter_image_paths
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 

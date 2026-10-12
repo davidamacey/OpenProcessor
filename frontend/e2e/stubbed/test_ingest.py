@@ -31,6 +31,16 @@ IDLE_JOB = {
 }
 
 
+BULK_CONFIG = {
+    "source_roots": ["/data/archive"],
+    "default_extensions": [".jpg", ".jpeg", ".png"],
+    "default_batch_size": 16,
+    "default_concurrency": 8,
+    "max_batch_size": 64,
+    "max_concurrency": 32,
+}
+
+
 def _base_ingest_stubs(
     stub,
     *,
@@ -94,6 +104,9 @@ def _base_ingest_stubs(
         },
     )
     stub.on("GET", r"/pipeline/auto_label/status", IDLE_JOB)
+    # The bulk-ingest panel mounts with the server-path panel (served source roots).
+    stub.on("GET", r"/ingest/bulk/config(\?|$)", BULK_CONFIG)
+    stub.on("GET", r"/ingest/bulk(\?|$)", {"items": [], "total": 0, "page": 1, "page_size": 5})
 
 
 def _select_folder(page, app_url) -> None:

@@ -1,4 +1,4 @@
-"""Parallel directory walk for the curation ingest walker.
+"""Parallel directory walk for bulk ingest.
 
 A plain ``os.walk`` is single-threaded and, on network-attached or
 otherwise high-latency storage, spends most of its wall time blocked on
@@ -8,7 +8,7 @@ independent unit of work, submitted recursively as it discovers more
 subdirectories, so I/O-bound directory listings overlap.
 
 Not a generic filesystem library — scoped to exactly what
-``ingest_walker.py`` needs: yield every regular file under ``root``
+bulk ingest needs: yield every regular file under ``root``
 whose suffix is in an allowed set.
 """
 
@@ -52,6 +52,17 @@ def iter_image_paths(
     pending = 0
     pending_lock = threading.Lock()
     pending_zero = threading.Event()
+    # Set when the consumer stops early (a cancelled run): a worker blocked on a
+    # full queue must give up, or closing the pool would wait on it forever.
+    stop = threading.Event()
+
+    def _put(path: Path) -> None:
+        while not stop.is_set():
+            try:
+                out.put(path, timeout=0.1)
+                return
+            except queue.Full:
+                continue
 
     def _scan(dir_path: Path) -> None:
         nonlocal pending
@@ -69,7 +80,7 @@ def iter_image_paths(
                 elif entry.is_file(follow_symlinks=False):
                     suffix = Path(entry.name).suffix.lower()
                     if suffix in exts:
-                        out.put(Path(entry.path))
+                        _put(Path(entry.path))
             except OSError:
                 continue
         with pending_lock:
@@ -82,19 +93,22 @@ def iter_image_paths(
             pending += 1
         executor.submit(_scan, root)
 
-        # Drain the queue on the calling thread while workers fan out;
-        # a sentinel-free design would race the "done" check against
-        # in-flight puts, so we poll with a short timeout instead.
-        while True:
-            try:
-                item = out.get(timeout=0.1)
-                yield item
-            except queue.Empty:
-                if pending_zero.is_set() and out.empty():
-                    break
-        # Drain anything queued between the last empty check and shutdown.
-        while not out.empty():
-            yield out.get_nowait()
+        try:
+            # Drain the queue on the calling thread while workers fan out;
+            # a sentinel-free design would race the "done" check against
+            # in-flight puts, so we poll with a short timeout instead.
+            while True:
+                try:
+                    item = out.get(timeout=0.1)
+                    yield item
+                except queue.Empty:
+                    if pending_zero.is_set() and out.empty():
+                        break
+            # Drain anything queued between the last empty check and shutdown.
+            while not out.empty():
+                yield out.get_nowait()
+        finally:
+            stop.set()
 
 
 __all__ = ['iter_image_paths']

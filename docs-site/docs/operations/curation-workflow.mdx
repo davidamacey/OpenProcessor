@@ -60,7 +60,7 @@ projects and promoted models are matched by name, never by id.
 
 | Source | Tool |
 |---|---|
-| Images on storage the API container mounts | `POST /ingest/image`, or `scripts/curation/ingest_walker.py --project $P` for a resumable bulk walk |
+| Images on storage the API container mounts | `POST /ingest/image`, or `scripts/curation/bulk_ingest.py --folder DIR --project $P` (or a `--manifest` list) for a resumable bulk run with progress, cancel and failure reporting |
 | Images only on your machine | `scripts/curation/ingest_upload.py --project $P` (uploads bytes to `POST /ingest/upload`; resuming relies on server-side content dedup) |
 | Images only (no labels) from a labeled dataset | `scripts/curation/import_labeled_dataset.py --images-only` (skips every class) |
 | An already-labeled YOLO / COCO dataset or an OpenProcessor export | `POST /datasets/preview`, then `POST /datasets/imports` (or `scripts/curation/import_labeled_dataset.py`); classes map by name, the import can be resumed and undone |

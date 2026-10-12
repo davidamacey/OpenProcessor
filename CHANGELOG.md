@@ -13,6 +13,16 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Added
 
+- Bulk ingest of a folder or a manifest as a background run, one runner behind both entry points: the
+  `POST`/`GET /curation/projects/{project}/ingest/bulk` routes (start or resume, progress, failures,
+  cancel, `/ingest/bulk/config`) and the `scripts/curation/bulk_ingest.py` command line, a client of
+  those routes, with Cropwright's "Bulk ingest" panel on `/ingest`. Batches go through the existing
+  `/ingest/batch` route (so every data-path improvement applies and the work spreads over all API workers)
+  with bounded concurrency; a per-run ledger makes a cancelled, crashed or partly failed run resumable and
+  skips what is stored, content-hash dedup makes a re-run idempotent, five whole-batch failures in a row stop
+  the run, and the run reports images per second, time left and seconds per stage. `/ingest/batch` accepts
+  an optional `ingest_run_id`. A live run counts as a busy project job. `OP_BULK_INGEST_DIR` (#229).
+
 - A checksum-pinned public benchmark set: `fetch_coco_subset.py --bench-set N` draws a seeded,
   license-filtered, all-class COCO 2017 set and pins per-image SHA-256 and bytes
   (`scripts/datasets/manifests/coco_bench_2000.json`); `--verify-only` re-hashes a download offline (#45).
@@ -45,7 +55,18 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   neighbour overlap, cluster agreement and purity against the COCO ground truth, label agreement),
   applies the thresholds of `scripts/bench/parity_gates.json` and exits non-zero on failure. The
   FP32 against FP16 PE engine results are in `docs/PERFORMANCE.md` (#208).
+- Measured INT8 evaluation of the PE image encoder on Ampere (RTX A6000 and RTX 3080 Ti), recorded in
+  `docs/PERFORMANCE.md` and `docs/benchmarks/int8_pe_eval.json`. Result: explicit Q/DQ INT8 is
+  1.2-1.4x faster than FP16 but fails the parity gates (crop cosine median 0.94-0.99 against 0.999,
+  neighbour overlap 0.52-0.82 against 0.95), and weight-only INT8 passes the gates with no speed or
+  size gain. INT8 is not offered; FP16 stays the only PE precision and no code changed (#213).
+
 ### Changed
+
+- `scripts/curation/ingest_walker.py` is replaced by `scripts/curation/bulk_ingest.py` (`--folder` instead of
+  `--root`, no progress file: the run resumes from the server). The parallel directory walk moved to
+  `src/services/curation/bulk_ingest/walk.py`.
+
 
 - The detector engines (`trt`, `trt_end2end`, YOLO26 and dual-head exports) take uint8 pixels and do
   the `/255` in the TensorRT graph, so a detector request carries a quarter of the bytes of the FP32
