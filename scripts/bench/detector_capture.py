@@ -4,7 +4,9 @@
 Input for ``detector_quality.py``. The preprocessing is the product's own
 (``letterbox_to_square``, fill 114, 640 px), so the boxes are what ingest sees
 before the confidence floor. Each model is ``NAME:uint8`` (engine scales in the
-graph) or ``NAME:fp32`` (this script divides by 255). Needs ``tritonclient``,
+graph), ``NAME:fp32`` (this script divides by 255) or ``NAME:frontend`` (the GPU ingest
+front end, ``image_frontend``: it takes the encoded file, decodes and letterboxes on the GPU and
+returns the detector rows with its letterbox). Needs ``tritonclient``,
 ``pillow`` and ``numpy`` (the API image has them); read-only against Triton.
 
     python scripts/bench/detector_capture.py --url 127.0.0.1:4961 \\
@@ -50,6 +52,39 @@ def decode_row(
     return out
 
 
+def frontend_row(client: Any, model: str, data: bytes) -> list[list[float]]:
+    """One image through the decoupled front end. An image it declines (it would take the CPU
+    path in ingest) stops the capture: the comparison needs every image from the front end."""
+    import queue
+
+    import tritonclient.grpc as grpcclient
+
+    answers: queue.Queue[Any] = queue.Queue()
+    client.start_stream(callback=lambda result, error: answers.put((result, error)))
+    try:
+        inp = grpcclient.InferInput('jpeg', [len(data)], 'UINT8')
+        inp.set_data_from_numpy(np.frombuffer(data, np.uint8))
+        client.async_stream_infer(model, [inp])
+        result, error = answers.get(timeout=120)
+    finally:
+        client.stop_stream()
+    if error is not None:
+        raise error
+    status = result.as_numpy('status')[0]
+    if status not in (b'ok', 'ok'):
+        raise SystemExit(f'{model} declined an image: {status!r}')
+    scale, pad_w, pad_h = (float(v) for v in result.as_numpy('letterbox'))
+    boxes = result.as_numpy('det_boxes').reshape(-1, 4)
+    return decode_row(
+        np.array([len(boxes)]),
+        boxes,
+        result.as_numpy('det_scores'),
+        result.as_numpy('det_classes'),
+        scale,
+        (pad_w, pad_h),
+    )
+
+
 def run(args: argparse.Namespace) -> int:
     import tritonclient.grpc as grpcclient
 
@@ -59,8 +94,8 @@ def run(args: argparse.Namespace) -> int:
     specs: list[tuple[str, str]] = []
     for m in args.model:
         name, _, dtype = m.partition(':')
-        if dtype not in ('uint8', 'fp32'):
-            raise SystemExit(f'--model {m!r}: dtype must be uint8 or fp32')
+        if dtype not in ('uint8', 'fp32', 'frontend'):
+            raise SystemExit(f'--model {m!r}: dtype must be uint8, fp32 or frontend')
         specs.append((name, dtype))
     results: dict[str, dict[str, Any]] = {n: {} for n, _ in specs}
     step = args.batch
@@ -72,6 +107,11 @@ def run(args: argparse.Namespace) -> int:
             lets.append(letterbox_to_square(img, NET))
         batch = np.concatenate([chw for chw, _s, _p in lets], axis=0)
         for name, dtype in specs:
+            if dtype == 'frontend':
+                for r in chunk:
+                    data = (Path(args.images) / r['file_name']).read_bytes()
+                    results[name][str(r['image_id'])] = frontend_row(client, name, data)
+                continue
             data = batch if dtype == 'uint8' else batch.astype(np.float32) / np.float32(255.0)
             inp = grpcclient.InferInput('images', list(data.shape), dtype.upper())
             inp.set_data_from_numpy(data)
@@ -102,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument('--url', required=True, help='Triton gRPC host:port')
     p.add_argument('--manifest', required=True)
     p.add_argument('--images', required=True)
-    p.add_argument('--model', action='append', required=True, metavar='NAME:uint8|fp32')
+    p.add_argument('--model', action='append', required=True, metavar='NAME:uint8|fp32|frontend')
     p.add_argument('--out-dir', required=True)
     p.add_argument('--batch', type=int, default=16)
     return run(p.parse_args(argv))
