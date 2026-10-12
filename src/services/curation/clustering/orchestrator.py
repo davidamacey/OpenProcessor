@@ -20,6 +20,7 @@ Skip-rule: residual pool < 32 residuals → no-op (return empty summary).
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -27,11 +28,14 @@ import numpy as np
 from src.config.curation import items_index
 from src.core.logging import get_logger
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
-from src.services.curation.clustering.cluster_write_guard import (
-    _guarded_class_cluster_write,
-    _log_bulk_write_errors,
+from src.services.curation.clustering.assignment_writer import (
+    Assignment,
+    AssignmentWriter,
+    batch_size,
+    batches,
 )
 from src.services.curation.clustering.last_run import record_last_run
+from src.services.curation.clustering.page_rows import hits_to_rows
 from src.services.curation.clustering.pool_size import MIN_RESIDUALS_FOR_CLUSTERING
 from src.services.curation.clustering.residual_gate import (
     _park_gated_residuals,
@@ -99,7 +103,7 @@ async def cluster_residuals(
        clustered it. If a largest-first ordering is needed again, it
        must be a derived sort (e.g. by cluster size, computed from the
        live data) rather than baked into the id itself.
-    4. Bulk-write back to OpenSearch in chunks of 2000.
+    4. Bulk-write back to OpenSearch in chunks, several requests at a time.
     """
     from src.services.curation.clustering import embedding_reduce
     from src.services.curation.clustering.backend import detect_cluster_backend
@@ -156,6 +160,7 @@ async def cluster_residuals(
     # PIT + sliced parallel fetch by default (~8x faster than scroll
     # on n=347k). Falls back internally to the sequential scroll
     # variant if PIT isn't available on the cluster.
+    t_fetch = time.perf_counter()
     ids, embeddings = await embedding_reduce.fetch_residual_embeddings_parallel(
         client,
         include_candidate_clusters=recluster_unvalidated,
@@ -163,6 +168,7 @@ async def cluster_residuals(
         extra_must=gate_clauses or None,
         progress=progress,
     )
+    fetch_s = time.perf_counter() - t_fetch
     if len(ids) < MIN_RESIDUALS_FOR_CLUSTERING:
         return {
             'status': 'no_residuals' if not ids else 'too_few_residuals',
@@ -184,11 +190,13 @@ async def cluster_residuals(
         # Only IVF takes a fixed cluster count; AHC/HDBSCAN derive their own.
         method_kwargs['n_clusters'] = n_clusters
     method = get_method(method_name, **method_kwargs)
+    t_fit = time.perf_counter()
     result = await method.fit_predict(
         embeddings,
         backend_info=backend_info,
         progress=progress,
     )
+    fit_s = time.perf_counter() - t_fit
 
     if progress is not None:
         progress.raise_if_cancelled()
@@ -212,47 +220,43 @@ async def cluster_residuals(
 
         dist_list = member_centroid_distances(embeddings, relabeled)
 
-    # Chunk the bulk write — at production scale (~350k items) a single
-    # bulk call exceeds the OpenSearch client's default 30s timeout.
-    # Each chunk publishes incremental progress so the dashboard
-    # advances during the write phase.
-    BULK_CHUNK = 2000
-    pairs = list(zip(ids, relabeled.tolist(), dist_list, strict=True))
+    # Chunk the bulk write -- at production scale (~350k items) a single bulk call exceeds the
+    # OpenSearch client's default 30s timeout -- and keep several chunks in flight at once: a
+    # guarded update re-indexes the whole document (vector included), so the node's write
+    # threads, not one request at a time, set the pace. Each finished chunk publishes
+    # incremental progress so the dashboard advances during the write phase.
+    #
+    # Residual labels >= 0 get the offset; -1 (noise) stays as -1 so the API renders it as
+    # cluster_kind="unassigned". The guarded script (not a blind 'doc' update) clears
+    # cluster_subid (stale refine groupings from the doc's previous cluster have no meaning in
+    # the new candidate) and sets cluster_distance (present for IVF, else null so a stale
+    # distance from a prior method can't mislead), but noops if a human relabeled/validated/
+    # excluded the doc since it was fetched for this fit.
+    t_write = time.perf_counter()
+    rows: list[Assignment] = [
+        (
+            crop_id,
+            int(label) + RESIDUAL_CLUSTER_ID_OFFSET if int(label) >= 0 else int(label),
+            float(dist) if dist is not None else None,
+        )
+        for crop_id, label, dist in zip(ids, relabeled.tolist(), dist_list, strict=True)
+    ]
     if progress is not None:
-        progress.update(processed=0, total=len(pairs))
-    n_written = 0
-    for start in range(0, len(pairs), BULK_CHUNK):
-        chunk = pairs[start : start + BULK_CHUNK]
-        bulk_body: list[dict[str, Any]] = []
-        for crop_id, label, dist in chunk:
-            # Residual labels >= 0 get the offset; -1 (noise) stays as
-            # -1 so the API renders it as cluster_kind="unassigned".
-            new_cid = int(label)
-            if new_cid >= 0:
-                new_cid += RESIDUAL_CLUSTER_ID_OFFSET
-            bulk_body.append({'update': {'_index': items_index(), '_id': crop_id}})
-            # Guarded script, not a blind 'doc' update -- clear
-            # cluster_subid (stale refine groupings from the doc's previous
-            # cluster have no meaning in the new candidate) and set
-            # cluster_distance (present for IVF, else null so a stale
-            # distance from a prior method can't mislead), but noop if a
-            # human relabeled/validated/excluded the doc since it was
-            # fetched for this fit.
-            bulk_body.append(
-                _guarded_class_cluster_write(new_cid, float(dist) if dist is not None else None)
-            )
-        br = await client.bulk(body=bulk_body, refresh=False)
-        if br.get('errors'):
-            _log_bulk_write_errors('cluster_residuals', br)
-        n_written += len(chunk)
-        if progress is not None:
-            progress.update(processed=n_written, total=len(pairs))
-            progress.raise_if_cancelled()
-    if pairs:
+        progress.update(processed=0, total=len(rows))
+    async with AssignmentWriter(client, 'cluster_residuals') as writer:
+        for batch in batches(rows, batch_size(len(rows))):
+            await writer.submit(batch)
+            if progress is not None:
+                progress.update(processed=writer.n_written, total=len(rows))
+                progress.raise_if_cancelled()
+    if progress is not None:
+        progress.update(processed=writer.n_written, total=len(rows))
+    if rows:
         try:
             await client.indices.refresh(index=items_index())
         except Exception as exc:
             logger.debug('curation_cluster_refresh_failed', error=str(exc))
+    write_back_s = time.perf_counter() - t_write
 
     # Park the gate complement (residual crops too small / blurry to train or
     # assign) and persist the gate policy so ingest + assign_only apply it.
@@ -293,6 +297,13 @@ async def cluster_residuals(
         'cluster_method_backend': result.backend,
         'cluster_method_params': result.params,
         'cluster_method_extra': result.extra,
+        # Where the pass spent its time (the member-centroid distances, when the method has
+        # none of its own, count under write_back).
+        'stage_seconds': {
+            'fetch': round(fetch_s, 3),
+            'fit': round(fit_s, 3),
+            'write_back': round(write_back_s, 3),
+        },
     }
     record_last_run(summary)
     return summary
@@ -352,44 +363,37 @@ async def assign_only_residuals(
     body: dict[str, Any] = {'size': chunk_size, '_source': [field], 'query': query}
     resp = await client.search(index=items_index(), body=body, scroll='2m')
     scroll_id = resp.get('_scroll_id')
-    n_written = 0
+    n_submitted = 0
     try:
-        while True:
-            hits = resp['hits']['hits']
-            if not hits:
-                break
-            chunk_ids: list[str] = []
-            chunk_embs: list[np.ndarray] = []
-            for h in hits:
-                emb = (h.get('_source') or {}).get(field)
-                if emb is None:
-                    continue
-                chunk_ids.append(h['_id'])
-                chunk_embs.append(np.asarray(emb, dtype=np.float32))
-            if chunk_embs:
-                matrix = np.vstack(chunk_embs)
-                norms = np.linalg.norm(matrix, axis=1, keepdims=True)
-                matrix = matrix / np.where(norms == 0, 1.0, norms)
-                labels, dists = store.assign_batch_with_distances(matrix)
-                bulk_body: list[dict[str, Any]] = []
-                for crop_id, label, dist in zip(
-                    chunk_ids, labels.tolist(), dists.tolist(), strict=True
-                ):
-                    new_cid = int(label) + RESIDUAL_CLUSTER_ID_OFFSET
-                    bulk_body.append({'update': {'_index': items_index(), '_id': crop_id}})
-                    # Guarded script — see cluster_residuals above.
-                    bulk_body.append(_guarded_class_cluster_write(new_cid, float(dist)))
-                br = await client.bulk(body=bulk_body, refresh=False)
-                if br.get('errors'):
-                    _log_bulk_write_errors('assign_only_residuals', br)
-                n_written += len(chunk_ids)
-                if progress is not None:
-                    progress.update(processed=n_written, total=total_estimate or n_written)
-                    progress.raise_if_cancelled()
-            if not scroll_id:
-                break
-            resp = await client.scroll(scroll_id=scroll_id, scroll='2m')
-            scroll_id = resp.get('_scroll_id')
+        async with AssignmentWriter(client, 'assign_only_residuals') as writer:
+            while True:
+                hits = resp['hits']['hits']
+                if not hits:
+                    break
+                chunk_ids, matrix = hits_to_rows(hits, field)
+                if matrix is not None:
+                    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+                    matrix = matrix / np.where(norms == 0, 1.0, norms)
+                    labels, dists = store.assign_batch_with_distances(matrix)
+                    # Guarded script -- see cluster_residuals above.
+                    page_rows: list[Assignment] = [
+                        (crop_id, int(label) + RESIDUAL_CLUSTER_ID_OFFSET, float(dist))
+                        for crop_id, label, dist in zip(
+                            chunk_ids, labels.tolist(), dists.tolist(), strict=True
+                        )
+                    ]
+                    for batch in batches(page_rows):
+                        await writer.submit(batch)
+                    n_submitted += len(chunk_ids)
+                    if progress is not None:
+                        progress.update(
+                            processed=writer.n_written, total=total_estimate or n_submitted
+                        )
+                        progress.raise_if_cancelled()
+                if not scroll_id:
+                    break
+                resp = await client.scroll(scroll_id=scroll_id, scroll='2m')
+                scroll_id = resp.get('_scroll_id')
     finally:
         if scroll_id:
             try:
@@ -397,6 +401,7 @@ async def assign_only_residuals(
             except Exception as exc:
                 logger.debug('curation_ivf_assign_clear_scroll_failed', error=str(exc))
 
+    n_written = writer.n_written
     if n_written:
         try:
             await client.indices.refresh(index=items_index())
