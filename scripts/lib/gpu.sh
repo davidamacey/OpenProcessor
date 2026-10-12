@@ -265,23 +265,25 @@ wait_for_gpu_memory() {
 # PE encoder placement (TRITON_GPU_ID may list several GPUs)
 # =============================================================================
 
-# gpu_pe_placement IDS PE_MIB TABLE [TRITON_RUNNING]
+# gpu_pe_placement IDS PE_MIB TABLE [TRITON_RUNNING] [PRIMARY_MIB]
 #   IDS     TRITON_GPU_ID as written in .env: "1" or "0,2" (host indexes)
 #   PE_MIB  GPU memory of one PE encoder instance
 #   TABLE   one GPU per line: index|name|total_mib|used_mib|compute_cap
 #   TRITON_RUNNING=1: this stack's Triton already holds its memory, so a
 #           shortfall of free memory is a warning, not a refusal
+#   PRIMARY_MIB: memory the primary card needs for every Triton model (the
+#           profile's budget); a 12 GB card is a PE-only secondary, not a primary
 # Prints, one per line: primary=ID, pe_gpus=ID,ID, gpu=ID role=... lines,
 # warn=... and problem=.... Returns 1 when there is any problem. Fails closed:
 # a listed GPU the host does not have, a repeated id, cards of different
 # compute capability (one TensorRT plan serves them all) or too little free
 # memory all refuse.
 gpu_pe_placement() {
-    local ids_csv="$1" pe_mib="$2" table="$3" running="${4:-0}"
+    local ids_csv="$1" pe_mib="$2" table="$3" running="${4:-0}" primary_mib="${5:-0}"
     local -A name=() total=() used=() cc=()
     local -a have=() want=() problems=() warns=() listed=()
     local -A kinds=()
-    local idx n t u c id seen=" " primary="" line free ccs=""
+    local idx n t u c id seen=" " primary="" line free ccs="" need what
 
     while IFS='|' read -r idx n t u c; do
         [[ -z "$idx" ]] && continue
@@ -311,8 +313,14 @@ gpu_pe_placement() {
 
     for id in "${listed[@]}"; do
         free=$(( total[$id] - used[$id] ))
-        if (( free < pe_mib )); then
-            line="GPU ${id} has ${free} MiB free; the PE encoder needs about ${pe_mib} MiB"
+        need=$pe_mib
+        what="the PE encoder needs about ${pe_mib} MiB"
+        if [[ "$id" == "$primary" ]] && (( primary_mib > pe_mib )); then
+            need=$primary_mib
+            what="the primary card runs every Triton model and needs about ${primary_mib} MiB (put a larger card first, i.e. give it the lowest id)"
+        fi
+        if (( free < need )); then
+            line="GPU ${id} has ${free} MiB free; ${what}"
             if [[ "$running" == 1 ]]; then
                 warns+=("${line} (Triton is running: its own memory is already counted as used)")
             else

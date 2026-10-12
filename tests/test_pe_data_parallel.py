@@ -75,3 +75,11 @@ def test_env_template_documents_the_gpu_list() -> None:
     block = text.split('TRITON_GPU_ID=0', 1)[0].rsplit('\n\n', 1)[-1]
     assert 'comma' in block.lower()
     assert 'PE' in block
+
+
+def test_triton_numbers_its_gpus_by_pci_bus() -> None:
+    # CUDA's default order is fastest first, so an RTX A6000 would come before a lower-numbered
+    # RTX 3080 Ti and the "gpus: [ 0 ]" models would land on a card other than the lowest id.
+    compose = yaml.safe_load((ROOT / 'docker-compose.yml').read_text())
+    env = compose['services']['triton-server'].get('environment') or []
+    assert 'CUDA_DEVICE_ORDER=PCI_BUS_ID' in env

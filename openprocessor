@@ -800,7 +800,7 @@ cmd_config() {
 # Explain where the PE image encoder runs and refuse a TRITON_GPU_ID that this
 # host cannot honour (missing card, mixed architectures, no room).
 _gpu_plan_placement() {
-    local ids pe_mib running=0 project table out line rc=0
+    local ids pe_mib running=0 project table out line rc=0 primary_mib
     ids="$(_env_value TRITON_GPU_ID)"
     ids="${ids:-0}"
     if ! command -v nvidia-smi &> /dev/null; then
@@ -815,9 +815,14 @@ _gpu_plan_placement() {
         && docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "${project:-openprocessor}-triton"; then
         running=1
     fi
+    case "$(_env_value GPU_PROFILE)" in
+        minimal) primary_mib=8192 ;;
+        full) primary_mib=17408 ;;
+        *) primary_mib=12288 ;;
+    esac
     table="$(nvidia-smi --query-gpu=index,name,memory.total,memory.used,compute_cap \
         --format=csv,noheader,nounits | awk -F', ' '{ print $1 "|" $2 "|" $3 "|" $4 "|" $5 }')"
-    out="$(gpu_pe_placement "$ids" "$pe_mib" "$table" "$running")" || rc=$?
+    out="$(gpu_pe_placement "$ids" "$pe_mib" "$table" "$running" "$primary_mib")" || rc=$?
     echo "  PE image encoder (about ${pe_mib} MiB per card):"
     while IFS= read -r line; do
         case "$line" in

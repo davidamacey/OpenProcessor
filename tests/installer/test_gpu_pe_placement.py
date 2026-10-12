@@ -25,18 +25,20 @@ def placement(
     rows: list[tuple[int, str, int, int, str]] = HOST,
     pe_mib: int = 1536,
     running: int = 0,
+    primary_mib: int = 0,
 ) -> tuple[int, dict[str, list[str]]]:
     table = '\n'.join('|'.join(str(c) for c in r) for r in rows)
     done = subprocess.run(
         [
             'bash',
             '-c',
-            f'source "{GPU_SH}"; gpu_pe_placement "$1" "$2" "$3" "$4"',
+            f'source "{GPU_SH}"; gpu_pe_placement "$1" "$2" "$3" "$4" "$5"',
             '_',
             ids,
             str(pe_mib),
             table,
             str(running),
+            str(primary_mib),
         ],
         check=False,
         capture_output=True,
@@ -103,3 +105,16 @@ def test_a_card_without_room_for_an_instance_refuses_unless_triton_runs() -> Non
     rc, out = placement('0,1', rows, running=1)
     assert rc == 0
     assert any('Triton is running' in w for w in out['warn'])
+
+
+def test_a_12_gb_card_is_refused_as_the_primary_but_serves_as_a_secondary() -> None:
+    rows = [(0, A6000, 49140, 0, '8.6'), (1, TI, 12288, 2500, '8.6')]
+    # standard profile: the primary needs 12 GB of free memory for every model
+    rc, out = placement(
+        '1,2', [(1, TI, 12288, 2500, '8.6'), (2, A6000, 49140, 0, '8.6')], primary_mib=12288
+    )
+    assert rc == 1
+    assert any('GPU 1 has' in p and 'primary card' in p for p in out['problem'])
+    rc, out = placement('0,1', rows, primary_mib=12288)
+    assert rc == 0
+    assert [g.split()[1] for g in out['gpu']] == ['role=primary', 'role=pe']
