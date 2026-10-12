@@ -36,7 +36,7 @@
 #                                    digests (local-only test builds);
 #                                    OP_IMAGE_REPO picks the repo prefix
 #   OP_TIERS / --tiers               comma list of tiers, or --all
-#   OP_GPU_PLAN / --gpu-plan         triton=1,segmenter=0,vlm=2,trainer=0
+#   OP_GPU_PLAN / --gpu-plan         triton=1,segmenter=0,vlm=2,trainer=0 (triton=0+2: PE encoder on both)
 #   GPU_PROFILE / --profile          minimal|standard|full
 #   OP_VLM_URL / --vlm-remote, OP_VLM_MODEL / --vlm-model,
 #   OP_VLM_KEY_FILE / --vlm-key-file remote OpenAI-compatible VLM
@@ -758,6 +758,7 @@ recommend_plan() {
     done <<< "$gpus"
 
     local tri="" vlm="" seg="" trn="" profile="" inst=1 single=0 tri_explicit=0
+    local -a pe_extra=()
     local -a usable=()
     for (( i = 0; i < n; i++ )); do
         if (( free[i] >= 8 )); then usable+=("$i"); fi
@@ -849,13 +850,40 @@ recommend_plan() {
         IFS=',' read -ra pairs <<< "$gpu_plan"
         for kv in "${pairs[@]}"; do
             key="${kv%%=*}"; val="${kv#*=}"
-            if [[ -z "${pos[$val]+x}" ]]; then
+            # triton=0+2 also runs a PE encoder instance on GPU 2; the lowest
+            # id is the primary card (the one every other model runs on, since
+            # the container numbers its GPUs in host order).
+            local -a listed=()
+            local v seen=" " lowest=""
+            IFS='+' read -ra listed <<< "$val"
+            for v in "${listed[@]}"; do
+                if [[ -z "${pos[$v]+x}" ]]; then
+                    echo "gpu_count=${n}"
+                    echo "refuse=--gpu-plan ${kv}: no GPU with index ${v}"
+                    return 1
+                fi
+                if [[ "$seen" == *" ${v} "* ]]; then
+                    echo "gpu_count=${n}"
+                    echo "refuse=--gpu-plan ${kv}: GPU ${v} listed twice"
+                    return 1
+                fi
+                seen+="${v} "
+                if [[ -z "$lowest" ]] || (( v < lowest )); then lowest=$v; fi
+            done
+            if (( ${#listed[@]} > 1 )) && [[ "$key" != triton ]]; then
                 echo "gpu_count=${n}"
-                echo "refuse=--gpu-plan ${kv}: no GPU with index ${val}"
+                echo "refuse=--gpu-plan ${kv}: only triton takes several GPUs (triton=0+2)"
                 return 1
             fi
+            val=$lowest
             case "$key" in
-                triton) tri=${pos[$val]}; tri_explicit=1 ;;
+                triton)
+                    tri=${pos[$val]}; tri_explicit=1
+                    pe_extra=()
+                    for v in "${listed[@]}"; do
+                        (( v == lowest )) || pe_extra+=("${pos[$v]}")
+                    done
+                    ;;
                 segmenter) seg=${pos[$val]} ;;
                 vlm) vlm=${pos[$val]} ;;
                 trainer|evaluator) trn=${pos[$val]} ;;
@@ -890,11 +918,33 @@ recommend_plan() {
     local tn pe_need=2
     tn=$(_triton_need_gb "$profile")
 
+    # Extra PE encoder GPUs (triton=0+2): each needs room for one instance
+    # (GPU_MIB_PER_INSTANCE in models/pe_image_encoder/config.pbtxt, 2 GB here).
+    local x pe_shared_vlm=0
+    for x in "${pe_extra[@]}"; do
+        if (( free[x] < pe_need )); then
+            local pe_msg="GPU ${ids[x]} has only ${free[x]} GB free; the PE encoder needs about ${pe_need} GB there"
+            if [[ "$force" != 1 ]]; then
+                echo "gpu_count=${n}"
+                echo "refuse=--gpu-plan triton: ${pe_msg} (free it, drop that GPU from triton=, or pass --force)"
+                for kv in "${warns[@]}"; do echo "warn=${kv}"; done
+                return 1
+            fi
+            warns+=("${pe_msg}; forced")
+        fi
+        if (( x == vlm )); then
+            pe_shared_vlm=1
+            warns+=("GPU ${ids[x]} also runs a PE encoder instance (about ${pe_need} GB); the VLM gets the VRAM left after it")
+        fi
+        (( x == seg )) && warns+=("GPU ${ids[x]} also runs a PE encoder instance (about ${pe_need} GB) next to the segmenter")
+    done
+
     # _avail_on_vlm INST -> free VRAM left on the VLM card for the VLM
     local vlm_avail
     _plan_vlm_avail() {
         local s=$1 x=${free[vlm]}
         (( tri == vlm )) && x=$(( x - tn - pe_need ))
+        (( pe_shared_vlm == 1 )) && x=$(( x - pe_need ))
         (( seg == vlm )) && x=$(( x - 2 * s ))
         echo "$x"
     }
@@ -998,7 +1048,11 @@ recommend_plan() {
     local allowed_ids
     allowed_ids="$(IFS=,; echo "${ids[*]}")"
     echo "gpu_count=${n}"
-    echo "TRITON_GPU_ID=${ids[tri]}"
+    local triton_ids="${ids[tri]}"
+    if (( ${#pe_extra[@]} > 0 )); then
+        triton_ids="$({ echo "${ids[tri]}"; for x in "${pe_extra[@]}"; do echo "${ids[x]}"; done; } | sort -n | paste -sd, -)"
+    fi
+    echo "TRITON_GPU_ID=${triton_ids}"
     echo "API_GPU_ID=${ids[tri]}"
     echo "SEGMENTER_GPU_ID=${ids[seg]}"
     echo "VLM_GPU_ID=${ids[vlm]}"
@@ -2350,6 +2404,7 @@ Usage: setup-openprocessor.sh [options]
   --release-dir DIR       install from locally built release assets (still checksum-verified)
   --tiers LIST | --all    core,curation,segmenter,vlm,trainer,cropwright
   --gpu-plan K=V,...      override placement: triton=1,segmenter=0,vlm=2,trainer=0
+                          (triton=0+2 also runs the PE image encoder on GPU 2)
   --profile NAME          minimal|standard|full (Triton instance profile)
   --vlm-remote URL --vlm-model NAME [--vlm-key-file PATH]
   --vlm-model-id ID       choose a VLM catalog entry explicitly
@@ -2747,7 +2802,7 @@ do_install() {
     if (( existing )) && [[ -z "$OP_GPU_PLAN" && "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
         local kept_plan="" kv_id
         kv_id="$(read_env_var "$ENV_FILE" TRITON_GPU_ID || true)"
-        [[ -n "$kv_id" ]] && kept_plan+="triton=${kv_id},"
+        [[ -n "$kv_id" ]] && kept_plan+="triton=${kv_id//,/+},"
         kv_id="$(read_env_var "$ENV_FILE" SEGMENTER_GPU_ID || true)"
         [[ -n "$kv_id" && ",${OP_TIERS}," == *",segmenter,"* ]] && kept_plan+="segmenter=${kv_id},"
         kv_id="$(read_env_var "$ENV_FILE" VLM_GPU_ID || true)"
@@ -2967,7 +3022,7 @@ do_install() {
     if [[ "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
         local ids=()
         mapfile -t ids < <(for key in TRITON_GPU_ID SEGMENTER_GPU_ID VLM_GPU_ID OP_TRAIN_GPU_ORDER; do
-            read_env_var "$ENV_FILE" "$key"; done | sort -u)
+            read_env_var "$ENV_FILE" "$key"; done | tr ',' '\n' | sort -u)
         gpu_container_probe "${ids[@]}"
     fi
 

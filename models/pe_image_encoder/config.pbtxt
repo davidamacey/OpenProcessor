@@ -40,10 +40,22 @@ dynamic_batching {
   max_queue_delay_microseconds: 15000
 }
 
+# No `gpus` list: Triton places `count` instances on every GPU the container
+# sees, so TRITON_GPU_ID in .env decides how many cards encode in parallel
+# (one card by default; "0,2" runs two). One dynamic-batcher queue feeds all
+# instances. Every other model stays pinned to `gpus: [ 0 ]`, the lowest
+# listed card. See INSTALLATION.md, "Spreading the PE encoder over GPUs".
 instance_group [
   {
     count: 1
     kind: KIND_GPU
-    gpus: [ 0 ]
   }
 ]
+
+# Budget accounting for `openprocessor gpu plan` and the installer: GPU memory
+# of one warm instance, measured at max batch 32 (1312 MiB resident on an RTX
+# 3080 Ti, the same on an RTX A6000), recorded with headroom.
+parameters: {
+  key: "GPU_MIB_PER_INSTANCE"
+  value: { string_value: "1536" }
+}
