@@ -51,6 +51,7 @@ from src.services.curation.clustering.backend import (
     free_gpu_blocks,
     gpu_used_vram_mb,
 )
+from src.services.curation.clustering.page_rows import hits_to_rows, stack_pages
 from src.services.curation.clustering.pool_size import (
     MIN_RESIDUALS_FOR_CLUSTERING,
     UMAP_N_COMPONENTS,
@@ -225,7 +226,7 @@ async def fetch_residual_embeddings(
         'query': {'bool': {'filter': filt, 'must_not': must_not}},
     }
     ids: list[str] = []
-    embs: list[np.ndarray] = []
+    pages: list[np.ndarray] = []
     resp = await client.search(index=items_index(), body=body, scroll='2m')
     scroll_id = resp.get('_scroll_id')
     try:
@@ -233,13 +234,10 @@ async def fetch_residual_embeddings(
             hits = resp['hits']['hits']
             if not hits:
                 break
-            for h in hits:
-                src = h.get('_source') or {}
-                emb = src.get(RESIDUAL_EMBEDDING_FIELD)
-                if emb is None:
-                    continue
-                ids.append(h['_id'])
-                embs.append(np.asarray(emb, dtype=np.float32))
+            page_ids, page = hits_to_rows(hits, RESIDUAL_EMBEDDING_FIELD)
+            if page is not None:
+                ids.extend(page_ids)
+                pages.append(page)
             if progress is not None:
                 # Scroll-loop checkpoint: emit progress and honour cancel
                 # after each page. Per-page is ~50 ms so a cancel is felt
@@ -257,9 +255,9 @@ async def fetch_residual_embeddings(
             except Exception as exc:
                 logger.debug('curation_embedding_clear_scroll_failed', error=str(exc))
 
-    if not embs:
+    if not pages:
         return [], np.zeros((0, 0), dtype=np.float32)
-    return ids, _normalize_rows(np.vstack(embs))
+    return ids, _normalize_rows(stack_pages(pages))
 
 
 # ============================================================================
@@ -395,13 +393,10 @@ async def fetch_residual_embeddings_parallel(
             hits = resp.get('hits', {}).get('hits') or []
             if not hits:
                 break
-            for h in hits:
-                src = h.get('_source') or {}
-                emb = src.get(RESIDUAL_EMBEDDING_FIELD)
-                if emb is None:
-                    continue
-                ids_local.append(h['_id'])
-                embs_local.append(np.asarray(emb, dtype=np.float32))
+            page_ids, page = hits_to_rows(hits, RESIDUAL_EMBEDDING_FIELD)
+            if page is not None:
+                ids_local.extend(page_ids)
+                embs_local.append(page)
             await _emit_progress(len(hits))
             # search_after cursor = sort key of the last hit. Required
             # to continue paging within this slice.
@@ -429,7 +424,7 @@ async def fetch_residual_embeddings_parallel(
 
     if not embs:
         return [], np.zeros((0, 0), dtype=np.float32)
-    return ids, _normalize_rows(np.vstack(embs))
+    return ids, _normalize_rows(stack_pages(embs))
 
 
 def _serialize_reducer(reducer: Any) -> bytes:

@@ -27,9 +27,12 @@ measured for, so an item moved while the pass ran is left alone; the
 wire then treats a distance whose ``cluster_distance_cluster_id`` differs
 from the item's ``cluster_id`` as stale (null).
 
-Memory stays bounded by the largest single cluster: centroids are built
-one cluster at a time, and members are fetched again per cluster for the
-write.
+Every clustered vector is read once, by point-in-time slices at once, and the
+centroids, distances and nearest clusters are computed per cluster from that
+matrix (rows in index order, so each sum is the one a per-cluster read would
+make). Memory is one float32 matrix of the clustered items. An item that already
+stores exactly the fields the pass would write is not written again; the rest go
+out several bulk requests at a time.
 """
 
 from __future__ import annotations
@@ -43,8 +46,10 @@ from src.config import get_curation_config
 from src.config.curation import ITEM_EMBEDDING_FIELD
 from src.core.logging import get_logger
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
+from src.services.curation.clustering.assignment_writer import BULK_CHUNK, AssignmentWriter
+from src.services.curation.clustering.page_rows import hits_to_rows
+from src.services.curation.clustering.pit_pages import iter_pages
 from src.services.curation.embedding_state import embedded_clause
-from src.services.curation.export_support import scroll_hits
 
 
 logger = get_logger(__name__)
@@ -52,7 +57,6 @@ logger = get_logger(__name__)
 DISTANCE_REF_FIELD = 'cluster_distance_cluster_id'
 # The cluster whose centroid is nearest the item (cluster purity).
 NEAREST_FIELD = 'cluster_nearest_id'
-_MAX_CLUSTER_BUCKETS = 20000
 _BULK_CHUNK = 2000
 
 _WRITE_SCRIPT = (
@@ -84,11 +88,11 @@ def centroid_distances(embeddings: np.ndarray, centroid: np.ndarray) -> np.ndarr
     return np.clip(1.0 - x @ centroid, 0.0, 2.0)
 
 
-def _members_query(cluster_id: int) -> dict[str, Any]:
+def _clustered_query() -> dict[str, Any]:
     return {
         'bool': {
             'filter': [
-                {'term': {'cluster_id': cluster_id}},
+                {'range': {'cluster_id': {'gte': 0}}},
                 embedded_clause(ITEM_EMBEDDING_FIELD),
             ],
             'must_not': [{'term': {'class_excluded': True}}],
@@ -96,40 +100,57 @@ def _members_query(cluster_id: int) -> dict[str, Any]:
     }
 
 
-async def _cluster_ids(client: Any, index: str) -> list[int]:
-    body = {
-        'size': 0,
-        'query': {
-            'bool': {
-                'filter': [
-                    {'range': {'cluster_id': {'gte': 0}}},
-                    embedded_clause(ITEM_EMBEDDING_FIELD),
-                ],
-                'must_not': [{'term': {'class_excluded': True}}],
-            }
-        },
-        'aggs': {'ids': {'terms': {'field': 'cluster_id', 'size': _MAX_CLUSTER_BUCKETS}}},
-    }
-    resp = await client.search(index=index, body=body)
-    buckets = ((resp.get('aggregations') or {}).get('ids') or {}).get('buckets') or []
-    return sorted(int(b['key']) for b in buckets)
+class _Clustered:
+    """Every clustered item with a vector: ids, cluster ids, stored geometry and the
+    float32 matrix, rows in index order (the order a per-cluster scroll returns them)."""
+
+    def __init__(self, ids: list[str], cluster: np.ndarray, vectors: np.ndarray, stored: list[Any]):
+        self.ids = ids
+        self.cluster = cluster
+        self.vectors = vectors
+        self.stored = stored
 
 
-async def _members(client: Any, index: str, cluster_id: int) -> tuple[list[str], np.ndarray]:
-    hits = await scroll_hits(
-        client,
-        index=index,
-        query=_members_query(cluster_id),
-        source=['crop_id', ITEM_EMBEDDING_FIELD],
-    )
+async def _fetch_clustered(client: Any, index: str) -> _Clustered:
     ids: list[str] = []
-    vecs: list[list[float]] = []
-    for h in hits:
-        emb = (h.get('_source') or {}).get(ITEM_EMBEDDING_FIELD)
-        if emb:
-            ids.append(str(h.get('_id')))
-            vecs.append(emb)
-    return ids, np.asarray(vecs, dtype=np.float32)
+    order: list[int] = []
+    cluster: list[int] = []
+    stored: list[Any] = []
+    pages: list[np.ndarray] = []
+    seen = 0
+    source = [
+        ITEM_EMBEDDING_FIELD,
+        'cluster_id',
+        'cluster_distance',
+        DISTANCE_REF_FIELD,
+        NEAREST_FIELD,
+    ]
+    async for hits in iter_pages(client, index=index, query=_clustered_query(), source=source):
+        kept = [h for h in hits if (h.get('_source') or {}).get(ITEM_EMBEDDING_FIELD)]
+        page_ids, page = hits_to_rows(kept, ITEM_EMBEDDING_FIELD)
+        if page is None:
+            continue
+        pages.append(page)
+        for h in kept:
+            sort = h.get('sort')
+            order.append(int(sort[0]) if sort else seen)
+            seen += 1
+            src = h['_source']
+            cluster.append(int(src['cluster_id']))
+            stored.append(
+                (src.get('cluster_distance'), src.get(DISTANCE_REF_FIELD), src.get(NEAREST_FIELD))
+            )
+        ids.extend(page_ids)
+    if not pages:
+        return _Clustered([], np.zeros(0, dtype=np.int64), np.zeros((0, 0), np.float32), [])
+    rank = np.argsort(np.asarray(order), kind='stable')
+    vectors = np.concatenate(pages) if len(pages) > 1 else pages[0]
+    return _Clustered(
+        [ids[i] for i in rank.tolist()],
+        np.asarray(cluster, dtype=np.int64)[rank],
+        vectors[rank],
+        [stored[i] for i in rank.tolist()],
+    )
 
 
 def _update(index: str, crop_id: str, cluster_id: int, fields: dict[str, Any]) -> list[Any]:
@@ -143,6 +164,16 @@ def _update(index: str, crop_id: str, cluster_id: int, fields: dict[str, Any]) -
             }
         },
     ]
+
+
+def _bodies(index: str) -> Any:
+    def build(batch: Any) -> list[Any]:
+        actions: list[Any] = []
+        for crop_id, cid, fields in batch:
+            actions.extend(_update(index, crop_id, cid, fields))
+        return actions
+
+    return build
 
 
 async def _write(client: Any, actions: list[Any]) -> int:
@@ -190,12 +221,12 @@ async def write_cluster_geometry(client: Any, *, index: str | None = None) -> di
     clusters), measured cluster and nearest centroid.
     """
     items_index = index or get_curation_config().items_index
-    cluster_ids = await _cluster_ids(client, items_index)
+    data = await _fetch_clustered(client, items_index)
+    members = {int(c): np.nonzero(data.cluster == c)[0] for c in np.unique(data.cluster)}
     centroid_ids: list[int] = []
     centroids: list[np.ndarray] = []
-    for cid in cluster_ids:
-        _ids, x = await _members(client, items_index, cid)
-        centroid = unit_centroid(x)
+    for cid, rows in members.items():
+        centroid = unit_centroid(data.vectors[rows])
         if centroid is not None:
             centroid_ids.append(cid)
             centroids.append(centroid)
@@ -207,25 +238,37 @@ async def write_cluster_geometry(client: Any, *, index: str | None = None) -> di
     n_items = 0
     n_class_distances = 0
     n_nearest_elsewhere = 0
-    n_write_errors = 0
-    for cid in centroid_ids:
-        ids, x = await _members(client, items_index, cid)
-        if not ids:
-            continue
-        sims = _normalize(x) @ matrix.T
-        own = np.clip(1.0 - sims[:, column[cid]], 0.0, 2.0)
-        nearest = [centroid_ids[k] for k in np.argmax(sims, axis=1).tolist()]
-        is_class_cluster = cid < RESIDUAL_CLUSTER_ID_OFFSET
-        actions: list[Any] = []
-        for crop_id, dist, near in zip(ids, own.tolist(), nearest, strict=True):
-            fields: dict[str, Any] = {DISTANCE_REF_FIELD: cid, NEAREST_FIELD: near}
-            if is_class_cluster:
-                fields['cluster_distance'] = float(dist)
-            actions.extend(_update(items_index, crop_id, cid, fields))
-        n_items += len(ids)
-        n_class_distances += len(ids) if is_class_cluster else 0
-        n_nearest_elsewhere += sum(1 for near in nearest if near != cid)
-        n_write_errors += await _write(client, actions)
+    n_unchanged = 0
+    async with AssignmentWriter(client, 'cluster_geometry', body_fn=_bodies(items_index)) as writer:
+        pending: list[tuple[str, int, dict[str, Any]]] = []
+        for cid in centroid_ids:
+            rows = members[cid]
+            sims = _normalize(data.vectors[rows]) @ matrix.T
+            own = np.clip(1.0 - sims[:, column[cid]], 0.0, 2.0)
+            nearest = [centroid_ids[k] for k in np.argmax(sims, axis=1).tolist()]
+            is_class_cluster = cid < RESIDUAL_CLUSTER_ID_OFFSET
+            for row, dist, near in zip(rows.tolist(), own.tolist(), nearest, strict=True):
+                fields: dict[str, Any] = {DISTANCE_REF_FIELD: cid, NEAREST_FIELD: near}
+                if is_class_cluster:
+                    fields['cluster_distance'] = float(dist)
+                have_dist, have_ref, have_near = data.stored[row]
+                if (
+                    have_ref == cid
+                    and have_near == near
+                    and (not is_class_cluster or have_dist == float(dist))
+                ):
+                    n_unchanged += 1
+                else:
+                    pending.append((data.ids[row], cid, fields))
+                if len(pending) >= BULK_CHUNK:
+                    await writer.submit(pending)
+                    pending = []
+            n_items += len(rows)
+            n_class_distances += len(rows) if is_class_cluster else 0
+            n_nearest_elsewhere += sum(1 for near in nearest if near != cid)
+        if pending:
+            await writer.submit(pending)
+    n_write_errors = writer.n_failed
     if n_items:
         await client.indices.refresh(index=items_index)
     if n_write_errors:
@@ -237,6 +280,7 @@ async def write_cluster_geometry(client: Any, *, index: str | None = None) -> di
         'n_class_distances': n_class_distances,
         'n_nearest_elsewhere': n_nearest_elsewhere,
         'n_write_errors': n_write_errors,
+        'n_unchanged': n_unchanged,
     }
 
 
