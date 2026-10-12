@@ -75,9 +75,18 @@ def test_profile_ocr_instances_fit_the_python_backend_budget(name: str) -> None:
     )
 
 
+def _default_loaded() -> set[str]:
+    compose = (ROOT / 'docker-compose.yml').read_text()
+    return set(re.findall(r'--load-model=(\S+)', compose))
+
+
 def test_committed_python_instances_fit_the_standard_budget() -> None:
+    # The budget covers what Triton loads at start; an opt-in model (image_frontend, loaded on
+    # first use) records its own memory and is planned by the deployment that enables it.
     budget = _profile('standard')['python_backend_budget_mib']
-    used = sum(_instance_count(m) * _mib_per_instance(m) for m in _python_gpu_models())
+    defaults = [m for m in _python_gpu_models() if m in _default_loaded()]
+    assert 'ocr_pipeline' in defaults
+    used = sum(_instance_count(m) * _mib_per_instance(m) for m in defaults)
     assert used <= budget
 
 

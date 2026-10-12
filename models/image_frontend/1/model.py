@@ -92,6 +92,9 @@ class TritonPythonModel:
         self.quality = int(p.get('JPEG_QUALITY', '90'))
         device = int(args['model_instance_device_id'])
         cp.cuda.Device(device).use()
+        # CuPy keeps freed blocks for reuse; photo frames differ in size, so without a cap the pool
+        # grows past 15 GB. At the cap it frees cached blocks before allocating.
+        cp.get_default_memory_pool().set_limit(size=int(p.get('POOL_MIB', '4096')) * 1024 * 1024)
         self.lanes = NvJpegLanes(lanes=int(p.get('LANES', '16')))
         self.kernels = FrontendKernels()
         self.encode_pool = ThreadPoolExecutor(int(p.get('ENCODE_THREADS', '8')), thread_name_prefix='fe-jpeg')

@@ -39,7 +39,18 @@ output [
   { name: "crop_jpegs", data_type: TYPE_STRING, dims: [ -1 ] }
 ]
 
-instance_group [ { count: 1, kind: KIND_GPU } ]
+instance_group [
+  {
+    count: 1  # one process owns the decoder; its worker threads give the concurrency
+    kind: KIND_GPU
+    gpus: [ 0 ]
+  }
+]
+
+# GPU memory: the CuPy pool is capped at POOL_MIB (frames in flight, letterbox and squares), plus
+# the CUDA context and the nvJPEG lane buffers. Not in Triton's default load list (opt-in).
+parameters { key: "GPU_MIB_PER_INSTANCE" value: { string_value: "6144" } }
+parameters { key: "POOL_MIB" value: { string_value: "4096" } }
 
 parameters { key: "FORCE_CPU_ONLY_INPUT_TENSORS" value: { string_value: "yes" } }
 parameters { key: "DETECTOR_MODEL" value: { string_value: "yolov11_small_trt_end2end" } }
