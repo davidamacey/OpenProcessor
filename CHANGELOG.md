@@ -86,6 +86,14 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   repeated card, mixed compute capabilities, or a card without room; the installer takes
   `--gpu-plan triton=0+2` and refuses the same cases. `scripts/bench/pe_gpu_parity.py` compares
   embeddings of the same crops per card (#228).
+- GPU decode measured and planned (`docs/design/gpu_decode_plan.md`, numbers in
+  `docs/PERFORMANCE.md`): on 12-24 MP photos the CPU JPEG decode caps ingest at about 26 photos/s on
+  this host; GPU decode cuts the decode's host cost 3.7x and a GPU front end cut API CPU per photo by
+  65 percent through the stack, at unchanged images/s until faster GPU kernels land; COCO frames gain
+  nothing. GPU decode changes the decoded pixels and fails the parity gates against today's
+  references while AP and kNN precision are unchanged, so it waits for an owner decision. New probe
+  tools `scripts/bench/gpu_decode_bench.py` and `scripts/bench/gpu_decode_parity.py` with tested
+  kernels and helpers (#217). No product code changed.
 
 ### Changed
 

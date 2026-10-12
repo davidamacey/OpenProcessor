@@ -2886,6 +2886,75 @@ with the default (not faster, and it adds 1-2 s to the closing refresh).
 - Tool: `scripts/bench/cluster_plumbing_bench.py` (stage split, `--fetch-profile`, `--write-grid`,
   `--fetch-grid`, `--assign-only`, `--geometry`).
 
+### GPU decode measurements (#217)
+
+Question: does decoding JPEGs on the GPU, and building each model's input there, speed up ingest?
+The full design, the dataflow map and the implementation plan are in
+[design/gpu_decode_plan.md](design/gpu_decode_plan.md); this section keeps the numbers. One RTX
+A6000 (GPU 2; SM86 has no hardware JPEG decoder), the published v0.5.0 images, the `ref-u8fp16`
+engines, an isolated compose project, only this work's processes on GPU 2 during every timed run.
+Tools: `scripts/bench/gpu_decode_bench.py`, `scripts/bench/gpu_decode_parity.py`.
+
+**Result.** On 12-24 MP photos the CPU decode is the ceiling: the two decodes ingest runs per photo
+cost 0.50 CPU-s and 46 processes doing nothing else reach 26.3 photos/s, the measured photo ingest
+rate. GPU decode cuts the host cost of a photo 3.7x (not to zero: there is no GPU-only Huffman
+decoder on this card) and, with letterbox, whole frame and blur on the GPU too, the API CPU per photo
+falls 65 percent through the real stack. Images/s did not rise in that run because the float32 GPU
+kernels used made the GPU the limit; the plan sets a kernel budget and estimates about 1.9x on one
+A6000 and 3x on two once it is met (cheaper kernels, 8 instead of 11 ms of GPU per photo, gave
+25.5 against 26.8 photos/s: still GPU-bound). GPU decode changes the decoded pixels
+slightly and the detector turns that into different boxes on 7 to 13 percent of images: the parity
+gates against today's references fail, AP and kNN precision against ground truth do not move. COCO
+frames gain nothing (they are bound by the PE engine) and stay on the CPU.
+
+CPU decoders (single thread, ms per image, median; Pillow 12.3 and OpenCV 4.10 of the API image):
+
+| Images (median MP) | Pillow + EXIF | Pillow at 1/8 | OpenCV | OpenCV at 1/8 | both decodes ingest runs | both, 46 processes: images/s |
+|---|---:|---:|---:|---:|---:|---:|
+| COCO set A (0.27) | 5.3 | 2.2 | 3.7 | 2.1 | 7.4 | 979 |
+| Open Images 1,024 px (0.78) | 10.1 | 3.4 | 5.8 | 2.9 | 13.0 | 851 |
+| Open Images originals (5.2) | 68.1 | 15.5 | 37.1 | 15.6 | 83.7 | 124 |
+| photos, set B (17.7) | 369 | 130 | 283 | 133 | 502 | 26.3 |
+
+GPU decoders (batch 32, 8 decoder threads): images/s and host CPU ms per image:
+
+| Images | nvImageCodec | DALI | torchvision nvJPEG |
+|---|---|---|---|
+| COCO set A | 2,346, 2.8 ms | 1,941, 3.1 ms | 379, 2.6 ms (serial) |
+| Open Images 1,024 px | 1,282, 4.9 ms | 1,176, 5.1 ms | 215, 4.6 ms |
+| Open Images originals | 193, 21.6 ms | 154, 23.5 ms | 22, 45 ms |
+| photos, set B | 35.4, 134 ms | 31.8, 132 ms | 4.5, 221 ms |
+
+One nvImageCodec decoder saturates at about 35 photos/s whatever its thread count; its `GPU_ONLY`
+backend returns no image on this card. Decoding beside the PE engine at saturation: a DALI front end
+(decode, letterbox, whole-frame resize) takes 4.5-5.8 percent of PE (about 2 ms of PE time per photo);
+the float32 torch front end with the blur takes 22 percent (about 15 ms).
+
+Through the stack (`/ingest/batch`, 3 repetitions):
+
+| Arm | Set B images/s | API CPU-s per photo | host busy % | GPU busy % | Set A images/s | API CPU-s per frame |
+|---|---:|---:|---:|---:|---:|---:|
+| CPU path, 32 workers | 24.32 (21.72-26.26) | 1.06-1.13 | 76-79 | 36-43 | 23.51 (23.39-23.54) | 0.069 |
+| CPU path, 16 workers | 26.78 (24.59-28.10) | 1.07-1.15 | 80-82 | 36-41 | | |
+| GPU front end in the API process, float32 kernels, 16 workers | 23.39 (23.00-24.38) | 0.36-0.41 | 28-33 | 70-80 | 20.23 (20.00-20.70) | 0.164 |
+| same, half-precision resize input and convolution blur | 25.48 (24.45-26.48) | 0.35-0.36 | 34-38 | 79-83 | not run | |
+
+With 32 workers the API-side front end ran the 48 GB card out of memory (each worker held 2-5 GB).
+
+Parity of that run through the stack against `ref-u8fp16` (profile `precision`): P-box 0.869, P-item
+0.942, P-pe p01 0.974, P-pew p01 0.991, kNN overlap 0.911, label vote 0.961 fail; near-duplicate
+agreement 0.9997, cluster assignment 0.988, purity drop 0.34 points, kNN precision drop 0.00 points
+and class labels pass. Offline on the same engines, GPU decode alone accounts for most of the box
+change (P-box 0.883 with CPU resizes, 0.869 with GPU resizes; the GPU letterbox passes the tensor
+gate on every image), and COCO AP is 0.4376 on the CPU path against 0.4378 and 0.4377 on the two GPU
+arms. Decoder coverage: nvImageCodec applies all eight EXIF orientations and, with
+`fancy_upsampling=1`, matches Pillow within 0.01 grey levels on average; torchvision's GPU decode and
+DALI's default ignore EXIF orientation, and every GPU decoder returns an image for truncated or
+corrupted files that Pillow rejects (the plan routes those to the CPU).
+
+Not measured: the Triton-resident front end the plan recommends, two cards and the 12 GB card with GPU
+decode, kernels that meet the plan's budget, the region stage and VLM on GPU-encoded crop JPEGs.
+
 
 ## Benchmarking
 
