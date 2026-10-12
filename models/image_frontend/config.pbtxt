@@ -1,6 +1,6 @@
 # image_frontend: decode a photo once on the GPU and derive every ingest input from that frame
-# (Python backend, decoupled: requests from all API workers are batched and pipelined inside one
-# process, one CUDA context). See 1/model.py. Loaded only when photo ingest uses the GPU front end
+# (Python backend, decoupled: requests from all API workers run concurrently on worker threads
+# inside one process, one CUDA context). See 1/model.py. Loaded only when photo ingest uses the GPU front end
 # (OP_INGEST_GPU_FRONTEND); the API decodes on the CPU otherwise.
 #
 # Inputs:
@@ -48,9 +48,7 @@ parameters { key: "NET_SIZE" value: { string_value: "640" } }
 parameters { key: "LETTERBOX_FILL" value: { string_value: "114" } }
 parameters { key: "MIN_MEGAPIXELS" value: { string_value: "0" } }
 parameters { key: "MAX_MEGAPIXELS" value: { string_value: "100" } }
-parameters { key: "LANES" value: { string_value: "8" } }
-parameters { key: "MAX_BATCH" value: { string_value: "16" } }
-parameters { key: "BATCH_WAIT_MS" value: { string_value: "5" } }
-parameters { key: "BATCH_WORKERS" value: { string_value: "3" } }
+parameters { key: "LANES" value: { string_value: "16" } }
+parameters { key: "WORKERS" value: { string_value: "32" } }
 parameters { key: "MAX_IN_FLIGHT" value: { string_value: "96" } }
 parameters { key: "ENCODE_THREADS" value: { string_value: "8" } }
