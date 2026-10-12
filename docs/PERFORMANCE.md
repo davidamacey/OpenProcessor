@@ -2826,7 +2826,8 @@ rate. GPU decode cuts the host cost of a photo 3.7x (not to zero: there is no GP
 decoder on this card) and, with letterbox, whole frame and blur on the GPU too, the API CPU per photo
 falls 65 percent through the real stack. Images/s did not rise in that run because the float32 GPU
 kernels used made the GPU the limit; the plan sets a kernel budget and estimates about 1.9x on one
-A6000 and 3x on two once it is met. TBD-PERF-V3. GPU decode changes the decoded pixels
+A6000 and 3x on two once it is met (cheaper kernels, 8 instead of 11 ms of GPU per photo, gave
+25.5 against 26.8 photos/s: still GPU-bound). GPU decode changes the decoded pixels
 slightly and the detector turns that into different boxes on 7 to 13 percent of images: the parity
 gates against today's references fail, AP and kNN precision against ground truth do not move. COCO
 frames gain nothing (they are bound by the PE engine) and stay on the CPU.
@@ -2861,6 +2862,7 @@ Through the stack (`/ingest/batch`, 3 repetitions):
 | CPU path, 32 workers | 24.32 (21.72-26.26) | 1.06-1.13 | 76-79 | 36-43 | 23.51 (23.39-23.54) | 0.069 |
 | CPU path, 16 workers | 26.78 (24.59-28.10) | 1.07-1.15 | 80-82 | 36-41 | | |
 | GPU front end in the API process, float32 kernels, 16 workers | 23.39 (23.00-24.38) | 0.36-0.41 | 28-33 | 70-80 | 20.23 (20.00-20.70) | 0.164 |
+| same, half-precision resize input and convolution blur | 25.48 (24.45-26.48) | 0.35-0.36 | 34-38 | 79-83 | not run | |
 
 With 32 workers the API-side front end ran the 48 GB card out of memory (each worker held 2-5 GB).
 

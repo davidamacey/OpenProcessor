@@ -4,7 +4,9 @@ Status: plan with measurements; nothing in `src/` changed. Issue #217 (WP-2.4 of
 [v060_wave_plan.md](v060_wave_plan.md)), parent design Waves 6 and 7 of
 [triton_pipeline_optimization_plan.md](triton_pipeline_optimization_plan.md), related #67
 (request-driven plans), #219 (work crops, WP-4.1), #220 (faces and OCR, WP-2.5). Written
-2026-10-12 against `origin/main` `54fcfc89`.
+2026-10-12 against `origin/main` `54fcfc89`; measured with the PE plan of `ref-u8fp16`, before the
+rotary-layout engine of #227 (17-25 % faster PE), which lowers the PE share of section 7.5 and so
+raises the GPU ceiling; the decode and front-end costs do not depend on it.
 
 A fresh implementation agent executes this file alone: section 9 lists the work items in order
 with files, interfaces, tests and gates; section 10 the verification commands. File and line
@@ -23,7 +25,9 @@ references were checked against `54fcfc89` and drift; re-find by symbol.
 - **Through the stack**, a GPU front end (decode, letterbox, whole frame, blur on the GPU) cut API CPU
   per photo by 65 % (1.10 to 0.36-0.41 CPU-s) and host busy from 80 % to 30 %, but images/s stayed at
   23-27 because the float32 GPU kernels took about 15 ms of GPU per photo and the GPU became the limit.
-  TBD-V3SUM With kernels inside a 3 ms budget the estimate is about 50 photos/s on one A6000 (1.9x)
+  Cheaper kernels (half-precision resize input, convolution blur: 8 ms instead of 11 ms of GPU) gave
+  25.5 against 26.8 photos/s on the CPU path: the GPU stays the limit until the 3 ms budget is met.
+  With kernels inside a 3 ms budget the estimate is about 50 photos/s on one A6000 (1.9x)
   and about 80 on two (3x, host-bound). COCO frames lose 14 % with the GPU front end: they stay on
   the CPU path.
 - **Numerics.** The GPU resizes pass the tensor gate (letterbox and crop squares within 1-4 grey
@@ -56,7 +60,7 @@ order the models run, (c) automatic batching and scaling. Added requirements:
 
 | ID | Requirement | Where answered |
 |---|---|---|
-| R1 | Zero-copy resize chain: decode once at full resolution, keep the pixels on the GPU, derive each model input in model order (detector, PE whole frame, PE crops from the full-resolution frame using the detector boxes, then blur, crop JPEGs, other consumers); state which tensor every resize reads, its interpolation, the parity effect of resizing from an already-resized tensor (cascading), and count every remaining copy | sections 2, 3, 6.4 |
+| R1 | Zero-copy resize chain: decode once at full resolution, keep the pixels on the GPU, derive each model input in model order (detector, PE whole frame, PE crops from the full-resolution frame using the detector boxes, then blur, crop JPEGs, other consumers); state which tensor every resize reads, its interpolation, the parity effect of resizing from an already-resized tensor (cascading), and count every remaining copy | sections 2, 3, 6.5 |
 | R2 | Embedding batching: the PE crops of an image (about 6.4) go to Triton as one well-sized request; Triton settings justified by measurement; say what the GPU-resident path changes | section 8 |
 | R3 | A CPU/GPU size gate with a measured cutoff | section 7.3 |
 | R4 | Combine experiments into one session instead of repeated long runs | section 4.1 |
@@ -119,7 +123,7 @@ decoder's buffer; host to device only the uint8 model inputs (1.2 MB letterbox, 
 Order of the chain, each step with the tensor it reads. "Original" is the full-resolution decoded
 frame `F` (HWC uint8, on the GPU).
 
-| Step | Tensor | Read from | Operation | Interpolation | Parity reference | Measured effect (section 6.4) |
+| Step | Tensor | Read from | Operation | Interpolation | Parity reference | Measured effect (sections 6.3, 6.5) |
 |---|---|---|---|---|---|---|
 | 0 | `F` | JPEG bytes (host) | nvImageCodec decode, EXIF orientation applied, libjpeg-style (fancy) chroma upsampling | n/a | Pillow decode | mean 0.03 grey levels, max 3 on COCO (3 % of pixels differ) |
 | 1 | `L` detector letterbox `[3,640,640]` | `F` | resize longer side to 640, pad 114 at `int(pad)` | antialiased bilinear (Pillow's `BILINEAR` on downscale) | `letterbox_to_square` | tensor gate T passes on 100 % of images (mean 0.02-0.05 grey levels, max 4) |
@@ -279,7 +283,7 @@ Findings that bind the implementation:
    8 tags). All four public sets carry orientation 1 only, so the parity runs below cannot catch an
    orientation bug: the decoder-coverage set is the gate for it.
 3. **ICC.** Neither the product (Pillow decode, no colour management) nor any GPU decoder applies
-   an embedded profile; 862 of the 2,000 COCO images and 428 of the 500 photos carry one. No
+   an embedded profile; 863 of the 2,000 COCO images and about 85 % of the photos carry one. No
    difference to manage; the plan keeps "ignore ICC" and says so in the decoder's docstring.
 4. **Fail-open on damaged files.** The GPU decoders return an image for a truncated file and for a
    corrupted bitstream that Pillow rejects (the product then fails the image with
@@ -406,7 +410,7 @@ design of section 7.4; not committed). Foreign SM load on GPU 2 was 0.0 % in eve
 | CPU path | 16 | 26.78 (24.59-28.10) | 1.074-1.151 | 80-82 | 36-41 | | | |
 | spike v1: torch front end, 32 workers | 32 | failed: GPU out of memory (each worker 2-5 GB; 48 GB card full) | | | | | | |
 | spike v2: float32 kernels, frame dropped after the derived tensors | 16 | 23.39 (23.00-24.38) | 0.356-0.409 | 28-33 | 70-80 | 20.23 (20.00-20.70) | 0.164 | 96-99 |
-| spike v3: half-precision resize input, convolution blur | 16 | TBD-V3 | | | | | | |
+| spike v3: half-precision resize input, convolution blur | 16 | 25.48 (24.45-26.48) | 0.345-0.361 | 34-38 | 79-83 | not run | | |
 
 Read:
 
@@ -417,7 +421,9 @@ Read:
 - **Throughput did not rise with float32 kernels**: the GPU became the limit (70-80 % busy; the
   front end costs about 15 ms of GPU per photo, section 5.4, next to 14 ms of PE). With the kernel
   budget of section 9 item 1 met (DALI-class, about 2 ms) the GPU cost per photo is about 18 ms
-  (TBD-V3 says how close the v3 kernels get).
+  (v3 cut the derived-tensor kernels from 11.3 to 8.0 ms of GPU per photo, single process, same
+  pixels within 1 grey level and bit-identical blur, and gave 25.5 photos/s: still GPU-bound, still
+  above the budget).
 - **Frames lose.** Set A: 23.5 to 20.2 images/s (-14 %) and API CPU per frame up from 0.069 to
   0.164 s: frames are PE-bound, the spike adds GPU work and, in the API-side design, serialises a
   GPU call and its synchronisation per small image. Frames stay on the CPU path (section 7.3).
@@ -426,7 +432,7 @@ Read:
 
 | Condition | Result |
 |---|---|
-| End-to-end images/s on set B up materially | not with the measured kernels (TBD-V3); the ceiling with the kernel budget met is about 1.8x on one A6000 and about 2.7x on two (section 7.5), host-bound at about 73 photos/s |
+| End-to-end images/s on set B up materially | not with the measured kernels (v2 23.4, v3 25.5 against 26.8 photos/s); the ceiling with the kernel budget met is about 1.8x on one A6000 and about 2.7x on two (section 7.5), host-bound at about 73 photos/s |
 | Total CPU down | yes: -65 % API CPU per photo, -50 % host busy at a similar rate |
 | Parity gates hold | no: the decoder alone fails P-box, P-item, P-pe, P-knn, P-label-vote against the CPU references (section 6.2); the difference is quantified and accuracy-neutral (AP, kNN precision, cluster purity unchanged, 6.4) |
 | COCO-size frames | gain nothing and lose 14 % in the API-side design: keep them on the CPU path |
@@ -434,7 +440,8 @@ Read:
 Recommendation: **GPU decode for photos only, as a per-deployment opt-in that changes the stored
 numerics once (owner decision D1), built as the Triton-resident front end with efficient kernels;
 frames stay on the CPU path.** Not before the kernels meet the 3 ms budget: with the float32 torch
-kernels the change only moves CPU to the GPU (same images/s, 65 % less CPU). TBD-REC
+kernels the change only moves CPU to the GPU (same images/s, 65 % less CPU). Nothing is built
+before D1; the first build step is item 1's kernel budget, because it is the measured binder.
 
 ### 7.3 The size gate (R3)
 
