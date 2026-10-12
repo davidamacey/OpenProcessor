@@ -46,7 +46,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from src.clients.model_adapters import END2END_OUTPUTS
-from src.clients.triton_pool import fp32_images_input
+from src.clients.triton_pool import uint8_images_input
 from src.config.ingest_profiles import proposer_label
 from src.core.logging import get_logger
 from src.services.curation.item_doc import DetectedItem
@@ -140,7 +140,7 @@ class WholeImageDetector:
             fill=self.profile.letterbox_fill,
             nbytes=_rgb_bytes(img),
         )
-        inp = await run_cpu(fp32_images_input, chw, nbytes=chw.nbytes)
+        inp = await run_cpu(uint8_images_input, chw, nbytes=chw.nbytes)
         outs = [InferRequestedOutput(name) for name in END2END_OUTPUTS]
         result = await self.triton_pool.infer(self.profile.detector_model, [inp], outputs=outs)
         return self.decode_primary_row(
@@ -194,7 +194,7 @@ class WholeImageDetector:
         step = max(1, self.profile.batch_limit)
         for start in range(0, full_batch.shape[0], step):
             chunk = full_batch[start : start + step]
-            inp = await run_cpu(fp32_images_input, chunk, nbytes=chunk.nbytes)
+            inp = await run_cpu(uint8_images_input, chunk, nbytes=chunk.nbytes)
             result = await self.triton_pool.infer(self.profile.detector_model, [inp], outputs=outs)
             for name in END2END_OUTPUTS:
                 rows[name].extend(result.as_numpy(name))
@@ -346,7 +346,7 @@ class WholeImageDetector:
             fill=profile.letterbox_fill,
             nbytes=_rgb_bytes(img),
         )
-        inp = await run_cpu(fp32_images_input, chw, nbytes=chw.nbytes)
+        inp = await run_cpu(uint8_images_input, chw, nbytes=chw.nbytes)
         result = await self.triton_pool.infer(
             profile.detector_model, [inp], outputs=self._secondary_outputs(feature)
         )
@@ -391,7 +391,7 @@ class WholeImageDetector:
         step = max(1, profile.batch_limit)
         for start in range(0, full_batch.shape[0], step):
             chunk = full_batch[start : start + step]
-            inp = await run_cpu(fp32_images_input, chunk, nbytes=chunk.nbytes)
+            inp = await run_cpu(uint8_images_input, chunk, nbytes=chunk.nbytes)
             result = await self.triton_pool.infer(profile.detector_model, [inp], outputs=outs)
             raws = result.as_numpy(_RAW_OUTPUT)
             fmaps = result.as_numpy(feature) if feature is not None else None

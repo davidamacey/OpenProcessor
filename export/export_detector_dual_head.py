@@ -449,6 +449,11 @@ def export_dual_head_onnx(
     }
     if validate:
         report['round_trip'] = _round_trip(out_path, dummy, detect, feature, input_name)
+    # After the float round trip: the served engine takes uint8 pixels and scales them itself.
+    sys.path.insert(0, str(Path(__file__).parent))
+    from uint8_input import add_uint8_input
+
+    add_uint8_input(out_path, out_path)
     return report
 
 
@@ -590,7 +595,7 @@ max_batch_size: {max_batch}
 input [
   {{
     name: "{input_name}"
-    data_type: TYPE_FP32
+    data_type: TYPE_UINT8
     dims: [ 3, {imgsz}, {imgsz} ]
   }}
 ]

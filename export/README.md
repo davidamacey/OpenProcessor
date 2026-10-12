@@ -186,7 +186,7 @@ Encoder) provides both towers of one shared 1024-d embedding space:
 
 | Tower | Consumer | Serving | Contract (hardcoded in `src/clients/pe_encoder.py`) |
 |-------|----------|---------|-----------------------------------------------------|
-| Image | `PEEncoder.encode_images` → `pe_embedding` field (semantic search, near-dup, clustering, embedding viz) | Triton `pe_image_encoder`, **required** | `images` FP32 `[B, 3, 336, 336]` → `image_embeddings` FP32 `[B, 1024]` |
+| Image | `PEEncoder.encode_images` → `pe_embedding` field (semantic search, near-dup, clustering, embedding viz) | Triton `pe_image_encoder`, **required** | `images` UINT8 `[B, 3, 336, 336]` → `image_embeddings` FP32 `[B, 1024]` |
 | Text  | `PEEncoder.encode_text` → `GET /curation/projects/{project}/search/text` queries | **Triton `pe_text_encoder`** (preferred: one shared CPU instance for every uvicorn worker), lazily-loaded in-process PyTorch fallback; in-process ONNX Runtime is an explicit opt-in only | `text_tokens` INT64 `[B, T≤32]` → `text_embeddings` FP32 `[B, 1024]` |
 
 Both embeddings come out L2-normalized. See
@@ -377,12 +377,13 @@ docker compose exec api python /app/export/export_paddleocr_rec.py
 ## Model Specifications
 
 ### YOLO11 Object Detection
-- Input: `[B, 3, 640, 640]` FP16, normalized [0, 1]
+- Input: `images` `[B, 3, 640, 640]` UINT8 RGB, letterboxed; the engine divides by 255 in the graph
+  (`export/uint8_input.py`, added after the FP16 bake)
 - Output (end2end): `num_dets`, `det_boxes`, `det_scores`, `det_classes`
 - Dynamic batching: 1-64 (configurable)
 
 ### Dual-Head Detector
-- Input: `[B, 3, S, S]` FP32, letterboxed, normalized [0, 1] (`S` = `--imgsz`)
+- Input: `[B, 3, S, S]` UINT8 RGB, letterboxed; the engine divides by 255 (`S` = `--imgsz`)
 - Output: `output0` (detection tensor) + `sppf_feat` `[B, C, S/32, S/32]`
 - Dynamic batching: 1-`--max-batch`
 
@@ -407,9 +408,11 @@ docker compose exec api python /app/export/export_paddleocr_rec.py
 - Dynamic batching: 1-64
 
 ### PE-Core-L14-336 Image Encoder
-- Input: `images` `[B, 3, 336, 336]` FP32, ImageNet mean/std normalized
+- Input: `images` `[B, 3, 336, 336]` UINT8 RGB
   (resize shorter edge to 336, center-crop — see
-  `src/services/detection/pe_preprocess.py`)
+  `src/services/detection/pe_preprocess.py`); the engine applies PE-Core's
+  `(x / 255 - 0.5) / 0.5` itself (`export/uint8_input.py`, run by `build_pe_trt.sh`
+  after the FP16 bake)
 - Output: `image_embeddings` `[B, 1024]` FP32, L2-normalized
 - Dynamic batching: 1-32 (engine profile min=1 / opt=8 / max=32)
 

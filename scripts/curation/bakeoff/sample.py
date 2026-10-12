@@ -29,23 +29,20 @@ from src.config.settings import TritonModelConfig
 
 
 _PE_INPUT_SIZE = 336
-# Must equal src/services/detection/pe_preprocess.PE_MEAN/PE_STD (PE-Core's own
-# 0.5/0.5 normalization); tests/curation/test_pe_preprocess.py pins the two together.
-_PE_MEAN = np.array([0.5, 0.5, 0.5], dtype=np.float32).reshape(3, 1, 1)
-_PE_STD = np.array([0.5, 0.5, 0.5], dtype=np.float32).reshape(3, 1, 1)
 _PE_MODEL = TritonModelConfig.PE_IMAGE_MODEL
 _IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp'}
 
 
 def _preprocess_for_pe(img: Image.Image, target: int = _PE_INPUT_SIZE) -> np.ndarray:
-    """Resize-by-shorter-edge + center-crop to PE-Core 336 PE-normalized CHW.
+    """Resize-by-shorter-edge + center-crop to PE-Core 336, as uint8 CHW pixels.
 
-    Identical convention to the production PE image path so embeddings match.
+    Identical convention to the production PE image path (the engine normalizes) so
+    embeddings match.
     """
     rgb = img.convert('RGB')
     w, h = rgb.size
     if w == 0 or h == 0:
-        return np.zeros((3, target, target), dtype=np.float32)
+        return np.zeros((3, target, target), dtype=np.uint8)
     scale = target / min(w, h)
     new_w = max(target, round(w * scale))
     new_h = max(target, round(h * scale))
@@ -53,9 +50,7 @@ def _preprocess_for_pe(img: Image.Image, target: int = _PE_INPUT_SIZE) -> np.nda
     left = (new_w - target) // 2
     upper = (new_h - target) // 2
     centered = resized.crop((left, upper, left + target, upper + target))
-    arr = np.asarray(centered, dtype=np.float32) / 255.0
-    chw = np.transpose(arr, (2, 0, 1)).astype(np.float32, copy=False)
-    return ((chw - _PE_MEAN) / _PE_STD).astype(np.float32, copy=False)
+    return np.ascontiguousarray(np.transpose(np.asarray(centered, dtype=np.uint8), (2, 0, 1)))
 
 
 def _list_images(src: Path, split: str) -> list[Path]:
@@ -73,8 +68,8 @@ def _embed(images: list[Path], triton_url: str, batch: int = 32) -> np.ndarray:
     out: list[np.ndarray] = []
     for i in range(0, len(images), batch):
         chunk = images[i : i + batch]
-        tensors = np.stack([_preprocess_for_pe(Image.open(p)) for p in chunk]).astype(np.float32)
-        inp = InferInput('images', list(tensors.shape), 'FP32')
+        tensors = np.stack([_preprocess_for_pe(Image.open(p)) for p in chunk])
+        inp = InferInput('images', list(tensors.shape), 'UINT8')
         inp.set_data_from_numpy(np.ascontiguousarray(tensors))
         res = client.infer(_PE_MODEL, [inp], outputs=[InferRequestedOutput('image_embeddings')])
         out.append(np.asarray(res.as_numpy('image_embeddings'), dtype=np.float32))

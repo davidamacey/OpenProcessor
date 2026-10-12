@@ -53,9 +53,14 @@ fi
 
 log "Installing $ONNX_PATH as the $MODEL_NAME Triton model (Path 2 / ORT)"
 
+# uint8 pixels in, PE-Core's own Normalize([0.5]*3, [0.5]*3) in the graph (export/uint8_input.py).
+U8_ONNX="${ONNX_PATH%.onnx}.u8.onnx"
+"$PYTHON" "$SCRIPT_DIR/uint8_input.py" "$ONNX_PATH" "$U8_ONNX" \
+    --mean 0.5 0.5 0.5 --std 0.5 0.5 0.5 >/dev/null
+
 for models_dir in $MODELS_DIRS; do
     mkdir -p "$models_dir/$MODEL_NAME/1"
-    install -m 0644 "$ONNX_PATH" "$models_dir/$MODEL_NAME/1/model.onnx"
+    install -m 0644 "$U8_ONNX" "$models_dir/$MODEL_NAME/1/model.onnx"
     # Path 1 and Path 2 must never coexist -- Triton loads whichever the
     # platform names and silently ignores the other artifact.
     rm -f "$models_dir/$MODEL_NAME/1/model.plan"
