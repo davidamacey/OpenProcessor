@@ -313,6 +313,20 @@ def _dataset_import_jobs(record: ProjectRecord) -> list[JobRef]:
         ]
 
 
+def _bulk_ingest_jobs(record: ProjectRecord) -> list[JobRef]:
+    """Live bulk-ingest runs (``src.services.curation.bulk_ingest``): one state dir
+    per run under the project's bulk-ingest dir, resolved from the bound project.
+    Live means an active status with a fresh heartbeat."""
+    from src.config.project_context import bind_project
+    from src.services.curation.bulk_ingest.store import running_run_ids
+
+    with bind_project(record, read_only=True):
+        return [
+            JobRef(kind='bulk_ingest', job_id=run_id, started_at=_iso_or_none(started_at))
+            for run_id, started_at in running_run_ids()
+        ]
+
+
 def _combine_jobs(record: ProjectRecord) -> list[JobRef]:
     """Live combine jobs that read or write this project (as a source or as
     the target being built); a combine is global, so its jobs dir is not
@@ -342,6 +356,7 @@ def running_jobs(record: ProjectRecord) -> list[JobRef]:
     jobs.extend(_reprocess_jobs(record))
     jobs.extend(_detection_worker_inflight(record))
     jobs.extend(_dataset_import_jobs(record))
+    jobs.extend(_bulk_ingest_jobs(record))
     jobs.extend(_combine_jobs(record))
     return jobs
 

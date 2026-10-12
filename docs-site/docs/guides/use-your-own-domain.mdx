@@ -143,7 +143,7 @@ curl -s "$API/ingest/region_drain"     # repeat until "drained" is true
 ```
 
 `GET /curation/projects/{project}/ingest/config` lists the accepted
-source roots. `scripts/curation/ingest_walker.py` ingests a whole folder.
+source roots. `scripts/curation/bulk_ingest.py` ingests a whole folder or a manifest as a resumable run.
 
 If you already have a labeled YOLO or COCO dataset, or an OpenProcessor
 export, import it instead. Classes are mapped by name. See

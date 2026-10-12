@@ -20,6 +20,7 @@
   import IngestStatusTable from '$lib/components/ingest/IngestStatusTable.svelte';
   import RegionDrainPanel from '$lib/components/ingest/RegionDrainPanel.svelte';
   import ClusteringHandoff from '$lib/components/ingest/ClusteringHandoff.svelte';
+  import BulkIngestPanel from '$lib/components/ingest/BulkIngestPanel.svelte';
   import IngestBatchPanel from '$lib/components/ingest/IngestBatchPanel.svelte';
   import IngestDetectorCard from '$lib/components/ingest/IngestDetectorCard.svelte';
   import RegionStagePanel from '$lib/components/ingest/RegionStagePanel.svelte';
@@ -124,6 +125,15 @@
           onChunkDone={() => (statusRefreshToken += 1)}
           onStateChange={(s) => (runState = s)}
         />
+      </section>
+    {/if}
+
+    {#if serverPathIngestAvailable(config)}
+      <section class="space-y-3 rounded-lg border border-zinc-800 p-4">
+        <h2 class="text-sm font-semibold text-zinc-200">
+          Bulk ingest (folder or manifest)
+        </h2>
+        <BulkIngestPanel />
       </section>
     {/if}
 

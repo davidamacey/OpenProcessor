@@ -271,7 +271,7 @@ as `update_curation_settings` does). Reasons: it is per project, it needs no
 versions or activation (a policy change affects only future ingests and
 explicit embed runs, never past data), it is cloned by project clone, and it is
 read by exactly one process family (the API; ingest runs through HTTP:
-`scripts/curation/ingest_walker.py` posts to `/ingest/batch`). No env var is
+`scripts/curation/bulk_ingest.py` drives the bulk-ingest routes, which post to `/ingest/batch`). No env var is
 added. The config store was rejected: it exists for artifacts that workers hot
 reload and that carry revisions pinned onto results (prompt packs, region
 profiles, VLM endpoints).
@@ -343,7 +343,7 @@ registry slug, `confidence_floor_applies` = false for proposers per F3) and a
 `policy` echo. Existing `POST /curation/projects/{project}/ingest/batch`
 results gain `n_embedded`, `n_not_embedded`, `n_filtered` per image
 (`IngestResult`, `ingest_models.py:44`) and the same sums in `IngestSummary`.
-The ingest walker prints them.
+The bulk ingest script prints them.
 
 ### 5.3 Detector and registry
 
@@ -557,7 +557,7 @@ revision OCC), `_settings_body` mapping, `ingest.py:_get_ingest_service`
 (load policy once per request), `ingest.py` service `detect_items`
 (`DetectResult`) and its three callers, `ingest_index.py` (embedding gate),
 `ingest_models.py`, `_project_models.py` + `projects/clone.py`
-(`CLONEABLE_AXES += 'ingest_policy'`), `scripts/curation/ingest_walker.py`
+(`CLONEABLE_AXES += 'ingest_policy'`), `scripts/curation/bulk_ingest.py`
 (print counters), docs.
 Tests (red-first):
 - `tests/curation/test_ingest_policy_models.py`: validation (`selected` with

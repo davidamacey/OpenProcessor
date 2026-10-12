@@ -74,6 +74,8 @@ class IngestBatchRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     items: list[IngestBatchItem] = Field(..., min_length=1)
+    # Tag stamped on every images doc of this call (bulk ingest sets its run id).
+    ingest_run_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 def _get_detection_profile() -> DetectionProfile:
@@ -223,6 +225,7 @@ async def curation_ingest_batch(
             images,
             paths,
             source=sources.pop() if len(sources) == 1 else 'batch',
+            ingest_run_id=body.ingest_run_id,
         )
         if images
         else None

@@ -64,11 +64,11 @@ The custom detector was queue-bound with a single instance on a 12 GB card. CPU 
 
 ## How to repeat
 
-The public repo has a directory ingest script, `scripts/curation/ingest_walker.py`, with `--batch-size` (default 32), `--concurrency` (default 4, in-flight batch POSTs), and `--walk-workers`. To repeat the sweep:
+The public repo has a directory ingest script, `scripts/curation/bulk_ingest.py`, with `--batch-size` (server default 16) and `--concurrency` (server default 8, batches in flight; at most 32). To repeat the sweep within those bounds:
 
 ```bash
-python scripts/curation/ingest_walker.py --root <image-dir> --project <project> \
-  --batch-size 1 --concurrency 128
+python scripts/curation/bulk_ingest.py --folder <image-dir> --project <project> \
+  --batch-size 1 --concurrency 32
 ```
 
 Vary `--batch-size` and `--concurrency` over the grid above, time each run, and sample GPU utilization with `nvidia-smi --query-gpu=utilization.gpu --format=csv -l 1`. Triton queue and compute times come from its Prometheus metrics (`nv_inference_queue_duration_us`, `nv_inference_compute_infer_duration_us`, `nv_inference_exec_count`). The measurements above used a different bulk-ingest endpoint and driver, so absolute rates for this script will differ; the batch/concurrency trend is what to compare.
