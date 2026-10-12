@@ -268,3 +268,58 @@ def test_gpu_normalize_parses_from_the_right(row: str, expected: str) -> None:
 
 def test_nvidia_smi_is_queried_without_units() -> None:
     assert '--format=csv,noheader,nounits' in SCRIPT.read_text()
+
+
+THREE_GPUS = [(0, 49140, 0), (1, 12288, 0), (2, 49140, 0)]
+
+
+def test_triton_plan_may_list_several_gpus_for_the_pe_encoder() -> None:
+    rc, kv, _ = plan(THREE_GPUS, 'core curation', 'gpu_plan=triton=2+0')
+    assert rc == 0
+    assert kv['TRITON_GPU_ID'] == '0,2'
+    assert kv['API_GPU_ID'] == '0'
+
+
+def test_the_lowest_listed_gpu_is_the_primary_card() -> None:
+    rc, kv, _ = plan(THREE_GPUS, 'core curation', 'gpu_plan=triton=2+1+0')
+    assert rc == 0
+    assert kv['TRITON_GPU_ID'] == '0,1,2'
+    assert kv['API_GPU_ID'] == '0'
+
+
+def test_a_listed_pe_gpu_that_does_not_exist_is_refused() -> None:
+    rc, kv, _ = plan(THREE_GPUS, 'core curation', 'gpu_plan=triton=0+7')
+    assert rc == 1
+    assert 'no GPU with index 7' in kv['refuse']
+
+
+def test_a_gpu_listed_twice_is_refused() -> None:
+    rc, kv, _ = plan(THREE_GPUS, 'core curation', 'gpu_plan=triton=0+0')
+    assert rc == 1
+    assert 'listed twice' in kv['refuse']
+
+
+def test_a_pe_gpu_without_room_for_an_encoder_is_refused_unless_forced() -> None:
+    busy = [(0, 49140, 0), (1, 12288, gb(11)), (2, 49140, 0)]
+    rc, kv, _ = plan(busy, 'core curation', 'gpu_plan=triton=0+1')
+    assert rc == 1
+    assert 'GPU 1' in kv['refuse']
+    assert 'PE encoder' in kv['refuse']
+    rc, kv, warns = plan(busy, 'core curation', 'gpu_plan=triton=0+1', 'force=1')
+    assert rc == 0
+    assert kv['TRITON_GPU_ID'] == '0,1'
+    assert any('PE encoder' in w for w in warns)
+
+
+def test_a_vlm_on_a_pe_gpu_has_the_encoder_subtracted_from_its_budget() -> None:
+    _, alone, _ = plan(THREE_GPUS, 'core curation vlm', 'gpu_plan=triton=0,vlm=2')
+    rc, shared, warns = plan(THREE_GPUS, 'core curation vlm', 'gpu_plan=triton=0+2,vlm=2')
+    assert rc == 0
+    assert int(shared['vlm_available_gb']) == int(alone['vlm_available_gb']) - 2
+    assert any('PE encoder' in w and 'GPU 2' in w for w in warns)
+
+
+def test_one_gpu_stays_a_plain_id() -> None:
+    rc, kv, _ = plan(THREE_GPUS, 'core curation', 'gpu_plan=triton=2')
+    assert rc == 0
+    assert kv['TRITON_GPU_ID'] == kv['API_GPU_ID'] == '2'

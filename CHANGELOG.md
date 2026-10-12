@@ -71,6 +71,15 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   `embed` reprocess scope (what embed-missing runs) and records images per second, the PE engine batch
   histogram and the API CPU (#216).
 
+- Data-parallel PE image encoding: `TRITON_GPU_ID` takes a comma list (`0,2`) and `pe_image_encoder`
+  runs one instance on every listed card behind one dynamic-batcher queue; every other model stays on
+  the lowest listed card. Two RTX A6000 reach 44.6 images/s on the pinned COCO set against 23.4 for one
+  (1.91x), an A6000 with an RTX 3080 Ti 43.7, and the stored vectors are bit-identical whichever card
+  serves a request. `openprocessor gpu plan` explains the placement and exits 1 for a missing or
+  repeated card, mixed compute capabilities, or a card without room; the installer takes
+  `--gpu-plan triton=0+2` and refuses the same cases. `scripts/bench/pe_gpu_parity.py` compares
+  embeddings of the same crops per card (#228).
+
 ### Changed
 
 - `scripts/curation/ingest_walker.py` is replaced by `scripts/curation/bulk_ingest.py` (`--folder` instead of
@@ -133,6 +142,10 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   their crops: 6.3 to 14.1 images per second on 500 images, PE mean batch 3.7 to 13. A client-side
   cross-image coalescer for ingest was measured and not adopted: ingest is already at the engine's rate
   (PE mean batch 27.7 of 32) and the coalescer changed nothing beyond noise (#216).
+
+- Triton runs with `CUDA_DEVICE_ORDER=PCI_BUS_ID`: CUDA's default fastest-first order would otherwise
+  put the `gpus: [ 0 ]` models on a faster card with a higher host index instead of the lowest listed
+  one (#228).
 
 ### Fixed
 

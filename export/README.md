@@ -252,7 +252,7 @@ is the rendered default (TensorRT, max batch 32).
 | `--checkpoint-path`, `--no-verify-checkpoint` | Use a local checkpoint / skip the SHA-256 check. |
 | `--method optimum` | Export `facebook/PE-Core-L14-336-hf` via Optimum instead of `perception_models`. Needs no local PE install, but names its tensors `pixel_values`/`image_embeds` — the exporter reports the mismatch rather than shipping a model the client can't call. That HF repo **is gated**: set `HF_TOKEN`. |
 | `--config-only --platform ...` | Re-render just `config.pbtxt` (what the two build scripts call). |
-| `--models-dir`, `--max-batch`, `--gpus`, `--instance-count` | Target repository + Triton tuning. `--max-batch` must match the engine's profile. |
+| `--models-dir`, `--max-batch`, `--gpus` (pins the encoder to those cards; omit it to run one instance per visible GPU), `--instance-count` | Target repository + Triton tuning. `--max-batch` must match the engine's profile. |
 | `--skip-validate` | Skip the ONNX Runtime probe (which also catches a static leading axis — see below). |
 
 > **Trace batch size matters.** The image exporter traces with a batch-**2**
