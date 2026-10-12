@@ -60,6 +60,9 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   1.2-1.4x faster than FP16 but fails the parity gates (crop cosine median 0.94-0.99 against 0.999,
   neighbour overlap 0.52-0.82 against 0.95), and weight-only INT8 passes the gates with no speed or
   size gain. INT8 is not offered; FP16 stays the only PE precision and no code changed (#213).
+- `scripts/bench/embed_missing_bench.py`: re-embeds a project's crop and frame vectors through the
+  `embed` reprocess scope (what embed-missing runs) and records images per second, the PE engine batch
+  histogram and the API CPU (#216).
 
 ### Changed
 
@@ -118,6 +121,11 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   up to about 128 MB resident per worker) (#211).
 - Triton runs with `--log-verbose=0` instead of logging an allocation and a free for every tensor of
   every request (#211).
+- The `embed` reprocess scope (embed-missing, "embed all") embeds 16 images at once and works through
+  64 images per chunk instead of one image at a time in chunks of 20, so Triton's dynamic batcher packs
+  their crops: 6.3 to 14.1 images per second on 500 images, PE mean batch 3.7 to 13. A client-side
+  cross-image coalescer for ingest was measured and not adopted: ingest is already at the engine's rate
+  (PE mean batch 27.7 of 32) and the coalescer changed nothing beyond noise (#216).
 
 ### Fixed
 

@@ -1915,6 +1915,152 @@ rounds to FP16 once, which is where the 0.9999 and the 98 percent box identity c
 - The `DELETE /curation/projects/{project}` 409 seen once at the end of a batch series is not
   diagnosed here.
 
+### WP-2.3: cross-image PE batching (#216)
+
+The question: ingest sends the crops of one image (6.4 on set A) and, in a second request, its whole
+frame, so every PE request carries a handful of rows while the engine is fastest at 32. Does packing
+the rows of several images into one engine batch raise images/s? Medians with the minimum and maximum
+of 3 repetitions in parentheses. Only repetitions with 0.0 percent foreign GPU load are counted.
+
+**Result.** Not for ingest: it is already at the engine's rate, and a client-side coalescer built for
+this (a per-process queue that packs the rows of concurrent callers into requests of up to 32 rows,
+5 ms maximum wait) changed nothing beyond noise on set A and on set B, so it was removed again and
+no batching code ships for ingest. The embed pass was the real gap: it embedded one image at a time,
+so Triton saw batches of 3.7 rows. It now works on 16 images at once, in chunks of 64 instead of 20,
+and runs 2.2 times faster (6.33 to 14.05 images/s on 500 images). Triton's dynamic batcher already
+does the packing across concurrent requests; the fix is to have concurrent requests.
+
+| Item | Value |
+|---|---|
+| GPU | RTX A6000, GPU 2, 0.0 percent foreign SM share in every counted repetition; another project held GPU 0 at 100 percent and was not touched. SM clock 1,416-1,444 MHz (c16), 1,449-1,482 MHz (c4) |
+| Host | 48 logical cores shared with other projects; 1-minute load 5-9 on the c16 and c4 repetitions, 12-20 at c32, 14-25 on set B; host 12-15 percent busy (set A, c4 and c16) |
+| Stack | project `xbatch`: Triton, API (the published v0.5.0 image with this checkout's `src/` mounted), OpenSearch 8 GB heap, 32 API workers, loopback ports; the uint8 FP16 PE plan of `ref-u8fp16` (sha256 `a4feb7df...`), `pe_image_encoder` dynamic batcher `preferred_batch_size: [4, 8, 16, 32]`, `max_queue_delay_microseconds: 15000` (unchanged) |
+| Load | set A: 2,000 COCO images, `POST /ingest/batch`, 32 images per request, policy `all`, 1 warm-up and 3 counted repetitions (`wave0_suite.py --phases env,sweep --sweep-points 32x16,32x4 --modes batch --skip-cluster --skip-settle`); set B: 500 photos, 8 per request, 16 clients; the embed bench is `scripts/bench/embed_missing_bench.py` (500 images ingested, then 3 rewrites of every crop and frame vector) |
+
+#### Measurement first: PE batch sizes Triton sees today (set A, unchanged ingest code)
+
+| Clients x images per request | images/s | PE mean batch | PE requests per image | PE executions | GPU 2 busy % | request p50 s (p95) |
+|---|---:|---:|---:|---:|---:|---:|
+| 16 x 32 | 23.51 (23.36-23.65) | 27.7 (27.5-28.0) | 2.07 | 529-538 | 95-98 | 21.7 (24.0-26.0) |
+| 32 x 32 | 23.42 (23.39-23.59) | 27.4 (27.1-27.9) | 2.07 | 530-546 | 96-98 | 40.5 (50.6-60.1) |
+| 4 x 32 | 21.43 (21.07-21.62) | 20.3 (19.5-21.2) | 2.07 | 698-757 | 86-91 | 5.9 (7.1-7.7) |
+
+Batch-size histogram of Triton's PE executions, first repetition, 16 clients (batch size: executions;
+535 executions in all): 32: 155, 31: 57, 30: 53, 29: 44, 28: 33, 27: 35, 26: 29, 25: 18, 24: 20,
+23: 15, 22: 10, 21: 20, 20: 8, 19: 9, 18: 6, 17: 5, 16: 3, 12-15: 8, 1-8: 12. Triton already
+packs 27.7 of 32 rows on average. The sizes below 32 come from request granularity (a 7-row request does
+not fit in the 3 rows left), not from a lack of company.
+
+The per-crop engine cost does not depend on the batch size in this range: the execute time divided by
+the mean batch is 5.5 ms per row at a mean batch of 21 (c4) and 5.5 ms at 27.7 (c16), the same 5.5 ms
+(181 rows/s) as `perf_analyzer` at batch 32 (180.9 rows/s, multi-GPU section). With 7.3 rows per
+image, 23.5 images/s is 172 rows/s, 95 percent of the engine; the packing of the last 5 percent
+cannot be worth more than that, and it is hidden by the GPU being 95-98 percent busy. Larger batches
+help only below about 16 rows, which ingest at 4 or more clients never sends.
+
+#### The coalescer, and why it was removed
+
+A `PEBatcher` in front of the Triton call (per process, per event loop; flush at 32 rows or 5 ms after
+the first caller; two batches in flight; a failed batch retried one caller at a time; each caller
+gets back its own rows) was built and measured as the "client-side micro-batching window" option.
+Same stack, GPU 2, 0.0 percent foreign load:
+
+| Case | Batcher off | Batcher on (5 ms) |
+|---|---:|---:|
+| Set A, 16 x 32, images/s | 23.51 (23.36-23.65) | 23.64 (23.28-23.91) |
+| Set A, 4 x 32, images/s | 22.78 (21.81-22.82) | 22.63 (21.77-23.24) |
+| Set A, 16 x 32, PE requests per image | 2.07 | 0.35-0.44 |
+| Set A, 16 x 32, PE mean batch at Triton | 27.7 | 25.9 (25.2-26.7) |
+| Set A, 16 x 32, request p95 s | 25.4 (24.0-26.0) | 27.4 (24.8-31.4) |
+| Set B, 8 x 16, images/s | 28.63 (26.99-29.49) | 28.03 (25.16-29.54) |
+| Embed pass, images/s (16 images at once) | 13.75 (13.63-13.84) | 13.17 (13.10-13.19) |
+
+The batcher cut PE requests per image by 80 percent and gained nothing: throughput is the engine's,
+the mean batch at Triton fell (a process sends fewer, larger requests, which Triton packs less
+tightly: two 20-row requests do not share a batch), and the request p95 moved up. The 4-client
+"off" row is a later series than the first 4-client row above (21.43); the 6 percent between the
+two is the drift between series on a shared host, not a code difference (ingest code is identical),
+which is why the on/off comparison was taken in the same series. The deterministic-output rule held (below), but a
+negative result ships no code: `src/clients/pe_batcher.py` and the `OP_PE_BATCH_MAX_WAIT_MS` setting
+were deleted. Acceptance (PE requests per image below 0.3 from 2.07, throughput not lower) is
+therefore not met for ingest, and not wanted: requests per image is not what limits ingest.
+
+#### The embed pass (what shipped)
+
+The `embed` reprocess scope (embed-missing, "embed all") embedded one image at a time: a one-row
+whole-frame request, then that image's crop request, in chunks of 20 images that drained at each end.
+`reembed_items` now runs up to 16 images at once (`_IMAGES_IN_FLIGHT`), so their requests overlap
+and Triton packs them, and a chunk is 64 images (`reprocess_images.CHUNK`), so a chunk holds several
+windows. `OP_MAX_INGEST_CONCURRENCY` is for ingest and is unrelated. The encoder client and the
+Triton configuration are unchanged.
+
+| Embed pass, 500 images, crop and frame vectors | before | after |
+|---|---:|---:|
+| images/s | 6.33 (6.33-6.34) | 14.05 (13.93-14.10) |
+| PE mean batch | 3.7 | 13.0 (12.9-13.4) |
+| PE requests per image | 1.98 | 1.98 |
+| PE executions at batch 1 | 556 of 990 | 14 of about 280 |
+| GPU 2 busy % | 25-29 | 57-60 |
+| API cores / CPU-s per image | not recorded | 0.65 / 0.047 |
+
+The settings that led here, all measured with the coalescer on, 500 images: 8 images at once and
+20-image chunks 10.8 images/s, 24 at once 10.7 (the chunk end is the limit), chunks of 64 with 24 at
+once 12.8, with 16 at once 13.2, with 32 at once 12.7. The pass is still not at the engine's
+24 images/s: the GPU is 58 percent busy with the API using 0.65 of a core, so the next limit is probably on the
+host side of the one process that runs the job. That was not diagnosed here.
+
+Memory: 16 images are decoded at once in one API process, about 15 MB for 640 x 480 frames and up to
+1.2 GB for 24 MP photos (3 bytes per pixel). The embed pass on photos was not run.
+
+#### Same vector whatever the batch mates
+
+The engine does not give the same bits for a crop at batch 1, at batch 32 or in a mixed batch (different
+kernels per batch size); it agrees to FP16 rounding. 192 crops (2 random boxes on each of 96 COCO
+images, the ingest resize), straight to Triton on GPU 2:
+
+| Pair | cosine min | max abs difference | bit-identical |
+|---|---:|---:|---:|
+| each crop alone vs batches of 32 | 0.999995 | 9.4e-4 | 0 of 192 |
+| each crop alone vs random batches of 2-31 | 0.999995 | 9.5e-4 | 0 of 192 |
+| batches of 32 vs random batches of 2-31 | 0.999995 | 9.5e-4 | 0 of 192 |
+| batches of 32, run twice | 1.000000 | 0.0 | 192 of 192 |
+
+Through the shipped embed pass (96 COCO images, 746 crops, 96 frames, two rewrites in a row, whose
+batches differ): crop cosine min 0.99989 and p01 0.99995; frame cosine min 0.99988. Against the vectors
+ingest wrote the embed pass differs more for some crops (min 0.9855, p01 0.9995; frames 0.99988): the pass
+cuts the crop from the stored normalized box on a re-decoded image, ingest from the detector's pixel box.
+That difference is in the crop rectangle, not in batching (the same minimum appeared with the coalescer on and
+off), and the pass was not compared against the old build, so whether it is older than this change
+is not established.
+
+#### Parity (`precision` profile, set A, GPU 2, policy `all`, capture of the final code)
+
+| Comparison | P-box | P-item | P-pe-p01 | P-pew-p01 | P-knn | P-cluster-assign | P-cluster-purity | P-label-vote | unmatched conf. | gates failed |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| `ref-u8fp16-repeat` vs `ref-u8fp16` (noise floor) | 0.9939 | 1.0000 | 0.99995 | 0.99994 | 0.9955 | 0.9997 | 0.453 | 0.9990 | 0 | none |
+| final vs `ref-u8fp16` | 0.9924 | 0.9995 | 0.99993 | 0.99990 | 0.9937 | 0.9996 | 0.164 | 0.9970 | 0 | none |
+| final vs `ref-u8fp16-repeat` | 0.9924 | 0.9995 | 0.99993 | 0.99991 | 0.9942 | 0.9993 | -0.289 | 0.9990 | 0 | none |
+
+The ingest path is the code of `origin/main`, so this capture is a regression check of the stack, not
+a test of the change; the embed pass has no reference capture, its check is the table above. The
+capture with the coalescer on passed the same gates (P-pe-p01 0.99995, P-pew-p01 0.99990, P-knn 0.9948,
+P-cluster-purity 0.219). The VLM gate is skipped (no VLM in the stack).
+
+#### Caveats and not measured
+
+- One host and one card, 3 repetitions, other projects running on the host's CPUs and on GPU 0; the c4
+  and c16 series ran at different times (drift above). Only 0.0 percent foreign GPU repetitions are
+  counted; host load was not controlled.
+- Set B was measured only for the on/off comparison (the host was loaded, load average 14-25; the
+  throughput reading is noisy: 25.2-29.5 images/s).
+- Not measured: Triton queue delay and preferred sizes (a knob sweep belongs to #226; the shipped 15 ms
+  and `[4, 8, 16, 32]` were left alone because the engine, not the batch size, bounds ingest); two
+  GPUs (one queue per Triton feeds both, unchanged by this); the `region` part of the embed pass; the
+  embed pass on photos; what holds the embed pass at 58 percent GPU; a before/after of the embed pass
+  API CPU; ingest with a coalescer cap of 16 rows to keep Triton's packing granularity.
+- Before-and-after of the embed pass compares two builds on one stack, run back to back on GPU 2 (before
+  first, after later); the before series ran with the coalescer absent.
+
 ## Benchmarking
 
 ### Using the Go Benchmark Tool
