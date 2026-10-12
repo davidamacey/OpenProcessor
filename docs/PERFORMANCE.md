@@ -942,6 +942,9 @@ or the API changed.
   variant passed the gates. The Triton numbers above are the PE model alone; the end-to-end ingest
   rate also depends on the decode, detector, crop, serialization and write stages above, so a 1.4x PE
   speed-up would have moved ingest by less than 1.4x.
+- The PE engines evaluated take FP32 normalized input (the graph before the uint8 input change); the
+  input dtype changes transfer bytes, not the 98 quantized matmuls, so neither the accuracy nor the
+  engine-only speed ratios depend on it. They were not repeated on the uint8-input graph.
 - The detector, MobileCLIP, ArcFace and OCR models in INT8; a SmoothQuant or per-token-activation
   recipe, quantization-aware training or a learned rounding method (not in the ONNX flow of the
   tool used; they are the usual remedy for ViT activation outliers and are a research task, not a
