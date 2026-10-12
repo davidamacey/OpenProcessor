@@ -155,6 +155,14 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   put the `gpus: [ 0 ]` models on a faster card with a higher host index instead of the lowest listed
   one (#228).
 
+- Cluster pass plumbing, output-preserving (#218): the write-back sends its guarded updates 8 requests at
+  a time (1,000 documents each, 429 retried with backoff) instead of one 2,000-document request after
+  another, the fetch decodes responses with `orjson` and converts a page to a matrix in one call, and
+  the pass reports `stage_seconds` (fetch, fit, write_back). Same guarded script, same stored result; the
+  clustering methods and the refinement are untouched. At 100k real vectors the IVF pass goes from 311 s
+  to 138 s, the write-back from 175 s to 32 s. `scripts/bench/cluster_plumbing_bench.py` measures it;
+  `tests/curation/test_cluster_plumbing_golden.py` pins every method's stored output.
+
 ### Fixed
 
 - An oversize upload answers `413` with `{"detail": "File too large. Maximum: <N>MB", "max_file_size_mb": <N>,
