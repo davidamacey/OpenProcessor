@@ -86,6 +86,14 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   repeated card, mixed compute capabilities, or a card without room; the installer takes
   `--gpu-plan triton=0+2` and refuses the same cases. `scripts/bench/pe_gpu_parity.py` compares
   embeddings of the same crops per card (#228).
+- GPU decode measured and planned (`docs/design/gpu_decode_plan.md`, numbers in
+  `docs/PERFORMANCE.md`): on 12-24 MP photos the CPU JPEG decode caps ingest at about 26 photos/s on
+  this host; GPU decode cuts the decode's host cost 3.7x and a GPU front end cut API CPU per photo by
+  65 percent through the stack, at unchanged images/s until faster GPU kernels land; COCO frames gain
+  nothing. GPU decode changes the decoded pixels and fails the parity gates against today's
+  references while AP and kNN precision are unchanged, so it waits for an owner decision. New probe
+  tools `scripts/bench/gpu_decode_bench.py` and `scripts/bench/gpu_decode_parity.py` with tested
+  kernels and helpers (#217). No product code changed.
 
 ### Changed
 
@@ -161,6 +169,17 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 - Triton runs with `CUDA_DEVICE_ORDER=PCI_BUS_ID`: CUDA's default fastest-first order would otherwise
   put the `gpus: [ 0 ]` models on a faster card with a higher host index instead of the lowest listed
   one (#228).
+
+- Cluster pass plumbing, output-preserving (#218): the write-back sends its guarded updates 8 requests at
+  a time (1,000 documents each, 429 retried with backoff) instead of one 2,000-document request after
+  another, the fetch decodes responses with `orjson` and converts a page to a matrix in one call, and
+  the pass reports `stage_seconds` (fetch, fit, write_back). Same guarded script, same stored result; the
+  clustering methods and the refinement are untouched. At 100k real vectors the IVF pass goes from 311 s
+  to 138 s, the write-back from 175 s to 32 s. `scripts/bench/cluster_plumbing_bench.py` measures it;
+  `tests/curation/test_cluster_plumbing_golden.py` pins every method's stored output. The geometry stage
+  after the pass reads the clustered vectors once, by point-in-time slices, writes only what changed and
+  does it 8 requests at a time (10k: 143 s to 11 s, same stored geometry); assign-only reads through
+  slices and skips documents that already store the result.
 
 ### Fixed
 

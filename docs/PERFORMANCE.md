@@ -2811,6 +2811,150 @@ P-cluster-purity 0.219). The VLM gate is skipped (no VLM in the stack).
 - Before-and-after of the embed pass compares two builds on one stack, run back to back on GPU 2 (before
   first, after later); the before series ran with the coalescer absent.
 
+### Cluster pass plumbing: fetch and write-back (#218)
+
+The question: where does "ingest complete" to "clusters available" go, and how much of it is moving
+vectors out of and assignments back into OpenSearch rather than clustering? The clustering methods
+(IVF, AHC and its refinement, HDBSCAN) were not touched; a golden test pins what each stores.
+Medians of 3 repetitions, range in the table of stage times in the bench output; CPU only.
+
+**Result.** The write-back was the binding stage: a guarded painless update re-indexes the whole
+document with its vector, so one 2,000-document request at a time gave about 550 documents/s. Eight
+requests of 1,000 reach about 2,300 documents/s on this loaded host (more writers add nothing). The fetch
+is bound by the node rendering 25 MB of floats per 2,000-document page (2.4 s) and then by the single
+client thread decoding it; decoding is now 2.5 times faster, and the fetch is flat at about 19 s for
+100k whatever the slices (8 to 32) and page size (1,000 to 2,000), so the node is the floor.
+
+| Seconds (median) | 2k before | 2k after | 10k before | 10k after | 100k before | 100k after |
+|---|---|---|---|---|---|---|
+| IVF fetch | 0.79 | 0.55 | 3.31 | 2.46 | 30.0 | 19.3 |
+| IVF fit (unchanged) | 2.38 | 2.33 | 7.55 | 7.96 | 93.3 | 86.9 |
+| IVF write-back | 3.26 | 0.65 | 18.5 | 3.9 | 175.3 | 31.5 |
+| **IVF total** | 6.71 | 3.87 | 28.3 | 14.4 | 310.6 | 138.0 |
+| AHC total (fetch + fit + write) | 5.99 | 4.83 | 47.5 | 24.4 | not run | not run |
+| HDBSCAN total | 11.6 | 9.25 | 201.6 | 189.1 | not run | not run |
+| assign-only (incremental), IVF | 5.0 | 3.3 | 26.3 | 10.6 | 292.8 | 82.6 |
+
+| Write-back alone, 100k documents | 2000 x 1 | 2000 x 4 | 1000 x 4 | 1000 x 8 | 2000 x 8 | 1000 x 16 | 500 x 16 |
+|---|---|---|---|---|---|---|---|
+| documents/s | 550 | 1,600 | 1,560 | 2,340 | 2,330 | 2,100 | 2,050 |
+
+The first cell is chunk size by writers. Default: 1,000 documents, 8 writers; a pool too small to fill
+them is split down to 250 documents per request. AHC and HDBSCAN were not run at 100k (see caveats).
+
+**New bottleneck, found here.** The `cluster_geometry` stage the pipeline runs inside the same progress
+stage read every clustered vector twice, one scroll per cluster, and wrote every item in 20-document
+requests one after another: 43 s at 2k, 96 s at 10k, 442 s at 100k after IVF (the 100k figure is on the
+vector set of the table above). It is now one point-in-time sliced read of the clustered items with the
+centroids, distances and nearest clusters computed from that matrix (rows in index order, so every sum is
+the one the per-cluster read made), items that already store the same geometry skipped, and the rest
+written 8 requests at a time through the same writer. The stored geometry is identical to the old
+algorithm's (`tests/curation/test_cluster_geometry_golden.py`).
+
+Follow-up measured on the 12,792 real crop vectors of a parity capture (the 114,987-vector set used above
+was no longer available, so 100k was not re-measured), IVF, median of 3, seconds, same node and host:
+
+| Seconds | 2k main | 2k first PR commit | 2k now | 10k main | 10k first PR commit | 10k now |
+|---|---|---|---|---|---|---|
+| IVF fetch | 0.72 | 0.55 | 0.50 | 3.67 | 2.34 | 2.50 |
+| IVF fit (untouched) | 2.28 | 2.83 | 2.37 | 9.99 | 8.87 | 7.17 |
+| IVF write-back | 3.08 | 0.81 | 0.56 | 18.0 | 3.84 | 3.64 |
+| geometry stage | 60.2 | 40.8 | 3.1 | 142.9 | 94.3 | 11.4 |
+| **cluster pass + geometry** | 66.6 | 45.4 | 6.8 | 176.4 | 110.6 | 24.9 |
+| assign-only (incremental) | 5.8 | 5.0 | 1.6 | 27.7 | 9.7 | 5.4 |
+
+Assign-only now reads through 8 point-in-time slices (one scroll is one cursor) and skips a document that
+already stores exactly what the update writes; a second pass on 10k found 7,181 of 10,000 already exact
+(3.9 s against 5.4 s; the rest differ in the last bit of the distance because a page's composition changes
+when its documents are rewritten, so the match is exact or the document is written). The new bottleneck
+at 10k is the IVF fit (7.2 of 13.5 s of the pass, a method), then the geometry stage (11.4 s).
+
+Options measured and not adopted (10k, one 2,000-document page): `fields` instead of `_source` 2.4 s
+against 2.65 s (inside the noise); `docvalue_fields` is refused by the node for the vector field and
+`stored_fields` returns nothing; `refresh_interval: -1` during the write-back 4.0-4.5 s against 3.7-4.5 s
+with the default (not faster, and it adds 1-2 s to the closing refresh).
+
+#### Caveats and not measured
+
+- Host: 48 logical cores shared with other projects, 1-minute load 13-48 during the series; one
+  single-node OpenSearch 3.6, 8 GB heap, loopback, `clusplumb` project. Before and after ran back to back.
+- AHC and HDBSCAN are not run-to-run deterministic on real vectors (two runs of the unmodified code gave
+  6 different `cluster_id` of 2,000), so real-index hashes cannot show equality for them; the golden test
+  on a fixed set (deterministic) does, and IVF's stored hash is identical before and after at 2k and 10k.
+- Not measured: AHC and HDBSCAN at 100k (AHC at 100k did not finish its merge loop in 25 minutes; HDBSCAN
+  fit 180 s at 10k), GPU paths, the follow-up at 100k, concurrent search load during the write-back.
+- Tool: `scripts/bench/cluster_plumbing_bench.py` (stage split, `--fetch-profile`, `--write-grid`,
+  `--fetch-grid`, `--assign-only`, `--geometry`).
+
+### GPU decode measurements (#217)
+
+Question: does decoding JPEGs on the GPU, and building each model's input there, speed up ingest?
+The full design, the dataflow map and the implementation plan are in
+[design/gpu_decode_plan.md](design/gpu_decode_plan.md); this section keeps the numbers. One RTX
+A6000 (GPU 2; SM86 has no hardware JPEG decoder), the published v0.5.0 images, the `ref-u8fp16`
+engines, an isolated compose project, only this work's processes on GPU 2 during every timed run.
+Tools: `scripts/bench/gpu_decode_bench.py`, `scripts/bench/gpu_decode_parity.py`.
+
+**Result.** On 12-24 MP photos the CPU decode is the ceiling: the two decodes ingest runs per photo
+cost 0.50 CPU-s and 46 processes doing nothing else reach 26.3 photos/s, the measured photo ingest
+rate. GPU decode cuts the host cost of a photo 3.7x (not to zero: there is no GPU-only Huffman
+decoder on this card) and, with letterbox, whole frame and blur on the GPU too, the API CPU per photo
+falls 65 percent through the real stack. Images/s did not rise in that run because the float32 GPU
+kernels used made the GPU the limit; the plan sets a kernel budget and estimates about 1.9x on one
+A6000 and 3x on two once it is met (cheaper kernels, 8 instead of 11 ms of GPU per photo, gave
+25.5 against 26.8 photos/s: still GPU-bound). GPU decode changes the decoded pixels
+slightly and the detector turns that into different boxes on 7 to 13 percent of images: the parity
+gates against today's references fail, AP and kNN precision against ground truth do not move. COCO
+frames gain nothing (they are bound by the PE engine) and stay on the CPU.
+
+CPU decoders (single thread, ms per image, median; Pillow 12.3 and OpenCV 4.10 of the API image):
+
+| Images (median MP) | Pillow + EXIF | Pillow at 1/8 | OpenCV | OpenCV at 1/8 | both decodes ingest runs | both, 46 processes: images/s |
+|---|---:|---:|---:|---:|---:|---:|
+| COCO set A (0.27) | 5.3 | 2.2 | 3.7 | 2.1 | 7.4 | 979 |
+| Open Images 1,024 px (0.78) | 10.1 | 3.4 | 5.8 | 2.9 | 13.0 | 851 |
+| Open Images originals (5.2) | 68.1 | 15.5 | 37.1 | 15.6 | 83.7 | 124 |
+| photos, set B (17.7) | 369 | 130 | 283 | 133 | 502 | 26.3 |
+
+GPU decoders (batch 32, 8 decoder threads): images/s and host CPU ms per image:
+
+| Images | nvImageCodec | DALI | torchvision nvJPEG |
+|---|---|---|---|
+| COCO set A | 2,346, 2.8 ms | 1,941, 3.1 ms | 379, 2.6 ms (serial) |
+| Open Images 1,024 px | 1,282, 4.9 ms | 1,176, 5.1 ms | 215, 4.6 ms |
+| Open Images originals | 193, 21.6 ms | 154, 23.5 ms | 22, 45 ms |
+| photos, set B | 35.4, 134 ms | 31.8, 132 ms | 4.5, 221 ms |
+
+One nvImageCodec decoder saturates at about 35 photos/s whatever its thread count; its `GPU_ONLY`
+backend returns no image on this card. Decoding beside the PE engine at saturation: a DALI front end
+(decode, letterbox, whole-frame resize) takes 4.5-5.8 percent of PE (about 2 ms of PE time per photo);
+the float32 torch front end with the blur takes 22 percent (about 15 ms).
+
+Through the stack (`/ingest/batch`, 3 repetitions):
+
+| Arm | Set B images/s | API CPU-s per photo | host busy % | GPU busy % | Set A images/s | API CPU-s per frame |
+|---|---:|---:|---:|---:|---:|---:|
+| CPU path, 32 workers | 24.32 (21.72-26.26) | 1.06-1.13 | 76-79 | 36-43 | 23.51 (23.39-23.54) | 0.069 |
+| CPU path, 16 workers | 26.78 (24.59-28.10) | 1.07-1.15 | 80-82 | 36-41 | | |
+| GPU front end in the API process, float32 kernels, 16 workers | 23.39 (23.00-24.38) | 0.36-0.41 | 28-33 | 70-80 | 20.23 (20.00-20.70) | 0.164 |
+| same, half-precision resize input and convolution blur | 25.48 (24.45-26.48) | 0.35-0.36 | 34-38 | 79-83 | not run | |
+
+With 32 workers the API-side front end ran the 48 GB card out of memory (each worker held 2-5 GB).
+
+Parity of that run through the stack against `ref-u8fp16` (profile `precision`): P-box 0.869, P-item
+0.942, P-pe p01 0.974, P-pew p01 0.991, kNN overlap 0.911, label vote 0.961 fail; near-duplicate
+agreement 0.9997, cluster assignment 0.988, purity drop 0.34 points, kNN precision drop 0.00 points
+and class labels pass. Offline on the same engines, GPU decode alone accounts for most of the box
+change (P-box 0.883 with CPU resizes, 0.869 with GPU resizes; the GPU letterbox passes the tensor
+gate on every image), and COCO AP is 0.4376 on the CPU path against 0.4378 and 0.4377 on the two GPU
+arms. Decoder coverage: nvImageCodec applies all eight EXIF orientations and, with
+`fancy_upsampling=1`, matches Pillow within 0.01 grey levels on average; torchvision's GPU decode and
+DALI's default ignore EXIF orientation, and every GPU decoder returns an image for truncated or
+corrupted files that Pillow rejects (the plan routes those to the CPU).
+
+Not measured: the Triton-resident front end the plan recommends, two cards and the 12 GB card with GPU
+decode, kernels that meet the plan's budget, the region stage and VLM on GPU-encoded crop JPEGs.
+
 
 ## Benchmarking
 
