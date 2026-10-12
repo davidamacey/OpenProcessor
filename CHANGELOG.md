@@ -67,6 +67,14 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   1.2-1.4x faster than FP16 but fails the parity gates (crop cosine median 0.94-0.99 against 0.999,
   neighbour overlap 0.52-0.82 against 0.95), and weight-only INT8 passes the gates with no speed or
   size gain. INT8 is not offered; FP16 stays the only PE precision and no code changed (#213).
+- Data-parallel PE image encoding: `TRITON_GPU_ID` takes a comma list (`0,2`) and `pe_image_encoder`
+  runs one instance on every listed card behind one dynamic-batcher queue; every other model stays on
+  the lowest listed card. Two RTX A6000 reach 44.6 images/s on the pinned COCO set against 23.4 for one
+  (1.91x), an A6000 with an RTX 3080 Ti 43.7, and the stored vectors are bit-identical whichever card
+  serves a request. `openprocessor gpu plan` explains the placement and exits 1 for a missing or
+  repeated card, mixed compute capabilities, or a card without room; the installer takes
+  `--gpu-plan triton=0+2` and refuses the same cases. `scripts/bench/pe_gpu_parity.py` compares
+  embeddings of the same crops per card (#228).
 
 ### Changed
 
@@ -132,6 +140,10 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   percent of the engine time on the pair arithmetic. No build flag, optimization profile, batching,
   instance count or CUDA-graph setting beat the shipped build. Upgrading: rebuild the engine
   (`./openprocessor models install --only pe`); a plan built earlier keeps working (#227).
+
+- Triton runs with `CUDA_DEVICE_ORDER=PCI_BUS_ID`: CUDA's default fastest-first order would otherwise
+  put the `gpus: [ 0 ]` models on a faster card with a higher host index instead of the lowest listed
+  one (#228).
 
 ### Fixed
 

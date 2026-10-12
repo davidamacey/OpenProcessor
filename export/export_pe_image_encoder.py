@@ -121,6 +121,8 @@ ONNX_OPSET_VERSION = 17
 # min=1 / opt=8 / max=32. Larger batches mostly buy queueing, not
 # throughput, for a ViT-L at this resolution.
 DEFAULT_MAX_BATCH = 32
+# GPU memory of one warm instance at max batch, with headroom (gpu plan and the installer read it).
+PE_GPU_MIB_PER_INSTANCE = 1536
 
 # Triton platform identifiers for the two serving paths.
 TRT_PLATFORM = 'tensorrt_plan'
@@ -163,7 +165,9 @@ class PETritonConfig:
     input_name: str = INPUT_TENSOR
     output_name: str = OUTPUT_TENSOR
     instance_count: int = 1
-    gpu_ids: tuple[int, ...] = (0,)
+    # None: no `gpus` list, so Triton runs an instance on every GPU the container sees
+    # (TRITON_GPU_ID in .env decides how many). A tuple pins the instances to those cards.
+    gpu_ids: tuple[int, ...] | None = None
     max_queue_delay_us: int = 15000
 
     def __post_init__(self) -> None:
@@ -177,9 +181,9 @@ class PETritonConfig:
                 raise ValueError(f'{attr} must be a positive int, got {value!r}')
         if self.max_queue_delay_us < 0:
             raise ValueError(f'max_queue_delay_us must be >= 0, got {self.max_queue_delay_us}')
-        if not self.gpu_ids:
+        if self.gpu_ids is not None and not self.gpu_ids:
             raise ValueError('gpu_ids must contain at least one device id')
-        if any(not isinstance(g, int) or g < 0 for g in self.gpu_ids):
+        if any(not isinstance(g, int) or g < 0 for g in self.gpu_ids or ()):
             raise ValueError(f'gpu_ids must be non-negative ints, got {self.gpu_ids!r}')
         if not self.input_name or not self.output_name:
             raise ValueError('input_name and output_name must be non-empty strings')
@@ -194,7 +198,11 @@ def preferred_batch_sizes(max_batch: int) -> list[int]:
 def render_config(cfg: PETritonConfig) -> str:
     """Render the Triton ``config.pbtxt`` body for the PE image encoder."""
     preferred = ', '.join(str(b) for b in preferred_batch_sizes(cfg.max_batch_size))
-    gpus = ', '.join(str(g) for g in cfg.gpu_ids)
+    gpu_pin = (
+        f'    gpus: [ {", ".join(str(g) for g in cfg.gpu_ids)} ]\n'
+        if cfg.gpu_ids is not None
+        else ''
+    )
     if cfg.platform == TRT_PLATFORM:
         provenance = (
             '# TensorRT plan built by export/build_pe_trt.sh from the ONNX\n'
@@ -251,13 +259,25 @@ dynamic_batching {{
   max_queue_delay_microseconds: {cfg.max_queue_delay_us}
 }}
 
+# No `gpus` list: Triton places `count` instances on every GPU the container
+# sees, so TRITON_GPU_ID in .env decides how many cards encode in parallel
+# (one card by default; "0,2" runs two). One dynamic-batcher queue feeds all
+# instances. Every other model stays pinned to `gpus: [ 0 ]`, the lowest
+# listed card. See INSTALLATION.md, "Spreading the PE encoder over GPUs".
 instance_group [
   {{
     count: {cfg.instance_count}
     kind: KIND_GPU
-    gpus: [ {gpus} ]
-  }}
+{gpu_pin}  }}
 ]
+
+# Budget accounting for `openprocessor gpu plan` and the installer: GPU memory
+# of one warm instance, measured at max batch 32 (1312 MiB resident on an RTX
+# 3080 Ti, the same on an RTX A6000), recorded with headroom.
+parameters: {{
+  key: "GPU_MIB_PER_INSTANCE"
+  value: {{ string_value: "{PE_GPU_MIB_PER_INSTANCE}" }}
+}}
 """
 
 
@@ -667,8 +687,8 @@ def build_parser() -> argparse.ArgumentParser:
         '--gpus',
         type=int,
         nargs='+',
-        default=[0],
-        help='GPU ids for the Triton instance group (default: 0)',
+        default=None,
+        help='pin the Triton instance group to these GPU ids (default: no pin, one instance per visible GPU)',
     )
     parser.add_argument(
         '--config-only',
@@ -703,7 +723,7 @@ def config_from_args(args: argparse.Namespace) -> PETritonConfig:
         image_size=args.image_size,
         embedding_dim=args.embedding_dim,
         instance_count=args.instance_count,
-        gpu_ids=tuple(args.gpus),
+        gpu_ids=tuple(args.gpus) if args.gpus else None,
     )
 
 

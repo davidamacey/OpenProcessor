@@ -206,7 +206,7 @@ directory created. Run `./openprocessor help` for the list.
 | `curation [up\|down\|logs\|status]` | start, stop, follow or list the curation workers (`status` is the default) |
 | `sample coco [--full]` | fetch the public COCO sample into `data/samples/` using the API image |
 | `config show` | print `.env` with every token, key, secret and password redacted |
-| `gpu plan` | print the GPU keys from `.env` |
+| `gpu plan` | print the GPU keys from `.env`, then where the PE image encoder runs and whether this host can honour it (see [Spreading the PE encoder over GPUs](#spreading-the-pe-encoder-over-gpus)) |
 | `vlm ...` | local VLM catalog and switching, see [Choosing a VLM](#choosing-a-vlm) |
 | `train-mode on\|off` | stop (and later restart) the local VLM, plus the segmenter when it shares the training GPU, around a training run |
 | `upgrade [--version vX.Y.Z]`, `repair`, `uninstall [...]` | run this install's own `setup-openprocessor.sh` against this directory (installed directories only) |
@@ -333,6 +333,47 @@ Common cases:
   `./openprocessor models install --only <group>` to retry each one.
 - **Disk**: the installer warns if it cannot check free space; the Triton
   image alone is about 30 GB.
+
+### Spreading the PE encoder over GPUs
+
+The PE image encoder is about 99 percent of the GPU work of `/ingest`, and one
+card tops out near 23 images per second on 640 x 480 frames. A second (or third)
+card runs a second (third) copy of the encoder: list the cards in
+`TRITON_GPU_ID`.
+
+```bash
+# .env: the PE encoder on GPU 0 and GPU 2; everything else stays on GPU 0
+TRITON_GPU_ID=0,2
+API_GPU_ID=0
+# or at install time
+./setup-openprocessor.sh --gpu-plan triton=0+2,vlm=1
+```
+
+Rules, all enforced:
+
+- The ids are host indexes from `nvidia-smi`. Triton sees the listed cards
+  numbered in host order, so the **lowest id is the primary card**: the
+  detector, face, MobileCLIP and OCR models stay there (their configs pin
+  `gpus: [ 0 ]`), and `API_GPU_ID` should name it. Every other listed card runs
+  only the encoder, one instance of about 1.5 GB (`GPU_MIB_PER_INSTANCE` in
+  `models/pe_image_encoder/config.pbtxt`).
+- One Triton, one dynamic-batcher queue: whichever card is free takes the next
+  batch, so a slower card simply takes fewer. The API and its clients are
+  unchanged.
+- All listed cards must share one compute capability, because they load one
+  TensorRT plan. Cards of different models with the same capability (an RTX A6000
+  and an RTX 3080 Ti) load it, with a TensorRT warning in the Triton log that a
+  plan is not portable across device models.
+- Fail closed. `./openprocessor gpu plan` exits 1 for an id the host does not
+  have, a repeated id, mixed compute capabilities, or a card with less than the
+  encoder's budget free; the installer refuses the same cases (`--force` only
+  overrides the free-memory check) and a container asked for a missing device
+  does not start. A card shared with the VLM or the segmenter is planned with the
+  encoder's memory subtracted from theirs.
+- `docker-compose.yml` passes `TRITON_GPU_ID` through unsplit (the NVIDIA runtime
+  reads `0,2` as two devices), so no compose edit is needed.
+
+Measured scaling is in [docs/PERFORMANCE.md](docs/PERFORMANCE.md#multi-gpu-pe-encoding-228).
 
 ---
 

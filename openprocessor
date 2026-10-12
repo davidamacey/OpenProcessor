@@ -797,6 +797,44 @@ cmd_config() {
     esac
 }
 
+# Explain where the PE image encoder runs and refuse a TRITON_GPU_ID that this
+# host cannot honour (missing card, mixed architectures, no room).
+_gpu_plan_placement() {
+    local ids pe_mib running=0 project table out line rc=0 primary_mib
+    ids="$(_env_value TRITON_GPU_ID)"
+    ids="${ids:-0}"
+    if ! command -v nvidia-smi &> /dev/null; then
+        log_warn "nvidia-smi not found: the placement of TRITON_GPU_ID=${ids} is not verified"
+        return 0
+    fi
+    pe_mib="$(sed -n -E '/GPU_MIB_PER_INSTANCE/{n;s/.*string_value: *"([0-9]+)".*/\1/p}' \
+        "${PROJECT_DIR}/models/pe_image_encoder/config.pbtxt" 2>/dev/null | head -1)" || true
+    pe_mib="${pe_mib:-1536}"
+    project="$(_env_value COMPOSE_PROJECT_NAME)"
+    if command -v docker &> /dev/null \
+        && docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "${project:-openprocessor}-triton"; then
+        running=1
+    fi
+    case "$(_env_value GPU_PROFILE)" in
+        minimal) primary_mib=8192 ;;
+        full) primary_mib=17408 ;;
+        *) primary_mib=12288 ;;
+    esac
+    table="$(nvidia-smi --query-gpu=index,name,memory.total,memory.used,compute_cap \
+        --format=csv,noheader,nounits | awk -F', ' '{ print $1 "|" $2 "|" $3 "|" $4 "|" $5 }')"
+    out="$(gpu_pe_placement "$ids" "$pe_mib" "$table" "$running" "$primary_mib")" || rc=$?
+    echo "  PE image encoder (about ${pe_mib} MiB per card):"
+    while IFS= read -r line; do
+        case "$line" in
+            gpu=*) echo "    GPU ${line#gpu=}" ;;
+            warn=*) log_warn "${line#warn=}" ;;
+            problem=*) log_error "${line#problem=}" ;;
+        esac
+    done <<< "$out"
+    echo "  every other Triton model runs on the primary card (the lowest id in TRITON_GPU_ID)"
+    return "$rc"
+}
+
 cmd_gpu() {
     local sub="${1:-plan}"
     case "$sub" in
@@ -807,6 +845,7 @@ cmd_gpu() {
                 value="$(_env_value "$key")"
                 echo "  ${key}=${value:-<unset>}"
             done
+            _gpu_plan_placement
             ;;
         *)
             log_error "unknown gpu subcommand: $sub"

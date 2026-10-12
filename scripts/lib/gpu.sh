@@ -262,6 +262,96 @@ wait_for_gpu_memory() {
 }
 
 # =============================================================================
+# PE encoder placement (TRITON_GPU_ID may list several GPUs)
+# =============================================================================
+
+# gpu_pe_placement IDS PE_MIB TABLE [TRITON_RUNNING] [PRIMARY_MIB]
+#   IDS     TRITON_GPU_ID as written in .env: "1" or "0,2" (host indexes)
+#   PE_MIB  GPU memory of one PE encoder instance
+#   TABLE   one GPU per line: index|name|total_mib|used_mib|compute_cap
+#   TRITON_RUNNING=1: this stack's Triton already holds its memory, so a
+#           shortfall of free memory is a warning, not a refusal
+#   PRIMARY_MIB: memory the primary card needs for every Triton model (the
+#           profile's budget); a 12 GB card is a PE-only secondary, not a primary
+# Prints, one per line: primary=ID, pe_gpus=ID,ID, gpu=ID role=... lines,
+# warn=... and problem=.... Returns 1 when there is any problem. Fails closed:
+# a listed GPU the host does not have, a repeated id, cards of different
+# compute capability (one TensorRT plan serves them all) or too little free
+# memory all refuse.
+gpu_pe_placement() {
+    local ids_csv="$1" pe_mib="$2" table="$3" running="${4:-0}" primary_mib="${5:-0}"
+    local -A name=() total=() used=() cc=()
+    local -a have=() want=() problems=() warns=() listed=()
+    local -A kinds=()
+    local idx n t u c id seen=" " primary="" line free ccs="" need what
+
+    while IFS='|' read -r idx n t u c; do
+        [[ -z "$idx" ]] && continue
+        have+=("$idx"); name[$idx]="$n"; total[$idx]="$t"; used[$idx]="$u"; cc[$idx]="$c"
+    done <<< "$table"
+
+    if [[ -z "$ids_csv" ]]; then
+        problems+=("TRITON_GPU_ID is empty")
+    else
+        IFS=',' read -ra want <<< "$ids_csv"
+    fi
+    for id in "${want[@]}"; do
+        id="${id// /}"
+        if [[ ! "$id" =~ ^[0-9]+$ ]]; then
+            problems+=("TRITON_GPU_ID entry '${id}' is not a GPU index")
+        elif [[ "$seen" == *" ${id} "* ]]; then
+            problems+=("GPU ${id} is listed twice in TRITON_GPU_ID")
+        elif [[ -z "${total[$id]+x}" ]]; then
+            problems+=("GPU ${id} is not present on this host (it has: $(IFS=,; echo "${have[*]:-none}"))")
+            seen+="${id} "
+        else
+            seen+="${id} "
+            listed+=("$id")
+            if [[ -z "$primary" ]] || (( id < primary )); then primary=$id; fi
+        fi
+    done
+
+    for id in "${listed[@]}"; do
+        free=$(( total[$id] - used[$id] ))
+        need=$pe_mib
+        what="the PE encoder needs about ${pe_mib} MiB"
+        if [[ "$id" == "$primary" ]] && (( primary_mib > pe_mib )); then
+            need=$primary_mib
+            what="the primary card runs every Triton model and needs about ${primary_mib} MiB (put a larger card first, i.e. give it the lowest id)"
+        fi
+        if (( free < need )); then
+            line="GPU ${id} has ${free} MiB free; ${what}"
+            if [[ "$running" == 1 ]]; then
+                warns+=("${line} (Triton is running: its own memory is already counted as used)")
+            else
+                problems+=("$line")
+            fi
+        fi
+        [[ " ${ccs} " == *" ${cc[$id]} "* ]] || ccs+="${cc[$id]} "
+        kinds[${name[$id]}]=1
+    done
+    if (( $(wc -w <<< "$ccs") > 1 )); then
+        problems+=("the listed GPUs have different compute capabilities (${ccs% }): one TensorRT plan cannot serve them all")
+    fi
+    if (( ${#kinds[@]} > 1 )); then
+        warns+=("the listed GPUs are different models; the PE plan is built on one model, TensorRT warns when another loads it and the cards run at their own speed")
+    fi
+
+    if [[ -n "$primary" ]]; then
+        echo "primary=${primary}"
+        echo "pe_gpus=$(printf '%s\n' "${listed[@]}" | sort -n | paste -sd, -)"
+        for id in $(printf '%s\n' "${listed[@]}" | sort -n); do
+            local role=pe
+            [[ "$id" == "$primary" ]] && role=primary
+            echo "gpu=${id} role=${role} name=${name[$id]} total_mib=${total[$id]} free_mib=$(( total[$id] - used[$id] )) compute_cap=${cc[$id]}"
+        done
+    fi
+    for line in "${warns[@]}"; do echo "warn=${line}"; done
+    for line in "${problems[@]}"; do echo "problem=${line}"; done
+    (( ${#problems[@]} == 0 ))
+}
+
+# =============================================================================
 # Print GPU Summary
 # =============================================================================
 

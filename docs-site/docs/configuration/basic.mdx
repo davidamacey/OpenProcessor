@@ -79,7 +79,7 @@ variable; see [GPU sizing](../deployment/gpu-sizing.mdx#gpu-ids).
 
 | Variable | Default | Service |
 |---|---|---|
-| `TRITON_GPU_ID` | `0` | `triton-server` |
+| `TRITON_GPU_ID` | `0` (a comma list such as `0,2` also runs the PE image encoder on the other cards) | `triton-server` |
 | `API_GPU_ID` | `0` | `api` (torch fallbacks, CUDA-side preprocessing) |
 | `EVALUATOR_GPU_ID` | `0` | `curation-evaluator` |
 | `SEGMENTER_GPU_ID` | `0` | `segmenter` |
