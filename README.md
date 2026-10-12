@@ -819,7 +819,9 @@ Every setting is in `.env` (template: [`env.template`](env.template)). The
 
 `TRITON_GPU_ID`, `API_GPU_ID`, `SEGMENTER_GPU_ID`, `EVALUATOR_GPU_ID` and
 `VLM_GPU_ID` pick a GPU per service. `./openprocessor gpu plan` prints them.
-The installer chooses a placement and `--gpu-plan` overrides it.
+The installer chooses a placement and `--gpu-plan` overrides it. `TRITON_GPU_ID=0,2` also runs the
+PE image encoder on GPU 2 (about twice the ingest rate on two identical cards); see
+[INSTALLATION.md](INSTALLATION.md#spreading-the-pe-encoder-over-gpus).
 
 ### Triton model loadout
 
