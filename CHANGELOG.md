@@ -13,6 +13,12 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Added
 
+- `scripts/bench/vectordb/` and `docker/bench/vectordb/compose.yml`: a vector store benchmark on real
+  PE embeddings of pinned public COCO images (exact filtered ground truth, recall-gated operating
+  points, write, streaming, rewrite and delete phases) with adapters for OpenSearch, Milvus, Qdrant,
+  pgvector and LanceDB. The result at 2k, 10k and 100k vectors, in `docs/PERFORMANCE.md` and
+  `docs/benchmarks/vectordb/`, is that OpenSearch stays the single store; the Lucene engine and
+  `ef_construction` 128 are follow-up candidates (#221, #230, #56).
 - A checksum-pinned public benchmark set: `fetch_coco_subset.py --bench-set N` draws a seeded,
   license-filtered, all-class COCO 2017 set and pins per-image SHA-256 and bytes
   (`scripts/datasets/manifests/coco_bench_2000.json`); `--verify-only` re-hashes a download offline (#45).
