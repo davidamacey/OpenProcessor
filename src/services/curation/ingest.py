@@ -110,6 +110,7 @@ if TYPE_CHECKING:
     from src.clients.pe_encoder import PEEncoder
     from src.clients.triton_pool import AsyncTritonPool
     from src.config import CurationConfig, DetectionProfile
+    from src.services.curation.ingest_frontend import FrontendFrame
 
 
 logger = get_logger(__name__)
@@ -356,6 +357,7 @@ class CurationIngestService:
         source: str = 'unknown',
         *,
         prefilled_image: DecodedImage | None = None,
+        prefilled_frame: FrontendFrame | None = None,
         source_identifier: str | None = None,
         ingest_run_id: str | None = None,
         adopt_existing: bool = False,
@@ -382,7 +384,10 @@ class CurationIngestService:
                 error_kind=ERROR_KIND_EMPTY,
             )
 
-        if prefilled_image is not None:
+        decoded: DecodedImage | None = None
+        if prefilled_frame is not None:
+            pass
+        elif prefilled_image is not None:
             decoded = prefilled_image
         else:
             try:
@@ -397,6 +402,12 @@ class CurationIngestService:
                     error=str(exc),
                     error_kind=ERROR_KIND_DECODE_FAILED,
                 )
+
+        if decoded is not None:
+            width, height = decoded.pil.size
+        else:
+            assert prefilled_frame is not None
+            width, height = prefilled_frame.width, prefilled_frame.height
 
         image_hash = _imohash_bytes(image_bytes)
         existing = known_existing or await self._lookup_image(image_hash)
@@ -419,10 +430,11 @@ class CurationIngestService:
             image_path=resolved_path,
             created=existing is None,
             dataset_split=(existing or {}).get('dataset_split'),
-            pil=decoded.pil,
-            rgb=decoded.rgb,
-            width=decoded.pil.width,
-            height=decoded.pil.height,
+            pil=decoded.pil if decoded is not None else None,
+            rgb=decoded.rgb if decoded is not None else None,
+            frontend=prefilled_frame,
+            width=width,
+            height=height,
             imohash=image_hash,
             source=source,
             source_identifier=source_identifier,
@@ -485,7 +497,17 @@ class CurationIngestService:
                         logger.warning(
                             'ingest_backbone_embedding_failed', path=image_path, error=str(exc)
                         )
-        items, n_filtered = apply_detect_filter(items, self.policy.detect, img.width, img.height)
+        return self.filter_detections(items, img.width, img.height, secondary_detector_error)
+
+    def filter_detections(
+        self,
+        items: list[DetectedItem],
+        width: int,
+        height: int,
+        secondary_detector_error: str | None = None,
+    ) -> DetectResult:
+        """The project's detect filter and class resolution over detected items."""
+        items, n_filtered = apply_detect_filter(items, self.policy.detect, width, height)
         if self.policy.detect.class_resolution == 'by_name':
             assign_classes_by_name(items, registry_name_index(self.registry), self.profile.name)
         return DetectResult(items, secondary_detector_error, n_filtered)
@@ -510,6 +532,7 @@ class CurationIngestService:
         prefilled_image: DecodedImage | None = None,
         prefilled_items: list[DetectedItem] | None = None,
         prefilled_secondary: SecondaryOutput | None = None,
+        prefilled_frame: FrontendFrame | None = None,
         source_identifier: str | None = None,
         ingest_run_id: str | None = None,
     ) -> IngestResult:
@@ -530,6 +553,9 @@ class CurationIngestService:
             prefilled_secondary: Secondary-detector output (raw tensor
                 plus optional backbone feature map) from
                 :meth:`WholeImageDetector.run_secondary_raw_batch`; same deal.
+            prefilled_frame: The GPU front end's products for this image
+                (:mod:`~src.services.curation.ingest_frontend`), with its
+                items in ``prefilled_items``; the API never decodes it.
 
         Every ``prefilled_*`` argument defaults to ``None``, in which
         case this method does the work itself — so direct callers
@@ -541,20 +567,23 @@ class CurationIngestService:
             image_path,
             source,
             prefilled_image=prefilled_image,
+            prefilled_frame=prefilled_frame,
             source_identifier=source_identifier,
             ingest_run_id=ingest_run_id,
         )
         if isinstance(ctx, IngestResult):
             return record_ingest_result(ctx)
-        img = ctx.pil
 
         try:
-            detected = await self.detect_items(
-                img,
-                image_path=image_path,
-                prefilled_items=prefilled_items,
-                prefilled_secondary=prefilled_secondary,
-            )
+            if ctx.pil is None:
+                detected = self.filter_detections(prefilled_items or [], ctx.width, ctx.height)
+            else:
+                detected = await self.detect_items(
+                    ctx.pil,
+                    image_path=image_path,
+                    prefilled_items=prefilled_items,
+                    prefilled_secondary=prefilled_secondary,
+                )
         except Exception as exc:
             logger.error('ingest_primary_detector_failed', path=image_path, error=str(exc))
             return record_ingest_result(

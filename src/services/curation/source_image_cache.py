@@ -131,7 +131,7 @@ def release_after_decode(path_or_fd: PathOrFd) -> None:
 
 def write_crop_cache(
     crop_id: str,
-    crop: Image.Image,
+    crop: Image.Image | bytes,
     cache_dir: str | Path,
     *,
     quality: int = DEFAULT_CROP_CACHE_QUALITY,
@@ -144,7 +144,8 @@ def write_crop_cache(
 
     Args:
         crop_id: The item's stable id; the cache key is ``<crop_id>.jpg``.
-        crop: A decoded PIL crop, already in the desired orientation.
+        crop: A decoded PIL crop, already in the desired orientation, or that crop already
+            encoded as JPEG (the GPU ingest front end's), written as is.
         cache_dir: Root cache directory (``CurationConfig.crop_cache_dir``).
             A falsy value disables the cache entirely (no-op).
         quality: JPEG encode quality.
@@ -158,8 +159,11 @@ def write_crop_cache(
         # Atomic write: tmp + rename so a partial write is never visible
         # to a concurrent reader.
         tmp = cache_root / f'{crop_id}.jpg.tmp.{os.getpid()}'
-        with stage_timer('jpeg_encode'):
-            crop.save(tmp, format='JPEG', quality=quality)
+        if isinstance(crop, bytes):
+            tmp.write_bytes(crop)
+        else:
+            with stage_timer('jpeg_encode'):
+                crop.save(tmp, format='JPEG', quality=quality)
         tmp.replace(out)
         add_stage_bytes('jpeg_encode', out.stat().st_size)
     except Exception as exc:
