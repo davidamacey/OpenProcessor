@@ -90,21 +90,38 @@ def _reflect101(n: int, device: Any) -> torch.Tensor:
     return idx
 
 
-def lap_sums(rgb: torch.Tensor) -> tuple[int, int, int]:
-    """``(n, sum, sum of squares)`` of OpenCV's 3x3 Laplacian (``BORDER_REFLECT_101``) of the
-    grey plane, in exact integers."""
-    g = gray_u8(rgb).to(torch.int32)
-    h, w = int(g.shape[0]), int(g.shape[1])
-    p = g.index_select(0, _reflect101(h, g.device)).index_select(1, _reflect101(w, g.device))
-    lap = p[:-2, 1:-1] + p[2:, 1:-1] + p[1:-1, :-2] + p[1:-1, 2:] - 4 * p[1:-1, 1:-1]
-    lap64 = lap.to(torch.int64)
-    return h * w, int(lap64.sum()), int((lap64 * lap64).sum())
+def lap_sums_gray(gray: torch.Tensor, rows_per_chunk: int = 0) -> tuple[int, int, int]:
+    """``(n, sum, sum of squares)`` of OpenCV's 3x3 Laplacian (``BORDER_REFLECT_101``) of a
+    uint8 grey plane, in exact integers. ``rows_per_chunk`` bounds the int64 temporaries (an
+    18 MP plane is 144 MB per int64 copy); the sums do not depend on it."""
+    h, w = int(gray.shape[0]), int(gray.shape[1])
+    rows = _reflect101(h, gray.device)
+    cols = _reflect101(w, gray.device)
+    step = rows_per_chunk if rows_per_chunk > 0 else h
+    total = squares = 0
+    for r0 in range(0, h, step):
+        r1 = min(h, r0 + step)
+        p = gray.index_select(0, rows[r0 : r1 + 2]).index_select(1, cols).to(torch.int32)
+        lap = p[:-2, 1:-1] + p[2:, 1:-1] + p[1:-1, :-2] + p[1:-1, 2:] - 4 * p[1:-1, 1:-1]
+        lap64 = lap.to(torch.int64)
+        total += int(lap64.sum())
+        squares += int((lap64 * lap64).sum())
+    return h * w, total, squares
+
+
+def lap_sums(rgb: torch.Tensor, rows_per_chunk: int = 0) -> tuple[int, int, int]:
+    """:func:`lap_sums_gray` of the grey plane of an RGB frame."""
+    return lap_sums_gray(gray_u8(rgb), rows_per_chunk)
+
+
+def var_from_sums(n: int, total: int, squares: int) -> float:
+    """``crop_quality.laplacian_var``'s integer variance formula, rounded to 2 decimals."""
+    return round((n * squares - total * total) / (n * n), 2)
 
 
 def lap_var(rgb: torch.Tensor) -> float:
     """``crop_quality.laplacian_var`` of the grey plane of ``rgb``, rounded to 2 decimals."""
-    n, total, squares = lap_sums(rgb)
-    return round((n * squares - total * total) / (n * n), 2)
+    return var_from_sums(*lap_sums(rgb))
 
 
 def whole_frame_u8(frame: torch.Tensor, target: int = 336, mode: str = 'antialias') -> torch.Tensor:

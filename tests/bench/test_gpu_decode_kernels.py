@@ -93,6 +93,14 @@ def test_blur_variance_is_the_product_value(seed: int) -> None:
     assert k.lap_var(torch.from_numpy(photo[y1:y2, x1:x2])) == crop_lap_var(photo, box, 'rgb')
 
 
+@pytest.mark.parametrize('chunk', [1, 7, 50, 0])
+def test_chunked_laplacian_sums_are_exact(chunk: int) -> None:
+    rgb = np.random.default_rng(9).integers(0, 256, size=(61, 45, 3), dtype=np.uint8)
+    t = torch.from_numpy(rgb)
+    assert k.lap_sums(t, rows_per_chunk=chunk) == k.lap_sums(t)
+    assert k.var_from_sums(*k.lap_sums_gray(k.gray_u8(t), chunk)) == image_lap_var(rgb, 'rgb')
+
+
 def test_whole_frame_square_shape_and_dtype() -> None:
     rgb = _photo(900, 1600)
     for mode in ('antialias', 'area', 'dct8'):
