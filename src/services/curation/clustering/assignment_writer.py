@@ -14,6 +14,7 @@ in does not change what is stored.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import TransportError
@@ -27,7 +28,7 @@ from src.services.curation.clustering.cluster_write_guard import (
 
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable
 
     from opensearchpy import AsyncOpenSearch
 
@@ -49,6 +50,7 @@ BULK_BACKOFF_S = 0.5
 
 # (document id, cluster id to store, distance or None)
 Assignment = tuple[str, int, float | None]
+BodyFn = Callable[[Sequence[Any]], list[dict[str, Any]]]
 
 
 def _body(batch: Sequence[Assignment]) -> list[dict[str, Any]]:
@@ -65,8 +67,14 @@ def _status(item: dict[str, Any]) -> int | None:
     return action.get('status')
 
 
-async def send_batch(client: AsyncOpenSearch, op: str, batch: Sequence[Assignment]) -> None:
-    """Bulk-write one batch, retrying what OpenSearch rejects with 429.
+async def send_batch(
+    client: AsyncOpenSearch,
+    op: str,
+    batch: Sequence[Any],
+    body_fn: BodyFn = _body,
+) -> int:
+    """Bulk-write one batch (``body_fn`` turns items into actions), retrying what OpenSearch
+    rejects with 429; returns the number of items that failed.
 
     Any other item failure is logged and the pass proceeds (as it always has); any other
     request-level error propagates.
@@ -75,15 +83,15 @@ async def send_batch(client: AsyncOpenSearch, op: str, batch: Sequence[Assignmen
     for attempt in range(BULK_RETRIES + 1):
         last = attempt == BULK_RETRIES
         try:
-            resp = await client.bulk(body=_body(pending), refresh=False)
+            resp = await client.bulk(body=body_fn(pending), refresh=False)
         except TransportError as exc:
             if exc.status_code != 429 or last:
                 raise
             await asyncio.sleep(BULK_BACKOFF_S * 2**attempt)
             continue
         if not resp.get('errors'):
-            return
-        rejected: list[Assignment] = []
+            return 0
+        rejected: list[Any] = []
         other: list[dict[str, Any]] = []
         for assignment, item in zip(pending, resp.get('items') or [], strict=False):
             if _status(item) == 429 and not last:
@@ -91,10 +99,12 @@ async def send_batch(client: AsyncOpenSearch, op: str, batch: Sequence[Assignmen
             else:
                 other.append(item)
         _log_bulk_write_errors(op, {'items': other})
+        failed = sum(1 for item in other if (next(iter(item.values()), {}) or {}).get('error'))
         if not rejected:
-            return
+            return failed
         pending = rejected
         await asyncio.sleep(BULK_BACKOFF_S * 2**attempt)
+    return 0
 
 
 class AssignmentWriter:
@@ -111,9 +121,12 @@ class AssignmentWriter:
         op: str,
         *,
         concurrency: int = BULK_CONCURRENCY,
+        body_fn: BodyFn = _body,
     ) -> None:
         self._client = client
         self._op = op
+        self._body_fn = body_fn
+        self.n_failed = 0
         self._slots = asyncio.Semaphore(max(1, concurrency))
         self._tasks: set[asyncio.Task[None]] = set()
         self._error: BaseException | None = None
@@ -128,7 +141,7 @@ class AssignmentWriter:
             return
         await self._drain()
 
-    async def submit(self, batch: Sequence[Assignment]) -> None:
+    async def submit(self, batch: Sequence[Any]) -> None:
         await self._slots.acquire()
         if self._error is not None:
             self._slots.release()
@@ -137,9 +150,9 @@ class AssignmentWriter:
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
-    async def _send(self, batch: Sequence[Assignment]) -> None:
+    async def _send(self, batch: Sequence[Any]) -> None:
         try:
-            await send_batch(self._client, self._op, batch)
+            self.n_failed += await send_batch(self._client, self._op, batch, self._body_fn)
             self.n_written += len(batch)
         except Exception as exc:
             self._error = self._error or exc
@@ -169,9 +182,9 @@ def batch_size(n_rows: int, concurrency: int = BULK_CONCURRENCY) -> int:
     return max(BULK_CHUNK_MIN, min(BULK_CHUNK, -(-n_rows // max(1, concurrency))))
 
 
-def batches(rows: Iterable[Assignment], size: int = BULK_CHUNK) -> Iterable[list[Assignment]]:
+def batches(rows: Iterable[Any], size: int = BULK_CHUNK) -> Iterable[list[Any]]:
     """``rows`` in order, ``size`` at a time."""
-    batch: list[Assignment] = []
+    batch: list[Any] = []
     for row in rows:
         batch.append(row)
         if len(batch) >= size:
