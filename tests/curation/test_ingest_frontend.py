@@ -85,8 +85,18 @@ def _gpu_service(
         w, h = sizes[data]
         return _frontend_result(w, h, status)
 
+    triton.loaded = []
+
+    async def is_model_ready(model: str) -> bool:
+        return model in triton.loaded
+
+    async def load_model(model: str) -> None:
+        triton.loaded.append(model)
+
     triton.get_model_parameters = get_model_parameters
     triton.stream_one = stream_one
+    triton.is_model_ready = is_model_ready
+    triton.load_model = load_model
     return svc, os_fake, triton, calls, sizes
 
 
@@ -115,6 +125,7 @@ async def test_a_photo_above_the_gate_is_ingested_from_the_front_end(tmp_path) -
     assert item['class_name'] == 'widget'
     assert (tmp_path / 'crops' / f'{crop_id}.jpg').read_bytes() == b'\xff\xd8crop'
     assert triton.calls.count('primary_end2end') == 1  # the CPU detector ran for the small one only
+    assert triton.loaded == [ingest_frontend.FRONTEND_MODEL]  # loaded on first use, once
 
 
 @pytest.mark.asyncio
@@ -159,3 +170,4 @@ async def test_front_end_off_never_calls_the_model(tmp_path) -> None:
     await svc.ingest_batch([big], ['/x/o.jpg'])
     assert calls == []
     assert triton.calls == ['primary_end2end']
+    assert triton.loaded == []

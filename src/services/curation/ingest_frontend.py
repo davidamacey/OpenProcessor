@@ -104,6 +104,9 @@ async def frontend_ready(service: CurationIngestService) -> bool:
         return cached
     ready = False
     try:
+        if not await service.triton_pool.is_model_ready(FRONTEND_MODEL):
+            # Not in Triton's default load list: it holds GPU memory only where it is used.
+            await service.triton_pool.load_model(FRONTEND_MODEL)
         params = await service.triton_pool.get_model_parameters(FRONTEND_MODEL)
         expected = {
             'DETECTOR_MODEL': profile.detector_model,

@@ -426,6 +426,12 @@ class AsyncTritonPool:
             logger.warning(f'is_model_ready({model_name!r}) failed: {e}')
             return False
 
+    async def load_model(self, model_name: str) -> None:
+        """Ask the server (explicit model control) to load ``model_name``; raises on failure."""
+        if not self._initialized:
+            raise RuntimeError('AsyncTritonPool not initialized. Call initialize() first.')
+        await self._clients[0].load_model(model_name)
+
     async def close(self) -> None:
         """Close all client connections."""
         if not self._initialized:
