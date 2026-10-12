@@ -55,6 +55,12 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   neighbour overlap, cluster agreement and purity against the COCO ground truth, label agreement),
   applies the thresholds of `scripts/bench/parity_gates.json` and exits non-zero on failure. The
   FP32 against FP16 PE engine results are in `docs/PERFORMANCE.md` (#208).
+- Measured INT8 evaluation of the PE image encoder on Ampere (RTX A6000 and RTX 3080 Ti), recorded in
+  `docs/PERFORMANCE.md` and `docs/benchmarks/int8_pe_eval.json`. Result: explicit Q/DQ INT8 is
+  1.2-1.4x faster than FP16 but fails the parity gates (crop cosine median 0.94-0.99 against 0.999,
+  neighbour overlap 0.52-0.82 against 0.95), and weight-only INT8 passes the gates with no speed or
+  size gain. INT8 is not offered; FP16 stays the only PE precision and no code changed (#213).
+
 ### Changed
 
 - `scripts/curation/ingest_walker.py` is replaced by `scripts/curation/bulk_ingest.py` (`--folder` instead of
