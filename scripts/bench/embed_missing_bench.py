@@ -38,6 +38,7 @@ from scripts.bench.suite_lib import triton_stats_delta
 from scripts.bench.suite_probes import Gauges, cgroup_cpu_s, chunks, triton_snapshot
 from scripts.curation._project_worker_utils import curation_api_prefix, scoped_url
 from scripts.datasets.bench_set import load_pin
+from src.config.settings import TritonModelConfig
 
 
 POLL_S = 1.0
@@ -75,7 +76,7 @@ def embed_run(client: httpx.Client, base: str, triton_url: str, gpu: str, projec
         'api_cores': api_cpu / wall,
         'status': (job or {}).get('status', 'inline'),
         'failed': (job or {}).get('images_failed', 0),
-        'pe': delta.get('pe_image_encoder', {}),
+        'pe': delta.get(TritonModelConfig.PE_IMAGE_MODEL, {}),
         **gauges.result(),
     }
 

@@ -2306,8 +2306,7 @@ tightly: two 20-row requests do not share a batch), and the request p95 moved up
 "off" row is a later series than the first 4-client row above (21.43); the 6 percent between the
 two is the drift between series on a shared host, not a code difference (ingest code is identical),
 which is why the on/off comparison was taken in the same series. The deterministic-output rule held (below), but a
-negative result ships no code: `src/clients/pe_batcher.py` and the `OP_PE_BATCH_MAX_WAIT_MS` setting
-were deleted. Acceptance (PE requests per image below 0.3 from 2.07, throughput not lower) is
+negative result ships no code: the batcher module and its wait setting were deleted. Acceptance (PE requests per image below 0.3 from 2.07, throughput not lower) is
 therefore not met for ingest, and not wanted: requests per image is not what limits ingest.
 
 #### The embed pass (what shipped)
