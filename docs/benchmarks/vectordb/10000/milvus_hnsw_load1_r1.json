@@ -1,0 +1,67 @@
+{
+ "arm": "milvus_hnsw",
+ "config": {
+  "store": "milvus",
+  "index": "HNSW",
+  "grid": [
+   {
+    "ef": 16
+   },
+   {
+    "ef": 32
+   },
+   {
+    "ef": 64
+   },
+   {
+    "ef": 128
+   },
+   {
+    "ef": 256
+   },
+   {
+    "ef": 512
+   }
+  ]
+ },
+ "size": 10000,
+ "dim": 1024,
+ "started": "2026-10-12T00:44:10-0400",
+ "repetition": 1,
+ "image": {
+  "image": "milvusdb/milvus:v2.6.25",
+  "id": "sha256:e7d72d359de8f1525eaa35f5172dd3830dcb39a53dfe33bc845d97bca5277ca6",
+  "repo_digests": "milvusdb/milvus@sha256:29f7668e64df1c6d5cdadbfbee99f38c72e4001054f149a298725acae57230ad"
+ },
+ "host": {
+  "load": {
+   "before": {
+    "load1": 25.4736328125,
+    "load5": 22.99072265625,
+    "load15": 22.9052734375,
+    "host_cpu_busy_pct": 79.5,
+    "cores": 48
+   },
+   "after": {
+    "load1": 26.62890625,
+    "load5": 23.6689453125,
+    "load15": 23.142578125,
+    "host_cpu_busy_pct": 31.0,
+    "cores": 48
+   },
+   "seconds": 30.612838936969638
+  }
+ },
+ "load": {
+  "cgroup_anon_before_bytes": 79155200,
+  "cgroup_shmem_before_bytes": 0,
+  "data_dir_before_bytes": 144935089,
+  "threads": 1,
+  "batch": 1000,
+  "load_s": 2.407550279982388,
+  "finish_s": 26.42460210295394,
+  "searchable_s": 28.83215238293633,
+  "vectors_per_s": 4153.599649878612,
+  "vectors_per_s_to_searchable": 346.83501485370476
+ }
+}

@@ -1,6 +1,6 @@
 # v0.6.0 vector store evaluation plan
 
-Status: plan (nothing implemented). Issue: #221 (work package WP-V of
+Status: measured at 2k, 10k and 100k real vectors (section 10); 1M not run. Issue: #221 (work package WP-V of
 [v060_wave_plan.md](v060_wave_plan.md)); its OpenSearch-tuning arm is #56. Measurement only: no
 datastore change ships from this plan without an explicit owner decision.
 
@@ -185,7 +185,23 @@ plan (kNN overlap@10 against the float32 reference >= 0.95 on the review-default
 
 ## 10. Results
 
-Empty until V.3. Record the hardware, versions and digests with every table.
+Measured on 2,000, 10,000 and 100,000 real PE-Core embeddings of pinned public COCO images
+(`docs/PERFORMANCE.md`, "Vector store evaluation"; raw JSON, versions and digests in
+`docs/benchmarks/vectordb/`; harness `scripts/bench/vectordb/`). D1M was not run.
+
+Deviations from this plan: crops come from COCO ground-truth boxes, not a detector run, at 6.5
+vectors per image; ground truth is exact on the CPU, not FAISS on GPU 0; 120 and 300 queries per point;
+three whole-arm repetitions for the headline arms only; no GPU index arms.
+
+Decision memo (section 8): no split. At 100k the best other engine ties the best tuned OpenSearch
+on p95 at recall@10 >= 0.95 on the review-default filter (7.3 against 7.0 to 8.1 ms), storage plus RAM
+per vector is not 40 percent lower anywhere (Lucene engine 7.0 KiB, `on_disk` 16x 7.6 KiB, best other 11
+KiB), and OpenSearch's in-place 100k `cluster_id` rewrite already meets the 60 s limit (35 to 52 s).
+Milvus leads on concurrent QPS (1.7 times) and on query latency under inserts. Result for #56 and
+V3: the Lucene engine for new project indexes (half the disk, no native graph memory, filtered recall
+0.97 to 1.0 where merged faiss reads 0.91 at 2.6 percent selectivity) and `ef_construction` 128 (merge 4
+times faster) are the candidate work packages, each needing the product-stack parity gate; neither is
+shipped by the evaluation.
 
 ## 11. Owner decisions and open questions
 
