@@ -3079,7 +3079,7 @@ ingest crops the detector's pixel box, which can extend past the frame, and Pill
 black; the stored `bbox_norm` is clamped to the frame, so the re-embed crops less. The padding cannot be
 recovered from the stored box, so matching ingest would change stored vectors: reported, not changed.
 
-#### Not measured
+#### Not measured in the stage 2 pass
 
 - Two cards: the second A6000 held 56 to 100 percent foreign utilisation in every window; the 44.6 images/s
   of the multi-GPU section was taken before the half-split engine.

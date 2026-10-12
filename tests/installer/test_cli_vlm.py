@@ -500,7 +500,8 @@ def test_models_status_prints_the_engine_build_stamp(shimmed: Shimmed, stack: Pa
     )
     result = cli(shimmed, stack, 'models', 'status')
     assert 'Engine build stamps' in result.stdout
-    assert 'pe_image_encoder: fp16, TensorRT v110100, compute capability 8.6, ONNX ab12cd34ef56' in (
-        result.stdout
+    assert (
+        'pe_image_encoder: fp16, TensorRT v110100, compute capability 8.6, ONNX ab12cd34ef56'
+        in (result.stdout)
     )
     assert 'Degraded precision' not in result.stdout
