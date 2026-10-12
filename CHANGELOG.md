@@ -101,7 +101,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   MP photos: 1.3x the images/s with detection and embedding, 1.55x detection only, 2.5x for one client,
   a third of the host CPU. Smaller images and any file the front end declines (progressive, truncated,
   not a baseline JPEG) take the CPU path, counted in the new `op_ingest_decode_total{route}`. It changes
-  the decoder's numerics once; `scripts/bench/detector_capture.py` gains a front-end mode and the
+  the decoder's numerics once, AP-neutral on COCO (0.4378 against 0.4376); `scripts/bench/detector_capture.py` gains a front-end mode and the
   benchmark suites an `--embedding-mode` (#217).
 
 ### Changed

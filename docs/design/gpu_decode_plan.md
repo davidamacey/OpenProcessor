@@ -791,6 +791,13 @@ repetitions at the bulk points and the latency points, median (min-max):
 
 PE on the same card while the front end works through set B: 223 to 213 inferences/s (-4.5 %).
 
+Accuracy (one capture and one AP check, on the shipped configuration):
+
+| Check | Result |
+|---|---|
+| Parity, `ref-ship` (front end on, gate 3 MP, so COCO frames take the CPU single decode) against `ref-u8fp16`, `precision` profile | every gate passes (P-box 0.994, P-pe p01 0.9998, P-knn 0.982, P-cluster-assign 0.999, P-label-vote 0.993, kNN precision and cluster purity up 0.09 and 0.35 points) except P-pew (whole-frame p01 0.65, median 0.82): the new whole-frame space of D2, as section 3 measured. `ref-ship` is the new reference; report in `docs/benchmarks/parity/decode_once_vs_ref/` |
+| AP of the GPU decode, all 2,000 COCO frames through the front end against the CPU decode, same engine, confidence 0.4 | AP 0.4378 against 0.4376, AP50 0.5705 against 0.5701, recall 0.5508 against 0.5505, precision 0.8571 against 0.8576; of 9,659 matched boxes 846 moved, 317 closer to the truth and 330 farther (mean IoU change +0.0007): AP-neutral, the D1 condition. Report in `docs/benchmarks/parity/detector_quality_gpu_decode/` |
+
 Go / no-go:
 
 - **CPU single decode alone: no-go as a speed-up** (1.0x at bulk, under the 1.5x bar); it stays as
