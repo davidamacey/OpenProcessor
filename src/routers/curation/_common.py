@@ -163,7 +163,9 @@ async def warm_knn_indexes(opensearch: Any) -> None:
     Without this, the first semantic-search / kNN query after a
     restart (or after a shard relocation) pays the cost of loading the
     faiss/HNSW graph off disk cold. The warmup endpoint forces that load
-    to happen once, up front, off the request path.
+    to happen once, up front, off the request path. It only loads native
+    (faiss) graphs, so it is a no-op for a project created on the Lucene
+    engine, whose graph is read with the segment.
 
     Callers should fire this via ``asyncio.create_task`` at startup — it
     must never block app boot, and a failure (endpoint unavailable,
