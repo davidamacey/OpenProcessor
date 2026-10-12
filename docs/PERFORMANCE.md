@@ -1915,6 +1915,331 @@ rounds to FP16 once, which is where the 0.9999 and the 98 percent box identity c
 - The `DELETE /curation/projects/{project}` 409 seen once at the end of a batch series is not
   diagnosed here.
 
+### Vector store evaluation: tuned OpenSearch against Milvus, Qdrant, pgvector and LanceDB (#221, #230)
+
+Question: is OpenSearch k-NN the right engine for the curation embedding index, or is a second
+store worth its cost? Protocol: [v060_vector_db_evaluation_plan.md](design/v060_vector_db_evaluation_plan.md).
+Raw documents: `docs/benchmarks/vectordb/` (one JSON per size, arm and repetition, plus
+`environment.json` with versions, digests and the deviations from the plan). Harness:
+`scripts/bench/vectordb/`, compose file `docker/bench/vectordb/compose.yml`.
+
+#### Setup
+
+- **Data: real embeddings only.** The product's PE-Core-L14-336 image tower (FP16, GPU 1) over
+  19,000 pinned public COCO 2017 images: one whole-frame vector plus one crop per ground-truth box
+  (largest first, at most 12, shorter side at least 10 px), 6.5 vectors per image, 1024 dimensions,
+  L2-normalized. 114,987 vectors are indexed; 1,300 held-out images supply 1,000 query vectors and
+  7,299 vectors for the streaming phase. Rungs of 2,000, 10,000 and 100,000 vectors are nested
+  prefixes. Every row below is `real`; no noise-expanded or random vectors were used. **1M was not
+  run**: the real set is 115k vectors, and embedding about 0.9M COCO vectors needs a 20 GB image
+  download and a GPU for hours, which this run did not do. Every 1M figure below is a linear
+  extrapolation and is labelled as such.
+- **Filters** as the product builds them: none; `project` (9.9 percent); project + class (2.6);
+  review default (project, not validated, not test holdout, not dismissed; 8.3); project +
+  `cluster_id` (0.06); a selectivity sweep at 50, 10, 1 and 0.1 percent. The filter fields other
+  than the COCO class are synthetic and seeded (plan section 3); `cluster_id` is a 512-way k-means
+  of the vectors. Exact cosine top-100 per query per filter is the ground truth.
+- **Engines**, each alone in a fresh container (16 cores, 64 GB cgroup, loopback only, no GPU):
+  OpenSearch 3.6.0 (8 GB heap), Milvus 2.6.25 standalone (embedded etcd, local storage), Qdrant
+  1.19.2, pgvector 0.8.7 on PostgreSQL 17 (16 GB shared buffers), LanceDB 0.40.0 (embedded), plus an
+  exact flat scan as the reference. HNSW arms use `m` 16 and `ef_construction` 512 unless named.
+- **Operating point.** For every filter the cheapest grid setting (`ef`, `nprobe`) whose recall@10
+  reaches 0.95 on 120 queries is used for the timed runs (300 queries, 3 repetitions on the
+  QPS filters). The grid floor is 16, and most engines reach 0.95 there on this data: recall is
+  not the binding constraint, per-query overhead is. Recall is re-measured on 300 queries, so a row
+  can read slightly under 0.95 (sampling error of a few thousandths).
+- **Noise.** The host is shared: load average 10 to 195 and 25 to 100 percent whole-host CPU during
+  the runs. The headline arms have 3 whole-arm repetitions at 100,000 (cells show median and
+  min-max); secondary arms and the 2,000 / 10,000 rungs have one. A difference is claimed only when
+  the ranges do not overlap. Some runs overlapped by mistake and were re-run (see
+  `environment.json`); the small rungs show shape, not precise latency.
+
+#### Write throughput, storage and memory at 100,000 vectors (real)
+
+"Load" is the client-side send (bodies encoded before the clock starts); "to searchable" includes
+refresh, merge or index build. LanceDB appends are cheap and the index build is its cost, so its
+load column is not comparable; use "vectors per second including index build". Disk is the data
+directory growth (container volume) and the engine's own figure where it reports one; RAM is the
+growth of the container's anonymous plus shared memory after load (OpenSearch heap is a fixed
+8 GB and not included).
+
+| Arm | load vec/s (8 clients) | to searchable s | vec/s incl. index build | disk KiB/vec (dir) | disk KiB/vec (engine) | RAM KiB/vec | runs |
+|---|---|---|---|---|---|---|---|
+| os_shipped | 2822 (2658-3470) | 117 (102-124) | 855 (809-984) | 8.20 (8.19-8.20) | 10.99 (8.19-11.00) | 6.99 (6.94-7.71) | 3 |
+| os_shipped_merged | 3319 (3130-3647) | 386 (360-428) | 259 (233-278) | 8.20 (8.20-8.20) | 8.20 (8.20-8.20) | 7.72 (7.53-7.99) | 3 |
+| os_efc128 | 3117 | 102 | 982 | 8.20 | 8.20 | 7.43 | 1 |
+| os_m32 | 3373 | 407 | 246 | 8.32 | 8.32 | 8.37 | 1 |
+| os_lucene | 2071 (1662-2259) | 434 (401-513) | 230 (195-249) | 4.10 (4.10-4.10) | 4.10 (4.10-12.14) | 2.87 (2.43-3.40) | 3 |
+| os_fp16 | 2493 | 355 | 282 | 6.20 | 10.24 | 6.31 | 1 |
+| os_disk8x | 3973 | 109 | 920 | 4.70 | 4.70 | 3.64 | 1 |
+| os_disk16x | 4191 | 81 | 1242 | 4.45 | 4.45 | 3.18 | 1 |
+| os_disk32x | 4283 | 78 | 1284 | 4.34 | 8.53 | 2.52 | 1 |
+| milvus_hnsw | 5423 (4997-6323) | 107 (93-109) | 930 (916-1077) | 23.44 (21.21-23.44) | n/a | 6.32 (5.93-6.36) | 3 |
+| milvus_ivf_sq8 | 5243 | 58 | 1721 | 16.26 | n/a | 10.74 | 1 |
+| qdrant_hnsw | 500 (500-551) | 215 (215-238) | 465 (420-466) | 10.71 (9.95-12.32) | n/a | 0.76 (0.73-0.93) | 3 |
+| qdrant_deferred | 456 | 307 | 325 | 11.01 | n/a | 0.64 | 1 |
+| qdrant_int8 | 532 | 203 | 492 | 10.97 | n/a | 4.24 | 1 |
+| pg_vector | 9661 (6065-10941) | 74 (74-98) | 1351 (1019-1352) | 22.57 (22.57-22.57) | 13.55 (13.55-13.55) | 13.56 (13.56-13.56) | 3 |
+| pg_halfvec | 15798 | 53 | 1879 | 10.30 | 5.55 | 5.56 | 1 |
+| lance_ivfpq | 305789 (302346-330029) | 79 (78-80) | 1269 (1253-1276) | n/a | 8.50 (8.50-8.50) | n/a | 3 |
+| lance_hnsw_sq | 34852 | 62 | 1604 | n/a | 11.53 | n/a | 1 |
+| ref_flat | 11836 | 9 | 11190 | n/a | 4.00 | n/a | 1 |
+
+Footnotes: `os_shipped` is the product's index as built (no forced merge, 13 segments); the other
+OpenSearch arms are force-merged to one segment as the storage document's settle rule says.
+`os_lucene` is the Lucene HNSW engine (same `m` and `ef_construction`, cosine). The `on_disk` arms use
+OpenSearch's quantized mode with default rescoring. `qdrant_deferred` builds the graph after the load
+(the documented bulk path); `qdrant_hnsw` indexes while loading, which is why its load is slow.
+pgvector builds the HNSW index after a `COPY`, and its RAM column is `shared_buffers` holding the
+table and index; pgvector's data directory includes WAL. Milvus's directory holds binlogs, index
+files and the write-ahead log, which is why it is 3 times OpenSearch (it is a deployment cost, not
+the index alone); on the smaller rungs the fixed overhead of Milvus and Qdrant dominates.
+
+#### Query latency at the recall target, review-default filter (8.3 percent), 100,000 vectors (real)
+
+Single client, k = 10, concurrency 1 for latency and 8 / 32 client threads for QPS (the Python client
+may bind the QPS columns above about 800). `recall@100` is measured at the cheapest setting that
+reaches 0.95 at k = 100.
+
+| Arm | setting | recall@10 | p50 ms | p95 ms | QPS c8 | QPS c32 | recall@100 |
+|---|---|---|---|---|---|---|---|
+| os_shipped | {"ef_search": 16} | 1.000 (1.000-1.000) | 8.4 (8.3-8.5) | 9.6 (9.5-9.9) | 336 (331-362) | 347 (344-369) | 1.000 (1.000-1.000) ({"ef_search": 16}) |
+| os_shipped_merged | {"ef_search": 100} | 0.967 (0.967-0.971) | 6.6 (6.1-6.9) | 8.1 (8.0-10.5) | 423 (365-448) | 387 (372-408) | 0.939 (0.935-0.940) ({"ef_search": 512}) |
+| os_efc128 | {"ef_search": 100} | 0.957 | 6.3 | 7.0 | 366 | 369 | 0.911 ({"ef_search": 512}) |
+| os_m32 | {"ef_search": 64} | 0.951 | 6.2 | 7.5 | 398 | 355 | 0.957 ({"ef_search": 512}) |
+| os_lucene | {"ef_search": 16} | 0.997 (0.997-0.998) | 6.9 (6.1-7.3) | 8.8 (8.8-11.1) | 403 (344-414) | 392 (360-395) | 0.999 (0.999-0.999) ({"ef_search": 16}) |
+| os_fp16 | {"ef_search": 100} | 0.963 | 6.6 | 8.1 | 382 | 371 | 0.937 ({"ef_search": 512}) |
+| os_disk8x | {"ef_search": 128} | 0.952 | 6.0 | 7.5 | 370 | 388 | 0.851 ({"ef_search": 512}) |
+| os_disk16x | {"ef_search": 128} | 0.945 | 5.6 | 7.8 | 388 | 394 | 0.857 ({"ef_search": 512}) |
+| os_disk32x | {"ef_search": 16} | 0.976 | 6.1 | 8.2 | 384 | 441 | 0.933 ({"ef_search": 512}) |
+| milvus_hnsw | {"ef": 16} | 0.954 (0.948-0.973) | 8.0 (7.2-8.1) | 9.8 (9.7-10.3) | 741 (568-747) | 726 (580-800) | 0.964 (0.964-0.986) ({"ef": 16}) |
+| milvus_ivf_sq8 | {"nprobe": 32} | 0.958 | 7.8 | 9.5 | 896 | 819 | 0.978 ({"nprobe": 128}) |
+| qdrant_hnsw | {"hnsw_ef": 16} | 1.000 (0.995-1.000) | 6.4 (6.2-7.6) | 7.3 (7.2-8.4) | 293 (286-298) | 293 (290-311) | 1.000 (0.999-1.000) ({"hnsw_ef": 16}) |
+| qdrant_int8 | {"hnsw_ef": 16} | 1.000 | 4.5 | 6.3 | 317 | 319 | 1.000 ({"hnsw_ef": 16}) |
+| pg_vector | {"ef_search": 16} | 1.000 (1.000-1.000) | 48.0 (47.3-50.3) | 52.2 (49.2-56.7) | 131 (130-135) | 103 (100-105) | 1.000 (1.000-1.000) ({"ef_search": 16}) |
+| pg_halfvec | {"ef_search": 16} | 0.988 | 4.9 | 9.5 | 903 | 747 | 1.000 ({"ef_search": 16}) |
+| lance_ivfpq | {"nprobes": 10, "refine": 10} | 0.977 (0.967-0.990) | 29.5 (29.5-30.4) | 33.9 (31.9-34.5) | 228 (210-246) | 275 (244-287) | 0.990 (0.987-0.994) ({"nprobes": 10, "refine": 10}) |
+| lance_hnsw_sq | {"nprobes": 10, "ef": 64} | 0.986 | 13.6 | 18.8 | 175 | 264 | 0.990 ({"nprobes": 10, "ef": 64}) |
+| ref_flat | {} | 1.000 | 9.5 | 12.9 | 271 | 319 | 1.000 ({}) |
+
+#### Filtered search: recall@10 per filter (median and min-max of the runs), 100,000 vectors (real)
+
+| filter | selectivity | os_shipped | os_shipped_merged | os_lucene | milvus_hnsw | qdrant_hnsw | pg_vector | lance_ivfpq |
+|---|---|---|---|---|---|---|---|---|
+| none | 100.00% | 0.987 (0.982-0.988) | 0.973 (0.972-0.976) | 0.978 (0.977-0.982) | 0.975 (0.954-0.979) | 0.991 (0.989-0.992) | 0.946 (0.946-0.981) | 0.956 (0.955-0.962) |
+| project | 9.90% | 1.000 (1.000-1.000) | 0.977 (0.975-0.980) | 0.993 (0.993-0.994) | 0.955 (0.952-0.975) | 0.999 (0.998-1.000) | 1.000 (1.000-1.000) | 0.974 (0.970-0.985) |
+| project_class | 2.56% | 1.000 (1.000-1.000) | 0.912 (0.908-0.917) | 1.000 (0.999-1.000) | 1.000 (1.000-1.000) | 1.000 (1.000-1.000) | 1.000 (1.000-1.000) | 0.969 (0.958-0.980) |
+| review_default | 8.30% | 1.000 (1.000-1.000) | 0.967 (0.967-0.971) | 0.997 (0.997-0.998) | 0.954 (0.948-0.973) | 1.000 (0.995-1.000) | 1.000 (1.000-1.000) | 0.977 (0.967-0.990) |
+| project_cluster | 0.06% | 0.995 (0.995-0.995) | 0.995 (0.995-0.996) | 0.997 (0.995-0.997) | 0.998 (0.995-0.998) | 0.996 (0.995-0.997) | 0.995 (0.995-0.995) | 0.995 (0.995-0.995) |
+| sel50 | 49.85% | 0.982 (0.981-0.988) | 0.959 (0.959-0.966) | 0.969 (0.962-0.969) | 0.958 (0.953-0.971) | 0.980 (0.979-0.994) | 0.963 (0.962-0.965) | 0.968 (0.964-0.973) |
+| sel10 | 9.96% | 1.000 (1.000-1.000) | 0.975 (0.974-0.978) | 0.995 (0.995-0.995) | 0.947 (0.940-0.962) | 0.999 (0.998-1.000) | 0.989 (0.988-0.990) | 0.975 (0.972-0.987) |
+| sel1 | 0.99% | 1.000 (1.000-1.000) | 1.000 (1.000-1.000) | 1.000 (1.000-1.000) | 1.000 (1.000-1.000) | 1.000 (1.000-1.000) | 0.997 (0.997-0.997) | 0.984 (0.982-0.991) |
+| sel01 | 0.10% | 1.000 (1.000-1.000) | 1.000 (1.000-1.000) | 1.000 (1.000-1.000) | 1.000 (1.000-1.000) | 1.000 (1.000-1.000) | 0.999 (0.998-0.999) | 1.000 (1.000-1.000) |
+
+Selectivity of `project_cluster` came out at 0.06 percent (the busiest cluster of project 0), below
+the plan's 0.2.
+
+p95 latency (ms) of the same runs:
+
+| filter | selectivity | os_shipped | os_shipped_merged | os_lucene | milvus_hnsw | qdrant_hnsw | pg_vector | lance_ivfpq |
+|---|---|---|---|---|---|---|---|---|
+| none | 100.00% | 8.5 (7.9-8.7) | 7.0 (6.7-7.4) | 6.7 (6.1-6.7) | 5.4 (5.1-5.6) | 5.6 (5.2-6.4) | 1.9 (1.5-2.3) | 33.0 (31.5-39.5) |
+| project | 9.90% | 10.2 (9.3-14.8) | 7.8 (7.6-16.3) | 8.9 (8.8-9.1) | 6.4 (5.9-8.4) | 7.2 (7.0-7.3) | 62.5 (59.5-98.3) | 34.9 (34.1-37.1) |
+| project_class | 2.56% | 7.3 (7.3-7.8) | 12.8 (12.4-23.1) | 11.1 (11.1-12.0) | 8.2 (8.0-8.2) | 5.6 (5.0-7.4) | 20.3 (18.1-34.4) | 29.0 (28.3-29.5) |
+| review_default | 8.30% | 9.6 (9.5-9.9) | 8.1 (8.0-10.5) | 8.8 (8.8-11.1) | 9.8 (9.7-10.3) | 7.3 (7.2-8.4) | 52.2 (49.2-56.7) | 33.9 (31.9-34.5) |
+| project_cluster | 0.06% | 6.3 (6.0-6.9) | 6.1 (5.3-7.4) | 7.6 (7.3-7.8) | 5.6 (5.3-5.8) | 4.0 (4.0-4.6) | 2.0 (1.6-2.2) | 19.1 (16.1-20.4) |
+| sel50 | 49.85% | 10.1 (10.0-10.5) | 7.1 (6.7-7.5) | 6.6 (6.5-7.0) | 11.6 (11.0-12.1) | 6.0 (5.3-6.0) | 2.4 (2.1-2.4) | 72.4 (71.8-72.5) |
+| sel10 | 9.96% | 10.3 (9.3-10.4) | 7.4 (6.7-7.8) | 8.2 (8.0-8.4) | 7.2 (7.2-7.3) | 7.2 (6.9-7.7) | 5.4 (4.7-5.4) | 51.0 (34.9-79.3) |
+| sel1 | 0.99% | 7.2 (6.4-7.3) | 7.2 (6.8-8.9) | 8.1 (7.6-8.1) | 6.4 (6.3-6.7) | 4.5 (4.0-5.6) | 28.9 (28.4-30.0) | 28.0 (26.4-54.1) |
+| sel01 | 0.10% | 6.6 (6.3-6.8) | 6.4 (5.7-11.5) | 7.6 (7.4-7.7) | 5.6 (5.3-6.4) | 4.1 (4.1-6.5) | 144.9 (143.5-151.3) | 22.8 (21.5-49.3) |
+
+#### Metadata rewrite, streaming insert and delete, 100,000 vectors (real)
+
+`cluster_id` rewritten for 12.8k and for all 100k vectors (the cluster pass write-back), review-default
+queries running throughout; then 200 vectors per second inserted for 20 s next to 4 query clients
+(p95 ratio is mixed over idle); then the 10 percent project deleted and the store settled. LanceDB's
+settle row reflects `optimize` with version cleanup. Only the headline arms ran these phases.
+
+| Arm | rewrite 12.8k s | rewrite 100k s | recall@10 during | p95 ms during | stream vec/s achieved | p95 mixed / idle | delete 10% s | MiB before delete | MiB after settle |
+|---|---|---|---|---|---|---|---|---|---|
+| lance_ivfpq | 1.2 (1.2-1.2) | 3.7 (3.4-4.0) | 0.980 (0.976-0.985) | 89.2 (80.4-98.1) | 201 (201-201) | 1.03 (1.01-1.05) | 0.0 (0.0-0.1) | 1291 (1291-1291) | 397 (397-397) |
+| milvus_hnsw | 2.1 (2.1-2.2) | 12.2 (11.4-13.0) | 0.976 (0.973-0.978) | 17.6 (17.4-17.9) | 199 (197-201) | 0.85 (0.67-1.03) | 1.7 (1.6-1.8) | 4772 (4707-4837) | 5027 (4947-5107) |
+| os_lucene | 6.5 | 43.0 | 1.000 | 21.6 | 200 | 2.10 | 1.9 | 2257 | 1097 |
+| os_shipped_merged | 7.8 (6.9-8.6) | 43.4 (35.1-51.6) | 0.982 (0.981-0.984) | 21.5 (16.5-26.4) | 176 (153-199) | 2.01 (1.90-2.11) | 3.6 (2.9-4.3) | 2689 (2418-2960) | 760 (756-764) |
+| os_shipped | 6.0 (5.9-6.1) | 44.4 (38.4-50.4) | 1.000 (1.000-1.000) | 16.8 (13.8-19.9) | 196 (192-200) | 1.96 (1.85-2.06) | 2.2 (2.1-2.4) | 2266 (2181-2351) | 1670 (1600-1740) |
+| pg_vector | 25.8 (25.0-26.7) | 202.4 (199.6-205.1) | 0.991 (0.991-0.991) | 31.3 (12.4-50.2) | 137 (123-151) | 1.82 (1.79-1.85) | 0.2 (0.2-0.2) | 2425 (2422-2428) | 2497 (2486-2508) |
+| qdrant_hnsw | 62.7 (54.8-70.6) | 148.9 (136.2-161.6) | 0.998 (0.996-1.000) | 13.1 (12.2-14.0) | 200 (200-200) | 2.39 (2.28-2.51) | 1.8 (1.1-2.5) | 1206 (1205-1208) | 1243 (1208-1278) |
+
+#### Scale rungs (review-default filter: recall@10 / p95 / QPS at 8 clients / disk per vector)
+
+2,000 and 10,000 vectors have one run per arm; the disk column of Milvus and Qdrant at those sizes
+is fixed overhead, not per-vector cost. All rows real.
+
+| arm | 2,000 vectors | 10,000 vectors | 100,000 vectors |
+|---|---|---|---|
+| os_shipped | 1.000 / 5.9 ms / 365 QPS / 8.2 KiB | 1.000 / 6.5 ms / 386 QPS / 5.9 KiB | 1.000 (1.000-1.000) / 9.6 (9.5-9.9) ms / 336 (331-362) QPS / 11.0 (8.2-11.0) KiB |
+| os_shipped_merged | 1.000 / 5.5 ms / 421 QPS / 8.2 KiB | 1.000 / 7.3 ms / 384 QPS / 8.2 KiB | 0.967 (0.967-0.971) / 8.1 (8.0-10.5) ms / 423 (365-448) QPS / 8.2 (8.2-8.2) KiB |
+| os_lucene | 1.000 / 7.5 ms / 391 QPS / 4.1 KiB | 1.000 / 5.9 ms / 512 QPS / 4.1 KiB | 0.997 (0.997-0.998) / 8.8 (8.8-11.1) ms / 403 (344-414) QPS / 4.1 (4.1-12.1) KiB |
+| milvus_hnsw | 0.978 / 6.3 ms / 904 QPS / 86.4 KiB | 0.969 / 7.0 ms / 923 QPS / 29.8 KiB | 0.954 (0.948-0.973) / 9.8 (9.7-10.3) ms / 741 (568-747) QPS / 24.9 (22.6-24.9) KiB |
+| qdrant_hnsw | 1.000 / 3.8 ms / 378 QPS / 480.3 KiB | 1.000 / 6.7 ms / 292 QPS / 99.3 KiB | 1.000 (0.995-1.000) / 7.3 (7.2-8.4) ms / 293 (286-298) QPS / 10.7 (10.0-12.3) KiB |
+| pg_vector | 1.000 / 1.8 ms / 4205 QPS / 13.7 KiB | 1.000 / 6.4 ms / 1333 QPS / 13.6 KiB | 1.000 (1.000-1.000) / 52.2 (49.2-56.7) ms / 131 (130-135) QPS / 13.6 (13.6-13.6) KiB |
+| lance_ivfpq | 1.000 / 17.0 ms / 124 QPS / 10.0 KiB | 0.992 / 16.4 ms / 304 QPS / 8.8 KiB | 0.977 (0.967-0.990) / 33.9 (31.9-34.5) ms / 228 (210-246) QPS / 8.5 (8.5-8.5) KiB |
+| ref_flat | 1.000 / 0.1 ms / 6516 QPS / 4.0 KiB | 1.000 / 0.7 ms / 4670 QPS / 4.0 KiB | 1.000 / 12.9 ms / 271 QPS / 4.0 KiB |
+
+
+Single-client load at 10,000 vectors (vectors per second, one run): OpenSearch merged 634,
+OpenSearch Lucene 595, Milvus 4,154, Qdrant 712, pgvector 2,832, LanceDB 57,978 (append only). Eight
+clients: 2,124, 2,226, 5,080, 513, 6,448 and 168,286.
+
+#### What the numbers say
+
+1. **Recall is not where OpenSearch loses, with one exception.** On the product's filters the
+   as-built index (`os_shipped`, 13 segments) holds recall@10 of 0.98 to 1.0 at `ef_search` 16 and
+   above, better than any other engine's lowest setting. After a forced merge to one segment the faiss
+   graph becomes the weak point: recall@10 at the review default needs `ef_search` 100 (0.617 at 16,
+   0.795 at 32, 0.923 at 64, 0.966 at 100, 0.996 at 256), and at project + class (2.6 percent) it stays
+   at 0.91 even at `ef_search` 512, where Milvus, Qdrant, pgvector and the Lucene engine read 1.0. The
+   Lucene engine holds 0.969 to 1.0 on every filter at `ef_search` 16 to 32.
+2. **Latency at the recall target is a tie.** On the review default the best OpenSearch rows (merged
+   faiss 8.1 ms, `on_disk` 16x 7.8 ms, `ef_construction` 128 7.0 ms, Lucene 8.8 ms) and the best other
+   rows (Qdrant 7.3 ms, Milvus 9.8 ms, pgvector `halfvec` 9.5 ms) overlap within the noise of this
+   host. pgvector is the fastest unfiltered (1.9 ms) and on the 0.06 percent cluster filter (2.0 ms),
+   and the slowest on the review default (52 ms for `vector`, 9.5 ms for `halfvec`) and on the 0.1
+   percent selectivity filter (145 ms): its planner switches between the HNSW and B-tree paths.
+   LanceDB IVF_PQ is 3 to 4 times slower (34 ms). Milvus's one clear lead is concurrent throughput:
+   741 QPS at 8 clients against 423 for merged OpenSearch (1.7 times, ranges do not overlap).
+3. **Writes while serving.** At 200 vectors per second, OpenSearch's query p95 doubles (ratio 2.0),
+   Qdrant's grows 2.4 times, pgvector's 1.8 times; Milvus (0.85) and LanceDB (1.03) stay flat.
+   Refreshes (which build graphs) take 87 s of wall time during a 100k load.
+4. **Metadata rewrite.** In place in OpenSearch the `cluster_id` rewrite of 100k vectors takes 35 to
+   52 s with recall@10 during the rewrite at 0.98 to 1.0, inside the plan's 60 s limit. It rewrites the
+   vector with the document: disk grows to 2.4 to 2.7 GB (3.2 times the settled 0.8 GB) until a merge.
+   Milvus does the same rewrite in 12 s, LanceDB in 4 s, Qdrant in 149 s and pgvector in 202 s.
+5. **Storage and memory.** The faiss index costs 8.2 KiB per vector on disk and 4.1 KiB of native
+   (off-heap) graph memory, as the storage document says. Lucene HNSW costs 4.1 KiB on disk and no
+   native graph memory (the graph is memory mapped; heap used 0.7 to 2.8 GB against 4.7 to 6.1 GB).
+   `on_disk` 8x / 16x: 4.7 / 4.5 KiB and 0.65 / 0.40 KiB native graph, but recall@10 needs
+   `ef_search` 128 and recall@100 falls to 0.85. `on_disk` 32x ignores `ef_search` (0.975 at every
+   value, no graph memory): it behaves as a quantized scan with rescoring. fp16 halves the native graph
+   (215 MB against 415 MB per 100k) but disk falls only 24 percent. No other engine is below the
+   OpenSearch Lucene or `on_disk` figures: Qdrant int8 11.0 KiB disk (it keeps the raw vectors),
+   pgvector `halfvec` 5.6 KiB, Milvus 16 to 23 KiB (directory), LanceDB IVF_PQ 8.5 KiB.
+6. **Build cost.** `ef_construction` 128 cuts the OpenSearch merge from 264 s to 67 s (searchable
+   after 102 s against 386 s) for a recall@10 loss of 0.01 at `ef_search` 100 (0.957 against 0.967 on
+   300 queries, inside the sampling error). The Lucene engine merges slower (387 to 485 s) and loads
+   slower (2.1k against 3.3k vectors per second).
+
+##### Cross-check against public statements
+
+- OpenSearch k-NN issue 3606 (filtered Faiss recall falls at sparse-to-mid selectivity while Lucene
+  stays near 1.0): **agree in direction**. Merged faiss reads 0.912 at 2.6 percent and 0.967 at 8 to
+  10 percent; Lucene reads 1.0 and 0.993 to 0.997. The floor here (0.91) is higher than the issue's
+  0.78 at 5 percent (nested queries, a different data set). The as-built unmerged index does not show
+  it. Faiss p95 is not lower than Lucene's here (8.1 against 8.8 ms on the review default, 12.8
+  against 11.1 on project + class, within noise).
+- Concurrent segment search (37 to 15 ms in the 3.0 benchmark) was not tested; it was off.
+- Lucene-on-Faiss quantization costing up to 4.5 percent recall: **partly disagree**. At the same
+  `ef_search` 100 the 8x and 16x modes read 0.933 and 0.932 against 0.966 (3 points) on recall@10,
+  and 0.85 against 0.94 on recall@100 at `ef_search` 512 (9 points); raising `ef_search` to 128 recovers 0.95.
+- FP16 saving about 48 percent memory: **agree for the native graph** (415 to 215 MB per 100k),
+  disagree if it is read as total memory or disk (RAM growth 7.7 to 6.3 KiB per vector, disk 8.2 to 6.2).
+- Rankings among Milvus, Qdrant and pgvector differ across public sources; only the recall-gated rows
+  above are used here.
+
+#### Where OpenSearch's limits are, and what 1M would do (extrapolation, not measured)
+
+Nothing in the 2,000 to 100,000 rungs is a hard limit: one shard, one node, 8 GB heap, p95 5 to 10 ms.
+Linear extrapolation of the measured per-vector figures to the 7.4 million vectors of a 1M-image
+project (one vector field; the items index has two):
+
+| Quantity | faiss as shipped | Lucene engine | faiss `on_disk` 16x |
+|---|---|---|---|
+| Disk, one field | 61 GB (above the usual 50 GB shard guidance) | 30 GB | 33 GB |
+| Native (off-heap) graph memory | 31 GB, counted against the k-NN circuit breaker | 0 (page cache instead) | 3 GB |
+| Forced merge of the whole field (from 100k timings; optimistic, build cost grows faster than linearly) | 5.5 h (`ef_construction` 512), 1.4 h (128) | 8 to 10 h | 1.1 h |
+
+The binding items at that scale are shard size, native memory, merge time and, today, query p95
+doubling under sustained inserts, not recall or single-query latency. All are properties of the
+engine choice (Lucene or `on_disk`) and of sharding, which stay inside OpenSearch. A real
+1M-vector set is the next scale point; it needs the full COCO train download (about 4.5 hours at the
+rate seen here) and GPU time for embedding.
+
+#### Decision against the plan (section 8)
+
+| Criterion (all must hold at D1M) | Result at 100,000 real vectors | Met |
+|---|---|---|
+| p95 at recall@10 >= 0.95 at least 2x better than best tuned OpenSearch on review default and cluster filters, or storage plus RAM per vector at least 40 percent lower than the best quantized OpenSearch | review default: best other 7.3 ms against best OpenSearch 7.0 to 8.1 ms (no gain); cluster filter: Qdrant 4.0 against 6.1 ms (1.5x), pgvector 2.0 ms but 52 ms on the review default; storage plus RAM: Lucene 4.1 + 2.9 = 7.0 KiB, `on_disk` 16x 4.5 + 3.2 = 7.6; best other pgvector `halfvec` 11 KiB, Qdrant int8 15 KiB | no |
+| `cluster_id` rewrite of 100k in under 60 s with recall >= 0.9 | OpenSearch in place 35 to 52 s with recall 0.98 to 1.0; Milvus 12 s; Qdrant 149 s and pgvector 202 s fail | met by OpenSearch itself |
+| Consistency design implementable with a reconciler and isolation guard test | not assessed: the first criterion failed | n/a |
+| Operational weight acceptable | not assessed | n/a |
+
+D1M was not run, so the criteria could not be met formally; at 100k there is no sign they would be.
+
+#### End states compared
+
+- **A. OpenSearch stays the single store, tuned (supported by the numbers).** No second service, OCC
+  and the isolation guard unchanged, one backup. Costs to manage: query p95 doubles under 200 vectors
+  per second of inserts, a 5 to 9 minute settle after deleting a project's items, and 2.4 to 3.2
+  times the disk until a merge after a full `cluster_id` rewrite.
+- **B. A vector store (Milvus is the strongest candidate) plus OpenSearch or a relational store for
+  everything else.** Gains measured: 1.7 times the concurrent QPS, flat query latency under inserts, a
+  12 s rewrite. Costs, none of which this benchmark removes: (1) every filter field the store needs
+  (class, validated, holdout, dismissed, cluster, project) is duplicated, and each human validation,
+  auto-promote and cluster pass writes twice; the lag is a correctness window (a validated item can
+  still be returned) closed only by over-fetching and an `mget` re-check; (2) an outbox and a
+  reconciler for item-without-vector, vector-without-item and stale-vector states after a crash; (3)
+  OCC and the lock rule stay in the metadata store, but the vector store needs its own
+  project-isolation guard (the transport guard covers only OpenSearch) and every delete, combine and
+  undo flow has to cover two stores; (4) clustering reads every vector from OpenSearch by
+  point-in-time slices today, so either vectors stay in OpenSearch (no storage win; Milvus adds 16 to
+  23 KiB per vector on this host) or the cluster pass must read the second store; (5) backup and
+  restore must be consistent across two stores; (6) migration is a backfill from the existing
+  indexes, per project, plus a dual-write period. Host cost measured for Milvus: 73 MB idle, 6.3 KiB
+  per vector resident, one container with embedded etcd (the stock compose uses three). pgvector as
+  the relational store would also take the metadata, which rewrites the OCC, aggregation, sort and
+  point-in-time code and is out of scope.
+
+#### Recommendation
+
+**Stay on OpenSearch as the single store; do not add Milvus now.** The numbers do not support a split
+at the sizes measured: latency at the recall target ties, storage and memory are not better anywhere
+else, and the consistency costs above are certain. Because no split is recommended, no split plan
+document was written. Follow-ups, each its own work package with the product-stack parity gate (kNN
+overlap@10 >= 0.95 on the review default, which was not run here because no product stack was
+brought up):
+
+1. **Lucene engine for new project indexes** (`_knn_field` in
+   `src/clients/curation_opensearch/base.py`): half the disk, no native graph memory, filtered
+   recall 0.97 to 1.0 on every filter, and identical `_score` for cosine (checked on 2,000 vectors: faiss
+   and Lucene returned the same scores to four digits, so `min_score` and the UI chip are unaffected).
+   Costs: 50 percent slower merge, 36 percent slower load, and existing indexes need a reindex. Not
+   shipped here: it changes stored mappings and needs the owner's decision and the parity gate.
+2. **`ef_construction` 128** (`OP_HNSW_EF_CONSTRUCTION`): merge 4 times faster, recall within sampling
+   error; not yet tested on the Lucene engine.
+3. **Do not force-merge** project indexes: the as-built segments gave the best recall at no extra cost.
+4. **Leave `ef_search` at the default**: it was not a lever (p50 moved by under 1 ms from 16 to 512).
+5. Re-run at 1M (and the cluster pass at 100k, #218) before revisiting a split. Revisit sooner if the
+   sustained ingest rate pushes query p95 past the product's budget, or concurrent search load exceeds
+   about 400 QPS per node. If a split is ever built, the smallest proof is a shadow Milvus collection
+   for one project filled from the scroll of its items index, compared on recall and p95, with no
+   change to the existing indexes.
+
+No product code was changed by this evaluation.
+
+#### Not measured
+
+- 1M vectors (real or otherwise); GPU index arms (cuVS, GPU CAGRA, Milvus GPU, FAISS GPU); two
+  shards and the `byte` data type in OpenSearch; concurrent segment search; Milvus `partition_key`,
+  IVF_FLAT and cluster-filtered partitioning; Qdrant on-disk vectors; pgvector partial indexes and
+  iterative-scan tuning; LanceDB GPU build; bulk size, refresh-off and writer-count sweeps (probe 5
+  covers them).
+- Whole-arm repetitions beyond one for the secondary arms and the small rungs; 120 and 300 queries
+  per point instead of 1,000; the in-set ("more like this") queries are recorded in the JSON
+  (`in_set@10`) but not tabulated.
+- Per-engine RSS under steady query load (only idle and after-load figures) and operational
+  procedures (backup, upgrade) beyond what is stated.
+- The product-stack parity gate for any shipped setting.
+
 ### WP-2.3: cross-image PE batching (#216)
 
 The question: ingest sends the crops of one image (6.4 on set A) and, in a second request, its whole
@@ -2060,6 +2385,7 @@ P-cluster-purity 0.219). The VLM gate is skipped (no VLM in the stack).
   API CPU; ingest with a coalescer cap of 16 rows to keep Triton's packing granularity.
 - Before-and-after of the embed pass compares two builds on one stack, run back to back on GPU 2 (before
   first, after later); the before series ran with the coalescer absent.
+
 
 ## Benchmarking
 

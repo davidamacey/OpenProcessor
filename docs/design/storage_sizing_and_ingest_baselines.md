@@ -94,7 +94,11 @@ storage.
    `docs/design/generic_detector_and_selective_embedding_plan.md`.)
 5. Quantize only after a benchmark on real embeddings. Tests on random vectors (fp16 about
    6.3 KB per doc; `on_disk` about 3.7 KB per doc at recall 0.75; 4x compression at recall 0.18)
-   are not representative. (Open: #56.)
+   are not representative. Measured on 100,000 real PE embeddings (`docs/PERFORMANCE.md`, "Vector
+   store evaluation"; #56): faiss 8.2 KiB per vector; fp16 6.2 KiB (native graph memory halves,
+   disk -24 percent, recall unchanged); `on_disk` 8x / 16x 4.7 / 4.5 KiB with recall@10 0.95 only at
+   `ef_search` 128 and recall@100 0.85; the Lucene engine 4.1 KiB with no native graph memory and
+   filtered recall 0.97 to 1.0.
 6. No replicas on a single node.
 7. Keep documents lean: cap history fields, keep thumbnails and text blobs out of the index.
 8. Give OpenSearch an adequate heap (a heap-dump file from a crash once took 2 GB of a data
@@ -129,5 +133,6 @@ poll the region drain count until zero, then measure storage after two forced me
   come from the same command) and the re-measured table in `docs/PERFORMANCE.md` ("v0.5.0
   baseline"): 8.83 KB per vector (1.06x the figure above) and 65.4 KB per image at 6.4 items per
   image. Open: the README and docs-site copies of the storage table.
-- Quantization and recall benchmark, k-NN memory formula check (#56).
+- Done (#56): quantization and recall benchmark on real embeddings (item 5 above). Open: the same at 1M
+  vectors and the product-stack parity gate for any shipped change.
 - Shard cost per project and index sharing policy (#53).

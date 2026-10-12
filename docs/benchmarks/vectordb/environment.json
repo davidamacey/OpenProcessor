@@ -1,0 +1,40 @@
+{
+  "purpose": "Vector store evaluation (#221, #230). One JSON per (vectors, arm, repetition) in the numbered directories; load1 files are the single-client load runs.",
+  "data": {
+    "source": "COCO 2017 (public), pinned with scripts/datasets/fetch_coco_subset.py --bench-set, seed 20261009",
+    "manifest_sha256": {
+      "bench_set_13600": "fc507ba1dee27a446cd21a9bae0cf8a12ae4365b05099233fbf0dda79d7361a8",
+      "bench_set_19000": "6d26b74a6bbc0eef8350704da700b0798de1415b3dbdc64d282caac0f5c01411"
+    },
+    "images_embedded": 19000,
+    "embedding_model": "PE-Core-L14-336 image tower (open_clip, FP16, GPU 1), 1024-d, L2-normalized, the model the product serves",
+    "vectors": "one whole-frame vector plus one crop vector per COCO ground-truth box (largest first, at most 12, shorter side at least 10 px); 6.5 vectors per image",
+    "index_set_vectors": 114987,
+    "held_out": "1300 images of the first 13600, never inserted: 1000 query vectors, 7299 vectors for the streaming-insert phase",
+    "in_set_queries": 1000,
+    "sizes": "2,000 / 10,000 / 100,000: nested prefixes of the index set in a seeded image order (whole images stay together)",
+    "synthetic_fields": "project (10 by image-id hash), class_validated 10%, test_holdout 5%, review_dismissed 2%, sel (uniform 0..9999); cluster_id is a 512-way spherical k-means of the index vectors; class_name is the COCO category",
+    "ground_truth": "exact cosine top-100 per query per filter (numpy, CPU)",
+    "row_labels": "every row is real embeddings; no noise-expanded or random vectors were used; 1M was not run"
+  },
+  "host": {
+    "cpu": "Intel Xeon E5-2680 v3 class, 48 threads, 503 GB RAM, NVMe",
+    "shared": "yes: other projects ran on the host throughout; load average 10 to 195, whole-host CPU 25 to 100 percent busy; every phase records load before and after in its JSON",
+    "docker": "27.3.1",
+    "gpu": "none attached to any engine; GPU 1 (RTX 3080 Ti) used only to generate the embeddings"
+  },
+  "engines": {
+    "opensearch": "opensearchproject/opensearch:3.6.0 @ sha256:b5dd1512af2a99748c942cfbbd7f32162623336b210667d0fc6333c6321f171d, 8 GB heap, 16 cores / 64 GB cgroup",
+    "milvus": "milvusdb/milvus:v2.6.25 @ sha256:29f7668e64df1c6d5cdadbfbee99f38c72e4001054f149a298725acae57230ad, standalone with embedded etcd and local storage",
+    "qdrant": "qdrant/qdrant:v1.19.2 @ sha256:b7b0444c4c351c970b98e90a6f89c2ee4287c65b44e52b4cb503fa5b2aa927ad",
+    "pgvector": "pgvector/pgvector:0.8.7-pg17-trixie @ sha256:7a7e9f22015b67edb4bef5c59daeebcd7e74bfa570df6ce60ae01237c8648a84, shared_buffers 16 GB",
+    "lancedb": "lancedb 0.40.0 embedded in the bench process (no cgroup limit; OMP/BLAS threads capped at 4)",
+    "clients": "opensearch-py 3.2.0, pymilvus 2.6.17, qdrant-client 1.19.1 (gRPC), psycopg 3.3.6, pgvector 0.5.1, faiss-cpu 1.15.1"
+  },
+  "protocol_deviations": [
+    "Query repetitions are 3 per operating point inside a run; whole-arm repetitions: 3 (r1-r3) for the seven headline arms at 100,000, 1 for the secondary arms and the 2,000 / 10,000 rungs.",
+    "Query counts per point: 120 (sweep), 300 (detail), a smaller sample than the plan's 1000; recall values carry sampling error of a few thousandths.",
+    "One engine at a time, each arm in a fresh container; the rewrite, streaming and delete phases ran for the headline arms only.",
+    "Several runs of different arms overlapped in time by mistake (the process check used a filter that hid the running job): the 10,000 single-client load files and the 2,000 pgvector, LanceDB and flat files were re-run alone; the 100,000 LanceDB r3 was re-run alone. The first arms of the 10,000 rung may have overlapped with one LanceDB query run at 100,000; treat the 2,000 and 10,000 rungs as shape, not as precise latencies."
+  ]
+}
