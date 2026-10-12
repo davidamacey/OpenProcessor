@@ -67,6 +67,13 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   1.2-1.4x faster than FP16 but fails the parity gates (crop cosine median 0.94-0.99 against 0.999,
   neighbour overlap 0.52-0.82 against 0.95), and weight-only INT8 passes the gates with no speed or
   size gain. INT8 is not offered; FP16 stays the only PE precision and no code changed (#213).
+- Measured system shared memory between the API and Triton for the detector and PE image batches,
+  recorded in `docs/PERFORMANCE.md` and `docs/benchmarks/shared_memory_transport.json`. Result: it
+  removes about 6 ms of client CPU per frame when the transport is measured alone, but ingest API CPU
+  per image falls 0 to 3 percent (inside the 8 to 10 percent run-to-run spread) and Triton's user CPU
+  rises by more than the kernel time saved, so the package is closed as measured and not adopted; the
+  wire stays the only transport and no code changed (#215).
+
 - `scripts/bench/embed_missing_bench.py`: re-embeds a project's crop and frame vectors through the
   `embed` reprocess scope (what embed-missing runs) and records images per second, the PE engine batch
   histogram and the API CPU (#216).
@@ -145,6 +152,14 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   up to about 128 MB resident per worker) (#211).
 - Triton runs with `--log-verbose=0` instead of logging an allocation and a free for every tensor of
   every request (#211).
+- The PE image encoder engine is 17 to 25 percent faster (181 to 225 images/s through Triton at batch 16, same
+  output: crop cosine median 0.99996, every `precision` parity gate passes). `export/pe_rope_layout.py`,
+  the last step of `export/export_pe_image_encoder.py`, permutes the query and key channels of every
+  head so the rotary embedding works on contiguous halves instead of interleaved pairs; TensorRT spent 23
+  percent of the engine time on the pair arithmetic. No build flag, optimization profile, batching,
+  instance count or CUDA-graph setting beat the shipped build. Upgrading: rebuild the engine
+  (`./openprocessor models install --only pe`); a plan built earlier keeps working (#227).
+
 - The `embed` reprocess scope (embed-missing, "embed all") embeds 16 images at once and works through
   64 images per chunk instead of one image at a time in chunks of 20, so Triton's dynamic batcher packs
   their crops: 6.3 to 14.1 images per second on 500 images, PE mean batch 3.7 to 13. A client-side

@@ -1915,6 +1915,137 @@ rounds to FP16 once, which is where the 0.9999 and the 98 percent box identity c
 - The `DELETE /curation/projects/{project}` 409 seen once at the end of a batch series is not
   diagnosed here.
 
+### WP-2.2: system shared memory between the API and Triton (#215), measured and not adopted
+
+**Result.** Shared memory removes 1.9 ms of client CPU per detector image and 0.5 to 0.6 ms per PE image
+when the transport is measured alone (about 6 ms of the 65 to 75 ms of API CPU per COCO frame), but the
+ingest does not get cheaper: API CPU per image is 0 to 3 percent lower (inside a run-to-run spread of
+8 to 10 percent), and Triton spends more user CPU than the wire path saved (+5.6 ms per image against
+-2.6 ms of kernel time), so the host total does not fall. Images per second rise 2 to 12 percent and the
+request p50 falls 5 to 8 percent, but the ranges overlap. The plan's rule (close the package when
+the win is under 5 percent of API CPU) applies, so the package is closed as measured and **nothing is
+shipped**: no setting, no compose change, no client code. The implementation and its tests are two
+commits on the local branch `perf/shared-memory-impl` (`4de40001`, `8e20afe5`), for reference only.
+
+**Method.** The isolated stack of the uint8 section (GPU 2, foreign load 0.0 percent in every sampled
+run, published v0.5.0 images with the branch `src/` mounted, uint8 detector and PE plans, PE plan sha256
+`a4feb7df...`, a fresh project per repetition, policy `all`), one extra tmpfs volume mounted as `/dev/shm`
+in both containers and `--allow-client-shm=true` on Triton. Wire and shared memory were the same code with
+the transport switch off or on, the API container recreated between launches, arms interleaved (wire, shm, shm,
+wire and shm, wire, shm) so a drifting host load falls on both. Host load average (1 min) was 12 to 62
+at launch and 15 to 43 at the end: other projects were running throughout. Medians with the minimum and
+maximum of the repetitions in parentheses. Raw numbers: `docs/benchmarks/shared_memory_transport.json`.
+
+**Attribution before.** Native `py-spy` on one worker (2 clients, 45 s, 50 Hz, uint8 tensors) put 13 percent
+of the busy thread samples in client-side transport (protobuf serialization 4.9, other gRPC client 4.4,
+socket send 2.9, the `tobytes` copy 1.1); that counts every thread of the process, so it is a ceiling, not a
+CPU share. The cgroup split of one worker is the better number: 14.4 of 66.9 ms of API CPU per image is
+kernel time (sockets, page faults, futex) and 52.5 ms is user time. Triton spends 18.7 ms per image
+(14.1 user, 4.6 kernel).
+
+**Isolated transport cost** (sequential `AsyncTritonPool.infer_images`, one process, 3 repetitions, client
+CPU ms per image):
+
+| Request | Wire | Shared memory |
+|---|---:|---:|
+| Detector, batch 16 (19.7 MB) | 2.25 (2.17-2.31) | 0.34 (0.33-0.36) |
+| PE, batch 9 (3.0 MB) | 0.89 (0.83-0.93) | 0.32 (0.28-0.32) |
+| PE, batch 32 (10.8 MB) | 0.67 (0.66-0.69) | 0.17 (0.15-0.18) |
+
+One frame is one detector image and about 7.4 PE images, so the isolated saving is about 6 ms per frame.
+With raw `tritonclient` calls, Triton CPU per image also falls in isolation (detector batch 8: 2.26 to
+0.89 ms; PE batch 16: 0.92 to 0.47 ms).
+
+**Ingest, set A (2,000 COCO images, 32 workers, 4 clients, 32 images per request, 9 repetitions per cell).**
+
+| Endpoint | Transport | images/s | API CPU s/image | Triton CPU s/image | request p50 s | GPU 2 busy % |
+|---|---|---:|---:|---:|---:|---:|
+| `/ingest/upload` | wire | 20.68 (19.18-22.28) | 0.0747 (0.0697-0.0866) | 0.0133 (0.0123-0.0145) | 6.15 (5.79-6.40) | 83 (80-91) |
+| `/ingest/upload` | shared memory | 21.66 (16.62-22.67) | 0.0739 (0.0679-0.0809) | 0.0131 (0.0120-0.0169) | 5.71 (4.92-7.39) | 88 (70-96) |
+| `/ingest/batch` | wire | 20.86 (19.99-21.79) | 0.0754 (0.0713-0.0799) | 0.0131 (0.0120-0.0138) | 5.95 (5.67-6.51) | 87 (80-92) |
+| `/ingest/batch` | shared memory | 21.29 (20.10-22.01) | 0.0755 (0.0682-0.0794) | 0.0143 (0.0124-0.0155) | 5.67 (5.08-5.83) | 91 (84-94) |
+
+After the first two launches shared memory looked 4 to 8 percent cheaper (0.0695 against 0.0724 s/image
+on batch, 0.0680 against 0.0742 on upload, non-overlapping ranges, 3 against 6 repetitions); the later
+launches removed it. Three repetitions per arm are not enough on this host. Throughput is bound by the GPU in both arms (83 to 91 percent busy), so the transport cannot
+raise images per second by more than the idle gaps it closes.
+
+**One worker, 2 clients (1,000 images, 9 repetitions per cell, `/ingest/upload`).**
+
+| Transport | images/s | API CPU s/image | Triton CPU s/image | request p50 s | GPU 2 busy % |
+|---|---:|---:|---:|---:|---:|
+| wire | 10.14 (7.83-12.66) | 0.0659 (0.0620-0.0733) | 0.0169 (0.0143-0.0191) | 5.22 (4.21-7.00) | 44 (33-57) |
+| shared memory | 11.31 (10.15-11.93) | 0.0653 (0.0600-0.0733) | 0.0203 (0.0192-0.0211) | 4.82 (4.41-5.27) | 46 (42-54) |
+
+User and kernel CPU of the two cgroups for the same run (ms per image, 3 repetitions per arm):
+
+| Transport | API user | API kernel | Triton user | Triton kernel |
+|---|---:|---:|---:|---:|
+| wire | 52.5 (51.4-52.8) | 14.4 (13.8-14.8) | 14.1 (13.9-15.4) | 4.6 (4.2-5.2) |
+| shared memory | 52.6 (51.9-54.6) | 12.3 (11.5-13.3) | 19.7 (19.5-20.0) | 2.0 (2.0-2.3) |
+
+API kernel time falls 2 ms and Triton kernel time 2.6 ms, as the isolated numbers predict. Triton's user
+time rises 5.6 ms. **Hypothesis, not verified:** a request whose input lives in a client-registered
+region is copied to the GPU from pageable host memory, which the CUDA driver stages on the CPU, while a
+gRPC request lands in memory Triton already owns; the isolated run is a single stream and does not show
+it. Registering the regions as pinned memory would be the experiment to run before revisiting this.
+
+**Photos, set B (500 pinned 12-24 MP photos, `/ingest/batch`, 8 images x 16 clients, 3 repetitions per
+arm, one launch per arm).** Wire 20.43 (12.10-20.82) images/s, API CPU 1.187 (1.129-1.309) s/image;
+shared memory 17.16 (15.05-19.51) images/s, 1.082 (1.061-1.129) s/image. The two arms differ by more
+than the transport can explain (decode and resize are 1.1 s of the CPU, the transport at most 6 ms) and
+the host load average was 29 to 44: these are noise, not a result. The ABBA series was stopped after two
+launches.
+
+**Parity.** `parity.py capture` of the shared memory stack (2,000 images, policy `all`, 200-image probe)
+against the references of the uint8 section, profile `precision`; the last column is the two references
+against each other (the noise floor of the pair):
+
+| Gate | shm vs `ref-u8fp16` | shm vs `ref-u8fp16-repeat` | `ref-u8fp16` vs repeat |
+|---|---:|---:|---:|
+| P-box (images with identical boxes) | 0.9929 | 0.9949 | 0.9939 |
+| P-item | 0.9995 | 0.9995 | 1.0000 |
+| P-pe, 1st percentile (median 1.0000) | 0.99993 | 0.99993 | 0.99995 |
+| P-pew, 1st percentile (median 1.0000) | 0.99991 | 0.99991 | 0.99994 |
+| P-knn overlap | 0.9943 | 0.9949 | 0.9955 |
+| P-cluster-assign | 0.9995 | 0.9995 | 0.9997 |
+| P-cluster-purity drop (points, gate 0.5) | 0.27 | -0.18 | 0.45 |
+| P-label-vote | 0.997 | 0.998 | 0.999 |
+| Gates failed | none | none | none |
+
+Direct check on real frames, the same tensors through both transports: PE embeddings are bit-identical
+at batch 1, 12 and 32. The detector's `det_boxes` differ by up to 0.012 between the transports, and by the
+same amount between two wire runs of the same tensor (the engine is not bit-reproducible, as the uint8
+section found); `num_dets`, scores and classes are identical.
+
+**What was built** (for a later revisit; none of it is in the tree). The detector and PE image batches
+only; outputs (4.8 KB per detector image, 4 KB per PE image) stay on the wire. One tmpfs volume mounted as
+`/dev/shm` in `triton-server` and `api` (project-scoped, sized by `SHM_SIZE`, so two compose projects never
+share a region namespace) and `--allow-client-shm` on Triton. Each API process owned up to four regions
+named `<namespace>.<boot>.<pid>.<n>` (`boot` random per start, so a recycled pid never collides), sized to
+the next power of two, grown on demand, never shrunk. A request leased a region, copied the batch in and
+sent the region name. Cleanup: the process held an `flock` on its lock file; at every start a process swept
+the namespace, removing the Triton registrations and files of any owner whose lock it could take, and any
+registration with no lock. A failed request retired its region. The start probed one region and refused to
+start (no fallback to the wire) if Triton could not map it. Checked live: `docker kill -s KILL` of the API
+left 16 registrations of 4 owners, the next start reaped 32 owners and left none; a graceful recreate left
+none and removed every file; a Triton restart was recovered by registering the region again (the first
+version matched the wrong error text and failed 3 requests of 128 before the slot was retired; fixed and
+rerun with 0 failed of 256). The 700-line ceiling held (`triton_pool.py` at 698).
+
+**Not measured.** CUDA shared memory (excluded by design: the API and Triton may sit on different GPUs, and
+the known `tritonclient` issue with multithreaded clients); pinned or registered host regions; writing the
+letterbox straight into the region (the `tobytes` copy is 1.1 percent of the samples above, so at most
+that); the core routes (`/detect`, `/embed`), which use the synchronous client; MobileCLIP, SCRFD, ArcFace
+and OCR, which still send FP32; more than one host; a Triton instance count other than the shipped one.
+
+**Caveats.** One host, one card, 9 repetitions per cell on set A and a shared CPU with load averages of 12
+to 62. A difference of 5 percent in API CPU would need more repetitions than this to resolve; the
+conclusion is that the effect is smaller than that, not that it is zero. The `DELETE
+/curation/projects/{project}` 409 of the uint8 section occurred once more (the third launch, `/ingest/batch`
+repetition 1); it is still not diagnosed, and it cost that launch its batch repetitions, which were
+repeated in a later launch.
+
 ### Multi-GPU PE encoding (#228)
 
 The PE image encoder is about 99 percent of the GPU work of `/ingest`, and one RTX A6000 tops out
@@ -2361,6 +2492,179 @@ No product code was changed by this evaluation.
 - Per-engine RSS under steady query load (only idle and after-load figures) and operational
   procedures (backup, upgrade) beyond what is stated.
 - The product-stack parity gate for any shipped setting.
+
+### PE image encoder engine pass (#227)
+
+Measured question: can the FP16 PE engine (384 GFLOP per embedding, 190 images/s engine only on the
+RTX A6000, about 46 percent of its 154.8 TFLOP/s dense FP16 peak) go faster at identical output?
+**Result: one change ships and everything else is a no-op.** The rotary embedding of the exported
+graph runs on interleaved channel pairs, and TensorRT lowers that to slice, transpose and concat
+kernels that took 23 percent of the engine time. Permuting the query and key channels of every
+head (even channels first, then the odd ones) turns the pairs into two contiguous halves, which is the
+same function (cosine 1.0000 in FP32 on ONNX Runtime) and a 17 to 25 percent faster engine, engine
+only and through Triton, on the same card. No builder flag, optimization profile, batching setting or
+instance count beat the shipped build. FP16 stays the only precision. The change is
+`export/pe_rope_layout.py`, run by the end of `export/export_pe_image_encoder.py`. Raw numbers:
+`docs/benchmarks/pe_engine_pass.json`.
+
+#### Method
+
+- **Engines.** The FP16-baked, uint8-input PE graph that the installer builds (TensorRT 11.1.0.106,
+  `trtexec`, profile min 1 / opt 8 / max 32 at 336 x 336, 8 GB workspace), one plan per variant, all
+  built the same way on the same GPU. Variants that change the ONNX (`rope`, `rope2`) start from the
+  same FP32 ONNX as the baseline.
+- **Engine only** is `trtexec --loadEngine` at a fixed batch (TensorRT 11 uses CUDA graphs and skips
+  host transfers by default), 1 s warm-up, 15 s timed. **Through Triton** is `perf_analyzer` over HTTP
+  against an isolated Triton (own container, loopback port, GPU 0), 6 s windows, the production
+  dynamic-batching configuration unless the row says otherwise, random uint8 input. The two are never
+  compared with each other. Every cell is the median of 3 repetitions, interleaved across variants,
+  with the range beside it.
+- **Machine state.** One RTX A6000 capped at 300 W: during the runs the SM clock averaged 1,430 to
+  1,540 MHz (lower at larger batches) and the power draw 285 to 299 W, temperature up to 78 C. The
+  GPU also holds other projects' idle Triton servers (30 GB resident, no compute). A run was kept only if
+  `nvidia-smi pmon` showed no process other than the benchmark with SM activity before and during the
+  run; runs that failed that check were repeated (the count is in the JSON). Timed commands ran under
+  the shared bench lock.
+- **Builds are sensitive to load.** A first set of variant plans built while another process loaded the
+  GPU ran at 78 to 116 images/s against 184 for the same flags built on a quiet GPU (the builder times
+  tactics on the shared card). That set was discarded; the plans below were built with the GPU idle and
+  the build was repeated if any foreign activity showed. Two builds of the baseline (with and without a
+  timing-cache file) agree within 0.1 percent.
+- **Layer dump** is `trtexec --dumpLayerInfo --dumpProfile` on a build with detailed profiling
+  verbosity, batch 16, separate profile run.
+
+#### Layer dump: what the engine does
+
+Both engines already fuse attention (`_gemm_mha_v2`, 24 blocks, 7.4 ms of 83.5 ms per batch of 16),
+fuse the bias, residual add and GELU into the GEMM epilogues (`FcAdd`, `Fc`), fold the Cast nodes of the
+FP16 bake into generated kernels (no standalone cast layer in the plan) and run LayerNorm as one generated
+kernel per norm. The GEMMs run at 99 to 118 TFLOP/s each. The unfused cost was the rotary embedding.
+
+| Per batch of 16, `--dumpProfile` | Interleaved pairs (shipped) | Half-split halves |
+|---|---:|---:|
+| Output projection and MLP down GEMMs (`FcAdd`) | 19.6 ms | 19.4 ms |
+| MLP up GEMM with GELU (`Fc`) | 18.7 ms | 18.5 ms |
+| QKV GEMM | 12.9 ms | 12.6 ms |
+| Fused attention | 7.4 ms | 7.3 ms |
+| Rotary slice, transpose, negate, concat | 19.2 ms (23 %) | 2.8 ms (4 %) |
+| LayerNorm | 3.6 ms | 3.6 ms |
+| Total per batch | 83.5 ms (191 images/s) | 66.2 ms (242 images/s) |
+
+#### Engine only (`trtexec`, images/s, median [range] of 3)
+
+The speed-up is the same in the two independent sets (the baseline reads 184 and 182 to 184 in them).
+
+| Plan | Batch 8 | Batch 16 | Batch 32 |
+|---|---:|---:|---:|
+| Baseline (opt 8) | 184.3 [183.5-185.7] | 182.4 [181.8-183.9] | 183.7 [183.4-183.8] |
+| Baseline, second build | 184.2 [183.6-186.2] | 182.1 [182.0-185.2] | 183.8 [183.3-183.9] |
+| `--builderOptimizationLevel=5` (build 6 to 7 min instead of 2) | 184.2 [184.2-185.8] | 183.3 [182.3-185.1] | 184.3 [183.9-184.8] |
+| `--maxAuxStreams=0` | 184.2 [183.8-184.3] | 182.6 [181.7-182.8] | 183.5 [183.4-184.2] |
+| Profile opt 16 | 173.0 [172.8-173.6] | 194.2 [193.0-195.1] | 183.3 [183.3-184.3] |
+| Profile opt 32 | 178.2 [178.0-178.2] | 186.0 [184.3-186.0] | 202.4 [201.5-202.5] |
+| **Half-split rotary layout** | **214.9 [214.7-217.0]** | **226.0 [225.8-228.3]** | **228.8 [228.8-229.2]** |
+| Half-split, profile opt 16 | 212.6 [212.4-213.0] | 228.0 [227.8-230.1] | 228.3 [228.0-228.6] |
+| Half-split, optimization level 5 | 215.8 [215.7-216.5] | 228.1 [226.8-228.3] | 229.5 [229.0-230.1] |
+| Half-split, tiling optimization level 3 | 215.6 [215.5-216.2] | 227.9 [226.2-229.3] | 229.2 [229.0-229.9] |
+| Half-split, attention scales folded into the QKV weights | 215.7 [215.4-216.4] | 226.2 [225.8-229.4] | 229.1 [228.4-229.5] |
+
+An optimization profile whose `opt` shape matches the batch is 6 to 10 percent faster at that batch
+and 3 to 6 percent slower at the others; with ingest batches that vary from 1 to 32 the profile
+does not pay and stays at `opt` 8. At batch 32 the half-split engine runs 229 images/s = 88 TFLOP/s =
+57 percent of peak (the baseline: 184 = 71 TFLOP/s = 46 percent).
+
+#### Through Triton (`perf_analyzer`, images/s, median [range] of 3)
+
+| Batch x concurrency | Baseline | Half-split | Ratio | p50 latency, baseline / half-split |
+|---|---:|---:|---:|---:|
+| 8 x 4 | 181.0 [180.5-181.5] | 217.5 [217.1-218.2] | 1.20 | 176 / 146 ms |
+| 8 x 8 | 181.1 [181.1-181.2] | 224.4 [224.2-224.4] | 1.24 | 352 / 284 ms |
+| 16 x 4 | 181.1 [180.4-181.1] | 224.6 [224.5-225.3] | 1.24 | 352 / 283 ms |
+| 16 x 8 | 181.1 [179.6-181.1] | 225.4 [225.3-232.0] | 1.24 | 705 / 566 ms |
+| 32 x 4 | 180.5 [180.5-182.0] | 226.3 [224.8-227.8] | 1.25 | 701 / 558 ms |
+| 32 x 8 | 180.3 [180.2-180.3] | 226.3 [226.2-226.3] | 1.26 | 1,404 / 1,128 ms |
+| 1 x 32 (single images, batched by Triton) | 180.4 [180.2-180.4] | 217.0 [216.7-217.3] | 1.20 | 176 / 147 ms |
+
+Serving settings, all on the same engine (images/s; 16 x 4, 16 x 8, 1 x 32):
+
+| Setting | Half-split | Baseline |
+|---|---|---|
+| Shipped: 1 instance, preferred 4, 8, 16, 32, 15 ms queue delay | 224.6, 225.4, 217.0 | 181.1, 181.1, 180.4 |
+| 2 instances on the GPU | 228.1, 228.2, 223.7 (+1 to +3 %) | 181.1, 178.9, 183.3 (-1 to +2 %) |
+| Queue delay 0 | 223.1, 225.3, 213.4 | not run |
+| Queue delay 5 ms | 224.5, 224.5, 217.8 | not run |
+| No preferred batch sizes | 224.6, 226.0, 217.5 | not run |
+| CUDA graphs for batches 1, 2, 4, 8, 12, 16, 20, 24, 32 | 221.0, 220.9, 215.8 (-2 %) | 178.1, 177.4, 174.2 (-2 to -3 %) |
+| Profile opt 16 plan | 225.3, 226.0, 216.2 | not run |
+
+The GPU is the bottleneck at one instance, so the batching knobs have nothing to win; a second instance
+buys at most 3 percent for twice the activation memory, and CUDA graphs cost 2 percent.
+
+#### Parity (candidate engine against the shipped FP16 engine, pinned 2,000 images)
+
+The candidate plan is the half-split ONNX baked, uint8-wrapped and built through the installer path,
+served in an isolated stack (project `pepass`, GPU 0, own ports, the reference models directory with only the
+PE plan replaced) and captured with `scripts/bench/parity.py capture`; the references are
+`ref-u8fp16` and `ref-u8fp16-repeat` of the current tree, judged with `compare --profile precision`.
+Summary: `docs/benchmarks/parity/pe_rope_layout_vs_u8fp16/`.
+
+| Gate (rule) | Against `ref-u8fp16` | Against `ref-u8fp16-repeat` | Reference against its repeat (noise) |
+|---|---:|---:|---:|
+| P-pe crop cosine p01 (>= 0.995) | 0.99976 | 0.99979 | 0.99995 |
+| P-pe crop cosine median (>= 0.999) | 0.99996 | 0.99996 | 1.00000 |
+| P-pew frame cosine p01 (>= 0.995) | 0.99945 | 0.99945 | 0.99994 |
+| P-pew frame cosine median (>= 0.999) | 0.99994 | 0.99994 | 1.00000 |
+| P-knn overlap@10 (>= 0.95) | 0.9826 | 0.9835 | 0.9955 |
+| P-dup near-duplicate agreement (>= 0.995) | 1.0000 | 1.0000 | 1.0000 |
+| P-cluster-assign (>= 0.98) | 0.9987 | 0.9984 | 0.9997 |
+| P-cluster-purity drop in points (<= 0.5) | 0.44 | -0.02 | 0.45 |
+| P-label-vote (>= 0.97) | 0.994 | 0.993 | 0.999 |
+| P-knn-precision drop in points (<= 0.5) | -0.12 | -0.11 | -0.01 |
+| P-box, P-item, P-label, P-clip, P-face, P-ocr | PASS | PASS | PASS |
+
+All gates pass (`P-vlm` skipped: no VLM in the stack). The frame vectors, which share their input bits
+with the reference (no detector in between), move by a minimum cosine of 0.9970 and a first percentile
+of 0.99945; the crop minimum of 0.909 is the same as the reference's own repeat run (0.909: one crop
+whose rectangle moved a pixel). The drift is FP16 rounding order, larger than the repeat noise
+(first percentile 0.9998 against 0.99995) and well inside the gates. Issue #227 states a stricter bar
+of p01 >= 0.9999 against `ref-fp16`; the engine does not meet that literal figure (0.99945 on frames),
+and the repository gate for a precision-level change is the one above.
+
+#### Decision
+
+| Rule | Observed | Action |
+|---|---|---|
+| >= 10 percent PE images/s at batch 16 through Triton | 1.24x (181.1 to 224.6) | Ship the half-split layout |
+| Reaches >= 55 percent of peak | 57 percent at batch 32, 56 percent at batch 16 | Closes the question of fused attention: it was fused all along |
+| Builder flag, profile, batching, instance or graph variants | within 2 percent of the baseline except at the `opt` batch | Not adopted, nothing added |
+
+`models/pe_image_encoder/config.pbtxt`, `build_pe_trt.sh` and the installer build step are unchanged.
+Deployments pick the faster engine up by rebuilding it (`./openprocessor models install --only pe` re-exports the
+ONNX and rebuilds the plan); a plan built before this change keeps working and keeps its speed.
+
+#### What was not measured, and caveats
+
+- Not run: the RTX 3080 Ti (GPU 1 belonged to another run), a maximum batch of 64, a second instance of
+  the half-split engine with the production API in front, the full ingest protocol (the ingest phase
+  of the two parity captures took 77 and 82 s against 97.6 s of the reference capture, but the host load
+  differed; not a measurement), repeated builds of the half-split plan (the baseline's two builds agree
+  within 0.1 percent), CUDA shared memory and pinned-memory settings (the shared-memory package covers them).
+- No attention plugin or custom kernel was tried: TensorRT already selects its fused MHA kernel, the
+  remaining non-GEMM time is LayerNorm at 4 percent and the fused attention at 11 percent. The
+  `--tacticSources` flag only lists convolution tactics in this TensorRT release, and the engine has one
+  convolution. LayerNorm and GELU are already fused (above). Precision mixing was not touched; INT8 stays
+  rejected (see the INT8 section).
+- Timing was taken at 1,430 to 1,540 MHz on a power-capped card shared with other projects; the
+  ratios between rows are the finding, the absolute images/s move by a few percent with clocks.
+- The rewrite is a fixed pattern of the PE-Core export (node names of the `perception_models` graph,
+  24 blocks of 16 heads x 64, 577 tokens). It checks those assumptions and leaves any other graph
+  as exported, with a warning, so a changed upstream export costs speed, not correctness.
+
+To repeat: export (`python export/export_pe_image_encoder.py` runs the rewrite), bake and build with
+`export/build_pe_trt.sh`, then `trtexec --loadEngine=model.plan --shapes=images:16x3x336x336
+--warmUp=1000 --duration=15` for the engine and `perf_analyzer -m pe_image_encoder -b 16
+--concurrency-range=4 --shape images:3,336,336` for Triton. A baseline plan for the comparison is the same
+build from an ONNX exported before this change (or `python export/pe_rope_layout.py` skipped).
 
 ### WP-2.3: cross-image PE batching (#216)
 

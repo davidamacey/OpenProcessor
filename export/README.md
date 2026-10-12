@@ -247,6 +247,13 @@ into `models/pe_image_encoder/` and render the matching `config.pbtxt`
 so Triton never sees both. The committed `models/pe_image_encoder/config.pbtxt`
 is the rendered default (TensorRT, max batch 32).
 
+The exporter's last step is `pe_rope_layout.py`: it rewrites the ONNX in place so the rotary
+embedding works on contiguous even/odd channel halves instead of interleaved pairs (the query and key
+channels of the QKV projection are permuted to match). The function is the same (cosine 1.0000 in
+FP32 on ONNX Runtime) and the TensorRT engine is about 24 percent faster. An ONNX exported before
+this step has the old layout: re-run the exporter, or `python export/pe_rope_layout.py IN.onnx
+OUT.onnx`, then rebuild the engine. A graph that is not PE-Core's is left as exported, with a warning.
+
 | Flag | Purpose |
 |------|---------|
 | `--checkpoint-path`, `--no-verify-checkpoint` | Use a local checkpoint / skip the SHA-256 check. |

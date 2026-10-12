@@ -428,6 +428,12 @@ and an API restart (`/v2/systemsharedmemory/status` before and after); `tests/te
 updated. Rollback: setting to `grpc`. If the win is < 5 % of API CPU, close the WP as measured and
 not adopted.
 
+**Result (measured, closed, not adopted).** The transport alone costs about 6 ms of client CPU per
+frame, but ingest API CPU per image fell 0 to 3 percent (inside an 8 to 10 percent run-to-run spread) and
+Triton's user CPU rose by more than its kernel time fell; no setting, compose change or client code
+shipped. Numbers, the design that was built and the isolation checks that were run are in
+`docs/PERFORMANCE.md` ("WP-2.2: system shared memory between the API and Triton").
+
 ### WP-2.3 Cross-image PE batching (#216). Tier: Sonnet.
 
 Touch points: `src/services/curation/ingest_batch.py` (`run_ingest_batch` `:129`), `ingest_index.py`
