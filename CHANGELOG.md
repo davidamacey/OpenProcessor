@@ -74,6 +74,15 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   rises by more than the kernel time saved, so the package is closed as measured and not adopted; the
   wire stays the only transport and no code changed (#215).
 
+- Data-parallel PE image encoding: `TRITON_GPU_ID` takes a comma list (`0,2`) and `pe_image_encoder`
+  runs one instance on every listed card behind one dynamic-batcher queue; every other model stays on
+  the lowest listed card. Two RTX A6000 reach 44.6 images/s on the pinned COCO set against 23.4 for one
+  (1.91x), an A6000 with an RTX 3080 Ti 43.7, and the stored vectors are bit-identical whichever card
+  serves a request. `openprocessor gpu plan` explains the placement and exits 1 for a missing or
+  repeated card, mixed compute capabilities, or a card without room; the installer takes
+  `--gpu-plan triton=0+2` and refuses the same cases. `scripts/bench/pe_gpu_parity.py` compares
+  embeddings of the same crops per card (#228).
+
 ### Changed
 
 - `scripts/curation/ingest_walker.py` is replaced by `scripts/curation/bulk_ingest.py` (`--folder` instead of
@@ -131,6 +140,9 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   up to about 128 MB resident per worker) (#211).
 - Triton runs with `--log-verbose=0` instead of logging an allocation and a free for every tensor of
   every request (#211).
+- Triton runs with `CUDA_DEVICE_ORDER=PCI_BUS_ID`: CUDA's default fastest-first order would otherwise
+  put the `gpus: [ 0 ]` models on a faster card with a higher host index instead of the lowest listed
+  one (#228).
 
 ### Fixed
 

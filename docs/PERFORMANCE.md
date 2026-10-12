@@ -2046,6 +2046,128 @@ conclusion is that the effect is smaller than that, not that it is zero. The `DE
 repetition 1); it is still not diagnosed, and it cost that launch its batch repetitions, which were
 repeated in a later launch.
 
+### Multi-GPU PE encoding (#228)
+
+The PE image encoder is about 99 percent of the GPU work of `/ingest`, and one RTX A6000 tops out
+near 23 images per second on 640 x 480 frames (Wave 0). This section measures running the encoder
+on several cards. Medians with the minimum and maximum of 3 repetitions in parentheses. Raw JSON
+and logs stay in the scratch directory of the run; the commands are `scripts/bench/wave0_suite.py
+--phases env,sweep --modes batch --reps 3 --sweep-points 32x16` (set A) and `8x16` (set B),
+`perf_analyzer` for the engine-only rows, and `scripts/bench/pe_gpu_parity.py`.
+
+**Design chosen.** One Triton, `pe_image_encoder` with `instance_group { count: 1, kind: KIND_GPU }`
+and no `gpus` list, so Triton starts one instance on every card the container sees and one
+dynamic-batcher queue feeds them all. `TRITON_GPU_ID` takes a comma list (`0,2`); every other model
+stays pinned to `gpus: [ 0 ]`, the lowest listed card (`CUDA_DEVICE_ORDER=PCI_BUS_ID` makes that
+true; see the finding below). No client change, no second service, and a card that is free takes the
+next batch, so unequal cards share the work by speed. The alternative, one Triton per card behind a
+client that balances, needs a balancing client in the API, one compose service and port per card,
+and gains nothing the first layout does not already deliver (engine-only table).
+
+| Item | Value |
+|---|---|
+| Cards | RTX A6000 (GPU 2, GPU 0), RTX 3080 Ti (GPU 1, 12 GB), PCIe 3.0 x16, GPU 0 and 1 on NUMA node 0, GPU 2 on node 1; same compute capability (8.6) |
+| Stack | the repository `docker-compose.yml` with the checkout's `src/` mounted, project `mgpu`, loopback ports, OpenSearch heap 8 GB, 32 API workers, no curation workers (`--skip-cluster --skip-settle`) |
+| Engines | the uint8 FP16 PE plan of `ref-u8fp16` (plan sha256 `a4feb7df...`), one plan file for every card |
+| Load | set A (2,000 COCO images, 32 per request, 16 clients), set B (500 photos, 8 per request, 16 clients), policy `all` |
+| Foreign load | the host and GPUs 0 and 2 were shared with other projects. Every repetition records the foreign SM share per card; only repetitions with 0.0 percent foreign load on every card used are reported as results |
+
+#### Engine only (`perf_analyzer`, batch 32, gRPC)
+
+| Layout | images/s |
+|---|---:|
+| RTX A6000 alone | 180.9 |
+| RTX 3080 Ti alone | 197.3 |
+| (a) one Triton, the encoder on both | 386.1 (102 percent of the two alone) |
+| (b) two Triton processes, both driven at once | 377.9 (197.8 + 180.1) |
+
+Ingest sends 7.4 encoder crops per image on set A (6.4 item crops and the whole frame), so 181
+crops/s is 24.4 images/s for one A6000 and 386 crops/s is 52 images/s for the pair.
+
+#### Ingest, set A (2,000 images, `/ingest/batch`)
+
+| Cards | images/s | scaling | request p50 s | GPU util % | API CPU s/image | host busy % |
+|---|---:|---:|---:|---|---:|---|
+| 1 x A6000 (GPU 2) | 23.39 (22.96-23.41) | 1.00 | 22.3 (21.5-22.4) | 95-98 | 0.065-0.071 | 26-42 |
+| 2 x A6000 (GPUs 0 and 2) | 44.60 (44.29-45.47) | 1.91 | 11.0 (10.9-11.1) | 87-93 / 89-93 | 0.060-0.068 | 22-26 |
+| A6000 + 3080 Ti (GPUs 2 and 1) | 43.72 (42.46-45.94) | 1.87 | 10.2 (10.1-10.6) | 84-90 / 81-90 | 0.062-0.079 | 29-82 |
+
+Two A6000 pass the 1.8x gate at 1.91x (95 percent of two cards), with the encoder instances 87-93
+percent busy on both cards and the host 22-26 percent busy: the API (1.7 cores per card at 0.06 CPU-s
+per image) is not the limit for frames. The three clean repetitions are 44.29 and 45.47 from one
+series and 44.60 from another; the other three repetitions of those series ran while other projects
+held 11-30 percent of GPU 0's SMs and are discarded (37.2-39.9 images/s).
+
+One A6000 reaches 96 percent of its engine-only capacity (23.39 against 24.4 images/s); the
+A6000 + 3080 Ti pair reaches 84 percent of its own (43.72 against 52), and the best repetition
+(45.94, host 29 percent busy) 88 percent. The slow repetitions of the pair ran while other
+projects pushed the host load average to 54-74 on 48 cores, which starves the API (GPU 81-84 percent
+busy, PE mean batch 1.7 against 1.8). The first one-card series on GPU 0 and on GPU 2 are discarded:
+other projects held 5-31 percent of those cards' SMs (15.9-22.2 images/s).
+
+#### Ingest, set B (500 photos of 12-24 MP, `/ingest/batch`)
+
+| Cards | images/s | API CPU s/image | GPU util % | host busy % |
+|---|---:|---:|---|---|
+| 1 x A6000 | 25.03 (23.36-26.39) | 1.17-1.20 | 32-41 | 71-81 |
+| A6000 + 3080 Ti | 26.54 (24.47-28.61) | 1.09-1.16 | 14-29 / 21-26 | 78-82 |
+
+Photos are bound by the API and host (28 of 48 cores), not by the encoder: a second card adds 6
+percent. More cards help frames, not photos; the next lever for photos is the API CPU per image.
+
+#### Same crops, any card
+
+`pe_gpu_parity.py capture` encoded the same 256 crops (resize, centre crop, uint8, as in ingest)
+on a Triton that sees one card, once per card.
+
+| Pair | crops | cosine min | max abs diff | bit-identical |
+|---|---:|---:|---:|---:|
+| RTX A6000 (GPU 0) vs RTX 3080 Ti (GPU 1) | 256 | 1.0000 | 0.0 | 256 |
+| RTX A6000 (GPU 0) vs RTX A6000 (GPU 2) | 256 | 1.0000 | 0.0 | 256 |
+| RTX 3080 Ti (GPU 1) vs RTX A6000 (GPU 2) | 256 | 1.0000 | 0.0 | 256 |
+| RTX 3080 Ti, run 1 vs run 2 | 256 | 1.0000 | 0.0 | 256 |
+
+Which card serves a request does not change the stored vector. TensorRT logs that a plan is "not
+supported across different models of devices"; with one compute capability the three cards loaded the
+one plan and agreed bit for bit.
+
+#### Parity gate (`precision` profile, set A, A6000 + 3080 Ti, policy `all`)
+
+| Comparison | P-box | P-item | P-pe-p01 | P-pew-p01 | P-knn | P-cluster-assign | P-cluster-purity | P-label-vote | unmatched conf. | gates failed |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| `ref-u8fp16-repeat` vs `ref-u8fp16` (noise floor) | 0.9939 | 1.0000 | 0.99995 | 0.99994 | 0.9955 | 0.9997 | 0.453 | 0.9990 | 0 | none |
+| two-card run vs `ref-u8fp16` | 0.9934 | 1.0000 | 0.99991 | 0.99989 | 0.9945 | 0.9997 | 0.274 | 0.9980 | 0 | none |
+| two-card run vs `ref-u8fp16-repeat` | 0.9944 | 1.0000 | 0.99991 | 0.99989 | 0.9939 | 0.9995 | -0.180 | 0.9970 | 0 | none |
+
+The capture used the detector and the encoder only (`--probe-images 0`: MobileCLIP, SCRFD and OCR
+are untouched by this change and did not fit next to them on the 12 GB card); the CLIP, face and OCR
+gates are therefore skipped. 12,792 items matched 12,792.
+
+#### Memory
+
+One encoder instance holds 1,312 MiB on either card at batch 32 (recorded as
+`GPU_MIB_PER_INSTANCE` 1536 in the model config, which `openprocessor gpu plan` and the installer
+read). The primary card holds every model: 13.6 GB on the A6000. With 2.5 GB held by another project
+the full model set does not load on the 12 GB card (SCRFD and the detector fail with out of memory),
+the detector and encoder alone do (5.1 GB). So a 12 GB card is a good secondary and not a primary;
+`gpu plan` refuses it as the lowest id, and the installer's existing 16 GB export floor does too.
+
+#### Finding: CUDA numbers cards fastest first
+
+Without `CUDA_DEVICE_ORDER=PCI_BUS_ID`, a Triton container given `TRITON_GPU_ID=1,2` put every
+`gpus: [ 0 ]` model on the RTX A6000 (host index 2) and the encoder second on the RTX 3080 Ti,
+because CUDA's default order is fastest first. The compose file now sets PCI order, so the pinned
+models follow the lowest listed host index on any mix of cards.
+
+#### Not measured
+
+- Whether the cross-socket copies of a card on the other NUMA node cost anything: no pinned
+  per-socket run was made, and the pair above already includes GPU 2 on node 1 against GPU 1 on
+  node 0 (scaling 1.87, 84 percent of the engine-only capacity).
+- The 10,000-image pin, p99 request latency per layout, the CLIP, face and OCR parity probes of the
+  two-card run, and a client-balanced multi-Triton run through the API (only the engine-only
+  comparison above).
+
 ### Vector store evaluation: tuned OpenSearch against Milvus, Qdrant, pgvector and LanceDB (#221, #230)
 
 Question: is OpenSearch k-NN the right engine for the curation embedding index, or is a second
