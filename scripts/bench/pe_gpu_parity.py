@@ -30,8 +30,12 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+# ruff: noqa: E402
+from src.config.settings import TritonModelConfig
+
+
 BATCH = 32
-MODEL = 'pe_image_encoder'
+MODEL = TritonModelConfig.PE_IMAGE_MODEL
 
 
 def pair_stats(a: np.ndarray, b: np.ndarray) -> dict[str, float]:
