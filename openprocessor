@@ -351,6 +351,15 @@ _models_precision_section() {
     local degraded model precision reason
     # shellcheck source=scripts/lib/model_setup.sh
     source "${SCRIPT_DIR}/lib/model_setup.sh"
+    local stamps trt cc sha
+    stamps="$(OP_DIR="$PROJECT_DIR" model_setup_stamp_report)"
+    if [[ -n "$stamps" ]]; then
+        echo -e "${BOLD}Engine build stamps:${NC}"
+        while IFS=$'\t' read -r model precision trt cc sha; do
+            echo "  ${model}: ${precision}, TensorRT ${trt}, compute capability ${cc}, ONNX ${sha}"
+        done <<< "$stamps"
+        echo ""
+    fi
     degraded="$(OP_DIR="$PROJECT_DIR" model_setup_precision_report)"
     [[ -n "$degraded" ]] || return 0
     echo -e "${BOLD}Degraded precision:${NC}"

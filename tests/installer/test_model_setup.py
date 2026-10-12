@@ -3,6 +3,7 @@ logic (installer plan section 9.2, last paragraph)."""
 
 from __future__ import annotations
 
+import hashlib
 from typing import TYPE_CHECKING
 
 
@@ -302,14 +303,26 @@ FP16_TRT_ERROR = (
 )
 
 
+STAMP_STUBS = '_ms_compute_cap() { echo 8.6; }; _ms_trt_version() { echo v110100; }; '
+ONNX_BYTES = b'pe-onnx-v1'
+ONNX_SHA = hashlib.sha256(ONNX_BYTES).hexdigest()
+
+
+def _put_onnx(tmp_path: Path, data: bytes = ONNX_BYTES) -> None:
+    (tmp_path / 'pytorch_models').mkdir(exist_ok=True)
+    (tmp_path / 'pytorch_models' / 'pe_image_encoder.onnx').write_bytes(data)
+
+
 def _pe_group_script(tmp_path: Path, *, fp16_trtexec_fails: bool) -> str:
     """Runs the real `pe` group with dc() standing in for docker compose:
     trtexec fails on the FP16-baked ONNX (first call) when asked to, and
     succeeds once the FP32 ONNX has been copied into place."""
     fail = 'true' if fp16_trtexec_fails else 'false'
+    _put_onnx(tmp_path)
     return (
         f'source {LIB}; OP_DIR="{tmp_path}"; mkdir -p "{tmp_path}/.install"; sleep() {{ :; }}; '
         'triton_load_and_wait() { return 0; }; '
+        f'{STAMP_STUBS} '
         'fp32_staged=0; '
         'dc() { '
         '  if [[ "$*" == *"cp /app/pytorch_models/pe_image_encoder.onnx"* ]]; then touch "$OP_DIR/fp32_staged"; fi; '
@@ -335,7 +348,7 @@ def test_pe_fp32_fallback_warns_loudly_and_is_recorded_as_degraded(tmp_path: Pat
     )
     assert statuses['pe'] == 'degraded'
     model, precision, reason = (
-        (tmp_path / '.install' / 'precision.tsv').read_text().rstrip().split('\t')
+        (tmp_path / '.install' / 'precision.tsv').read_text().rstrip().split('\t')[:3]
     )
     assert (model, precision) == ('pe_image_encoder', 'fp32_fallback')
     assert 'IEinsumLayer' in reason
@@ -364,8 +377,10 @@ def test_a_degraded_group_is_not_skipped_as_up_to_date(tmp_path: Path, bash) -> 
     (models / 'pe_text_encoder' / '1' / 'model.onnx').write_text('x')
     (tmp_path / '.install').mkdir()
     (tmp_path / '.install' / 'state.json').write_text('{"triton_image_digest": "sha256:abc"}')
+    _put_onnx(tmp_path)
+    (tmp_path / '.install' / 'precision.tsv').write_text(_stamp_row())
     base = (
-        f'source {LIB}; OP_DIR="{tmp_path}"; MODEL_SETUP_TRITON_DIGEST=sha256:abc; '
+        f'source {LIB}; OP_DIR="{tmp_path}"; MODEL_SETUP_TRITON_DIGEST=sha256:abc; {STAMP_STUBS}'
         'triton_model_ready() { return 0; }; triton_load_and_wait() { return 0; }; '
         'dc() { echo STEP-RAN; return 0; }; '
     )
@@ -385,3 +400,64 @@ def test_precision_report_lists_only_non_fp16_models(tmp_path: Path, bash) -> No
     )
     out = bash(f'source {LIB}; OP_DIR="{tmp_path}" model_setup_precision_report').stdout
     assert out.strip() == 'pe_image_encoder\tfp32_fallback\tIEinsumLayer mismatch'
+
+
+# ---- build stamp: what was built, for which GPU, from which ONNX ----
+
+
+def test_pe_build_records_a_full_stamp(tmp_path: Path, bash) -> None:
+    bash(_pe_group_script(tmp_path, fp16_trtexec_fails=False))
+    row = (tmp_path / '.install' / 'precision.tsv').read_text().rstrip().split('\t')
+    assert row[:2] == ['pe_image_encoder', 'fp16']
+    assert row[3:6] == ['v110100', '8.6', ONNX_SHA]
+    assert 'opt8' in row[6]
+
+
+def _installed_pe(tmp_path: Path, *, stamp: str | None) -> str:
+    """An installed, READY, up-to-date-looking PE group; returns the bash prelude."""
+    models = tmp_path / 'models'
+    for rel in ('pe_image_encoder/1/model.plan', 'pe_text_encoder/1/model.onnx'):
+        (models / rel).parent.mkdir(parents=True, exist_ok=True)
+        (models / rel).write_text('x')
+    (tmp_path / '.install').mkdir(exist_ok=True)
+    (tmp_path / '.install' / 'state.json').write_text('{"triton_image_digest": "sha256:abc"}')
+    (tmp_path / '.install' / 'groups.tsv').write_text('pe\tok\t5\n')
+    if stamp is not None:
+        (tmp_path / '.install' / 'precision.tsv').write_text(stamp)
+    _put_onnx(tmp_path)
+    return (
+        f'source {LIB}; OP_DIR="{tmp_path}"; MODEL_SETUP_TRITON_DIGEST=sha256:abc; {STAMP_STUBS}'
+        'triton_model_ready() { return 0; }; triton_load_and_wait() { return 0; }; '
+        'dc() { return 0; }; '
+    )
+
+
+def _stamp_row(*, precision: str = 'fp16', cc: str = '8.6', sha: str = ONNX_SHA) -> str:
+    return f'pe_image_encoder\t{precision}\t\tv110100\t{cc}\t{sha}\tflags\n'
+
+
+def test_a_current_stamp_lets_the_group_skip(tmp_path: Path, bash) -> None:
+    prelude = _installed_pe(tmp_path, stamp=_stamp_row())
+    assert 'up to date, skipped' in bash(prelude + 'model_setup_run_group pe').stdout
+
+
+def test_a_stale_or_missing_stamp_forces_a_rebuild(tmp_path: Path, bash) -> None:
+    cases = {
+        'no build stamp': None,
+        'compute capability 7.5': _stamp_row(cc='7.5'),
+        'ONNX changed': _stamp_row(sha='0' * 64),
+    }
+    for reason, stamp in cases.items():
+        prelude = _installed_pe(tmp_path, stamp=stamp)
+        out = bash(prelude + 'model_setup_run_group pe')
+        assert 'skipped' not in out.stdout, reason
+        assert 'engine stamp is stale' in out.stdout, reason
+        assert reason in out.stdout, reason
+        assert 'step pe_weights: ok' in out.stdout, reason
+
+
+def test_stamp_report_lists_every_stamped_engine(tmp_path: Path, bash) -> None:
+    (tmp_path / '.install').mkdir()
+    (tmp_path / '.install' / 'precision.tsv').write_text(_stamp_row())
+    out = bash(f'source {LIB}; OP_DIR="{tmp_path}" model_setup_stamp_report').stdout
+    assert out.strip() == f'pe_image_encoder\tfp16\tv110100\t8.6\t{ONNX_SHA[:12]}'
