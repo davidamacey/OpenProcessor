@@ -61,13 +61,13 @@ def test_readme_sample_walker_sets_op_source_root_host() -> None:
 
 def test_readme_sample_walker_root_is_under_the_source_mount() -> None:
     section = README[README.index('Try it with a public sample') :][:2000]
-    assert '--root /data/source/coco_va_readme/images' in section, (
-        f"README's ingest_walker.py --root must be a container path under "
+    assert '--folder /data/source/coco_va_readme/images' in section, (
+        f"README's bulk_ingest.py --folder must be a container path under "
         f'/data/source (the real mount target), not a host-relative or '
         f'/app/data/samples path:\n{section}'
     )
     # The old, broken form must be gone.
-    assert '--root data/samples/coco_va_readme/images' not in section
+    assert '--folder data/samples/coco_va_readme/images' not in section
 
 
 def test_readme_mentions_narrowing_with_the_ingest_policy() -> None:

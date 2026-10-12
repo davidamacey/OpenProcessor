@@ -276,10 +276,10 @@ Government Work"; never NonCommercial or NoDerivs). Then:
 #    target is fixed at /data/source):
 echo 'OP_SOURCE_ROOT_HOST=./data/samples' >> .env
 docker compose up -d --force-recreate api
-# 4. --root is a container path under the /data/source mount, not a
+# 4. --folder is a container path under the /data/source mount, not a
 #    host-relative one:
-docker compose exec api python scripts/curation/ingest_walker.py \
-  --root /data/source/coco_va_readme/images --project cars \
+docker compose exec api python scripts/curation/bulk_ingest.py \
+  --folder /data/source/coco_va_readme/images --project cars \
   --api-base http://localhost:8000/curation
 ```
 

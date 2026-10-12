@@ -1,0 +1,335 @@
+{
+  "calibration": {
+    "crop_boxes": "COCO ground-truth boxes (min side 24 px, up to 6 per image) through the production crop rule",
+    "crops": 1000,
+    "overlap_with_pinned_set": 0,
+    "source": "COCO train2017, 300 images outside the pinned 2,000, seed 20261011"
+  },
+  "decision": "not shipped: no A8W8 recipe passes the accuracy gates; the one recipe that passes (weight-only) gives no speed or size gain",
+  "engine_only_trtexec": {
+    "bmax_3080": {
+      "b32": {
+        "gpu_compute_ms_mean": 117.878,
+        "images_per_s": 271.5
+      },
+      "b8": {
+        "gpu_compute_ms_mean": 28.13,
+        "images_per_s": 284.4
+      }
+    },
+    "bmax_a6000": {
+      "b32": {
+        "gpu_compute_ms_mean": 119.323,
+        "images_per_s": 268.2
+      },
+      "b8": {
+        "gpu_compute_ms_mean": 28.6712,
+        "images_per_s": 279.0
+      }
+    },
+    "c_e_a6000": {
+      "b32": {
+        "gpu_compute_ms_mean": 135.88,
+        "images_per_s": 235.5
+      },
+      "b8": {
+        "gpu_compute_ms_mean": 33.1843,
+        "images_per_s": 241.1
+      }
+    },
+    "fp16_3080": {
+      "b32": {
+        "gpu_compute_ms_mean": 159.784,
+        "images_per_s": 200.3
+      },
+      "b8": {
+        "gpu_compute_ms_mean": 38.7446,
+        "images_per_s": 206.5
+      }
+    },
+    "fp16_a6000": {
+      "b32": {
+        "gpu_compute_ms_mean": 171.594,
+        "images_per_s": 186.5
+      },
+      "b8": {
+        "gpu_compute_ms_mean": 42.1048,
+        "images_per_s": 190.0
+      }
+    },
+    "h2_3080": {
+      "b32": {
+        "gpu_compute_ms_mean": 129.928,
+        "images_per_s": 246.3
+      },
+      "b8": {
+        "gpu_compute_ms_mean": 31.2396,
+        "images_per_s": 256.1
+      }
+    },
+    "h2_a6000": {
+      "b32": {
+        "gpu_compute_ms_mean": 137.191,
+        "images_per_s": 233.2
+      },
+      "b8": {
+        "gpu_compute_ms_mean": 33.1019,
+        "images_per_s": 241.7
+      }
+    }
+  },
+  "environment": {
+    "batch_profile": "min 1 / opt 8 / max 32 at 336x336",
+    "gpus": [
+      "RTX A6000 (SM86, 300 W)",
+      "RTX 3080 Ti (SM86, 12 GB)"
+    ],
+    "modelopt": "0.47.0",
+    "tensorrt": "11.1.0.106",
+    "triton_image": "davidamacey/openprocessor-triton:0.5.0",
+    "trtexec": "v110100"
+  },
+  "evaluation_set": "pinned 2,000 COCO images: 12,790 production crops (reference crop rectangles) and 2,000 whole frames; reference = FP16 engine built from the same ONNX on the same GPU",
+  "gates": {
+    "b_a6000": {
+      "failed_gates": 8,
+      "gpu": "A6000",
+      "observed": {
+        "P-cluster-assign": 0.90133,
+        "P-cluster-purity": -0.13292,
+        "P-dup": 0.99914,
+        "P-knn": 0.7158,
+        "P-knn-precision": 0.80519,
+        "P-label": 1.0,
+        "P-label-vote": 0.887,
+        "P-pe-median": 0.98633,
+        "P-pe-p01": 0.88519,
+        "P-pew-median": 0.98056,
+        "P-pew-p01": 0.94249
+      },
+      "recipe": "entropy (1000 crops), all 98 linear MatMuls"
+    },
+    "bmax_3080": {
+      "failed_gates": 8,
+      "gpu": "3080 Ti",
+      "observed": {
+        "P-cluster-assign": 0.67021,
+        "P-cluster-purity": -0.49257,
+        "P-dup": 0.99892,
+        "P-knn": 0.5238,
+        "P-knn-precision": 0.75325,
+        "P-label": 1.0,
+        "P-label-vote": 0.849,
+        "P-pe-median": 0.93744,
+        "P-pe-p01": 0.73512,
+        "P-pew-median": 0.92739,
+        "P-pew-p01": 0.8049
+      },
+      "recipe": "max, all 98 linear MatMuls, activation matmuls FP16"
+    },
+    "bmax_a6000": {
+      "failed_gates": 8,
+      "gpu": "A6000",
+      "observed": {
+        "P-cluster-assign": 0.67115,
+        "P-cluster-purity": 0.36747,
+        "P-dup": 0.99892,
+        "P-knn": 0.5241,
+        "P-knn-precision": 0.81818,
+        "P-label": 1.0,
+        "P-label-vote": 0.847,
+        "P-pe-median": 0.9375,
+        "P-pe-p01": 0.73558,
+        "P-pew-median": 0.92725,
+        "P-pew-p01": 0.8046
+      },
+      "recipe": "max, all 98 linear MatMuls, activation matmuls FP16"
+    },
+    "c_e_a6000": {
+      "failed_gates": 7,
+      "gpu": "A6000",
+      "observed": {
+        "P-cluster-assign": 0.95489,
+        "P-cluster-purity": -0.53948,
+        "P-dup": 0.99932,
+        "P-knn": 0.8201,
+        "P-knn-precision": 0.36364,
+        "P-label": 1.0,
+        "P-label-vote": 0.926,
+        "P-pe-median": 0.99242,
+        "P-pe-p01": 0.97665,
+        "P-pew-median": 0.98379,
+        "P-pew-p01": 0.94511
+      },
+      "recipe": "entropy (300 crops), blocks 0,1,22,23 + pooling head + projection kept FP16"
+    },
+    "fp16_3080": {
+      "failed_gates": 0,
+      "gpu": "3080 Ti",
+      "observed": {
+        "P-cluster-assign": 0.99922,
+        "P-cluster-purity": 0.24238,
+        "P-dup": 1.0,
+        "P-knn": 0.9922,
+        "P-knn-precision": 0.02597,
+        "P-label": 1.0,
+        "P-label-vote": 0.991,
+        "P-pe-median": 0.99999,
+        "P-pe-p01": 0.99996,
+        "P-pew-median": 0.99998,
+        "P-pew-p01": 0.99991
+      },
+      "recipe": "FP16 engine built on the 3080 Ti, against the A6000 FP16 engine (cross-GPU noise floor)"
+    },
+    "h2_a6000": {
+      "failed_gates": 7,
+      "gpu": "A6000",
+      "observed": {
+        "P-cluster-assign": 0.8792,
+        "P-cluster-purity": 0.0,
+        "P-dup": 0.9987,
+        "P-knn": 0.6944,
+        "P-knn-precision": -0.23377,
+        "P-label": 1.0,
+        "P-label-vote": 0.896,
+        "P-pe-median": 0.97981,
+        "P-pe-p01": 0.92877,
+        "P-pew-median": 0.97562,
+        "P-pew-p01": 0.92769
+      },
+      "recipe": "max, blocks 0,1,22,23 + pooling head + projection kept FP16"
+    },
+    "w8_a6000": {
+      "failed_gates": 0,
+      "gpu": "A6000",
+      "observed": {
+        "P-cluster-assign": 0.99586,
+        "P-cluster-purity": 0.16419,
+        "P-dup": 0.99981,
+        "P-knn": 0.9596,
+        "P-knn-precision": -0.16883,
+        "P-label": 1.0,
+        "P-label-vote": 0.976,
+        "P-pe-median": 0.99966,
+        "P-pe-p01": 0.999,
+        "P-pew-median": 0.99954,
+        "P-pew-p01": 0.99844
+      },
+      "recipe": "weight-only per-channel INT8, activations FP16"
+    }
+  },
+  "schema": 1,
+  "triton_perf_analyzer_images_per_s": {
+    "3080_bmax": {
+      "b16_c1": 129.909,
+      "b16_c16": 254.65,
+      "b16_c2": 246.202,
+      "b16_c4": 236.466,
+      "b16_c8": 254.834,
+      "b1_c1": 34.1834,
+      "b1_c16": 239.532,
+      "b1_c2": 58.2816,
+      "b1_c4": 142.538,
+      "b1_c8": 207.245,
+      "b32_c1": 121.055,
+      "b32_c16": 250.925,
+      "b32_c2": 216.199,
+      "b32_c4": 258.015,
+      "b32_c8": 256.393,
+      "b8_c1": 131.75,
+      "b8_c16": 253.939,
+      "b8_c2": 266.178,
+      "b8_c4": 257.706,
+      "b8_c8": 253.552
+    },
+    "3080_fp16": {
+      "b16_c1": 106.072,
+      "b16_c16": 190.935,
+      "b16_c2": 191.439,
+      "b16_c4": 189.504,
+      "b16_c8": 189.74,
+      "b1_c1": 29.9927,
+      "b1_c16": 198.59,
+      "b1_c2": 50.3187,
+      "b1_c4": 114.557,
+      "b1_c8": 189.519,
+      "b32_c1": 106.296,
+      "b32_c16": 188.055,
+      "b32_c2": 188.513,
+      "b32_c4": 191.986,
+      "b32_c8": 188.831,
+      "b8_c1": 114.797,
+      "b8_c16": 193.781,
+      "b8_c2": 200.257,
+      "b8_c4": 195.458,
+      "b8_c8": 191.65
+    },
+    "a6000_bmax": {
+      "b16_c1": 141.644,
+      "b16_c16": 266.975,
+      "b16_c2": 239.032,
+      "b16_c4": 264.138,
+      "b16_c8": 266.146,
+      "b1_c1": 34.3373,
+      "b1_c16": 253.894,
+      "b1_c2": 59.1521,
+      "b1_c4": 122.767,
+      "b1_c8": 231.128,
+      "b32_c1": 115.939,
+      "b32_c16": 262.884,
+      "b32_c2": 231.743,
+      "b32_c4": 266.907,
+      "b32_c8": 265.115,
+      "b8_c1": 139.868,
+      "b8_c16": 266.214,
+      "b8_c2": 264.805,
+      "b8_c4": 272.662,
+      "b8_c8": 266.952
+    },
+    "a6000_c_e": {
+      "b16_c1": 134.714,
+      "b16_c16": 234.04,
+      "b16_c2": 211.642,
+      "b16_c4": 234.121,
+      "b16_c8": 232.656,
+      "b1_c1": 33.5661,
+      "b1_c16": 222.312,
+      "b1_c2": 57.9441,
+      "b1_c4": 117.711,
+      "b1_c8": 201.945,
+      "b32_c1": 122.485,
+      "b32_c16": 236.109,
+      "b32_c2": 231.326,
+      "b32_c4": 234.514,
+      "b32_c8": 231.672,
+      "b8_c1": 122.275,
+      "b8_c16": 234.942,
+      "b8_c2": 240.544,
+      "b8_c4": 239.026,
+      "b8_c8": 235.301
+    },
+    "a6000_fp16": {
+      "b16_c1": 111.976,
+      "b16_c16": 189.405,
+      "b16_c2": 189.881,
+      "b16_c4": 189.922,
+      "b16_c8": 191.215,
+      "b1_c1": 32.7988,
+      "b1_c16": 181.645,
+      "b1_c2": 56.8417,
+      "b1_c4": 103.808,
+      "b1_c8": 170.907,
+      "b32_c1": 105.935,
+      "b32_c16": 192.044,
+      "b32_c2": 190.03,
+      "b32_c4": 190.473,
+      "b32_c8": 188.867,
+      "b8_c1": 114.016,
+      "b8_c16": 191.838,
+      "b8_c2": 191.652,
+      "b8_c4": 191.396,
+      "b8_c8": 190.373
+    }
+  },
+  "work_package": "INT8 PE evaluation on Ampere (#213)"
+}

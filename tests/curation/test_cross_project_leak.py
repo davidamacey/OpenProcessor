@@ -135,6 +135,7 @@ def route_params(slug: str) -> dict[str, str]:
         'box_id': 'b1',
         'revision': '1',
         'import_id': 'imp_20260101T000000_0123abcd',
+        'run_id': 'bulk_20260101T000000_0123abcd',
     }
 
 
@@ -208,6 +209,8 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/datasets/preview'): {'json': {'source': {'path': source}}},
         ('POST', '/datasets/imports'): {'json': {'source': {'path': source}}},
         ('POST', '/datasets/imports/{import_id}/cancel'): {},
+        ('POST', '/ingest/bulk'): {'json': {'folder': f'{source}/no-such-folder'}},
+        ('POST', '/ingest/bulk/{run_id}/cancel'): {},
         ('POST', '/datasets/imports/{import_id}/resume'): {},
         ('POST', '/datasets/imports/{import_id}/undo'): {'json': {'dry_run': True}},
         ('POST', '/datasets/uploads'): {
@@ -362,6 +365,11 @@ NO_WRITE: dict[tuple[str, str], str] = {
     ('POST', '/datasets/imports/{import_id}/cancel'): 'the sweep has no live import to cancel',
     ('POST', '/datasets/imports/{import_id}/resume'): 'the sweep has no interrupted import',
     ('POST', '/datasets/imports/{import_id}/undo'): 'a dry run reads the ledger; writes nothing',
+    ('POST', '/ingest/bulk'): (
+        'the sweep names no folder, so it is refused before a run is claimed; the run '
+        'itself is covered in tests/integration/test_bulk_ingest_routes.py'
+    ),
+    ('POST', '/ingest/bulk/{run_id}/cancel'): 'the sweep has no live run to cancel',
     ('POST', '/events/publish'): 'publishes an event (checked separately), writes no data',
     ('POST', '/ingest/path_lookup'): 'read-only lookup under POST',
     (
@@ -2420,6 +2428,36 @@ def test_import_state_of_alpha_is_invisible_to_beta_and_a_misplaced_dir_is_refus
     shutil.copytree(alpha_dir, beta_dir)
     with bind_project(leak_env.records['beta']), pytest.raises(ProjectDirMismatchError):
         open_store(import_id)
+
+
+def test_bulk_ingest_runs_of_alpha_are_invisible_to_beta_and_a_misplaced_dir_is_refused(
+    leak_env: LeakEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import shutil
+
+    from src.config.project_context import ProjectDirMismatchError, bind_project
+    from src.services.curation.bulk_ingest.store import (
+        BulkStore,
+        list_stores,
+        open_store,
+        runs_root,
+    )
+
+    monkeypatch.setenv('OP_BULK_INGEST_DIR', str(leak_env.root / 'bulk'))
+    run_id = 'bulk_20260101T000000_0123abcd'
+    with bind_project(leak_env.records['alpha']):
+        BulkStore(runs_root() / run_id).job.write({'status': 'completed'})
+        assert open_store(run_id) is not None
+        alpha_dir = runs_root()
+        assert (alpha_dir / '.project').read_text() == 'alpha'
+    with bind_project(leak_env.records['beta']):
+        assert open_store(run_id) is None
+        assert list_stores() == []
+        beta_dir = runs_root()
+    assert beta_dir != alpha_dir
+    shutil.copytree(alpha_dir, beta_dir)
+    with bind_project(leak_env.records['beta']), pytest.raises(ProjectDirMismatchError):
+        open_store(run_id)
 
 
 def test_reprocess_and_upload_dirs_are_marked_with_their_project(

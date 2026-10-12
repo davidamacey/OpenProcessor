@@ -147,7 +147,7 @@ before touching OpenSearch.
 
 | Path | What it is |
 |---|---|
-| `ingest_walker.py`, `_fast_walk.py` | Parallel bulk-directory ingest. Walks a directory the API container can see and posts paths to `POST /curation/projects/{project}/ingest/batch`, with a resumable progress file. Run it inside `api`: `--root /data/source/...` |
+| `bulk_ingest.py` | Bulk ingest of a folder or manifest the API container can see, as a resumable background run (a client of `POST /curation/projects/{project}/ingest/bulk`): live progress and rates, cancel with Ctrl-C, failed images listed. `--folder /data/source/...` or `--manifest FILE`; `--status RUN_ID`, `--cancel RUN_ID`, `--no-wait` |
 | `ingest_upload.py` | Byte-upload ingest for storage the API cannot mount: reads files locally and posts them to `POST /curation/projects/{project}/ingest/upload`; resumes with `POST /curation/projects/{project}/ingest/path_lookup` and server-side content-hash dedup |
 | `import_labeled_dataset.py` | Client of `POST /curation/projects/{project}/datasets/imports`. Previews a dataset (YOLO, COCO, OpenProcessor export), builds the by-name mapping from `--map CLASS=ID`, `--create CLASS[=NAME]`, `--skip`, `--region`, `--accept-suggestions` (`--images-only` skips every class), starts or resumes (`--resume IMPORT_ID`) and polls. `--dry-run` previews only; `--state-dir` writes the per-split cohort `eval_regions_vs_gt.py` reads |
 | `yolo_dataset.py` | Shared YOLO dataset discovery for the two tools above |

@@ -659,6 +659,7 @@ collides with a class hotkey is reported with the class; pass
 | One image by path | `POST /curation/projects/{project}/ingest/image` |
 | Many images by path | `POST /curation/projects/{project}/ingest/batch` |
 | Bytes upload | `POST /curation/projects/{project}/ingest/upload` |
+| A whole folder or a manifest, as a background run | `POST`, `GET /curation/projects/{project}/ingest/bulk`, [Bulk ingest](#bulk-ingest) |
 | Which paths are already known | `POST /curation/projects/{project}/ingest/path_lookup` |
 | Limits and source roots | `GET /curation/projects/{project}/ingest/config` |
 | Read or replace the ingest policy | `GET`, `PUT /curation/projects/{project}/ingest/policy` |
@@ -671,6 +672,79 @@ created item is seeded `pending_detection`, which is the only way an item
 enters the region worker's queue. An existing region status is never
 overwritten on re-ingest. Items that exist before you activate a profile are
 picked up with [`POST /reprocess`](#reprocess).
+
+### Bulk ingest
+
+For a folder or a list of thousands of images, start a run instead of calling
+`/ingest/batch` yourself. The API reads the files, so the source is a path inside
+the API container under a [source root](#mounting-your-image-source): a folder
+(walked recursively for `.jpg`, `.jpeg` and `.png`, or the extensions you give) or a
+manifest (a text file with one absolute image path per line, or JSON Lines with a
+`path` field; blank lines and `#` comments are skipped).
+
+| Purpose | Route |
+|---|---|
+| Start a run, or resume the stopped run of the same source | `POST /curation/projects/{project}/ingest/bulk` |
+| Roots, run-option defaults and bounds | `GET /curation/projects/{project}/ingest/bulk/config` |
+| Recent runs | `GET /curation/projects/{project}/ingest/bulk` |
+| Progress and rates of one run | `GET /curation/projects/{project}/ingest/bulk/{run_id}` |
+| The failed images of the latest attempt, with reasons | `GET /curation/projects/{project}/ingest/bulk/{run_id}/failures` |
+| Stop after the batches in flight | `POST /curation/projects/{project}/ingest/bulk/{run_id}/cancel` |
+
+The command line is a client of the same routes (so is Cropwright's `/ingest`
+page, under "Bulk ingest"). Run it inside `api`: like every curation script it
+resolves `--project` through the project registry first and refuses an unknown or
+unbindable project.
+
+```bash
+docker compose exec api python scripts/curation/bulk_ingest.py \
+  --folder /data/source/my_dataset --project cars
+docker compose exec api python scripts/curation/bulk_ingest.py \
+  --manifest /data/source/list.txt --project cars --source census \
+  --batch-size 16 --concurrency 8
+```
+
+It prints live progress, ends with the counts, the images per second and where the
+time went, lists up to 20 failed images, and exits 0 (completed), 1 (completed with
+failed images), 2 (the run stopped) or 130 (cancelled). Ctrl-C asks the server to
+cancel; `--status RUN_ID` and `--cancel RUN_ID` address a run by id, `--no-wait`
+starts one and returns.
+
+How a run behaves:
+
+- **Same pipeline.** Every batch of paths goes through `POST /ingest/batch`, the
+  one entry the data path is tuned behind, so the run gets everything that route
+  gets (batched detection, embedding, the lock rule, region seeding, the
+  project guard) and the batches spread over all API worker processes. A run does
+  nothing a client of `/ingest/batch` could not.
+- **Bounded.** At most `concurrency` batches of `batch_size` images are in flight
+  (defaults 8 and 16, from `GET .../ingest/bulk/config`); the runner holds paths,
+  never image bytes, and the API's own admission gate bounds decoded pixels per
+  worker. One run per project at a time (409 `bulk_ingest_busy`).
+- **Idempotent and resumable.** Images are recognised by content hash, so running
+  a source again ingests nothing twice (they count as `duplicates`). A run keeps a
+  ledger of the images it stored; starting the same source after a cancel, a crash
+  or a run that finished with failed images continues that run (`resumed: true`),
+  skips the ledger without re-reading those files, and retries the failed ones. A
+  source that completed starts a new run.
+- **Stops on an outage.** Five batches in a row that fail entirely (the detector or
+  OpenSearch is down) end the run as `failed` with the error, instead of recording
+  the whole source as failed; fix the cause and start the same source again.
+- **Progress.** `discovered` grows while a folder is walked (`discovery_complete`
+  says when it is final); `ingested` and `duplicates` are cumulative over a run's
+  attempts, `failed` is the current attempt's. `images_per_s_recent` is the last 30
+  seconds. `stage_s` gives wall seconds per stage: `batch_requests` is the runner's
+  own, the rest are the pipeline's stage timers over the run from the API's
+  Prometheus totals (every stage of every worker, so other ingest traffic during
+  the run is included, and concurrent work adds up beyond the elapsed time).
+- **Throughput.** A run is GPU-bound like any other client: on one RTX A6000 the
+  2,000-image COCO set runs at the same images per second through the runner as
+  through `/ingest/batch` from the same number of clients (see
+  [PERFORMANCE.md](PERFORMANCE.md#bulk-ingest-runner)). The run state lives under
+  `OP_BULK_INGEST_DIR` (default `/jobs/bulk_ingest`, per project) on the shared
+  jobs volume.
+
+A project with a live run counts as busy for delete and archive.
 
 ### Ingest policy
 
@@ -737,7 +811,7 @@ all skip them, so the API says so instead of returning a silent gap:
 
 - Ingest results and the batch summary carry `n_embedded` and `n_not_embedded`
   (items stored without a vector, which includes policy skips) and `n_embed_failed`
-  (only the encoder failures: warn on this one); `ingest_walker.py` warns when any
+  (only the encoder failures: warn on this one); `bulk_ingest.py` warns when any
   item was stored without a vector.
 - `GET /curation/projects/{project}/search/text` returns `unembedded_in_scope`.
 - `GET /curation/projects/{project}/crops` with `order=outliers` or
@@ -800,8 +874,8 @@ are the ways an item needs a vector after ingest, and what happens today.
 
 For bulk work from a shell:
 
-- `scripts/curation/ingest_walker.py`: walk a directory with a resumable
-  progress file.
+- `scripts/curation/bulk_ingest.py`: ingest a folder or manifest as a resumable
+  background run (see [Bulk ingest](#bulk-ingest)).
 - `scripts/curation/ingest_upload.py`: read files locally and upload the
   bytes when the API cannot mount your storage (resume is server-side content
   dedup).

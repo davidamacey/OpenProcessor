@@ -1448,12 +1448,18 @@ can fuse. The default pool is fresh and class-bucketed unvalidated items.
 | Method | Path | Body | Response |
 |---|---|---|---|
 | POST | `/ingest/image` | `IngestImageRequest`: `path`, `source` (`extra='forbid'`) | `IngestImageResponse` |
-| POST | `/ingest/batch` | `IngestBatchRequest`: `items: [{path, source}]` (required, non-empty, `extra='forbid'`) | `BatchIngestResponse` |
+| POST | `/ingest/batch` | `IngestBatchRequest`: `items: [{path, source}]` (required, non-empty), `ingest_run_id` (optional tag, at most 64 characters; `extra='forbid'`) | `BatchIngestResponse` |
 | POST | `/ingest/upload` | multipart: `images` (files), `image_paths` (JSON list of identifiers, optional), `source`, `run_id` | `BatchIngestResponse` |
 | POST | `/ingest/path_lookup` | `{image_paths}` (at most 10,000) | `{known_paths: {path: image_id}}` |
 | GET | `/ingest/config` | | limits |
 | GET | `/ingest/status` | query `run_id` | `{total, by_source[], by_day[]}` |
 | GET | `/ingest/region_drain` | | drain state |
+| POST | `/ingest/bulk` | `BulkIngestRequest`: exactly one of `folder`, `manifest`; `source`, `extensions`, `batch_size`, `concurrency` (`extra='forbid'`) | `BulkIngestRun` (202) |
+| GET | `/ingest/bulk` | query `page`, `page_size` | `BulkIngestList`, newest first |
+| GET | `/ingest/bulk/config` | | `BulkIngestConfig` |
+| GET | `/ingest/bulk/{run_id}` | | `BulkIngestRun` |
+| GET | `/ingest/bulk/{run_id}/failures` | query `offset`, `limit` | `BulkIngestFailurePage` |
+| POST | `/ingest/bulk/{run_id}/cancel` | | `BulkIngestRun` |
 
 - `IngestImageResponse`: `status` (`success`, `duplicate`, `failed`),
   `image_id`, `image_path`, `source_identifier`, `imohash`, `n_crops`,
@@ -1480,6 +1486,21 @@ can fuse. The default pool is fresh and class-bucketed unvalidated items.
   path. The client's identifier is `source_identifier`. `path_lookup` matches
   either field and keys its result by the one that matched. `run_id` is
   recorded as `ingest_run_id` and scopes `GET /ingest/status?run_id=`.
+- Bulk ingest runs a folder or manifest (a path inside the API container, under a
+  source root; `422 bulk_ingest_invalid_source` otherwise) as a background run that
+  sends batches through `POST /ingest/batch`. `BulkIngestRun`: `run_id`, `status`
+  (`queued`, `running`, `completed`, `completed_with_errors`, `failed`,
+  `cancelled`, `interrupted`), `resumed`, `source`, `options`, `progress`
+  (`discovered`, `discovery_complete`, `skipped`, `ingested`, `duplicates`,
+  `failed`, `processed`, `crops_indexed`, `n_embedded`, `n_not_embedded`,
+  `n_embed_failed`, `in_flight`, `images_per_s`, `images_per_s_recent`, `eta_s`,
+  `elapsed_s`), `stage_s`, `attempts`, `can_cancel`, `can_resume`,
+  `cancel_requested`, `error`, `started_at`, `finished_at`, `poll_after_s` (null once
+  the run is over). `POST /ingest/bulk` starts a run, or continues the
+  interrupted, cancelled, failed or partly failed run of the same source
+  (`resumed: true`); `409 bulk_ingest_busy` (with `run_id`) while a run of the
+  project is live. A run stops as `failed` after five batches in a row fail
+  entirely. `404 bulk_ingest_not_found` for an unknown run id.
 - `GET /ingest/config`: `upload` (`enabled`, `max_images_per_request`,
   `max_bytes_per_request`, `accepted_extensions`, `persists_bytes`), `batch`
   (`enabled`, `max_items`, `source_roots`), `region_drain` (`poll_interval_s`,

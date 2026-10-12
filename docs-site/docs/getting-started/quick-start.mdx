@@ -158,8 +158,8 @@ curl -s -X POST "$API/curation/projects/$P/classes/seed_from_detector" \
 
 # 4. Ingest into the project. --root is a container path under the
 #    /data/source mount
-docker compose exec api python scripts/curation/ingest_walker.py \
-  --project $P --root /data/source/coco_va_readme/images \
+docker compose exec api python scripts/curation/bulk_ingest.py \
+  --project $P --folder /data/source/coco_va_readme/images \
   --api-base http://localhost:8000/curation
 
 # 5. Optional: start the async workers and cluster (+ VLM-label) the pool

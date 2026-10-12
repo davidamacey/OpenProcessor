@@ -169,6 +169,7 @@ class _Cfg:
     ('module', 'argv'),
     [
         ('scripts.curation.ingest_upload', ['--root', '/tmp']),
+        ('scripts.curation.bulk_ingest', ['--folder', '/tmp']),
         ('scripts.curation.import_labeled_dataset', ['--dataset', '/tmp']),
     ],
 )
@@ -179,20 +180,3 @@ def test_ingest_tools_default_api_base_follows_prefix(
     monkeypatch.setattr(mod, 'get_curation_config', lambda: _Cfg())
     args = mod.build_parser().parse_args(argv)
     assert args.api_base == 'http://localhost:4603/custom-mount'
-
-
-def test_ingest_walker_default_api_base_follows_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
-    mod = importlib.import_module('scripts.curation.ingest_walker')
-    monkeypatch.setattr(mod, 'get_curation_config', lambda: _Cfg())
-    monkeypatch.setattr('sys.argv', ['ingest_walker', '--root', '/tmp'])
-    monkeypatch.delenv('OP_CURATION_PROJECT', raising=False)
-    seen: dict[str, Any] = {}
-
-    def _fake_run(**kwargs: Any) -> None:
-        seen.update(kwargs)
-
-    monkeypatch.setattr(mod, 'run', _fake_run)
-    monkeypatch.setattr(mod, 'bind_script_project', lambda _slug: None)
-    monkeypatch.setattr(mod.asyncio, 'run', lambda _coro: None)
-    mod.main()
-    assert seen['api_base'] == 'http://localhost:4603/custom-mount/projects/default'

@@ -16,8 +16,8 @@ something Cropwright decides on its own:
 
 - If browser upload is disabled on the deployment, the upload panel is
   replaced with a single line saying so.
-- Server-path batch ingest only appears when the backend both enables it
-  and has at least one configured source root.
+- Server-path ingest (bulk ingest and the paste-a-few-paths panel) only appears
+  when the backend both enables it and has at least one configured source root.
 
 ## Browser upload
 
@@ -31,6 +31,27 @@ resume and cancel.
 An amber "uploads aren't kept" banner appears only when the backend reports
 that it doesn't persist uploaded bytes server-side. A stock deployment
 persists them (content-addressed), so this banner is normally absent.
+
+## Bulk ingest (folder or manifest)
+
+Starts a background run over a folder, or a manifest listing image paths, that
+the backend already has mounted under a source root (the roots are listed
+above the form). The run is the backend's, the same one the command line
+`scripts/curation/bulk_ingest.py` drives, so it keeps going if you leave the
+page and the page picks it up again when you return.
+
+While it runs the panel shows what the backend serves: images found so far (a
+folder is scanned while it runs), ingested, duplicate and failed counts, the
+speed over the last 30 seconds and over the whole run, the time left and a
+"Where the time went" table of seconds per stage. **Cancel** stops after the
+batches in flight; images already stored stay stored. After a cancel, a
+backend restart or a run that finished with failed images, **Resume** starts
+the same source again and skips what it already stored. Failed images are
+listed with the reason for each. Only one run per project can be live; a second
+start shows the backend's answer.
+
+Under **Advanced**: file extensions, images per batch and batches in flight
+(the placeholders are the backend's defaults; only change them to tune a run).
 
 ## Server-path batch ingest
 
