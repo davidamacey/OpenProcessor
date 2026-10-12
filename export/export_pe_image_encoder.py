@@ -766,6 +766,10 @@ def main(argv: list[str] | None = None) -> int:
             checkpoint_path=args.checkpoint_path,
             verify_checkpoint=args.verify_checkpoint,
         )
+        # Same function, contiguous rotary halves: the engine is faster (export/pe_rope_layout.py).
+        from pe_rope_layout import apply_if_supported
+
+        apply_if_supported(onnx_path)
 
     problems: list[str] = []
     if not args.skip_validate:

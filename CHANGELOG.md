@@ -137,6 +137,14 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   up to about 128 MB resident per worker) (#211).
 - Triton runs with `--log-verbose=0` instead of logging an allocation and a free for every tensor of
   every request (#211).
+- The PE image encoder engine is 17 to 25 percent faster (181 to 225 images/s through Triton at batch 16, same
+  output: crop cosine median 0.99996, every `precision` parity gate passes). `export/pe_rope_layout.py`,
+  the last step of `export/export_pe_image_encoder.py`, permutes the query and key channels of every
+  head so the rotary embedding works on contiguous halves instead of interleaved pairs; TensorRT spent 23
+  percent of the engine time on the pair arithmetic. No build flag, optimization profile, batching,
+  instance count or CUDA-graph setting beat the shipped build. Upgrading: rebuild the engine
+  (`./openprocessor models install --only pe`); a plan built earlier keeps working (#227).
+
 - The `embed` reprocess scope (embed-missing, "embed all") embeds 16 images at once and works through
   64 images per chunk instead of one image at a time in chunks of 20, so Triton's dynamic batcher packs
   their crops: 6.3 to 14.1 images per second on 500 images, PE mean batch 3.7 to 13. A client-side

@@ -387,3 +387,39 @@ class TestDynamicDimDetection:
     @pytest.mark.parametrize('dim', [1, 2, 32, PE_SIZE])
     def test_concrete_dims_are_static(self, dim: int) -> None:
         assert pe_export._is_dynamic(dim) is False
+
+
+class TestRotaryLayoutStep:
+    """The perception-models export hands its ONNX to the rotary layout pass; the HF route does not."""
+
+    @staticmethod
+    def _run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, method: str) -> list[Path]:
+        import pe_rope_layout
+
+        applied: list[Path] = []
+        onnx_path = tmp_path / 'pe.onnx'
+        monkeypatch.setattr(pe_export, 'export_via_perception_models', lambda path, **_: path)
+        monkeypatch.setattr(pe_export, 'export_via_optimum', lambda path, **_: path)
+        monkeypatch.setattr(pe_rope_layout, 'apply_if_supported', lambda p: applied.append(Path(p)))
+        rc = pe_export.main(
+            [
+                '--onnx-out',
+                str(onnx_path),
+                '--method',
+                method,
+                '--skip-validate',
+                '--no-write-config',
+            ]
+        )
+        assert rc == 0
+        return applied
+
+    def test_perception_models_export_applies_the_pass_to_its_onnx(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        assert self._run(monkeypatch, tmp_path, 'perception-models') == [tmp_path / 'pe.onnx']
+
+    def test_optimum_export_is_left_alone(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        assert self._run(monkeypatch, tmp_path, 'optimum') == []
