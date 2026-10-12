@@ -64,7 +64,7 @@ The custom detector was queue-bound with a single instance on a 12 GB card. CPU 
 
 ## How to repeat
 
-The public repo has a directory ingest script, `scripts/curation/bulk_ingest.py`, with `--batch-size` (server default 16) and `--concurrency` (server default 8, batches in flight; at most 32). To repeat the sweep within those bounds:
+The public repo has a directory ingest script, `scripts/curation/bulk_ingest.py`, with `--batch-size` (server default 16) and `--concurrency` (server default 16, batches in flight; at most 32). To repeat the sweep within those bounds:
 
 ```bash
 python scripts/curation/bulk_ingest.py --folder <image-dir> --project <project> \
