@@ -168,7 +168,10 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   the pass reports `stage_seconds` (fetch, fit, write_back). Same guarded script, same stored result; the
   clustering methods and the refinement are untouched. At 100k real vectors the IVF pass goes from 311 s
   to 138 s, the write-back from 175 s to 32 s. `scripts/bench/cluster_plumbing_bench.py` measures it;
-  `tests/curation/test_cluster_plumbing_golden.py` pins every method's stored output.
+  `tests/curation/test_cluster_plumbing_golden.py` pins every method's stored output. The geometry stage
+  after the pass reads the clustered vectors once, by point-in-time slices, writes only what changed and
+  does it 8 requests at a time (10k: 143 s to 11 s, same stored geometry); assign-only reads through
+  slices and skips documents that already store the result.
 
 ### Fixed
 

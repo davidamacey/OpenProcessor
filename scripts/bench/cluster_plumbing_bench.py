@@ -276,14 +276,16 @@ async def geometry_run(client: Any, method: str, size: int) -> dict[str, Any]:
     }
 
 
-async def assign_run(client: Any, size: int, rep: int) -> dict[str, Any]:
+async def assign_run(client: Any, size: int, rep: int, *, reset: bool = True) -> dict[str, Any]:
     from src.services.curation.clustering.orchestrator import assign_only_residuals
 
-    await reset_clusters(client)
+    if reset:
+        await reset_clusters(client)
     t0 = time.perf_counter()
     summary = await assign_only_residuals(client)
     return {
-        'kind': 'assign_only',
+        'kind': 'assign_only' if reset else 'assign_only_repeat',
+        'n_unchanged': summary.get('n_unchanged'),
         'method': 'ivf',
         'size': size,
         'rep': rep,
@@ -478,6 +480,9 @@ async def one_size(args: argparse.Namespace, size: int, out: Path) -> None:
         for rep in range(args.reps):
             rows.append(await assign_run(client, size, rep))
             print(json.dumps(rows[-1], default=float), flush=True)
+        # Again with the assignments in place: the pass a scheduled refresh runs.
+        rows.append(await assign_run(client, size, 0, reset=False))
+        print(json.dumps(rows[-1], default=float), flush=True)
     with (out / f'{args.label}_runs.jsonl').open('a') as fh:
         fh.writelines(json.dumps({**r, 'label': args.label}, default=float) + '\n' for r in rows)
     if not args.keep:

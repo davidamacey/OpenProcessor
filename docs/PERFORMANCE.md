@@ -2842,10 +2842,37 @@ client thread decoding it; decoding is now 2.5 times faster, and the fetch is fl
 The first cell is chunk size by writers. Default: 1,000 documents, 8 writers; a pool too small to fill
 them is split down to 250 documents per request. AHC and HDBSCAN were not run at 100k (see caveats).
 
-**New bottleneck.** After the fit (86.9 s of 138 s at 100k, a method), the `cluster_geometry` stage
-that the pipeline runs inside the same progress stage reads every clustered vector again, cluster by
-cluster, and rewrites every item: 43 s at 2k, 96 s at 10k, 442 s at 100k after IVF (unchanged code,
-measured once). It is larger than the whole cluster pass; its plumbing is the next candidate.
+**New bottleneck, found here.** The `cluster_geometry` stage the pipeline runs inside the same progress
+stage read every clustered vector twice, one scroll per cluster, and wrote every item in 20-document
+requests one after another: 43 s at 2k, 96 s at 10k, 442 s at 100k after IVF (the 100k figure is on the
+vector set of the table above). It is now one point-in-time sliced read of the clustered items with the
+centroids, distances and nearest clusters computed from that matrix (rows in index order, so every sum is
+the one the per-cluster read made), items that already store the same geometry skipped, and the rest
+written 8 requests at a time through the same writer. The stored geometry is identical to the old
+algorithm's (`tests/curation/test_cluster_geometry_golden.py`).
+
+Follow-up measured on the 12,792 real crop vectors of a parity capture (the 114,987-vector set used above
+was no longer available, so 100k was not re-measured), IVF, median of 3, seconds, same node and host:
+
+| Seconds | 2k main | 2k first PR commit | 2k now | 10k main | 10k first PR commit | 10k now |
+|---|---|---|---|---|---|---|
+| IVF fetch | 0.72 | 0.55 | 0.50 | 3.67 | 2.34 | 2.50 |
+| IVF fit (untouched) | 2.28 | 2.83 | 2.37 | 9.99 | 8.87 | 7.17 |
+| IVF write-back | 3.08 | 0.81 | 0.56 | 18.0 | 3.84 | 3.64 |
+| geometry stage | 60.2 | 40.8 | 3.1 | 142.9 | 94.3 | 11.4 |
+| **cluster pass + geometry** | 66.6 | 45.4 | 6.8 | 176.4 | 110.6 | 24.9 |
+| assign-only (incremental) | 5.8 | 5.0 | 1.6 | 27.7 | 9.7 | 5.4 |
+
+Assign-only now reads through 8 point-in-time slices (one scroll is one cursor) and skips a document that
+already stores exactly what the update writes; a second pass on 10k found 7,181 of 10,000 already exact
+(3.9 s against 5.4 s; the rest differ in the last bit of the distance because a page's composition changes
+when its documents are rewritten, so the match is exact or the document is written). The new bottleneck
+at 10k is the IVF fit (7.2 of 13.5 s of the pass, a method), then the geometry stage (11.4 s).
+
+Options measured and not adopted (10k, one 2,000-document page): `fields` instead of `_source` 2.4 s
+against 2.65 s (inside the noise); `docvalue_fields` is refused by the node for the vector field and
+`stored_fields` returns nothing; `refresh_interval: -1` during the write-back 4.0-4.5 s against 3.7-4.5 s
+with the default (not faster, and it adds 1-2 s to the closing refresh).
 
 #### Caveats and not measured
 
@@ -2854,9 +2881,8 @@ measured once). It is larger than the whole cluster pass; its plumbing is the ne
 - AHC and HDBSCAN are not run-to-run deterministic on real vectors (two runs of the unmodified code gave
   6 different `cluster_id` of 2,000), so real-index hashes cannot show equality for them; the golden test
   on a fixed set (deterministic) does, and IVF's stored hash is identical before and after at 2k and 10k.
-- Not measured: AHC and HDBSCAN at 100k (AHC held about 9 GB at 10k; HDBSCAN fit 180 s at 10k), GPU
-  paths, a sliced scroll for assign-only (its fetch is still one cursor), `cluster_geometry` before the
-  change (code unchanged), concurrent search load during the write-back.
+- Not measured: AHC and HDBSCAN at 100k (AHC at 100k did not finish its merge loop in 25 minutes; HDBSCAN
+  fit 180 s at 10k), GPU paths, the follow-up at 100k, concurrent search load during the write-back.
 - Tool: `scripts/bench/cluster_plumbing_bench.py` (stage split, `--fetch-profile`, `--write-grid`,
   `--fetch-grid`, `--assign-only`, `--geometry`).
 
