@@ -748,3 +748,59 @@ Not measured here:
 | Summary tables | this file and `docs/PERFORMANCE.md` ("GPU decode measurements (#217)") |
 | Raw JSON, logs, parity NPZ, the spike module and its compose overrides | the run's scratch directory, not committed (raw parity captures are hundreds of MB) |
 | The spike (section 7.4) | not committed; its design is section 7.4 and item 3, its numbers are in section 7 |
+
+## 13. Build and A/B after the owner decisions (go / no-go)
+
+Owner decisions: D1 yes (a new parity reference for the new decoder numerics, after an AP check),
+D2 no (no 1/8-scale emulation: the whole-frame square is resized from the full frame, a new vector
+space), D3 no silent acceptance (a truncated or damaged file is still refused). The owner then asked
+for the CPU single decode first and the GPU front end built and measured properly against it.
+
+What was built (branch `perf/gpu-decode-impl`, on top of the CPU slices):
+
+| Slice | What | Where |
+|---|---|---|
+| CPU single decode | the whole-frame square is cut from the frame decoded for the detector (Pillow `BILINEAR`, shorter edge to 336, centre crop); `exif_transpose` only when the tag moves pixels | `pe_preprocess.whole_frame_rgb_from_image`, `ingest._decode_image` |
+| libjpeg-turbo decode | JPEG through `simplejpeg` (the libjpeg-turbo Pillow runs, pixels identical) straight into the array the blur reads | `src/services/curation/image_decode.py` |
+| GPU front end | Triton Python model `image_frontend`, decoupled, one process: nvJPEG decoupled API with the GPU-Huffman backend through ctypes (16 lanes), EXIF on the GPU, fused uint8 CuPy kernels (separable Pillow-`BILINEAR` resampler for the letterbox and whole frame, plain bilinear for crop squares, exact grey + Laplacian sums), detector and PE through BLS, crop JPEGs encoded on host threads; per-image worker pool, bounded in flight | `models/image_frontend/`, `src/services/curation/ingest_frontend.py` |
+| Routing | `OP_INGEST_GPU_FRONTEND` (off by default), size gate `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0); the model is loaded on first use and used only when its detector input matches the ingest profile; declined files (progressive, no end-of-image marker, not a baseline JPEG, decoder error) take the CPU path, counted in `op_ingest_decode_total{route}` | `ingest_batch._prefill_frontend` |
+
+Departures from sections 7.4 and 9: nvImageCodec decodes the Huffman stage on the CPU on this card,
+so the front end calls nvJPEG's GPU-Huffman backend itself; there is no sequence batcher (one request
+returns every product of the image, so the frame never needs to outlive the request); batching
+requests inside the model put a barrier between stages and ran at 15 photos/s, per-image workers
+whose BLS calls the detector's and PE's own batchers group run at 43-48 (perf_analyzer, 32 streams,
+GPU 65-75 % busy). The fused kernels cost about 1.3 ms of GPU per 18 MP photo.
+
+A/B, one isolated stack on GPU 2 (foreign SM load 0.0 % in every counted run), `/ingest/batch`, 3
+repetitions at the bulk points and the latency points, median (min-max):
+
+| Set B photos (500, 12-24 MP) | CPU path (`origin/main`) | CPU single decode | + libjpeg-turbo | GPU front end |
+|---|---:|---:|---:|---:|
+| detect + embed, batch 8 x 16 clients: images/s | 27.0 (25.2-27.2) | 26.8 (24.3-28.4) | 23.5 (22.2-26.6) | **35.0 (24.2-38.5)** |
+| detect only (`lazy`), batch 8 x 16: images/s | 28.3 (27.6-29.4) | 31.6 (25.4-31.8) | 31.0 (29.3-31.1) | **44.0 (38.8-44.8)** |
+| one client, batch 1: images/s, p50 s | 0.97, 0.98 | | 1.17, 0.81 | **2.40, 0.36** |
+| 4 clients, batch 1: images/s, p50 s | 3.45, 1.07 | | 4.48, 0.85 | **8.30, 0.41** |
+| host CPU-s per photo (API + Triton), bulk | 1.12 | 0.97 | 1.00 | **0.34** |
+| GPU 2 busy, bulk detect + embed | 35 % | 33 % | 28 % | 55 % |
+
+| Set A COCO frames (2,000, 0.3 MP), batch 32 x 16 | CPU path | CPU single decode | + libjpeg-turbo | GPU front end, gate 3 MP | GPU front end forced on frames (gate 0) |
+|---|---:|---:|---:|---:|---:|
+| detect + embed: images/s | 28.6 | 29.0 | 29.3 | 29.0 | 22.7 |
+| detect only: images/s | 120.3 | 132.4 | 123.2 | 124.5 | 63.6 |
+
+PE on the same card while the front end works through set B: 223 to 213 inferences/s (-4.5 %).
+
+Go / no-go:
+
+- **CPU single decode alone: no-go as a speed-up** (1.0x at bulk, under the 1.5x bar); it stays as
+  the CPU path the front end falls back to and the definition of the whole-frame square both paths
+  share. libjpeg-turbo helps the latency mode (+21-30 %) and is noise at bulk.
+- **Triton GPU front end: go, opt-in, size-gated.** Photos: 1.3x at bulk with detection and
+  embedding (the rest of the pipeline and PE bind next, GPU 55 % busy), 1.55x detection only,
+  2.4-2.5x for one to four clients, a third of the host CPU. Frames: the gate keeps them on the CPU
+  (forced onto the GPU they lose 21-49 %), so the default gate of 3 MP stands for both modes.
+- Not reached: the 1.9x estimate of section 7.5 assumed PE batching that the bulk run did not get
+  (the first repetition, with cold kernel weight caches, ran at 24 photos/s); a second card, GPU
+  decode of progressive files (11 % of set B goes to the CPU) and crop JPEGs on the GPU are the
+  follow-ups.

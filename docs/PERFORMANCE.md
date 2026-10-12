@@ -2881,6 +2881,25 @@ Not measured: the Triton-resident front end the plan recommends, two cards and t
 decode, kernels that meet the plan's budget, the region stage and VLM on GPU-encoded crop JPEGs.
 
 
+### Decode once and the GPU ingest front end (#217)
+
+Built after the owner decisions on the GPU decode plan (`docs/design/gpu_decode_plan.md`, section
+13 has the full A/B and the go / no-go). One isolated stack on GPU 2, `/ingest/batch`, 3 repetitions,
+median images/s; host CPU is the API plus Triton containers.
+
+| Set B photos (12-24 MP) | CPU path | CPU single decode + libjpeg-turbo | GPU front end (`OP_INGEST_GPU_FRONTEND=1`) |
+|---|---:|---:|---:|
+| detect + embed, batch 8 x 16 clients | 27.0 | 23.5 (26.8 without libjpeg-turbo) | **35.0** |
+| detect only, batch 8 x 16 | 28.3 | 31.0 | **44.0** |
+| one client, batch 1 (p50 latency) | 0.97 (0.98 s) | 1.17 (0.81 s) | **2.40 (0.36 s)** |
+| four clients, batch 1 | 3.45 | 4.48 | **8.30** |
+| host CPU-s per photo at bulk | 1.12 | 1.00 | **0.34** |
+
+COCO frames (0.3 MP) are faster on the CPU (forced onto the GPU front end: 22.7 against 29.0
+images/s with embedding, 63.6 against 124.5 detection only), so the front end takes only images at
+or above `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0). The CPU single decode alone does not speed up bulk
+ingest (the next binders are elsewhere); it is the CPU path the front end falls back to.
+
 ## Benchmarking
 
 ### Using the Go Benchmark Tool
