@@ -172,6 +172,14 @@ class IngestWriter:
             self._flushes.add(task)
             task.add_done_callback(self._flush_done)
 
+    async def close(self) -> None:
+        """Stop the queue once its writes are done (a bench or test ending its loop)."""
+        while self._pending or self._flushes:
+            await asyncio.sleep(0.005)
+        if self._drainer is not None:
+            self._drainer.cancel()
+            await asyncio.gather(self._drainer, return_exceptions=True)
+
     def _flush_done(self, task: asyncio.Task[None]) -> None:
         self._flushes.discard(task)
         self._slots.release()
@@ -257,6 +265,10 @@ class IngestWriter:
                     await asyncio.sleep(pause)
                     continue
                 raise
+            if not resp.get('errors'):
+                for unit in todo:
+                    results[id(unit)].images_indexed = 1
+                return
             retry: list[_Unit] = []
             for unit, item in zip(todo, resp.get('items', []), strict=False):
                 op = item.get('index') or {}
