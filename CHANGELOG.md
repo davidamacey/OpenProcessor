@@ -13,6 +13,13 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Added
 
+- `scripts/bench/vectordb/` and `docker/bench/vectordb/compose.yml`: a vector store benchmark on real
+  PE embeddings of pinned public COCO images (exact filtered ground truth, recall-gated operating
+  points, write, streaming, rewrite and delete phases) with adapters for OpenSearch, Milvus, Qdrant,
+  pgvector and LanceDB. The result at 2k, 10k and 100k vectors, in `docs/PERFORMANCE.md` and
+  `docs/benchmarks/vectordb/`, is that OpenSearch stays the single store; the Lucene engine and
+  `ef_construction` 128 are follow-up candidates (#221, #230, #56).
+
 - Bulk ingest of a folder or a manifest as a background run, one runner behind both entry points: the
   `POST`/`GET /curation/projects/{project}/ingest/bulk` routes (start or resume, progress, failures,
   cancel, `/ingest/bulk/config`) and the `scripts/curation/bulk_ingest.py` command line, a client of
