@@ -49,3 +49,26 @@ def test_skip_flags_default_off_and_parse() -> None:
     assert (off.skip_cluster, off.skip_settle) == (False, False)
     on = parser.parse_args([*base, '--skip-cluster', '--skip-settle'])
     assert (on.skip_cluster, on.skip_settle) == (True, True)
+
+
+def test_set_embedding_mode_puts_lazy_at_the_current_revision() -> None:
+    import httpx
+
+    seen: list[tuple[str, str, bytes]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path, request.content))
+        if request.method == 'GET':
+            return httpx.Response(200, json={'revision': 4})
+        return httpx.Response(200, json={})
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        bs.set_embedding_mode(client, 'http://api/curation/projects/p', 'all')
+        assert seen == []
+        bs.set_embedding_mode(client, 'http://api/curation/projects/p', 'lazy')
+    assert [(m, p) for m, p, _ in seen] == [
+        ('GET', '/curation/projects/p/ingest/policy'),
+        ('PUT', '/curation/projects/p/ingest/policy'),
+    ]
+    assert b'"expected_revision":4' in seen[1][2].replace(b' ', b'')
+    assert b'"lazy"' in seen[1][2]
