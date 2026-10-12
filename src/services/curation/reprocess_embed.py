@@ -51,6 +51,9 @@ logger = get_logger(__name__)
 
 ALL_PARTS = frozenset({'crop', 'frame', 'region'})
 _BATCH = 32
+_IMAGES_IN_FLIGHT = 16
+"""Images embedded at once: enough crops in flight to fill an engine batch, few enough that
+their decoded pixels stay small."""
 
 
 @dataclass
@@ -172,13 +175,15 @@ async def reembed_items(
     image_updates: list[tuple[str, dict[str, Any]]] = []
     box_entries: dict[str, list[dict[str, Any]]] = {}
 
-    for target in targets:
+    gate = asyncio.Semaphore(_IMAGES_IN_FLIGHT)
+
+    async def embed_target(target: EmbedTarget) -> None:
         if not target_has_work(target, parts, only_missing=only_missing):
-            continue
+            return
         img = await asyncio.to_thread(_load_image, target.image_path)
         if img is None:
             counts['missing_image'] += 1
-            continue
+            return
         counts['images'] += 1
         counts['items'] += len(target.items)
         if 'frame' in parts:
@@ -216,6 +221,17 @@ async def reembed_items(
                         continue
                     box_entries.setdefault(cid, []).append(entry_for(box, vec))
                     counts['region_written'] += 1
+
+    # Images run side by side so the encoder client can pack their crops into shared engine
+    # batches; a failure still ends the pass before anything is written, as it did serially.
+    async def gated(target: EmbedTarget) -> None:
+        async with gate:
+            await embed_target(target)
+
+    outcomes = await asyncio.gather(*(gated(t) for t in targets), return_exceptions=True)
+    for outcome in outcomes:
+        if isinstance(outcome, BaseException):
+            raise outcome
 
     await _bulk_update(opensearch, cfg.items_index, list(item_updates.items()))
     await _bulk_update(opensearch, cfg.images_index, image_updates)
