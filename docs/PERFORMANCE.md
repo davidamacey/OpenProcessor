@@ -1915,6 +1915,137 @@ rounds to FP16 once, which is where the 0.9999 and the 98 percent box identity c
 - The `DELETE /curation/projects/{project}` 409 seen once at the end of a batch series is not
   diagnosed here.
 
+### WP-2.2: system shared memory between the API and Triton (#215), measured and not adopted
+
+**Result.** Shared memory removes 1.9 ms of client CPU per detector image and 0.5 to 0.6 ms per PE image
+when the transport is measured alone (about 6 ms of the 65 to 75 ms of API CPU per COCO frame), but the
+ingest does not get cheaper: API CPU per image is 0 to 3 percent lower (inside a run-to-run spread of
+8 to 10 percent), and Triton spends more user CPU than the wire path saved (+5.6 ms per image against
+-2.6 ms of kernel time), so the host total does not fall. Images per second rise 2 to 12 percent and the
+request p50 falls 5 to 8 percent, but the ranges overlap. The plan's rule (close the package when
+the win is under 5 percent of API CPU) applies, so the package is closed as measured and **nothing is
+shipped**: no setting, no compose change, no client code. The implementation and its tests are two
+commits on the local branch `perf/shared-memory-impl` (`4de40001`, `8e20afe5`), for reference only.
+
+**Method.** The isolated stack of the uint8 section (GPU 2, foreign load 0.0 percent in every sampled
+run, published v0.5.0 images with the branch `src/` mounted, uint8 detector and PE plans, PE plan sha256
+`a4feb7df...`, a fresh project per repetition, policy `all`), one extra tmpfs volume mounted as `/dev/shm`
+in both containers and `--allow-client-shm=true` on Triton. Wire and shared memory were the same code with
+the transport switch off or on, the API container recreated between launches, arms interleaved (wire, shm, shm,
+wire and shm, wire, shm) so a drifting host load falls on both. Host load average (1 min) was 12 to 62
+at launch and 15 to 43 at the end: other projects were running throughout. Medians with the minimum and
+maximum of the repetitions in parentheses. Raw numbers: `docs/benchmarks/shared_memory_transport.json`.
+
+**Attribution before.** Native `py-spy` on one worker (2 clients, 45 s, 50 Hz, uint8 tensors) put 13 percent
+of the busy thread samples in client-side transport (protobuf serialization 4.9, other gRPC client 4.4,
+socket send 2.9, the `tobytes` copy 1.1); that counts every thread of the process, so it is a ceiling, not a
+CPU share. The cgroup split of one worker is the better number: 14.4 of 66.9 ms of API CPU per image is
+kernel time (sockets, page faults, futex) and 52.5 ms is user time. Triton spends 18.7 ms per image
+(14.1 user, 4.6 kernel).
+
+**Isolated transport cost** (sequential `AsyncTritonPool.infer_images`, one process, 3 repetitions, client
+CPU ms per image):
+
+| Request | Wire | Shared memory |
+|---|---:|---:|
+| Detector, batch 16 (19.7 MB) | 2.25 (2.17-2.31) | 0.34 (0.33-0.36) |
+| PE, batch 9 (3.0 MB) | 0.89 (0.83-0.93) | 0.32 (0.28-0.32) |
+| PE, batch 32 (10.8 MB) | 0.67 (0.66-0.69) | 0.17 (0.15-0.18) |
+
+One frame is one detector image and about 7.4 PE images, so the isolated saving is about 6 ms per frame.
+With raw `tritonclient` calls, Triton CPU per image also falls in isolation (detector batch 8: 2.26 to
+0.89 ms; PE batch 16: 0.92 to 0.47 ms).
+
+**Ingest, set A (2,000 COCO images, 32 workers, 4 clients, 32 images per request, 9 repetitions per cell).**
+
+| Endpoint | Transport | images/s | API CPU s/image | Triton CPU s/image | request p50 s | GPU 2 busy % |
+|---|---|---:|---:|---:|---:|---:|
+| `/ingest/upload` | wire | 20.68 (19.18-22.28) | 0.0747 (0.0697-0.0866) | 0.0133 (0.0123-0.0145) | 6.15 (5.79-6.40) | 83 (80-91) |
+| `/ingest/upload` | shared memory | 21.66 (16.62-22.67) | 0.0739 (0.0679-0.0809) | 0.0131 (0.0120-0.0169) | 5.71 (4.92-7.39) | 88 (70-96) |
+| `/ingest/batch` | wire | 20.86 (19.99-21.79) | 0.0754 (0.0713-0.0799) | 0.0131 (0.0120-0.0138) | 5.95 (5.67-6.51) | 87 (80-92) |
+| `/ingest/batch` | shared memory | 21.29 (20.10-22.01) | 0.0755 (0.0682-0.0794) | 0.0143 (0.0124-0.0155) | 5.67 (5.08-5.83) | 91 (84-94) |
+
+After the first two launches shared memory looked 4 to 8 percent cheaper (0.0695 against 0.0724 s/image
+on batch, 0.0680 against 0.0742 on upload, non-overlapping ranges, 3 against 6 repetitions); the later
+launches removed it. Three repetitions per arm are not enough on this host. Throughput is bound by the GPU in both arms (83 to 91 percent busy), so the transport cannot
+raise images per second by more than the idle gaps it closes.
+
+**One worker, 2 clients (1,000 images, 9 repetitions per cell, `/ingest/upload`).**
+
+| Transport | images/s | API CPU s/image | Triton CPU s/image | request p50 s | GPU 2 busy % |
+|---|---:|---:|---:|---:|---:|
+| wire | 10.14 (7.83-12.66) | 0.0659 (0.0620-0.0733) | 0.0169 (0.0143-0.0191) | 5.22 (4.21-7.00) | 44 (33-57) |
+| shared memory | 11.31 (10.15-11.93) | 0.0653 (0.0600-0.0733) | 0.0203 (0.0192-0.0211) | 4.82 (4.41-5.27) | 46 (42-54) |
+
+User and kernel CPU of the two cgroups for the same run (ms per image, 3 repetitions per arm):
+
+| Transport | API user | API kernel | Triton user | Triton kernel |
+|---|---:|---:|---:|---:|
+| wire | 52.5 (51.4-52.8) | 14.4 (13.8-14.8) | 14.1 (13.9-15.4) | 4.6 (4.2-5.2) |
+| shared memory | 52.6 (51.9-54.6) | 12.3 (11.5-13.3) | 19.7 (19.5-20.0) | 2.0 (2.0-2.3) |
+
+API kernel time falls 2 ms and Triton kernel time 2.6 ms, as the isolated numbers predict. Triton's user
+time rises 5.6 ms. **Hypothesis, not verified:** a request whose input lives in a client-registered
+region is copied to the GPU from pageable host memory, which the CUDA driver stages on the CPU, while a
+gRPC request lands in memory Triton already owns; the isolated run is a single stream and does not show
+it. Registering the regions as pinned memory would be the experiment to run before revisiting this.
+
+**Photos, set B (500 pinned 12-24 MP photos, `/ingest/batch`, 8 images x 16 clients, 3 repetitions per
+arm, one launch per arm).** Wire 20.43 (12.10-20.82) images/s, API CPU 1.187 (1.129-1.309) s/image;
+shared memory 17.16 (15.05-19.51) images/s, 1.082 (1.061-1.129) s/image. The two arms differ by more
+than the transport can explain (decode and resize are 1.1 s of the CPU, the transport at most 6 ms) and
+the host load average was 29 to 44: these are noise, not a result. The ABBA series was stopped after two
+launches.
+
+**Parity.** `parity.py capture` of the shared memory stack (2,000 images, policy `all`, 200-image probe)
+against the references of the uint8 section, profile `precision`; the last column is the two references
+against each other (the noise floor of the pair):
+
+| Gate | shm vs `ref-u8fp16` | shm vs `ref-u8fp16-repeat` | `ref-u8fp16` vs repeat |
+|---|---:|---:|---:|
+| P-box (images with identical boxes) | 0.9929 | 0.9949 | 0.9939 |
+| P-item | 0.9995 | 0.9995 | 1.0000 |
+| P-pe, 1st percentile (median 1.0000) | 0.99993 | 0.99993 | 0.99995 |
+| P-pew, 1st percentile (median 1.0000) | 0.99991 | 0.99991 | 0.99994 |
+| P-knn overlap | 0.9943 | 0.9949 | 0.9955 |
+| P-cluster-assign | 0.9995 | 0.9995 | 0.9997 |
+| P-cluster-purity drop (points, gate 0.5) | 0.27 | -0.18 | 0.45 |
+| P-label-vote | 0.997 | 0.998 | 0.999 |
+| Gates failed | none | none | none |
+
+Direct check on real frames, the same tensors through both transports: PE embeddings are bit-identical
+at batch 1, 12 and 32. The detector's `det_boxes` differ by up to 0.012 between the transports, and by the
+same amount between two wire runs of the same tensor (the engine is not bit-reproducible, as the uint8
+section found); `num_dets`, scores and classes are identical.
+
+**What was built** (for a later revisit; none of it is in the tree). The detector and PE image batches
+only; outputs (4.8 KB per detector image, 4 KB per PE image) stay on the wire. One tmpfs volume mounted as
+`/dev/shm` in `triton-server` and `api` (project-scoped, sized by `SHM_SIZE`, so two compose projects never
+share a region namespace) and `--allow-client-shm` on Triton. Each API process owned up to four regions
+named `<namespace>.<boot>.<pid>.<n>` (`boot` random per start, so a recycled pid never collides), sized to
+the next power of two, grown on demand, never shrunk. A request leased a region, copied the batch in and
+sent the region name. Cleanup: the process held an `flock` on its lock file; at every start a process swept
+the namespace, removing the Triton registrations and files of any owner whose lock it could take, and any
+registration with no lock. A failed request retired its region. The start probed one region and refused to
+start (no fallback to the wire) if Triton could not map it. Checked live: `docker kill -s KILL` of the API
+left 16 registrations of 4 owners, the next start reaped 32 owners and left none; a graceful recreate left
+none and removed every file; a Triton restart was recovered by registering the region again (the first
+version matched the wrong error text and failed 3 requests of 128 before the slot was retired; fixed and
+rerun with 0 failed of 256). The 700-line ceiling held (`triton_pool.py` at 698).
+
+**Not measured.** CUDA shared memory (excluded by design: the API and Triton may sit on different GPUs, and
+the known `tritonclient` issue with multithreaded clients); pinned or registered host regions; writing the
+letterbox straight into the region (the `tobytes` copy is 1.1 percent of the samples above, so at most
+that); the core routes (`/detect`, `/embed`), which use the synchronous client; MobileCLIP, SCRFD, ArcFace
+and OCR, which still send FP32; more than one host; a Triton instance count other than the shipped one.
+
+**Caveats.** One host, one card, 9 repetitions per cell on set A and a shared CPU with load averages of 12
+to 62. A difference of 5 percent in API CPU would need more repetitions than this to resolve; the
+conclusion is that the effect is smaller than that, not that it is zero. The `DELETE
+/curation/projects/{project}` 409 of the uint8 section occurred once more (the third launch, `/ingest/batch`
+repetition 1); it is still not diagnosed, and it cost that launch its batch repetitions, which were
+repeated in a later launch.
+
 ### Multi-GPU PE encoding (#228)
 
 The PE image encoder is about 99 percent of the GPU work of `/ingest`, and one RTX A6000 tops out
@@ -2679,6 +2810,150 @@ P-cluster-purity 0.219). The VLM gate is skipped (no VLM in the stack).
   API CPU; ingest with a coalescer cap of 16 rows to keep Triton's packing granularity.
 - Before-and-after of the embed pass compares two builds on one stack, run back to back on GPU 2 (before
   first, after later); the before series ran with the coalescer absent.
+
+### Cluster pass plumbing: fetch and write-back (#218)
+
+The question: where does "ingest complete" to "clusters available" go, and how much of it is moving
+vectors out of and assignments back into OpenSearch rather than clustering? The clustering methods
+(IVF, AHC and its refinement, HDBSCAN) were not touched; a golden test pins what each stores.
+Medians of 3 repetitions, range in the table of stage times in the bench output; CPU only.
+
+**Result.** The write-back was the binding stage: a guarded painless update re-indexes the whole
+document with its vector, so one 2,000-document request at a time gave about 550 documents/s. Eight
+requests of 1,000 reach about 2,300 documents/s on this loaded host (more writers add nothing). The fetch
+is bound by the node rendering 25 MB of floats per 2,000-document page (2.4 s) and then by the single
+client thread decoding it; decoding is now 2.5 times faster, and the fetch is flat at about 19 s for
+100k whatever the slices (8 to 32) and page size (1,000 to 2,000), so the node is the floor.
+
+| Seconds (median) | 2k before | 2k after | 10k before | 10k after | 100k before | 100k after |
+|---|---|---|---|---|---|---|
+| IVF fetch | 0.79 | 0.55 | 3.31 | 2.46 | 30.0 | 19.3 |
+| IVF fit (unchanged) | 2.38 | 2.33 | 7.55 | 7.96 | 93.3 | 86.9 |
+| IVF write-back | 3.26 | 0.65 | 18.5 | 3.9 | 175.3 | 31.5 |
+| **IVF total** | 6.71 | 3.87 | 28.3 | 14.4 | 310.6 | 138.0 |
+| AHC total (fetch + fit + write) | 5.99 | 4.83 | 47.5 | 24.4 | not run | not run |
+| HDBSCAN total | 11.6 | 9.25 | 201.6 | 189.1 | not run | not run |
+| assign-only (incremental), IVF | 5.0 | 3.3 | 26.3 | 10.6 | 292.8 | 82.6 |
+
+| Write-back alone, 100k documents | 2000 x 1 | 2000 x 4 | 1000 x 4 | 1000 x 8 | 2000 x 8 | 1000 x 16 | 500 x 16 |
+|---|---|---|---|---|---|---|---|
+| documents/s | 550 | 1,600 | 1,560 | 2,340 | 2,330 | 2,100 | 2,050 |
+
+The first cell is chunk size by writers. Default: 1,000 documents, 8 writers; a pool too small to fill
+them is split down to 250 documents per request. AHC and HDBSCAN were not run at 100k (see caveats).
+
+**New bottleneck, found here.** The `cluster_geometry` stage the pipeline runs inside the same progress
+stage read every clustered vector twice, one scroll per cluster, and wrote every item in 20-document
+requests one after another: 43 s at 2k, 96 s at 10k, 442 s at 100k after IVF (the 100k figure is on the
+vector set of the table above). It is now one point-in-time sliced read of the clustered items with the
+centroids, distances and nearest clusters computed from that matrix (rows in index order, so every sum is
+the one the per-cluster read made), items that already store the same geometry skipped, and the rest
+written 8 requests at a time through the same writer. The stored geometry is identical to the old
+algorithm's (`tests/curation/test_cluster_geometry_golden.py`).
+
+Follow-up measured on the 12,792 real crop vectors of a parity capture (the 114,987-vector set used above
+was no longer available, so 100k was not re-measured), IVF, median of 3, seconds, same node and host:
+
+| Seconds | 2k main | 2k first PR commit | 2k now | 10k main | 10k first PR commit | 10k now |
+|---|---|---|---|---|---|---|
+| IVF fetch | 0.72 | 0.55 | 0.50 | 3.67 | 2.34 | 2.50 |
+| IVF fit (untouched) | 2.28 | 2.83 | 2.37 | 9.99 | 8.87 | 7.17 |
+| IVF write-back | 3.08 | 0.81 | 0.56 | 18.0 | 3.84 | 3.64 |
+| geometry stage | 60.2 | 40.8 | 3.1 | 142.9 | 94.3 | 11.4 |
+| **cluster pass + geometry** | 66.6 | 45.4 | 6.8 | 176.4 | 110.6 | 24.9 |
+| assign-only (incremental) | 5.8 | 5.0 | 1.6 | 27.7 | 9.7 | 5.4 |
+
+Assign-only now reads through 8 point-in-time slices (one scroll is one cursor) and skips a document that
+already stores exactly what the update writes; a second pass on 10k found 7,181 of 10,000 already exact
+(3.9 s against 5.4 s; the rest differ in the last bit of the distance because a page's composition changes
+when its documents are rewritten, so the match is exact or the document is written). The new bottleneck
+at 10k is the IVF fit (7.2 of 13.5 s of the pass, a method), then the geometry stage (11.4 s).
+
+Options measured and not adopted (10k, one 2,000-document page): `fields` instead of `_source` 2.4 s
+against 2.65 s (inside the noise); `docvalue_fields` is refused by the node for the vector field and
+`stored_fields` returns nothing; `refresh_interval: -1` during the write-back 4.0-4.5 s against 3.7-4.5 s
+with the default (not faster, and it adds 1-2 s to the closing refresh).
+
+#### Caveats and not measured
+
+- Host: 48 logical cores shared with other projects, 1-minute load 13-48 during the series; one
+  single-node OpenSearch 3.6, 8 GB heap, loopback, `clusplumb` project. Before and after ran back to back.
+- AHC and HDBSCAN are not run-to-run deterministic on real vectors (two runs of the unmodified code gave
+  6 different `cluster_id` of 2,000), so real-index hashes cannot show equality for them; the golden test
+  on a fixed set (deterministic) does, and IVF's stored hash is identical before and after at 2k and 10k.
+- Not measured: AHC and HDBSCAN at 100k (AHC at 100k did not finish its merge loop in 25 minutes; HDBSCAN
+  fit 180 s at 10k), GPU paths, the follow-up at 100k, concurrent search load during the write-back.
+- Tool: `scripts/bench/cluster_plumbing_bench.py` (stage split, `--fetch-profile`, `--write-grid`,
+  `--fetch-grid`, `--assign-only`, `--geometry`).
+
+### GPU decode measurements (#217)
+
+Question: does decoding JPEGs on the GPU, and building each model's input there, speed up ingest?
+The full design, the dataflow map and the implementation plan are in
+[design/gpu_decode_plan.md](design/gpu_decode_plan.md); this section keeps the numbers. One RTX
+A6000 (GPU 2; SM86 has no hardware JPEG decoder), the published v0.5.0 images, the `ref-u8fp16`
+engines, an isolated compose project, only this work's processes on GPU 2 during every timed run.
+Tools: `scripts/bench/gpu_decode_bench.py`, `scripts/bench/gpu_decode_parity.py`.
+
+**Result.** On 12-24 MP photos the CPU decode is the ceiling: the two decodes ingest runs per photo
+cost 0.50 CPU-s and 46 processes doing nothing else reach 26.3 photos/s, the measured photo ingest
+rate. GPU decode cuts the host cost of a photo 3.7x (not to zero: there is no GPU-only Huffman
+decoder on this card) and, with letterbox, whole frame and blur on the GPU too, the API CPU per photo
+falls 65 percent through the real stack. Images/s did not rise in that run because the float32 GPU
+kernels used made the GPU the limit; the plan sets a kernel budget and estimates about 1.9x on one
+A6000 and 3x on two once it is met (cheaper kernels, 8 instead of 11 ms of GPU per photo, gave
+25.5 against 26.8 photos/s: still GPU-bound). GPU decode changes the decoded pixels
+slightly and the detector turns that into different boxes on 7 to 13 percent of images: the parity
+gates against today's references fail, AP and kNN precision against ground truth do not move. COCO
+frames gain nothing (they are bound by the PE engine) and stay on the CPU.
+
+CPU decoders (single thread, ms per image, median; Pillow 12.3 and OpenCV 4.10 of the API image):
+
+| Images (median MP) | Pillow + EXIF | Pillow at 1/8 | OpenCV | OpenCV at 1/8 | both decodes ingest runs | both, 46 processes: images/s |
+|---|---:|---:|---:|---:|---:|---:|
+| COCO set A (0.27) | 5.3 | 2.2 | 3.7 | 2.1 | 7.4 | 979 |
+| Open Images 1,024 px (0.78) | 10.1 | 3.4 | 5.8 | 2.9 | 13.0 | 851 |
+| Open Images originals (5.2) | 68.1 | 15.5 | 37.1 | 15.6 | 83.7 | 124 |
+| photos, set B (17.7) | 369 | 130 | 283 | 133 | 502 | 26.3 |
+
+GPU decoders (batch 32, 8 decoder threads): images/s and host CPU ms per image:
+
+| Images | nvImageCodec | DALI | torchvision nvJPEG |
+|---|---|---|---|
+| COCO set A | 2,346, 2.8 ms | 1,941, 3.1 ms | 379, 2.6 ms (serial) |
+| Open Images 1,024 px | 1,282, 4.9 ms | 1,176, 5.1 ms | 215, 4.6 ms |
+| Open Images originals | 193, 21.6 ms | 154, 23.5 ms | 22, 45 ms |
+| photos, set B | 35.4, 134 ms | 31.8, 132 ms | 4.5, 221 ms |
+
+One nvImageCodec decoder saturates at about 35 photos/s whatever its thread count; its `GPU_ONLY`
+backend returns no image on this card. Decoding beside the PE engine at saturation: a DALI front end
+(decode, letterbox, whole-frame resize) takes 4.5-5.8 percent of PE (about 2 ms of PE time per photo);
+the float32 torch front end with the blur takes 22 percent (about 15 ms).
+
+Through the stack (`/ingest/batch`, 3 repetitions):
+
+| Arm | Set B images/s | API CPU-s per photo | host busy % | GPU busy % | Set A images/s | API CPU-s per frame |
+|---|---:|---:|---:|---:|---:|---:|
+| CPU path, 32 workers | 24.32 (21.72-26.26) | 1.06-1.13 | 76-79 | 36-43 | 23.51 (23.39-23.54) | 0.069 |
+| CPU path, 16 workers | 26.78 (24.59-28.10) | 1.07-1.15 | 80-82 | 36-41 | | |
+| GPU front end in the API process, float32 kernels, 16 workers | 23.39 (23.00-24.38) | 0.36-0.41 | 28-33 | 70-80 | 20.23 (20.00-20.70) | 0.164 |
+| same, half-precision resize input and convolution blur | 25.48 (24.45-26.48) | 0.35-0.36 | 34-38 | 79-83 | not run | |
+
+With 32 workers the API-side front end ran the 48 GB card out of memory (each worker held 2-5 GB).
+
+Parity of that run through the stack against `ref-u8fp16` (profile `precision`): P-box 0.869, P-item
+0.942, P-pe p01 0.974, P-pew p01 0.991, kNN overlap 0.911, label vote 0.961 fail; near-duplicate
+agreement 0.9997, cluster assignment 0.988, purity drop 0.34 points, kNN precision drop 0.00 points
+and class labels pass. Offline on the same engines, GPU decode alone accounts for most of the box
+change (P-box 0.883 with CPU resizes, 0.869 with GPU resizes; the GPU letterbox passes the tensor
+gate on every image), and COCO AP is 0.4376 on the CPU path against 0.4378 and 0.4377 on the two GPU
+arms. Decoder coverage: nvImageCodec applies all eight EXIF orientations and, with
+`fancy_upsampling=1`, matches Pillow within 0.01 grey levels on average; torchvision's GPU decode and
+DALI's default ignore EXIF orientation, and every GPU decoder returns an image for truncated or
+corrupted files that Pillow rejects (the plan routes those to the CPU).
+
+Not measured: the Triton-resident front end the plan recommends, two cards and the 12 GB card with GPU
+decode, kernels that meet the plan's budget, the region stage and VLM on GPU-encoded crop JPEGs.
 
 
 ### Stage 2 tuning: detector engine and the concurrency sweep (#226, #259)

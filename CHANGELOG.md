@@ -67,6 +67,13 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   1.2-1.4x faster than FP16 but fails the parity gates (crop cosine median 0.94-0.99 against 0.999,
   neighbour overlap 0.52-0.82 against 0.95), and weight-only INT8 passes the gates with no speed or
   size gain. INT8 is not offered; FP16 stays the only PE precision and no code changed (#213).
+- Measured system shared memory between the API and Triton for the detector and PE image batches,
+  recorded in `docs/PERFORMANCE.md` and `docs/benchmarks/shared_memory_transport.json`. Result: it
+  removes about 6 ms of client CPU per frame when the transport is measured alone, but ingest API CPU
+  per image falls 0 to 3 percent (inside the 8 to 10 percent run-to-run spread) and Triton's user CPU
+  rises by more than the kernel time saved, so the package is closed as measured and not adopted; the
+  wire stays the only transport and no code changed (#215).
+
 - `scripts/bench/embed_missing_bench.py`: re-embeds a project's crop and frame vectors through the
   `embed` reprocess scope (what embed-missing runs) and records images per second, the PE engine batch
   histogram and the API CPU (#216).
@@ -79,6 +86,14 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   repeated card, mixed compute capabilities, or a card without room; the installer takes
   `--gpu-plan triton=0+2` and refuses the same cases. `scripts/bench/pe_gpu_parity.py` compares
   embeddings of the same crops per card (#228).
+- GPU decode measured and planned (`docs/design/gpu_decode_plan.md`, numbers in
+  `docs/PERFORMANCE.md`): on 12-24 MP photos the CPU JPEG decode caps ingest at about 26 photos/s on
+  this host; GPU decode cuts the decode's host cost 3.7x and a GPU front end cut API CPU per photo by
+  65 percent through the stack, at unchanged images/s until faster GPU kernels land; COCO frames gain
+  nothing. GPU decode changes the decoded pixels and fails the parity gates against today's
+  references while AP and kNN precision are unchanged, so it waits for an owner decision. New probe
+  tools `scripts/bench/gpu_decode_bench.py` and `scripts/bench/gpu_decode_parity.py` with tested
+  kernels and helpers (#217). No product code changed.
 
 - The installer stamps the PE engine it builds (precision actually built, TensorRT version, GPU compute
   capability, ONNX sha256, builder flags) in `.install/precision.tsv` and rebuilds it when the stamp is
@@ -165,6 +180,17 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   (29.1 images/s against 27.6 at 8 and 22.0 at 4); no detector engine variant, Triton instance count,
   queue delay, preferred batch size or API worker count moved images per second by 3 percent or more on a
   GPU-bound card, so those defaults stay (#226, `docs/PERFORMANCE.md`).
+
+- Cluster pass plumbing, output-preserving (#218): the write-back sends its guarded updates 8 requests at
+  a time (1,000 documents each, 429 retried with backoff) instead of one 2,000-document request after
+  another, the fetch decodes responses with `orjson` and converts a page to a matrix in one call, and
+  the pass reports `stage_seconds` (fetch, fit, write_back). Same guarded script, same stored result; the
+  clustering methods and the refinement are untouched. At 100k real vectors the IVF pass goes from 311 s
+  to 138 s, the write-back from 175 s to 32 s. `scripts/bench/cluster_plumbing_bench.py` measures it;
+  `tests/curation/test_cluster_plumbing_golden.py` pins every method's stored output. The geometry stage
+  after the pass reads the clustered vectors once, by point-in-time slices, writes only what changed and
+  does it 8 requests at a time (10k: 143 s to 11 s, same stored geometry); assign-only reads through
+  slices and skips documents that already store the result.
 
 ### Fixed
 
