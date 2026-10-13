@@ -111,7 +111,7 @@ class FakePEEncoder:
         self.embed_crops_calls.append(len(crops))
         return np.tile(np.array([1.0, 0.0, 0.0], dtype=np.float32), (len(crops), 1))
 
-    async def embed_whole_frame(self, path: str) -> np.ndarray | None:  # noqa: ARG002
+    async def embed_whole_frame_image(self, img: Any) -> np.ndarray:  # noqa: ARG002
         return np.array([0.0, 1.0, 0.0], dtype=np.float32)
 
 

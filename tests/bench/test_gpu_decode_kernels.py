@@ -112,26 +112,28 @@ def test_whole_frame_square_shape_and_dtype() -> None:
 
 
 def test_dct8_whole_frame_tracks_the_reduced_decode() -> None:
-    """The 1/8 emulation lands near OpenCV's ``IMREAD_REDUCED_COLOR_8`` path; the antialiased
-    full-resolution resize does not (the product upsamples a thumbnail on small frames)."""
-    from src.services.detection.pe_preprocess import whole_frame_rgb_from_bytes
+    """The 1/8 emulation lands near OpenCV's ``IMREAD_REDUCED_COLOR_8`` path (the whole frame
+    before the single decode); the antialiased full-resolution resize lands near today's
+    whole frame (Pillow ``BILINEAR`` from the full frame)."""
+    from PIL import Image
+
+    from src.services.detection.pe_preprocess import resize_crop_rgb, whole_frame_rgb_from_image
 
     rgb = _photo(480, 640, seed=5)
     ok, enc = cv2.imencode(
         '.jpg', cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 95]
     )
     assert ok
-    data = enc.tobytes()
-    decoded = cv2.cvtColor(
-        cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB
-    )
-    ref = whole_frame_rgb_from_bytes(data)
+    data = np.frombuffer(enc.tobytes(), np.uint8)
+    decoded = cv2.cvtColor(cv2.imdecode(data, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
+    reduced = cv2.cvtColor(cv2.imdecode(data, cv2.IMREAD_REDUCED_COLOR_8), cv2.COLOR_BGR2RGB)
+    old = resize_crop_rgb(reduced)
+    new = whole_frame_rgb_from_image(Image.fromarray(decoded))
     dct8 = k.whole_frame_u8(torch.from_numpy(decoded), mode='dct8').numpy()
     aa = k.whole_frame_u8(torch.from_numpy(decoded), mode='antialias').numpy()
-    d_dct8 = lib.tensor_diff(ref, dct8).mean_abs
-    d_aa = lib.tensor_diff(ref, aa).mean_abs
-    assert d_dct8 < 2.0
-    assert d_dct8 < d_aa
+    assert lib.tensor_diff(old, dct8).mean_abs < 2.0
+    assert lib.tensor_diff(old, dct8).mean_abs < lib.tensor_diff(old, aa).mean_abs
+    assert lib.tensor_diff(new, aa).mean_abs < lib.tensor_diff(new, dct8).mean_abs
 
 
 @pytest.mark.parametrize('orientation', range(1, 9))

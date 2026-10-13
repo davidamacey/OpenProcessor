@@ -62,12 +62,15 @@ RUN rm -rf /usr/local/cuda-*/NsightSystems-cli-* \
     && pip install --no-cache-dir --upgrade 'starlette>=1.3.1' 'anyio>=4.14.2'
 
 # Install PyTorch and TorchVision (CUDA 13.x wheels)
-# Required for Python backend models (ROI align, per-box embeddings, OCR pipeline)
+# Required for Python backend models (ROI align, per-box embeddings, OCR pipeline).
+# CuPy: image_frontend (the GPU ingest front end) compiles its kernels with it; the base image
+# ships this version, pinned so a base bump cannot drop it silently.
 RUN pip install --no-cache-dir \
     torch==2.12.1 \
     torchvision==0.27.1 \
     --index-url https://download.pytorch.org/whl/cu130 \
     && pip install --no-cache-dir opencv-python-headless==4.13.0.92 \
+    && pip install --no-cache-dir cupy-cuda13x==13.6.0 \
     && python3 -c "import torch; print(f'PyTorch {torch.__version__} installed, CUDA: {torch.cuda.is_available()}')" \
     && python3 -c "import torchvision; print(f'TorchVision {torchvision.__version__} installed')"
 

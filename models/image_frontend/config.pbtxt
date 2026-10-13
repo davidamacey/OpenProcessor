@@ -1,0 +1,66 @@
+# image_frontend: decode a photo once on the GPU and derive every ingest input from that frame
+# (Python backend, decoupled: requests from all API workers run concurrently on worker threads
+# inside one process, one CUDA context). See 1/model.py. Loaded only when photo ingest uses the GPU front end
+# (OP_INGEST_GPU_FRONTEND); the API decodes on the CPU otherwise.
+#
+# Inputs:
+#   - jpeg:          [-1] UINT8, the encoded image as uploaded
+#   - embed_crops:   [1] BOOL (optional, default true), also embed every detection's square
+# Outputs (status "ok"; any other status is the reason the API decodes this image on the CPU):
+#   - status:          [1] STRING
+#   - size:            [2] INT32, width and height after EXIF orientation
+#   - letterbox:       [3] FP64, scale, pad_w, pad_h of the detector letterbox
+#   - det_boxes:       [-1, 4] FP32, det_scores [-1] FP32, det_classes [-1] INT32 (end2end rows)
+#   - whole_embedding: [-1] FP32, PE embedding of the whole-frame square (not normalized)
+#   - crop_embeddings: [-1, -1] FP32, one per detection when embed_crops (not normalized)
+#   - blur_sums:       [-1, 3] INT64, (pixels, Laplacian sum, sum of squares): the frame, then
+#                      each detection's clamped rectangle (pixels 0: empty)
+#   - crop_jpegs:      [-1] STRING, each detection's crop, JPEG quality 90
+
+name: "image_frontend"
+backend: "python"
+max_batch_size: 0
+model_transaction_policy { decoupled: true }
+
+input [
+  { name: "jpeg", data_type: TYPE_UINT8, dims: [ -1 ] },
+  { name: "embed_crops", data_type: TYPE_BOOL, dims: [ 1 ], optional: true }
+]
+output [
+  { name: "status", data_type: TYPE_STRING, dims: [ 1 ] },
+  { name: "size", data_type: TYPE_INT32, dims: [ 2 ] },
+  { name: "letterbox", data_type: TYPE_FP64, dims: [ 3 ] },
+  { name: "det_boxes", data_type: TYPE_FP32, dims: [ -1, 4 ] },
+  { name: "det_scores", data_type: TYPE_FP32, dims: [ -1 ] },
+  { name: "det_classes", data_type: TYPE_INT32, dims: [ -1 ] },
+  { name: "whole_embedding", data_type: TYPE_FP32, dims: [ -1 ] },
+  { name: "crop_embeddings", data_type: TYPE_FP32, dims: [ -1, -1 ] },
+  { name: "blur_sums", data_type: TYPE_INT64, dims: [ -1, 3 ] },
+  { name: "crop_jpegs", data_type: TYPE_STRING, dims: [ -1 ] }
+]
+
+instance_group [
+  {
+    count: 1  # one process owns the decoder; its worker threads give the concurrency
+    kind: KIND_GPU
+    gpus: [ 0 ]
+  }
+]
+
+# GPU memory: the CuPy pool is capped at POOL_MIB (frames in flight, letterbox and squares), plus
+# the CUDA context, the nvJPEG lane buffers and the BLS tensors: 8.2 GB measured at 32 streams of
+# 12-24 MP photos. Not in Triton's default load list (opt-in, loaded on first use).
+parameters { key: "GPU_MIB_PER_INSTANCE" value: { string_value: "8704" } }
+parameters { key: "POOL_MIB" value: { string_value: "4096" } }
+
+parameters { key: "FORCE_CPU_ONLY_INPUT_TENSORS" value: { string_value: "yes" } }
+parameters { key: "DETECTOR_MODEL" value: { string_value: "yolov11_small_trt_end2end" } }
+parameters { key: "PE_MODEL" value: { string_value: "pe_image_encoder" } }
+parameters { key: "NET_SIZE" value: { string_value: "640" } }
+parameters { key: "LETTERBOX_FILL" value: { string_value: "114" } }
+parameters { key: "MIN_MEGAPIXELS" value: { string_value: "0" } }
+parameters { key: "MAX_MEGAPIXELS" value: { string_value: "100" } }
+parameters { key: "LANES" value: { string_value: "16" } }
+parameters { key: "WORKERS" value: { string_value: "32" } }
+parameters { key: "MAX_IN_FLIGHT" value: { string_value: "96" } }
+parameters { key: "ENCODE_THREADS" value: { string_value: "8" } }

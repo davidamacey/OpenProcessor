@@ -24,7 +24,7 @@ Pipeline, per image:
    with a raw score for lineage.
 4. Per-crop PE embedding (:meth:`~src.clients.pe_encoder.PEEncoder.embed_crops`)
    plus a whole-frame PE embedding
-   (:meth:`~src.clients.pe_encoder.PEEncoder.embed_whole_frame`).
+   (:meth:`~src.clients.pe_encoder.PEEncoder.embed_whole_frame_image`).
 5. Primary-subject rank + blur quality
    (:mod:`~src.services.detection.crop_quality`), and residual-pool
    cluster assignment via the ingest-time IVF cache
@@ -64,12 +64,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from PIL import Image, ImageOps
-
 from src.config import get_curation_config, get_region_fields
 from src.core.logging import get_logger
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.event_hub import publish_crop_created
+from src.services.curation.image_decode import DecodedImage, decode_image
 from src.services.curation.ingest_detect import (
     SECONDARY_IOU_MATCH,
     SecondaryOutput,
@@ -106,11 +105,13 @@ from src.utils.stage_timing import stage_timer
 
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
+    from PIL import Image
 
     from src.clients.curation_opensearch.registry import ClassRegistry
     from src.clients.pe_encoder import PEEncoder
     from src.clients.triton_pool import AsyncTritonPool
     from src.config import CurationConfig, DetectionProfile
+    from src.services.curation.ingest_frontend import FrontendFrame
 
 
 logger = get_logger(__name__)
@@ -143,15 +144,10 @@ def _imohash_bytes(data: bytes) -> str:
             return hashlib.sha256(data).hexdigest()[:32]
 
 
-def _decode_image(image_bytes: bytes) -> tuple[Image.Image, int, int]:
-    """Decode bytes -> EXIF-transposed RGB PIL image + (width, height)."""
+def _decode_image(image_bytes: bytes) -> DecodedImage:
+    """Decode bytes into the upright RGB frame (:func:`~src.services.curation.image_decode.decode_image`)."""
     with stage_timer('decode', nbytes=len(image_bytes)):
-        img = Image.open(io.BytesIO(image_bytes))
-        img = ImageOps.exif_transpose(img)
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-        w, h = img.size
-        return img, w, h
+        return decode_image(image_bytes)
 
 
 def _now_iso() -> str:
@@ -342,8 +338,8 @@ class CurationIngestService:
         image_path: str,
         source: str = 'unknown',
         *,
-        prefilled_image: Image.Image | None = None,
-        whole_frame_from_bytes: bool = False,
+        prefilled_image: DecodedImage | None = None,
+        prefilled_frame: FrontendFrame | None = None,
         source_identifier: str | None = None,
         ingest_run_id: str | None = None,
         adopt_existing: bool = False,
@@ -370,12 +366,14 @@ class CurationIngestService:
                 error_kind=ERROR_KIND_EMPTY,
             )
 
-        if prefilled_image is not None:
-            img = prefilled_image
-            full_w, full_h = img.size
+        decoded: DecodedImage | None = None
+        if prefilled_frame is not None:
+            pass
+        elif prefilled_image is not None:
+            decoded = prefilled_image
         else:
             try:
-                img, full_w, full_h = await run_cpu(
+                decoded = await run_cpu(
                     _decode_image, image_bytes, nbytes=encoded_nbytes(image_bytes)
                 )
             except Exception as exc:
@@ -386,6 +384,12 @@ class CurationIngestService:
                     error=str(exc),
                     error_kind=ERROR_KIND_DECODE_FAILED,
                 )
+
+        if decoded is not None:
+            width, height = decoded.pil.size
+        else:
+            assert prefilled_frame is not None
+            width, height = prefilled_frame.width, prefilled_frame.height
 
         image_hash = _imohash_bytes(image_bytes)
         existing = known_existing or await self._lookup_image(image_hash)
@@ -408,15 +412,15 @@ class CurationIngestService:
             image_path=resolved_path,
             created=existing is None,
             dataset_split=(existing or {}).get('dataset_split'),
-            pil=img,
-            width=full_w,
-            height=full_h,
+            pil=decoded.pil if decoded is not None else None,
+            rgb=decoded.rgb if decoded is not None else None,
+            frontend=prefilled_frame,
+            width=width,
+            height=height,
             imohash=image_hash,
-            image_bytes=image_bytes,
             source=source,
             source_identifier=source_identifier,
             ingest_run_id=ingest_run_id,
-            whole_frame_from_bytes=whole_frame_from_bytes,
         )
 
     async def detect_items(
@@ -475,7 +479,17 @@ class CurationIngestService:
                         logger.warning(
                             'ingest_backbone_embedding_failed', path=image_path, error=str(exc)
                         )
-        items, n_filtered = apply_detect_filter(items, self.policy.detect, img.width, img.height)
+        return self.filter_detections(items, img.width, img.height, secondary_detector_error)
+
+    def filter_detections(
+        self,
+        items: list[DetectedItem],
+        width: int,
+        height: int,
+        secondary_detector_error: str | None = None,
+    ) -> DetectResult:
+        """The project's detect filter and class resolution over detected items."""
+        items, n_filtered = apply_detect_filter(items, self.policy.detect, width, height)
         if self.policy.detect.class_resolution == 'by_name':
             assign_classes_by_name(items, registry_name_index(self.registry), self.profile.name)
         return DetectResult(items, secondary_detector_error, n_filtered)
@@ -497,10 +511,10 @@ class CurationIngestService:
         image_path: str,
         source: str = 'unknown',
         *,
-        prefilled_image: Image.Image | None = None,
+        prefilled_image: DecodedImage | None = None,
         prefilled_items: list[DetectedItem] | None = None,
         prefilled_secondary: SecondaryOutput | None = None,
-        whole_frame_from_bytes: bool = False,
+        prefilled_frame: FrontendFrame | None = None,
         source_identifier: str | None = None,
         ingest_run_id: str | None = None,
     ) -> IngestResult:
@@ -512,8 +526,7 @@ class CurationIngestService:
                 dedup fingerprint is computed from.
             image_path: Source path, persisted verbatim on the images doc.
             source: Free-form provenance tag.
-            prefilled_image: Already-decoded PIL image; skips the decode
-                + EXIF transpose.
+            prefilled_image: The already-decoded frame; skips the decode.
             prefilled_items: Primary-detector output from
                 :meth:`_run_primary_detector_batch`; skips this image's
                 own single-image Triton round-trip. An empty list is
@@ -522,10 +535,9 @@ class CurationIngestService:
             prefilled_secondary: Secondary-detector output (raw tensor
                 plus optional backbone feature map) from
                 :meth:`WholeImageDetector.run_secondary_raw_batch`; same deal.
-            whole_frame_from_bytes: Compute the whole-frame embedding from
-                ``image_bytes`` instead of re-reading ``image_path``. Set by
-                byte-upload ingest, where ``image_path`` is a client-side
-                identifier the server cannot open.
+            prefilled_frame: The GPU front end's products for this image
+                (:mod:`~src.services.curation.ingest_frontend`), with its
+                items in ``prefilled_items``; the API never decodes it.
 
         Every ``prefilled_*`` argument defaults to ``None``, in which
         case this method does the work itself — so direct callers
@@ -537,21 +549,23 @@ class CurationIngestService:
             image_path,
             source,
             prefilled_image=prefilled_image,
-            whole_frame_from_bytes=whole_frame_from_bytes,
+            prefilled_frame=prefilled_frame,
             source_identifier=source_identifier,
             ingest_run_id=ingest_run_id,
         )
         if isinstance(ctx, IngestResult):
             return record_ingest_result(ctx)
-        img = ctx.pil
 
         try:
-            detected = await self.detect_items(
-                img,
-                image_path=image_path,
-                prefilled_items=prefilled_items,
-                prefilled_secondary=prefilled_secondary,
-            )
+            if ctx.pil is None:
+                detected = self.filter_detections(prefilled_items or [], ctx.width, ctx.height)
+            else:
+                detected = await self.detect_items(
+                    ctx.pil,
+                    image_path=image_path,
+                    prefilled_items=prefilled_items,
+                    prefilled_secondary=prefilled_secondary,
+                )
         except Exception as exc:
             logger.error('ingest_primary_detector_failed', path=image_path, error=str(exc))
             return record_ingest_result(
@@ -605,7 +619,6 @@ class CurationIngestService:
         images: list[bytes],
         image_paths: list[str],
         source: str = 'batch',
-        whole_frame_from_bytes: bool = False,
         source_identifiers: list[str | None] | None = None,
         ingest_run_id: str | None = None,
     ) -> BatchIngestResult:
@@ -621,7 +634,6 @@ class CurationIngestService:
             images: Raw image bytes, one per entry.
             image_paths: Source paths, index-aligned with ``images``.
             source: Provenance tag stamped on every document.
-            whole_frame_from_bytes: See :meth:`ingest_one`.
 
         Raises:
             ValueError: If ``image_paths`` is not the same length as
@@ -634,7 +646,6 @@ class CurationIngestService:
             images,
             image_paths,
             source=source,
-            whole_frame_from_bytes=whole_frame_from_bytes,
             source_identifiers=source_identifiers,
             ingest_run_id=ingest_run_id,
         )

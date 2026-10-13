@@ -183,7 +183,6 @@ async def curation_ingest_upload(
             data,
             kept_paths,
             source=source,
-            whole_frame_from_bytes=True,
             source_identifiers=source_identifiers,
             ingest_run_id=run_id,
         )

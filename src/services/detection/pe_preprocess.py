@@ -12,15 +12,19 @@ Convention: resize so the shorter edge is 336, center-crop to
 are applied inside the TensorRT engine (``export/uint8_input.py``), so the
 request carries a quarter of the bytes of the float tensor.
 
-Whole *frames* are decoded with OpenCV ``IMREAD_REDUCED_COLOR_8`` (a 1/8-scale
-JPEG decode — fast and GIL-releasing, so a thread pool scales across cores) and
-resized with ``cv2.INTER_LINEAR``.
+A whole frame is read from the full-resolution decoded frame (Pillow, EXIF orientation
+applied): the shorter edge to 336 with Pillow ``BILINEAR`` (antialiased on a downscale), then the
+centre square. Ingest passes the frame it already decoded for the detector, so a photo is decoded
+once; the path and byte helpers decode the same way, so every caller lands in one space.
 """
 
 from __future__ import annotations
 
+import io
+
 import cv2
 import numpy as np
+from PIL import Image, ImageOps
 
 
 PE_SIZE = 336
@@ -57,33 +61,39 @@ def to_chw_into(out_chw: np.ndarray, rgb_uint8: np.ndarray) -> None:
     out_chw[...] = rgb_uint8.transpose(2, 0, 1)
 
 
-def whole_frame_rgb(path: str, target: int = PE_SIZE) -> np.ndarray | None:
-    """cv2 1/8 decode + resize-shorter-edge + center-crop -> (target,target,3) RGB u8.
+def whole_frame_rgb_from_image(img: Image.Image, target: int = PE_SIZE) -> np.ndarray:
+    """Shorter edge to ``target`` (Pillow ``BILINEAR``) and the centre square of a decoded frame."""
+    w, h = img.size
+    if w == 0 or h == 0:
+        return np.zeros((target, target, 3), dtype=np.uint8)
+    rgb = img if img.mode == 'RGB' else img.convert('RGB')
+    scale = target / min(w, h)
+    nw, nh = max(target, round(w * scale)), max(target, round(h * scale))
+    left, top = (nw - target) // 2, (nh - target) // 2
+    square = rgb.resize((nw, nh), Image.BILINEAR).crop((left, top, left + target, top + target))
+    return np.asarray(square)
 
-    The cheap, GIL-free part of whole-frame preprocessing — safe to call from
-    a large read thread pool. Returns ``None`` on a decode failure.
-    """
-    bgr = cv2.imread(path, cv2.IMREAD_REDUCED_COLOR_8)
-    if bgr is None:
+
+def _decode_upright(source: str | io.BytesIO) -> Image.Image | None:
+    try:
+        with Image.open(source) as img:
+            return ImageOps.exif_transpose(img).convert('RGB')
+    except (OSError, ValueError, Image.DecompressionBombError):
         return None
-    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-    return resize_crop_rgb(rgb, target)
+
+
+def whole_frame_rgb(path: str, target: int = PE_SIZE) -> np.ndarray | None:
+    """Decode a file and return its whole-frame square; ``None`` on a decode failure."""
+    img = _decode_upright(path)
+    return None if img is None else whole_frame_rgb_from_image(img, target)
 
 
 def whole_frame_rgb_from_bytes(data: bytes, target: int = PE_SIZE) -> np.ndarray | None:
-    """:func:`whole_frame_rgb` for an in-memory encoded image (e.g. an upload).
-
-    ``cv2.imdecode`` with the same ``IMREAD_REDUCED_COLOR_8`` flag runs the
-    same decoder as ``cv2.imread`` on the same bytes, so an uploaded image
-    and the identical file read from disk embed to the same vector.
-    """
+    """:func:`whole_frame_rgb` for an in-memory encoded image."""
     if not data:
         return None
-    bgr = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_REDUCED_COLOR_8)
-    if bgr is None:
-        return None
-    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-    return resize_crop_rgb(rgb, target)
+    img = _decode_upright(io.BytesIO(data))
+    return None if img is None else whole_frame_rgb_from_image(img, target)
 
 
 def whole_frame_chw(path: str, target: int = PE_SIZE) -> np.ndarray | None:
