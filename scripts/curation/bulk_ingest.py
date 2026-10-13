@@ -20,15 +20,20 @@ finished with failures resumes that run and skips what it already stored.
 Ctrl-C asks the server to cancel (images already stored stay stored) and waits
 for it to stop.
 
-Usage:
+Usage (inside the ``api`` container the API listens on port 8000, so pass
+``--api-base``; on the host the default ``localhost:4603`` works):
     docker compose exec api python scripts/curation/bulk_ingest.py \\
-        --folder /data/source/my_dataset --project cars
+        --folder /data/source/my_dataset --project cars \\
+        --api-base http://localhost:8000/curation
 
-    python scripts/curation/bulk_ingest.py --manifest /data/source/list.txt \\
-        --batch-size 16 --concurrency 8 --source census
+    docker compose exec api python scripts/curation/bulk_ingest.py \\
+        --manifest /data/source/list.txt --batch-size 16 --concurrency 8 \\
+        --source census --project cars --api-base http://localhost:8000/curation
 
-    python scripts/curation/bulk_ingest.py --project cars --status bulk_20261011T120000_ab12cd34
-    python scripts/curation/bulk_ingest.py --project cars --cancel bulk_20261011T120000_ab12cd34
+    docker compose exec api python scripts/curation/bulk_ingest.py --project cars \\
+        --status bulk_20261011T120000_ab12cd34 --api-base http://localhost:8000/curation
+    docker compose exec api python scripts/curation/bulk_ingest.py --project cars \\
+        --cancel bulk_20261011T120000_ab12cd34 --api-base http://localhost:8000/curation
 
 Exit status: 0 completed, 1 completed with failed images, 2 failed (the run
 stopped), 130 cancelled.
