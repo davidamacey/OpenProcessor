@@ -1,16 +1,16 @@
-"""GPU ingest front end for photos (#217): decode once on the GPU, derive every input there.
+"""GPU decode for photos (#217): decode once on the GPU, derive every input there.
 
-With ``OP_INGEST_GPU_FRONTEND`` on, a batch ingest sends each image at or above
-``OP_INGEST_GPU_MIN_MEGAPIXELS`` to the ``image_frontend`` Triton model instead of decoding it in
+With ``OP_INGEST_GPU_DECODE`` on, a batch ingest sends each image at or above
+``OP_INGEST_GPU_MIN_MEGAPIXELS`` to the ``gpu_image_prep`` Triton model instead of decoding it in
 the API. That model decodes the photo once (nvJPEG), runs the detector on its letterbox, embeds
 the whole-frame square and every detection's square with PE, computes the blur sums and encodes
 the crop JPEGs; only boxes, vectors, sums and JPEGs come back. The API turns the detector rows
 into items with the same :meth:`WholeImageDetector.decode_primary_row` the CPU path uses and
-reads every other per-image product from the returned :class:`FrontendFrame`.
+reads every other per-image product from the returned :class:`GpuDecodeFrame`.
 
-Fail closed, image by image: an image the front end does not take (not a baseline 8-bit JPEG,
-no end-of-image marker, below the gate, a decoder error) or a front-end call that fails is
-decoded on the CPU path as before, and counted in ``op_ingest_decode_total``. The front end is
+Fail closed, image by image: an image the GPU decode does not take (not a baseline 8-bit JPEG,
+no end-of-image marker, below the gate, a decoder error) or a GPU decode call that fails is
+decoded on the CPU path as before, and counted in ``op_ingest_decode_total``. The GPU decode is
 used only while its detector, network size and letterbox fill match the ingest profile and no
 secondary detector is configured (that one needs the CPU frame); otherwise every image takes the
 CPU path.
@@ -42,13 +42,13 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-FRONTEND_MODEL = TritonModelConfig.IMAGE_FRONTEND_MODEL
+GPU_IMAGE_PREP_MODEL = TritonModelConfig.GPU_IMAGE_PREP_MODEL
 
 
 @dataclass
-class FrontendFrame:
-    """One photo's products from the front end; per-detection rows are indexed by the item
-    objects :func:`run_frontend` built (``det_of``)."""
+class GpuDecodeFrame:
+    """One photo's products from the GPU decode; per-detection rows are indexed by the item
+    objects :func:`run_gpu_decode` built (``det_of``)."""
 
     width: int
     height: int
@@ -91,11 +91,11 @@ def megapixels(data: bytes) -> float | None:
 _READY: dict[tuple[str, int, tuple[int, int, int]], bool] = {}
 
 
-async def frontend_ready(service: CurationIngestService) -> bool:
-    """Whether photos go to the front end: enabled, no secondary detector, and the loaded model
+async def gpu_decode_ready(service: CurationIngestService) -> bool:
+    """Whether photos go to the GPU decode: enabled, no secondary detector, and the loaded model
     built for the ingest profile's detector input. The model check runs once per profile
     shape per process; a mismatch or a missing model is logged and keeps the CPU path."""
-    if not service.config.ingest_gpu_frontend or service.detector.secondary_profile is not None:
+    if not service.config.ingest_gpu_decode or service.detector.secondary_profile is not None:
         return False
     profile = service.profile
     key = (profile.detector_model, profile.input_size, profile.letterbox_fill)
@@ -104,10 +104,10 @@ async def frontend_ready(service: CurationIngestService) -> bool:
         return cached
     ready = False
     try:
-        if not await service.triton_pool.is_model_ready(FRONTEND_MODEL):
+        if not await service.triton_pool.is_model_ready(GPU_IMAGE_PREP_MODEL):
             # Not in Triton's default load list: it holds GPU memory only where it is used.
-            await service.triton_pool.load_model(FRONTEND_MODEL)
-        params = await service.triton_pool.get_model_parameters(FRONTEND_MODEL)
+            await service.triton_pool.load_model(GPU_IMAGE_PREP_MODEL)
+        params = await service.triton_pool.get_model_parameters(GPU_IMAGE_PREP_MODEL)
         expected = {
             'DETECTOR_MODEL': profile.detector_model,
             'NET_SIZE': str(profile.input_size),
@@ -117,10 +117,10 @@ async def frontend_ready(service: CurationIngestService) -> bool:
         ready = not mismatch and len(set(profile.letterbox_fill)) == 1
         if not ready:
             logger.warning(
-                'ingest_frontend_profile_mismatch', mismatch=mismatch, fill=profile.letterbox_fill
+                'ingest_gpu_decode_profile_mismatch', mismatch=mismatch, fill=profile.letterbox_fill
             )
     except Exception as exc:
-        logger.warning('ingest_frontend_unavailable', error=str(exc))
+        logger.warning('ingest_gpu_decode_unavailable', error=str(exc))
     _READY[key] = ready
     return ready
 
@@ -133,19 +133,19 @@ def _input(name: str, arr: np.ndarray, dtype: str) -> Any:
     return inp
 
 
-async def run_frontend(
+async def run_gpu_decode(
     service: CurationIngestService, data: bytes, *, embed_crops: bool
-) -> tuple[FrontendFrame, list[DetectedItem]] | str:
-    """The front end's products and the detected items for one image, or the reason the image
+) -> tuple[GpuDecodeFrame, list[DetectedItem]] | str:
+    """The GPU decode's products and the detected items for one image, or the reason the image
     takes the CPU path."""
     inputs = [
         _input('jpeg', np.frombuffer(data, dtype=np.uint8), 'UINT8'),
         _input('embed_crops', np.array([embed_crops]), 'BOOL'),
     ]
     try:
-        result = await service.triton_pool.stream_one(FRONTEND_MODEL, inputs)
+        result = await service.triton_pool.stream_one(GPU_IMAGE_PREP_MODEL, inputs)
     except Exception as exc:
-        logger.warning('ingest_frontend_call_failed', error=str(exc))
+        logger.warning('ingest_gpu_decode_call_failed', error=str(exc))
         return 'call_failed'
     status = result.as_numpy('status')[0]
     status = status.decode() if isinstance(status, bytes) else str(status)
@@ -167,7 +167,7 @@ async def run_frontend(
     crops = result.as_numpy('crop_embeddings').reshape(
         -1, result.as_numpy('whole_embedding').shape[0]
     )
-    frame = FrontendFrame(
+    frame = GpuDecodeFrame(
         width=width,
         height=height,
         whole_embedding=_l2_normalize(result.as_numpy('whole_embedding').astype(np.float32)),

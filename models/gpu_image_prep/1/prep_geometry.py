@@ -1,6 +1,6 @@
-"""Host-side logic of the GPU ingest front end: header routing, geometry and resampling weights.
+"""Host-side logic of the GPU decode: header routing, geometry and resampling weights.
 
-Numpy only, so the offline test suite covers it (``tests/models/test_image_frontend_geometry.py``).
+Numpy only, so the offline test suite covers it (``tests/models/test_gpu_image_prep_geometry.py``).
 Every function reproduces the arithmetic of the CPU ingest path it stands in for:
 
 * :func:`letterbox_geometry`  ``geometry.letterbox_to_square``

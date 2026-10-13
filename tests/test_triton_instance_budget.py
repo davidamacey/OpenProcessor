@@ -81,8 +81,8 @@ def _default_loaded() -> set[str]:
 
 
 def test_committed_python_instances_fit_the_standard_budget() -> None:
-    # The budget covers what Triton loads at start; a model loaded on demand (image_frontend, loaded on
-    # first use) records its own memory and is planned by the installer profile (ingest_gpu_frontend).
+    # The budget covers what Triton loads at start; a model loaded on demand (gpu_image_prep, loaded on
+    # first use) records its own memory and is planned by the installer profile (ingest_gpu_decode).
     budget = _profile('standard')['python_backend_budget_mib']
     defaults = [m for m in _python_gpu_models() if m in _default_loaded()]
     assert 'ocr_pipeline' in defaults

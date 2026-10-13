@@ -1,4 +1,4 @@
-"""image_frontend: decode a photo once on the GPU and derive every ingest input from that frame.
+"""gpu_image_prep: decode a photo once on the GPU and derive every ingest input from that frame.
 
 One request per image (the encoded bytes). Requests from every API worker meet in this one
 process (one CUDA context, one decoder owner) and run on a pool of worker threads, so decoding,
@@ -34,7 +34,7 @@ import cupy as cp
 import cv2
 import numpy as np
 import triton_python_backend_utils as pb_utils
-from frontend_geometry import (
+from prep_geometry import (
     blur_rect,
     crop_rect,
     letterbox_geometry,
@@ -43,7 +43,7 @@ from frontend_geometry import (
     undo_letterbox,
     whole_square_geometry,
 )
-from frontend_kernels import FrontendKernels
+from prep_kernels import PrepKernels
 from nvjpeg_lanes import NvJpegLanes
 
 
@@ -96,7 +96,7 @@ class TritonPythonModel:
         # grows past 15 GB. At the cap it frees cached blocks before allocating.
         cp.get_default_memory_pool().set_limit(size=int(p.get('POOL_MIB', '4096')) * 1024 * 1024)
         self.lanes = NvJpegLanes(lanes=int(p.get('LANES', '16')))
-        self.kernels = FrontendKernels()
+        self.kernels = PrepKernels()
         self.encode_pool = ThreadPoolExecutor(int(p.get('ENCODE_THREADS', '8')), thread_name_prefix='fe-jpeg')
         self.workers = ThreadPoolExecutor(int(p.get('WORKERS', '32')), thread_name_prefix='fe-image')
         self.in_flight = threading.BoundedSemaphore(int(p.get('MAX_IN_FLIGHT', '96')))
@@ -117,7 +117,7 @@ class TritonPythonModel:
             with stream:
                 response = self._process(request)
         except Exception as exc:  # one failed image must not take the model down
-            err = pb_utils.TritonError(f'image_frontend: {exc}')
+            err = pb_utils.TritonError(f'gpu_image_prep: {exc}')
             response = pb_utils.InferenceResponse(output_tensors=[], error=err)
         try:
             request.get_response_sender().send(response, flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)

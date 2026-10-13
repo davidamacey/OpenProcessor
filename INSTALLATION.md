@@ -480,8 +480,8 @@ The system automatically selects a profile based on your GPU's VRAM:
 | **standard** | 12-24GB | All | ~15 RPS | RTX 3080, RTX 4090 |
 | **full** | 48GB+ | All | ~50 RPS | A6000, A100 |
 
-The profile also decides the GPU ingest front end (about 8.5 GB more on the Triton card):
-`setup.sh` and the installer write `OP_INGEST_GPU_FRONTEND=1` for **full** and `0` for **minimal**
+The profile also decides the GPU decode (about 8.5 GB more on the Triton card):
+`setup.sh` and the installer write `OP_INGEST_GPU_DECODE=1` for **full** and `0` for **minimal**
 and **standard**. Set it yourself in `.env` to override; `openprocessor gpu plan` shows the result.
 
 ### Profile Details

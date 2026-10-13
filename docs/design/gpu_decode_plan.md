@@ -1,4 +1,4 @@
-# GPU decode once and a GPU-resident ingest front end (#217, WP-2.4)
+# GPU decode once and a GPU-resident ingest GPU decode (#217, WP-2.4)
 
 Status: plan with measurements; nothing in `src/` changed. Issue #217 (WP-2.4 of
 [v060_wave_plan.md](v060_wave_plan.md)), parent design Waves 6 and 7 of
@@ -6,7 +6,7 @@ Status: plan with measurements; nothing in `src/` changed. Issue #217 (WP-2.4 of
 (request-driven plans), #219 (work crops, WP-4.1), #220 (faces and OCR, WP-2.5). Written
 2026-10-12 against `origin/main` `54fcfc89`; measured with the PE plan of `ref-u8fp16`, before the
 rotary-layout engine of #227 (17-25 % faster PE), which lowers the PE share of section 7.5 and so
-raises the GPU ceiling; the decode and front-end costs do not depend on it.
+raises the GPU ceiling; the decode and GPU decode costs do not depend on it.
 
 A fresh implementation agent executes this file alone: section 9 lists the work items in order
 with files, interfaces, tests and gates; section 10 the verification commands. File and line
@@ -22,13 +22,13 @@ references were checked against `54fcfc89` and drift; re-find by symbol.
   and nvImageCodec's GPU-only backend decodes nothing here, so the Huffman stage stays on the CPU:
   134 ms per photo, 2.8 ms per COCO frame. One decoder instance saturates at about 35 photos/s; scale
   by instances.
-- **Through the stack**, a GPU front end (decode, letterbox, whole frame, blur on the GPU) cut API CPU
+- **Through the stack**, a GPU decode (decode, letterbox, whole frame, blur on the GPU) cut API CPU
   per photo by 65 % (1.10 to 0.36-0.41 CPU-s) and host busy from 80 % to 30 %, but images/s stayed at
   23-27 because the float32 GPU kernels took about 15 ms of GPU per photo and the GPU became the limit.
   Cheaper kernels (half-precision resize input, convolution blur: 8 ms instead of 11 ms of GPU) gave
   25.5 against 26.8 photos/s on the CPU path: the GPU stays the limit until the 3 ms budget is met.
   With kernels inside a 3 ms budget the estimate is about 50 photos/s on one A6000 (1.9x)
-  and about 80 on two (3x, host-bound). COCO frames lose 14 % with the GPU front end: they stay on
+  and about 80 on two (3x, host-bound). COCO frames lose 14 % with the GPU decode: they stay on
   the CPU path.
 - **Numerics.** The GPU resizes pass the tensor gate (letterbox and crop squares within 1-4 grey
   levels, no shift) and the blur sums are bit-identical for the same pixels; the decoder alone moves
@@ -44,11 +44,11 @@ references were checked against `54fcfc89` and drift; re-find by symbol.
   libjpeg (fix: nvImageCodec `fancy_upsampling=1`, then 0.01 grey levels); torchvision's GPU decode and
   DALI's default ignore EXIF orientation; all GPU decoders return an image for truncated or corrupt
   files that Pillow rejects (route by an end-of-image check; the CPU verdict stands).
-- **Where:** a Triton Python-backend front end (`image_frontend`, nvImageCodec plus custom kernels,
+- **Where:** a Triton Python-backend GPU decode (`gpu_image_prep`, nvImageCodec plus custom kernels,
   sequence batching to keep the frame between the detector and the crops), not 32 API workers each
   holding a CUDA context (that ran the 48 GB card out of memory). **Size gate:** GPU from 3 MP up
   (measured cut-offs 2.8-23 MP depending on cards and detections per image). **Batching:** keep the
-  PE and detector settings (measured flat); the front end sends a request's whole-frame and crop
+  PE and detector settings (measured flat); the GPU decode sends a request's whole-frame and crop
   squares as one PE tensor in chunks of 32.
 
 ## 1. Question, rules, inputs
@@ -148,7 +148,7 @@ sums, the letterbox and squares written straight into preallocated batch tensors
 only boxes, vectors (4 KB each), blur sums (3 integers per box) and the crop JPEGs. Where the front
 end runs outside Triton (section 7.1, stage 1) the letterbox (1.2 MB) and squares (0.34 MB each)
 cross back to the host for the gRPC request: two small copies per tensor that a Triton-resident
-front end removes.
+GPU decode removes.
 
 ## 4. Measurements: method
 
@@ -205,7 +205,7 @@ SM time). Batch 1 and 8 on set B: 7.4 and 13.8 photos/s at the same 135-152 ms h
 - torchvision's GPU decode runs images one after the other (one core, 4.5 photos/s) and is
   ruled out for throughput; it also ignores EXIF orientation (section 6.1).
 
-### 5.3 Front end on the GPU (decode plus letterbox, whole frame, blur)
+### 5.3 GPU decode on the GPU (decode plus letterbox, whole frame, blur)
 
 | Class | `nvimgcodec_full` (decode + torch kernels per image): images/s | host ms | GPU busy ms | `dali_full` (decode + letterbox + whole-frame resize in DALI): images/s | host ms | GPU busy ms |
 |---|---:|---:|---:|---:|---:|---:|
@@ -225,7 +225,7 @@ GPU per 18 MP photo for letterbox, whole frame and blur sums together.
 PE engine driven at saturation (`pe-load`, batch 32, 6 streams: 182-183 embeddings/s alone) while
 a decoder process works through set B on the same card; two repetitions:
 
-| Front end | PE alone | PE while decoding | PE lost | front end alone | front end beside PE | PE time lost per photo |
+| GPU decode | PE alone | PE while decoding | PE lost | GPU decode alone | GPU decode beside PE | PE time lost per photo |
 |---|---:|---:|---:|---:|---:|---:|
 | torch kernels (`nvimgcodec_full`) | 183.2 / 181.5 | 142.5 / 141.6 | -22 % | 25.1 / 25.7 photos/s | 15.2 / 15.5 | 2.7 embeddings = 14.6 ms |
 | DALI (`dali_full`) | 183.2 / 181.5 | 175.1 / 170.9 | -4.5 / -5.8 % | 31.7 / 33.0 | 20.7 / 32.0 | 0.4 embeddings = 2.1 ms |
@@ -276,9 +276,9 @@ Findings that bind the implementation:
 1. **Chroma upsampling.** Every GPU decoder's default upsamples 4:2:0 and 4:2:2 chroma by
    replication; libjpeg-turbo (Pillow, OpenCV) interpolates ("fancy"). nvImageCodec with
    `options=':fancy_upsampling=1'` matches Pillow to 0.01 grey levels (max 3, the IDCT rounding).
-   The front end uses that option; DALI's equivalent is `jpeg_fancy_upsampling=True`.
+   The GPU decode uses that option; DALI's equivalent is `jpeg_fancy_upsampling=True`.
 2. **EXIF.** nvImageCodec applies the orientation (all 8 tags correct). torchvision's CUDA decode
-   and DALI's decoder as configured ignore it: a front end built on them must re-orient from the
+   and DALI's decoder as configured ignore it: a GPU decode built on them must re-orient from the
    header (`gpu_decode_kernels.apply_orientation`, tested against `ImageOps.exif_transpose` for all
    8 tags). All four public sets carry orientation 1 only, so the parity runs below cannot catch an
    orientation bug: the decoder-coverage set is the gate for it.
@@ -287,7 +287,7 @@ Findings that bind the implementation:
    difference to manage; the plan keeps "ignore ICC" and says so in the decoder's docstring.
 4. **Fail-open on damaged files.** The GPU decoders return an image for a truncated file and for a
    corrupted bitstream that Pillow rejects (the product then fails the image with
-   `decode_failed`). The front end must not turn a rejected file into an ingested one: it checks
+   `decode_failed`). The GPU decode must not turn a rejected file into an ingested one: it checks
    for the end-of-image marker before decoding and treats any decoder warning as a failure that is
    re-decoded on the CPU, so the CPU verdict stands (section 9, item 1, "fallback"). Truncation is
    the common case and the marker check catches it; a file corrupted mid-stream with an intact end
@@ -408,7 +408,7 @@ design of section 7.4; not committed). Foreign SM load on GPU 2 was 0.0 % in eve
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | CPU path (`origin/main`) | 32 | 24.32 (21.72-26.26) | 1.055-1.131 | 76-79 | 36-43 | 23.51 (23.39-23.54) | 0.069 | 95-98 |
 | CPU path | 16 | 26.78 (24.59-28.10) | 1.074-1.151 | 80-82 | 36-41 | | | |
-| spike v1: torch front end, 32 workers | 32 | failed: GPU out of memory (each worker 2-5 GB; 48 GB card full) | | | | | | |
+| spike v1: torch GPU decode, 32 workers | 32 | failed: GPU out of memory (each worker 2-5 GB; 48 GB card full) | | | | | | |
 | spike v2: float32 kernels, frame dropped after the derived tensors | 16 | 23.39 (23.00-24.38) | 0.356-0.409 | 28-33 | 70-80 | 20.23 (20.00-20.70) | 0.164 | 96-99 |
 | spike v3: half-precision resize input, convolution blur | 16 | 25.48 (24.45-26.48) | 0.345-0.361 | 34-38 | 79-83 | not run | | |
 
@@ -419,7 +419,7 @@ Read:
   the frame download and Pillow copy that the spike still makes for the crops (about 60 ms), the
   crops and their JPEG encode, documents.
 - **Throughput did not rise with float32 kernels**: the GPU became the limit (70-80 % busy; the
-  front end costs about 15 ms of GPU per photo, section 5.4, next to 14 ms of PE). With the kernel
+  GPU decode costs about 15 ms of GPU per photo, section 5.4, next to 14 ms of PE). With the kernel
   budget of section 9 item 1 met (DALI-class, about 2 ms) the GPU cost per photo is about 18 ms
   (v3 cut the derived-tensor kernels from 11.3 to 8.0 ms of GPU per photo, single process, same
   pixels within 1 grey level and bit-identical blur, and gave 25.5 photos/s: still GPU-bound, still
@@ -438,16 +438,16 @@ Read:
 | COCO-size frames | gain nothing and lose 14 % in the API-side design: keep them on the CPU path |
 
 Recommendation: **GPU decode for photos only, as a per-deployment opt-in that changes the stored
-numerics once (owner decision D1), built as the Triton-resident front end with efficient kernels;
+numerics once (owner decision D1), built as the Triton-resident GPU decode with efficient kernels;
 frames stay on the CPU path.** Not before the kernels meet the 3 ms budget: with the float32 torch
 kernels the change only moves CPU to the GPU (same images/s, 65 % less CPU). Nothing is built
 before D1; the first build step is item 1's kernel budget, because it is the measured binder.
 
 ### 7.3 The size gate (R3)
 
-Measured per-image costs (sections 5.1-5.3 and WP-1.2's stage table): the CPU front end of ingest
+Measured per-image costs (sections 5.1-5.3 and WP-1.2's stage table): the CPU GPU decode of ingest
 costs about 10.6 + 46.6 x MP ms of API CPU per image (decode, letterbox, whole frame, blur; fitted
-on 0.27 MP frames, 23 ms, and 17.7 MP photos, 837 ms); the GPU front end about 2.5 + 7.5 x MP ms of
+on 0.27 MP frames, 23 ms, and 17.7 MP photos, 837 ms); the GPU decode about 2.5 + 7.5 x MP ms of
 host CPU (hybrid Huffman) and 0.1 + 0.21 x MP ms of GPU with DALI-class kernels. Fitted on the four
 classes, the GPU path's host cost is below the CPU path's from 0.77 MP up
 (`gpu_decode_lib.crossover_megapixels`), and measured it is below at every class, including 0.27 MP
@@ -471,9 +471,9 @@ CPU, 12-24 MP photos go to the GPU. Caveat that the setting text must carry: a p
 straddle the threshold gets two decoders in one embedding space (section 6.3: P-pe p01 about 0.97
 between them). For a mixed project prefer `cpu` or `gpu` for the whole project over `auto`.
 
-### 7.4 Where the front end lives
+### 7.4 Where the GPU decode lives
 
-| | API process (the spike) | Triton Python-backend model (`image_frontend`) | DALI ensemble |
+| | API process (the spike) | Triton Python-backend model (`gpu_image_prep`) | DALI ensemble |
 |---|---|---|---|
 | Decode once across detect and crops | natural (the frame lives in the request) | needs state between two calls: sequence batcher, correlation id per image (item 2) | no: one sample in, one out; crops after detection need the frame again (parent plan section 9) |
 | GPU memory | one CUDA context and decoder per API worker: 32 workers ran the 48 GB card out of memory (spike v1); 16 workers took 12 x about 1.5 GB | one context per instance; budgeted in `config.pbtxt` like PE (`GPU_MIB_PER_INSTANCE`) | DALI instances are large and keep memory (parent plan risk 3) |
@@ -492,14 +492,14 @@ bound what the Triton design must reach.
 
 | | One A6000 | Two A6000 |
 |---|---:|---:|
-| Host CPU per photo, GPU front end incl. GPU crops and crop JPEGs on the GPU (estimate from 7.1 minus the frame download and CPU crops) | about 0.33 CPU-s | about 0.33 |
+| Host CPU per photo, GPU decode incl. GPU crops and crop JPEGs on the GPU (estimate from 7.1 minus the frame download and CPU crops) | about 0.33 CPU-s | about 0.33 |
 | Host ceiling at 28 cores | about 85 photos/s | about 85 |
-| GPU per photo: PE 2.6 x 5.5 ms + detector 1.2 + decode and front end with the 3 ms budget (about 2-4) | about 19 ms | about 19 ms per card |
+| GPU per photo: PE 2.6 x 5.5 ms + detector 1.2 + decode and GPU decode with the 3 ms budget (about 2-4) | about 19 ms | about 19 ms per card |
 | GPU ceiling | about 52 photos/s | about 104 photos/s |
 | Expected | **about 50 photos/s (1.9x today's 26.8)** | **about 80 photos/s, host-bound (3x)** |
 
 Estimates from measured stage costs, not measured end to end; the two-card column also assumes the
-front end scales with instances the way PE did (1.91x on frames, #228). Today's CPU path cannot pass
+GPU decode scales with instances the way PE did (1.91x on frames, #228). Today's CPU path cannot pass
 about 26 photos/s on this host whatever the GPUs (the decode pair alone saturates 46 processes at
 26.3 photos/s, section 5.1).
 
@@ -525,25 +525,25 @@ What the GPU-resident path changes:
    32 is 4.8x batch 1 on photos, 6.7x on frames). Requests from different API workers do not share a
    decode call; that is fine because one decoder instance saturates at about 35 photos/s and the
    scaling unit is the instance (below), not the batch.
-2. **PE requests.** The front end writes the whole-frame square and every selected crop square of
+2. **PE requests.** The GPU decode writes the whole-frame square and every selected crop square of
    all images in the request into one preallocated uint8 `[N, 3, 336, 336]` tensor and sends it in
    chunks of 32 rows (a photo request of 8 images is about 21 rows: one PE request instead of 16).
    The dynamic batcher keeps packing across requests exactly as today; nothing in its configuration
    changes. The whole-frame row joins the crop rows of the same request (today it is a separate
    one-row request per image, 2.07 requests per image).
-3. **Scaling unit.** Front-end instances per card: one instance saturates at about 35 photos/s of
+3. **Scaling unit.** GPU decode instances per card: one instance saturates at about 35 photos/s of
    decode (5 host cores of hybrid Huffman), so the instance count is sized from the target photo rate:
    2 per card for the 1-card target of about 50 photos/s (section 7), 2 per card again with 2 cards.
    Frames need 1 (2,346 frames/s per instance).
 4. **Back-pressure.** Unchanged at the API (`ingest_gate` admits images by decoded megabytes, WP-1.3),
-   plus the front end's own bound: at most `frames_in_flight` decoded frames per instance (default 16,
+   plus the GPU decode's own bound: at most `frames_in_flight` decoded frames per instance (default 16,
    about 0.9 GB of photo frames), excess requests wait in Triton's queue (`max_queue_size` 64, then
    the API gets `UNAVAILABLE` and retries the image on the CPU path, counted). The PE queue is
-   unaffected because the front end submits PE work only for frames it holds.
-5. **Two cards.** The front end runs one instance group per listed card like PE (#228); the API
+   unaffected because the GPU decode submits PE work only for frames it holds.
+5. **Two cards.** The GPU decode runs one instance group per listed card like PE (#228); the API
    picks the card by the Triton instance it lands on (Triton's scheduler), so PE crops of an image are
-   embedded on the card that decoded it only when the front end calls PE itself (Triton-resident,
-   stage 2). With the API-side front end (stage 1) the squares travel through the host and any card's
+   embedded on the card that decoded it only when the GPU decode calls PE itself (Triton-resident,
+   stage 2). With the API-side GPU decode (stage 1) the squares travel through the host and any card's
    PE instance takes them.
 
 ## 9. Implementation plan
@@ -557,10 +557,10 @@ default until item 6 and the owner decision D1 (section 11).
 
 See section 11. Items 1-5 can land with the setting defaulting to the CPU path.
 
-### Item 1. One home for the front-end operations
+### Item 1. One home for the GPU decode operations
 
 - Move the operations out of the bench into the model directory that will run them:
-  `models/image_frontend/1/frontend_ops.py` gets `letterbox_u8`, `pe_square_u8`, `crop_u8`,
+  `models/gpu_image_prep/1/prep_ops.py` gets `letterbox_u8`, `pe_square_u8`, `crop_u8`,
   `gray_u8`, `lap_sums_gray` (chunked), `var_from_sums`, `whole_frame_u8` (only the `dct8` mode;
   `antialias` and `area` are measured rejects and are deleted), `apply_orientation`, and from
   `gpu_decode_lib.py` the geometry (`letterbox_geometry`, `pe_square_geometry`, `crop_rect`) and the
@@ -569,7 +569,7 @@ See section 11. Items 1-5 can land with the setting defaulting to the CPU path.
   from the model directory (load by path as `tests/test_ocr_pipeline_rec_width.py` does); no second
   copy.
 - Tests: move `tests/bench/test_gpu_decode_kernels.py` and the header/geometry tests to
-  `tests/test_image_frontend_ops.py` (CPU torch; the repo `.venv` has it). They already pin:
+  `tests/test_gpu_image_prep_ops.py` (CPU torch; the repo `.venv` has it). They already pin:
   geometry identical to `letterbox_to_square` / `resize_crop_rgb` / `crop_pil`, gate T for the two
   resizes, grey plane and Laplacian variance bit-identical to OpenCV and `crop_quality`, chunked sums
   exact, EXIF re-orientation equal to `ImageOps.exif_transpose` for all 8 tags, router reasons.
@@ -582,11 +582,11 @@ See section 11. Items 1-5 can land with the setting defaulting to the CPU path.
   (`antialias=True`, `interp_type=INTERP_LINEAR`) only if its output passes gate T against
   Pillow. Bit-exactness of the blur sums is non-negotiable (test).
 
-### Item 2. Triton model `image_frontend` (decode once, state per image)
+### Item 2. Triton model `gpu_image_prep` (decode once, state per image)
 
 Python backend in the Triton image (nvImageCodec 0.7, torch, CuPy already there; no image change).
 
-- `models/image_frontend/config.pbtxt`: `backend: "python"`, `max_batch_size: 16`,
+- `models/gpu_image_prep/config.pbtxt`: `backend: "python"`, `max_batch_size: 16`,
   `instance_group [{ count: 2, kind: KIND_GPU }]` with no `gpus` list (one group per listed card,
   as PE in #228), `parameters { key: "FORCE_CPU_ONLY_INPUT_TENSORS" value: { string_value: "no" } }`,
   `sequence_batching { direct { } max_sequence_idle_microseconds: 30000000 control_input [ START,
@@ -622,18 +622,18 @@ Python backend in the Triton image (nvImageCodec 0.7, torch, CuPy already there;
 
 ### Item 3. API client and ingest integration
 
-- `src/clients/image_frontend.py`: `FrontendClient.prepare(images: list[bytes], corr_ids)` and
-  `FrontendClient.finish(corr_id, rects, embed_mask, jpeg_max_side)` over the existing
+- `src/clients/gpu_image_prep.py`: `GpuImagePrepClient.prepare(images: list[bytes], corr_ids)` and
+  `GpuImagePrepClient.finish(corr_id, rects, embed_mask, jpeg_max_side)` over the existing
   `AsyncTritonPool` (gRPC, sequence id = a 64-bit hash of `ingest_run_id` + image index; the pool
   must pass `sequence_id`, `sequence_start`, `sequence_end`).
 - `src/services/curation/ingest_batch.py` `_prefill_detections`: when the setting selects the GPU
-  front end, call `prepare` instead of `_decode_image` + `run_primary_batch`; images with a non-zero
+  GPU decode, call `prepare` instead of `_decode_image` + `run_primary_batch`; images with a non-zero
   status take today's path (`_decode_image`, CPU letterbox), counted in a new
-  `op_ingest_decode_total{backend, reason}` counter. `ImageContext` gets `frontend: FrontendHandle |
+  `op_ingest_decode_total{backend, reason}` counter. `ImageContext` gets `gpu_frame: GpuDecodeFrame |
   None` (correlation id, size, whole embedding, blur sums) and `pil` becomes optional; every
-  consumer of `ctx.pil` (crop, blur, crop cache) branches on `ctx.frontend` in one place
+  consumer of `ctx.pil` (crop, blur, crop cache) branches on `ctx.gpu_frame` in one place
   (`ingest_index.index_items`).
-- `ingest_index.index_items`: with a front end, `embed_items` sends the selected rectangles to
+- `ingest_index.index_items`: with a GPU decode, `embed_items` sends the selected rectangles to
   `finish` instead of `embed_crops`; the whole-frame vector comes from `prepare`; blur values are
   computed with `crop_quality.blur_ratio` from `var_from_sums` of the returned sums (same rounding
   as today); crop JPEGs from `finish` go to `write_crop_cache` (new `write_crop_cache_bytes` that
@@ -642,7 +642,7 @@ Python backend in the Triton image (nvImageCodec 0.7, torch, CuPy already there;
   above `ingest_gpu_min_megapixels`, default from section 7.3). Names are proposals (wave plan
   convention): the item picks the `OP_*` names, reads them once at startup into `CurationConfig`,
   and adds them to `env.template` (Curation quick-config block) and `tests/test_env_surface.py`. The embed pass (`reprocess_embed`) and dataset import stay on the CPU
-  path in this item; making them use the front end is item 5.
+  path in this item; making them use the GPU decode is item 5.
 - Contract: no route or wire model changes (`make contracts-check` stays clean).
 
 ### Item 4. Fallback and fail-closed rules (tests first)
@@ -662,8 +662,8 @@ Python backend in the Triton image (nvImageCodec 0.7, torch, CuPy already there;
 ### Item 5. Remaining decoders of the same images
 
 The embed pass (`reprocess_embed`), `reprocess_detect`, dataset import and the crop-cache miss path
-(`crop_bytes.crop_jpeg_from_disk`) decode sources again. Each gets the same front end through
-`FrontendClient` when `ingest_decode` is not `cpu`, so a project embedded at ingest and one
+(`crop_bytes.crop_jpeg_from_disk`) decode sources again. Each gets the same GPU decode through
+`GpuImagePrepClient` when `ingest_decode` is not `cpu`, so a project embedded at ingest and one
 embedded later produce vectors from the same decoder (the rule of #52 and WP-2.3). The core routes
 (`/detect`, `/embed`) are the parent plan's Wave 6 (stateless DALI ensembles) and stay out of this
 work package.
@@ -723,12 +723,12 @@ Open questions (answer inside item 2 before building on them): C2 (does an `asyn
 size it needs), C6 (DLPack hand-off from nvImageCodec to a BLS input without a copy), sequence
 batcher behaviour with the Python backend (routing by correlation id, idle eviction), the Python
 stub's GPU memory per instance. Stop-and-escalate rule of the parent plan: if the Triton-resident
-front end loses by more than 15 % to the API-side spike design of section 7.4, build the API-side
+GPU decode loses by more than 15 % to the API-side spike design of section 7.4, build the API-side
 design instead (bounded to 16 workers, frames freed after the derived tensors are built).
 
 Not measured here:
 
-- The Triton-resident front end itself (C2, C3, C6 and the sequence batcher) and the production
+- The Triton-resident GPU decode itself (C2, C3, C6 and the sequence batcher) and the production
   kernels against the 3 ms budget; the ceiling of section 7.1 assumes the budget is met.
 - Two A6000s with GPU decode (GPU 0 was busy with another project all day) and the 12 GB card (GPU 1
   reserved): section 7.1 extrapolates the two-card number from #228's measured 1.91x on frames.
@@ -754,7 +754,7 @@ Not measured here:
 Owner decisions: D1 yes (a new parity reference for the new decoder numerics, after an AP check),
 D2 no (no 1/8-scale emulation: the whole-frame square is resized from the full frame, a new vector
 space), D3 no silent acceptance (a truncated or damaged file is still refused). The owner then asked
-for the CPU single decode first and the GPU front end built and measured properly against it.
+for the CPU single decode first and the GPU decode built and measured properly against it.
 
 What was built (branch `perf/gpu-decode-impl`, on top of the CPU slices):
 
@@ -762,11 +762,11 @@ What was built (branch `perf/gpu-decode-impl`, on top of the CPU slices):
 |---|---|---|
 | CPU single decode | the whole-frame square is cut from the frame decoded for the detector (Pillow `BILINEAR`, shorter edge to 336, centre crop); `exif_transpose` only when the tag moves pixels | `pe_preprocess.whole_frame_rgb_from_image`, `ingest._decode_image` |
 | libjpeg-turbo decode | JPEG through `simplejpeg` (the libjpeg-turbo Pillow runs, pixels identical) straight into the array the blur reads | `src/services/curation/image_decode.py` |
-| GPU front end | Triton Python model `image_frontend`, decoupled, one process: nvJPEG decoupled API with the GPU-Huffman backend through ctypes (16 lanes), EXIF on the GPU, fused uint8 CuPy kernels (separable Pillow-`BILINEAR` resampler for the letterbox and whole frame, plain bilinear for crop squares, exact grey + Laplacian sums), detector and PE through BLS, crop JPEGs encoded on host threads; per-image worker pool, bounded in flight | `models/image_frontend/`, `src/services/curation/ingest_frontend.py` |
-| Routing | `OP_INGEST_GPU_FRONTEND` (on by default; the installer writes 0 for profiles without room), size gate `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0); the model is loaded on first use and used only when its detector input matches the ingest profile; declined files (progressive, no end-of-image marker, not a baseline JPEG, decoder error) take the CPU path, counted in `op_ingest_decode_total{route}` | `ingest_batch._prefill_frontend` |
+| GPU decode | Triton Python model `gpu_image_prep`, decoupled, one process: nvJPEG decoupled API with the GPU-Huffman backend through ctypes (16 lanes), EXIF on the GPU, fused uint8 CuPy kernels (separable Pillow-`BILINEAR` resampler for the letterbox and whole frame, plain bilinear for crop squares, exact grey + Laplacian sums), detector and PE through BLS, crop JPEGs encoded on host threads; per-image worker pool, bounded in flight | `models/gpu_image_prep/`, `src/services/curation/ingest_gpu_decode.py` |
+| Routing | `OP_INGEST_GPU_DECODE` (on by default; the installer writes 0 for profiles without room), size gate `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0); the model is loaded on first use and used only when its detector input matches the ingest profile; declined files (progressive, no end-of-image marker, not a baseline JPEG, decoder error) take the CPU path, counted in `op_ingest_decode_total{route}` | `ingest_batch._prefill_gpu_decode` |
 
 Departures from sections 7.4 and 9: nvImageCodec decodes the Huffman stage on the CPU on this card,
-so the front end calls nvJPEG's GPU-Huffman backend itself; there is no sequence batcher (one request
+so the GPU decode calls nvJPEG's GPU-Huffman backend itself; there is no sequence batcher (one request
 returns every product of the image, so the frame never needs to outlive the request); batching
 requests inside the model put a barrier between stages and ran at 15 photos/s, per-image workers
 whose BLS calls the detector's and PE's own batchers group run at 43-48 (perf_analyzer, 32 streams,
@@ -775,7 +775,7 @@ GPU 65-75 % busy). The fused kernels cost about 1.3 ms of GPU per 18 MP photo.
 A/B, one isolated stack on GPU 2 (foreign SM load 0.0 % in every counted run), `/ingest/batch`, 3
 repetitions at the bulk points and the latency points, median (min-max):
 
-| Set B photos (500, 12-24 MP) | CPU path (`origin/main`) | CPU single decode | + libjpeg-turbo | GPU front end |
+| Set B photos (500, 12-24 MP) | CPU path (`origin/main`) | CPU single decode | + libjpeg-turbo | GPU decode |
 |---|---:|---:|---:|---:|
 | detect + embed, batch 8 x 16 clients: images/s | 27.0 (25.2-27.2) | 26.8 (24.3-28.4) | 23.5 (22.2-26.6) | **35.0 (24.2-38.5)** |
 | detect only (`lazy`), batch 8 x 16: images/s | 28.3 (27.6-29.4) | 31.6 (25.4-31.8) | 31.0 (29.3-31.1) | **44.0 (38.8-44.8)** |
@@ -784,26 +784,26 @@ repetitions at the bulk points and the latency points, median (min-max):
 | host CPU-s per photo (API + Triton), bulk | 1.12 | 0.97 | 1.00 | **0.34** |
 | GPU 2 busy, bulk detect + embed | 35 % | 33 % | 28 % | 55 % |
 
-| Set A COCO frames (2,000, 0.3 MP), batch 32 x 16 | CPU path | CPU single decode | + libjpeg-turbo | GPU front end, gate 3 MP | GPU front end forced on frames (gate 0) |
+| Set A COCO frames (2,000, 0.3 MP), batch 32 x 16 | CPU path | CPU single decode | + libjpeg-turbo | GPU decode, gate 3 MP | GPU decode forced on frames (gate 0) |
 |---|---:|---:|---:|---:|---:|
 | detect + embed: images/s | 28.6 | 29.0 | 29.3 | 29.0 | 22.7 |
 | detect only: images/s | 120.3 | 132.4 | 123.2 | 124.5 | 63.6 |
 
-PE on the same card while the front end works through set B: 223 to 213 inferences/s (-4.5 %).
+PE on the same card while the GPU decode works through set B: 223 to 213 inferences/s (-4.5 %).
 
 Accuracy (one capture and one AP check, on the shipped configuration):
 
 | Check | Result |
 |---|---|
-| Parity, `ref-ship` (front end on, gate 3 MP, so COCO frames take the CPU single decode) against `ref-u8fp16`, `precision` profile | every gate passes (P-box 0.994, P-pe p01 0.9998, P-knn 0.982, P-cluster-assign 0.999, P-label-vote 0.993, kNN precision and cluster purity up 0.09 and 0.35 points) except P-pew (whole-frame p01 0.65, median 0.82): the new whole-frame space of D2, as section 3 measured. `ref-ship` is the new reference; report in `docs/benchmarks/parity/decode_once_vs_ref/` |
-| AP of the GPU decode, all 2,000 COCO frames through the front end against the CPU decode, same engine, confidence 0.4 | AP 0.4378 against 0.4376, AP50 0.5705 against 0.5701, recall 0.5508 against 0.5505, precision 0.8571 against 0.8576; of 9,659 matched boxes 846 moved, 317 closer to the truth and 330 farther (mean IoU change +0.0007): AP-neutral, the D1 condition. Report in `docs/benchmarks/parity/detector_quality_gpu_decode/` |
+| Parity, `ref-ship` (GPU decode on, gate 3 MP, so COCO frames take the CPU single decode) against `ref-u8fp16`, `precision` profile | every gate passes (P-box 0.994, P-pe p01 0.9998, P-knn 0.982, P-cluster-assign 0.999, P-label-vote 0.993, kNN precision and cluster purity up 0.09 and 0.35 points) except P-pew (whole-frame p01 0.65, median 0.82): the new whole-frame space of D2, as section 3 measured. `ref-ship` is the new reference; report in `docs/benchmarks/parity/decode_once_vs_ref/` |
+| AP of the GPU decode, all 2,000 COCO frames through the GPU decode against the CPU decode, same engine, confidence 0.4 | AP 0.4378 against 0.4376, AP50 0.5705 against 0.5701, recall 0.5508 against 0.5505, precision 0.8571 against 0.8576; of 9,659 matched boxes 846 moved, 317 closer to the truth and 330 farther (mean IoU change +0.0007): AP-neutral, the D1 condition. Report in `docs/benchmarks/parity/detector_quality_gpu_decode/` |
 
 Go / no-go:
 
 - **CPU single decode alone: no-go as a speed-up** (1.0x at bulk, under the 1.5x bar); it stays as
-  the CPU path the front end falls back to and the definition of the whole-frame square both paths
+  the CPU path the GPU decode falls back to and the definition of the whole-frame square both paths
   share. libjpeg-turbo helps the latency mode (+21-30 %) and is noise at bulk.
-- **Triton GPU front end: go, opt-in, size-gated.** Photos: 1.3x at bulk with detection and
+- **Triton GPU decode: go, opt-in, size-gated.** Photos: 1.3x at bulk with detection and
   embedding (the rest of the pipeline and PE bind next, GPU 55 % busy), 1.55x detection only,
   2.4-2.5x for one to four clients, a third of the host CPU. Frames: the gate keeps them on the CPU
   (forced onto the GPU they lose 21-49 %), so the default gate of 3 MP stands for both modes.

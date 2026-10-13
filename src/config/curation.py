@@ -254,13 +254,13 @@ class CurationConfig:
     # /regions/vocabulary as region_profile.limits.max_boxes_per_write.
     region_max_boxes_per_write: int = 500
 
-    # GPU ingest front end (#217): photos at or above the size gate are decoded once on the
-    # GPU by the image_frontend Triton model, which also builds the detector letterbox, the PE
+    # GPU decode (#217): photos at or above the size gate are decoded once on the
+    # GPU by the gpu_image_prep Triton model, which also builds the detector letterbox, the PE
     # squares, the blur sums and the crop JPEGs. On by default (the installer writes 0 for profiles
     # whose card has no room for its ~8.5 GB): it changes the stored numerics once (nvJPEG
     # decode), smaller images stay on the CPU path, and any failure to load or run it falls back
     # to the CPU path per image.
-    ingest_gpu_frontend: bool = True
+    ingest_gpu_decode: bool = True
     ingest_gpu_min_megapixels: float = 3.0
 
     # --- Project-scoped fields (see PROJECT_SCOPED_FIELDS below and
@@ -421,7 +421,7 @@ class CurationConfig:
             region_max_boxes_per_write=_int(
                 'REGION_MAX_BOXES_PER_WRITE', defaults.region_max_boxes_per_write
             ),
-            ingest_gpu_frontend=_bool('INGEST_GPU_FRONTEND', defaults.ingest_gpu_frontend),
+            ingest_gpu_decode=_bool('INGEST_GPU_DECODE', defaults.ingest_gpu_decode),
             ingest_gpu_min_megapixels=_float(
                 'INGEST_GPU_MIN_MEGAPIXELS', defaults.ingest_gpu_min_megapixels
             ),

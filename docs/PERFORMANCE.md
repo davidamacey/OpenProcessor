@@ -2926,9 +2926,9 @@ GPU decoders (batch 32, 8 decoder threads): images/s and host CPU ms per image:
 | photos, set B | 35.4, 134 ms | 31.8, 132 ms | 4.5, 221 ms |
 
 One nvImageCodec decoder saturates at about 35 photos/s whatever its thread count; its `GPU_ONLY`
-backend returns no image on this card. Decoding beside the PE engine at saturation: a DALI front end
+backend returns no image on this card. Decoding beside the PE engine at saturation: a DALI GPU decode
 (decode, letterbox, whole-frame resize) takes 4.5-5.8 percent of PE (about 2 ms of PE time per photo);
-the float32 torch front end with the blur takes 22 percent (about 15 ms).
+the float32 torch GPU decode with the blur takes 22 percent (about 15 ms).
 
 Through the stack (`/ingest/batch`, 3 repetitions):
 
@@ -2936,10 +2936,10 @@ Through the stack (`/ingest/batch`, 3 repetitions):
 |---|---:|---:|---:|---:|---:|---:|
 | CPU path, 32 workers | 24.32 (21.72-26.26) | 1.06-1.13 | 76-79 | 36-43 | 23.51 (23.39-23.54) | 0.069 |
 | CPU path, 16 workers | 26.78 (24.59-28.10) | 1.07-1.15 | 80-82 | 36-41 | | |
-| GPU front end in the API process, float32 kernels, 16 workers | 23.39 (23.00-24.38) | 0.36-0.41 | 28-33 | 70-80 | 20.23 (20.00-20.70) | 0.164 |
+| GPU decode in the API process, float32 kernels, 16 workers | 23.39 (23.00-24.38) | 0.36-0.41 | 28-33 | 70-80 | 20.23 (20.00-20.70) | 0.164 |
 | same, half-precision resize input and convolution blur | 25.48 (24.45-26.48) | 0.35-0.36 | 34-38 | 79-83 | not run | |
 
-With 32 workers the API-side front end ran the 48 GB card out of memory (each worker held 2-5 GB).
+With 32 workers the API-side GPU decode ran the 48 GB card out of memory (each worker held 2-5 GB).
 
 Parity of that run through the stack against `ref-u8fp16` (profile `precision`): P-box 0.869, P-item
 0.942, P-pe p01 0.974, P-pew p01 0.991, kNN overlap 0.911, label vote 0.961 fail; near-duplicate
@@ -2952,7 +2952,7 @@ arms. Decoder coverage: nvImageCodec applies all eight EXIF orientations and, wi
 DALI's default ignore EXIF orientation, and every GPU decoder returns an image for truncated or
 corrupted files that Pillow rejects (the plan routes those to the CPU).
 
-Not measured: the Triton-resident front end the plan recommends, two cards and the 12 GB card with GPU
+Not measured: the Triton-resident GPU decode the plan recommends, two cards and the 12 GB card with GPU
 decode, kernels that meet the plan's budget, the region stage and VLM on GPU-encoded crop JPEGs.
 
 
@@ -3118,13 +3118,13 @@ and `stage2_tuning_vs_u8fp16-repeat/`. All gates pass; `P-vlm` is skipped (no VL
   factorial of client x instances x delays x workers (one factor at a time was run), `priority_levels`.
 - The embed-pass fix (above).
 
-### Decode once and the GPU ingest front end (#217)
+### Decode once and the GPU decode (#217)
 
 Built after the owner decisions on the GPU decode plan (`docs/design/gpu_decode_plan.md`, section
 13 has the full A/B and the go / no-go). One isolated stack on GPU 2, `/ingest/batch`, 3 repetitions,
 median images/s; host CPU is the API plus Triton containers.
 
-| Set B photos (12-24 MP) | CPU path | CPU single decode + libjpeg-turbo | GPU front end (`OP_INGEST_GPU_FRONTEND`, on by default) |
+| Set B photos (12-24 MP) | CPU path | CPU single decode + libjpeg-turbo | GPU decode (`OP_INGEST_GPU_DECODE`, on by default) |
 |---|---:|---:|---:|
 | detect + embed, batch 8 x 16 clients | 27.0 | 23.5 (26.8 without libjpeg-turbo) | **35.0** |
 | detect only, batch 8 x 16 | 28.3 | 31.0 | **44.0** |
@@ -3132,16 +3132,16 @@ median images/s; host CPU is the API plus Triton containers.
 | four clients, batch 1 | 3.45 | 4.48 | **8.30** |
 | host CPU-s per photo at bulk | 1.12 | 1.00 | **0.34** |
 
-COCO frames (0.3 MP) are faster on the CPU (forced onto the GPU front end: 22.7 against 29.0
-images/s with embedding, 63.6 against 124.5 detection only), so the front end takes only images at
+COCO frames (0.3 MP) are faster on the CPU (forced onto the GPU decode: 22.7 against 29.0
+images/s with embedding, 63.6 against 124.5 detection only), so the GPU decode takes only images at
 or above `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0). The CPU single decode alone does not speed up bulk
-ingest (the next binders are elsewhere); it is the CPU path the front end falls back to.
+ingest (the next binders are elsewhere); it is the CPU path the GPU decode falls back to.
 
-The front end is the default, sized by hardware. It adds about 8.5 GB (8,704 MiB, loaded on first use)
+The GPU decode is the default, sized by hardware. It adds about 8.5 GB (8,704 MiB, loaded on first use)
 to the Triton card, on top of the profile's own models (about 8, 12 and 17 GB for `minimal`,
 `standard` and `full`). Only `full` (48 GB+) has room, so the installer writes
-`OP_INGEST_GPU_FRONTEND=1` for it and `0` for `minimal` and `standard`; a 12 GB card does not hold
-the full model set beside other projects' resident processes, let alone the front end. A checkout
+`OP_INGEST_GPU_DECODE=1` for it and `0` for `minimal` and `standard`; a 12 GB card does not hold
+the full model set beside other projects' resident processes, let alone the GPU decode. A checkout
 whose `.env` has no such line gets the code default (on), and an explicit value always wins.
 `openprocessor gpu plan` prints whether it is on and why, and warns (never refuses) when it is on
 for a card without room. If the model cannot load, Triton leaves the other models serving and

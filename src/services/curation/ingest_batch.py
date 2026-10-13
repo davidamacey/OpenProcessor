@@ -17,8 +17,8 @@ Triton round-trips and is measurably slower for identical output. It is:
    single representative.
 2. **Decode once** — non-duplicates are decoded up front, and the PIL
    image is handed to ``ingest_one`` so it does not decode again. With the
-   GPU front end on, photos at or above its size gate are decoded on the GPU
-   instead (:mod:`~src.services.curation.ingest_frontend`), which also
+   GPU decode on, photos at or above its size gate are decoded on the GPU
+   instead (:mod:`~src.services.curation.ingest_gpu_decode`), which also
    returns their detections, vectors, blur sums and crop JPEGs; an image it
    declines falls back to the CPU decode here.
 3. **Batched whole-image inference** — the decoded images go through
@@ -57,27 +57,27 @@ if TYPE_CHECKING:
     from src.services.curation.image_decode import DecodedImage
     from src.services.curation.ingest import CurationIngestService
     from src.services.curation.ingest_detect import SecondaryOutput
-    from src.services.curation.ingest_frontend import FrontendFrame
+    from src.services.curation.ingest_gpu_decode import GpuDecodeFrame
     from src.services.curation.item_doc import DetectedItem
 
 
 logger = get_logger(__name__)
 
 
-async def _prefill_frontend(
+async def _prefill_gpu_decode(
     service: CurationIngestService, images: list[bytes], indices: list[int]
-) -> tuple[dict[int, FrontendFrame], dict[int, list[DetectedItem]]]:
-    """Run the GPU front end on the images of ``indices`` at or above its size gate."""
-    from src.services.curation.ingest_frontend import (
+) -> tuple[dict[int, GpuDecodeFrame], dict[int, list[DetectedItem]]]:
+    """Run the GPU decode on the images of ``indices`` at or above its size gate."""
+    from src.services.curation.ingest_gpu_decode import (
         count_route,
-        frontend_ready,
+        gpu_decode_ready,
         megapixels,
-        run_frontend,
+        run_gpu_decode,
     )
 
-    frames: dict[int, FrontendFrame] = {}
+    frames: dict[int, GpuDecodeFrame] = {}
     items: dict[int, list[DetectedItem]] = {}
-    if not indices or not await frontend_ready(service):
+    if not indices or not await gpu_decode_ready(service):
         return frames, items
     gate = service.config.ingest_gpu_min_megapixels
     chosen = []
@@ -89,7 +89,7 @@ async def _prefill_frontend(
             count_route('cpu_small' if mp is not None else 'cpu_not_image')
     embed_crops = service.policy.embedding.mode != 'lazy'
     outcomes = await asyncio.gather(
-        *(run_frontend(service, images[idx], embed_crops=embed_crops) for idx in chosen)
+        *(run_gpu_decode(service, images[idx], embed_crops=embed_crops) for idx in chosen)
     )
     for idx, outcome in zip(chosen, outcomes, strict=True):
         if isinstance(outcome, str):
@@ -110,7 +110,7 @@ async def _prefill_detections(
     dict[int, DecodedImage],
     dict[int, list[DetectedItem]],
     dict[int, SecondaryOutput],
-    dict[int, FrontendFrame],
+    dict[int, GpuDecodeFrame],
 ]:
     """Batch-decode ``indices`` and run the whole-image detectors batched.
 
@@ -124,7 +124,7 @@ async def _prefill_detections(
 
     prefilled_imgs: dict[int, DecodedImage] = {}
     prefilled_secondary: dict[int, SecondaryOutput] = {}
-    frames, prefilled_items = await _prefill_frontend(service, images, indices)
+    frames, prefilled_items = await _prefill_gpu_decode(service, images, indices)
     indices = [idx for idx in indices if idx not in frames]
     if not indices:
         return prefilled_imgs, prefilled_items, prefilled_secondary, frames
@@ -169,8 +169,8 @@ async def _prefill_detections(
             error=str(exc),
             n_images=len(valid_imgs),
         )
-        frontend_items = {idx: prefilled_items[idx] for idx in frames}
-        return prefilled_imgs, frontend_items, {}, frames
+        gpu_decode_items = {idx: prefilled_items[idx] for idx in frames}
+        return prefilled_imgs, gpu_decode_items, {}, frames
 
     for idx, items, secondary in zip(valid_indices, items_per, secondary_per, strict=False):
         prefilled_items[idx] = items

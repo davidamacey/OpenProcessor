@@ -102,14 +102,15 @@
 
 <div class="flex min-h-screen flex-col bg-zinc-950 text-zinc-100">
   <header class="flex h-12 shrink-0 items-center gap-4 border-b border-zinc-800 px-4">
-    <span class="text-sm font-semibold tracking-tight">{appName}</span>
-    <span class="text-zinc-600">/</span>
-    <h1 class="text-sm text-zinc-200">Projects</h1>
+    <span class="shrink-0 text-sm font-semibold tracking-tight">{appName}</span>
+    <span class="shrink-0 text-zinc-600">/</span>
+    <h1 class="shrink-0 text-sm text-zinc-200">Projects</h1>
     <span class="grow"></span>
     {#if home}
       <a
         href={resolve(projectHref('/dashboard', home.slug))}
-        class="shrink-0 text-sm text-zinc-300 hover:text-white"
+        class="min-w-0 truncate text-sm text-zinc-300 hover:text-white"
+        title="Open {home.display_name}"
         data-testid="projects-back">Open {home.display_name}</a
       >
     {/if}

@@ -1,5 +1,5 @@
-"""The GPU front end's host-side arithmetic reproduces the CPU ingest path it stands in for
-(``models/image_frontend/1/frontend_geometry.py``; the CUDA kernels apply these weights)."""
+"""The GPU decode's host-side arithmetic reproduces the CPU ingest path it stands in for
+(``models/gpu_image_prep/1/prep_geometry.py``; the CUDA kernels apply these weights)."""
 
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ from src.services.detection.geometry import letterbox_to_square, undo_letterbox
 from src.services.detection.pe_preprocess import resize_crop_rgb, whole_frame_rgb_from_image
 
 
-_PATH = Path(__file__).resolve().parents[2] / 'models' / 'image_frontend' / '1' / 'frontend_geometry.py'
-_spec = importlib.util.spec_from_file_location('frontend_geometry', _PATH)
+_PATH = Path(__file__).resolve().parents[2] / 'models' / 'gpu_image_prep' / '1' / 'prep_geometry.py'
+_spec = importlib.util.spec_from_file_location('prep_geometry', _PATH)
 assert _spec is not None and _spec.loader is not None
 fg = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(fg)

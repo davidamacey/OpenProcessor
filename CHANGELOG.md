@@ -88,20 +88,20 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   embeddings of the same crops per card (#228).
 - GPU decode measured and planned (`docs/design/gpu_decode_plan.md`, numbers in
   `docs/PERFORMANCE.md`): on 12-24 MP photos the CPU JPEG decode caps ingest at about 26 photos/s on
-  this host; GPU decode cuts the decode's host cost 3.7x and a GPU front end cut API CPU per photo by
+  this host; GPU decode cuts the decode's host cost 3.7x and a GPU decode cut API CPU per photo by
   65 percent through the stack, at unchanged images/s until faster GPU kernels land; COCO frames gain
   nothing. GPU decode changes the decoded pixels and fails the parity gates against today's
   references while AP and kNN precision are unchanged, so it waits for an owner decision. New probe
   tools `scripts/bench/gpu_decode_bench.py` and `scripts/bench/gpu_decode_parity.py` with tested
   kernels and helpers (#217). No product code changed.
-- GPU ingest front end for photos, opt-in with `OP_INGEST_GPU_FRONTEND` and gated by
-  `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0): the `image_frontend` Triton model decodes each JPEG once on the
+- GPU decode for photos, opt-in with `OP_INGEST_GPU_DECODE` and gated by
+  `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0): the `gpu_image_prep` Triton model decodes each JPEG once on the
   GPU (nvJPEG with GPU Huffman decoding), builds the detector letterbox and the PE squares with fused
   uint8 kernels, runs the detector and PE, computes the blur sums and encodes the crop JPEGs. On 12-24
   MP photos: 1.3x the images/s with detection and embedding, 1.55x detection only, 2.5x for one client,
-  a third of the host CPU. Smaller images and any file the front end declines (progressive, truncated,
+  a third of the host CPU. Smaller images and any file the GPU decode declines (progressive, truncated,
   not a baseline JPEG) take the CPU path, counted in the new `op_ingest_decode_total{route}`. It changes
-  the decoder's numerics once, AP-neutral on COCO (0.4378 against 0.4376); `scripts/bench/detector_capture.py` gains a front-end mode and the
+  the decoder's numerics once, AP-neutral on COCO (0.4378 against 0.4376); `scripts/bench/detector_capture.py` gains a gpu_decode mode and the
   benchmark suites an `--embedding-mode` (#217).
 
 - The installer stamps the PE engine it builds (precision actually built, TensorRT version, GPU compute
@@ -229,13 +229,18 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   migration, re-ingest to move one (#254). Write ceiling at 100,000 real vectors on this mapping: 1,980
   documents/s with 4 writers, 4,426 with 8 (#230).
 
-- The GPU ingest front end (`image_frontend`, #217) is now on by default (`OP_INGEST_GPU_FRONTEND`),
+- The GPU decode (`gpu_image_prep`, #217) is now on by default (`OP_INGEST_GPU_DECODE`),
   with the 3.0 MP size gate unchanged. It follows the hardware: each installer profile carries an
-  `ingest_gpu_frontend` flag (`full` true, `minimal` and `standard` false, since the front end adds
+  `ingest_gpu_decode` flag (`full` true, `minimal` and `standard` false, since the GPU decode adds
   about 8.5 GB to the Triton card) that `setup.sh` and the installer write to `.env`, an explicit
   `.env` value wins, and `openprocessor gpu plan` prints whether it is on and why, warning when it
-  is on for a card without room. A front end that cannot load leaves the other models and CPU
+  is on for a card without room. A GPU decode that cannot load leaves the other models and CPU
   ingest working.
+
+- The GPU decode stage of ingest was called the "front end"; it is renamed and nothing else changes:
+  `OP_INGEST_GPU_FRONTEND` is now `OP_INGEST_GPU_DECODE` (profile key `ingest_gpu_frontend` is now
+  `ingest_gpu_decode`), and the Triton model `image_frontend` is now `gpu_image_prep`. There is no alias:
+  an existing deployment renames its `.env` key and its `models/image_frontend` directory.
 
 ### Fixed
 
@@ -282,6 +287,11 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   default export leaves the tree clean; a test compares each committed exporter-written config with its
   renderer. The installer no longer builds the unused standard `yolov11_small_trt` engine, and that
   directory is git-ignored for `make export-models`.
+
+- Cropwright's top bar and `/projects` header no longer widen the page past a 430 px viewport when the
+  project has a long display name: the project switcher is capped at 55 percent of the viewport and the
+  "Open <project>" link on `/projects` truncates (#274). The 430 px e2e sweep now serves a long display
+  name and a long slug, so it fails on that header without the fix.
 
 ## [0.5.0] - 2026-10-09
 

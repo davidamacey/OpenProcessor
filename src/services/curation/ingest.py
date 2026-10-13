@@ -111,7 +111,7 @@ if TYPE_CHECKING:
     from src.clients.pe_encoder import PEEncoder
     from src.clients.triton_pool import AsyncTritonPool
     from src.config import CurationConfig, DetectionProfile
-    from src.services.curation.ingest_frontend import FrontendFrame
+    from src.services.curation.ingest_gpu_decode import GpuDecodeFrame
 
 
 logger = get_logger(__name__)
@@ -339,7 +339,7 @@ class CurationIngestService:
         source: str = 'unknown',
         *,
         prefilled_image: DecodedImage | None = None,
-        prefilled_frame: FrontendFrame | None = None,
+        prefilled_frame: GpuDecodeFrame | None = None,
         source_identifier: str | None = None,
         ingest_run_id: str | None = None,
         adopt_existing: bool = False,
@@ -414,7 +414,7 @@ class CurationIngestService:
             dataset_split=(existing or {}).get('dataset_split'),
             pil=decoded.pil if decoded is not None else None,
             rgb=decoded.rgb if decoded is not None else None,
-            frontend=prefilled_frame,
+            gpu_frame=prefilled_frame,
             width=width,
             height=height,
             imohash=image_hash,
@@ -514,7 +514,7 @@ class CurationIngestService:
         prefilled_image: DecodedImage | None = None,
         prefilled_items: list[DetectedItem] | None = None,
         prefilled_secondary: SecondaryOutput | None = None,
-        prefilled_frame: FrontendFrame | None = None,
+        prefilled_frame: GpuDecodeFrame | None = None,
         source_identifier: str | None = None,
         ingest_run_id: str | None = None,
     ) -> IngestResult:
@@ -535,8 +535,8 @@ class CurationIngestService:
             prefilled_secondary: Secondary-detector output (raw tensor
                 plus optional backbone feature map) from
                 :meth:`WholeImageDetector.run_secondary_raw_batch`; same deal.
-            prefilled_frame: The GPU front end's products for this image
-                (:mod:`~src.services.curation.ingest_frontend`), with its
+            prefilled_frame: The GPU decode's products for this image
+                (:mod:`~src.services.curation.ingest_gpu_decode`), with its
                 items in ``prefilled_items``; the API never decodes it.
 
         Every ``prefilled_*`` argument defaults to ``None``, in which

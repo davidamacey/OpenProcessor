@@ -88,7 +88,7 @@ def laplacian_var(gray: np.ndarray) -> float:
 
 def variance_from_sums(n: int, total: int, squares: int) -> float:
     """The Laplacian variance from its exact integer sums (pixel count, sum, sum of squares),
-    rounded as :func:`laplacian_var` rounds; the GPU ingest front end reports these sums."""
+    rounded as :func:`laplacian_var` rounds; the GPU decode reports these sums."""
     return round((n * squares - total * total) / (n * n), 2)
 
 

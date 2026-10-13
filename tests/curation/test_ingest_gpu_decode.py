@@ -1,5 +1,5 @@
-"""Batch ingest with the GPU front end (#217): photos at or above the size gate are decoded and
-processed by the ``image_frontend`` Triton model; everything else, and every image the front end
+"""Batch ingest with the GPU decode (#217): photos at or above the size gate are decoded and
+processed by the ``gpu_image_prep`` Triton model; everything else, and every image the GPU decode
 declines, takes the CPU path. No GPU here: a fake pool answers for the model."""
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from curation.test_ingest_service import _jpeg_bytes, _make_service
-from src.services.curation import ingest_frontend
+from src.services.curation import ingest_gpu_decode
 from src.services.curation.ingest_policy import EmbeddingPolicy, IngestPolicy
 
 
@@ -26,7 +26,7 @@ class _Result:
         return self.outputs[name]
 
 
-def _frontend_result(
+def _gpu_decode_result(
     width: int, height: int, status: str = 'ok', jpeg: bytes = b'\xff\xd8crop'
 ) -> _Result:
     if status != 'ok':
@@ -52,9 +52,9 @@ def _frontend_result(
 
 @pytest.fixture(autouse=True)
 def _fresh_ready_cache() -> Any:
-    ingest_frontend._READY.clear()
+    ingest_gpu_decode._READY.clear()
     yield
-    ingest_frontend._READY.clear()
+    ingest_gpu_decode._READY.clear()
 
 
 def _gpu_service(
@@ -63,7 +63,7 @@ def _gpu_service(
     svc, os_fake, triton = _make_service()
     svc.config = dataclasses.replace(
         svc.config,
-        ingest_gpu_frontend=True,
+        ingest_gpu_decode=True,
         ingest_gpu_min_megapixels=gate,
         crop_cache_dir=tmp_path / 'crops',
     )
@@ -71,7 +71,7 @@ def _gpu_service(
     sizes: dict[bytes, tuple[int, int]] = {}
 
     async def get_model_parameters(model: str) -> dict[str, str]:
-        assert model == ingest_frontend.FRONTEND_MODEL
+        assert model == ingest_gpu_decode.GPU_IMAGE_PREP_MODEL
         return params or {
             'DETECTOR_MODEL': 'primary_end2end',
             'NET_SIZE': '320',
@@ -79,11 +79,11 @@ def _gpu_service(
         }
 
     async def stream_one(model: str, inputs: list) -> _Result:
-        assert model == ingest_frontend.FRONTEND_MODEL
+        assert model == ingest_gpu_decode.GPU_IMAGE_PREP_MODEL
         data, embed = inputs[0]._raw_content, inputs[1]._raw_content
         calls.append({'nbytes': len(data), 'embed': bool(np.frombuffer(embed, np.bool_)[0])})
         w, h = sizes[data]
-        return _frontend_result(w, h, status)
+        return _gpu_decode_result(w, h, status)
 
     triton.loaded = []
 
@@ -106,13 +106,13 @@ def _register(sizes: dict[bytes, tuple[int, int]], data: bytes, size: tuple[int,
 
 
 @pytest.mark.asyncio
-async def test_a_photo_above_the_gate_is_ingested_from_the_front_end(tmp_path) -> None:
+async def test_a_photo_above_the_gate_is_ingested_from_the_gpu_decode(tmp_path) -> None:
     svc, os_fake, triton, calls, sizes = _gpu_service(tmp_path, gate=0.2)
     big = _register(sizes, _jpeg_bytes((640, 480), seed=1), (640, 480))
     small = _jpeg_bytes((320, 240), seed=2)
     result = await svc.ingest_batch([big, small], ['/x/big.jpg', '/x/small.jpg'])
     assert result.summary.successful == 2
-    assert len(calls) == 1  # only the photo at or above 0.2 MP went to the front end
+    assert len(calls) == 1  # only the photo at or above 0.2 MP went to the GPU decode
     docs = {d['image_path']: d for d in os_fake.images.values()}
     assert docs['/x/big.jpg']['pe_embedding'] == pytest.approx([0.0, 0.0, 1.0])  # normalized
     assert docs['/x/small.jpg']['pe_embedding'] == pytest.approx([0.0, 1.0, 0.0])  # CPU fake
@@ -125,7 +125,7 @@ async def test_a_photo_above_the_gate_is_ingested_from_the_front_end(tmp_path) -
     assert item['class_name'] == 'widget'
     assert (tmp_path / 'crops' / f'{crop_id}.jpg').read_bytes() == b'\xff\xd8crop'
     assert triton.calls.count('primary_end2end') == 1  # the CPU detector ran for the small one only
-    assert triton.loaded == [ingest_frontend.FRONTEND_MODEL]  # loaded on first use, once
+    assert triton.loaded == [ingest_gpu_decode.GPU_IMAGE_PREP_MODEL]  # loaded on first use, once
 
 
 @pytest.mark.asyncio
@@ -141,7 +141,7 @@ async def test_a_declined_image_takes_the_cpu_path(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_front_end_built_for_another_detector_is_not_used(tmp_path) -> None:
+async def test_a_gpu_decode_built_for_another_detector_is_not_used(tmp_path) -> None:
     params = {'DETECTOR_MODEL': 'other_model', 'NET_SIZE': '320', 'LETTERBOX_FILL': '114'}
     svc, _os, _triton, calls, sizes = _gpu_service(tmp_path, params=params)
     big = _register(sizes, _jpeg_bytes((640, 480), seed=4), (640, 480))
@@ -163,9 +163,9 @@ async def test_lazy_embedding_asks_for_no_crop_vectors(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_front_end_off_never_calls_the_model(tmp_path) -> None:
+async def test_gpu_decode_off_never_calls_the_model(tmp_path) -> None:
     svc, _os, triton, calls, sizes = _gpu_service(tmp_path)
-    svc.config = dataclasses.replace(svc.config, ingest_gpu_frontend=False)
+    svc.config = dataclasses.replace(svc.config, ingest_gpu_decode=False)
     big = _register(sizes, _jpeg_bytes((640, 480), seed=6), (640, 480))
     await svc.ingest_batch([big], ['/x/o.jpg'])
     assert calls == []
@@ -173,17 +173,17 @@ async def test_front_end_off_never_calls_the_model(tmp_path) -> None:
     assert triton.loaded == []
 
 
-def test_the_front_end_is_on_by_default_with_the_three_megapixel_gate() -> None:
+def test_the_gpu_decode_is_on_by_default_with_the_three_megapixel_gate() -> None:
     from src.config.curation import CurationConfig
 
     cfg = CurationConfig()
-    assert cfg.ingest_gpu_frontend is True
+    assert cfg.ingest_gpu_decode is True
     assert cfg.ingest_gpu_min_megapixels == 3.0
 
 
 @pytest.mark.asyncio
 async def test_a_model_that_fails_to_load_leaves_ingest_on_the_cpu_path(tmp_path) -> None:
-    """Triton out of memory for image_frontend: the load raises, every photo is ingested on the
+    """Triton out of memory for gpu_image_prep: the load raises, every photo is ingested on the
     CPU, the detector is used as before and the load is not retried for every batch."""
     svc, os_fake, triton, calls, sizes = _gpu_service(tmp_path)
     attempts: list[str] = []
@@ -197,7 +197,7 @@ async def test_a_model_that_fails_to_load_leaves_ingest_on_the_cpu_path(tmp_path
         big = _register(sizes, _jpeg_bytes((640, 480), seed=seed), (640, 480))
         result = await svc.ingest_batch([big], [f'/x/{name}.jpg'])
         assert result.summary.successful == 1
-    assert calls == []  # the front end was never called
-    assert attempts == [ingest_frontend.FRONTEND_MODEL]
+    assert calls == []  # the GPU decode was never called
+    assert attempts == [ingest_gpu_decode.GPU_IMAGE_PREP_MODEL]
     assert triton.calls == ['primary_end2end', 'primary_end2end']
     assert len(os_fake.images) == 2

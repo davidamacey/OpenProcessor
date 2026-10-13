@@ -846,20 +846,20 @@ _gpu_plan_placement() {
         esac
     done <<< "$out"
     echo "  every other Triton model runs on the primary card (the lowest id in TRITON_GPU_ID)"
-    _gpu_plan_frontend "$ids" "$table" "$running" "$primary_mib"
+    _gpu_plan_decode "$ids" "$table" "$running" "$primary_mib"
     return "$rc"
 }
 
-# Say whether the GPU ingest front end is on and why. Refuses nothing: the front end loads on first
+# Say whether the GPU decode is on and why. Refuses nothing: the GPU decode loads on first
 # use and falls back to the CPU path per image, so a forced-on card without room only warns.
-_gpu_plan_frontend() {
+_gpu_plan_decode() {
     local ids="$1" table="$2" running="$3" primary_mib="$4" setting profile source primary
-    local fe_mib=8704
-    setting="$(_env_value OP_INGEST_GPU_FRONTEND)"
+    local decode_mib=8704
+    setting="$(_env_value OP_INGEST_GPU_DECODE)"
     profile="$(_env_value GPU_PROFILE)"
     profile="${profile:-standard}"
     if [[ -n "$setting" ]]; then
-        source="OP_INGEST_GPU_FRONTEND=${setting} in .env"
+        source="OP_INGEST_GPU_DECODE=${setting} in .env"
     else
         setting=1
         source="code default (on); the installer writes 0 for profiles without room"
@@ -869,18 +869,18 @@ _gpu_plan_frontend() {
         *) setting=0 ;;
     esac
     if (( setting == 0 )); then
-        echo "  GPU ingest front end: off (${source}); photos decode on the CPU. Needs about ${fe_mib} MiB more on the primary card"
+        echo "  GPU decode (ingest): off (${source}); photos decode on the CPU. Needs about ${decode_mib} MiB more on the primary card"
         return 0
     fi
-    echo "  GPU ingest front end: on (${source}); about ${fe_mib} MiB more on the primary card, loaded on first use"
+    echo "  GPU decode (ingest): on (${source}); about ${decode_mib} MiB more on the primary card, loaded on first use"
     primary="$(tr ',' '\n' <<< "$ids" | sort -n | head -1)"
-    local idx name total used cc need=$(( primary_mib + fe_mib )) have
+    local idx name total used cc need=$(( primary_mib + decode_mib )) have
     while IFS='|' read -r idx name total used cc; do
         [[ "$idx" == "$primary" ]] || continue
         # A running Triton already holds its models, so only the card's total can be judged then.
         if [[ "$running" == 1 ]]; then have=$total; else have=$(( total - used )); fi
         if (( have < need )); then
-            log_warn "GPU ${idx} has ${have} MiB $([[ "$running" == 1 ]] && echo total || echo free); the ${profile} profile's models (${primary_mib} MiB) plus the front end (${fe_mib} MiB) need about ${need} MiB. Without room the front end fails to load and ingest stays on the CPU path; set OP_INGEST_GPU_FRONTEND=0 to silence this"
+            log_warn "GPU ${idx} has ${have} MiB $([[ "$running" == 1 ]] && echo total || echo free); the ${profile} profile's models (${primary_mib} MiB) plus the GPU decode (${decode_mib} MiB) need about ${need} MiB. Without room the GPU decode fails to load and ingest stays on the CPU path; set OP_INGEST_GPU_DECODE=0 to silence this"
         fi
     done <<< "$table"
 }

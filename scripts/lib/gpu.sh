@@ -127,10 +127,10 @@ get_profile_description() {
     esac
 }
 
-# 1 when the profile file turns the GPU ingest front end on (it needs about 8.5 GB more on the
+# 1 when the profile file turns the GPU decode on (it needs about 8.5 GB more on the
 # Triton card), else 0. A missing key is 0: never grow a card's footprint by omission.
-profile_ingest_gpu_frontend() {
-    if grep -Eq '"ingest_gpu_frontend"[[:space:]]*:[[:space:]]*true' "$1"; then echo 1; else echo 0; fi
+profile_ingest_gpu_decode() {
+    if grep -Eq '"ingest_gpu_decode"[[:space:]]*:[[:space:]]*true' "$1"; then echo 1; else echo 0; fi
 }
 
 # Load profile configuration from JSON
@@ -153,9 +153,9 @@ load_profile() {
     PROFILE_WORKERS=$(grep -o '"workers"[[:space:]]*:[[:space:]]*[0-9]*' "$profile_file" | grep -o '[0-9]*$')
     PROFILE_OCR_PIPELINE_INSTANCES=$(grep -o '"ocr_pipeline_instances"[[:space:]]*:[[:space:]]*[0-9]*' "$profile_file" | grep -o '[0-9]*$')
 
-    PROFILE_INGEST_GPU_FRONTEND=$(profile_ingest_gpu_frontend "$profile_file")
+    PROFILE_INGEST_GPU_DECODE=$(profile_ingest_gpu_decode "$profile_file")
 
-    export PROFILE_NAME PROFILE_INSTANCE_COUNT PROFILE_MAX_BATCH PROFILE_SHM_SIZE PROFILE_WORKERS PROFILE_OCR_PIPELINE_INSTANCES PROFILE_INGEST_GPU_FRONTEND
+    export PROFILE_NAME PROFILE_INSTANCE_COUNT PROFILE_MAX_BATCH PROFILE_SHM_SIZE PROFILE_WORKERS PROFILE_OCR_PIPELINE_INSTANCES PROFILE_INGEST_GPU_DECODE
 
     log_debug "Loaded profile: $PROFILE_NAME (instances=$PROFILE_INSTANCE_COUNT, batch=$PROFILE_MAX_BATCH)"
     return 0
