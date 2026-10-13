@@ -201,13 +201,17 @@ export class BulkIngest {
 
   /** Start the same source again: the backend continues the run it left off. */
   resume(run: BulkIngestRun): Promise<boolean> {
-    const body: BulkIngestRequest = {
-      [run.source.kind === 'folder' ? 'folder' : 'manifest']: run.source.path,
-      source: run.options.source_tag,
-      extensions: run.source.extensions,
-      batch_size: run.options.batch_size,
-      concurrency: run.options.concurrency,
-    };
+    // A registered source runs with its own options; a path source repeats the run's.
+    const body: BulkIngestRequest =
+      run.source.kind === 'queue'
+        ? { source_id: run.source.path }
+        : {
+            [run.source.kind === 'folder' ? 'folder' : 'manifest']: run.source.path,
+            source: run.options.source_tag,
+            extensions: run.source.extensions,
+            batch_size: run.options.batch_size,
+            concurrency: run.options.concurrency,
+          };
     return this.start(body);
   }
 

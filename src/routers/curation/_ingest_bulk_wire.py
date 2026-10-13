@@ -17,6 +17,7 @@ from src.routers.curation._ingest_bulk_models import (
     BulkSourceWire,
 )
 from src.services.curation.bulk_ingest import limits
+from src.services.curation.bulk_ingest.sources import load_source
 from src.services.curation.bulk_ingest.store import (
     ACTIVE_STATUSES,
     RESUMABLE_STATUSES,
@@ -67,6 +68,13 @@ def open_run(run_id: str) -> BulkStore:
     return store
 
 
+def _source_label(source: dict[str, Any]) -> str | None:
+    if source.get('kind') != 'queue':
+        return None
+    registered = load_source(source.get('path', ''))
+    return f'{registered.name} ({registered.location})' if registered else None
+
+
 def run_wire(store: BulkStore, *, resumed: bool = False) -> BulkIngestRun:
     state: dict[str, Any] = store.repaired_state()
     status = state.get('status', 'queued')
@@ -82,6 +90,7 @@ def run_wire(store: BulkStore, *, resumed: bool = False) -> BulkIngestRun:
             kind=source.get('kind', 'folder'),
             path=source.get('path', ''),
             extensions=list(source.get('extensions') or []),
+            label=_source_label(source),
         ),
         options=BulkOptionsWire(
             source_tag=options.get('source_tag', ''),

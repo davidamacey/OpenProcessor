@@ -51,8 +51,11 @@ class BulkIngestRequest(BaseModel):
 
 class BulkSourceWire(BaseModel):
     kind: BulkSourceKind
+    # A folder or manifest path; for a queue source, the id of the registered source.
     path: str
     extensions: list[str]
+    # What to show for the source: its name and location when it is a registered one.
+    label: str | None = None
 
 
 class BulkOptionsWire(BaseModel):

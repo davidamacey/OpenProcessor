@@ -2890,6 +2890,17 @@
             "title": "Kind",
             "type": "string"
           },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
           "path": {
             "title": "Path",
             "type": "string"
@@ -9629,6 +9640,10 @@
             "title": "Min Watch Interval S",
             "type": "integer"
           },
+          "poll_after_s": {
+            "title": "Poll After S",
+            "type": "number"
+          },
           "s3_allowed": {
             "items": {
               "type": "string"
@@ -9648,7 +9663,8 @@
           "default_batch_size",
           "default_concurrency",
           "default_watch_interval_s",
-          "min_watch_interval_s"
+          "min_watch_interval_s",
+          "poll_after_s"
         ],
         "title": "IngestSourceList",
         "type": "object"

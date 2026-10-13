@@ -175,6 +175,8 @@ class IngestSourceStatus(BaseModel):
     can_run: bool
     can_retry_dead: bool
     blocked_reason: BlockedReason | None = None
+    # The reason in words, for display.
+    blocked_message: str | None = None
 
 
 class IngestSourceList(BaseModel):
@@ -186,6 +188,8 @@ class IngestSourceList(BaseModel):
     default_concurrency: int
     default_watch_interval_s: int
     min_watch_interval_s: int
+    # Seconds a poller should wait before the next read: short while a scan or run is live.
+    poll_after_s: float
 
 
 class RetryDeadResult(BaseModel):

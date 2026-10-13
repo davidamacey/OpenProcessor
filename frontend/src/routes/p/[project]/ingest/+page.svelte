@@ -21,6 +21,7 @@
   import RegionDrainPanel from '$lib/components/ingest/RegionDrainPanel.svelte';
   import ClusteringHandoff from '$lib/components/ingest/ClusteringHandoff.svelte';
   import BulkIngestPanel from '$lib/components/ingest/BulkIngestPanel.svelte';
+  import IngestSourcesPanel from '$lib/components/ingest/IngestSourcesPanel.svelte';
   import IngestBatchPanel from '$lib/components/ingest/IngestBatchPanel.svelte';
   import IngestDetectorCard from '$lib/components/ingest/IngestDetectorCard.svelte';
   import RegionStagePanel from '$lib/components/ingest/RegionStagePanel.svelte';
@@ -136,6 +137,13 @@
         <BulkIngestPanel />
       </section>
     {/if}
+
+    <section class="space-y-3 rounded-lg border border-zinc-800 p-4">
+      <h2 class="text-sm font-semibold text-zinc-200">
+        Sources (S3 buckets and watched folders)
+      </h2>
+      <IngestSourcesPanel />
+    </section>
 
     {#if serverPathIngestAvailable(config)}
       <!-- Piece 11: server-path ingest, gated on the served `batch.enabled`

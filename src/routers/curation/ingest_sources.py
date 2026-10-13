@@ -84,6 +84,10 @@ if TYPE_CHECKING:
     from fastapi import HTTPException
 
 
+LIVE_POLL_S = 2.0
+IDLE_POLL_S = 10.0
+
+
 def _not_found(source_id: str) -> HTTPException:
     return api_error(
         404, 'ingest_source_not_found', f'no ingest source {source_id!r}', project=slug()
@@ -107,6 +111,14 @@ def check_definition(source: IngestSource) -> None:
         raise api_error(422, 's3_not_allowed', str(exc), project=slug()) from None
     except InvalidSourceDefinitionError as exc:
         raise api_error(422, 'ingest_source_invalid', str(exc), project=slug()) from None
+
+
+_BLOCKED_MESSAGES = {
+    's3_not_configured': 'S3 is off on this deployment: OP_S3_ALLOWED is empty',
+    's3_not_allowed': 'This bucket or prefix is outside OP_S3_ALLOWED',
+    'invalid_source': 'The source can no longer be read: check its path',
+    'project_run_live': 'Another ingest run of this project is live',
+}
 
 
 def _blocked_reason(source: IngestSource) -> str | None:
@@ -163,6 +175,7 @@ def status_wire(source: IngestSource) -> IngestSourceStatus:
         can_run=reason is None and not run_is_live(run),
         can_retry_dead=data['counts']['dead'] > 0,
         blocked_reason=reason,  # type: ignore[arg-type]
+        blocked_message=_BLOCKED_MESSAGES.get(reason) if reason else None,
     )
 
 
@@ -175,14 +188,17 @@ def _apply_triggers(source: IngestSource, triggers: TriggersWire) -> None:
 @router.get('/ingest/sources', response_model=IngestSourceList)
 async def list_ingest_sources() -> IngestSourceList:
     s3 = S3Config.from_env()
+    items = [status_wire(s) for s in list_sources()]
+    busy = any(i.scan.active or run_is_live(i.last_run and i.last_run.model_dump()) for i in items)
     return IngestSourceList(
-        items=[status_wire(s) for s in list_sources()],
+        items=items,
         s3_configured=s3.configured,
         s3_allowed=[f'{b}/{p}' if p else b for b, p in s3.allowed],
         default_batch_size=limits.DEFAULT_BATCH_SIZE,
         default_concurrency=limits.DEFAULT_CONCURRENCY,
         default_watch_interval_s=DEFAULT_WATCH_INTERVAL_S,
         min_watch_interval_s=MIN_WATCH_INTERVAL_S,
+        poll_after_s=LIVE_POLL_S if busy else IDLE_POLL_S,
     )
 
 
