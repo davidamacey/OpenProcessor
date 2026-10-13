@@ -25,14 +25,21 @@ F = get_region_fields()
 
 
 def _knn_field(dim: int = config.embedding_dim) -> dict[str, Any]:
-    """Standard cosine k-NN HNSW field (FAISS engine)."""
+    """Standard cosine k-NN HNSW field on the Lucene engine.
+
+    Lucene stores the graph with the segment (no native graph memory), takes half the disk of
+    faiss for the same vectors and keeps recall near 1.0 under the filters the review and
+    search routes send (faiss with a filter fell to 0.91 after a merge). Its cosine ``_score``
+    equals faiss's, so ``min_score`` is unchanged. Indexes created before this default keep
+    their faiss fields: the engine of a field is fixed at creation.
+    """
     return {
         'type': 'knn_vector',
         'dimension': dim,
         'method': {
             'name': 'hnsw',
             'space_type': 'cosinesimil',
-            'engine': 'faiss',
+            'engine': 'lucene',
             'parameters': {
                 'ef_construction': config.hnsw_ef_construction,
                 'm': config.hnsw_m,

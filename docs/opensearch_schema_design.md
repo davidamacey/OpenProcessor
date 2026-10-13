@@ -131,7 +131,7 @@ endpoints live in `op_global_configs` (`OP_GLOBAL_CONFIGS_INDEX`). Bodies are in
 `src/clients/curation_opensearch/` (`bodies_core.py` for images and items, `bodies_other.py` for the rest).
 
 Embedding dimensions: `embedding` 512, `pe_embedding` 1024 (PE-Core),
-`backbone_embedding` 1024. HNSW defaults `ef_construction` 512 and `m` 16
+`backbone_embedding` 1024. HNSW on the Lucene engine (new projects; earlier projects keep faiss), defaults `ef_construction` 128 and `m` 16
 (`OP_HNSW_EF_CONSTRUCTION`, `OP_HNSW_M`).
 
 ### `images`

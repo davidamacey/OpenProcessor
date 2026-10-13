@@ -1,0 +1,39 @@
+{
+  "cluster": {
+    "ari": 0.3436945291402488,
+    "items": 12745,
+    "nmi": 0.7772643967342976,
+    "purity_cand": 0.6869360533542566,
+    "purity_drop_points": -0.7924676343664117,
+    "purity_ref": 0.6790113770105924
+  },
+  "filters": {
+    "project_class": {
+      "overlap_at_k_ref_vs_cand": 0.9296890672016049,
+      "queries": 997,
+      "recall_cand_vs_exact": 1.0,
+      "recall_ref_vs_exact": 0.9381,
+      "score_abs_delta_p99": 0.00018353149999995882,
+      "selectivity_ref": 0.33117238147309225
+    },
+    "project_cluster": {
+      "overlap_at_k_ref_vs_cand": 0.0,
+      "queries": 997,
+      "recall_cand_vs_exact": 1.0,
+      "recall_ref_vs_exact": 1.0,
+      "score_abs_delta_p99": null,
+      "selectivity_ref": 0.0074982425993907675
+    },
+    "review_default": {
+      "overlap_at_k_ref_vs_cand": 0.9922768304914745,
+      "queries": 997,
+      "recall_cand_vs_exact": 0.9994984954864594,
+      "recall_ref_vs_exact": 0.9997999999999999,
+      "score_abs_delta_p99": 0.00018366599999999404,
+      "selectivity_ref": 1.0
+    }
+  },
+  "items_cand": 12803,
+  "items_ref": 12803,
+  "k": 10
+}

@@ -1,0 +1,424 @@
+{
+  "runs": [
+    {
+      "arm": "perimage",
+      "offered_images_per_s": 25.0,
+      "images": 500,
+      "achieved_images_per_s": 24.60594296884495,
+      "docs": 3713,
+      "docs_exact_real": 3713,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 9.975738012,
+      "requests_per_image": 3.0,
+      "requests": {
+        "bulk": 1000,
+        "mget": 500
+      },
+      "bulk_docs_mean": 7.426,
+      "write_latency_p50_ms": 399.68440402299166,
+      "write_latency_p99_ms": 916.901384061202,
+      "knn_p50_ms": 20.064524840563536,
+      "knn_p95_ms": 317.7765443222595,
+      "knn_queries": 182
+    },
+    {
+      "arm": "coalesced",
+      "offered_images_per_s": 25.0,
+      "images": 500,
+      "achieved_images_per_s": 23.99066428285237,
+      "docs": 3713,
+      "docs_exact_real": 3713,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 9.800446438000002,
+      "requests_per_image": 1.194,
+      "requests": {
+        "bulk": 398,
+        "mget": 199
+      },
+      "bulk_docs_mean": 18.65829145728643,
+      "write_latency_p50_ms": 432.2854813653976,
+      "write_latency_p99_ms": 1239.0931998472659,
+      "knn_p50_ms": 18.267359817400575,
+      "knn_p95_ms": 24.934211792424335,
+      "knn_queries": 300
+    },
+    {
+      "arm": "coalesced_w8",
+      "offered_images_per_s": 25.0,
+      "images": 500,
+      "achieved_images_per_s": 24.681051183505385,
+      "docs": 3713,
+      "docs_exact_real": 3713,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 10.839604244,
+      "requests_per_image": 2.166,
+      "requests": {
+        "bulk": 722,
+        "mget": 361
+      },
+      "bulk_docs_mean": 10.285318559556787,
+      "write_latency_p50_ms": 375.8979784324765,
+      "write_latency_p99_ms": 1465.0713236769657,
+      "knn_p50_ms": 19.736576126888394,
+      "knn_p95_ms": 28.900474891997845,
+      "knn_queries": 282
+    },
+    {
+      "arm": "coalesced_bulk500",
+      "offered_images_per_s": 25.0,
+      "images": 500,
+      "achieved_images_per_s": 23.977656848654398,
+      "docs": 3713,
+      "docs_exact_real": 3713,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 9.79208694799999,
+      "requests_per_image": 1.23,
+      "requests": {
+        "bulk": 410,
+        "mget": 205
+      },
+      "bulk_docs_mean": 18.11219512195122,
+      "write_latency_p50_ms": 396.90770162269473,
+      "write_latency_p99_ms": 1764.8039880860595,
+      "knn_p50_ms": 19.884160021319985,
+      "knn_p95_ms": 23.96638253703713,
+      "knn_queries": 292
+    },
+    {
+      "arm": "coalesced_nolinger",
+      "offered_images_per_s": 25.0,
+      "images": 500,
+      "achieved_images_per_s": 24.67167116295292,
+      "docs": 3713,
+      "docs_exact_real": 3713,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 8.728142505999998,
+      "requests_per_image": 1.32,
+      "requests": {
+        "bulk": 440,
+        "mget": 220
+      },
+      "bulk_docs_mean": 16.87727272727273,
+      "write_latency_p50_ms": 391.19511959142983,
+      "write_latency_p99_ms": 1063.2752534374595,
+      "knn_p50_ms": 18.033744068816304,
+      "knn_p95_ms": 23.268882278352976,
+      "knn_queries": 294
+    },
+    {
+      "arm": "perimage",
+      "offered_images_per_s": 50.0,
+      "images": 1000,
+      "achieved_images_per_s": 28.554359431215335,
+      "docs": 7410,
+      "docs_exact_real": 7410,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 7.836647166000006,
+      "requests_per_image": 3.0,
+      "requests": {
+        "bulk": 2000,
+        "mget": 1000
+      },
+      "bulk_docs_mean": 7.41,
+      "write_latency_p50_ms": 15005.723312031478,
+      "write_latency_p99_ms": 21113.069692719728,
+      "knn_p50_ms": 851.4392625074834,
+      "knn_p95_ms": 7203.055843710899,
+      "knn_queries": 16
+    },
+    {
+      "arm": "coalesced",
+      "offered_images_per_s": 50.0,
+      "images": 1000,
+      "achieved_images_per_s": 48.81598315160453,
+      "docs": 7410,
+      "docs_exact_real": 7410,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 5.933930253,
+      "requests_per_image": 0.63,
+      "requests": {
+        "bulk": 420,
+        "mget": 210
+      },
+      "bulk_docs_mean": 35.285714285714285,
+      "write_latency_p50_ms": 425.96755316480994,
+      "write_latency_p99_ms": 1212.4221646646035,
+      "knn_p50_ms": 19.082840997725725,
+      "knn_p95_ms": 25.886976625770334,
+      "knn_queries": 289
+    },
+    {
+      "arm": "coalesced_w8",
+      "offered_images_per_s": 50.0,
+      "images": 1000,
+      "achieved_images_per_s": 48.14692461572301,
+      "docs": 7410,
+      "docs_exact_real": 7410,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 6.553769799000009,
+      "requests_per_image": 1.119,
+      "requests": {
+        "bulk": 746,
+        "mget": 373
+      },
+      "bulk_docs_mean": 19.865951742627345,
+      "write_latency_p50_ms": 393.79504951648414,
+      "write_latency_p99_ms": 982.137216082774,
+      "knn_p50_ms": 20.11721907183528,
+      "knn_p95_ms": 27.448165323585272,
+      "knn_queries": 287
+    },
+    {
+      "arm": "coalesced_bulk500",
+      "offered_images_per_s": 50.0,
+      "images": 1000,
+      "achieved_images_per_s": 48.9978070230992,
+      "docs": 7410,
+      "docs_exact_real": 7410,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 5.7952807159999935,
+      "requests_per_image": 0.48,
+      "requests": {
+        "bulk": 320,
+        "mget": 160
+      },
+      "bulk_docs_mean": 46.3125,
+      "write_latency_p50_ms": 564.9214186705649,
+      "write_latency_p99_ms": 1488.340427498333,
+      "knn_p50_ms": 20.835153525695205,
+      "knn_p95_ms": 29.17100847698748,
+      "knn_queries": 280
+    },
+    {
+      "arm": "coalesced_nolinger",
+      "offered_images_per_s": 50.0,
+      "images": 1000,
+      "achieved_images_per_s": 48.77827013578745,
+      "docs": 7410,
+      "docs_exact_real": 7410,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 5.767991368000011,
+      "requests_per_image": 0.543,
+      "requests": {
+        "bulk": 362,
+        "mget": 181
+      },
+      "bulk_docs_mean": 40.93922651933702,
+      "write_latency_p50_ms": 578.206350794062,
+      "write_latency_p99_ms": 1510.2010207530109,
+      "knn_p50_ms": 20.794083829969168,
+      "knn_p95_ms": 28.825982520356785,
+      "knn_queries": 280
+    },
+    {
+      "arm": "perimage",
+      "offered_images_per_s": 100.0,
+      "images": 2000,
+      "achieved_images_per_s": 25.699618622283054,
+      "docs": 14947,
+      "docs_exact_real": 14781,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 7.2082601199999985,
+      "requests_per_image": 3.0,
+      "requests": {
+        "bulk": 4000,
+        "mget": 2000
+      },
+      "bulk_docs_mean": 7.4735,
+      "write_latency_p50_ms": 47533.58947741799,
+      "write_latency_p99_ms": 63206.62658036221,
+      "knn_p50_ms": 2364.1052581369877,
+      "knn_p95_ms": 23317.26837530732,
+      "knn_queries": 11
+    },
+    {
+      "arm": "coalesced",
+      "offered_images_per_s": 100.0,
+      "images": 2000,
+      "achieved_images_per_s": 95.47660164879557,
+      "docs": 14947,
+      "docs_exact_real": 14781,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 3.8521098444999993,
+      "requests_per_image": 0.249,
+      "requests": {
+        "bulk": 332,
+        "mget": 166
+      },
+      "bulk_docs_mean": 90.0421686746988,
+      "write_latency_p50_ms": 605.0948116462678,
+      "write_latency_p99_ms": 2017.5301629910246,
+      "knn_p50_ms": 21.08829701319337,
+      "knn_p95_ms": 39.33498468250036,
+      "knn_queries": 265
+    },
+    {
+      "arm": "coalesced_w8",
+      "offered_images_per_s": 100.0,
+      "images": 2000,
+      "achieved_images_per_s": 94.59206067503594,
+      "docs": 14947,
+      "docs_exact_real": 14781,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 3.909756534500005,
+      "requests_per_image": 0.4755,
+      "requests": {
+        "bulk": 634,
+        "mget": 317
+      },
+      "bulk_docs_mean": 47.15141955835962,
+      "write_latency_p50_ms": 536.3029199652374,
+      "write_latency_p99_ms": 1794.540965440683,
+      "knn_p50_ms": 20.534726325422525,
+      "knn_p95_ms": 31.78232405334711,
+      "knn_queries": 285
+    },
+    {
+      "arm": "coalesced_bulk500",
+      "offered_images_per_s": 100.0,
+      "images": 2000,
+      "achieved_images_per_s": 95.49223960674527,
+      "docs": 14947,
+      "docs_exact_real": 14781,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 3.682073418999998,
+      "requests_per_image": 0.21,
+      "requests": {
+        "bulk": 280,
+        "mget": 140
+      },
+      "bulk_docs_mean": 106.76428571428572,
+      "write_latency_p50_ms": 720.7151236943901,
+      "write_latency_p99_ms": 1946.9464158965275,
+      "knn_p50_ms": 20.776853431016207,
+      "knn_p95_ms": 35.631161113269634,
+      "knn_queries": 268
+    },
+    {
+      "arm": "coalesced_nolinger",
+      "offered_images_per_s": 100.0,
+      "images": 2000,
+      "achieved_images_per_s": 97.59294556305656,
+      "docs": 14947,
+      "docs_exact_real": 14781,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 3.4932609029999995,
+      "requests_per_image": 0.2205,
+      "requests": {
+        "bulk": 294,
+        "mget": 147
+      },
+      "bulk_docs_mean": 101.68027210884354,
+      "write_latency_p50_ms": 703.7796420045197,
+      "write_latency_p99_ms": 2014.5621897745878,
+      "knn_p50_ms": 21.288271993398666,
+      "knn_p95_ms": 36.59408963285385,
+      "knn_queries": 267
+    },
+    {
+      "arm": "perimage",
+      "offered_images_per_s": 200.0,
+      "images": 3989,
+      "achieved_images_per_s": 29.092643272220013,
+      "docs": 29820,
+      "docs_exact_real": 14781,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 7.923742501880168,
+      "requests_per_image": 3.0,
+      "requests": {
+        "bulk": 7978,
+        "mget": 3989
+      },
+      "bulk_docs_mean": 7.4755577839057405,
+      "write_latency_p50_ms": 91593.73907279223,
+      "write_latency_p99_ms": 116267.54313893616,
+      "knn_p50_ms": 11706.395877990872,
+      "knn_p95_ms": 39254.492575488985,
+      "knn_queries": 9
+    },
+    {
+      "arm": "coalesced",
+      "offered_images_per_s": 200.0,
+      "images": 3999,
+      "achieved_images_per_s": 193.2174522436872,
+      "docs": 29917,
+      "docs_exact_real": 14781,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 2.94852475293823,
+      "requests_per_image": 0.06526631657914479,
+      "requests": {
+        "bulk": 174,
+        "mget": 87
+      },
+      "bulk_docs_mean": 343.8735632183908,
+      "write_latency_p50_ms": 1365.5796679668128,
+      "write_latency_p99_ms": 2551.2270841933787,
+      "knn_p50_ms": 22.85235677845776,
+      "knn_p95_ms": 79.26766772288826,
+      "knn_queries": 224
+    },
+    {
+      "arm": "coalesced_w8",
+      "offered_images_per_s": 200.0,
+      "images": 3997,
+      "achieved_images_per_s": 186.3268539032158,
+      "docs": 29877,
+      "docs_exact_real": 14781,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 3.1598811195896936,
+      "requests_per_image": 0.1268451338503878,
+      "requests": {
+        "bulk": 338,
+        "mget": 169
+      },
+      "bulk_docs_mean": 176.7869822485207,
+      "write_latency_p50_ms": 1497.2363910637796,
+      "write_latency_p99_ms": 3006.606242470439,
+      "knn_p50_ms": 23.215537890791893,
+      "knn_p95_ms": 64.4941952545196,
+      "knn_queries": 223
+    },
+    {
+      "arm": "coalesced_bulk500",
+      "offered_images_per_s": 200.0,
+      "images": 3876,
+      "achieved_images_per_s": 175.25710740843763,
+      "docs": 28964,
+      "docs_exact_real": 14781,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 3.1584210681114535,
+      "requests_per_image": 0.05804953560371517,
+      "requests": {
+        "bulk": 150,
+        "mget": 75
+      },
+      "bulk_docs_mean": 386.18666666666667,
+      "write_latency_p50_ms": 1591.3078826852143,
+      "write_latency_p99_ms": 3384.7877730149776,
+      "knn_p50_ms": 23.803954012691975,
+      "knn_p95_ms": 68.71702196076508,
+      "knn_queries": 239
+    },
+    {
+      "arm": "coalesced_nolinger",
+      "offered_images_per_s": 200.0,
+      "images": 4000,
+      "achieved_images_per_s": 126.96464121751035,
+      "docs": 29921,
+      "docs_exact_real": 14781,
+      "failed_images": 0,
+      "api_cpu_ms_per_image": 3.133816638000006,
+      "requests_per_image": 0.0615,
+      "requests": {
+        "bulk": 164,
+        "mget": 82
+      },
+      "bulk_docs_mean": 364.890243902439,
+      "write_latency_p50_ms": 1608.898337930441,
+      "write_latency_p99_ms": 12027.577077988535,
+      "knn_p50_ms": 26.533931028097868,
+      "knn_p95_ms": 84.16057720314711,
+      "knn_queries": 328
+    }
+  ]
+}
