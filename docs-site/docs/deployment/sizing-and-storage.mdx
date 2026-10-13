@@ -63,8 +63,14 @@ see [GPU sizing](./gpu-sizing.mdx) and the plan it prints.
   plus 20 GB headroom) and stops unless `--force`.
 - OpenSearch keeps its default disk watermarks (85% low, 90% high, 95%
   flood-stage, which makes indexes read-only). Keep the volume under 80% full.
-- Vectors cost about 8.4 KB each (see `docs/design/storage_sizing_and_ingest_baselines.md`
-  for per-1,000-image figures).
+- New projects store vectors on the Lucene k-NN engine. For the same 12,803 items the items
+  index measured 56 MiB on Lucene against 108 MiB on faiss: about 4.5 KiB per item against
+  8.6 KiB, whole documents included (`docs/PERFORMANCE.md`, "Lucene engine and
+  `ef_construction` 128 on the product stack"). A project created on an older build keeps
+  its faiss fields, so size it at the faiss figure. Source images are not in OpenSearch
+  and usually dominate the total.
+- To estimate disk for a large folder before you ingest it, follow the disk estimate in
+  [Ingest a large folder](../guides/ingest-large-folder.mdx).
 - Every container rotates its logs (`json-file`, 10 MB by 5 files).
 
 ## Where data lives and backups
@@ -79,11 +85,10 @@ see [GPU sizing](./gpu-sizing.mdx) and the plan it prints.
 | Crop cache | tmpfs, rebuilt on restart |
 
 `./openprocessor upgrade` backs up release files, `.env` and state to
-`backups/<UTC timestamp>/` first; it does not copy the OpenSearch volume. To
-protect the data itself, snapshot the install directory and the named volumes
-(for example `docker run --rm -v <project>_opensearch_data:/d -v "$PWD":/b alpine tar czf /b/os.tgz -C /d .`
-with the stack stopped) on your own schedule, and prune old `backups/` and
-`exports/` directories by age.
+`backups/<UTC timestamp>/` first; it does not copy the OpenSearch volume or `data/`.
+[Upgrade, repair and back up](../operations/upgrade-and-backup.mdx) has the
+volume backup and restore commands and the full table of what lives where. Prune old
+`backups/` and `exports/` directories by age.
 
 ## Documentation container
 
