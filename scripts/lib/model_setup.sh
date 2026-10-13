@@ -266,14 +266,11 @@ model_setup_group_outputs() {
 _ms_api() { dc run --rm --no-deps -T -w /app api "$@"; }
 _ms_triton() { dc run --rm --no-deps -T triton-server "$@"; }
 
-# The uint8 prefix constants: identical to PE_NORMALIZE in export/build_pe_trt.sh
-# (tests/installer/test_pe_uint8_build.py keeps them equal).
+# Same as PE_NORMALIZE in export/build_pe_trt.sh (a test keeps them equal).
 _MS_PE_NORMALIZE="--mean 0.5 0.5 0.5 --std 0.5 0.5 0.5"
 
-# _ms_pe_uint8_prepare: puts the uint8 input prefix in front of the (FP16-baked or
-# FP32) pe_image_encoder.build.onnx, then fails unless the result's input datatype
-# is the one models/pe_image_encoder/config.pbtxt declares. The FP16 bake keeps the
-# graph I/O float32, so the prefix always goes after it.
+# _ms_pe_uint8_prepare: uint8 input prefix after the FP16 bake (which keeps the I/O
+# float32), then fail unless the input datatype is the one config.pbtxt declares.
 _ms_pe_uint8_prepare() {
     # shellcheck disable=SC2086
     _ms_api python /app/export/uint8_input.py /app/models/pe_image_encoder.build.onnx \
