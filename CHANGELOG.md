@@ -267,6 +267,8 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   the model, the FP16 failure reason and the consequence, is recorded in `.install/precision.tsv`,
   marks the model group `degraded` (a re-run retries FP16) and shows under "Degraded precision" in
   `./openprocessor models status` and in the install summary.
+- `frontend/scripts/capture_docs_screenshots.py` no longer aborts after the first image when `--out` is
+  outside `frontend/` (it printed the path with `relative_to`, which raised `ValueError`).
 
 ## [0.5.0] - 2026-10-09
 
