@@ -9,6 +9,12 @@ The whole active-learning loop over the `/curation` API, in order. Every
 step works from `curl`; a frontend such as Cropwright drives the same
 routes. `API=http://localhost:4603` below.
 
+This page walks the full loop. You do not have to run all of it: detection only,
+detection with embeddings and clustering, and VLM-assisted labeling are different
+settings of the same stack. See [Pipeline modes](../guides/pipeline-modes.mdx) for
+which workers to start, what to switch off per project, and what the code cannot yet
+switch off.
+
 ## 0. Prerequisites
 
 1. Core stack up and the PE-Core encoders built (`make export-pe`).
@@ -103,6 +109,14 @@ logged; a dry run is never gated. `curation-cluster-refresh` calls
 auto-promote as each project's pool grows, so it promotes nothing until the
 audit clears the classes.
 
+:::caution Known issue: a gated promote stops the retrain
+The daemon treats the `409 audit_required` answer as a failure. It logs
+`auto_promote failed` and returns before it queues the centroid retrain, so a
+project with an unaudited promotable class stops refreshing its clusters until the
+audit passes. (issue to be filed) F3. See
+[Pipeline modes](../guides/pipeline-modes.mdx#4-known-issue-the-audit-gate-stops-the-retrain).
+:::
+
 ## 5. Label: VLM suggestions and review queues
 
 <Screenshot
@@ -111,8 +125,11 @@ audit clears the classes.
   caption="Review queue from GET /review/{tab} (captured from Cropwright, a frontend for this backend)"
 />
 
-- **VLM assist.** A project runs its active VLM endpoint, by default the
-  `env` endpoint from `OP_VLM_URL`/`OP_VLM_MODEL`. Run
+- **VLM assist.** A project runs its active VLM endpoint. A project that never
+  activated one runs the `env` endpoint from `OP_VLM_URL`/`OP_VLM_MODEL`, if those are
+  set, so `curation-vlm-worker` labels in every such project without being asked.
+  Switch a project off with `POST /vlm/endpoints/deactivate` (see
+  [VLM selection](../guides/vlm-selection.mdx#turn-the-vlm-off-for-a-project)). Run
   `auto_label/start?run_vlm=true`, label one cluster with
   `POST /vlm/label_cluster/{cluster_id}`, or let `curation-vlm-worker`
   suggest classes continuously. Register and activate other endpoints as
