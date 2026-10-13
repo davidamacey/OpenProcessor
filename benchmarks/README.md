@@ -1,6 +1,6 @@
 # Benchmarks
 
-This directory contains benchmarking tools and results for the Triton API.
+This directory contains benchmarking tools and results for OpenProcessor.
 
 ## Directory Structure
 

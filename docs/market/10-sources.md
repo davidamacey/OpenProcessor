@@ -3,7 +3,7 @@
 **Summary.** All external pages were accessed on 2026-10-04 through a fetch or search tool that
 returns summaries; figures are snapshots. Search-result summaries are secondary and marked.
 
-## OpenProcessor evidence (this repository, origin/main, v0.4.0)
+## OpenProcessor evidence (this repository, origin/main at the snapshot date, 2026-10-04)
 
 README.md (features, tiers, quick start, license); INSTALLATION.md (hardware, tiers, installer);
 docs/CURATION.md (import formats, export and training routes, regions, lock rule, keymaps);

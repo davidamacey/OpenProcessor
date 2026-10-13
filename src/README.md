@@ -1,4 +1,4 @@
-# Visual AI API - Source Code
+# OpenProcessor API - Source Code
 
 **Unified FastAPI service providing object detection, face recognition, visual search, and OCR through a single REST API.**
 
@@ -405,9 +405,9 @@ Settings managed via `config/settings.py` with environment variables:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `TRITON_URL` | `triton-server:8001` | Triton gRPC address |
-| `OPENSEARCH_URL` | `http://opensearch:4607` | OpenSearch REST address |
+| `OPENSEARCH_URL` | `http://opensearch:9200` | OpenSearch REST address |
 | `MAX_FILE_SIZE_MB` | `50` | Maximum upload size |
-| `SLOW_REQUEST_THRESHOLD_MS` | `1000` | Log slow requests |
+| `SLOW_REQUEST_THRESHOLD_MS` | `100` | Log slow requests |
 
 ---
 

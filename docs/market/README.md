@@ -4,7 +4,7 @@
 ingest, detect, cluster, label with a vision-language model (VLM), confirm by a person, train,
 compare, promote back to serving. This folder compares that loop against open-source annotation
 tools, commercial labeling platforms, foundation-model auto-labelers, curation tools and
-training/MLOps products. Written 2026-10-04 for OpenProcessor v0.4.0 and Cropwright 0.1.0.
+training/MLOps products. Written 2026-10-04 against the release current at that date.
 
 ## Contents
 
@@ -64,7 +64,7 @@ training/MLOps products. Written 2026-10-04 for OpenProcessor v0.4.0 and Cropwri
 
 - Product facts about OpenProcessor come from this repository (README, INSTALLATION.md,
   docs/CURATION.md, docs/PERFORMANCE.md, docs/VISION_AND_GOALS.md, LICENSE) at origin/main
-  for v0.4.0, plus Cropwright's public description. Evidence is cited by file in
+  at the snapshot date (2026-10-04), plus Cropwright's public description. Evidence is cited by file in
   [10-sources.md](10-sources.md).
 - Competitor facts come from vendor and GitHub pages and web search summaries fetched on
   2026-10-04. Page text was summarized by a tool, not read in a browser; star counts and
