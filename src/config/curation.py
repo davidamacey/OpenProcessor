@@ -256,9 +256,11 @@ class CurationConfig:
 
     # GPU ingest front end (#217): photos at or above the size gate are decoded once on the
     # GPU by the image_frontend Triton model, which also builds the detector letterbox, the PE
-    # squares, the blur sums and the crop JPEGs. Off by default: it changes the stored numerics
-    # once (nvJPEG decode), and smaller images stay on the CPU path, where they are faster.
-    ingest_gpu_frontend: bool = False
+    # squares, the blur sums and the crop JPEGs. On by default (the installer writes 0 for profiles
+    # whose card has no room for its ~8.5 GB): it changes the stored numerics once (nvJPEG
+    # decode), smaller images stay on the CPU path, and any failure to load or run it falls back
+    # to the CPU path per image.
+    ingest_gpu_frontend: bool = True
     ingest_gpu_min_megapixels: float = 3.0
 
     # --- Project-scoped fields (see PROJECT_SCOPED_FIELDS below and
