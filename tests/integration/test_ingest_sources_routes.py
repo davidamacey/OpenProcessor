@@ -261,3 +261,40 @@ def test_the_webhook_refuses_bad_bodies_and_sources_that_did_not_opt_in(
     assert not_json.status_code == 422
     missing = client.post(f'{BASE}/sources/src_nosuchsource/events', json={'Records': []})
     assert missing.status_code == 404
+
+
+def test_a_dispatcher_tick_drains_what_a_webhook_queued_and_a_quiet_watcher_makes_no_run(
+    client: TestClient, store: FakeObjectStore, opensearch: FakeOpenSearch
+) -> None:
+    from src.services.curation.bulk_ingest import dispatcher
+
+    hook = _create(client, name='hook', triggers={'webhook_enabled': True})
+    watcher = _create(
+        client,
+        name='watch',
+        s3={'bucket': 'imgs', 'prefix': 'in/empty/'},
+        triggers={'watch': {'enabled': True, 'interval_s': 10}},
+    )
+    refs = [store.ref('imgs', f'in/a{i}.jpg') for i in range(2)]
+    events = {'Records': [_event(r.key, r.etag) for r in refs]}
+    assert client.post(f'{BASE}/sources/{hook["source_id"]}/events', json=events).status_code == 202
+
+    async def tick() -> list[Any]:
+        return dispatcher.run_project_tick()
+
+    taken = client.portal.call(tick)
+    kinds = {(a.source_id, a.kind) for a in taken}
+    assert (hook['source_id'], 'drain') in kinds
+    assert (watcher['source_id'], 'poll') in kinds
+
+    runs = client.get(f'{BASE}/bulk').json()['items']
+    assert len(runs) == 1, 'the drain started a run; the quiet watcher started none'
+    run = _wait(client, runs[0]['run_id'])
+    assert run['status'] == 'completed', run
+    assert run['progress']['ingested'] == 2
+    assert len(opensearch.images) == 2
+    # The webhook source listed nothing: its work came from the events alone.
+    time.sleep(0.3)  # let the watcher's scan finish: it found nothing, so it makes no run
+    assert len(client.get(f'{BASE}/bulk').json()['items']) == 1
+    assert client.get(f'{BASE}/sources/{hook["source_id"]}').json()['scan']['last'] is None
+    assert client.get(f'{BASE}/sources/{hook["source_id"]}').json()['counts']['done'] == 2

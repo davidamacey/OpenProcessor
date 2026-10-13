@@ -279,24 +279,29 @@ class BulkIngestRun:
         iterator: Iterator[str] = iter_source_paths(self.source, should_stop=self._stopping)
         batch_size = self.options.batch_size
 
-        def take() -> tuple[list[str], int, int, bool]:
+        def take() -> tuple[list[str], list[str], int, bool]:
             chunk: list[str] = []
-            seen = skipped = 0
+            skipped: list[str] = []
+            seen = 0
             for path in iterator:
                 seen += 1
                 if path in done:
-                    skipped += 1
+                    skipped.append(path)
                     continue
                 chunk.append(path)
                 if len(chunk) >= batch_size:
-                    return chunk, seen, skipped, False
-            return chunk, seen, skipped, True
+                    return chunk, skipped, seen, False
+            return chunk, skipped, seen, True
 
         try:
             while not self._stopping():
-                chunk, seen, skipped, exhausted = await asyncio.to_thread(take)
+                chunk, skipped, seen, exhausted = await asyncio.to_thread(take)
                 self.discovered += seen
-                self.skipped += skipped
+                self.skipped += len(skipped)
+                if skipped and self.listener is not None:
+                    # Stored by an earlier attempt: a source that keeps its own record
+                    # settles them now (the attempt may have died before it could).
+                    await asyncio.to_thread(self.listener.on_done, skipped)
                 if chunk:
                     await queue.put(chunk)
                 if exhausted:

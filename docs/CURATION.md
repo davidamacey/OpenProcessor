@@ -954,6 +954,25 @@ How it behaves:
   types and every event that is not a creation, so one bucket-wide notification can feed
   several sources. Keep the endpoint on loopback or a trusted network: like the rest of
   the API it has no authentication.
+- **Watcher and schedule.** A source can poll (`triggers.watch`, `interval_s` at least 10)
+  and run on a cron schedule (`triggers.schedule.cron`, five fields in UTC). A poll scans
+  the bucket or folder into the queue on its own and starts a run only if something is
+  pending, so a quiet source makes no runs; a schedule fire always starts a run (scan, then
+  drain). A fire missed while the API was down is not replayed: the schedule resumes at its
+  next time. The local-folder watcher is the same code (a modification-time watermark;
+  a file changed in the last five seconds waits for the next pass so a copy in progress is
+  not read half written). `GET .../ingest/sources/{source_id}` reports `watch`
+  (`last_poll_at`, `next_poll_at`, `error`), `schedule` (`last_fire_at`, `next_fire_at`),
+  the scan's progress and the last run.
+- **The dispatcher.** One task in each API worker (`OP_INGEST_DISPATCH_S`, default 5
+  seconds; 0 turns every trigger off) acts per project under a file lock, so one worker
+  acts per tick. It also drains rows a webhook queued and resumes a run that a restart
+  interrupted; a cancelled run is left cancelled, a failed one waits five minutes. A scan
+  that fails (the store is unreachable, credentials are missing, the allow-list changed)
+  records its error under `watch.error` and backs off, doubling to ten minutes, while the
+  queue keeps what it has. Runs of the dispatcher send their batches to the API's own
+  address (`OP_API_LOOPBACK_URL`, default `http://127.0.0.1:8000`, the listen address inside
+  the container).
 - **Failures are per object.** A missing object (`gone`) or one over the size cap
   (`too_large`), or one that is not an image, is `dead` at once; a permission or
   network error (`forbidden`, `fetch_error`) is retried by later runs up to three
