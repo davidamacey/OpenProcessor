@@ -51,7 +51,7 @@ def function_from(path: Path, name: str, **namespace: Any):
     tree = ast.parse(path.read_text())
     node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name)
     ns: dict[str, Any] = dict(namespace)
-    exec(compile(ast.Module([node], []), str(path), 'exec'), ns)  # noqa: S102
+    exec(compile(ast.Module([node], []), str(path), 'exec'), ns)
     return ns[name]
 
 

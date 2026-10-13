@@ -17,7 +17,14 @@ import sys
 from pathlib import Path
 
 
-_ONNX_TO_TRITON = {1: 'TYPE_FP32', 2: 'TYPE_UINT8', 3: 'TYPE_INT8', 6: 'TYPE_INT32', 7: 'TYPE_INT64', 10: 'TYPE_FP16'}
+_ONNX_TO_TRITON = {
+    1: 'TYPE_FP32',
+    2: 'TYPE_UINT8',
+    3: 'TYPE_INT8',
+    6: 'TYPE_INT32',
+    7: 'TYPE_INT64',
+    10: 'TYPE_FP16',
+}
 
 
 def config_input_dtype(config_path: str | Path) -> str:

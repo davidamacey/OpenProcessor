@@ -6,11 +6,15 @@ from __future__ import annotations
 
 import re
 import shutil
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from installer_harness import REPO_ROOT
 from test_model_setup import LIB, ONNX_SHA, STAMP_STUBS, _installed_pe, _put_onnx, _stamp_row
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 NORMALIZE = '--mean 0.5 0.5 0.5 --std 0.5 0.5 0.5'
@@ -21,7 +25,9 @@ def _build_script(tmp_path: Path, *, fp16_fails: bool, check_fails: bool = False
     """The real `pe` group; every dc call is appended to calls.log."""
     _put_onnx(tmp_path)
     (tmp_path / 'models' / 'pe_image_encoder').mkdir(parents=True)
-    shutil.copy(REPO_ROOT / 'models/pe_image_encoder/config.pbtxt', tmp_path / 'models/pe_image_encoder')
+    shutil.copy(
+        REPO_ROOT / 'models/pe_image_encoder/config.pbtxt', tmp_path / 'models/pe_image_encoder'
+    )
     return (
         f'source {LIB}; OP_DIR="{tmp_path}"; mkdir -p "{tmp_path}/.install"; sleep() {{ :; }}; '
         f'triton_load_and_wait() {{ return 0; }}; {STAMP_STUBS} '
@@ -104,7 +110,9 @@ def _with_config(tmp_path: Path) -> None:
 def test_a_stamp_without_the_config_datatype_is_stale(tmp_path: Path, bash) -> None:
     prelude = _installed_pe(tmp_path, stamp=_stamp_row())  # flags: "flags", the pre-fix shape
     _with_config(tmp_path)
-    result = bash(prelude + 'model_setup_stamp_stale pe_image_encoder pytorch_models/pe_image_encoder.onnx')
+    result = bash(
+        prelude + 'model_setup_stamp_stale pe_image_encoder pytorch_models/pe_image_encoder.onnx'
+    )
     assert result.returncode == 0
     assert 'input datatype is not the config' in result.stdout
 
@@ -113,7 +121,9 @@ def test_a_stamp_with_the_config_datatype_is_current(tmp_path: Path, bash) -> No
     stamp = _stamp_row().replace('\tflags\n', f'\t{FLAGS_OK}\n')
     prelude = _installed_pe(tmp_path, stamp=stamp)
     _with_config(tmp_path)
-    result = bash(prelude + 'model_setup_stamp_stale pe_image_encoder pytorch_models/pe_image_encoder.onnx')
+    result = bash(
+        prelude + 'model_setup_stamp_stale pe_image_encoder pytorch_models/pe_image_encoder.onnx'
+    )
     assert result.returncode == 1
 
 
@@ -146,7 +156,12 @@ def _run_check(onnx_path: Path, config: Path):
     import sys
 
     return subprocess.run(
-        [sys.executable, str(REPO_ROOT / 'export/check_input_dtype.py'), str(onnx_path), str(config)],
+        [
+            sys.executable,
+            str(REPO_ROOT / 'export/check_input_dtype.py'),
+            str(onnx_path),
+            str(config),
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -168,8 +183,13 @@ def test_check_input_dtype_accepts_the_prefixed_onnx(tmp_path: Path) -> None:
 
     _float_onnx(tmp_path / 'f.onnx')
     subprocess.run(
-        [sys.executable, str(REPO_ROOT / 'export/uint8_input.py'), str(tmp_path / 'f.onnx'),
-         str(tmp_path / 'u.onnx'), *NORMALIZE.split()],
+        [
+            sys.executable,
+            str(REPO_ROOT / 'export/uint8_input.py'),
+            str(tmp_path / 'f.onnx'),
+            str(tmp_path / 'u.onnx'),
+            *NORMALIZE.split(),
+        ],
         check=True,
         capture_output=True,
     )
@@ -205,7 +225,9 @@ def test_every_uint8_tensorrt_config_has_a_known_builder() -> None:
 def test_each_uint8_engine_builder_applies_the_prefix(model: str) -> None:
     for rel in UINT8_BUILDERS[model]:
         text = (REPO_ROOT / rel).read_text()
-        assert re.search(r'uint8_input(\.py)?\b|add_uint8_input', text), f'{rel} never adds the uint8 input'
+        assert re.search(r'uint8_input(\.py)?\b|add_uint8_input', text), (
+            f'{rel} never adds the uint8 input'
+        )
 
 
 def test_dual_head_exporter_declares_uint8_and_applies_the_prefix() -> None:
@@ -217,7 +239,9 @@ def test_dual_head_exporter_declares_uint8_and_applies_the_prefix() -> None:
 # ---- #270: models install in a checkout without .install/state.json ----
 
 
-def test_models_install_in_a_checkout_without_state_json_does_not_exit_silently(shimmed, tmp_path) -> None:
+def test_models_install_in_a_checkout_without_state_json_does_not_exit_silently(
+    shimmed, tmp_path
+) -> None:
     checkout = tmp_path / 'checkout'
     (checkout / 'src').mkdir(parents=True)
     (checkout / 'src' / 'main.py').write_text('')
