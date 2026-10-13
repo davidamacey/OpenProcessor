@@ -2650,7 +2650,7 @@
             "type": "integer"
           },
           "concurrency": {
-            "default": 8,
+            "default": 16,
             "maximum": 32.0,
             "minimum": 1.0,
             "title": "Concurrency",

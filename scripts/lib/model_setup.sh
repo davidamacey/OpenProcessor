@@ -278,25 +278,59 @@ _ms_pe_trtexec() {
         --skipInference
 }
 
-# Per-model precision ledger (.install/precision.tsv: model, precision,
-# reason). "fp16" is a clean build; anything else is a recorded fallback that
-# model_setup_run_group reports loudly and `openprocessor models status`
-# lists, so a silent FP32 engine can never pass as the FP16 default.
+# Per-model precision ledger (.install/precision.tsv, tab separated:
+# model, precision, reason, tensorrt, compute_cap, onnx_sha256, flags). It is
+# also the engine build stamp: what was actually built, with which TensorRT,
+# for which GPU architecture, from which ONNX. "fp16" is a clean build;
+# anything else is a recorded fallback that model_setup_run_group reports
+# loudly and `openprocessor models status` lists, so a silent FP32 engine can
+# never pass as the FP16 default. A stamp that no longer matches the host
+# (another architecture, a re-exported ONNX, no row at all) makes the group
+# rebuild instead of being skipped as up to date.
 _ms_precision_file() {
     printf '%s' "${MODEL_SETUP_PRECISION_FILE:-${OP_DIR:?OP_DIR not set}/.install/precision.tsv}"
 }
 
-# _ms_record_precision MODEL PRECISION REASON
+# The PE engine's trtexec profile (_ms_pe_trtexec), recorded in its stamp.
+_MS_PE_FLAGS="min1/opt8/max32 336x336 workspace8G strongly-typed"
+_MS_PE_ONNX_REL="pytorch_models/pe_image_encoder.onnx"
+
+# _ms_compute_cap: compute capability of the lowest GPU id given to Triton.
+_ms_compute_cap() {
+    nvidia-smi --query-gpu=compute_cap --format=csv,noheader -i "${TRITON_GPU_ID:-0}" 2>/dev/null \
+        | head -n1 | tr -d '[:space:]'
+}
+
+# _ms_trt_version: the TensorRT build inside the Triton image (e.g. v110100).
+_ms_trt_version() {
+    _ms_triton trtexec --help 2>&1 | sed -n -E 's/.*TensorRT (v[0-9]+).*/\1/p' | head -n1
+}
+
+# _ms_onnx_sha256 REL_PATH: sha256 of an ONNX under OP_DIR, empty when absent.
+_ms_onnx_sha256() {
+    local f="${OP_DIR:?OP_DIR not set}/$1"
+    [[ -f "$f" ]] || return 0
+    sha256sum "$f" | cut -d' ' -f1
+}
+
+# _ms_record_precision MODEL PRECISION REASON [ONNX_REL FLAGS]
+# With an ONNX path and flags the row is a full build stamp.
 _ms_record_precision() {
     [[ "${OP_DRY_RUN:-0}" == "1" ]] && return 0
-    local model="$1" precision="$2" reason="${3//$'\t'/ }" f tmp
+    local model="$1" precision="$2" reason="${3//$'\t'/ }" onnx_rel="${4:-}" flags="${5:-}" f tmp
+    local trt="" cc="" sha=""
+    if [[ -n "$onnx_rel" ]]; then
+        trt="$(_ms_trt_version)"
+        cc="$(_ms_compute_cap)"
+        sha="$(_ms_onnx_sha256 "$onnx_rel")"
+    fi
     f="$(_ms_precision_file)"
     ( umask 077; mkdir -p "$(dirname "$f")" )
     tmp="$(mktemp "${f}.XXXXXX")"
     if [[ -f "$f" ]]; then
         awk -F'\t' -v m="$model" '$1 != m' "$f" > "$tmp"
     fi
-    printf '%s\t%s\t%s\n' "$model" "$precision" "$reason" >> "$tmp"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$model" "$precision" "$reason" "$trt" "$cc" "$sha" "$flags" >> "$tmp"
     chmod 600 "$tmp"
     mv -f "$tmp" "$f"
 }
@@ -307,7 +341,53 @@ model_setup_precision_report() {
     local f
     f="$(_ms_precision_file)"
     [[ -f "$f" ]] || return 0
-    awk -F'\t' '$2 != "fp16"' "$f"
+    awk -F'\t' -v OFS='\t' '$2 != "fp16" { print $1, $2, $3 }' "$f"
+}
+
+# model_setup_stamp_report: every recorded engine stamp, one line per model
+# ("model<TAB>precision<TAB>tensorrt<TAB>compute_cap<TAB>onnx_sha256_prefix").
+model_setup_stamp_report() {
+    local f
+    f="$(_ms_precision_file)"
+    [[ -f "$f" ]] || return 0
+    awk -F'\t' -v OFS='\t' '$4 != "" { print $1, $2, $4, $5, substr($6, 1, 12) }' "$f"
+}
+
+# model_setup_stamp_stale MODEL ONNX_REL: prints why and returns 0 when the
+# recorded stamp of MODEL no longer describes what this host would build
+# (no stamp, a fallback precision, another GPU architecture or another ONNX);
+# returns 1 when the engine is current. The TensorRT build is covered by the
+# Triton image digest that group_should_skip already compares.
+model_setup_stamp_stale() {
+    local model="$1" onnx_rel="$2" f row precision cc sha now_cc now_sha
+    f="$(_ms_precision_file)"
+    row="$(awk -F'\t' -v m="$model" '$1 == m' "$f" 2>/dev/null | tail -n1)"
+    if [[ -z "$row" ]]; then echo "no build stamp"; return 0; fi
+    precision="$(cut -f2 <<< "$row")"
+    cc="$(cut -f5 <<< "$row")"
+    sha="$(cut -f6 <<< "$row")"
+    if [[ "$precision" != fp16 ]]; then echo "built as ${precision}"; return 0; fi
+    if [[ -z "$sha" ]]; then echo "stamp has no ONNX hash"; return 0; fi
+    now_cc="$(_ms_compute_cap)"
+    if [[ -n "$now_cc" && "$cc" != "$now_cc" ]]; then
+        echo "built for compute capability ${cc:-unknown}, GPU is ${now_cc}"
+        return 0
+    fi
+    now_sha="$(_ms_onnx_sha256 "$onnx_rel")"
+    if [[ -n "$now_sha" && "$sha" != "$now_sha" ]]; then echo "ONNX changed since the build"; return 0; fi
+    return 1
+}
+
+# _ms_group_stamp_stale GROUP: logs and returns 0 when a stamped engine of the
+# group must be rebuilt. Only the PE engine carries a stamp today.
+_ms_group_stamp_stale() {
+    local why
+    [[ "$1" == pe ]] || return 1
+    if why="$(model_setup_stamp_stale pe_image_encoder "$_MS_PE_ONNX_REL")"; then
+        log_info "group $1: engine stamp is stale (${why}), rebuilding"
+        return 0
+    fi
+    return 1
 }
 
 # _ms_warn_if_degraded GROUP: prints a warning per fallback-precision model of
@@ -351,7 +431,7 @@ _ms_pe_build_engine() {
         rm -f "$raw"
         cat "$attempt_log"
         _ms_api rm -f /app/models/pe_image_encoder.build.onnx
-        _ms_record_precision pe_image_encoder fp16 ""
+        _ms_record_precision pe_image_encoder fp16 "" "$_MS_PE_ONNX_REL" "$_MS_PE_FLAGS"
         return 0
     fi
     ( umask 077; model_setup_redact < "$raw" > "$attempt_log" )
@@ -363,7 +443,7 @@ _ms_pe_build_engine() {
     _ms_api cp /app/pytorch_models/pe_image_encoder.onnx /app/models/pe_image_encoder.build.onnx
     if _ms_pe_trtexec pe_image_encoder.build.onnx; then
         _ms_api rm -f /app/models/pe_image_encoder.build.onnx
-        _ms_record_precision pe_image_encoder fp32_fallback "FP16 build failed: ${reason}"
+        _ms_record_precision pe_image_encoder fp32_fallback "FP16 build failed: ${reason}" "$_MS_PE_ONNX_REL" "$_MS_PE_FLAGS"
         return 0
     fi
     return 1
@@ -473,6 +553,7 @@ model_setup_run_group() {
     # A degraded group (fallback precision) is never "up to date": re-running
     # retries the preferred precision.
     if [[ -n "$outputs" ]] && [[ "$(model_setup_group_status "$group")" != degraded ]] \
+        && ! _ms_group_stamp_stale "$group" \
         && group_should_skip "$outputs" "$models" "$state" "${MODEL_SETUP_TRITON_DIGEST:-}"; then
         log_info "group ${group}: up to date, skipped"
         _ms_record "$group" skipped 0
