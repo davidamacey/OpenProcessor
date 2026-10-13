@@ -125,7 +125,7 @@ async def performance_middleware(request: Request, call_next):
 Automatic request timing and slow request detection:
 
 ```python
-SLOW_REQUEST_THRESHOLD_MS = 100  # Log requests slower than this
+slow_request_threshold_ms = 100  # settings value; log requests slower than this
 
 @app.middleware("http")
 async def performance_middleware(request: Request, call_next):
@@ -137,7 +137,7 @@ async def performance_middleware(request: Request, call_next):
     response.headers["X-Process-Time"] = f"{duration_ms:.2f}ms"
 
     # Log slow requests
-    if duration_ms > SLOW_REQUEST_THRESHOLD_MS:
+    if duration_ms > settings.slow_request_threshold_ms:
         logger.warning(f"Slow request: {request.url.path} took {duration_ms:.2f}ms")
 
     return response
@@ -3519,9 +3519,10 @@ Current: **100ms** (logs requests slower than this)
 
 **To adjust**:
 
-Edit `src/main.py`:
-```python
-SLOW_REQUEST_THRESHOLD_MS = 50  # More aggressive logging
+Set it in `.env` (the setting is `slow_request_threshold_ms` in `src/config/settings.py`;
+environment names are case-insensitive):
+```bash
+slow_request_threshold_ms=50  # More aggressive logging
 ```
 
 **Useful for**:
