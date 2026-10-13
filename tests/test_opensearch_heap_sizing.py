@@ -169,4 +169,4 @@ def test_env_template_documents_heap_and_shard_knob() -> None:
     text = (REPO_ROOT / 'env.template').read_text()
     assert re.search(r'^OPENSEARCH_HEAP=2g$', text, re.MULTILINE)
     assert re.search(r'^# OP_SHARDS_PER_HEAP_GB=20$', text, re.MULTILINE)
-    assert 'RAM/8' in text
+    assert 'RAM/2, 2-30 GB' in text
