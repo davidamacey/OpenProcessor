@@ -6,6 +6,9 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from src.routers.curation._ingest_sources_models import (
+    S3Location,  # noqa: TC001 - pydantic field type
+)
 from src.services.curation.bulk_ingest.limits import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_CONCURRENCY,
@@ -17,18 +20,22 @@ from src.services.curation.bulk_ingest.limits import (
 BulkIngestStatus = Literal[
     'queued', 'running', 'completed', 'completed_with_errors', 'failed', 'cancelled', 'interrupted'
 ]
-BulkSourceKind = Literal['folder', 'manifest']
+BulkSourceKind = Literal['folder', 'manifest', 'queue']
 
 
 class BulkIngestRequest(BaseModel):
-    """Exactly one of ``folder`` and ``manifest``: a path inside the API container,
-    under a configured source root. Starting a source whose earlier run was
-    interrupted, cancelled or finished with failures resumes that run."""
+    """Exactly one of ``folder`` and ``manifest`` (a path inside the API container,
+    under a configured source root), ``s3`` (a bucket and prefix inside
+    ``OP_S3_ALLOWED``) or ``source_id`` (a registered ingest source, whose own options
+    apply). Starting a source whose earlier run was interrupted, cancelled or finished
+    with failures resumes that run."""
 
     model_config = ConfigDict(extra='forbid')
 
     folder: str | None = Field(default=None, min_length=1)
     manifest: str | None = Field(default=None, min_length=1)
+    s3: S3Location | None = None
+    source_id: str | None = Field(default=None, min_length=1, max_length=64)
     source: str = Field(default='bulk_ingest', min_length=1, max_length=120)
     extensions: list[str] | None = Field(default=None, max_length=32)
     batch_size: int = Field(default=DEFAULT_BATCH_SIZE, ge=1, le=MAX_BATCH_SIZE)
@@ -36,8 +43,9 @@ class BulkIngestRequest(BaseModel):
 
     @model_validator(mode='after')
     def _exactly_one_source(self) -> Self:
-        if (self.folder is None) == (self.manifest is None):
-            raise ValueError('send exactly one of folder and manifest')
+        chosen = [self.folder, self.manifest, self.s3, self.source_id]
+        if sum(x is not None for x in chosen) != 1:
+            raise ValueError('send exactly one of folder, manifest, s3 and source_id')
         return self
 
 

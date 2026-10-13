@@ -886,6 +886,68 @@ Fetch public sample data with `make sample-coco`, `make sample-coco-cars` or
 `make sample-plates`; `make sample-clean` removes it. On an installed stack,
 `./openprocessor sample coco` fetches the COCO sample.
 
+### Ingest sources and S3
+
+Every way of getting images in ends in the same pipeline. A request to `/ingest`,
+`/ingest/batch` or `/ingest/upload`, a bulk run over a folder or manifest, and an S3
+bucket all reach `ingest_batch`, so decode routing, the coalesced writer, the lock
+rule and project isolation are the same for each.
+
+**S3 and S3-compatible stores (MinIO and others).** Set `OP_S3_ALLOWED` to the
+`bucket` or `bucket/prefix` entries the deployment may read; with it empty S3 is off
+and every S3 route answers 503 `s3_not_configured`. A source or request outside the
+list is refused 422 `s3_not_allowed`, at creation and again at use. `OP_S3_ENDPOINT_URL`,
+`OP_S3_REGION` and `OP_S3_PATH_STYLE` point at a non-AWS store. Credentials are never
+part of a request or a stored source: boto3 finds them in the `api` container's
+environment (`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, or
+`AWS_SHARED_CREDENTIALS_FILE` naming a mounted secret file) or from an instance or task
+role. Give them read-only access to the listed prefixes.
+
+| Purpose | Route |
+|---|---|
+| List sources, with trigger and queue status | `GET /curation/projects/{project}/ingest/sources` |
+| Register a source (a bucket/prefix or a folder, options, triggers) | `POST /curation/projects/{project}/ingest/sources` |
+| Read, change or remove one | `GET`, `PATCH`, `DELETE /curation/projects/{project}/ingest/sources/{source_id}` |
+| Scan the source and ingest what is new, now | `POST /curation/projects/{project}/ingest/sources/{source_id}/run` |
+| Put objects that gave up back in the queue | `POST /curation/projects/{project}/ingest/sources/{source_id}/retry-dead` |
+| Fetch and ingest named objects (what the runner calls for S3) | `POST /curation/projects/{project}/ingest/objects` |
+| A time-limited download URL of an original | `POST /curation/projects/{project}/ingest/objects/presign` |
+
+A one-shot bucket ingest is the same mechanism: `POST .../ingest/bulk` with
+`{"s3": {"bucket": "...", "prefix": "..."}}` (or `scripts/curation/bulk_ingest.py
+--s3 s3://bucket/prefix`) finds or creates a trigger-less source for that bucket and
+prefix and runs it, so starting it again resumes or ingests only what is new.
+
+How it behaves:
+
+- **One queue per source.** Whatever notices a new object (a scan, a webhook event,
+  a manual run) inserts `(key, etag)` rows into the source's durable queue (SQLite on
+  the shared jobs volume, under the project's bulk-ingest directory); a bulk run of
+  kind `queue` drains the pending rows. A replayed event or a repeated scan queues
+  nothing twice.
+- **Staged, with the original referenced.** The API fetches an object into memory,
+  writes it once, content-addressed, under the project's upload root (the same as
+  `/ingest/upload`, so thumbnails, crops and the region worker keep working) and
+  stores the reference of the original as the image's `source_identifier`:
+  `s3://bucket/key#etag=...&version=...`. An object whose exact reference is already
+  stored is answered `duplicate` without a download; the same bytes under another key
+  are caught by the content hash as before. `.../objects/presign` turns a stored
+  reference into a download URL of the original (inside the allow-list only).
+- **Bounded.** Encoded bytes held by fetches are bounded per API process
+  (`OP_S3_INFLIGHT_MB`, with `OP_S3_MAX_OBJECT_MB` as the per-object cap and
+  `OP_S3_FETCH_WORKERS` threads), reserved per batch before any download so batches
+  cannot deadlock each other; decoded pixels stay under the existing ingest gate.
+- **Listing at scale.** A scan lists ObjectsV2 pages (1000 keys), one worker per
+  top-level sub-prefix (`OP_S3_LIST_WORKERS`), and writes its position after every page,
+  so a restart resumes instead of relisting. A finished pass moves a watermark (the
+  pass start minus two minutes); the next pass queues objects modified since. A very
+  large flat bucket is better served by the webhook than by relisting.
+- **Failures are per object.** A missing object (`gone`) or one over the size cap
+  (`too_large`), or one that is not an image, is `dead` at once; a permission or
+  network error (`forbidden`, `fetch_error`) is retried by later runs up to three
+  attempts. Each failure appears in the run's failure list with its reason and in the
+  source's `errors`; `retry-dead` queues them again.
+
 ## Dataset import
 
 Bring an already-labeled YOLO or COCO dataset, or an OpenProcessor export,

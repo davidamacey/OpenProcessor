@@ -23,14 +23,30 @@ from src.routers.curation._common import (
     router,
 )
 from src.routers.curation.ingest import _batch_response, _get_ingest_service
-from src.services.curation.ingest_models import ERROR_KIND_UNSUPPORTED_TYPE
-from src.services.curation.open_vocab_ingest import schedule_open_vocab_after_ingest
-from src.utils.stage_timing import stage_timer
+from src.services.curation.upload_ingest import (
+    EarlyFailure,
+    PayloadTooLargeError,
+    StagedEntry,
+    stage_and_ingest,
+)
 
 
 # Kept as the interim fallback default; the served source of truth
 # is GET /ingest/config, which reads CurationConfig.upload_max_images_per_request.
 MAX_UPLOAD_IMAGES = 128
+
+
+def early_failures_to_wire(early: list[EarlyFailure]) -> list[IngestImageResponse]:
+    return [
+        IngestImageResponse(
+            status='failed',
+            image_path=f.identifier,
+            error=f.error,
+            error_kind=f.error_kind,
+            source_identifier=f.identifier,
+        )
+        for f in early
+    ]
 
 
 def _parse_upload_paths(image_paths: str | None, uploads: list[UploadFile]) -> list[str]:
@@ -109,8 +125,6 @@ async def curation_ingest_upload(
     uploaded bytes, not by re-opening the path.
     """
     from src.config import get_curation_config
-    from src.services.curation.image_serving import persist_uploaded_bytes
-    from src.services.curation.ingest import _imohash_bytes
 
     cfg = get_curation_config()
     if not images:
@@ -127,72 +141,26 @@ async def curation_ingest_upload(
     await _ensure_indexes(opensearch)
     service = await _get_ingest_service(opensearch, registry)
 
-    data: list[bytes] = []
-    kept_paths: list[str] = []
-    source_identifiers: list[str | None] = []
-    failed_early: list[IngestImageResponse] = []
-    total_bytes = 0
-    for upload, path in zip(images, paths, strict=True):
-        payload = await upload.read()
-        if not payload:
-            failed_early.append(
-                IngestImageResponse(
-                    status='failed',
-                    image_path=path,
-                    error='empty upload',
-                    error_kind='empty',
-                    source_identifier=path,
-                )
-            )
-            continue
-        ext = _upload_extension(path, upload)
-        if ext not in cfg.upload_accepted_extensions:
-            failed_early.append(
-                IngestImageResponse(
-                    status='failed',
-                    image_path=path,
-                    error=(
-                        f'{ext!r} is not an accepted extension '
-                        f'({", ".join(cfg.upload_accepted_extensions)})'
-                    ),
-                    error_kind=ERROR_KIND_UNSUPPORTED_TYPE,
-                    source_identifier=path,
-                )
-            )
-            continue
-        total_bytes += len(payload)
-        if total_bytes > cfg.upload_max_bytes_per_request:
-            raise HTTPException(
-                status_code=413,
-                detail=(
-                    f'total upload bytes exceeds the per-request limit of '
-                    f'{cfg.upload_max_bytes_per_request} bytes'
-                ),
-            )
-        image_hash = _imohash_bytes(payload)
-        with stage_timer('persist', nbytes=len(payload)):
-            persisted = persist_uploaded_bytes(
-                payload, imohash=image_hash, extension=ext, config=cfg
-            )
-        data.append(payload)
-        kept_paths.append(str(persisted))
-        source_identifiers.append(path)
-
-    batch_result = (
-        await service.ingest_batch(
-            data,
-            kept_paths,
-            source=source,
-            source_identifiers=source_identifiers,
-            ingest_run_id=run_id,
-        )
-        if data
-        else None
-    )
-    if batch_result is not None:
-        await schedule_open_vocab_after_ingest(
+    entries = [
+        StagedEntry(path, await upload.read(), _upload_extension(path, upload))
+        for upload, path in zip(images, paths, strict=True)
+    ]
+    try:
+        batch_result, early = await stage_and_ingest(
             opensearch,
             service,
-            [r.image_id for r in batch_result.results if r.status == 'success' and r.image_id],
+            entries,
+            config=cfg,
+            source=source,
+            run_id=run_id,
+            max_total_bytes=cfg.upload_max_bytes_per_request,
         )
-    return _batch_response(batch_result, failed_early)
+    except PayloadTooLargeError:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f'total upload bytes exceeds the per-request limit of '
+                f'{cfg.upload_max_bytes_per_request} bytes'
+            ),
+        ) from None
+    return _batch_response(batch_result, early_failures_to_wire(early))

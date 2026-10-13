@@ -33,7 +33,9 @@ import src.routers.curation.export_single_class
 import src.routers.curation.health
 import src.routers.curation.ingest
 import src.routers.curation.ingest_bulk
+import src.routers.curation.ingest_objects
 import src.routers.curation.ingest_policy
+import src.routers.curation.ingest_sources
 import src.routers.curation.ingest_upload
 import src.routers.curation.keymap
 import src.routers.curation.label_undo

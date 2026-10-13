@@ -136,6 +136,7 @@ def route_params(slug: str) -> dict[str, str]:
         'revision': '1',
         'import_id': 'imp_20260101T000000_0123abcd',
         'run_id': 'bulk_20260101T000000_0123abcd',
+        'source_id': 'src_unknown00',
     }
 
 
@@ -211,6 +212,17 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/datasets/imports/{import_id}/cancel'): {},
         ('POST', '/ingest/bulk'): {'json': {'folder': f'{source}/no-such-folder'}},
         ('POST', '/ingest/bulk/{run_id}/cancel'): {},
+        ('POST', '/ingest/sources'): {
+            'json': {'name': 'sweep', 'backend': 'folder', 'folder': f'{source}/no-such-folder'}
+        },
+        ('PATCH', '/ingest/sources/{source_id}'): {'json': {'name': 'sweep'}},
+        ('DELETE', '/ingest/sources/{source_id}'): {},
+        ('POST', '/ingest/sources/{source_id}/run'): {},
+        ('POST', '/ingest/sources/{source_id}/retry-dead'): {},
+        ('POST', '/ingest/objects'): {'json': {'items': [{'bucket': 'sweep', 'key': 'k.jpg'}]}},
+        ('POST', '/ingest/objects/presign'): {
+            'json': {'source_identifier': 's3://sweep/k.jpg#etag=e'}
+        },
         ('POST', '/datasets/imports/{import_id}/resume'): {},
         ('POST', '/datasets/imports/{import_id}/undo'): {'json': {'dry_run': True}},
         ('POST', '/datasets/uploads'): {
@@ -370,6 +382,19 @@ NO_WRITE: dict[tuple[str, str], str] = {
         'itself is covered in tests/integration/test_bulk_ingest_routes.py'
     ),
     ('POST', '/ingest/bulk/{run_id}/cancel'): 'the sweep has no live run to cancel',
+    ('POST', '/ingest/sources'): 'the sweep names no existing folder, so the source is refused',
+    ('PATCH', '/ingest/sources/{source_id}'): 'the sweep has no such source (404)',
+    ('DELETE', '/ingest/sources/{source_id}'): 'the sweep has no such source (404)',
+    ('POST', '/ingest/sources/{source_id}/run'): 'the sweep has no such source (404)',
+    ('POST', '/ingest/sources/{source_id}/retry-dead'): 'the sweep has no such source (404)',
+    (
+        'POST',
+        '/ingest/objects',
+    ): 'the sweep names a bucket outside OP_S3_ALLOWED, so it is refused first (422)',
+    (
+        'POST',
+        '/ingest/objects/presign',
+    ): 'the sweep names a bucket outside OP_S3_ALLOWED (422); it writes nothing',
     ('POST', '/events/publish'): 'publishes an event (checked separately), writes no data',
     ('POST', '/ingest/path_lookup'): 'read-only lookup under POST',
     (
@@ -1461,6 +1486,7 @@ def leak_env(
         'TRITON_MODEL_REPO': 'models',
     }.items():
         monkeypatch.setenv(f'OP_{name}', str(tmp_path / sub))
+    monkeypatch.setenv('OP_S3_ALLOWED', 'sweep-allowed-bucket')
     monkeypatch.setenv('OP_EVENT_BUS', 'process')
     # `ensure_fresh` skips the config read while the snapshot is under a
     # second old, so how many `configs` operations a route issues would

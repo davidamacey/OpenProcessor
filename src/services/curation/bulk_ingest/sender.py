@@ -13,6 +13,7 @@ import httpx
 from prometheus_client.parser import text_string_to_metric_families
 
 from src.services.curation.bulk_ingest.limits import BATCH_REQUEST_TIMEOUT_S, MAX_SENDER_CONNECTIONS
+from src.services.curation.bulk_ingest.object_store import ObjectRef
 
 
 _STAGE_METRIC = 'op_pipeline_stage_seconds'
@@ -44,14 +45,20 @@ class HttpBatchSender:
         self._client = client
         self._batch_url = f'{api_prefix}/projects/{project}/ingest/batch'
 
+    def _request_body(self, paths: list[str], source: str, run_id: str) -> dict[str, Any]:
+        return {
+            'items': [{'path': p, 'source': source} for p in paths],
+            'ingest_run_id': run_id,
+        }
+
+    def _answer(self, body: dict[str, Any], paths: list[str]) -> dict[str, Any]:  # noqa: ARG002
+        return body
+
     async def post_batch(self, paths: list[str], *, source: str, run_id: str) -> dict[str, Any]:
         try:
             resp = await self._client.post(
                 self._batch_url,
-                json={
-                    'items': [{'path': p, 'source': source} for p in paths],
-                    'ingest_run_id': run_id,
-                },
+                json=self._request_body(paths, source, run_id),
                 timeout=BATCH_REQUEST_TIMEOUT_S,
             )
         except httpx.HTTPError as exc:
@@ -59,7 +66,7 @@ class HttpBatchSender:
         if resp.status_code != 200:
             raise BatchRequestError(f'HTTP {resp.status_code}: {resp.text[:250]}')
         body: dict[str, Any] = resp.json()
-        return body
+        return self._answer(body, paths)
 
     async def stage_seconds(self) -> dict[str, float]:
         try:
@@ -78,13 +85,62 @@ class HttpBatchSender:
         await self._client.aclose()
 
 
-def loopback_sender(server: tuple[str, int], *, api_prefix: str, project: str) -> HttpBatchSender:
+class ObjectBatchSender(HttpBatchSender):
+    """The same sender for ``s3://`` references: ``POST .../ingest/objects``. The
+    route may store an object under the etag it actually fetched, so each result is
+    matched back to the reference the run sent by bucket and key."""
+
+    def __init__(self, client: httpx.AsyncClient, *, api_prefix: str, project: str) -> None:
+        super().__init__(client, api_prefix=api_prefix, project=project)
+        self._batch_url = f'{api_prefix}/projects/{project}/ingest/objects'
+
+    def _request_body(self, paths: list[str], source: str, run_id: str) -> dict[str, Any]:
+        items = []
+        for uri in paths:
+            ref = ObjectRef.parse(uri)
+            item: dict[str, Any] = {'bucket': ref.bucket, 'key': ref.key, 'etag': ref.etag}
+            if ref.version_id:
+                item['version_id'] = ref.version_id
+            items.append(item)
+        return {'items': items, 'source': source, 'ingest_run_id': run_id}
+
+    def _answer(self, body: dict[str, Any], paths: list[str]) -> dict[str, Any]:
+        sent = {}
+        for uri in paths:
+            ref = ObjectRef.parse(uri)
+            sent[(ref.bucket, ref.key)] = uri
+        for result in body.get('results', []):
+            identifier = result.get('source_identifier') or result.get('image_path') or ''
+            try:
+                ref = ObjectRef.parse(identifier)
+            except ValueError:
+                continue
+            result['image_path'] = sent.get((ref.bucket, ref.key), result.get('image_path'))
+        return body
+
+
+def make_client(base_url: str) -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        base_url=base_url, limits=httpx.Limits(max_connections=MAX_SENDER_CONNECTIONS)
+    )
+
+
+def url_sender(
+    base_url: str, *, api_prefix: str, project: str, objects: bool = False
+) -> HttpBatchSender:
+    """A sender aimed at an explicit API address (the dispatcher has no request to take
+    the listening socket from)."""
+    cls = ObjectBatchSender if objects else HttpBatchSender
+    return cls(make_client(base_url), api_prefix=api_prefix, project=project)
+
+
+def loopback_sender(
+    server: tuple[str, int], *, api_prefix: str, project: str, objects: bool = False
+) -> HttpBatchSender:
     """A sender aimed at the API process's own listening socket (``server`` is the
     ASGI scope's ``(host, port)``)."""
     host, port = server
     netloc = f'[{host}]' if ':' in host else host
-    client = httpx.AsyncClient(
-        base_url=f'http://{netloc}:{port}',
-        limits=httpx.Limits(max_connections=MAX_SENDER_CONNECTIONS),
+    return url_sender(
+        f'http://{netloc}:{port}', api_prefix=api_prefix, project=project, objects=objects
     )
-    return HttpBatchSender(client, api_prefix=api_prefix, project=project)

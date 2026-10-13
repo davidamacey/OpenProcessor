@@ -2640,7 +2640,7 @@
       },
       "BulkIngestRequest": {
         "additionalProperties": false,
-        "description": "Exactly one of ``folder`` and ``manifest``: a path inside the API container,\nunder a configured source root. Starting a source whose earlier run was\ninterrupted, cancelled or finished with failures resumes that run.",
+        "description": "Exactly one of ``folder`` and ``manifest`` (a path inside the API container,\nunder a configured source root), ``s3`` (a bucket and prefix inside\n``OP_S3_ALLOWED``) or ``source_id`` (a registered ingest source, whose own options\napply). Starting a source whose earlier run was interrupted, cancelled or finished\nwith failures resumes that run.",
         "properties": {
           "batch_size": {
             "default": 16,
@@ -2695,12 +2695,35 @@
             ],
             "title": "Manifest"
           },
+          "s3": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/S3Location"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "source": {
             "default": "bulk_ingest",
             "maxLength": 120,
             "minLength": 1,
             "title": "Source",
             "type": "string"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
           }
         },
         "title": "BulkIngestRequest",
@@ -2861,7 +2884,8 @@
           "kind": {
             "enum": [
               "folder",
-              "manifest"
+              "manifest",
+              "queue"
             ],
             "title": "Kind",
             "type": "string"
@@ -4468,6 +4492,13 @@
               "bulk_ingest_not_found",
               "bulk_ingest_busy",
               "bulk_ingest_invalid_source",
+              "s3_not_configured",
+              "s3_not_allowed",
+              "invalid_s3_event",
+              "ingest_source_not_found",
+              "ingest_source_exists",
+              "ingest_source_invalid",
+              "webhook_disabled",
               "import_resumable",
               "dataset_changed",
               "import_not_resumable",
@@ -9260,6 +9291,44 @@
         "title": "IngestImageResponse",
         "type": "object"
       },
+      "IngestObjectsRequest": {
+        "additionalProperties": false,
+        "description": "The server fetches each object (credentials come from the deployment, never\nfrom the request) and ingests it as an upload would be: staged under the\nproject's upload root, the object reference stored as ``source_identifier``.",
+        "properties": {
+          "ingest_run_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingest Run Id"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ObjectItem"
+            },
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          },
+          "source": {
+            "default": "s3",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "IngestObjectsRequest",
+        "type": "object"
+      },
       "IngestPolicy": {
         "additionalProperties": false,
         "properties": {
@@ -9504,6 +9573,381 @@
           "observed_at"
         ],
         "title": "IngestRegionDrainResponse",
+        "type": "object"
+      },
+      "IngestSourceList": {
+        "properties": {
+          "default_batch_size": {
+            "title": "Default Batch Size",
+            "type": "integer"
+          },
+          "default_concurrency": {
+            "title": "Default Concurrency",
+            "type": "integer"
+          },
+          "default_watch_interval_s": {
+            "title": "Default Watch Interval S",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IngestSourceStatus"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "min_watch_interval_s": {
+            "title": "Min Watch Interval S",
+            "type": "integer"
+          },
+          "s3_allowed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "S3 Allowed",
+            "type": "array"
+          },
+          "s3_configured": {
+            "title": "S3 Configured",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "s3_configured",
+          "s3_allowed",
+          "default_batch_size",
+          "default_concurrency",
+          "default_watch_interval_s",
+          "min_watch_interval_s"
+        ],
+        "title": "IngestSourceList",
+        "type": "object"
+      },
+      "IngestSourcePatch": {
+        "additionalProperties": false,
+        "description": "Changes to the options and triggers; the location of a source never changes.",
+        "properties": {
+          "batch_size": {
+            "anyOf": [
+              {
+                "maximum": 64.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Size"
+          },
+          "concurrency": {
+            "anyOf": [
+              {
+                "maximum": 32.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concurrency"
+          },
+          "extensions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extensions"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "triggers": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TriggersWire"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "IngestSourcePatch",
+        "type": "object"
+      },
+      "IngestSourceRequest": {
+        "additionalProperties": false,
+        "description": "Exactly one of ``s3`` and ``folder``, matching ``backend``.",
+        "properties": {
+          "backend": {
+            "enum": [
+              "s3",
+              "folder"
+            ],
+            "title": "Backend",
+            "type": "string"
+          },
+          "batch_size": {
+            "default": 16,
+            "maximum": 64.0,
+            "minimum": 1.0,
+            "title": "Batch Size",
+            "type": "integer"
+          },
+          "concurrency": {
+            "default": 8,
+            "maximum": 32.0,
+            "minimum": 1.0,
+            "title": "Concurrency",
+            "type": "integer"
+          },
+          "extensions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extensions"
+          },
+          "folder": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "s3": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/S3Location"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "default": "source",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          },
+          "triggers": {
+            "$ref": "#/components/schemas/TriggersWire"
+          }
+        },
+        "required": [
+          "name",
+          "backend"
+        ],
+        "title": "IngestSourceRequest",
+        "type": "object"
+      },
+      "IngestSourceStatus": {
+        "properties": {
+          "backend": {
+            "enum": [
+              "s3",
+              "folder"
+            ],
+            "title": "Backend",
+            "type": "string"
+          },
+          "batch_size": {
+            "title": "Batch Size",
+            "type": "integer"
+          },
+          "blocked_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "s3_not_configured",
+                  "s3_not_allowed",
+                  "invalid_source",
+                  "project_run_live"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocked Reason"
+          },
+          "can_retry_dead": {
+            "title": "Can Retry Dead",
+            "type": "boolean"
+          },
+          "can_run": {
+            "title": "Can Run",
+            "type": "boolean"
+          },
+          "concurrency": {
+            "title": "Concurrency",
+            "type": "integer"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/SourceCounts"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/SourceObjectError"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "extensions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Extensions",
+            "type": "array"
+          },
+          "folder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceRunSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location": {
+            "title": "Location",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "s3": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/S3Location"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scan": {
+            "$ref": "#/components/schemas/SourceScanStatus"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/SourceScheduleStatus"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          },
+          "triggers": {
+            "$ref": "#/components/schemas/TriggersWire"
+          },
+          "watch": {
+            "$ref": "#/components/schemas/SourceWatchStatus"
+          },
+          "webhook": {
+            "$ref": "#/components/schemas/SourceWebhookStatus"
+          }
+        },
+        "required": [
+          "project",
+          "source_id",
+          "name",
+          "backend",
+          "location",
+          "extensions",
+          "source",
+          "batch_size",
+          "concurrency",
+          "triggers",
+          "created_at",
+          "counts",
+          "scan",
+          "watch",
+          "schedule",
+          "webhook",
+          "can_run",
+          "can_retry_dead"
+        ],
+        "title": "IngestSourceStatus",
         "type": "object"
       },
       "IngestStatusResponse": {
@@ -11940,6 +12384,34 @@
         "title": "LabeledStats",
         "type": "object"
       },
+      "LastScan": {
+        "properties": {
+          "finished_at": {
+            "title": "Finished At",
+            "type": "number"
+          },
+          "listed": {
+            "title": "Listed",
+            "type": "integer"
+          },
+          "pages": {
+            "title": "Pages",
+            "type": "integer"
+          },
+          "queued": {
+            "title": "Queued",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "finished_at",
+          "pages",
+          "listed",
+          "queued"
+        ],
+        "title": "LastScan",
+        "type": "object"
+      },
       "LatencyStats": {
         "properties": {
           "mean": {
@@ -12891,6 +13363,101 @@
           "name"
         ],
         "title": "NotCoveredClass",
+        "type": "object"
+      },
+      "ObjectItem": {
+        "additionalProperties": false,
+        "description": "One object version. ``etag`` and ``version_id`` pin the version when known;\n``size`` (bytes) saves a HEAD request.",
+        "properties": {
+          "bucket": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Bucket",
+            "type": "string"
+          },
+          "etag": {
+            "default": "",
+            "maxLength": 256,
+            "title": "Etag",
+            "type": "string"
+          },
+          "key": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          }
+        },
+        "required": [
+          "bucket",
+          "key"
+        ],
+        "title": "ObjectItem",
+        "type": "object"
+      },
+      "ObjectPresignRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expires_in": {
+            "default": 900,
+            "maximum": 43200.0,
+            "minimum": 60.0,
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "source_identifier": {
+            "maxLength": 2048,
+            "minLength": 6,
+            "title": "Source Identifier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_identifier"
+        ],
+        "title": "ObjectPresignRequest",
+        "type": "object"
+      },
+      "ObjectPresignResponse": {
+        "properties": {
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires_in"
+        ],
+        "title": "ObjectPresignResponse",
         "type": "object"
       },
       "OcrBlock": {
@@ -21714,6 +22281,23 @@
         "title": "ResourceLink",
         "type": "object"
       },
+      "RetryDeadResult": {
+        "properties": {
+          "retried": {
+            "title": "Retried",
+            "type": "integer"
+          },
+          "source": {
+            "$ref": "#/components/schemas/IngestSourceStatus"
+          }
+        },
+        "required": [
+          "retried",
+          "source"
+        ],
+        "title": "RetryDeadResult",
+        "type": "object"
+      },
       "ReviewEmptyState": {
         "description": "Underlying-state flags a client uses to word ANY tab's\nzero-result state without a per-tab round trip -- the same signals\n``GET /review/{tab}``'s own ``empty_reason`` is derived from.",
         "properties": {
@@ -23308,6 +23892,46 @@
         "title": "RunsListResponse",
         "type": "object"
       },
+      "S3Location": {
+        "additionalProperties": false,
+        "properties": {
+          "bucket": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Bucket",
+            "type": "string"
+          },
+          "prefix": {
+            "default": "",
+            "maxLength": 1024,
+            "title": "Prefix",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bucket"
+        ],
+        "title": "S3Location",
+        "type": "object"
+      },
+      "ScheduleTriggerWire": {
+        "additionalProperties": false,
+        "properties": {
+          "cron": {
+            "default": "",
+            "maxLength": 120,
+            "title": "Cron",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "title": "ScheduleTriggerWire",
+        "type": "object"
+      },
       "ScoresComputeRequest": {
         "properties": {
           "scorers": {
@@ -24879,6 +25503,297 @@
         "title": "SourceBucket",
         "type": "object"
       },
+      "SourceCounts": {
+        "properties": {
+          "dead": {
+            "title": "Dead",
+            "type": "integer"
+          },
+          "done": {
+            "title": "Done",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "pending": {
+            "title": "Pending",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pending",
+          "done",
+          "failed",
+          "dead"
+        ],
+        "title": "SourceCounts",
+        "type": "object"
+      },
+      "SourceObjectError": {
+        "properties": {
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "error": {
+            "title": "Error",
+            "type": "string"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "failed",
+              "dead"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "etag",
+          "state",
+          "attempts",
+          "error"
+        ],
+        "title": "SourceObjectError",
+        "type": "object"
+      },
+      "SourceRunSummary": {
+        "properties": {
+          "duplicates": {
+            "title": "Duplicates",
+            "type": "integer"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "ingested": {
+            "title": "Ingested",
+            "type": "integer"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "status",
+          "ingested",
+          "duplicates",
+          "failed"
+        ],
+        "title": "SourceRunSummary",
+        "type": "object"
+      },
+      "SourceScanStatus": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "last": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LastScan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "listed": {
+            "title": "Listed",
+            "type": "integer"
+          },
+          "pages": {
+            "title": "Pages",
+            "type": "integer"
+          },
+          "queued": {
+            "title": "Queued",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "active",
+          "pages",
+          "listed",
+          "queued"
+        ],
+        "title": "SourceScanStatus",
+        "type": "object"
+      },
+      "SourceScheduleStatus": {
+        "properties": {
+          "last_fire_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Fire At"
+          },
+          "next_fire_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Fire At"
+          }
+        },
+        "title": "SourceScheduleStatus",
+        "type": "object"
+      },
+      "SourceWatchStatus": {
+        "properties": {
+          "backoff_until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backoff Until"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "last_poll_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Poll At"
+          },
+          "next_poll_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Poll At"
+          }
+        },
+        "title": "SourceWatchStatus",
+        "type": "object"
+      },
+      "SourceWebhookStatus": {
+        "properties": {
+          "duplicates": {
+            "title": "Duplicates",
+            "type": "integer"
+          },
+          "ignored": {
+            "title": "Ignored",
+            "type": "integer"
+          },
+          "last_event_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Event At"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "queued": {
+            "title": "Queued",
+            "type": "integer"
+          },
+          "received": {
+            "title": "Received",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "received",
+          "queued",
+          "duplicates",
+          "ignored"
+        ],
+        "title": "SourceWebhookStatus",
+        "type": "object"
+      },
       "StartCampaignResponse": {
         "properties": {
           "campaign_id": {
@@ -26224,6 +27139,24 @@
           "count"
         ],
         "title": "TrainedModelList",
+        "type": "object"
+      },
+      "TriggersWire": {
+        "additionalProperties": false,
+        "properties": {
+          "schedule": {
+            "$ref": "#/components/schemas/ScheduleTriggerWire"
+          },
+          "watch": {
+            "$ref": "#/components/schemas/WatchTriggerWire"
+          },
+          "webhook_enabled": {
+            "default": false,
+            "title": "Webhook Enabled",
+            "type": "boolean"
+          }
+        },
+        "title": "TriggersWire",
         "type": "object"
       },
       "UnknownDetectorNamesDetail": {
@@ -28724,6 +29657,25 @@
           "label"
         ],
         "title": "VocabularyOption",
+        "type": "object"
+      },
+      "WatchTriggerWire": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "interval_s": {
+            "default": 60,
+            "maximum": 604800.0,
+            "minimum": 1.0,
+            "title": "Interval S",
+            "type": "integer"
+          }
+        },
+        "title": "WatchTriggerWire",
         "type": "object"
       },
       "_PathLookupRequest": {
@@ -36520,7 +37472,7 @@
         ]
       },
       "post": {
-        "description": "Start a run over a folder or manifest, or resume the interrupted, cancelled\nor partly failed run of the same source (``resumed: true``). One run per\nproject at a time (409 ``bulk_ingest_busy``).",
+        "description": "Start a run over a folder, manifest, S3 bucket/prefix or registered source, or\nresume the interrupted, cancelled or partly failed run of the same source\n(``resumed: true``). One run per project at a time (409 ``bulk_ingest_busy``).",
         "operationId": "start_bulk_ingest_curation_projects__project__ingest_bulk_post",
         "parameters": [
           {
@@ -36888,6 +37840,112 @@
         ]
       }
     },
+    "/curation/projects/{project}/ingest/objects": {
+      "post": {
+        "description": "Fetch and ingest a batch of objects. A per-object failure (gone, forbidden,\ntoo large, unreachable, not an image) is reported as a ``failed`` result with its\n``error_kind``; it never fails the batch.",
+        "operationId": "curation_ingest_objects_curation_projects__project__ingest_objects_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestObjectsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/src__routers__curation___common_models__BatchIngestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Curation Ingest Objects",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest/objects/presign": {
+      "post": {
+        "description": "A time-limited URL of the original behind a stored object reference. The\nreference must lie inside ``OP_S3_ALLOWED``; the API never proxies the bytes.",
+        "operationId": "curation_presign_object_curation_projects__project__ingest_objects_presign_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ObjectPresignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObjectPresignResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Curation Presign Object",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/projects/{project}/ingest/path_lookup": {
       "post": {
         "description": "Filter a list of paths down to those already ingested.\n\nUsed by an ingest walker to short-circuit the read+hash work for\nre-scans of immutable archive media. Matches on ``image_path`` OR\n``source_identifier``: a byte-upload ingest's client identifier\nis recorded as ``source_identifier`` now that ``image_path`` is the\nserver-persisted path, so a re-scan driver that only knows its own\nidentifiers still gets a hit. Both fields are mapped keyword on the\nimages index.",
@@ -37146,6 +38204,355 @@
           }
         },
         "summary": "Ingest Region Drain",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest/sources": {
+      "get": {
+        "operationId": "list_ingest_sources_curation_projects__project__ingest_sources_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestSourceList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Ingest Sources",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "post": {
+        "operationId": "create_ingest_source_curation_projects__project__ingest_sources_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestSourceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestSourceStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Ingest Source",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest/sources/{source_id}": {
+      "delete": {
+        "description": "Remove the definition and its queue. Images already ingested stay.",
+        "operationId": "delete_ingest_source_curation_projects__project__ingest_sources__source_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Ingest Source",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "get": {
+        "operationId": "get_ingest_source_curation_projects__project__ingest_sources__source_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestSourceStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Ingest Source",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "patch": {
+        "operationId": "update_ingest_source_curation_projects__project__ingest_sources__source_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestSourcePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestSourceStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Ingest Source",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest/sources/{source_id}/retry-dead": {
+      "post": {
+        "description": "Put the objects that gave up (or can never succeed) back in the queue; the next\nrun tries them again.",
+        "operationId": "retry_dead_objects_curation_projects__project__ingest_sources__source_id__retry_dead_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryDeadResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry Dead Objects",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest/sources/{source_id}/run": {
+      "post": {
+        "description": "Run now: scan the source and ingest what is new, or resume its interrupted run.",
+        "operationId": "run_ingest_source_curation_projects__project__ingest_sources__source_id__run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkIngestRun"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Ingest Source",
         "tags": [
           "Curation"
         ]

@@ -31,7 +31,7 @@ import hashlib
 import time
 from collections import deque
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from src.config.project_context import ensure_marked_dir
 from src.core.logging import get_logger
@@ -65,6 +65,17 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from src.services.curation.bulk_ingest.sender import BatchSender
+
+
+class RunListener(Protocol):
+    """Told what each batch settled, for a source that keeps its own record of it."""
+
+    def on_done(self, refs: list[str]) -> None: ...
+
+    def on_failed(self, rows: list[tuple[str, str, str]]) -> None:
+        """``(ref, error, error_kind)`` per failed reference."""
+        ...
+
 
 logger = get_logger(__name__)
 
@@ -156,7 +167,9 @@ class BulkIngestRun:
         store: BulkStore,
         source: BulkSource,
         options: BulkOptions,
+        listener: RunListener | None = None,
     ) -> None:
+        self.listener = listener
         self.sender = sender
         self.store = store
         self.source = source
@@ -263,7 +276,7 @@ class BulkIngestRun:
     # ----------------------------------------------------------------- producer
 
     async def _produce(self, queue: asyncio.Queue[list[str] | None], done: set[str]) -> None:
-        iterator: Iterator[str] = iter_source_paths(self.source)
+        iterator: Iterator[str] = iter_source_paths(self.source, should_stop=self._stopping)
         batch_size = self.options.batch_size
 
         def take() -> tuple[list[str], int, int, bool]:
@@ -310,16 +323,20 @@ class BulkIngestRun:
                 await self._process(paths)
             except Exception as exc:  # one bad batch never stops the run
                 logger.error('bulk_ingest_batch_crashed', error=str(exc), n=len(paths))
-                self._record_failures(paths, str(exc), ERROR_KIND_BATCH)
+                await self._record_failures(paths, str(exc), ERROR_KIND_BATCH)
             finally:
                 self.in_flight -= len(paths)
             await self._flush()
 
-    def _record_failures(self, paths: list[str], error: str, error_kind: str) -> None:
+    async def _record_failures(self, paths: list[str], error: str, error_kind: str) -> None:
         self.failed += len(paths)
         self.store.append_failures(
             [{'path': p, 'error': error[:300], 'error_kind': error_kind} for p in paths]
         )
+        if self.listener is not None:
+            await asyncio.to_thread(
+                self.listener.on_failed, [(p, error[:300], error_kind) for p in paths]
+            )
 
     async def _process(self, paths: list[str]) -> None:
         started = time.perf_counter()
@@ -329,7 +346,7 @@ class BulkIngestRun:
             )
         except BatchRequestError as exc:
             logger.error('bulk_ingest_batch_failed', error=str(exc), n=len(paths))
-            self._record_failures(paths, str(exc), ERROR_KIND_BATCH)
+            await self._record_failures(paths, str(exc), ERROR_KIND_BATCH)
             self._note_batch(all_failed=True, reason=str(exc))
             return
         finally:
@@ -347,11 +364,11 @@ class BulkIngestRun:
             elif res.get('status') == 'duplicate':
                 done_rows.append((path, OUTCOME_DUPLICATE))
             else:
-                self._record_failures(
+                await self._record_failures(
                     [path], res.get('error') or 'ingest failed', res.get('error_kind') or ''
                 )
         if unaccounted:  # a result the route never returned is a failure, not a success
-            self._record_failures(sorted(unaccounted), 'no result returned', ERROR_KIND_BATCH)
+            await self._record_failures(sorted(unaccounted), 'no result returned', ERROR_KIND_BATCH)
 
         summary = body.get('summary', {})
         self.ingested += sum(1 for _, o in done_rows if o == OUTCOME_INGESTED)
@@ -362,6 +379,8 @@ class BulkIngestRun:
         self.n_not_embedded += summary.get('n_not_embedded', 0)
         self.n_embed_failed += summary.get('n_embed_failed', 0)
         await asyncio.to_thread(self.store.append_done, done_rows)
+        if self.listener is not None and done_rows:
+            await asyncio.to_thread(self.listener.on_done, [p for p, _ in done_rows])
         first_error = next(
             (r.get('error') for r in body.get('results', []) if r.get('error')), None
         )
@@ -423,9 +442,16 @@ class BulkIngestRun:
 
 
 def spawn(
-    *, sender: BatchSender, store: BulkStore, source: BulkSource, options: BulkOptions
+    *,
+    sender: BatchSender,
+    store: BulkStore,
+    source: BulkSource,
+    options: BulkOptions,
+    listener: RunListener | None = None,
 ) -> None:
-    run = BulkIngestRun(sender=sender, store=store, source=source, options=options)
+    run = BulkIngestRun(
+        sender=sender, store=store, source=source, options=options, listener=listener
+    )
 
     async def runner() -> None:
         try:
