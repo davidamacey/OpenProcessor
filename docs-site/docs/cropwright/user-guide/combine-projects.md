@@ -5,9 +5,9 @@ title: Combine projects
 
 # Combine projects (`/projects/combine`)
 
-Merge several existing projects into a **new** one. The sources are left
-untouched; the new project gets their images, items and a class list you
-define during the combine. Like `/projects`, these pages are not scoped to a
+Merge several existing projects into a **new** one. The concepts, priority
+rules and the API path are in the
+[Combine projects guide](../../guides/combine-projects.mdx). Like `/projects`, these pages are not scoped to a
 project, since the target doesn't exist yet. The **Combine projects…**
 button on `/projects` appears only when the backend supports combining;
 otherwise the page says so and nothing else is requested.
