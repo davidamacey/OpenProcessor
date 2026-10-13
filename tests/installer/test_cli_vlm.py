@@ -490,3 +490,18 @@ def test_models_status_is_quiet_when_every_engine_is_fp16(shimmed: Shimmed, stac
     (stack / '.install' / 'precision.tsv').write_text('pe_image_encoder\tfp16\t\n')
     result = cli(shimmed, stack, 'models', 'status')
     assert 'Degraded precision' not in result.stdout
+
+
+def test_models_status_prints_the_engine_build_stamp(shimmed: Shimmed, stack: Path) -> None:
+    (stack / '.install').mkdir(exist_ok=True)
+    sha = 'ab12cd34ef56' + '0' * 52
+    (stack / '.install' / 'precision.tsv').write_text(
+        f'pe_image_encoder\tfp16\t\tv110100\t8.6\t{sha}\tflags\n'
+    )
+    result = cli(shimmed, stack, 'models', 'status')
+    assert 'Engine build stamps' in result.stdout
+    assert (
+        'pe_image_encoder: fp16, TensorRT v110100, compute capability 8.6, ONNX ab12cd34ef56'
+        in (result.stdout)
+    )
+    assert 'Degraded precision' not in result.stdout

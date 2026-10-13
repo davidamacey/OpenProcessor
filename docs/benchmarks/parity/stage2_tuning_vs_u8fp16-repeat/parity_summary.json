@@ -1,0 +1,389 @@
+{
+  "candidate": {
+    "created_at": "2026-10-12T23:44:01.107750+00:00",
+    "engine": {
+      "label": "fp16",
+      "plan_bytes": 643831692,
+      "plan_file": "model.plan",
+      "plan_sha256": "b6d1c071f021c162dfe144e83ad757bbfe178919a65154efc61dad371bc103f6",
+      "source": "stage2-final"
+    },
+    "git_dirty": true,
+    "git_sha": "97fb6898eaa2a1fcc841c02e68b56ed591a595ea",
+    "gpu": "NVIDIA RTX A6000",
+    "image_digests": {
+      "stage2-api": {
+        "image": "davidamacey/openprocessor:0.5.0",
+        "image_id": "sha256:89975719cc407f5842f3588773421d735973f49caa066d3b3cfe1f82a7bdb524"
+      },
+      "stage2-auto-label-worker": {
+        "image": "davidamacey/openprocessor:0.5.0",
+        "image_id": "sha256:89975719cc407f5842f3588773421d735973f49caa066d3b3cfe1f82a7bdb524"
+      },
+      "stage2-cluster-refresh": {
+        "image": "davidamacey/openprocessor:0.5.0",
+        "image_id": "sha256:89975719cc407f5842f3588773421d735973f49caa066d3b3cfe1f82a7bdb524"
+      },
+      "stage2-detection-worker": {
+        "image": "davidamacey/openprocessor:0.5.0",
+        "image_id": "sha256:89975719cc407f5842f3588773421d735973f49caa066d3b3cfe1f82a7bdb524"
+      },
+      "stage2-opensearch": {
+        "image": "opensearchproject/opensearch:3.6.0",
+        "image_id": "sha256:b1b447d0d021b051fdb1ae6be100e106667bbe302aa8d6855a4f6d726863d766"
+      },
+      "stage2-triton": {
+        "image": "davidamacey/openprocessor-triton:0.5.0",
+        "image_id": "sha256:c26adfad81ad2971f859c77a7899886a368fe45580af9e818c265a60842ee535"
+      }
+    },
+    "manifest": {
+      "annotations_sha256": "113a836d90195ee1f884e704da6304dfaaecff1f023f49b6ca93c4aaae470268",
+      "count": 2000,
+      "name": "coco_bench_2000.json",
+      "seed": 20261009,
+      "sha256": "edde8ae3d8cecfb225040852ed7c46844009ad4f8e7e153e9c44f97c2558c691"
+    },
+    "sections": [
+      "items",
+      "frames",
+      "clusters",
+      "clip",
+      "faces",
+      "ocr"
+    ],
+    "tag": "stage2-final"
+  },
+  "evaluation": {
+    "checks": [
+      {
+        "id": "P-box",
+        "metric": "boxes.images_identical_share",
+        "note": "images with every box matched at IoU >= 0.95 and confidence delta <= 0.02",
+        "observed": 0.993427704752275,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.98
+      },
+      {
+        "id": "P-box-confident",
+        "metric": "boxes.unmatched_confident",
+        "note": "unmatched boxes with confidence >= 0.5",
+        "observed": 0,
+        "op": "<=",
+        "status": "PASS",
+        "value": 0
+      },
+      {
+        "id": "P-item",
+        "metric": "boxes.item_count_class_identical_share",
+        "note": "images with the same item count and class names",
+        "observed": 0.9989888776541962,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.99
+      },
+      {
+        "id": "P-pe-p01",
+        "metric": "pe_crop.p01",
+        "note": "cosine, crop vectors of matched items",
+        "observed": 0.999713699412298,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.995
+      },
+      {
+        "id": "P-pe-median",
+        "metric": "pe_crop.median",
+        "observed": 0.9999635831694706,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.999
+      },
+      {
+        "id": "P-pew-p01",
+        "metric": "pe_frame.p01",
+        "note": "cosine, whole-frame vectors",
+        "observed": 0.999447452586755,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.995
+      },
+      {
+        "id": "P-pew-median",
+        "metric": "pe_frame.median",
+        "observed": 0.9999440182775892,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.999
+      },
+      {
+        "id": "P-knn",
+        "metric": "knn.overlap_at_k",
+        "note": "neighbour overlap at k over the query items",
+        "observed": 0.9828,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.95
+      },
+      {
+        "id": "P-dup",
+        "metric": "knn.near_dup_agreement",
+        "note": "near-duplicate decisions at the configured cosine, identical on this share of pairs",
+        "observed": 1.0,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.995
+      },
+      {
+        "id": "P-cluster-assign",
+        "metric": "cluster.assignment_agreement",
+        "note": "nearest reference centroid unchanged when candidate vectors are assigned to it",
+        "observed": 0.9983582206238761,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.98
+      },
+      {
+        "id": "P-cluster-purity",
+        "metric": "cluster.purity_drop_points",
+        "note": "purity against COCO ground-truth classes, percentage points lost",
+        "observed": -0.21108591978734603,
+        "op": "<=",
+        "status": "PASS",
+        "value": 0.5
+      },
+      {
+        "id": "P-label-vote",
+        "metric": "knn.label_vote_agreement",
+        "note": "majority detector class among the top-k neighbours, identical in both spaces (label propagation); the VLM agreement bar",
+        "observed": 0.992,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.97
+      },
+      {
+        "id": "P-knn-precision",
+        "metric": "knn.precision_drop_points",
+        "note": "kNN precision against COCO ground-truth classes, percentage points lost",
+        "observed": -0.03931847968544622,
+        "op": "<=",
+        "status": "PASS",
+        "value": 0.5
+      },
+      {
+        "id": "P-label",
+        "metric": "labels.class_agreement",
+        "note": "class name per matched item (the auto-promote outcome)",
+        "observed": 1.0,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.99
+      },
+      {
+        "id": "P-vlm",
+        "metric": "labels.vlm_agreement",
+        "note": "VLM label on the sampled crops",
+        "observed": null,
+        "op": ">=",
+        "status": "SKIP",
+        "value": 0.97
+      },
+      {
+        "id": "P-clip",
+        "metric": "clip.p01",
+        "note": "core-route image embedding, cosine",
+        "observed": 0.9999999999999998,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.995
+      },
+      {
+        "id": "P-face",
+        "metric": "face.p01",
+        "note": "face embedding of matched faces, cosine",
+        "observed": 0.9999999999999998,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.995
+      },
+      {
+        "id": "P-ocr",
+        "metric": "ocr.exact_share",
+        "note": "OCR lines matched at IoU >= 0.5, exact string",
+        "observed": 1.0,
+        "op": ">=",
+        "status": "PASS",
+        "value": 0.98
+      }
+    ],
+    "description": "A change that moves numerics of one stage by rounding only (engine precision, input dtype): matched detections and vectors must stay equivalent.",
+    "failed": 0,
+    "passed": true,
+    "profile": "precision",
+    "recorded": {
+      "boxes.crop_rect_identical_share": 0.9914002032679228,
+      "boxes.iou_min": 0.7887998633030621,
+      "boxes.score_delta_max": 0.005615234375,
+      "cluster.ari": 0.32548558831586016,
+      "cluster.core_agreement": 0.9633335939332343,
+      "cluster.nmi": 0.7721257260042429,
+      "cluster.objective_rel_diff": -0.00391957697504282,
+      "cluster.purity_cand": 0.6184817449769369,
+      "cluster.purity_ref": 0.6163708857790634,
+      "cluster.similarity_abs_delta_mean": 0.02182551845908165,
+      "cluster.similarity_abs_delta_p99": 0.1327730119228363,
+      "knn.precision_cand": 0.610615989515072,
+      "knn.precision_ref": 0.6102228047182175,
+      "knn.top1_recall_at_k": 1.0,
+      "ocr.char_error_rate": 0.0,
+      "pe_crop.identical_share": 0.0,
+      "pe_crop.mean": 0.9998694057864165,
+      "pe_crop.min": 0.8426747419971387,
+      "pe_frame.identical_share": 0.0,
+      "pe_frame.mean": 0.9999134666726581,
+      "pe_frame.min": 0.997043405689281
+    },
+    "skipped": 1
+  },
+  "metrics": {
+    "boxes": {
+      "crop_rect_identical_share": 0.9914002032679228,
+      "images": 1978,
+      "images_identical_share": 0.993427704752275,
+      "iou_mean": 0.9997517787794257,
+      "iou_min": 0.7887998633030621,
+      "item_count_class_identical_share": 0.9989888776541962,
+      "items_cand": 12792,
+      "items_ref": 12792,
+      "matched": 12791,
+      "score_delta_max": 0.005615234375,
+      "unmatched_confident": 0
+    },
+    "clip": {
+      "identical_share": 1.0,
+      "mean": 1.0,
+      "median": 1.0,
+      "min": 0.9999999999999998,
+      "n": 200,
+      "p01": 0.9999999999999998
+    },
+    "cluster": {
+      "ari": 0.32548558831586016,
+      "assignment_agreement": 0.9983582206238761,
+      "clusters_cand": 512,
+      "clusters_ref": 512,
+      "core_agreement": 0.9633335939332343,
+      "items": 12791,
+      "nmi": 0.7721257260042429,
+      "objective_cand": 0.138703852891922,
+      "objective_ref": 0.13924965262413025,
+      "objective_rel_diff": -0.00391957697504282,
+      "purity_cand": 0.6184817449769369,
+      "purity_drop_points": -0.21108591978734603,
+      "purity_ref": 0.6163708857790634,
+      "similarity_abs_delta_mean": 0.02182551845908165,
+      "similarity_abs_delta_p99": 0.1327730119228363
+    },
+    "face": {
+      "cand": 200,
+      "identical_share": 1.0,
+      "mean": 1.0,
+      "median": 1.0,
+      "min": 0.9999999999999998,
+      "n": 200,
+      "p01": 0.9999999999999998,
+      "ref": 200
+    },
+    "knn": {
+      "k": 10,
+      "label_vote_agreement": 0.992,
+      "near_dup_agreement": 1.0,
+      "near_dup_pairs": 10172,
+      "overlap_at_k": 0.9828,
+      "precision_cand": 0.610615989515072,
+      "precision_drop_points": -0.03931847968544622,
+      "precision_ref": 0.6102228047182175,
+      "queries": 1000,
+      "top1_recall_at_k": 1.0
+    },
+    "labels": {
+      "class_agreement": 1.0,
+      "pairs": 12791
+    },
+    "ocr": {
+      "char_error_rate": 0.0,
+      "exact_share": 1.0,
+      "lines_cand": 34,
+      "lines_ref": 34,
+      "matched": 34
+    },
+    "pe_crop": {
+      "identical_share": 0.0,
+      "matched": 12791,
+      "mean": 0.9998694057864165,
+      "median": 0.9999635831694706,
+      "min": 0.8426747419971387,
+      "n": 12791,
+      "p01": 0.999713699412298
+    },
+    "pe_frame": {
+      "identical_share": 0.0,
+      "matched": 2000,
+      "mean": 0.9999134666726581,
+      "median": 0.9999440182775892,
+      "min": 0.997043405689281,
+      "n": 2000,
+      "p01": 0.999447452586755
+    }
+  },
+  "reference": {
+    "created_at": "2026-10-11T20:45:39.683499+00:00",
+    "engine": {
+      "detector": "rebuilt-trt11.1-uint8",
+      "label": "fp16",
+      "plan_bytes": 644809796,
+      "plan_file": "model.plan",
+      "plan_sha256": "a4feb7dfed8203b913a28da3fe9cc2834066d0161f6a4a19adda7eb85b6ab578",
+      "source": "pr247-uint8-final"
+    },
+    "git_dirty": true,
+    "git_sha": "9ae52c0949fbd1cd1b5aea9a159e5e7a7f4e45e7",
+    "gpu": "NVIDIA RTX A6000",
+    "image_digests": {
+      "refq-api": {
+        "image": "davidamacey/openprocessor:0.5.0",
+        "image_id": "sha256:89975719cc407f5842f3588773421d735973f49caa066d3b3cfe1f82a7bdb524"
+      },
+      "refq-auto-label-worker": {
+        "image": "davidamacey/openprocessor:0.5.0",
+        "image_id": "sha256:89975719cc407f5842f3588773421d735973f49caa066d3b3cfe1f82a7bdb524"
+      },
+      "refq-opensearch": {
+        "image": "opensearchproject/opensearch:3.6.0",
+        "image_id": "sha256:b1b447d0d021b051fdb1ae6be100e106667bbe302aa8d6855a4f6d726863d766"
+      },
+      "refq-triton": {
+        "image": "davidamacey/openprocessor-triton:0.5.0",
+        "image_id": "sha256:c26adfad81ad2971f859c77a7899886a368fe45580af9e818c265a60842ee535"
+      }
+    },
+    "manifest": {
+      "annotations_sha256": "113a836d90195ee1f884e704da6304dfaaecff1f023f49b6ca93c4aaae470268",
+      "count": 2000,
+      "name": "coco_bench_2000.json",
+      "seed": 20261009,
+      "sha256": "edde8ae3d8cecfb225040852ed7c46844009ad4f8e7e153e9c44f97c2558c691"
+    },
+    "sections": [
+      "items",
+      "frames",
+      "clusters",
+      "clip",
+      "faces",
+      "ocr"
+    ],
+    "tag": "ref-u8fp16-repeat"
+  },
+  "schema": 1
+}
