@@ -496,51 +496,57 @@ nvidia-smi
 
 ## GPU Profiles
 
-The system automatically selects a profile based on your GPU's VRAM:
+`setup.sh` and the installer pick a profile from your GPU's VRAM. A profile is a set of
+Triton model settings: instances per model, batch sizes and OCR pipeline instances. It does
+not choose which models exist.
 
-| Profile | VRAM Range | Models | Performance | Use Case |
-|---------|------------|--------|-------------|----------|
-| **minimal** | 6-8GB | Core only | ~5 RPS | RTX 3060, RTX 4060 |
-| **standard** | 12-24GB | All | ~15 RPS | RTX 3080, RTX 4090 |
-| **full** | 48GB+ | All | ~50 RPS | A6000, A100 |
+| Profile | VRAM Range | Triton instances per model | Max batch | `ocr_pipeline` instances | Example GPUs |
+|---------|------------|----------------------------|-----------|--------------------------|--------------|
+| **minimal** | 6-8GB | 1 | 16 | 1 | RTX 3060, RTX 4060 |
+| **standard** | 12-24GB | 2 | 32 | 2 | RTX 3080, RTX 4090 |
+| **full** | 48GB+ | 4 | 64 | 4 | A6000, A100 |
+
+The values come from `config_templates/profiles/*.json`. No per-profile throughput has
+been measured; measured numbers (one RTX A6000) are in `docs/PERFORMANCE.md`.
 
 The profile also decides the GPU decode (about 8.5 GB more on the Triton card):
 `setup.sh` and the installer write `OP_INGEST_GPU_DECODE=1` for **full** and `0` for **minimal**
 and **standard**. Set it yourself in `.env` to override; `openprocessor gpu plan` shows the result.
 
-### Profile Details
+### What a profile does and does not do
 
-**minimal** (6-8GB GPUs):
-- YOLO object detection
-- SCRFD face detection
-- ArcFace embeddings
-- MobileCLIP embeddings
-- No OCR (optional add-on)
-- 1 instance per model, batch size 16
-- 1 `ocr_pipeline` instance (about 256 MiB of GPU memory each)
+- It rewrites `models/<name>/config.pbtxt` for the YOLO, SCRFD, ArcFace, MobileCLIP and
+  PaddleOCR models and `ocr_pipeline`. Triton reads them at start.
+- The Triton load list is fixed in `docker-compose.yml`. A model that was never exported stays
+  unloaded and Triton keeps running. `scripts/setup.sh --profile=minimal` exports the
+  essential models only, with no OCR.
+- `.env` also gets `TRITON_WORKERS`, `MAX_BATCH_SIZE` and `SHM_SIZE`, but nothing reads them.
+  The API runs 32 uvicorn workers and each service has `shm_size: 8g` in `docker-compose.yml`.
+- `setup.sh` writes `docker-compose.override.yml`, but it is never loaded: `setup.sh`,
+  `./openprocessor` and `make` pass explicit `-f` files.
 
-**standard** (12-24GB GPUs):
-- All models including OCR
-- 2 instances per model, batch size 32
-- 2 `ocr_pipeline` instances (OCR throughput scales with this count)
-- Good for most production workloads
-
-**full** (48GB+ GPUs):
-- All models with maximum parallelism
-- 4 instances per model, batch size 64
-- 4 `ocr_pipeline` instances
-- High-throughput production systems
-
-### Manually Selecting a Profile
+### Selecting a Profile
 
 ```bash
 # During setup
 ./scripts/setup.sh --profile=minimal
-
-# After setup
-./scripts/openprocessor.sh profile minimal
-./scripts/openprocessor.sh restart
 ```
+
+Switching later with `./openprocessor profile <name>` (a checkout only) is incomplete
+(issue to be filed, F4). It rewrites the Triton configs but, when `.env` already exists, leaves
+`GPU_PROFILE` and `OP_INGEST_GPU_DECODE` unchanged. Switch by hand:
+
+```bash
+./openprocessor profile standard      # rewrites models/*/config.pbtxt
+# edit .env: GPU_PROFILE=standard and OP_INGEST_GPU_DECODE=0 (or 1)
+./openprocessor restart triton-server
+```
+
+Do not pass the optional second argument (a GPU id); it is written into every `config.pbtxt`.
+A `.env` made by `scripts/setup.sh` or copied from `env.template` must also have
+`COMPOSE_PROJECT_NAME` set, or `./openprocessor` refuses to run (see
+[Configure the environment](#4-configure-environment)).
+See [Deployment and GPU sizing](docs-site/docs/deployment/gpu-sizing.mdx) for the details.
 
 ---
 
