@@ -724,6 +724,16 @@ _triton_need_gb() {
     esac
 }
 
+# The GPU ingest front end (image_frontend, about 8.5 GB more on the Triton card). Mirrors
+# "ingest_gpu_frontend" in config_templates/profiles/*.json (tests/installer keeps them equal):
+# only the full profile (48 GB+) has room beside the profile's own Triton budget.
+_ingest_frontend_for_profile() {
+    case "$1" in
+        full) echo 1 ;;
+        *) echo 0 ;;
+    esac
+}
+
 # recommend_plan GPUS TIERS [force=0|1] [vlm_id=ID] [gpu_plan=k=v,...]
 #                [profile=NAME] [remote=0|1]
 # GPUS: "index total_mib used_mib" lines. TIERS: requested closure
@@ -1061,6 +1071,7 @@ recommend_plan() {
     echo "OP_TRAIN_DEFAULT_GPUS=${ids[trn]}"
     echo "OP_GPU_ALLOWED_IDS=${allowed_ids}"
     echo "GPU_PROFILE=${profile}"
+    echo "OP_INGEST_GPU_FRONTEND=$(_ingest_frontend_for_profile "$profile")"
     echo "SEGMENTER_INSTANCES=${inst}"
     echo "vlm_available_gb=${vlm_avail}"
     echo "VLM_GPU_TOTAL_MIB=${total_mib}"
@@ -2665,7 +2676,7 @@ select_tiers_interactive() {
 
 print_gpu_plan() {
     local plan="$1" key
-    for key in TRITON_GPU_ID SEGMENTER_GPU_ID VLM_GPU_ID OP_TRAIN_GPU_ORDER GPU_PROFILE SEGMENTER_INSTANCES VLM_CATALOG_ID vlm_available_gb; do
+    for key in TRITON_GPU_ID SEGMENTER_GPU_ID VLM_GPU_ID OP_TRAIN_GPU_ORDER GPU_PROFILE OP_INGEST_GPU_FRONTEND SEGMENTER_INSTANCES VLM_CATALOG_ID vlm_available_gb; do
         printf '  %-22s %s\n' "$key" "$(plan_get "$plan" "$key")"
     done
     while IFS= read -r key; do
@@ -2899,7 +2910,7 @@ do_install() {
         VLM_PICK="$(plan_get "$plan" VLM_CATALOG_ID)"
         local key val
         for key in TRITON_GPU_ID API_GPU_ID SEGMENTER_GPU_ID VLM_GPU_ID EVALUATOR_GPU_ID \
-                OP_TRAIN_GPU_ORDER OP_TRAIN_DEFAULT_GPUS OP_GPU_ALLOWED_IDS GPU_PROFILE SEGMENTER_INSTANCES; do
+                OP_TRAIN_GPU_ORDER OP_TRAIN_DEFAULT_GPUS OP_GPU_ALLOWED_IDS GPU_PROFILE OP_INGEST_GPU_FRONTEND SEGMENTER_INSTANCES; do
             val="$(plan_get "$plan" "$key")"
             if [[ "$key" == SEGMENTER_* && " $(tiers_close_dependencies "$(plan_get "$plan" tiers)") " != *" segmenter "* \
                     && -n "$(read_env_var "$ENV_FILE" "$key" || true)" ]]; then

@@ -229,6 +229,14 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   migration, re-ingest to move one (#254). Write ceiling at 100,000 real vectors on this mapping: 1,980
   documents/s with 4 writers, 4,426 with 8 (#230).
 
+- The GPU ingest front end (`image_frontend`, #217) is now on by default (`OP_INGEST_GPU_FRONTEND`),
+  with the 3.0 MP size gate unchanged. It follows the hardware: each installer profile carries an
+  `ingest_gpu_frontend` flag (`full` true, `minimal` and `standard` false, since the front end adds
+  about 8.5 GB to the Triton card) that `setup.sh` and the installer write to `.env`, an explicit
+  `.env` value wins, and `openprocessor gpu plan` prints whether it is on and why, warning when it
+  is on for a card without room. A front end that cannot load leaves the other models and CPU
+  ingest working.
+
 ### Fixed
 
 - An oversize upload answers `413` with `{"detail": "File too large. Maximum: <N>MB", "max_file_size_mb": <N>,

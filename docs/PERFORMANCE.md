@@ -3124,7 +3124,7 @@ Built after the owner decisions on the GPU decode plan (`docs/design/gpu_decode_
 13 has the full A/B and the go / no-go). One isolated stack on GPU 2, `/ingest/batch`, 3 repetitions,
 median images/s; host CPU is the API plus Triton containers.
 
-| Set B photos (12-24 MP) | CPU path | CPU single decode + libjpeg-turbo | GPU front end (`OP_INGEST_GPU_FRONTEND=1`) |
+| Set B photos (12-24 MP) | CPU path | CPU single decode + libjpeg-turbo | GPU front end (`OP_INGEST_GPU_FRONTEND`, on by default) |
 |---|---:|---:|---:|
 | detect + embed, batch 8 x 16 clients | 27.0 | 23.5 (26.8 without libjpeg-turbo) | **35.0** |
 | detect only, batch 8 x 16 | 28.3 | 31.0 | **44.0** |
@@ -3136,6 +3136,16 @@ COCO frames (0.3 MP) are faster on the CPU (forced onto the GPU front end: 22.7 
 images/s with embedding, 63.6 against 124.5 detection only), so the front end takes only images at
 or above `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0). The CPU single decode alone does not speed up bulk
 ingest (the next binders are elsewhere); it is the CPU path the front end falls back to.
+
+The front end is the default, sized by hardware. It adds about 8.5 GB (8,704 MiB, loaded on first use)
+to the Triton card, on top of the profile's own models (about 8, 12 and 17 GB for `minimal`,
+`standard` and `full`). Only `full` (48 GB+) has room, so the installer writes
+`OP_INGEST_GPU_FRONTEND=1` for it and `0` for `minimal` and `standard`; a 12 GB card does not hold
+the full model set beside other projects' resident processes, let alone the front end. A checkout
+whose `.env` has no such line gets the code default (on), and an explicit value always wins.
+`openprocessor gpu plan` prints whether it is on and why, and warns (never refuses) when it is on
+for a card without room. If the model cannot load, Triton leaves the other models serving and
+every photo is ingested on the CPU path, as with a declined file.
 
 ### Stage 4: coalesced ingest writes, Lucene engine, write ceiling on the final mapping (#248, #254, #230)
 

@@ -704,6 +704,11 @@ generate_env_file() {
         heap="$(opensearch_heap_for_host)" || { log_error "could not read host memory to size the OpenSearch heap"; return 1; }
     fi
 
+    # An explicit front end choice survives a forced regeneration too.
+    local frontend="$PROFILE_INGEST_GPU_FRONTEND" kept_frontend=""
+    [[ -f "$env_file" ]] && kept_frontend="$(sed -n 's/^OP_INGEST_GPU_FRONTEND=//p' "$env_file" | tail -n1)"
+    [[ -n "$kept_frontend" ]] && frontend="$kept_frontend"
+
     log_step "Generating .env file..."
 
     cat > "$env_file" << EOF
@@ -716,6 +721,9 @@ generate_env_file() {
 # Options: minimal (6-8GB), standard (12-24GB), full (48GB+)
 GPU_PROFILE=$profile
 GPU_ID=$gpu_id
+
+# GPU ingest front end: 1 only where the profile's card has ~8.5 GB of room beyond its models
+OP_INGEST_GPU_FRONTEND=$frontend
 
 # Performance (auto-configured based on GPU_PROFILE)
 TRITON_WORKERS=$PROFILE_WORKERS
