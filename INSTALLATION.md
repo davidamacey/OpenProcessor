@@ -101,11 +101,11 @@ Consent variables for unattended runs:
 | `OP_CONFIRM_PURGE=<project>` | `--purge-volumes` / `--purge-data` |
 | `OP_CONFIRM_PURGE_SECRETS=<project>` | also deleting `secrets/` during a purge |
 
-Other variables: `OP_GH_REPO`, `CW_GH_REPO` (where to install from),
+Other variables: `OP_GH_REPO` (the GitHub `org/repo` to install from),
 `OP_IMAGE_NAMESPACE` (Docker Hub namespace, default `davidamacey`),
-`OP_ARTIFACT_BASE_URL` / `OP_RAW_BASE_URL` and the `CW_` equivalents (https
-mirrors), `OP_DOCS_URL`, `OP_HEALTH_TIMEOUT` (cap in seconds on each health
-wait). The header of `setup-openprocessor.sh` lists them all.
+`OP_ARTIFACT_BASE_URL` / `OP_RAW_BASE_URL` (https mirrors), `OP_DOCS_URL`,
+`OP_HEALTH_TIMEOUT` (cap in seconds on each health wait). The header of
+`setup-openprocessor.sh` lists them all.
 
 ### Network access
 
@@ -185,6 +185,22 @@ its full class vocabulary (leave the class-id filter unset). `./openprocessor sa
 coco` fetches the public, license-filtered COCO sample (200 images; `--full`
 for 800) into `data/samples/`. Details: [docs/CURATION.md](docs/CURATION.md).
 
+#### Where your images live (the source root)
+
+The API and the workers read images from one **source root**, mounted
+read-only at `/data/source`. Its host side is `OP_SOURCE_ROOT_HOST`. The
+installer writes `OP_SOURCE_ROOT_HOST=./data`; a source checkout that never
+ran the installer gets the compose default, `./data/source`. Three services
+mount it: `api`, `curation-detection-worker` and `curation-auto-label-worker`.
+Without the worker mounts, thumbnails 404 and the VLM stage labels nothing.
+
+To change it, edit `.env`, then recreate the three services with
+`./openprocessor start` (or `make up && make curation-up` in a checkout).
+`./openprocessor restart` does not re-read `.env`. Paths you pass to ingest are
+container paths under `/data/source`. `OP_SOURCE_PATH_ALIASES` adds more named
+roots, but compose does not mount them for you: bind-mount each one into the
+same three services with your own compose override file.
+
 ### The `openprocessor` CLI
 
 Every install directory has an `openprocessor` script; a source checkout has
@@ -211,7 +227,7 @@ directory created. Run `./openprocessor help` for the list.
 | `train-mode on\|off` | stop (and later restart) the local VLM, plus the segmenter when it shares the training GPU, around a training run |
 | `upgrade [--version vX.Y.Z]`, `repair`, `uninstall [...]` | run this install's own `setup-openprocessor.sh` against this directory (installed directories only) |
 | `update` | in a checkout: pull images and rebuild; in an install directory: same as `upgrade` |
-| `profile [minimal\|standard\|full] [gpu_id]` | show or switch the Triton instance profile (checkout only) |
+| `profile [minimal\|standard\|full] [gpu_id]` | show the Triton instance profile in `.env` (checkout only). Switching does not work on an existing install: it leaves `GPU_PROFILE` in `.env` unchanged, so choose the profile with `scripts/setup.sh --profile=NAME --force` or the installer's `--profile` |
 | `test [quick\|full\|visual]` | smoke test, `tests/test_full_system.py`, or visual validation (checkout only; `full` and `visual` need `.venv`) |
 | `bench [quick\|full]` | build and run `benchmarks/triton_bench` (checkout only) |
 | `clean [cache\|models\|exports\|all]` | remove caches, downloaded weights, or TensorRT plans (asks first) |
@@ -384,6 +400,14 @@ For development, or to build the images yourself.
 ```bash
 git clone https://github.com/davidamacey/OpenProcessor.git && cd OpenProcessor && ./scripts/setup.sh
 ```
+
+In a checkout, manage the stack with `make` (`make up`, `make curation-up`,
+`make down`, `make status`). The `./openprocessor` CLI (and its shim
+`./scripts/openprocessor.sh`) refuses to run until `.env` has a
+`COMPOSE_PROJECT_NAME` line; the `.env` that `setup.sh` writes has none, so
+add `COMPOSE_PROJECT_NAME=openprocessor` first. When you run `docker compose`
+by hand, pass `-p <project>` so you never act on another stack that uses the
+default name.
 
 ### Interactive Setup
 
@@ -561,16 +585,16 @@ cp env.template .env
 # Edit .env to adjust settings
 ```
 
-Or generate automatically:
+The `./openprocessor` CLI also needs the compose project name in `.env`:
 
 ```bash
-./scripts/openprocessor.sh profile standard
+echo 'COMPOSE_PROJECT_NAME=openprocessor' >> .env
 ```
 
 ### 5. Start Containers (for export)
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d triton-server api
+make up
 ```
 
 `make up` and `./openprocessor start` add the dev overlay for you and start
@@ -620,16 +644,12 @@ curl http://localhost:4603/health
 **Symptoms:** Services crash, "CUDA out of memory" errors
 
 **Solutions:**
-1. Switch to a smaller profile:
-   ```bash
-   ./scripts/openprocessor.sh profile minimal
-   ./scripts/openprocessor.sh restart
-   ```
+1. Reinstall with a smaller profile (`--profile minimal` on the installer, or
+   `scripts/setup.sh --profile=minimal --force` in a checkout).
 
-2. Reduce batch size in `.env`:
-   ```bash
-   MAX_BATCH_SIZE=8
-   ```
+2. Move other GPU services to another card: set `SEGMENTER_GPU_ID`,
+   `VLM_GPU_ID` and `API_GPU_ID` in `.env`, then run `./openprocessor gpu plan`
+   and `./openprocessor start`.
 
 3. Stop other GPU processes:
    ```bash
@@ -725,9 +745,15 @@ curl http://localhost:4603/health
 
 ```bash
 git pull
-./scripts/openprocessor.sh update
-./scripts/openprocessor.sh restart
+./openprocessor update      # pull images and rebuild (a checkout)
+make up                     # recreate the services whose configuration changed
+make curation-up            # same, for the curation workers
+make dev-restart            # reload the source in api and the workers
 ```
+
+The processes import their source once at start, so restart them after every
+pull. An installed directory upgrades with `./openprocessor upgrade` instead
+(see [Upgrade, repair, rollback, uninstall](#upgrade-repair-rollback-uninstall)).
 
 ### Rebuilding After Updates
 
@@ -752,8 +778,13 @@ After major updates, you may need to re-export TensorRT models:
 ### Stop and Remove Containers
 
 ```bash
-docker compose down -v  # -v removes volumes
+./openprocessor stop                              # keeps volumes
+docker compose -p openprocessor down -v          # -v removes volumes
 ```
+
+Use your own project name in place of `openprocessor` if you set
+`COMPOSE_PROJECT_NAME`. Without `-p`, `docker compose` picks the project from
+`.env` or the directory name, which may be a different stack.
 
 ### Remove Images
 

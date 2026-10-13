@@ -52,6 +52,7 @@ MLFLOW_PORT=4709
 DCGM_PORT=4710
 SEGMENTER_PORT=4711
 VLM_PORT=4712
+CROPWRIGHT_PORT=5284
 ```
 
 `make` reads `.env` too (`-include .env`), so `make up`, `make test-detect`
@@ -91,6 +92,12 @@ OP_TRAIN_GPU_ORDER=1
 cp env.template .env        # in the second clone
 # set COMPOSE_PROJECT_NAME, all *_PORT values, OP_IMAGE_TAG, *_GPU_ID
 docker compose config | grep -E 'container_name|published'   # sanity check
-docker compose up -d
+make up                     # core stack; `make curation-up` adds the workers
 curl http://localhost:4703/health
 ```
+
+Compose reads `COMPOSE_PROJECT_NAME` from the clone's `.env`. From any other
+directory, pass `-p opdev` on every `docker compose` command. The
+`./openprocessor` CLI also reads the name from `.env`; in a checkout it exits
+with code 3 until `COMPOSE_PROJECT_NAME` is set there, which this checklist
+does.

@@ -13,9 +13,11 @@ it by hand with the Makefile targets, and the models `setup.sh` does not
 build (PE-Core for curation).
 
 Every target below runs inside the running `api` container
-(`docker compose exec api ...`), so start the core stack first
-(`make up`). Weights you download land in `pytorch_models/`, which the
-API container mounts.
+(`docker compose -p <project> exec api ...`), so start the core stack first
+(`make up`). On an installed directory, use
+`./openprocessor models install [--only GROUP]` instead of these targets
+(groups: `preflight`, `base`, `yolo`, `mobileclip`, `faces`, `ocr`, `pe`).
+Weights you download land in `pytorch_models/`, which the API container mounts.
 
 ## What Triton loads by default
 
@@ -46,22 +48,14 @@ in `docker-compose.yml`:
 | OCR | `make setup-ocr` | `download-paddleocr` (PP-OCRv5 ONNX + dictionaries), `export-paddleocr` (det + rec to TensorRT), then restarts Triton |
 
 `make export-small` is the same as `export-models`; `make export-all`
-builds nano through xlarge in every format (60-120 minutes).
+builds nano through xlarge in every format, which takes a long time.
 `make export-status`, `make validate-exports` and `make models-list`
 show what exists and what Triton has loaded.
 
-Measured one-time export cost on a 48 GB card (from the README; times vary
-by GPU):
-
-| Model | Export time | Engine size |
-|---|---|---|
-| YOLO11 detection | ~8 min | ~45 MB |
-| YOLO26 detection (optional) | ~6 min | ~40 MB |
-| SCRFD face detection | ~2 min | ~20 MB |
-| ArcFace embeddings | ~2 min | ~86 MB |
-| MobileCLIP image encoder | ~4 min | ~35 MB |
-| MobileCLIP text encoder | ~1 min | ~125 MB |
-| PaddleOCR (det + rec) | ~15 min | ~15 MB |
+Export is a one-time cost per GPU model; engines are cached on disk, so later
+starts take seconds to a minute. A full first install, pulls and engine
+builds together, typically takes 30-60 minutes. Per-model times vary with the
+card, so time them on yours.
 
 ## YOLO26 alongside YOLO11
 
@@ -71,7 +65,7 @@ both families; the API reads each model's output format from Triton
 metadata.
 
 ```bash
-docker compose exec api python /app/export/export_yolo26.py --models small
+docker compose -p openprocessor exec api python /app/export/export_yolo26.py --models small
 curl -X POST http://localhost:4603/models/yolo26_small_trt/load
 curl -X POST "http://localhost:4603/detect?model_name=yolo26_small_trt" -F "image=@photo.jpg"
 ```

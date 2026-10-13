@@ -29,8 +29,10 @@ another.
 :::warning[`OP_*` variables are read at process start]
 Curation routers build their prefix when `src.main` is imported, and
 workers read their settings once at startup. Changing any `OP_*` variable
-needs a container recreate (`docker compose up -d --force-recreate api`),
-not just a reload.
+needs a container **recreate**, not a restart. `./openprocessor start` (or
+`make up` and `make curation-up` in a checkout) recreates every service whose
+configuration changed. For one service, run
+`docker compose -p <project> up -d --force-recreate <service>`.
 :::
 
 ## Where configuration lives
@@ -53,24 +55,28 @@ Details are on [Projects](../guides/projects.mdx) and
 
 ## GPU profile and performance
 
-Written by `scripts/setup.sh` from the selected GPU profile. The profile
-itself drives the generated `docker-compose.override.yml` (Triton/API GPU
-pinning, uvicorn workers, shared memory, OpenSearch heap) and the
-generated model configs, so switch profiles with
-`./scripts/openprocessor.sh profile <name>` rather than by editing these
-values by hand.
+The installer and `scripts/setup.sh` write these keys from the selected GPU
+profile (`minimal`, `standard` or `full`; see [GPU sizing](../deployment/gpu-sizing.mdx)).
+The profile is applied **when it is chosen**: it sets the Triton model
+instance counts and batch size in the model configs, and decides whether GPU
+decode is on (`OP_INGEST_GPU_DECODE`, the one profile-driven key the app
+acts on). The other keys below record the choice; `docker-compose.yml`
+does not read `TRITON_WORKERS`, `MAX_BATCH_SIZE` or `SHM_SIZE` (the API
+runs 32 uvicorn workers and every service that sets `shm_size` uses `8g`), so
+editing them changes nothing.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `GPU_PROFILE` | `standard` | `minimal` (6-8 GB), `standard` (12-24 GB), `full` (48 GB+) |
-| `GPU_ID` | `0` | GPU the setup script pins Triton and the API to |
-| `TRITON_WORKERS` | `16` | uvicorn workers for the API (recommended 8 / 16 / 32 per profile) |
-| `MAX_BATCH_SIZE` | `32` | Inference batch size for generated model configs (16 / 32 / 64) |
-| `SHM_SIZE` | `6g` | Container shared memory (4g / 6g / 8g) |
-| `OPENSEARCH_HEAP` | `2g` | OpenSearch JVM heap. The installer sets it from host RAM (RAM/8, 1-8 GB) and never overwrites a value you set. Raise it for more projects: about 1 GB per 20 shards |
+| `GPU_PROFILE` | `standard` | `minimal` (6-8 GB), `standard` (12-24 GB), `full` (48 GB+). Read by `./openprocessor gpu plan` and the model setup, not by compose |
+| `GPU_ID` | `0` | GPU the setup scripts measure for the profile |
+| `OP_INGEST_GPU_DECODE` | `1` for `full`, `0` for `minimal` and `standard` | Decode large photos on the GPU; costs about 8.5 GB more VRAM on the Triton card |
+| `OPENSEARCH_HEAP` | `2g` in `env.template` | OpenSearch JVM heap. The installer sets it to half of host RAM, between 2 and 30 GB, and never overwrites a value you set. Raise it for more projects: about 1 GB per 20 shards |
 
-If a generated `docker-compose.override.yml` exists, its GPU pinning for
-`triton-server` and `api` wins over the `*_GPU_ID` variables below.
+Choose the profile at install time: pass `--profile NAME` to the installer,
+or run `scripts/setup.sh --profile=NAME --force` in a checkout (`--force`
+rewrites `.env`, keeping your `OPENSEARCH_HEAP`). Then check the result with
+`./openprocessor gpu plan`. `./openprocessor profile <name>` does not switch
+an existing install: it leaves `GPU_PROFILE` in `.env` unchanged.
 
 ## GPU ids
 
@@ -139,7 +145,7 @@ curation deployment actually sets:
 | `OP_INGEST_PRIMARY_DETECTOR_MODEL` | **Required for ingest** (it `503`s without one): the Triton end2end model that proposes items, e.g. `yolov11_small_trt_end2end` |
 | `OP_INGEST_PRIMARY_CLASS_IDS` | Retired and ignored with a warning. Narrow ingest per project with the ingest policy instead |
 | `OP_INGEST_PRIMARY_ASSIGNS_CLASS` | `false` (default): detections are unlabeled proposals. `true` only if the detector was trained on your class registry |
-| `OP_SOURCE_ROOT_HOST` | Host directory mounted read-only at `/data/source` in `api` and the detection worker (default `./data/source`) |
+| `OP_SOURCE_ROOT_HOST` | Host directory mounted read-only at `/data/source` in three services: `api`, `curation-detection-worker` and `curation-auto-label-worker`. A source checkout defaults to `./data/source`; the installer writes `./data`. Recreate all three after changing it |
 | `OP_VLM_URL`, `OP_VLM_MODEL`, `OP_VLM_API_KEY` | An OpenAI-compatible `/v1/chat/completions` endpoint. This defines the built-in `env` VLM endpoint; `OP_VLM_MODEL` is required whenever `OP_VLM_URL` is set. More endpoints are registered through the API; see [VLM selection](../guides/vlm-selection.mdx) |
 | `OP_SEGMENTER_URL` | e.g. `http://segmenter:8000`; empty makes the cascade's segmenter leg a clean no-op |
 | `HF_TOKEN` | Needed by the segmenter (gated SAM 3 weights) and for gated VLM weights |
