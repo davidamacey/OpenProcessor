@@ -266,6 +266,28 @@ model_setup_group_outputs() {
 _ms_api() { dc run --rm --no-deps -T -w /app api "$@"; }
 _ms_triton() { dc run --rm --no-deps -T triton-server "$@"; }
 
+# Same as PE_NORMALIZE in export/build_pe_trt.sh (a test keeps them equal).
+_MS_PE_NORMALIZE="--mean 0.5 0.5 0.5 --std 0.5 0.5 0.5"
+
+# _ms_pe_uint8_prepare: uint8 input prefix after the FP16 bake (which keeps the I/O
+# float32), then fail unless the input datatype is the one config.pbtxt declares.
+_ms_pe_uint8_prepare() {
+    # shellcheck disable=SC2086
+    _ms_api python /app/export/uint8_input.py /app/models/pe_image_encoder.build.onnx \
+        /app/models/pe_image_encoder.build.u8.onnx $_MS_PE_NORMALIZE \
+        && _ms_api python /app/export/check_input_dtype.py \
+            /app/models/pe_image_encoder.build.u8.onnx /app/models/pe_image_encoder/config.pbtxt \
+        || { log_error "pe_image_encoder: the engine input would not match config.pbtxt; Triton would refuse to load it"; return 1; }
+}
+
+# _ms_config_input_dtype MODEL: the input datatype (UINT8, FP32, ...) the shipped
+# config.pbtxt declares, empty when there is no config.
+_ms_config_input_dtype() {
+    local cfg="${OP_DIR:?OP_DIR not set}/models/$1/config.pbtxt"
+    [[ -f "$cfg" ]] || return 0
+    awk '/^input[[:space:]]*\[/ {in_in=1} in_in && /data_type:/ {sub(/.*TYPE_/, ""); print $1; exit}' "$cfg"
+}
+
 _ms_pe_trtexec() {
     local onnx="$1"
     _ms_triton trtexec \
@@ -292,7 +314,7 @@ _ms_precision_file() {
 }
 
 # The PE engine's trtexec profile (_ms_pe_trtexec), recorded in its stamp.
-_MS_PE_FLAGS="min1/opt8/max32 336x336 workspace8G strongly-typed"
+_MS_PE_FLAGS="min1/opt8/max32 336x336 workspace8G strongly-typed input=uint8"
 _MS_PE_ONNX_REL="pytorch_models/pe_image_encoder.onnx"
 
 # _ms_compute_cap: compute capability of the lowest GPU id given to Triton.
@@ -359,7 +381,7 @@ model_setup_stamp_report() {
 # returns 1 when the engine is current. The TensorRT build is covered by the
 # Triton image digest that group_should_skip already compares.
 model_setup_stamp_stale() {
-    local model="$1" onnx_rel="$2" f row precision cc sha now_cc now_sha
+    local model="$1" onnx_rel="$2" f row precision cc sha now_cc now_sha want
     f="$(_ms_precision_file)"
     row="$(awk -F'\t' -v m="$model" '$1 == m' "$f" 2>/dev/null | tail -n1)"
     if [[ -z "$row" ]]; then echo "no build stamp"; return 0; fi
@@ -367,6 +389,11 @@ model_setup_stamp_stale() {
     cc="$(cut -f5 <<< "$row")"
     sha="$(cut -f6 <<< "$row")"
     if [[ "$precision" != fp16 ]]; then echo "built as ${precision}"; return 0; fi
+    want="$(_ms_config_input_dtype "$model")"
+    if [[ -n "$want" && " $(cut -f7 <<< "$row") " != *" input=${want,,} "* ]]; then
+        echo "engine input datatype is not the config's ${want}"
+        return 0
+    fi
     if [[ -z "$sha" ]]; then echo "stamp has no ONNX hash"; return 0; fi
     now_cc="$(_ms_compute_cap)"
     if [[ -n "$now_cc" && "$cc" != "$now_cc" ]]; then
@@ -418,7 +445,8 @@ _ms_pe_build_engine() {
     if [[ "${OP_DRY_RUN:-0}" == "1" ]]; then
         _ms_api python /app/export/trt_utils.py /app/pytorch_models/pe_image_encoder.onnx \
             /app/models/pe_image_encoder.build.onnx
-        _ms_pe_trtexec pe_image_encoder.build.onnx
+        _ms_pe_uint8_prepare
+        _ms_pe_trtexec pe_image_encoder.build.u8.onnx
         return 0
     fi
     attempt_log="$(_model_setup_logdir)/pe_image_trt.fp16_attempt.log"
@@ -426,11 +454,12 @@ _ms_pe_build_engine() {
     _ms_api mkdir -p /app/models/pe_image_encoder/1
     if { _ms_api python /app/export/trt_utils.py /app/pytorch_models/pe_image_encoder.onnx \
             /app/models/pe_image_encoder.build.onnx \
-        && _ms_pe_trtexec pe_image_encoder.build.onnx; } >"$raw" 2>&1; then
+        && _ms_pe_uint8_prepare \
+        && _ms_pe_trtexec pe_image_encoder.build.u8.onnx; } >"$raw" 2>&1; then
         ( umask 077; model_setup_redact < "$raw" > "$attempt_log" )
         rm -f "$raw"
         cat "$attempt_log"
-        _ms_api rm -f /app/models/pe_image_encoder.build.onnx
+        _ms_api rm -f /app/models/pe_image_encoder.build.onnx /app/models/pe_image_encoder.build.u8.onnx
         _ms_record_precision pe_image_encoder fp16 "" "$_MS_PE_ONNX_REL" "$_MS_PE_FLAGS"
         return 0
     fi
@@ -441,8 +470,8 @@ _ms_pe_build_engine() {
     reason="${reason:-FP16 build failed, see ${attempt_log}}"
     echo "FP16 engine build failed (${reason}); retrying from the FP32 ONNX"
     _ms_api cp /app/pytorch_models/pe_image_encoder.onnx /app/models/pe_image_encoder.build.onnx
-    if _ms_pe_trtexec pe_image_encoder.build.onnx; then
-        _ms_api rm -f /app/models/pe_image_encoder.build.onnx
+    if _ms_pe_uint8_prepare && _ms_pe_trtexec pe_image_encoder.build.u8.onnx; then
+        _ms_api rm -f /app/models/pe_image_encoder.build.onnx /app/models/pe_image_encoder.build.u8.onnx
         _ms_record_precision pe_image_encoder fp32_fallback "FP16 build failed: ${reason}" "$_MS_PE_ONNX_REL" "$_MS_PE_FLAGS"
         return 0
     fi
@@ -469,7 +498,7 @@ _ms_run_group_steps() {
             ;;
         yolo)
             "$runner" yolo_export _ms_api python /app/export/export_models.py --models small \
-                --formats trt trt_end2end --normalize-boxes --save-labels --generate-config || return 1
+                --formats trt_end2end --normalize-boxes --save-labels --generate-config || return 1
             ;;
         mobileclip)
             "$runner" mobileclip_image _ms_api python /app/export/export_mobileclip_image_encoder.py || return 1
