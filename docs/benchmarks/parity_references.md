@@ -80,14 +80,14 @@ The references captured from the final configuration are `ref-u8fp16` and `ref-u
 to each other they pass every `precision` gate (images with identical boxes 99.4 %, crop vectors p01
 0.99995, kNN overlap 0.9955, cluster purity drop 0.45 points).
 
-## Record: decode once and the GPU front end (#217)
+## Record: decode once and the GPU decode (#217)
 
 The whole-frame square is now resized from the frame decoded for the detector (owner decision D2), so
 whole-frame vectors leave the old space by design, and photos above the size gate may be decoded on the
-GPU (D1). One capture of the shipped configuration (`ref-ship`: GPU front end on, gate 3 MP, so the
+GPU (D1). One capture of the shipped configuration (`ref-ship`: GPU decode on, gate 3 MP, so the
 COCO frames take the CPU decode) against `ref-u8fp16` passes every `precision` gate except P-pew
 (whole-frame p01 0.65, median 0.82; `docs/benchmarks/parity/decode_once_vs_ref/`). The GPU decode
-itself, all 2,000 frames through the front end against the CPU decode with the same engine, is
+itself, all 2,000 frames through the GPU decode against the CPU decode with the same engine, is
 AP-neutral (AP 0.4378 against 0.4376; `docs/benchmarks/parity/detector_quality_gpu_decode/`).
 `ref-ship` replaces `ref-u8fp16` as the reference for later work.
 

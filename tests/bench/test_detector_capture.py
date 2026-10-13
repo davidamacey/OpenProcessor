@@ -1,4 +1,4 @@
-"""``detector_capture.frontend_row``: the GPU front end's rows mapped like the CPU capture's."""
+"""``detector_capture.gpu_decode_row``: the GPU decode's rows mapped like the CPU capture's."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ class _Client:
         self.callback = callback
 
     def async_stream_infer(self, model: str, inputs: list) -> None:
-        assert model == 'image_frontend'
+        assert model == 'gpu_image_prep'
         assert inputs[0].shape() == [4]
         self.callback(result=_Result(self.outputs), error=None)
 
@@ -47,7 +47,7 @@ def test_rows_are_undone_with_the_returned_letterbox() -> None:
             'det_classes': np.array([3], np.int32),
         }
     )
-    rows = dc.frontend_row(client, 'image_frontend', b'\xff\xd8\xff\xd9')
+    rows = dc.gpu_decode_row(client, 'gpu_image_prep', b'\xff\xd8\xff\xd9')
     expected = dc.decode_row(
         np.array([1]),
         client.outputs['det_boxes'],
@@ -64,4 +64,4 @@ def test_rows_are_undone_with_the_returned_letterbox() -> None:
 def test_a_declined_image_stops_the_capture() -> None:
     client = _Client({'status': np.array([b'progressive'], dtype=np.object_)})
     with pytest.raises(SystemExit, match='progressive'):
-        dc.frontend_row(client, 'image_frontend', b'\xff\xd8\xff\xd9')
+        dc.gpu_decode_row(client, 'gpu_image_prep', b'\xff\xd8\xff\xd9')

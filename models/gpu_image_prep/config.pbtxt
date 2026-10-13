@@ -1,7 +1,7 @@
-# image_frontend: decode a photo once on the GPU and derive every ingest input from that frame
+# gpu_image_prep: decode a photo once on the GPU and derive every ingest input from that frame
 # (Python backend, decoupled: requests from all API workers run concurrently on worker threads
-# inside one process, one CUDA context). See 1/model.py. Loaded only when photo ingest uses the GPU front end
-# (OP_INGEST_GPU_FRONTEND, on by default); the API decodes on the CPU otherwise.
+# inside one process, one CUDA context). See 1/model.py. Loaded only when photo ingest uses the GPU decode
+# (OP_INGEST_GPU_DECODE, on by default); the API decodes on the CPU otherwise.
 #
 # Inputs:
 #   - jpeg:          [-1] UINT8, the encoded image as uploaded
@@ -17,7 +17,7 @@
 #                      each detection's clamped rectangle (pixels 0: empty)
 #   - crop_jpegs:      [-1] STRING, each detection's crop, JPEG quality 90
 
-name: "image_frontend"
+name: "gpu_image_prep"
 backend: "python"
 max_batch_size: 0
 model_transaction_policy { decoupled: true }

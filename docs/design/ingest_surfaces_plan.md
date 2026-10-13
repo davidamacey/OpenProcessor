@@ -11,7 +11,7 @@ Owner decisions already made (do not reopen): no API authentication or security 
 stack runs locally), but credentials come only from the environment, an instance role or a mounted secret
 file, never from a request or the tree, and an unconfigured bucket or prefix fails closed; webhook **and**
 cron **and** poll-watch are all in scope; the work is built on the final pipeline and so inherits the decode
-routing (photos of 3 MP and more may use the opt-in GPU front end, CPU below; decode internals are not
+routing (photos of 3 MP and more may use the opt-in GPU decode, CPU below; decode internals are not
 touched), the coalesced OpenSearch writer, bulk concurrency 16, project isolation, the lock rule and OCC,
 and the content-hash ledger; one wire serializer, with `make contracts` in the same commit as each route
 change; live tests use MinIO in an isolated compose project, offline tests use a fake client, data is
@@ -64,7 +64,7 @@ replication logic.
   `persist_uploaded_bytes` (content-addressed `upload_root/<hh>/<hash><ext>`, atomic, dedup-by-existence),
   then `service.ingest_batch(data, paths, source, source_identifiers, ingest_run_id)`. `source_identifier`
   is an indexed keyword, already matched by `path_lookup`.
-- Decode routing and GPU front end: inside `ingest_batch` (`ingest_batch.py`, `ingest_frontend.py`); photos at or
+- Decode routing and GPU decode: inside `ingest_batch` (`ingest_batch.py`, `ingest_gpu_decode.py`); photos at or
   above `ingest_gpu_min_megapixels` may use the opt-in GPU path, CPU below. **Not touched.**
 - Admission: `src/utils/cpu_pool.py` `InflightGate` (FIFO, counts MiB, a request larger than capacity is clamped
   and runs alone); the process gate `ingest_gate()` counts decoded MiB (`OP_INGEST_INFLIGHT_MB`, 1024).

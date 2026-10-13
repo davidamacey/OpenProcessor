@@ -63,7 +63,7 @@ RUN rm -rf /usr/local/cuda-*/NsightSystems-cli-* \
 
 # Install PyTorch and TorchVision (CUDA 13.x wheels)
 # Required for Python backend models (ROI align, per-box embeddings, OCR pipeline).
-# CuPy: image_frontend (the GPU ingest front end) compiles its kernels with it; the base image
+# CuPy: gpu_image_prep (the GPU decode) compiles its kernels with it; the base image
 # ships this version, pinned so a base bump cannot drop it silently.
 RUN pip install --no-cache-dir \
     torch==2.12.1 \

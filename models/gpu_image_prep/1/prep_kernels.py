@@ -1,10 +1,10 @@
-"""Fused uint8 CUDA kernels of the GPU ingest front end, through CuPy ``RawKernel``.
+"""Fused uint8 CUDA kernels of the GPU decode, through CuPy ``RawKernel``.
 
 Every model input is resampled from the full-resolution decoded frame (HWC uint8 on the GPU) by
 one separable two-pass resampler: a horizontal pass into a float32 scratch holding only the rows
 the output needs, then a vertical pass that writes uint8 CHW straight into its slot of a batch
 tensor (the detector letterbox canvas, a PE square). Weights come from
-``frontend_geometry.filter_weights`` (a few KB per size, cached). A region may extend past the
+``prep_geometry.filter_weights`` (a few KB per size, cached). A region may extend past the
 frame: outside pixels read as 0, as ``PIL.Image.crop`` fills them.
 
 The blur kernel computes OpenCV's grey plane (15-bit fixed-point weights) and the 3 x 3 Laplacian
@@ -19,7 +19,7 @@ from typing import Any
 import cupy as cp
 import numpy as np
 
-from frontend_geometry import filter_weights
+from prep_geometry import filter_weights
 
 
 _SRC = r'''
@@ -119,7 +119,7 @@ extern "C" __global__ void lap_sums(
 '''
 
 
-class FrontendKernels:
+class PrepKernels:
     def __init__(self) -> None:
         mod = cp.RawModule(code=_SRC)
         self.k_h = mod.get_function('resample_h')

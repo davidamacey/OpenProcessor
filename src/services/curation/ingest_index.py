@@ -25,7 +25,7 @@ from src.core.logging import get_logger, get_request_id
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.clustering.ivf_ingest import get_ivf_ingest_store, ingest_passes_gate
 from src.services.curation.embedding_state import EMBEDDED, FAILED
-from src.services.curation.ingest_frontend import FrontendFrame
+from src.services.curation.ingest_gpu_decode import GpuDecodeFrame
 from src.services.curation.ingest_models import ERROR_KIND_BULK_INDEX, IngestResult
 from src.services.curation.ingest_policy import select_for_embedding
 from src.services.curation.item_doc import (
@@ -67,7 +67,7 @@ class ImageContext:
     image_path: str
     created: bool
     pil: Image.Image | None
-    """The decoded frame; ``None`` when the GPU front end decoded the image (``frontend``)."""
+    """The decoded frame; ``None`` when the GPU decode decoded the image (``gpu_frame``)."""
     width: int
     height: int
     imohash: str
@@ -76,7 +76,7 @@ class ImageContext:
     ingest_run_id: str | None = None
     rgb: np.ndarray | None = None
     """``pil``'s pixels as an HWC uint8 array when the decoder produced one (no copy for blur)."""
-    frontend: FrontendFrame | None = None
+    gpu_frame: GpuDecodeFrame | None = None
     dataset_split: str | None = None
     """The split the images doc is filed under (a dataset import's); items
     indexed on this image later inherit it."""
@@ -151,7 +151,7 @@ def residual_placement(
 async def embed_items(
     service: CurationIngestService,
     items: list[DetectedItem],
-    crops: list[Image.Image] | FrontendFrame,
+    crops: list[Image.Image] | GpuDecodeFrame,
     width: int,
     height: int,
     image_path: str,
@@ -170,7 +170,7 @@ async def embed_items(
             items[i].pe_embedding = None
             items[i].backbone_embedding = None
     try:
-        if isinstance(crops, FrontendFrame):
+        if isinstance(crops, GpuDecodeFrame):
             for i in wanted:
                 items[i].pe_embedding = crops.crop_embedding(items[i])
         elif wanted:
@@ -200,7 +200,7 @@ async def index_items(
     active region profile (a ``processing: none`` import: the items are
     validated labels the region worker must never see).
     """
-    img, frame = ctx.pil, ctx.frontend
+    img, frame = ctx.pil, ctx.gpu_frame
     full_w, full_h = ctx.width, ctx.height
     image_path = ctx.image_path
     crops: list[Image.Image] | list[bytes]
