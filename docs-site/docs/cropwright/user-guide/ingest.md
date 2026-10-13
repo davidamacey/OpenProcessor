@@ -35,23 +35,35 @@ persists them (content-addressed), so this banner is normally absent.
 ## Bulk ingest (folder or manifest)
 
 Starts a background run over a folder, or a manifest listing image paths, that
-the backend already has mounted under a source root (the roots are listed
-above the form). The run is the backend's, the same one the command line
-`scripts/curation/bulk_ingest.py` drives, so it keeps going if you leave the
-page and the page picks it up again when you return.
+the backend already has mounted under a source root. The roots are listed
+above the form. Mounting a share, trial runs, timing and disk are in the
+[Ingest a large folder](../../guides/ingest-large-folder.mdx) guide.
 
-While it runs the panel shows what the backend serves: images found so far (a
-folder is scanned while it runs), ingested, duplicate and failed counts, the
-speed over the last 30 seconds and over the whole run, the time left and a
-"Where the time went" table of seconds per stage. **Cancel** stops after the
-batches in flight; images already stored stay stored. After a cancel, a
-backend restart or a run that finished with failed images, **Resume** starts
-the same source again and skips what it already stored. Failed images are
-listed with the reason for each. Only one run per project can be live; a second
-start shows the backend's answer.
+1. Choose **Folder** or **Manifest**.
+2. Enter the path as the backend sees it (it starts with the root, for example
+   `/data/source`).
+3. Press **Start bulk ingest**. **Advanced** has file extensions, images per
+   batch and batches in flight; the placeholders are the backend's defaults.
 
-Under **Advanced**: file extensions, images per batch and batches in flight
-(the placeholders are the backend's defaults; only change them to tune a run).
+The run belongs to the backend, the same one `scripts/curation/bulk_ingest.py`
+drives, so it keeps going if you leave the page and the page picks it up when
+you return. While it runs the panel shows what the backend serves: images found
+so far (a folder is scanned while it runs), ingested, duplicate and failed
+counts, the speed over the last 30 seconds and over the whole run, the time left
+and a "Where the time went" table of seconds per stage.
+
+- **Cancel** stops after the batches in flight; images already stored stay
+  stored.
+- **Resume** appears after a cancel, a backend restart or a run that finished
+  with failed images. It starts the same source again and skips what is already
+  stored.
+- Failed images are listed with the reason for each.
+- Only one run per project can be live; a second start shows the backend's
+  answer.
+
+<Screenshot name="cropwright/ingest-bulk-panel-1600.png" alt="Cropwright ingest page with the bulk ingest panel and the list of source roots" caption="The bulk ingest panel: the backend's source roots, folder or manifest, and Start" />
+
+<Screenshot name="cropwright/ingest-bulk-run-1600.png" alt="A bulk ingest run in progress with counts, speed and the stage table" caption="A run in progress" />
 
 ## Server-path batch ingest
 
