@@ -116,6 +116,9 @@ IMGS_TEST/
 # export_models.py --generate-config never replaces a differing tracked config.pbtxt;
 # it writes this beside it for a diff (export/config_write.py).
 models*/*/config.pbtxt.generated
+# The standard (non-NMS) YOLO11 TensorRT export is optional and nothing in the stack serves it;
+# `make export-models` writes its config and labels, the end2end export is the tracked one.
+/models/yolov11_*_trt/
 # Class registry generated at runtime (default OP_REGISTRY_PATH); the
 # warehouse example data/class_registry.example.json IS committed.
 /data/class_registry.json

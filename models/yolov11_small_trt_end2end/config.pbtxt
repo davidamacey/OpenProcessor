@@ -19,13 +19,14 @@ output [
   {
     name: "det_boxes"
     # Boxes/scores precision follows the built engine (TRT-version
-    # dependent); the exporter rewrites this config from the engine.
+    # dependent); the exporter rewrites this config from the engine. The values
+    # here are what the default FP16 build produces (FP32 boxes, FP16 scores).
     data_type: TYPE_FP32
     dims: [ 300, 4 ]
   },
   {
     name: "det_scores"
-    data_type: TYPE_FP32
+    data_type: TYPE_FP16
     dims: [ 300 ]
   },
   {

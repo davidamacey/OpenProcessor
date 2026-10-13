@@ -267,6 +267,18 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   the model, the FP16 failure reason and the consequence, is recorded in `.install/precision.tsv`,
   marks the model group `degraded` (a re-run retries FP16) and shows under "Degraded precision" in
   `./openprocessor models status` and in the install summary.
+- The installer's PE image encoder build now puts the uint8 input prefix in front of the FP16-baked
+  (and the FP32 fallback) ONNX, as `export/build_pe_trt.sh` does, so a fresh install, repair or
+  upgrade no longer leaves `pe_image_encoder` UNAVAILABLE with "unexpected datatype TYPE_FP32 ...
+  expecting TYPE_UINT8". `export/check_input_dtype.py` compares the built input datatype to
+  `config.pbtxt` and fails the install on a mismatch; the build stamp records `input=uint8`, so an
+  engine built before this fix is rebuilt on the next `models install`.
+- `./openprocessor models install|repair` in a checkout without `.install/state.json` no longer exits
+  silently: it logs that every model group will be built and goes on (#270).
+- The committed `yolov11_small_trt_end2end` config declares the FP16 build's `det_scores` datatype, so a
+  default export leaves the tree clean; a test compares each committed exporter-written config with its
+  renderer. The installer no longer builds the unused standard `yolov11_small_trt` engine, and that
+  directory is git-ignored for `make export-models`.
 
 ## [0.5.0] - 2026-10-09
 
