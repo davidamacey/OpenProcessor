@@ -11,6 +11,11 @@ vector. This page covers where you see that and change it. Every number,
 list and refusal shown is served by the backend; Cropwright computes none of
 them.
 
+What each field means, the API calls and the cost of each mode are in the
+[Ingest policy](../../guides/ingest-policy.mdx) guide. Set the policy before a
+[large ingest](../../guides/ingest-large-folder.mdx): it changes future ingests
+only.
+
 ## The detector card (`/ingest`)
 
 The [Ingest](./ingest.md) page shows a card for the served detector: model,
@@ -26,7 +31,8 @@ reported."
 The form starts from the policy the backend serves.
 
 - **Embedding mode**, always open: `all` (every detection), `selected` (only
-  those matching your criteria) or `lazy` (none until asked for).
+  those matching your criteria) or `lazy` (no detection vector until asked for;
+  the whole-frame vector of each image is still computed).
 - **Detect filter**, collapsed under advanced: classes, excluded classes,
   confidence, area, a per-image cap and how classes are resolved.
 - **Per-project detector override**, also advanced.
