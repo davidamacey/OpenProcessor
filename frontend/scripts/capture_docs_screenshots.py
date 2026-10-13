@@ -836,7 +836,7 @@ def main() -> int:
             clip.screenshot(path=str(out_path))
         else:
             page.screenshot(path=str(out_path), full_page=True)
-        print(f"  wrote {out_path.relative_to(REPO_ROOT)}")
+        print(f"  wrote {out_path}")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(args=["--disable-gpu"])
