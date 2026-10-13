@@ -24,6 +24,7 @@ Usage:
     e2e/.venv/bin/python scripts/capture_docs_screenshots.py \\
         --base-url http://localhost:<port-of-a-public-data-instance>
     # or: CROPWRIGHT_URL=... e2e/.venv/bin/python scripts/capture_docs_screenshots.py
+    # or, from the repo root: make docs-screenshots CROPWRIGHT_URL=...
 
 The capture is read-only: every non-GET/HEAD request is aborted, so a
 screenshot pass can never write to the backend it points at.
@@ -37,11 +38,10 @@ small explicit allow-list in READ_ONLY_CALLS (calls the UI makes only to
 render a report/dialog, each of which writes nothing server-side). Keep
 docs-site/docs/cropwright/developer-guide/screenshots.md's list in step with it.
 
-The route list is NOT hardcoded here — it's read from
-frontend/scripts/screenshot_routes.json, the same directory the
-landing page's ScreenshotShowcase component and doc pages' <Screenshot>
-slots pull filenames from. Add a route there, not in this script, when a
-doc page gains a new screenshot slot.
+The route list is NOT hardcoded here: it is read from
+frontend/scripts/screenshot_routes.json. Add a route there, or a state to
+STATES below, when a doc page gains a new <Screenshot> slot. The full guide
+(data rule, fixtures, `make docs-screenshots`) is docs-site/docs/developer-guide/screenshots.mdx.
 """
 from __future__ import annotations
 
@@ -735,6 +735,99 @@ def state_run_results_confusion(page, ctx: Ctx) -> None:
     _settle(page, 2500)
 
 
+# --- Slots for the large-folder ingest guide, pipeline modes, audit and the settings lists ----
+# Read-only pages use ctx.project (a public sample project). The slots that need a run in
+# progress, a failed run or a deactivated VLM read throwaway cwlife-* projects that
+# docs_screenshot_fixtures.py (`bulk`, `vlm-off`) creates; the browser itself never writes.
+BULK_RUN_PROJECT = os.environ.get("BULK_RUN_PROJECT", "")
+BULK_FAIL_PROJECT = os.environ.get("BULK_FAIL_PROJECT", "")
+VLM_OFF_PROJECT = os.environ.get("VLM_OFF_PROJECT", "cwlife-vlm-off")
+
+
+def _cwlife(slug: str) -> str:
+    if not slug.startswith("cwlife-"):
+        raise RuntimeError(f"{slug!r} is not a throwaway cwlife-* project (set it from the fixtures output)")
+    return slug
+
+
+def _bulk_section(page, ctx: Ctx, slug: str, wait: str):
+    page.goto(f"{ctx.base}/p/{slug}/ingest", wait_until="domcontentloaded", timeout=30_000)
+    page.wait_for_selector(wait, timeout=30_000)
+    panel = page.locator("[data-testid='bulk-ingest']")
+    panel.scroll_into_view_if_needed()
+    _settle(page, 1500)
+    return panel.locator("xpath=..")  # the card around the panel: heading included
+
+
+def state_ingest_bulk_panel(page, ctx: Ctx):
+    # A throwaway project with no run yet, so the panel shows only the roots and the form.
+    return _bulk_section(page, ctx, _cwlife(VLM_OFF_PROJECT), "[data-testid='bulk-roots']")
+
+
+def state_ingest_bulk_run(page, ctx: Ctx):
+    # Start the run just before capturing: docs_screenshot_fixtures.py bulk
+    sec = _bulk_section(page, ctx, _cwlife(BULK_RUN_PROJECT), "[data-testid='bulk-run']")
+    page.locator("[data-testid='bulk-run'] summary", has_text="Where the time went").click()
+    page.wait_for_timeout(800)
+    return sec
+
+
+def state_ingest_bulk_failures(page, ctx: Ctx):
+    return _bulk_section(page, ctx, _cwlife(BULK_FAIL_PROJECT), "[data-testid='bulk-failures']")
+
+
+def state_ingest_policy(page, ctx: Ctx) -> None:
+    page.goto(ctx.url("/settings/ingest-policy"), wait_until="domcontentloaded", timeout=30_000)
+    page.wait_for_selector("main", timeout=20_000)
+    _settle(page, 2000)
+
+
+def state_vlm_endpoint_off(page, ctx: Ctx):
+    # Crop to the active-VLM card: the endpoint table below lists every project of the
+    # deployment under "Used by", which must not reach a screenshot.
+    page.goto(
+        f"{ctx.base}/p/{_cwlife(VLM_OFF_PROJECT)}/settings/models", wait_until="domcontentloaded", timeout=30_000
+    )
+    page.wait_for_selector("section#active", timeout=20_000)
+    _settle(page, 2500)
+    return page.locator("section#active")
+
+
+def state_audit(page, ctx: Ctx) -> None:
+    page.goto(ctx.url("/audit"), wait_until="domcontentloaded", timeout=30_000)
+    page.wait_for_selector("main", timeout=20_000)
+    _settle(page, 2500)
+
+
+def state_cluster_detail(page, ctx: Ctx) -> None:
+    cl = ctx.api("/clusters?page_size=40")
+    rows = [c for c in cl.get("clusters", cl.get("items", [])) if c.get("cluster_id", -1) >= 0]
+    cid = max(rows, key=lambda c: min(c.get("size", 0), 60))["cluster_id"]
+    page.goto(ctx.url(f"/clusters/{cid}"), wait_until="domcontentloaded", timeout=30_000)
+    page.wait_for_selector("[data-testid='cluster-header-counts']", timeout=20_000)
+    _settle(page, 2500)
+
+
+def state_dataset_imports(page, ctx: Ctx) -> None:
+    page.goto(ctx.url("/datasets/imports"), wait_until="domcontentloaded", timeout=30_000)
+    page.wait_for_selector("main", timeout=20_000)
+    _settle(page, 2000)
+
+
+def _settings_list(path: str):
+    def state(page, ctx: Ctx) -> None:
+        page.goto(ctx.url(path), wait_until="domcontentloaded", timeout=30_000)
+        page.wait_for_selector("main", timeout=20_000)
+        _settle(page, 2000)
+
+    return state
+
+
+state_prompt_packs_list = _settings_list("/settings/prompt-packs")
+state_region_profiles_list = _settings_list("/settings/region-profiles")
+state_open_vocab_list = _settings_list("/settings/open-vocab")
+
+
 # name -> function; every state is captured at 1600px only.
 STATES = {
     "projects-delete-dry-run": state_projects_delete_dry_run,
@@ -771,6 +864,17 @@ STATES = {
     "dashboard-embedding": state_dashboard_embedding,
     "crop-embedding-row": state_crop_embedding_row,
     "run-results-confusion": state_run_results_confusion,
+    "ingest-bulk-panel": state_ingest_bulk_panel,
+    "ingest-bulk-run": state_ingest_bulk_run,
+    "ingest-bulk-failures": state_ingest_bulk_failures,
+    "ingest-policy": state_ingest_policy,
+    "vlm-endpoint-off": state_vlm_endpoint_off,
+    "audit": state_audit,
+    "cluster-detail": state_cluster_detail,
+    "dataset-imports": state_dataset_imports,
+    "prompt-packs-list": state_prompt_packs_list,
+    "region-profiles-list": state_region_profiles_list,
+    "open-vocab-list": state_open_vocab_list,
 }
 
 

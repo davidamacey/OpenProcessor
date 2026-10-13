@@ -12,11 +12,21 @@ asynchronous delete to finish.
 
     python3 scripts/docs_screenshot_fixtures.py setup    --base-url http://localhost:5184
     python3 scripts/docs_screenshot_fixtures.py teardown --base-url http://localhost:5184
+
+`bulk` and `vlm-off` set up the slots of the large-folder ingest guide and
+the VLM-off state. They need a folder of PUBLIC images that the API container
+can read (`--folder`, a container path) and the name of the API container
+(`--container`, to write a manifest under the throwaway project's upload root):
+
+    python3 scripts/docs_screenshot_fixtures.py bulk    --base-url http://localhost:5184 \\
+        --folder /data/source/valid/images --container <api-container>
+    python3 scripts/docs_screenshot_fixtures.py vlm-off --base-url http://localhost:5184
 """
 from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import time
 import urllib.error
@@ -30,6 +40,7 @@ SRC = "cwlife-src"  # empty combine source
 PAUSED = "cwlife-paused"  # shows the paused chip on /projects
 EDITORS = "cwlife-editors"  # holds the editable prompt pack + region profile
 MERGED = "cwlife-merged"  # combine target
+VLM_OFF = "cwlife-vlm-off"  # a project with its VLM explicitly deactivated
 PACK_NAME = "cwlife_pack"
 PROFILE_NAME = "cwlife_profile"
 
@@ -116,6 +127,45 @@ def setup(base: str) -> None:
         sys.exit("combine failed")
 
 
+def _ensure(base: str, slug: str) -> None:
+    assert_cwlife(slug)
+    status, _ = call(base, "GET", f"/projects/{slug}")
+    if status == 404:
+        create_project(base, slug, slug)
+    wait_active(base, slug)
+
+
+def bulk(base: str, folder: str, container: str) -> None:
+    """Start a folder run (left running for the screenshot) and a manifest run
+    with two missing paths (so the failures list has rows). Both go to fresh
+    projects (a deleted slug is retired for good, and re-ingesting stored images
+    is all duplicates and ends in a second). Run the capture right after: a
+    folder of a few hundred images takes about half a minute."""
+    stamp = int(time.time())
+    BULK_RUN = f"cwlife-bulk-run-{stamp}"
+    BULK_FAIL = f"cwlife-bulk-fail-{stamp}"
+    _ensure(base, BULK_RUN)
+    write(base, "POST", BULK_RUN, "/ingest/bulk", {"folder": folder, "batch_size": 8, "concurrency": 2})  # slow enough to catch mid-run
+    _ensure(base, BULK_FAIL)
+    root = f"/var/lib/openprocessor/projects/{BULK_FAIL}/uploads"
+    listing = subprocess.run(
+        ["docker", "exec", container, "sh", "-c", f"ls {folder} | head -n 10"],
+        check=True, capture_output=True, text=True,
+    ).stdout.split()
+    lines = [f"{folder}/{n}" for n in listing] + [f"{folder}/missing_1.jpg", f"{folder}/missing_2.jpg"]
+    subprocess.run(
+        ["docker", "exec", "-i", container, "sh", "-c", f"mkdir -p {root} && cat > {root}/manifest.txt"],
+        check=True, input="\n".join(lines) + "\n", text=True,
+    )
+    write(base, "POST", BULK_FAIL, "/ingest/bulk", {"manifest": f"{root}/manifest.txt"})
+    print(f"export BULK_RUN_PROJECT={BULK_RUN} BULK_FAIL_PROJECT={BULK_FAIL}")
+
+
+def vlm_off(base: str) -> None:
+    _ensure(base, VLM_OFF)
+    write(base, "POST", VLM_OFF, "/vlm/endpoints/deactivate", {})
+
+
 def teardown(base: str) -> None:
     status, out = call(base, "GET", "/projects?include_archived=true")
     slugs = [p["slug"] for p in out.get("projects", []) if p["slug"].startswith(PREFIX)]
@@ -137,10 +187,19 @@ def teardown(base: str) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("command", choices=["setup", "teardown"])
+    ap.add_argument("command", choices=["setup", "teardown", "bulk", "vlm-off"])
     ap.add_argument("--base-url", required=True)
+    ap.add_argument("--folder", help="bulk: a container path holding public images")
+    ap.add_argument("--container", help="bulk: the API container name")
     a = ap.parse_args()
-    (setup if a.command == "setup" else teardown)(a.base_url)
+    if a.command == "bulk":
+        if not (a.folder and a.container):
+            sys.exit("bulk needs --folder and --container")
+        bulk(a.base_url, a.folder, a.container)
+    elif a.command == "vlm-off":
+        vlm_off(a.base_url)
+    else:
+        (setup if a.command == "setup" else teardown)(a.base_url)
 
 
 if __name__ == "__main__":
