@@ -34,6 +34,8 @@ Container Toolkit, and disk for the tiers you pick. The installer never
 installs packages or changes the Docker daemon config: it tells you what is
 missing and stops.
 
+Not sure which tiers to pick? See [Choose your path](./choose-your-path.mdx).
+
 ## Tiers
 
 | Tier | What you get | Extra images | Needs |
@@ -87,6 +89,18 @@ authenticity**. The same holds for `images.lock`, which
 pins exact digests and are covered by `SHA256SUMS`; the installer also checks
 that each `images.lock` entry names the image repo expected for its key.
 Signed releases are follow-up work.
+
+## Where your images go
+
+The installer sets `OP_SOURCE_ROOT_HOST=./data`, so the install's `data/`
+directory is the **source root**: the folder the API and the workers read
+images from. Inside the containers it is `/data/source`. Three services mount
+it read-only: `api`, `curation-detection-worker` and
+`curation-auto-label-worker`. Point it at your own images (a NAS mount, for
+example) by editing `OP_SOURCE_ROOT_HOST` in `.env`, then apply the change with
+`./openprocessor start`, which recreates the services whose configuration
+changed. `./openprocessor restart` does not re-read `.env`. A source checkout
+that never ran the installer gets the compose default, `./data/source`.
 
 ## Cropwright in the bundle
 
