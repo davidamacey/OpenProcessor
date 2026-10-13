@@ -86,6 +86,16 @@ def test_synth_vectors_are_unit_length_and_follow_the_pool() -> None:
     assert (iid @ pool.T).max(axis=1).mean() < 0.6
 
 
+def test_zero_noise_returns_distinct_real_rows_and_refuses_a_short_pool() -> None:
+    rng = np.random.default_rng(2)
+    pool = o.unit_rows(rng.standard_normal((50, 16), dtype=np.float32))
+    real = o.synth_vectors(pool, 30, 16, rng, noise=0.0)
+    assert len({tuple(r) for r in real.round(6)}) == 30
+    assert all(np.isclose(pool @ r, 1.0, atol=1e-5).any() for r in real)
+    with pytest.raises(ValueError, match='50'):
+        o.synth_vectors(pool, 51, 16, rng, noise=0.0)
+
+
 def test_bulk_body_is_valid_ndjson_with_unique_ids() -> None:
     docs = [orjson.dumps({'n': i}) for i in range(5)]
     body = o.bulk_body('w0os-x', 'items', docs, 1, 4)

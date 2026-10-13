@@ -32,7 +32,7 @@ Pipeline, per image:
 6. Crop-cache write (:func:`~src.services.curation.source_image_cache.write_crop_cache`).
 7. Bulk index: the images doc is a blind upsert (nothing else writes
    that index); items docs go through
-   :func:`~src.clients.occ.occ_upsert_bulk` with human-field guards so a
+   :func:`~src.clients.occ_upsert.occ_upsert_bulk` with human-field guards so a
    re-ingest never clobbers a human-applied label. With a region profile
    active, new items are seeded ``pending_detection`` (never overwriting
    an existing region status) so the region-detection worker picks them
@@ -95,6 +95,7 @@ from src.services.curation.ingest_policy import (
     assign_classes_by_name,
     registry_name_index,
 )
+from src.services.curation.ingest_writer import get_ingest_writer
 from src.services.curation.item_doc import DetectedItem, region_seed_status
 from src.services.curation.ops_metrics import record_ingest_result
 from src.services.detection.geometry import crop_id as _crop_id_fn, letterbox_params
@@ -291,60 +292,41 @@ class CurationIngestService:
         *,
         seed_region: bool = True,
     ) -> dict[str, int]:
-        """Index 1 images doc (blind) + N items docs (OCC upsert).
+        """Write 1 images doc (blind) + N items docs (OCC upsert) through the process's
+        coalescing writer (:mod:`~src.services.curation.ingest_writer`), which batches them
+        with other images' documents and answers for this image alone.
 
         ``created_ids`` (optional out-list) receives the crop_id of every
-        items doc this call newly created.
+        items doc this call newly created. A flush that fails as a whole
+        raises, as the per-image path did.
         """
-        from src.clients.occ import occ_upsert_bulk
-
-        result = {
-            'images_indexed': 0,
-            'crops_created': 0,
-            'crops_updated': 0,
-            'crops_preserved_human': 0,
-            'crops_final_conflicts': 0,
-            'region_queued': 0,
-        }
-
-        if image_doc:
-            image_body = [
-                {'index': {'_index': self.config.images_index, '_id': image_doc['image_id']}},
+        seeding = seed_region and self.region_seed_status is not None
+        with stage_timer('opensearch_write'):
+            unit = await get_ingest_writer(self.opensearch).write(
                 image_doc,
-            ]
-            with stage_timer('opensearch_write'):
-                resp = await self.opensearch.bulk(body=image_body, refresh=False)
-            if isinstance(resp, dict) and resp.get('errors'):
-                logger.warning('ingest_bulk_partial_errors', items=resp.get('items', [])[:3])
-            else:
-                result['images_indexed'] = 1
-
-        if crop_docs:
-            with stage_timer('opensearch_write'):
-                upsert = await occ_upsert_bulk(
-                    self.opensearch,
-                    crop_docs,
-                    index=self.config.items_index,
-                    human_field_guards=list(self._CROP_HUMAN_FIELD_GUARDS),
-                    writer_id='ingest',
-                    created_ids=created_ids,
-                    fill_if_absent=(
-                        (get_region_fields().status,)
-                        if seed_region and self.region_seed_status is not None
-                        else ()
-                    ),
-                )
-            result['crops_created'] = upsert['created']
-            result['crops_updated'] = upsert['updated']
-            result['crops_preserved_human'] = upsert['preserved_human']
-            result['crops_final_conflicts'] = upsert['final_conflicts']
-            if seed_region and self.region_seed_status is not None:
-                status_field = get_region_fields().status
-                seeded = {d['crop_id'] for d in crop_docs if d.get(status_field) is not None}
-                created_seeded = len([cid for cid in created_ids or () if cid in seeded])
-                result['region_queued'] = created_seeded + upsert['filled_absent']
-
-        return result
+                crop_docs,
+                images_index=self.config.images_index,
+                items_index=self.config.items_index,
+                guards=self._CROP_HUMAN_FIELD_GUARDS,
+                fill_if_absent=(get_region_fields().status,) if seeding else (),
+            )
+        if unit.refused:
+            logger.warning('ingest_bulk_partial_errors', refused=unit.refused[:3])
+        if created_ids is not None:
+            created_ids.extend(unit.created_ids)
+        queued = 0
+        if seeding:
+            status_field = get_region_fields().status
+            seeded = {d['crop_id'] for d in crop_docs if d.get(status_field) is not None}
+            queued = len(seeded.intersection(unit.created_ids)) + unit.filled_absent
+        return {
+            'images_indexed': unit.images_indexed,
+            'crops_created': unit.created,
+            'crops_updated': unit.updated,
+            'crops_preserved_human': unit.preserved_human,
+            'crops_final_conflicts': unit.final_conflicts,
+            'region_queued': queued,
+        }
 
     # ------------------------------------------------------------------
     # Public API

@@ -177,7 +177,7 @@ class CurationConfig:
     encoder_embedding_dim: int = 1024
     backbone_embedding_dim: int = 1024
 
-    hnsw_ef_construction: int = 512
+    hnsw_ef_construction: int = 128
     hnsw_m: int = 16
 
     # Bake-off harness (src/routers/curation/bakeoff.py,

@@ -140,7 +140,10 @@ def test_bulk_index_is_timed() -> None:
             return {'errors': False, 'items': []}
 
     service = SimpleNamespace(
-        opensearch=_Client(), config=SimpleNamespace(images_index='images', items_index='items')
+        opensearch=_Client(),
+        config=SimpleNamespace(images_index='images', items_index='items'),
+        region_seed_status=None,
+        _CROP_HUMAN_FIELD_GUARDS=(),
     )
     before = _hist_count('opensearch_write')
     result = asyncio.run(

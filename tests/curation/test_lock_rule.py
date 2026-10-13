@@ -10,13 +10,8 @@ one).
 
 from __future__ import annotations
 
-from src.clients.occ import (
-    _is_locked_marker,
-    _merge_preserving_human,
-    is_locked_box,
-    is_locked_class,
-    is_locked_item,
-)
+from src.clients.occ_locks import _is_locked_marker, is_locked_box, is_locked_class, is_locked_item
+from src.clients.occ_upsert import _merge_preserving_human
 from src.config import get_region_fields
 from src.services.curation.region_boxes import RegionBox
 

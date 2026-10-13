@@ -81,9 +81,17 @@ def unit_rows(matrix: np.ndarray) -> np.ndarray:
 def synth_vectors(
     pool: np.ndarray | None, n: int, dim: int, rng: np.random.Generator, noise: float = 0.35
 ) -> np.ndarray:
-    """``n`` unit vectors: noisy copies of ``pool`` rows, or independent draws when no pool."""
+    """``n`` unit vectors: noisy copies of ``pool`` rows, or independent draws when no pool.
+
+    ``noise`` 0 returns ``n`` distinct pool rows as they are (every vector real); it needs
+    a pool of at least ``n``.
+    """
     if pool is None or len(pool) == 0:
         return unit_rows(rng.standard_normal((n, dim), dtype=np.float32))
+    if noise == 0:
+        if len(pool) < n:
+            raise ValueError(f'{n} real vectors asked for, the pool holds {len(pool)}')
+        return unit_rows(pool[rng.permutation(len(pool))[:n]])
     base = pool[rng.integers(0, len(pool), size=n)]
     return unit_rows(base + noise * rng.standard_normal(base.shape, dtype=np.float32) / dim**0.5)
 
@@ -246,12 +254,17 @@ def load_templates(
     client: httpx.Client, url: str, index: str, n: int
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     source = client.get(f'{url}/{index}').raise_for_status().json()[index]
-    hits = (
-        client.post(f'{url}/{index}/_search', json={'size': n, 'query': {'match_all': {}}})
-        .raise_for_status()
-        .json()['hits']['hits']
-    )
-    return [h['_source'] for h in hits], source
+    resp = client.post(
+        f'{url}/{index}/_search?scroll=5m', json={'size': min(n, 1000), 'query': {'match_all': {}}}
+    ).raise_for_status()
+    docs: list[dict[str, Any]] = []
+    while (hits := resp.json()['hits']['hits']) and len(docs) < n:
+        docs += [h['_source'] for h in hits]
+        resp = client.post(
+            f'{url}/_search/scroll',
+            json={'scroll': '5m', 'scroll_id': resp.json()['_scroll_id']},
+        ).raise_for_status()
+    return docs[:n], source
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -267,6 +280,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument('--arms', default=','.join(ARMS))
     p.add_argument('--seed', type=int, default=20261010)
     p.add_argument('--templates', type=int, default=1000)
+    p.add_argument(
+        '--noise',
+        type=float,
+        default=0.35,
+        help='gaussian noise on pool vectors; 0 uses distinct real vectors only',
+    )
     args = p.parse_args(argv)
     url = args.opensearch_url.rstrip('/')
     rng = np.random.default_rng(args.seed)
@@ -287,15 +306,23 @@ def main(argv: list[str] | None = None) -> int:
             docs_by_mode[mode] = {
                 'items': build_docs(
                     item_t,
-                    {'pe_embedding': synth_vectors(src and src['pe'], args.docs, 1024, rng)},
+                    {
+                        'pe_embedding': synth_vectors(
+                            src and src['pe'], args.docs, 1024, rng, args.noise
+                        )
+                    },
                     'items',
                     args.docs,
                 ),
                 'images': build_docs(
                     image_t,
                     {
-                        'pe_embedding': synth_vectors(src and src['img_pe'], n_images, 1024, rng),
-                        'embedding': synth_vectors(src and src['img_clip'], n_images, 512, rng),
+                        'pe_embedding': synth_vectors(
+                            src and src['img_pe'], n_images, 1024, rng, args.noise
+                        ),
+                        'embedding': synth_vectors(
+                            src and src['img_clip'], n_images, 512, rng, args.noise
+                        ),
                     },
                     'images',
                     n_images,
