@@ -857,7 +857,7 @@ services:
       - VLM_MAX_MODEL_LEN=${VLM_MAX_MODEL_LEN:-16384}
       # Fraction of this GPU's VRAM vLLM may claim. Lower it to share the
       # GPU with Triton/the segmenter/training; see docs/CURATION.md
-      # "VLM VRAM budget" for worked numbers per card size.
+      # "Choosing a VLM" (VRAM per catalog model).
       - VLM_GPU_MEMORY_UTILIZATION=${VLM_GPU_MEMORY_UTILIZATION:-0.4}
       # Keep this equal to OP_VLM_MAX_IMAGES_PER_CALL.
       - VLM_LIMIT_MM_IMAGES=${VLM_LIMIT_MM_IMAGES:-8}

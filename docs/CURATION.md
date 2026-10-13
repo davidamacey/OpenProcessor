@@ -145,7 +145,9 @@ docker compose -p <project> exec api python scripts/curation/bulk_ingest.py \
 
 Defaults are batch size 16 and concurrency 16
 (`GET /curation/projects/{project}/ingest/bulk/config` shows the bounds). The measured
-rate is in [PERFORMANCE.md](PERFORMANCE.md#bulk-ingest-runner).
+rate is in [PERFORMANCE.md](PERFORMANCE.md#bulk-ingest-runner). The full procedure for a
+large share (mount, trial run, resume, time and disk estimate) is
+[Ingest a large folder](../docs-site/docs/guides/ingest-large-folder.mdx).
 
 ### Ingest policy
 

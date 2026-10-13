@@ -154,6 +154,11 @@ $R --project $P --status detection_failed --apply
 $R --project $P --missing-status --apply   # items that predate the region profile
 ```
 
+The dry run (`--status detection_failed`, no `--apply`) was run inside the `api`
+container against a public sample project. It printed
+`detection_failed -> pending_detection: 0 items selected` and
+`Dry-run only. Pass --apply to re-run.` The `--apply` form was not run.
+
 A VLM that keeps answering with no verdict does not loop forever: after
 `OP_REGION_WORKER_MAX_NO_VERDICT_ATTEMPTS` (default 3) replies, the
 combined stage writes `verify_rejected` with reason `verifier_no_verdict`

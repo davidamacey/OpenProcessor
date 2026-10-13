@@ -189,6 +189,15 @@ Run a restore into a scratch install first if you have never done one. A backup
 you have not restored is a guess.
 :::
 
+**What was verified.** The volume `tar` backup and the restore command were run
+against a throwaway Docker volume (not an OpenProcessor volume): files, a nested
+directory and a hidden directory were archived with `tar czf ... -C /d .` in
+`alpine`, the volume was emptied with the `rm -rf /d/* /d/.[!.]*` line, the
+archive was unpacked with `tar xzf ... -C /d`, and the listing and contents
+matched. The `./openprocessor stop` and `start` steps, the `install-data.tgz`
+archive and a restore of a real `opensearch_data` volume into a running
+OpenSearch were not run here.
+
 ## Prune old backups
 
 The installer adds a `backups/<timestamp>/` directory on every upgrade, repair

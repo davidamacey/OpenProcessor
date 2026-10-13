@@ -242,6 +242,14 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   `ingest_gpu_decode`), and the Triton model `image_frontend` is now `gpu_image_prep`. There is no alias:
   an existing deployment renames its `.env` key and its `models/image_frontend` directory.
 
+- Documentation overhaul. `docs-site/docs/` is the single source of truth for user and operator
+  docs and `docs/CURATION.md` is a short map into it. New guides cover choosing a path, ingesting
+  a large folder, pipeline modes, upgrade and backup, and the Cropwright audit page. The README
+  is an overview with a first result. Wrong or stale statements are corrected (source-root
+  mounts, GPU profile keys, worker defaults, OpenSearch heap sizing, `bulk_ingest.py` usage
+  inside the container). Screenshots are refreshed and added for the new pages, and
+  `make docs-screenshots` regenerates them.
+
 ### Fixed
 
 - An oversize upload answers `413` with `{"detail": "File too large. Maximum: <N>MB", "max_file_size_mb": <N>,

@@ -866,19 +866,18 @@ The steps above set up core inference only. To also get curation
 
   2. Seed a class registry (there is no default one):
        Add classes via POST {API}/curation/projects/default/classes, or via the
-       Cropwright UI's /classes page. See docs/CURATION.md "Seed /
-       bootstrap path for a fresh install" -> "Create classes from
-       zero".
+       Cropwright UI's /classes page. See docs/CURATION.md "Quick start for
+       a fresh install".
 
   3. VLM (auto-labeling / region verification) -- pick one:
        - docker compose --profile vlm up -d      # runs vLLM in this compose
        - or set OP_VLM_URL in .env to a VLM you already run elsewhere
-     See docs/CURATION.md "VLM" and env.template's VLM section.
+     See docs/CURATION.md "Choosing a VLM" and env.template's VLM section.
 
   4. Segmenter (region-of-interest cascade), if your use case needs one:
        HF_TOKEN=<your-hf-token-with-SAM3-access> \\
          docker compose --profile curation --profile segmenter up -d
-     See docs/CURATION.md "Workers and the curation compose profile"
+     See docs/CURATION.md "Workers and compose profiles"
      and env.template's Segmenter section.
 
   5. Start the curation workers:

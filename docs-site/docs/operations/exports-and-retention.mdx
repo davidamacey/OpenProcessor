@@ -92,6 +92,11 @@ docker compose exec -T api python scripts/curation/prune_exports.py --project $P
 docker compose exec -T api python scripts/curation/prune_training_runs.py --project $P --keep-last 10
 ```
 
+The dry runs of both scripts were run in the `api` container against a public
+sample project. They printed `Nothing to prune under data/projects/<slug>/exports
+(keep_last=5).` and `0 training run(s) planned for removal (keep_last=10)` with
+`Dry-run only. Pass --apply to remove.` The `--apply` forms were not run.
+
 Export pruning **never** removes a custom-named export directory, the
 target of the `current` symlink, or any export a training job, a finished
 run's lineage, or a queued/running bake-off still references. Training-run
