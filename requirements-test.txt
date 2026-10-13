@@ -42,6 +42,8 @@ transformers>=4.30.0
 # src/utils/face_align.py, image_processing.py, src/services/cpu_preprocess.py,
 # src/services/detection/{region_lean,pe_preprocess,crop_quality}.py
 opencv-python
+# src/services/curation/image_decode.py
+simplejpeg
 
 numpy
 scipy

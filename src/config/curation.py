@@ -254,6 +254,13 @@ class CurationConfig:
     # /regions/vocabulary as region_profile.limits.max_boxes_per_write.
     region_max_boxes_per_write: int = 500
 
+    # GPU ingest front end (#217): photos at or above the size gate are decoded once on the
+    # GPU by the image_frontend Triton model, which also builds the detector letterbox, the PE
+    # squares, the blur sums and the crop JPEGs. Off by default: it changes the stored numerics
+    # once (nvJPEG decode), and smaller images stay on the CPU path, where they are faster.
+    ingest_gpu_frontend: bool = False
+    ingest_gpu_min_megapixels: float = 3.0
+
     # --- Project-scoped fields (see PROJECT_SCOPED_FIELDS below and
     # docs/design/openprocessor_internal/projects_plan.md §2.2/§3.3).
     # No env var sets any project-scoped field: ``get_curation_config()``
@@ -411,6 +418,10 @@ class CurationConfig:
             ),
             region_max_boxes_per_write=_int(
                 'REGION_MAX_BOXES_PER_WRITE', defaults.region_max_boxes_per_write
+            ),
+            ingest_gpu_frontend=_bool('INGEST_GPU_FRONTEND', defaults.ingest_gpu_frontend),
+            ingest_gpu_min_megapixels=_float(
+                'INGEST_GPU_MIN_MEGAPIXELS', defaults.ingest_gpu_min_megapixels
             ),
         )
 

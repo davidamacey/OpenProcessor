@@ -48,6 +48,12 @@ OP_INGEST_IMAGES_TOTAL = Counter(
     'Images through ingest, by project and outcome (ok / failed / skipped = duplicate).',
     labelnames=('project', 'outcome'),
 )
+OP_INGEST_DECODE_TOTAL = Counter(
+    'op_ingest_decode_total',
+    'Images decoded by ingest, by route: gpu (the GPU front end) or cpu_<reason> (the CPU path: '
+    'off, small, not_jpeg, progressive, truncated, decoder, call_failed, ...).',
+    labelnames=('route',),
+)
 OP_INGEST_ITEMS_TOTAL = Counter(
     'op_ingest_items_total',
     'Items (crops) indexed by ingest, by project.',

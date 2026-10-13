@@ -81,9 +81,14 @@ def laplacian_var(gray: np.ndarray) -> float:
     if gray.dtype != np.uint8:
         return round(float(cv2.Laplacian(gray, cv2.CV_64F).var()), 2)
     lap = cv2.Laplacian(gray, cv2.CV_16S)
-    n = lap.size
     total = int(cv2.sumElems(lap)[0])
     squares = int(np.einsum('ij,ij->', lap, lap, dtype=np.int64))
+    return variance_from_sums(lap.size, total, squares)
+
+
+def variance_from_sums(n: int, total: int, squares: int) -> float:
+    """The Laplacian variance from its exact integer sums (pixel count, sum, sum of squares),
+    rounded as :func:`laplacian_var` rounds; the GPU ingest front end reports these sums."""
     return round((n * squares - total * total) / (n * n), 2)
 
 

@@ -119,6 +119,9 @@ services:
       # TRITON_GPU_ID may list several cards. CUDA's default order is fastest
       # first; PCI order makes "gpus: [ 0 ]" mean the lowest listed id.
       - CUDA_DEVICE_ORDER=PCI_BUS_ID
+      # image_frontend (GPU ingest front end) compiles its CUDA kernels with CuPy; the
+      # server user's home is read-only.
+      - CUPY_CACHE_DIR=/tmp/cupy_cache
     shm_size: 8g
     ulimits:
       memlock: -1

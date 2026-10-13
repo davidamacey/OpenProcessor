@@ -255,6 +255,15 @@ def run_autolabel(
         time.sleep(2)
 
 
+def set_embedding_mode(client: httpx.Client, base: str, mode: str) -> None:
+    """Set a fresh project's ingest embedding mode (the default, ``all``, needs no call)."""
+    if mode == 'all':
+        return
+    revision = client.get(f'{base}/ingest/policy').raise_for_status().json()['revision']
+    body = {'embedding': {'mode': mode}, 'expected_revision': revision}
+    client.put(f'{base}/ingest/policy', json=body).raise_for_status()
+
+
 def ingest_rep(
     args: argparse.Namespace,
     mode: str,
@@ -273,6 +282,7 @@ def ingest_rep(
             f'{args.api_url}{curation_api_prefix()}/projects',
             json={'slug': slug, 'display_name': slug},
         ).raise_for_status()
+        set_embedding_mode(client, base, getattr(args, 'embedding_mode', 'all'))
         batches = chunks(files, args.batch_size)
         before_t = triton_snapshot(client, args.triton_url)
         before_m = scrape(client, f'{args.api_url}/metrics')
@@ -370,7 +380,11 @@ def phase_ingest(args: argparse.Namespace) -> dict[str, Any]:
             'concurrency': args.concurrency,
             'reps': args.reps,
             'warmup_images': args.warmup,
-            'policy': 'all (detector + whole-image and per-detection embeddings)',
+            'policy': (
+                'all (detector + whole-image and per-detection embeddings)'
+                if getattr(args, 'embedding_mode', 'all') == 'all'
+                else 'lazy (detector + whole-image embedding; no per-detection embeddings)'
+            ),
         },
         **{
             m: {'summary': summarize_runs([r['flat'] for r in rs]), 'runs': rs}
@@ -590,6 +604,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--idle-samples', type=int, default=30)
     p.add_argument('--skip-cluster', action='store_true', help='no cluster training after ingest')
     p.add_argument('--skip-settle', action='store_true', help='no merge/storage accounting')
+    p.add_argument(
+        '--embedding-mode',
+        choices=('all', 'lazy'),
+        default='all',
+        help='ingest embedding policy of each run project: all (detect + embed) or lazy (detect only)',
+    )
     p.add_argument('--perf-dir', type=Path, default=Path('artifacts_local/bench/perf_analyzer'))
     p.add_argument('--perf-models', default=','.join(PERF_MODELS))
     p.add_argument('--perf-batches', default=','.join(str(b) for b in PERF_BATCHES))

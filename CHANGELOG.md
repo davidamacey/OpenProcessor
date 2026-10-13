@@ -94,6 +94,15 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   references while AP and kNN precision are unchanged, so it waits for an owner decision. New probe
   tools `scripts/bench/gpu_decode_bench.py` and `scripts/bench/gpu_decode_parity.py` with tested
   kernels and helpers (#217). No product code changed.
+- GPU ingest front end for photos, opt-in with `OP_INGEST_GPU_FRONTEND` and gated by
+  `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0): the `image_frontend` Triton model decodes each JPEG once on the
+  GPU (nvJPEG with GPU Huffman decoding), builds the detector letterbox and the PE squares with fused
+  uint8 kernels, runs the detector and PE, computes the blur sums and encodes the crop JPEGs. On 12-24
+  MP photos: 1.3x the images/s with detection and embedding, 1.55x detection only, 2.5x for one client,
+  a third of the host CPU. Smaller images and any file the front end declines (progressive, truncated,
+  not a baseline JPEG) take the CPU path, counted in the new `op_ingest_decode_total{route}`. It changes
+  the decoder's numerics once, AP-neutral on COCO (0.4378 against 0.4376); `scripts/bench/detector_capture.py` gains a front-end mode and the
+  benchmark suites an `--embedding-mode` (#217).
 
 - `scripts/bench/ingest_write_path.py` (the ingest write path alone at offered rates, with k-NN queries
   running next to it), `scripts/bench/store_parity.py` (ANN overlap against exact search, cluster
@@ -186,6 +195,13 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   after the pass reads the clustered vectors once, by point-in-time slices, writes only what changed and
   does it 8 requests at a time (10k: 143 s to 11 s, same stored geometry); assign-only reads through
   slices and skips documents that already store the result.
+
+- Ingest decodes each image once: the whole-frame PE square is resized from the frame decoded for the
+  detector (Pillow `BILINEAR`, shorter edge to 336, centre crop) instead of a second 1/8-scale OpenCV
+  decode, so whole-frame vectors move to a new space (re-embedding and backfills use the same square);
+  JPEGs decode through libjpeg-turbo straight into an array (`simplejpeg`, a new dependency: identical
+  pixels at about half of Pillow's CPU), and `exif_transpose` no longer copies an upright frame. A
+  truncated JPEG is still refused. Upgrading: rebuild the API image for the new dependency (#217).
 
 - Ingest writes are coalesced per API process: the documents of images that finish near each other go to
   OpenSearch as one images bulk, one `mget` and one items bulk of up to 1,000 documents, with 4 flushes in

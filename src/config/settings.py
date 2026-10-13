@@ -49,6 +49,9 @@ class TritonModelConfig:
     PE_IMAGE_MODEL = os.environ.get('PE_IMAGE_MODEL', 'pe_image_encoder')
     PE_TEXT_MODEL = os.environ.get('PE_TEXT_MODEL', 'pe_text_encoder')
 
+    # GPU ingest front end (decode once, letterbox, squares, blur, crop JPEGs; Python backend)
+    IMAGE_FRONTEND_MODEL = os.environ.get('IMAGE_FRONTEND_MODEL', 'image_frontend')
+
 
 class Settings(BaseSettings):
     """

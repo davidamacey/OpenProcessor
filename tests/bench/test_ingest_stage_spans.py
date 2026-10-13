@@ -83,7 +83,9 @@ def test_whole_frame_preprocess_and_request_build_are_timed() -> None:
 
     encoder = PEEncoder(triton_pool=_Pool())  # type: ignore[arg-type]
     whole, built = _count('whole_frame_preprocess'), _count('triton_request')
-    vector = asyncio.run(encoder.embed_whole_frame_bytes(_jpeg()))
+    vector = asyncio.run(
+        encoder.embed_whole_frame_image(Image.open(io.BytesIO(_jpeg())).convert('RGB'))
+    )
     assert vector is not None
     assert vector.shape == (1024,)
     assert _count('whole_frame_preprocess') - whole == 1
@@ -137,7 +139,7 @@ def index_service(tmp_path):
         async def embed_crops(self, crops, **_kw):
             return np.ones((len(crops), 1024), dtype=np.float32)
 
-        async def embed_whole_frame_bytes(self, _data):
+        async def embed_whole_frame_image(self, _img):
             return np.ones(1024, dtype=np.float32)
 
     async def _bulk_index(image_doc, crop_docs, created_ids, *, seed_region=True):
@@ -167,9 +169,7 @@ def test_index_items_times_blur_and_document_build(index_service) -> None:
         width=128,
         height=96,
         imohash='h',
-        image_bytes=data,
         source='t',
-        whole_frame_from_bytes=True,
     )
     items = [DetectedItem(bbox_pixel=(10.0, 10.0, 60.0, 50.0), score=0.9)]
     blur, docs = _count('blur'), _count('doc_build')

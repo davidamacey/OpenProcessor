@@ -45,7 +45,7 @@ class TaggingPE:
         finally:
             self.inflight -= 1
 
-    async def embed_whole_frame(self, path: str) -> np.ndarray | None:  # noqa: ARG002
+    async def embed_whole_frame_image(self, img: Any) -> np.ndarray:  # noqa: ARG002
         await asyncio.sleep(0.01)
         return np.array([0.0, 1.0, 0.0], dtype=np.float32)
 

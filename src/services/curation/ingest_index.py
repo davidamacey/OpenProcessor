@@ -25,6 +25,7 @@ from src.core.logging import get_logger, get_request_id
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.clustering.ivf_ingest import get_ivf_ingest_store, ingest_passes_gate
 from src.services.curation.embedding_state import EMBEDDED, FAILED
+from src.services.curation.ingest_frontend import FrontendFrame
 from src.services.curation.ingest_models import ERROR_KIND_BULK_INDEX, IngestResult
 from src.services.curation.ingest_policy import select_for_embedding
 from src.services.curation.item_doc import (
@@ -65,15 +66,17 @@ class ImageContext:
     image_id: str
     image_path: str
     created: bool
-    pil: Image.Image
+    pil: Image.Image | None
+    """The decoded frame; ``None`` when the GPU front end decoded the image (``frontend``)."""
     width: int
     height: int
     imohash: str
-    image_bytes: bytes
     source: str
     source_identifier: str | None = None
     ingest_run_id: str | None = None
-    whole_frame_from_bytes: bool = False
+    rgb: np.ndarray | None = None
+    """``pil``'s pixels as an HWC uint8 array when the decoder produced one (no copy for blur)."""
+    frontend: FrontendFrame | None = None
     dataset_split: str | None = None
     """The split the images doc is filed under (a dataset import's); items
     indexed on this image later inherit it."""
@@ -112,10 +115,11 @@ def _crop_all(img: Image.Image, items: list[DetectedItem]) -> list[Image.Image]:
     return [crop_pil(img, item.bbox_pixel) for item in items]
 
 
-def _full_frame_blur(img: Image.Image) -> tuple[np.ndarray, float]:
+def _full_frame_blur(img: Image.Image, rgb: np.ndarray | None) -> tuple[np.ndarray, float]:
     """The RGB frame and its Laplacian variance (the denominator of every box's ratio)."""
     with stage_timer('blur'):
-        rgb = np.asarray(img if img.mode == 'RGB' else img.convert('RGB'))
+        if rgb is None:
+            rgb = np.asarray(img if img.mode == 'RGB' else img.convert('RGB'))
         return rgb, image_lap_var(rgb, 'rgb')
 
 
@@ -147,7 +151,7 @@ def residual_placement(
 async def embed_items(
     service: CurationIngestService,
     items: list[DetectedItem],
-    crops_pil: list[Image.Image],
+    crops: list[Image.Image] | FrontendFrame,
     width: int,
     height: int,
     image_path: str,
@@ -166,9 +170,12 @@ async def embed_items(
             items[i].pe_embedding = None
             items[i].backbone_embedding = None
     try:
-        if wanted:
+        if isinstance(crops, FrontendFrame):
+            for i in wanted:
+                items[i].pe_embedding = crops.crop_embedding(items[i])
+        elif wanted:
             embeddings = await service.pe_encoder.embed_crops(
-                [np.asarray(crops_pil[i]) for i in wanted], max_batch=service.profile.batch_limit
+                [np.asarray(crops[i]) for i in wanted], max_batch=service.profile.batch_limit
             )
             for i, emb in zip(wanted, embeddings, strict=False):
                 items[i].pe_embedding = emb
@@ -193,23 +200,28 @@ async def index_items(
     active region profile (a ``processing: none`` import: the items are
     validated labels the region worker must never see).
     """
-    img = ctx.pil
+    img, frame = ctx.pil, ctx.frontend
     full_w, full_h = ctx.width, ctx.height
     image_path = ctx.image_path
-    crops_pil = await run_cpu(_crop_all, img, items, nbytes=_box_bytes(items))
-    await embed_items(service, items, crops_pil, full_w, full_h, image_path)
+    crops: list[Image.Image] | list[bytes]
+    if frame is not None:
+        crops = [frame.crop_jpeg(it) for it in items]
+        await embed_items(service, items, frame, full_w, full_h, image_path)
+    else:
+        assert img is not None
+        crops = await run_cpu(_crop_all, img, items, nbytes=_box_bytes(items))
+        await embed_items(service, items, crops, full_w, full_h, image_path)
 
     now = datetime.now(UTC).isoformat()
     image_doc: dict[str, Any] | None = None
     if ctx.created:
         whole_frame_embedding = None
         try:
-            if ctx.whole_frame_from_bytes:
-                whole_frame_embedding = await service.pe_encoder.embed_whole_frame_bytes(
-                    ctx.image_bytes
-                )
+            if frame is not None:
+                whole_frame_embedding = frame.whole_embedding
             else:
-                whole_frame_embedding = await service.pe_encoder.embed_whole_frame(image_path)
+                assert img is not None
+                whole_frame_embedding = await service.pe_encoder.embed_whole_frame_image(img)
         except Exception as exc:
             logger.warning('ingest_embed_whole_frame_failed', path=image_path, error=str(exc))
         with stage_timer('doc_build'):
@@ -227,12 +239,18 @@ async def index_items(
             )
             image_doc.update(ctx.image_extra)
 
+    rgb_frame = None
+    full_var = 0.0
     try:
-        rgb_frame, full_var = await run_cpu(_full_frame_blur, img, nbytes=full_w * full_h * 3)
+        if frame is not None:
+            full_var = frame.full_var()
+        else:
+            assert img is not None
+            rgb_frame, full_var = await run_cpu(
+                _full_frame_blur, img, ctx.rgb, nbytes=full_w * full_h * 3
+            )
     except Exception as exc:
         logger.warning('ingest_blur_full_var_failed', path=image_path, error=str(exc))
-        rgb_frame = None
-        full_var = 0.0
 
     bnorms = [_bbox_norm_fn(it.bbox_pixel, full_w, full_h) for it in items]
     areas = [max(0.0, bn[2] - bn[0]) * max(0.0, bn[3] - bn[1]) for bn in bnorms]
@@ -248,13 +266,15 @@ async def index_items(
     if any(it.class_id is None and it.pe_embedding is not None for it in items):
         store = get_ivf_ingest_store()
 
-    box_vars: list[float | None] = (
-        await run_cpu(
+    box_vars: list[float | None]
+    if frame is not None:
+        box_vars = [frame.box_var(item) for item in items]
+    elif rgb_frame is not None:
+        box_vars = await run_cpu(
             _box_blurs, rgb_frame, [item.bbox_pixel for item in items], nbytes=_box_bytes(items)
         )
-        if rgb_frame is not None
-        else [None] * len(items)
-    )
+    else:
+        box_vars = [None] * len(items)
     await asyncio.gather(
         *(
             run_cpu(
@@ -262,9 +282,9 @@ async def index_items(
                 cid,
                 crop,
                 service.config.crop_cache_dir,
-                nbytes=crop.width * crop.height * 3,
+                nbytes=len(crop) if isinstance(crop, bytes) else crop.width * crop.height * 3,
             )
-            for cid, crop in zip(cids, crops_pil, strict=True)
+            for cid, crop in zip(cids, crops, strict=True)
         )
     )
 

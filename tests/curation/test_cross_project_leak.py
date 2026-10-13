@@ -1411,13 +1411,9 @@ class _LeakPEEncoder(FakePEEncoder):
     async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
         return np.array([_vec(100 + i) for i in range(len(crops))], dtype=np.float32)
 
-    async def embed_whole_frame(self, path: str) -> np.ndarray | None:
-        self.whole_frame_paths.append(path)
+    async def embed_whole_frame_image(self, img: Any) -> np.ndarray:
+        self.whole_frame_sizes.append(img.size)
         return np.array(_vec(200), dtype=np.float32)
-
-    async def embed_whole_frame_bytes(self, data: bytes) -> np.ndarray | None:
-        self.whole_frame_bytes.append(data)
-        return np.array(_vec(201), dtype=np.float32)
 
 
 @dataclass

@@ -16,7 +16,11 @@ Triton round-trips and is measurably slower for identical output. It is:
    that also collapses byte-identical repeats *within* one request onto a
    single representative.
 2. **Decode once** — non-duplicates are decoded up front, and the PIL
-   image is handed to ``ingest_one`` so it does not decode again.
+   image is handed to ``ingest_one`` so it does not decode again. With the
+   GPU front end on, photos at or above its size gate are decoded on the GPU
+   instead (:mod:`~src.services.curation.ingest_frontend`), which also
+   returns their detections, vectors, blur sums and crop JPEGs; an image it
+   declines falls back to the CPU decode here.
 3. **Batched whole-image inference** — the decoded images go through
    :class:`~src.services.curation.ingest_detect.WholeImageDetector`'s
    batched methods, one Triton call per ``DetectionProfile.batch_limit``
@@ -50,12 +54,50 @@ from src.utils.stage_timing import observe_stage
 if TYPE_CHECKING:
     from PIL import Image
 
+    from src.services.curation.image_decode import DecodedImage
     from src.services.curation.ingest import CurationIngestService
     from src.services.curation.ingest_detect import SecondaryOutput
+    from src.services.curation.ingest_frontend import FrontendFrame
     from src.services.curation.item_doc import DetectedItem
 
 
 logger = get_logger(__name__)
+
+
+async def _prefill_frontend(
+    service: CurationIngestService, images: list[bytes], indices: list[int]
+) -> tuple[dict[int, FrontendFrame], dict[int, list[DetectedItem]]]:
+    """Run the GPU front end on the images of ``indices`` at or above its size gate."""
+    from src.services.curation.ingest_frontend import (
+        count_route,
+        frontend_ready,
+        megapixels,
+        run_frontend,
+    )
+
+    frames: dict[int, FrontendFrame] = {}
+    items: dict[int, list[DetectedItem]] = {}
+    if not indices or not await frontend_ready(service):
+        return frames, items
+    gate = service.config.ingest_gpu_min_megapixels
+    chosen = []
+    for idx in indices:
+        mp = megapixels(images[idx])
+        if mp is not None and mp >= gate:
+            chosen.append(idx)
+        else:
+            count_route('cpu_small' if mp is not None else 'cpu_not_image')
+    embed_crops = service.policy.embedding.mode != 'lazy'
+    outcomes = await asyncio.gather(
+        *(run_frontend(service, images[idx], embed_crops=embed_crops) for idx in chosen)
+    )
+    for idx, outcome in zip(chosen, outcomes, strict=True):
+        if isinstance(outcome, str):
+            count_route(f'cpu_{outcome}')
+            continue
+        count_route('gpu')
+        frames[idx], items[idx] = outcome
+    return frames, items
 
 
 async def _prefill_detections(
@@ -65,9 +107,10 @@ async def _prefill_detections(
     indices: list[int],
     sizes: dict[int, int | None],
 ) -> tuple[
-    dict[int, Image.Image],
+    dict[int, DecodedImage],
     dict[int, list[DetectedItem]],
     dict[int, SecondaryOutput],
+    dict[int, FrontendFrame],
 ]:
     """Batch-decode ``indices`` and run the whole-image detectors batched.
 
@@ -79,11 +122,12 @@ async def _prefill_detections(
     """
     from src.services.curation.ingest import _decode_image
 
-    prefilled_imgs: dict[int, Image.Image] = {}
-    prefilled_items: dict[int, list[DetectedItem]] = {}
+    prefilled_imgs: dict[int, DecodedImage] = {}
     prefilled_secondary: dict[int, SecondaryOutput] = {}
+    frames, prefilled_items = await _prefill_frontend(service, images, indices)
+    indices = [idx for idx in indices if idx not in frames]
     if not indices:
-        return prefilled_imgs, prefilled_items, prefilled_secondary
+        return prefilled_imgs, prefilled_items, prefilled_secondary, frames
 
     valid_imgs: list[Image.Image] = []
     valid_indices: list[int] = []
@@ -100,13 +144,12 @@ async def _prefill_detections(
                 raise outcome
             logger.warning('ingest_batch_decode_failed', path=image_paths[idx], error=str(outcome))
             continue
-        img = outcome[0]
-        prefilled_imgs[idx] = img
-        valid_imgs.append(img)
+        prefilled_imgs[idx] = outcome
+        valid_imgs.append(outcome.pil)
         valid_indices.append(idx)
 
     if not valid_imgs:
-        return prefilled_imgs, prefilled_items, prefilled_secondary
+        return prefilled_imgs, prefilled_items, prefilled_secondary, frames
 
     detector = service.detector
     secondary_per: list[SecondaryOutput | None]
@@ -126,13 +169,14 @@ async def _prefill_detections(
             error=str(exc),
             n_images=len(valid_imgs),
         )
-        return prefilled_imgs, {}, {}
+        frontend_items = {idx: prefilled_items[idx] for idx in frames}
+        return prefilled_imgs, frontend_items, {}, frames
 
     for idx, items, secondary in zip(valid_indices, items_per, secondary_per, strict=False):
         prefilled_items[idx] = items
         if secondary is not None:
             prefilled_secondary[idx] = secondary
-    return prefilled_imgs, prefilled_items, prefilled_secondary
+    return prefilled_imgs, prefilled_items, prefilled_secondary, frames
 
 
 async def run_ingest_batch(
@@ -140,7 +184,6 @@ async def run_ingest_batch(
     images: list[bytes],
     image_paths: list[str],
     source: str = 'batch',
-    whole_frame_from_bytes: bool = False,
     source_identifiers: list[str | None] | None = None,
     ingest_run_id: str | None = None,
 ) -> BatchIngestResult:
@@ -189,7 +232,7 @@ async def run_ingest_batch(
         # Only pay the (expensive) batched decode + inference for images that
         # dedup did not already resolve to an existing document or an
         # earlier-in-batch representative.
-        prefilled_imgs, prefilled_items, prefilled_secondary = await _prefill_detections(
+        prefilled_imgs, prefilled_items, prefilled_secondary, frames = await _prefill_detections(
             service, images, image_paths, non_dup, sizes
         )
 
@@ -245,7 +288,7 @@ async def run_ingest_batch(
                     prefilled_image=prefilled_imgs.get(i),
                     prefilled_items=prefilled_items.get(i),
                     prefilled_secondary=prefilled_secondary.get(i),
-                    whole_frame_from_bytes=whole_frame_from_bytes,
+                    prefilled_frame=frames.get(i),
                     source_identifier=source_identifier,
                     ingest_run_id=ingest_run_id,
                 )
