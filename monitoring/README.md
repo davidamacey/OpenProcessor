@@ -1,6 +1,7 @@
-# Triton Monitoring Stack
+# Monitoring stack
 
-Complete production-grade monitoring for NVIDIA Triton Inference Server.
+Prometheus, Grafana, Loki and exporters for OpenProcessor and the NVIDIA Triton
+Inference Server under it. It is opt-in: the `monitoring` compose profile.
 
 ## Architecture
 
@@ -13,8 +14,8 @@ Complete production-grade monitoring for NVIDIA Triton Inference Server.
 ## Quick Start
 
 ```bash
-# Start all services including monitoring
-docker compose up -d
+# Start the core stack plus monitoring (the monitoring services are in a compose profile)
+docker compose --profile monitoring up -d   # or: make up-monitoring
 
 # Check monitoring services
 docker compose ps prometheus grafana loki alloy
@@ -44,8 +45,7 @@ The API job (`api:8000/metrics`) is scraped once and already aggregates every AP
 
 **Dashboard Layout:**
 
-**Row 1: Service Overview (6 gauges)**
-- Model Ready Status
+**Row 1: Service Overview (5 gauges)**
 - Total Throughput (req/s)
 - Average Latency (ms)
 - Queue Time (µs)
@@ -92,23 +92,30 @@ The API job (`api:8000/metrics`) is scraped once and already aggregates every AP
 
 Two alerting systems are configured:
 
-### Prometheus Alerts (Legacy)
+### Prometheus alerts
 
-Rules in `monitoring/alerts/triton-alerts.yml` - evaluated by Prometheus.
+Rules in `monitoring/alerts/triton-alerts.yml`, evaluated by Prometheus and shown at
+`http://localhost:4604/alerts`. There is no Alertmanager, so they notify nobody.
 
-### Grafana Unified Alerting (Recommended)
+### Grafana unified alerting
 
-Rules in `monitoring/grafana-alerting.yml` - evaluated by Grafana with built-in notifications.
+Rules in `monitoring/grafana-alerting.yml`, evaluated by Grafana. The shipped contact
+points are webhooks to `http://localhost:9999/...` (the Grafana container itself), so
+nothing receives them until you set real ones (below).
 
 **Alert Groups:**
 
 | Group | Alerts |
 |-------|--------|
 | API Service Health | Error rate, slow response time |
-| Triton Inference Server | Server down, high latency, model not ready, high queue |
-| GPU Resources | High utilization, memory pressure, temperature |
+| Triton Inference Server | Server down, high latency, high queue, model not ready (never fires, see below) |
+| GPU Resources | High utilization, memory pressure, temperature (never fires, see below) |
 | System Resources | CPU, memory, load average |
 | OpenSearch Health | Cluster status |
+
+Triton does not export `nv_model_ready_state` or `nv_gpu_temperature`, so the Grafana rules
+**Triton Model Not Ready** and **High GPU Temperature** can never fire. Use `GET /models/`
+for model readiness and `DCGM_FI_DEV_GPU_TEMP` for temperature.
 
 ### Alert Thresholds
 
@@ -120,9 +127,7 @@ Rules in `monitoring/grafana-alerting.yml` - evaluated by Grafana with built-in 
 | Failure Rate | >1% | >5% | 2m / 1m |
 | GPU Utilization | >95% | - | 5m |
 | GPU Memory | >90% | >95% | 5m / 2m |
-| GPU Temperature | >80°C | - | 2m |
 | Queue Depth | >50 | - | 2m |
-| Model Not Ready | - | Any | 1m |
 | System Memory | >90% | - | 5m |
 | System CPU | >90% | - | 5m |
 | System Load | >2.0/cpu | - | 5m |
@@ -169,20 +174,20 @@ grafana:
 3. Use LogQL queries:
 
 ```logql
-# All Triton logs
-{container="/triton-server"}
+# All Triton logs (job is triton, fastapi or worker)
+{job="triton"}
 
-# FastAPI logs
-{container=~"/(api|pytorch-api)"}
+# API logs
+{job="fastapi"}
 
-# Error logs only
-{container="/triton-server"} |= "error" or "ERROR"
+# Curation worker and segmenter logs
+{job="worker"}
 
-# Inference logs
-{container="/triton-server"} |= "inference"
+# Error lines only
+{job="triton"} |~ "(?i)error"
 
-# Last 5 minutes of warnings
-{container="/triton-server"} |~ "warn|WARNING" [5m]
+# Warnings or errors from the API
+{job="fastapi"} |~ "(?i)warn|error"
 ```
 
 ### Log Correlation
@@ -366,7 +371,8 @@ Create custom panels in Grafana:
 
 ### Data Retention
 
-Adjust retention in [docker-compose.yml](../docker-compose.yml):
+The compose file sets no retention flags, so Prometheus keeps its default (15 days). To
+change it, add flags to the `prometheus` `command` in [docker-compose.yml](../docker-compose.yml):
 
 ```yaml
 prometheus:
@@ -386,8 +392,7 @@ prometheus:
 
 For production deployments, consider:
 
-- [x] Set up alerting with notifications (Grafana unified alerting configured)
-- [x] Configure alert routing by severity (critical vs warning routing)
+- [x] Alert rules and severity routing are provisioned (Grafana unified alerting)
 - [ ] Add notification channels (Slack, PagerDuty, email) - edit grafana-alerting.yml
 - [ ] Add remote write to long-term storage
 - [ ] Enable authentication for external access
@@ -402,16 +407,15 @@ For production deployments, consider:
 ```
 monitoring/
 ├── README.md                              # This file
-├── prometheus.yml                         # Prometheus config (Triton + Node Exporter)
+├── prometheus.yml                         # Prometheus scrape config
 ├── grafana-datasources.yml               # Grafana datasources (Prometheus + Loki)
 ├── grafana-dashboards.yml                # Dashboard auto-provisioning config
 ├── grafana-alerting.yml                  # Grafana unified alerting rules & notifications
 ├── loki-config.yml                       # Loki log aggregation config
 ├── alloy-config.alloy                    # Grafana Alloy log shipping config
 ├── alerts/
-│   └── triton-alerts.yml                 # Prometheus alert rules (legacy)
-└── dashboards/
-    └── triton-unified-dashboard.json     # All-in-one unified dashboard (auto-loaded)
+│   └── triton-alerts.yml                 # Prometheus alert rules
+└── dashboards/                           # Six dashboards, auto-loaded (list below)
 ```
 
 ## Available Metrics
@@ -432,20 +436,18 @@ Exposed by Triton on port 8002 (mapped to 4602):
 | `nv_inference_compute_infer_duration_us` | Inference computation time |
 | `nv_inference_compute_output_duration_us` | Output processing time |
 | `nv_inference_pending_request_count` | Current queue depth |
-| `nv_model_ready_state` | Model availability (1=ready) |
 | `nv_gpu_utilization` | GPU usage (0-1 decimal, multiply by 100 for %) |
 | `nv_gpu_memory_total_bytes` | Total GPU memory |
 | `nv_gpu_memory_used_bytes` | Used GPU memory |
 | `nv_gpu_power_usage` | GPU power consumption (watts) |
 | `nv_gpu_power_limit` | GPU power limit (watts) |
-| `nv_gpu_temperature` | GPU temperature (celsius) |
 | `nv_energy_consumption` | Total energy consumed |
 
 **View all Triton metrics:** `curl http://localhost:4602/metrics`
 
 ### System Metrics (Node Exporter)
 
-Exposed on port 9100:
+Exposed by `node-exporter` on port 9100 inside the compose network (not published to the host; Prometheus scrapes it as `node-exporter:9100`):
 
 | Metric | Description |
 |--------|-------------|
@@ -460,7 +462,7 @@ Exposed on port 9100:
 | `node_disk_*` | Disk I/O metrics |
 | `node_network_*` | Network interface metrics |
 
-**View all system metrics:** `curl http://localhost:9100/metrics`
+Query them in Prometheus (`http://localhost:4604`) or Grafana Explore.
 
 ## Dashboards (provisioned from `monitoring/dashboards/`)
 

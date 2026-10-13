@@ -79,10 +79,18 @@ Exports, training runs and caches would otherwise grow without bound.
 | What | Policy | Knob |
 |---|---|---|
 | Auto-named exports (`YYYYMMDDTHHMMSSZ` dirs) | Keep-last, applied best-effort after every successful export | `OP_EXPORT_KEEP_LAST` (default `5`, `0` keeps all) |
-| Export backlog | Same planner, by hand | `python3 scripts/curation/prune_exports.py [--keep-last N] [--apply]` |
-| Finished training runs and bake-off output | Keep-last, by hand | `python3 scripts/curation/prune_training_runs.py [--keep-last N] [--bakeoff-out-keep-last N] [--apply]` |
+| Export backlog | Same planner, by hand | `prune_exports.py [--keep-last N] [--apply]` |
+| Finished training runs and bake-off output | Keep-last, by hand | `prune_training_runs.py [--keep-last N] [--bakeoff-out-keep-last N] [--apply]` |
 | Crop cache | Pruned back toward 90% of the cap once exceeded (checked every ~256 ingest writes) | `OP_CROP_CACHE_MAX_BYTES` |
 | Event log | Rotates to a single `.1` backup | `OP_EVENT_LOG_MAX_BYTES` |
+
+Both scripts live in `scripts/curation/` and ship in the `api` image. Run them there:
+
+```bash
+docker compose exec -T api python scripts/curation/prune_exports.py --project $P           # dry run
+docker compose exec -T api python scripts/curation/prune_exports.py --project $P --apply
+docker compose exec -T api python scripts/curation/prune_training_runs.py --project $P --keep-last 10
+```
 
 Export pruning **never** removes a custom-named export directory, the
 target of the `current` symlink, or any export a training job, a finished
