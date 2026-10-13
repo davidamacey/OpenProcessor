@@ -1,10 +1,21 @@
 # Ingest surfaces: S3 source, triggers and the gRPC decision (#264, #263)
 
-Status: plan; nothing in `src/` changed by this file. Issues #264 (S3 source with watch mode) and #263
-(gRPC ingest channel, only if it wins), built on the bulk runner of #229. Written 2026-10-12 against
-`origin/main` `300a321c`. A fresh implementation agent executes this file alone: section 9 gives the slices
-in order with files, interfaces, tests and exit gates; section 10 the verification commands. File and
-line references drift; re-find by symbol.
+Status: plan; nothing in `src/` changed by this file, implementation is a later task. Issues #264 (S3
+source with watch mode) and #263 (gRPC ingest channel, only if it wins), built on the bulk runner of #229.
+Written 2026-10-12 against `origin/main` `300a321c`. A fresh implementation agent executes this file alone:
+section 9 gives the slices in order with files, interfaces, tests and exit gates; section 10 the verification
+commands; section 12 the traps found while sketching an implementation. File and line references drift;
+re-find by symbol.
+
+Owner decisions already made (do not reopen): no API authentication or security hardening for now (the
+stack runs locally), but credentials come only from the environment, an instance role or a mounted secret
+file, never from a request or the tree, and an unconfigured bucket or prefix fails closed; webhook **and**
+cron **and** poll-watch are all in scope; the work is built on the final pipeline and so inherits the decode
+routing (photos of 3 MP and more may use the opt-in GPU front end, CPU below; decode internals are not
+touched), the coalesced OpenSearch writer, bulk concurrency 16, project isolation, the lock rule and OCC,
+and the content-hash ledger; one wire serializer, with `make contracts` in the same commit as each route
+change; live tests use MinIO in an isolated compose project, offline tests use a fake client, data is
+public only (COCO, Open Images), never real credentials.
 
 ## 0. Summary
 
@@ -106,11 +117,13 @@ the work spreads over all API workers and the runner still holds only references
 
 ### D5. Bounded in-flight bytes
 
-A second `InflightGate` instance (the same class) in `cpu_pool.py` (`fetch_gate()`, capacity
-`S3_INFLIGHT_MB`, default 256) counts **encoded** MiB held by fetches in a process, taken from the object
-size the listing/event carried (HEAD when absent) and held from the GET until the bytes are handed to
-`ingest_batch`. It is separate from `ingest_gate()` because that gate counts decoded pixels and `ingest_batch`
-acquires it itself; holding it across a fetch would deadlock. Per-object cap `S3_MAX_OBJECT_MB` (default 256):
+A second `InflightGate` instance (the same class from `cpu_pool.py`, built in `object_fetch.py` as
+`fetch_gate()`, capacity `S3_INFLIGHT_MB`, default 256) counts **encoded** MiB held by fetches in a process.
+One reservation per **batch**, taken before any download starts from the sizes the listing or event carried (a
+HEAD per object when absent) and held until `ingest_batch` has returned (`held_fetch`, an async context
+manager). A reservation per object would let two batches each hold part of the capacity and wait for the rest.
+It is separate from `ingest_gate()` because that gate counts decoded pixels and `ingest_batch` acquires it
+itself; holding it across a fetch would deadlock. Per-object cap `S3_MAX_OBJECT_MB` (default 256):
 larger objects fail with `error_kind=too_large`. GETs run in threads (`boto3` is synchronous) with a bounded
 pool (`S3_FETCH_WORKERS`, default 8 per process); the runner's concurrency (default 16) bounds batches.
 
@@ -174,7 +187,7 @@ All triggers write queue rows; the dispatcher starts runs.
 
 | Trigger | Mechanism |
 |---|---|
-| Manual "run now", CLI | the run route of a source (`/sources/{id}/run`, POST): scan (if the backend lists) then drain |
+| Manual "run now", CLI, one-shot bulk start | the run route of a source (`/sources/{id}/run`, POST) or the bulk start route: **claims the project's run first** (409 `bulk_ingest_busy` at once if one is live), then the run scans the source into the queue and drains it |
 | Poll-with-checkpoint watcher | per source `watch.interval_s` (min 10); due when `now - last_poll_started >= interval`; scan then drain only if rows are pending (no empty runs) |
 | Cron schedule | per source `schedule.cron` (5 fields, UTC: `*`, lists, ranges, steps); due when the next fire after `last_fire_at` is in the past; missed fires collapse into one (no catch-up storm) |
 | S3 event webhook | the events route of a source (`/sources/{id}/events`, POST) (below): inserts rows and returns; the dispatcher drains within one tick |
@@ -189,8 +202,11 @@ HTTP forwarding and by MinIO's webhook target. Rules: a body that is not that sh
 `invalid_s3_event` (with the path of the first bad field); records whose event is not `ObjectCreated:*` are
 counted `ignored`; records for another bucket, outside the source prefix or with a non-image extension are
 `ignored` (never an error: a bucket-wide notification feeds several sources); keys are URL-decoded exactly once
-(S3 sends them form-encoded, `+` is a space); a record without an etag is queued with the etag looked up by one
-HEAD at drain time (empty-string placeholder replaced). Response 202 `{received, queued, duplicates, ignored}`
+(S3 sends them form-encoded, `+` is a space; use `unquote_plus`); an `ObjectCreated:*` record without an `eTag` is
+invalid (422 naming `Records[i].s3.object.eTag`), because the queue key is `(key, etag)`; the `s3:TestEvent` body S3
+sends when a notification is configured has no `Records` and is accepted with nothing queued; more than 10,000
+records is refused; counters (`received`, `queued`, `duplicates`, `ignored`, last event time) are written in the
+same transaction. Response 202 `{received, queued, duplicates, ignored}`
 within one SQLite transaction (target p99 under 50 ms at 1000 records); the dispatcher, not the request, does
 all S3 and pipeline work. A webhook for a source without `triggers.webhook.enabled` is 409 `webhook_disabled`.
 The receiver is per source, so the URL itself selects project and source; there is no shared secret in this
@@ -209,17 +225,39 @@ sender comes from `API_LOOPBACK_URL` (default `http://127.0.0.1:8000`, the conta
 route-started runs keep using the request's socket). One live run per project is the existing rule; a due source
 waits for the next tick while another run is live (sources of a project are served oldest-due first).
 
+The decision is a pure function `decide(source, state, counts, last_run, now) -> Action | None` (unit-tested with an
+injected clock), in this order: nothing during `backoff_until`; `run_scan` when the cron's next fire after
+`last_fire_at` is due; `poll` when the watch interval elapsed; `drain` when a trigger is enabled and rows are
+`pending`. A cancelled last run is never restarted by `drain`; a failed one waits five minutes. `poll` needs no
+run slot (it only scans, and starts a drain only if rows are pending afterwards, so a quiet bucket makes no runs
+and `last_poll_started_at` is stamped under the tick's lock, before the scan task starts, so a second worker's tick
+sees it); `run_scan` and `drain` take the project's one run slot, and once one is taken or a run is live the rest
+wait for the next tick. A schedule first seen with no `last_fire_at` is stamped with the current time (it counts
+from then, it does not fire on sight). Only rows in state `pending` trigger a `drain`; `failed` rows are retried by
+whatever run next drains the queue, so a failing object cannot burn its attempts in seconds. A scan failure sets
+`last_poll_error` and `backoff_until` (10 s doubling to 600 s) and starts no run.
+
 ### D12. Runner changes (small, no rewrite)
 
 - `BulkSource` gains kind `queue` with `path = source_id`; `iter_source_paths` yields the queue's pending
   references. Existing kinds are untouched.
-- `BatchSender` gains `result_key(result) -> str | None` (folder sender: `image_path`; objects sender:
-  `source_identifier`) so the runner's result matching works for both.
-- `BulkIngestRun` takes an optional `listener` with `on_done(refs, outcome)` and `on_failed(rows)`; the queue
-  uses it to mark rows. Folder runs pass none.
+- The runner matches batch results to the references it sent by `image_path`. The objects sender (a subclass of
+  `HttpBatchSender` posting to the objects route) rewrites each result's `image_path` to the reference it sent,
+  matching by `(bucket, key)`, because the route stores an object under the etag it actually fetched, which can
+  differ from the listed one. The HTTP client is built by one module function (`make_client`) so tests aim every
+  sender at the app in-process (`route_bulk_ingest_through_the_app` patches that one seam).
+- `BulkIngestRun` takes an optional `listener` with `on_done(refs)` and `on_failed([(ref, error, error_kind)])`;
+  the queue's listener marks rows. `_record_failures` becomes `async` for it. References skipped because the run's
+  ledger already holds them are also reported `on_done`, so a row whose attempt died before it could be marked
+  settles instead of looping forever. Folder runs pass no listener.
+- The producer passes `should_stop` to the (blocking) source iterator so a cancel stops a scan inside a run;
+  a scan stopped that way ends the iterator quietly, it is not a source failure.
 - The existing bulk start route accepts exactly one of `folder`, `manifest`, `s3` (`{bucket, prefix}`) or `source_id`.
-  `s3` finds-or-creates a trigger-less source for the pair and runs it, so a one-shot bucket ingest and a watched
-  source are the same mechanism.
+  `s3` finds-or-creates a trigger-less source for the pair (id derived from bucket and prefix) and runs it, so a
+  one-shot bucket ingest and a watched source are the same mechanism. `BulkSourceWire.kind` gains `queue` and a
+  `label` (name and location of a registered source) so the existing run views show something readable.
+- The helpers shared by the bulk routes and the source routes (`slug`, `own_address`, `open_run`, `run_wire`) move
+  to one module, `_ingest_bulk_wire.py`, so the two routers do not import each other.
 
 ## 3. Interfaces
 
@@ -244,8 +282,8 @@ Routes (all under `/curation/projects/{project}/ingest/`, no `/v1` twin):
 
 | Route | Body / result |
 |---|---|
-| `/sources` (GET, POST) | create: `{name, backend: 's3'\|'folder', s3:{bucket,prefix}\|folder, extensions, source, triggers:{watch:{enabled,interval_s}, schedule:{enabled,cron}, webhook:{enabled}}, batch_size, concurrency}`; list returns `SourceStatus[]` |
-| `/sources/{id}` (GET, PATCH, DELETE) | `SourceStatus`: definition, queue counts (`pending, done, failed, dead`), `scan` (state, pages, listed, queued, last_error), `watch` (last_poll_at, next_poll_at, last_error), `schedule` (cron, last_fire_at, next_fire_at), `webhook` (path, received/queued/duplicates/ignored totals, last_event_at), `last_run` (id, status, counts), `can_run`, `can_retry_dead`, `blocked_reason` |
+| `/sources` (GET, POST) | create: `{name, backend: 's3'\|'folder', s3:{bucket,prefix}\|folder, extensions, source, triggers:{watch:{enabled,interval_s}, schedule:{enabled,cron}, webhook:{enabled}}, batch_size, concurrency}`; list returns `{items: SourceStatus[], s3_configured, s3_allowed, defaults, min_watch_interval_s, poll_after_s}`; `poll_after_s` is 2 while a scan or run is live, else 10, and the frontend polls at that served interval |
+| `/sources/{id}` (GET, PATCH, DELETE) | `SourceStatus`: definition, queue counts (`pending, done, failed, dead`), `scan` (state, pages, listed, queued, last_error), `watch` (last_poll_at, next_poll_at, last_error), `schedule` (cron, last_fire_at, next_fire_at), `webhook` (path, received/queued/duplicates/ignored totals, last_event_at), `last_run` (id, status, counts), `errors` (the last failed/dead objects with reason), `can_run`, `can_retry_dead`, `blocked_reason` and `blocked_message` (the reason in words, so the frontend renders it as served) |
 | `/sources/{id}/run`, `/sources/{id}/retry-dead` (POST) | 202 `SourceStatus`; 409 `bulk_ingest_busy` when a run is live |
 | `/sources/{id}/events` (POST) | S3 event JSON in; 202 `{received, queued, duplicates, ignored}` |
 | `/objects` (POST) | `{items:[{bucket,key,etag?,version_id?,size?}], source, ingest_run_id}` in; `BatchIngestResponse` out |
@@ -312,7 +350,7 @@ Hooks and gates: ruff, mypy, the file-size ratchet, `check_docs_vs_code.py`, `te
 ## 7. Safety for the live checks
 
 Compose project `-p isurf` only (the default project `openprocessor` is live and is never touched), its own ports on
-127.0.0.1, local-only image tags, MinIO (`minio/minio` already pulled) as a service of `docker/test`-style compose file
+127.0.0.1, local-only image tags, MinIO (the `minio/minio` image) as a service of `docker/test`-style compose file
 `docker/test/compose.s3.yml` with fixed throwaway credentials that exist only in that file for that purpose (never
 real credentials; the API container gets them through compose `environment:` literals of the test file, never
 `.env`). GPU only for the one end-to-end check: GPU 2 when `nvidia-smi` shows it clean, `flock /tmp/ortloom-bench.lock`
@@ -395,3 +433,42 @@ make contracts && make contracts-check
 | Dispatcher in a worker that restarts (`--limit-max-requests` recycles workers) | all state on disk; stale-heartbeat repair; scans resume from checkpoint |
 | SQLite on the shared volume | WAL, one container only, `busy_timeout`, tested with concurrent writers |
 | `boto3` import cost in 32 workers | imported lazily on first S3 use |
+
+## 12. Traps found while sketching an implementation
+
+A first pass of S1 to S4 (not merged, not part of this plan's PR) found these; each cost real time.
+
+- **Error codes are a closed literal.** `api_error(status, code, ...)` takes a code from `ErrorCode` in
+  `src/routers/curation/_config_common_models.py`; add `s3_not_configured`, `s3_not_allowed`, `invalid_s3_event`,
+  `ingest_source_not_found`, `ingest_source_invalid`, `webhook_disabled` there first (and the OpenAPI enum follows).
+- **Cross-project sweep.** `tests/curation/test_cross_project_leak.py` walks every scoped route: each new route
+  needs a `route_params` entry (`source_id`, a valid id such as `src_unknown00`), a body in `route_bodies` for every
+  mutating route, a `NO_WRITE` reason when it writes nothing in the sweep, and the sweep must set the allow-list variable (`S3_ALLOWED` with the prefix)
+  to a bucket the bodies do not name (otherwise the object routes answer 503, which the sweep rejects).
+- **Dependency and env guards.** `boto3` **and** `botocore` (the code imports `botocore.config`) go in
+  `requirements.txt`, `requirements-test.txt` and `pyproject.toml` together (`test_dependency_manifest.py`).
+  `test_env_surface.py` finds variables only as a literal `os.environ.get('OP_...', ...)` call: a helper that takes the
+  variable name as an argument hides it and fails the test; every variable must also appear in `env.template`.
+- **Docs checker.** `scripts/docs/check_docs_vs_code.py` fails a doc that names a route or `OP_*` variable the code
+  does not have, which is why this plan writes new routes as `path (METHOD)` and variables without the prefix; the
+  user guide section (`docs/CURATION.md`, at the end of the "Ingest" parent, after "Embedding use cases") is written in
+  the implementation PR, when the routes exist.
+- **Exceptions end in `Error`** (ruff N818) and a pydantic field type imported only for a model needs a
+  `# noqa: TC001` with the reason; a route module that annotates `request: Request` needs `# noqa: TC002`.
+- **Test seams.** `FakeOpenSearch` in `tests/integration/ingest_fakes.py` has no query for `terms` on
+  `source_identifier`; add one. A fake object store with paging, delimiters, modification times and injectable
+  failures is shared by the route, scan and dispatcher tests. `TestClient` exposes `client.portal.call(coro)` to run
+  `dispatcher.run_project_tick` on the app's loop. Compare response bodies by key: the middleware adds `request_id`
+  and `total_time_ms` to every JSON body.
+- **Environment.** The shared `.venv` can be stale (a missing `simplejpeg` made every ingest-pipeline test fail with
+  `error` results until installed); a fresh worktree has no `frontend/node_modules` (`npm ci`, seven seconds); the
+  frontend contract test reads the vendored `contracts/openapi/curation.json`, so run `make contracts` after every
+  wire-model change before `vitest`.
+- **Svelte.** Do not destructure `controller.form` into a local `const` in a component: the controller replaces the
+  form object when the dialog opens, and the local keeps the stale one. Bind `controller.form.x` directly.
+- **Webhook tests need no Docker:** post the S3 and MinIO sample bodies at the route; the live check is the only place a
+  real MinIO notification target is configured (`mc event add ... --event put`, webhook target set with
+  `mc admin config set ... notify_webhook:...` pointing at the API's published port on 127.0.0.1).
+- **Runner thresholds that interact with the queue:** five whole-batch failures in a row abort the run; every such
+  batch counts one attempt against each of its rows, so an outage can move rows toward `dead` three runs in a row;
+  `retry-dead` resets attempts.
