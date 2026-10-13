@@ -10,11 +10,17 @@ from __future__ import annotations
 
 import pytest
 
-from conftest import ACTION_TIMEOUT_MS, wait_for_paint
+from conftest import ACTION_TIMEOUT_MS, API_PREFIX, wait_for_paint
 
-from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID, make_item
+from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID, make_item, project, projects_response
 
 NARROW = {"width": 430, "height": 900}
+
+# A real deployment's names are not "Default": a long display name and a long slug
+# (shown in the switcher menu, the URL and the breadcrumb row) must not widen the
+# header past the viewport (#274).
+LONG_SLUG = "coco-bench-2k-public-validation-run-long-slug"
+LONG_NAME = "COCO bench 2k (public) with a long display name"
 
 CLASSES = [
     {"class_id": 64, "class_name": "class_b", "kind": "item", "group": "moto", "hotkey_letter": None,
@@ -120,6 +126,14 @@ IDLE_JOB = {
 
 def _stub_common(stub) -> None:
     """Idle but well-formed answers for every read the swept pages make."""
+    stub.on(
+        "GET",
+        rf"^{API_PREFIX}/projects$",
+        projects_response(
+            API_PREFIX,
+            [project(API_PREFIX, LONG_SLUG, display_name=LONG_NAME, is_default=True, paused=True, status="archived", writable=False, archivable=False, unarchivable=True)],
+        ),
+    )
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
     stub.on("GET", r"/stats/classes(\?|$)", {"classes": []})
     stub.on("GET", r"/clusters(\?|$)", CLUSTERS)
@@ -160,7 +174,7 @@ def _stub_common(stub) -> None:
 def test_no_horizontal_overflow_at_430(stub, page, app_url, path, ready):
     page.set_viewport_size(NARROW)
     _stub_common(stub)
-    prefix = "" if path.startswith("/projects") else "/p/default"
+    prefix = "" if path.startswith("/projects") else f"/p/{LONG_SLUG}"
     page.goto(f"{app_url}{prefix}{path}")
     page.locator(ready).first.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)

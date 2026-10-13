@@ -273,6 +273,11 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   marks the model group `degraded` (a re-run retries FP16) and shows under "Degraded precision" in
   `./openprocessor models status` and in the install summary.
 
+- Cropwright's top bar and `/projects` header no longer widen the page past a 430 px viewport when the
+  project has a long display name: the project switcher is capped at 55 percent of the viewport and the
+  "Open <project>" link on `/projects` truncates (#274). The 430 px e2e sweep now serves a long display
+  name and a long slug, so it fails on that header without the fix.
+
 ## [0.5.0] - 2026-10-09
 
 The monorepo release. The backend and the Cropwright frontend (`frontend/`, formerly a separate
