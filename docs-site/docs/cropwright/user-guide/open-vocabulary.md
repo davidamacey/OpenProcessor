@@ -5,12 +5,8 @@ title: Open-vocabulary sets
 
 # Open-vocabulary sets (`/p/<project>/settings/open-vocab`)
 
-An **open-vocabulary set** describes things to find in words, and has the
-backend's SAM 3 segmenter find them in your images. A set is a named,
-revisioned list of **targets**. Each target has a `prompt` (what to look for)
-and, optionally, the class its hits are stored as. A target with no class is
-in *discovery mode*: its hits are stored as unlabeled proposals named by the
-prompt. One set is active per project.
+This page covers the editor. What a set and a target are, discovery mode and the
+API path are in the [Open-vocabulary guide](../../guides/open-vocabulary.mdx).
 
 The pages appear only when the backend serves open-vocabulary sets;
 otherwise **Settings** has no Open-vocabulary card. Whether the segmenter is

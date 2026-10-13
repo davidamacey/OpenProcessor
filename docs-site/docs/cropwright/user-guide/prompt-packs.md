@@ -5,11 +5,10 @@ title: Prompt-pack editor
 
 # Prompt packs (`/p/<project>/settings/prompt-packs`)
 
-A **prompt pack** is the set of instructions and reply formats the vision
-language model (VLM) uses when it suggests or verifies labels in this
-project. The editor lets you read, edit, test and activate them without
-touching the backend's files. The pages appear only when the backend serves
-prompt packs; otherwise **Settings** has no Prompt packs card.
+This page covers the editor. What a prompt pack is, its fields and the API path
+are in the [Prompt packs guide](../../guides/prompt-packs.mdx). The pages appear
+only when the backend serves prompt packs; otherwise **Settings** has no Prompt
+packs card.
 
 ## The list
 

@@ -7,6 +7,11 @@
 | [branding/](branding/)                                                   | Logo concepts (SVG and PNG)                                                             |
 | [../examples/](../examples/README.md)                                    | Example tier-2 annotation profiles (license plate, aircraft tail number, defect code)   |
 
+The user-facing documentation (getting started, user guide, configuration,
+operations) is the Cropwright section of the OpenProcessor docs site, in
+`docs-site/docs/cropwright/` at the repository root. This folder keeps the
+developer-side references only.
+
 Root-level docs: [README](../README.md) (setup and configuration),
 [CLAUDE.md](../CLAUDE.md) (the authoritative architecture, route,
 keyboard-shortcut and testing reference), [CHANGELOG](../CHANGELOG.md),

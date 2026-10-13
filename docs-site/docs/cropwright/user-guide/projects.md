@@ -5,11 +5,8 @@ title: Projects
 
 # Projects (`/projects`, `/p/<project>/...`)
 
-A **project** is its own isolated dataset and its own settings on the same
-Cropwright/OpenProcessor deployment — its own classes, crops, clusters,
-review queues, exports, training runs and curation defaults. Nothing about
-one project (classes, keyboard shortcuts, curation settings, cached data)
-leaks into another.
+This page covers the Projects screens. What a project owns, the slug rules and
+the API/CLI path are in the [Projects guide](../../guides/projects.mdx).
 
 ## URLs
 

@@ -28,8 +28,11 @@ Full walkthrough of every route with explanations: **[docs/FEATURES.md](docs/FEA
 
 Full documentation site (getting started, user guide, configuration,
 operations, developer guide, architecture diagrams, roadmap):
-served by the app itself at **`/cropwright/`** on the app origin (for example
-`http://localhost:5184/cropwright/`; source in `docs-site/`).
+the Cropwright section of the OpenProcessor documentation site (source in
+`docs-site/docs/cropwright/` at the repository root). Screenshots live in
+`docs-site/static/img/screenshots/cropwright/`. When the docs overlay is
+running (`docker-compose.docs.yml`), the app proxies the site on its own
+origin and the top-bar **Resources** menu links to it.
 
 ## Security — read this before deploying
 
@@ -54,12 +57,11 @@ it has no data of its own to show.
 
 ## Quick start (Docker)
 
-Cropwright 0.1.0 is published as `davidamacey/cropwright` (and
-`davidamacey/cropwright-docs`) on Docker Hub, and the OpenProcessor installer
-sets it up for you. To run it standalone, use `docker-compose.yml` from the
-release (`docker compose pull && docker compose up -d`; add `--profile docs`
-for the bundled documentation). From a source checkout, build the app and its
-docs instead:
+In the OpenProcessor repository, Cropwright is the `cropwright` compose profile
+(`docker compose --profile cropwright up -d` from the repository root, see the
+[quick start](../docs-site/docs/cropwright/getting-started/quick-start.md)). The
+rest of this section runs the `frontend/` compose file on its own, against an
+existing backend. From a source checkout, build the app:
 
 ```bash
 cp .env.example .env
@@ -88,10 +90,9 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
 Open `http://localhost:5184` (or whatever `CROPWRIGHT_PORT` you set).
-The same compose file also runs the documentation site, reached on that
-origin at `/cropwright/`, and the API's own Swagger UI at `/docs`
-(ReDoc at `/redoc`); the top bar's **Resources** menu links to all of them
-and to any dashboards the backend serves.
+The app origin also serves the API's own Swagger UI at `/docs` (ReDoc at
+`/redoc`); the top bar's **Resources** menu links to them, to the
+documentation when it is running, and to any dashboards the backend serves.
 The image runs nginx as a non-root user (uid 101) listening on port 8080
 inside the container; compose maps `CROPWRIGHT_PORT` to it.
 
@@ -309,7 +310,7 @@ them.
 
 ## Screenshots policy
 
-Every image published in `docs/` comes from a fresh-start run on public
+Every image published in the docs (`docs-site/static/img/screenshots/cropwright/`) comes from a fresh-start run on public
 datasets only (COCO val2017, and license-checked Open Images images for
 the region example), fetched by the backend and never bundled here.
 Contributions that add screenshots must follow the same rule: no private

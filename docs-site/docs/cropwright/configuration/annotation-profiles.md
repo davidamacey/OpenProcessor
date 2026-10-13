@@ -16,12 +16,12 @@ Cropwright rebuild**.
    **second** annotation slot the backend doesn't know about, by dropping
    an `annotation-profiles.json` file next to the built app — no fork, no
    rebuild.
-   - `static/annotation-profiles.example.json` in the Cropwright repo is a
+   - `frontend/static/annotation-profiles.example.json` is a
      worked example that customizes a served profile.
-   - `examples/annotation-profiles/` has three more: license plate,
+   - `frontend/examples/annotation-profiles/` has three more: license plate,
      aircraft tail number, and defect code.
    - The schema is documented in
-     `docs/annotation-slots-contract-draft.md` in the repo.
+     `frontend/docs/annotation-slots-contract-draft.md`.
 
 A missing or malformed profile file never crashes the app — it's dropped
 with a console warning and a toast, and Cropwright falls back to whatever
