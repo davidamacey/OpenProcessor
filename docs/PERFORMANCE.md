@@ -2968,7 +2968,7 @@ share count. Raw JSON stays in the scratch directory of the run.
 
 | Item | Value |
 |---|---|
-| Card | RTX A6000 (GPU 0), one card; 2-card runs not taken: the second A6000 was loaded by another project during every window |
+| Cards | one RTX A6000 (GPU 0) for the sweep; two A6000 (GPUs 0 and 2, 0.0 percent foreign utilisation in every counted repetition) for the confirmation runs |
 | Stack | project `stage2`, the checkout's `src/` over the published image, 32 API workers, OpenSearch 8 GB heap; uint8 FP16 detector plan and the half-split PE plan (`models/` as in the previous section) |
 | Load | set A (2,000 COCO images), `POST /ingest/batch`, policy `all`, 100-image warm-up, 3 repetitions per point |
 | Host | 48 logical cores shared with other projects; 1-minute load 7-37, host 13-47 percent busy; SM clock 1,480 MHz mean |
@@ -3079,10 +3079,39 @@ ingest crops the detector's pixel box, which can extend past the frame, and Pill
 black; the stored `bbox_norm` is clamped to the frame, so the re-embed crops less. The padding cannot be
 recovered from the stored box, so matching ingest would change stored vectors: reported, not changed.
 
+#### Parity (final configuration against `ref-u8fp16` and `ref-u8fp16-repeat`, `precision` profile)
+
+One capture of the final configuration (shipped engines and Triton settings, one card, set A, policy `all`,
+200 probe images for the CLIP, face and OCR gates); summaries in `docs/benchmarks/parity/stage2_tuning_vs_u8fp16/`
+and `stage2_tuning_vs_u8fp16-repeat/`. All gates pass; `P-vlm` is skipped (no VLM in the stack).
+
+| Gate (rule) | Against `ref-u8fp16` | Against `ref-u8fp16-repeat` |
+|---|---:|---:|
+| P-box images identical (>= 0.98) | 0.99242 | 0.99343 |
+| P-item (>= 0.99) | 0.99899 | 0.99899 |
+| P-pe crop cosine p01 (>= 0.995) | 0.99977 | 0.99971 |
+| P-pew frame cosine p01 (>= 0.995) | 0.99944 | 0.99945 |
+| P-knn overlap@10 (>= 0.95) | 0.98210 | 0.98280 |
+| P-cluster-assign (>= 0.98) | 0.99898 | 0.99836 |
+| P-cluster-purity drop in points (<= 0.5) | 0.24 | -0.21 |
+| P-label-vote (>= 0.97) | 0.992 | 0.992 |
+| P-clip, P-face, P-ocr | 1.0000 | 1.0000 |
+
+#### End to end, before and after (set A, 16 x 16, one card)
+
+| | images/s | encoder busy |
+|---|---:|---:|
+| Before (multi-GPU section, one A6000, uint8 + interleaved PE engine) | 23.39 [22.96-23.41] | 0.95-0.98 |
+| After (this checkout: half-split engine, default settings) | 28.81-29.07 (three series of 3 repetitions, 0.0 percent foreign load) | 0.95-0.96 |
+| Two cards before (multi-GPU section) | 44.60 [44.29-45.47] | 0.87-0.93 per card |
+| Two cards after, 16 x 16 | 55.08 [55.04-55.11] (1.89x one card) | 1.79-1.82 of 2 |
+| Two cards after, 32 x 16 | 56.37 [55.24-56.97] | 1.82-1.88 of 2 |
+| Two cards after, 16 x 32 | 50.17 [48.98-51.68] | 1.62-1.71 of 2 |
+
 #### Not measured in the stage 2 pass
 
-- Two cards: the second A6000 held 56 to 100 percent foreign utilisation in every window; the 44.6 images/s
-  of the multi-GPU section was taken before the half-split engine.
+- Two-card sweep: only the confirmation points above were run (16 x 16, 32 x 16, 16 x 32 at shipped settings);
+  instance counts, delays and worker counts were swept on one card only. 2-card API CPU stays 0.06 s/image.
 - Set B (photos): the pinned images were removed from the scratch store by another process and the
   re-download was rate limited (HTTP 429); no photo numbers.
 - The `minimal` and `standard` profiles, the RTX 3080 Ti, detector CUDA graphs in Triton, a full

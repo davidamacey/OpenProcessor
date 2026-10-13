@@ -177,7 +177,8 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   one (#228).
 
 - The bulk-ingest default concurrency is 16 batches in flight (was 8). One RTX A6000 plateaus at 16 clients
-  (29.1 images/s against 27.6 at 8 and 22.0 at 4); no detector engine variant, Triton instance count,
+  (29.1 images/s against 27.6 at 8 and 22.0 at 4; two A6000 reach 55.1, against 44.6 before the half-split
+  encoder engine); no detector engine variant, Triton instance count,
   queue delay, preferred batch size or API worker count moved images per second by 3 percent or more on a
   GPU-bound card, so those defaults stay (#226, `docs/PERFORMANCE.md`).
 
