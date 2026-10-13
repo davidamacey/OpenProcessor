@@ -101,6 +101,12 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   instead of skipping it as up to date. `openprocessor models status` lists the stamps. Only the PE group
   is stamped; the other groups are a follow-up (#209).
 
+- `scripts/bench/ingest_write_path.py` (the ingest write path alone at offered rates, with k-NN queries
+  running next to it), `scripts/bench/store_parity.py` (ANN overlap against exact search, cluster
+  agreement and purity for two engines on the product stack) and `--noise 0` for
+  `os_write_ceiling.py` (real vectors only). Results in `docs/PERFORMANCE.md` and
+  `docs/benchmarks/stage4_*.json` (#248, #254, #230).
+
 ### Changed
 
 - `scripts/curation/ingest_walker.py` is replaced by `scripts/curation/bulk_ingest.py` (`--folder` instead of
@@ -192,6 +198,20 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   after the pass reads the clustered vectors once, by point-in-time slices, writes only what changed and
   does it 8 requests at a time (10k: 143 s to 11 s, same stored geometry); assign-only reads through
   slices and skips documents that already store the result.
+
+- Ingest writes are coalesced per API process: the documents of images that finish near each other go to
+  OpenSearch as one images bulk, one `mget` and one items bulk of up to 1,000 documents, with 4 flushes in
+  flight, 429 backoff and a result per image (a refused document is reported in its own image, and a
+  failed flush answers every caller). At the GPU-bound 26 images/s nothing changes end to end; one process
+  that used to stop at about 26 images/s now sustains 100 (and 175 to 187 at 200), with 62 percent less
+  API CPU per image at 100 and k-NN p95 under the same writes down from 449 to 28 ms at 25. The upsert
+  moved to `src/clients/occ_upsert.py` and returns an outcome per document (#248).
+- New projects build their vector fields on the Lucene engine with `ef_construction` 128 (was faiss 512):
+  the items index is 48 percent smaller on the product stack, filtered recall stays near 1.0, the cosine
+  score is unchanged, and the review-default overlap@10 against faiss is 0.992 (gate 0.95) with cluster
+  agreement and purity inside run-to-run noise. Existing projects keep their faiss fields; there is no
+  migration, re-ingest to move one (#254). Write ceiling at 100,000 real vectors on this mapping: 1,980
+  documents/s with 4 writers, 4,426 with 8 (#230).
 
 ### Fixed
 

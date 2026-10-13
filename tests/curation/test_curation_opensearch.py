@@ -70,6 +70,7 @@ def test_images_has_knn_embedding() -> None:
     assert embedding['dimension'] == config.embedding_dim == 512
     assert embedding['method']['name'] == 'hnsw'
     assert embedding['method']['space_type'] == 'cosinesimil'
+    assert embedding['method']['engine'] == 'lucene'
     assert embedding['method']['parameters'] == {
         'ef_construction': config.hnsw_ef_construction,
         'm': config.hnsw_m,

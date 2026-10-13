@@ -3118,6 +3118,134 @@ and `stage2_tuning_vs_u8fp16-repeat/`. All gates pass; `P-vlm` is skipped (no VL
   factorial of client x instances x delays x workers (one factor at a time was run), `priority_levels`.
 - The embed-pass fix (above).
 
+### Stage 4: coalesced ingest writes, Lucene engine, write ceiling on the final mapping (#248, #254, #230)
+
+Three storage changes measured on the product stack: one RTX 3080 Ti (GPU 1, 12 GB, shared with other
+projects' resident processes, none busy), 24 API workers, FP16 PE engine, OpenSearch 3.6.0 with an 8 GB
+heap on the same host (load average 13 to 36 from other projects), set A (public COCO, 2,000 images,
+policy `all`, 12,803 items), 32 images per request, 8 clients, fresh project per run. "Before" is the
+tree at the parent commit, "after" this branch, switched by changing the mounted `src/` of the same
+containers. Raw files: `docs/benchmarks/stage4_*.json` (ingest, write path, parity, ceiling).
+
+#### 1. Where the write path sits at the GPU-bound rate
+
+| Route | Arm | images/s median (min-max, 4 runs) | API CPU s/image | request p50 / p95 s | `opensearch_write` mean ms |
+|---|---|---:|---:|---:|---:|
+| `/ingest/batch` | before | 26.6 (26.5-26.9) | 0.065 (0.059-0.069) | 9.7 / 11.3 | 184 |
+| `/ingest/batch` | after | 26.4 (25.8-28.2) | 0.062 (0.045-0.065) | 9.9 / 11.0 | 392 |
+| `/ingest/upload` | before | 23.5 (21.7-25.8) | 0.070 (0.069-0.071) | 10.7 / 14.6 | 432 |
+| `/ingest/upload` | after | 23.7 (20.5-27.6) | 0.067 (0.062-0.069) | 10.1 / 14.0 | 937 |
+
+At 23 to 27 images/s the coalesced writer wins nothing end to end: throughput, API CPU and request
+latency are inside run-to-run noise, and the GPU is the binder as before. The `opensearch_write` stage
+is wall time per image and grew because an image now waits for a shared flush; the request p50 did
+not move. The CPU stages of the write path are small at this rate (`doc_build` 0.07 and
+`bulk_serialize` 0.05 ms per call); the gain is headroom, below.
+
+#### 2. The write path alone at the rates decode work will unlock
+
+`scripts/bench/ingest_write_path.py` replays real ingest documents (the images doc and items docs of
+a real project, vectors as stored; beyond the 2,000 source images they are reused with a small
+perturbation, the last column is the exact-real share) through the product client and guard in one
+process, open loop, 20 s per point, 2 repetitions in opposite order, with 20 review-default k-NN
+queries per second running in the same process. `perimage` is the previous behaviour: an images bulk,
+an `mget` and an items bulk per image (about 7 documents each), no limit on writers.
+
+| Offered img/s | Arm | achieved img/s | API CPU ms/image | requests/image | docs per bulk | write p50 / p99 ms | k-NN p50 / p95 ms | exact real |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 25 | perimage | 24 | 10.1 | 3.00 | 7 | 593 / 2,494 | 23 / 449 | 1.00 |
+| 25 | coalesced | 24 | 9.5 | 1.17 | 19 | 441 / 1,151 | 22 / 28 | 1.00 |
+| 50 | perimage | 25 | 7.6 | 3.00 | 7 | 15,680 / 28,606 | 1,159 / 9,821 | 1.00 |
+| 50 | coalesced | 48 | 5.8 | 0.55 | 41 | 519 / 1,539 | 21 / 29 | 1.00 |
+| 100 | perimage | 26 | 7.3 | 3.00 | 7 | 45,720 / 62,996 | 2,945 / 23,521 | 0.99 |
+| 100 | coalesced | 96 | 3.8 | 0.26 | 85 | 575 / 1,659 | 22 / 39 | 0.99 |
+| 200 | perimage | 28 | 8.0 | 3.00 | 7 | 96,118 / 121,942 | 13,166 / 42,292 | 0.50 |
+| 200 | coalesced | 175 | 3.2 | 0.05 | 530 | 2,687 / 5,091 | 42 / 179 | 0.49 |
+| 200 | coalesced, 500-doc bulks | 180 | 3.1 | 0.07 | 324 | 1,363 / 2,871 | 24 / 71 | 0.51 |
+| 200 | coalesced, 8 writers | 187 | 3.1 | 0.12 | 182 | 1,561 / 3,402 | 24 / 71 | 0.49 |
+
+- One process on the per-image path stops at about 25 to 28 images/s (3 requests each through the
+  client's 10-connection pool) and queues without bound above it; the coalesced writer keeps up to 100
+  images/s and reaches 175 to 187 at 200. In production 24 workers share the load, so the per-process
+  knee is the relevant number when a few workers carry the decoded frames.
+- API CPU per image falls 62 percent at 100 images/s (7.3 to 3.8 ms) and requests fall 3.00 to 0.26 per
+  image. At 25 images/s CPU is unchanged (10 ms) but k-NN p95 under the same writes falls from 449 to
+  28 ms, because the node no longer takes 75 small bulks per second.
+- No linger (`coalesced_nolinger`) and bulk caps of 500 against 1,000 differ by under 10 percent below
+  200 images/s; 500 documents and 8 writers are slightly better at 200. The defaults stay at 1,000
+  documents and 4 writers per process (24 processes in the stack).
+- Not measured here: node CPU per image (the cgroup counter included merges and neighbours' load).
+
+#### 3. Lucene engine and `ef_construction` 128 on the product stack
+
+Two projects per engine from the same 2,000 images: faiss with `ef_construction` 512 (the previous
+default, built from the parent tree) and Lucene with 128 (this branch). `scripts/bench/store_parity.py`
+runs the product's k-NN query builder with the review-default filter (and a class and a cluster filter)
+against the live indexes for 1,000 items and compares the top 10 with exact cosine search over the
+stored vectors; cluster training ran on all four projects. The same-engine rows are the noise floor
+(two ingests of identical images differ in about 1 percent of boxes).
+
+| Pair | review default overlap@10 | review default recall vs exact (ref / cand) | class filter (33 %) overlap@10 | class filter recall (ref / cand) | cluster ARI | cluster purity change, points |
+|---|---:|---|---:|---|---:|---:|
+| faiss 512 against faiss 512 | 0.9935 | 0.9998 / 0.9997 | 0.904 | 0.938 / 0.912 | 0.338 | -0.56 |
+| faiss 512 against Lucene 128 | 0.9923 | 0.9998 / 0.9995 | 0.930 | 0.938 / 1.000 | 0.344 | -0.79 |
+| faiss 512 against Lucene 128 (second pair) | 0.9902 | 0.9997 / 0.9992 | 0.910 | 0.918 / 1.000 | 0.338 | +0.53 |
+| Lucene 128 against Lucene 128 | 0.9883 | 0.9994 / 0.9993 | 0.987 | 1.000 / 1.000 | 0.341 | +0.77 |
+
+- Gate (overlap@10 >= 0.95 on the review default): **passes**, 0.990 to 0.992 across engines against
+  0.988 to 0.994 within an engine. Cosine `_score` of the same neighbour differs by under 0.0005 at the
+  99th percentile, so `min_score` and the UI chip are unaffected.
+- With a class filter the faiss index loses recall to the filter (0.92 to 0.94) and Lucene does not (1.000);
+  the cross-engine overlap there (0.91 to 0.93) is faiss's miss, not Lucene's.
+- Cluster agreement (ARI 0.338 to 0.344) and purity change (-0.79 to +0.77 points) are inside the spread
+  of two k-means runs of one engine, because cluster training reads the stored vectors and does not
+  query the index. The cluster-filter overlap is not meaningful across projects (cluster ids are
+  per project); its recall against exact search is 1.000 on both engines.
+- Disk of the items index for the same 12,803 items: 56 MiB on Lucene against 108 MiB on faiss (4.5
+  against 8.6 KiB per item, whole documents included).
+
+**Existing indexes.** The engine of a vector field is fixed when the field is created, so an existing
+project keeps its faiss fields and `ef_construction` 512 and keeps working (queries and scores are
+the same on both engines). New projects, and vector fields added to an old index by the startup
+mapping migration, get Lucene with 128. No migration or reindex tool ships: to move a project, create
+a new project on this build and re-ingest or re-import its images. `OP_HNSW_EF_CONSTRUCTION` applies
+to indexes created after it is set.
+
+#### 4. Write ceiling at 100,000 real vectors, final mapping
+
+`scripts/bench/os_write_ceiling.py` with `--noise 0`: 100,000 distinct real item documents and 15,625 real
+image documents, copied from a real 16,000-image COCO ingest on this stack (102,677 items), written
+to fresh indexes with that project's mapping and settings (Lucene, `m` 16, `ef_construction` 128,
+one shard, no replica, 1 s refresh). Medians of 2 repetitions on a loaded host.
+
+| Writers x bulk | docs/s | images/s equivalent | searchable s | bulk p95 s | node cores |
+|---|---:|---:|---:|---:|---:|
+| 1 x 1,000 | 473 | 64 | 245 | 3.7 | 4.9 |
+| 4 x 1,000 | 1,980 | 268 | 60 | 3.6 | 6.9 |
+| 8 x 1,000 | 4,426 | 598 | 26 | 2.8 | 9.6 |
+| 16 x 1,000 | 6,271 | 847 | 19 | 3.3 | 15.3 |
+
+- Lucene is slower per writer than the faiss rows of probe 5 (473 against 1,011 documents/s with one
+  writer; the host was also busier), so one writer no longer carries 100 images/s: four do (268
+  images/s equivalent). That is what the coalescer's 4 writers per process provide. 429 retries: none.
+- Stored size of the source project's items index: 448.5 MiB for 102,677 items (4.5 KiB each); heap in
+  use 4.4 of 8 GB after the runs.
+- **Extrapolation, not run (1M):** a linear extrapolation of the sizes above gives about 4.4 GiB of
+  items and 0.5 GiB of images on disk for a million items, a load of 5 to 10 minutes at the 8-writer rate
+  if it held (it will fall as merges grow), and the Lucene graph read through the page cache instead of
+  heap. One shard per
+  project is enough to this size; split into more shards only when a single shard passes tens of GB,
+  because each shard merges alone. Keep the heap at 8 GB for the HNSW build buffers and let the rest
+  of the RAM be page cache. This is a guide, not a measurement; the 1M point stays with #232.
+
+#### Not measured
+
+- 1M vectors (real or noisy), 250k and 500k points; a merge-time and load-time comparison of faiss against
+  Lucene at 100k on this build (the vector store evaluation has the 100k figures: merge 50 percent slower,
+  load 36 percent slower); node CPU per image of the two write paths; set B (photos) end to end.
+- The 4-writer, 1,000-document default was not tuned past the points above; ingest throughput at the
+  GPU-bound rate does not depend on it.
+
 ## Benchmarking
 
 ### Using the Go Benchmark Tool

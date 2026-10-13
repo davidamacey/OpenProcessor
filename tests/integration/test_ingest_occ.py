@@ -186,7 +186,7 @@ async def test_existing_crop_with_human_label_preserved_on_reingest() -> None:
     human-guard field on the existing doc and increment the per-field
     preserved-label counter.
     """
-    from src.clients.occ import occ_upsert_bulk
+    from src.clients.occ_upsert import occ_upsert_bulk
     from src.services.curation.metrics import OP_INGEST_PRESERVED_HUMAN_LABEL
 
     client = FakeUpsertOpenSearch()
@@ -264,7 +264,7 @@ async def test_parallel_ingest_of_same_image_yields_n_crops_not_2n() -> None:
     create wins; the other gets 409, falls back to OCC update. Final
     state has exactly the new doc count, not 2x it.
     """
-    from src.clients.occ import occ_upsert_bulk
+    from src.clients.occ_upsert import occ_upsert_bulk
 
     client = FakeUpsertOpenSearch()
     index = 'op_items_test'
@@ -306,7 +306,7 @@ async def test_non_human_doc_overwritten_normally() -> None:
     doc, OCC upsert still applies the new value (normal overwrite). No
     preserved-label counter should increment.
     """
-    from src.clients.occ import occ_upsert_bulk
+    from src.clients.occ_upsert import occ_upsert_bulk
     from src.services.curation.metrics import OP_INGEST_PRESERVED_HUMAN_LABEL
 
     client = FakeUpsertOpenSearch()
@@ -357,7 +357,7 @@ async def test_bulk_update_phase_issues_one_bulk_call_not_n() -> None:
     human-guard fields must be preserved/checked) must batch through
     one occ_update_bulk call -- one mget + one bulk -- instead of one
     client.update() per doc."""
-    from src.clients.occ import occ_upsert_bulk
+    from src.clients.occ_upsert import occ_upsert_bulk
 
     client = FakeUpsertOpenSearch()
     index = 'op_items_test'
@@ -444,7 +444,7 @@ _LOCKED_EXISTING = {
 
 @pytest.mark.parametrize('kind', sorted(_LOCKED_EXISTING))
 async def test_reingest_keeps_every_class_field_of_a_locked_item(kind: str) -> None:
-    from src.clients.occ import occ_upsert_bulk
+    from src.clients.occ_upsert import occ_upsert_bulk
 
     client = FakeUpsertOpenSearch()
     index = 'op_items_test'
