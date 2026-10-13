@@ -171,3 +171,33 @@ async def test_front_end_off_never_calls_the_model(tmp_path) -> None:
     assert calls == []
     assert triton.calls == ['primary_end2end']
     assert triton.loaded == []
+
+
+def test_the_front_end_is_on_by_default_with_the_three_megapixel_gate() -> None:
+    from src.config.curation import CurationConfig
+
+    cfg = CurationConfig()
+    assert cfg.ingest_gpu_frontend is True
+    assert cfg.ingest_gpu_min_megapixels == 3.0
+
+
+@pytest.mark.asyncio
+async def test_a_model_that_fails_to_load_leaves_ingest_on_the_cpu_path(tmp_path) -> None:
+    """Triton out of memory for image_frontend: the load raises, every photo is ingested on the
+    CPU, the detector is used as before and the load is not retried for every batch."""
+    svc, os_fake, triton, calls, sizes = _gpu_service(tmp_path)
+    attempts: list[str] = []
+
+    async def load_model(model: str) -> None:
+        attempts.append(model)
+        raise RuntimeError('failed to load: CUDA out of memory')
+
+    triton.load_model = load_model
+    for name, seed in (('a', 7), ('b', 8)):
+        big = _register(sizes, _jpeg_bytes((640, 480), seed=seed), (640, 480))
+        result = await svc.ingest_batch([big], [f'/x/{name}.jpg'])
+        assert result.summary.successful == 1
+    assert calls == []  # the front end was never called
+    assert attempts == [ingest_frontend.FRONTEND_MODEL]
+    assert triton.calls == ['primary_end2end', 'primary_end2end']
+    assert len(os_fake.images) == 2
