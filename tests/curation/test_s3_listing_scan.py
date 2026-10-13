@@ -7,8 +7,8 @@ import os
 from typing import TYPE_CHECKING
 
 import pytest
-
 from _fake_object_store import FakeObjectStore
+
 from src.services.curation.bulk_ingest.folder_scan import SETTLE_S, scan_folder
 from src.services.curation.bulk_ingest.object_queue import ObjectQueue
 from src.services.curation.bulk_ingest.object_store import ObjectFetchError

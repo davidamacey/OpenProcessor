@@ -910,6 +910,7 @@ role. Give them read-only access to the listed prefixes.
 | Read, change or remove one | `GET`, `PATCH`, `DELETE /curation/projects/{project}/ingest/sources/{source_id}` |
 | Scan the source and ingest what is new, now | `POST /curation/projects/{project}/ingest/sources/{source_id}/run` |
 | Put objects that gave up back in the queue | `POST /curation/projects/{project}/ingest/sources/{source_id}/retry-dead` |
+| Receive S3 event notifications (webhook) | `POST /curation/projects/{project}/ingest/sources/{source_id}/events` |
 | Fetch and ingest named objects (what the runner calls for S3) | `POST /curation/projects/{project}/ingest/objects` |
 | A time-limited download URL of an original | `POST /curation/projects/{project}/ingest/objects/presign` |
 
@@ -942,6 +943,17 @@ How it behaves:
   so a restart resumes instead of relisting. A finished pass moves a watermark (the
   pass start minus two minutes); the next pass queues objects modified since. A very
   large flat bucket is better served by the webhook than by relisting.
+- **Webhook.** A source created with `triggers.webhook_enabled` accepts the S3 event
+  notification JSON (`Records[].s3.bucket.name` and `.object.key`, `.eTag`, `.versionId`;
+  S3 and MinIO send it) at its `.../events` route, which its status gives as
+  `webhook.path`. Point the store's notification target at it (MinIO: `mc event add`
+  with a webhook target). The route only writes queue rows and answers 202 with
+  `{received, queued, duplicates, ignored}`; it validates the shape (422
+  `invalid_s3_event`, naming the first bad field), deduplicates by bucket, key and etag
+  so a redelivery queues nothing, and ignores records for other buckets, prefixes or file
+  types and every event that is not a creation, so one bucket-wide notification can feed
+  several sources. Keep the endpoint on loopback or a trusted network: like the rest of
+  the API it has no authentication.
 - **Failures are per object.** A missing object (`gone`) or one over the size cap
   (`too_large`), or one that is not an image, is `dead` at once; a permission or
   network error (`forbidden`, `fetch_error`) is retried by later runs up to three

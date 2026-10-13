@@ -9,6 +9,8 @@ definitions, start a run now, requeue dead objects and receive S3 event notifica
 
 from __future__ import annotations
 
+import asyncio
+import time
 from typing import TYPE_CHECKING
 
 from fastapi import Request  # noqa: TC002 - FastAPI resolves route annotations at runtime
@@ -19,6 +21,7 @@ from src.routers.curation._config_common_models import api_error
 from src.routers.curation._ingest_bulk_models import BulkIngestRequest, BulkIngestRun
 from src.routers.curation._ingest_bulk_wire import own_address, run_wire, slug
 from src.routers.curation._ingest_sources_models import (
+    EventsAccepted,
     IngestSourceList,
     IngestSourcePatch,
     IngestSourceRequest,
@@ -38,11 +41,18 @@ from src.routers.curation._ingest_sources_models import (
 )
 from src.routers.curation.ingest import _get_ingest_service
 from src.services.curation.bulk_ingest import limits, runner
+from src.services.curation.bulk_ingest.object_queue import QueueEntry
 from src.services.curation.bulk_ingest.object_store import (
     S3Config,
     S3NotAllowedError,
     S3NotConfiguredError,
 )
+from src.services.curation.bulk_ingest.s3_events import (
+    EventRecord,
+    InvalidS3EventError,
+    parse_s3_event,
+)
+from src.services.curation.bulk_ingest.s3_listing import wanted_extension
 from src.services.curation.bulk_ingest.source import normalise_extensions
 from src.services.curation.bulk_ingest.source_runs import (
     run_is_live,
@@ -305,3 +315,64 @@ async def retry_dead_objects(source_id: str) -> RetryDeadResult:
     source = _load(source_id)
     retried = source_queue(source_id).retry_dead()
     return RetryDeadResult(retried=retried, source=status_wire(source))
+
+
+def _record_matches(source: IngestSource, record: EventRecord, s3: S3Config) -> bool:
+    if not record.is_created or record.bucket != source.bucket:
+        return False
+    if not record.key.startswith(source.prefix) or not wanted_extension(
+        record.key, frozenset(source.extensions)
+    ):
+        return False
+    try:
+        s3.check(record.bucket, record.key)
+    except (S3NotAllowedError, S3NotConfiguredError):
+        return False
+    return True
+
+
+def _queue_events(source: IngestSource, records: list[EventRecord]) -> EventsAccepted:
+    s3 = S3Config.from_env()
+    wanted = [r for r in records if _record_matches(source, r, s3)]
+    queue = source_queue(source.source_id)
+    queued, duplicates = queue.enqueue(
+        QueueEntry(r.key, r.etag, r.version_id, r.size) for r in wanted
+    )
+    ignored = len(records) - len(wanted)
+    queue.add_counters(
+        {
+            'events.received': len(records),
+            'events.queued': queued,
+            'events.duplicates': duplicates,
+            'events.ignored': ignored,
+        }
+    )
+    queue.meta_set('events.last_at', time.time())
+    return EventsAccepted(
+        received=len(records), queued=queued, duplicates=duplicates, ignored=ignored
+    )
+
+
+@router.post('/ingest/sources/{source_id}/events', response_model=EventsAccepted, status_code=202)
+async def receive_s3_events(source_id: str, request: Request) -> EventsAccepted:
+    """S3 event notification webhook of one source. Idempotent: a record is deduplicated by
+    bucket, key and etag, so a redelivery queues nothing. Records for other buckets,
+    prefixes or file types, and non-create events, are ignored (a bucket-wide
+    notification can feed several sources). The request only writes queue rows; the
+    dispatcher starts the run, so the answer is fast."""
+    source = _load(source_id)
+    if not source.webhook_enabled:
+        raise api_error(
+            409, 'webhook_disabled', 'this source does not accept events', project=slug()
+        )
+    try:
+        body = await request.json()
+    except ValueError:
+        raise api_error(
+            422, 'invalid_s3_event', '$: the body is not JSON', project=slug()
+        ) from None
+    try:
+        records = parse_s3_event(body)
+    except InvalidS3EventError as exc:
+        raise api_error(422, 'invalid_s3_event', str(exc), project=slug()) from None
+    return await asyncio.to_thread(_queue_events, source, records)

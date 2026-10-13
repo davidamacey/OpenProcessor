@@ -8,8 +8,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
-
 from _fake_object_store import FakeObjectStore
+
 from integration.ingest_fakes import (
     FakeOpenSearch,
     FakePEEncoder,

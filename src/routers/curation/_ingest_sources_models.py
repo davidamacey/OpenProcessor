@@ -191,3 +191,12 @@ class IngestSourceList(BaseModel):
 class RetryDeadResult(BaseModel):
     retried: int
     source: IngestSourceStatus
+
+
+class EventsAccepted(BaseModel):
+    """What one notification did. ``received`` = ``queued`` + ``duplicates`` + ``ignored``."""
+
+    received: int
+    queued: int
+    duplicates: int
+    ignored: int

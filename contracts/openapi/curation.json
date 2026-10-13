@@ -8132,6 +8132,35 @@
         "title": "EvalDatasetList",
         "type": "object"
       },
+      "EventsAccepted": {
+        "description": "What one notification did. ``received`` = ``queued`` + ``duplicates`` + ``ignored``.",
+        "properties": {
+          "duplicates": {
+            "title": "Duplicates",
+            "type": "integer"
+          },
+          "ignored": {
+            "title": "Ignored",
+            "type": "integer"
+          },
+          "queued": {
+            "title": "Queued",
+            "type": "integer"
+          },
+          "received": {
+            "title": "Received",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "received",
+          "queued",
+          "duplicates",
+          "ignored"
+        ],
+        "title": "EventsAccepted",
+        "type": "object"
+      },
       "ExportClassSplitCounts": {
         "description": "One class's object (label-line) counts per split, as recorded in the manifest.",
         "properties": {
@@ -38449,6 +38478,58 @@
           }
         },
         "summary": "Update Ingest Source",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest/sources/{source_id}/events": {
+      "post": {
+        "description": "S3 event notification webhook of one source. Idempotent: a record is deduplicated by\nbucket, key and etag, so a redelivery queues nothing. Records for other buckets,\nprefixes or file types, and non-create events, are ignored (a bucket-wide\nnotification can feed several sources). The request only writes queue rows; the\ndispatcher starts the run, so the answer is fast.",
+        "operationId": "receive_s3_events_curation_projects__project__ingest_sources__source_id__events_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventsAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Receive S3 Events",
         "tags": [
           "Curation"
         ]

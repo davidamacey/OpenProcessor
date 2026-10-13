@@ -8,11 +8,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from src.services.curation.bulk_ingest.object_queue import (
-    MAX_ATTEMPTS,
-    ObjectQueue,
-    QueueEntry,
-)
+from src.services.curation.bulk_ingest.object_queue import MAX_ATTEMPTS, ObjectQueue, QueueEntry
 from src.services.curation.bulk_ingest.object_store import (
     ObjectRef,
     S3Config,
@@ -125,7 +121,7 @@ def test_concurrent_writers_lose_nothing(tmp_path: Path) -> None:
     def writer(n: int) -> None:
         for i in range(30):
             queue.enqueue([QueueEntry(f'w{n}/{i}.jpg', 'e'), QueueEntry('shared.jpg', 'e')])
-            queue.incr('events.received')
+            queue.add_counters({'events.received': 1})
 
     threads = [threading.Thread(target=writer, args=(n,)) for n in range(6)]
     for t in threads:

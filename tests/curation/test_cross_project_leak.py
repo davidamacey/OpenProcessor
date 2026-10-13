@@ -219,6 +219,7 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('DELETE', '/ingest/sources/{source_id}'): {},
         ('POST', '/ingest/sources/{source_id}/run'): {},
         ('POST', '/ingest/sources/{source_id}/retry-dead'): {},
+        ('POST', '/ingest/sources/{source_id}/events'): {'json': {'Records': []}},
         ('POST', '/ingest/objects'): {'json': {'items': [{'bucket': 'sweep', 'key': 'k.jpg'}]}},
         ('POST', '/ingest/objects/presign'): {
             'json': {'source_identifier': 's3://sweep/k.jpg#etag=e'}

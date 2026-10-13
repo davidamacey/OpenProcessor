@@ -219,14 +219,16 @@ class ObjectQueue:
                 (name, json.dumps(value)),
             )
 
-    def incr(self, name: str, amount: int = 1) -> None:
-        """Add to a counter atomically (webhook totals)."""
+    def add_counters(self, amounts: dict[str, int]) -> None:
+        """Add to several counters in one transaction (webhook totals)."""
         with self._connect() as conn:
             conn.execute('BEGIN IMMEDIATE')
-            row = conn.execute('SELECT v FROM meta WHERE k=?', (name,)).fetchone()
-            total = (json.loads(row[0]) if row else 0) + amount
-            conn.execute(
-                'INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v=excluded.v',
-                (name, json.dumps(total)),
-            )
+            for name, amount in amounts.items():
+                row = conn.execute('SELECT v FROM meta WHERE k=?', (name,)).fetchone()
+                total = (json.loads(row[0]) if row else 0) + amount
+                conn.execute(
+                    'INSERT INTO meta (k, v) VALUES (?, ?)'
+                    ' ON CONFLICT(k) DO UPDATE SET v=excluded.v',
+                    (name, json.dumps(total)),
+                )
             conn.execute('COMMIT')

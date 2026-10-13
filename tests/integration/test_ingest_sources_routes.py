@@ -10,8 +10,8 @@ import time
 from typing import TYPE_CHECKING, Any
 
 import pytest
-
 from _fake_object_store import FakeObjectStore
+
 from integration.ingest_fakes import (
     FakeOpenSearch,
     FakePEEncoder,
@@ -203,3 +203,61 @@ def test_the_one_shot_bucket_start_uses_the_same_source_and_stays_inside_the_all
     assert (denied.status_code, denied.json()['detail']['error']) == (422, 's3_not_allowed')
     both = client.post(f'{BASE}/bulk', json={'s3': S3_BODY, 'folder': '/x'})
     assert both.status_code == 422
+
+
+def _counts(resp: Any) -> dict[str, int]:
+    return {k: resp.json()[k] for k in ('received', 'queued', 'duplicates', 'ignored')}
+
+
+def _event(key: str, etag: str, *, bucket: str = 'imgs', name: str = 'ObjectCreated:Put') -> dict:
+    return {
+        'eventName': name,
+        's3': {'bucket': {'name': bucket}, 'object': {'key': key, 'eTag': etag, 'size': 10}},
+    }
+
+
+def test_the_webhook_queues_matching_records_once(
+    client: TestClient, store: FakeObjectStore
+) -> None:
+    source = _create(client, triggers={'webhook_enabled': True})
+    events_url = f'{BASE}/sources/{source["source_id"]}/events'
+    ref = store.ref('imgs', 'in/a0.jpg')
+    body = {
+        'Records': [
+            _event('in/a0.jpg', ref.etag),
+            _event('in/a0.jpg', ref.etag),  # a redelivery inside the same notification
+            _event('in/notes.txt', 'e1'),  # not an image
+            _event('elsewhere/b.jpg', 'e2'),  # outside the source prefix
+            _event('in/a1.jpg', 'e3', bucket='other'),  # another bucket
+            _event('in/a2.jpg', 'e4', name='ObjectRemoved:Delete'),
+        ]
+    }
+    first = client.post(events_url, json=body)
+    assert first.status_code == 202, first.text
+    assert _counts(first) == {'received': 6, 'queued': 1, 'duplicates': 1, 'ignored': 4}
+    replay = client.post(events_url, json=body)
+    assert _counts(replay) == {'received': 6, 'queued': 0, 'duplicates': 2, 'ignored': 4}
+
+    status = client.get(f'{BASE}/sources/{source["source_id"]}').json()
+    assert status['counts']['pending'] == 1
+    assert (status['webhook']['received'], status['webhook']['queued']) == (12, 1)
+    assert status['webhook']['last_event_at'] is not None
+
+
+def test_the_webhook_refuses_bad_bodies_and_sources_that_did_not_opt_in(
+    client: TestClient,
+) -> None:
+    closed = _create(client)
+    refused = client.post(f'{BASE}/sources/{closed["source_id"]}/events', json={'Records': []})
+    assert (refused.status_code, refused.json()['detail']['error']) == (409, 'webhook_disabled')
+
+    open_source = _create(client, triggers={'webhook_enabled': True})
+    url = f'{BASE}/sources/{open_source["source_id"]}/events'
+    bad = client.post(url, json={'Records': [{'eventName': 'ObjectCreated:Put', 's3': {}}]})
+    assert bad.status_code == 422
+    assert bad.json()['detail']['error'] == 'invalid_s3_event'
+    assert 'Records[0].s3.bucket' in bad.json()['detail']['message']
+    not_json = client.post(url, content=b'<xml/>', headers={'content-type': 'application/json'})
+    assert not_json.status_code == 422
+    missing = client.post(f'{BASE}/sources/src_nosuchsource/events', json={'Records': []})
+    assert missing.status_code == 404
