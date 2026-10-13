@@ -405,7 +405,12 @@ cmd_models_install() {
     OP_DIR="$PROJECT_DIR"
     OP_HEALTH_HOST=127.0.0.1
     GPU_PROFILE="$(_env_value GPU_PROFILE)"
-    MODEL_SETUP_TRITON_DIGEST="$(sed -n -E 's/^  "triton_image_digest": "([^"]*)",?$/\1/p' "$PROJECT_DIR/.install/state.json" 2>/dev/null | head -n1)"
+    MODEL_SETUP_TRITON_DIGEST=""
+    if [[ -f "$PROJECT_DIR/.install/state.json" ]]; then
+        MODEL_SETUP_TRITON_DIGEST="$(sed -n -E 's/^  "triton_image_digest": "([^"]*)",?$/\1/p' "$PROJECT_DIR/.install/state.json" | head -n1)"
+    else
+        log_info "no .install/state.json (a checkout, not an installed directory): every model group is built"
+    fi
     export OP_DIR OP_HEALTH_HOST GPU_PROFILE MODEL_SETUP_TRITON_DIGEST
     dc up -d triton-server
     if model_setup_run_groups "$tiers" "$only"; then
