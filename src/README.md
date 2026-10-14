@@ -369,7 +369,7 @@ curl -X POST http://localhost:4603/ocr/predict -F "image=@document.jpg"
 
 ---
 
-### Combined Analysis (`routers/analyze.py`)
+### Combined Analysis (`routers/analyze.py`, `services/analyze_pipeline.py`)
 
 Run all models on a single image in one request.
 
