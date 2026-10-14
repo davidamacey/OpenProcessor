@@ -140,7 +140,7 @@ tests/curation/test_router_wireup.py # exercises the example profile's name/regi
 tests/curation/test_train_preflight_scan.py # exercises the example profile
 tests/curation/train_router/test_preflight_class_and_label_checks.py # negative assertion that 'license_plate' is NOT hardcoded into the class-balance message
 tests/curation/test_training_class_subset_presets.py # exercises the example profile's region_class_name in preset tests; docstring also names the hardcoded presets it replaces
-tests/curation/test_triton_promote.py # exercises the example profile
+tests/curation/triton_promote/test_promote_rollback_lineage_and_class_remap.py # exercises the example profile
 tests/curation/test_yolo26_triton_config.py # exercises the example profile
 tests/examples/test_bakeoff_license_plate_example.py # exercises the opt-in license_plate bake-off example under examples/bakeoff/ (loads it by path)
 scripts/datasets/fetch_openimages_plates.py # G-05 public sample fetcher: fetches Open Images V7's own "Vehicle registration plate" class by that exact public display name; same public license_plate example domain this allowlist section already covers throughout

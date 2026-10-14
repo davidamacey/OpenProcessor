@@ -12,7 +12,7 @@ at startup and keeps calling it on the same periodic tick the GPU arbiter
 uses, so a Triton bounce between API restarts is still picked up without
 an API bounce of its own. The reload function's own decision logic
 (skip-if-ready, ignore non-promoted dirs, best-effort on an unreachable
-Triton) is covered by ``tests/curation/test_triton_promote.py``.
+Triton) is covered by ``tests/curation/triton_promote/``.
 """
 
 from __future__ import annotations
