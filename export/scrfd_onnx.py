@@ -98,38 +98,11 @@ def analyze_onnx(onnx_path: Path) -> dict:
     return info
 
 
-def make_batch_dynamic(onnx_path: Path, output_path: Path | None = None) -> Path:
+def _rename_outputs_semantically(model: Any) -> dict[str, str]:
+    """Rename the numeric output tensors to ``score_<stride>`` / ``bbox_<stride>`` / ``kps_<stride>``.
+
+    Returns the ``old name -> new name`` map (also applied to the producing nodes).
     """
-    Fix SCRFD ONNX to support dynamic batch dimension with Triton batching.
-
-    Standard InsightFace SCRFD ONNX has two issues preventing batch support:
-    1. Transpose uses perm=[2,3,0,1] (puts spatial dims first, batch gets absorbed)
-    2. Reshape uses [-1, D] (flattens batch into first dim)
-
-    This function fixes both:
-    1. Renames numeric output tensors to semantic names (score_8, bbox_16, etc.)
-    2. Changes Transpose perm to [0,2,3,1] (keeps batch first: [B,H,W,C])
-    3. Changes Reshape from [-1,D] to [0,-1,D] (preserves batch: [B,N_anchors,D])
-    4. Sets dynamic batch dimension on input and output tensor specs
-
-    Result: outputs go from [N_anchors, D] to [batch, N_anchors, D], enabling
-    Triton's dynamic_batching scheduler.
-
-    Args:
-        onnx_path: Input ONNX path
-        output_path: Output path (default: adds _batched suffix)
-
-    Returns:
-        Path to batch-compatible ONNX model
-    """
-    import onnx
-    from onnx import TensorProto, helper
-
-    logger.info('Patching ONNX for batch support (rename + transpose + reshape)...')
-
-    model = onnx.load(str(onnx_path))
-
-    # --- Step 1: Rename outputs from numeric to semantic names ---
     score_outputs = []
     bbox_outputs = []
     kps_outputs = []
@@ -157,8 +130,11 @@ def make_batch_dynamic(onnx_path: Path, output_path: Path | None = None) -> Path
         for i, output_name in enumerate(node.output):
             if output_name in rename_map:
                 node.output[i] = rename_map[output_name]
+    return rename_map
 
-    # --- Step 2: Build producer map and find output-connected ops ---
+
+def _find_output_transposes(model: Any, rename_map: dict[str, str]) -> tuple[set[int], set[str]]:
+    """Find the Transpose nodes (by ``id``) and Reshape shape initializers feeding the outputs."""
     producer = {}
     for node in model.graph.node:
         for o in node.output:
@@ -191,8 +167,11 @@ def make_batch_dynamic(onnx_path: Path, output_path: Path | None = None) -> Path
                     break
             else:
                 break
+    return transpose_ids, reshape_init_names
 
-    # --- Step 3: Fix Transpose perm [2,3,0,1] -> [0,2,3,1] ---
+
+def _fix_transpose_perms(model: Any, transpose_ids: set[int]) -> None:
+    """Transpose perm [2,3,0,1] -> [0,2,3,1] so the batch stays first."""
     fixed_transposes = 0
     for node in model.graph.node:
         if node.op_type == 'Transpose' and id(node) in transpose_ids:
@@ -202,12 +181,12 @@ def make_batch_dynamic(onnx_path: Path, output_path: Path | None = None) -> Path
                     fixed_transposes += 1
     logger.info(f'  Fixed {fixed_transposes} Transpose nodes: perm [2,3,0,1] -> [0,2,3,1]')
 
-    # --- Step 4: Fix Reshape [-1, D] -> [0, -1, D] ---
+
+def _fix_reshape_shapes(model: Any, reshape_init_names: set[str]) -> None:
+    """Reshape shape initializers [-1, D] -> [0, -1, D] so the batch is preserved."""
     fixed_reshapes = 0
     for init in model.graph.initializer:
         if init.name in reshape_init_names:
-            import numpy as np
-
             old_shape = np.frombuffer(init.raw_data, dtype=np.int64)
             if len(old_shape) == 2 and old_shape[0] == -1:
                 new_shape = np.array([0, -1, old_shape[1]], dtype=np.int64)
@@ -217,7 +196,11 @@ def make_batch_dynamic(onnx_path: Path, output_path: Path | None = None) -> Path
                 logger.info(f'  Reshape {init.name}: {old_shape} -> {new_shape}')
     logger.info(f'  Fixed {fixed_reshapes} Reshape initializers')
 
-    # --- Step 5: Update input with dynamic batch ---
+
+def _set_dynamic_batch_input(model: Any) -> None:
+    """Replace the graph input with a ``['batch', 3, H, W]`` spec."""
+    from onnx import TensorProto, helper
+
     input_tensor = model.graph.input[0]
     new_input = helper.make_tensor_value_info(
         input_tensor.name, TensorProto.FLOAT, ['batch', 3, INPUT_SIZE, INPUT_SIZE]
@@ -225,7 +208,11 @@ def make_batch_dynamic(onnx_path: Path, output_path: Path | None = None) -> Path
     model.graph.input.remove(input_tensor)
     model.graph.input.insert(0, new_input)
 
-    # --- Step 6: Update outputs with [batch, N_anchors, D] shapes ---
+
+def _set_batched_outputs(model: Any, rename_map: dict[str, str]) -> None:
+    """Replace the output specs with ``[batch, N_anchors, D]`` shapes."""
+    from onnx import TensorProto, helper
+
     fm_sizes = {s: INPUT_SIZE // s for s in FPN_STRIDES}
     n_anchors_map = {s: fm_sizes[s] * fm_sizes[s] * NUM_ANCHORS for s in FPN_STRIDES}
     last_dim_map = {'score': 1, 'bbox': 4, 'kps': 10}
@@ -246,6 +233,44 @@ def make_batch_dynamic(onnx_path: Path, output_path: Path | None = None) -> Path
         model.graph.output.pop()
     for new_out in new_outputs:
         model.graph.output.append(new_out)
+
+
+def make_batch_dynamic(onnx_path: Path, output_path: Path | None = None) -> Path:
+    """
+    Fix SCRFD ONNX to support dynamic batch dimension with Triton batching.
+
+    Standard InsightFace SCRFD ONNX has two issues preventing batch support:
+    1. Transpose uses perm=[2,3,0,1] (puts spatial dims first, batch gets absorbed)
+    2. Reshape uses [-1, D] (flattens batch into first dim)
+
+    This function fixes both:
+    1. Renames numeric output tensors to semantic names (score_8, bbox_16, etc.)
+    2. Changes Transpose perm to [0,2,3,1] (keeps batch first: [B,H,W,C])
+    3. Changes Reshape from [-1,D] to [0,-1,D] (preserves batch: [B,N_anchors,D])
+    4. Sets dynamic batch dimension on input and output tensor specs
+
+    Result: outputs go from [N_anchors, D] to [batch, N_anchors, D], enabling
+    Triton's dynamic_batching scheduler.
+
+    Args:
+        onnx_path: Input ONNX path
+        output_path: Output path (default: adds _batched suffix)
+
+    Returns:
+        Path to batch-compatible ONNX model
+    """
+    import onnx
+
+    logger.info('Patching ONNX for batch support (rename + transpose + reshape)...')
+
+    model = onnx.load(str(onnx_path))
+
+    rename_map = _rename_outputs_semantically(model)
+    transpose_ids, reshape_init_names = _find_output_transposes(model, rename_map)
+    _fix_transpose_perms(model, transpose_ids)
+    _fix_reshape_shapes(model, reshape_init_names)
+    _set_dynamic_batch_input(model)
+    _set_batched_outputs(model, rename_map)
 
     # --- Save ---
     if output_path is None:
