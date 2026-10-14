@@ -15723,14 +15723,28 @@
       "ProjectCounts": {
         "properties": {
           "images": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "default": 0,
-            "title": "Images",
-            "type": "integer"
+            "title": "Images"
           },
           "items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "default": 0,
-            "title": "Items",
-            "type": "integer"
+            "title": "Items"
           },
           "items_embedded": {
             "anyOf": [
@@ -16011,16 +16025,37 @@
             "type": "integer"
           },
           "holdout_items": {
-            "title": "Holdout Items",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holdout Items"
           },
           "images": {
-            "title": "Images",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Images"
           },
           "items": {
-            "title": "Items",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items"
           },
           "items_embedded": {
             "anyOf": [
@@ -16034,8 +16069,15 @@
             "title": "Items Embedded"
           },
           "pending_detection": {
-            "title": "Pending Detection",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Detection"
           },
           "promoted_models": {
             "title": "Promoted Models",
