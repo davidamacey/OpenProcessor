@@ -42,7 +42,8 @@ src/
 │   ├── ocr.py                   # Text extraction (/ocr)
 │   ├── analyze.py               # Combined analysis (/analyze)
 │   ├── clusters.py              # Clustering (/clusters)
-│   └── query.py                 # Data retrieval (/query)
+│   ├── query.py                 # Data retrieval (/query)
+│   └── query_duplicates.py      # Duplicate groups (/query/duplicates)
 │
 ├── services/                    # Business logic layer
 │   ├── __init__.py              # Service exports
