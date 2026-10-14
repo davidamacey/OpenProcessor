@@ -2,6 +2,6 @@
 # Installed into e2e/.venv only (gitignored) — never on the host.
 # See docs/design/test-audit-2026-09-24.md recommendation 5 / P1-1.
 pytest==9.1.1
-pytest-playwright==0.9.0
+pytest-playwright==0.10.0
 playwright==1.63.0
 pytest-xdist==3.8.0
