@@ -409,7 +409,7 @@ async def test_curation_worker_appends_history() -> None:
 
 
 # =============================================================================
-# classes.py::merge_class (the writer originally deferred alongside the
+# classes_merge.py::merge_class (the writer originally deferred alongside the
 # curation worker case above — its subject now exists on this tree).
 # =============================================================================
 
@@ -477,7 +477,7 @@ async def _run_class_merge_case_with_os(
 ) -> tuple[dict[str, Any], _FakeMergeOS]:
     from types import SimpleNamespace
 
-    import src.routers.curation.classes as classes_mod
+    import src.routers.curation.classes_merge as classes_mod
     from src.routers.curation._class_models import ClassMergeRequest
 
     fake_reg = SimpleNamespace(

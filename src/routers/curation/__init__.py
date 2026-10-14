@@ -18,7 +18,13 @@ import src.routers.curation.audit
 import src.routers.curation.bakeoff
 
 
+import src.routers.curation.crops_list  # isort: skip
+import src.routers.curation.crops_write  # isort: skip
+import src.routers.curation.crops_exclude  # isort: skip
 import src.routers.curation.classes  # isort: skip
+import src.routers.curation.classes_write  # isort: skip
+import src.routers.curation.classes_merge  # isort: skip
+import src.routers.curation.classes_crops  # isort: skip
 import src.routers.curation.ingest  # isort: skip
 import src.routers.curation.class_seed
 import src.routers.curation.clusters
@@ -26,7 +32,6 @@ import src.routers.curation.cohorts
 import src.routers.curation.config_test
 import src.routers.curation.config_vocabulary
 import src.routers.curation.crop_context
-import src.routers.curation.crops
 import src.routers.curation.datasets
 import src.routers.curation.detections
 import src.routers.curation.edit_undo
@@ -63,7 +68,11 @@ import src.routers.curation.regions_boxes_edit
 import src.routers.curation.regions_edit
 import src.routers.curation.regions_fp
 import src.routers.curation.reprocess
-import src.routers.curation.review
+
+
+import src.routers.curation.review_terms  # isort: skip
+import src.routers.curation.review  # isort: skip
+import src.routers.curation.holdout_freeze  # isort: skip
 import src.routers.curation.review_proposals
 import src.routers.curation.review_resolve
 import src.routers.curation.scores
@@ -85,7 +94,7 @@ from src.routers.curation.images import crops_router as images_crops_router, rou
 # objects, mounted by `_mounting.py` rather than registered on `router`. `regions_fp`
 # imports helpers from `regions` directly (not through this package's
 # `__init__`), so there is no import-order requirement between those two
-# side-effect imports. `classes` imports `list_crops` from `crops`
+# side-effect imports. `classes_crops` imports `list_crops` from `crops_list`
 # directly (not through this package's `__init__`); `pipeline_events` lazily
 # imports `stats.stats_dataset` and `autolabel.job` inside its generator
 # function body (not at module load time) to avoid a load-order

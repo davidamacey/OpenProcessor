@@ -20,7 +20,7 @@ Before the fix below, the endpoint was completely broken end to end:
 
 Every test below is written against the fixed behaviour; see the phase
 report for the fail-then-pass evidence captured by temporarily reverting
-``src/routers/curation/review.py``, ``src/routers/curation/_common.py``,
+``src/routers/curation/holdout_freeze.py``, ``src/routers/curation/_common.py``,
 and ``src/services/curation/holdout.py`` to their pre-Phase-2 state.
 """
 
@@ -128,7 +128,7 @@ def _make_search_dispatcher(
     strata enumeration or a per-stratum ``search_after`` scan, based on the
     request body shape -- mirrors the two kinds of query the fixed endpoint
     actually issues (:func:`_fetch_holdout_cohort_strata` +
-    :func:`_scan_stratum_crop_ids` in ``src/routers/curation/review.py``).
+    :func:`_scan_stratum_crop_ids` in ``src/routers/curation/holdout_freeze.py``).
 
     ``strata_pages`` is consumed in order, one entry per composite-agg call
     (however many are made); each per-stratum scan returns its full
@@ -404,12 +404,12 @@ def test_single_holdout_implementation() -> None:
     This branch has no offline promotion script to cross-check against
     (that script is deployment-specific tooling, not part of the generic
     curation package), so this test pins the one binding this branch does
-    own: the review router's ``select_test_holdout`` is the exact same
+    own: the holdout-freeze router's ``select_test_holdout`` is the exact same
     function object as the canonical module's, not a copy.
     """
-    import src.routers.curation.review as review_module
+    import src.routers.curation.holdout_freeze as holdout_module
 
-    assert review_module.select_test_holdout is test_holdout_module.select_test_holdout
+    assert holdout_module.select_test_holdout is test_holdout_module.select_test_holdout
 
 
 # =============================================================================

@@ -102,7 +102,7 @@ async def _export(fake: QueryFakeOpenSearch, registry: ClassRegistry, tmp_path: 
 
 
 async def _human_label_paths(fake, registry, monkeypatch) -> None:
-    from src.routers.curation import crops
+    from src.routers.curation import crops_write as crops
     from src.routers.curation._common_models import (
         CropBatchLabelRequest,
         CropLabelRequest,

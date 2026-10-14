@@ -10,7 +10,7 @@ SHA1-of-``crop_id`` deterministic ordering per ``class_id`` with a
 The decision was to keep exactly one algorithm: the SHA1-deterministic one,
 because it needs no seed to reproduce and guarantees every covered class
 gets at least :data:`MIN_TEST_PER_CLASS` held-out crops. This module is that
-one implementation. ``src.routers.curation.review.freeze_test_holdout`` and
+one implementation. ``src.routers.curation.holdout_freeze.freeze_test_holdout`` and
 any offline promotion tooling should both call :func:`select_test_holdout`
 rather than reimplementing the sampling.
 

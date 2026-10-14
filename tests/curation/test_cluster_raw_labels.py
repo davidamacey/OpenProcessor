@@ -187,7 +187,7 @@ def script_mod():
 async def test_script_populates_what_the_review_endpoint_reads(
     script_mod: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from src.routers.curation import review
+    from src.routers.curation import review_terms as review
 
     fake = FakeItemsOpenSearch(_corpus())
 

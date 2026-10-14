@@ -11,7 +11,7 @@ against synchronous ``TestClient`` calls.
 
 The three ``GET /curation/crops?order=diverse`` full-router-integration
 tests below (``test_get_crops_order_diverse_*``) exercise
-``src/routers/curation/crops.py``'s ``GET /crops`` endpoint, which
+``src/routers/curation/crops_list.py``'s ``GET /crops`` endpoint, which
 ``compute_diverse_order`` plugs into. The ``compute_diverse_order``
 helper itself is fully covered above by the unit-level tests that call
 it directly without a router.

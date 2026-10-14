@@ -77,7 +77,7 @@ src/main.py	11	triage every return-empty handler in PR 3; ratchet: may only go d
 src/routers/analyze.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/curation/_models_vlm.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/curation/bakeoff.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/curation/classes.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/classes_merge.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/curation/config_vocabulary.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/curation/crop_context.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/curation/datasets.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
