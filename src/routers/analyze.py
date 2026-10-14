@@ -14,19 +14,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
-from src.config.settings import TritonModelConfig
-from src.schemas.analyze import (
-    AnalyzeResponse,
-    BatchAnalyzeResponse,
-    BatchAnalyzeResult,
-    DetectionResult,
-    FaceResult,
-    OcrResult,
+from src.schemas.analyze import AnalyzeResponse, BatchAnalyzeResponse
+from src.services.analyze_pipeline import (
+    BatchTotals,
+    analyze_batch_item,
+    analyze_single_image,
+    get_inference_service,
 )
-from src.schemas.detection import ImageMetadata
-from src.services.analyze_pipeline import analyze_single_image, get_inference_service, ocr_failure
 from src.services.ocr_service import get_ocr_service
-from src.utils.affine import format_detections_from_triton
 from src.utils.retry import RetryExhaustedError
 
 
@@ -163,9 +158,7 @@ def analyze_batch(
 
     results = []
     failures = []
-    total_dets = 0
-    total_faces = 0
-    images_with_text = 0
+    totals = BatchTotals()
 
     service = get_inference_service()
     ocr_service = get_ocr_service()
@@ -186,145 +179,21 @@ def analyze_batch(
                 )
                 continue
 
-            # Run unified pipeline
-            import numpy as np
-
-            from src.clients.triton_client import get_sync_triton_client
-            from src.config import get_settings
-
-            settings = get_settings()
-            client = get_sync_triton_client(settings.triton_url)
-
-            # Run YOLO + CLIP with CPU preprocessing
-            yolo_clip_result = client.infer_yolo_clip_cpu(image_bytes)
-
-            # Run face detection
-            faces_result = service.detect_faces(image_bytes, confidence=0.5)
-
-            # Run OCR if enabled
-            ocr_result = None
-            if enable_ocr:
-                ocr_result = ocr_service.extract_text(image_bytes, filter_by_score=True)
-
-            # Parse results
-            num_dets = yolo_clip_result.get('num_dets', 0)
-            num_faces = faces_result.get('num_faces', 0)
-            has_text = bool(ocr_result and ocr_result.get('num_texts', 0) > 0)
-
-            total_dets += num_dets
-            total_faces += num_faces
-            if has_text:
-                images_with_text += 1
-
-            batch_orig_shape = yolo_clip_result.get('orig_shape', (0, 0))
-            result = BatchAnalyzeResult(
-                filename=filename,
-                image_index=idx,
-                status='success',
-                image=ImageMetadata(
-                    width=batch_orig_shape[1] if batch_orig_shape else 0,
-                    height=batch_orig_shape[0] if batch_orig_shape else 0,
-                ),
-                num_detections=num_dets,
-                num_faces=num_faces,
-                has_text=has_text,
+            results.append(
+                analyze_batch_item(
+                    image_bytes,
+                    filename=filename,
+                    idx=idx,
+                    service=service,
+                    ocr_service=ocr_service,
+                    totals=totals,
+                    include_embedding=include_embedding,
+                    include_face_embeddings=include_face_embeddings,
+                    enable_ocr=enable_ocr,
+                    include_full_results=include_full_results,
+                    confidence=confidence,
+                )
             )
-
-            # Include full results if requested
-            if include_full_results:
-                # Detections
-                detections: list[DetectionResult] = []
-                if num_dets > 0:
-                    formatted = format_detections_from_triton(
-                        yolo_clip_result,
-                        input_size=yolo_clip_result['input_size'],
-                        model_name=TritonModelConfig.YOLO_MODEL,
-                    )
-                    detections.extend(
-                        DetectionResult(
-                            box=[det['x1'], det['y1'], det['x2'], det['y2']],
-                            confidence=det['confidence'],
-                            class_id=det['class'],
-                            class_name=det.get('class_name'),
-                        )
-                        for det in formatted
-                        if det['confidence'] >= confidence
-                    )
-
-                # Generate CLIP crop embeddings via batched Triton call
-                batch_orig_w = batch_orig_shape[1] if batch_orig_shape else 0
-                batch_orig_h = batch_orig_shape[0] if batch_orig_shape else 0
-                if include_embedding and detections and batch_orig_w > 0 and batch_orig_h > 0:
-                    try:
-                        import io
-
-                        from PIL import Image
-
-                        from src.utils.cpu_preprocess import center_crop_cpu
-
-                        np_img = np.array(Image.open(io.BytesIO(image_bytes)).convert('RGB'))
-                        preprocessed = []
-                        for det in detections:
-                            x1, y1, x2, y2 = det.box
-                            px1, py1 = int(x1 * batch_orig_w), int(y1 * batch_orig_h)
-                            px2, py2 = int(x2 * batch_orig_w), int(y2 * batch_orig_h)
-                            if px2 > px1 and py2 > py1:
-                                preprocessed.append(
-                                    center_crop_cpu(np_img[py1:py2, px1:px2], target_size=256)
-                                )
-                            else:
-                                preprocessed.append(np.zeros((3, 256, 256), dtype=np.float32))
-                        batch_tensor = np.stack(preprocessed)
-                        crop_embeddings = client.infer_mobileclip_batch(batch_tensor)
-                        for det_i, det in enumerate(detections):
-                            det.embedding = crop_embeddings[det_i].tolist()
-                    except Exception:
-                        logger.warning(f'Failed to generate crop embeddings for {filename}')
-
-                result.detections = detections
-
-                # Faces
-                faces = []
-                if num_faces > 0:
-                    for i, face in enumerate(faces_result.get('faces', [])):
-                        face_emb = None
-                        if include_face_embeddings and i < len(faces_result.get('embeddings', [])):
-                            face_emb = faces_result['embeddings'][i]
-                            if hasattr(face_emb, 'tolist'):
-                                face_emb = face_emb.tolist()
-
-                        faces.append(
-                            FaceResult(
-                                box=face['box'],
-                                landmarks=face['landmarks'],
-                                score=face['score'],
-                                quality=face.get('quality'),
-                                embedding=face_emb,
-                            )
-                        )
-                result.faces = faces
-
-                # Embedding
-                if include_embedding:
-                    emb = yolo_clip_result.get('image_embedding')
-                    if emb is not None:
-                        result.global_embedding = np.array(emb).tolist()
-
-                # OCR
-                if ocr_result and ocr_result.get('status') == 'success':
-                    result.ocr = OcrResult(
-                        texts=ocr_result.get('texts', []),
-                        boxes=ocr_result.get('boxes', []),
-                        boxes_normalized=ocr_result.get('boxes_normalized', []),
-                        det_scores=ocr_result.get('det_scores', []),
-                        rec_scores=ocr_result.get('rec_scores', []),
-                        rec_errors=ocr_result.get('rec_errors', []),
-                        full_text=' '.join(ocr_result.get('texts', [])),
-                        num_texts=ocr_result.get('num_texts', 0),
-                    )
-                result.ocr_error = ocr_failure(ocr_result)
-
-            results.append(result)
 
         except Exception as e:
             logger.warning(f'Analysis failed for {filename}: {e}')
@@ -343,7 +212,7 @@ def analyze_batch(
         failed_images=len(failures),
         results=results,
         failures=failures if failures else None,
-        total_detections=total_dets,
-        total_faces=total_faces,
-        images_with_text=images_with_text,
+        total_detections=totals.detections,
+        total_faces=totals.faces,
+        images_with_text=totals.images_with_text,
     )

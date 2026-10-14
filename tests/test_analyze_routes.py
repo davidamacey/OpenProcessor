@@ -477,3 +477,17 @@ def test_batch_with_no_images_is_an_empty_success(backends: Backends) -> None:
     assert (result.total_images, result.processed_images, result.failed_images) == (0, 0, 0)
     assert result.results == []
     assert result.failures is None
+
+
+def test_batch_an_image_failing_while_parsing_full_results_still_counts_in_the_totals(
+    client: TestClient, jpeg: bytes, backends: Backends
+) -> None:
+    """The summary counts are added before the full results are built, so an image that
+    then fails still contributes to them (and is listed as a failure)."""
+    backends.faces.result = {'status': 'success', 'num_faces': 1, 'faces': [{}]}
+    body = _batch(client, jpeg, include_full_results='true', enable_ocr='true').json()
+    assert body['status'] == 'all_failed'
+    assert body['failures'] == [{'filename': 'img0.jpg', 'index': 0, 'error': "'box'"}]
+    assert body['total_detections'] == 3
+    assert body['total_faces'] == 1
+    assert body['images_with_text'] == 1

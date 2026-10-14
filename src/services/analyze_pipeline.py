@@ -6,11 +6,18 @@ import io
 import logging
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 from src.config.settings import TritonModelConfig
-from src.schemas.analyze import AnalyzeResponse, DetectionResult, FaceResult, OcrResult
+from src.schemas.analyze import (
+    AnalyzeResponse,
+    BatchAnalyzeResult,
+    DetectionResult,
+    FaceResult,
+    OcrResult,
+)
 from src.schemas.detection import ImageMetadata
 from src.services.inference import InferenceService
 from src.services.ocr_service import get_ocr_service
@@ -281,3 +288,131 @@ def analyze_single_image(
         ocr_error=ocr_failure(ocr_result),
         timing=timing if timing else None,
     )
+
+
+@dataclass
+class BatchTotals:
+    """Running summary counts of a batch, added to as each image's pipeline finishes."""
+
+    detections: int = 0
+    faces: int = 0
+    images_with_text: int = 0
+
+
+def _embed_detection_crops(
+    client: Any,
+    image_bytes: bytes,
+    detections: list[DetectionResult],
+    width: int,
+    height: int,
+    filename: str,
+) -> None:
+    """Set each detection's embedding from one batched crop call; a failure only logs."""
+    if not (detections and width > 0 and height > 0):
+        return
+    try:
+        batch_tensor = crop_batch_tensor(image_bytes, detections, width, height)
+        crop_embeddings = client.infer_mobileclip_batch(batch_tensor)
+        for det_i, det in enumerate(detections):
+            det.embedding = crop_embeddings[det_i].tolist()
+    except Exception:
+        logger.warning(f'Failed to generate crop embeddings for {filename}')
+
+
+def _add_full_results(
+    result: BatchAnalyzeResult,
+    *,
+    client: Any,
+    image_bytes: bytes,
+    filename: str,
+    yolo_clip_result: dict[str, Any],
+    faces_result: dict[str, Any],
+    ocr_result: dict[str, Any] | None,
+    include_embedding: bool,
+    include_face_embeddings: bool,
+    confidence: float,
+) -> None:
+    """Fill the detection, face, embedding and OCR lists of a batch image result."""
+    width, height = image_size(yolo_clip_result)
+    detections = detections_from_yolo(yolo_clip_result, confidence)
+    if include_embedding:
+        _embed_detection_crops(client, image_bytes, detections, width, height, filename)
+    result.detections = detections
+
+    result.faces = (
+        faces_from_result(faces_result, include_face_embeddings)
+        if faces_result.get('num_faces', 0) > 0
+        else []
+    )
+
+    result.global_embedding = _global_embedding(yolo_clip_result, include_embedding)[0]
+
+    result.ocr = ocr_from_result(ocr_result)
+    result.ocr_error = ocr_failure(ocr_result)
+
+
+def analyze_batch_item(
+    image_bytes: bytes,
+    *,
+    filename: str,
+    idx: int,
+    service: InferenceService,
+    ocr_service: Any,
+    totals: BatchTotals,
+    include_embedding: bool,
+    include_face_embeddings: bool,
+    enable_ocr: bool,
+    include_full_results: bool,
+    confidence: float,
+) -> BatchAnalyzeResult:
+    """Run the pipeline on one image of a batch, adding its counts to ``totals``."""
+    from src.clients.triton_client import get_sync_triton_client
+    from src.config import get_settings
+
+    settings = get_settings()
+    client = get_sync_triton_client(settings.triton_url)
+
+    # Run YOLO + CLIP with CPU preprocessing
+    yolo_clip_result = client.infer_yolo_clip_cpu(image_bytes)
+
+    # Run face detection
+    faces_result = service.detect_faces(image_bytes, confidence=0.5)
+
+    # Run OCR if enabled
+    ocr_result = None
+    if enable_ocr:
+        ocr_result = ocr_service.extract_text(image_bytes, filter_by_score=True)
+
+    num_dets = yolo_clip_result.get('num_dets', 0)
+    num_faces = faces_result.get('num_faces', 0)
+    has_text = bool(ocr_result and ocr_result.get('num_texts', 0) > 0)
+
+    totals.detections += num_dets
+    totals.faces += num_faces
+    if has_text:
+        totals.images_with_text += 1
+
+    width, height = image_size(yolo_clip_result)
+    result = BatchAnalyzeResult(
+        filename=filename,
+        image_index=idx,
+        status='success',
+        image=ImageMetadata(width=width, height=height),
+        num_detections=num_dets,
+        num_faces=num_faces,
+        has_text=has_text,
+    )
+    if include_full_results:
+        _add_full_results(
+            result,
+            client=client,
+            image_bytes=image_bytes,
+            filename=filename,
+            yolo_clip_result=yolo_clip_result,
+            faces_result=faces_result,
+            ocr_result=ocr_result,
+            include_embedding=include_embedding,
+            include_face_embeddings=include_face_embeddings,
+            confidence=confidence,
+        )
+    return result
