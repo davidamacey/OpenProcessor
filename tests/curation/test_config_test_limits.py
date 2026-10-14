@@ -1,4 +1,4 @@
-"""W5: the bounds on a test run -- per-process concurrency per kind and a
+"""The bounds on a test run -- per-process concurrency per kind and a
 wall-clock limit (the routes map them to 429 / 504)."""
 
 from __future__ import annotations

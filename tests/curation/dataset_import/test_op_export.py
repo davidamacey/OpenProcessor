@@ -1,4 +1,4 @@
-"""W10.2.2: an OpenProcessor export is read back faithfully.
+"""An OpenProcessor export is read back faithfully.
 
 Every export here is produced by the REAL exporters; the reader must take
 class names from ``class_registry.json`` (never from a position in any

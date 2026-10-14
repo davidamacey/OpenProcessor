@@ -9,7 +9,7 @@ Sub-modules:
     bulk_writer  — ``_bulk_update`` + ``_publish_region_events``
     client       — SAM3 HTTP client with circuit breaker
     runner       — the long-running ``run()`` entry point (the live
-                   multi-box pipeline; the pre-W8 single-candidate
+                   multi-box pipeline; the old single-candidate
                    ``_process_crop``/``combined.py`` cohort path was
                    deleted once this became the only production cascade)
     pipeline     — ``PipelineContext`` (shared queues/counters) + stage helpers

@@ -108,7 +108,7 @@ async def _validate_defaults(defaults: dict[str, str | None], opensearch: Any) -
         raise HTTPException(status_code=422, detail='; '.join(errors))
 
 
-# Axes W2 moved off the generic settings-doc ``defaults`` map onto the
+# Axes moved off the generic settings-doc ``defaults`` map onto the
 # config store's activation docs: a PUT
 # here delegates to ``store.activate_axis`` instead of writing into
 # ``defaults``, and a GET merges the store's active name back in so the
@@ -233,7 +233,7 @@ async def update_curation_settings_route(
     # the VLM is the third side of the pack <-> profile <-> VLM triple.
     # It is resolved and gated against the PENDING pack/profile of this same
     # request, and the pack/profile gates below pair with the PENDING VLM
-    # (never each against the other sides' stored values: R5-1).
+    # (never each against the other sides' stored values).
     vlm_plan = None
     if 'vlm' in body.defaults:
         vlm_plan = await _plan_vlm(body.defaults['vlm'], resolved, opensearch)
@@ -282,7 +282,7 @@ async def _resolve_config_store_axis(
     """``PUT /settings {"defaults": {axis: value}}`` for a config-store
     axis: resolve ``value`` (or ``None``/``'off'``) against the live
     registry. Read-only -- writes nothing, and does NOT run the
-    activation gate (R5-1 fix, W3/W4 review: gating happens
+    activation gate (gating happens
     after every axis in the request has been resolved, so a combined
     PUT can gate each axis against the OTHER axis's PENDING target
     instead of its stored one -- see the caller,

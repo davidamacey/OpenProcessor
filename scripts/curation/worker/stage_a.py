@@ -125,7 +125,7 @@ async def stage_a_consumer(ctx: PipelineContext, consumer_id: int) -> None:
 
             # Path 1: pending_verification — already has a candidate awaiting
             # VLM verification; straight to the combined call (no
-            # fresh detection needed). W8 B1 fix: the candidate comes
+            # fresh detection needed). The candidate comes
             # from this item's STORED ``region_boxes`` -- every box
             # whose state is ``proposed`` (the real source of truth,
             # incl. a human's box set via `PUT /crops/{id}/regions`)
@@ -142,7 +142,7 @@ async def stage_a_consumer(ctx: PipelineContext, consumer_id: int) -> None:
                 # selected here) must be merged back at write
                 # time, never silently replaced.
                 t.pending_merge = True
-                # W8c B1 fix (2026-09-28 re-review): this is the
+                # This is the
                 # ONE place that is a genuine Path-1 re-verify --
                 # distinct from `pending_merge` alone, which every
                 # fresh-detection pass below also sets (for its

@@ -186,7 +186,7 @@ def _rollup_class_sources(buckets: list[dict[str, Any]]) -> dict[str, int]:
     separately by the caller via region-detector aggregations.
 
     Callers pass ONLY ``class_sources_with_class`` buckets (docs that
-    carry a class_id — see ``build_dataset_query_body``). F-23: this
+    carry a class_id — see ``build_dataset_query_body``). This
     function used to also bucket a ``by_proposal`` count here, but the
     unlabeled-proposal class_source values (``unlabeled_proposal_class_sources``)
     are, by construction, the detector's "no class assigned yet" marker
@@ -293,7 +293,7 @@ async def dataset_stats(opensearch: Any, item_filter: ItemFilter) -> dict[str, A
       region-validated flags.
     - ``unlabeled.{pending_detection, pending_verification, no_label_source,
       vlm_no_class, by_proposal}`` — the region-status field plus crops with
-      no ``class_id``. ``by_proposal`` is F-23's fixed accounting for
+      no ``class_id``. ``by_proposal`` is the fixed accounting for
       detector-proposed-but-not-yet-classified crops (moved here from the
       always-0 ``labeled.by_proposal``, since those class_source values
       never carry a class_id).

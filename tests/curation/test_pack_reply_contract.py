@@ -1,11 +1,11 @@
-"""W3 pinning test (any_domain_plan.md §3.3): a synthetic reply carrying
+"""A synthetic reply carrying
 exactly one call's required ``REPLY_KEY_CONTRACT`` keys must parse to a
 non-failure result, and dropping a required key must fail (or hit the
 documented no-verdict fallback).
 
 Two rows pin against the REAL parser code that exists in this branch
 (``_combined_reply_from_entry`` for the single-crop combined call, and
-``region_overlay.box_verdicts`` for the W8 list shape, including the
+``region_overlay.box_verdicts`` for the list shape, including the
 flat-vs-one-element-list equivalence). The plan's assumed private-parser
 names for the other rows (``_parse_item_response``,
 ``_parse_combined_batch_response``, ``_parse_region_response``,
@@ -47,7 +47,7 @@ def test_every_call_required_keys_detected_when_present_and_missing_when_absent(
 
 
 def test_combined_single_crop_flat_and_one_element_list_parse_identically() -> None:
-    """D-B / W8: a flat reply (pre-W8 shape, N=1 only) and a one-element
+    """A flat reply (the single-box shape, N=1 only) and a one-element
     list reply must produce the same per-box verdict."""
     fields = get_region_fields()
     flat_entry = {

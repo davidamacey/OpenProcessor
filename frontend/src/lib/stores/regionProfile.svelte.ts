@@ -10,7 +10,7 @@
  *
  * Seeded once, before first render, by `loadRegionProfile()` from the
  * root layout's `load()`. Only a SUCCESSFUL read seeds: a served
- * `region_profile: null` means "not configured". A timeout or network error does not (F-78: a slow
+ * `region_profile: null` means "not configured". A timeout or network error does not (a slow
  * first `/health` used to seed "no profile", the next poll disagreed,
  * and a spurious "reload" toast fired while the region tab was missing).
  * Boot retries with a bounded backoff; if every try fails the store stays

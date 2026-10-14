@@ -1,4 +1,4 @@
-"""Tests for scripts/release/build_and_publish.sh (Wave 4, installer plan §11.1).
+"""Tests for scripts/release/build_and_publish.sh.
 
 No real docker/trivy work happens here: this builds a throwaway sandbox repo
 (VERSION + a git init + stub Dockerfiles) and puts fake `docker`, `trivy`, and

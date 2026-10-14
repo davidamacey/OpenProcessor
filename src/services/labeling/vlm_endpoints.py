@@ -332,7 +332,7 @@ def _matching_probe(
 
 
 def draft_endpoint(body: VlmEndpointBody) -> VlmEndpoint:
-    """An unsaved body as an endpoint (test-on-crop drafts, W5): never
+    """An unsaved body as an endpoint (test-on-crop drafts): never
     probed, never activatable, ref ``_draft@<sha12>``."""
     body = body.normalized()
     return VlmEndpoint(

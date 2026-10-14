@@ -1,5 +1,5 @@
 /**
- * W10 image Reprocess from the region gallery: a card's "Reprocess
+ * Image Reprocess from the region gallery: a card's "Reprocess
  * image..." hands the served items to the gallery, which re-fetches its
  * page (re-detection can add, move or drop the image's regions) instead
  * of leaving the old cards on screen. Mounts the real component.

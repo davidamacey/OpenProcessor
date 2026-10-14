@@ -312,8 +312,7 @@ def _apply_fill_if_absent(
 # is_locked_class() defines, not a narrower per-value string check --
 # otherwise re-ingest preserves an unvalidated ("suggestion") import's
 # class_source/label_source the same as a human's or a VALIDATED
-# import's, which is_locked_class explicitly does NOT lock (W10 fix
-# pass, Opus review 2026-09-28, lock-rule call-site m4). Region-only
+# import's, which is_locked_class explicitly does NOT lock. Region-only
 # guard fields (region_label_source, region_text_source, ...) keep the
 # narrower per-value check -- is_locked_class doesn't speak to them.
 _CLASS_LOCK_GUARD_FIELDS = frozenset({'class_source', 'label_source'})

@@ -1,7 +1,5 @@
 /**
- * Test-on-crop for one pack (`POST /prompt_packs/test`, W5;
- * any_domain_plan.md §5.1, §7.5, §7.6 item 3; docs/design/
- * w3-pack-editor-ui-plan-2026-09-27.md §3).
+ * Test-on-crop for one pack (`POST /prompt_packs/test`).
  *
  * Sends exactly what the operator chose: the unsaved draft, or the saved
  * pack at the revision on screen; the call; the crop ids; `use_region_box`

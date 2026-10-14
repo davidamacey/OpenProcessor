@@ -37,7 +37,7 @@ def center_crop_cpu(
     """
     orig_h, orig_w = img_rgb.shape[:2]
 
-    # Resize shortest edge to target_size. F-28: round() (not int()/truncate)
+    # Resize shortest edge to target_size. round() (not int()/truncate)
     # and a max(target_size, ...) floor -- on a small detection crop (common
     # on ordinary COCO images: a distant person/object a few dozen px wide),
     # scale * min(orig_h, orig_w) is mathematically target_size but float

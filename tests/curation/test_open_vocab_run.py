@@ -1,4 +1,4 @@
-"""Wave 4: the full-image SAM 3 pass writes normal items, idempotently, under
+"""The full-image SAM 3 pass writes normal items, idempotently, under
 the lock rule, and an outage writes nothing."""
 
 from __future__ import annotations

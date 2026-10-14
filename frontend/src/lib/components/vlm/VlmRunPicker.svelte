@@ -1,8 +1,7 @@
 <script lang="ts">
   /**
-   * Per-run VLM endpoint picker (W9; docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md
-   * §3.3). A `<select>` over the served `/methods` `vlm` axis: "Project
-   * default" (sends nothing) and every served entry, labelled with its
+   * Per-run VLM endpoint picker. A `<select>` over the served
+   * `/methods` `vlm` axis: "Project default" (sends nothing) and every served entry, labelled with its
    * served endpoint status. When the chosen entry's served
    * `per_run_ack_required` is true, the served `warning` shows in a banner
    * with an "I understand" checkbox bound to `acknowledgeExternal`. The run

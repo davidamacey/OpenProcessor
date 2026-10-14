@@ -63,8 +63,9 @@ async def run_activation_gate(
     revision-copy doc, a legitimate rollback to an old-but-real revision
     would incorrectly 404 here. Callers with no client (none exist today)
     keep the current-revision-only behavior the dedicated activate routes
-    already had (round-1..3 Minor 2: activating a genuinely past revision
-    through those routes is a separate, pre-existing, non-blocking gap).
+    already had
+    (activating a genuinely past revision through those routes is a
+    separate, non-blocking gap).
 
     ``pending_sibling``: the OTHER
     axis's PENDING (about-to-be-applied) value, for a caller that is
@@ -86,7 +87,7 @@ async def run_activation_gate(
     switched off). Left unset, the pack/profile is paired with the
     project's stored active VLM.
 
-    ``body`` (R5-3 fix, W3/W4 review, Major -- project clone):
+    ``body`` (project clone):
     when supplied, skips the ``build_record``/``get_revision_record``
     name lookup (and the template 403 check) entirely and validates
     THIS body under ``name``/``revision`` instead. For a caller

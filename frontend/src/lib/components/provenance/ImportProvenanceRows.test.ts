@@ -1,7 +1,7 @@
 /**
- * W10 import/lock provenance rows: each row appears only when the served
- * item carries a value; import ids link to the import page only while W10
- * is served; every value is rendered as served.
+ * Import/lock provenance rows: each row appears only when the served
+ * item carries a value; import ids link to the import page only while dataset
+ * import is served; every value is rendered as served.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
@@ -68,7 +68,7 @@ describe('ImportProvenanceRows', () => {
       false,
     );
     expect(target.children).toHaveLength(0);
-    // Not even the W10 probe fires for an item that names no import.
+    // Not even the dataset-import probe fires for an item that names no import.
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 

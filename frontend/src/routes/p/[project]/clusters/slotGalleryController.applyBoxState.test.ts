@@ -1,6 +1,5 @@
 /**
- * W8 region-cluster bulk triage (docs/design/
- * w8-multibox-frontend-plan-2026-09-26.md, §7.7): "Triage from a cluster
+ * Region-cluster bulk triage: "Triage from a cluster
  * goes through batch_box_state, never the item-level batch_status, which
  * would flip every sibling box." `applyBoxState` is the controller's
  * per-box triage path, distinct from `applyStatus` (item-level

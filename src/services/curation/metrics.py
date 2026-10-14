@@ -200,7 +200,7 @@ OP_STAGE_B_VLM_VERIFY_DURATION_SECONDS = Histogram(
 
 OP_STAGE_REGION_DETECTOR_DURATION_SECONDS = Histogram(
     'op_stage_region_detector_duration_seconds',
-    'Stage A region detector (single-class detector) detect_batch call duration in seconds.',
+    'Stage A region detector (single-class detector) detect_batch_multi call duration in seconds.',
     labelnames=('outcome',),  # hit / miss / error
     buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0),
 )

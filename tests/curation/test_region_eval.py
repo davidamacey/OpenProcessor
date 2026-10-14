@@ -477,7 +477,7 @@ def _run_cli(monkeypatch, fake: QueryFakeOpenSearch, argv: list[str]) -> int:
 
 def _dataset_with_duplicated_split_dir(root: Path) -> Path:
     """A data.yaml where train: and val: both point at images/validation --
-    the F-76 bug shape (originally produced by
+    the bug shape (originally produced by
     scripts/datasets/fetch_openimages_plates.py)."""
     img = root / 'images' / 'validation' / 'a.jpg'
     img.parent.mkdir(parents=True, exist_ok=True)
@@ -493,7 +493,7 @@ def _dataset_with_duplicated_split_dir(root: Path) -> Path:
 def test_build_cohort_deduplicates_when_a_yaml_lists_the_same_dir_twice(
     tmp_path: Path,
 ) -> None:
-    """F-76: train: and val: both resolving to images/validation must not
+    """``train:`` and ``val:`` both resolving to images/validation must not
     make build_cohort() count and score the same image twice."""
     mod = _cli()
     data = _dataset_with_duplicated_split_dir(tmp_path / 'ds')
@@ -552,7 +552,7 @@ def test_cli_state_dir_cohort_uses_recorded_ids(monkeypatch, tmp_path: Path) -> 
 
 
 # test_cli_unknown_frame_exits_3 (and test_unknown_frame_is_refused above)
-# were removed in the W8-cleanup port: both simulated a stored
+# were removed when boxes became lists: both simulated a stored
 # `region_bbox_frame='pixels'` on an item to exercise the CLI's
 # RegionFrameError -> exit(3) path. `region_boxes` entries have no stored
 # per-box frame marker at all (every writer projects to source frame

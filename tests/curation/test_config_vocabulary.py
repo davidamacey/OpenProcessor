@@ -1,4 +1,4 @@
-"""W4: ``GET /config/vocabulary`` (any_domain_plan.md §7.4)."""
+"""``GET /config/vocabulary`` (any_domain_plan.md §7.4)."""
 
 from __future__ import annotations
 

@@ -1,5 +1,5 @@
 """Promoted-model discovery and cross-project ownership (moved from
-``src.routers.curation.models``, W4 any_domain_plan.md §4.3): so
+``src.routers.curation.models``): so
 ``profile_validation.py`` (a service module) can check a region
 profile's ``detector_model`` against promoted models without importing a
 router module. ``src.routers.curation.models`` imports these under their
@@ -41,7 +41,7 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
     ``src.routers.curation.models`` -- :func:`discover_promoted_models`
     below needed it and previously imported it back from that router,
     the exact "service depends on the router it was moved out of" the
-    W4 move was supposed to avoid.
+    move was supposed to avoid.
     """
     from src.services.detection.profile_registry import get_active_region_profile
 

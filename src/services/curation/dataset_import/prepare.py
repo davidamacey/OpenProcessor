@@ -399,11 +399,11 @@ def materialize_created_classes(
     adopt_existing: bool = False,
 ) -> None:
     """Create every ``create`` target in the registry BEFORE any item write
-, patching the assigned id into ``resolved``.
+    , patching the assigned id into ``resolved``.
 
-    ``adopt_existing`` (a resume): a non-deprecated class with exactly the
-    target's name was created by the interrupted run, so its id is adopted
-    instead of failing as a duplicate.
+        ``adopt_existing`` (a resume): a non-deprecated class with exactly the
+        target's name was created by the interrupted run, so its id is adopted
+        instead of failing as a duplicate.
     """
     groups = new_groups or {}
     for dataset_class in list(resolved.created_classes):

@@ -1,5 +1,5 @@
 /**
- * Backend wrappers for W5 test-on-crop (owner: Track C): pack and
+ * Backend wrappers for test-on-crop: pack and
  * region-profile tests. Neither route writes. Import from
  * `$lib/api_configTest` directly; never re-exported from `api.ts` (that
  * would make the two modules circular).

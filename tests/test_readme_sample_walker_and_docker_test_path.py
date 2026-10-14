@@ -1,4 +1,4 @@
-"""F-21 (fresh-start E2E findings 2026-09-25): README command blocks must
+"""README command blocks must
 actually work against this repo's real compose/scripts/env, not a
 plausible-looking but broken variant.
 
@@ -12,13 +12,13 @@ Two concrete breakages fixed here:
    every image 404s ``unservable_path``. README must set
    ``OP_SOURCE_ROOT_HOST=./data/samples`` and pass a ``--root`` under
    ``/data/source/...``.
-2. **F-31: the "Docker-only" pytest path doesn't exist.** The production
+2. **The "Docker-only" pytest path doesn't exist.** The production
    ``api`` image installs only ``requirements.txt`` -- no pytest, no
    ``requirements-test.txt`` -- so ``docker compose exec api pytest
    ...`` fails with "executable file not found". README must install
    ``requirements-test.txt`` into the running container first.
 
-Also: F-21's ``OP_INGEST_PRIMARY_CLASS_IDS`` gap -- an unset ingest
+Also: the ``OP_INGEST_PRIMARY_CLASS_IDS`` gap -- an unset ingest
 class allowlist means a stock detector's *entire* label space (all 80
 COCO classes) becomes item proposals, which the walkthrough must warn
 about before a reader runs the walker unnarrowed.

@@ -1,4 +1,4 @@
-"""W8 multi-box regions: a served `region_boxes` list with a mix of
+"""Multi-box regions: a served `region_boxes` list with a mix of
 accepted and rejected boxes mounts /review's region tab with the multi-box
 canvas and no pageerror (the real wire; the single-box scalar keys no
 longer exist)."""

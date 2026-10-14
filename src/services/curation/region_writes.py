@@ -80,7 +80,7 @@ def human_box_write(
     batch_box_state``).
 
     Status is re-derived from the list (an empty list is the human "no
-    region visible"); the human is stamped as the verifier. W8.7: the
+    region visible"); the human is stamped as the verifier. The
     write counts as the item's validation (``validated``, ``set_complete``)
     only when no box is left ``proposed`` -- a partial review leaves both
     as stored, so the item stays reviewable.
@@ -129,7 +129,7 @@ def human_status_box_write(
 
     A whole-set CONFIRM is the one deliberate exception to "a whole-set
     write never overrides a per-box decision": it reopens only the boxes
-    the *verifier* rejected (W8-cleanup M3) -- see ``boxes_with_status``.
+    the *verifier* rejected -- see ``boxes_with_status``.
     When nothing is reopenable it raises ``no_accepted_box`` (422).
 
     The item-level ``rejection_reason`` mirror is derived by
@@ -169,7 +169,7 @@ def human_status_box_write(
 
 
 def reason_only_box_write(current: dict[str, Any], reason: str | None) -> dict[str, Any]:
-    """W8-cleanup N3: a reason-only PATCH (no status change) over the
+    """A reason-only PATCH (no status change) over the
     current box list.
 
     Patches every currently-rejected box's ``rejection_reason``, same as
@@ -180,7 +180,7 @@ def reason_only_box_write(current: dict[str, Any], reason: str | None) -> dict[s
     ``rejection_reason`` to ``None`` -- restore the reason this request
     is setting in that case.
 
-    W8-cleanup R3-1: that restore must only fire for a truly box-less
+    That restore must only fire for a truly box-less
     item (``not new_boxes``). A looser "no rejected box" condition also
     matched an accepted-only, false-positive-only, or proposed-only item,
     and stored a reason on it.

@@ -1,7 +1,6 @@
-"""``/region_profiles*`` + ``/config/vocabulary`` -- region-profile CRUD
-.
+"""``/region_profiles*`` + ``/config/vocabulary`` -- region-profile CRUD.
 
-Route-order note (§4.2, mirrors W3's §3.2): ``schema``, ``validate``,
+Route-order note (mirrors the prompt-pack routes): ``schema``, ``validate``,
 ``validate_segmenter_prompt``, ``test``, ``active`` (+ its children) and
 ``deactivate`` are declared before ``/{name}`` and its children.
 ``config_vocabulary.py`` registers ``GET /config/vocabulary`` separately

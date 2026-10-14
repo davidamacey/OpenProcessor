@@ -628,7 +628,7 @@ class CurationIngestService:
         — see that module's docstring for why the batch path is more than
         ``ingest_one`` run N times concurrently. To ingest an
         already-labeled dataset, use ``POST /datasets/imports``
-        (planned, W10 route not yet built).
+        (planned, route not yet built).
 
         Args:
             images: Raw image bytes, one per entry.

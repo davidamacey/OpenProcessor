@@ -1,11 +1,9 @@
 /**
- * The "not yet deployed" gate for a config-store editor (OpenProcessor W3
- * prompt packs, W4 region profiles).
+ * The "not yet deployed" gate for a config-store editor (prompt packs,
+ * region profiles).
  *
- * This is NOT backward compatibility. Neither wave serves a capability
- * signal (docs/design/w3-pack-editor-ui-plan-2026-09-27.md §0.3, W3-Q1;
- * docs/design/w4-profile-editor-ui-plan-2026-09-27.md §0.3, W4-Q1), so
- * until the wave is deployed the one way to know whether its routes exist
+ * This is NOT backward compatibility. Neither serves a capability
+ * signal, so until the feature is deployed the one way to know whether its routes exist
  * is to ask: a 404/501 on the probe means "not deployed" and every surface
  * of that editor is absent. Any other failure keeps `available` unknown
  * and records the error, so a transient outage never hides a route that

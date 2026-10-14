@@ -19,7 +19,7 @@ import type {
  * The served list a schema row's `choices_from` names, as its uniform
  * `choice` entries. Where each list lives is the spec's own table (§7.3
  * `CHOICE_SOURCES`): the vocabulary's top-level keys, or `ocr.*`.
- * `vlm_catalog` and `secret_refs` live on W9 routes, not the vocabulary:
+ * `vlm_catalog` and `secret_refs` live on the VLM routes, not the vocabulary:
  * `null`, and the row falls back to a text input.
  */
 export function choiceList(
@@ -80,7 +80,7 @@ export function selectOptions(
 
 /**
  * Whether a row's `applies_when` holds in the saved revision, read from
- * that revision's served `effective` (W4-Q2: nothing is served for the
+ * that revision's served `effective` (nothing is served for the
  * draft). `null` when the row has no condition, or the condition or the
  * `effective` block isn't known.
  */

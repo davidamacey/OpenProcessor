@@ -143,8 +143,8 @@
            queues need (item 9's empty_state.has_probe_predictions). -->
       <ProbeControl {status} />
 
-      <!-- Training-time metrics (OpenProcessor #34 W1). Neither of these
-           is the run's headline number — that's eval.map50 below,
+      <!-- Training-time metrics. Neither of these is
+           the run's headline number — that's eval.map50 below,
            labelled by eval.split. `last_epoch_metric` is the true last
            TRAINING epoch's own validation pass; `best_checkpoint_metric`
            is the best checkpoint's (best.pt) own re-validation, which

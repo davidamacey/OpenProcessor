@@ -1,4 +1,4 @@
-"""W3: ``/prompt_packs*`` full CRUD lifecycle, template read-only-ness,
+"""``/prompt_packs*`` full CRUD lifecycle, template read-only-ness,
 clone (same-project and cross-project), revisions and ETag
 (any_domain_plan.md §3/§7.2)."""
 

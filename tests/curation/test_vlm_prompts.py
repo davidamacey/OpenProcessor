@@ -99,9 +99,9 @@ def test_example_pack_file_loads_and_differs_from_generic() -> None:
 
 @pytest.mark.parametrize('pack', [GENERIC_ITEM_PACK], ids=['generic_item_v1'])
 def test_shipped_packs_ask_for_the_nested_region_boxes_shape(pack: PromptPack) -> None:
-    """W8 M7 fix (pipeline-wiring review, 2026-09-27): every shipped
-    combined prompt must ask for the W8.6 list shape (``region_boxes:
-    [{"box": ..., ...}]``), never the pre-W8 flat
+    """Every shipped
+    combined prompt must ask for the list shape (``region_boxes:
+    [{"box": ..., ...}]``), never the old flat
     ``region_bbox_correct``/``region_text``/``region_confidence`` top-
     level keys -- a flat-shape pack makes ``box_verdicts`` raise
     ``MultiRegionKeysMissingError`` on every combined call, silently

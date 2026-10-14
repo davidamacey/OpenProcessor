@@ -1,9 +1,8 @@
-"""Region-profile activation impact aggregation (W4, any_domain_plan.md
-§4.6): "if I activate this profile, what happens to existing items",
-served by ``GET /region_profiles/active/impact`` and embedded in the
+"""Region-profile activation impact aggregation: "if I activate this
+profile, what happens to existing items", served by ``GET /region_profiles/active/impact`` and embedded in the
 activate response.
 
-No silent data rewrite, ever (§4.6): this module only counts; nothing
+No silent data rewrite, ever: this module only counts; nothing
 here writes to an item.
 """
 

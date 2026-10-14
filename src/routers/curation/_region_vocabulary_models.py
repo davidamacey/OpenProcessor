@@ -47,7 +47,7 @@ class RejectionReasonEntry(BaseModel):
 
 
 class RegionProfileLimits(BaseModel):
-    """W8 write-size guards, never hardcoded by a client."""
+    """Write-size guards, never hardcoded by a client."""
 
     max_boxes_per_write: int = Field(
         description=(
@@ -77,7 +77,7 @@ class RegionProfileSummary(BaseModel):
     )
     limits: RegionProfileLimits = Field(
         description=(
-            'W8: served write-size guards. max_boxes_per_write is an abuse guard on the '
+            'Served write-size guards. max_boxes_per_write is an abuse guard on the '
             'element count of one region-box write request, not a labeling rule -- human '
             'box lists are otherwise unbounded.'
         )

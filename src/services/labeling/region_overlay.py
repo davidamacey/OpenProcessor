@@ -1,9 +1,8 @@
-"""W8.6: the numbered-overlay VLM contract for multi-box region verify.
+"""The numbered-overlay VLM contract for multi-box region verify.
 
 Kept separate from :mod:`src.services.labeling.vlm_labeler` so this
 module's growth doesn't add to it.
-Self-contained: no import of ``vlm_labeler`` (or vice versa this pass --
-see the W8 handback report for what remains to wire the two together).
+Self-contained: no import of ``vlm_labeler`` (or vice versa).
 
 Regions are always a list -- N=1 draws a single numbered tag "1",
 not a separate code path. Every box on the crop sent to the VLM is
@@ -11,7 +10,7 @@ numbered so the reply can address "box 3" without ambiguity; the reply's
 per-box verdicts are threaded back onto the same numbers by
 :func:`box_verdicts`.
 
-**D-B (owner decision, 2026-09-26):** the pre-W8 flat reply shape
+The earlier flat reply shape
 (``region_bbox_correct`` etc. as top-level keys) is DROPPED, not kept as
 a fallback. A combined reply that lacks the list-shaped verdict key
 raises :class:`MultiRegionKeysMissingError` -- list shape only, N=1 is a
@@ -37,7 +36,7 @@ logger = get_logger('region_overlay')
 BBoxNorm = tuple[float, float, float, float]
 ConfidenceLevel = Literal['high', 'medium', 'low']
 
-# Same visual language as the pre-W8 single-box overlay
+# Same visual language as the earlier single-box overlay
 # (vlm_labeler._draw_bbox_overlay): a 3-px red outline drawn just outside
 # the box so it never paints over the region itself.
 _OVERLAY_WIDTH = 3
@@ -188,8 +187,8 @@ def _normalize_confidence(value: Any) -> ConfidenceLevel | None:
     return None
 
 
-# the pre-W8 flat parser's
-# full sentinel set (vlm_reply_parse._TEXT_SENTINELS) -- the W8 rewrite's
+# the earlier flat parser's
+# full sentinel set (vlm_reply_parse._TEXT_SENTINELS) -- the list parser's
 # ``_clean_text_reply`` only dropped 4 of these 7, silently storing
 # "unreadable"/"-" as if they were real region text.
 _TEXT_SENTINELS = frozenset({'', 'null', 'none', 'unknown', 'unreadable', 'n/a', '-'})
@@ -206,7 +205,7 @@ def _clean_text_reply(value: Any, *, echoes: tuple[str, ...] = ()) -> str | None
     Drops sentinels and any value that is really one of the reply's own
     item-level answers echoed into the text slot (``echoes``: the class
     name it picked, its ``make`` / ``model``, both joined) -- M5: this
-    suppression lived in the pre-W8 flat parser
+    suppression lived in the earlier flat parser
     (``vlm_labeler._clean_combined_region_text``) and was dropped, not
     ported, when the per-box list shape replaced it.
     """

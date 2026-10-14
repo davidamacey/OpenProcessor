@@ -133,8 +133,8 @@ def _dedupe_cohort(cohort: list[CohortImage]) -> list[CohortImage]:
     """Drop repeat entries for the same image, keeping the first occurrence.
 
     A ``data.yaml`` that lists the same directory under two split keys
-    (e.g. ``train:`` and ``val:`` both pointing at ``images/validation`` --
-    F-76) makes :func:`discover` return that image under both splits, so
+    (e.g. ``train:`` and ``val:`` both pointing at ``images/validation``)
+    makes :func:`discover` return that image under both splits, so
     the naive per-split concatenation in :func:`build_cohort` would count
     it twice in ``[total]`` and score it twice. Identity is ``image_id``
     when the source (e.g. ``ingested/<split>.jsonl``) provided one, else

@@ -224,8 +224,7 @@ def format_detections_from_triton(
         model_name: Which Triton model produced ``result`` -- resolves
             ``class_name`` from that model's own labels (see
             :mod:`src.utils.class_names`) instead of always assuming the
-            stock 80-class COCO vocabulary (F-42, fresh-start E2E
-            findings 2026-09-25). ``None`` keeps the historical
+            stock 80-class COCO vocabulary. ``None`` keeps the historical
             COCO-only behavior for callers that genuinely never see
             anything but the stock detector.
 

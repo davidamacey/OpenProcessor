@@ -519,7 +519,7 @@ async def test_merge_class_appends_history(monkeypatch: pytest.MonkeyPatch) -> N
 async def test_merge_class_history_records_pre_merge_validation_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """F-56: a human-validated crop merged into another class must have
+    """A human-validated crop merged into another class must have
     its pre-merge validated=true state on record — not just the class it
     came from — so an audit can tell it apart from a merely-suggested
     label."""
@@ -534,7 +534,7 @@ async def test_merge_class_history_records_pre_merge_validation_state(
 async def test_merge_class_carries_over_validation_to_the_target(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """F-56 follow-up (owner-aligned semantics): a merge must KEEP a
+    """A merge must KEEP a
     human validation, not clear it — a human-validated crop of the source
     class stays validated=true under the target. class_id_history (see
     test above) separately remembers that the *prior* class was validated;

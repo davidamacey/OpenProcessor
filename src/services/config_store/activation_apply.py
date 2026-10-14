@@ -1,5 +1,5 @@
-"""Shared activate/rollback write-and-apply logic (N4 fix, W3/W4 round-3
-review), split out of ``store.py`` to stay under the 700-LOC ratchet.
+"""Shared activate/rollback write-and-apply logic, split out of ``store.py`` to stay
+under the 700-LOC ratchet.
 
 Both :func:`~src.services.config_store.store.activate_axis` and
 :func:`rollback_axis` (used by ``packs.rollback_pack`` /

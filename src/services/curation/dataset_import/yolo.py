@@ -4,8 +4,8 @@ Discovery (``data.yaml`` / ``images/<split>`` tree) is a fresh
 implementation here rather than a straight move of
 ``scripts/curation/yolo_dataset.py`` (which stays in place, still used by
 ``scripts/curation/eval_regions_vs_gt.py``). The row-level rules (clamp
-tolerance, polygon-to-box, class-range checks) are new: the pre-W10
-per-image importer had none of them.
+tolerance, polygon-to-box, class-range checks) are new: the earlier per-image
+importer had none of them.
 
 A dataset is untrusted input. Every path it names goes through
 :mod:`~src.services.curation.dataset_import.paths`, every text file is

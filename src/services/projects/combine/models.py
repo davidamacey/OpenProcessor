@@ -1,6 +1,6 @@
 """The request and preview types of a combine-projects job (projects plan
 section 6). ``extra='forbid'`` everywhere: a stale or misspelled key, or a
-mapping row that is not a W10 ``ClassMappingEntry`` (``{to}`` / ``{drop}``),
+mapping row that is not a ``ClassMappingEntry`` (``{to}`` / ``{drop}``),
 is a 422."""
 
 from __future__ import annotations

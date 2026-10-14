@@ -92,7 +92,7 @@ async def create_curation_indexes(
     active_cfg = cfg or config
     # A project may fold several roles onto one index name (shard folding,
     # owner D4 -- SETTINGS / UMAP_VIZ_STATE onto CONFIGS for a project
-    # created after W2). Merge their mapping properties into one body per
+    # created with the config store). Merge their mapping properties into one body per
     # distinct name rather than creating the name once with only
     # whichever role's body happened to be seen first.
     bodies_by_name: dict[str, dict[str, Any]] = {}

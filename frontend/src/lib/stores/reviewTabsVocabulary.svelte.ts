@@ -1,6 +1,6 @@
 /**
  * ReviewTabsVocabularyStore — served review-tab labels/descriptions
- * (`GET {API_PREFIX}/review/tabs`, W0 naming-sweep finding m9), loaded once.
+ * (`GET {API_PREFIX}/review/tabs`), loaded once.
  *
  * The frontend keeps owning its own tab *structure* and ids
  * (`reviewTabs.ts`'s `REVIEW_TABS`/`REVIEW_PRESETS`) — this store only

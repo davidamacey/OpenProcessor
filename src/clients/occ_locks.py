@@ -29,8 +29,8 @@ def is_human_marker(value: Any) -> bool:
 
 
 def _is_locked_marker(value: Any) -> bool:
-    """``is_human_marker`` plus the two import-provenance string values
-. Used wherever a re-ingest/automated writer must never clobber
+    """``is_human_marker`` plus the two import-provenance string values.
+    Used wherever a re-ingest/automated writer must never clobber
     an imported label the same way it must never clobber a human one."""
     from src.services.curation.ingest_class_sources import (
         LABEL_IMPORT_CLASS_SOURCE,
@@ -41,7 +41,7 @@ def _is_locked_marker(value: Any) -> bool:
 
 
 def is_locked_class(source: dict[str, Any]) -> bool:
-    """Reusable class-lock guard predicate (W10; replaces the narrower
+    """Reusable class-lock guard predicate (replaces the narrower
     ``is_human_owned_class``, which this supersedes — no symbol of that
     name remains anywhere in the codebase).
 

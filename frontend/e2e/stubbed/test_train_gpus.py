@@ -40,7 +40,7 @@ def register_train_mount(stub):
         lambda _r, m: (200, {"job_id": m.group(1), "state": "finished", "promote": None}),
     )
     stub.on("GET", r"/train/gpus(\?|$)", GPU_OPTIONS)
-    # OpenProcessor df01309: AugmentationPanel now fetches its preset list
+    # AugmentationPanel now fetches its preset list
     # from the backend instead of a hardcoded id table.
     stub.on(
         "GET",

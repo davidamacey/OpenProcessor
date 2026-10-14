@@ -1,6 +1,6 @@
 """Pack <-> region profile <-> VLM endpoint pairing: the checks
 themselves, and that EVERY entry point that changes one side of the triple
-runs them (the R5-1 lesson: a combined change is paired with what it will
+runs them (a combined change is paired with what it will
 become, not with what it replaces)."""
 
 from __future__ import annotations

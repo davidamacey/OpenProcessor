@@ -1,5 +1,4 @@
-"""m3 (W2-finish review, 2026-09-27): each ``vlm_called`` write site in
-the detection worker actually gets exercised by a test that would fail if
+"""Each ``vlm_called`` write site in the detection worker actually gets exercised by a test that would fail if
 that flag write were removed or set wrong.
 
 Before this file, only the bulk-writer *gate* was tested
@@ -9,7 +8,7 @@ of the four production call sites (the reviewer's mutation removed all
 four ``vlm_called = True`` assignments and the full-suite pass/fail
 outcome did not change outside that one test) actually *sets* it right.
 
-Call sites covered here (post-W8: the pre-W8 per-crop cascade
+Call sites covered here (the old per-crop cascade
 ``_process_crop`` / ``combined.py`` cohort path was deleted once
 ``runner.py``'s streaming pipeline became the only production cascade --
 its two ``vlm_called`` sites are gone with it, ported below onto the two

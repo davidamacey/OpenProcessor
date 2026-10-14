@@ -1,4 +1,4 @@
-"""W10.2.1/W10.17: COCO dataset scanning."""
+"""COCO dataset scanning."""
 
 from __future__ import annotations
 

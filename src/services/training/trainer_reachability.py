@@ -11,7 +11,7 @@ Without this probe, submitting a job writes ``job.json`` and sits in
 ``/train/preflight``/``/train/start`` call :func:`probe_trainer_reachable`
 to surface that instead.
 
-F-72 regression this module fixes: the original implementation only had a
+Regression this module fixes: the original implementation only had a
 docker-socket-based check, which reported ``block`` whenever the API
 container had no socket mounted -- the *stock* deployment (no
 ``docker-compose.gpu-arbiter.yml`` overlay) -- even with a perfectly

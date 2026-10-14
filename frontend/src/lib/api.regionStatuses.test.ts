@@ -1,5 +1,5 @@
 /**
- * W2 (docs/design/logic-moves-adoption-plan-2026-09-24.md) — the
+ * The
  * deployment's region-status vocabulary, served whole by
  * `GET {API_PREFIX}/regions/statuses` and consumed by
  * `$stores/regionStatuses.svelte`.

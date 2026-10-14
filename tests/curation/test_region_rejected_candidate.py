@@ -296,11 +296,11 @@ class TestHumanReversal:
     def test_confirm_never_reopens_a_human_rejected_or_sanity_rejected_box(
         self, client: TestClient, fake_os: QueryFakeOpenSearch
     ) -> None:
-        """W8-cleanup M3: a whole-set CONFIRM must only reopen a box the
+        """A whole-set CONFIRM must only reopen a box the
         VERIFIER rejected -- never a human's own per-box rejection, and
         never a sanity-gate reject. Two boxes here: one rejected by a
         human, one by the sanity gate. Neither is reopenable, so CONFIRM
-        must 422 (pre-W8 refused a confirm with no accepted box too)."""
+        must 422 (a confirm with no accepted box too)."""
         fake_os.docs(INDEX)['mixedrej'] = _item_with(
             'mixedrej',
             [

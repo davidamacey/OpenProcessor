@@ -1,4 +1,4 @@
-"""Deprecate/Restore (OpenProcessor 01324cb, 243f7f2): `POST
+"""Deprecate/Restore: `POST
 {API_PREFIX}/classes/{id}/deprecate` and `.../restore` — the `/classes`
 Restore button used to be permanently disabled ("no backend support
 exists"). This proves the real browser-rendered page:
@@ -177,7 +177,7 @@ def test_restore_conflict_shows_plain_string_detail_verbatim(stub, page, app_url
 
 
 def test_restore_merged_class_names_the_merge_target(stub, page, app_url):
-    """F-56 (OpenProcessor 4c125ec): restoring a merged class 409s with a
+    """Restoring a merged class 409s with a
     structured `class_merged` detail; the toast names the served merge
     target and says un-merge isn't supported, with the served hint."""
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES_WITH_DEPRECATED})
@@ -215,7 +215,7 @@ def test_restore_merged_class_names_the_merge_target(stub, page, app_url):
 
 
 def test_merged_class_row_has_no_restore(stub, page, app_url):
-    """51b05d7: GET /classes serves merged_into; a merged deprecated class
+    """GET /classes serves merged_into; a merged deprecated class
     shows where it went and offers no Restore."""
     merged = dict(CLASSES_WITH_DEPRECATED[-1], merged_into=11)
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": [*CLASSES_LIVE, merged]})
@@ -231,7 +231,7 @@ def test_merged_class_row_has_no_restore(stub, page, app_url):
 
 
 def test_merge_preview_says_validations_carry_over(stub, page, app_url):
-    """51b05d7: the merge dry-run serves validations_carried_over (kept),
+    """The merge dry-run serves validations_carried_over (kept),
     replacing would_unvalidate (lost)."""
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES_LIVE})
     stub.on("GET", r"/review/new_class_proposals/summary(\?|$)", EMPTY_PROPOSALS)

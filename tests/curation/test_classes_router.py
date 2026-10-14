@@ -100,8 +100,8 @@ def test_put_class_accepts_nonreserved_hotkey(
 
 
 def test_reserved_set_covers_every_single_key_labeler_action() -> None:
-    """W2b: the derived default equals the legacy hardcoded set plus W8's
-    'y'/'r' (per-box accept/reject) and the overlay's backtick (CW-K §3.4)."""
+    """The derived default equals the legacy hardcoded set plus
+    'y'/'r' (per-box accept/reject) and the overlay's backtick."""
     assert set(reserved_hotkeys({})) == LEGACY_RESERVED_HOTKEY_LETTERS | {'y', 'r', '`'}
 
 

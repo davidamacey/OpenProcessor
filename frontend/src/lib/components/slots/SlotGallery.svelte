@@ -43,7 +43,7 @@
       <label class="flex items-center gap-1.5">
         <span class="text-zinc-400">Detector</span>
         <!-- Options are the served vocabulary's filterable detectors
-             (`GET {API_PREFIX}/regions/vocabulary`, W0 finding m9) — the exact
+             (`GET {API_PREFIX}/regions/vocabulary`) — the exact
              values that can appear in stored region_detector for this
              deployment, rather than a hardcoded model-id list. -->
         <select bind:value={gallery.detectorFilter} class="select-sm">
@@ -304,10 +304,9 @@
       >
         <span class="font-medium text-blue-200">{gallery.sel.size} selected</span>
         {#if gallery.selectedCluster != null}
-          <!-- W8: triage from a cluster is per-box (batch_box_state), never
+          <!-- Triage from a cluster is per-box (batch_box_state), never
                the item-level batch_status, which would flip every sibling
-               box on a multi-box item (docs/design/
-               w8-multibox-frontend-plan-2026-09-26.md, §7.7). -->
+               box on a multi-box item. -->
           <span class="text-[11px] text-zinc-500">(per-box)</span>
         {/if}
         <span class="grow"></span>

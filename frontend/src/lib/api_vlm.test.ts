@@ -1,5 +1,5 @@
 /**
- * W9 wrappers: each route's method, GLOBAL vs project-scoped URL, name
+ * VLM wrappers: each route's method, GLOBAL vs project-scoped URL, name
  * encoding, query and body, through the real `apiFetch` (fetch stubbed).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';

@@ -12,7 +12,7 @@ target, or any export dir a training job, a finished run's lineage, or a
 queued/running bake-off still references.
 
 Loops over every active AND archived project by default, pruning each
-project's own exports under its own binding (projects_plan.md §11 W7).
+project's own exports under its own binding.
 ``--project SLUG`` restricts the run to just that one project.
 
     # See what would be removed, every project.

@@ -258,7 +258,7 @@ async def _auto_confirm_or_pending(
 @dataclass(frozen=True)
 class TaskBoxInput:
     """One candidate box going into a verify call (a bounded stand-in for
-    the eventual worker ``TaskBox`` -- see W8.5). ``box_id`` is set for a
+    the eventual worker ``TaskBox``). ``box_id`` is set for a
     box read back from storage (``pending_verification``); ``None`` for a
     fresh candidate, which gets the next id in :func:`verdicts_to_boxes`.
     """
@@ -281,7 +281,7 @@ class TaskBoxInput:
 def task_box_from_stored(
     box: RegionBox, *, item_bbox_norm: tuple[float, float, float, float]
 ) -> TaskBoxInput:
-    """W8 B1 fix: wrap one stored ``proposed`` box as a VLM re-verify
+    """Wrap one stored ``proposed`` box as a VLM re-verify
     candidate, preserving its ``box_id`` (never minting a fresh one --
     this is the same box, going back through verification, not a new
     detection) plus its stored score/detector/source. The real source of
@@ -349,10 +349,10 @@ def verdicts_to_boxes(
     ``candidates`` and ``verdicts`` are aligned by position (both length
     N; ``verdicts[i].box == i + 1``). Every entry in the returned list
     carries its own ``box_id`` (Cropwright C3/Q15) -- a candidate read
-    back from storage (``cand.box_id`` set, W8 B1) keeps that real id;
+    back from storage (``cand.box_id`` set) keeps that real id;
     a fresh candidate (``cand.box_id is None``) gets a PLACEHOLDER id
     (:func:`~src.services.curation.region_boxes.new_box_placeholder`),
-    not a real ``b<N>`` one. W8 M1: a real id is only safe to mint
+    not a real ``b<N>`` one. A real id is only safe to mint
     against the CURRENT ``region_box_seq`` high-water mark, which this
     function -- called at task-processing time, potentially long before
     the write actually lands -- does not have; the caller's write path
@@ -420,20 +420,19 @@ def verdicts_to_boxes(
 
 
 # =============================================================================
-# W8 M2 fix (pipeline-wiring review, 2026-09-27): item-level verification
-# fields for a box-list write.
+# Item-level verification fields for a box-list write.
 # =============================================================================
 #
-# Pre-W8, every combined-verify write set RegionFields.verified/verifier/
+# Earlier, every combined-verify write set RegionFields.verified/verifier/
 # verifier_version/verified_at/validated/auto_confirmed at the item level
-# (_region_write_doc above). The W8 box-list rewrite dropped these
+# (_region_write_doc above). The box-list write dropped these
 # entirely -- readers that still filter/sort on them (regions.py's
 # `verified` filter, the detector_blind_spots/low_conf_correct training
 # cohorts, region_requeue.py, the auto-confirm review semantics) went
-# blind to every fresh worker write. Box-aware definition (corrected by
-# the 2026-09-27 re-review, R-M4: the first cut used `reply is not None`,
-# which is also true for an all-rejected verdict set and contradicted the
-# existing invariant in test_region_status_invariants.py plus the pre-W8
+# blind to every fresh worker write. Box-aware definition (an earlier
+# version used `reply is not None`, which is also true for an all-rejected
+# verdict set and contradicted the
+# existing invariant in test_region_status_invariants.py and the earlier
 # write, which only ever set `verified=True` on an ACCEPTED write):
 # `verified` means the VLM actually CONFIRMED a region this write -- at
 # least one box in the final set is `accepted`; `auto_confirmed` means at
@@ -453,8 +452,8 @@ def item_verification_fields(
 
     ``validated`` is always ``False`` here -- the worker never validates a
     region, only a human does (``RegionFields.validated`` semantics,
-    unchanged from pre-W8). ``verifier``/``verifier_version`` are cleared
-    (``None``) when ``verified`` is False, mirroring the pre-W8
+    unchanged). ``verifier``/``verifier_version`` are cleared
+    (``None``) when ``verified`` is False, mirroring the earlier
     ``_region_write_doc`` behaviour.
     """
     F = get_region_fields()
@@ -475,7 +474,7 @@ async def boxes_auto_confirmed(
     candidates: list[TaskBoxInput],
     profile: DetectionProfile | None = None,
 ) -> bool:
-    """W8 M2: the box-aware ``auto_confirmed`` rule.
+    """The box-aware ``auto_confirmed`` rule.
 
     At least one accepted box, AND every accepted box independently
     passes :func:`_auto_confirm_or_pending` (aligned by position with

@@ -6,7 +6,7 @@ model.
 Test coverage:
 * Decoder produces sane crop-frame bboxes (round-trip through letterbox).
 * Confidence floor filters low-score detections.
-* ``detect_batch`` aligns results 1:1 with inputs and survives partial
+* ``detect_batch_multi`` aligns results 1:1 with inputs and survives partial
   failures.
 * ``RegionDetector.detect`` returns ``None`` for empty / corrupt JPEG
   bytes rather than raising.
@@ -574,7 +574,7 @@ class TestPaddleOcrTextRecognizer:
         assert pick.text == 'ABC-1234'
 
     @pytest.mark.asyncio
-    async def test_f4_rejects_letters_only_text(self) -> None:
+    async def test_rejects_letters_only_text(self) -> None:
         """With the letters+digits rule on, lettering-only text must not promote."""
         from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
@@ -601,7 +601,7 @@ class TestPaddleOcrTextRecognizer:
         assert rec.pick_best_text_region(regions) is None
 
     @pytest.mark.asyncio
-    async def test_f4_rejects_low_rec_score(self) -> None:
+    async def test_rejects_low_rec_score(self) -> None:
         """Even a perfect-looking plate text below the rec-score floor is rejected."""
         from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 
@@ -622,7 +622,7 @@ class TestPaddleOcrTextRecognizer:
         assert rec.pick_best_text_region(regions) is None
 
     @pytest.mark.asyncio
-    async def test_f4_accepts_vanity_plate(self) -> None:
+    async def test_accepts_vanity_plate(self) -> None:
         """Vanity plates with letter+digit mix promote (e.g. 'LUV2DRV')."""
         from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 

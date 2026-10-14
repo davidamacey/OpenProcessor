@@ -1,7 +1,6 @@
 <script lang="ts">
   /**
-   * Test-on-crop for one pack (`POST /prompt_packs/test`, W5; §5.1, §7.5,
-   * §7.6 item 3, §7.7). Absent unless the served schema marks a call
+   * Test-on-crop for one pack (`POST /prompt_packs/test`). Absent unless the served schema marks a call
    * `testable`. Shows exactly what the server returns: the pack and VLM
    * that ran, the prompt it built, the raw reply, each crop's parsed
    * answer (or served skip reason) and the preview item.

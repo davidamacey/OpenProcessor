@@ -1,8 +1,7 @@
-"""OpenProcessor W4 (region-profile CRUD, activation, impact), any_domain_plan.md
-§4, §7.3, §7.4, §7.6; docs/design/w4-profile-editor-ui-plan-2026-09-27.md §10.
+"""Region-profile CRUD, activation, impact.
 
-The backend has not shipped W4 yet, so every payload below follows the spec's
-own examples (neutral widget/tag domain). The fail-closed stub means any
+The profile routes are stubbed with payloads shaped like the served contract
+(neutral widget/tag domain). The fail-closed stub means any
 profile request the page makes that a test did not expect fails the test.
 
   1. `test_edit_validate_save_and_resolve_a_conflict` — a model picked from the

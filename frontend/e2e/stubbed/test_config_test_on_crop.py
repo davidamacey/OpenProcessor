@@ -1,6 +1,4 @@
-"""OpenProcessor W5 (test-on-crop for prompt packs and region profiles),
-any_domain_plan.md §5, §7.5-7.7; docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md
-§5.2-5.4. Payloads follow the vendored contract (PackTestResponse,
+"""Test-on-crop for prompt packs and region profiles. Payloads follow the vendored contract (PackTestResponse,
 RegionTestResponse), in the neutral widget/tag domain. The fail-closed stub
 means any request the page makes that a test did not expect fails the test.
 
@@ -479,7 +477,7 @@ def test_profile_test_overlay_is_bounded_and_does_not_overlap(stub, page, app_ur
         panel.screenshot(path=str(SHOT_DIR / f"profile-test-{w}.png"))
 
 
-# --- The per-run VLM picker on the test panels (W9 x W5) --------------------
+# --- The per-run VLM picker on the test panels (VLM x test-on-crop) --------------------
 
 from test_vlm_run_selection import BASE_STRATEGIES, VLM_STRATEGIES, WARNING
 

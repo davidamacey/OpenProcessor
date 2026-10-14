@@ -8,7 +8,7 @@ back to the separate-call paths.
 The upstream VLM's own wire-reply keys (what the reply's JSON object is
 keyed by) are read via ``RegionFields`` in ``vlm_labeler_combined.py`` rather than
 hardcoded — these fixtures use the generic ``RegionFields``
-defaults (``region_visible``, ``region_boxes`` -- W8 list shape, one
+defaults (``region_visible``, ``region_boxes`` -- the list shape, one
 verdict object per candidate box: ``box`` (1-based), ``region_bbox_correct``,
 ``region_text``, ``region_confidence``) so the tests stay domain-neutral.
 
@@ -394,7 +394,7 @@ class TestLabelCombinedBatch:
 
     @pytest.mark.asyncio
     async def test_multi_box_reply_aligns_by_position(self) -> None:
-        """W8: 2 candidate boxes on one crop -> 2 verdicts, aligned by
+        """2 candidate boxes on one crop -> 2 verdicts, aligned by
         1-based ``box`` number."""
         labeler = _make_labeler(
             {

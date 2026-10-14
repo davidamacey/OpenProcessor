@@ -9,8 +9,8 @@ out with zero rows. On this codebase the contract is the other way round:
   auto-promote, dataset import) sets ``class_validated=true`` on the item;
 - :class:`~src.services.curation.export.GenericYoloExportService` selects
   ``class_validated=true`` items straight from the items index and never
-  reads the confirmed-labels index, which nothing writes anymore (W10:
-  dataset import's own ledger is the provenance record now).
+  reads the confirmed-labels index, which nothing writes anymore;
+  dataset import's own ledger is the provenance record now.
 
 These tests run each real write path against one query-evaluating in-memory
 OpenSearch and then run the real exporter over the result, so they fail if
@@ -133,11 +133,11 @@ async def test_human_labels_alone_produce_a_non_empty_export(fake, registry, tmp
 @pytest.mark.asyncio
 @pytest.mark.usefixtures('reference_ingest_profiles')
 async def test_every_label_path_reaches_the_export(fake, registry, tmp_path, monkeypatch):
-    """The fifth "every label path" writer, post-W10: dataset import.
+    """The fifth "every label path" writer: dataset import.
 
-    Ported from the pre-W10 version of this test, which used the since-
+    Ported from the earlier version of this test, which used the since-
     deleted ``label_import.import_yolo_labels`` (a parallel write path
-    with no OCC, no restorable snapshot — any_domain_plan.md W10.1 I2).
+    with no OCC, no restorable snapshot).
     Dataset import now goes through the SAME ``class_label_update()`` /
     ``occ_upsert_bulk()`` primitive every other writer exercised by this
     test uses.

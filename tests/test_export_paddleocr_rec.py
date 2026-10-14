@@ -12,7 +12,7 @@ replaces it with the TensorRT Python API directly (same dependency
 ``export/export_models.py`` already uses in-process), so these tests
 fake ``tensorrt`` itself -- no GPU, no real engine build, no docker.
 
-Round 2 (F-17 regression + destructive rebuild, same findings doc):
+Further regressions (TRT 11 flag removal, destructive rebuild):
 (a) the fake ``tensorrt`` used here originally always exposed
 ``NetworkDefinitionCreationFlag.EXPLICIT_BATCH``, matching TRT <= 10 and
 masking that the real image's TRT 11.1 has no such attribute --
@@ -73,8 +73,8 @@ def _install_fake_tensorrt(
     trt_utils.atomic_write_plan touch.
 
     ``explicit_batch_flag_exists=False`` simulates TRT 11, which removed
-    ``NetworkDefinitionCreationFlag.EXPLICIT_BATCH`` entirely (round-2
-    regression: the old code did a bare attribute lookup and crashed).
+    ``NetworkDefinitionCreationFlag.EXPLICIT_BATCH`` entirely (the
+    old code did a bare attribute lookup and crashed).
     ``trt_utils`` is force-reimported so it re-binds to *this* fake module
     instead of a previous test's (trt_utils imports tensorrt lazily,
     per-call, precisely to avoid stale bindings across fakes).
@@ -113,7 +113,7 @@ def _install_fake_tensorrt(
 
 
 class TestExplicitBatchAcrossTrtVersions:
-    """Regression coverage for the F-17 crash: a bare
+    """Regression coverage for the crash: a bare
     ``trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH`` lookup raises
     ``AttributeError`` on TRT 11, where the flag was removed entirely."""
 
@@ -207,7 +207,7 @@ class TestConvertToTensorrtViaPythonApi:
     def test_stale_plan_survives_a_failed_rebuild(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """F-17(b) round 2: a leftover, WORKING plan from a previous run
+        """A leftover, WORKING plan from a previous run
         must survive a failed rebuild -- the old code unlinked it before
         even attempting the build, so a bad rerun destroyed a good
         install."""
@@ -275,7 +275,7 @@ class TestConvertToTensorrtViaPythonApi:
 def test_main_fails_loudly_when_tensorrt_conversion_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """F-17's fail-open half: main() used to always return 0, even when
+    """Fail-open half: main() used to always return 0, even when
     the whole point of the run (an installed model.plan) never happened."""
     monkeypatch.setattr(rec_export, 'check_onnx_exists', lambda: True)
     monkeypatch.setattr(rec_export, 'ONNX_PATH', tmp_path / 'ppocr_rec_v5_mobile.onnx')

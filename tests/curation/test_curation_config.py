@@ -166,7 +166,7 @@ def test_from_env_probe_actionable_min_confidence_unset_stays_default(
 
 
 # =============================================================================
-# OP_REGION_MAX_BOXES_PER_WRITE (W8: served abuse guard, human box lists are
+# OP_REGION_MAX_BOXES_PER_WRITE (served abuse guard, human box lists are
 # unbounded -- this caps the element count of one write request, not a
 # labeling rule)
 # =============================================================================

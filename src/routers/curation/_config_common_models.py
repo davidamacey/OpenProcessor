@@ -1,10 +1,6 @@
 """Shared structured-error and validation models for the config-store /
-projects surface (P1 creates this module ahead of W2, because P1 lands
-first in the merge order -- see
-docs/design/openprocessor_internal/projects_plan.md §7 and
-any_domain_plan.md §7.1/§9 W2). W2 extends the Literals and adds the
-validation-report shapes and ``ActiveRef``/``ActiveConfigResponse``;
-W3/W4/W8/W9 extend the Literals further as their routes land.
+projects surface: the error-code and validation-code Literals, the
+validation-report shapes and ``ActiveRef``/``ActiveConfigResponse``.
 
 Every project or config route raises through :func:`api_error`, never a
 bare string ``detail`` -- gives Cropwright one stable shape
@@ -22,10 +18,9 @@ from src.routers.curation._dataset_issue_models import DatasetIssueWire
 from src.services.issue_ids import stamp_issue_ids
 
 
-# P1 seeded the project-related codes it raises. W2 adds the codes its
-# own low-level primitives (``src.services.config_store``) and the
-# ``PUT /settings`` bridge raise; W3/W4/W8/W9 add the rest as their
-# routes land (see any_domain_plan.md §7.1's full table).
+# Project-related codes, then the codes the low-level config-store primitives
+# (``src.services.config_store``) and the ``PUT /settings`` bridge raise,
+# then the pack/profile, region and VLM routes' codes.
 ErrorCode = Literal[
     'project_not_found',
     'project_archived',
@@ -50,7 +45,6 @@ ErrorCode = Literal[
     'model_name_reserved',
     'internal_isolation_error',
     'revision_conflict',
-    # W2
     'not_found',
     'unknown_revision',
     'active_conflict',
@@ -71,7 +65,6 @@ ErrorCode = Literal[
     'empty_val_split',
     'model_not_found',
     'project_owned_model',
-    # W2b
     'class_hotkey_conflict',
     'hotkey_reserved',
     'hotkey_taken',
@@ -150,10 +143,7 @@ ErrorCode = Literal[
     'audit_precision_low',
 ]
 
-# Seeded with the codes W2 raises (none yet -- W2 has no validated
-# writes of its own, only the low-level OCC primitives). W3/W4 add the
-# pack/profile validation codes; W8/W9 add theirs. W2b adds the
-# keymap_* codes (CW-K §3.1).
+# Pack/profile, region and VLM validation codes, plus the keymap_* codes.
 ValidationCode = Literal[
     'name_conflict',
     'keymap_unknown_action',
@@ -355,7 +345,7 @@ class ConfigErrorDetail(BaseModel):
     hard_limit: int | None = None
     heap_max_bytes: int | None = None
     current_revision: int | None = None
-    # W2 (activation OCC / validation reports)
+    # Activation OCC / validation reports
     report: ValidationReport | None = None
     current: ActiveRef | None = None
     axis: str | None = None
@@ -487,10 +477,10 @@ class ActiveRef(BaseModel):
 
 
 class AppliedRuntime(BaseModel):
-    """One worker process's "what did I actually apply" record (any_domain_plan.md
-    §4.5/§7.3), served under ``ActiveConfigResponse.applied[]`` from
-    ``runtime:<process>:<host>`` docs (``upsert_project_runtime_doc``,
-    W2). ``lagging`` is ``true`` when ``applied_config_revision`` is
+    """One worker process's "what did I actually apply" record,
+    served under ``ActiveConfigResponse.applied[]`` from
+    ``runtime:<process>:<host>`` docs (``upsert_project_runtime_doc``).
+    ``lagging`` is ``true`` when ``applied_config_revision`` is
     behind the axis's current ``config_revision`` for longer than the
     drain-plus-poll grace period (§4.5) -- a stuck/slow worker, not a
     momentary swap in progress."""
@@ -532,10 +522,10 @@ class AppliedRuntime(BaseModel):
 
 class ActiveConfigResponse(BaseModel):
     """``GET /prompt_packs/active`` / ``GET /region_profiles/active``;
-    also the activation-mutation response shape used by W2's settings
+    also the activation-mutation response shape used by the settings
     bridge and by ``store.activate``'s callers.
 
-    ``source`` (Cropwright W3 UI, C2/Q5): where ``active`` came from --
+    ``source``: where ``active`` came from --
     ``'stored'`` (an activation doc names a saved pack/profile),
     ``'env'`` (never activated through the store; the env/file default
     applies, and ``active.name`` names it), or ``'off'`` (explicitly

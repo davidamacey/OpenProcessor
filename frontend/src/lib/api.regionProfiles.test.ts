@@ -1,6 +1,5 @@
 /**
- * W4 region-profile and vocabulary wrappers (any_domain_plan.md §4.2,
- * §7.3, §7.4): every route is scoped, every body is sent as given, the
+ * Region-profile and vocabulary wrappers: every route is scoped, every body is sent as given, the
  * list always asks for templates, `for_activation` and
  * `include_other_projects` travel as query params, and OCC values are
  * passed through untouched.

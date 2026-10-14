@@ -1,5 +1,5 @@
 /**
- * Promote-to-Triton helpers (F-64, fresh-start findings 2026-09-25).
+ * Promote-to-Triton helpers.
  *
  * `POST {API_PREFIX}/train/promote/{job_id}` answers every promote-blocking
  * failure with a 422 whose `detail` is `PromoteGateFailedDetail`:

@@ -83,7 +83,7 @@ def _write_heartbeat(jobs_dir: Path, *, age_seconds: float) -> None:
 def test_probe_trainer_reachable_ok_on_a_stock_install_with_fresh_heartbeat(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """F-72 regression: a stock install has no docker socket in the API
+    """Regression: a stock install has no docker socket in the API
     container. The heartbeat file the trainer's watch loop refreshes every
     ~30s must be enough on its own -- no docker SDK/socket needed.
 

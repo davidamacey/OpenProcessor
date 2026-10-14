@@ -1,4 +1,4 @@
-"""F-29/F-71 (fresh-start E2E findings 2026-09-25): bind-mount source dirs
+"""Bind-mount source dirs
 must exist, host-user-owned, before compose ever runs -- without
 breaking `git pull`.
 
@@ -7,9 +7,9 @@ directory doesn't exist, so Docker auto-creates it **root-owned** on the
 very first ``docker compose up``, and ``make download-test-images``
 (running as the host user) then fails to write into it.
 
-F-29's first fix shipped a tracked ``test_images/.gitkeep`` placeholder
+An earlier fix shipped a tracked ``test_images/.gitkeep`` placeholder
 so ``git clone`` itself created the directory, host-user-owned, before
-compose ever ran. That backfired as F-71: on an EXISTING install whose
+compose ever ran. That backfired: on an EXISTING install whose
 ``test_images/`` was already root-owned (from before this fix ever
 shipped), ``git pull`` needs write access to materialize the new
 tracked file there -- permission denied, and the pull aborted
@@ -45,7 +45,7 @@ def _git_check_ignore(path: str) -> bool:
 
 
 def test_no_file_is_tracked_inside_test_images() -> None:
-    """The F-71 fix: nothing inside test_images/ may be a tracked file --
+    """Nothing inside test_images/ may be a tracked file --
     that's exactly what made `git pull` require write access there."""
     result = subprocess.run(
         ['git', 'ls-files', 'test_images/'],
@@ -72,7 +72,7 @@ def test_ensure_host_bind_mount_dirs_target_exists() -> None:
 
 
 def test_up_targets_depend_on_ensure_host_bind_mount_dirs() -> None:
-    """F-71: `up` and `up-monitoring` must create the bind-mount source
+    """`up` and `up-monitoring` must create the bind-mount source
     dirs (as the host user) BEFORE compose runs and could auto-create
     them root-owned instead."""
     assert 'up: ensure-host-bind-mount-dirs' in MAKEFILE

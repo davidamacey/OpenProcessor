@@ -1233,7 +1233,7 @@ class _FakeTransport:
             if method == 'DELETE':
                 self._write(indices[0], doc_id, None, merge=False)
             elif action == '_update':
-                # minor 7 / W2b M6: `bump_config_revision`'s
+                # `bump_config_revision`'s
                 # painless script + upsert body needs real semantics here,
                 # not the generic doc-merge below -- mirrors
                 # tests/curation/_fake_config_opensearch.py's
@@ -2143,8 +2143,7 @@ def test_a_planted_unkeyed_cache_behind_a_shared_helper_is_caught(
 
 
 # --------------------------------------------------------------------------
-# W2b review (w2b_review_2026-09-27.md): B1/B2/B3 + isolation gaps, through
-# the real leak_env guard.
+# Config-store isolation gaps, through the real leak_env guard.
 # --------------------------------------------------------------------------
 
 

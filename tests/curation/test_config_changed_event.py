@@ -1,6 +1,6 @@
-"""W2: activating through the config store publishes exactly one
+"""Activating through the config store publishes exactly one
 ``config.changed`` event, stamped with the bound project (never
-unbound) -- any_domain_plan.md §9 W2."""
+unbound)."""
 
 from __future__ import annotations
 

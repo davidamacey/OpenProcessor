@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# vlm_switch.sh - `openprocessor vlm status|use|apply|probe` (any-domain W9.7)
+# vlm_switch.sh - `openprocessor vlm status|use|apply|probe`
 # =============================================================================
 # Sourced by the `openprocessor` CLI, which supplies dc(), _env_value(),
 # log_*(), PROJECT_DIR and API_PORT. Switching the local model recreates the

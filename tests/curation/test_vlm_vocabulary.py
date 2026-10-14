@@ -74,7 +74,7 @@ def test_class_source_rollup_buckets(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_count_by_proposal_sums_proposal_and_low_conf_and_default_sources(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """F-23: the fixed accounting for 'detector proposed it, nothing has
+    """The fixed accounting for 'detector proposed it, nothing has
     classified it yet' -- fed class-less (no class_id) buckets."""
     monkeypatch.setenv('OP_INGEST_PRIMARY_NAME', 'proposer')
     no_class_buckets = [

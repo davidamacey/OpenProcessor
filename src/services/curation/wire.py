@@ -436,10 +436,8 @@ def region_boxes_to_wire(
     crop_id: str = '',
     prefix: str = '',
 ) -> dict[str, Any]:
-    """The W8 per-item box list plus its item-level summary fields
-. Additive alongside the legacy per-box
-    scalar wire keys above -- see the W8 handback report for why those
-    are not removed yet. Each ``RegionBoxWire`` element also carries
+    """The per-item box list plus its item-level summary fields.
+    Each ``RegionBoxWire`` element also carries
     ``bbox_in_parent`` (the item-crop frame, derived; ``None`` with no
     usable item box) and ``thumbnail_url`` (``crop_id`` unset -> both
     keys omitted, e.g. a bare doc with no crop identity)."""

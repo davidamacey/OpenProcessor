@@ -1,9 +1,8 @@
-"""The detection worker's hot-reloadable runtime (W2, any_domain_plan.md
-sec 4.5; per-project per projects_plan.md sec 11 W2; the VLM endpoint joined
-the swap in W9).
+"""The detection worker's hot-reloadable runtime (any_domain_plan.md
+sec 4.5; per-project; the VLM endpoint is part of the swap).
 
 :func:`build_runtime` is the extracted build block that used to live
-inline in ``runner.py`` (``runner.py:227-331`` pre-W2): given a Triton
+inline in ``runner.py``: given a Triton
 pool, an already-resolved ``(profile, pack)`` pair and the worker's CLI
 args, it builds every heavy-IO object one profile activation needs
 (detector, segmenter, OCR recognizer, text rules, VLM) and returns them
@@ -12,9 +11,8 @@ as one immutable :class:`RegionRuntime`.
 :class:`RuntimeHolder` keeps one built :class:`RegionRuntime` per
 project slug -- "alpha activating a new profile does not touch beta's
 runtime" falls out for free because each slug's entry is only ever
-replaced by a swap keyed to that same slug (projects_plan.md sec 11 W2:
-"the worker RegionRuntime, quiesce-and-swap and runtime:* docs are per
-project").
+replaced by a swap keyed to that same slug (the worker RegionRuntime, quiesce-and-swap and
+runtime:* docs are per project).
 
 :func:`quiesce_and_swap` is the producer loop's per-cycle hot-reload
 primitive (sec 4.5 step 2): drain every queue so no in-flight item can
@@ -156,7 +154,7 @@ async def build_runtime(
     """Build one :class:`RegionRuntime` for ``(profile, pack, vlm_endpoint)``.
 
     Extracted, byte-for-byte, from the build block ``runner.py`` used to
-    run inline at module-startup time (pre-W2) so it can be re-run at a
+    run inline at module-startup time so it can be re-run at a
     quiesce point without duplicating the construction logic. Never
     touches OpenSearch or the OS-level pause sentinel -- those stay in
     ``runner.py``'s own startup path.
@@ -226,8 +224,8 @@ async def build_runtime(
 
 @dataclass
 class RuntimeHolder:
-    """Per-project-slug :class:`RegionRuntime` registry (projects_plan.md
-    sec 11 W2's ``runtimes[slug]``). Activating a profile in one project
+    """Per-project-slug :class:`RegionRuntime` registry (one runtime per
+    slug). Activating a profile in one project
     only ever replaces that project's own entry.
 
     ``_synced_refs`` is tracked separately from the runtime's own

@@ -5,7 +5,7 @@ to a target by NAME, through an explicit ``map`` / ``create`` / ``skip``
 (``any_domain_plan.md``, "Class identity invariant" section) this wave
 exists to enforce.
 
-Exported for P4 (combine-projects, W10.19): ``suggest_mapping`` /
+Exported for combine-projects: ``suggest_mapping`` /
 ``resolve_mapping`` map one project's/dataset's class names onto another
 registry by name with the same action vocabulary and completeness rule.
 """
@@ -27,7 +27,7 @@ MatchKind = Literal[
 ]
 
 # accept_suggestions only auto-fills a mapping from these match kinds
-#synonym/merged/create always need an explicit human choice.
+# synonym/merged/create always need an explicit human choice.
 _AUTO_ACCEPTABLE_MATCHES = frozenset({'same_registry', 'exact', 'case_insensitive', 'region'})
 
 

@@ -135,10 +135,9 @@ class TestCombinedSingle:
         reply = await _labeler(_combined(region_text=echo)).label_combined(
             'c1', _jpeg(), class_names=CLASS_NAMES, region_bboxes_norm=[(0.2, 0.6, 0.5, 0.8)]
         )
-        # W8 M5 fix (pipeline-wiring review, 2026-09-27): restored --
         # box_verdicts' text cleaning (region_overlay._clean_text_reply)
         # now suppresses an item-answer echo (the picked class name, make,
-        # model, or their join) the same way the pre-W8 flat parser's
+        # model, or their join) the same way the old flat parser's
         # _clean_combined_region_text did. The class side still resolves
         # regardless.
         assert reply.region_boxes[0].text_reply is None
@@ -147,9 +146,8 @@ class TestCombinedSingle:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         'sentinel',
-        # 'unreadable' / '-' restored: the W8 rewrite's
-        # region_overlay._clean_text_reply only dropped 4 of the pre-W8
-        # flat parser's 7 sentinels.
+        # 'unreadable' / '-' are sentinels too: region_overlay._clean_text_reply
+        # must drop all 7 the old flat parser dropped, not just 4.
         [None, '', 'unknown', 'N/A', 'null', 'unreadable', '-'],
     )
     async def test_no_text_is_null(self, sentinel: str | None) -> None:
@@ -471,8 +469,8 @@ def _item(status: str = 'pending_detection') -> dict[str, Any]:
 
 
 def _as_candidate_list(c: RegionCandidate | list[RegionCandidate] | None) -> list[RegionCandidate]:
-    """Normalize a ``_drive_worker`` leg input to a list (W8 M8: a test
-    can now feed 2+ raw candidates per leg, not just 0 or 1)."""
+    """Normalize a ``_drive_worker`` leg input to a list (a test
+    can feed 2+ raw candidates per leg, not just 0 or 1)."""
     if c is None:
         return []
     if isinstance(c, list):
@@ -595,9 +593,7 @@ async def _drive_worker(
     )
 
     async def _stopper() -> None:
-        # W8 pipeline-review flaky-test fix (2026-09-27, comment corrected
-        # 2026-09-27 re-review): this used to be a FIXED 500 x 10ms
-        # iteration budget -- a ~5s nominal wall-clock allowance assuming
+        # This used to be a FIXED 500 x 10ms iteration budget -- a ~5s nominal wall-clock allowance assuming
         # each `asyncio.sleep(0.01)` returns close to schedule. The actual
         # cause of the flake is plain wall-clock variance against that
         # fixed ~5s budget, not individual sleeps somehow running long

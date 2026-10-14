@@ -4,7 +4,7 @@
 The workers (``scripts/curation/_project_worker_utils.py``'s
 ``is_project_paused``) already read a file sentinel,
 ``<project_state_dir>/pipeline_paused.flag`` -- that mechanism predates
-this route (the plan's ``pipeline.paused`` settings-doc field needs W2's
+this route (the plan's ``pipeline.paused`` settings-doc field needs the
 config store, not merged here). This route is the missing write side:
 an operator (or Cropwright) flips the same flag file through the API
 instead of reaching into the container's filesystem by hand.

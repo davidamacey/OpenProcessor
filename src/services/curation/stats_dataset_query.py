@@ -85,7 +85,7 @@ def build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
             # surfaces "detector found N regions" from this, NOT from
             # class_source (which never carries a region-detector value).
             #
-            # W8-cleanup: the detector lives on each box in region_boxes now
+            # The detector lives on each box in region_boxes now
             # (the retired item-level region_detector scalar), so this is a
             # nested agg over the box list, not a plain terms agg.
             'region_detectors': {
@@ -106,7 +106,7 @@ def build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
                 },
             },
             # region-verifier breakdown — VLM (AI) vs human. Item-level
-            # (unaffected by W8): a region's per-item ``verified``/
+            # (not a box field): a region's per-item ``verified``/
             # ``verifier`` fields describe the item's own verification pass,
             # not any one box.
             'region_verifiers': {
@@ -138,7 +138,7 @@ def build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
             # Crops that actually carry a region box right now. This — not
             # total_detected (which sums detector CREDIT, including
             # rejected/failed attempts) — is the honest "crops with a
-            # region" number and matches the region cluster view. W8-cleanup:
+            # region" number and matches the region cluster view.
             # a box is "carried" when it's accepted, or false_positive (kept
             # for FP analysis/training) -- the retired region_bbox_norm
             # scalar's existence used to mean the same thing.

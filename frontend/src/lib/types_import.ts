@@ -1,6 +1,5 @@
 /**
- * Wire types for OpenProcessor W10: labeled-dataset import and Reprocess
- * (`any_domain_plan.md` §7.12, W10.4, W10.11-W10.14). Every route is
+ * Wire types for labeled-dataset import and Reprocess. Every route is
  * project-scoped (`{prefix}/datasets/...`, `{prefix}/reprocess...`).
  *
  * Pinned field-for-field to the vendored OpenAPI (OpenProcessor f582aa05)
@@ -28,7 +27,7 @@ export interface DatasetFormatInfo {
 
 export type DatasetIssueSeverity = 'error' | 'warning' | 'info';
 
-/** One `/datasets/formats` issue-catalog row (W10.4 `ISSUE_CATALOG`). */
+/** One `/datasets/formats` issue-catalog row (`ISSUE_CATALOG`). */
 export interface DatasetIssueCatalogEntry {
   code: string;
   severity: string;
@@ -101,7 +100,7 @@ export interface DatasetImportOptions {
   force?: boolean;
 }
 
-/** `DatasetPreviewRequest` — no `project` field (delta 15, W10.3). */
+/** `DatasetPreviewRequest` — no `project` field. */
 export interface DatasetPreviewRequest {
   source: DatasetSource;
   mapping: ClassMappingEntry[];
@@ -274,7 +273,7 @@ export interface DatasetImportReport {
   disagreements: { counts: Record<string, number>; samples: unknown[] };
 }
 
-/** W10.11 `next_steps` entry (question 10). */
+/** A `next_steps` entry. */
 export interface NextStep {
   action: string;
   method: string;
@@ -384,7 +383,7 @@ export interface DatasetUploadResponse {
   files: number;
 }
 
-/** `ConfigErrorDetail` (§7.1) with the W10 optional fields. */
+/** `ConfigErrorDetail` with the dataset-import optional fields. */
 export interface DatasetErrorDetail {
   error: string;
   message: string;

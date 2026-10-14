@@ -122,7 +122,7 @@ def _combined_reply_from_entry(
     missing or not a recognizable boolean (the caller leaves the item
     pending rather than stamping ``no_region_visible`` or an accept off a
     reply that never answered). ``n_boxes`` candidate boxes were offered
-    for this crop (W8.6 numbered overlay); when ``n_boxes > 0`` the reply
+    for this crop (numbered overlay); when ``n_boxes > 0`` the reply
     must carry the list-shaped ``fields.boxes`` key or
     :class:`~src.services.labeling.region_overlay.MultiRegionKeysMissingError`
     (a :class:`ValueError` subclass) is raised -- D-B, no flat-shape
@@ -143,7 +143,7 @@ def _combined_reply_from_entry(
     model_name = str(entry.get('model') or '').strip()[:48]
     # suppress a per-box
     # text reply that's really the item's own class/make/model echoed
-    # back into the text slot -- ported from the pre-W8 flat parser's
+    # back into the text slot -- ported from the earlier flat parser's
     # ``_clean_combined_region_text`` echo check, dropped (not ported)
     # when the per-box list shape replaced it.
     picked_class = (

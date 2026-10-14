@@ -1,4 +1,4 @@
-"""Wave 6: the gate inside the full-image pass -- tier 1 registry rules, tier 2
+"""The gate inside the full-image pass -- tier 1 registry rules, tier 2
 vision-model pre-check, tier 3 hit-rate, skips counted, nothing edited."""
 
 from __future__ import annotations

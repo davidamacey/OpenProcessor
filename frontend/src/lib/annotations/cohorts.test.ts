@@ -89,8 +89,7 @@ describe('cohortsForClass — a region slot (declared cohorts override derived)'
     );
   });
 
-  // Wave 2 C13/C14 (docs/design/slot-generic-crop-mapping-plan-2026-09-21.md
-  // §8.4(iii)): the cohort `id` (render key) is separate from `params.mode`
+  // The cohort `id` (render key) is separate from `params.mode`
   // (the wire value).
   it('every compiled tier-1 region cohort URL is byte-identical to getTrainingCandidates(mode, {class_id})', () => {
     const cohorts = cohortsForClass(3, 'widget_tag', registry, classesById, true);
@@ -143,7 +142,7 @@ describe('cohortsForClass — predicateCohortsAvailable gate', () => {
   });
 });
 
-describe('cohortEndpointKind (Wave 2 C12 — structural dispatch, not path === literal)', () => {
+describe('cohortEndpointKind (structural dispatch, not path === literal)', () => {
   it('recognizes training_candidates under any base path', () => {
     expect(cohortEndpointKind('/gadgets/training_candidates')).toBe(
       'training_candidates',

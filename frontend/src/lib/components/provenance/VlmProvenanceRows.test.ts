@@ -1,5 +1,5 @@
 /**
- * The W9 provenance rows: endpoint (`name@revision`), model and prompt pack
+ * The VLM provenance rows: endpoint (`name@revision`), model and prompt pack
  * render verbatim and only when the item carries them; an item with none
  * renders nothing.
  */

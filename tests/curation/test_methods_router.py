@@ -536,7 +536,7 @@ def test_methods_contract_declares_field_coverage() -> None:
     """The generated OpenAPI contract must type ``field_coverage`` /
     ``field_coverage_total`` as real StrategyEntry properties, not leave
     the whole response as a free-form (``additionalProperties: true``)
-    object -- that's the W2.3 contract gap this test locks down."""
+    object -- that's the contract gap this test locks down."""
     import json
     from pathlib import Path
 

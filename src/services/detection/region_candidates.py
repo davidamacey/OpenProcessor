@@ -1,4 +1,4 @@
-"""W8.4: select up to N region candidates per item.
+"""Select up to N region candidates per item.
 
 One function, used by every candidate-producing leg (detector, segmenter,
 text-hint re-pass) and by ``POST /region_profiles/test`` (the ``selected``

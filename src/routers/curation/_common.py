@@ -102,7 +102,7 @@ def guard_page_depth(page: int, page_size: int) -> None:
     ``index.max_result_window`` and the app would surface that as a bare
     503/500 instead of a clear, cheap client-side rejection. Cursor-based
     pagination (``search_after``) is the documented way past this limit;
-    Wave 1 doesn't add a cursor param, so depth is capped instead."""
+    This route doesn't add a cursor param, so depth is capped instead."""
     if (page - 1) * page_size + page_size > MAX_RESULT_WINDOW:
         raise HTTPException(
             status_code=422,

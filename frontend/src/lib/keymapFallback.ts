@@ -17,10 +17,8 @@
  * action whose default includes one keeps it (`locked_keys`); no other
  * action may take one. The store enforces this on every document.
  *
- * The three W8 per-box actions (`review.region.accept_box`/`reject_box`,
- * `box_edit.next_box`) are `available: true` as of the
- * feat/w8-multibox-lockstep branch (docs/design/
- * w8-multibox-frontend-plan-2026-09-26.md) — registered by the review
+ * The three per-box actions (`review.region.accept_box`/`reject_box`,
+ * `box_edit.next_box`) are `available: true` — registered by the review
  * page's multi-box editing surface.
  */
 

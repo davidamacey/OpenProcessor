@@ -1,6 +1,6 @@
 """Every way a VLM endpoint can be selected goes through ONE gate.
 
-The W3/W4 lesson (a gate bypass found four times because each caller
+The lesson (a gate bypass found four times because each caller
 re-implemented the checks): a single test walks every selection path with an
 input that has to be refused. Here that input is an endpoint that passed
 validation when it was saved and whose host has since started resolving to

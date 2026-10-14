@@ -1,7 +1,6 @@
-"""Tests for the F-13c fix in ``export/export_mobileclip_image_encoder.py``.
+"""Tests for the TensorRT-fallback fix in ``export/export_mobileclip_image_encoder.py``.
 
-Fresh-start E2E findings (2026-09-25), F-13(c): the MobileCLIP2-S2 image
-encoder's FP16 TensorRT build fails ("Could not find any implementation for
+The MobileCLIP2-S2 image encoder's FP16 TensorRT build fails ("Could not find any implementation for
 node …stages.1/downsample/proj/proj.0/reparam_conv/Conv + PWN…") with no
 FP32 fallback, and the exporter still printed "Export Complete" and exited
 0. Before the fix, ``convert_to_tensorrt`` caught the FP16 build failure and
@@ -16,7 +15,7 @@ and assert:
   2. when *every* precision fails, ``convert_to_tensorrt`` raises instead
      of returning ``None`` silently;
   3. ``main()`` propagates that failure as a non-zero exit code (was:
-     always printed "Export Complete" and exited 0, F-13c's "fail-open"
+     always printed "Export Complete" and exited 0, a "fail-open"
      symptom).
 """
 
@@ -141,7 +140,7 @@ class TestMainExitsNonZeroOnTotalFailure:
     def test_main_exits_1_when_every_precision_fails(
         self, mce, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Reproduces F-13c's fail-open symptom: previously ``main()`` always
+        """Reproduces the fail-open symptom: previously ``main()`` always
         printed "Export Complete" and returned normally (exit 0) even when
         no TensorRT engine was ever written."""
         monkeypatch.setattr(sys, 'argv', ['export_mobileclip_image_encoder.py', '--model', 'S2'])

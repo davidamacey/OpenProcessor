@@ -17,7 +17,7 @@ lock accounting and the routes (``POST /reprocess``). A box is dropped by
 The pieces:
 
 - :func:`requeue_breakdown` — counts per box ``detector`` x
-  ``rejection_reason`` (W8c: nested fields on the ``region_boxes`` list,
+  ``rejection_reason`` (nested fields on the ``region_boxes`` list,
   not the deleted item-level scalars) for the selected cohort (the dry
   run).
 - :func:`apply_requeue` — flips the cohort to a pending status through the
@@ -26,8 +26,8 @@ The pieces:
   (first requeue only, so the original verdict survives repeated passes),
   the rejection reason is cleared, and with ``clear_detection`` every box
   a human hasn't touched (:func:`~src.services.curation.region_boxes.
-  is_human_owned` — created, explicitly rejected or transcribed via the W8a
-  per-box edit routes, W8c M3 fix; an accept of a machine box leaves no
+  is_human_owned` — created, explicitly rejected or transcribed via the
+  per-box edit routes; an accept of a machine box leaves no
   per-box trace) is dropped from
   ``region_boxes`` so the cascade starts fresh; the worker's own
   fresh-detection write later replaces whatever machine-sourced boxes
@@ -154,7 +154,7 @@ def _value_filter(field: str, values: tuple[str, ...]) -> dict[str, Any]:
 def box_values_filter(
     F: RegionFields, *, detectors: tuple[str, ...] = (), reasons: tuple[str, ...] = ()
 ) -> dict[str, Any] | None:
-    """W8c: the detector and rejection-reason selections as ONE nested
+    """The detector and rejection-reason selections as ONE nested
     ``region_boxes`` clause (:func:`~src.services.curation.region_boxes.box_query`),
     so both conditions must hold on the SAME box. Two separate nested clauses
     would match an item whose box A has the detector and whose box B has the
@@ -192,10 +192,10 @@ def box_values_filter(
 def requeue_query(
     sel: RequeueSelection, fields: RegionFields | None = None, *, include_locked: bool = False
 ) -> dict[str, Any]:
-    """W8c: selects on the ``region_boxes`` list, never the deleted
+    """Selects on the ``region_boxes`` list, never the deleted
     single-scalar fields (``bbox_norm``, item-level ``detector`` /
-    ``rejection_reason``) — a fresh W8 write never populates those, so the
-    pre-W8c query silently matched nothing for any item this worker wrote.
+    ``rejection_reason``) — a fresh write never populates those, so the
+    earlier query silently matched nothing for any item this worker wrote.
 
     A human- or import-validated region set (``RegionFields.validated``) is
     excluded unless ``include_locked`` (the reprocess dry run counts those
@@ -274,7 +274,7 @@ async def requeue_breakdown(
     :data:`NONE_BUCKET`), so before this field existed a cohort of
     entirely-boxless items (``no_region_box``/``no_region_visible``/
     unseeded) rendered an empty ``by_detector`` breakdown with no
-    indication why (W8c nit fix; the pre-nested-query version showed an
+    indication why (the pre-nested-query version showed an
     explicit ``(none)`` bucket for this case).
     """
     cfg = config or get_curation_config()
@@ -309,7 +309,7 @@ async def requeue_breakdown(
                     }
                 },
             },
-            # W8c nit fix: a sibling, non-nested filter agg -- counts
+            # A sibling, non-nested filter agg -- counts
             # ITEMS (not boxes), so `total - no_box` is the exact item
             # count that has at least one box, restoring the pre-port
             # "no box at all" visibility a nested agg alone can't give.
@@ -390,7 +390,7 @@ class _Merger:
         update: dict[str, Any] = dict.fromkeys(to_clear)
         box_update: dict[str, Any] = {}
         if target == RegionStatus.PENDING_VERIFICATION:
-            # W8c M2 fix: a terminal item's box(es) are `rejected`, so the
+            # A terminal item's box(es) are `rejected`, so the
             # worker's Path 1 (re-verify a stored `proposed` box) has
             # nothing to act on unless THIS requeue re-proposes them. Only
             # unlocked boxes are re-proposed -- a human's or an import's

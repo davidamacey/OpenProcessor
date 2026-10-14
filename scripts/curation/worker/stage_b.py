@@ -36,7 +36,7 @@ async def stage_b_combined(ctx: PipelineContext, consumer_id: int) -> None:
     """Stage B: batched combined VLM call (class + region-verify + OCR).
 
     Replaces the legacy vlm_visible + vlm_verify two-call
-    cascade with ONE VLM round-trip per crop. W8: every candidate box
+    cascade with ONE VLM round-trip per crop. Every candidate box
     selected for this item (``t.candidates``, 1..N) is drawn as a
     numbered overlay on the parent item JPEG before sending so the
     VLM confirms each one visually in the same call that classifies
@@ -53,7 +53,7 @@ async def stage_b_combined(ctx: PipelineContext, consumer_id: int) -> None:
         ``force_resolve``).
       - otherwise -> :func:`verdicts_to_boxes` resolves each box
         (``accepted`` / ``rejected`` + reason) and the item status
-        follows W8.7's precedence (accepted > false_positive >
+        follows this precedence (accepted > false_positive >
         proposed > rejected > empty). ``combined_bbox_wrong`` counts
         crops where at least one candidate's box was visible-
         elsewhere-rejected.

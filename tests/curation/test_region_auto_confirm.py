@@ -40,11 +40,10 @@ class TestWorkerWrites:
     async def test_streaming_worker_combined_accept_writes_an_accepted_box(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """W8: the combined-call accept path writes the box-list shape
+        """The combined-call accept path writes the box-list shape
         (``region_boxes[i].state == 'accepted'``) AND restores the
         item-level ``region_verified``/``region_auto_confirmed``/
-        ``region_validated`` fields (W8 M2 fix, pipeline-wiring review
-        2026-09-27) -- these stopped being written when the box-list
+        ``region_validated`` fields -- these stopped being written when the box-list
         rewrite landed, going blind every reader that still filters on
         them (regions.py's ``verified`` filter, the training-candidate
         cohorts, region_requeue.py). ``region_validated`` stays human-only
@@ -111,7 +110,7 @@ class TestWorkerWrites:
     ) -> None:
         """M2: the no-VLM-configured accept path (``accept_without_vlm``)
         never calls the VLM -- verified/auto_confirmed must both stay
-        False, the same as the pre-W8 skip-verify write."""
+        False, the same as the old skip-verify write."""
         fake = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
         await _drive(
             tmp_path,

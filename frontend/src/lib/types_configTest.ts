@@ -1,6 +1,6 @@
 /**
- * Wire types for OpenProcessor W5 test-on-crop: `POST /prompt_packs/test`
- * and `POST /region_profiles/test` (any_domain_plan.md §5, §7.5-7.7).
+ * Wire types for test-on-crop: `POST /prompt_packs/test`
+ * and `POST /region_profiles/test`.
  * Neither route writes anything. Pinned key-for-key to the vendored
  * OpenAPI (OpenProcessor f582aa05) by `contract/configTestContract.test.ts`.
  *

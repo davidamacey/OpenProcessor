@@ -1,6 +1,5 @@
 /**
- * W7 (Ignored bucket) / W8 (item-text search) on `/clusters`
- * (docs/design/logic-moves-adoption-plan-2026-09-24.md). No
+ * The Ignored bucket and item-text search on `/clusters`. No
  * `@testing-library/svelte` in this repo (see `searchMode.test.ts`'s
  * header comment for the established convention this file follows), so
  * this is a static source scan of the load-bearing wiring:
@@ -76,5 +75,15 @@ describe('/clusters item-text search (W8)', () => {
     expect(itemTextBranch).toBeGreaterThan(-1);
     expect(embeddingBranch).toBeGreaterThan(-1);
     expect(itemTextBranch).toBeLessThan(embeddingBranch);
+  });
+});
+
+describe('item-text search shows only the error, not the error AND the empty state', () => {
+  it('the empty-state copy is gated on !itemTextError', () => {
+    const block = src.match(
+      /\{#if itemTextLoading[\s\S]*?No crops matched that text\.[\s\S]*?\{:else\}/,
+    )?.[0];
+    expect(block).not.toBeUndefined();
+    expect(block).toMatch(/\{:else if itemTextError\}/);
   });
 });

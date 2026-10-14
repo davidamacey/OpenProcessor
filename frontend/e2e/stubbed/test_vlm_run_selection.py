@@ -1,5 +1,4 @@
-"""OpenProcessor W9 per-run VLM selection and the `/settings` dropdown,
-any_domain_plan.md §7.8; docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md §3.3.
+"""Per-run VLM selection and the `/settings` dropdown.
 
   1. `test_dashboard_auto_label_with_a_picked_external_endpoint` — the
      assist bar's picker shows the served warning and the acknowledgement;

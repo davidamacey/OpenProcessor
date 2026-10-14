@@ -51,7 +51,7 @@ INDEXES = {
     role: f'verify_prj_default__{role}'
     for role in ('images', 'items', 'labels_confirmed', 'classes', 'settings')
 }
-# MJ2 (W2-finish review): op_global_configs (M3) belongs to no project --
+# op_global_configs belongs to no project --
 # OP_GLOBAL_CONFIGS_INDEX=verify_global_configs in the compose file --
 # but still must carry the verify_ prefix, so it goes through the same
 # static prefix assertion below as every project-scoped index.

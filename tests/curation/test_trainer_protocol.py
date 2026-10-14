@@ -580,7 +580,7 @@ def test_unattached_gpu_request_fails_instead_of_mis_scheduling(
 
 
 # =============================================================================
-# Trainer capabilities file (W5.2 -- the API's preflight reads this)
+# Trainer capabilities file (the API's preflight reads this)
 # =============================================================================
 
 
@@ -633,7 +633,7 @@ def test_write_trainer_capabilities_survives_cuda_probe_failure(
 
 
 class TestCudaProbeIsolation:
-    """F-47: the idle daemon process must never itself call into CUDA."""
+    """The idle daemon process must never itself call into CUDA."""
 
     def test_probe_runs_in_a_subprocess_not_in_process(
         self, monkeypatch: pytest.MonkeyPatch

@@ -1,9 +1,7 @@
-"""W8 multi-box regions (docs/design/w8-multibox-frontend-plan-2026-09-26.md).
-Supersedes the pre-W8 single-box nudge test this file originally covered —
-the region slot's editor is `MultiBoxCanvas` now, not the legacy
+"""Multi-box regions: nudging a box.
+The region slot's editor is `MultiBoxCanvas` now, not the legacy
 `BboxCanvas`/"Save bbox" button, and edits flush through
-`PUT /crops/{id}/regions`; the old single-box route is gone (W8.8, no
-backward compatibility, owner decision 2026-09-26).
+`PUT /crops/{id}/regions`; the old single-box route is gone.
 
 Enter edit (E) -> ArrowRight x3 nudges the selected box -> still in edit
 mode, same crop -> Enter -> exactly one PUT /crops/{id}/regions, to the

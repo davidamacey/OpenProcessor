@@ -1,5 +1,5 @@
 /**
- * `/settings/models` mounted against stubbed W9 routes: absent (one line,
+ * `/settings/models` mounted against stubbed VLM routes: absent (one line,
  * no other `/vlm/*` request) when the registry 404s; otherwise the active
  * panel with the served health block, the endpoints, the local model and
  * the model choices; "Activate here" for an external endpoint shows the

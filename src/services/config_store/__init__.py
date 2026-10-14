@@ -1,7 +1,6 @@
 """The config store: OpenSearch-backed prompt packs and region
 profiles with a global revision counter, per-process snapshot and hot
-reload -- no CRUD routes live here yet. See
-``docs/design/openprocessor_internal/any_domain_plan.md`` §3/§4/§9 W2.
+reload -- no CRUD routes live here yet.
 """
 
 from __future__ import annotations

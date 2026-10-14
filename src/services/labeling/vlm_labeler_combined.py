@@ -56,7 +56,7 @@ class CombinedOps(VlmLabelerCore):
                 None / [] when the caller only wants the region-side
                 answers; ``class_id`` returns None.
             region_bboxes_norm: This item candidate region bboxes in
-                normalized crop coords ``[x1, y1, x2, y2]`` (W8: always a
+                normalized crop coords ``[x1, y1, x2, y2]`` (always a
                 list, possibly empty/None). Empty/None when no candidate
                 exists — the VLM still answers ``region_visible``.
             draw_overlay: If True (default), draw the numbered region

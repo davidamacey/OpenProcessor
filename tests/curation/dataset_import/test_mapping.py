@@ -1,4 +1,4 @@
-"""W10.5/W10.17: class-name mapping — never by index."""
+"""Class-name mapping — never by index."""
 
 from __future__ import annotations
 
@@ -68,7 +68,7 @@ class TestResolveMapping:
     def test_never_by_index(self) -> None:
         """Dataset ``{0: truck, 1: car}`` against a registry
         ``[car(0), truck(1)]`` imports trucks as truck, not car — the
-        bug the pre-W10 index-based importer had."""
+        bug an index-based importer would have."""
         entries = [
             ClassMappingEntry(dataset_class='truck', action='map', class_id=1),
             ClassMappingEntry(dataset_class='car', action='map', class_id=0),

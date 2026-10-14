@@ -1,6 +1,6 @@
 /**
  * The activation impact, mounted: the served counts and the by-profile
- * table; "Re-run" only when the server suggests one AND serves W10's
+ * table; "Re-run" only when the server suggests one AND serves
  * Reprocess; the served request goes out as served, dry run first, and
  * the apply only after a confirm; the served counts are what
  * the operator reads.

@@ -216,7 +216,7 @@ def setup_trt_builder(
     Returns:
         Tuple of (builder, config, network, logger)
     """
-    # F-09/F-12 (fresh-start E2E findings 2026-09-25): this script runs
+    # This script runs
     # under /opt/venv-y11's deliberately CPU-only torch (see
     # requirements-export-y11.txt), so the ONNX-export step above always
     # passes device='cpu' to Ultralytics. Ultralytics' own
@@ -1292,7 +1292,7 @@ def print_summary(results: list[dict[str, Any]]) -> None:
 
 
 def _any_export_failed(results: list[dict[str, Any]]) -> bool:
-    """F-12: whether any model/format in ``results`` reports an error.
+    """Whether any model/format in ``results`` reports an error.
 
     ``main()`` used to always exit 0 regardless of what ``results``
     said -- a total, silent failure (e.g. every format's TensorRT build

@@ -1,5 +1,5 @@
 /**
- * 
+ *
  * `GET {API_PREFIX}/classes` now serves `thresholds`, `reserved_hotkeys` and
  * a per-class `adequacy` string alongside the class list, and
  * `POST {API_PREFIX}/classes/merge?dry_run=true` reports the blast radius

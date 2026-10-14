@@ -264,9 +264,9 @@ class TestRouting:
     async def test_pending_verify_rejected_is_terminal_not_a_sam3_fallback(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """W8: a combined-verify reject on the existing candidate is a
+        """A combined-verify reject on the existing candidate is a
         terminal ``verify_rejected`` write for this pass -- there is no
-        intra-pass fallback to the secondary segmenter (pre-W8's
+        intra-pass fallback to the secondary segmenter (the old
         two-call ``verify_region`` cascade did that; the single combined
         call doesn't)."""
         F = get_region_fields()
@@ -354,7 +354,7 @@ class TestRouting:
     async def test_pending_car_detector_rejected_is_terminal_not_a_sam3_fallback(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Same W8 architecture note as the pending_verify case: a primary-
+        """Same note as the pending_verify case: a primary-
         detector hit that the combined VLM call rejects is terminal, not a
         trigger to try the secondary segmenter within the same pass."""
         F = get_region_fields()
@@ -430,7 +430,7 @@ class TestRouting:
         # segmenter miss is never recorded on its own -- the segmenter's
         # global attempt folds into the text-hint branch, which records
         # its own miss tag instead (pre-existing runner.py behavior, not
-        # touched by this pass -- see the W8 handback report).
+        # touched by this pass).
         assert any(f'{_profile().ocr_rec_model}:text_hint:miss' in s for s in chain)
 
     @pytest.mark.asyncio

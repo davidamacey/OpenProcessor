@@ -1,4 +1,4 @@
-"""WP-1.5 (#212): when the cluster retrain starts, with a fake clock and fake
+"""Issue #212: when the cluster retrain starts, with a fake clock and fake
 ingest-status observations. Scheduling only: what a retrain computes is
 pinned by ``test_cluster_schedule_equivalence.py``."""
 

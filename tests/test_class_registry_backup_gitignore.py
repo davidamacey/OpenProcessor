@@ -1,4 +1,4 @@
-"""F-45 (fresh-start E2E findings 2026-09-25): class-registry backup
+"""Class-registry backup
 snapshots must be gitignored.
 
 Every class-registry write (``ClassRegistry._write`` in

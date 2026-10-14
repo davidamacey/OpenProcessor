@@ -1,5 +1,5 @@
 /**
- * W0 naming-sweep finding m9: SlotGallery's region-gallery Detector <select>
+ * SlotGallery's region-gallery Detector <select>
  * used to hardcode `tag_detector_v1`/`sam3`/`paddleocr_det_trt`/`human`
  * options. Its options are now the served vocabulary's filterable
  * detectors (`GET {API_PREFIX}/regions/vocabulary`, `regionVocabularyStore`).

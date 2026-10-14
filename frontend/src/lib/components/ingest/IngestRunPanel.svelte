@@ -229,7 +229,7 @@
   {/if}
 
   {#if run.totals.queued === 0 && run.totals.skipped_known > 0 && run.state === 'done'}
-    <!-- F-59: every selected file was already indexed, so nothing was
+    <!-- Every selected file was already indexed, so nothing was
          sent. Say so instead of rendering nothing. -->
     <p class="text-xs text-zinc-300" data-testid="ingest-all-skipped">
       Nothing uploaded: {run.totals.skipped_known} already indexed (the backend already has

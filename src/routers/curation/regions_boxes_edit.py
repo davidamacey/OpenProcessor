@@ -137,7 +137,7 @@ class RegionConflictError(Exception):
 
 def _check_text_allowed(elements: list[BoxWriteElement] | list[Any], profile: Any) -> None:
     """422 ``region_text_disabled`` when any element sets ``text`` on a
-    profile that doesn't read text (W8.8; moved off ``region_meta``)."""
+    profile that doesn't read text (moved off ``region_meta``)."""
     if profile.reads_text:
         return
     if any(getattr(e, 'text', None) is not None for e in elements):
@@ -151,7 +151,7 @@ def _check_text_allowed(elements: list[BoxWriteElement] | list[Any], profile: An
 
 
 def _check_box_states(route: str, elements: list[Any]) -> None:
-    """W8c: 422 ``region_box_edits.validate_box_state`` per element instead
+    """422 ``region_box_edits.validate_box_state`` per element instead
     of only serving ``BOX_STATE_ROUTES`` on ``GET .../regions/statuses``
     without ever enforcing it on write."""
     for e in elements:
@@ -287,8 +287,8 @@ async def set_crop_regions(
     bbox_norm}`` for a moved box (keeps state; a moved box is human
     geometry, an unmoved one a confirmation), ``{box_id, state}`` /
     ``{box_id, bbox_norm, state}`` to change state too, and ``{box_id:
-    null, bbox_norm, state?}`` for a new box (default ``accepted``, W8
-    pin 2). ``frame: "parent"`` projects into the source frame
+    null, bbox_norm, state?}`` for a new box (default ``accepted``).
+    ``frame: "parent"`` projects into the source frame
     server-side. Optional ``region_status`` applies a
     whole-set status to the built list in the same write;
     an empty list is the human "no region visible".

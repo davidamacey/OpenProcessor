@@ -110,7 +110,7 @@ def verify_regions_update(
     if pack_stamp is not None:
         update['vlm_prompt_pack'] = pack_stamp
     if vlm_stamp:
-        # Which endpoint/model answered (W9 provenance).
+        # Which endpoint/model answered (provenance).
         update.update(vlm_stamp)
     return update
 

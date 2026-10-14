@@ -1,7 +1,7 @@
-"""Class mapping of a combine (projects plan section 6, W10.19).
+"""Class mapping of a combine (projects plan section 6).
 
 The target registry is new, so a ``create`` row defines a target class and a
-``map`` row names one by ``new_class_name``. Everything else is W10's:
+``map`` row names one by ``new_class_name``. Everything else is the import's:
 :func:`~src.services.curation.dataset_import.mapping.suggest_mapping` for the
 suggestions and :func:`~...resolve_mapping` for completeness and the
 ``map`` / ``create`` / ``skip`` / ``region`` vocabulary, applied to the target
@@ -86,7 +86,7 @@ def _ordered_targets(
 def _convert(
     row: ClassMappingEntry, ids: Mapping[str, int], project: str, errors: list[CombineIssue]
 ) -> ClassMappingEntry | None:
-    """A combine row as the W10 row ``resolve_mapping`` understands: both
+    """A combine row as the import row ``resolve_mapping`` understands: both
     ``create`` and ``map`` become a ``map`` onto a target class id."""
     if row.action in ('create', 'map'):
         name = (row.new_class_name or row.dataset_class).strip()
@@ -159,7 +159,7 @@ def resolve_combine_mapping(
 def suggest_combine_mapping(
     request: CombineRequest, class_counts: Mapping[str, Mapping[str, int]]
 ) -> dict[str, list[ClassMappingEntry]]:
-    """W10's name-based suggestions: a class whose name (exact, else any
+    """The import's name-based suggestions: a class whose name (exact, else any
     case) already exists among the classes suggested so far maps onto it,
     anything else is created under its own name."""
     views: list[RegistryClassView] = []

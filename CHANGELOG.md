@@ -60,12 +60,12 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   environment, ingest through `/ingest/upload` and `/ingest/batch`, Triton statistics,
   perf_analyzer points, endpoints and VLM throughput as one JSON; the v0.5.0 numbers are in
   `docs/PERFORMANCE.md` and `docs/benchmarks/` (#45, #40).
-- Wave 0 full-pipeline throughput probes: `scripts/bench/wave0_suite.py` (client concurrency and
+- Wave 0 full-pipeline throughput probes: `scripts/bench/ingest_sweep_suite.py` (client concurrency and
   batch sweep, Triton instance-count, queue-delay and preferred-batch arms applied and restored
   through the model store, per-endpoint stage cost for faces, OCR and the combined analyze route,
   py-spy attribution of the API container, per-GPU clocks, power, foreign load and host CPU),
   `scripts/bench/os_write_ceiling.py` (OpenSearch bulk write ceiling with the real mapping) and
-  `wave0_report.py` (the tables). `scripts/datasets/fetch_hires_set.py` pins a 500-image set of
+  `ingest_sweep_report.py` (the tables). `scripts/datasets/fetch_hires_set.py` pins a 500-image set of
   12 to 24 MP public photos (`manifests/commons_hires_500.json`). Results and the binding resource
   per stage are in `docs/PERFORMANCE.md` ("Wave 0: full-pipeline throughput") (#45, #210, #230).
 - `scripts/bench/parity.py` with `capture` and `compare` subcommands: the accuracy gate every
@@ -133,6 +133,12 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Changed
 
+- Tests and scripts are named by behavior, not by the pass that wrote them: the activation probes are
+  `tests/curation/activation/` (nine files), the clone probes `tests/projects/test_clone_settings_real_flow.py`
+  and friends, `scripts/bench/wave0_*.py` are `scripts/bench/ingest_sweep_*.py` (the published
+  `docs/benchmarks/v060_wave0_*.json` keep their names), and the review-id file and test names under
+  `tests/curation/` lost their suffixes. Comments and docstrings no longer carry wave, round or
+  work-package ids (`scripts/codegen/check_process_ids.py` now enforces that with an empty baseline).
 - The region field that keeps the status an item had before a region requeue is now
   `region_status_before_requeue` (was `region_status_legacy`). Values already stored under the old
   name are not read; they only recorded a past requeue.

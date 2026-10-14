@@ -712,8 +712,7 @@
     return 'yolo26';
   }
 
-  // -- Training-cohort picker (2026-09-24 logic-moves W6, item 13;
-  // originally P2.14, docs/genericization-plan-2026-09-13.md §9.3) -----
+  // -- Training-cohort picker ---------------------------------------------
   //
   // Cohort definitions now come from the backend's own `GET
   // {API_PREFIX}/training_cohorts?class_id=` — `id`/`label`/`description`/
@@ -840,7 +839,7 @@
    *  `{API_PREFIX}/training_cohorts`, or a tier-2 declared fallback
    *  compiled the same way) to the one existing api.ts function that
    *  already answers that endpoint shape — keyed structurally by
-   *  `cohortEndpointKind()` rather than a path string-equality check (Wave 2 C12 — see cohorts.ts's doc comment
+   *  `cohortEndpointKind()` rather than a path string-equality check (see cohorts.ts's doc comment
    *  on `cohortEndpointKind` for why the old check silently broke on a
    *  base-path rename). Anything else (a future slot's endpoint cohort
    *  naming a path none of these three recognize) fails closed to an
@@ -1316,7 +1315,7 @@
     />
   {/if}
 
-  <!-- Form. F-63(b): stays mounted (disabled) while a run is active, so
+  <!-- Form. Stays mounted (disabled) while a run is active, so
        the operator's choices survive the run instead of resetting to
        the page defaults when it finishes. -->
   {#if isActive}
@@ -1480,8 +1479,8 @@
     </div>
   </section>
 
-  <!-- Training cohorts (2026-09-24 logic-moves W6; originally P2.14)
-       — GET {API_PREFIX}/training_cohorts?class_id=
+  <!-- Training cohorts —
+       GET {API_PREFIX}/training_cohorts?class_id=
        serves both the region profile's cohorts AND every other
        class's 4 class-agnostic core cohorts; a tier-2 slot's own
        declared cohort fills in only if the server didn't already send

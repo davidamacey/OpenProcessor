@@ -74,7 +74,7 @@ dynamic_batching {
 
 instance_group [
   {
-    # F-19 (fresh-start E2E findings 2026-09-25): count 4 measured at
+    # Count 4 measured at
     # ~6.8 GB; the default core loadout has to share a 48 GB card with
     # the VLM + segmenter + trainer. count: 1 is ~1.7 GB -- raise this
     # on a card with headroom to spare (see README "GPU sizing").

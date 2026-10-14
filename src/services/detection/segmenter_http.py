@@ -1,4 +1,4 @@
-"""One-shot segmenter call for the API process (W5, ``POST /region_profiles/test``).
+"""One-shot segmenter call for the API process (``POST /region_profiles/test``).
 
 The detection worker talks to the segmenter through
 ``scripts/curation/worker/client.py``, which carries a per-host circuit

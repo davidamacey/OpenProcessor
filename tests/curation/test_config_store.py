@@ -1,6 +1,5 @@
-"""W2: the config store's low-level primitives (OCC, revision bump,
-per-process snapshot, hot reload) --
-docs/design/openprocessor_internal/any_domain_plan.md §3.6/§9 W2."""
+"""The config store's low-level primitives (OCC, revision bump,
+per-process snapshot, hot reload)."""
 
 from __future__ import annotations
 
@@ -279,7 +278,7 @@ async def test_refresh_forces_the_index_current_before_searching_configs() -> No
 
 
 def test_active_config_response_serves_source_activated_at_and_applied() -> None:
-    """Cropwright W3 UI (C2/Q5, any_domain_plan.md §7.2): ActiveConfigResponse
+    """ActiveConfigResponse (the Cropwright UI reads it)
     must carry `source`, `activated_at` and `applied[]` -- not just
     `axis`/`active`/`previous`/`config_revision`/`stale`."""
     from src.routers.curation._config_common_models import (
@@ -405,7 +404,7 @@ async def test_poll_all_active_projects_refreshes_every_project_not_just_one() -
 async def test_startup_bootstrap_config_store_safe_starts_poll_task_unbound(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """MJ1 (W2-finish review, 2026-09-27): ``src.main``'s lifespan runs
+    """``src.main``'s lifespan runs
     unbound -- no project is EVER bound at process startup -- so the old
     code's ``get_config_store(mode='live')`` + ``store.refresh(client)``
     "warm the bound project's store" step always raised
@@ -464,8 +463,7 @@ async def test_startup_bootstrap_config_store_safe_starts_poll_task_unbound(
 async def test_startup_bootstrap_config_store_safe_retries_until_opensearch_reachable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """MJ3 (W2-finish review, 2026-09-27, fix-on-fix): reproduces the
-    reviewer's exact probe P2/P3 -- ``indices.exists`` raises
+    """Reproduces a review probe: ``indices.exists`` raises
     (OpenSearch unreachable at startup, or the same shape as a lost
     index-create race) on the first few calls, then succeeds. The old
     code ran ``ensure_global_configs_index`` inline before

@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * Import options (W10.14 `DatasetImportOptions`). Every enum control
+   * Import options (`DatasetImportOptions`). Every enum control
    * renders the served vocabulary; an option left at "Server default" is
    * omitted from the request, so the server's own default applies (plan
    * §8 question 6).

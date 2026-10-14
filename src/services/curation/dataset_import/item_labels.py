@@ -1,4 +1,4 @@
-"""Item-class labels of one image (W10.6 steps 2-4): match the dataset's
+"""Item-class labels of one image: match the dataset's
 boxes to the image's existing items, decide per box what the import does,
 and apply it through the single class-label writer.
 

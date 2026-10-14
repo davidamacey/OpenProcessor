@@ -1,7 +1,6 @@
-"""W2: ``PUT/GET /curation/settings`` bridges ``prompt_pack`` /
+"""``PUT/GET /curation/settings`` bridges ``prompt_pack`` /
 ``detection_profile`` through the config store's activation instead of
-the generic settings-doc ``defaults`` map --
-any_domain_plan.md §3.7/§9 W2."""
+the generic settings-doc ``defaults`` map."""
 
 from __future__ import annotations
 
@@ -95,7 +94,7 @@ def test_put_prompt_pack_null_deactivates(app_client: TestClient) -> None:
 def test_put_detection_profile_off_and_on(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """W2: detection_profile is now settable through the store, unlike
+    """``detection_profile`` is now settable through the store, unlike
     the prior read-only behavior."""
     from src.config import DetectionProfile
     from src.services.detection import profile_registry

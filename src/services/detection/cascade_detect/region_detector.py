@@ -120,7 +120,7 @@ def _decode_yolo_output(
     )
 
 
-# Pre-NMS safety cap on a raw detector output before it reaches W8's
+# Pre-NMS safety cap on a raw detector output before it reaches
 # ``select_region_candidates`` (region_candidates.py): a 640-input YOLO
 # head emits thousands of anchors, and greedy NMS there is O(n^2) --
 # keeping only the top-scoring ``_MAX_PRE_NMS_ANCHORS`` bounds that cost
@@ -140,7 +140,7 @@ def _decode_yolo_output_multi(
     source: str = '',
 ) -> list[RegionCandidate]:
     """Decode a YOLOv11-shaped ``[1, 5, N]`` raw output to every candidate
-    region above ``confidence_floor`` (W8: multi-candidate detector leg).
+    region above ``confidence_floor`` (the multi-candidate detector leg).
 
     Same geometry pipeline as :func:`_decode_yolo_output` (letterbox
     undo, crop-frame normalization, degenerate-box drop) but keeps every
@@ -330,7 +330,7 @@ class RegionDetector:
         )
 
     async def detect_multi(self, crop_jpeg: bytes) -> list[RegionCandidate]:
-        """W8: every region candidate above the confidence floor (not just
+        """Every region candidate above the confidence floor (not just
         the top one), for :func:`~src.services.detection.region_candidates
         .select_region_candidates` to floor/NMS/cap.
 
@@ -363,7 +363,7 @@ class RegionDetector:
         self,
         crops_jpeg: list[bytes],
     ) -> list[list[RegionCandidate]]:
-        """W8: :meth:`detect_batch`'s multi-candidate counterpart.
+        """Run :meth:`detect_multi` over a batch of crops.
 
         Returns a list aligned 1:1 with ``crops_jpeg``; each entry is
         every candidate :meth:`detect_multi` found for that crop (``[]``

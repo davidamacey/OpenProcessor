@@ -361,7 +361,7 @@ class SegmenterClient:
         return max(cands, key=lambda c: c.score) if cands else None
 
     async def segment_multi(self, crop_jpeg: bytes) -> list[RegionCandidate]:
-        """Segment one crop, keeping every candidate (W8 multi-candidate leg).
+        """Segment one crop, keeping every candidate.
 
         The crop-stage call: the client-level prompt and candidate cap, no
         score floor and no masks requested, so the payload is the one the

@@ -363,7 +363,7 @@ class RowCollector:
             _apply_import_fields_from(row, src)
             status = str(src.get(f.status) or '')
             if status in POSITIVE_REGION_STATUSES:
-                # W8-cleanup: an item can carry more than one accepted box
+                # An item can carry more than one accepted box
                 # now (region_boxes, not the retired single region_bbox_norm
                 # scalar) -- every accepted box on this item becomes its own
                 # label line on the frame.
@@ -421,10 +421,10 @@ class RowCollector:
             _apply_import_fields_from(row, src)
             status = str(src.get(f.status) or '')
             if status in POSITIVE_REGION_STATUSES:
-                # W8-cleanup: every accepted box on this item that lands
+                # Every accepted box on this item that lands
                 # inside its own parent crop becomes a label line; if none
                 # do, this item is dropped entirely (unchanged behavior
-                # from the pre-W8 single-box case).
+                # from the single-box case).
                 for b in accepted(read_boxes(src, f)):
                     box = reproject_into_crop(list(b.bbox_norm), parent)
                     if box is not None:

@@ -4,7 +4,7 @@
  * `any_domain_plan.md` §7.1 (the shared models), §7.2 and §7.3 (the common
  * envelopes: revisions, clone, update, activate).
  *
- * Built against the frozen spec before the backend lands W3/W4, so nothing
+ * Built against the frozen spec before the backend lands prompt packs and region profiles, so nothing
  * here is pinned to the vendored OpenAPI yet.
  */
 
@@ -74,7 +74,7 @@ export interface AppliedRuntime {
 
 /** `GET /{resource}/active`, and the activate / rollback / deactivate
  *  response. `source`, `activated_at` and `applied` are served by the
- *  backend since W2 landed (`applied` is `[]` when no runtime has
+ *  backend (`applied` is `[]` when no runtime has
  *  reported); the panels render them as served, never inferred. */
 export interface ActiveConfigResponse {
   axis: ConfigAxis;
@@ -163,7 +163,7 @@ export interface ConfigErrorDetail {
   current?: ActiveRef | null;
   axis?: string | null;
   valid_ids?: string[] | null;
-  // W9 / P4 / W5 refusals (contract f582aa05): each present only on the
+  // VLM / combine / test-on-crop refusals (contract f582aa05): each present only on the
   // codes that carry it.
   endpoint?: string | null;
   activate_via?: string | null;

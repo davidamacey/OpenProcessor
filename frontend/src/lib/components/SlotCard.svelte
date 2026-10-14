@@ -240,7 +240,7 @@
           candidate
         </span>
       {:else if boxCount != null && boxCount > 0}
-        <!-- W8 multi-box: box count (+ this row's own box state, when the
+        <!-- Multi-box: box count (+ this row's own box state, when the
            browse route selected a specific box via region_box_id). -->
         <span
           class="absolute top-1 right-1 rounded border border-zinc-600/60 bg-zinc-800/85 px-1 py-0.5 text-[9px] font-semibold text-zinc-200"
@@ -256,7 +256,7 @@
          width; the disagree badge wraps under it instead of squeezing the
          value to "6…" on a narrow card. C6: plain text, no emoji glyph. -->
       <div class="flex min-w-0 flex-wrap items-center justify-between gap-1 font-mono">
-        <!-- OpenProcessor W1 (text-free regions): a slot with no text
+        <!-- Text-free regions: a slot with no text
            capability at all never renders a text value/row, not even a
            "—" placeholder — showing one implied the profile reads text
            when it structurally doesn't. -->

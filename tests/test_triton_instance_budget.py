@@ -54,7 +54,7 @@ def _python_gpu_models() -> list[str]:
 
 
 def test_ocr_pipeline_ships_more_than_one_instance() -> None:
-    # Wave 0 measured 21 images/s at one instance, 42 at two, 80 at four.
+    # Measured 21 images/s at one instance, 42 at two, 80 at four.
     assert _instance_count('ocr_pipeline') >= 2
 
 

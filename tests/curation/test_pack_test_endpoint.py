@@ -1,4 +1,4 @@
-"""W5 (§5.1): ``POST /prompt_packs/test`` runs one call of a draft or saved
+"""``POST /prompt_packs/test`` runs one call of a draft or saved
 pack over stored crops through the production labeler and previews each
 item's write. It writes nothing."""
 

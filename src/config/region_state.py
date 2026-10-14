@@ -134,8 +134,8 @@ HUMAN_WRITABLE_STATUSES: frozenset[RegionStatus] = frozenset(
 class BoxStateInfo:
     """What one per-box ``state`` means, served on ``box_states``.
 
-    ``tone`` is a semantic meaning, not a CSS color (W8.7, Cropwright
-    ask, coordinator-approved 2026-09-26): Cropwright maps tone to its
+    ``tone`` is a semantic meaning, not a CSS color (a Cropwright
+    ask): Cropwright maps tone to its
     own theme palette instead of keeping its own state->color rules.
     """
 

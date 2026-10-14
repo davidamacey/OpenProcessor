@@ -1124,7 +1124,7 @@ suspect. This section measures what the whole pipeline can do on one GPU at full
 limits it, stage by stage: a client and Triton sweep, a set of large photos, the stages `ingest`
 does not call (faces, OCR), where the API CPU goes, and how fast OpenSearch takes the documents.
 Raw JSON: `docs/benchmarks/v060_wave0_*.json`; the tables are rendered by
-`scripts/bench/wave0_report.py`. Medians with the minimum and maximum of 3 repetitions in
+`scripts/bench/ingest_sweep_report.py`. Medians with the minimum and maximum of 3 repetitions in
 parentheses.
 
 **Headline.**
@@ -1551,7 +1551,7 @@ request). Foreign load on GPU 2 was 0.0 percent in all 42 measured runs; whole-h
 was 16 to 22 percent (A) and 18 to 34 percent (B) before the changes, 15 to 17 and 54 to 78 percent
 after them (the difference is this stack's own load: it now uses the cores it left idle). The
 "before" rows are the code of `origin/main` plus the two Wave 0 branches, measured in the same
-session as the "after" rows. Commands: `scripts/bench/wave0_suite.py --phases sweep` with
+session as the "after" rows. Commands: `scripts/bench/ingest_sweep_suite.py --phases sweep` with
 `--sweep-points 32x4,32x16,32x32 --modes upload --limit 1000` and
 `--sweep-points 8x8,8x16,8x32,8x64 --modes batch`.
 
@@ -1776,7 +1776,7 @@ One RTX A6000 (GPU 2), the published v0.5.0 images with the checkout's `src/` mo
 an isolated compose project on loopback, OpenSearch 8 GB heap, 32 API workers, a fresh stack per
 configuration, policy `all`. Set A: the pinned COCO set (2,000 images, `coco_bench_2000.json`),
 `scripts/bench/baseline_suite.py --phases env,ingest --reps 3 --skip-cluster --skip-settle` (32 images
-per request, 4 clients; upload and batch). Set B: the 500 pinned photos, `scripts/bench/wave0_suite.py
+per request, 4 clients; upload and batch). Set B: the 500 pinned photos, `scripts/bench/ingest_sweep_suite.py
 --phases sweep --sweep-points 8x16 --modes batch`. Configurations: **base** is `origin/main` with the
 detector plan of the v0.5.0 install (Sep 26 build) and an FP16 PE plan from `build_pe_trt.sh`;
 **detector uint8** is the first commit of this change (PE still FP32); **final** is both. The uint8
@@ -2051,7 +2051,7 @@ repeated in a later launch.
 The PE image encoder is about 99 percent of the GPU work of `/ingest`, and one RTX A6000 tops out
 near 23 images per second on 640 x 480 frames (Wave 0). This section measures running the encoder
 on several cards. Medians with the minimum and maximum of 3 repetitions in parentheses. Raw JSON
-and logs stay in the scratch directory of the run; the commands are `scripts/bench/wave0_suite.py
+and logs stay in the scratch directory of the run; the commands are `scripts/bench/ingest_sweep_suite.py
 --phases env,sweep --modes batch --reps 3 --sweep-points 32x16` (set A) and `8x16` (set B),
 `perf_analyzer` for the engine-only rows, and `scripts/bench/pe_gpu_parity.py`.
 
@@ -2686,7 +2686,7 @@ does the packing across concurrent requests; the fix is to have concurrent reque
 | GPU | RTX A6000, GPU 2, 0.0 percent foreign SM share in every counted repetition; another project held GPU 0 at 100 percent and was not touched. SM clock 1,416-1,444 MHz (c16), 1,449-1,482 MHz (c4) |
 | Host | 48 logical cores shared with other projects; 1-minute load 5-9 on the c16 and c4 repetitions, 12-20 at c32, 14-25 on set B; host 12-15 percent busy (set A, c4 and c16) |
 | Stack | project `xbatch`: Triton, API (the published v0.5.0 image with this checkout's `src/` mounted), OpenSearch 8 GB heap, 32 API workers, loopback ports; the uint8 FP16 PE plan of `ref-u8fp16` (sha256 `a4feb7df...`), `pe_image_encoder` dynamic batcher `preferred_batch_size: [4, 8, 16, 32]`, `max_queue_delay_microseconds: 15000` (unchanged) |
-| Load | set A: 2,000 COCO images, `POST /ingest/batch`, 32 images per request, policy `all`, 1 warm-up and 3 counted repetitions (`wave0_suite.py --phases env,sweep --sweep-points 32x16,32x4 --modes batch --skip-cluster --skip-settle`); set B: 500 photos, 8 per request, 16 clients; the embed bench is `scripts/bench/embed_missing_bench.py` (500 images ingested, then 3 rewrites of every crop and frame vector) |
+| Load | set A: 2,000 COCO images, `POST /ingest/batch`, 32 images per request, policy `all`, 1 warm-up and 3 counted repetitions (`ingest_sweep_suite.py --phases env,sweep --sweep-points 32x16,32x4 --modes batch --skip-cluster --skip-settle`); set B: 500 photos, 8 per request, 16 clients; the embed bench is `scripts/bench/embed_missing_bench.py` (500 images ingested, then 3 rewrites of every crop and frame vector) |
 
 #### Measurement first: PE batch sizes Triton sees today (set A, unchanged ingest code)
 

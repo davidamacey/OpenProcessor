@@ -140,7 +140,7 @@ async def _target(client: Any, name: str, revision: int | None) -> VlmEndpoint:
 
 #: "No override supplied: pair against the project's currently STORED
 #: pack / profile". A real ``None`` override means "that side is being
-#: cleared in this same request" (the R5-1 lesson: never fall back to the
+#: cleared in this same request" (never fall back to the
 #: stored value for a side a combined request is changing).
 UNSET: Any = object()
 

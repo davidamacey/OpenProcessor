@@ -4,7 +4,7 @@ Every human class-label write (``label_crop``, ``batch_label_crops``
 (``src/routers/curation/crops.py``), ``move_crops``, and
 ``POST /review/new_class_proposals/resolve``
 (``src/routers/curation/review_resolve.py``)) and every dataset-import
-class-label write (W10, ``dataset_import/job.py``) go through this module.
+class-label write (``dataset_import/job.py``) go through this module.
 There is no second dict literal anywhere else that sets
 ``class_validated: True`` together with a human/import ``class_source`` —
 ``tests/test_class_label_single_writer.py`` is the gate.
@@ -61,8 +61,8 @@ class ItemLabel:
     ``"human"`` -> ``class_source=HUMAN_CLASS_SOURCE``; ``"import"`` ->
     ``class_source=LABEL_IMPORT_CLASS_SOURCE`` (``external_label``),
     ``label_source=LABEL_SOURCE_IMPORT``. ``validated=False`` is only
-    valid for ``source="import"`` (``options.label_trust: "suggestion"``,
-    W10.10): the machine pipeline may still relabel it, so it must not be
+    valid for ``source="import"`` (``options.label_trust: "suggestion"``):
+    the machine pipeline may still relabel it, so it must not be
     locked (:func:`src.clients.occ.is_locked_class`).
     """
 
@@ -148,13 +148,11 @@ def class_label_update(current: dict[str, Any], label: ItemLabel) -> dict[str, A
     class-label writer the AST gate
     (``tests/test_class_label_single_writer.py``) checks for.
 
-    W10 fix-pass correction (Opus review 2026-09-28, minor m10): dataset
-    import's `import_dataset()` (`dataset_import/job.py`) does NOT call
-    this on its update path — it goes through `occ_upsert_bulk`'s
-    generic `_merge_preserving_human` guard instead (now with an
-    explicit `is_locked_item` pre-filter, see the W10 fix-pass CHANGELOG
-    entry), which has no restorable snapshot. Routing dataset import's
-    update path through this function for a real snapshot is future
+    Note: dataset import's `import_dataset()` (`dataset_import/job.py`)
+    does NOT call this on its update path — it goes through
+    `occ_upsert_bulk`'s generic `_merge_preserving_human` guard instead
+    (now with an explicit `is_locked_item` pre-filter), which has no
+    restorable snapshot. Routing dataset import's update path through this function for a real snapshot is future
     work, not done this pass.
     """
     from src.services.curation.history import record_class_snapshot

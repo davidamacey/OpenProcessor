@@ -66,7 +66,7 @@ async def test_preserve_union_keeps_anything_test_in_any_source(world: World) ->
     store, target = await run_job(world, world.request(['cars-a', 'cars-b'], MAPPING))
     images = by_origin(world)
     expect_test = {
-        images[ids['a_test']]['image_id'],  # the W10 test split
+        images[ids['a_test']]['image_id'],  # the test split
         images[ids['a_frozen']]['image_id'],  # frozen in A itself
         images[ids['a_shared']]['image_id'],  # B froze its copy, A's was train
     }

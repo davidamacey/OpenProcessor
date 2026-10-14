@@ -1,7 +1,7 @@
 """Backend selection + fallback for the PE text encoder.
 
 :class:`src.clients.pe_encoder.PEEncoder` picks a text backend at warm-up.
-F-07 remainder (fresh-start E2E findings 2026-09-25, round 2): ``auto``
+``auto``
 now tries Triton's shared ``pe_text_encoder`` first and falls back to a
 **lazily-loaded** in-process PyTorch backend -- it no longer even looks at
 the in-process ONNX Runtime path. That in-process ONNX backend used to
@@ -322,8 +322,7 @@ class TestBackendSelection:
         assert torch_backend.calls == 1
 
     def test_auto_does_not_eagerly_load_torch_at_warm_time(self, tmp_path, monkeypatch) -> None:
-        """F-07 (fresh-start E2E findings, 2026-09-25).
-
+        """
         Every uvicorn worker calls ``warm_text_encoder()`` from the FastAPI
         lifespan at startup. Before this fix, ``auto`` mode's fallback path
         called the ~2.7 GB ``pe.CLIP`` loader synchronously inside

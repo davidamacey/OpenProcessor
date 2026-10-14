@@ -8,7 +8,7 @@ background images) and reports recall / precision / F1 / mean IoU, the
 false-positive gate on background images, and why each missed box was
 missed.
 
-Coordinate frames. W8-cleanup port: boxes now come from the item's
+Coordinate frames. Boxes come from the item's
 ``region_boxes`` list (:mod:`src.services.curation.region_boxes`), whose
 element ``bbox_norm`` is ALWAYS stored in source-frame coordinates --
 every writer (the cascade, the human PUT-box routes) projects into source

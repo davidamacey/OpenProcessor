@@ -1,6 +1,6 @@
-"""W8 M3 + M8 regressions: multi-candidate (N>1) pipeline coverage.
+"""Multi-candidate (N>1) pipeline coverage.
 
-The review's mutation testing found the existing suite could not tell
+Mutation testing found the earlier suite could not tell
 N=1 from N>1 through the real streaming runner -- ``_drive_worker`` /
 ``_drive`` only ever fed one candidate per leg, so mutations like
 forcing the selection cap to 1, misaligning verdicts with candidates, or

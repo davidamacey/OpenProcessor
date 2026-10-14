@@ -2,7 +2,7 @@
 Prometheus alert rules to a fixture of metrics this stack's Triton,
 DCGM-exporter and node-exporter actually export.
 
-Bug this guards against (installer plan, Wave 0 follow-up): the Triton
+Bug this guards against: the Triton
 unified dashboard's "Model Ready" and "GPU Temperature" panels, and the
 `ModelNotReady` alert, queried metric names this Triton version's
 ``/metrics`` endpoint never exposes (``nv_model_ready_state``,

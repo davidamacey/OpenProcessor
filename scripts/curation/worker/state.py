@@ -154,7 +154,7 @@ class _ItemTask:
     # candidate) for the no-VLM-configured fallback (accept_without_vlm)
     # and the region-embedding stage, which are still single-box.
     candidates: list[TaskBoxInput] = field(default_factory=list)
-    # W8 B1 fix: this item's full stored ``region_boxes`` list, read
+    # This item's full stored ``region_boxes`` list, read
     # alongside this task's other fields at fetch time. Path 1
     # (pending_verification) builds its VLM candidates from this list's
     # ``proposed`` boxes -- the real source of truth -- rather than the
@@ -169,7 +169,7 @@ class _ItemTask:
     # reads the CURRENT live doc (M1 fix), never this snapshot.
     region_revision: int = 0
     region_box_seq: int = 0
-    # W8 B1 + M1 fix: this pass's own resolved box list (not yet merged
+    # This pass's own resolved box list (not yet merged
     # with any concurrently-stored siblings, ids not yet finalized) plus
     # the status to fall back to once the write-time merge is empty.
     # ``None`` means this write doesn't touch the box list at all (e.g.
@@ -180,7 +180,7 @@ class _ItemTask:
     # against THAT, never this snapshot.
     pending_boxes: list[RegionBox] | None = None
     pending_empty_status: RegionStatus | None = None
-    # W8 B1 fix: whether the write-time merge (bulk_writer._merge) should
+    # Whether the write-time merge (bulk_writer._merge) should
     # touch `pending_boxes` against the CURRENT stored list at all
     # (preserving a sibling box this pass never itself decided) or
     # REPLACE the stored list outright with exactly `pending_boxes`.
@@ -188,8 +188,8 @@ class _ItemTask:
     # existing behaviour (e.g. `accept_without_vlm`'s DETECTION_FAILED
     # sanity-reject branch, which owns the whole list it writes).
     #
-    # True covers TWO distinct cases, disambiguated by `reverify` below
-    # (W8c B1/M1 fix, 2026-09-28 re-review): `reverify=True` is Path 1
+    # True covers TWO distinct cases, disambiguated by `reverify` below:
+    # `reverify=True` is Path 1
     # (re-verifying a stored `proposed` box) -- `bulk_writer._merge` calls
     # `merge_boxes_for_write`, which keeps every stored sibling this pass
     # never touched, by id. `reverify=False` is a FRESH detection pass
@@ -202,7 +202,7 @@ class _ItemTask:
     # machine box would accumulate forever and keep overriding the new
     # pass's derived status (M1).
     pending_merge: bool = False
-    # W8c B1 fix (2026-09-28 re-review): True ONLY for Path 1
+    # True ONLY for Path 1
     # (`stage_a.py`'s pending-verification branch, re-verifying a stored
     # `proposed` box). Read at the VLM `region_visible=False` branch
     # (`stage_b.py`, combined-verify handling) to pick "resolve the
@@ -256,8 +256,8 @@ class _ItemTask:
     project: Any = None
     # True once a VLM call actually ran
     # for this task this pass (visibility gate or combined class+region
-    # -- see runner.py's call sites; W8 deleted the separate per-crop
-    # verify_region cascade in cascade.py/combined.py). The bulk writer
+    # -- see runner.py's call sites; the separate per-crop
+    # verify_region cascade no longer exists). The bulk writer
     # only stamps ``vlm_prompt_pack`` on a write when this is
     # True, so a deployment with no VLM configured (or a write path that
     # skipped the VLM, e.g. the high-confidence segmenter auto-skip) never

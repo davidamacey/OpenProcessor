@@ -1,5 +1,5 @@
 """Region-class mappings, reviewed negatives and empty frames across a
-combine (W10 semantics, project source)."""
+combine (project source)."""
 
 from __future__ import annotations
 

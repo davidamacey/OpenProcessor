@@ -1,4 +1,4 @@
-"""W5 (§5.2): ``POST /region_profiles/test`` runs a draft or saved profile's
+"""``POST /region_profiles/test`` runs a draft or saved profile's
 legs over one stored crop and previews the item the worker would leave. It
 writes nothing."""
 

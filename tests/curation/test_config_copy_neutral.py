@@ -3,8 +3,8 @@
 neutral copy, excluding template bodies (templates intentionally carry
 domain examples like "wheel"/"plate", not leaked *default* vocabulary).
 
-W4 extends this file to cover ``/region_profiles/schema`` and
-``/config/vocabulary`` once those routes exist.
+This file also covers ``/region_profiles/schema`` and
+``/config/vocabulary``.
 """
 
 from __future__ import annotations
@@ -86,7 +86,7 @@ def test_config_vocabulary_is_domain_neutral(app_client: TestClient) -> None:
 
 
 def test_vlm_endpoint_surfaces_are_domain_neutral(vlm_api) -> None:
-    """W9: the endpoint form schema, the listing (labels, warnings, choices),
+    """The endpoint form schema, the listing (labels, warnings, choices),
     the local catalog, the ``vlm`` strategies on ``/methods`` and the model
     status rows are generic copy: no private domain named anywhere."""
     vlm_api.ready('alpha')

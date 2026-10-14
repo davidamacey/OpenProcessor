@@ -51,7 +51,7 @@ describe('REVIEW_TABS (2026-09 tab consolidation)', () => {
         s.capabilities.queue!.urlId,
       );
     }
-    // new_class_proposals (2026-09-24 logic-moves W5) is a real core tab —
+    // new_class_proposals is a real core tab —
     // its urlId/endpointId are the raw backend tab id, same as every
     // other core tab.
     expect(REVIEW_TABS.find((t) => t.id === 'new_class_proposals')).toMatchObject({

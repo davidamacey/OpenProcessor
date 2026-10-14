@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Work-package ids and history names are gone from comments, JSDoc and test titles in `src/` and `e2e/`,
+  and the route tests under `src/routes/p/[project]/` are named by what they test (for example
+  `reviewDismissedPanel`, `clusterPurityDisplay`, `servedTrainingCohorts`) instead of by the pass that
+  wrote them. Same 4,575 tests; no rendered change.
 - `scripts/capture_docs_screenshots.py` gains states for the sources panel and the bulk-ingest panel (idle, running, failures), the ingest
   policy page, a project with its VLM off, the audit page, a cluster page, the dataset imports list and the prompt-pack,
   region-profile and open-vocabulary lists. `scripts/docs_screenshot_fixtures.py` gains `bulk` and `vlm-off` to set up

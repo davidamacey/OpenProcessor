@@ -179,7 +179,7 @@ class ItemRegionMetaRequest(BaseModel):
 
     Use this for operator corrections like changing the status to
     ``verify_rejected``. To edit a box's text, use ``PATCH
-    /crops/{crop_id}/regions/{box_id}`` (per-box, W8.8) -- ``region_text``
+    /crops/{crop_id}/regions/{box_id}`` (per-box) -- ``region_text``
     is REMOVED from this request (D decision, 2026-09-26): it was a
     per-box value on an item-level route. A stale client sending it gets
     422 (``extra='forbid'``). To set or clear a box's geometry, use ``PUT

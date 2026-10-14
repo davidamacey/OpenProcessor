@@ -1,4 +1,4 @@
-"""W3: the multi-box pairing check between a flat (N=1-shaped) pack and
+"""The multi-box pairing check between a flat (N=1-shaped) pack and
 an N>1 active region profile (any_domain_plan.md §3.3/§4.3)."""
 
 from __future__ import annotations
@@ -16,9 +16,9 @@ from src.services.labeling.vlm_prompts import GENERIC_REGION_PACK
 
 
 def _flat_pack_body() -> dict[str, object]:
-    """A pre-W8-shaped pack: the combined calls name the per-box verdict
+    """A flat-shaped pack: the combined calls name the per-box verdict
     keys as top-level (flat) fields, never ``region_boxes``/``box`` --
-    valid for N=1, missing the W8 multi-box list keys."""
+    valid for N=1, missing the multi-box list keys."""
     body = GENERIC_REGION_PACK.to_dict()
     body.pop('name')
     body['combined_system'] = (

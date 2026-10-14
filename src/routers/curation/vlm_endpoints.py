@@ -1,5 +1,5 @@
-"""``/curation/vlm/endpoints*``: the deployment-wide VLM endpoint registry
-. Registered on the projects ``global_router``: the registry belongs to
+"""``/curation/vlm/endpoints*``: the deployment-wide VLM endpoint registry.
+Registered on the projects ``global_router``: the registry belongs to
 no project, so these routes run with nothing bound. Which endpoint a
 project *uses* is that project's activation (:mod:`vlm_activation`, scoped).
 

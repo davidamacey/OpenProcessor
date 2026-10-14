@@ -1,4 +1,4 @@
-"""W10.2.1/W10.17: YOLO dataset scanning."""
+"""YOLO dataset scanning."""
 
 from __future__ import annotations
 
@@ -134,7 +134,7 @@ class TestSparseNames:
         return scan_yolo(tmp_path)
 
     def test_sparse_gap_index_never_crosses_to_wrong_name(self, tmp_path: Path) -> None:
-        """Review probe W10 M3: names={0: car, 2: truck}. Index 1 has no
+        """A review probe: names={0: car, 2: truck}. Index 1 has no
         name -- a row using cls=1 must be rejected as unmapped, never
         silently resolved to 'truck' (or 'car')."""
         scan = self._scan_with_names_dict(tmp_path, {0: 'car', 2: 'truck'}, '1 0.5 0.5 0.2 0.2')

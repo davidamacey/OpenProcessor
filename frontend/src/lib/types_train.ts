@@ -144,7 +144,7 @@ export interface TrainEvalPerClass {
  * `evalPerClassLabel`); never `TrainJobStatus.best_checkpoint_metric`,
  * which is a per-epoch training-time figure, not this holdout pass.
  *
- * `head` (OpenProcessor #34 W1) names the detection head that test-split
+ * `head` names the detection head that test-split
  * pass scored, e.g. `'end2end'` when the loaded checkpoint's NMS-free
  * one-to-one head was explicitly forced to match what's actually served
  * — `null`/absent for a model family with no such distinction.
@@ -164,7 +164,7 @@ export interface TrainEval {
    *  overall figures since 5595474. */
   val_last?: { map50?: number | null; map50_95?: number | null } | null;
   per_class?: TrainEvalPerClass[] | null;
-  /** Detection head this eval pass scored (OpenProcessor #34 W1),
+  /** Detection head this eval pass scored,
    *  e.g. `'end2end'`; `null`/absent when not applicable. */
   head?: string | null;
   /** Servable URL (`GET {API_PREFIX}/train/artifacts/{job_id}/{name}`),
@@ -174,7 +174,7 @@ export interface TrainEval {
 }
 
 /** One row of `TrainJobStatus.last_epoch_metric` /
- *  `.best_checkpoint_metric` (OpenProcessor #34 W1) — a single coherent
+ *  `.best_checkpoint_metric` — a single coherent
  *  validation pass (map50 + map50_95 from the SAME pass, never a
  *  per-key running max across different epochs). `epoch` is that pass's
  *  1-indexed training epoch number. `null` on a run whose status.json
@@ -198,7 +198,7 @@ export interface TrainJobStatus {
   current_epoch?: number | null;
   total_epochs?: number | null;
   epoch_time_s?: number | null;
-  /** The true last TRAINING epoch's own metrics (OpenProcessor #34 W1) —
+  /** The true last TRAINING epoch's own metrics —
    *  distinct from `best_checkpoint_metric` because Ultralytics
    *  re-validates the best checkpoint once more after training and that
    *  pass doesn't advance the epoch counter. */
@@ -242,14 +242,14 @@ export interface TrainManifestLineage {
   augmentation_seed?: number | null;
   class_remap?: TrainManifestClassRemap | null;
   dataset_sha?: string | null;
-  /** The export's frozen-test-split hash (OpenProcessor #34 W1) — copied
+  /** The export's frozen-test-split hash — copied
    *  from the export manifest, or computed from disk when an older
    *  export's manifest lacks it. */
   frozen_test_sha?: string | null;
-  /** Hash of just the frozen test split's label files (#34 W1) —
+  /** Hash of just the frozen test split's label files —
    *  distinct from `frozen_test_sha` (the whole frozen split). */
   test_label_sha?: string | null;
-  /** The export's own human-readable version tag (#34 W1), when the
+  /** The export's own human-readable version tag, when the
    *  export recorded one. */
   dataset_version_tag?: string | null;
   deterministic?: boolean | null;
@@ -262,11 +262,11 @@ export interface TrainManifestLineage {
 
 export interface TrainManifestCodeVersions {
   api_sha?: string | null;
-  /** The trainer container's own build identity (#34 W1) — its baked
+  /** The trainer container's own build identity — its baked
    *  `OP_BUILD_SHA` when present, else the API's stamped
    *  `trainer_image_revision` observed at submit time. */
   trainer_sha?: string | null;
-  /** The trainer image's own id (#34 W1), independent of `trainer_sha`'s
+  /** The trainer image's own id, independent of `trainer_sha`'s
    *  revision label. */
   trainer_image_id?: string | null;
   ultralytics_pkg?: string | null;
@@ -275,10 +275,10 @@ export interface TrainManifestCodeVersions {
 }
 
 export interface TrainManifestResults {
-  /** The true last training epoch's metrics (#34 W1) — see
+  /** The true last training epoch's metrics — see
    *  `TrainJobStatus.last_epoch_metric`. */
   last_epoch_metric?: TrainEpochMetric | null;
-  /** The best checkpoint's own re-validation metrics (#34 W1) — see
+  /** The best checkpoint's own re-validation metrics — see
    *  `TrainJobStatus.best_checkpoint_metric`. Never the headline number;
    *  that's `eval.map50` labelled by `eval.split`. */
   best_checkpoint_metric?: TrainEpochMetric | null;

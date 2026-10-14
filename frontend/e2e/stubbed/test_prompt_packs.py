@@ -1,9 +1,7 @@
-"""OpenProcessor W3 (prompt-pack CRUD) and the pack half of W5
-(test-on-crop), any_domain_plan.md §3, §5.1, §7.2, §7.5, §7.6;
-docs/design/w3-pack-editor-ui-plan-2026-09-27.md.
+"""Prompt-pack CRUD and the pack half of test-on-crop.
 
-The backend has not shipped W3 yet, so every payload below follows the
-spec's own examples (in the neutral widget/tag domain). The fail-closed
+The pack routes are stubbed with payloads shaped like the served contract
+(in the neutral widget/tag domain). The fail-closed
 stub means any pack request the page makes that a test did not expect
 fails the test.
 
@@ -201,7 +199,7 @@ REVISIONS = {
 
 
 def serve_packs(stub: Any, active_state: dict[str, Any] | None = None) -> dict[str, Any]:
-    """The W3 reads every pack page makes. Returns the mutable state the
+    """The GET reads every pack page makes. Returns the mutable state the
     write handlers in each test update."""
     state: dict[str, Any] = {"active": active_state or active()}
     # The project shell's class registry read.

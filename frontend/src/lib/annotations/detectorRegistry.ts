@@ -2,7 +2,7 @@
  * Role-driven detector chip color resolution.
  *
  * Detector/verifier/segmenter LABELS now come from the backend's served
- * vocabulary (`GET {API_PREFIX}/regions/vocabulary`, W0 naming-sweep finding m9 —
+ * vocabulary (`GET {API_PREFIX}/regions/vocabulary` —
  * see `$stores/regionVocabulary.svelte`), not from a hand-copied
  * name→label table: those model ids are deployment config, and a
  * hardcoded map drifted from them the moment a deployment swapped

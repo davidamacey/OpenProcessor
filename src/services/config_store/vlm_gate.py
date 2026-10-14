@@ -4,9 +4,9 @@ Anything that picks or switches the endpoint a project's VLM calls go
 through -- ``POST /vlm/endpoints/{name}/activate``, rollback, ``PUT
 /settings``, a project clone's activation copy, a per-run ``?vlm=`` on the
 pipeline and the VLM routes, and the draft tests -- must call
-:func:`enforce_vlm_gate` before it acts. The lesson of W3/W4 (the same
-gate bypass found four times because each caller re-implemented the
-checks): the checks live here and nowhere else, and
+:func:`enforce_vlm_gate` before it acts. The same gate bypass was
+found four times because each caller re-implemented the checks, so the
+checks live here and nowhere else, and
 ``tests/curation/test_vlm_selection_paths.py`` walks every path with an
 input that has to be refused.
 

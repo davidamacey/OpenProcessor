@@ -45,8 +45,7 @@ def test_get_vlm_labeler_resolves_a_configured_pack(tmp_path: Path) -> None:
     path.write_text(json.dumps(custom.to_dict()))
 
     # resolve_prompt_pack's defining module is vlm_prompt_resolution.py
-    # (split out of vlm_prompts.py to stay under the 700-LOC ratchet, W3/W4
-    # review round 2) -- vlm_prompts.py only re-exports the name, and
+    # (split out of vlm_prompts.py to stay under the 700-LOC ratchet) -- vlm_prompts.py only re-exports the name, and
     # active_prompt_pack() (also in vlm_prompt_resolution.py) calls the
     # function via that module's own namespace, so the patch target must
     # be the defining module, not the re-export.

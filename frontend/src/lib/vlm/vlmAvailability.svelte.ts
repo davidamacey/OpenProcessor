@@ -1,6 +1,6 @@
 /**
- * `vlmAvailability`: the "not yet deployed" gate for OpenProcessor W9 (the
- * VLM endpoint registry). W9 serves no capability flag for its registry
+ * `vlmAvailability`: the "not yet deployed" gate for the
+ * VLM endpoint registry. It serves no capability flag for its registry
  * routes, so this probes the GLOBAL `GET {prefix}/vlm/endpoints` once
  * (404/501 = every registry surface absent, no other `/vlm/*` request
  * fires). Unlike the project-scoped gates it is deployment-wide, so it is

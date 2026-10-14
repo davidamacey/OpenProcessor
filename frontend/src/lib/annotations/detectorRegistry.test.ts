@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { paletteForRole, isMutedTag, PALETTES } from './detectorRegistry';
 
 /**
- * W0 naming-sweep finding m9: chip color is now keyed off a served
+ * Chip color is now keyed off a served
  * vocabulary entry's `role`, not the detector id. This is the equivalence
  * proof that every documented role maps to a distinct, correct palette,
  * and that an unknown/absent role degrades to the neutral chip.

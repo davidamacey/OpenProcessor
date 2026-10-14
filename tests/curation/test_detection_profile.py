@@ -32,10 +32,8 @@ def test_defaults_match_reference_constants() -> None:
 
 
 def test_max_regions_per_item_defaults_to_1() -> None:
-    """W8 M4 fix (pipeline-wiring review, 2026-09-27): multi-box is
-    opt-in per profile, never silently on. The spec (any_domain_plan.md
-    W8.4/W8.9) names the field ``max_regions_per_item`` with default 1 --
-    a profile that never sets it reproduces today's single-region
+    """Multi-box is opt-in per profile, never silently on. The field is
+    named ``max_regions_per_item`` with default 1 -- a profile that never sets it reproduces today's single-region
     behaviour exactly."""
     profile = DetectionProfile(name='license_plate')
     assert profile.max_regions_per_item == 1

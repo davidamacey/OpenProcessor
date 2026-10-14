@@ -195,9 +195,8 @@ async def stage_a_sam_consumer(ctx: PipelineContext, consumer_id: int) -> None:
                         rules=rt.text_rules,
                     )
                     box = _box_with_resolved_text(box, text_doc)
-                    # W8 M2: skip-verify never calls the VLM --
-                    # verified/auto_confirmed stay False, same as the
-                    # pre-W8 skip-verify write.
+                    # skip-verify never calls the VLM, so
+                    # verified/auto_confirmed stay False.
                     t.update_doc = _box_list_doc(
                         t,
                         [box],

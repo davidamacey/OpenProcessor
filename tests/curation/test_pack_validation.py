@@ -1,4 +1,4 @@
-"""W3: prompt-pack validation (any_domain_plan.md §3.3) --
+"""Prompt-pack validation (any_domain_plan.md §3.3) --
 ``src.services.config_store.pack_validation.validate_pack``."""
 
 from __future__ import annotations

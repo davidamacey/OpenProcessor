@@ -55,7 +55,7 @@ class ScanEntry:
     stratum: str | None = None
     hard_negative: bool = False
     """An OpenProcessor-export ``neg:`` frame: a human marked a detector
-    region false-positive there (W10.2.2)."""
+    region false-positive there."""
     declared_size: tuple[int, int] | None = None
     """A COCO image's declared ``(width, height)``; the job compares it with
     the decoded size (``image_size_mismatch``)."""
@@ -78,7 +78,7 @@ class DatasetScan:
     op_export: OpExportInfo | None = None
     class_box_counts: dict[str, int] = field(default_factory=dict)
     """dataset_class -> total box count across every entry (only classes
-    with >=1 box need a mapping decision, W10.5)."""
+    with >=1 box need a mapping decision)."""
 
 
 def exif_transposed_size(path: Path) -> tuple[int, int] | None:
@@ -128,7 +128,7 @@ def source_sha(scan: DatasetScan) -> str:
     (encoded as the boxes themselves, since a full second read of every
     label file's raw bytes is the job's job, not the scan's).
 
-    Simplification note: any_domain_plan.md W10.11 hashes label FILE
+    Simplification note: the intended design hashes label FILE
     BYTES directly (so an edit that doesn't change parsed boxes, e.g. a
     reordered row, still changes the hash) and separately hashes image
     (path, size). This implementation hashes over the parsed

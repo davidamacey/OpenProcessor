@@ -1,12 +1,12 @@
 <script lang="ts">
   /**
-   * Test-on-crop for one region profile (`POST /region_profiles/test`, W5;
-   * §5.2, §7.6, §7.7). Runs the profile's legs over one stored crop and
+   * Test-on-crop for one region profile (`POST /region_profiles/test`).
+   * Runs the profile's legs over one stored crop and
    * shows what the server returned: the legs and their candidates (kept
    * and dropped), the candidates drawn over the source image and in the
    * crop's own frame, the preview item, and, when asked, the VLM verify.
    * Nothing is written. Shown whenever the editor loads (the schema
-   * serves no `testable` flag, question W5-1).
+   * serves no `testable` flag).
    */
   import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
   import TestPreviewItem from '$components/config/TestPreviewItem.svelte';

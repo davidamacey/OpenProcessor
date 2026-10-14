@@ -1,4 +1,4 @@
-"""One entry point for the Wave 0 baseline: environment, ingest, Triton, endpoints, VLM.
+"""One entry point for the baseline: environment, ingest, Triton, endpoints, VLM.
 
 Writes (and merges into) one JSON document with a fixed schema, so a phase can be
 re-run alone. Phases (``--phases``, comma list; default all but ``vlm``):

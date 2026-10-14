@@ -206,8 +206,8 @@ def _reset_config_store() -> Iterator[None]:
 def test_put_detection_profile_now_settable_through_the_store(
     app_client_config_store: TestClient,
 ) -> None:
-    """W2: detection_profile joined the config-store-backed axes (it was
-    read-only pre-W2, when the region cascade only read ``OP_REGION_PROFILE``
+    """``detection_profile`` joined the config-store-backed axes (it was
+    read-only before, when the region cascade only read ``OP_REGION_PROFILE``
     at process start; the detection worker now hot-reloads it, §4.5)."""
     r = app_client_config_store.put(
         '/curation/projects/default/settings',

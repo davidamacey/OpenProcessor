@@ -173,11 +173,10 @@ async def run(args: argparse.Namespace) -> int:
     project_registry = _WorkerProjects()
     fairness_scheduler = FairnessScheduler()
 
-    # W2 sec 4.5, per-project (B1): one RegionRuntime per active project,
+    # Per-project: one RegionRuntime per active project,
     # each fed by its OWN pinned ConfigStore -- alpha activating a
     # profile never touches beta's runtime because each slug's store
-    # and holder entry are independent (projects_plan.md sec 11 W2
-    # "runtimes[slug]"). The worker is multi-project by default (no
+    # and holder entry are independent. The worker is multi-project by default (no
     # ``--project``); ``project_registry.active_projects()`` (already
     # narrowed to ``--project`` when given, via ``only_project``) is the
     # single source of truth for which slugs to hold a runtime for --

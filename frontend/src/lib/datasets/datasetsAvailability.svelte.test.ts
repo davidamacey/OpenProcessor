@@ -1,6 +1,6 @@
 /**
- * The W10 "not yet deployed" gate: a 404/501 on `/datasets/formats`
- * hides every W10 surface; a 200 caches the served vocabulary; any other
+ * The dataset-import "not yet deployed" gate: a 404/501 on `/datasets/formats`
+ * hides every import surface; a 200 caches the served vocabulary; any other
  * failure keeps availability unknown and records the error.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

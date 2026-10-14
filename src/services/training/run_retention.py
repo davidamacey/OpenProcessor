@@ -150,7 +150,7 @@ def apply_run_prune(job_ids: list[str], *, jobs_dir: Path) -> dict[str, int]:
     Best-effort per file -- a missing/unremovable file is skipped, never
     raised. Does not touch MLflow runs or the trainer's own artifact
     directory (``OP_TRAIN_RUNS_ROOT``); those are a separate concern
-    (MLflow retention is owner-decision, W7).
+    (MLflow retention is an owner decision).
     """
     removed_files = 0
     removed_runs = 0

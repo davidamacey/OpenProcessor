@@ -285,7 +285,7 @@ def test_empty_queue_offers_embed_them_only_when_served_and_relevant(stub, page,
             "suggested_reprocess": _EMBED_REQUEST,
         },
     )
-    # Reprocess is present only while the deployment serves the W10 vocabulary.
+    # Reprocess is present only while the deployment serves the import/reprocess vocabulary.
     stub.on("GET", r"/datasets/formats(\?|$)", copy.deepcopy(FORMATS))
     page.set_viewport_size({"width": 1600, "height": 1000})
     page.goto(f"{app_url}/p/default/review?tab=uncertainty")

@@ -1,4 +1,4 @@
-"""W5: one function builds the item-crop JPEG, for the worker and for the
+"""One function builds the item-crop JPEG, for the worker and for the
 test-on-crop routes, so a preview crop is the crop the worker sees."""
 
 from __future__ import annotations

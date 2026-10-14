@@ -175,7 +175,7 @@ export function derivedCohorts(spec: SlotSpec): CohortSpec[] {
 
   // subBox ⇒ "parent subject is present, sub-box is not" — the generic
   // meaning of a blind spot for any sub-annotation. Only meaningful for a
-  // legacy scalar single-box capability (bboxField); a W8 multi-box slot
+  // legacy scalar single-box capability (bboxField); a multi-box slot
   // (listField) has no single "exists" predicate field — it's covered by
   // the served /training_cohorts modes instead (see the plan doc).
   if (subBox?.bboxField) {
@@ -284,7 +284,7 @@ function compiled(spec: CohortSpec, ctx: CohortContext): CohortSpec {
  * to answer today (§9.1's mode table + §9.2.2's CORE_COHORTS), keyed by
  * a compiled query's final path segment rather than the whole path.
  *
- * Matching the last segment rather than the whole path (Wave 2 C12,
+ * Matching the last segment rather than the whole path
  * docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §10) means a
  * backend base-path rename, or a second slot's endpoint cohort under
  * another base path (e.g. a tier-2 profile's

@@ -1,5 +1,4 @@
-"""OpenProcessor W10 leftovers (docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md
-§5.5): the `imported` review tab, URL-seeded `import_id` / `combine_conflict`
+"""Import leftovers: the `imported` review tab, URL-seeded `import_id` / `combine_conflict`
 filters, lock badges, and image Reprocess from a browse card. Payloads follow
 the vendored contract in the neutral widget domain; the fail-closed stub means
 any request the page makes that a test did not expect fails the test.

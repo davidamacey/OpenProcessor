@@ -1,4 +1,4 @@
-"""WP-1.5 (#212): the daemon's HTTP glue around the schedule, with the API faked."""
+"""Issue #212: the daemon's HTTP glue around the schedule, with the API faked."""
 
 from __future__ import annotations
 

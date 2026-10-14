@@ -1,16 +1,16 @@
 /**
- * `datasetsAvailability` — the "not yet deployed" gate for OpenProcessor
- * W10 (dataset import + Reprocess), plus the served vocabulary every W10
+ * `datasetsAvailability` — the "not yet deployed" gate for dataset import
+ * and Reprocess, plus the served vocabulary every import
  * control renders from (`GET {prefix}/datasets/formats`).
  *
- * This is NOT backward compatibility. W10's `/health api_features` signal
- * was dropped (execution_schedule.md D-C), so until W10 is deployed the
+ * This is NOT backward compatibility. The `/health api_features` signal
+ * was dropped, so until dataset import is deployed the
  * one way to know whether its routes exist is to ask: a 404/501 on
- * `/datasets/formats` means "not deployed" and every W10 surface is
+ * `/datasets/formats` means "not deployed" and every import surface is
  * absent. Any other failure keeps `available` unknown and records the
  * error, so a transient outage never hides a route that exists.
  *
- * To remove the gate once W10 ships everywhere: drop the 404 branch and
+ * To remove the gate once dataset import ships everywhere: drop the 404 branch and
  * `available`, and keep this as a plain vocabulary loader.
  *
  * Probed lazily (the surfaces that need it call `init()`), at most once

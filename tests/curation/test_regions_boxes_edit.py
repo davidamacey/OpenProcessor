@@ -1,4 +1,4 @@
-"""Write-path tests for the W8a multi-box human edit routes:
+"""Write-path tests for the multi-box human edit routes:
 ``PUT /crops/{id}/regions``, ``PUT /crops/batch_regions``,
 ``PATCH /crops/{id}/regions/{box_id}``, ``POST /regions/batch_box_state``.
 
@@ -444,7 +444,7 @@ def test_batch_box_state_unknown_state_is_422(
 
 
 # ---------------------------------------------------------------------------
-# W8c m4: an empty batch must still validate, never silently 200
+# An empty batch must still validate, never silently 200
 # ---------------------------------------------------------------------------
 
 
@@ -504,7 +504,7 @@ def test_batch_box_state_empty_targets_and_valid_state_is_still_a_noop(
 
 
 # ---------------------------------------------------------------------------
-# W8c M3: a human's per-box REJECT action on a machine box is stamped so
+# A human's per-box REJECT action on a machine box is stamped so
 # `region_boxes.is_human_owned` recognizes it later (clear_detection /
 # fresh-detection replace).
 # ---------------------------------------------------------------------------

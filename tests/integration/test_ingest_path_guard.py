@@ -75,7 +75,7 @@ def test_batch_refuses_a_path_outside_the_source_roots(
 def test_batch_rejects_the_removed_label_txt_path_field(
     client: TestClient, tmp_path: Path, served_root: Path
 ) -> None:
-    """W10: ``label_txt_path`` is removed from ``/ingest/batch`` outright
+    """``label_txt_path`` is removed from ``/ingest/batch`` outright
     (no back-compat) -- ``IngestBatchItem`` is ``extra='forbid'``, so a
     caller still sending it 422s instead of the field silently being
     ignored. Its BA-5 path-guard coverage lives on for the
@@ -130,7 +130,7 @@ def test_single_ingest_refuses_a_path_outside_the_source_roots(
 def test_batch_rejects_a_malformed_body_instead_of_a_silent_noop(
     client: TestClient, served_root: Path
 ) -> None:
-    """F-22: {'paths': [...]} previously validated against IngestBatchRequest
+    """{'paths': [...]} previously validated against IngestBatchRequest
     with `items` defaulting to [], returning 200 status=success with
     all-zero counts -- a silent no-op indistinguishable from ingesting an
     empty batch on purpose. The wrong key must now 422."""
@@ -143,7 +143,7 @@ def test_batch_rejects_a_malformed_body_instead_of_a_silent_noop(
 
 
 def test_batch_rejects_an_empty_items_list(client: TestClient) -> None:
-    """F-22: an empty (or omitted) items list is also a no-op that should
+    """An empty (or omitted) items list is also a no-op that should
     422 rather than silently returning success with zero results."""
     resp = client.post('/curation/projects/default/ingest/batch', json={'items': []})
     assert resp.status_code == 422, resp.text
@@ -153,7 +153,7 @@ def test_batch_rejects_an_empty_items_list(client: TestClient) -> None:
 
 
 def test_single_ingest_rejects_a_malformed_body(client: TestClient, served_root: Path) -> None:
-    """F-22: same silent-ignore class of bug on the single-image route --
+    """Same silent-ignore class of bug on the single-image route --
     an unknown key like 'image_path' instead of 'path' must 422."""
     inside = _jpeg(served_root, 'single_wrongkey.jpg')
     resp = client.post(

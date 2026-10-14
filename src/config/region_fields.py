@@ -78,10 +78,9 @@ class RegionFields:
     profile: str = 'region_profile'
     profile_revision: str = 'region_profile_revision'
 
-    # W8 multi-box list. ``boxes`` is the indirected storage name of the
+    # Multi-box list. ``boxes`` is the indirected storage name of the
     # list itself; the element keys inside each list entry are FIXED
-    # strings (see docs/design/openprocessor_internal/any_domain_plan.md
-    # W8.2) since the list is new and no deployment has legacy names for
+    # strings, since the list is new and no deployment has legacy names for
     # them. ``boxes_state`` below is only used to build nested queries
     # (``box_query``) against the fixed element key ``state``.
     boxes: str = 'region_boxes'

@@ -200,7 +200,7 @@ def ensure_env_region_profile() -> None:
 
 def _stored_profiles() -> dict[str, DetectionProfile]:
     """The bound project's stored region profiles from the process-local
-    config-store snapshot (W2; empty until W4 CRUD exists). No I/O --
+    config-store snapshot (empty until profile CRUD stores any). No I/O --
     reads whatever the last refresh cached. Malformed stored bodies are
     skipped with a logged warning."""
     try:

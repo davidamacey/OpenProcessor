@@ -254,7 +254,7 @@ class FakeLifecycleOpenSearch(FakeRegistryOpenSearch):
         retry_on_conflict: int = 0,  # noqa: ARG002
         refresh: str | bool | None = None,  # noqa: ARG002
     ) -> dict[str, Any]:
-        # teach this fake W2's atomic
+        # teach this fake the atomic
         # ``bump_config_revision`` (painless script + ``upsert``), the
         # same real create-vs-bump distinction
         # ``tests/curation/_fake_config_opensearch.py``'s

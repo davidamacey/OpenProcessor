@@ -1,5 +1,5 @@
 /**
- * W3 prompt-pack wrappers (any_domain_plan.md §7.2, §7.5): every route is
+ * Prompt-pack wrappers: every route is
  * scoped, every body is sent as given, and the structured `ConfigErrorDetail` refusal surfaces its
  * served `message`.
  */

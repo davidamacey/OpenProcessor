@@ -48,7 +48,7 @@ describe('mapRawCrop full field mapping', () => {
     expect(crop.label_confidence).toBe(raw.confidence);
     expect(crop.cluster_id).toBe(raw.cluster_id);
     // similarity_to_centroid is served verbatim as cluster_similarity — no
-    // client 1-cluster_distance computation (2026-09-24 logic-moves W6).
+    // client 1-cluster_distance computation.
     expect(crop.similarity_to_centroid).toBe(raw.cluster_similarity);
     expect(crop.cluster_is_core).toBe(raw.cluster_is_core);
     expect(crop.cluster_subid).toBe(raw.cluster_subid);
@@ -89,7 +89,7 @@ describe('mapRawCrop full field mapping', () => {
     expect(crop.excluded_at).toBe(raw.excluded_at);
     expect(crop.item_text_lines).toEqual(raw.item_text_lines);
 
-    // image_id is carried (it targets an image Reprocess, W10); an empty
+    // image_id is carried (it targets an image Reprocess); an empty
     // served one (a legacy item) reads undefined. thumbnail_url is declared
     // on RawCrop but intentionally not carried onto Crop by mapRawCrop
     // today — documented here so a future intentional wiring doesn't get

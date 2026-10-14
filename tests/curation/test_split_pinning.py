@@ -1,4 +1,4 @@
-"""W10.9: the export honours the split a dataset import filed each frame
+"""The export honours the split a dataset import filed each frame
 under, the frozen holdout always wins, and ``recompute`` ignores pins."""
 
 from __future__ import annotations

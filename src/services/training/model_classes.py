@@ -161,7 +161,7 @@ def model_classes(triton_name: str) -> list[ModelClass]:
 
 def _match_name(model_name: str, registry_by_name: dict[str, tuple[int, str]]) -> MappingEntry:
     """Exact, then case-insensitive, name match -- never a synonym or a
-    merge (those are a human/W10 decision, not something a model mapping
+    merge (those are a human decision, not something a model mapping
     applies automatically)."""
     exact = registry_by_name.get(model_name)
     if exact is not None:

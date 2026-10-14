@@ -113,7 +113,7 @@ class TestStreamingWorker:
         assert fake_os.live['c1'][F.status] == 'verify_rejected'
 
 
-# test_null_bbox_verdict_writes_nothing (pre-W8 unit test of the deleted
+# test_null_bbox_verdict_writes_nothing (an old unit test of the deleted
 # combined.py::_try_combined_class_region) is superseded by
 # TestStreamingWorker.test_null_bbox_verdict_leaves_the_item_pending above
 # -- same assertion (a null box verdict writes nothing, the item stays

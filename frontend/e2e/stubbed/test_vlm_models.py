@@ -1,7 +1,6 @@
-"""OpenProcessor W9 (VLM endpoint registry, local model, per-project
-activation), any_domain_plan.md §7.8; docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md §3.
+"""VLM endpoint registry, local model, per-project activation.
 
-Every payload follows the f582aa05 contract (neutral names). The fail-closed
+Every payload follows the vendored contract (neutral names). The fail-closed
 stub means any VLM request the page makes that a test did not expect fails
 the test.
 
@@ -250,7 +249,7 @@ def vocabulary() -> dict[str, Any]:
 
 
 def serve_registry(stub: Any) -> dict[str, Any]:
-    """The W9 reads every page makes. Returns the mutable state the write
+    """The GET reads every page makes. Returns the mutable state the write
     handlers in each test update."""
     state: dict[str, Any] = {"active": active(), "local": local()}
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": []})

@@ -160,11 +160,11 @@ def _region_auto_confirm_mapping() -> dict[str, Any]:
 
 
 def _region_boxes_mapping() -> dict[str, Any]:
-    """The W8 multi-box region fields: the box list, the per-box vectors and
+    """The multi-box region fields: the box list, the per-box vectors and
     the item-level summary. The one definition behind both the fresh index
     body (:func:`_items_body`) and :func:`ensure_items_region_boxes_fields`."""
     return {
-        # W8 multi-box regions: the per-item box list. `nested` so a
+        # Multi-box regions: the per-item box list. `nested` so a
         # query like "a box with detector=sam3 AND state=accepted"
         # means the same box (region_boxes.box_query, the only
         # place that builds this nested clause). Element keys are
@@ -246,7 +246,7 @@ def _items_body() -> dict[str, Any]:
                 # revision produced this item's region write, and which
                 # prompt pack / revision the VLM used for its most recent
                 # write. Null for an item never touched by either. No
-                # back-compat migration for a pre-W2 index: stacks are
+                # back-compat migration for an old index: stacks are
                 # re-created (execution_schedule.md §4.0 NON-NEGOTIABLE 4).
                 'region_profile': {'type': 'keyword'},
                 'region_profile_revision': {'type': 'integer'},

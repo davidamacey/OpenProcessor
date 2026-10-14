@@ -135,7 +135,7 @@ def read_coco(
     """Read one or more COCO annotation files into ``ScanEntry`` rows.
 
     Each file's ``categories[].name`` are the dataset classes;
-    ``category_id`` is never compared with a registry id (W10.2.1: "never
+    ``category_id`` is never compared with a registry id ("never
     by index"). The first ``size_checks`` images have their declared
     ``width``/``height`` compared with the EXIF-transposed header size
     (``image_size_mismatch``: the image is skipped).

@@ -234,8 +234,7 @@ class TestWriters:
 @pytest.mark.usefixtures('reference_region_profile')
 def test_human_typed_text_records_the_human_choice() -> None:
     """``region_text`` moved off the item-level ``region_meta`` route onto
-    the per-box ``PATCH /crops/{crop_id}/regions/{box_id}`` route (W8, D
-    decision, 2026-09-26): human-typed text still records ``text_source``
+    the per-box ``PATCH /crops/{crop_id}/regions/{box_id}`` route: human-typed text still records ``text_source``
     / ``text_choice`` == human, now per box."""
     from fastapi import FastAPI
     from fastapi.testclient import TestClient

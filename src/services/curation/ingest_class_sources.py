@@ -38,8 +38,8 @@ OPEN_VOCAB_CLASS_SOURCE = 'open_vocab_proposal'
 OPEN_VOCAB_TARGET_CLASS_SOURCE = 'open_vocab_target'
 # Label import's default (callers may pass their own).
 LABEL_IMPORT_CLASS_SOURCE = 'external_label'
-# ``label_source`` (not ``class_source``) value stamped by dataset import
-# — distinct namespace from LABEL_IMPORT_CLASS_SOURCE above, which
+# ``label_source`` (not ``class_source``) value stamped by dataset import.
+# A distinct namespace from LABEL_IMPORT_CLASS_SOURCE above, which
 # is the class_source value. Both feed the lock rule (src/clients/occ.py).
 LABEL_SOURCE_IMPORT = 'import'
 

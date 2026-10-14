@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * A dataset's served issues (W10.4 `DatasetIssue`), grouped by the
+   * A dataset's served issues (`DatasetIssue`), grouped by the
    * served `severity`, each headed by the served catalog label
    * (`GET /datasets/formats` `issues`) with its own served `message`,
    * `count` and samples. Blocking is the served flag, never inferred.

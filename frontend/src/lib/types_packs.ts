@@ -1,12 +1,10 @@
 /**
- * Wire types for OpenProcessor W3 (prompt-pack CRUD) and the pack half of
- * `any_domain_plan.md` §3, §5.1, §7.1, §7.2, §7.5.
+ * Wire types for prompt-pack CRUD and the pack half of test-on-crop.
  * Every route is project-scoped (`{prefix}/prompt_packs...`).
  *
- * Built against the frozen spec before the backend lands W3, so nothing
+ * Built against the frozen spec before the backend lands prompt packs, so nothing
  * here is pinned to the vendored OpenAPI yet. Where the spec leaves a
- * shape open, the type is the literal reading recorded in
- * docs/design/w3-pack-editor-ui-plan-2026-09-27.md §6 (question W3-Qn).
+ * shape open, the type is the literal reading of it.
  */
 
 import type {

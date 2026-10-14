@@ -1,6 +1,6 @@
-"""W2: a per-run ``?prompt_pack=name@rev`` pins the exact revision at job
+"""A per-run ``?prompt_pack=name@rev`` pins the exact revision at job
 start; a later edit/activation never changes what an in-flight job's
-labeler uses -- any_domain_plan.md §3.7, §9 W2."""
+labeler uses."""
 
 from __future__ import annotations
 

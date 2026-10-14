@@ -2,8 +2,8 @@
 ``region_text_disabled``) before anything is written; other region
 metadata still patches.
 
-``region_text`` moved off ``PATCH /crops/{id}/region_meta`` in W8 (D
-decision, 2026-09-26) onto the per-box routes -- this test now exercises
+``region_text`` moved off ``PATCH /crops/{id}/region_meta`` onto
+the per-box routes -- this test now exercises
 ``PATCH /crops/{crop_id}/regions/{box_id}`` instead of the old item-level
 ``region_text`` key (``region_meta`` no longer accepts it at all;
 ``extra='forbid'`` 422s a stale client that still sends it)."""

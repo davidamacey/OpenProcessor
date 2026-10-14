@@ -82,7 +82,7 @@ help: ## Show this help message
 # ==================================================================================
 
 .PHONY: ensure-host-bind-mount-dirs
-ensure-host-bind-mount-dirs: ## F-29/F-71: pre-create bind-mount source dirs as the invoking (host) user, before compose ever runs. Docker auto-creates a missing bind-mount source root-owned on first 'up', which then blocks any host-user write into it (e.g. 'make download-test-images') -- and, if a tracked placeholder file is ever shipped inside one of these, blocks 'git pull' too (F-71). Run before every 'up' target instead of shipping a tracked file inside them.
+ensure-host-bind-mount-dirs: ## Pre-create bind-mount source dirs as the invoking (host) user, before compose ever runs. Docker auto-creates a missing bind-mount source root-owned on first 'up', which then blocks any host-user write into it (e.g. 'make download-test-images') -- and, if a tracked placeholder file is ever shipped inside one of these, blocks 'git pull' too. Run before every 'up' target instead of shipping a tracked file inside them.
 	@mkdir -p test_images data/source cache/huggingface cache/vllm
 	@(umask 077; mkdir -p secrets/vlm)
 	@for d in test_images data/source cache/huggingface cache/vllm secrets/vlm; do \
@@ -113,7 +113,7 @@ cluster-cpu: ## Recreate the auto-label worker without GPU passthrough (sklearn 
 	@echo "Worker recreated without GPU passthrough (clustering runs on CPU)."
 
 .PHONY: up-monitoring
-up-monitoring: ensure-host-bind-mount-dirs ## Start the core stack PLUS monitoring (F-3: opt-in on a shared host -- alloy mounts docker.sock and tails every container, dcgm-exporter reserves all GPUs)
+up-monitoring: ensure-host-bind-mount-dirs ## Start the core stack PLUS monitoring (opt-in on a shared host -- alloy mounts docker.sock and tails every container, dcgm-exporter reserves all GPUs)
 	@echo "Starting core + monitoring services..."
 	$(COMPOSE) --profile monitoring up -d --remove-orphans
 	@echo ""

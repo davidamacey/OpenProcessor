@@ -121,9 +121,8 @@ async def bootstrap_opensearch_indexes() -> 'asyncio.Task[None] | None':
 
     Wrapped so a missing/not-yet-up OpenSearch instance doesn't block
     startup -- the curation router retries its own create on the first
-    /curation/* request. F-25 (fresh-start E2E findings 2026-09-25):
-    nothing else creates the core visual_search_* indexes, so a fresh
-    install's first /ingest previously auto-created them with a dynamic
+    /curation/* request. Nothing else creates the core visual_search_*
+    indexes, so a fresh install's first /ingest previously auto-created them with a dynamic
     (non-knn_vector) mapping, silently breaking every k-NN search
     forever after; create_all_indexes is idempotent, so calling it here
     on every boot is safe (see OpenSearchClient._search_index /

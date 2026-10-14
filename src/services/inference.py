@@ -70,12 +70,10 @@ class InferenceService:
 
     Public methods:
     - detect(): Object detection using YOLOv11 TRT End2End
-    - detect_batch(): Batch object detection
     - detect_faces(): SCRFD face detection with ArcFace embeddings
     - recognize_faces(): Full pipeline (YOLO + faces + CLIP embedding)
     - encode_image(): MobileCLIP image encoding
     - encode_text(): MobileCLIP text encoding
-    - analyze_full(): Combined YOLO + faces + CLIP + OCR
 
     All responses include:
     - detections: List of normalized [0,1] bounding boxes

@@ -1,6 +1,5 @@
 /**
- * W8 multi-box region editing controller (docs/design/
- * w8-multibox-frontend-plan-2026-09-26.md) — owns the working `EditableBox[]`
+ * Multi-box region editing controller — owns the working `EditableBox[]`
  * set for the active crop's region slot and every write path over it,
  * following the existing factory-function convention
  * (`reviewController.svelte.ts`, `slotGalleryController.svelte.ts`):

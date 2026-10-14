@@ -1,5 +1,4 @@
-"""Target-context activation-gate check for project clone (R5-3 fix,
-W3/W4 review, Major).
+"""Target-context activation-gate check for project clone.
 
 Split out of ``clone.py`` to stay under the repo's 700-LOC pre-commit
 ratchet; ``clone.py``'s ``_validate_clone`` is the only caller.
@@ -106,14 +105,12 @@ async def check_activation_pair_in_target_context(
     # resolves an env/registry-registered profile's body even with
     # `revision=None` (there is nothing wrong with reading it for
     # validation purposes), so checking only "a body resolved" wrongly
-    # treated an unstored registry profile as "will be cloned" (R6-2's
-    # second variant). Match `_clone_activations`'s exact condition here
-    # instead, or the gate validates a pairing that never lands.
+    # treated an unstored registry profile as "will be cloned". Match `_clone_activations`'s exact condition
+    # here instead, or the gate validates a pairing that never lands.
     profile_will_be_cloned = (
         profile_ref is not None and profile_ref[1] is not None and profile_body is not None
     )
-    # R7-4 fix (Major, pre-existing, W3/W4 review, mirror of
-    # R6-2): same reasoning as `profile_will_be_cloned` above, applied to
+    # Same reasoning as `profile_will_be_cloned` above, applied to
     # the pack axis -- `pack_ref[1] is None` means an env/file pack
     # (`activate()`'s own invariant for "never written to the store"),
     # which `_clone_activations` skips exactly like an unstored profile.
@@ -141,8 +138,7 @@ async def check_activation_pair_in_target_context(
             # the cloned profile against THAT pack, bound to the target
             # (this function already runs inside `bind_project
             # (target_record)`), or the gate validates a pairing that
-            # never lands (the same class of gap R6-2 fixed for the
-            # reverse axis).
+            # never lands (the same class of gap as the profile axis).
             from src.services.labeling.vlm_prompts import resolve_prompt_pack
 
             pending_kwargs['pending_sibling'] = resolve_prompt_pack()
@@ -194,7 +190,7 @@ async def check_activation_pair_in_target_context(
     # reply keys, registry class-name coverage) against the cloned pack,
     # which several existing minimal test-fixture packs -- and plausibly
     # some real ones -- were never validated against end-to-end (same
-    # scoping reasoning the original R5-3 fix used for the profile axis,
+    # scoping reasoning the profile axis uses,
     # see the module docstring). The confirmed gap is specifically the
     # CROSS-AXIS pack/profile pairing (multi-box reply keys, text-mode
     # mismatch), so only those two checks run here.

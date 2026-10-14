@@ -479,7 +479,7 @@
   let vlmRunning = $state<boolean>(false);
   // Live status while POST /vlm/label_cluster/{id}'s job runs, polled via
   // pollAutoLabelJob — rendered as a compact inline stage/progress string
-  // next to the Run VLM button (2026-09-24 logic-moves W3).
+  // next to the Run VLM button.
   let vlmJob = $state<AutoLabelJobState | null>(null);
   // the endpoint this one run uses (`null` = the project default) and
   // the acknowledgement for an external one.
@@ -991,7 +991,7 @@
           >{kc('cluster.flag_new_class')}</kbd
         >
       </button>
-      <!-- W10 Reprocess on the selection (§7.12 item 6): absent unless the
+      <!-- Reprocess on the selection: absent unless the
            backend serves it; a served dry run precedes the apply. -->
       <ReprocessControl
         target={{ kind: 'crops', cropIds: [...sel.ids] }}

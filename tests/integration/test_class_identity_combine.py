@@ -60,7 +60,7 @@ async def test_class_identity_holds_through_a_combine(tmp_path: Path, monkeypatc
     assert world.registry_ids('proj-a')['car'] != world.registry_ids('proj-b')['car']
     expected = {**populate(world, 'proj-a', A_BOXES), **populate(world, 'proj-b', B_BOXES)}
 
-    # The mapping is W10's own name-based suggestion, accepted as it stands.
+    # The mapping is the combine service's own name-based suggestion, accepted as it stands.
     request = world.request(['proj-a', 'proj-b'], {})
     preview, _ = await service.preview(world.fake, request)
     request = world.request(['proj-a', 'proj-b'], {

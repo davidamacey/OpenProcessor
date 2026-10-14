@@ -1,4 +1,4 @@
-"""W8.4/W8.15: :func:`select_region_candidates` -- floor, NMS, cap, order."""
+""":func:`select_region_candidates` -- floor, NMS, cap, order."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ def test_deterministic_tie_order() -> None:
     assert result.selected == [first, second]
 
 
-def test_n1_returns_top_scoring_box_pre_w8_behaviour() -> None:
+def test_n1_returns_top_scoring_box() -> None:
     weak = _c(0.0, 0.0, 0.2, 0.2, 0.4)
     strong = _c(0.6, 0.6, 0.8, 0.8, 0.95)
     result = select_region_candidates([weak, strong], min_score=0.0, iou=0.5, max_n=1)

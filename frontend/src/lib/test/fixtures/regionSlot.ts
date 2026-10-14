@@ -35,7 +35,7 @@ export const WIDGET_TAG_PROFILE: ServedRegionProfile = {
 export const widgetTagServedSlot: SlotSpec =
   regionSlotFromServedProfile(WIDGET_TAG_PROFILE);
 
-/** Text-free variant (OpenProcessor W1, 2026-09-26): a profile that
+/** Text-free variant: a profile that
  *  detects/segments the region but never reads text off it —
  *  `text_reader: 'none'`, `reads_text: false`. */
 export const WIDGET_TAG_PROFILE_NO_TEXT: ServedRegionProfile = {

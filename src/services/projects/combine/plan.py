@@ -1,5 +1,5 @@
 """Combine preview and plan (projects plan section 6): validate the request,
-read every source through W10's project reader, resolve the name mapping,
+read every source through the import's project reader, resolve the name mapping,
 find duplicates, and report exactly what a run would do. Writes nothing.
 
 :func:`analyze` is the single computation behind ``POST /projects/combine/

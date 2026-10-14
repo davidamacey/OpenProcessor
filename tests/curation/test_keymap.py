@@ -1,4 +1,4 @@
-"""W2b: the per-project configurable keymap -- action registry, grammar
+"""The per-project configurable keymap -- action registry, grammar
 validator, reserved-hotkey derivation, and the ``GET/PUT/validate/reset
 {prefix}/keymap`` routes (CW-K §0/§2/§3/§4)."""
 
@@ -29,7 +29,7 @@ LEGACY_RESERVED_HOTKEY_LETTERS = frozenset('gndzxuam/feb')
 # --------------------------------------------------------------- registry
 
 
-def test_registry_loads_and_w8_rows_present() -> None:
+def test_registry_loads_and_per_box_rows_present() -> None:
     registry = load_registry()
     for action_id in ('review.region.accept_box', 'review.region.reject_box', 'box_edit.next_box'):
         assert action_id in registry.actions
@@ -107,8 +107,8 @@ def test_validator_warns_focus_key() -> None:
 # ------------------------------------------------------- reserved_hotkeys
 
 
-def test_derived_default_equals_legacy_set_plus_w8_and_overlay() -> None:
-    """CW-K §3.4: the derived default = the legacy hardcoded set UNION {y, r, backtick}."""
+def test_derived_default_equals_legacy_set_plus_box_keys_and_overlay() -> None:
+    """The derived default = the legacy hardcoded set UNION {y, r, backtick}."""
     assert set(reserved_hotkeys({})) == LEGACY_RESERVED_HOTKEY_LETTERS | {'y', 'r', '`'}
 
 

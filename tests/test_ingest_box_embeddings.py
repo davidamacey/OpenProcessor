@@ -107,7 +107,7 @@ def test_infer_yolo_clip_cpu_produces_box_embeddings(client: TritonClient) -> No
 
 class _MultiSmallBoxAdapter:
     """Several small, differently-sized boxes on a 640x480 (COCO-shaped)
-    image -- reproduces F-28: distant/small detection crops whose
+    image -- reproduces: distant/small detection crops whose
     center_crop_cpu resize-then-crop math previously undershot 256px on
     some boxes but not others, so np.stack across the batch raised
     'all input arrays must have the same shape'."""
@@ -143,7 +143,7 @@ class _MultiSmallBoxAdapter:
 def test_infer_yolo_clip_cpu_stacks_many_small_boxes_on_a_coco_image(
     client: TritonClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """F-28: reproduces the reported failure on an ordinary 640x480 image
+    """Reproduces the reported failure on an ordinary 640x480 image
     with several small detections -- previously raised ValueError from
     np.stack when one box's center-cropped tensor came out smaller than
     256x256 due to float truncation in the resize-then-crop math."""
@@ -175,7 +175,7 @@ def test_infer_yolo_clip_cpu_stacks_many_small_boxes_on_a_coco_image(
 def test_infer_yolo_clip_cpu_handles_every_image_mode(
     client: TritonClient, mode: str, size: tuple[int, int]
 ) -> None:
-    """F-28: grayscale / alpha / CMYK / tiny inputs must decode to a plain
+    """Grayscale / alpha / CMYK / tiny inputs must decode to a plain
     RGB array and produce a well-formed box embedding, not raise."""
     img = Image.new(mode, size, color=200 if mode == 'L' else (200, 60, 60, 255)[: len(mode)])
     buf = io.BytesIO()

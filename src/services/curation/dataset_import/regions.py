@@ -2,7 +2,7 @@
 (e.g. "wheel") attach to their parent item (e.g. "car") by containment.
 
 Pure — no I/O. ``dataset_import/job.py`` calls this per image, then
-writes the result through W8's ``boxes_write_fields``.
+writes the result through ``boxes_write_fields``.
 """
 
 from __future__ import annotations

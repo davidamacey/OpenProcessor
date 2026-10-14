@@ -1,5 +1,5 @@
 /**
- * F-53 / F-58 (fresh-start findings 2026-09-25). Source scan, matching
+ * Source scan, matching
  * this directory's convention: the route page isn't mountable here.
  */
 import { readFileSync } from 'node:fs';

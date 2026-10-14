@@ -6,10 +6,10 @@ value first, ``configured: true``), ``segmenters[]`` with the *active
 profile's* own candidate-selection numbers (this repo has no separate
 fixed server-side cap -- see the module docstring below), and ``vlm`` as
 ``{active, endpoints: [<one env entry>]}`` built from ``OP_VLM_URL`` /
-``OP_VLM_MODEL``. W9 swaps the ``vlm`` block's source to the endpoint
-registry without changing this shape, and adds ``model_choices`
+``OP_VLM_MODEL``. The endpoint registry will replace the ``vlm`` block's
+source without changing this shape, and adds ``model_choices``
 (served here as an always-empty list until then, so the field exists in
-the contract without W9's routes).
+the contract without those routes).
 """
 
 from __future__ import annotations
@@ -280,7 +280,7 @@ async def _build_segmenter() -> list[SegmenterEntry]:
             status=built['status'],
             # No fixed server-side candidate cap exists in this codebase
             # (select_region_candidates takes max_n from the ACTIVE
-            # profile's own max_regions_per_item at call time, W8.4) --
+            # profile's own max_regions_per_item at call time) --
             # served here rather than a fabricated constant.
             max_candidates=profile.max_regions_per_item,
             default_min_score=profile.confidence_floor,

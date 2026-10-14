@@ -19,8 +19,7 @@
    * The `raw` form parses entries from `region_detector_chain` so the
    * meta panel can render the full cascade story as a chip strip.
    *
-   * Label/palette resolution is now backend-driven (W0 naming-sweep
-   * finding m9): this component used to hand-code a 20-arm label switch
+   * Label/palette resolution is now backend-driven: this component used to hand-code a 20-arm label switch
    * and a 10-branch palette if-chain, then (P2.2) moved that same table
    * into a config object. Both are gone — the label comes from
    * `GET {API_PREFIX}/regions/vocabulary` (`regionVocabularyStore`), and the chip

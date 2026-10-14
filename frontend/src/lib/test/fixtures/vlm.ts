@@ -1,5 +1,5 @@
 /**
- * W9 VLM fixtures, shaped after the contract's own models (f582aa05) in
+ * VLM fixtures, shaped after the contract's own models (f582aa05) in
  * neutral names: a stored local endpoint, a stored external one and the
  * read-only env built-in.
  */

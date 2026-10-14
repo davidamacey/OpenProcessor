@@ -275,7 +275,7 @@ def test_no_key_means_the_conventional_placeholder() -> None:
     assert labeler_for(_endpoint(), GENERIC_ITEM_PACK).api_key == 'EMPTY'
 
 
-# ---- W9 review M7: the host is re-checked at use time -------------------------
+# ---- the host is re-checked at use time -------------------------
 
 
 def _flip_to(monkeypatch: pytest.MonkeyPatch, host: str, address: str) -> None:

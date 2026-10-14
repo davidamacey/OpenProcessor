@@ -3,12 +3,11 @@
 See ``scripts/curation/worker/__main__.py`` for the entry point and
 the ``scripts/curation/worker/`` package for the rest of the split.
 
-The pre-W8 single-candidate cascade (``_process_crop`` + its
+The old single-candidate cascade (``_process_crop`` + its
 ``combined._run_combined_cohort_path`` cohort routing) has been deleted
 -- ``runner.py``'s streaming pipeline is the only production cascade
-(confirmed zero production callers before removal; see the W8 pipeline-
-wiring handback report). This module now only keeps the pending-fetch
-query, the crop/geometry helpers ``runner.py`` still calls, and the
+(it had zero production callers). This module now only keeps the
+pending-fetch query, the crop/geometry helpers ``runner.py`` still calls, and the
 ``SegmenterClient`` re-export other modules import from here.
 """
 

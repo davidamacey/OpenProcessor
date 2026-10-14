@@ -491,7 +491,7 @@ async def _clone_activations(
     written_packs: dict[str, Any] | None = None,
     target_activations: dict[str, dict[str, Any] | None] | None = None,
 ) -> None:
-    """Glue G1 (projects_plan.md §11 W2): copy the source's active
+    """Copy the source's active
     ``prompt_pack``/``detection_profile`` -- the stored config body plus
     the activation itself -- into the target. A source axis that is
     ``off``, unset, or resolves to an env/file-registered profile (never
@@ -530,7 +530,7 @@ async def _clone_activations(
             # -- there is no bulk 'region_profiles' clone axis) so this
             # never needs to re-read what was just written.
             #
-            # W2 Minor 2 must still hold even when the sibling axis wrote
+            # This must still hold even when the sibling axis wrote
             # first: the body actually made ACTIVE in the target is always
             # the source's ACTIVATED body (`body`, fetched above from the
             # immutable `<kind>:<name>@<rev>` copy) -- never the source's

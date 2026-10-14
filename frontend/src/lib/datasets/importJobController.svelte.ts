@@ -1,6 +1,5 @@
 /**
- * One import job's view state (any_domain_plan.md §7.12 item 2, W10.11,
- * W10.12; docs/design/w10-import-reprocess-ui-plan-2026-09-27.md §3).
+ * One import job's view state.
  *
  * The served job is the only source: the controller re-reads it after
  * the served `poll_after_s` (null = terminal, polling stops), and a

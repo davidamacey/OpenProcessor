@@ -1,4 +1,4 @@
-"""Wave 5: the ``open_vocab`` reprocess scope -- dry-run estimate, locked
+"""The ``open_vocab`` reprocess scope -- dry-run estimate, locked
 count, active-set requirement, image-level selectors, outage handling."""
 
 from __future__ import annotations

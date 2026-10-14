@@ -1,4 +1,4 @@
-"""W10.8: imported reviewed-negative frames reach both exporters as
+"""Imported reviewed-negative frames reach both exporters as
 background training data, with the coverage rule and provenance intact."""
 
 from __future__ import annotations

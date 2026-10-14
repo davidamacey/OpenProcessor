@@ -1,4 +1,4 @@
-"""W10 fix-pass regression: unexclusion_update's legacy
+"""Regression: unexclusion_update's legacy
 ``excluded_prior_class_validated``-absent branch must ask "was this a
 human write" (``is_human_marker``), not "is this locked"
 (``is_locked_class``) -- the two are not the same claim.

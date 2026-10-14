@@ -1,4 +1,4 @@
-"""W2b keymap validator (CW-K §3.1-§3.4).
+"""Keymap validator.
 
 Pure function: no OpenSearch I/O beyond the class list the caller
 already fetched (per the owner's per-project scope override, §0: class

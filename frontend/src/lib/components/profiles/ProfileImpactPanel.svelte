@@ -16,7 +16,7 @@
    * §4.6, §7.3): items by the profile@revision that produced them and the
    * cohorts a profile change never touches. Nothing already processed is
    * rewritten by an activation; a re-run is explicit. When the server
-   * suggests one (`suggested_reprocess`, W10) and serves Reprocess, "Re-run…"
+   * suggests one (`suggested_reprocess`) and serves Reprocess, "Re-run…"
    * sends that request exactly as served to `POST /reprocess`: a dry run
    * first, then the apply behind a confirm.
    */

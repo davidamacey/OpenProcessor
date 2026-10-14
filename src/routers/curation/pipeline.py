@@ -115,7 +115,7 @@ async def _run_auto_label(
     prompt_pack_revision: int | None = None,
     # `/start` already ran `resolve_run_prompt_pack`: do not re-pin.
     prompt_pack_resolved: bool = False,
-    # The ORIGINAL request omitted `prompt_pack` (R6-1b): resolve the
+    # The ORIGINAL request omitted `prompt_pack`: resolve the
     # labeler against "whatever is active now", not the echoed name, which
     # can go stale before the VLM stage runs.
     prompt_pack_omitted: bool = False,
@@ -191,7 +191,7 @@ async def _run_auto_label(
         # `(active_name, None)` -- `None` there means "follow the active
         # pack's PINNED body dynamically" (`_get_vlm_labeler`/
         # `get_prompt_pack` redirect a bare active name with
-        # `revision=None` to the pinned body, B1 round-2), NOT "not yet
+        # `revision=None` to the pinned body), NOT "not yet
         # resolved." Re-running `resolve_run_prompt_pack` on that
         # already-resolved bare `active_name` here re-entered the N7
         # "bare name -> latest saved revision" branch and silently pinned
@@ -201,7 +201,7 @@ async def _run_auto_label(
         # the resolver" signal, set unconditionally there -- so this
         # branch only fires for a call that never went through `/start`.
         #
-        # R6-1b fix: capture "was `prompt_pack` omitted" from the RAW
+        # Capture "was `prompt_pack` omitted" from the RAW
         # incoming param before `resolve_run_prompt_pack` overwrites it
         # below -- this branch is the only place besides `/start` itself
         # that ever resolves an omitted pack, so it must compute the same
@@ -416,7 +416,7 @@ async def _run_auto_label(
     ]
     # The run's selected pack (resolve_prompt_pack() default when unset).
     #
-    # R6-1b fix: when the request omitted `prompt_pack`, resolve the
+    # When the request omitted `prompt_pack`, resolve the
     # labeler against `None`/`None` -- ALWAYS "whatever is active right
     # now" -- never the echoed `(prompt_pack, prompt_pack_revision)`
     # name/revision, which can go stale between request time and here

@@ -1,4 +1,4 @@
-"""Wave 6: the one segmenter gate (tiers 1-3), pure parts and ordering."""
+"""The one segmenter gate (tiers 1-3), pure parts and ordering."""
 
 from __future__ import annotations
 

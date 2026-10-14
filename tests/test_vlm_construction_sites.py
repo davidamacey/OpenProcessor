@@ -41,7 +41,7 @@ def test_only_the_factory_constructs_a_vlm_labeler() -> None:
 
 
 def test_the_worker_builds_its_labeler_through_the_factory_alias() -> None:
-    rel = 'scripts/curation/worker/__init__.py'
+    rel = 'scripts/curation/worker/runner.py'
     tree = dict(_sources())[rel]
     imported = {
         alias.asname or alias.name

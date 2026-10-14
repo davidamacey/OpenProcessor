@@ -1,4 +1,4 @@
-"""W5: one combined VLM reply -> boxes/status/write fields, shared by the
+"""One combined VLM reply -> boxes/status/write fields, shared by the
 worker's combined stage and the test-on-crop preview."""
 
 from __future__ import annotations

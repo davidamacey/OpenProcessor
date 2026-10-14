@@ -204,7 +204,7 @@ export interface PromptPackInfo extends MethodInfoBase {
 
 /**
  * One VLM endpoint a run can be pointed at, plus the `off` entry
- * (`axis: 'vlm'`, OpenProcessor W9). Beyond the shared fields it carries
+ * (`axis: 'vlm'`). Beyond the shared fields it carries
  * the endpoint's served status and the acknowledgement facts the pickers
  * read verbatim: whether it sends crops outside the deployment, the served
  * warning, whether the project default already has a recorded

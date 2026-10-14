@@ -233,8 +233,8 @@
     {/if}
   {/if}
 
-  <!-- Per-feature provenance rows (W9 VLM, W10 import/lock, v0.4.0 open
-       vocabulary, P4 combine origin, v0.4.0 embedding state): each
+  <!-- Per-feature provenance rows (VLM, import/lock, open
+       vocabulary, combine origin, embedding state): each
        component renders its own <dt>/<dd> pairs or nothing. -->
   <VlmProvenanceRows {crop} />
   <ImportProvenanceRows {crop} />
@@ -311,7 +311,7 @@
   {/if}
 </dl>
 
-<!-- W10 Reprocess (§7.12 item 6): absent unless the backend serves it. -->
+<!-- Reprocess: absent unless the backend serves it. -->
 <div class="mt-2">
   <ReprocessControl
     target={{ kind: 'crop', cropId: crop.id }}

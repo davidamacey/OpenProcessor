@@ -244,11 +244,11 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
         ReviewSort(
             id='region_score',
             label='Region detection score',
-            # W8-cleanup B1 fix: sort on the flat `region_max_score` item
+            # Sort on the flat `region_max_score` item
             # field, not the legacy `region_score`/`region_candidate_score`
-            # scalars. Nothing in the W8 worker ever writes those two --
+            # scalars. Nothing in the region worker ever writes those two --
             # only dead code (verify.py's now-uncalled doc builders) and
-            # human single-box paths do -- so on a W8-written index this
+            # human single-box paths do -- so on an index the worker wrote this
             # sort tied on `missing: '_last'` for every item and fell back
             # to the crop_id tiebreak, silently burying high-confidence
             # items last. `region_max_score` is maintained by every box

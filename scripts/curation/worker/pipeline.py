@@ -107,7 +107,7 @@ def _should_classify(t: _ItemTask, *, registry_loaded: bool) -> bool:
 
 
 # =============================================================================
-# W8 multi-box candidate wiring helpers (module-level so they're directly
+# Multi-box candidate wiring helpers (module-level so they're directly
 # unit-testable, same rationale as ``_should_classify``).
 # =============================================================================
 
@@ -158,7 +158,7 @@ def _box_list_doc(
     write time, plus whatever non-box fields (chain, class update, ...)
     land in the same update.
 
-    W8 B1 + M1 fix (pipeline-wiring review, 2026-09-27): the actual box
+    The actual box
     list merge, status derivation, id finalization and
     ``region_revision``/``region_box_seq`` bump used to happen HERE,
     against this task's own fetch-time snapshot -- silently discarding

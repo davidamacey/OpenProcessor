@@ -1,8 +1,7 @@
-"""W8 per-item region-box list: the single storage abstraction.
+"""Per-item region-box list: the single storage abstraction.
 
 Regions are always a list per item. N=1 is a list of one — there is no
-separate "single box" code path (see
-``docs/design/openprocessor_internal/any_domain_plan.md`` W8.0-W8.2).
+separate "single box" code path.
 
 This module is pure (no I/O): every OpenSearch reader/writer routes
 through :func:`read_boxes` / :func:`boxes_write_fields` so the list, the
@@ -44,8 +43,7 @@ class RegionBox:
     """One element of the ``region_boxes`` nested list.
 
     Element keys are fixed strings (not ``RegionFields``-indirected) —
-    see W8.2: the list is new, so no deployment has legacy names for
-    them.
+    the list is new, so no deployment has legacy names for them.
     """
 
     box_id: str
@@ -142,13 +140,13 @@ class _IdOnly:
     box_id: str
 
 
-# W8 M1 fix (pipeline-wiring review, 2026-09-27): a fresh candidate box's
+# A fresh candidate box's
 # REAL id (``b<N>``) is only safe to mint against the CURRENT stored
 # ``region_box_seq`` high-water mark, which is only known at write time
 # (inside the bulk-writer's OCC merge, which re-reads the live doc
 # immediately before writing -- see ``bulk_writer._merge``). Minting a
 # real id at task-processing time off a possibly-stale fetch-time
-# snapshot let a concurrent write's ids collide (the review's M1 probe).
+# snapshot let a concurrent write's ids collide.
 # A placeholder is assigned instead at candidate-resolution time and
 # swapped for a real id in :func:`finalize_box_ids`, called from the
 # merge closure. Never matches ``b<digits>`` or a human/real box id.
@@ -175,7 +173,7 @@ def finalize_box_ids(
     before this call) so a real id already spoken for -- by a box this
     pass never touched, including one a concurrent human write just
     added -- is never reused. Boxes that already carry a real id
-    (re-verified from a stored ``proposed`` box, W8 B1) pass through
+    (re-verified from a stored ``proposed`` box) pass through
     unchanged and also claim their id against ``existing`` for the rest
     of this call's minting.
     """
@@ -290,7 +288,7 @@ def is_human_owned(box: RegionBox) -> bool:
 
 
 def derive_status(boxes: Sequence[RegionBox], *, empty_status: RegionStatus) -> RegionStatus:
-    """Item status from the box list, in W8.7's fixed precedence order."""
+    """Item status from the box list, in a fixed precedence order."""
     if any(b.state == 'accepted' for b in boxes):
         return RegionStatus.DETECTED
     if any(b.state == RegionStatus.FALSE_POSITIVE.value for b in boxes):
@@ -360,7 +358,7 @@ def boxes_write_fields(
         F.box_seq: max(current_seq, max_id_seen),
     }
     # `rejection_reason` mirrors the highest-scoring REJECTED box, but only
-    # when the item has no accepted or false_positive box (W8-cleanup N1):
+    # when the item has no accepted or false_positive box:
     # such an item is `detected`/`false_positive`, not rejected, and must not
     # carry a rejection reason from a rejected sibling box -- that would
     # make the labeler render a red "Rejection" row on an item that

@@ -1,4 +1,4 @@
-"""F-42 (fresh-start E2E findings 2026-09-25, round 2): class-name
+"""Class-name
 resolution must be scoped to the model that actually produced the
 detection, not a hardcoded assumption that every caller is the stock
 COCO detector.
@@ -66,7 +66,7 @@ class TestFormatDetectionsFromTriton:
     def test_a_promoted_models_class_ids_never_borrow_coco_words(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """The exact regression: F-42's bus/train/truck mislabeling."""
+        """The exact regression: bus/train/truck mislabeling."""
         monkeypatch.setenv('OP_TRITON_MODEL_REPO', str(tmp_path))
         model_dir = tmp_path / 'vehicle_detector_v1'
         model_dir.mkdir()
@@ -98,7 +98,7 @@ class TestTritonClientFormatDetections:
 
 
 class TestInferenceServiceThreadsModelNameThrough:
-    """The actual F-42 symptom lived here: /detect?model_name=<promoted>
+    """The symptom lived here: /detect?model_name=<promoted>
     called format_detections() with no model_name at all."""
 
     def test_detect_passes_its_model_name_to_format_detections(
@@ -117,29 +117,6 @@ class TestInferenceServiceThreadsModelNameThrough:
 
         service = inference_module.InferenceService()
         service.detect(b'fake-jpeg-bytes', model_name='vehicle_detector_v1')
-
-        fake_client.format_detections.assert_called_once()
-        _args, kwargs = fake_client.format_detections.call_args
-        assert kwargs.get('model_name') == 'vehicle_detector_v1'
-
-    def test_detect_batch_passes_its_model_name_to_format_detections(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        from src.services import inference as inference_module
-
-        fake_client = MagicMock()
-        fake_client.infer_yolo_end2end_batch.return_value = [
-            {'boxes': [], 'scores': [], 'classes': []}
-        ]
-        fake_client.format_detections.return_value = []
-        monkeypatch.setattr(inference_module, 'get_triton_client', lambda *_a, **_k: fake_client)
-        monkeypatch.setattr(
-            inference_module, 'decode_image', lambda *_a, **_k: np.zeros((10, 10, 3), np.uint8)
-        )
-        monkeypatch.setattr(inference_module, 'validate_image', lambda *_a, **_k: None)
-
-        service = inference_module.InferenceService()
-        service.detect_batch([b'fake-jpeg-bytes'], model_name='vehicle_detector_v1')
 
         fake_client.format_detections.assert_called_once()
         _args, kwargs = fake_client.format_detections.call_args

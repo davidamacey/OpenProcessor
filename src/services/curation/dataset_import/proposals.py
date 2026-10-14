@@ -1,4 +1,4 @@
-"""Machine proposals during an import (W10.6 step 7, W10.7 ``parents:
+"""Machine proposals during an import (``parents:
 detect``): run the primary detector over the decoded image and merge its
 boxes into the image's items through
 :func:`~src.services.curation.proposal_merge.merge_item_proposals`.

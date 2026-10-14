@@ -1,5 +1,5 @@
 /**
- * W5 test-on-crop fixtures (`POST /prompt_packs/test`,
+ * Test-on-crop fixtures (`POST /prompt_packs/test`,
  * `POST /region_profiles/test`), shaped after the vendored contract
  * (PackTestResponse, RegionTestResponse) in the neutral widget/tag domain.
  */

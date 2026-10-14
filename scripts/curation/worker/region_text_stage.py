@@ -242,7 +242,7 @@ def resolve_rejected_box_text(
     profile: DetectionProfile,
     rules: RegionTextRules | None = None,
 ) -> RegionBox:
-    """W8 M6 fix: a non-accepted box must never carry a raw, unvalidated
+    """A non-accepted box must never carry a raw, unvalidated
     VLM text reply the way an accepted box's ``apply_region_text`` output
     is validated.
 

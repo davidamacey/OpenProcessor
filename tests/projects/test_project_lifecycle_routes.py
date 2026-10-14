@@ -120,7 +120,7 @@ def test_archive_unarchive_route_envelope() -> None:
 def test_clone_settings_route_serves_keymap_conflicts_structured(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """W2b: a dropped keymap-clone conflict is served on the route
+    """A dropped keymap-clone conflict is served on the route
     response as a structured ``keymap_clone_conflicts`` list (action_id,
     combo, class), never silently swallowed."""
     from src.config.project_context import try_current_project

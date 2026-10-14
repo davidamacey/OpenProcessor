@@ -85,7 +85,7 @@ export interface SubBoxRing {
 }
 
 /**
- * One element of a multi-box list (W8, `RegionBoxWire`). Additive to the
+ * One element of a multi-box list (`RegionBoxWire`). Additive to the
  * existing scalar `SubBoxCapability` fields below — a slot that declares
  * `listField` gets `SlotData.subBoxes` populated by `readSlot`; slots that
  * don't (every non-region slot today) are unaffected. See
@@ -352,7 +352,7 @@ export interface SlotSpec {
 
 export interface SlotData {
   key: SlotKey;
-  /** W8 multi-box list, present when the slot's `subBox.listField` is
+  /** Multi-box list, present when the slot's `subBox.listField` is
    *  set and the backend serves it — always an array, `[]` when the item
    *  has no boxes, in stored (display) order. See `SlotBox`. */
   subBoxes?: SlotBox[];

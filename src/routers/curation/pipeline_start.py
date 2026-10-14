@@ -156,7 +156,7 @@ async def pipeline_auto_label_start(
                 # above for every shape of this request, so the job must
                 # never re-run it.
                 'prompt_pack_resolved': True,
-                # R6-1b fix: tells `_run_auto_label` whether THIS request
+                # Tells `_run_auto_label` whether THIS request
                 # omitted `prompt_pack` -- when it did, the job must
                 # resolve the VLM labeler against `None` (always "whatever
                 # is active right now"), never the echoed `prompt_pack`

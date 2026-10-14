@@ -1,6 +1,5 @@
 /**
- * W4 region-profile fixtures, shaped after the spec's own examples
- * (any_domain_plan.md §7.3, §7.4) in the neutral widget/tag domain.
+ * Region-profile fixtures, shaped after the spec's own examples in the neutral widget/tag domain.
  */
 import type { ActiveConfigResponse, ConfigRevisionList } from '$lib/types_config';
 import type {

@@ -172,7 +172,7 @@ class ProjectWarning(BaseModel):
 
 
 class KeymapCloneConflictWire(BaseModel):
-    """W2b: one action whose combo collides with the target's class hotkey.
+    """One action whose combo collides with the target's class hotkey.
     The ``keymap`` clone axis is all-or-nothing: on any conflict the whole
     keymap is skipped and the target's keymap is left unchanged -- a
     report, never a silent unbind (CW-K §0 clause 1)."""

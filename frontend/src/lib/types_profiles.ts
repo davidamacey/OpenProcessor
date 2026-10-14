@@ -1,13 +1,11 @@
 /**
- * Wire types for OpenProcessor W4 (region-profile CRUD and the config
- * vocabulary): `any_domain_plan.md` §4, §7.3, §7.4; `projects_plan.md`
- * §5.5 (shared detectors). Every route is project-scoped
+ * Wire types for region-profile CRUD and the config
+ * vocabulary. Every route is project-scoped
  * (`{prefix}/region_profiles...`, `{prefix}/config/vocabulary`).
  *
- * Built against the frozen spec before the backend lands W4, so nothing
+ * Built against the frozen spec before the backend lands region profiles, so nothing
  * here is pinned to the vendored OpenAPI yet. Where the spec leaves a
- * shape open, the type is the literal reading recorded in
- * docs/design/w4-profile-editor-ui-plan-2026-09-27.md §8 (question W4-Qn).
+ * shape open, the type is the literal reading of it.
  */
 
 import type {
@@ -170,7 +168,7 @@ export interface ImpactByProfile {
 }
 
 /** `GET /region_profiles/active/impact` (§4.6, §7.3). `suggested_reprocess`
- *  is W10's request (G2: absent when W4 ships first). */
+ *  is the Reprocess request (absent when no reprocess is suggested). */
 export interface ActivationImpact {
   items_total: number;
   by_profile: ImpactByProfile[];
@@ -292,7 +290,7 @@ export interface ConfigVocabulary {
     det_models: VocabModel[];
     rec_models: VocabModel[];
   };
-  /** W9.8; rendered on `/settings/models`. */
+  /** Rendered on `/settings/models`. */
   model_choices: ModelChoice[];
   text_reader_modes: VocabTextReaderMode[];
   registry_classes: VocabRegistryClass[];

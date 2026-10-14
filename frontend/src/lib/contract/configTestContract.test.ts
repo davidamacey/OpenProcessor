@@ -1,6 +1,6 @@
 /**
- * `types_configTest.ts` vs the vendored OpenAPI (OpenProcessor f582aa05,
- * W5). Each key map is compile-time exact against its interface and is
+ * `types_configTest.ts` vs the vendored OpenAPI (OpenProcessor f582aa05).
+ * Each key map is compile-time exact against its interface and is
  * pinned to the schema's property set. Two things are deliberately not
  * pinned: `vlm_draft` on both requests (a cross-page draft, not offered
  * by this UI) and the client-added `preview` (the mapped `preview_item`).

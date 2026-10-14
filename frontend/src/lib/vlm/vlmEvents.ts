@@ -1,5 +1,5 @@
 /**
- * The two event streams a W9 surface follows: the GLOBAL
+ * The two event streams a VLM surface follows: the GLOBAL
  * `vlm.changed` (registry or local-model catalog changed) and the
  * project-scoped `config.changed axis=vlm` (this project's activation
  * changed). Both are only wake-ups to re-read; the served reads stay the

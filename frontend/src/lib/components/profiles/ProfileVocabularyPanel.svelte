@@ -3,8 +3,7 @@
    * The project's config vocabulary (`GET /config/vocabulary`, §7.4), read
    * only: the models, segmenters, OCR models, text-reading modes and VLM
    * endpoints a region profile can name. The vocabulary has no write
-   * route; a profile picks from it. Ids without a served label print raw
-   *.
+   * route; a profile picks from it. Ids without a served label print raw.
    */
   import type { ConfigVocabulary, VocabModel } from '$lib/types_profiles';
   import SegmenterStatus from './SegmenterStatus.svelte';

@@ -60,7 +60,7 @@ CLUSTER_SCOPED_SKIP: dict[str, object] = {
 # uses it. The param stays declared (hidden) only so an old client still
 # sending it gets a clear 422 instead of FastAPI silently ignoring an
 # unknown param.
-# E7 (any_domain_plan.md §1): reworded off OP_REGION_PROFILE (W2/W4 made
+# Reworded off OP_REGION_PROFILE (the config store made
 # the active profile a config-store activation, not just an env var) to
 # name the real source of truth and how to change it.
 _UNRESOLVABLE_REVISION = (
@@ -99,8 +99,8 @@ def reject_detection_profile(detection_profile: Any) -> None:
 async def resolve_run_prompt_pack(
     opensearch: Any, prompt_pack: Any
 ) -> tuple[str | None, int | None]:
-    """Resolve the per-run ``prompt_pack`` id, and PIN a revision (W2,
-    any_domain_plan.md §3.7): ``"name@<revision>"`` pins that exact
+    """Resolve the per-run ``prompt_pack`` id, and PIN a revision:
+    ``"name@<revision>"`` pins that exact
     revision; a bare ``"name"`` resolves to ``(name, None)`` -- "latest
     saved" at the time the job reads the labeler, unaffected by an edit
     made after the job starts (the job dict stores the returned revision
@@ -149,8 +149,7 @@ async def resolve_run_prompt_pack(
         # motivating case) used to be accepted with a 202 and only fail
         # once the background job called `_get_vlm_labeler`. §3.7 requires
         # a 422 here instead. `get_prompt_pack` resolves `name@rev` against
-        # both the current doc and the store's pinned-active-revision copy
-        #, so this covers exactly the revision the job
+        # both the current doc and the store's pinned-active-revision copy, so this covers exactly the revision the job
         # will resolve later. `opensearch=None` (no client -- unit tests
         # exercising this resolver in isolation, same contract as
         # `resolve_effective_default`) skips the store lookup entirely,
@@ -193,7 +192,7 @@ async def resolve_run_prompt_pack(
         # exact current revision now so the job resolves the same body
         # `_get_vlm_labeler`/`get_prompt_pack(name, revision=N)` will
         # serve later, instead of letting `revision=None` ride through to
-        # `get_prompt_pack`'s active-pack redirect (B1/round-2's pinning,
+        # `get_prompt_pack`'s active-pack redirect (the pinning,
         # which must stay untouched for the omitted-param path).
         from src.services.config_store import get_config_store
 
@@ -202,7 +201,7 @@ async def resolve_run_prompt_pack(
         stored = get_config_store().current.packs.get(resolved)
         if stored is not None:
             revision = stored.revision
-    # NOTE (R6-1b, W3/W4 review): `resolved` here still echoes the
+    # NOTE: `resolved` here still echoes the
     # active pack's NAME for the omitted-param case (`requested is None`)
     # -- several callers (job summaries, `/start`'s own response) read
     # this purely for display and must keep seeing it. The job/labeler
@@ -216,11 +215,10 @@ async def resolve_run_prompt_pack(
 def omitted_pack_is_store_active(resolved_name: str | None) -> bool:
     """True when ``resolved_name`` (the echo for an omitted per-run
     ``prompt_pack``) came from the config store's own activation, not a
-    legacy settings-doc/env/file default (R7-2 fix, W3/W4 review,
-    Major).
+    legacy settings-doc/env/file default.
 
     ``labeler_resolution_args``'s ``(None, None)`` re-resolution exists
-    only to dodge the store-active-pack TOCTOU (R6-1b): the echoed name
+    only to dodge the store-active-pack TOCTOU: the echoed name
     can go STALE between request time and the VLM stage actually running,
     once a *different* pack is activated. An env/file default
     has no such staleness -- nothing "activates" out
@@ -243,8 +241,7 @@ def omitted_pack_is_store_active(resolved_name: str | None) -> bool:
 def labeler_resolution_args(
     prompt_pack: str | None, prompt_pack_revision: int | None, *, prompt_pack_omitted: bool
 ) -> tuple[str | None, int | None]:
-    """What ``_get_vlm_labeler`` must be called with for the VLM stage
-    (R6-1b fix, W3/W4 review, Blocker).
+    """What ``_get_vlm_labeler`` must be called with for the VLM stage.
 
     ``(prompt_pack, prompt_pack_revision)`` are the RESOLVED echo values
     (kept for ``summary``/job-status display -- existing callers read
@@ -257,7 +254,7 @@ def labeler_resolution_args(
     revision=None)`` no longer redirects that OLD name to its pinned
     body and instead silently serves its un-activated CURRENT draft
     (B1, reachable again once a separate process's config-store
-    snapshot is warm, R6-1a). Split out as its own function so it is
+    snapshot is warm). Split out as its own function so it is
     directly unit-testable without driving the whole pipeline.
     """
     if prompt_pack_omitted:
