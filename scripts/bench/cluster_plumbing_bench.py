@@ -174,9 +174,9 @@ class StageClock:
         setattr(owner, name, timed)
 
     def __enter__(self) -> StageClock:
-        from src.services.curation.clustering import centroid_distance, embedding_reduce, methods
+        from src.services.curation.clustering import centroid_distance, methods, residual_fetch
 
-        self._wrap(embedding_reduce, 'fetch_residual_embeddings_parallel', 'fetch_s')
+        self._wrap(residual_fetch, 'fetch_residual_embeddings_parallel', 'fetch_s')
         self._wrap(centroid_distance, 'member_centroid_distances', 'distance_s')
         self._wrap(self._client.indices, 'refresh', 'refresh_s')
         real_get = methods.get_method
@@ -369,14 +369,14 @@ def fetch_profile(url: str, index: str, pages: int = 5, page_size: int = 2000) -
 
 async def fetch_grid(client: Any, grid: str, reps: int) -> list[dict[str, Any]]:
     """Time the parallel fetch alone for each ``slices:page_size`` pair of ``grid``."""
-    from src.services.curation.clustering import embedding_reduce
+    from src.services.curation.clustering import residual_fetch
 
     rows = []
     for cell in grid.split(','):
         n_slices, page_size = (int(x) for x in cell.split(':'))
         for rep in range(reps):
             t0 = time.perf_counter()
-            ids, _ = await embedding_reduce.fetch_residual_embeddings_parallel(
+            ids, _ = await residual_fetch.fetch_residual_embeddings_parallel(
                 client, n_slices=n_slices, page_size=page_size
             )
             rows.append(
@@ -400,10 +400,10 @@ async def write_grid(client: Any, grid: str, reps: int) -> list[dict[str, Any]]:
     The labels are arbitrary (the cluster-id offset plus the row number modulo 512): the
     cost of a guarded update does not depend on the value written.
     """
-    from src.services.curation.clustering import embedding_reduce
+    from src.services.curation.clustering import residual_fetch
     from src.services.curation.clustering.assignment_writer import AssignmentWriter, batches
 
-    ids, _ = await embedding_reduce.fetch_residual_embeddings_parallel(client)
+    ids, _ = await residual_fetch.fetch_residual_embeddings_parallel(client)
     rows_all = [(doc_id, 10_000 + i % 512, (i % 100) / 100.0) for i, doc_id in enumerate(ids)]
     out = []
     for cell in grid.split(','):

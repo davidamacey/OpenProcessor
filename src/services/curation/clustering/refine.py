@@ -92,7 +92,7 @@ async def _fetch_cluster_members(
     load into RAM. The embedding is normalized to the ``'embedding'`` key
     so :func:`refine_members` stays field-name-agnostic.
     """
-    from src.services.curation.clustering.embedding_reduce import RESIDUAL_EMBEDDING_FIELD
+    from src.services.curation.clustering.residual_fetch import RESIDUAL_EMBEDDING_FIELD
 
     if index is None:
         index = items_index()

@@ -128,10 +128,10 @@ def leak_env(
     monkeypatch.setattr(settings_doc, '_SETTINGS_CACHE_TTL_SECONDS', 0.0)
     # A UMAP fit the fixture's small pool supports (the defaults need
     # more points than the fixture seeds).
-    from src.services.curation.clustering import embedding_reduce
+    from src.services.curation.clustering import pool_size
 
-    monkeypatch.setattr(embedding_reduce, 'UMAP_N_COMPONENTS', 2)
-    monkeypatch.setattr(embedding_reduce, 'UMAP_N_NEIGHBORS', 3)
+    monkeypatch.setattr(pool_size, 'UMAP_N_COMPONENTS', 2)
+    monkeypatch.setattr(pool_size, 'UMAP_N_NEIGHBORS', 3)
     # The auto-label module resolves its state dir per bound project
     # (``_state_dir()`` -> ``get_curation_config().autolabel_dir``, itself
     # ``OP_AUTO_LABEL_STATE_DIR`` + ``/projects/<slug>``) -- keep it inside

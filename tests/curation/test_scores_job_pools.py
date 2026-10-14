@@ -2,7 +2,7 @@
 
 Before this fix, every scorer (including ``mistakenness``) was handed the
 clustering *residual* pool
-(``clustering.embedding_reduce.fetch_residual_embeddings_parallel``), which
+(``clustering.residual_fetch.fetch_residual_embeddings_parallel``), which
 explicitly excludes confidently machine-labeled items (``class_validated``,
 every ``CONFIDENT_CLASS_SOURCES`` ``class_source``, ``class_excluded``).
 That's backwards for mistakenness: it exists to audit machine labels, not
@@ -121,7 +121,7 @@ async def test_probe_scored_pool_includes_machine_labeled_excludes_gated() -> No
     """A machine-labeled probe-scored item (the exact case the residual
     pool drops) must be IN the probe_scored pool; validated/excluded/
     holdout items must be OUT."""
-    from src.services.curation.clustering.embedding_reduce import CONFIDENT_CLASS_SOURCES
+    from src.services.curation.clustering.residual_fetch import CONFIDENT_CLASS_SOURCES
 
     machine_label_source = next(iter(CONFIDENT_CLASS_SOURCES))
     docs = {
@@ -214,7 +214,7 @@ async def _run_with_spies(
         return residual_pool
 
     monkeypatch.setattr(
-        'src.services.curation.clustering.embedding_reduce.fetch_residual_embeddings_parallel',
+        'src.services.curation.clustering.residual_fetch.fetch_residual_embeddings_parallel',
         _fake_residual,
     )
 

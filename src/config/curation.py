@@ -131,7 +131,7 @@ class CurationConfig:
     # Two deliberately distinct UMAP-state indexes (see
     # ``src/services/curation/embedding_viz.py`` module docstring):
     # the retired clustering reducer's fitted-manifold cache
-    # (``clustering/embedding_reduce.py``) and the visualization-only
+    # (``clustering/umap_state.py``) and the visualization-only
     # projection's own metadata slot. UMAP_STATE keeps its own index;
     # UMAP_VIZ_STATE folds onto CONFIGS's name (shard folding, owner D4).
     umap_state_index: str = _FROM_DEFAULT_PROJECT
