@@ -14,9 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   seconds per stage), cancel, resume, and read the failed images with their reasons. Everything shown and every
   allowed action (`can_cancel`, `can_resume`) comes from the backend's `/ingest/bulk*` routes.
 
+- `/ingest` has a "Sources (S3 buckets and watched folders)" panel: list, create, edit and remove sources (S3
+  bucket and prefix or a server folder; poll interval, cron schedule, webhook), **Run now** and **Retry** for
+  objects that gave up. Counts, trigger times, the webhook path, the last run, failures, `can_run` and the
+  `blocked_reason`/`blocked_message` are served by `/ingest/sources*`; the panel renders them and refreshes after the
+  served `poll_after_s`. No credential is entered or shown.
+
 ### Changed
 
-- `scripts/capture_docs_screenshots.py` gains states for the bulk-ingest panel (idle, running, failures), the ingest
+- `scripts/capture_docs_screenshots.py` gains states for the sources panel and the bulk-ingest panel (idle, running, failures), the ingest
   policy page, a project with its VLM off, the audit page, a cluster page, the dataset imports list and the prompt-pack,
   region-profile and open-vocabulary lists. `scripts/docs_screenshot_fixtures.py` gains `bulk` and `vlm-off` to set up
   throwaway `cwlife-*` projects for them.

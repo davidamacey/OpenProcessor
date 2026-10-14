@@ -65,6 +65,34 @@ and a "Where the time went" table of seconds per stage.
 
 <Screenshot name="cropwright/ingest-bulk-run-1600.png" alt="A bulk ingest run in progress with counts, speed and the stage table" caption="A run in progress" />
 
+## Sources (S3 buckets and watched folders)
+
+The **Sources** panel keeps a project fed from an S3 bucket prefix or a server folder.
+What may be read is set on the deployment (the bucket allow-list and credentials live
+in the API's environment, see [Ingest from S3 and watched sources](../../guides/ingest-sources.mdx));
+Cropwright never asks for or shows a credential. If S3 is not allowed, the form says so
+and only **Server folder** is offered.
+
+1. Press **Add a source**, name it, and choose **S3 bucket** (bucket and prefix) or
+   **Server folder**.
+2. Pick triggers: **Watch every** N seconds, **On a schedule** (five-field cron, UTC),
+   and for S3 **Accept S3 event notifications (webhook)**. With none, the source runs
+   only when you press **Run now**. **Options** has file extensions, batch size and
+   concurrency.
+3. Save. Each source then shows what the backend serves: counts (pending, ingested,
+   retrying, gave up), last and next poll or fire, the webhook path and its event
+   counts, the scan in progress, the last run and the objects that failed with the
+   reason.
+
+- **Run now** scans the source and drains its queue. When the backend cannot run it
+  (a run of this project is live, S3 not allowed), the button is disabled and the
+  backend's reason is shown next to it.
+- **Retry the N that gave up** queues failed objects again.
+- **Edit** changes the name, triggers and options; the location cannot change.
+- **Remove** asks first. Images already ingested stay in the project.
+
+The panel refreshes on the interval the backend serves.
+
 ## Server-path batch ingest
 
 Points at a folder the backend already has mounted (for example,
