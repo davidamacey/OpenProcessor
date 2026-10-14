@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 from curation import query_fakes
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation import base_curation_config
-from src.services.curation import review_queries, review_sorts
+from src.services.curation import review_queries, review_sorts, review_tabs
 from src.services.curation.review_queries import DETECTOR_DISAGREES_SCRIPT
 from src.services.curation.review_request import ReviewFilters, before_query, build_review_request
 
@@ -121,11 +121,11 @@ async def test_default_sort_is_vlm_then_detector_confidence() -> None:
 
 
 def test_tab_is_in_the_served_catalog_with_the_common_filters() -> None:
-    tabs = {t['id']: t for t in review_queries.review_tab_catalog()}
+    tabs = {t['id']: t for t in review_tabs.review_tab_catalog()}
     tab = tabs['detector_disagreements']
     assert tab['label'] == 'Detector disagreements'
     assert 'detector' in tab['description'].lower()
-    assert set(tab['filters']) == set(review_queries.COMMON_FILTERS)
+    assert set(tab['filters']) == set(review_tabs.COMMON_FILTERS)
 
 
 def test_the_unknown_tab_error_names_the_new_tab(client: TestClient) -> None:

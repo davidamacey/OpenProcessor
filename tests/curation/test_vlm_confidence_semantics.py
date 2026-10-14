@@ -24,7 +24,7 @@ from src.services.curation.class_sources import (
     class_confidence,
     class_source_catalog,
 )
-from src.services.curation.review_queries import TAB_LABELS
+from src.services.curation.review_tabs import TAB_LABELS
 from src.services.curation.wire import serialize_item
 
 

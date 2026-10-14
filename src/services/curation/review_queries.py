@@ -16,7 +16,6 @@ from typing import Any
 
 from src.config.curation import ITEM_EMBEDDING_FIELD, PROBE_ENTROPY_REVIEW_MIN
 from src.config.region_fields import get_region_fields
-from src.config.region_rejection import compose_rejection_reason
 from src.config.region_state import RegionStatus
 from src.config.vlm_class_attempt import VLM_CLASS_EMPTY_REASON_FIELD
 from src.core.exceptions import RequestRejectedError
@@ -26,10 +25,10 @@ from src.domain.ingest_class_sources import (
     classifier_class_sources,
     unlabeled_proposal_class_sources,
 )
-from src.domain.region_boxes import box_query, read_boxes
+from src.domain.region_boxes import box_query
+from src.services.curation import review_tabs
 from src.services.curation.class_sources import VLM_CLASS_SOURCES
 from src.services.curation.review_filter_specs import (
-    FILTER_SPECS,
     HAS_REJECTED_BOX,
     REGION_STATUS_DEFAULT,
     REGION_STATUS_FILTER_VALUES,
@@ -47,233 +46,12 @@ DETECTOR_DISAGREES_SCRIPT = (
     "!doc['detector_class_name'].value.equals(doc['class_name'].value)"
 )
 
-KNOWN_TABS: tuple[str, ...] = (
-    'all',
-    'mismatches',
-    'vlm_low_conf',
-    'detector_disagreements',
-    'outliers',
-    'uncertainty',
-    'model_disagreements',
-    'regions',
-    'primary_low_conf',
-    'classifier_blind_spots',
-    'new_class_proposals',
-    'imported',
-)
-
-# A display label + description per tab, so the frontend stops
-# hardcoding them ("Classifier blind spots" for classifier_blind_spots in
-# particular -- the id itself was renamed at some point). Served by
-# ``GET {prefix}/review/tabs``.
-TAB_LABELS: dict[str, tuple[str, str]] = {
-    'all': ('All', 'Unified queue: every crop a human should look at, most-uncertain first'),
-    'mismatches': ('Mismatches', "The VLM's reply did not match any registry class"),
-    'vlm_low_conf': (
-        'VLM low confidence',
-        "The VLM's own confidence in its label is medium or low",
-    ),
-    'detector_disagreements': (
-        'Detector disagreements',
-        "The VLM's class differs from the class the detector gave the crop",
-    ),
-    'outliers': ('Outliers', 'Far from cluster centroid'),
-    'uncertainty': ('Uncertainty', 'High active-learning probe entropy'),
-    'model_disagreements': (
-        'Model disagreements',
-        'Validated crops where the new model disagrees with the human label',
-    ),
-    'regions': ('Regions', 'Region detected — needs human confirmation'),
-    'primary_low_conf': (
-        'Primary low confidence',
-        'Largest subject — classifier unsure or missed',
-    ),
-    'classifier_blind_spots': (
-        'Classifier blind spots',
-        'Detector proposed an item the classifier missed entirely',
-    ),
-    'new_class_proposals': (
-        'New class proposals',
-        'Needs a class the registry does not have yet',
-    ),
-    'imported': (
-        'Imported labels',
-        'Validated labels that came from a dataset import: spot-check them',
-    ),
-}
-
-
-# Query filters every tab honours (``GET /review/{tab}`` and its locate
-# twin). ``build_tab_query`` / ``build_review_request`` read this same
-# table, so the served catalog can never advertise a filter a tab ignores.
-COMMON_FILTERS: tuple[str, ...] = (
-    'include_test',
-    'max_rank',
-    'min_blur_ratio',
-    'min_mistakenness',
-    'hide_near_duplicates',
-    'source',
-    'conf_min',
-    'conf_max',
-    'class_name',
-    'exclude_class_name',
-    'min_area',
-    'max_area',
-    'origin',
-    'embedding_state',
-    'review_status',
-    'combine_conflict',
-    'on_negative_frame',
-)
-# Tab-only filters, on top of COMMON_FILTERS.
-TAB_EXTRA_FILTERS: dict[str, tuple[str, ...]] = {
-    'regions': ('text', 'region_status'),
-    'imported': ('import_id', 'dataset_split'),
-}
-# A filter value a tab applies when the client omits it (the two
-# "primary subject" tabs are rank-limited by definition).
-PRIMARY_SUBJECT_MAX_RANK = 2
-TAB_FILTER_DEFAULTS: dict[str, dict[str, Any]] = {
-    'primary_low_conf': {'max_rank': PRIMARY_SUBJECT_MAX_RANK},
-    'classifier_blind_spots': {'max_rank': PRIMARY_SUBJECT_MAX_RANK},
-    'regions': {'region_status': REGION_STATUS_DEFAULT},
-}
-
 
 def negative_frame_clause(on_negative_frame: bool) -> dict[str, Any]:
     """The one definition of the ``on_negative_frame`` filter, shared by
     ``GET /crops`` and the review queue."""
     marked: dict[str, Any] = {'term': {'on_negative_frame': True}}
     return marked if on_negative_frame else {'bool': {'must_not': marked}}
-
-
-def tab_filters(tab: str) -> tuple[str, ...]:
-    """Query filters ``tab`` applies, in a stable order. The ``regions``
-    tab's ``text`` filter only exists on a text-reading region profile."""
-    extra = TAB_EXTRA_FILTERS.get(tab, ())
-    if 'text' in extra and not _region_text_enabled():
-        extra = tuple(name for name in extra if name != 'text')
-    return (*COMMON_FILTERS, *extra)
-
-
-def _region_text_enabled() -> bool:
-    from src.services.detection.profile_registry import get_active_region_profile
-
-    profile = get_active_region_profile()
-    return profile is None or profile.reads_text
-
-
-def review_tab_catalog() -> list[dict[str, Any]]:
-    """``[{id, label, description, filters, filter_defaults,
-    filter_specs}, ...]`` for every ``KNOWN_TABS`` entry, EXCEPT
-    ``regions`` when no region profile is active (no-profile gating
-    contract: a client must not offer a tab for data that can never
-    exist).
-
-    ``filters`` lists the query parameters the tab honours (anything else
-    is accepted but ignored); ``filter_defaults`` the value a tab applies
-    when that parameter is omitted (``{}`` for none); ``filter_specs`` a
-    self-describing entry (``review_filter_specs``) for every one of those
-    filters, so the frontend renders it without per-filter code.
-
-    Fails loudly (``KeyError``) if a tab is added to ``KNOWN_TABS`` without
-    a matching ``TAB_LABELS`` entry -- the same "one source of truth"
-    contract ``test_class_sources.py`` enforces for ``class_source``.
-
-    The ``regions`` tab's label/description come from the active region
-    profile's ``display_name`` when one is configured (e.g. "Wheels"),
-    falling back to the generic ``TAB_LABELS`` entry ("Regions") when it
-    set no ``display_name``.
-    """
-    from src.services.detection.profile_registry import get_active_region_profile
-
-    has_region_profile = get_active_region_profile() is not None
-    return [
-        {
-            'id': tab,
-            'label': _tab_label(tab),
-            'description': _tab_description(tab),
-            'filters': list(tab_filters(tab)),
-            'filter_defaults': dict(TAB_FILTER_DEFAULTS.get(tab, {})),
-            'filter_specs': [
-                {**FILTER_SPECS[name], 'options': [dict(o) for o in FILTER_SPECS[name]['options']]}
-                for name in tab_filters(tab)
-            ],
-        }
-        for tab in KNOWN_TABS
-        if tab != 'regions' or has_region_profile
-    ]
-
-
-def _tab_label(tab: str) -> str:
-    if tab == 'regions':
-        from src.services.detection.profile_registry import get_active_region_profile
-
-        profile = get_active_region_profile()
-        if profile is not None and profile.display_name:
-            return profile.display_name
-    return TAB_LABELS[tab][0]
-
-
-def _tab_description(tab: str) -> str:
-    return TAB_LABELS[tab][1]
-
-
-def mismatch_reason(src: dict[str, Any], registry_names: frozenset[str], default: str) -> str:
-    """Per-item reason on the ``mismatches`` tab.
-
-    ``vlm_unmatched`` covers more than "the VLM named something outside
-    the registry": a low-confidence answer that *is* a registry class is
-    routed here unapplied, and legacy rows carry no answer at all. The
-    tab's generic reason was false for both. ``registry_names`` are the
-    normalized active class names.
-    """
-    from src.services.curation.new_class_terms import normalize_term
-
-    raw = str(src.get('vlm_raw_class') or src.get('vlm_raw_label') or '').strip()
-    if not raw:
-        return 'VLM gave no class answer'
-    if normalize_term(raw) in registry_names:
-        confidence = src.get('vlm_confidence') or 'unknown'
-        return f'VLM named registry class {raw!r} at {confidence} confidence; not applied'
-    return default
-
-
-def region_reason(src: dict[str, Any], fields: Any, default: str) -> str:
-    """Per-item reason on the ``regions`` tab (mirrors :func:`mismatch_reason`).
-
-    A verifier-rejected candidate needs a different reason than an
-    accepted-but-unreviewed box: the reviewer is confirming/reversing a
-    rejection, not just validating a fresh detection.
-
-    This used to always say "...— needs human review" even for a
-    reason whose own kind is a firm model/automatic verdict, and embedded
-    the raw ``region_rejection_reason`` id verbatim instead of its served
-    vocabulary label -- so a box the verifier actually rejected read
-    "rejected (bad detection)" next to a reason that also claimed "needs
-    human review", contradicting itself. :func:`compose_rejection_reason`
-    words the reason from the served rejection-reason vocabulary and only
-    says "needs human review" for a ``needs_human``-kind reason.
-
-    The rejection reason lives on the rejected box itself now
-    (``region_boxes[].rejection_reason``), not an item-level scalar. The
-    first ``rejected`` box's reason is used (a ``verify_rejected`` item has
-    only rejected boxes, but may have several; the reviewer sees each box's
-    own reason on the box).
-    """
-    if src.get(fields.status) != RegionStatus.VERIFY_REJECTED.value:
-        return default
-    why = next(
-        (
-            b.rejection_reason
-            for b in read_boxes(src, fields)
-            if b.state == 'rejected' and b.rejection_reason
-        ),
-        None,
-    )
-    if why:
-        return compose_rejection_reason(why)
-    return 'needs human review: verifier rejected this candidate with no reason recorded'
 
 
 def _escape_wildcard(text: str) -> str:
@@ -492,7 +270,7 @@ def build_tab_query(
         # depends on whichever writer set the text, so don't assume an
         # uppercase canonical form. Per-box now (the fixed 'text' element
         # key, not RegionFields-indirected -- see region_boxes.py).
-        if text and 'text' in tab_filters(tab):
+        if text and 'text' in review_tabs.tab_filters(tab):
             must.append(box_query(region_text_clause(f'{fields.boxes}.text', text), fields))
         # Default sort: region score desc (falling back to the rejected
         # candidate's score when there is no accepted region score), so
@@ -632,31 +410,17 @@ def build_tab_query(
     else:
         raise RequestRejectedError(
             status_code=400,
-            detail=f'unknown review tab: {tab}. Must be one of: {", ".join(KNOWN_TABS)}',
+            detail=f'unknown review tab: {tab}. Must be one of: {", ".join(review_tabs.KNOWN_TABS)}',
         )
 
     # Subject-size limit, applied once here for every tab that
     # serves it (it used to be honoured only by the two primary tabs).
     rank_limit = (
-        max_rank if max_rank is not None else TAB_FILTER_DEFAULTS.get(tab, {}).get('max_rank')
+        max_rank
+        if max_rank is not None
+        else review_tabs.TAB_FILTER_DEFAULTS.get(tab, {}).get('max_rank')
     )
-    if rank_limit is not None and 'max_rank' in tab_filters(tab):
+    if rank_limit is not None and 'max_rank' in review_tabs.tab_filters(tab):
         must.append({'range': {'crop_rank_in_image': {'lte': rank_limit}}})
 
     return must, must_not, reason
-
-
-__all__ = [
-    'COMMON_FILTERS',
-    'DETECTOR_DISAGREES_SCRIPT',
-    'KNOWN_TABS',
-    'TAB_EXTRA_FILTERS',
-    'TAB_FILTER_DEFAULTS',
-    'TAB_LABELS',
-    'build_tab_query',
-    'mismatch_reason',
-    'negative_frame_clause',
-    'region_reason',
-    'review_tab_catalog',
-    'tab_filters',
-]

@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation import base_curation_config
-from src.services.curation import review_queries
+from src.services.curation import review_tabs
 
 
 ITEMS = base_curation_config().items_index
@@ -96,4 +96,4 @@ def test_the_catalog_serves_the_spec_on_every_tab_that_honours_it(client: TestCl
             'true',
             'false',
         ]  # '' = Any: omit the param
-    assert 'on_negative_frame' in review_queries.COMMON_FILTERS
+    assert 'on_negative_frame' in review_tabs.COMMON_FILTERS

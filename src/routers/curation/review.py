@@ -40,7 +40,7 @@ from src.routers.curation._review_params import (  # noqa: TC001 - FastAPI resol
     TextQ,
 )
 from src.routers.curation._review_tab_models import ReviewTabsResponse
-from src.services.curation import review_empty_reason, review_queries
+from src.services.curation import review_empty_reason, review_reasons
 from src.services.curation.dataset_thresholds import MIN_TEST_CROPS_PER_CLASS
 from src.services.curation.holdout import (
     MIN_TEST_PER_CLASS,
@@ -64,6 +64,7 @@ from src.services.curation.review_request import (
     before_query,
     build_review_request,
 )
+from src.services.curation.review_tabs import KNOWN_TABS, review_tab_catalog
 from src.services.curation.wire import item_list_source_excludes, serialize_item
 from src.utils.timeutil import now_iso
 
@@ -244,7 +245,7 @@ if TYPE_CHECKING:
     from src.services.curation.item_filter import ItemFilter
 
 
-_TAB_DESCRIPTION = 'One of: ' + ' | '.join(review_queries.KNOWN_TABS)
+_TAB_DESCRIPTION = 'One of: ' + ' | '.join(KNOWN_TABS)
 
 
 def _filters(
@@ -300,7 +301,7 @@ async def review_tabs(opensearch: OpenSearchDep) -> dict[str, Any]:
     ``empty_reason`` uses) without a per-tab round trip.
     """
     empty_state = await review_empty_reason.review_tabs_empty_state(opensearch)
-    return {'tabs': review_queries.review_tab_catalog(), 'empty_state': empty_state}
+    return {'tabs': review_tab_catalog(), 'empty_state': empty_state}
 
 
 @router.get('/review/{tab}', response_model=None, responses={200: {'model': ReviewQueuePage}})
@@ -396,9 +397,9 @@ async def review_queue(
         item = serialize_item(src, h.get('_id', ''))
         # Review-only extra on top of the shared wire item.
         if tab == 'mismatches':
-            item['reason'] = review_queries.mismatch_reason(src, registry_names, req.reason)
+            item['reason'] = review_reasons.mismatch_reason(src, registry_names, req.reason)
         elif tab == 'regions':
-            item['reason'] = review_queries.region_reason(src, region_fields, req.reason)
+            item['reason'] = review_reasons.region_reason(src, region_fields, req.reason)
         else:
             item['reason'] = req.reason
         items.append(item)

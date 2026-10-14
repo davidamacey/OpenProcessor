@@ -15,7 +15,7 @@ from _route_helpers import api_routes
 
 from src.domain import ingest_class_sources
 from src.routers.curation.stats import _count_by_proposal, _rollup_class_sources
-from src.services.curation.review_queries import KNOWN_TABS
+from src.services.curation.review_tabs import KNOWN_TABS
 
 
 if TYPE_CHECKING:

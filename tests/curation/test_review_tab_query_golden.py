@@ -25,7 +25,8 @@ from typing import TYPE_CHECKING, Any
 from unittest import mock
 
 from src.core.exceptions import RequestRejectedError
-from src.services.curation.review_queries import KNOWN_TABS, build_tab_query, review_tab_catalog
+from src.services.curation.review_queries import build_tab_query
+from src.services.curation.review_tabs import KNOWN_TABS, review_tab_catalog
 
 
 if TYPE_CHECKING:
