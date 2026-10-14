@@ -19,8 +19,8 @@ from curation import query_fakes
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation import base_curation_config
 from src.services.curation import review_queries, review_sorts, review_tabs
-from src.services.curation.review_queries import DETECTOR_DISAGREES_SCRIPT
 from src.services.curation.review_request import ReviewFilters, before_query, build_review_request
+from src.services.curation.review_tab_clauses import DETECTOR_DISAGREES_SCRIPT
 
 
 ITEMS = base_curation_config().items_index
