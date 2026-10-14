@@ -38,7 +38,6 @@ src/services/curation/item_doc.py::build_item_doc	17	ratchet: may only go down
 src/services/curation/item_filter.py::item_filter_clauses	23	ratchet: may only go down
 src/services/curation/keymap_validator.py::validate_keymap	25	top 15: decompose in PR 6
 src/services/curation/proposal_merge.py::merge_item_proposals	16	ratchet: may only go down
-src/services/curation/region_eval.py::evaluate	21	ratchet: may only go down
 src/services/curation/registry_reclassify.py::reclassify_unmatched	16	ratchet: may only go down
 src/services/curation/reprocess_embed.py::reembed_items	17	ratchet: may only go down
 src/services/curation/review_queries.py::build_tab_query	23	ratchet: may only go down

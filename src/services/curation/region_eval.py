@@ -60,6 +60,7 @@ if TYPE_CHECKING:
 
     from src.config.curation import CurationConfig
     from src.config.region_fields import RegionFields
+    from src.services.curation.region_eval_geometry import Box
 
 
 DEFAULT_ACCEPTED_STATUSES: tuple[str, ...] = (RegionStatus.DETECTED.value,)
@@ -157,6 +158,178 @@ class EvalResult:
         return int(self.summary['total']['pending_images'])
 
 
+@dataclass
+class _EvalRun:
+    """Accumulators one :func:`evaluate` pass fills image by image."""
+
+    tallies: dict[str, _Tally] = field(default_factory=lambda: defaultdict(_Tally))
+    status_items: Counter[str] = field(default_factory=Counter)
+    status_boxes: Counter[str] = field(default_factory=Counter)
+    rejected_hits: Counter[str] = field(default_factory=Counter)
+    misses: list[dict[str, Any]] = field(default_factory=list)
+    fps: list[dict[str, Any]] = field(default_factory=list)
+
+
+def _bump(groups: list[_Tally], attr: str, n: int = 1) -> None:
+    for t in groups:
+        setattr(t, attr, getattr(t, attr) + n)
+
+
+def _count_statuses(run: _EvalRun, records: list[RegionRecord]) -> None:
+    for r in records:
+        run.status_items[r.status] += 1
+        if r.box is not None:
+            run.status_boxes[r.status] += 1
+
+
+def _tally_matches(
+    groups: list[_Tally],
+    preds: list[RegionRecord],
+    matched: list[tuple[int, int, float]],
+) -> set[int]:
+    """Add the matched IoU mass and per-detector counts; returns matched prediction indices."""
+    for t in groups:
+        t.iou_sum += sum(v for _g, _p, v in matched)
+    matched_p = {p for _g, p, _v in matched}
+    for pi, r in enumerate(preds):
+        for t in groups:
+            t.by_detector[r.detector]['predictions'] += 1
+            t.by_detector[r.detector]['tp'] += int(pi in matched_p)
+    return matched_p
+
+
+def _false_positive_rows(
+    img: CohortImage, preds: list[RegionRecord], matched_p: set[int]
+) -> list[dict[str, Any]]:
+    return [
+        {
+            'split': img.split,
+            'image': img.key,
+            'server_path': img.server_path,
+            'background': not img.positive,
+            'crop_id': r.crop_id,
+            'detector': r.detector,
+            'score': r.score,
+            'box': list(r.box or ()),
+            'best_gt_iou': round(max((iou(g, r.box) for g in img.gt), default=0.0), 4)
+            if r.box
+            else 0.0,
+        }
+        for pi, r in enumerate(preds)
+        if pi not in matched_p
+    ]
+
+
+def _miss_row(
+    img: CohortImage,
+    gt_box: Box,
+    *,
+    preds: list[RegionRecord],
+    pred_boxes: list[Box],
+    others: list[RegionRecord],
+    has_records: bool,
+    iou_threshold: float,
+    rejected_hits: Counter[str],
+) -> dict[str, Any]:
+    """Why one unmatched GT box was missed (counts a rejected-but-boxed hit)."""
+    best = max(
+        ((iou(gt_box, b), r) for r, b in zip(preds, pred_boxes, strict=True)),
+        default=None,
+        key=lambda t: t[0],
+    )
+    best_other = max(
+        ((iou(gt_box, r.box), r) for r in others if r.box), default=None, key=lambda t: t[0]
+    )
+    if not has_records:
+        reason = 'no_items'
+    elif best_other is not None and best_other[0] >= iou_threshold:
+        reason = f'status:{best_other[1].status}'
+        rejected_hits[best_other[1].status] += 1
+    elif best is not None and best[0] > 0.0:
+        reason = 'low_iou'
+    else:
+        reason = 'no_region'
+    return {
+        'split': img.split,
+        'image': img.key,
+        'server_path': img.server_path,
+        'image_id': img.image_id,
+        'gt_box': [round(v, 6) for v in gt_box],
+        'reason': reason,
+        'best_iou': round(best[0], 4) if best else 0.0,
+        'best_box': list(best[1].box or ()) if best else None,
+        'best_detector': best[1].detector if best else None,
+        'best_other_status': best_other[1].status if best_other else None,
+        'best_other_iou': round(best_other[0], 4) if best_other else None,
+    }
+
+
+def _score_image(
+    run: _EvalRun,
+    img: CohortImage,
+    regions: dict[str, list[RegionRecord]],
+    *,
+    accepted_set: set[str],
+    iou_threshold: float,
+    dedup_iou: float,
+) -> None:
+    tallies = run.tallies
+    groups = [tallies['total'], tallies[f'split:{img.split}']] if img.split else [tallies['total']]
+    n_gt = len(img.gt)
+    _bump(groups, 'images')
+    _bump(groups, 'positives' if img.positive else 'backgrounds')
+    _bump(groups, 'gt_boxes', n_gt)
+    if not img.image_id:
+        _bump(groups, 'not_ingested')
+        return
+    records = regions.get(img.image_id, [])
+    _count_statuses(run, records)
+    if any(r.status in PENDING_VALUES for r in records):
+        _bump(groups, 'pending_images')
+        _bump(groups, 'pending_gt_boxes', n_gt)
+        return
+    if not records:
+        _bump(groups, 'no_item_images')
+        _bump(groups, 'no_item_gt_boxes', n_gt)
+
+    preds, merged = dedup_predictions(
+        [r for r in records if r.status in accepted_set and r.box is not None], dedup_iou
+    )
+    others = [r for r in records if r.status not in accepted_set and r.box is not None]
+    pred_boxes = [r.box for r in preds if r.box is not None]
+    _bump(groups, 'evaluated_images')
+    _bump(groups, 'evaluated_gt_boxes', n_gt)
+    _bump(groups, 'predictions', len(preds))
+    _bump(groups, 'duplicates_merged', merged)
+    _bump(groups, 'tp_05', len(greedy_match(img.gt, pred_boxes, 0.5)))
+    matched = greedy_match(img.gt, pred_boxes, iou_threshold)
+    _bump(groups, 'tp', len(matched))
+    matched_p = _tally_matches(groups, preds, matched)
+    if not img.positive:
+        _bump(groups, 'evaluated_backgrounds')
+        if preds:
+            _bump(groups, 'backgrounds_with_detection')
+            _bump(groups, 'background_fp_regions', len(preds))
+    run.fps.extend(_false_positive_rows(img, preds, matched_p))
+
+    matched_g = {g for g, _p, _v in matched}
+    for gi, gt_box in enumerate(img.gt):
+        if gi in matched_g:
+            continue
+        run.misses.append(
+            _miss_row(
+                img,
+                gt_box,
+                preds=preds,
+                pred_boxes=pred_boxes,
+                others=others,
+                has_records=bool(records),
+                iou_threshold=iou_threshold,
+                rejected_hits=run.rejected_hits,
+            )
+        )
+
+
 def evaluate(
     cohort: list[CohortImage],
     regions: dict[str, list[RegionRecord]],
@@ -167,123 +340,19 @@ def evaluate(
 ) -> EvalResult:
     """Score the cohort. Pure — ``regions`` is :func:`fetch_regions`' output."""
     accepted_set = {normalize_status(s) for s in accepted}
-    tallies: dict[str, _Tally] = defaultdict(_Tally)
-    status_items: Counter[str] = Counter()
-    status_boxes: Counter[str] = Counter()
-    rejected_hits: Counter[str] = Counter()
-    misses: list[dict[str, Any]] = []
-    fps: list[dict[str, Any]] = []
-
+    run = _EvalRun()
     for img in cohort:
-        groups = (
-            [tallies['total'], tallies[f'split:{img.split}']] if img.split else [tallies['total']]
+        _score_image(
+            run,
+            img,
+            regions,
+            accepted_set=accepted_set,
+            iou_threshold=iou_threshold,
+            dedup_iou=dedup_iou,
         )
-        n_gt = len(img.gt)
 
-        def _bump(attr: str, n: int = 1, *, _groups: list[_Tally] = groups) -> None:
-            for t in _groups:
-                setattr(t, attr, getattr(t, attr) + n)
-
-        _bump('images')
-        _bump('positives' if img.positive else 'backgrounds')
-        _bump('gt_boxes', n_gt)
-        if not img.image_id:
-            _bump('not_ingested')
-            continue
-        records = regions.get(img.image_id, [])
-        for r in records:
-            status_items[r.status] += 1
-            if r.box is not None:
-                status_boxes[r.status] += 1
-        if any(r.status in PENDING_VALUES for r in records):
-            _bump('pending_images')
-            _bump('pending_gt_boxes', n_gt)
-            continue
-        if not records:
-            _bump('no_item_images')
-            _bump('no_item_gt_boxes', n_gt)
-
-        preds, merged = dedup_predictions(
-            [r for r in records if r.status in accepted_set and r.box is not None], dedup_iou
-        )
-        others = [r for r in records if r.status not in accepted_set and r.box is not None]
-        pred_boxes = [r.box for r in preds if r.box is not None]
-        _bump('evaluated_images')
-        _bump('evaluated_gt_boxes', n_gt)
-        _bump('predictions', len(preds))
-        _bump('duplicates_merged', merged)
-        _bump('tp_05', len(greedy_match(img.gt, pred_boxes, 0.5)))
-        matched = greedy_match(img.gt, pred_boxes, iou_threshold)
-        _bump('tp', len(matched))
-        for t in groups:
-            t.iou_sum += sum(v for _g, _p, v in matched)
-        matched_p = {p for _g, p, _v in matched}
-        for pi, r in enumerate(preds):
-            for t in groups:
-                t.by_detector[r.detector]['predictions'] += 1
-                t.by_detector[r.detector]['tp'] += int(pi in matched_p)
-        if not img.positive:
-            _bump('evaluated_backgrounds')
-            if preds:
-                _bump('backgrounds_with_detection')
-                _bump('background_fp_regions', len(preds))
-        for pi, r in enumerate(preds):
-            if pi not in matched_p:
-                fps.append(
-                    {
-                        'split': img.split,
-                        'image': img.key,
-                        'server_path': img.server_path,
-                        'background': not img.positive,
-                        'crop_id': r.crop_id,
-                        'detector': r.detector,
-                        'score': r.score,
-                        'box': list(r.box or ()),
-                        'best_gt_iou': round(max((iou(g, r.box) for g in img.gt), default=0.0), 4)
-                        if r.box
-                        else 0.0,
-                    }
-                )
-
-        matched_g = {g for g, _p, _v in matched}
-        for gi, g in enumerate(img.gt):
-            if gi in matched_g:
-                continue
-            best = max(
-                ((iou(g, b), r) for r, b in zip(preds, pred_boxes, strict=True)),
-                default=None,
-                key=lambda t: t[0],
-            )
-            best_other = max(
-                ((iou(g, r.box), r) for r in others if r.box), default=None, key=lambda t: t[0]
-            )
-            if not records:
-                reason = 'no_items'
-            elif best_other is not None and best_other[0] >= iou_threshold:
-                reason = f'status:{best_other[1].status}'
-                rejected_hits[best_other[1].status] += 1
-            elif best is not None and best[0] > 0.0:
-                reason = 'low_iou'
-            else:
-                reason = 'no_region'
-            misses.append(
-                {
-                    'split': img.split,
-                    'image': img.key,
-                    'server_path': img.server_path,
-                    'image_id': img.image_id,
-                    'gt_box': [round(v, 6) for v in g],
-                    'reason': reason,
-                    'best_iou': round(best[0], 4) if best else 0.0,
-                    'best_box': list(best[1].box or ()) if best else None,
-                    'best_detector': best[1].detector if best else None,
-                    'best_other_status': best_other[1].status if best_other else None,
-                    'best_other_iou': round(best_other[0], 4) if best_other else None,
-                }
-            )
-
-    misses.sort(key=lambda m: (m['best_iou'], m['image']))
-    total = tallies['total']
+    run.misses.sort(key=lambda m: (m['best_iou'], m['image']))
+    total = run.tallies['total']
     summary: dict[str, Any] = {
         'accepted_statuses': sorted(accepted_set),
         'iou_threshold': iou_threshold,
@@ -291,16 +360,17 @@ def evaluate(
         'total': total.metrics(iou_threshold),
         'splits': {
             k.removeprefix('split:'): t.metrics(iou_threshold)
-            for k, t in sorted(tallies.items())
+            for k, t in sorted(run.tallies.items())
             if k.startswith('split:')
         },
         'by_status': {
-            s: {'items': status_items[s], 'with_box': status_boxes[s]} for s in sorted(status_items)
+            s: {'items': run.status_items[s], 'with_box': run.status_boxes[s]}
+            for s in sorted(run.status_items)
         },
-        'missed_but_boxed_by_status': dict(sorted(rejected_hits.items())),
-        'miss_reasons': dict(sorted(Counter(m['reason'] for m in misses).items())),
+        'missed_but_boxed_by_status': dict(sorted(run.rejected_hits.items())),
+        'miss_reasons': dict(sorted(Counter(m['reason'] for m in run.misses).items())),
     }
-    return EvalResult(summary=summary, misses=misses, false_positives=fps)
+    return EvalResult(summary=summary, misses=run.misses, false_positives=run.fps)
 
 
 async def run_eval(
