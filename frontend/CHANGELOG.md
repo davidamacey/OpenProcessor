@@ -196,7 +196,7 @@ database of its own and requires a running OpenProcessor backend.
 - **The curation API has no authentication.** Anyone who can reach the
   Cropwright origin can label, ingest, export and train. Run it only on a
   trusted network or behind an authenticating reverse proxy; never expose
-  it to the public internet. See [SECURITY.md](SECURITY.md).
+  it to the public internet. See [SECURITY.md](../SECURITY.md).
 - nginx sends X-Frame-Options, X-Content-Type-Options, Referrer-Policy and
   Permissions-Policy on every response and does not reveal its version.
 - The container drops all capabilities and sets `no-new-privileges` in
