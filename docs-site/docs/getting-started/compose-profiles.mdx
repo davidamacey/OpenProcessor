@@ -44,7 +44,7 @@ Notes:
   `./openprocessor curation up` also start it.
 - **Starting only some curation services.** Name them:
   `docker compose -p <project> --profile curation up -d curation-detection-worker`.
-  The CLI has no subset command (issue to be filed, F8). Which workers a
+  The CLI has no subset command (issue #285). Which workers a
   workflow needs is in [Pipeline modes](../guides/pipeline-modes.mdx).
 - **In an installed directory the profiles come from `.env`.** The installer
   writes `COMPOSE_PROFILES` from the tiers you chose, and `./openprocessor

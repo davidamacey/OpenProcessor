@@ -25,7 +25,7 @@ the network, or a hosted API.
   `OP_VLM_URL` set, **every project that never activated an endpoint labels with it**
   and `curation-vlm-worker` starts suggesting classes for it. The active
   endpoint then shows `"source": "env"`. To stop that for a project, use the
-  explicit off state below. (Making this opt-in is issue to be filed, F5.)
+  explicit off state below. (Making this opt-in is issue #282.)
 - **Off.** A project can be switched off explicitly. That is a stored state
   (`source` is `off`, `active.name` is null), not the same as never having
   activated anything.

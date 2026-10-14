@@ -56,7 +56,7 @@ What a profile changes, and what it does not:
 ### Switching profile later
 
 `./openprocessor profile <name>` does not switch profiles cleanly yet:
-(issue to be filed) F4. It needs a checkout. It regenerates the Triton configs, which works,
+(issue #281). It needs a checkout. It regenerates the Triton configs, which works,
 but with an existing `.env` it leaves `GPU_PROFILE` and `OP_INGEST_GPU_DECODE` alone, and writes
 an override file the CLI never loads. Until it is fixed, switch by hand:
 

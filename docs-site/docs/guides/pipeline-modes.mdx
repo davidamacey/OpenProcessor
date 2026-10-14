@@ -16,10 +16,10 @@ is whatever `API_PORT` says in `.env`.
 
 | Mode | What runs | How you select it | What you cannot turn off today |
 |---|---|---|---|
-| [(a) Detection only](#a-detection-only) | Core stack. Ingest runs the item detector. | Start without the `curation` profile. Ingest policy `embedding.mode=lazy`. | The whole-frame embedding. Ingest-time cluster placement. Idle centroid retrain (needs a worker setting). (issue to be filed) F2 |
-| [(b) Detection, embedding, clustering](#b-detection-embedding-and-clustering) | Core stack and the `curation` workers. Every detection embedded. | The default. | Clustering has no per-project switch. A cluster-refresh retrain stalls on an audit-gate 409. (issue to be filed) F3 |
-| [(c) VLM-assisted labeling of a large batch](#c-vlm-assisted-labeling-of-a-large-batch) | Mode (b) plus a VLM. | `vlm` profile or a remote endpoint, project activation, VLM policy. | With `OP_VLM_URL` set, every project that never activated an endpoint uses the env VLM. (issue to be filed) F5 |
-| [(d) Iterative cluster-sampled labeling](#d-iterative-cluster-sampled-auto-labeling-planned) | Not shipped. | Not selectable. | Planned. (issue to be filed) F9 |
+| [(a) Detection only](#a-detection-only) | Core stack. Ingest runs the item detector. | Start without the `curation` profile. Ingest policy `embedding.mode=lazy`. | The whole-frame embedding. Ingest-time cluster placement. Idle centroid retrain (needs a worker setting). (issue #279) |
+| [(b) Detection, embedding, clustering](#b-detection-embedding-and-clustering) | Core stack and the `curation` workers. Every detection embedded. | The default. | Clustering has no per-project switch. A cluster-refresh retrain stalls on an audit-gate 409. (issue #280) |
+| [(c) VLM-assisted labeling of a large batch](#c-vlm-assisted-labeling-of-a-large-batch) | Mode (b) plus a VLM. | `vlm` profile or a remote endpoint, project activation, VLM policy. | With `OP_VLM_URL` set, every project that never activated an endpoint uses the env VLM. (issue #282) |
+| [(d) Iterative cluster-sampled labeling](#d-iterative-cluster-sampled-auto-labeling-planned) | Not shipped. | Not selectable. | Planned. (issue #286) |
 
 :::note How the commands on this page were checked
 Blocks marked `# ran` were run on the local stack against the public project
@@ -55,7 +55,7 @@ needed.
 embedding of each image is still computed and stored (see the caution in
 [Ingest policy](./ingest-policy.mdx)). There is no policy field to skip it. Ingest also
 still places each new item into the existing cluster centroids when centroids exist.
-(issue to be filed) F2
+(issue #279)
 
 ### 1. Stateless detection, no storage
 
@@ -110,7 +110,7 @@ The VLM is a third source of work. Deactivate it per project (mode (b), step 2).
 
 With only some workers running, start them by name. There is no CLI for a subset:
 `./openprocessor curation up` and `make curation-up` start all five curation services.
-(issue to be filed) F8
+(issue #285)
 
 ```bash
 # not run  (installed directory: .env holds COMPOSE_PROFILES)
@@ -178,7 +178,7 @@ endpoint again (`.../vlm/endpoints/env/activate` for the built-in one).
 
 :::note Making VLM use opt-in
 Today you cannot make "off" the default for new projects, and the project page does not
-show "inherited from the environment" separately from "chosen". (issue to be filed) F5
+show "inherited from the environment" separately from "chosen". (issue #282)
 :::
 
 <Screenshot
@@ -251,7 +251,7 @@ precision, the route answers `409 audit_required` or `409 audit_precision_low`. 
 daemon treats any HTTP error as a failure: it logs `auto_promote failed`, returns, and
 does not queue the retrain. The project's clusters then stop refreshing on every poll
 until the audit passes. Run the audit for that project, or switch the daemon to
-`--no-auto-label` and queue retrains yourself. (issue to be filed) F3
+`--no-auto-label` and queue retrains yourself. (issue #280)
 
 ## (c) VLM-assisted labeling of a large batch
 
@@ -357,7 +357,7 @@ export until a person validates it.
 
 :::info Planned
 This mode is **not shipped**. There is no route, flag or setting for it, and no design
-document yet. (issue to be filed) F9, related to #97 and #218.
+document yet. (issue #286), related to #97 and #218.
 
 The idea is a loop: sample crops from each cluster and sub-cluster, label them with
 the VLM, measure how well the labels agree, propagate the label to the whole cluster

@@ -533,7 +533,7 @@ and **standard**. Set it yourself in `.env` to override; `openprocessor gpu plan
 ```
 
 Switching later with `./openprocessor profile <name>` (a checkout only) is incomplete
-(issue to be filed, F4). It rewrites the Triton configs but, when `.env` already exists, leaves
+(issue #281). It rewrites the Triton configs but, when `.env` already exists, leaves
 `GPU_PROFILE` and `OP_INGEST_GPU_DECODE` unchanged. Switch by hand:
 
 ```bash
