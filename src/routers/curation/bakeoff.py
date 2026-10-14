@@ -3,7 +3,7 @@
 api pins an older Ultralytics release and cannot load every model
 family the harness scores, so it does NOT run the comparison itself. It
 resolves the request (eval datasets, training runs, class mappings; see
-``src/services/curation/bakeoff_jobs.py``) into a ``<job_id>.job.json`` in
+``src/services/curation/bakeoff_jobs.py`` and its siblings) into a ``<job_id>.job.json`` in
 ``_jobs_dir()``, which the evaluator container watches. The evaluator scores
 every model on every dataset's frozen test split and writes ``status.json``,
 ``<dataset dir>/comparison.json`` and ``matrix.json`` under
@@ -68,7 +68,7 @@ from src.schemas.bakeoff.run import (
     BakeoffStatus,
     JobProgress,
 )
-from src.services.curation import bakeoff_jobs, eval_datasets
+from src.services.curation import bakeoff_jobs, bakeoff_resolve, eval_datasets
 from src.services.training.run_retention import bakeoff_out_dir
 
 
@@ -101,7 +101,7 @@ def _out_dir() -> Path:
     return bakeoff_out_dir(_jobs_dir())
 
 
-def _raise(exc: bakeoff_jobs.BakeoffRequestError) -> NoReturn:
+def _raise(exc: bakeoff_resolve.BakeoffRequestError) -> NoReturn:
     raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
@@ -150,7 +150,7 @@ async def bakeoff_trained_models(
     """
     try:
         models = await bakeoff_jobs.list_trained_models(dataset_id, limit)
-    except bakeoff_jobs.BakeoffRequestError as exc:
+    except bakeoff_resolve.BakeoffRequestError as exc:
         _raise(exc)
     return TrainedModelList(models=models, count=len(models))
 
@@ -216,10 +216,10 @@ async def bakeoff_baseline_models(profile: str | None = None) -> BaselineModelLi
     ``baselines_path`` is read instead.
     """
     try:
-        path = bakeoff_jobs.baselines_path_for(profile)
-    except bakeoff_jobs.BakeoffRequestError as exc:
+        path = bakeoff_resolve.baselines_path_for(profile)
+    except bakeoff_resolve.BakeoffRequestError as exc:
         _raise(exc)
-    baselines = bakeoff_jobs.load_baselines(path)
+    baselines = bakeoff_resolve.load_baselines(path)
     return BaselineModelList(baselines=baselines, count=len(baselines))
 
 
@@ -235,7 +235,7 @@ async def bakeoff_run(payload: BakeoffRunRequest) -> BakeoffRunAccepted:
 
     try:
         spec, accepted = await bakeoff_jobs.build_job_spec(payload, out_root=_out_dir())
-    except bakeoff_jobs.BakeoffRequestError as exc:
+    except bakeoff_resolve.BakeoffRequestError as exc:
         _raise(exc)
     job_file = _jobs_dir() / f'{spec.job_id}.job.json'
     status_file = _out_dir() / spec.job_id / 'status.json'
@@ -292,8 +292,8 @@ async def bakeoff_status(job_id: str) -> BakeoffStatus:
 
 def _safe(job_id: str) -> str:
     try:
-        return bakeoff_jobs.safe_job_id(job_id)
-    except bakeoff_jobs.BakeoffRequestError as exc:
+        return bakeoff_resolve.safe_job_id(job_id)
+    except bakeoff_resolve.BakeoffRequestError as exc:
         _raise(exc)
 
 

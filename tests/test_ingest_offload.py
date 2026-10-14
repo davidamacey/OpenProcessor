@@ -111,18 +111,18 @@ def test_waiting_for_the_gate_is_recorded_as_a_stage(monkeypatch: pytest.MonkeyP
 
 
 def test_batch_decode_runs_off_the_loop_thread(monkeypatch: pytest.MonkeyPatch) -> None:
-    from src.services.curation import ingest
+    from src.services.curation import ingest_helpers
 
     monkeypatch.setattr(cpu_pool, 'OFFLOAD_MIN_BYTES', 0)  # these frames are tiny
     threads: list[int] = []
-    real = ingest._decode_image
+    real = ingest_helpers._decode_image
 
     def spy(data: bytes):
         threads.append(threading.get_ident())
         time.sleep(0.05)
         return real(data)
 
-    monkeypatch.setattr(ingest, '_decode_image', spy)
+    monkeypatch.setattr(ingest_helpers, '_decode_image', spy)
     service = _Service()
 
     async def main() -> tuple[int, float]:

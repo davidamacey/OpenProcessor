@@ -22,7 +22,7 @@ from fastapi.testclient import TestClient
 
 from curation._vlm_test_support import empty_registry_reads
 from src.config.region_source import CANDIDATE_SOURCES
-from src.services.curation.review_queries import KNOWN_TABS
+from src.services.curation.review_tabs import KNOWN_TABS
 
 
 @pytest.fixture

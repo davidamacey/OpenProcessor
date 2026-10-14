@@ -16,7 +16,7 @@ import dataclasses
 from dataclasses import dataclass
 from typing import Any
 
-from src.services.curation import review_queries, review_sorts
+from src.services.curation import review_queries, review_sorts, review_tabs
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 from src.services.curation.review_filter_specs import REGION_STATUS_DEFAULT
 
@@ -102,7 +102,7 @@ async def build_review_request(
         must.append({'term': {'combine_conflict': True}})
     if filters.on_negative_frame is not None:
         must.append(review_queries.negative_frame_clause(filters.on_negative_frame))
-    honoured = review_queries.tab_filters(tab)
+    honoured = review_tabs.tab_filters(tab)
     if filters.import_id and 'import_id' in honoured:
         must.append({'term': {'import_ids': filters.import_id}})
     if filters.dataset_split and 'dataset_split' in honoured:

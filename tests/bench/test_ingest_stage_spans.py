@@ -61,7 +61,7 @@ def test_letterbox_is_timed_and_unchanged() -> None:
 
 
 def test_file_hash_is_timed() -> None:
-    from src.services.curation.ingest import _imohash_bytes
+    from src.services.curation.ingest_helpers import _imohash_bytes
 
     data = _jpeg()
     before, nbytes = _count('hash'), _bytes('hash')

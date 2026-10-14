@@ -1,6 +1,6 @@
 """Regression: ``GET /regions?text=`` must match case-insensitively and
 escape wildcard metacharacters in user input, same as the review 'regions'
-tab's already-correct helper (``review_queries.region_text_clause``).
+tab's already-correct helper (``review_tab_clauses.region_text_clause``).
 
 The pre-fix query was ``{'wildcard': {F.text: f'*{text.upper()}*'}}`` —
 correct only when the stored value happens to be uppercase, and unsafe

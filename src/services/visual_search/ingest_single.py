@@ -279,7 +279,7 @@ class IngestSingleMixin:
             Dict with duplicate info if assigned, None if unique
         """
         try:
-            from src.services.duplicate_detection import DuplicateDetectionService
+            from src.services.duplicate_detection.service import DuplicateDetectionService
 
             dup_service = DuplicateDetectionService(self.opensearch)
 
