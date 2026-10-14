@@ -39,7 +39,7 @@ def test_discovery_finds_the_known_removal_routes() -> None:
 def test_route_refuses_an_ocr_model_and_removes_nothing(
     method: str, path: str, force: bool, monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
-    from src.routers import models as public
+    from src.routers import models_lifecycle as public
     from src.services.training import triton_promote
 
     removers = [AsyncMock(return_value=(True, ''))]

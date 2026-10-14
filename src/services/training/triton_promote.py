@@ -17,7 +17,7 @@ The workflow:
 7. POST ``/v2/repository/models/<triton_name>/load`` to make the model
    active immediately.
 
-This is intentionally separate from ``src/routers/models.py`` —
+This is intentionally separate from ``src/routers/models_lifecycle.py`` —
 that router is YOLO11-specific (NMS plugin, TRT engine builder).
 YOLO26's NMS is internal to the forward pass, and Ultralytics' own
 guidance is to ship ONNX and let Triton's TensorRT execution

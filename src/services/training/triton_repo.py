@@ -10,7 +10,7 @@ from pathlib import Path
 from src.config.env import env_optional_str, env_path, env_str
 
 
-# Same default as src/routers/models.py — the Triton model repo mounted
+# Same default as src/routers/models_lifecycle.py — the Triton model repo mounted
 # into the API container. Override at construction time for tests.
 #
 # This used to be a plain module-level constant, so a deployment
