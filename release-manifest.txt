@@ -16,6 +16,7 @@ scripts/lib/cli_dev.sh
 scripts/lib/cli_gpu.sh
 scripts/lib/download.sh
 scripts/lib/export.sh
+scripts/lib/export_steps.sh
 scripts/lib/model_setup.sh
 scripts/lib/vlm_catalog.sh
 scripts/lib/vlm_switch.sh
