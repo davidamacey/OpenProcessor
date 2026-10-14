@@ -8,27 +8,12 @@ separate ``term`` clauses on ``class_source`` into one ``terms`` clause.
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 
-
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
-
-_SPEC = importlib.util.spec_from_file_location(
-    'vlm_worker_module_f20', _REPO_ROOT / 'scripts' / 'curation' / 'vlm_worker.py'
-)
-assert _SPEC is not None
-assert _SPEC.loader is not None
-vlm_worker = importlib.util.module_from_spec(_SPEC)
-sys.modules['vlm_worker_module_f20'] = vlm_worker
-_SPEC.loader.exec_module(vlm_worker)
+from scripts.curation import vlm_pending
 
 
 # =============================================================================
@@ -50,7 +35,7 @@ def _count_term_clauses_on_field(query: Any, field: str) -> int:
 
 
 def test_vlm_worker_class_source_exclusions_are_one_terms_clause() -> None:
-    query = vlm_worker._build_pending_query(0.8)
+    query = vlm_pending._build_pending_query(0.8)
     must_not = query['bool']['must_not']
     # No separate `term` clauses on class_source left.
     assert _count_term_clauses_on_field(must_not, 'class_source') == 0
@@ -69,13 +54,13 @@ def test_vlm_worker_class_source_exclusions_are_one_terms_clause() -> None:
 
 
 def test_vlm_worker_build_pending_query_pushes_exclude_ids_server_side() -> None:
-    query = vlm_worker._build_pending_query(0.8, exclude_ids=['a', 'b'])
+    query = vlm_pending._build_pending_query(0.8, exclude_ids=['a', 'b'])
     must_not = query['bool']['must_not']
     assert {'ids': {'values': ['a', 'b']}} in must_not
 
 
 def test_vlm_worker_build_pending_query_omits_ids_clause_when_no_exclusions() -> None:
-    query = vlm_worker._build_pending_query(0.8)
+    query = vlm_pending._build_pending_query(0.8)
     must_not = query['bool']['must_not']
     assert not any('ids' in c for c in must_not)
 
@@ -95,7 +80,7 @@ async def test_vlm_worker_fetch_pending_ids_query_shape() -> None:
 
     from src.services.curation.vlm_scope import ScopeCache
 
-    ids = await vlm_worker.fetch_pending_ids(
+    ids = await vlm_pending.fetch_pending_ids(
         _FakeOpenSearch(),
         slug='default',
         scope_cache=ScopeCache(),

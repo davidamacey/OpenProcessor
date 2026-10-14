@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from scripts.curation.vlm_worker import fetch_pending_ids
+from scripts.curation.vlm_pending import fetch_pending_ids
 from src.services.curation.vlm_scope import ScopeCache
 
 
