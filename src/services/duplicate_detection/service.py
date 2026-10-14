@@ -41,6 +41,16 @@ from src.services.duplicate_detection.models import (
     DuplicateGroup,
     DuplicateMatch,
 )
+from src.services.duplicate_detection.queries import (
+    GROUP_CARDINALITY_BODY,
+    GROUPED_COUNT_BODY,
+    group_from_bucket,
+    group_member_doc,
+    group_members_body,
+    groups_aggregation_body,
+    knn_body,
+    matches_from_hits,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -96,41 +106,10 @@ class DuplicateDetectionService:
         # k-NN search for similar images
         response = await self.opensearch.client.search(
             index=IndexName.GLOBAL.value,
-            body={
-                'size': max_results + 1,  # +1 to exclude self
-                'query': {
-                    'knn': {
-                        'global_embedding': {
-                            'vector': embedding,
-                            'k': max_results + 1,
-                        }
-                    }
-                },
-                '_source': ['image_id', 'image_path', 'duplicate_group_id'],
-            },
+            body=knn_body(embedding, max_results + 1),  # +1 to exclude self
         )
 
-        duplicates = []
-        for hit in response['hits']['hits']:
-            hit_id = hit['_id']
-            if hit_id == image_id:
-                continue  # Skip self
-
-            similarity = hit['_score']
-            if similarity < threshold:
-                continue
-
-            source = hit['_source']
-            duplicates.append(
-                DuplicateMatch(
-                    image_id=hit_id,
-                    image_path=source.get('image_path', ''),
-                    similarity=similarity,
-                    duplicate_group_id=source.get('duplicate_group_id'),
-                )
-            )
-
-        return duplicates
+        return matches_from_hits(response['hits']['hits'], threshold, image_id)
 
     async def find_duplicates_by_embedding(
         self,
@@ -158,41 +137,10 @@ class DuplicateDetectionService:
 
         response = await self.opensearch.client.search(
             index=IndexName.GLOBAL.value,
-            body={
-                'size': max_results,
-                'query': {
-                    'knn': {
-                        'global_embedding': {
-                            'vector': embedding,
-                            'k': max_results,
-                        }
-                    }
-                },
-                '_source': ['image_id', 'image_path', 'duplicate_group_id'],
-            },
+            body=knn_body(embedding, max_results),
         )
 
-        duplicates = []
-        for hit in response['hits']['hits']:
-            hit_id = hit['_id']
-            if exclude_image_id and hit_id == exclude_image_id:
-                continue
-
-            similarity = hit['_score']
-            if similarity < threshold:
-                continue
-
-            source = hit['_source']
-            duplicates.append(
-                DuplicateMatch(
-                    image_id=hit_id,
-                    image_path=source.get('image_path', ''),
-                    similarity=similarity,
-                    duplicate_group_id=source.get('duplicate_group_id'),
-                )
-            )
-
-        return duplicates
+        return matches_from_hits(response['hits']['hits'], threshold, exclude_image_id)
 
     async def create_duplicate_group(
         self,
@@ -217,13 +165,7 @@ class DuplicateDetectionService:
         await self.opensearch.client.update(
             index=IndexName.GLOBAL.value,
             id=primary_image_id,
-            body={
-                'doc': {
-                    'duplicate_group_id': group_id,
-                    'is_duplicate_primary': True,
-                    'duplicate_score': 1.0,
-                }
-            },
+            body=group_member_doc(group_id, primary=True, score=1.0),
         )
 
         # Update duplicate images
@@ -231,13 +173,7 @@ class DuplicateDetectionService:
             await self.opensearch.client.update(
                 index=IndexName.GLOBAL.value,
                 id=dup_id,
-                body={
-                    'doc': {
-                        'duplicate_group_id': group_id,
-                        'is_duplicate_primary': False,
-                        'duplicate_score': score,
-                    }
-                },
+                body=group_member_doc(group_id, primary=False, score=score),
             )
 
         logger.info(
@@ -265,67 +201,15 @@ class DuplicateDetectionService:
         # Aggregate by duplicate_group_id
         response = await self.opensearch.client.search(
             index=IndexName.GLOBAL.value,
-            body={
-                'size': 0,
-                'query': {'exists': {'field': 'duplicate_group_id'}},
-                'aggs': {
-                    'groups': {
-                        'terms': {
-                            'field': 'duplicate_group_id',
-                            'size': 10000,  # Get all groups
-                            'min_doc_count': min_size,
-                        },
-                        'aggs': {
-                            'primary': {
-                                'filter': {'term': {'is_duplicate_primary': True}},
-                                'aggs': {
-                                    'doc': {
-                                        'top_hits': {
-                                            'size': 1,
-                                            '_source': ['image_id', 'image_path'],
-                                        }
-                                    }
-                                },
-                            }
-                        },
-                    }
-                },
-            },
+            body=groups_aggregation_body(min_size),
         )
 
-        groups = []
         buckets = response['aggregations']['groups']['buckets']
 
         # Apply pagination
         start = page * size
         end = start + size
-        paginated = buckets[start:end]
-
-        for bucket in paginated:
-            group_id = bucket['key']
-            count = bucket['doc_count']
-
-            # Get primary image info
-            primary_hits = bucket['primary']['doc']['hits']['hits']
-            if primary_hits:
-                primary = primary_hits[0]['_source']
-                primary_id = primary.get('image_id', '')
-                primary_path = primary.get('image_path', '')
-            else:
-                primary_id = ''
-                primary_path = ''
-
-            groups.append(
-                DuplicateGroup(
-                    group_id=group_id,
-                    primary_image_id=primary_id,
-                    primary_image_path=primary_path,
-                    member_count=count,
-                    members=[],  # Lazy load members
-                )
-            )
-
-        return groups
+        return [group_from_bucket(bucket) for bucket in buckets[start:end]]
 
     async def get_group_members(
         self,
@@ -342,36 +226,9 @@ class DuplicateDetectionService:
         Returns:
             List of member documents
         """
-        query = {'term': {'duplicate_group_id': group_id}}
-
-        if not include_primary:
-            query = {
-                'bool': {
-                    'must': [query],
-                    'must_not': [{'term': {'is_duplicate_primary': True}}],
-                }
-            }
-
         response = await self.opensearch.client.search(
             index=IndexName.GLOBAL.value,
-            body={
-                'size': 1000,
-                'query': query,
-                '_source': [
-                    'image_id',
-                    'image_path',
-                    'duplicate_group_id',
-                    'is_duplicate_primary',
-                    'duplicate_score',
-                    'width',
-                    'height',
-                    'indexed_at',
-                ],
-                'sort': [
-                    {'is_duplicate_primary': {'order': 'desc'}},
-                    {'duplicate_score': {'order': 'desc'}},
-                ],
-            },
+            body=group_members_body(group_id, include_primary),
         )
 
         return [hit['_source'] for hit in response['hits']['hits']]
@@ -389,17 +246,13 @@ class DuplicateDetectionService:
         # Grouped images
         grouped = await self.opensearch.client.count(
             index=IndexName.GLOBAL.value,
-            body={'query': {'exists': {'field': 'duplicate_group_id'}}},
+            body=GROUPED_COUNT_BODY,
         )
 
         # Number of groups
         groups_response = await self.opensearch.client.search(
             index=IndexName.GLOBAL.value,
-            body={
-                'size': 0,
-                'query': {'exists': {'field': 'duplicate_group_id'}},
-                'aggs': {'group_count': {'cardinality': {'field': 'duplicate_group_id'}}},
-            },
+            body=GROUP_CARDINALITY_BODY,
         )
 
         num_groups = groups_response['aggregations']['group_count']['value']
