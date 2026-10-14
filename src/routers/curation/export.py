@@ -34,7 +34,7 @@ def _resolve_current_export_dir() -> Path:
 
 class ExportSkippedItems(BaseModel):
     """Validated items scrolled off the index but left out of the export,
-    by reason (see :meth:`GenericYoloExportService._hits_to_rows`)."""
+    by reason."""
 
     no_image_id: int = Field(
         default=0, description='Had a usable box + class but no image_id to group on.'

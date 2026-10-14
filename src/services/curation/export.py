@@ -61,19 +61,8 @@ from typing import TYPE_CHECKING, Any, Literal
 from src.clients.curation_opensearch.registry import ClassRegistry, get_class_registry
 from src.config import CurationConfig, get_curation_config
 from src.core.logging import get_logger
-from src.services.curation.export_images import (
-    copy_export_images,
-    image_file_stem,
-    normalized_box,
-    select_export_images,
-    yolo_line,
-)
-from src.services.curation.export_models import (
-    ARTIFACT_FILENAMES,
-    ExportProfile,
-    ExportResult,
-    SplitCounts,
-)
+from src.services.curation.export_images import copy_export_images, select_export_images
+from src.services.curation.export_models import ARTIFACT_FILENAMES, ExportProfile, ExportResult
 from src.services.curation.export_negatives import (
     plan_multi_class_negatives,
     scroll_negative_frames,
@@ -87,6 +76,7 @@ from src.services.curation.export_readiness import (
     validated_export_query,
 )
 from src.services.curation.export_retention import prune_exports_after_write
+from src.services.curation.export_rows import dense_class_names, hits_to_rows, to_dense_ids
 from src.services.curation.export_split import (
     DEFAULT_SPLIT_GROUP_KEY,
     SplitMode,
@@ -94,24 +84,29 @@ from src.services.curation.export_split import (
     stratified_split_with_stats,
 )
 from src.services.curation.export_support import (
-    _build_export_id_map,
     _code_sha,
     _ExportRow,
-    _remap_rows_to_export_ids,
-    _resolve_source_path,
     allocate_export_dir,
     atomic_symlink_flip,
     atomic_write_text,
     frozen_test_sha_of,
     label_content_sha,
     scroll_hits,
-    source_frozen_test_sha,
 )
-from src.services.curation.export_writers import class_split_rows
+from src.services.curation.export_writers import (
+    WrittenLabels,
+    class_split_rows,
+    source_frozen_manifest,
+    write_data_yaml,
+    write_image_labels,
+    write_label_stats,
+    write_registry_snapshot,
+)
 from src.services.curation.holdout import compute_holdout_sha
 
 
 if TYPE_CHECKING:
+    from src.services.curation.export_images import _ExportImage
     from src.services.curation.item_filter import ItemFilter
 
 
@@ -177,42 +172,6 @@ class GenericYoloExportService:
                 'import_source_stem',
             ],
         )
-
-    def _hits_to_rows(self, hits: list[dict[str, Any]]) -> tuple[list[_ExportRow], dict[str, int]]:
-        """Object rows for every hit with an image, a usable box and a class.
-
-        Returns ``(rows, skipped)``; ``skipped`` counts the hits left out
-        by reason. A skipped hit that sits on an exported image is still
-        counted there as an unlabeled object.
-        """
-        rows: list[_ExportRow] = []
-        skipped = {'no_image_id': 0, 'no_usable_box_or_class': 0}
-        for hit in hits:
-            src = hit.get('_source') or {}
-            item_id = src.get('crop_id') or hit.get('_id')
-            box = normalized_box(src.get('bbox_norm'))
-            class_id = src.get('class_id')
-            if not item_id or box is None or class_id is None:
-                skipped['no_usable_box_or_class'] += 1
-                continue
-            if not src.get('image_id'):
-                # No image key to group on or to name files by.
-                skipped['no_image_id'] += 1
-                continue
-            rows.append(
-                _ExportRow(
-                    item_id=str(item_id),
-                    image_id=str(src['image_id']),
-                    image_path=str(src.get('image_path') or ''),
-                    bbox_norm=list(box),
-                    class_id=int(class_id),
-                    class_name=str(src.get('class_name') or class_id),
-                    has_test_crop=bool(src.get('test_holdout')),
-                    dataset_split=src.get('dataset_split') or None,
-                    import_source_stem=src.get('import_source_stem') or None,
-                )
-            )
-        return rows, skipped
 
     async def export_dataset(
         self,
@@ -290,34 +249,9 @@ class GenericYoloExportService:
             raise ValueError(msg)
         started_at = datetime.now(UTC).isoformat()
         generation = await items_index_generation(self.opensearch, self.config.items_index)
-        query = validated_export_query(item_filter)
-        # Scroll the FULL cohort — never cap here. Truncating the raw hit
-        # list would hand the budget to whatever the scroll returned first
-        # and let a rare class vanish; the cap is a class-balanced sample
-        # of images applied once the pool has settled.
-        hits = await self._scroll_items(query)
-        if not hits:
-            raise NothingToExportError(NO_VALIDATED_ITEMS_REASON)
-
-        rows, skipped_items = self._hits_to_rows(hits)
-        if not rows:
-            raise NothingToExportError(
-                f'{len(hits)} validated items, but none has an image id, a box and a class id'
-            )
-
+        rows, skipped_items = await self._load_rows(validated_export_query(item_filter))
         registry_file = self.registry.load()
-        id_map = _build_export_id_map(registry_file.classes)
-        dropped_unregistered: dict[str, int] = {}
-        for row in rows:
-            if row.class_id not in id_map:
-                key = str(row.class_id)
-                dropped_unregistered[key] = dropped_unregistered.get(key, 0) + 1
-        rows = _remap_rows_to_export_ids(rows, id_map)
-        if not rows:
-            raise NothingToExportError(
-                'every validated item has a class id that is not in the class registry '
-                f'(or is deprecated): {dict(sorted(dropped_unregistered.items()))}'
-            )
+        rows, id_map, dropped_unregistered = to_dense_ids(rows, registry_file)
 
         images, unlabeled, selection = await select_export_images(
             self.opensearch,
@@ -328,11 +262,7 @@ class GenericYoloExportService:
             max_images=max_images,
             seed=seed,
         )
-
-        name_by_registry_id = {c.class_id: c.class_name for c in registry_file.classes}
-        names: list[str] = [''] * len(id_map)
-        for registry_id, dense_id in id_map.items():
-            names[dense_id] = name_by_registry_id.get(registry_id, str(registry_id))
+        names = dense_class_names(registry_file, id_map)
 
         resolved_export_dir = (
             Path(export_dir)
@@ -356,74 +286,31 @@ class GenericYoloExportService:
             pinned=pins_from_rows(split_rows, split_mode),
         )
 
-        counts = SplitCounts()
-        object_counts = SplitCounts()
-        per_class = {dense_id: SplitCounts() for dense_id in range(len(names))}
-        item_ids: list[str] = []
-        holdout_item_ids: list[str] = []
-        image_jobs: list[tuple[str, str]] = []
-        # (import_source_stem, own label stem) of every test image, for the
-        # manifest's source_frozen_test_sha.
-        test_stems: list[tuple[str | None, str]] = []
-
-        for image in images:
-            split = item_split[image.objects[0].item_id]
-            stem = image_file_stem(image.image_id)
-            if split == 'test':
-                test_stems.append((image.objects[0].import_source_stem, stem))
-            lines = [yolo_line(o.export_class_id, o.bbox_norm) for o in image.objects]
-            (labels_root / split / f'{stem}.txt').write_text('\n'.join(lines) + '\n')
-            setattr(counts, split, getattr(counts, split) + 1)
-            setattr(object_counts, split, getattr(object_counts, split) + len(image.objects))
-            for obj in image.objects:
-                class_counts = per_class[obj.export_class_id]
-                setattr(class_counts, split, getattr(class_counts, split) + 1)
-                item_ids.append(obj.item_id)
-                if obj.has_test_crop:
-                    holdout_item_ids.append(obj.item_id)
-
-            if copy_images:
-                src_path = _resolve_source_path(image.image_path, self.config)
-                if src_path is not None:
-                    ext = src_path.suffix or '.jpg'
-                    dest = images_root / split / f'{stem}{ext}'
-                    image_jobs.append((str(src_path), str(dest)))
-                else:
-                    logger.warning(
-                        'export_source_image_unresolved',
-                        image_id=image.image_id,
-                        image_path=image.image_path,
-                    )
-
+        written = write_image_labels(
+            images,
+            item_split,
+            names=names,
+            labels_root=labels_root,
+            images_root=images_root,
+            config=self.config,
+            copy_images=copy_images,
+        )
         negatives_written = 0
         negatives_skipped_partial = 0
         if include_negative_frames:
-            planned, negatives_skipped_partial = plan_multi_class_negatives(
-                await scroll_negative_frames(
-                    self.opensearch, images_index=self.config.images_index
-                ),
-                exported_class_names={
-                    names[o.export_class_id] for im in images for o in im.objects
-                },
-                already_exported={im.image_id for im in images},
-                split_mode=split_mode,
-                seed=seed,
-                train_ratio=self.profile.train_ratio,
-                val_ratio=self.profile.val_ratio,
-            )
-            negatives_written = write_negative_frames(
-                planned,
+            negatives_written, negatives_skipped_partial = await self._write_negatives(
+                images,
+                names,
+                written,
                 labels_root=labels_root,
                 images_root=images_root,
-                config=self.config,
-                split_counts=counts,
-                test_stems=test_stems,
-                image_jobs=image_jobs,
+                split_mode=split_mode,
+                seed=seed,
                 copy_images=copy_images,
             )
 
         image_copy_stats = await copy_export_images(
-            image_jobs,
+            written.image_jobs,
             resize_mode=resize_mode,
             image_size=image_size,
             max_workers=max_image_workers,
@@ -440,46 +327,9 @@ class GenericYoloExportService:
         )
         finished_at = datetime.now(UTC).isoformat()
 
-        data_yaml_path = resolved_export_dir / ARTIFACT_FILENAMES['data_yaml']
-        data_yaml_path.write_text(
-            f'path: {resolved_export_dir}\n'
-            'train: images/train\n'
-            'val: images/val\n'
-            'test: images/test\n'
-            f'nc: {len(names)}\n'
-            f'names: {json.dumps(names)}\n'
-        )
-
-        # Objects per class, i.e. label lines across every split.
-        label_stats: dict[str, int] = dict.fromkeys(names, 0)
-        for dense_id, class_counts in per_class.items():
-            label_stats[names[dense_id]] += sum(class_counts.to_dict().values())
-        (resolved_export_dir / ARTIFACT_FILENAMES['label_stats']).write_text(
-            json.dumps(label_stats, indent=2)
-        )
-        # class_count is the registry size written into data.yaml
-        # (nc/names) -- it stays that way for back-compat, but a class
-        # with zero labeled objects in this export inflates that number
-        # into looking like "84 classes of real data" when only a
-        # handful have any objects at all. classes_with_objects is the
-        # honest denominator for a per-class table.
-        classes_with_objects = sum(1 for v in label_stats.values() if v > 0)
-
-        class_registry_payload = {
-            'version': 1,
-            'exported_at': finished_at,
-            'classes': [
-                {
-                    'class_id': c.class_id,
-                    'class_name': c.class_name,
-                    'deprecated': c.deprecated,
-                }
-                for c in registry_file.classes
-            ],
-            'export_id_map': {str(k): v for k, v in id_map.items()},
-        }
-        class_registry_path = resolved_export_dir / ARTIFACT_FILENAMES['class_registry']
-        class_registry_path.write_text(json.dumps(class_registry_payload, indent=2))
+        data_yaml_path = write_data_yaml(resolved_export_dir, names)
+        classes_with_objects = write_label_stats(resolved_export_dir, names, written.per_class)
+        write_registry_snapshot(resolved_export_dir, registry_file, id_map, exported_at=finished_at)
 
         exported_unlabeled = [unlabeled.get(im.image_id, 0) for im in images]
         partial = {
@@ -499,19 +349,11 @@ class GenericYoloExportService:
             'negative_images': negatives_written,
             'negative_frames_skipped_partial': negatives_skipped_partial,
             **split_stats.to_manifest(split_mode),
-            **(
-                {'source_frozen_test_sha': source_sha}
-                if (
-                    source_sha := source_frozen_test_sha(
-                        (s for s, _ in test_stems), (o for _, o in test_stems)
-                    )
-                )
-                else {}
-            ),
-            'object_count': len(item_ids),
-            'split_counts': counts.to_dict(),
-            'split_object_counts': object_counts.to_dict(),
-            'class_split_counts': class_split_rows(per_class, id_map, names),
+            **source_frozen_manifest(written.test_stems),
+            'object_count': len(written.item_ids),
+            'split_counts': written.counts.to_dict(),
+            'split_object_counts': written.object_counts.to_dict(),
+            'class_split_counts': class_split_rows(written.per_class, id_map, names),
             'class_count': len(names),
             'classes_with_objects': classes_with_objects,
             **partial,
@@ -519,8 +361,8 @@ class GenericYoloExportService:
             'finished_at': finished_at,
             'exported_at': finished_at,
             'code_sha': _code_sha(),
-            'frozen_holdout_sha': compute_holdout_sha(holdout_item_ids)
-            if holdout_item_ids
+            'frozen_holdout_sha': compute_holdout_sha(written.holdout_item_ids)
+            if written.holdout_item_ids
             else None,
             'dedup': selection['dedup'],
             'max_images': max_images,
@@ -539,14 +381,7 @@ class GenericYoloExportService:
 
         current_symlink = self.config.export_root / 'current'
         atomic_symlink_flip(current_symlink, resolved_export_dir)
-
-        # ST-4: best-effort keep-last prune of auto-named export dirs.
-        # Never raises -- a prune failure must never fail an otherwise
-        # successful export.
-        try:
-            await asyncio.to_thread(prune_exports_after_write, self.config)
-        except Exception as exc:
-            logger.warning('export_retention_failed', error=str(exc))
+        await self._prune_old_exports()
 
         return ExportResult(
             export_dir=str(resolved_export_dir),
@@ -554,17 +389,77 @@ class GenericYoloExportService:
             manifest_path=str(manifest_path),
             data_yaml_path=str(data_yaml_path),
             dataset_sha=checksum,
-            split_counts=counts,
+            split_counts=written.counts,
             image_count=len(images) + negatives_written,
             class_count=len(names),
             classes_with_objects=classes_with_objects,
             started_at=started_at,
             finished_at=finished_at,
             current_symlink=str(current_symlink),
-            object_count=len(item_ids),
-            split_object_counts=object_counts,
+            object_count=len(written.item_ids),
+            split_object_counts=written.object_counts,
             unlabeled_items_on_exported_images=partial['unlabeled_items_on_exported_images'],
             images_with_unlabeled_items=partial['images_with_unlabeled_items'],
             images_dropped_not_fully_labeled=partial['images_dropped_not_fully_labeled'],
             skipped_items=skipped_items,
         )
+
+    async def _load_rows(self, query: dict[str, Any]) -> tuple[list[_ExportRow], dict[str, int]]:
+        """Scroll the cohort and turn it into object rows; refuses an empty export."""
+        # Scroll the FULL cohort — never cap here. Truncating the raw hit
+        # list would hand the budget to whatever the scroll returned first
+        # and let a rare class vanish; the cap is a class-balanced sample
+        # of images applied once the pool has settled.
+        hits = await self._scroll_items(query)
+        if not hits:
+            raise NothingToExportError(NO_VALIDATED_ITEMS_REASON)
+
+        rows, skipped_items = hits_to_rows(hits)
+        if not rows:
+            raise NothingToExportError(
+                f'{len(hits)} validated items, but none has an image id, a box and a class id'
+            )
+        return rows, skipped_items
+
+    async def _write_negatives(
+        self,
+        images: list[_ExportImage],
+        names: list[str],
+        written: WrittenLabels,
+        *,
+        labels_root: Path,
+        images_root: Path,
+        split_mode: SplitMode,
+        seed: int,
+        copy_images: bool,
+    ) -> tuple[int, int]:
+        """Reviewed-negative frames as empty labels; returns ``(written, skipped_partial)``."""
+        planned, skipped_partial = plan_multi_class_negatives(
+            await scroll_negative_frames(self.opensearch, images_index=self.config.images_index),
+            exported_class_names={names[o.export_class_id] for im in images for o in im.objects},
+            already_exported={im.image_id for im in images},
+            split_mode=split_mode,
+            seed=seed,
+            train_ratio=self.profile.train_ratio,
+            val_ratio=self.profile.val_ratio,
+        )
+        negatives_written = write_negative_frames(
+            planned,
+            labels_root=labels_root,
+            images_root=images_root,
+            config=self.config,
+            split_counts=written.counts,
+            test_stems=written.test_stems,
+            image_jobs=written.image_jobs,
+            copy_images=copy_images,
+        )
+        return negatives_written, skipped_partial
+
+    async def _prune_old_exports(self) -> None:
+        # ST-4: best-effort keep-last prune of auto-named export dirs.
+        # Never raises -- a prune failure must never fail an otherwise
+        # successful export.
+        try:
+            await asyncio.to_thread(prune_exports_after_write, self.config)
+        except Exception as exc:
+            logger.warning('export_retention_failed', error=str(exc))

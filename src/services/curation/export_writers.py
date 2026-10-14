@@ -11,24 +11,39 @@ from __future__ import annotations
 import asyncio
 import json
 from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from src.config.project_context import run_in_executor_bound
+from src.core.logging import get_logger
+from src.services.curation.export_images import image_file_stem, yolo_line
 from src.services.curation.export_models import (
+    ARTIFACT_FILENAMES,
     CLASS_REGISTRY_FILENAME,
     LABEL_STATS_FILENAME,
     SingleClassExportProfile,
     SplitCounts,
 )
-from src.services.curation.export_support import _copy_or_resize_one, atomic_write_text
+from src.services.curation.export_support import (
+    _copy_or_resize_one,
+    _resolve_source_path,
+    atomic_write_text,
+    source_frozen_test_sha,
+)
 
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from pathlib import Path
 
+    from src.clients.curation_opensearch import ClassRegistryFile
     from src.clients.curation_opensearch.registry import ClassRegistry
+    from src.config import CurationConfig
+    from src.services.curation.export_images import _ExportImage
+
+
+logger = get_logger(__name__)
 
 
 def class_split_rows(
@@ -165,3 +180,123 @@ async def copy_single_class_images(
                 if err:
                     errors.append(err)
     return {'attempted': len(jobs), 'copied': copied, 'failed': failed, 'errors': errors[:20]}
+
+
+@dataclass
+class WrittenLabels:
+    """What :func:`write_image_labels` counted and which image copies it planned."""
+
+    counts: SplitCounts = field(default_factory=SplitCounts)
+    object_counts: SplitCounts = field(default_factory=SplitCounts)
+    per_class: dict[int, SplitCounts] = field(default_factory=dict)
+    item_ids: list[str] = field(default_factory=list)
+    holdout_item_ids: list[str] = field(default_factory=list)
+    image_jobs: list[tuple[str, str]] = field(default_factory=list)
+    # (import_source_stem, own label stem) of every test image, for the
+    # manifest's source_frozen_test_sha.
+    test_stems: list[tuple[str | None, str]] = field(default_factory=list)
+
+
+def write_image_labels(
+    images: list[_ExportImage],
+    item_split: dict[str, str],
+    *,
+    names: list[str],
+    labels_root: Path,
+    images_root: Path,
+    config: CurationConfig,
+    copy_images: bool,
+) -> WrittenLabels:
+    """One label file per image under ``labels_root/<split>``; plans the pixel copies."""
+    written = WrittenLabels(per_class={dense_id: SplitCounts() for dense_id in range(len(names))})
+    for image in images:
+        split = item_split[image.objects[0].item_id]
+        stem = image_file_stem(image.image_id)
+        if split == 'test':
+            written.test_stems.append((image.objects[0].import_source_stem, stem))
+        lines = [yolo_line(o.export_class_id, o.bbox_norm) for o in image.objects]
+        (labels_root / split / f'{stem}.txt').write_text('\n'.join(lines) + '\n')
+        setattr(written.counts, split, getattr(written.counts, split) + 1)
+        setattr(
+            written.object_counts, split, getattr(written.object_counts, split) + len(image.objects)
+        )
+        for obj in image.objects:
+            class_counts = written.per_class[obj.export_class_id]
+            setattr(class_counts, split, getattr(class_counts, split) + 1)
+            written.item_ids.append(obj.item_id)
+            if obj.has_test_crop:
+                written.holdout_item_ids.append(obj.item_id)
+
+        if copy_images:
+            src_path = _resolve_source_path(image.image_path, config)
+            if src_path is not None:
+                ext = src_path.suffix or '.jpg'
+                dest = images_root / split / f'{stem}{ext}'
+                written.image_jobs.append((str(src_path), str(dest)))
+            else:
+                logger.warning(
+                    'export_source_image_unresolved',
+                    image_id=image.image_id,
+                    image_path=image.image_path,
+                )
+    return written
+
+
+def write_data_yaml(export_dir: Path, names: list[str]) -> Path:
+    """The multi-class ``data.yaml`` (flow-style ``names``); returns its path."""
+    data_yaml_path = export_dir / ARTIFACT_FILENAMES['data_yaml']
+    data_yaml_path.write_text(
+        f'path: {export_dir}\n'
+        'train: images/train\n'
+        'val: images/val\n'
+        'test: images/test\n'
+        f'nc: {len(names)}\n'
+        f'names: {json.dumps(names)}\n'
+    )
+    return data_yaml_path
+
+
+def write_label_stats(export_dir: Path, names: list[str], per_class: dict[int, SplitCounts]) -> int:
+    """``label_stats.json`` (objects per class across every split); returns
+    the number of classes that have any object."""
+    label_stats: dict[str, int] = dict.fromkeys(names, 0)
+    for dense_id, class_counts in per_class.items():
+        label_stats[names[dense_id]] += sum(class_counts.to_dict().values())
+    (export_dir / ARTIFACT_FILENAMES['label_stats']).write_text(json.dumps(label_stats, indent=2))
+    # class_count is the registry size written into data.yaml
+    # (nc/names) -- it stays that way for back-compat, but a class
+    # with zero labeled objects in this export inflates that number
+    # into looking like "84 classes of real data" when only a
+    # handful have any objects at all. classes_with_objects is the
+    # honest denominator for a per-class table.
+    return sum(1 for v in label_stats.values() if v > 0)
+
+
+def write_registry_snapshot(
+    export_dir: Path,
+    registry_file: ClassRegistryFile,
+    id_map: dict[int, int],
+    *,
+    exported_at: str,
+) -> None:
+    """``class_registry.json``: the registry as exported plus the dense id map."""
+    payload = {
+        'version': 1,
+        'exported_at': exported_at,
+        'classes': [
+            {
+                'class_id': c.class_id,
+                'class_name': c.class_name,
+                'deprecated': c.deprecated,
+            }
+            for c in registry_file.classes
+        ],
+        'export_id_map': {str(k): v for k, v in id_map.items()},
+    }
+    (export_dir / ARTIFACT_FILENAMES['class_registry']).write_text(json.dumps(payload, indent=2))
+
+
+def source_frozen_manifest(test_stems: list[tuple[str | None, str]]) -> dict[str, str]:
+    """``source_frozen_test_sha`` when any test image came from an import."""
+    sha = source_frozen_test_sha((s for s, _ in test_stems), (o for _, o in test_stems))
+    return {'source_frozen_test_sha': sha} if sha else {}
