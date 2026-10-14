@@ -58,7 +58,8 @@ tests/curation/test_vlm_vocabulary.py # guard test: pins gemma_*->vlm_* / v6_*->
 tests/curation/test_wire_contract.py:plate|gemma # negative assertions that these retired-name literals are absent / rejected on the wire
 tests/integration/test_stats_router.py:by_lpr|by_sam3|gemma # negative test: asserts these retired stats-key literals are absent
 tests/curation/test_bakeoff_harness.py # guard test + its own DOMAIN_WORDS regex scanning bakeoff harness files for domain words
-tests/curation/test_bakeoff_router.py # negative test: asserts the retired lpr_nanov11_640 id is absent from served baselines
+tests/curation/bakeoff_router/test_profiles_and_baselines.py # negative test: asserts the retired lpr_nanov11_640 id is absent from served baselines
+tests/curation/bakeoff_router/test_contract_and_evaluator.py # asserts the harness file listing includes the example profile backend path
 tests/curation/test_models_unload.py # guard tests: prove there is no hardcoded 'lpr_' prefix special-case
 tests/curation/test_candidate_source_values.py # negative test: asserts retired sam3/sam3_text_hint/lpr/lpr_existing values never resolve specially
 tests/curation/test_methods_router.py # negative test: asserts the retired 'lpr' export id is omitted from served entries
