@@ -6,7 +6,6 @@ scripts/curation/vlm_worker.py::run	32	top 15: decompose in PR 6
 scripts/curation/worker/runner.py::run	20	ratchet: may only go down
 scripts/curation/worker/stage_a.py::stage_a_consumer	17	ratchet: may only go down
 scripts/curation/worker/stage_a.py::stage_a_vlm_visible	19	ratchet: may only go down
-scripts/curation/worker/stage_b.py::stage_b_combined	25	top 15: decompose in PR 6
 scripts/curation/worker/stage_sam.py::stage_a_sam_consumer	24	top 15: decompose in PR 6
 src/clients/occ_upsert.py::occ_upsert_bulk	25	top 15: decompose in PR 6
 src/clients/opensearch/bulk.py::bulk_ingest	19	ratchet: may only go down
