@@ -171,7 +171,7 @@ describe('createStrategyBar', () => {
   // §5/§7). k is deliberately NOT part of toQueryParams(): only
   // /clusters/[id] forwards it, and it reads bar.k directly the same way
   // it already reads bar.sort directly (see this file's header comment
-  // and src/routes/clusters/[id]/+page.svelte's cropQuery()).
+  // and cropQuery() in $lib/clusters/clusterDetailController.svelte.ts).
   describe('k (diverse-mode pool-scale selection count)', () => {
     it('defaults to null and is settable independently of sort/filters', () => {
       const bar = createStrategyBar();

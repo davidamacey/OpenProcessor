@@ -11,7 +11,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
-import type { DatasetStats as DatasetStatsType } from '$lib/api';
+import type { DatasetStats as DatasetStatsType } from '$lib/api_stats';
 import { datasetStatsFixture } from '$lib/test/fixtures/datasetStats';
 import {
   installServedRegionProfile,

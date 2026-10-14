@@ -21,7 +21,15 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.resolve(here, '+page.svelte'), 'utf-8');
+const LIB = path.resolve(here, '../../../../lib');
+const src = readFileSync(
+  path.join(LIB, 'clusters/clusterSearchModes.svelte.ts'),
+  'utf-8',
+);
+const gridSrc = readFileSync(
+  path.join(LIB, 'components/clusters/ClustersGrid.svelte'),
+  'utf-8',
+);
 
 describe('/clusters Ignored bucket (W7)', () => {
   it('restoreIgnored calls unexcludeCrops, not excludeCrops', () => {
@@ -43,8 +51,8 @@ describe('/clusters Ignored bucket (W7)', () => {
   });
 
   it('the ignoredModeActive grid branch renders before showEmbeddingViz (searchModeActive precedent)', () => {
-    const ignoredBranch = src.indexOf('{:else if ignoredModeActive}');
-    const embeddingBranch = src.indexOf('{:else if showEmbeddingViz}');
+    const ignoredBranch = gridSrc.indexOf('{:else if modes.ignoredModeActive}');
+    const embeddingBranch = gridSrc.indexOf('{:else if showEmbeddingViz}');
     expect(ignoredBranch).toBeGreaterThan(-1);
     expect(embeddingBranch).toBeGreaterThan(-1);
     expect(ignoredBranch).toBeLessThan(embeddingBranch);
@@ -70,8 +78,8 @@ describe('/clusters item-text search (W8)', () => {
   });
 
   it('the itemTextModeActive grid branch renders before showEmbeddingViz', () => {
-    const itemTextBranch = src.indexOf('{:else if itemTextModeActive}');
-    const embeddingBranch = src.indexOf('{:else if showEmbeddingViz}');
+    const itemTextBranch = gridSrc.indexOf('{:else if modes.itemTextModeActive}');
+    const embeddingBranch = gridSrc.indexOf('{:else if showEmbeddingViz}');
     expect(itemTextBranch).toBeGreaterThan(-1);
     expect(embeddingBranch).toBeGreaterThan(-1);
     expect(itemTextBranch).toBeLessThan(embeddingBranch);
@@ -80,10 +88,10 @@ describe('/clusters item-text search (W8)', () => {
 
 describe('item-text search shows only the error, not the error AND the empty state', () => {
   it('the empty-state copy is gated on !itemTextError', () => {
-    const block = src.match(
-      /\{#if itemTextLoading[\s\S]*?No crops matched that text\.[\s\S]*?\{:else\}/,
+    const block = gridSrc.match(
+      /\{#if modes\.itemTextLoading[\s\S]*?No crops matched that text\.[\s\S]*?\{:else\}/,
     )?.[0];
     expect(block).not.toBeUndefined();
-    expect(block).toMatch(/\{:else if itemTextError\}/);
+    expect(block).toMatch(/\{:else if modes\.itemTextError\}/);
   });
 });

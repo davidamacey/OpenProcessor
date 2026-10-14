@@ -7,7 +7,7 @@
  * surface absent). See `ConfigAvailability`. Reset
  * on a project switch.
  */
-import { listRegionProfiles } from '$lib/api';
+import { listRegionProfiles } from '$lib/api_profiles';
 import { ConfigAvailability } from '$lib/config/configAvailability.svelte';
 import { onProjectChange } from '$lib/projectChange';
 

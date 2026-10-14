@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSemanticSearchBox } from './searchBox.svelte';
-import type { SearchCrop } from './types';
+import type { SearchCrop } from '$lib/types_review';
 
 function crop(id: string, similarity_score = 0.5): SearchCrop {
   return {

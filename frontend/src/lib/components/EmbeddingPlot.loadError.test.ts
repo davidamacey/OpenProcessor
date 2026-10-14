@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 
 const getVizProjection = vi.fn();
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_viz', async () => {
+  const actual = await vi.importActual<typeof import('$lib/api_viz')>('$lib/api_viz');
   return { ...actual, getVizProjection: (...a: unknown[]) => getVizProjection(...a) };
 });
 

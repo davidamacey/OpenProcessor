@@ -21,7 +21,8 @@ import re
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from conftest import ACTION_TIMEOUT_MS, expect_handled
+from harness.constants import ACTION_TIMEOUT_MS
+from harness.waits import expect_handled
 from playwright.sync_api import expect
 
 from fixtures.wire import make_item, review_tab, review_tabs

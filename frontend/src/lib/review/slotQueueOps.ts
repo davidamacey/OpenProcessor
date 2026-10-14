@@ -7,8 +7,8 @@
  * extracted as pure functions so they're independently testable and so
  * Phase 2 can parameterize them by slot without touching the review
  * page's control flow. Behavior is unchanged — every function here is a
- * direct lift of the logic that used to live at
- * `review/+page.svelte:737-780`.
+ * direct lift of the logic that used to live inline in the page; the
+ * step-back stack that calls them is now `reviewSlotActions.svelte.ts`.
  */
 
 /**

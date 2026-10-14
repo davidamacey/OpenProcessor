@@ -6,7 +6,8 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import openapi from '$contracts/openapi/curation.json';
-import { exportYolo, freezeTestHoldout, ingestBatch } from '$lib/api';
+import { exportYolo, freezeTestHoldout } from '$lib/api_export';
+import { ingestBatch } from '$lib/api_ingest';
 
 type Schema = { properties?: Record<string, unknown>; additionalProperties?: boolean };
 const schemas = (

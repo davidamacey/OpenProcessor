@@ -16,7 +16,7 @@ import type {
   NewClassProposalTerm,
   NewClassProposalsSummary,
   NewClassTermRules,
-} from '$lib/api';
+} from '$lib/api_review';
 
 export interface ProposalRow {
   term: NewClassProposalTerm;

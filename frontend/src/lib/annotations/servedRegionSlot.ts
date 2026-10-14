@@ -16,7 +16,7 @@
  * `examples/annotation-profiles/`).
  */
 
-import type { ServedRegionProfile } from '$lib/types';
+import type { ServedRegionProfile } from '$lib/types_health';
 import { keymapStore } from '$stores/keymap.svelte';
 import type { SlotSpec, SlotState, SubBoxCapability, TextCapability } from './types';
 

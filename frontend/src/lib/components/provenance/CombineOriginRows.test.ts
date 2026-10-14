@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import CombineOriginRows from './CombineOriginRows.svelte';
-import { mapRawCrop } from '$lib/api';
+import { mapRawCrop } from '$lib/api_cropMap';
 import { makeItem } from '$lib/test/makeItem';
 
 let target: HTMLDListElement;

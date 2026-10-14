@@ -17,7 +17,7 @@
    * DnD, and label hotkeys keep working completely unchanged — this is
    * deliberately not a parallel rendering path.
    */
-  import { searchCrops } from '$lib/api';
+  import { searchCrops } from '$lib/api_cropRead';
   import { createSemanticSearchBox } from '$lib/searchBox.svelte';
   import type { SemanticSearchResult } from '$lib/searchBox.svelte';
   import { onMount } from 'svelte';

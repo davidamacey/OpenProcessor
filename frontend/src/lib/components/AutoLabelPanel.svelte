@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   /*
    * Recluster / auto-label control panel.
    *
@@ -29,12 +29,12 @@
   import AssistScopeBar from './AssistScopeBar.svelte';
   import {
     cancelAutoLabel,
-    configErrorDetail,
     getAutoLabelStatus,
     startAutoLabel,
     unknownStrategyDetail,
     type AutoLabelJobState,
-  } from '$lib/api';
+  } from '$lib/api_autoLabel';
+  import { configErrorDetail } from '$lib/api_profiles';
   import { createAssistScope } from '$lib/assistScope.svelte';
   import { resolveAutoLabelRunVlm } from '$lib/autoLabelRunVlm';
   import { isScopedAssistAvailable } from '$lib/strategies';

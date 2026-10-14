@@ -11,6 +11,7 @@
  * row offers is decided by the page from served flags alone.
  */
 
+import { apiErrorText } from '$lib/api_errors';
 import {
   archiveProject,
   cloneProjectSettings,
@@ -20,9 +21,8 @@ import {
   getProjects,
   patchProject,
   projectErrorDetail,
-  apiErrorText,
   unarchiveProject,
-} from '$lib/api';
+} from '$lib/api_projects';
 import type {
   CreateProjectRequest,
   DeleteDryRunResponse,

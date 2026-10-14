@@ -6,7 +6,7 @@
  * `probe` is shown as is; a 429 `probe_busy` is the served message).
  * Nothing here judges a result.
  */
-import { apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
 import { validateVlmEndpoint } from '$lib/api_vlm';
 import type {
   VlmEndpointBody,

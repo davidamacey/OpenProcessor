@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { classifyScoresPoll, formatCoverageCounts, formatCoveragePct } from './scores';
-import type { ScoreCoverageEntry } from './api';
+import type { ScoreCoverageEntry } from '$lib/api_scores';
 
 function entry(overrides: Partial<ScoreCoverageEntry> = {}): ScoreCoverageEntry {
   return {

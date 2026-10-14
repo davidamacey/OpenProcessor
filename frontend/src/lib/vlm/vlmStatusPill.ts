@@ -7,7 +7,7 @@
  * pill. Nothing here decides what a status means.
  */
 import { modelStatusPill, type StatusPill } from '$lib/modelStatus';
-import type { ModelInfo } from '$lib/types';
+import type { ModelInfo } from '$lib/types_models';
 
 const NEUTRAL = 'bg-zinc-700/40 text-zinc-400 border-zinc-600';
 const TRITON_STATUSES = new Set([

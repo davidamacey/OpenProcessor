@@ -11,12 +11,16 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.resolve(here, './+page.svelte'), 'utf-8');
+const src = readFileSync(
+  path.resolve(here, '../../../../lib/train/trainCohortsController.svelte.ts'),
+  'utf-8',
+);
 
 describe('/train cohort definitions come from GET /training_cohorts?class_id=', () => {
-  it('imports getTrainingCohorts and the ServedTrainingCohort type from $lib/api', () => {
-    expect(src).toMatch(/getTrainingCohorts/);
-    expect(src).toMatch(/ServedTrainingCohort/);
+  it('imports getTrainingCohorts and the ServedTrainingCohort type from $lib/api_train', () => {
+    expect(src).toMatch(
+      /import\s*\{[^}]*getTrainingCohorts[^}]*ServedTrainingCohort[^}]*\}\s*from\s*'\$lib\/api_train'/,
+    );
   });
 
   it('loadGroupCohorts calls getTrainingCohorts(group.classId) and maps served cohorts, not cohortsForClass alone', () => {

@@ -12,8 +12,8 @@
  * - "Check segmenter prompt": the draft's prompt posted to the text-only
  *   route, its served report kept apart and cleared by the next edit.
  */
+import { apiErrorText } from '$lib/api_errors';
 import {
-  apiErrorText,
   getConfigVocabulary,
   getRegionProfile,
   getRegionProfileRevision,
@@ -22,7 +22,7 @@ import {
   updateRegionProfile,
   validateRegionProfile,
   validateSegmenterPrompt,
-} from '$lib/api';
+} from '$lib/api_profiles';
 import { ConfigEditor } from '$lib/config/configEditor.svelte';
 import { subscribeCurationEvents, type CurationEvent } from '$lib/sse';
 import type { ValidationReport } from '$lib/types_config';

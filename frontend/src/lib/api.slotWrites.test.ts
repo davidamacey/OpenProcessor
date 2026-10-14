@@ -6,17 +6,17 @@
  * list, a box's state and its text go through the four per-box routes.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { API_PREFIX } from '$lib/api';
+import { patchSlotMeta } from '$lib/api_cropWrites';
+import { ApiError } from '$lib/api_errors';
 import {
-  patchSlotMeta,
   batchRegionStatus,
   putRegionBoxes,
   putBatchRegions,
   patchRegionBox,
   postBatchBoxState,
   regionConflictDetail,
-  ApiError,
-  API_PREFIX,
-} from './api';
+} from '$lib/api_regionBoxes';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import { aircraftTailNumberSlot } from '$lib/test/fixtures/aircraftTailNumberSlot';
 

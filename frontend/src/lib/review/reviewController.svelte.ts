@@ -17,9 +17,10 @@
  * a page-level and a controller-level copy that can drift apart.
  */
 
-import { putCropLabel, reviewDismissCrop, apiErrorText } from '$lib/api';
+import { putCropLabel, reviewDismissCrop } from '$lib/api_cropWrites';
+import { apiErrorText } from '$lib/api_errors';
 import type { Pager } from '$lib/pager.svelte';
-import type { ReviewItem } from '$lib/types';
+import type { ReviewItem } from '$lib/types_review';
 import { classesStore } from '$stores/classes.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import { undoStore } from '$stores/undo.svelte';

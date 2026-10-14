@@ -6,33 +6,33 @@
  * fallback. Static source scan (no component-mount harness; see
  * slotReviewCharacterization.test.ts's doc comment).
  */
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { reviewPageSource, reviewSource } from '$lib/testing/reviewPageSources';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const pageSrc = reviewPageSource();
+const editSrc = reviewSource('lib/review/reviewSlotEditController.svelte.ts');
+const panelSrc = reviewSource('lib/components/review/ReviewSlotPanel.svelte');
+const actionsSrc = reviewSource('lib/review/reviewSlotActions.svelte.ts');
 
 describe('shape-warning badge and client shape-gate are gone', () => {
   it('never imports shapeGate or renders a shapeWarning badge', () => {
-    expect(src).not.toMatch(/shapeGate/);
-    expect(src).not.toMatch(/shapeWarning/);
-    expect(src).not.toMatch(/describeEnvelope/);
+    expect(pageSrc).not.toMatch(/shapeGate/);
+    expect(pageSrc).not.toMatch(/shapeWarning/);
+    expect(pageSrc).not.toMatch(/describeEnvelope/);
   });
 });
 
 describe('box edits never project client-side, and the removed single-box write is gone', () => {
   it('never imports projectFromParent or setSlotBox (both deleted)', () => {
-    expect(src).not.toMatch(/projectFromParent/);
-    expect(src).not.toMatch(/setSlotBox/);
-    expect(src).not.toMatch(/saveBboxAndExit/);
+    expect(pageSrc).not.toMatch(/projectFromParent/);
+    expect(pageSrc).not.toMatch(/setSlotBox/);
+    expect(pageSrc).not.toMatch(/saveBboxAndExit/);
   });
 });
 
 describe('slot writes render the server-returned item, not a computed patch', () => {
   it('saveSlotMeta spreads res.item onto the queue item', () => {
-    const fn = src.match(
+    const fn = editSrc.match(
       /async function saveSlotMeta\([\s\S]*?\n {2}async function commitSlotText/,
     )?.[0];
     expect(fn).not.toBeUndefined();
@@ -41,7 +41,9 @@ describe('slot writes render the server-returned item, not a computed patch', ()
   });
 
   it('commitSlotStatus goes through saveSlotMeta, which renders the returned item (the server clears the box list itself)', () => {
-    const statusFn = src.match(/async function commitSlotStatus\([\s\S]*?\n {2}\}/)?.[0];
+    const statusFn = editSrc.match(
+      /async function commitSlotStatus\([\s\S]*?\n {2}\}/,
+    )?.[0];
     expect(statusFn).toMatch(/await saveSlotMeta\(\{ status: editedSlotStatus \}\)/);
     expect(statusFn).not.toMatch(/setSlotBox|editedSlotBox/);
   });
@@ -49,14 +51,18 @@ describe('slot writes render the server-returned item, not a computed patch', ()
 
 describe('status vocabulary/actions are server-driven with a profile fallback', () => {
   it('humanWritableStates/statusWantsRejectionReason are called with regionStatusesStore.list', () => {
-    expect(src).toMatch(/humanWritableStates\(activeSlot, regionStatusesStore\.list\)/);
-    expect(src).toMatch(
+    expect(editSrc).toMatch(
+      /humanWritableStates\(activeSlot, regionStatusesStore\.list\)/,
+    );
+    expect(panelSrc).toMatch(
       /statusWantsRejectionReason\(activeSlot, editedSlotStatus, regionStatusesStore\.list\)/,
     );
   });
 
   it('markFalsePositive prefers the served false_positive_status', () => {
-    const fn = src.match(/async function markFalsePositive\([\s\S]*?\n {2}\}/)?.[0];
+    const fn = actionsSrc.match(
+      /async function markFalsePositive\([\s\S]*?\n {2}\}/,
+    )?.[0];
     expect(fn).toMatch(/regionStatusesStore\.falsePositiveStatus \?\?/);
   });
 });

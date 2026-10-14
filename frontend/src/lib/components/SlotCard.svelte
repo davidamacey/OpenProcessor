@@ -23,7 +23,9 @@
    */
   import ProvenanceChip from './ProvenanceChip.svelte';
   import ReprocessControl from './datasets/ReprocessControl.svelte';
-  import { getThumbUrl, resolveApiUrl, scoped, type RegionBrowseItem } from '$lib/api';
+  import { resolveApiUrl, scoped } from '$lib/api';
+  import { getThumbUrl } from '$lib/api_cropRead';
+  import type { RegionBrowseItem } from '$lib/api_regions';
   import { readSlot } from '$lib/annotations/readSlot';
   import { reprocessVocabularyStore } from '$lib/stores/reprocessVocabulary.svelte';
   import { displayBoxOf, rowBoxOf } from '$lib/annotations/rowBox';

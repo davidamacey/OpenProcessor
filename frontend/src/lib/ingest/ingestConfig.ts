@@ -9,7 +9,7 @@
  * cap).
  */
 
-import type { IngestConfig } from '$lib/types';
+import type { IngestConfig } from '$lib/types_ingest';
 
 /**
  * `_PathLookupRequest.image_paths.maxItems` — this one IS already

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   /**
    * `/export`: limit the export to the items a filter matches. Collapsed by
    * default. While the filter names something, the line "Matching items: N"
@@ -9,7 +9,7 @@
    */
   import { untrack } from 'svelte';
   import ItemFilterBar from './ItemFilterBar.svelte';
-  import { getMatchingItemCount } from '$lib/api';
+  import { getMatchingItemCount } from '$lib/api_stats';
   import { withoutOpenVocab } from '$lib/itemFilter/itemFilterState.svelte';
   import type { ItemFilterState } from '$lib/itemFilter/itemFilterState.svelte';
 

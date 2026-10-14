@@ -10,7 +10,15 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const LIB = path.resolve(here, '../../../../../lib');
+const src = readFileSync(
+  path.join(LIB, 'clusters/clusterDetailActions.svelte.ts'),
+  'utf-8',
+);
+const toolbarSrc = readFileSync(
+  path.join(LIB, 'components/clusters/ClusterDetailToolbar.svelte'),
+  'utf-8',
+);
 
 describe('runVlm uses POST /vlm/label_cluster/{id} + status polling, not the old batch loop', () => {
   it('imports pollAutoLabelJob alongside runVlmOnCluster', () => {
@@ -21,7 +29,7 @@ describe('runVlm uses POST /vlm/label_cluster/{id} + status polling, not the old
   it('runVlm calls runVlmOnCluster then polls via pollAutoLabelJob, never fetching a crop page itself', () => {
     const fn = src.match(/async function runVlm\(\)[\s\S]*?\n {2}\}/)?.[0];
     expect(fn).not.toBeUndefined();
-    expect(fn).toMatch(/await runVlmOnCluster\(clusterId,/);
+    expect(fn).toMatch(/await runVlmOnCluster\(view\.clusterId,/);
     expect(fn).toMatch(/await pollAutoLabelJob\(/);
     // The old implementation fetched {API_PREFIX}/crops itself before
     // chunking into {API_PREFIX}/vlm/label_batch — neither should survive.
@@ -30,9 +38,9 @@ describe('runVlm uses POST /vlm/label_cluster/{id} + status polling, not the old
   });
 
   it('renders the job stage/progress from the polled state, not a client-computed percentage', () => {
-    expect(src).toMatch(/vlmJob\.stage/);
-    expect(src).toMatch(/vlmJob\.processed/);
-    expect(src).toMatch(/vlmJob\.total/);
+    expect(toolbarSrc).toMatch(/vlmJob\.stage/);
+    expect(toolbarSrc).toMatch(/vlmJob\.processed/);
+    expect(toolbarSrc).toMatch(/vlmJob\.total/);
   });
 });
 

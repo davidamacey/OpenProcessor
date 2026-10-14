@@ -6,7 +6,7 @@
  * ok preview with `expected_preview_sha`.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import { combinePreview } from '$lib/test/fixtures/combine';
 import type { CombinePreview } from '$lib/types_combine';
 import {

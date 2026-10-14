@@ -15,7 +15,8 @@
  *  2. No polling. See the plan's §4.3.
  */
 
-import { getCurationSettings, putCurationDefaults, apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { getCurationSettings, putCurationDefaults } from '$lib/api_settings';
 import { onProjectChange } from '$lib/projectChange';
 import {
   EMPTY_CURATION_SETTINGS,

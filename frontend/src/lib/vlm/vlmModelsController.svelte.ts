@@ -19,7 +19,8 @@
  * `local_vlm` re-reads the local status, and the project's
  * `config.changed axis=vlm` re-reads the active ref.
  */
-import { configErrorDetail, apiErrorText, getConfigVocabulary } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { configErrorDetail, getConfigVocabulary } from '$lib/api_profiles';
 import {
   clearLocalVlmSelection,
   cloneVlmEndpoint,

@@ -16,12 +16,23 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const LIB = path.resolve(here, '../../../../lib');
+const pageSrc = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const src = readFileSync(
+  path.join(LIB, 'classes/newClassProposalsController.svelte.ts'),
+  'utf-8',
+);
+const panelSrc = readFileSync(
+  path.join(LIB, 'components/classes/NewClassProposalsPanel.svelte'),
+  'utf-8',
+);
 
 describe('/classes Proposals section', () => {
   it('does not import or call the retired sample-only bulkLabel path', () => {
-    expect(src).not.toMatch(/\bbulkLabel\(/);
-    expect(src).not.toMatch(/[,{]\s*bulkLabel\s*[,}]/);
+    for (const s of [pageSrc, src, panelSrc]) {
+      expect(s).not.toMatch(/\bbulkLabel\(/);
+      expect(s).not.toMatch(/[,{]\s*bulkLabel\s*[,}]/);
+    }
   });
 
   it('loadProposals fetches getNewClassProposalsSummary and degrades to an inline error, not a crash', () => {
@@ -48,7 +59,7 @@ describe('/classes Proposals section', () => {
 
   it('mapToExisting dry-runs the resolve with the picked class_id, confirms the served matched count, then resolves for real', () => {
     const start = src.indexOf('async function mapToExisting(');
-    const end = src.indexOf('</script>', start);
+    const end = src.indexOf('\n  function flagReason(', start);
     const fn = src.slice(start, end);
     expect(start).toBeGreaterThan(-1);
     expect(fn).toMatch(/label: term\.label, class_id: targetId/);
@@ -80,7 +91,7 @@ describe('/classes Proposals section', () => {
     expect(createFn).toMatch(/classesStore\.clearAndRefetch\(\)/);
 
     const mapStart = src.indexOf('async function mapToExisting(');
-    const mapEnd = src.indexOf('</script>', mapStart);
+    const mapEnd = src.indexOf('\n  function flagReason(', mapStart);
     const mapFn = src.slice(mapStart, mapEnd);
     expect(mapFn).toMatch(/await loadProposals\(\);/);
   });
@@ -109,7 +120,7 @@ describe('/classes Proposals section — flagged_terms (DQ-M11)', () => {
   });
 
   it('shows without_term and term_rules as help text, not silently dropped', () => {
-    expect(src).toMatch(/proposalsSummary\.without_term/);
-    expect(src).toMatch(/proposalsSummary\.term_rules/);
+    expect(panelSrc).toMatch(/proposalsSummary\.without_term/);
+    expect(panelSrc).toMatch(/proposalsSummary\.term_rules/);
   });
 });

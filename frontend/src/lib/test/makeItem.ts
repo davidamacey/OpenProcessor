@@ -12,7 +12,7 @@
  * key list, so this file breaking (missing a key TypeScript now requires)
  * is the signal that `RawCrop` grew a field this fixture doesn't cover yet.
  */
-import { RAW_CROP_KEYS, type RawCrop } from '../api';
+import { RAW_CROP_KEYS, type RawCrop } from '$lib/api_cropMap';
 
 // `Required<RawCrop>` (not `RawCrop`) so TypeScript itself rejects an
 // omitted optional field — the compile-time half of "every field has a

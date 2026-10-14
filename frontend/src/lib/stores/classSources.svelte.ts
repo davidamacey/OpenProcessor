@@ -7,7 +7,11 @@
  * outside the catalog).
  */
 
-import { getClassSources, type ClassSource, type ClassSourceRole } from '$lib/api';
+import {
+  getClassSources,
+  type ClassSource,
+  type ClassSourceRole,
+} from '$lib/api_classes';
 import { onProjectChange } from '$lib/projectChange';
 
 class ClassSourcesStore {

@@ -15,7 +15,7 @@ import re
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
-from conftest import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
 
 WARNING = "Crops are sent to a service outside this deployment (api.example.com)."

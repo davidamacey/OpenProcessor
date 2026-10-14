@@ -24,7 +24,7 @@ baked at build time — safe to intercept against a `vite preview` build):
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS
 
 from playwright.sync_api import expect
 
@@ -66,7 +66,7 @@ def register_curation(stub):
         return (200, EMPTY_QUEUE)
 
     stub.on("GET", r"/review/(?!tabs)", review_handler)
-    # Keep the served region-tab label conftest.py defaults to.
+    # Keep the served region-tab label harness/stub.py defaults to.
     stub.on("GET", r"/review/tabs(\?|$)", review_tabs(review_tab("regions", REGION_TAB_LABEL)))
     return review_calls
 
@@ -181,7 +181,7 @@ def _assert_dropped(stub, page, app_url, *, expect_region_tab: bool, reason: str
 
 def test_tier2_region_slot_dropped_under_another_served_profile(stub, page, app_url):
     register_curation(stub)
-    # conftest's default /health serves the widget_tag profile.
+    # the harness stub's default /health serves the widget_tag profile.
     _assert_dropped(stub, page, app_url, expect_region_tab=True, reason='"widget_tag"')
 
 

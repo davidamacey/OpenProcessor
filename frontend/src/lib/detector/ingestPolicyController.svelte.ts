@@ -9,9 +9,14 @@
  * `expected_revision` = the revision last read; every refusal is shown as
  * served.
  */
-import { detectorErrorDetail, detectorErrorLines } from '$lib/api_detector';
-import { getIngestPolicy, previewIngestPolicy, putIngestPolicy } from '$lib/api_detector';
-import { getIngestConfig } from '$lib/api';
+import {
+  detectorErrorDetail,
+  detectorErrorLines,
+  getIngestPolicy,
+  previewIngestPolicy,
+  putIngestPolicy,
+} from '$lib/api_detector';
+import { getIngestConfig } from '$lib/api_ingest';
 import type {
   IngestDetectorInfo,
   IngestPolicy,

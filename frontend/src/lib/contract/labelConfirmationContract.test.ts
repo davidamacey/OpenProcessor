@@ -8,7 +8,7 @@ import spec from '$contracts/openapi/curation.json';
 import itemWire from '$contracts/json/item_wire.json';
 import type * as T from '$lib/types_labelConfirmation';
 import { VLM_SCOPES } from '$lib/types_labelConfirmation';
-import { RAW_CROP_KEYS } from '$lib/api';
+import { RAW_CROP_KEYS } from '$lib/api_cropMap';
 import { CORE_REVIEW_TABS } from '$lib/reviewTabs';
 
 type Schema = {

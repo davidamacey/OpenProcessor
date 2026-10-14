@@ -8,7 +8,7 @@
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { keymapAvailability, keymapStore } from '$stores/keymap.svelte';
-  import type { RegistryClass } from '$lib/types';
+  import type { RegistryClass } from '$lib/types_classes';
 
   const shortcuts = $derived(keyboardStore.shortcutsForCurrentScope());
 

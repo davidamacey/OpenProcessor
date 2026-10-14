@@ -25,7 +25,7 @@
  * it's serialized under differs per route (`sort` for `/review`,
  * `order` for `/clusters/[id]`), which is why `toQueryParams()` only
  * covers the `/review` shape and the cluster page reads `.sort` directly
- * (see `src/routes/clusters/[id]/+page.svelte`'s `cropQuery()`).
+ * (see `cropQuery()` in `$lib/clusters/clusterDetailController.svelte.ts`).
  *
  * `formatAppliedSort`/`formatPinnedSortFallback` below are the one
  * exception to "deliberately dumb" above — both are pure functions the

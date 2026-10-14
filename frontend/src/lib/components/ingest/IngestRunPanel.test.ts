@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import IngestRunPanel from './IngestRunPanel.svelte';
-import { ingestPathLookup, ingestUpload } from '$lib/api';
+import { ingestPathLookup, ingestUpload } from '$lib/api_ingest';
 import { resolveIngestConfig } from '$lib/ingest/ingestConfig';
 import { servedIngestConfig } from '$lib/test/fixtures/ingestConfig';
 import type { IngestFile } from '$lib/ingest/fileSource';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_ingest', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_ingest')>('$lib/api_ingest');
   return { ...actual, ingestPathLookup: vi.fn(), ingestUpload: vi.fn() };
 });
 

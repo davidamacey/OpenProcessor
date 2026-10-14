@@ -10,7 +10,11 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const LIB = path.resolve(here, '../../../../../lib');
+const src = readFileSync(
+  path.join(LIB, 'clusters/clusterDetailController.svelte.ts'),
+  'utf-8',
+);
 
 describe('class-for-cluster lookup uses the served cluster_kind, not an id-equality guess', () => {
   it('clsForCluster reads cluster.cluster_kind and cluster.dominant_class_id', () => {

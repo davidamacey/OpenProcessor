@@ -12,7 +12,8 @@
  * `region_status`/`region_revision` in one step.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { undoCropRegion, API_PREFIX } from './api';
+import { API_PREFIX } from '$lib/api';
+import { undoCropRegion } from '$lib/api_cropWrites';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import {
   installDeploymentSlots,

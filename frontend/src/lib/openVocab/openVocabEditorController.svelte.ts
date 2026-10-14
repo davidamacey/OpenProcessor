@@ -8,7 +8,7 @@
  * report kept apart). New targets take the served rows' defaults; no
  * client rule checks a value.
  */
-import { apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
 import {
   getOpenVocab,
   getOpenVocabRevision,

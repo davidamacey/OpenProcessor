@@ -16,7 +16,7 @@
  * keeps the response's facts. The wake-up follows `vlm.changed`
  * (`registry`) and the project's `config.changed axis=vlm`.
  */
-import { apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
 import {
   getVlmCatalog,
   getVlmEndpoint,

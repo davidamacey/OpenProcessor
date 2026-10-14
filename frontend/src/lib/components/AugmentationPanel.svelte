@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   /**
    * Augmentation config panel (design §13).
    *
@@ -10,7 +10,7 @@
    * Parent owns `value: AugmentationSpec | null`. We mutate it via a
    * setter so reactivity updates clearly cross the component boundary.
    */
-  import { getAugmentationPresets } from '$lib/api';
+  import { getAugmentationPresets } from '$lib/api_train';
   import type { AugmentationPresetsResponse, AugmentationSpec } from '$lib/types_train';
 
   interface Props {

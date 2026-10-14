@@ -25,7 +25,7 @@ from __future__ import annotations
 import time
 from urllib.parse import parse_qs, urlparse
 
-from conftest import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS
 
 CLASSES: list[dict] = []
 METHODS = {"strategies": [], "flags": {}}

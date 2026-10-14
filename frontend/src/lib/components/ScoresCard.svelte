@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   /**
    * "Curation scores" card — `/settings` (docs/design/
    * frontend-coverage-audit-2026-09-24.md §G10). Per-scorer coverage
@@ -23,7 +23,7 @@
     getScoresStatus,
     type ScoresCoverage,
     type ScoresJob,
-  } from '$lib/api';
+  } from '$lib/api_scores';
   import {
     classifyScoresPoll,
     formatCoverageCounts,

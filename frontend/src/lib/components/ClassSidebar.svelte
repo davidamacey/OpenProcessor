@@ -4,7 +4,7 @@
   import { adequacyChipClass } from '$lib/adequacy';
   import { isAssignableClass } from '$lib/classVisibility';
   import { classesStore } from '$stores/classes.svelte';
-  import type { RegistryClass } from '$lib/types';
+  import type { RegistryClass } from '$lib/types_classes';
 
   interface Props {
     selectedId: number | null;

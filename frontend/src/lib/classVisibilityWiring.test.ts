@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { reviewPageSource } from '$lib/testing/reviewPageSources';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..', '..');
@@ -30,7 +31,7 @@ function read(rel: string): string {
 const ASSIGNMENT_SURFACES = [
   'src/lib/classPicker.ts',
   'src/lib/components/ClassSidebar.svelte',
-  'src/routes/p/[project]/clusters/[id]/+page.svelte',
+  'src/lib/components/clusters/ClusterDetailToolbar.svelte',
   'src/lib/components/EmbeddingPlot.svelte',
   'src/lib/components/ShortcutOverlay.svelte',
   'src/lib/classHotkey.ts',
@@ -44,7 +45,7 @@ describe('widget_tag assignment-hiding wiring', () => {
   });
 
   it('cluster-detail confirm-to <select> filters through isAssignableClass, not raw classesStore.classes', () => {
-    const src = read('src/routes/p/[project]/clusters/[id]/+page.svelte');
+    const src = read('src/lib/components/clusters/ClusterDetailToolbar.svelte');
     expect(src).not.toMatch(/\{#each classesStore\.classes as cls/);
     expect(src).toMatch(
       /\{#each classesStore\.classes\.filter\(isAssignableClass\) as cls/,
@@ -73,7 +74,6 @@ describe('widget_tag assignment-hiding wiring', () => {
   });
 
   it('the review page does not import classVisibility itself — it delegates to classPicker.ts/classesStore', () => {
-    const src = read('src/routes/p/[project]/review/+page.svelte');
-    expect(src).not.toMatch(/classVisibility/);
+    expect(reviewPageSource()).not.toMatch(/classVisibility/);
   });
 });

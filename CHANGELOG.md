@@ -319,6 +319,11 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   the status and body the old `HTTPException` carried. No route, status code or response body
   changed. An auto-label job queued before the upgrade names the old function path and fails to
   resolve it: requeue it.
+- The frontend's oversize files are split by concern: `api.ts` into per-domain `api_<domain>.ts`
+  modules, the review, train, export, clusters, cluster-detail and classes pages into a controller
+  plus components, `types.ts`, the slot-config parser, the large vitest files, `e2e/conftest.py`
+  (now a `harness/` plugin package) and `frontend/scripts/capture_docs_screenshots.py` (now the
+  `docs_screenshots/` package). Behavior is unchanged; details are in `frontend/CHANGELOG.md`.
 
 ### Removed
 

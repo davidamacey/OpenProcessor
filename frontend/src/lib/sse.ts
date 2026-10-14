@@ -14,7 +14,7 @@
  * `onEvent` callback so the page can switch on `event.type`.
  */
 
-import { apiBase, globalApi, scoped } from './api';
+import { apiBase, globalApi, scoped } from '$lib/api';
 import { slotRegistry } from './annotations/registeredSlots';
 
 // All event payloads share these fields; specific types add more.

@@ -8,8 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import AutoLabelPanel from './AutoLabelPanel.svelte';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_autoLabel', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_autoLabel')>('$lib/api_autoLabel');
   return {
     ...actual,
     getAutoLabelStatus: vi.fn(async () => ({

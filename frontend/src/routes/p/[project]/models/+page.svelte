@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   import { onMount, onDestroy } from 'svelte';
-  import { getModelsStatus, unloadModel } from '$lib/api';
+  import { getModelsStatus, unloadModel } from '$lib/api_models';
   import {
     showsProtectedChip,
     unloadButtonState,
@@ -18,7 +18,7 @@
   import { vlmAvailability, vlmStatusLabels } from '$lib/vlm/vlmAvailability.svelte';
   import { vlmRowStatusPill } from '$lib/vlm/vlmStatusPill';
   import type { StatusPill } from '$lib/modelStatus';
-  import type { ModelInfo } from '$lib/types';
+  import type { ModelInfo } from '$lib/types_models';
   import ModelSharingInfo from '$components/models/ModelSharingInfo.svelte';
   import ShareModelDialog from '$components/models/ShareModelDialog.svelte';
   import { createModelSharing } from '$lib/models/modelSharingController.svelte';

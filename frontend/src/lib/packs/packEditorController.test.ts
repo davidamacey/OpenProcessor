@@ -5,7 +5,7 @@
  * `force_allowed`, and the `config.changed` wake-up.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import type { CurationEvent } from '$lib/sse';
 import {
   activeFixture,

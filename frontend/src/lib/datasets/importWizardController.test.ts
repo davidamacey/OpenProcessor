@@ -4,7 +4,7 @@
  * served Start outcome.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import { jobFixture, previewFixture } from '$lib/test/fixtures/datasetImport';
 import type { DatasetPreview } from '$lib/types_import';
 import { ImportWizard, PREVIEW_DEBOUNCE_MS } from './importWizardController.svelte';

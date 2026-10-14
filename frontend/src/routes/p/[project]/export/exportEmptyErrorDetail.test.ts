@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const src = readFileSync(
+  path.resolve(here, '../../../../lib/export/exportRunController.svelte.ts'),
+  'utf-8',
+);
 
 /**
  * dq-queues cutover (2026-09-24): POST {API_PREFIX}/export/yolo and

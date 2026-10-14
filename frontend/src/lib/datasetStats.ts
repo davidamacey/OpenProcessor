@@ -3,7 +3,7 @@
  * error-envelope handling (G1) is unit-testable without mounting the
  * component or standing up the SSE transport.
  */
-import { type DatasetStats } from '$lib/api';
+import type { DatasetStats } from '$lib/api_stats';
 
 export interface StatsUpdateResult {
   stats: DatasetStats | null;

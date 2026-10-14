@@ -17,7 +17,7 @@ import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 import { classesStore } from '$stores/classes.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import { testProject } from '$lib/test/fixtures/projects';
-import type { ApiHealth } from '$lib/types';
+import type { ApiHealth } from '$lib/types_health';
 
 const DEFAULT = testProject({ slug: 'default', prefix: API_PREFIX, is_default: true });
 const BETA = testProject({ slug: 'beta' });

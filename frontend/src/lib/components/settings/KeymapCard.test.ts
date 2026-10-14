@@ -19,8 +19,9 @@ const putKeymap = vi.fn();
 const validateKeymap = vi.fn();
 const resetKeymap = vi.fn();
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_settings', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_settings')>('$lib/api_settings');
   return {
     ...actual,
     putKeymap: (...args: unknown[]) => putKeymap(...args),
@@ -31,7 +32,7 @@ vi.mock('$lib/api', async () => {
 
 const { default: KeymapCard } = await import('./KeymapCard.svelte');
 const { keymapStore } = await import('$stores/keymap.svelte');
-const { ApiError } = await import('$lib/api');
+const { ApiError } = await import('$lib/api_errors');
 
 function servedDoc(overrides: Partial<KeymapDocument> = {}): KeymapDocument {
   return { ...FALLBACK_KEYMAP, revision: 3, is_default: true, ...overrides };

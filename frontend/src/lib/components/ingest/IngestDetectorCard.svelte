@@ -6,7 +6,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
-  import type { IngestConfig } from '$lib/types';
+  import type { IngestConfig } from '$lib/types_ingest';
 
   let { config }: { config: IngestConfig } = $props();
 

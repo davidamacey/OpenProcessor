@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { CLASS_SOURCE_ROLES } from '$contracts/ts/classSources';
-import type { ClassSourceRole } from '../api';
+import type { ClassSourceRole } from '$lib/api_classes';
 import { sourceBadge } from '../sourceBadge';
 
 describe('vendored class-source-role snapshot sanity', () => {

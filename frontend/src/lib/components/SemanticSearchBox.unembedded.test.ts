@@ -5,10 +5,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import SemanticSearchBox from './SemanticSearchBox.svelte';
-import { searchCrops } from '$lib/api';
+import { searchCrops } from '$lib/api_cropRead';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_cropRead', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_cropRead')>('$lib/api_cropRead');
   return { ...actual, searchCrops: vi.fn() };
 });
 

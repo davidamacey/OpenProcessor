@@ -12,7 +12,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from conftest import ACTION_TIMEOUT_MS, expect_handled
+from harness.constants import ACTION_TIMEOUT_MS
+from harness.waits import expect_handled
 from playwright.sync_api import expect
 
 from fixtures.multipart import parse_multipart

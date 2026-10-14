@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import { VlmPolicyEditor } from '$lib/labelConfirmation/vlmPolicyController.svelte';
 import type { VlmPolicy, VlmPolicyUpdate } from '$lib/types_labelConfirmation';
 import VlmScopePanel from './VlmScopePanel.svelte';

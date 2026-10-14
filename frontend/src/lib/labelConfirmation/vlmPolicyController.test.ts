@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import { VlmPolicyEditor } from './vlmPolicyController.svelte';
 import type { VlmPolicy, VlmPolicyUpdate } from '$lib/types_labelConfirmation';
 

@@ -5,7 +5,7 @@ Runs 40 slow fetches against a local server (Chromium opens 6 connections
 per origin, so 34 wait in its socket pool), starts a short-lived container
 meanwhile, and counts the fetches that failed. `plain` lets Chromium load
 the requests (expect 34/40 to fail every iteration); `routed` answers them
-through `page.route` + `route.fetch()`, the way e2e/conftest.py's
+through `page.route` + `route.fetch()`, the way e2e/harness/assets.py's
 `serve_app_through_harness` serves the app (expect 0).
 
 The container event is host-wide: it can fail requests in any other
