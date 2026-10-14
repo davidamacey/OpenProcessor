@@ -68,7 +68,7 @@ async def test_trained_models_reports_the_eval_score_with_its_split(
     """``trainer_map50`` is ``eval.map50`` (labelled by ``eval.split``), never the
     best checkpoint's validation score."""
     from src.routers.curation import bakeoff
-    from src.services.curation import bakeoff_jobs
+    from src.services.curation import bakeoff_resolve
 
     ckpt = tmp_path / 'runs' / 'run-3' / 'weights' / 'best.pt'
     ckpt.parent.mkdir(parents=True)
@@ -86,7 +86,7 @@ async def test_trained_models_reports_the_eval_score_with_its_split(
         )
     )
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path / 'jobs'))
-    monkeypatch.setattr(bakeoff_jobs, 'RUNS_HOST_ROOT', tmp_path / 'runs')
+    monkeypatch.setattr(bakeoff_resolve, 'RUNS_HOST_ROOT', tmp_path / 'runs')
 
     body = await bakeoff.bakeoff_trained_models()
 

@@ -23,6 +23,8 @@ _BAKEOFF_API_FILES = (
     *(f'src/schemas/bakeoff/{m}.py' for m in ['datasets', 'job_spec', 'models', 'results', 'run']),
     'src/services/curation/eval_datasets.py',
     'src/services/curation/bakeoff_jobs.py',
+    'src/services/curation/bakeoff_mapping.py',
+    'src/services/curation/bakeoff_resolve.py',
 )
 
 
