@@ -416,6 +416,20 @@ class Stub:
         self.on("GET", r"/ingest/status(\?|$)", {"total": 0, "by_source": [], "by_day": []})
         self.on(
             "GET",
+            r"/ingest/sources(\?|$)",
+            {
+                "items": [],
+                "s3_configured": False,
+                "s3_allowed": [],
+                "default_batch_size": 16,
+                "default_concurrency": 16,
+                "default_watch_interval_s": 60,
+                "min_watch_interval_s": 10,
+                "poll_after_s": 5,
+            },
+        )
+        self.on(
+            "GET",
             r"/ingest/config(\?|$)",
             {
                 "upload": {
