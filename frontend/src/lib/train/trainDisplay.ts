@@ -3,7 +3,7 @@
  * labels and pill classes. No state, no fetches.
  */
 import type { ExportDataset } from '$lib/types';
-import type { TrainJobStatus } from '$lib/types_train';
+import type { PreflightCheck, TrainJobStatus } from '$lib/types_train';
 
 export function statePillClass(s: string): string {
   switch (s) {
@@ -42,4 +42,15 @@ export function datasetLabel(d: ExportDataset): string {
   const when = d.exported_at ? d.exported_at.slice(0, 16).replace('T', ' ') : '';
   const dir = d.export_dir.split('/').pop() ?? d.export_dir;
   return `${dir} (${n} imgs${samp}${tag}${cur}) ${when}`.trim();
+}
+
+export function checkSeverityClass(s: PreflightCheck['severity']): string {
+  switch (s) {
+    case 'block':
+      return 'border-red-500/40 bg-red-500/10 text-red-200';
+    case 'warn':
+      return 'border-yellow-500/40 bg-yellow-500/10 text-yellow-200';
+    default:
+      return 'border-zinc-700 bg-zinc-950 text-zinc-300';
+  }
 }

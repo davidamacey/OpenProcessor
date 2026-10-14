@@ -2,28 +2,38 @@
   import { apiErrorText } from '$lib/api';
   /**
    * Training form. Decomposed sub-pieces (`ClassSubsetPicker`,
-   * `AugmentationPanel`) own their own UI; this component owns:
+   * `AugmentationPanel`, `TrainHyperparams`, `TrainPreflightPanel`) own
+   * their own UI; this component owns:
    *   - model size + profile picker
    *   - GPU selector
-   *   - hyperparameter override grid
+   *   - the hyperparameter override values
    *   - submit row + multi-size campaign mode
-   *   - inline preflight rendering
    *
-   * State flows up to `/train/+page.svelte` via the `submit` callbacks
-   * so the page is the single source of truth for in-flight runs.
+   * The request bodies are built by `$lib/train/trainSpec`. State flows up
+   * to `/train/+page.svelte` via the `submit` callbacks so the page is the
+   * single source of truth for in-flight runs.
    */
-  import AugmentationPanel from './AugmentationPanel.svelte';
-  import ClassSubsetPicker from './ClassSubsetPicker.svelte';
+  import AugmentationPanel from '$components/AugmentationPanel.svelte';
+  import ClassSubsetPicker from '$components/ClassSubsetPicker.svelte';
+  import TrainHyperparams from '$components/train/TrainHyperparams.svelte';
+  import TrainPreflightPanel from '$components/train/TrainPreflightPanel.svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { defaultTrainSelection } from '$lib/trainClassSelection';
   import { defaultGpuValue, getTrainGpus, type TrainGpuOptionsResponse } from '$lib/api';
+  import {
+    buildCampaign,
+    buildSpec,
+    profileHyperparams,
+    PROFILE_NAMES,
+    SIZES,
+    type HyperparamOverrides,
+    type TrainFormValues,
+  } from '$lib/train/trainSpec';
   import type { TestHoldoutStats } from '$lib/types';
   import type {
     AugmentationSpec,
-    CampaignRunSpec,
     ClassSubsetPreset,
     ModelSize,
-    PreflightCheck,
     PreflightReport,
     Profile,
     ProfileName,
@@ -72,15 +82,6 @@
   }: Props = $props();
 
   // ---- Form state -------------------------------------------------------
-  const SIZES: ModelSize[] = ['n', 's', 'm', 'l', 'x'];
-  const PROFILE_NAMES: ProfileName[] = [
-    'probe',
-    'nano',
-    'small',
-    'medium',
-    'large',
-    'xlarge',
-  ];
   let modelSize = $state<ModelSize>('m');
   let profileName = $state<ProfileName>('medium');
   // '' until the served options load; an omitted claim lets the backend
@@ -125,18 +126,7 @@
 
   // Hyperparameter overrides. Keyed by Ultralytics arg name. `null` =
   // "use the profile default". Updated when the user picks a profile.
-  let hpEpochs = $state<number | null>(null);
-  let hpBatch = $state<number | null>(null);
-  let hpImgsz = $state<number | null>(null);
-  let hpLr0 = $state<number | null>(null);
-  let hpLrf = $state<number | null>(null);
-  let hpMomentum = $state<number | null>(null);
-  let hpWeightDecay = $state<number | null>(null);
-  let hpMosaic = $state<number | null>(null);
-  let hpMixup = $state<number | null>(null);
-  let hpCopyPaste = $state<number | null>(null);
-  let hpPatience = $state<number | null>(null);
-  let hpExpanded = $state<boolean>(false);
+  let hp = $state<HyperparamOverrides>(profileHyperparams({}));
 
   // Campaign mode.
   let campaignMode = $state<boolean>(false);
@@ -156,17 +146,7 @@
     ) {
       modelSize = def.model_size as ModelSize;
     }
-    hpEpochs = (def.epochs as number | undefined) ?? null;
-    hpBatch = (def.batch as number | undefined) ?? null;
-    hpImgsz = (def.imgsz as number | undefined) ?? null;
-    hpLr0 = (def.lr0 as number | undefined) ?? null;
-    hpLrf = (def.lrf as number | undefined) ?? null;
-    hpMomentum = (def.momentum as number | undefined) ?? null;
-    hpWeightDecay = (def.weight_decay as number | undefined) ?? null;
-    hpMosaic = (def.mosaic as number | undefined) ?? null;
-    hpMixup = (def.mixup as number | undefined) ?? null;
-    hpCopyPaste = (def.copy_paste as number | undefined) ?? null;
-    hpPatience = (def.patience as number | undefined) ?? null;
+    hp = profileHyperparams(def);
   }
 
   // A single-class export (nc=1) is one class. Collapse to one
@@ -184,68 +164,21 @@
     }
   });
 
-  // Build the spec for preflight / submit. Only set hyperparameter fields
-  // the user actually overrode (anything still null is left to profile
-  // defaults inside the trainer container).
-  function buildHyperparameters(): Record<string, unknown> {
-    const hp: Record<string, unknown> = {
-      // optimizer is fixed for YOLO26 (preflight rejects 'auto').
-      optimizer: 'MuSGD',
-    };
-    if (hpEpochs != null) hp.epochs = hpEpochs;
-    if (hpBatch != null) hp.batch = hpBatch;
-    if (hpImgsz != null) hp.imgsz = hpImgsz;
-    if (hpLr0 != null) hp.lr0 = hpLr0;
-    if (hpLrf != null) hp.lrf = hpLrf;
-    if (hpMomentum != null) hp.momentum = hpMomentum;
-    if (hpWeightDecay != null) hp.weight_decay = hpWeightDecay;
-    if (hpMosaic != null) hp.mosaic = hpMosaic;
-    if (hpMixup != null) hp.mixup = hpMixup;
-    if (hpCopyPaste != null) hp.copy_paste = hpCopyPaste;
-    if (hpPatience != null) hp.patience = hpPatience;
-    return hp;
-  }
-
-  function buildSpec(): TrainJobSpec {
+  function formValues(): TrainFormValues {
     return {
-      dataset_export_dir: datasetExportDir,
-      model_family: 'yolo26',
-      model_size: modelSize,
-      profile: profileName,
-      cuda_visible_devices: cudaDevices || undefined,
-      // A single-class export is already a class-0 dataset, so never filter
-      // it by the multi-class registry ids — that drops every label. Send
-      // no class subset for single-class runs.
-      include_classes: singleClassExport ? null : selectedClasses,
-      single_cls: singleClassExport ? true : singleCls,
-      hyperparameters: buildHyperparameters(),
-      augmentation: augmentation && augmentation.enabled ? augmentation : null,
-      auto_quantize_bakeoff: autoQuantizeBakeoff,
-    };
-  }
-
-  function buildCampaign(): TrainCampaignSpec {
-    const runs: CampaignRunSpec[] = campaignSizes.map((size) => ({
-      // For now we re-use the currently picked profile for every size —
-      // a power-user can still tweak each size's run after submit by
-      // editing the queued job.json. Could expand to per-size pickers
-      // later if it proves useful.
-      profile: profileName,
-      model_size: size,
-    }));
-    const stopWhen =
-      stopWhenMap50 != null && stopWhenMap50 > 0
-        ? { map50_at_least: stopWhenMap50 }
-        : null;
-    return {
-      dataset_export_dir: datasetExportDir,
-      include_classes: singleClassExport ? null : selectedClasses,
-      single_cls: singleClassExport ? true : singleCls,
-      cuda_visible_devices: cudaDevices || undefined,
-      augmentation: augmentation && augmentation.enabled ? augmentation : null,
-      runs,
-      stop_when: stopWhen,
-      auto_promote_best: autoPromoteBest,
+      datasetExportDir,
+      modelSize,
+      profileName,
+      cudaDevices,
+      selectedClasses,
+      singleCls,
+      singleClassExport,
+      hp,
+      augmentation,
+      autoQuantizeBakeoff,
+      campaignSizes,
+      autoPromoteBest,
+      stopWhenMap50,
     };
   }
 
@@ -256,7 +189,7 @@
   function schedulePreflight(): void {
     if (preflightDebounce) clearTimeout(preflightDebounce);
     preflightDebounce = setTimeout(() => {
-      onPreflight(buildSpec());
+      onPreflight(buildSpec(formValues()));
     }, 350);
   }
 
@@ -269,17 +202,17 @@
     void cudaDevices;
     void selectedClasses;
     void singleCls;
-    void hpEpochs;
-    void hpBatch;
-    void hpImgsz;
-    void hpLr0;
-    void hpLrf;
-    void hpMomentum;
-    void hpWeightDecay;
-    void hpMosaic;
-    void hpMixup;
-    void hpCopyPaste;
-    void hpPatience;
+    void hp.epochs;
+    void hp.batch;
+    void hp.imgsz;
+    void hp.lr0;
+    void hp.lrf;
+    void hp.momentum;
+    void hp.weight_decay;
+    void hp.mosaic;
+    void hp.mixup;
+    void hp.copy_paste;
+    void hp.patience;
     void augmentation;
     if (!datasetExportDir) return;
     schedulePreflight();
@@ -293,23 +226,12 @@
     }
   }
 
-  function checkSeverityClass(s: PreflightCheck['severity']): string {
-    switch (s) {
-      case 'block':
-        return 'border-red-500/40 bg-red-500/10 text-red-200';
-      case 'warn':
-        return 'border-yellow-500/40 bg-yellow-500/10 text-yellow-200';
-      default:
-        return 'border-zinc-700 bg-zinc-950 text-zinc-300';
-    }
-  }
-
   async function submitSingle(): Promise<void> {
-    await onStart(buildSpec(), false);
+    await onStart(buildSpec(formValues()), false);
   }
 
   async function submitCampaign(): Promise<void> {
-    await onStartCampaign(buildCampaign(), false);
+    await onStartCampaign(buildCampaign(formValues()), false);
   }
 
   const isBlocked = $derived(!!preflight?.blocked);
@@ -420,209 +342,9 @@
 
   <!-- Augmentation -->
   <AugmentationPanel value={augmentation} setValue={(v) => (augmentation = v)} />
+  <TrainHyperparams bind:hp />
 
-  <!-- Hyperparameters -->
-  <section class="rounded-md border border-zinc-800 bg-zinc-900">
-    <button
-      type="button"
-      class="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-zinc-800"
-      onclick={() => (hpExpanded = !hpExpanded)}
-      aria-expanded={hpExpanded}
-    >
-      <span class="font-mono text-xs text-zinc-500">{hpExpanded ? '▼' : '▶'}</span>
-      <span class="font-semibold text-zinc-100">Hyperparameters</span>
-      <span class="grow text-xs text-zinc-400">
-        epochs {hpEpochs ?? '—'} · batch {hpBatch ?? '—'} · imgsz {hpImgsz ?? '—'}
-      </span>
-    </button>
-
-    {#if hpExpanded}
-      <div
-        class="grid grid-cols-2 gap-3 border-t border-zinc-800 p-3 text-sm sm:grid-cols-4"
-      >
-        <label class="block">
-          <span class="mb-1 block text-xs text-zinc-400">epochs</span>
-          <input
-            type="number"
-            min="1"
-            bind:value={hpEpochs}
-            class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-          />
-        </label>
-        <label class="block">
-          <span class="mb-1 flex items-center justify-between text-xs text-zinc-400">
-            <span>batch</span>
-            <span class="flex items-center gap-1 text-[10px] text-zinc-500">
-              <input
-                type="checkbox"
-                aria-label="batch: auto"
-                checked={hpBatch === -1}
-                onchange={(e) => (hpBatch = e.currentTarget.checked ? -1 : 64)}
-              />
-              auto
-            </span>
-          </span>
-          <input
-            type="number"
-            min="-1"
-            aria-label="batch"
-            bind:value={hpBatch}
-            disabled={hpBatch === -1}
-            placeholder={hpBatch === -1 ? 'auto (−1)' : ''}
-            class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none disabled:opacity-50"
-          />
-        </label>
-        <label class="block">
-          <span class="mb-1 block text-xs text-zinc-400">imgsz</span>
-          <input
-            type="number"
-            min="64"
-            step="32"
-            bind:value={hpImgsz}
-            class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-          />
-        </label>
-        <label class="block">
-          <span class="mb-1 block text-xs text-zinc-400">optimizer</span>
-          <input
-            type="text"
-            value="MuSGD"
-            readonly
-            class="w-full cursor-not-allowed rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5 font-mono text-sm text-zinc-500"
-          />
-        </label>
-        <label class="block">
-          <span class="mb-1 block text-xs text-zinc-400">lr0</span>
-          <input
-            type="number"
-            step="0.0001"
-            bind:value={hpLr0}
-            class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-          />
-        </label>
-        <label class="block">
-          <span class="mb-1 block text-xs text-zinc-400">lrf</span>
-          <input
-            type="number"
-            step="0.001"
-            bind:value={hpLrf}
-            class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-          />
-        </label>
-        <label class="block">
-          <span class="mb-1 block text-xs text-zinc-400">momentum</span>
-          <input
-            type="number"
-            step="0.001"
-            bind:value={hpMomentum}
-            class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-          />
-        </label>
-        <label class="block">
-          <span class="mb-1 block text-xs text-zinc-400">weight_decay</span>
-          <input
-            type="number"
-            step="0.00001"
-            bind:value={hpWeightDecay}
-            class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-          />
-        </label>
-        <label class="block">
-          <span class="mb-1 block text-xs text-zinc-400">mosaic</span>
-          <input
-            type="number"
-            step="0.001"
-            min="0"
-            max="1"
-            bind:value={hpMosaic}
-            class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-          />
-        </label>
-        <label class="block">
-          <span class="mb-1 block text-xs text-zinc-400">mixup</span>
-          <input
-            type="number"
-            step="0.001"
-            min="0"
-            max="1"
-            bind:value={hpMixup}
-            class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-          />
-        </label>
-        <label class="block">
-          <span class="mb-1 block text-xs text-zinc-400">copy_paste</span>
-          <input
-            type="number"
-            step="0.001"
-            min="0"
-            max="1"
-            bind:value={hpCopyPaste}
-            class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-          />
-        </label>
-        <label class="block">
-          <span class="mb-1 block text-xs text-zinc-400">patience</span>
-          <input
-            type="number"
-            min="0"
-            bind:value={hpPatience}
-            class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-          />
-        </label>
-      </div>
-    {/if}
-  </section>
-
-  <!-- Preflight panel -->
-  <section class="rounded-md border border-zinc-800 bg-zinc-900 p-3">
-    <header class="mb-2 flex items-center gap-3">
-      <h3 class="text-[11px] uppercase tracking-wide text-zinc-500">Preflight</h3>
-      {#if preflighting}
-        <span class="text-[11px] text-zinc-400">checking…</span>
-      {:else if preflight}
-        <span
-          class="rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide {preflight.blocked
-            ? 'border-red-500/40 bg-red-500/10 text-red-200'
-            : 'border-green-500/40 bg-green-500/10 text-green-200'}"
-        >
-          {preflight.blocked ? 'blocked' : 'ok'}
-        </span>
-        <span class="text-xs text-zinc-400">{preflight.summary ?? ''}</span>
-      {/if}
-    </header>
-    {#if preflight}
-      <ul class="space-y-1.5">
-        {#each preflight.checks as c (c.name)}
-          <li
-            class="flex items-start gap-2 rounded border px-2 py-1.5 text-xs {checkSeverityClass(
-              c.severity,
-            )}"
-          >
-            <span class="font-mono text-[10px] uppercase tracking-wide opacity-70">
-              {c.severity}
-            </span>
-            <span class="font-mono text-[10px] text-zinc-400">{c.name}</span>
-            <span class="grow">
-              {c.message}
-              {#if c.detail && Object.keys(c.detail).length > 0}
-                <details class="mt-1">
-                  <summary class="cursor-pointer text-[10px] text-zinc-500"
-                    >detail</summary
-                  >
-                  <pre
-                    class="mt-1 whitespace-pre-wrap break-all font-mono text-[10px] text-zinc-400">{JSON.stringify(
-                      c.detail,
-                      null,
-                      2,
-                    )}</pre>
-                </details>
-              {/if}
-            </span>
-          </li>
-        {/each}
-      </ul>
-    {/if}
-  </section>
+  <TrainPreflightPanel {preflight} {preflighting} />
 
   <!-- Submit row -->
   <div

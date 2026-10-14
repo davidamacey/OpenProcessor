@@ -6,7 +6,6 @@ frontend/src/lib/api.test.ts	2755	split in PR 8
 frontend/src/lib/api.ts	5766	split in PR 8
 frontend/src/lib/clusters/clusterController.test.ts	1343	split in PR 8
 frontend/src/lib/components/CropMetaPanel.svelte	753	split in PR 8
-frontend/src/lib/components/TrainForm.svelte	708	split in PR 8
 frontend/src/lib/components/settings/KeymapCard.svelte	744	split in PR 8
 frontend/src/lib/strategies.test.ts	1128	split in PR 8
 frontend/src/lib/types.ts	1430	split in PR 8
