@@ -547,7 +547,7 @@ describe('createIngestRun — response handling', () => {
       skipLookup: true,
     });
     expect(run.state).toBe('error');
-    expect(run.errorReason).toMatch(/CROPWRIGHT_INGEST_MAX_REQUEST_MB/);
+    expect(run.errorReason).toMatch(/OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB/);
     expect(upload).toHaveBeenCalledTimes(1);
   });
 

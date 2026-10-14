@@ -328,7 +328,7 @@ export function createIngestRun(deps: IngestRunDeps): IngestRun {
           state = 'error';
           errorReason =
             `Upload rejected by the Cropwright proxy — request larger than ` +
-            `CROPWRIGHT_INGEST_MAX_REQUEST_MB`;
+            `OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB`;
           cancelRequested = true;
           toastStore.error(errorReason);
           markChunk(chunk, 'not_sent');
