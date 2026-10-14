@@ -26,7 +26,7 @@ TRAINER_DIR = Path(__file__).resolve().parents[2] / 'docker' / 'trainer'
 if str(TRAINER_DIR) not in sys.path:
     sys.path.insert(0, str(TRAINER_DIR))
 
-import trainer  # noqa: E402
+import trainer_callbacks  # noqa: E402
 
 
 def test_guard_disables_ultralytics_mlflow_when_artifact_root_is_unwritable(
@@ -49,7 +49,7 @@ def test_guard_disables_ultralytics_mlflow_when_artifact_root_is_unwritable(
     monkeypatch.setitem(sys.modules, 'ultralytics.utils', MagicMock(SETTINGS=fake_settings))
 
     try:
-        trainer._guard_ultralytics_mlflow_artifact_root('openprocessor')
+        trainer_callbacks._guard_ultralytics_mlflow_artifact_root('openprocessor')
     finally:
         unwritable_parent.chmod(0o700)
 
@@ -68,7 +68,7 @@ def test_guard_is_a_noop_for_proxied_artifact_root(monkeypatch: pytest.MonkeyPat
     monkeypatch.setitem(sys.modules, 'mlflow', fake_mlflow)
     monkeypatch.setitem(sys.modules, 'ultralytics.utils', MagicMock(SETTINGS=fake_settings))
 
-    trainer._guard_ultralytics_mlflow_artifact_root('openprocessor')
+    trainer_callbacks._guard_ultralytics_mlflow_artifact_root('openprocessor')
 
     fake_settings.update.assert_not_called()
 
@@ -83,7 +83,7 @@ def test_guard_is_a_noop_when_ultralytics_mlflow_integration_disabled(
     monkeypatch.setitem(sys.modules, 'mlflow', fake_mlflow)
     monkeypatch.setitem(sys.modules, 'ultralytics.utils', MagicMock(SETTINGS=fake_settings))
 
-    trainer._guard_ultralytics_mlflow_artifact_root('openprocessor')
+    trainer_callbacks._guard_ultralytics_mlflow_artifact_root('openprocessor')
 
     fake_mlflow.get_experiment_by_name.assert_not_called()
     fake_settings.update.assert_not_called()

@@ -244,11 +244,11 @@ def training_volume_mount_sane(path: str) -> bool:
         return False
 
 
-# Written by docker/trainer/trainer.py's write_trainer_capabilities() at
+# Written by docker/trainer/gpu_select.py's write_trainer_capabilities() at
 # startup, next to job.json in the shared /jobs volume. Kept in sync with
 # TRAINER_CAPABILITIES_FILENAME there -- there is no shared import (the
 # trainer ships as its own image with no src/ dependency), so
-# test_trainer_protocol.py conformance-tests both halves against the
+# tests/curation/trainer_protocol/ conformance-tests both halves against the
 # literal name.
 TRAINER_CAPABILITIES_FILENAME = '.trainer_capabilities.json'
 

@@ -18,7 +18,7 @@ container had no socket mounted -- the *stock* deployment (no
 healthy trainer, so preflight/`/start` 422'd unconditionally on every
 stock install. The primary signal is now the trainer's own heartbeat file
 (:data:`TRAINER_CAPABILITIES_FILENAME`, refreshed every ~30s by the
-trainer's watch loop, see ``docker/trainer/trainer.py``
+trainer's watch loop, see ``docker/trainer/gpu_select.py``
 ``HEARTBEAT_INTERVAL_S``), which needs no docker socket. "Can't tell"
 (missing/stale heartbeat, no docker socket either) is now at most
 ``warn``, never ``block``.
@@ -35,17 +35,17 @@ from src.services.training.gpu_arbiter import _container_status_sync, _docker_cl
 
 
 # Filename the trainer's watch loop refreshes every HEARTBEAT_INTERVAL_S
-# (docker/trainer/trainer.py) via write_trainer_capabilities(), next to
+# (docker/trainer/gpu_select.py) via write_trainer_capabilities(), next to
 # job.json in the shared /jobs volume. Duplicated (not imported) from
 # src/services/training/preflight_checks.py's own TRAINER_CAPABILITIES_FILENAME and
 # the trainer image's copy -- same reasoning as those two: the trainer
 # ships as its own image with no src/ dependency, so there is nothing to
-# share an import with. tests/curation/test_trainer_protocol.py
+# share an import with. tests/curation/trainer_protocol/
 # conformance-tests all copies against the literal name.
 TRAINER_CAPABILITIES_FILENAME = '.trainer_capabilities.json'
 
 # The trainer's watch loop rewrites this file every ~30s while idle
-# (docker/trainer/trainer.py HEARTBEAT_INTERVAL_S). A generous multiple of
+# (docker/trainer/gpu_select.py HEARTBEAT_INTERVAL_S). A generous multiple of
 # that cadence tells "trainer alive but a slow poll tick" apart from
 # "trainer container is actually gone" without needing the docker socket
 # at all.

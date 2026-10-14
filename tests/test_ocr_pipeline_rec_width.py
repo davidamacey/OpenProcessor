@@ -93,6 +93,8 @@ def model_module(monkeypatch: pytest.MonkeyPatch):
     # this test doesn't need a GPU.
     monkeypatch.setitem(sys.modules, 'cupy', None)
     monkeypatch.setitem(sys.modules, 'torch', None)
+    # Triton loads the version directory flat, so model.py imports its sibling by bare name.
+    monkeypatch.syspath_prepend(str(MODEL_PY.parent))
 
     spec = importlib.util.spec_from_file_location('ocr_pipeline_model', MODEL_PY)
     assert spec is not None
@@ -102,6 +104,7 @@ def model_module(monkeypatch: pytest.MonkeyPatch):
     spec.loader.exec_module(module)
     yield module
     del sys.modules['ocr_pipeline_model']
+    sys.modules.pop('ocr_postprocess', None)
 
 
 class _Engine:

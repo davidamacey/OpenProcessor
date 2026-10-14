@@ -39,6 +39,14 @@ if TYPE_CHECKING:
     from types import ModuleType
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+EXPORT_DIR = REPO_ROOT / 'export'
+if str(EXPORT_DIR) not in sys.path:
+    sys.path.insert(0, str(EXPORT_DIR))
+
+import dual_head_model  # noqa: E402
+import dual_head_triton  # noqa: E402
+
+
 SCRIPT_PY = REPO_ROOT / 'export' / 'export_detector_dual_head.py'
 SCRIPT_SH = REPO_ROOT / 'export' / 'export_detector_dual_head.sh'
 
@@ -180,26 +188,26 @@ def tiny_model() -> TinyDetector:
     return TinyDetector()
 
 
-def test_find_feature_layer_by_class_name(mod: ModuleType, tiny_model) -> None:
-    path, layer = mod.find_feature_layer(tiny_model, module_name='SPPF')
+def test_find_feature_layer_by_class_name(tiny_model) -> None:
+    path, layer = dual_head_model.find_feature_layer(tiny_model, module_name='SPPF')
     assert path == 'model[1]'
     assert type(layer).__name__ == 'SPPF'
 
 
-def test_find_feature_layer_by_explicit_index(mod: ModuleType, tiny_model) -> None:
-    path, layer = mod.find_feature_layer(tiny_model, module_name='SPPF', index=0)
+def test_find_feature_layer_by_explicit_index(tiny_model) -> None:
+    path, layer = dual_head_model.find_feature_layer(tiny_model, module_name='SPPF', index=0)
     assert path == 'model[0]'
     assert type(layer).__name__ == 'Conv2d'
 
 
-def test_find_feature_layer_unknown_module_raises(mod: ModuleType, tiny_model) -> None:
+def test_find_feature_layer_unknown_module_raises(tiny_model) -> None:
     with pytest.raises(ValueError, match='No module of type'):
-        mod.find_feature_layer(tiny_model, module_name='NotARealBlock')
+        dual_head_model.find_feature_layer(tiny_model, module_name='NotARealBlock')
 
 
-def test_find_feature_layer_out_of_range_index_raises(mod: ModuleType, tiny_model) -> None:
+def test_find_feature_layer_out_of_range_index_raises(tiny_model) -> None:
     with pytest.raises(ValueError, match='not addressable'):
-        mod.find_feature_layer(tiny_model, module_name='SPPF', index=99)
+        dual_head_model.find_feature_layer(tiny_model, module_name='SPPF', index=99)
 
 
 # ---------------------------------------------------------------------------
@@ -207,14 +215,14 @@ def test_find_feature_layer_out_of_range_index_raises(mod: ModuleType, tiny_mode
 # ---------------------------------------------------------------------------
 
 
-def test_export_emits_two_named_outputs(mod: ModuleType, tiny_model, tmp_path: Path) -> None:
+def test_export_emits_two_named_outputs(tiny_model, tmp_path: Path) -> None:
     pytest.importorskip('onnx')
     onnx_path = tmp_path / 'tiny_dual.onnx'
 
-    report = mod.export_dual_head_onnx(tiny_model, onnx_path, imgsz=64, opset=17)
+    report = dual_head_model.export_dual_head_onnx(tiny_model, onnx_path, imgsz=64, opset=17)
 
     assert onnx_path.exists()
-    outputs = mod.inspect_onnx_outputs(onnx_path)
+    outputs = dual_head_model.inspect_onnx_outputs(onnx_path)
     assert [name for name, _ in outputs] == ['output0', 'sppf_feat']
     # 64 / stride 32 -> a 2x2 grid of 16-channel cells, the [C, H, W] shape
     # roi_pool_sppf expects (H == W == input_size // stride).
@@ -224,11 +232,11 @@ def test_export_emits_two_named_outputs(mod: ModuleType, tiny_model, tmp_path: P
     assert report['detect_dims'] == [4, 8]
 
 
-def test_export_honours_custom_output_names(mod: ModuleType, tiny_model, tmp_path: Path) -> None:
+def test_export_honours_custom_output_names(tiny_model, tmp_path: Path) -> None:
     pytest.importorskip('onnx')
     onnx_path = tmp_path / 'renamed.onnx'
 
-    mod.export_dual_head_onnx(
+    dual_head_model.export_dual_head_onnx(
         tiny_model,
         onnx_path,
         imgsz=64,
@@ -236,23 +244,25 @@ def test_export_honours_custom_output_names(mod: ModuleType, tiny_model, tmp_pat
         feature_output='backbone_feat',
     )
 
-    assert [name for name, _ in mod.inspect_onnx_outputs(onnx_path)] == [
+    assert [name for name, _ in dual_head_model.inspect_onnx_outputs(onnx_path)] == [
         'detections',
         'backbone_feat',
     ]
 
 
-def test_export_round_trip_validation_runs(mod: ModuleType, tiny_model, tmp_path: Path) -> None:
+def test_export_round_trip_validation_runs(tiny_model, tmp_path: Path) -> None:
     """onnxruntime must agree with the PyTorch reference on both tensors."""
     pytest.importorskip('onnxruntime')
-    report = mod.export_dual_head_onnx(tiny_model, tmp_path / 'rt.onnx', imgsz=64)
+    report = dual_head_model.export_dual_head_onnx(tiny_model, tmp_path / 'rt.onnx', imgsz=64)
     assert report['round_trip'] == 'ok'
 
 
-def test_export_rejects_a_non_feature_map_tap(mod: ModuleType, tiny_model, tmp_path: Path) -> None:
+def test_export_rejects_a_non_feature_map_tap(tiny_model, tmp_path: Path) -> None:
     """Tapping the detection head captures a tuple, not a ``[B, C, H, W]`` map."""
     with pytest.raises(RuntimeError, match='not a tensor'):
-        mod.export_dual_head_onnx(tiny_model, tmp_path / 'bad.onnx', imgsz=64, feature_index=2)
+        dual_head_model.export_dual_head_onnx(
+            tiny_model, tmp_path / 'bad.onnx', imgsz=64, feature_index=2
+        )
 
 
 class _Flatten(nn.Module):
@@ -271,15 +281,15 @@ class Rank3Detector(nn.Module):
         return self.model(x)
 
 
-def test_export_rejects_a_wrong_rank_tap(mod: ModuleType, tmp_path: Path) -> None:
+def test_export_rejects_a_wrong_rank_tap(tmp_path: Path) -> None:
     """A rank-3 tensor cannot be RoI-pooled over a spatial grid."""
     with pytest.raises(RuntimeError, match=r'expected \[B,C,H,W\]'):
-        mod.export_dual_head_onnx(
+        dual_head_model.export_dual_head_onnx(
             Rank3Detector(), tmp_path / 'rank.onnx', imgsz=64, feature_index=1
         )
 
 
-def test_export_of_a_real_yolo_architecture(mod: ModuleType, tmp_path: Path) -> None:
+def test_export_of_a_real_yolo_architecture(tmp_path: Path) -> None:
     """End-to-end on a real Ultralytics YOLO11n graph (random weights, offline).
 
     Built from the bundled architecture YAML rather than a downloaded
@@ -292,9 +302,12 @@ def test_export_of_a_real_yolo_architecture(mod: ModuleType, tmp_path: Path) -> 
     model = ultralytics.YOLO('yolo11n.yaml').model
     onnx_path = tmp_path / 'yolo11n_dual.onnx'
 
-    report = mod.export_dual_head_onnx(model, onnx_path, imgsz=160, opset=17)
+    report = dual_head_model.export_dual_head_onnx(model, onnx_path, imgsz=160, opset=17)
 
-    assert [name for name, _ in mod.inspect_onnx_outputs(onnx_path)] == ['output0', 'sppf_feat']
+    assert [name for name, _ in dual_head_model.inspect_onnx_outputs(onnx_path)] == [
+        'output0',
+        'sppf_feat',
+    ]
     assert report['feature_layer'] == 'model[9]'
     # SPPF sits at stride 32 in the YOLO11 backbone.
     assert report['feature_spatial'] == (160 // 32, 160 // 32)
@@ -308,8 +321,8 @@ def test_export_of_a_real_yolo_architecture(mod: ModuleType, tmp_path: Path) -> 
 # ---------------------------------------------------------------------------
 
 
-def test_render_triton_config_declares_both_outputs(mod: ModuleType) -> None:
-    config = mod.render_triton_config(
+def test_render_triton_config_declares_both_outputs() -> None:
+    config = dual_head_triton.render_triton_config(
         triton_name='my_detector',
         imgsz=1280,
         max_batch=16,
@@ -335,8 +348,8 @@ def test_render_triton_config_declares_both_outputs(mod: ModuleType) -> None:
     assert config.index('TYPE_UINT8') < config.index('output [')
 
 
-def test_render_triton_config_small_batch_has_a_preferred_size(mod: ModuleType) -> None:
-    config = mod.render_triton_config(
+def test_render_triton_config_small_batch_has_a_preferred_size() -> None:
+    config = dual_head_triton.render_triton_config(
         triton_name='m',
         imgsz=640,
         max_batch=4,
@@ -349,9 +362,9 @@ def test_render_triton_config_small_batch_has_a_preferred_size(mod: ModuleType) 
     assert 'preferred_batch_size: [ 1 ]' in config
 
 
-def test_render_labels_fills_gaps(mod: ModuleType) -> None:
-    assert mod.render_labels({}) == ''
-    assert mod.render_labels({0: 'car', 2: 'truck'}) == 'car\nunknown_1\ntruck\n'
+def test_render_labels_fills_gaps() -> None:
+    assert dual_head_triton.render_labels({}) == ''
+    assert dual_head_triton.render_labels({0: 'car', 2: 'truck'}) == 'car\nunknown_1\ntruck\n'
 
 
 # ---------------------------------------------------------------------------
