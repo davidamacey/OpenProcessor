@@ -1,12 +1,12 @@
 """Constants of the PE text encoder export: names, shapes, token ids, defaults and parity prompts.
 
-The tensor and model names are a hard contract with ``src/clients/pe_encoder.py``.
+The tensor and model names are a hard contract with ``src/clients/pe_text_backends.py``.
 """
 
 from pathlib import Path
 
 
-# Model name + tensor names are a hard contract with src/clients/pe_encoder.py
+# Model name + tensor names are a hard contract with src/clients/pe_text_backends.py
 # (PE_TEXT_TRITON_MODEL / PE_TEXT_INPUT / PE_TEXT_OUTPUT) — rename both sides
 # together.
 TRITON_MODEL_NAME = 'pe_text_encoder'

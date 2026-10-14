@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from src.clients import pe_encoder as client
+from src.clients import pe_encoder as client, pe_text_backends as text_backends
 
 
 EXPORT_DIR = Path(__file__).resolve().parents[1] / 'export'
@@ -42,33 +42,33 @@ import pe_text_validate  # noqa: E402
 
 class TestClientContract:
     def test_exporter_constants_match_the_client(self) -> None:
-        assert pe_text_constants.TRITON_MODEL_NAME == client.PE_TEXT_TRITON_MODEL
-        assert pe_text_constants.INPUT_TENSOR == client.PE_TEXT_INPUT
-        assert pe_text_constants.OUTPUT_TENSOR == client.PE_TEXT_OUTPUT
-        assert pe_text_constants.CONTEXT_LENGTH == client.PE_TEXT_CONTEXT_LENGTH
+        assert pe_text_constants.TRITON_MODEL_NAME == text_backends.PE_TEXT_TRITON_MODEL
+        assert pe_text_constants.INPUT_TENSOR == text_backends.PE_TEXT_INPUT
+        assert pe_text_constants.OUTPUT_TENSOR == text_backends.PE_TEXT_OUTPUT
+        assert pe_text_constants.CONTEXT_LENGTH == text_backends.PE_TEXT_CONTEXT_LENGTH
         assert pe_text_constants.EMBEDDING_DIM == client.PE_EMBEDDING_DIM
-        assert pe_text_constants.PE_VARIANT == client.PE_TEXT_CHECKPOINT
+        assert pe_text_constants.PE_VARIANT == text_backends.PE_TEXT_CHECKPOINT
 
     def test_trim_to_eot_matches_the_client(self) -> None:
         tokens = np.zeros((3, 32), dtype=np.int64)
         tokens[0, :3] = [49406, 320, 49407]
         tokens[1, :6] = [49406, 320, 1125, 539, 320, 49407]
         np.testing.assert_array_equal(
-            pe_text_parity.trim_to_eot(tokens), client.trim_text_tokens(tokens)
+            pe_text_parity.trim_to_eot(tokens), text_backends.trim_text_tokens(tokens)
         )
         assert pe_text_parity.trim_to_eot(tokens).shape == (3, 6)
         assert pe_text_constants.EOT_TOKEN_ID == 49407
 
     def test_default_onnx_destination_is_the_client_default(self) -> None:
         args = text_export.build_parser().parse_args([])
-        assert str(args.onnx_out) == client.DEFAULT_PE_TEXT_ONNX_PATH
+        assert str(args.onnx_out) == text_backends.DEFAULT_PE_TEXT_ONNX_PATH
 
     def test_rendered_config_declares_the_client_tensors(self) -> None:
         out = pe_text_triton_config.render_config(pe_text_triton_config.PETextTritonConfig())
-        assert f'name: "{client.PE_TEXT_TRITON_MODEL}"' in out
+        assert f'name: "{text_backends.PE_TEXT_TRITON_MODEL}"' in out
         assert 'platform: "onnxruntime_onnx"' in out
-        assert f'name: "{client.PE_TEXT_INPUT}"' in out
-        assert f'name: "{client.PE_TEXT_OUTPUT}"' in out
+        assert f'name: "{text_backends.PE_TEXT_INPUT}"' in out
+        assert f'name: "{text_backends.PE_TEXT_OUTPUT}"' in out
         assert 'data_type: TYPE_INT64' in out
         # The client trims padding, so the token axis must be variable.
         assert 'dims: [ -1 ]' in out
@@ -162,7 +162,7 @@ class TestCli:
 
     def test_config_only_writes_the_model_repo_entry(self, tmp_path: Path) -> None:
         assert text_export.main(['--config-only', '--models-dir', str(tmp_path)]) == 0
-        body = (tmp_path / client.PE_TEXT_TRITON_MODEL / 'config.pbtxt').read_text()
+        body = (tmp_path / text_backends.PE_TEXT_TRITON_MODEL / 'config.pbtxt').read_text()
         assert 'platform: "onnxruntime_onnx"' in body
 
     @pytest.mark.parametrize(
@@ -178,7 +178,7 @@ class TestCli:
         self, tmp_path: Path, argv: list[str]
     ) -> None:
         assert text_export.main([*argv, '--config-only', '--models-dir', str(tmp_path)]) == 2
-        assert not (tmp_path / client.PE_TEXT_TRITON_MODEL).exists()
+        assert not (tmp_path / text_backends.PE_TEXT_TRITON_MODEL).exists()
 
     def test_install_triton_copies_the_graph(self, tmp_path: Path) -> None:
         onnx_file = tmp_path / 'text.onnx'
@@ -186,7 +186,9 @@ class TestCli:
         target = pe_text_triton_config.install_triton_model(
             onnx_file, tmp_path / 'models', pe_text_triton_config.PETextTritonConfig()
         )
-        assert target == tmp_path / 'models' / client.PE_TEXT_TRITON_MODEL / '1' / 'model.onnx'
+        assert (
+            target == tmp_path / 'models' / text_backends.PE_TEXT_TRITON_MODEL / '1' / 'model.onnx'
+        )
         assert target.read_bytes() == b'graph-bytes'
         assert (target.parent.parent / 'config.pbtxt').is_file()
 
