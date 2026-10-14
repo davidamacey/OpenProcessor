@@ -97,6 +97,11 @@ _TEMPLATE_SIDE_ALLOWLIST = {
     # Projects plan 2.3: the soft shard budget knob. Today its only reader is
     # the installer (scripts/lib/opensearch_heap.sh, bash) for the summary.
     'OP_SHARDS_PER_HEAP_GB',
+    # docker-compose.docs.yml's own ${OP_DOCS_IMAGE:-...} interpolation is the reader.
+    'OP_DOCS_IMAGE',
+    # `openprocessor vlm use` waits for the VLM; read by scripts/lib/vlm_switch.sh (bash).
+    'OP_VLM_WAIT_S',
+    'OP_VLM_POLL_S',
 }
 
 

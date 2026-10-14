@@ -17,10 +17,15 @@ DOC_ROOTS = (
     ROOT / 'README.md',
     ROOT / 'INSTALLATION.md',
     ROOT / 'CLAUDE.md',
+    ROOT / 'SECURITY.md',
+    ROOT / 'CONTRIBUTING.md',
     *ROOT.glob('docs/*.md'),
+    *(ROOT / 'docs-site' / 'docs').rglob('*.md'),
     *(ROOT / 'docs-site' / 'docs').rglob('*.mdx'),
 )
-RELEASE_MENTION = re.compile(r'(?<![\w.])v(0\.\d+\.\d+)(?![\w.])')
+# A release mention ends at a word character or a version dot, not at a sentence period
+# ("shipped in v0.4.0." is a mention; "v0.4.0.1" and "v0.4.0rc1" are not this pattern).
+RELEASE_MENTION = re.compile(r'(?<![\w.])v(0\.\d+\.\d+)(?!\w|\.\d)')
 
 
 def test_version_file_is_a_plain_release_number() -> None:
@@ -69,3 +74,12 @@ def test_the_roadmap_ships_the_current_release() -> None:
 def test_the_installer_script_reports_the_current_release() -> None:
     script = (ROOT / 'setup-openprocessor.sh').read_text()
     assert re.search(rf'^SCRIPT_VERSION="{re.escape(VERSION)}"$', script, re.M)
+
+
+def test_release_mention_pattern_catches_a_mention_at_a_sentence_end() -> None:
+    assert RELEASE_MENTION.findall('Shipped in v0.9.9.') == ['0.9.9']
+    assert RELEASE_MENTION.findall('v0.9.9, v0.9.8; (v0.9.7)') == ['0.9.9', '0.9.8', '0.9.7']
+
+
+def test_release_mention_pattern_ignores_longer_versions_and_words() -> None:
+    assert RELEASE_MENTION.findall('v0.9.9.1 v0.9.9rc1 dev0.9.9') == []
