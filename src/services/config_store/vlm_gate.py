@@ -102,10 +102,8 @@ def current_pack_and_profile() -> tuple[PromptPack | None, DetectionProfile | No
 def _registry_class_names() -> list[str]:
     from src.clients.curation_opensearch.registry import get_class_registry
 
-    try:
-        return sorted(c.class_name for c in get_class_registry().load().classes if not c.deprecated)
-    except Exception:
-        return []
+    # An unreadable registry raises: the gate must not pass as "no classes".
+    return sorted(c.class_name for c in get_class_registry().load().classes if not c.deprecated)
 
 
 def _ack_ok(

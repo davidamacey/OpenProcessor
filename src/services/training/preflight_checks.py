@@ -26,6 +26,8 @@ from src.services.training.job_files import trainer_root_dir
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from src.services.training.job_models import AugmentationSpec, TrainJobSpec
 
 
@@ -122,8 +124,9 @@ async def count_validated_and_test_per_class(
     return _by_class('validated_by_class'), _by_class('test_by_class')
 
 
-async def count_pending_ingest(opensearch: Any) -> int:
-    """Count crops still awaiting region detection/verification.
+async def count_pending_ingest(opensearch: Any) -> int | None:
+    """Count crops still awaiting region detection/verification, or ``None``
+    when they could not be counted (an outage is not an idle backlog).
 
     A training claim that stops GPU-resident ingest containers
     (``gpu_arbiter.containers_to_stop``) pauses that detection/verification
@@ -144,8 +147,43 @@ async def count_pending_ingest(opensearch: Any) -> int:
         resp = await opensearch.count(index=items_index(), body=body)
     except Exception as exc:
         logger.warning('train_pending_count_failed', error=str(exc))
-        return 0
+        return None
     return int(resp.get('count', 0))
+
+
+def ingest_idle_check(pending: int | None, stopped: Sequence[str]) -> PreflightCheck:
+    """The ``ingest_idle`` check for a claim that stops ``stopped`` containers.
+    An uncountable backlog warns: it must not read as "no ingest backlog"."""
+    stopped_names = ', '.join(stopped)
+    if pending is None:
+        return PreflightCheck(
+            name='ingest_idle',
+            severity='warn',
+            message=(
+                'pending ingest could not be counted. This run stops '
+                f'{stopped_names}, which pauses any region detection/verification still '
+                'in flight until the run finishes (it auto-resumes afterward).'
+            ),
+            detail={'stops_containers': list(stopped)},
+        )
+    if pending > 0:
+        return PreflightCheck(
+            name='ingest_idle',
+            severity='warn',
+            message=(
+                f'{pending:,} crops are still pending region '
+                f'detection/verification. This run stops {stopped_names}, '
+                'pausing that ingest until the run finishes (it auto-resumes '
+                'afterward).'
+            ),
+            detail={'pending_ingest': pending, 'stops_containers': list(stopped)},
+        )
+    return PreflightCheck(
+        name='ingest_idle',
+        severity='ok',
+        message=f'No ingest backlog — safe to stop {stopped_names} for training',
+        detail={'stops_containers': list(stopped)},
+    )
 
 
 def resolve_target_classes(spec: TrainJobSpec) -> list[int]:
@@ -280,17 +318,27 @@ def read_trainer_gpu_order() -> list[int] | None:
     return order
 
 
+class ExportManifestUnreadableError(ValueError):
+    """An export's ``manifest.json`` exists but cannot be read as a JSON object."""
+
+
 def read_export_manifest(dataset_export_dir: str | None) -> dict[str, Any]:
-    """Best-effort read of an export's ``manifest.json`` (``{}`` on any failure)."""
+    """An export's ``manifest.json``: ``{}`` when there is no export or no manifest
+    file; :class:`ExportManifestUnreadableError` when the file is there but unreadable."""
     if not dataset_export_dir:
         return {}
-    import json
-    from pathlib import Path
-
+    path = Path(dataset_export_dir) / 'manifest.json'
     try:
-        return json.loads((Path(dataset_export_dir) / 'manifest.json').read_text())
-    except Exception:
+        manifest = json.loads(path.read_text())
+    except FileNotFoundError:
         return {}
+    except (OSError, ValueError) as exc:
+        msg = f'{path.name} in the export is unreadable: {exc}'
+        raise ExportManifestUnreadableError(msg) from exc
+    if not isinstance(manifest, dict):
+        msg = f'{path.name} in the export is not a JSON object'
+        raise ExportManifestUnreadableError(msg)
+    return manifest
 
 
 def unresolvable_include_classes(

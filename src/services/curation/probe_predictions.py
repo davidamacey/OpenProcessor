@@ -66,6 +66,8 @@ import asyncio
 import math
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.config import CurationConfig, get_curation_config
 from src.core.logging import get_logger
 from src.services.curation.probe_models import (  # noqa: F401 - re-exported for callers and tests
@@ -97,14 +99,11 @@ logger = get_logger(__name__)
 
 
 def _registry_class_ids(cfg: CurationConfig) -> dict[str, int]:
-    """Active class name -> id from the configured registry ({} when absent)."""
+    """Active class name -> id from the configured registry ({} when absent; an
+    unreadable registry raises, so a probe never runs with no class names)."""
     from src.clients.curation_opensearch.registry import ClassRegistry
 
-    try:
-        reg = ClassRegistry(path=cfg.class_registry_path).load()
-    except Exception as exc:
-        logger.warning('probe_registry_unavailable', error=str(exc))
-        return {}
+    reg = ClassRegistry(path=cfg.class_registry_path).load()
     from src.services.curation.region_class import item_classes
 
     return {c.class_name: c.class_id for c in item_classes(reg.classes)}
@@ -292,7 +291,7 @@ async def run_probe_inference(
         if scroll_id:
             try:
                 await opensearch.clear_scroll(scroll_id=scroll_id)
-            except Exception as exc:
+            except OpenSearchException as exc:
                 logger.warning('probe_clear_scroll_failed', err=str(exc))
     logger.info('probe_done', processed=processed)
     return processed
