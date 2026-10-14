@@ -4,7 +4,9 @@
  * include_excluded / item_text crop-filter params.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, API_PREFIX, getCropHistory, getCropContext, getCrops } from './api';
+import { API_PREFIX } from '$lib/api';
+import { getCropHistory, getCropContext, getCrops } from '$lib/api_cropRead';
+import { ApiError } from '$lib/api_errors';
 import { makeItem } from './test/makeItem';
 
 function jsonResponse(body: unknown, status = 200) {

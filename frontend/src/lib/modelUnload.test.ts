@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { ApiError } from './api';
+import { ApiError } from '$lib/api_errors';
 import {
   showsProtectedChip,
   unloadButtonState,

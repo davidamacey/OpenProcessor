@@ -10,7 +10,8 @@
  * failure (gate 422, name 409, 404) is rethrown from `start()` so the
  * modal keeps rendering the served gate detail as before.
  */
-import { ApiError, apiErrorText, getPromoteJob, promoteTrainJob } from '$lib/api';
+import { ApiError, apiErrorText } from '$lib/api_errors';
+import { getPromoteJob, promoteTrainJob } from '$lib/api_train';
 import type { PromoteJobStatus, PromoteRequest, PromoteResponse } from '$lib/types_train';
 
 const PROMOTE_DEFAULT_POLL_S = 3;

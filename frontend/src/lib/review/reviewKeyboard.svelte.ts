@@ -16,7 +16,7 @@ import type { ReviewSlotActions } from '$lib/review/reviewSlotActions.svelte';
 import type { ReviewSlotEditController } from '$lib/review/reviewSlotEditController.svelte';
 import type { ReviewTabsController } from '$lib/review/reviewTabsController.svelte';
 import { isSlotTab } from '$lib/reviewTabs';
-import type { RegistryClass } from '$lib/types';
+import type { RegistryClass } from '$lib/types_classes';
 import { dropOnClassStore } from '$stores/dropOnClass.svelte';
 import { keyboardStore, type RegisterActionOptions } from '$stores/keyboard.svelte';
 import { toastStore } from '$stores/toast.svelte';

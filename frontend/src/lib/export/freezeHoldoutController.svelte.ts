@@ -2,7 +2,8 @@
  * /export's test-holdout freeze: the confirm modal's state and the
  * one-shot `POST {API_PREFIX}/test_holdout/freeze`.
  */
-import { apiErrorText, freezeTestHoldout } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { freezeTestHoldout } from '$lib/api_export';
 import { toastStore } from '$stores/toast.svelte';
 
 /** `loadAll` re-reads the page's data after a successful freeze. */

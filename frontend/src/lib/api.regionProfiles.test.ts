@@ -5,8 +5,8 @@
  * passed through untouched.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { API_PREFIX } from '$lib/api';
 import {
-  API_PREFIX,
   activateRegionProfile,
   cloneRegionProfile,
   deactivateRegionProfile,
@@ -23,7 +23,7 @@ import {
   updateRegionProfile,
   validateRegionProfile,
   validateSegmenterPrompt,
-} from './api';
+} from '$lib/api_profiles';
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

@@ -16,7 +16,7 @@ import {
   SELECTION_SAMPLES,
 } from '$lib/types_itemFilter';
 import type * as T from '$lib/types_itemFilter';
-import type { ReviewFilterSpec } from '$lib/api';
+import type { ReviewFilterSpec } from '$lib/api_review';
 import type { CropFilter } from '$lib/types';
 
 type Prop = { enum?: string[]; items?: Prop; anyOf?: Prop[] };
@@ -248,7 +248,7 @@ describe('the shared filter on every list route (V-12: class by name)', () => {
 
 describe('ReviewFilterSpec', () => {
   it('has the served keys and kinds', async () => {
-    const { REVIEW_FILTER_KINDS } = await import('$lib/api');
+    const { REVIEW_FILTER_KINDS } = await import('$lib/api_review');
     const s = S.components.schemas['ReviewFilterSpec'] as unknown as {
       properties: Record<string, Prop>;
     };

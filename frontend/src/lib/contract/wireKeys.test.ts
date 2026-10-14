@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import itemWire from '$contracts/json/item_wire.json';
-import { RAW_CROP_KEYS } from '../api';
+import { RAW_CROP_KEYS } from '$lib/api_cropMap';
 import openapi from '$contracts/openapi/curation.json';
 import { mapRegionBoxWire } from '$lib/annotations/readSlot';
 import { widgetTagServedSlot } from '$lib/test/fixtures/regionSlot';

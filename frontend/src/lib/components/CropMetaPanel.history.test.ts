@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import type { Crop } from '$lib/types';
 
-vi.mock('$lib/api', () => ({
+vi.mock('$lib/api_cropRead', () => ({
   getCropHistory: vi.fn(async () => ({
     crop_id: 'c1',
     entries: [
@@ -28,8 +28,8 @@ vi.mock('$lib/api', () => ({
   })),
   getCropContext: vi.fn(async () => ({ image: null, items: [] })),
   getThumbUrl: (id: string) => `/thumb/${id}`,
-  apiErrorText: (e: unknown) => String(e),
 }));
+vi.mock('$lib/api_errors', () => ({ apiErrorText: (e: unknown) => String(e) }));
 
 const { default: CropMetaPanel } = await import('./CropMetaPanel.svelte');
 

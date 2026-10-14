@@ -3,8 +3,9 @@
  * preview (re-requested whenever the pair changes) and the real merge.
  * `busy` is the page's shared write flag, read and set through the handle.
  */
-import { apiErrorText, mergeClasses, previewClassMerge } from '$lib/api';
-import type { ClassMergeDryRun } from '$lib/types';
+import { mergeClasses, previewClassMerge } from '$lib/api_classes';
+import { apiErrorText } from '$lib/api_errors';
+import type { ClassMergeDryRun } from '$lib/types_classes';
 import { classesStore } from '$stores/classes.svelte';
 import { toastStore } from '$stores/toast.svelte';
 

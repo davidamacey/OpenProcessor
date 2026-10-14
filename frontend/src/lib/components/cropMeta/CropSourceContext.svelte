@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Crop } from '$lib/types';
-  import { getThumbUrl } from '$lib/api';
+  import { getThumbUrl } from '$lib/api_cropRead';
   import SourceImageOverlay from '$components/SourceImageOverlay.svelte';
   import type { OverlayShape } from '$lib/configTest/overlayShapes';
   import type { CropMetaLoader } from '$lib/cropMeta/cropMetaLoader.svelte';

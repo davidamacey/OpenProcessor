@@ -5,14 +5,14 @@
  * disposed.
  */
 
+import { apiErrorText } from '$lib/api_errors';
 import {
   buildRegionFpCentroids,
   clusterRegions,
   getRegionClusterStatus,
   getRegionFpCentroidStatus,
   refineRegionCluster,
-  apiErrorText,
-} from '$lib/api';
+} from '$lib/api_regions';
 import { toastStore } from '$stores/toast.svelte';
 import type { SlotSpec } from '$lib/annotations/types';
 

@@ -16,7 +16,9 @@
  * blocking error state instead of the app.
  */
 
-import { ApiError, getProject, getProjects, setScopedPrefix } from '$lib/api';
+import { setScopedPrefix } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
+import { getProject, getProjects } from '$lib/api_projects';
 import { resetForProjectChange } from '$lib/projectChange';
 import type {
   ProjectCapacity,

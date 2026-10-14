@@ -5,7 +5,9 @@
  * pinned to the contract in `contract/configTestContract.test.ts`.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { API_PREFIX, ApiError, configErrorDetail, apiErrorText } from './api';
+import { API_PREFIX } from '$lib/api';
+import { ApiError, apiErrorText } from '$lib/api_errors';
+import { configErrorDetail } from '$lib/api_profiles';
 import { testPromptPack, testRegionProfile } from './api_configTest';
 import {
   packTestResponseFixture,

@@ -5,16 +5,15 @@
  */
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
+import { getCrops } from '$lib/api_cropRead';
+import { apiErrorText } from '$lib/api_errors';
 import {
-  apiErrorText,
-  getCrops,
-  getReviewQueue,
   getTrainingCandidates,
-  getTrainingCohorts,
   type RegionBrowseItem,
-  type ServedTrainingCohort,
   type TrainingCohortMode,
-} from '$lib/api';
+} from '$lib/api_regions';
+import { getReviewQueue } from '$lib/api_review';
+import { getTrainingCohorts, type ServedTrainingCohort } from '$lib/api_train';
 import { projectHref } from '$lib/projectPaths';
 import { classesStore } from '$stores/classes.svelte';
 import { slotRegistry } from '$lib/annotations/registeredSlots';
@@ -26,7 +25,8 @@ import {
   type CohortSpec,
 } from '$lib/annotations/cohorts';
 import { splitCohortGroups } from '$lib/trainCohortGroups';
-import type { Crop, ReviewItem } from '$lib/types';
+import type { Crop } from '$lib/types';
+import type { ReviewItem } from '$lib/types_review';
 
 interface CohortGroup {
   classId: number;

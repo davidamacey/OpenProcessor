@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   /**
    * Training form. Decomposed sub-pieces (`ClassSubsetPicker`,
    * `AugmentationPanel`, `TrainHyperparams`, `TrainPreflightPanel`) own
@@ -19,7 +19,11 @@
   import TrainPreflightPanel from '$components/train/TrainPreflightPanel.svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { defaultTrainSelection } from '$lib/trainClassSelection';
-  import { defaultGpuValue, getTrainGpus, type TrainGpuOptionsResponse } from '$lib/api';
+  import {
+    defaultGpuValue,
+    getTrainGpus,
+    type TrainGpuOptionsResponse,
+  } from '$lib/api_train';
   import {
     buildCampaign,
     buildSpec,
@@ -29,7 +33,7 @@
     type HyperparamOverrides,
     type TrainFormValues,
   } from '$lib/train/trainSpec';
-  import type { TestHoldoutStats } from '$lib/types';
+  import type { TestHoldoutStats } from '$lib/types_export';
   import type {
     AugmentationSpec,
     ClassSubsetPreset,

@@ -4,7 +4,7 @@
  * crop query, the sub-cluster grouping and core cut line, and selection.
  */
 import { page } from '$app/state';
-import { getCluster } from '$lib/api';
+import { getCluster } from '$lib/api_clusters';
 import { createExclusionGuard } from '$lib/clusters/clusterController.svelte';
 import { computeCutLine } from '$lib/clusters/cutLine';
 import { SLOW_LOAD_MS } from '$lib/clusters/firstLoad';

@@ -17,9 +17,9 @@ const src = readFileSync(
 );
 
 describe('/train cohort definitions come from GET /training_cohorts?class_id=', () => {
-  it('imports getTrainingCohorts and the ServedTrainingCohort type from $lib/api', () => {
+  it('imports getTrainingCohorts and the ServedTrainingCohort type from $lib/api_train', () => {
     expect(src).toMatch(
-      /import\s*\{[^}]*getTrainingCohorts[^}]*ServedTrainingCohort[^}]*\}\s*from\s*'\$lib\/api'/,
+      /import\s*\{[^}]*getTrainingCohorts[^}]*ServedTrainingCohort[^}]*\}\s*from\s*'\$lib\/api_train'/,
     );
   });
 

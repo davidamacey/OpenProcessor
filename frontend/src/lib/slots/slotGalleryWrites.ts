@@ -4,12 +4,9 @@
  * merges. Every write renders what the server returned.
  */
 
-import {
-  batchRegionStatus,
-  postBatchBoxState,
-  type RegionBrowseItem,
-  apiErrorText,
-} from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { batchRegionStatus, postBatchBoxState } from '$lib/api_regionBoxes';
+import type { RegionBrowseItem } from '$lib/api_regions';
 import type { Pager } from '$lib/pager.svelte';
 import type { Selection } from '$lib/selection.svelte';
 import type { Crop } from '$lib/types';

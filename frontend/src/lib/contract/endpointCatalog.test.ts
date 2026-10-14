@@ -32,7 +32,28 @@ const srcRoot = path.resolve(here, '..', '..');
 
 /** Every file that composes a backend URL through `${scoped()}`. */
 const SCANNED_FILES = [
-  'lib/api.ts',
+  'lib/api_autoLabel.ts',
+  'lib/api_bakeoff.ts',
+  'lib/api_classes.ts',
+  'lib/api_clusters.ts',
+  'lib/api_cropRead.ts',
+  'lib/api_cropWrites.ts',
+  'lib/api_datasetImport.ts',
+  'lib/api_export.ts',
+  'lib/api_ingest.ts',
+  'lib/api_models.ts',
+  'lib/api_packs.ts',
+  'lib/api_profiles.ts',
+  'lib/api_regionBoxes.ts',
+  'lib/api_regions.ts',
+  'lib/api_reprocess.ts',
+  'lib/api_review.ts',
+  'lib/api_scores.ts',
+  'lib/api_select.ts',
+  'lib/api_settings.ts',
+  'lib/api_stats.ts',
+  'lib/api_train.ts',
+  'lib/api_viz.ts',
   'lib/sse.ts',
   'routes/p/[project]/export/+page.svelte',
   'lib/components/SlotCard.svelte',
@@ -46,12 +67,16 @@ const SCANNED_FILES = [
   'lib/api_ingestSources.ts',
 ] as const;
 
+/** The HTTP core (`apiFetch`, `scoped()`): composes no backend URL itself. */
+const HTTP_CORE_FILE = 'lib/api.ts';
+
 /** Every file that composes a backend URL through `${globalApi()}` — the
  *  small set of routes P1 keeps global (never project-scoped): the
  *  project list itself, and the global health/events used before a
  *  project is even selected. */
 const GLOBAL_SCANNED_FILES = [
-  'lib/api.ts',
+  'lib/api_projects.ts',
+  'lib/api_stats.ts',
   'lib/sse.ts',
   'lib/api_vlm.ts',
   'lib/api_combine.ts',
@@ -63,7 +88,10 @@ const GLOBAL_SCANNED_FILES = [
  *  (`/projects` row actions such as pause/resume). Resolved against the
  *  scoped OpenAPI paths exactly like `${scoped()}`. */
 const PROJECT_PREFIX_MARKER = '${projectPrefix(project)}';
-const PROJECT_PREFIX_SCANNED_FILES = ['lib/api.ts', 'lib/api_combine.ts'] as const;
+const PROJECT_PREFIX_SCANNED_FILES = [
+  'lib/api_projects.ts',
+  'lib/api_combine.ts',
+] as const;
 
 function read(rel: string): string {
   return readFileSync(path.join(srcRoot, rel), 'utf-8');
@@ -102,7 +130,7 @@ const MANUAL_OVERRIDES: Array<{
   queryParams?: string[] | null;
 }> = [
   {
-    file: 'lib/api.ts',
+    file: 'lib/api_export.ts',
     marker: 'export function exportSingleClass(',
     // spec.buildPath: a region slot's declared extras.datasetExport.buildPath,
     // '/export/single_class' for the built-in profile today.
@@ -111,14 +139,14 @@ const MANUAL_OVERRIDES: Array<{
     queryParams: [],
   },
   {
-    file: 'lib/api.ts',
+    file: 'lib/api_export.ts',
     marker: 'export function exportSingleClassStatus(',
     path: '/export/single_class/status',
     method: 'GET',
     queryParams: ['profile_name'],
   },
   {
-    file: 'lib/api.ts',
+    file: 'lib/api_cropWrites.ts',
     marker: 'export async function patchSlotMeta(',
     // spec.endpoints.patchMeta — '/crops/{id}/region_meta' today.
     path: '/crops/*/region_meta',
@@ -126,7 +154,7 @@ const MANUAL_OVERRIDES: Array<{
     queryParams: [],
   },
   {
-    file: 'lib/api.ts',
+    file: 'lib/api_regionBoxes.ts',
     marker: 'export async function batchRegionStatus(',
     // spec.endpoints.batchStatus — '/regions/batch_status' today.
     path: '/regions/batch_status',
@@ -134,7 +162,7 @@ const MANUAL_OVERRIDES: Array<{
     queryParams: [],
   },
   {
-    file: 'lib/api.ts',
+    file: 'lib/api_regions.ts',
     marker: 'export async function getRegions(',
     // browsePath is the slot's declared capabilities.queue.browsePath —
     // '/regions' for a region slot. Query params ARE
@@ -142,7 +170,7 @@ const MANUAL_OVERRIDES: Array<{
     path: '/regions',
   },
   {
-    file: 'lib/api.ts',
+    file: 'lib/api_reprocess.ts',
     marker: 'export function runServedNextStep(',
     // step.method/step.path: a finished import's served `next_steps`
     // entry. The spec's one documented example is
@@ -298,8 +326,12 @@ describe('endpoint catalog: completeness', () => {
         (p) => !p.endsWith('.test.ts') && !p.startsWith(path.join('lib', 'contract')),
       );
     const scannedSet = new Set<string>(SCANNED_FILES);
+    // The HTTP core declares `scoped()` and names it in its doc comments
+    // only; it is exempt while it holds no call site of its own.
     const unscanned = hits.filter(
-      (p) => !scannedSet.has(p as (typeof SCANNED_FILES)[number]),
+      (p) =>
+        !scannedSet.has(p as (typeof SCANNED_FILES)[number]) &&
+        !(p === HTTP_CORE_FILE && resolveCalls(p).length === 0),
     );
     expect(unscanned).toEqual([]);
   });
@@ -435,13 +467,14 @@ const TRACK_WRAPPER_FILES = new Set<string>([
  *  named here and a test pins the list: a newly unresolved call, or a stale
  *  entry, fails instead of reporting a check that asserted nothing. */
 const UNRESOLVED_QUERY = new Set<string>([
-  'lib/api.ts GET /clusters',
-  'lib/api.ts GET /crops',
-  'lib/api.ts GET /review/*',
-  'lib/api.ts GET /review/*/locate',
-  'lib/api.ts GET /search/text',
-  'lib/api.ts GET /stats/dataset',
-  'lib/api.ts POST /pipeline/auto_label/start',
+  'lib/api_clusters.ts GET /clusters',
+  'lib/api_clusters.ts GET /crops',
+  'lib/api_cropRead.ts GET /crops',
+  'lib/api_review.ts GET /review/*',
+  'lib/api_review.ts GET /review/*/locate',
+  'lib/api_cropRead.ts GET /search/text',
+  'lib/api_stats.ts GET /stats/dataset',
+  'lib/api_autoLabel.ts POST /pipeline/auto_label/start',
   'lib/api_detector.ts GET /detections/summary',
 ]);
 const unresolvedSeen = new Set<string>();

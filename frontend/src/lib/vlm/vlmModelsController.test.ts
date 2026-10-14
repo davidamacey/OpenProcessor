@@ -9,7 +9,7 @@
  * (`vlm.changed` registry vs local_vlm, `config.changed axis=vlm` only).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import {
   activeFixture,
   catalogFixture,

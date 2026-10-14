@@ -7,7 +7,7 @@
  * `slots.<key>` values directly against the raw wire payload.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getCrop } from './api';
+import { getCrop } from '$lib/api_cropRead';
 import { mapCropSlots } from './annotations/cropSlots';
 import {
   installDeploymentSlots,

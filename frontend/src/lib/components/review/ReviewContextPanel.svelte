@@ -5,7 +5,7 @@
 <script lang="ts">
   import CropMetaPanel from '$lib/components/CropMetaPanel.svelte';
   import type { Pager } from '$lib/pager.svelte';
-  import type { ReviewItem } from '$lib/types';
+  import type { ReviewItem } from '$lib/types_review';
 
   interface Props {
     current: ReviewItem;

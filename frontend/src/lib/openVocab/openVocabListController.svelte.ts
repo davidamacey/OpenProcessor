@@ -12,7 +12,7 @@ import {
   getOpenVocabSchema,
   listOpenVocab,
 } from '$lib/api_openVocab';
-import { apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
 import { ConfigList } from '$lib/config/configList.svelte';
 import { isConfigAxisEvent } from '$lib/config/validationIssues';
 import { subscribeCurationEvents, type CurationEvent } from '$lib/sse';

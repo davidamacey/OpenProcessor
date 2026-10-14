@@ -4,16 +4,12 @@
    * YOLO export. The export run and the freeze live in `$lib/export/`
    * controllers; the sections in `$lib/components/export/` render them.
    */
-  import { apiErrorText } from '$lib/api';
-  import {
-    apiBase,
-    scoped,
-    exportStatus,
-    getStats,
-    getTestHoldoutStats,
-    listDatasets,
-  } from '$lib/api';
-  import type { StatsSummary, TestHoldoutStats } from '$lib/types';
+  import { apiErrorText } from '$lib/api_errors';
+  import { apiBase, scoped } from '$lib/api';
+  import { exportStatus, getTestHoldoutStats, listDatasets } from '$lib/api_export';
+  import { getStats } from '$lib/api_stats';
+  import type { TestHoldoutStats } from '$lib/types_export';
+  import type { StatsSummary } from '$lib/types_health';
   import {
     buildExportRows,
     registryArtifactsAvailable,

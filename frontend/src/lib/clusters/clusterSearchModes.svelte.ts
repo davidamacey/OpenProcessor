@@ -8,20 +8,16 @@ import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { page } from '$app/state';
 import { SvelteMap } from 'svelte/reactivity';
-import {
-  ApiError,
-  apiErrorText,
-  bulkLabel,
-  excludeCrops,
-  getClusters,
-  getCrops,
-  unexcludeCrops,
-} from '$lib/api';
+import { getClusters } from '$lib/api_clusters';
+import { getCrops } from '$lib/api_cropRead';
+import { bulkLabel, excludeCrops, unexcludeCrops } from '$lib/api_cropWrites';
+import { ApiError, apiErrorText } from '$lib/api_errors';
 import type { Pager } from '$lib/pager.svelte';
 import { projectHref } from '$lib/projectPaths';
 import { createSelection } from '$lib/selection.svelte';
 import { isSemanticSearchAvailable } from '$lib/strategies';
-import type { Cluster, Crop, RegistryClass } from '$lib/types';
+import type { Cluster, Crop } from '$lib/types';
+import type { RegistryClass } from '$lib/types_classes';
 import { dropOnClassStore } from '$stores/dropOnClass.svelte';
 import { keyboardStore } from '$stores/keyboard.svelte';
 import { strategiesStore } from '$stores/strategies.svelte';

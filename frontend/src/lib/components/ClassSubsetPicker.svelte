@@ -5,7 +5,8 @@
    * Owns its UI state (search query, expanded/collapsed); the parent
    * binds `selected` (set of class_ids) and `singleCls`.
    */
-  import type { RegistryClass, TestHoldoutStats } from '$lib/types';
+  import type { RegistryClass } from '$lib/types_classes';
+  import type { TestHoldoutStats } from '$lib/types_export';
   import type { ClassSubsetPreset } from '$lib/types_train';
   import { excludeLackingData, selectedLackingData } from '$lib/trainClassSelection';
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   /**
    * "Run probe predictions" control — `/train`, embedded in `RunResults`
    * for a finished run (OpenProcessor #36 item 8). Populates
@@ -21,7 +21,7 @@
     getProbeStatus,
     runProbe,
     type ProbeStatusResponse,
-  } from '$lib/api';
+  } from '$lib/api_train';
   import { canRunProbe, classifyProbePoll } from '$lib/probe';
   import { toastStore } from '$stores/toast.svelte';
   import type { TrainJobStatus } from '$lib/types_train';

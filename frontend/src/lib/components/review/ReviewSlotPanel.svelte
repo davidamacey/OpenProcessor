@@ -15,7 +15,7 @@
     statusWantsRejectionReason,
     type SlotPanelLabels,
   } from '$lib/review/slotPanel';
-  import type { ReviewItem } from '$lib/types';
+  import type { ReviewItem } from '$lib/types_review';
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
 

@@ -4,12 +4,13 @@
  * dataset), the materialized versions on disk, and the current export's
  * served counts. Call during component init (it registers effects).
  */
-import { apiErrorText, exportStatus, listDatasets } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { exportStatus, listDatasets } from '$lib/api_export';
 import { registeredSlots } from '$lib/annotations/registeredSlots';
 import { datasetExportForSlot } from '$lib/annotations/datasetExport';
 import { isDatasetExportAvailable } from '$lib/strategies';
 import { strategiesStore } from '$stores/strategies.svelte';
-import type { ExportDataset, ExportStatus } from '$lib/types';
+import type { ExportDataset, ExportStatus } from '$lib/types_export';
 
 // Which frozen export the training run targets: the multi-class dataset
 // (`MULTI_CLASS`, the `yolo` export's `current`) or the registered slot's

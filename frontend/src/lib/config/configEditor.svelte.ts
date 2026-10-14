@@ -13,7 +13,8 @@
  * re-reads the active ref, and the doc when it names this one and the
  * draft is clean (a dirty draft gets a notice instead).
  */
-import { configErrorDetail, apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { configErrorDetail } from '$lib/api_profiles';
 import type { CurationEvent } from '$lib/sse';
 import type {
   ActiveConfigResponse,

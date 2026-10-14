@@ -2,7 +2,7 @@
  * /train display helpers: pure string mappings from served values to
  * labels and pill classes. No state, no fetches.
  */
-import type { ExportDataset } from '$lib/types';
+import type { ExportDataset } from '$lib/types_export';
 import type { PreflightCheck, TrainJobStatus } from '$lib/types_train';
 
 export function statePillClass(s: string): string {

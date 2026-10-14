@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   /**
    * Contender picker for `/bakeoff`: finished training runs (with the
    * served per-dataset facts for every selected dataset), the profile's

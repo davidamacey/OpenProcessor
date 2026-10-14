@@ -11,7 +11,7 @@ import { isSlotTab } from '$lib/reviewTabs';
 import type { ReviewItemActions } from '$lib/review/reviewItemActions.svelte';
 import type { ReviewQueueLoader } from '$lib/review/reviewQueueLoader.svelte';
 import type { ReviewTabsController } from '$lib/review/reviewTabsController.svelte';
-import type { RegistryClass } from '$lib/types';
+import type { RegistryClass } from '$lib/types_classes';
 import { classesStore } from '$stores/classes.svelte';
 
 export interface ReviewClassPickerOptions {

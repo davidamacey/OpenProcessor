@@ -26,9 +26,8 @@
  * ordering to get right by sharing this one.)
  */
 
+import { activeProjectKey } from '$lib/api';
 import {
-  ApiError,
-  activeProjectKey,
   undoCropLabel,
   undoCropRegion,
   undoCropRegionBatch,
@@ -36,8 +35,8 @@ import {
   undoVlmDismiss,
   excludeCrops,
   unexcludeCrops,
-  apiErrorText,
-} from '$lib/api';
+} from '$lib/api_cropWrites';
+import { ApiError, apiErrorText } from '$lib/api_errors';
 import { onProjectChange } from '$lib/projectChange';
 import { toastStore } from '$stores/toast.svelte';
 import type { Crop, UndoEntry } from '$lib/types';

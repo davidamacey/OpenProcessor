@@ -4,9 +4,9 @@
  * served `message`.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { API_PREFIX } from '$lib/api';
+import { ApiError, apiErrorText } from '$lib/api_errors';
 import {
-  API_PREFIX,
-  ApiError,
   activatePromptPack,
   clonePromptPack,
   deletePromptPack,
@@ -16,12 +16,11 @@ import {
   getPromptPackRevisions,
   getPromptPackSchema,
   listPromptPacks,
-  configErrorDetail,
-  apiErrorText,
   rollbackPromptPack,
   updatePromptPack,
   validatePromptPack,
-} from './api';
+} from '$lib/api_packs';
+import { configErrorDetail } from '$lib/api_profiles';
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

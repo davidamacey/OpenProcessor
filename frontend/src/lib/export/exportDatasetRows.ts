@@ -15,7 +15,8 @@
  * treating "absent" as "deficient" was the bug (every un-validated class
  * showed a red "below N test crops" badge on `/export`).
  */
-import type { ExportDataset, StatsSummary, TestHoldoutStats } from '$lib/types';
+import type { ExportDataset, TestHoldoutStats } from '$lib/types_export';
+import type { StatsSummary } from '$lib/types_health';
 
 export interface ExportRow {
   class_id: number;

@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { getThumbUrl } from '$lib/api';
+  import { getThumbUrl } from '$lib/api_cropRead';
   import { proposalRows, termRulesText } from '$lib/classes/proposalRows';
   import type { NewClassProposalsController } from '$lib/classes/newClassProposalsController.svelte';
-  import type { RegistryClass } from '$lib/types';
+  import type { RegistryClass } from '$lib/types_classes';
   import { classesStore } from '$stores/classes.svelte';
 
   let {

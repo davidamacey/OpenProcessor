@@ -5,7 +5,7 @@
  * anything else is the error's own message.
  */
 import { describe, expect, it } from 'vitest';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import { vlmRunErrorText } from './runErrors';
 
 const err = (status: number, detail: unknown) => new ApiError(status, '/x', { detail });

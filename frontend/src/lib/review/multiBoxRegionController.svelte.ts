@@ -39,13 +39,12 @@ import {
   confirmProposedBoxes,
   type EditableBox,
 } from '$lib/annotations/multiBox';
+import { ApiError, apiErrorText } from '$lib/api_errors';
 import {
   putRegionBoxes,
   patchRegionBox,
   regionConflictDetail,
-  ApiError,
-  apiErrorText,
-} from '$lib/api';
+} from '$lib/api_regionBoxes';
 import { slotOf } from '$lib/annotations/cropSlots';
 import type { SlotSpec, BBoxNormLike } from '$lib/annotations/types';
 import type { Crop } from '$lib/types';

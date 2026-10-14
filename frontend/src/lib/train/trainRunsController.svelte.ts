@@ -4,7 +4,8 @@
  * effect's teardown and `dispose()` stop the interval and abort the
  * in-flight status read on unmount.
  */
-import { apiErrorText, getTrainRuns, getTrainStatus } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { getTrainRuns, getTrainStatus } from '$lib/api_train';
 import type { TrainJobStatus } from '$lib/types_train';
 
 const ACTIVE_STATES: ReadonlySet<string> = new Set([

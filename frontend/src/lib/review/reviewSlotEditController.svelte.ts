@@ -8,7 +8,8 @@
  */
 
 import { untrack } from 'svelte';
-import { apiErrorText, patchSlotMeta } from '$lib/api';
+import { patchSlotMeta } from '$lib/api_cropWrites';
+import { apiErrorText } from '$lib/api_errors';
 import { slotOf } from '$lib/annotations/cropSlots';
 import { AbortRegistry } from '$lib/review/abortRegistry';
 import { capCropDisplayStyle } from '$lib/review/cropDisplaySize';
@@ -16,7 +17,7 @@ import { createMultiBoxRegionController } from '$lib/review/multiBoxRegionContro
 import type { ReviewQueueLoader } from '$lib/review/reviewQueueLoader.svelte';
 import type { ReviewTabsController } from '$lib/review/reviewTabsController.svelte';
 import { humanWritableStates, panelLabels } from '$lib/review/slotPanel';
-import type { ReviewItem } from '$lib/types';
+import type { ReviewItem } from '$lib/types_review';
 import { regionStatusesStore, toneRingRgb } from '$stores/regionStatuses.svelte';
 import { toastStore } from '$stores/toast.svelte';
 

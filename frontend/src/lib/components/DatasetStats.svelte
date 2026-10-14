@@ -24,7 +24,7 @@
    */
   import { onDestroy } from 'svelte';
   import { formatDuration } from '$lib/format/duration';
-  import { type DatasetStats } from '$lib/api';
+  import type { DatasetStats } from '$lib/api_stats';
   import { subscribePipelineEvents, type CurationEventSubscription } from '$lib/sse';
   import { registeredSlots } from '$lib/annotations/registeredSlots';
   import { embeddingStateChips } from '$components/embedding/embeddingCopy';

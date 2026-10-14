@@ -4,11 +4,12 @@
  * backend reports the export still running. The owner calls `dispose()`
  * on teardown so no poll outlives the page.
  */
-import { apiErrorText, exportStatus, exportYolo } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { exportStatus, exportYolo } from '$lib/api_export';
 import { splitExportClasses } from '$lib/export/exportDatasetRows';
 import { ItemFilterState } from '$lib/itemFilter/itemFilterState.svelte';
 import { toastStore } from '$stores/toast.svelte';
-import type { ExportStatus } from '$lib/types';
+import type { ExportStatus } from '$lib/types_export';
 
 export function downloadUrl(url: string, suggestedName: string): void {
   const a = document.createElement('a');

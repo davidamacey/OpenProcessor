@@ -2,7 +2,7 @@
   /** /export's test-holdout status card: frozen totals and the
    *  server-flagged deficient classes, or the Freeze action. */
   import type { ExportRow } from '$lib/export/exportDatasetRows';
-  import type { TestHoldoutStats } from '$lib/types';
+  import type { TestHoldoutStats } from '$lib/types_export';
 
   interface Props {
     holdout: TestHoldoutStats | null;

@@ -3,9 +3,8 @@
  * cancel, reproduce, and the promote modal wiring. Status reads and the
  * past-runs refresh go through the runs controller.
  */
+import { ApiError, apiErrorText } from '$lib/api_errors';
 import {
-  ApiError,
-  apiErrorText,
   cancelTrainCampaign,
   cancelTrainJob,
   getTrainManifest,
@@ -13,7 +12,7 @@ import {
   trainPreflight,
   trainStart,
   trainStartCampaign,
-} from '$lib/api';
+} from '$lib/api_train';
 import { defaultTritonName, findActivePromote } from '$lib/promote';
 import { toastStore } from '$stores/toast.svelte';
 import type {

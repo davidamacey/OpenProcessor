@@ -3,7 +3,8 @@
  * on the dataset controller's capability flag. Call during component
  * init (it registers effects).
  */
-import { apiErrorText, exportSingleClass, exportSingleClassStatus } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { exportSingleClass, exportSingleClassStatus } from '$lib/api_export';
 import { exportDedupDefault } from '$lib/strategies';
 import { strategiesStore } from '$stores/strategies.svelte';
 import { toastStore } from '$stores/toast.svelte';

@@ -4,7 +4,7 @@
 -->
 <script lang="ts">
   import { kg } from '$lib/review/reviewKeys';
-  import type { RegistryClass } from '$lib/types';
+  import type { RegistryClass } from '$lib/types_classes';
 
   interface Props {
     topClasses: RegistryClass[];

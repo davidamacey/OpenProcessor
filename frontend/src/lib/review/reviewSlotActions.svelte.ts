@@ -6,7 +6,9 @@
  * Moved verbatim out of `review/+page.svelte`.
  */
 
-import { apiErrorText, getCrop, patchSlotMeta } from '$lib/api';
+import { getCrop } from '$lib/api_cropRead';
+import { patchSlotMeta } from '$lib/api_cropWrites';
+import { apiErrorText } from '$lib/api_errors';
 import type { ReviewItemActions } from '$lib/review/reviewItemActions.svelte';
 import { kg } from '$lib/review/reviewKeys';
 import type { ReviewQueueLoader } from '$lib/review/reviewQueueLoader.svelte';
@@ -14,7 +16,7 @@ import type { ReviewSlotEditController } from '$lib/review/reviewSlotEditControl
 import type { ReviewTabsController } from '$lib/review/reviewTabsController.svelte';
 import { statusWantsRejectionReason } from '$lib/review/slotPanel';
 import { pushUndo, removeUndo, popUndo, reinsertAt } from '$lib/review/slotQueueOps';
-import type { ReviewItem } from '$lib/types';
+import type { ReviewItem } from '$lib/types_review';
 import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import { undoStore } from '$stores/undo.svelte';

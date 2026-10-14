@@ -12,7 +12,7 @@
   import { NO_OPINION_TEXT } from '$lib/review/probeOpinion';
   import { NO_CLASS_YET, vlmEmptyReasonText } from '$lib/review/reviewCopy';
   import type { ReviewItemActions } from '$lib/review/reviewItemActions.svelte';
-  import type { ReviewItem } from '$lib/types';
+  import type { ReviewItem } from '$lib/types_review';
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
 

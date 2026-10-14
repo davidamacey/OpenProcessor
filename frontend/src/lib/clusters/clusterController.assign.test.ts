@@ -3,10 +3,16 @@
  * Shared fixtures are in `clusterControllerTestKit.ts`.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { RegistryClass } from '$lib/types';
+import type { RegistryClass } from '$lib/types_classes';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_clusters', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_clusters')>('$lib/api_clusters');
+  return { ...actual, moveCropsToCluster: vi.fn() };
+});
+vi.mock('$lib/api_cropWrites', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_cropWrites')>('$lib/api_cropWrites');
   return {
     ...actual,
     putCropLabel: vi.fn(),
@@ -15,14 +21,13 @@ vi.mock('$lib/api', async () => {
     discardCropsBatch: vi.fn(),
     excludeCrops: vi.fn(),
     unexcludeCrops: vi.fn(),
-    moveCropsToCluster: vi.fn(),
     vlmDismissCrop: vi.fn(),
     undoCropLabel: vi.fn(),
     undoLabelBatch: vi.fn(),
   };
 });
 
-import { bulkLabel, putCropLabel } from '$lib/api';
+import { bulkLabel, putCropLabel } from '$lib/api_cropWrites';
 import { classesStore } from '$stores/classes.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import { undoStore } from '$stores/undo.svelte';

@@ -4,8 +4,8 @@
  * the two can be compared. Nothing here decides anything: the served
  * catalog role and the served detector fields go in, wording comes out.
  */
-import type { ClassSourceRole } from './api';
-import type { Crop } from './types';
+import type { ClassSourceRole } from '$lib/api_classes';
+import type { Crop } from '$lib/types';
 
 /** The detector's own class next to a VLM label: only for a VLM-sourced
  *  class that carries the detector's answer, else null. */

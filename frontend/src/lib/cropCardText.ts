@@ -7,7 +7,7 @@
  * catalog ROLE (`GET /class_sources`), with the full served label in its
  * tooltip — no source is ever recognised by its id string.
  */
-import type { ClassSourceRole } from '$lib/api';
+import type { ClassSourceRole } from '$lib/api_classes';
 
 const ROLE_SHORT: Record<string, string> = {
   human: 'H',

@@ -1,4 +1,4 @@
-import type { ReviewFilterSpec } from '$lib/api';
+import type { ReviewFilterSpec } from '$lib/api_review';
 
 /**
  * The value a served enum filter's `<select>` should show: the operator's

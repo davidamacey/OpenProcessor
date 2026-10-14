@@ -3,7 +3,7 @@
    *  and the served status of the latest export. */
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
-  import { getClassRegistryUrl, getDataYamlUrl, getManifestUrl } from '$lib/api';
+  import { getClassRegistryUrl, getDataYamlUrl, getManifestUrl } from '$lib/api_export';
   import { formatCount } from '$lib/format/count';
   import ExportItemFilter from '$lib/components/itemFilter/ExportItemFilter.svelte';
   import {

@@ -5,8 +5,9 @@
  * offered.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { API_PREFIX, defaultGpuValue, getTrainGpus } from './api';
-import type { TrainGpuOptionsResponse } from './api';
+import { API_PREFIX } from '$lib/api';
+import { defaultGpuValue, getTrainGpus } from '$lib/api_train';
+import type { TrainGpuOptionsResponse } from '$lib/api_train';
 
 const LIVE: TrainGpuOptionsResponse = {
   options: [

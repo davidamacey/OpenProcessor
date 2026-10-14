@@ -5,7 +5,7 @@
  * call (`create()`) with the same chosen names. Nothing here decides which
  * classes a detector label becomes: the lists are the served ones.
  */
-import { getIngestConfig } from '$lib/api';
+import { getIngestConfig } from '$lib/api_ingest';
 import { detectorErrorLines, seedFromDetector } from '$lib/api_detector';
 import type {
   IngestDetectorInfo,

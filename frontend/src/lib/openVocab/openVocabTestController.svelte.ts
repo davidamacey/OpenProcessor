@@ -10,7 +10,9 @@
  * `segmenter_error` is an error, never "no hits"; every refusal reads as
  * served. Nothing here draws or judges a hit.
  */
-import { ApiError, configErrorDetail, apiErrorText, getCrop } from '$lib/api';
+import { getCrop } from '$lib/api_cropRead';
+import { ApiError, apiErrorText } from '$lib/api_errors';
+import { configErrorDetail } from '$lib/api_profiles';
 import { testOpenVocab } from '$lib/api_openVocab';
 import type {
   OpenVocabTargetBody,

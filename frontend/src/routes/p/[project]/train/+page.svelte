@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   /**
    * /train — model training cockpit (Phase 2 of the training pipeline
    * design doc).
@@ -18,12 +18,8 @@
    * sections in `$lib/components/train/` render them.
    */
   import { onDestroy, onMount } from 'svelte';
-  import {
-    getTestHoldoutStats,
-    getTrainPresets,
-    getTrainProfiles,
-    tailTrainLog,
-  } from '$lib/api';
+  import { getTestHoldoutStats } from '$lib/api_export';
+  import { getTrainPresets, getTrainProfiles, tailTrainLog } from '$lib/api_train';
   import ResourceLinksRow from '$lib/components/ResourceLinksRow.svelte';
   import CampaignCard from '$components/CampaignCard.svelte';
   import LogTail from '$components/LogTail.svelte';
@@ -41,7 +37,7 @@
   import { createTrainRunsController } from '$lib/train/trainRunsController.svelte';
   import { createTrainActionsController } from '$lib/train/trainActionsController.svelte';
   import { createTrainCohortsController } from '$lib/train/trainCohortsController.svelte';
-  import type { TestHoldoutStats } from '$lib/types';
+  import type { TestHoldoutStats } from '$lib/types_export';
   import type { ClassSubsetPreset, Profile } from '$lib/types_train';
 
   $effect(() => {

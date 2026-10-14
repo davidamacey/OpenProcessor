@@ -8,7 +8,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import { ConfigActive } from '$lib/config/configActive.svelte';
 import { activeFixture } from '$lib/test/fixtures/vlm';
 import ConfigActivateDialog from './ConfigActivateDialog.svelte';

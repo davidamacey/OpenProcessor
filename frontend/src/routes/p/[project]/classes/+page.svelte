@@ -1,16 +1,15 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText, ApiError } from '$lib/api_errors';
   import {
-    ApiError,
     classStillReferencedDetail,
     deprecateClass,
-    getTestHoldoutStats,
     renameClass,
     restoreClass,
     classMergedDetail,
     classMergedRestoreText,
     syncClassesToOpensearch,
-  } from '$lib/api';
+  } from '$lib/api_classes';
+  import { getTestHoldoutStats } from '$lib/api_export';
   import AddClassModal from '$components/AddClassModal.svelte';
   import SeedFromDetectorPanel from '$lib/components/detector/SeedFromDetectorPanel.svelte';
   import ClassRegistryTable from '$lib/components/classes/ClassRegistryTable.svelte';
@@ -20,7 +19,7 @@
   import { createMergeClassesController } from '$lib/classes/mergeClassesController.svelte';
   import { createNewClassProposalsController } from '$lib/classes/newClassProposalsController.svelte';
   import { reservedHotkeyLetters, setClassHotkey } from '$lib/classHotkey';
-  import type { RegistryClass } from '$lib/types';
+  import type { RegistryClass } from '$lib/types_classes';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';

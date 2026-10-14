@@ -6,11 +6,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_train', async () => {
+  const actual = await vi.importActual<typeof import('$lib/api_train')>('$lib/api_train');
   return { ...actual, getTrainStatus: vi.fn(), getTrainRuns: vi.fn() };
 });
-import { getTrainRuns, getTrainStatus } from '$lib/api';
+import { getTrainRuns, getTrainStatus } from '$lib/api_train';
 import { createTrainRunsController } from './trainRunsController.svelte';
 
 let cleanup: (() => void) | undefined;

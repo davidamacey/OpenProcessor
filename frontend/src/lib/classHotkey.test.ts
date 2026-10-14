@@ -2,20 +2,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { reservedHotkeyLetters, setClassHotkey } from './classHotkey';
 import { classesStore } from '$stores/classes.svelte';
 import { toastStore } from '$stores/toast.svelte';
-import { ApiError } from '$lib/api';
-import type { RegistryClass } from '$lib/types';
+import { ApiError } from '$lib/api_errors';
+import type { RegistryClass } from '$lib/types_classes';
 import {
   installServedRegionProfile,
   resetDeploymentSlots,
 } from '$lib/annotations/registeredSlots';
 import { WIDGET_TAG_PROFILE } from '$lib/test/fixtures/regionSlot';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_classes', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_classes')>('$lib/api_classes');
   return { ...actual, renameClass: vi.fn() };
 });
 
-import { renameClass } from '$lib/api';
+import { renameClass } from '$lib/api_classes';
 
 function cls(over: Partial<RegistryClass> & { id: number; name: string }): RegistryClass {
   return {

@@ -4,7 +4,7 @@
  * display order, and the representatives fetched in that display order.
  */
 import { untrack } from 'svelte';
-import { getClusters } from '$lib/api';
+import { getClusters } from '$lib/api_clusters';
 import { idsNeedingRepresentatives } from '$lib/clusters/displayOrderRepresentatives';
 import {
   filterPersistKey,

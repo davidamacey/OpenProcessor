@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { RegistryClass } from '$lib/types';
+  import type { RegistryClass } from '$lib/types_classes';
   import { classesStore } from '$stores/classes.svelte';
 
   // Collapsible list of deprecated classes; a merged class names its target

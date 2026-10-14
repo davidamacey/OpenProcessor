@@ -2,7 +2,7 @@
   import { adequacyChipClass, adequacyTooltip } from '$lib/adequacy';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { formatDateOnly } from '$lib/format/date';
-  import type { RegistryClass } from '$lib/types';
+  import type { RegistryClass } from '$lib/types_classes';
   import { classesStore } from '$stores/classes.svelte';
 
   // The active-class registry table on /classes. Row actions are the page's

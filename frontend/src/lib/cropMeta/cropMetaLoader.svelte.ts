@@ -5,7 +5,8 @@
  * superseded request, and never blocks the rest of the panel.
  */
 
-import { apiErrorText, getCropContext, getCropHistory } from '$lib/api';
+import { getCropContext, getCropHistory } from '$lib/api_cropRead';
+import { apiErrorText } from '$lib/api_errors';
 import type {
   Crop,
   CropContextResponse,

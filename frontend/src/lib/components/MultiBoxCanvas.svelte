@@ -17,7 +17,7 @@
    * `EditableBox[]` state (via `annotations/multiBox.ts`'s pure helpers)
    * so this component stays presentation-only.
    */
-  import { getThumbUrl } from '$lib/api';
+  import { getThumbUrl } from '$lib/api_cropRead';
   import { reprocessVocabularyStore } from '$lib/stores/reprocessVocabulary.svelte';
   import type { BBoxNormLike } from '$lib/annotations/types';
   import { normalize as normalizeKey } from '$stores/keyboard.svelte';

@@ -3,14 +3,14 @@
  * VLM-proposed terms and the per-term resolve actions (create a class, or
  * map onto an existing one), each dry-run first for a served confirm count.
  */
+import { apiErrorText } from '$lib/api_errors';
 import {
-  apiErrorText,
   getNewClassProposalsSummary,
   resolveNewClassProposal,
   type NewClassProposalsSummary,
   type NewClassProposalTerm,
-} from '$lib/api';
-import type { ResolveNewClassRequest, ResolveNewClassResponse } from '$lib/types';
+} from '$lib/api_review';
+import type { ResolveNewClassRequest, ResolveNewClassResponse } from '$lib/types_review';
 import { classesStore } from '$stores/classes.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import { undoStore } from '$stores/undo.svelte';

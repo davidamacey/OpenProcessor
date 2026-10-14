@@ -14,7 +14,8 @@
  */
 
 import { untrack } from 'svelte';
-import { apiErrorText, getReviewQueue, locateInReviewQueue } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { getReviewQueue, locateInReviewQueue } from '$lib/api_review';
 import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
 import { createPager } from '$lib/pager.svelte';
 import { createReviewQueueController } from '$lib/review/reviewController.svelte';
@@ -29,7 +30,7 @@ import {
 import { endpointForTab } from '$lib/reviewTabs';
 import type { SemanticSearchResult } from '$lib/searchBox.svelte';
 import { isSemanticSearchAvailable } from '$lib/strategies';
-import type { ReviewItem, ReviewTab } from '$lib/types';
+import type { ReviewItem, ReviewTab } from '$lib/types_review';
 import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
 import { strategiesStore } from '$stores/strategies.svelte';
 import { toastStore } from '$stores/toast.svelte';

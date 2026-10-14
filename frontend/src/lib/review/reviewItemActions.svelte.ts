@@ -16,7 +16,7 @@ import {
 import { probeOpinion } from '$lib/review/probeOpinion';
 import { kg } from '$lib/review/reviewKeys';
 import type { ReviewQueueLoader } from '$lib/review/reviewQueueLoader.svelte';
-import type { ReviewItem } from '$lib/types';
+import type { ReviewItem } from '$lib/types_review';
 import { classesStore } from '$stores/classes.svelte';
 import { toastStore } from '$stores/toast.svelte';
 

@@ -1,4 +1,1 @@
-frontend/src/lib/api.test.ts	2755	split in PR 8
-frontend/src/lib/api.ts	5766	split in PR 8
-frontend/src/lib/types.ts	1430	split in PR 8
 setup-openprocessor.sh	3214	cohesive: one __op_define function so a truncated curl-to-bash download is a syntax error; pre-install code cannot source libraries

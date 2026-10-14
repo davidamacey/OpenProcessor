@@ -5,7 +5,9 @@
  * Moved verbatim out of `review/+page.svelte`.
  */
 
-import { apiErrorText, getCrops, reviewUndismissCrop } from '$lib/api';
+import { getCrops } from '$lib/api_cropRead';
+import { reviewUndismissCrop } from '$lib/api_cropWrites';
+import { apiErrorText } from '$lib/api_errors';
 import type { Crop } from '$lib/types';
 import { toastStore } from '$stores/toast.svelte';
 

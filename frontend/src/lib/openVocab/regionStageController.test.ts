@@ -4,7 +4,7 @@
  * the write, and the served refusal text.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import type { RegionStageState } from '$lib/types_openVocab';
 import { createRegionStage } from './regionStageController.svelte';
 

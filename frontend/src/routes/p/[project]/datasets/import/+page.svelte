@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   /**
    * `/datasets/import` — import a labeled dataset into the current project
    * (any_domain_plan.md §7.12 item 1; docs/design/
@@ -15,7 +15,8 @@
   import ImportOptions from '$components/datasets/ImportOptions.svelte';
   import MappingTable from '$components/datasets/MappingTable.svelte';
   import PreviewSummary from '$components/datasets/PreviewSummary.svelte';
-  import { getDatasetImport, getIngestConfig, listDatasetImports } from '$lib/api';
+  import { getDatasetImport, listDatasetImports } from '$lib/api_datasetImport';
+  import { getIngestConfig } from '$lib/api_ingest';
   import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
   import { createImportWizard } from '$lib/datasets/importWizardController.svelte';
   import { datasetUploadMaxBytes } from '$lib/datasets/uploadCap';

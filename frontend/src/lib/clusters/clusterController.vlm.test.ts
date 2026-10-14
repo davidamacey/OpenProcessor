@@ -4,8 +4,14 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_clusters', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_clusters')>('$lib/api_clusters');
+  return { ...actual, moveCropsToCluster: vi.fn() };
+});
+vi.mock('$lib/api_cropWrites', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_cropWrites')>('$lib/api_cropWrites');
   return {
     ...actual,
     putCropLabel: vi.fn(),
@@ -14,14 +20,14 @@ vi.mock('$lib/api', async () => {
     discardCropsBatch: vi.fn(),
     excludeCrops: vi.fn(),
     unexcludeCrops: vi.fn(),
-    moveCropsToCluster: vi.fn(),
     vlmDismissCrop: vi.fn(),
     undoCropLabel: vi.fn(),
     undoLabelBatch: vi.fn(),
   };
 });
 
-import { ApiError, bulkLabel, putCropLabel, vlmDismissCrop } from '$lib/api';
+import { bulkLabel, putCropLabel, vlmDismissCrop } from '$lib/api_cropWrites';
+import { ApiError } from '$lib/api_errors';
 import { toastStore } from '$stores/toast.svelte';
 import { undoStore } from '$stores/undo.svelte';
 import { crop, setup } from './clusterControllerTestKit';

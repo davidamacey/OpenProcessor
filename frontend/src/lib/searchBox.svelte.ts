@@ -1,4 +1,4 @@
-import { apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
 /**
  * State/logic for `<SemanticSearchBox>` (P2-14 — free-text search over
  * crops, `GET {API_PREFIX}/search/text`). Same "logic extracted from the
@@ -17,7 +17,7 @@ import { apiErrorText } from '$lib/api';
  * touches labeling.
  */
 
-import type { SearchCrop } from './types';
+import type { SearchCrop } from '$lib/types_review';
 
 export interface SemanticSearchResult {
   items: SearchCrop[];

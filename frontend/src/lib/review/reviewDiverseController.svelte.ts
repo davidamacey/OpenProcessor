@@ -10,19 +10,15 @@
  */
 
 import { onMount } from 'svelte';
-import {
-  apiErrorText,
-  cancelSelect,
-  getCrop,
-  getSelectStatus,
-  selectDiverse,
-} from '$lib/api';
+import { getCrop } from '$lib/api_cropRead';
+import { apiErrorText } from '$lib/api_errors';
+import { cancelSelect, getSelectStatus, selectDiverse } from '$lib/api_select';
 import { endpointForTab, tabHonorsPinnedSortDefault } from '$lib/reviewTabs';
 import { isDiverseOverlayAvailable } from '$lib/strategies';
 import { createStrategyBar } from '$lib/strategyBar.svelte';
 import { REVIEW_PAGE_SIZE as pageSize } from '$lib/review/reviewQueueLoader.svelte';
 import type { ReviewTabsController } from '$lib/review/reviewTabsController.svelte';
-import type { DiverseSelection, ReviewItem } from '$lib/types';
+import type { DiverseSelection, ReviewItem } from '$lib/types_review';
 import { curationSettingsStore } from '$stores/curationSettings.svelte';
 import { strategiesStore } from '$stores/strategies.svelte';
 

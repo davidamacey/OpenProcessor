@@ -1,6 +1,6 @@
 <script lang="ts">
   /** /export's YOLO export progress and result modal. */
-  import { getManifestUrl } from '$lib/api';
+  import { getManifestUrl } from '$lib/api_export';
   import { formatCount } from '$lib/format/count';
   import Modal from '$components/Modal.svelte';
   import {

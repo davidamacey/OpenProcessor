@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const FILES = [
-  'src/lib/api.ts',
+  'src/lib/api_train.ts',
   'src/lib/promote.ts',
   'src/lib/promoteJobController.svelte.ts',
   'src/lib/components/PromoteModal.svelte',

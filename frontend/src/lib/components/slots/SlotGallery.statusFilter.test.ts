@@ -14,11 +14,12 @@ import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
 import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_regions', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_regions')>('$lib/api_regions');
   return { ...actual, getRegionClusters: vi.fn(), getRegions: vi.fn() };
 });
-import { getRegionClusters } from '$lib/api';
+import { getRegionClusters } from '$lib/api_regions';
 
 let target: HTMLDivElement;
 let instance: unknown;

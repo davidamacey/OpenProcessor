@@ -6,7 +6,8 @@
  * regionStatus.test.ts.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getRegions, API_PREFIX } from './api';
+import { API_PREFIX } from '$lib/api';
+import { getRegions } from '$lib/api_regions';
 
 function jsonResponse(body: unknown) {
   return new Response(JSON.stringify(body), {

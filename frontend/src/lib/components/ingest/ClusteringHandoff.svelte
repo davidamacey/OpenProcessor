@@ -15,7 +15,7 @@
   import AutoLabelPanel from '$components/AutoLabelPanel.svelte';
   import { formatTime } from '$lib/format/time';
   import type { IngestRunState } from '$lib/ingest/ingestRunController.svelte';
-  import type { RegionDrain } from '$lib/types';
+  import type { RegionDrain } from '$lib/types_ingest';
 
   interface Props {
     runState: IngestRunState;

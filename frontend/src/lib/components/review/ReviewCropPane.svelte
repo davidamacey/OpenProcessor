@@ -12,7 +12,7 @@
   import ReviewItemMeta from '$lib/components/review/ReviewItemMeta.svelte';
   import ReviewSlotPanel from '$lib/components/review/ReviewSlotPanel.svelte';
   import VectorRefreshNotice from '$lib/components/review/VectorRefreshNotice.svelte';
-  import { getThumbUrl } from '$lib/api';
+  import { getThumbUrl } from '$lib/api_cropRead';
   import { slotOf } from '$lib/annotations/cropSlots';
   import type { ReviewClassPicker } from '$lib/review/reviewClassPicker.svelte';
   import type { ReviewItemActions } from '$lib/review/reviewItemActions.svelte';
@@ -22,7 +22,7 @@
   import type { ReviewSlotEditController } from '$lib/review/reviewSlotEditController.svelte';
   import type { ReviewTabsController } from '$lib/review/reviewTabsController.svelte';
   import { isSlotTab } from '$lib/reviewTabs';
-  import type { ReviewItem } from '$lib/types';
+  import type { ReviewItem } from '$lib/types_review';
 
   interface Props {
     current: ReviewItem;

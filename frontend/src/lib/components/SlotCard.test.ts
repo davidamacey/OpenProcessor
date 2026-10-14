@@ -9,7 +9,7 @@ import { reprocessVocabularyStore } from '$lib/stores/reprocessVocabulary.svelte
 import { reprocessVocabularyFixture } from '$lib/test/fixtures/regionProfiles';
 import { mount, unmount, flushSync } from 'svelte';
 import SlotCard from './SlotCard.svelte';
-import type { RegionBrowseItem } from '$lib/api';
+import type { RegionBrowseItem } from '$lib/api_regions';
 import { regionSlotFromServedProfile } from '$lib/annotations/servedRegionSlot';
 import { widgetTagSlot, WIDGET_TAG_PROFILE_NO_TEXT } from '$lib/test/fixtures/regionSlot';
 import { API_PREFIX } from '$lib/api';

@@ -10,7 +10,8 @@
  * reply.
  */
 import { untrack } from 'svelte';
-import { configErrorDetail, apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { configErrorDetail } from '$lib/api_profiles';
 import { testPromptPack } from '$lib/api_configTest';
 import type { Crop } from '$lib/types';
 import type {

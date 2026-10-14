@@ -7,7 +7,7 @@
  * and `embeddingPlot.ts`'s `classifyRebuildPoll`.
  */
 
-import type { ScoreCoverageEntry, ScoresJob } from './api';
+import type { ScoreCoverageEntry, ScoresJob } from '$lib/api_scores';
 
 /** "N / total", or "—" when the scorer has no coverage row at all
  *  (never a bare `0`, matching `formatCount()`'s null-vs-zero rule). */

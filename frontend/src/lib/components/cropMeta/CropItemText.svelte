@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Crop } from '$lib/types';
-  import { getThumbUrl } from '$lib/api';
+  import { getThumbUrl } from '$lib/api_cropRead';
   import { pct } from '$lib/cropMeta/pct';
 
   let { crop }: { crop: Crop } = $props();

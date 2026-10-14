@@ -12,7 +12,7 @@
    */
   import { enumFilterSelection } from '$lib/review/enumFilter';
   import { classesStore } from '$stores/classes.svelte';
-  import type { ReviewFilterSpec } from '$lib/api';
+  import type { ReviewFilterSpec } from '$lib/api_review';
 
   type Spec = Pick<
     ReviewFilterSpec,

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { getThumbUrl, resolveApiUrl } from '$lib/api';
+  import { resolveApiUrl } from '$lib/api';
+  import { getThumbUrl } from '$lib/api_cropRead';
   import { slotForClassName } from '$lib/annotations/registeredSlots';
   import {
     dominantShareText,

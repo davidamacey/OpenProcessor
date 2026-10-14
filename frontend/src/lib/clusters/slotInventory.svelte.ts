@@ -3,7 +3,8 @@
  * registered slot with a browse endpoint, since a slot's regions are
  * sub-boxes on other items and never form cluster docs of their own.
  */
-import { getRegions, resolveApiUrl } from '$lib/api';
+import { resolveApiUrl } from '$lib/api';
+import { getRegions } from '$lib/api_regions';
 import { registeredSlots } from '$lib/annotations/registeredSlots';
 import { displayBoxOf } from '$lib/annotations/rowBox';
 import type { SlotSpec } from '$lib/annotations/types';

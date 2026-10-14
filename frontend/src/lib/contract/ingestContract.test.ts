@@ -16,7 +16,7 @@ import type {
   IngestItemStatus,
   RegionDependencyStatus,
   RegionDrain,
-} from '$lib/types';
+} from '$lib/types_ingest';
 
 type Schemas = Record<string, { properties?: Record<string, unknown> }>;
 const schemas = (openapi as { components: { schemas: Schemas } }).components.schemas;
@@ -36,7 +36,7 @@ describe('ingest contract', () => {
     expect(PATH_LOOKUP_MAX).toBe(10_000);
   });
 
-  it('IngestImageResult (types.ts) has exactly the served IngestImageResponse properties', () => {
+  it('IngestImageResult (types_ingest.ts) has exactly the served IngestImageResponse properties', () => {
     const IMAGE_RESULT_KEYS = [
       'error',
       'error_kind',
@@ -56,7 +56,7 @@ describe('ingest contract', () => {
     expect([...IMAGE_RESULT_KEYS].sort()).toEqual(keysOf('IngestImageResponse'));
   });
 
-  it('BatchIngestSummary (types.ts) has exactly the served BatchIngestSummaryResponse properties', () => {
+  it('BatchIngestSummary (types_ingest.ts) has exactly the served BatchIngestSummaryResponse properties', () => {
     const SUMMARY_KEYS = [
       'successful',
       'duplicates',
@@ -71,7 +71,7 @@ describe('ingest contract', () => {
     expect([...SUMMARY_KEYS].sort()).toEqual(keysOf('BatchIngestSummaryResponse'));
   });
 
-  it('BatchIngestResponse (types.ts) has exactly the served BatchIngestResponse properties', () => {
+  it('BatchIngestResponse (types_ingest.ts) has exactly the served BatchIngestResponse properties', () => {
     const RESPONSE_KEYS = [
       'status',
       'summary',
@@ -88,7 +88,7 @@ describe('ingest contract', () => {
     );
   });
 
-  it('RegionDependencyStatus (types.ts) has exactly the served properties', () => {
+  it('RegionDependencyStatus (types_ingest.ts) has exactly the served properties', () => {
     const KEYS = [
       'role',
       'model',
@@ -125,7 +125,7 @@ describe('ingest contract', () => {
     );
   });
 
-  it('IngestConfig (types.ts) has exactly the served IngestConfigResponse shape', () => {
+  it('IngestConfig (types_ingest.ts) has exactly the served IngestConfigResponse shape', () => {
     const uploadKeys = keysOf('IngestUploadConfig');
     const batchKeys = keysOf('IngestBatchConfig');
     const drainKeys = keysOf('IngestRegionDrainConfig');
@@ -142,7 +142,7 @@ describe('ingest contract', () => {
     expect(drainKeys).toEqual(['poll_interval_s', 'stable_polls'].sort());
   });
 
-  it('RegionDrain (types.ts) has exactly the served IngestRegionDrainResponse properties', () => {
+  it('RegionDrain (types_ingest.ts) has exactly the served IngestRegionDrainResponse properties', () => {
     const DRAIN_KEYS = [
       'pending_detection',
       'pending_verification',

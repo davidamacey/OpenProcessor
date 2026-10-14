@@ -30,7 +30,7 @@ import {
 import { REGION_TAB_ID } from '$lib/annotations/servedRegionSlot';
 import { regionProfileStore } from '$stores/regionProfile.svelte';
 import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
-import type { ReviewTab } from '$lib/types';
+import type { ReviewTab } from '$lib/types_review';
 
 export interface ReviewTabsOptions {
   /** Drop the previous tab's filters, in state and in `url`. */

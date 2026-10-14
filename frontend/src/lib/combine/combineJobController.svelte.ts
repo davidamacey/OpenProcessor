@@ -16,7 +16,8 @@
  * `status` (`GET /projects/{target}`, same interval) until it leaves
  * `building`; `canRunNextStep` is true only once it is `active`.
  */
-import { apiErrorText, getProject } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { getProject } from '$lib/api_projects';
 import {
   cancelCombine,
   getCombineJob,

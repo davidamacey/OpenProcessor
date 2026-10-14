@@ -1,7 +1,7 @@
 <script lang="ts">
   import Modal from '$components/Modal.svelte';
   import type { MergeClassesController } from '$lib/classes/mergeClassesController.svelte';
-  import type { RegistryClass } from '$lib/types';
+  import type { RegistryClass } from '$lib/types_classes';
 
   let {
     m,

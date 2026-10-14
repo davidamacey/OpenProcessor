@@ -2,7 +2,7 @@
   /** /train's training-cohort chips per class with the inline preview grid. */
   import SlotCard from '$components/SlotCard.svelte';
   import CropCard from '$components/CropCard.svelte';
-  import type { RegionBrowseItem } from '$lib/api';
+  import type { RegionBrowseItem } from '$lib/api_regions';
   import type { Crop } from '$lib/types';
   import type { TrainCohortsController } from '$lib/train/trainCohortsController.svelte';
 

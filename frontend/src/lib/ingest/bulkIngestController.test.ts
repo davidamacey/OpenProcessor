@@ -4,7 +4,7 @@
  * resume as the backend allows. Nothing is decided client-side.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import {
   RUN_ID,
   configFixture,

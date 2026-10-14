@@ -5,8 +5,8 @@
  * per action, a locked key) run here for immediate feedback while typing.
  */
 
+import { apiErrorText } from '$lib/api_errors';
 import {
-  apiErrorText,
   keymapClassConflictDetail,
   keymapRevisionConflictDetail,
   keymapValidationFailedDetail,
@@ -15,7 +15,7 @@ import {
   validateKeymap,
   type KeymapClassConflict,
   type KeymapValidationReport,
-} from '$lib/api';
+} from '$lib/api_settings';
 import { formatShortcutKey } from '$lib/keyboardDisplay';
 import { normalize, keyboardStore } from '$stores/keyboard.svelte';
 import { keymapStore } from '$stores/keymap.svelte';

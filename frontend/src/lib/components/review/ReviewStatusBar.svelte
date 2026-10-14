@@ -3,7 +3,7 @@
 -->
 <script lang="ts">
   import type { Pager } from '$lib/pager.svelte';
-  import type { ReviewItem } from '$lib/types';
+  import type { ReviewItem } from '$lib/types_review';
 
   interface Props {
     queue: Pager<ReviewItem>;

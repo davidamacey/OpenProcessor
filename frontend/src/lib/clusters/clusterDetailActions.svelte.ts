@@ -7,14 +7,13 @@
  */
 import { SOURCES, TRIGGERS } from 'svelte-dnd-action';
 import {
-  apiErrorText,
-  flagNeedsNewClass,
   pollAutoLabelJob,
-  refineCluster,
   runVlmOnCluster,
   type AutoLabelJobState,
-  type ExcludeReason,
-} from '$lib/api';
+} from '$lib/api_autoLabel';
+import { refineCluster } from '$lib/api_clusters';
+import { flagNeedsNewClass, type ExcludeReason } from '$lib/api_cropWrites';
+import { apiErrorText } from '$lib/api_errors';
 import { createClusterActionController } from '$lib/clusters/clusterController.svelte';
 import type { ClusterDetailController } from '$lib/clusters/clusterDetailController.svelte';
 import type { Crop } from '$lib/types';
