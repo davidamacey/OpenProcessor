@@ -114,8 +114,27 @@ describe('IngestSourcesPanel', () => {
     await vi.waitFor(() =>
       expect(deps.runIngestSource).toHaveBeenCalledWith('src_1a2b3c4d5e'),
     );
+    await vi.waitFor(() => {
+      flushSync();
+      expect((byId('source-retry') as HTMLButtonElement).disabled).toBe(false);
+    });
     click(byId('source-retry'));
     await vi.waitFor(() => expect(deps.retryDeadObjects).toHaveBeenCalledOnce());
+    ctl.stop();
+  });
+
+  it('Remove asks first and deletes only on confirm', async () => {
+    const { ctl, deps } = controller();
+    await render(ctl);
+    click(byId('source-remove'));
+    expect(deps.deleteIngestSource).not.toHaveBeenCalled();
+    const confirm = Array.from(document.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Remove' && b !== byId('source-remove'),
+    );
+    click(confirm ?? null);
+    await vi.waitFor(() =>
+      expect(deps.deleteIngestSource).toHaveBeenCalledWith('src_1a2b3c4d5e'),
+    );
     ctl.stop();
   });
 

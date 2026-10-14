@@ -37,7 +37,7 @@ export function sourceFixture(
       next_fire_at: '2026-10-13T02:00:00+00:00',
     },
     webhook: {
-      path: `/curation/projects/default/ingest/sources/${SOURCE_ID}/events`,
+      path: `/projects/default/ingest/sources/${SOURCE_ID}/events`,
       received: 40,
       queued: 38,
       duplicates: 1,

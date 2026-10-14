@@ -4,6 +4,7 @@
    * and next times, queue counts, the scan in progress, the last run, the objects
    * that failed, and the actions the backend allows now.
    */
+  import ConfirmDialog from '$components/ConfirmDialog.svelte';
   import { formatWhen, scanText, STATUS_TONE } from '$lib/ingest/sourcesFormat';
   import type { IngestSources } from '$lib/ingest/sourcesController.svelte';
   import type { IngestSourceStatus } from '$lib/types_ingestSources';
@@ -13,6 +14,12 @@
     controller: IngestSources;
   }
   let { source, controller }: Props = $props();
+
+  let confirmingRemove = $state(false);
+
+  async function removeNow(): Promise<void> {
+    if (await controller.remove(source.source_id)) confirmingRemove = false;
+  }
 
   const triggers = $derived(source.triggers);
   const noTriggers = $derived(
@@ -164,8 +171,9 @@
     <button
       class="btn btn-sm"
       type="button"
+      data-testid="source-remove"
       disabled={controller.busy}
-      onclick={() => void controller.remove(source.source_id)}
+      onclick={() => (confirmingRemove = true)}
     >
       Remove
     </button>
@@ -176,3 +184,21 @@
     {/if}
   </div>
 </article>
+
+{#if confirmingRemove}
+  <ConfirmDialog
+    title="Remove the source"
+    confirmLabel="Remove"
+    busy={controller.busy}
+    onconfirm={() => void removeNow()}
+    oncancel={() => (confirmingRemove = false)}
+  >
+    <p>
+      Remove {source.name}? Its triggers stop and its queue is forgotten. Images already
+      ingested stay in the project.
+    </p>
+    {#if controller.actionError}<p class="text-red-300" data-testid="source-remove-error">
+        {controller.actionError}
+      </p>{/if}
+  </ConfirmDialog>
+{/if}
