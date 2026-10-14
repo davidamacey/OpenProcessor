@@ -480,6 +480,13 @@ fewer iterations (niter 50, nredo 5, K 512 in `methods/ivf.py:59-76`).
 
 ### WP-3.1 Clustering benchmark, GPU IVF, incremental (#218). Tier: Opus writes the method-harness interface, Sonnet implements.
 
+**Status, 2026-10-14:** item 1 is implemented in a smaller form: `scripts/bench/cluster_bench.py`
+times the production `cluster_residuals` at a chosen size per method in a throw-away project and
+records method, wall time and counts (`tests/test_cluster_bench.py`); the stage split is
+`cluster_plumbing_bench.py`. There is no `cluster_bench_lib.py`, no seed-stability or CPU-against-GPU
+comparison and no peak-memory sampling. Item 3 and 4 are merged (#262). Item 2 (GPU k-means) is not
+started and stays behind the agreement gate. The 100k cluster-pass run is open.
+
 1. `scripts/bench/cluster_bench.py` (pure logic in `scripts/bench/cluster_bench_lib.py`, tests
    `tests/test_cluster_bench.py`): input a fixed embedding dump (pinned set residual pool, exported
    once via the existing PIT fetch `fetch_residual_embeddings_parallel`, plus the 10k pin); runs any

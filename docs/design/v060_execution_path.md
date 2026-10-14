@@ -26,6 +26,8 @@ and labels being available.
 | Services | OCR instances (#240), cluster scheduling (#212), serializer (#153), VLM idle (#207) | merged | |
 | Ingest | Bulk ingest runner, CLI, route, Cropwright panel (#229) | merged | one runner; speed follows the data path |
 | Storage | Vector store evaluation (#221) | merged | stay on tuned OpenSearch; follow-ups #254, #248, #230 |
+| Storage | Quantization and retention (#56), write ceiling (#230) | measured, documented | native-memory formula checked against the 100k data; 1,980 documents/s with 4 writers against about 740 needed for 100 images/s: go |
+| Clustering | Plumbing, geometry stage, bench harness (#218) | partly merged | 10k pass 176 to 25 s; `cluster_bench.py` times the pass at a chosen size; 100k cluster-pass run and GPU k-means (agreement-gated) open |
 
 ## 2. Order of the remaining work
 

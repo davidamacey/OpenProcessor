@@ -194,7 +194,7 @@ class StageClock:
                     clock.t['fit_s'] = time.perf_counter() - t0
                     clock.t['fit_s_end'] = time.perf_counter()
 
-            m.fit_predict = fit_predict
+            setattr(m, 'fit_predict', fit_predict)  # noqa: B010 - instance-level wrap of a method
             return m
 
         self._orig.append((methods, 'get_method', real_get))
@@ -230,7 +230,7 @@ async def one_run(client: Any, method: str, size: int, rep: int) -> dict[str, An
     after_fit = c.get('distance_s_end', c.get('fit_s_end', t0))
     refresh_start = c['refresh_s_end'] - c['refresh_s'] if 'refresh_s' in c else t_end
     extra = summary.get('cluster_method_extra') or {}
-    row = {
+    row: dict[str, Any] = {
         'kind': 'full',
         'method': method,
         'size': size,
@@ -251,11 +251,8 @@ async def one_run(client: Any, method: str, size: int, rep: int) -> dict[str, An
         'load_after': host_load(),
     }
     # The stage that contains the fetch before the fit starts: whatever is left of wall.
-    row['other_s'] = round(
-        row['wall_s']
-        - sum(row[k] for k in ('fetch_s', 'fit_s', 'distance_s', 'write_s', 'refresh_s', 'tail_s')),
-        3,
-    )
+    stages = ('fetch_s', 'fit_s', 'distance_s', 'write_s', 'refresh_s', 'tail_s')
+    row['other_s'] = round(row['wall_s'] - sum(row[k] for k in stages), 3)
     return row
 
 
