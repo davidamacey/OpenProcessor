@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from src.services.training import job_wire, jobs as train_jobs
+from src.services.training import job_manifest, job_wire
 
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ async def test_resolve_run_dir_from_checkpoint_path(jobs_dir: Path) -> None:
             }
         )
     )
-    resolved = await train_jobs.resolve_run_dir('ck')
+    resolved = await job_manifest.resolve_run_dir('ck')
     assert resolved == run_dir.resolve()
 
 
@@ -44,19 +44,19 @@ async def test_resolve_run_dir_falls_back_to_confusion_matrix_path(jobs_dir: Pat
             }
         )
     )
-    resolved = await train_jobs.resolve_run_dir('cm')
+    resolved = await job_manifest.resolve_run_dir('cm')
     assert resolved == run_dir.resolve()
 
 
 @pytest.mark.asyncio
 async def test_resolve_run_dir_none_when_no_hints(jobs_dir: Path) -> None:
     (jobs_dir / 'bare.status.json').write_text(json.dumps({'job_id': 'bare', 'state': 'running'}))
-    assert await train_jobs.resolve_run_dir('bare') is None
+    assert await job_manifest.resolve_run_dir('bare') is None
 
 
 @pytest.mark.asyncio
 async def test_resolve_run_dir_none_when_no_status(jobs_dir: Path) -> None:
-    assert await train_jobs.resolve_run_dir('never_ran') is None
+    assert await job_manifest.resolve_run_dir('never_ran') is None
 
 
 @pytest.mark.asyncio
@@ -73,7 +73,7 @@ async def test_read_artifact_serves_a_whitelisted_file(jobs_dir: Path) -> None:
             }
         )
     )
-    path = await train_jobs.read_artifact('good', 'confusion_matrix.png')
+    path = await job_manifest.read_artifact('good', 'confusion_matrix.png')
     assert path == (run_dir / 'confusion_matrix.png').resolve()
 
 
@@ -87,12 +87,12 @@ async def test_read_artifact_rejects_a_non_whitelisted_name(jobs_dir: Path) -> N
             {'job_id': 'good2', 'state': 'finished', 'checkpoint_path': str(run_dir / 'best.pt')}
         )
     )
-    assert await train_jobs.read_artifact('good2', 'best.pt') is None
+    assert await job_manifest.read_artifact('good2', 'best.pt') is None
 
 
 @pytest.mark.asyncio
 async def test_read_artifact_none_for_unknown_job(jobs_dir: Path) -> None:
-    assert await train_jobs.read_artifact('does_not_exist', 'confusion_matrix.png') is None
+    assert await job_manifest.read_artifact('does_not_exist', 'confusion_matrix.png') is None
 
 
 @pytest.mark.asyncio
@@ -108,7 +108,7 @@ async def test_read_artifact_none_when_file_never_written(jobs_dir: Path) -> Non
             }
         )
     )
-    assert await train_jobs.read_artifact('nofile', 'confusion_matrix.png') is None
+    assert await job_manifest.read_artifact('nofile', 'confusion_matrix.png') is None
 
 
 @pytest.mark.asyncio
@@ -129,13 +129,13 @@ async def test_read_artifact_rejects_traversal_attempt(jobs_dir: Path) -> None:
     # Not in the whitelist (a slash isn't a valid character in any
     # whitelisted basename), so this must resolve to None rather than
     # escaping run_dir to serve the sibling file.
-    assert await train_jobs.read_artifact('trav', '../confusion_matrix.png') is None
+    assert await job_manifest.read_artifact('trav', '../confusion_matrix.png') is None
 
 
 @pytest.mark.asyncio
 async def test_read_artifact_rejects_invalid_job_id() -> None:
     with pytest.raises(ValueError, match='invalid job_id'):
-        await train_jobs.read_artifact('../escaping', 'confusion_matrix.png')
+        await job_manifest.read_artifact('../escaping', 'confusion_matrix.png')
 
 
 def test_artifact_media_type_png_and_csv() -> None:

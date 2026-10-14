@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from src.core.logging import get_logger
 from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - used at runtime by FastAPI
-from src.services.training import jobs as train_jobs
+from src.services.training import job_campaigns, jobs as train_jobs
 from src.services.training.gpu_arbiter_policy import GpuArbiterStopFailedError
 from src.services.training.job_models import TrainCampaignSpec, TrainJobSpec
 from src.services.training.preflight_checks import PreflightReport
@@ -161,7 +161,7 @@ async def start_campaign(
             },
         ) from exc
     try:
-        campaign_id, job_ids = await train_jobs.write_campaign(campaign)
+        campaign_id, job_ids = await job_campaigns.write_campaign(campaign)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return StartCampaignResponse(campaign_id=campaign_id, job_ids=job_ids)
