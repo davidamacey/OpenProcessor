@@ -182,7 +182,7 @@ src/services/curation/worker_liveness.py	1	triage every return-empty handler in 
 src/services/detection/fp_store.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/detection/profile_registry.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/detection/segmenter_gate.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/duplicate_detection/__init__.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/duplicate_detection/service.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/face_identity/face_records.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/face_identity/identification.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/face_identity/person_management.py	5	triage every return-empty handler in PR 3; ratchet: may only go down

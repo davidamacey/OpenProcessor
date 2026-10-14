@@ -526,7 +526,7 @@ async def list_duplicate_groups(
         Paginated list of duplicate groups.
     """
     try:
-        from src.services.duplicate_detection import DuplicateDetectionService
+        from src.services.duplicate_detection.service import DuplicateDetectionService
 
         dup_service = DuplicateDetectionService(search_service.opensearch)
 
@@ -580,7 +580,7 @@ async def get_duplicate_stats(
         Duplicate detection statistics.
     """
     try:
-        from src.services.duplicate_detection import DuplicateDetectionService
+        from src.services.duplicate_detection.service import DuplicateDetectionService
 
         dup_service = DuplicateDetectionService(search_service.opensearch)
         stats = await dup_service.get_stats()
@@ -618,7 +618,7 @@ async def get_duplicate_group(
         Group members with metadata.
     """
     try:
-        from src.services.duplicate_detection import DuplicateDetectionService
+        from src.services.duplicate_detection.service import DuplicateDetectionService
 
         dup_service = DuplicateDetectionService(search_service.opensearch)
         members = await dup_service.get_group_members(group_id, include_primary=True)
