@@ -298,7 +298,7 @@ async def create_project(
         # no shards and leave no dirs (it used to leave the record
         # 'failed' with gamma's indexes already created -- see the P3
         # review's M7/m9).
-        from src.services.projects.clone import _validate_clone_source
+        from src.services.projects.clone_validate import _validate_clone_source
 
         await _validate_clone_source(
             client, target_slug=slug, from_slug=clone_settings_from, axes=clone_axes
