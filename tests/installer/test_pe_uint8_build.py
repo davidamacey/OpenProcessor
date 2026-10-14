@@ -231,9 +231,8 @@ def test_each_uint8_engine_builder_applies_the_prefix(model: str) -> None:
 
 
 def test_dual_head_exporter_declares_uint8_and_applies_the_prefix() -> None:
-    text = (REPO_ROOT / 'export/export_detector_dual_head.py').read_text()
-    assert 'TYPE_UINT8' in text
-    assert 'add_uint8_input(' in text
+    assert 'TYPE_UINT8' in (REPO_ROOT / 'export/dual_head_triton.py').read_text()
+    assert 'add_uint8_input(' in (REPO_ROOT / 'export/dual_head_model.py').read_text()
 
 
 # ---- #270: models install in a checkout without .install/state.json ----
