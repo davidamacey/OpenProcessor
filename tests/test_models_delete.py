@@ -11,7 +11,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.routers import models as models_router
+from src.routers import models as models_router, models_lifecycle
 
 
 if TYPE_CHECKING:
@@ -25,9 +25,9 @@ class _Triton:
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    monkeypatch.setattr(models_router, 'TRITON_MODELS_DIR', tmp_path / 'models')
-    monkeypatch.setattr(models_router, 'PYTORCH_MODELS_DIR', tmp_path / 'pytorch_models')
-    monkeypatch.setattr(models_router, 'TritonControlService', _Triton)
+    monkeypatch.setattr(models_lifecycle, 'TRITON_MODELS_DIR', tmp_path / 'models')
+    monkeypatch.setattr(models_lifecycle, 'PYTORCH_MODELS_DIR', tmp_path / 'pytorch_models')
+    monkeypatch.setattr(models_lifecycle, 'TritonControlService', _Triton)
     app = FastAPI()
     app.include_router(models_router.router)
     return TestClient(app)

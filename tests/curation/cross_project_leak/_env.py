@@ -280,14 +280,14 @@ def leak_env(
         def __getattr__(self, name: str) -> Any:
             raise ConnectionError(f'triton disabled in the leak test ({name})')
 
-    import src.main as main_module
+    import src.app.resources as resources_module
     from src.main import app
 
     env.app = app
     app.dependency_overrides[get_async_triton] = lambda: _DeadTriton()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
     # Ingest runs end to end: a fake detector pool and PE encoder at the
     # service boundary (the same fakes the ingest integration tests use).
-    monkeypatch.setattr(main_module, 'get_async_triton_pool', FakeTritonPool)
+    monkeypatch.setattr(resources_module, 'get_async_triton_pool', FakeTritonPool)
     had_encoder = hasattr(app.state, 'pe_encoder')
     previous_encoder = getattr(app.state, 'pe_encoder', None)
     app.state.pe_encoder = _LeakPEEncoder()

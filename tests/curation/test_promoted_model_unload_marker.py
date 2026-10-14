@@ -89,10 +89,10 @@ def test_a_directory_without_promote_json_gets_no_marker(tmp_path: Path) -> None
 def test_the_unload_route_records_the_marker(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from fastapi.testclient import TestClient
 
-    from src.routers import models as models_router
+    from src.routers import models_lifecycle
 
-    monkeypatch.setattr(models_router, 'TRITON_MODELS_DIR', repo)
-    monkeypatch.setattr(models_router, 'check_unload', lambda *_a, **_k: None)
+    monkeypatch.setattr(models_lifecycle, 'TRITON_MODELS_DIR', repo)
+    monkeypatch.setattr(models_lifecycle, 'check_unload', lambda *_a, **_k: None)
 
     class _Triton:
         async def unload_model(self, name: str) -> tuple[bool, str]:
@@ -101,7 +101,7 @@ def test_the_unload_route_records_the_marker(repo: Path, monkeypatch: pytest.Mon
         async def load_model(self, name: str) -> tuple[bool, str]:
             return True, f'{name} loaded'
 
-    monkeypatch.setattr(models_router, 'TritonControlService', _Triton)
+    monkeypatch.setattr(models_lifecycle, 'TritonControlService', _Triton)
     from src.main import app
 
     client = TestClient(app)

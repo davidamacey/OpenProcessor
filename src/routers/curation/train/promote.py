@@ -147,7 +147,7 @@ async def reload_promoted() -> ReloadPromotedResponse:
     ``docker compose restart``/recreate of the Triton service) silently
     strands every previously-promoted model at UNAVAILABLE until someone
     POSTs ``/load`` again. The API already runs this once at its own
-    startup and on its periodic reconcile tick (see ``src/main.py``); this
+    startup and on its periodic reconcile tick (see ``src/app/lifespan.py``); this
     route lets an operator trigger it on demand right after bouncing
     Triton, without needing a full API restart. ``make reload-promoted``
     calls this.
