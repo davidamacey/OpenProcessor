@@ -5,9 +5,6 @@ scripts/curation/bakeoff/bakeoff_runner.py::run_job	18	ratchet: may only go down
 scripts/curation/worker/runner.py::run	20	ratchet: may only go down
 scripts/curation/worker/stage_a.py::stage_a_consumer	17	ratchet: may only go down
 scripts/curation/worker/stage_a.py::stage_a_vlm_visible	19	ratchet: may only go down
-src/clients/occ_upsert.py::occ_upsert_bulk	25	top 15: decompose in PR 6
-src/clients/opensearch/bulk.py::bulk_ingest	19	ratchet: may only go down
-src/clients/opensearch/ingest.py::ingest_image	27	top 15: decompose in PR 6
 src/routers/curation/models.py::models_status	17	ratchet: may only go down
 src/routers/curation/regions.py::list_regions	20	ratchet: may only go down
 src/routers/curation/review_resolve.py::resolve_new_class_proposal	16	ratchet: may only go down
@@ -17,7 +14,6 @@ src/routers/ingest/directory.py::ingest_directory	18	ratchet: may only go down
 src/services/curation/bulk_ingest/walk.py::iter_image_paths	16	ratchet: may only go down
 src/services/curation/clustering/auto_promote.py::auto_promote_clusters	16	ratchet: may only go down
 src/services/curation/clustering/orchestrator.py::cluster_residuals	19	ratchet: may only go down
-src/services/curation/dataset_import/chunk.py::_import_one	19	ratchet: may only go down
 src/services/curation/dataset_import/coco.py::read_coco	20	ratchet: may only go down
 src/services/curation/dataset_import/mapping.py::resolve_mapping	18	ratchet: may only go down
 src/services/curation/dataset_import/yolo.py::read_yolo_labels	16	ratchet: may only go down
@@ -25,8 +21,6 @@ src/services/curation/export_split.py::stratified_split_with_stats	16	ratchet: m
 src/services/curation/ingest_batch.py::run_ingest_batch	17	ratchet: may only go down
 src/services/curation/ingest_index.py::index_items	16	ratchet: may only go down
 src/services/curation/item_doc.py::build_item_doc	17	ratchet: may only go down
-src/services/curation/item_filter.py::item_filter_clauses	23	ratchet: may only go down
-src/services/curation/keymap_validator.py::validate_keymap	25	top 15: decompose in PR 6
 src/services/curation/proposal_merge.py::merge_item_proposals	16	ratchet: may only go down
 src/services/curation/registry_reclassify.py::reclassify_unmatched	16	ratchet: may only go down
 src/services/curation/reprocess_embed.py::reembed_items	17	ratchet: may only go down
@@ -37,5 +31,3 @@ src/services/labeling/vlm_labeler_verify.py::_parse_region_batch_response	20	rat
 src/services/labeling/vlm_labeler_visibility.py::_parse_region_visible_response	22	ratchet: may only go down
 src/services/model_export.py::run_export	18	ratchet: may only go down
 src/services/training/preflight_scan.py::scan_export_labels	18	ratchet: may only go down
-src/services/visual_search/ingest_batch.py::ingest_batch	40	top 15: decompose in PR 6
-src/services/visual_search/ingest_single.py::ingest_image	20	ratchet: may only go down

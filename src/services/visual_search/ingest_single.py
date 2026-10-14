@@ -12,6 +12,49 @@ from src.services.inference import InferenceService
 logger = logging.getLogger(__name__)
 
 
+def _imohash(image_bytes: bytes) -> str:
+    import io
+
+    import imohash
+
+    return imohash.hashfileobject(io.BytesIO(image_bytes)).hex()
+
+
+def _run_pipelines(
+    image_bytes: bytes, *, enable_detection: bool, enable_clip: bool, enable_faces: bool
+) -> tuple[dict, dict]:
+    """Run the enabled pipelines in parallel; returns ``(yolo+clip result, face result)``."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from src.clients.fast_face_client import get_fast_face_client
+    from src.clients.triton_client import get_sync_triton_client
+    from src.config import get_settings
+
+    settings = get_settings()
+    client = get_sync_triton_client(settings.triton_url)
+
+    result: dict = {'num_dets': 0, 'image_embedding': None}
+    face_result: dict = {'num_faces': 0}
+
+    futures = {}
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        # YOLO detection + CLIP embedding (if either is enabled)
+        if enable_detection or enable_clip:
+            futures['yolo_clip'] = executor.submit(client.infer_yolo_clip_cpu, image_bytes)
+
+        # Face detection + embedding (if enabled)
+        if enable_faces:
+            face_client = get_fast_face_client(settings.triton_url)
+            futures['face'] = executor.submit(face_client.recognize, image_bytes, confidence=0.5)
+
+        # Collect results
+        if 'yolo_clip' in futures:
+            result = futures['yolo_clip'].result()
+        if 'face' in futures:
+            face_result = futures['face'].result()
+    return result, face_result
+
+
 class IngestSingleMixin:
     opensearch: OpenSearchClient
     inference: InferenceService
@@ -69,15 +112,7 @@ class IngestSingleMixin:
         """
         try:
             # 1. Compute imohash for duplicate detection
-            import io
-
-            import imohash
-
-            from src.clients.fast_face_client import get_fast_face_client
-            from src.clients.triton_client import get_sync_triton_client
-            from src.config import get_settings
-
-            image_hash = imohash.hashfileobject(io.BytesIO(image_bytes)).hex()
+            image_hash = _imohash(image_bytes)
             file_size = len(image_bytes)
 
             # 2. Check for duplicates if enabled
@@ -96,43 +131,12 @@ class IngestSingleMixin:
                         'message': 'Image already exists in index (same imohash)',
                     }
 
-            settings = get_settings()
-            client = get_sync_triton_client(settings.triton_url)
-
-            # Initialize results
-            result = {'num_dets': 0, 'image_embedding': None}
-            face_result = {'num_faces': 0}
-            global_embedding = None
-
-            # Run enabled pipelines in parallel
-            from concurrent.futures import ThreadPoolExecutor
-
-            futures = {}
-            with ThreadPoolExecutor(max_workers=3) as executor:
-                # YOLO detection + CLIP embedding (if either is enabled)
-                if enable_detection or enable_clip:
-
-                    def run_yolo_clip():
-                        return client.infer_yolo_clip_cpu(image_bytes)
-
-                    futures['yolo_clip'] = executor.submit(run_yolo_clip)
-
-                # Face detection + embedding (if enabled)
-                if enable_faces:
-                    from src.clients.fast_face_client import get_fast_face_client
-
-                    face_client = get_fast_face_client(settings.triton_url)
-
-                    def run_face_detection():
-                        return face_client.recognize(image_bytes, confidence=0.5)
-
-                    futures['face'] = executor.submit(run_face_detection)
-
-                # Collect results
-                if 'yolo_clip' in futures:
-                    result = futures['yolo_clip'].result()
-                if 'face' in futures:
-                    face_result = futures['face'].result()
+            result, face_result = _run_pipelines(
+                image_bytes,
+                enable_detection=enable_detection,
+                enable_clip=enable_clip,
+                enable_faces=enable_faces,
+            )
 
             # Extract global embedding if CLIP is enabled
             if enable_clip and result.get('image_embedding') is not None:
@@ -141,7 +145,7 @@ class IngestSingleMixin:
                 # Create zero embedding if CLIP disabled (still need for indexing structure)
                 global_embedding = np.zeros(512, dtype=np.float32)
 
-            # Prepare box data (only if detection is enabled)
+            # Box data (only if detection is enabled)
             box_embeddings = None
             normalized_boxes = None
             det_classes: list[int] | None = None
@@ -172,35 +176,9 @@ class IngestSingleMixin:
             # Index faces if detected and enabled
             num_faces_indexed = 0
             if enable_faces and face_result.get('num_faces', 0) > 0:
-                face_embeddings: list = face_result.get('face_embeddings', [])
-                face_boxes: list = face_result.get('face_boxes', [])
-                face_scores: list = face_result.get('face_scores', [])
-                face_quality: list = face_result.get('face_quality', [])
-                face_landmarks: list = face_result.get('face_landmarks', [])
-
-                for i in range(min(len(face_embeddings), len(face_boxes))):
-                    if len(face_embeddings[i]) > 0:
-                        face_id = f'{image_id}_face_{i}'
-                        try:
-                            await self.opensearch.index_face(
-                                face_id=face_id,
-                                image_id=image_id,
-                                image_path=image_path or image_id,
-                                embedding=face_embeddings[i],
-                                box=face_boxes[i].tolist()
-                                if hasattr(face_boxes[i], 'tolist')
-                                else list(face_boxes[i]),
-                                landmarks=face_landmarks[i].tolist()
-                                if hasattr(face_landmarks[i], 'tolist')
-                                else list(face_landmarks[i])
-                                if len(face_landmarks) > i
-                                else [],
-                                confidence=float(face_scores[i]) if len(face_scores) > i else 0.0,
-                                quality=float(face_quality[i]) if len(face_quality) > i else 0.0,
-                            )
-                            num_faces_indexed += 1
-                        except Exception as e:
-                            logger.debug(f'Failed to index face {face_id}: {e}')
+                num_faces_indexed = await self._index_faces(
+                    face_result, image_id, image_path or image_id
+                )
 
             # 6. Auto-detect and assign near-duplicates (runs in background, non-blocking)
             duplicate_info = None
@@ -232,7 +210,6 @@ class IngestSingleMixin:
                 response['near_duplicate'] = duplicate_info
 
             # 7. Run OCR and index text content (if enabled)
-            ocr_info = None
             if enable_ocr:
                 ocr_info = await self._process_ocr(
                     image_bytes=image_bytes,
@@ -251,6 +228,40 @@ class IngestSingleMixin:
                 'image_id': image_id,
                 'error': str(e),
             }
+
+    async def _index_faces(self, face_result: dict, image_id: str, image_path: str) -> int:
+        """Index each detected face; one that fails to index is skipped, not fatal."""
+        face_embeddings: list = face_result.get('face_embeddings', [])
+        face_boxes: list = face_result.get('face_boxes', [])
+        face_scores: list = face_result.get('face_scores', [])
+        face_quality: list = face_result.get('face_quality', [])
+        face_landmarks: list = face_result.get('face_landmarks', [])
+
+        indexed = 0
+        for i in range(min(len(face_embeddings), len(face_boxes))):
+            if len(face_embeddings[i]) > 0:
+                face_id = f'{image_id}_face_{i}'
+                try:
+                    await self.opensearch.index_face(
+                        face_id=face_id,
+                        image_id=image_id,
+                        image_path=image_path,
+                        embedding=face_embeddings[i],
+                        box=face_boxes[i].tolist()
+                        if hasattr(face_boxes[i], 'tolist')
+                        else list(face_boxes[i]),
+                        landmarks=face_landmarks[i].tolist()
+                        if hasattr(face_landmarks[i], 'tolist')
+                        else list(face_landmarks[i])
+                        if len(face_landmarks) > i
+                        else [],
+                        confidence=float(face_scores[i]) if len(face_scores) > i else 0.0,
+                        quality=float(face_quality[i]) if len(face_quality) > i else 0.0,
+                    )
+                    indexed += 1
+                except Exception as e:
+                    logger.debug(f'Failed to index face {face_id}: {e}')
+        return indexed
 
     async def _assign_to_duplicate_group(
         self,

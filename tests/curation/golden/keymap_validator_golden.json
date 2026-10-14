@@ -1,0 +1,4424 @@
+{
+ "empty": {
+  "report": {
+   "ok": true,
+   "errors": [],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "n"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "x"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "unknown_action": {
+  "report": {
+   "ok": false,
+   "errors": [
+    {
+     "id": "keymap_unknown_action:overrides.nope.action",
+     "code": "keymap_unknown_action",
+     "severity": "error",
+     "field": "overrides.nope.action",
+     "message": "'nope.action' is not a known action id.",
+     "detail": {
+      "action_id": "nope.action"
+     },
+     "bypassable": false
+    }
+   ],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "n"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "x"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "locked_action": {
+  "report": {
+   "ok": false,
+   "errors": [
+    {
+     "id": "keymap_action_locked:overrides.global.close_overlay",
+     "code": "keymap_action_locked",
+     "severity": "error",
+     "field": "overrides.global.close_overlay",
+     "message": "'global.close_overlay' cannot be rebound.",
+     "detail": {
+      "action_id": "global.close_overlay"
+     },
+     "bypassable": false
+    }
+   ],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "q"
+   ],
+   "review.skip": [
+    "n"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "x"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "invalid_combo": {
+  "report": {
+   "ok": false,
+   "errors": [
+    {
+     "id": "keymap_combo_invalid:overrides.review.skip",
+     "code": "keymap_combo_invalid",
+     "severity": "error",
+     "field": "overrides.review.skip",
+     "message": "'ctrl+ctrl+x' is not a valid combo: 'ctrl+ctrl+x' repeats a modifier",
+     "detail": {
+      "combo": "ctrl+ctrl+x",
+      "reason": "'ctrl+ctrl+x' repeats a modifier"
+     },
+     "bypassable": false
+    }
+   ],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "ctrl+ctrl+x"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "x"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "duplicate_combo": {
+  "report": {
+   "ok": false,
+   "errors": [
+    {
+     "id": "keymap_combo_invalid:overrides.review.skip",
+     "code": "keymap_combo_invalid",
+     "severity": "error",
+     "field": "overrides.review.skip",
+     "message": "'review.skip' repeats a combo.",
+     "detail": {
+      "combo": [
+       "q",
+       "q"
+      ],
+      "reason": "duplicate combo"
+     },
+     "bypassable": false
+    }
+   ],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "q",
+    "q"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "x"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "focus_key_outside_box_edit": {
+  "report": {
+   "ok": true,
+   "errors": [],
+   "warnings": [
+    {
+     "id": "keymap_focus_key:overrides.review.skip",
+     "code": "keymap_focus_key",
+     "severity": "warning",
+     "field": "overrides.review.skip",
+     "message": "'tab' shadows focus navigation outside box editing.",
+     "detail": {
+      "combo": "tab"
+     },
+     "bypassable": false
+    },
+    {
+     "id": "keymap_focus_key:overrides.review.skip#2",
+     "code": "keymap_focus_key",
+     "severity": "warning",
+     "field": "overrides.review.skip",
+     "message": "'shift+tab' shadows focus navigation outside box editing.",
+     "detail": {
+      "combo": "shift+tab"
+     },
+     "bypassable": false
+    }
+   ],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "tab",
+    "shift+tab"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "x"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "focus_key_in_box_edit": {
+  "report": {
+   "ok": true,
+   "errors": [],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "n"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "x"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "locked_key_elsewhere": {
+  "report": {
+   "ok": false,
+   "errors": [
+    {
+     "id": "keymap_key_locked:overrides.review.skip",
+     "code": "keymap_key_locked",
+     "severity": "error",
+     "field": "overrides.review.skip",
+     "message": "'escape' is a locked key and cannot be bound elsewhere.",
+     "detail": {
+      "combo": "escape"
+     },
+     "bypassable": false
+    }
+   ],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "escape"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "x"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "browser_reserved": {
+  "report": {
+   "ok": false,
+   "errors": [
+    {
+     "id": "keymap_browser_reserved:overrides.review.skip",
+     "code": "keymap_browser_reserved",
+     "severity": "error",
+     "field": "overrides.review.skip",
+     "message": "'ctrl+w' is reserved by the browser.",
+     "detail": {
+      "combo": "ctrl+w"
+     },
+     "bypassable": false
+    }
+   ],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "ctrl+w"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "x"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "too_many_combos": {
+  "report": {
+   "ok": false,
+   "errors": [
+    {
+     "id": "keymap_too_many_combos:overrides.review.skip",
+     "code": "keymap_too_many_combos",
+     "severity": "error",
+     "field": "overrides.review.skip",
+     "message": "'review.skip' has 4 combos; max is 3.",
+     "detail": {
+      "limit": 3,
+      "requested": 4
+     },
+     "bypassable": false
+    }
+   ],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "q",
+    "w",
+    "e",
+    "p"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "x"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "drop_own_locked_key": {
+  "report": {
+   "ok": false,
+   "errors": [
+    {
+     "id": "keymap_key_locked:overrides.review.queue.confirm",
+     "code": "keymap_key_locked",
+     "severity": "error",
+     "field": "overrides.review.queue.confirm",
+     "message": "'review.queue.confirm' cannot lose its locked key 'enter'.",
+     "detail": {
+      "combo": "enter"
+     },
+     "bypassable": false
+    }
+   ],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "n"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "k"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "x"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "drop_two_locked_keys": {
+  "report": {
+   "ok": false,
+   "errors": [
+    {
+     "id": "keymap_key_locked:overrides.review.queue.next",
+     "code": "keymap_key_locked",
+     "severity": "error",
+     "field": "overrides.review.queue.next",
+     "message": "'review.queue.next' cannot lose its locked key 'arrowright'.",
+     "detail": {
+      "combo": "arrowright"
+     },
+     "bypassable": false
+    },
+    {
+     "id": "keymap_key_locked:overrides.review.queue.prev",
+     "code": "keymap_key_locked",
+     "severity": "error",
+     "field": "overrides.review.queue.prev",
+     "message": "'review.queue.prev' cannot lose its locked key 'arrowleft'.",
+     "detail": {
+      "combo": "arrowleft"
+     },
+     "bypassable": false
+    }
+   ],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "n"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [],
+   "review.queue.next": [],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "x"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "extend_keeps_locked": {
+  "report": {
+   "ok": true,
+   "errors": [],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "n"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter",
+    "k"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "x"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "context_collision": {
+  "report": {
+   "ok": false,
+   "errors": [
+    {
+     "id": "keymap_context_collision:overrides.review.skip",
+     "code": "keymap_context_collision",
+     "severity": "error",
+     "field": "overrides.review.skip",
+     "message": "'d' is already bound in context 'review.queue'.",
+     "detail": {
+      "combo": "d",
+      "context": "review.queue",
+      "action_ids": [
+       "review.queue.discard",
+       "review.skip"
+      ]
+     },
+     "bypassable": false
+    },
+    {
+     "id": "keymap_context_collision:overrides.review.skip#2",
+     "code": "keymap_context_collision",
+     "severity": "error",
+     "field": "overrides.review.skip",
+     "message": "'d' is already bound in context 'review.region'.",
+     "detail": {
+      "combo": "d",
+      "context": "review.region",
+      "action_ids": [
+       "review.region.reject",
+       "review.skip"
+      ]
+     },
+     "bypassable": false
+    }
+   ],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "d"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "x"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "collision_two_touched": {
+  "report": {
+   "ok": false,
+   "errors": [
+    {
+     "id": "keymap_context_collision:overrides.review.skip",
+     "code": "keymap_context_collision",
+     "severity": "error",
+     "field": "overrides.review.skip",
+     "message": "'k' is already bound in context 'review'.",
+     "detail": {
+      "combo": "k",
+      "context": "review",
+      "action_ids": [
+       "review.skip",
+       "review.undo"
+      ]
+     },
+     "bypassable": false
+    },
+    {
+     "id": "keymap_context_collision:overrides.review.undo",
+     "code": "keymap_context_collision",
+     "severity": "error",
+     "field": "overrides.review.undo",
+     "message": "'k' is already bound in context 'review'.",
+     "detail": {
+      "combo": "k",
+      "context": "review",
+      "action_ids": [
+       "review.skip",
+       "review.undo"
+      ]
+     },
+     "bypassable": false
+    },
+    {
+     "id": "keymap_context_collision:overrides.review.skip#2",
+     "code": "keymap_context_collision",
+     "severity": "error",
+     "field": "overrides.review.skip",
+     "message": "'k' is already bound in context 'review.queue'.",
+     "detail": {
+      "combo": "k",
+      "context": "review.queue",
+      "action_ids": [
+       "review.skip",
+       "review.undo"
+      ]
+     },
+     "bypassable": false
+    },
+    {
+     "id": "keymap_context_collision:overrides.review.undo#2",
+     "code": "keymap_context_collision",
+     "severity": "error",
+     "field": "overrides.review.undo",
+     "message": "'k' is already bound in context 'review.queue'.",
+     "detail": {
+      "combo": "k",
+      "context": "review.queue",
+      "action_ids": [
+       "review.skip",
+       "review.undo"
+      ]
+     },
+     "bypassable": false
+    },
+    {
+     "id": "keymap_context_collision:overrides.review.skip#3",
+     "code": "keymap_context_collision",
+     "severity": "error",
+     "field": "overrides.review.skip",
+     "message": "'k' is already bound in context 'review.region'.",
+     "detail": {
+      "combo": "k",
+      "context": "review.region",
+      "action_ids": [
+       "review.skip",
+       "review.undo"
+      ]
+     },
+     "bypassable": false
+    },
+    {
+     "id": "keymap_context_collision:overrides.review.undo#3",
+     "code": "keymap_context_collision",
+     "severity": "error",
+     "field": "overrides.review.undo",
+     "message": "'k' is already bound in context 'review.region'.",
+     "detail": {
+      "combo": "k",
+      "context": "review.region",
+      "action_ids": [
+       "review.skip",
+       "review.undo"
+      ]
+     },
+     "bypassable": false
+    }
+   ],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "k"
+   ],
+   "review.undo": [
+    "k"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "x"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "overlay_unbound": {
+  "report": {
+   "ok": false,
+   "errors": [
+    {
+     "id": "keymap_overlay_unbound:overrides.global.shortcuts_overlay",
+     "code": "keymap_overlay_unbound",
+     "severity": "error",
+     "field": "overrides.global.shortcuts_overlay",
+     "message": "The shortcuts overlay must always have at least one key.",
+     "detail": {},
+     "bypassable": false
+    }
+   ],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "n"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "x"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "errors_short_circuit_with_collision": {
+  "report": {
+   "ok": false,
+   "errors": [
+    {
+     "id": "keymap_unknown_action:overrides.nope.action",
+     "code": "keymap_unknown_action",
+     "severity": "error",
+     "field": "overrides.nope.action",
+     "message": "'nope.action' is not a known action id.",
+     "detail": {
+      "action_id": "nope.action"
+     },
+     "bypassable": false
+    }
+   ],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "d"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "x"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "class_conflict": {
+  "report": {
+   "ok": true,
+   "errors": [],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [
+   {
+    "project": "proj",
+    "class_id": 33,
+    "class_name": "ice_cream_truck",
+    "combo": "i",
+    "action_id": "cluster.ignore"
+   }
+  ],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "n"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "i"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": [
+   {
+    "id": "",
+    "code": "keymap_class_hotkey_conflict",
+    "severity": "error",
+    "field": "overrides.cluster.ignore",
+    "message": "'i' is bound to class 'ice_cream_truck' in project proj.",
+    "detail": {
+     "combo": "i",
+     "action_id": "cluster.ignore",
+     "conflicts": [
+      {
+       "project": "proj",
+       "class_id": 33,
+       "class_name": "ice_cream_truck"
+      }
+     ]
+    },
+    "bypassable": false
+   }
+  ]
+ },
+ "class_conflict_multi": {
+  "report": {
+   "ok": true,
+   "errors": [],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [
+   {
+    "project": "proj",
+    "class_id": 34,
+    "class_name": "jam",
+    "combo": "j",
+    "action_id": "cluster.skip"
+   },
+   {
+    "project": "proj",
+    "class_id": 33,
+    "class_name": "ice",
+    "combo": "i",
+    "action_id": "cluster.ignore"
+   }
+  ],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "n"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "j"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "i"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": [
+   {
+    "id": "",
+    "code": "keymap_class_hotkey_conflict",
+    "severity": "error",
+    "field": "overrides.cluster.skip",
+    "message": "'j' is bound to class 'jam' in project proj.",
+    "detail": {
+     "combo": "j",
+     "action_id": "cluster.skip",
+     "conflicts": [
+      {
+       "project": "proj",
+       "class_id": 34,
+       "class_name": "jam"
+      }
+     ]
+    },
+    "bypassable": false
+   },
+   {
+    "id": "",
+    "code": "keymap_class_hotkey_conflict",
+    "severity": "error",
+    "field": "overrides.cluster.ignore",
+    "message": "'i' is bound to class 'ice' in project proj.",
+    "detail": {
+     "combo": "i",
+     "action_id": "cluster.ignore",
+     "conflicts": [
+      {
+       "project": "proj",
+       "class_id": 33,
+       "class_name": "ice"
+      }
+     ]
+    },
+    "bypassable": false
+   }
+  ]
+ },
+ "class_conflict_deprecated_ignored": {
+  "report": {
+   "ok": true,
+   "errors": [],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "n"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "i"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "class_conflict_not_live_context": {
+  "report": {
+   "ok": true,
+   "errors": [],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "n"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "i"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "x"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "class_conflict_uppercase_letter": {
+  "report": {
+   "ok": true,
+   "errors": [],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [
+   {
+    "project": "proj",
+    "class_id": 33,
+    "class_name": "ice",
+    "combo": "i",
+    "action_id": "cluster.ignore"
+   }
+  ],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "n"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "i"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": [
+   {
+    "id": "",
+    "code": "keymap_class_hotkey_conflict",
+    "severity": "error",
+    "field": "overrides.cluster.ignore",
+    "message": "'i' is bound to class 'ice' in project proj.",
+    "detail": {
+     "combo": "i",
+     "action_id": "cluster.ignore",
+     "conflicts": [
+      {
+       "project": "proj",
+       "class_id": 33,
+       "class_name": "ice"
+      }
+     ]
+    },
+    "bypassable": false
+   }
+  ]
+ },
+ "class_conflict_modified_combo_ignored": {
+  "report": {
+   "ok": true,
+   "errors": [],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "n"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "ctrl+i"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "grandfathered_default": {
+  "report": {
+   "ok": true,
+   "errors": [],
+   "warnings": [
+    {
+     "id": "keymap_class_hotkey_shadowed:overrides.review.region.back",
+     "code": "keymap_class_hotkey_shadowed",
+     "severity": "warning",
+     "field": "overrides.review.region.back",
+     "message": "Class 'bmw' (hotkey 'b') shares 'b' with Step back to last confirmed region on review.region.",
+     "detail": {
+      "combo": "b",
+      "action_id": "review.region.back",
+      "conflicts": [
+       {
+        "project": "proj",
+        "class_id": 12,
+        "class_name": "bmw"
+       }
+      ]
+     },
+     "bypassable": false
+    }
+   ],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "n"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "x"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "grandfathered_via_previous": {
+  "report": {
+   "ok": true,
+   "errors": [],
+   "warnings": [
+    {
+     "id": "keymap_class_hotkey_shadowed:overrides.cluster.ignore",
+     "code": "keymap_class_hotkey_shadowed",
+     "severity": "warning",
+     "field": "overrides.cluster.ignore",
+     "message": "Class 'ice' (hotkey 'i') shares 'i' with Ignore selected (exclude from training) on cluster.",
+     "detail": {
+      "combo": "i",
+      "action_id": "cluster.ignore",
+      "conflicts": [
+       {
+        "project": "proj",
+        "class_id": 33,
+        "class_name": "ice"
+       }
+      ]
+     },
+     "bypassable": false
+    }
+   ],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "n"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "i"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "no_classes_no_previous": {
+  "report": {
+   "ok": true,
+   "errors": [],
+   "warnings": [],
+   "force_allowed": false
+  },
+  "conflicts": [],
+  "resolved": {
+   "global.shortcuts_overlay": [
+    "`",
+    "shift+~"
+   ],
+   "global.close_overlay": [
+    "escape"
+   ],
+   "review.skip": [
+    "n"
+   ],
+   "review.undo": [
+    "z"
+   ],
+   "review.queue.confirm": [
+    "enter"
+   ],
+   "review.queue.discard": [
+    "d"
+   ],
+   "review.queue.class_picker": [
+    "/"
+   ],
+   "review.queue.prev": [
+    "arrowleft"
+   ],
+   "review.queue.next": [
+    "arrowright"
+   ],
+   "review.region.confirm": [
+    "enter"
+   ],
+   "review.region.reject": [
+    "d"
+   ],
+   "review.region.false_positive": [
+    "f"
+   ],
+   "review.region.edit_box": [
+    "e"
+   ],
+   "review.region.back": [
+    "arrowleft",
+    "b"
+   ],
+   "review.region.next": [
+    "arrowright"
+   ],
+   "review.region.accept_box": [
+    "y"
+   ],
+   "review.region.reject_box": [
+    "r"
+   ],
+   "box_edit.save": [
+    "enter"
+   ],
+   "box_edit.cancel": [
+    "escape"
+   ],
+   "box_edit.nudge_up": [
+    "arrowup"
+   ],
+   "box_edit.nudge_down": [
+    "arrowdown"
+   ],
+   "box_edit.nudge_left": [
+    "arrowleft"
+   ],
+   "box_edit.nudge_right": [
+    "arrowright"
+   ],
+   "box_edit.shrink_right": [
+    "["
+   ],
+   "box_edit.grow_right": [
+    "]"
+   ],
+   "box_edit.delete_box": [
+    "backspace"
+   ],
+   "box_edit.next_box": [
+    "tab"
+   ],
+   "cluster.confirm": [
+    "enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+enter"
+   ],
+   "cluster.accept_vlm": [
+    "g"
+   ],
+   "cluster.skip": [
+    "n"
+   ],
+   "cluster.flag_new_class": [
+    "shift+n"
+   ],
+   "cluster.discard": [
+    "d"
+   ],
+   "cluster.undo": [
+    "z"
+   ],
+   "cluster.ignore": [
+    "i"
+   ],
+   "cluster.unignore": [
+    "u"
+   ],
+   "cluster.select_all": [
+    "a"
+   ],
+   "cluster.prev": [
+    "arrowleft"
+   ],
+   "cluster.next": [
+    "arrowright"
+   ],
+   "cluster.move": [
+    "m"
+   ],
+   "cluster.cancel": [
+    "escape"
+   ],
+   "clusters_search.select_all": [
+    "a"
+   ],
+   "clusters_search.cancel": [
+    "escape"
+   ],
+   "clusters_search.ignore": [
+    "x"
+   ],
+   "clusters_search.undo": [
+    "z"
+   ],
+   "region_gallery.undo": [
+    "z"
+   ]
+  },
+  "issues": []
+ },
+ "__shadowed__": [
+  {
+   "id": "",
+   "code": "keymap_class_hotkey_shadowed",
+   "severity": "warning",
+   "field": "overrides.review.region.back",
+   "message": "Class 'bmw' (hotkey 'b') shares 'b' with Step back to last confirmed region on review.region.",
+   "detail": {
+    "combo": "b",
+    "action_id": "review.region.back",
+    "conflicts": [
+     {
+      "project": "proj",
+      "class_id": 12,
+      "class_name": "bmw"
+     }
+    ]
+   },
+   "bypassable": false
+  }
+ ]
+}

@@ -1,0 +1,926 @@
+{
+ "empty": [],
+ "class_names": [
+  {
+   "bool": {
+    "should": [
+     {
+      "term": {
+       "class_name": {
+        "value": "hot dog",
+        "case_insensitive": true
+       }
+      }
+     },
+     {
+      "term": {
+       "class_name": {
+        "value": "hot-dog",
+        "case_insensitive": true
+       }
+      }
+     },
+     {
+      "term": {
+       "class_name": {
+        "value": "hot_dog",
+        "case_insensitive": true
+       }
+      }
+     },
+     {
+      "term": {
+       "class_name": {
+        "value": "person",
+        "case_insensitive": true
+       }
+      }
+     },
+     {
+      "term": {
+       "proposal_name": {
+        "value": "hot dog",
+        "case_insensitive": true
+       }
+      }
+     },
+     {
+      "term": {
+       "proposal_name": {
+        "value": "hot-dog",
+        "case_insensitive": true
+       }
+      }
+     },
+     {
+      "term": {
+       "proposal_name": {
+        "value": "hot_dog",
+        "case_insensitive": true
+       }
+      }
+     },
+     {
+      "term": {
+       "proposal_name": {
+        "value": "person",
+        "case_insensitive": true
+       }
+      }
+     }
+    ],
+    "minimum_should_match": 1
+   }
+  }
+ ],
+ "exclude_class_names": [
+  {
+   "bool": {
+    "must_not": [
+     {
+      "bool": {
+       "should": [
+        {
+         "term": {
+          "class_name": {
+           "value": "car",
+           "case_insensitive": true
+          }
+         }
+        },
+        {
+         "term": {
+          "proposal_name": {
+           "value": "car",
+           "case_insensitive": true
+          }
+         }
+        }
+       ],
+       "minimum_should_match": 1
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "conf_min": [
+  {
+   "range": {
+    "confidence": {
+     "gte": 0.3
+    }
+   }
+  }
+ ],
+ "conf_max": [
+  {
+   "range": {
+    "confidence": {
+     "lte": 0.8
+    }
+   }
+  }
+ ],
+ "conf_band": [
+  {
+   "range": {
+    "confidence": {
+     "gte": 0.3,
+     "lte": 0.8
+    }
+   }
+  }
+ ],
+ "min_area": [
+  {
+   "range": {
+    "crop_area_norm": {
+     "gte": 0.1
+    }
+   }
+  }
+ ],
+ "max_area": [
+  {
+   "range": {
+    "crop_area_norm": {
+     "lte": 0.5
+    }
+   }
+  }
+ ],
+ "area_band": [
+  {
+   "range": {
+    "crop_area_norm": {
+     "gte": 0.1,
+     "lte": 0.5
+    }
+   }
+  }
+ ],
+ "area_equal": [
+  {
+   "range": {
+    "crop_area_norm": {
+     "gte": 0.2,
+     "lte": 0.2
+    }
+   }
+  }
+ ],
+ "max_rank": [
+  {
+   "range": {
+    "crop_rank_in_image": {
+     "lte": 2
+    }
+   }
+  }
+ ],
+ "origin_one": [
+  {
+   "terms": {
+    "class_source": [
+     "human",
+     "human_move"
+    ]
+   }
+  }
+ ],
+ "origin_all": [
+  {
+   "bool": {
+    "should": [
+     {
+      "bool": {
+       "must_not": [
+        {
+         "exists": {
+          "field": "import_ids"
+         }
+        },
+        {
+         "terms": {
+          "class_source": [
+           "human",
+           "human_move"
+          ]
+         }
+        },
+        {
+         "exists": {
+          "field": "open_vocab_set"
+         }
+        }
+       ]
+      }
+     },
+     {
+      "exists": {
+       "field": "open_vocab_set"
+      }
+     },
+     {
+      "terms": {
+       "class_source": [
+        "human",
+        "human_move"
+       ]
+      }
+     },
+     {
+      "exists": {
+       "field": "import_ids"
+      }
+     }
+    ],
+    "minimum_should_match": 1
+   }
+  }
+ ],
+ "embedding_one": [
+  {
+   "exists": {
+    "field": "pe_embedding"
+   }
+  }
+ ],
+ "embedding_many": [
+  {
+   "bool": {
+    "should": [
+     {
+      "exists": {
+       "field": "pe_embedding"
+      }
+     },
+     {
+      "match_phrase": {
+       "embedding_state": "failed"
+      }
+     },
+     {
+      "match_phrase": {
+       "embedding_state": "deferred"
+      }
+     },
+     {
+      "match_phrase": {
+       "embedding_state": "not_selected"
+      }
+     }
+    ],
+    "minimum_should_match": 1
+   }
+  }
+ ],
+ "review_pending": [
+  {
+   "bool": {
+    "must_not": [
+     {
+      "term": {
+       "class_validated": true
+      }
+     },
+     {
+      "exists": {
+       "field": "review_dismissed_at"
+      }
+     },
+     {
+      "term": {
+       "class_excluded": true
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "review_all": [
+  {
+   "bool": {
+    "should": [
+     {
+      "bool": {
+       "must_not": [
+        {
+         "term": {
+          "class_validated": true
+         }
+        },
+        {
+         "exists": {
+          "field": "review_dismissed_at"
+         }
+        },
+        {
+         "term": {
+          "class_excluded": true
+         }
+        }
+       ]
+      }
+     },
+     {
+      "term": {
+       "class_validated": true
+      }
+     },
+     {
+      "exists": {
+       "field": "review_dismissed_at"
+      }
+     },
+     {
+      "term": {
+       "class_excluded": true
+      }
+     }
+    ],
+    "minimum_should_match": 1
+   }
+  }
+ ],
+ "source": [
+  {
+   "term": {
+    "source": "upload"
+   }
+  }
+ ],
+ "source_empty_string": [],
+ "class_id_zero": [
+  {
+   "term": {
+    "class_id": 0
+   }
+  }
+ ],
+ "cluster_id": [
+  {
+   "term": {
+    "cluster_id": 7
+   }
+  }
+ ],
+ "dataset_split": [
+  {
+   "term": {
+    "dataset_split": "val"
+   }
+  }
+ ],
+ "label_source": [
+  {
+   "term": {
+    "label_source": "vlm"
+   }
+  }
+ ],
+ "class_source": [
+  {
+   "term": {
+    "class_source": "human"
+   }
+  }
+ ],
+ "open_vocab_set": [
+  {
+   "term": {
+    "open_vocab_set": "street"
+   }
+  }
+ ],
+ "source_prompt": [
+  {
+   "term": {
+    "source_prompt": "a sheep"
+   }
+  }
+ ],
+ "import_id": [
+  {
+   "bool": {
+    "should": [
+     {
+      "term": {
+       "import_ids": "imp1"
+      }
+     },
+     {
+      "term": {
+       "proposed_by_import": "imp1"
+      }
+     }
+    ],
+    "minimum_should_match": 1
+   }
+  }
+ ],
+ "label_validated_true": [
+  {
+   "term": {
+    "class_validated": true
+   }
+  }
+ ],
+ "label_validated_false": [
+  {
+   "term": {
+    "class_validated": false
+   }
+  }
+ ],
+ "proposed_true": [
+  {
+   "exists": {
+    "field": "proposed_by_import"
+   }
+  }
+ ],
+ "proposed_false": [
+  {
+   "bool": {
+    "must_not": {
+     "exists": {
+      "field": "proposed_by_import"
+     }
+    }
+   }
+  }
+ ],
+ "negative_true": [
+  {
+   "term": {
+    "on_negative_frame": true
+   }
+  }
+ ],
+ "negative_false": [
+  {
+   "bool": {
+    "must_not": {
+     "term": {
+      "on_negative_frame": true
+     }
+    }
+   }
+  }
+ ],
+ "gate_skipped_true": [
+  {
+   "exists": {
+    "field": "region_gate_skip"
+   }
+  }
+ ],
+ "gate_skipped_false": [
+  {
+   "bool": {
+    "must_not": {
+     "exists": {
+      "field": "region_gate_skip"
+     }
+    }
+   }
+  }
+ ],
+ "needs_new_true": [
+  {
+   "term": {
+    "needs_new_class": true
+   }
+  }
+ ],
+ "needs_new_false": [
+  {
+   "bool": {
+    "must_not": {
+     "term": {
+      "needs_new_class": true
+     }
+    }
+   }
+  }
+ ],
+ "dismissed_true": [
+  {
+   "exists": {
+    "field": "review_dismissed_at"
+   }
+  }
+ ],
+ "dismissed_false": [
+  {
+   "bool": {
+    "must_not": {
+     "exists": {
+      "field": "review_dismissed_at"
+     }
+    }
+   }
+  }
+ ],
+ "blur": [
+  {
+   "bool": {
+    "should": [
+     {
+      "range": {
+       "blur_lap_ratio": {
+        "gte": 0.4
+       }
+      }
+     },
+     {
+      "bool": {
+       "must_not": {
+        "exists": {
+         "field": "blur_lap_ratio"
+        }
+       }
+      }
+     }
+    ],
+    "minimum_should_match": 1
+   }
+  }
+ ],
+ "classifier_low": [
+  {
+   "bool": {
+    "should": [
+     {
+      "bool": {
+       "filter": [
+        {
+         "terms": {
+          "class_source": [
+           "item_model"
+          ]
+         }
+        },
+        {
+         "range": {
+          "confidence": {
+           "lt": 0.5
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "terms": {
+       "class_source": [
+        "item_low_conf",
+        "item_proposal",
+        "open_vocab_proposal"
+       ]
+      }
+     }
+    ],
+    "minimum_should_match": 1
+   }
+  }
+ ],
+ "item_text": [
+  {
+   "bool": {
+    "filter": [
+     {
+      "prefix": {
+       "item_text_tokens": {
+        "value": "RED"
+       }
+      }
+     },
+     {
+      "prefix": {
+       "item_text_tokens": {
+        "value": "CAR"
+       }
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "everything": [
+  {
+   "bool": {
+    "should": [
+     {
+      "term": {
+       "class_name": {
+        "value": "person",
+        "case_insensitive": true
+       }
+      }
+     },
+     {
+      "term": {
+       "proposal_name": {
+        "value": "person",
+        "case_insensitive": true
+       }
+      }
+     }
+    ],
+    "minimum_should_match": 1
+   }
+  },
+  {
+   "bool": {
+    "must_not": [
+     {
+      "bool": {
+       "should": [
+        {
+         "term": {
+          "class_name": {
+           "value": "car",
+           "case_insensitive": true
+          }
+         }
+        },
+        {
+         "term": {
+          "proposal_name": {
+           "value": "car",
+           "case_insensitive": true
+          }
+         }
+        }
+       ],
+       "minimum_should_match": 1
+      }
+     }
+    ]
+   }
+  },
+  {
+   "range": {
+    "confidence": {
+     "gte": 0.1,
+     "lte": 0.9
+    }
+   }
+  },
+  {
+   "range": {
+    "crop_area_norm": {
+     "gte": 0.01,
+     "lte": 0.9
+    }
+   }
+  },
+  {
+   "range": {
+    "crop_rank_in_image": {
+     "lte": 3
+    }
+   }
+  },
+  {
+   "bool": {
+    "should": [
+     {
+      "terms": {
+       "class_source": [
+        "human",
+        "human_move"
+       ]
+      }
+     },
+     {
+      "exists": {
+       "field": "import_ids"
+      }
+     }
+    ],
+    "minimum_should_match": 1
+   }
+  },
+  {
+   "bool": {
+    "should": [
+     {
+      "exists": {
+       "field": "pe_embedding"
+      }
+     },
+     {
+      "match_phrase": {
+       "embedding_state": "failed"
+      }
+     }
+    ],
+    "minimum_should_match": 1
+   }
+  },
+  {
+   "bool": {
+    "should": [
+     {
+      "term": {
+       "class_validated": true
+      }
+     },
+     {
+      "bool": {
+       "must_not": [
+        {
+         "term": {
+          "class_validated": true
+         }
+        },
+        {
+         "exists": {
+          "field": "review_dismissed_at"
+         }
+        },
+        {
+         "term": {
+          "class_excluded": true
+         }
+        }
+       ]
+      }
+     }
+    ],
+    "minimum_should_match": 1
+   }
+  },
+  {
+   "term": {
+    "source": "s"
+   }
+  },
+  {
+   "term": {
+    "class_id": 1
+   }
+  },
+  {
+   "term": {
+    "cluster_id": 2
+   }
+  },
+  {
+   "term": {
+    "dataset_split": "train"
+   }
+  },
+  {
+   "term": {
+    "label_source": "ls"
+   }
+  },
+  {
+   "term": {
+    "class_source": "cs"
+   }
+  },
+  {
+   "term": {
+    "open_vocab_set": "ov"
+   }
+  },
+  {
+   "term": {
+    "source_prompt": "sp"
+   }
+  },
+  {
+   "bool": {
+    "should": [
+     {
+      "term": {
+       "import_ids": "imp"
+      }
+     },
+     {
+      "term": {
+       "proposed_by_import": "imp"
+      }
+     }
+    ],
+    "minimum_should_match": 1
+   }
+  },
+  {
+   "term": {
+    "class_validated": true
+   }
+  },
+  {
+   "bool": {
+    "must_not": {
+     "exists": {
+      "field": "proposed_by_import"
+     }
+    }
+   }
+  },
+  {
+   "term": {
+    "on_negative_frame": true
+   }
+  },
+  {
+   "exists": {
+    "field": "region_gate_skip"
+   }
+  },
+  {
+   "term": {
+    "needs_new_class": true
+   }
+  },
+  {
+   "bool": {
+    "must_not": {
+     "exists": {
+      "field": "review_dismissed_at"
+     }
+    }
+   }
+  },
+  {
+   "bool": {
+    "should": [
+     {
+      "range": {
+       "blur_lap_ratio": {
+        "gte": 0.2
+       }
+      }
+     },
+     {
+      "bool": {
+       "must_not": {
+        "exists": {
+         "field": "blur_lap_ratio"
+        }
+       }
+      }
+     }
+    ],
+    "minimum_should_match": 1
+   }
+  },
+  {
+   "bool": {
+    "should": [
+     {
+      "bool": {
+       "filter": [
+        {
+         "terms": {
+          "class_source": [
+           "item_model"
+          ]
+         }
+        },
+        {
+         "range": {
+          "confidence": {
+           "lt": 0.6
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "terms": {
+       "class_source": [
+        "item_low_conf",
+        "item_proposal",
+        "open_vocab_proposal"
+       ]
+      }
+     }
+    ],
+    "minimum_should_match": 1
+   }
+  },
+  {
+   "bool": {
+    "filter": [
+     {
+      "prefix": {
+       "item_text_tokens": {
+        "value": "DOG"
+       }
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

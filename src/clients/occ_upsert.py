@@ -121,10 +121,6 @@ async def occ_upsert_bulk(
     """
     if index is None:
         index = items_index()
-    # Local import: metrics module imports prometheus_client at top
-    # level and we keep occ.py prometheus-free for unit-test ergonomics.
-    from src.core.metrics import OP_INGEST_OCC_FINAL_CONFLICT, OP_INGEST_PRESERVED_HUMAN_LABEL
-
     result = {
         'created': 0,
         'updated': 0,
@@ -141,52 +137,27 @@ async def occ_upsert_bulk(
     )
     by_id: dict[str, dict[str, Any]] = {item['_id']: item for item in mget_resp.get('docs', [])}
 
-    create_actions: list[dict[str, Any]] = []
     create_docs: list[dict[str, Any]] = []
     update_targets: list[tuple[dict[str, Any], dict[str, Any]]] = []
-
     for doc in docs:
-        doc_id = doc[id_field]
-        existing = by_id.get(doc_id)
+        existing = by_id.get(doc[id_field])
         if not existing or not existing.get('found'):
-            create_actions.append({'create': {'_index': index, '_id': doc_id}})
             create_docs.append(doc)
         else:
             update_targets.append((doc, existing))
 
     # Phase 1: atomic creates for docs not present at mget time.
-    create_conflict_ids: set[str] = set()
-    if create_actions:
-        body: list[dict[str, Any]] = []
-        for action, doc in zip(create_actions, create_docs, strict=True):
-            body.append(action)
-            body.append(doc)
-        bulk_resp = await client.bulk(body=body, refresh=refresh)
-        for item in bulk_resp.get('items', []) or []:
-            create_item = item.get('create') or {}
-            status = create_item.get('status')
-            doc_id = create_item.get('_id')
-            if status in (200, 201):
-                result['created'] += 1
-                if outcomes is not None and doc_id:
-                    outcomes[doc_id] = DocOutcome('created')
-                if created_ids is not None and doc_id:
-                    created_ids.append(doc_id)
-            elif status == 409 and doc_id:
-                # A parallel writer created the doc between our mget and
-                # our bulk create. Fall back to the OCC update path with
-                # a fresh fetch.
-                create_conflict_ids.add(doc_id)
-            else:
-                logger.warning(
-                    'curation_ingest_upsert_create_error',
-                    doc_id=doc_id,
-                    status=status,
-                    error=create_item.get('error'),
-                    writer_id=writer_id,
-                )
-                if outcomes is not None and doc_id:
-                    outcomes[doc_id] = DocOutcome('error', error=_item_error(create_item))
+    create_conflict_ids = await _create_new_docs(
+        client,
+        create_docs,
+        index=index,
+        id_field=id_field,
+        refresh=refresh,
+        writer_id=writer_id,
+        result=result,
+        created_ids=created_ids,
+        outcomes=outcomes,
+    )
 
     # Resolve create-conflicts by re-fetching and joining the update list.
     if create_conflict_ids:
@@ -202,79 +173,173 @@ async def occ_upsert_bulk(
             if item.get('found') and item['_id'] in id_to_doc
         )
 
-    # Phase 2: batched OCC updates — one occ_update_bulk call
-    # (one mget page + one bulk, retrying 409s once) instead of one
-    # client.update per doc. Local import: occ_bulk.py imports FROM this
-    # module (OCC_BULK_*), so importing it back at module
-    # level here would cycle.
+    # Phase 2: batched OCC updates.
     if update_targets:
-        from src.clients.occ_bulk import occ_update_bulk
-
-        new_doc_by_id = {doc[id_field]: doc for doc, _existing in update_targets}
-        # merge_fn is re-invoked per retry round with the freshest source,
-        # so this always reflects the merge that actually got written (or
-        # was last attempted) for each id.
-        merge_effects: dict[str, tuple[list[str], bool]] = {}
-
-        def _merge(doc_id: str, source: dict[str, Any]) -> dict[str, Any]:
-            merged, preserved_fields = _merge_preserving_human(
-                new_doc=new_doc_by_id[doc_id],
-                existing=source,
-                human_field_guards=human_field_guards,
-            )
-            filled = _apply_fill_if_absent(merged, source, fill_if_absent)
-            keep_stored_vector_state(merged, source)
-            merge_effects[doc_id] = (preserved_fields, filled)
-            return merged
-
-        try:
-            status_map = await occ_update_bulk(
-                client,
-                index=index,
-                ids=list(new_doc_by_id),
-                merge_fn=_merge,
-                max_retries=1,
-                refresh=refresh,
-            )
-        except Exception as exc:
-            logger.warning(
-                'curation_ingest_upsert_bulk_update_failed',
-                writer_id=writer_id,
-                n=len(new_doc_by_id),
-                error=str(exc),
-            )
-            status_map = {}
-
-        for doc_id in new_doc_by_id:
-            status = status_map.get(doc_id)
-            if status == 'updated':
-                preserved_fields, filled = merge_effects.get(doc_id, ([], False))
-                result['updated'] += 1
-                if outcomes is not None:
-                    outcomes[doc_id] = DocOutcome('updated', len(preserved_fields), filled)
-                for field in preserved_fields:
-                    # Per-field counter — Grafana panels can break down which guard fired
-                    # (e.g. RegionFields.label_source vs class_source) so operators see the fix.
-                    OP_INGEST_PRESERVED_HUMAN_LABEL.labels(field=field).inc()
-                result['preserved_human'] += len(preserved_fields)
-                if filled:
-                    result['filled_absent'] += 1
-            elif status == 'conflict-exhausted':
-                # occ_update_bulk folds genuine (non-conflict) item errors into this
-                # same status — logged distinctly there via curation_occ_update_bulk_item_error.
-                OP_INGEST_OCC_FINAL_CONFLICT.inc()
-                result['final_conflicts'] += 1
-                if outcomes is not None:
-                    outcomes[doc_id] = DocOutcome('conflict')
-                logger.info(
-                    'curation_ingest_upsert_final_conflict', doc_id=doc_id, writer_id=writer_id
-                )
-            else:
-                logger.warning('curation_ingest_upsert_refetch_failed', doc_id=doc_id, error=status)
-                if outcomes is not None:
-                    outcomes[doc_id] = DocOutcome('error', error=str(status or 'update failed'))
+        await _update_existing_docs(
+            client,
+            {doc[id_field]: doc for doc, _existing in update_targets},
+            index=index,
+            human_field_guards=human_field_guards,
+            writer_id=writer_id,
+            refresh=refresh,
+            fill_if_absent=fill_if_absent,
+            result=result,
+            outcomes=outcomes,
+        )
 
     return result
+
+
+async def _create_new_docs(
+    client: AsyncOpenSearch,
+    create_docs: list[dict[str, Any]],
+    *,
+    index: str,
+    id_field: str,
+    refresh: bool | str,
+    writer_id: str,
+    result: dict[str, int],
+    created_ids: list[str] | None,
+    outcomes: dict[str, DocOutcome] | None,
+) -> set[str]:
+    """Bulk ``create`` the docs; returns the ids that lost a create race (409)."""
+    create_conflict_ids: set[str] = set()
+    if not create_docs:
+        return create_conflict_ids
+    body: list[dict[str, Any]] = []
+    for doc in create_docs:
+        body.append({'create': {'_index': index, '_id': doc[id_field]}})
+        body.append(doc)
+    bulk_resp = await client.bulk(body=body, refresh=refresh)
+    for item in bulk_resp.get('items', []) or []:
+        create_item = item.get('create') or {}
+        status = create_item.get('status')
+        doc_id = create_item.get('_id')
+        if status in (200, 201):
+            result['created'] += 1
+            if outcomes is not None and doc_id:
+                outcomes[doc_id] = DocOutcome('created')
+            if created_ids is not None and doc_id:
+                created_ids.append(doc_id)
+        elif status == 409 and doc_id:
+            # A parallel writer created the doc between our mget and
+            # our bulk create. Fall back to the OCC update path with
+            # a fresh fetch.
+            create_conflict_ids.add(doc_id)
+        else:
+            logger.warning(
+                'curation_ingest_upsert_create_error',
+                doc_id=doc_id,
+                status=status,
+                error=create_item.get('error'),
+                writer_id=writer_id,
+            )
+            if outcomes is not None and doc_id:
+                outcomes[doc_id] = DocOutcome('error', error=_item_error(create_item))
+    return create_conflict_ids
+
+
+async def _update_existing_docs(
+    client: AsyncOpenSearch,
+    new_doc_by_id: dict[str, dict[str, Any]],
+    *,
+    index: str,
+    human_field_guards: list[str],
+    writer_id: str,
+    refresh: bool | str,
+    fill_if_absent: Collection[str],
+    result: dict[str, int],
+    outcomes: dict[str, DocOutcome] | None,
+) -> None:
+    """One ``occ_update_bulk`` call (one mget page + one bulk, retrying 409s once)
+    instead of one ``client.update`` per doc, then the per-doc accounting."""
+    # Local import: occ_bulk.py imports FROM this module (OCC_BULK_*), so
+    # importing it back at module level here would cycle.
+    from src.clients.occ_bulk import occ_update_bulk
+
+    # merge_fn is re-invoked per retry round with the freshest source,
+    # so this always reflects the merge that actually got written (or
+    # was last attempted) for each id.
+    merge_effects: dict[str, tuple[list[str], bool]] = {}
+
+    def _merge(doc_id: str, source: dict[str, Any]) -> dict[str, Any]:
+        merged, preserved_fields = _merge_preserving_human(
+            new_doc=new_doc_by_id[doc_id],
+            existing=source,
+            human_field_guards=human_field_guards,
+        )
+        filled = _apply_fill_if_absent(merged, source, fill_if_absent)
+        keep_stored_vector_state(merged, source)
+        merge_effects[doc_id] = (preserved_fields, filled)
+        return merged
+
+    try:
+        status_map = await occ_update_bulk(
+            client,
+            index=index,
+            ids=list(new_doc_by_id),
+            merge_fn=_merge,
+            max_retries=1,
+            refresh=refresh,
+        )
+    except Exception as exc:
+        logger.warning(
+            'curation_ingest_upsert_bulk_update_failed',
+            writer_id=writer_id,
+            n=len(new_doc_by_id),
+            error=str(exc),
+        )
+        status_map = {}
+
+    for doc_id in new_doc_by_id:
+        _record_update_status(
+            doc_id,
+            status_map.get(doc_id),
+            merge_effects.get(doc_id, ([], False)),
+            writer_id=writer_id,
+            result=result,
+            outcomes=outcomes,
+        )
+
+
+def _record_update_status(
+    doc_id: str,
+    status: str | None,
+    effects: tuple[list[str], bool],
+    *,
+    writer_id: str,
+    result: dict[str, int],
+    outcomes: dict[str, DocOutcome] | None,
+) -> None:
+    """Count one doc's update result, emit its metrics and log line, record its outcome."""
+    # Local import: metrics module imports prometheus_client at top
+    # level and we keep occ.py prometheus-free for unit-test ergonomics.
+    from src.core.metrics import OP_INGEST_OCC_FINAL_CONFLICT, OP_INGEST_PRESERVED_HUMAN_LABEL
+
+    if status == 'updated':
+        preserved_fields, filled = effects
+        result['updated'] += 1
+        if outcomes is not None:
+            outcomes[doc_id] = DocOutcome('updated', len(preserved_fields), filled)
+        for field in preserved_fields:
+            # Per-field counter — Grafana panels can break down which guard fired
+            # (e.g. RegionFields.label_source vs class_source) so operators see the fix.
+            OP_INGEST_PRESERVED_HUMAN_LABEL.labels(field=field).inc()
+        result['preserved_human'] += len(preserved_fields)
+        if filled:
+            result['filled_absent'] += 1
+    elif status == 'conflict-exhausted':
+        # occ_update_bulk folds genuine (non-conflict) item errors into this
+        # same status — logged distinctly there via curation_occ_update_bulk_item_error.
+        OP_INGEST_OCC_FINAL_CONFLICT.inc()
+        result['final_conflicts'] += 1
+        if outcomes is not None:
+            outcomes[doc_id] = DocOutcome('conflict')
+        logger.info('curation_ingest_upsert_final_conflict', doc_id=doc_id, writer_id=writer_id)
+    else:
+        logger.warning('curation_ingest_upsert_refetch_failed', doc_id=doc_id, error=status)
+        if outcomes is not None:
+            outcomes[doc_id] = DocOutcome('error', error=str(status or 'update failed'))
 
 
 def _item_error(item: dict[str, Any]) -> str:
