@@ -9,7 +9,7 @@
  * per-class hard minimum, floored at 0. A class is lacking when that
  * served gap is > 0. No threshold is computed or invented here.
  */
-import type { RegistryClass } from '$lib/types';
+import type { RegistryClass } from '$lib/types_classes';
 
 function candidates(classes: RegistryClass[]): RegistryClass[] {
   // Region-kind classes are sub-box slots, not item classes a detector

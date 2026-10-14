@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   /*
    * Pipeline dashboard route — the app's single home page.
    *
@@ -35,16 +35,16 @@
   import DetectionsSummaryPanel from '$lib/components/detector/DetectionsSummaryPanel.svelte';
   import ClassBalanceChart from '$components/ClassBalanceChart.svelte';
   import {
-    exportYolo,
-    getCrops,
-    getStats,
-    getTestHoldoutStats,
-    getThumbUrl,
     pollAutoLabelJob,
     runVlmOnCluster,
     type AutoLabelJobState,
-  } from '$lib/api';
-  import type { Crop, ExportResult, StatsSummary, TestHoldoutStats } from '$lib/types';
+  } from '$lib/api_autoLabel';
+  import { getCrops, getThumbUrl } from '$lib/api_cropRead';
+  import { exportYolo, getTestHoldoutStats } from '$lib/api_export';
+  import { getStats } from '$lib/api_stats';
+  import type { Crop } from '$lib/types';
+  import type { ExportResult, TestHoldoutStats } from '$lib/types_export';
+  import type { StatsSummary } from '$lib/types_health';
   import { toastStore } from '$stores/toast.svelte';
   import Modal from '$components/Modal.svelte';
 

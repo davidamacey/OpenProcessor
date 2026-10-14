@@ -7,7 +7,7 @@
  * class-label UI can tell the difference.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getCrop } from './api';
+import { getCrop } from '$lib/api_cropRead';
 import { makeItem } from './test/makeItem';
 
 function jsonResponse(body: unknown) {

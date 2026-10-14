@@ -1,6 +1,6 @@
 <script module lang="ts">
-  import { apiErrorText } from '$lib/api';
-  import type { CropContextResponse } from '$lib/types';
+  import { apiErrorText } from '$lib/api_errors';
+  import type { CropContextResponse, Crop } from '$lib/types';
   import { activeProjectKey } from '$lib/api';
   import { onProjectChange } from '$lib/projectChange';
 
@@ -41,8 +41,7 @@
    * by construction: every region box/color/label comes from the
    * matching registered `SlotSpec`, never a hardcoded noun.
    */
-  import { getCropContext, getSourceImageScaled } from '$lib/api';
-  import type { Crop } from '$lib/types';
+  import { getCropContext, getSourceImageScaled } from '$lib/api_cropRead';
   import type { OverlayShape } from '$lib/configTest/overlayShapes';
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import { slotOf, subBoxSlotFor } from '$lib/annotations/cropSlots';

@@ -31,8 +31,8 @@ Two hard safety properties, both enforced here, not by test discipline:
      part of the permanent suite.
 
 Chromium launch args (`--disable-gpu`) are inherited from
-`e2e/conftest.py`'s `browser_type_launch_args` fixture — this directory's
-conftest is layered under that one, so no need to redeclare it here.
+`e2e/harness/server.py`'s `browser_type_launch_args` fixture — this directory's
+conftest is layered under the plugins `e2e/conftest.py` loads, so no need to redeclare it here.
 """
 
 from __future__ import annotations

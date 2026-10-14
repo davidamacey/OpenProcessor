@@ -18,7 +18,7 @@ fully inside the viewport with no scrolling.
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS
 
 from fixtures.wire import make_item
 

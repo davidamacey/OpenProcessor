@@ -17,8 +17,7 @@
     usedByText,
   } from '$lib/modelSharing';
   import type { ModelSharing } from '$lib/models/modelSharingController.svelte';
-  import type { ModelInfo } from '$lib/types';
-  import type { ModelSharingUser } from '$lib/types_models';
+  import type { ModelInfo, ModelSharingUser } from '$lib/types_models';
   import { toastStore } from '$stores/toast.svelte';
   import Modal from '$components/Modal.svelte';
 

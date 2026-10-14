@@ -12,8 +12,8 @@ const getProbeStatus = vi.fn();
 const runProbe = vi.fn();
 const cancelProbe = vi.fn();
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_train', async () => {
+  const actual = await vi.importActual<typeof import('$lib/api_train')>('$lib/api_train');
   return { ...actual, getProbeStatus, runProbe, cancelProbe };
 });
 

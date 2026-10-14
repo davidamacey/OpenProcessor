@@ -29,18 +29,18 @@
    *   assigns a cluster.
    */
 
+  import { moveCropsToCluster } from '$lib/api_clusters';
+  import { getThumbUrl } from '$lib/api_cropRead';
+  import { bulkLabel } from '$lib/api_cropWrites';
+  import { apiErrorText } from '$lib/api_errors';
   import {
-    apiErrorText,
-    bulkLabel,
     cancelVizProjection,
-    getThumbUrl,
     getVizProjection,
     getVizProjectionStatus,
-    moveCropsToCluster,
     rebuildVizProjection,
     type VizPoint,
     type VizProjectionJob,
-  } from '$lib/api';
+  } from '$lib/api_viz';
   import { isAssignableClass } from '$lib/classVisibility';
   import {
     classifyRebuildPoll,

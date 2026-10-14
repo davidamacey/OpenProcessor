@@ -9,7 +9,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import spec from '$contracts/openapi/curation.json';
-import { reprocessBatch, reprocessCrop, reprocessImage } from '$lib/api';
+import { reprocessBatch, reprocessCrop, reprocessImage } from '$lib/api_reprocess';
 import { REGION_MODES, REPROCESS_SCOPES } from '$lib/datasets/reprocessVocabulary';
 import { ReprocessFlow } from '$lib/datasets/reprocessController.svelte';
 import type * as T from '$lib/types_import';

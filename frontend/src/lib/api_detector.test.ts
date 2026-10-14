@@ -3,7 +3,8 @@
  * through the real `apiFetch` (fetch stubbed).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { API_PREFIX, ApiError, setScopedPrefix } from '$lib/api';
+import { API_PREFIX, setScopedPrefix } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import {
   detectorErrorLines,
   getDetectionsSummary,

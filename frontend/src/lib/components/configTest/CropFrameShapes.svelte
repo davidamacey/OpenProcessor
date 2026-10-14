@@ -5,7 +5,7 @@
    * `mask_polygon_in_parent`, drawn as served as an SVG layer (§7.7, no
    * client projection). Dropped candidates are dimmed.
    */
-  import { getThumbUrl } from '$lib/api';
+  import { getThumbUrl } from '$lib/api_cropRead';
   import type { OverlayShape } from '$lib/configTest/overlayShapes';
 
   interface Props {

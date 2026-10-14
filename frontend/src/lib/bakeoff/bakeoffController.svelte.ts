@@ -8,8 +8,6 @@
  * here computes a metric, a class mapping, a rank or a winner.
  */
 import {
-  ApiError,
-  apiErrorText,
   bakeoffBaselineModels,
   bakeoffEvalDatasets,
   bakeoffMatrix,
@@ -19,7 +17,8 @@ import {
   bakeoffRuns,
   bakeoffStatus,
   bakeoffTrainedModels,
-} from '$lib/api';
+} from '$lib/api_bakeoff';
+import { ApiError, apiErrorText } from '$lib/api_errors';
 import type {
   BakeoffComparison,
   BakeoffMatrix,

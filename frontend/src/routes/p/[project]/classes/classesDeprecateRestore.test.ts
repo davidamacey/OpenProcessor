@@ -18,7 +18,20 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+const LIB = path.resolve(here, '../../../../lib');
 const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const registrySrc = readFileSync(
+  path.join(LIB, 'components/classes/ClassRegistryTable.svelte'),
+  'utf-8',
+);
+const deprecatedSrc = readFileSync(
+  path.join(LIB, 'components/classes/DeprecatedClassesTable.svelte'),
+  'utf-8',
+);
+const mergeSrc = readFileSync(
+  path.join(LIB, 'classes/mergeClassesController.svelte.ts'),
+  'utf-8',
+);
 
 function fn(name: string, nextMarker: string): string {
   const start = src.indexOf(`async function ${name}(`);
@@ -31,22 +44,26 @@ function fn(name: string, nextMarker: string): string {
 describe('/classes: Restore is no longer permanently disabled', () => {
   it('no longer ships the disabled placeholder button', () => {
     expect(src).not.toMatch(/Restore not yet implemented/);
+    expect(deprecatedSrc).not.toMatch(/Restore not yet implemented/);
   });
 
   it("the deprecated table's Restore button calls restoreClassAction and is gated on busy, not disabled outright", () => {
-    const idx = src.indexOf('data-testid="restore-{cls.id}"');
+    const idx = deprecatedSrc.indexOf('data-testid="restore-{cls.id}"');
     expect(idx).toBeGreaterThan(-1);
-    const block = src.slice(idx, idx + 200);
+    const block = deprecatedSrc.slice(idx, idx + 200);
     expect(block).toMatch(/onclick=\{\(\) => void restoreClassAction\(cls\)\}/);
     expect(block).toMatch(/disabled=\{busy\}/);
+    expect(src).toMatch(
+      /<DeprecatedClassesTable \{deprecatedRows\} \{busy\} \{restoreClassAction\} \/>/,
+    );
   });
 });
 
 describe('/classes: Deprecate action per live class row', () => {
   it('renders a Deprecate button next to Rename on each active row', () => {
-    const idx = src.indexOf('data-testid="deprecate-{cls.id}"');
+    const idx = registrySrc.indexOf('data-testid="deprecate-{cls.id}"');
     expect(idx).toBeGreaterThan(-1);
-    const block = src.slice(idx, idx + 200);
+    const block = registrySrc.slice(idx, idx + 200);
     expect(block).toMatch(/onclick=\{\(\) => void deprecateClassAction\(cls\)\}/);
   });
 
@@ -79,9 +96,9 @@ describe('/classes: Deprecate action per live class row', () => {
   });
 
   it('openMergeWithSource resets the merge dialog then pins mergeSourceId', () => {
-    const idx = src.indexOf('function openMergeWithSource(');
+    const idx = mergeSrc.indexOf('function openMergeWithSource(');
     expect(idx).toBeGreaterThan(-1);
-    const block = src.slice(idx, idx + 150);
+    const block = mergeSrc.slice(idx, idx + 150);
     expect(block).toMatch(/openMerge\(\)/);
     expect(block).toMatch(/mergeSourceId = sourceId/);
   });

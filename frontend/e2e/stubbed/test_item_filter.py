@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 from urllib.parse import parse_qs, urlparse
 
-from conftest import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS
 
 from fixtures.wire import make_item, review_tab, review_tabs
 

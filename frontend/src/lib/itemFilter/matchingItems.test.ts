@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_cropRead', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_cropRead')>('$lib/api_cropRead');
   return { ...actual, getCrops: vi.fn() };
 });
 
-import { getCrops } from '$lib/api';
+import { getCrops } from '$lib/api_cropRead';
 import { createMatchingItems } from './matchingItems.svelte';
 import type { Crop } from '$lib/types';
 

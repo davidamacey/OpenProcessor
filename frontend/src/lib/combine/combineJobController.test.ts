@@ -5,7 +5,7 @@
  * next-step call against the target project's prefix.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import { combineJob } from '$lib/test/fixtures/combine';
 import type { ProjectEvent } from '$lib/sse';
 import {

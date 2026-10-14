@@ -13,7 +13,7 @@ that a test did not expect fails the test.
   3. `test_preview_stale_re_previews` — a 409 `preview_stale` shows the
      served message and fires a fresh preview; the retry carries the new sha.
   4. `test_failed_job_undo_opens_the_delete_dry_run`.
-  5. `test_feature_absent_on_a_plain_404` — conftest's default 404: no
+  5. `test_feature_absent_on_a_plain_404` — the harness stub's default 404: no
      button, the route says so, no other combine request fires.
 """
 
@@ -24,7 +24,7 @@ import re
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from conftest import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
 
 from fixtures.wire import project, projects_response
@@ -463,7 +463,7 @@ def test_failed_job_undo_opens_the_delete_dry_run(stub, page, app_url):
 
 
 def test_feature_absent_on_a_plain_404(stub, page, app_url):
-    # conftest's default: GET {prefix}/projects/combine/<id> -> plain 404.
+    # the harness stub's default: GET {prefix}/projects/combine/<id> -> plain 404.
     serve_projects(stub)
 
     with page.expect_response(lambda r: "/projects/combine/" in r.url):

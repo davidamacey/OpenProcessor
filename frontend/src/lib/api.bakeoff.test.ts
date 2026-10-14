@@ -3,8 +3,8 @@
  * run body reach the wire exactly as served routes expect.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { API_PREFIX } from '$lib/api';
 import {
-  API_PREFIX,
   bakeoffBaselineModels,
   bakeoffEvalDatasets,
   bakeoffMatrix,
@@ -14,7 +14,7 @@ import {
   bakeoffRuns,
   bakeoffStatus,
   bakeoffTrainedModels,
-} from './api';
+} from '$lib/api_bakeoff';
 
 const ok = (body: unknown) =>
   new Response(JSON.stringify(body), {

@@ -17,14 +17,14 @@
  * Human and imported labels are locked server-side; the client never
  * words an outcome itself, only the served counts are shown.
  */
+import { apiErrorText } from '$lib/api_errors';
 import {
   cancelReprocessJob,
-  apiErrorText,
   getReprocessJob,
   reprocessBatch,
   reprocessCrop,
   reprocessImage,
-} from '$lib/api';
+} from '$lib/api_reprocess';
 import type { Crop } from '$lib/types';
 import type {
   EmbedOptions,

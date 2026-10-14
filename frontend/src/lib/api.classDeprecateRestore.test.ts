@@ -9,15 +9,15 @@
  * must NOT be mistaken for the structured shape.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { API_PREFIX } from '$lib/api';
 import {
-  ApiError,
-  API_PREFIX,
   classMergedDetail,
   classMergedRestoreText,
   classStillReferencedDetail,
   deprecateClass,
   restoreClass,
-} from './api';
+} from '$lib/api_classes';
+import { ApiError } from '$lib/api_errors';
 
 const ok = (body: unknown) =>
   new Response(JSON.stringify(body), {

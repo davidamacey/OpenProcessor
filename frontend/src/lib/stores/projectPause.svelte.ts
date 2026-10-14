@@ -13,7 +13,8 @@
  * keyed by slug and every value belongs to its project.
  */
 import { SvelteMap } from 'svelte/reactivity';
-import { getProjectPause, pauseProject, apiErrorText, resumeProject } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { getProjectPause, pauseProject, resumeProject } from '$lib/api_projects';
 import type { PipelinePauseState, ProjectSummary } from '$lib/types_projects';
 
 type PauseTarget = Pick<ProjectSummary, 'slug' | 'prefix'>;

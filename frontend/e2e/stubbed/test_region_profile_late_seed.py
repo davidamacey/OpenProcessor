@@ -9,7 +9,7 @@ no "changed" toast.
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS
 
 from fixtures.wire import REGION_PROFILE, REGION_TAB_LABEL, review_tabs
 from test_labeling_flow import register_base

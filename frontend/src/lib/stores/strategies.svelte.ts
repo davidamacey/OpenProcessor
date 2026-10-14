@@ -17,7 +17,8 @@
  * a data cache, not a UI concern.
  */
 
-import { getMethods, apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { getMethods } from '$lib/api_settings';
 import { onProjectChange } from '$lib/projectChange';
 import { EMPTY_METHODS, type MethodsResponse } from '$lib/strategies';
 

@@ -18,7 +18,8 @@
  * `grammar.locked_keys` unless that key is one of its own locked keys.
  */
 
-import { ApiError, getKeymap } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
+import { getKeymap } from '$lib/api_settings';
 import { onProjectChange } from '$lib/projectChange';
 import { formatCompactKey, formatShortcutKey } from '$lib/keyboardDisplay';
 import {

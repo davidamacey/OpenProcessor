@@ -6,7 +6,7 @@ import {
 } from './slotPanel';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import { aircraftTailNumberSlot } from '$lib/test/fixtures/aircraftTailNumberSlot';
-import type { RegionStatusEntry } from '../api';
+import type { RegionStatusEntry } from '$lib/api_regions';
 
 const SERVED: RegionStatusEntry[] = [
   {

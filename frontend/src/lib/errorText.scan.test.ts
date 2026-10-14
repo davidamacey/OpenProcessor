@@ -1,5 +1,5 @@
 /**
- * User-visible error text goes through `apiErrorText` (api.ts), never a raw
+ * User-visible error text goes through `apiErrorText` (api_errors.ts), never a raw
  * `(e as Error).message` / `String(e)`: the raw message of an ApiError is
  * "API 503 /curation/projects/... - <detail>", which leaks the URL into toasts.
  */
@@ -18,7 +18,7 @@ const RAW_ERROR_TEXT = [
 ];
 
 // The helper itself, and the chunk-load recovery hook (no ApiError, no UI text).
-const ALLOWED = new Set(['lib/api.ts', 'lib/chunkRecovery.ts']);
+const ALLOWED = new Set(['lib/api_errors.ts', 'lib/chunkRecovery.ts']);
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {

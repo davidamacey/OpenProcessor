@@ -16,7 +16,7 @@ import { parseProfileDocument } from './parseSlotConfig';
 import { resolveSlotRegistry } from '../registry';
 import { applyRegionProfileRule, builtinSlots } from '../registeredSlots';
 import { regionSlotFromServedProfile } from '../servedRegionSlot';
-import type { ServedRegionProfile } from '$lib/types';
+import type { ServedRegionProfile } from '$lib/types_health';
 import {
   exampleProfileFiles,
   loadExampleProfile,

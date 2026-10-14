@@ -57,7 +57,7 @@ describe('resolveApiUrl', () => {
   it('is a plain no-op prefix (empty apiBase) when PUBLIC_TRITON_API_URL is unset', async () => {
     vi.stubEnv('PUBLIC_TRITON_API_URL', '');
     vi.resetModules();
-    const { resolveApiUrl, API_PREFIX } = await import('./api');
+    const { resolveApiUrl, API_PREFIX } = await import('$lib/api');
     expect(resolveApiUrl(`${API_PREFIX}/crops/abc/region_thumbnail`)).toBe(
       `${API_PREFIX}/crops/abc/region_thumbnail`,
     );

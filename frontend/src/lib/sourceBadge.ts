@@ -5,7 +5,7 @@
  * catalog renders verbatim in a neutral tone — the frontend never infers
  * meaning from a source's name.
  */
-import type { ClassSourceRole } from './api';
+import type { ClassSourceRole } from '$lib/api_classes';
 
 const TONE = {
   human: 'bg-green-500/20 text-green-200 border-green-500/40',

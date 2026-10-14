@@ -21,6 +21,8 @@ import { extractFunction } from '$lib/testing/sourceScan';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(path.resolve(here, './TrainForm.svelte'), 'utf-8');
+// The request bodies are built by `$lib/train/trainSpec.ts` from the form's values.
+const specSrc = readFileSync(path.resolve(here, '../train/trainSpec.ts'), 'utf-8');
 
 describe('TrainForm.svelte GPU picker', () => {
   // A mount test can prove a list is rendered; it can't prove a SECOND,
@@ -40,7 +42,8 @@ describe('TrainForm.svelte GPU picker', () => {
     // be a stray GPU id. False positives (e.g. a completely unrelated
     // '1' string) would need updating this regex, but there are none
     // today — see the full match list below if this ever fails.
-    const suspicious = src.match(/(?:cuda|gpu)[a-zA-Z]*\s*[:=]\s*['"]1['"]/gi) ?? [];
+    const suspicious =
+      (src + specSrc).match(/(?:cuda|gpu)[a-zA-Z]*\s*[:=]\s*['"]1['"]/gi) ?? [];
     expect(suspicious).toEqual([]);
   });
 
@@ -52,12 +55,16 @@ describe('TrainForm.svelte GPU picker', () => {
   it('threads the selected cudaDevices value into both the single-run and campaign payloads', () => {
     // buildSpec() -> POST {API_PREFIX}/train/start; buildCampaign() -> POST
     // {API_PREFIX}/train/start_campaign. Both must carry whatever the user picked.
-    const buildSpecMatch = extractFunction(src, 'buildSpec');
-    const buildCampaignMatch = extractFunction(src, 'buildCampaign');
+    const buildSpecMatch = extractFunction(specSrc, 'buildSpec');
+    const buildCampaignMatch = extractFunction(specSrc, 'buildCampaign');
     expect(buildSpecMatch).not.toBeNull();
     expect(buildCampaignMatch).not.toBeNull();
     expect(buildSpecMatch).toMatch(/cuda_visible_devices:\s*cudaDevices/);
     expect(buildCampaignMatch).toMatch(/cuda_visible_devices:\s*cudaDevices/);
+    // ...and the form hands its own selected value to both builders.
+    expect(extractFunction(src, 'formValues')).toMatch(/\bcudaDevices,/);
+    expect(src).toMatch(/onStart\(buildSpec\(formValues\(\)\)/);
+    expect(src).toMatch(/onStartCampaign\(buildCampaign\(formValues\(\)\)/);
   });
 
   // A prop declaration a mount can't observe directly. (That no

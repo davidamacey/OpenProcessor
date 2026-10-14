@@ -3,7 +3,7 @@
   import { sourceShortCode } from '$lib/cropCardText';
   import { vlmEmptyReasonText } from '$lib/review/reviewCopy';
   import { classSourcesStore } from '$stores/classSources.svelte';
-  import { getThumbUrl } from '$lib/api';
+  import { getThumbUrl } from '$lib/api_cropRead';
   import { reprocessVocabularyStore } from '$lib/stores/reprocessVocabulary.svelte';
   import type { BBoxNorm, Crop } from '$lib/types';
   import { slotOf, subBoxSlotFor } from '$lib/annotations/cropSlots';

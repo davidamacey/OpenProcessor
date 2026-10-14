@@ -8,13 +8,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import IngestBatchPanel from './IngestBatchPanel.svelte';
-import { ingestBatch } from '$lib/api';
+import { ingestBatch } from '$lib/api_ingest';
 import { resolveIngestConfig } from '$lib/ingest/ingestConfig';
 import { servedIngestConfig } from '$lib/test/fixtures/ingestConfig';
-import type { BatchIngestResponse } from '$lib/types';
+import type { BatchIngestResponse } from '$lib/types_ingest';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_ingest', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_ingest')>('$lib/api_ingest');
   return { ...actual, ingestBatch: vi.fn() };
 });
 

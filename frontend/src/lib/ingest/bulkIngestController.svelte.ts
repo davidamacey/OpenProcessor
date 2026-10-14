@@ -5,7 +5,7 @@
  * computed or decided here; whether a source is acceptable, whether a run is
  * already live and what a start resumes are the backend's answers.
  */
-import { apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
 import {
   cancelBulkIngest,
   getBulkIngest,

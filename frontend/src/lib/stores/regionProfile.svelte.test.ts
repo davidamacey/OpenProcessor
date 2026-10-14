@@ -5,12 +5,8 @@
  * an error toast.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  API_PREFIX,
-  apiFetch,
-  RegionProfileUnavailableError,
-  type ApiError,
-} from '$lib/api';
+import { API_PREFIX, apiFetch } from '$lib/api';
+import { RegionProfileUnavailableError, type ApiError } from '$lib/api_errors';
 import {
   registeredSlots,
   resetDeploymentSlots,
@@ -18,7 +14,7 @@ import {
 } from '$lib/annotations/registeredSlots';
 import { REGION_PROFILE_UNAVAILABLE_MESSAGE } from '$lib/regionProfileUnavailable';
 import { WIDGET_TAG_CLASS, WIDGET_TAG_PROFILE } from '$lib/test/fixtures/regionSlot';
-import type { ApiHealth } from '$lib/types';
+import type { ApiHealth } from '$lib/types_health';
 import { toastStore } from './toast.svelte';
 import {
   loadRegionProfile,

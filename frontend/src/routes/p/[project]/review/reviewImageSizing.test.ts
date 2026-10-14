@@ -6,13 +6,10 @@
  * source really change" is exactly the pin a mount test can't beat (see
  * slotReviewCharacterization.test.ts).
  */
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { reviewSource } from '$lib/testing/reviewPageSources';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const src = reviewSource('lib/components/review/ReviewCropPane.svelte');
 
 describe('the crop/region image never collapses to 0px when Details opens', () => {
   it('the image wrapper is shrink-0 with a floor min-height, not flex-1', () => {

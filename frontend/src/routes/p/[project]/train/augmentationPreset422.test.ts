@@ -2,7 +2,7 @@
  * OpenProcessor df01309: `POST {API_PREFIX}/train/start` and
  * `/train/start_campaign` 422 on an unknown `augmentation.preset` with
  * `{detail: {message, field: 'augmentation.preset', valid_presets}}`.
- * `maybeRenderPreflight` (`/train/+page.svelte`) already read
+ * `maybeRenderPreflight` (`$lib/train/trainActionsController.svelte.ts`) already read
  * `body.detail.message` generically before this change — this proves it
  * also surfaces the served `valid_presets` list, not just the bare
  * message, and does so without special-casing every other 422 shape
@@ -19,7 +19,10 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.resolve(here, './+page.svelte'), 'utf-8');
+const src = readFileSync(
+  path.resolve(here, '../../../../lib/train/trainActionsController.svelte.ts'),
+  'utf-8',
+);
 
 function extractFunction(name: string): string {
   const start = src.indexOf(`function ${name}(`);

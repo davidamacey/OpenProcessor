@@ -9,7 +9,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import MappingTable from './MappingTable.svelte';
 import { ImportWizard } from '$lib/datasets/importWizardController.svelte';
 import { formatsFixture, previewFixture } from '$lib/test/fixtures/datasetImport';
-import type { RegistryClass } from '$lib/types';
+import type { RegistryClass } from '$lib/types_classes';
 import type { DatasetPreview } from '$lib/types_import';
 
 const CLASSES = [

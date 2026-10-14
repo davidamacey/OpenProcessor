@@ -10,7 +10,8 @@
  * instead of surfacing as `label_confidence`.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getCrop, mapRawCrop } from './api';
+import { mapRawCrop } from '$lib/api_cropMap';
+import { getCrop } from '$lib/api_cropRead';
 import { makeItem } from './test/makeItem';
 
 function jsonResponse(body: unknown) {

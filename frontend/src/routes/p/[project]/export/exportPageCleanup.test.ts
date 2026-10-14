@@ -18,21 +18,40 @@ import { describe, expect, it } from 'vitest';
  * coverage of the gating logic itself, `hasCurrentMulticlassExport()`).
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.resolve(here, './+page.svelte'), 'utf-8');
+const lib = path.resolve(here, '../../../../lib');
+// Every file the /export page is made of: the page, its controllers and sections.
+const pageFiles = [
+  path.resolve(here, './+page.svelte'),
+  path.resolve(lib, 'export/exportRunController.svelte.ts'),
+  path.resolve(lib, 'export/freezeHoldoutController.svelte.ts'),
+  ...[
+    'HoldoutStatusCard',
+    'ExportClassTable',
+    'ExportControls',
+    'ExportRunModal',
+    'FreezeHoldoutModal',
+  ].map((c) => path.resolve(lib, `components/export/${c}.svelte`)),
+];
+const all = pageFiles.map((f) => readFileSync(f, 'utf-8')).join('\n');
+// The registry downloads and the /train link live in the export controls section.
+const src = readFileSync(
+  path.resolve(lib, 'components/export/ExportControls.svelte'),
+  'utf-8',
+);
 
 describe('export page: stale training-command panel removed', () => {
   it('no longer references the dead train_medium.sh script path', () => {
-    expect(src).not.toMatch(/train_medium\.sh/);
+    expect(all).not.toMatch(/train_medium\.sh/);
   });
 
   it('has no leftover "Training command" heading', () => {
-    expect(src).not.toMatch(/Training command/);
+    expect(all).not.toMatch(/Training command/);
   });
 
   it('has no leftover copyCommand/trainingCommand helpers', () => {
-    expect(src).not.toMatch(/trainingCommand/);
-    expect(src).not.toMatch(/copyCommand/);
-    expect(src).not.toMatch(/totalImagesTraining/);
+    expect(all).not.toMatch(/trainingCommand/);
+    expect(all).not.toMatch(/copyCommand/);
+    expect(all).not.toMatch(/totalImagesTraining/);
   });
 
   it('links the operator to /train as the next step', () => {
@@ -65,6 +84,6 @@ describe('export page: registry download buttons gated on the served dataset lis
   });
 
   it('no longer gates any of the three on the shared export-job-status slot', () => {
-    expect(src).not.toMatch(/disabled=\{exportState\?\.status !== 'success'\}/);
+    expect(all).not.toMatch(/disabled=\{(run\.)?exportState\?\.status !== 'success'\}/);
   });
 });

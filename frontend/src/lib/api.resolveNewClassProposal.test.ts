@@ -7,7 +7,10 @@
  * faithfully rather than re-derived client-side.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, API_PREFIX, resolveNewClassProposal, undoLabelBatch } from './api';
+import { API_PREFIX } from '$lib/api';
+import { undoLabelBatch } from '$lib/api_cropWrites';
+import { ApiError } from '$lib/api_errors';
+import { resolveNewClassProposal } from '$lib/api_review';
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

@@ -7,7 +7,8 @@
  * A `config.changed` event on the resource's axis is a wake-up to re-read;
  * the served list stays the only source.
  */
-import { configErrorDetail, apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { configErrorDetail } from '$lib/api_profiles';
 import type { CurationEvent } from '$lib/sse';
 import type {
   ConfigCloneRequest,

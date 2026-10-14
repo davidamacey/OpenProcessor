@@ -12,9 +12,10 @@
  * successful poll restores it.
  */
 
-import { getGlobalHealth, getHealth, apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { getGlobalHealth, getHealth } from '$lib/api_stats';
 import { onProjectChange } from '$lib/projectChange';
-import type { ApiHealth, GlobalHealth } from '$lib/types';
+import type { ApiHealth, GlobalHealth } from '$lib/types_health';
 import { regionProfileStore } from '$stores/regionProfile.svelte';
 
 const POLL_INTERVAL_MS = 15_000;

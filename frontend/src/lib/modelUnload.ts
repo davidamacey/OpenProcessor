@@ -14,8 +14,9 @@
  * would be a second, driftable copy of the real guard.
  */
 
-import { apiErrorText, projectErrorDetail } from './api';
-import type { ModelInfo } from './types';
+import { apiErrorText } from '$lib/api_errors';
+import { projectErrorDetail } from '$lib/api_projects';
+import type { ModelInfo } from '$lib/types_models';
 
 export type UnloadButtonState = 'hidden' | 'normal' | 'force-required';
 

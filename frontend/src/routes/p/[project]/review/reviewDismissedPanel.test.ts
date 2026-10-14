@@ -5,13 +5,11 @@
  * component-mount harness; see slotReviewCharacterization.test.ts's doc
  * comment).
  */
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { reviewSource } from '$lib/testing/reviewPageSources';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const src = reviewSource('lib/review/reviewDismissedController.svelte.ts');
+const panelSrc = reviewSource('lib/components/review/DismissedPanel.svelte');
 
 describe("un-dismiss panel reverses discard()'s reviewDismissCrop", () => {
   it('toggleDismissedPanel loads {API_PREFIX}/crops?review_dismissed=true', () => {
@@ -42,7 +40,7 @@ describe('Dismissed panel sends a sort the backend accepts and reports failure',
   });
 
   it('the panel renders an error state before falling back to the empty state', () => {
-    const markup = src.match(/\{#if dismissedLoading\}[\s\S]*?\{\/if\}/)?.[0];
+    const markup = panelSrc.match(/\{#if dismissedLoading\}[\s\S]*?\{\/if\}/)?.[0];
     expect(markup).not.toBeUndefined();
     expect(markup).toMatch(/\{:else if dismissedError\}/);
     // The error branch must come before the empty-state branch so a

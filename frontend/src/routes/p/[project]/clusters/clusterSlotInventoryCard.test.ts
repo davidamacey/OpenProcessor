@@ -9,11 +9,30 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const LIB = path.resolve(here, '../../../../lib');
+const pageSrc = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const inventorySrc = readFileSync(
+  path.join(LIB, 'clusters/slotInventory.svelte.ts'),
+  'utf-8',
+);
+const listSrc = readFileSync(
+  path.join(LIB, 'clusters/clusterListController.svelte.ts'),
+  'utf-8',
+);
+const gridSrc = readFileSync(
+  path.join(LIB, 'components/clusters/ClustersGrid.svelte'),
+  'utf-8',
+);
+const cardSrc = readFileSync(
+  path.join(LIB, 'components/clusters/ClusterGridCard.svelte'),
+  'utf-8',
+);
 
 describe('the synthetic slot inventory card invents nothing and never hides a real cluster', () => {
   it('buildSlotInventoryCard builds a fully-typed Cluster (no `as Cluster` cast hiding missing fields)', () => {
-    const fn = src.match(/async function buildSlotInventoryCard\([\s\S]*?\n {2}\}/)?.[0];
+    const fn = inventorySrc.match(
+      /async function buildSlotInventoryCard\([\s\S]*?\n {2}\}/,
+    )?.[0];
     expect(fn).not.toBeUndefined();
     expect(fn).not.toMatch(/as Cluster/);
     expect(fn).toMatch(/isSlotCard: true/);
@@ -21,37 +40,39 @@ describe('the synthetic slot inventory card invents nothing and never hides a re
   });
 
   it('re-runs whenever classesStore.classes changes, not just once after the first loadFirst (the ~1-in-8 race)', () => {
-    expect(src).toMatch(
-      /slotInventoryCards\.length === 0 &&\s*\n\s*classesStore\.classes\.length > 0/,
+    expect(pageSrc).toMatch(
+      /slotInventory\.slotInventoryCards\.length === 0 &&\s*\n\s*classesStore\.classes\.length > 0/,
     );
   });
 
   it('never drops the real cluster sharing the slot class’s id from the grid', () => {
-    const gridItemsFn = src.match(
+    const gridItemsFn = listSrc.match(
       /const gridItems = \$derived\.by<Cluster\[\]>\(\(\) => \{[\s\S]*?\n {2}\}\);/,
     )?.[0];
     expect(gridItemsFn).not.toBeUndefined();
     // The old bug filtered the real cluster out via
     // `sorted.filter((c) => c.id !== slotInventoryCard!.id)`.
     expect(gridItemsFn).not.toMatch(/filter\(\(c\) => c\.id !== slotInventoryCard/);
-    expect(gridItemsFn).toMatch(/return \[\.\.\.slotInventoryCards, \.\.\.sorted\];/);
+    expect(gridItemsFn).toMatch(
+      /return \[\.\.\.slotInventory\.slotInventoryCards, \.\.\.sorted\];/,
+    );
   });
 
   it('keys the #each off isSlotCard so the synthetic card can never collide with a real cluster’s key', () => {
-    expect(src).toMatch(
-      /\{#each gridItems as c \(c\.isSlotCard \? `slot-\$\{c\.id\}` : c\.id\)\}/,
+    expect(gridSrc).toMatch(
+      /\{#each list\.gridItems as c \(c\.isSlotCard \? `slot-\$\{c\.id\}` : c\.id\)\}/,
     );
   });
 
   it('purityBadge renders no badge at all for the synthetic card (never an invented "noisy 0%")', () => {
-    const fn = src.match(/function purityBadge\(c: Cluster\)[\s\S]*?\n {2}\}/)?.[0];
+    const fn = cardSrc.match(/function purityBadge\(c: Cluster\)[\s\S]*?\n {2}\}/)?.[0];
     expect(fn).not.toBeUndefined();
     expect(fn).toMatch(/if \(c\.isSlotCard\) return null;/);
   });
 
   it('the subtitle row skips the invented dominant_pct "· 0%" for the synthetic card too', () => {
-    expect(src).toMatch(/\{#if c\.isSlotCard\}/);
-    expect(src.match(/\{#if c\.isSlotCard\}[\s\S]{0,80}/)?.[0]).not.toMatch(
+    expect(cardSrc).toMatch(/\{#if c\.isSlotCard\}/);
+    expect(cardSrc.match(/\{#if c\.isSlotCard\}[\s\S]{0,80}/)?.[0]).not.toMatch(
       /dominant_pct/,
     );
   });

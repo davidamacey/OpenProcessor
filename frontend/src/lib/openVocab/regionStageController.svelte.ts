@@ -5,7 +5,7 @@
  * on screen. The "re-run gate-skipped" request is the served
  * `rerun_skipped`, handed to the reprocess dialog as served.
  */
-import { apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
 import {
   getRegionStage,
   pauseRegionStage,

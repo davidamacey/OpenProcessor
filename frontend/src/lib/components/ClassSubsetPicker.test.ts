@@ -8,7 +8,8 @@
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
-import type { RegistryClass, TestHoldoutStats } from '$lib/types';
+import type { RegistryClass } from '$lib/types_classes';
+import type { TestHoldoutStats } from '$lib/types_export';
 import ClassSubsetPicker from './ClassSubsetPicker.svelte';
 
 let target: HTMLDivElement;

@@ -1,7 +1,7 @@
 """Ported from scripts/playwright_labeling_flow.py (deleted; see
 docs/design/test-audit-2026-09-24.md recommendation 5 / P1-1).
 
-Drives the real UI against the fail-closed `stub` fixture (conftest.py) so
+Drives the real UI against the fail-closed `stub` fixture (harness/stub.py) so
 it exercises: 1.1 class-letter hotkey labels the SELECTION; 1.2 Shift+N
 flags the selection for a new class; 1.3 a failed label puts the review
 item back in the queue; 1.9 Escape after a drag does not blow the stack;
@@ -11,7 +11,8 @@ behavior.
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS, wait_for_paint
+from harness.constants import ACTION_TIMEOUT_MS
+from harness.waits import wait_for_paint
 
 import re
 

@@ -7,18 +7,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 
-vi.mock('$lib/api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('$lib/api')>();
-  return {
-    ...actual,
-    getThumbUrl: () => '',
-    putRegionBoxes: vi.fn(async () => ({ id: 'c1' })),
-  };
+vi.mock('$lib/api_cropRead', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('$lib/api_cropRead')>();
+  return { ...actual, getThumbUrl: () => '' };
+});
+vi.mock('$lib/api_regionBoxes', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('$lib/api_regionBoxes')>();
+  return { ...actual, putRegionBoxes: vi.fn(async () => ({ id: 'c1' })) };
 });
 
 import ShortcutOverlay from './ShortcutOverlay.svelte';
 import SlotBboxEditor from './SlotBboxEditor.svelte';
-import { putRegionBoxes } from '$lib/api';
+import { putRegionBoxes } from '$lib/api_regionBoxes';
 import { keyboardStore } from '$stores/keyboard.svelte';
 import { keymapStore } from '$stores/keymap.svelte';
 import { FALLBACK_KEYMAP, type KeymapDocument } from '$lib/keymapFallback';

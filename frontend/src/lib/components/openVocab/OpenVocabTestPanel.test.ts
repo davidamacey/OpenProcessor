@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import {
   bodyFixture,
   testResponseFixture,
@@ -19,8 +19,8 @@ const mocks = vi.hoisted(() => ({
   testOpenVocab: vi.fn(),
 }));
 
-vi.mock('$lib/api', async (orig) => ({
-  ...(await orig<typeof import('$lib/api')>()),
+vi.mock('$lib/api_cropRead', async (orig) => ({
+  ...(await orig<typeof import('$lib/api_cropRead')>()),
   getCrop: mocks.getCrop,
   getCropContext: mocks.getCropContext,
 }));

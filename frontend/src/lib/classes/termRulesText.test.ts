@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { termRulesText } from './proposalRows';
-import type { NewClassTermRules } from '$lib/api';
+import type { NewClassTermRules } from '$lib/api_review';
 
 function rules(over: Partial<NewClassTermRules> = {}): NewClassTermRules {
   return {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { API_PREFIX } from './api';
+import { API_PREFIX } from '$lib/api';
 import {
   cancelBulkIngest,
   getBulkIngest,

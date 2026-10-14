@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { classesStore } from './classes.svelte';
-import type { RegistryClass } from '$lib/types';
+import type { RegistryClass } from '$lib/types_classes';
 
 const ok = (body: unknown) =>
   new Response(JSON.stringify(body), {

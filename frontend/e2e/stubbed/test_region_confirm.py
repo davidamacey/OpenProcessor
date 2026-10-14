@@ -11,7 +11,8 @@ state changes. So Enter on an untouched `proposed` box sends exactly one
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS, wait_for_paint
+from harness.constants import ACTION_TIMEOUT_MS
+from harness.waits import wait_for_paint
 
 from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_URL_ID
 

@@ -23,12 +23,12 @@
  * type instead of `e.detail === null`.
  */
 
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import type {
   BatchIngestResponse,
   IngestPathLookupResponse,
   IngestUploadRequest,
-} from '$lib/types';
+} from '$lib/types_ingest';
 import type { IngestFile } from './fileSource';
 import {
   chunkForLookup,

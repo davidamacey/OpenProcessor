@@ -11,13 +11,13 @@
  * (both/neither of crop ids and filter, an empty filter without a limit,
  * too many items) are the server's own message.
  */
+import { apiErrorText } from '$lib/api_errors';
 import {
-  apiErrorText,
   batchExcludeSelection,
   batchUnexcludeSelection,
   bulkLabelSelection,
   moveSelectionToCluster,
-} from '$lib/api';
+} from '$lib/api_select';
 import { undoStore } from '$stores/undo.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import type {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   /**
    * Piece 11 (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md
    * §A.6) — server-path ingest for images already reachable inside the
@@ -14,8 +14,8 @@
    * per-file byte cost to the browser and the backend itself already
    * batches the detector inference internally.
    */
-  import { ingestBatch } from '$lib/api';
-  import type { BatchIngestResponse } from '$lib/types';
+  import { ingestBatch } from '$lib/api_ingest';
+  import type { BatchIngestResponse } from '$lib/types_ingest';
   import type { ResolvedIngestConfig } from '$lib/ingest/ingestConfig';
   import { toastStore } from '$stores/toast.svelte';
 

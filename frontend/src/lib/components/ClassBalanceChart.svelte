@@ -7,7 +7,8 @@
    */
   import { buildClassBalance, type ClassBalanceRow } from '$lib/dashboard/classBalance';
   import { holdoutByClass } from '$lib/holdoutCounts';
-  import type { ClassThresholds, TestHoldoutStats } from '$lib/types';
+  import type { ClassThresholds } from '$lib/types_classes';
+  import type { TestHoldoutStats } from '$lib/types_export';
 
   interface Props {
     rows: Array<ClassBalanceRow & { adequacy: string }>;

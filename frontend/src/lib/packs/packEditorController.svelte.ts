@@ -12,7 +12,7 @@ import {
   getPromptPackSchema,
   updatePromptPack,
   validatePromptPack,
-} from '$lib/api';
+} from '$lib/api_packs';
 import { ConfigEditor } from '$lib/config/configEditor.svelte';
 import { isConfigAxisEvent } from '$lib/config/validationIssues';
 import { subscribeCurationEvents, type CurationEvent } from '$lib/sse';

@@ -15,7 +15,7 @@ import {
   deactivateRegionProfile,
   getActiveRegionProfile,
   rollbackRegionProfile,
-} from '$lib/api';
+} from '$lib/api_profiles';
 import { ConfigActive } from '$lib/config/configActive.svelte';
 import { healthStore } from '$stores/health.svelte';
 import type { ProfileActivateResponse } from '$lib/types_profiles';

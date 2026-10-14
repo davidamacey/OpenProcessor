@@ -3,7 +3,7 @@
  * `npm run test:e2e` — creates or reuses the e2e/.venv, installs the pinned
  * Python deps + a chromium browser if missing, then runs the stubbed
  * pytest+Playwright suite. The suite's own `app_url` fixture
- * (e2e/conftest.py) does `npm run build` + `vite preview`, so this script
+ * (e2e/harness/server.py) does `npm run build` + `vite preview`, so this script
  * does not build itself.
  *
  * `npm run test:live` reuses this exact venv/browser setup, just pointed
@@ -94,7 +94,7 @@ if (isLive || process.env.E2E_APP_URL) {
   run(VENV_PYTEST, pytestArgs);
 } else {
   // Build and serve once here, then fan the stubbed suite out across xdist
-  // workers. Left to conftest's session fixture, every worker would run its
+  // workers. Left to the harness's session fixture, every worker would run its
   // own build and preview server. Every test stubs its own page, so the
   // tests share nothing but this static server.
   console.log('[test:e2e] building …');

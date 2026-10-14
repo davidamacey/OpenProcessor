@@ -15,8 +15,19 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const gridSrc = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
-const detailSrc = readFileSync(path.join(here, '[id]/+page.svelte'), 'utf-8');
+const LIB = path.resolve(here, '../../../../lib');
+const gridSrc = readFileSync(
+  path.join(LIB, 'components/clusters/ClusterGridCard.svelte'),
+  'utf-8',
+);
+const toolbarSrc = readFileSync(
+  path.join(LIB, 'components/clusters/ClustersToolbar.svelte'),
+  'utf-8',
+);
+const detailSrc = readFileSync(
+  path.join(LIB, 'components/clusters/ClusterDetailToolbar.svelte'),
+  'utf-8',
+);
 
 describe('/clusters cards show purity_n/purity_basis and label_purity/labelled_share', () => {
   it('the chip reads "<served tier> · cohesion NN% · n=N" (cohesionText)', () => {
@@ -29,7 +40,7 @@ describe('/clusters cards show purity_n/purity_basis and label_purity/labelled_s
     const block = gridSrc.slice(idx, idx + 400);
     expect(block).toMatch(/c\.label_agreement/);
     expect(block).toMatch(/c\.labelled_share/);
-    expect(gridSrc).not.toMatch(/>purity (asc|desc)</);
+    expect(toolbarSrc).not.toMatch(/>purity (asc|desc)</);
   });
 
   it('purity_tier is still what drives the badge color/text', () => {
@@ -40,16 +51,16 @@ describe('/clusters cards show purity_n/purity_basis and label_purity/labelled_s
 
 describe('/clusters/[id] header shows purity with basis/n and label_purity/labelled_share', () => {
   it('renders cluster.purity gated on non-null, with purity_basis and purity_n', () => {
-    const idx = detailSrc.indexOf('{#if cluster.purity != null}');
+    const idx = detailSrc.indexOf('{#if view.cluster.purity != null}');
     expect(idx).toBeGreaterThan(-1);
     const block = detailSrc.slice(idx, idx + 700);
     // rendered as cohesion (cohesionText reads purity/purity_n).
-    expect(block).toMatch(/cohesionText\(cluster\)/);
+    expect(block).toMatch(/cohesionText\(view\.cluster\)/);
     expect(block).toMatch(/COHESION_TOOLTIP/);
   });
 
   it('carries label_agreement/labelled_share in the tooltip', () => {
-    const idx = detailSrc.indexOf('{#if cluster.purity != null}');
+    const idx = detailSrc.indexOf('{#if view.cluster.purity != null}');
     const block = detailSrc.slice(idx, idx + 700);
     expect(block).toMatch(/cluster\.label_agreement/);
     expect(block).toMatch(/cluster\.labelled_share/);

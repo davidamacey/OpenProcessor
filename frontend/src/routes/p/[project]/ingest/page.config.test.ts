@@ -8,12 +8,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import { servedIngestConfig } from '$lib/test/fixtures/ingestConfig';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_ingest', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_ingest')>('$lib/api_ingest');
   return { ...actual, getIngestConfig: vi.fn() };
 });
 
-import { getIngestConfig } from '$lib/api';
+import { getIngestConfig } from '$lib/api_ingest';
 import IngestPage from './+page.svelte';
 
 const getConfig = vi.mocked(getIngestConfig);

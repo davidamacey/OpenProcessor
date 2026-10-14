@@ -5,7 +5,7 @@
    * that ran, the prompt it built, the raw reply, each crop's parsed
    * answer (or served skip reason) and the preview item.
    */
-  import { getThumbUrl } from '$lib/api';
+  import { getThumbUrl } from '$lib/api_cropRead';
   import { createPackTest } from '$lib/packs/packTestController.svelte';
   import type { PackTestCall } from '$lib/types_configTest';
   import type { PackSchemaCall, PromptPackBody } from '$lib/types_packs';

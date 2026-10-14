@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import re
 
-from conftest import ACTION_TIMEOUT_MS, expect_handled, wait_for_paint
+from harness.constants import ACTION_TIMEOUT_MS
+from harness.waits import expect_handled, wait_for_paint
 from playwright.sync_api import expect
 
 from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_URL_ID

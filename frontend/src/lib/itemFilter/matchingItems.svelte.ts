@@ -5,7 +5,7 @@
  * The filter is read when each page is fetched, so every page carries the
  * filter in force when the list was (re)loaded.
  */
-import { getCrops } from '$lib/api';
+import { getCrops } from '$lib/api_cropRead';
 import { createPager, type Pager } from '$lib/pager.svelte';
 import type { Crop } from '$lib/types';
 import type { ItemFilterQuery } from '$lib/types_itemFilter';

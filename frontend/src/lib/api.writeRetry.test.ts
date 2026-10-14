@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { apiFetch } from './api';
+import { apiFetch } from '$lib/api';
 
 // A write the server may already have executed must never be re-sent by the
 // transport: only GET/HEAD are retried.

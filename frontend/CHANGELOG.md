@@ -27,6 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   start while a retired `CROPWRIGHT_*` name is still set. The browser-side `window.__CROPWRIGHT_*__`
   globals are unchanged. `.env.example` and the README drop the container-name variables only the
   removed standalone compose used.
+- The oversize frontend files are split by concern, with no behavior change. `lib/api.ts` is the HTTP core and
+  the calls live in `lib/api_<domain>.ts` modules (`api_errors`, `api_projects`, `api_review`, `api_clusters`,
+  `api_train` and the rest); `lib/types.ts` keeps the core entities and the rest are `types_<domain>.ts`. The
+  review, train, export, clusters, cluster detail and classes pages are thin pages over controllers in
+  `lib/<area>/*.svelte.ts` and components in `lib/components/<area>/`; `CropMetaPanel`, `KeymapCard`,
+  `TrainForm`, the slot-config parser and the slot gallery controller are split the same way, the e2e
+  `conftest.py` is a set of `e2e/harness/` plugins and `capture_docs_screenshots.py` is the `docs_screenshots/`
+  package. Oversize test files are split by behavior with the same test cases.
+
 - Every dialog is the one shared `Modal` component: `role="dialog"`, `aria-modal`, an accessible name, focus
   moved in on open and trapped while open, Escape and a click on the dimmed backdrop close it, and focus returns
   to the control that opened it. The 28 hand-rolled dialogs and their `a11y_click_events_have_key_events`

@@ -3,7 +3,7 @@ follow the vendored contract in the neutral widget domain. The
 fail-closed stub means any open-vocab request the page makes that a test did
 not expect fails the test.
 
-  1. `test_absent_when_open_vocab_404` — conftest's default 404: no /settings
+  1. `test_absent_when_open_vocab_404` — the harness stub's default 404: no /settings
      card, the routes say so, no other `/open_vocab` request fires.
   2. `test_list_new_set_and_clone_a_template`.
   3. `test_edit_a_target_validate_save_and_resolve_a_conflict` — a served
@@ -27,7 +27,8 @@ import zlib
 from pathlib import Path
 from typing import Any
 
-from conftest import ACTION_TIMEOUT_MS, expect_handled
+from harness.constants import ACTION_TIMEOUT_MS
+from harness.waits import expect_handled
 from fixtures.wire import make_item
 from playwright.sync_api import expect
 

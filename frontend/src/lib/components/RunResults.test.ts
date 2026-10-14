@@ -17,10 +17,9 @@ import {
 
 const getTrainManifestMock = vi.fn();
 
-vi.mock('$lib/api', () => ({
+vi.mock('$lib/api', () => ({ resolveApiUrl: (u: string) => `https://api.test${u}` }));
+vi.mock('$lib/api_train', () => ({
   getTrainManifest: (...args: unknown[]) => getTrainManifestMock(...args),
-  // A distinct origin proves artifact URLs go through the resolver.
-  resolveApiUrl: (u: string) => `https://api.test${u}`,
 }));
 
 const { default: RunResults } = await import('./RunResults.svelte');

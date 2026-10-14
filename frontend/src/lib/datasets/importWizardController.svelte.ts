@@ -11,12 +11,12 @@
  */
 import {
   datasetErrorDetail,
-  apiErrorText,
   previewDataset,
   resumeDatasetImport,
   startDatasetImport,
   uploadDatasetArchive,
-} from '$lib/api';
+} from '$lib/api_datasetImport';
+import { apiErrorText } from '$lib/api_errors';
 import type {
   ClassMappingEntry,
   DatasetClassRow,
