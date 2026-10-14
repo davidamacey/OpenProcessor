@@ -127,7 +127,7 @@ class TestCascadeWithTheShippedSegmenter:
         streaming pipeline's equivalent routing (primary-detector miss ->
         segmenter hit -> combined VLM call -> ``detected`` write with
         ``region_boxes[0].source == 'sam3'``) is covered end-to-end by
-        ``test_region_cascade_integrity.py``'s ``_drive_worker`` harness
+        ``region_cascade_helpers.py``'s ``_drive_worker`` harness
         (with a mocked, not real-HTTP, segmenter).
         """
         async with _asgi_client() as http:
