@@ -420,7 +420,7 @@ def _docs_after_import(
 
 
 def _hash_of(data: bytes) -> str:
-    from src.services.curation.ingest import _imohash_bytes
+    from src.services.curation.ingest_helpers import _imohash_bytes
 
     return _imohash_bytes(data)
 

@@ -141,12 +141,15 @@ src/services/curation/export_readiness.py	2	triage every return-empty handler in
 src/services/curation/export_support.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/image_serving.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/index_bootstrap.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/ingest.py	10	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/ingest.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/ingest_batch.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/ingest_dedup.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/ingest_detect.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/ingest_detector.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/ingest_gpu_decode.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/ingest_helpers.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/ingest_index.py	5	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/ingest_items.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/ingest_writer.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/item_delete.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/item_scores/job.py	2	triage every return-empty handler in PR 3; ratchet: may only go down

@@ -68,10 +68,10 @@ def _pillow_reference(data: bytes) -> np.ndarray:
 
 @pytest.mark.parametrize('orientation', [None, *range(1, 9)])
 def test_jpeg_decode_matches_pillow_and_returns_the_array(orientation) -> None:
-    from src.services.curation import ingest
+    from src.services.curation import ingest_helpers
 
     data = _jpeg(320, 200, orientation=orientation)
-    decoded = ingest._decode_image(data)
+    decoded = ingest_helpers._decode_image(data)
     expected = _pillow_reference(data)
     assert decoded.rgb is not None
     np.testing.assert_array_equal(decoded.rgb, expected)
@@ -81,7 +81,7 @@ def test_jpeg_decode_matches_pillow_and_returns_the_array(orientation) -> None:
 
 @pytest.mark.parametrize('kind', ['progressive', 'grey', 'cmyk', 'png'])
 def test_other_encodings_decode_as_pillow_does(kind) -> None:
-    from src.services.curation import ingest
+    from src.services.curation import ingest_helpers
 
     rng = np.random.default_rng(5)
     img = Image.fromarray(rng.integers(0, 256, (90, 120, 3), dtype=np.uint8))
@@ -95,18 +95,18 @@ def test_other_encodings_decode_as_pillow_does(kind) -> None:
     else:
         img.save(buf, 'PNG')
     data = buf.getvalue()
-    decoded = ingest._decode_image(data)
+    decoded = ingest_helpers._decode_image(data)
     np.testing.assert_array_equal(np.asarray(decoded.pil), _pillow_reference(data))
     if decoded.rgb is not None:
         np.testing.assert_array_equal(decoded.rgb, _pillow_reference(data))
 
 
 def test_a_truncated_jpeg_is_refused() -> None:
-    from src.services.curation import ingest
+    from src.services.curation import ingest_helpers
 
     data = _jpeg(320, 200)
     with pytest.raises(ValueError, match='Premature end of JPEG file'):
-        ingest._decode_image(data[: len(data) // 2])
+        ingest_helpers._decode_image(data[: len(data) // 2])
 
 
 def test_index_items_embeds_the_whole_frame_from_the_decoded_frame(tmp_path) -> None:
