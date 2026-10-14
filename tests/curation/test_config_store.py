@@ -338,7 +338,8 @@ async def test_poll_all_active_projects_refreshes_every_project_not_just_one() -
     from curation._fake_config_opensearch import TwoProjectOpenSearch
     from src.config.curation import base_curation_config
     from src.config.projects import resources_for_new
-    from src.services.config_store.store import _poll_all_active_projects, get_config_store
+    from src.services.config_store.store import get_config_store
+    from src.services.config_store.store_poll import _poll_all_active_projects
     from src.services.projects.registry import ProjectRecord, record_to_doc
 
     client = TwoProjectOpenSearch()
@@ -411,9 +412,8 @@ async def test_startup_bootstrap_config_store_safe_starts_poll_task_unbound(
     returns a task whose first tick refreshes an active project's store."""
     from curation._fake_config_opensearch import TwoProjectOpenSearch
     from src.services.config_store.global_store import reset_global_config_store
-    from src.services.config_store.store import (
-        get_config_store,
-        reset_config_stores,
+    from src.services.config_store.store import get_config_store, reset_config_stores
+    from src.services.config_store.store_poll import (
         shutdown_config_store_poll,
         startup_bootstrap_config_store_safe,
     )
@@ -469,11 +469,10 @@ async def test_startup_bootstrap_config_store_safe_retries_until_opensearch_reac
     is a real, still-running task that keeps retrying with backoff and
     eventually enters the poll loop once OpenSearch becomes reachable."""
     from curation._fake_config_opensearch import TwoProjectOpenSearch
-    from src.services.config_store import store as store_module
+    from src.services.config_store import store_poll as store_module
     from src.services.config_store.global_store import reset_global_config_store
-    from src.services.config_store.store import (
-        get_config_store,
-        reset_config_stores,
+    from src.services.config_store.store import get_config_store, reset_config_stores
+    from src.services.config_store.store_poll import (
         shutdown_config_store_poll,
         startup_bootstrap_config_store_safe,
     )

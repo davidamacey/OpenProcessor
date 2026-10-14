@@ -26,14 +26,14 @@ from src.services.config_store.index import (
     save_config,
     upsert_runtime_doc,
 )
+from src.services.config_store.snapshot import AxisRef, ConfigSnapshot, StoredConfig
 from src.services.config_store.store import (
-    AxisRef,
-    ConfigSnapshot,
     ConfigStore,
-    StoredConfig,
     activate_axis,
     get_config_store,
     reset_config_stores,
+)
+from src.services.config_store.store_poll import (
     shutdown_config_store_poll,
     startup_bootstrap_config_store_safe,
 )
