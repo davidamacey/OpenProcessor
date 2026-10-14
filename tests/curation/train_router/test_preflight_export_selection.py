@@ -114,7 +114,7 @@ def test_force_does_not_bypass_empty_val_split(
         else {'dataset_export_dir': export, 'runs': [{'profile': 'nano', 'model_size': 'n'}]}
     )
     with patch(
-        'src.routers.curation_train.start.run_preflight',
+        'src.routers.curation.train.start.run_preflight',
         new=AsyncMock(return_value=_empty_val_report(['val'])),
     ):
         r = app_client.post(f'/curation/projects/default/train/{route}?force=true', json=body)
@@ -128,7 +128,7 @@ def test_force_still_bypasses_an_empty_train_only_block(
     """Only the val split is a hard failure; other blocks stay forceable."""
     body = {'dataset_export_dir': str(project_export_root / 'x'), 'profile': 'medium'}
     with patch(
-        'src.routers.curation_train.start.run_preflight',
+        'src.routers.curation.train.start.run_preflight',
         new=AsyncMock(return_value=_empty_val_report(['train'])),
     ):
         r = app_client.post('/curation/projects/default/train/start?force=true', json=body)

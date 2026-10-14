@@ -9,7 +9,7 @@ registers ``@router`` handlers on the shared ``_common.router``.
 
 This is a **visualization-only** overlay, distinct from and never sharing
 state with the retired clustering UMAP path
-(``curation_umap.py``/``embedding_reduce.py``, mounted at
+(``umap.py``/``embedding_reduce.py``, mounted at
 ``POST {prefix}/cluster/umap/rebuild``) — see
 :mod:`src.services.curation.embedding_viz`'s module docstring for the full
 non-negotiable-rules list (own state slot, never fits on a request path,

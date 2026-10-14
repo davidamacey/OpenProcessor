@@ -18,7 +18,7 @@ Key Features:
 
 Usage:
     # Initialize client with clustering
-    from src.services.clustering import get_clustering_service
+    from src.services.visual_search.clustering import get_clustering_service
 
     client = OpenSearchClient(hosts=["http://localhost:9200"])
     clustering = get_clustering_service()

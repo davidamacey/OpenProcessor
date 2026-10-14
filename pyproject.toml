@@ -399,7 +399,7 @@ ignore_missing_imports = true
 # Relax strict checks for ML/scientific code with FAISS and numpy operations
 [[tool.mypy.overrides]]
 module = [
-    "src.services.clustering",
+    "src.services.visual_search.clustering",
     "src.services.duplicate_detection",
     "src.services.duplicate_detection.*",
     "src.clients.opensearch.*",

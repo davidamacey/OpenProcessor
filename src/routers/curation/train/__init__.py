@@ -37,7 +37,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from src.config import get_curation_config
-from src.routers.curation_train import artifacts, catalog, preflight, promote, runs, start
+from src.routers.curation.train import artifacts, catalog, preflight, promote, runs, start
 
 
 config = get_curation_config()

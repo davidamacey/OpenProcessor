@@ -22,7 +22,7 @@ fetched in (1) directly — that's also what makes the AHC
 ``distance_threshold=0.25`` cosine cut dimensionally correct against
 the source vectors, not a reduced projection. The only caller of the
 UMAP-reduce path is ``POST /curation/cluster/umap/rebuild``
-(:mod:`src.routers.curation_umap`), which exists purely to feed the
+(:mod:`src.routers.curation.umap`), which exists purely to feed the
 labeler's 2D/3D scatter visualization. Any design note claiming "UMAP
 feeds the clustering pipeline" is wrong; correct it if you find one.
 

@@ -137,7 +137,7 @@ def train_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     fake.indices.get_settings = AsyncMock(return_value={})
 
     from src.routers.curation._common import _raw_opensearch_dep
-    from src.routers.curation_train import router as train_router
+    from src.routers.curation.train import router as train_router
 
     app = FastAPI()
     from _curation_app import mount_curation_routers

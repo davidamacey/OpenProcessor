@@ -12,9 +12,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-import src.services.clustering as clustering_mod
+import src.services.visual_search.clustering as clustering_mod
 from src.config.cluster_index import ClusterIndex
-from src.services.clustering import ClusteringService, get_clustering_service
+from src.services.visual_search.clustering import ClusteringService, get_clustering_service
 
 
 if TYPE_CHECKING:

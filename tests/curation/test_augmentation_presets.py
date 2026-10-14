@@ -59,7 +59,7 @@ def app_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
     fake.count = AsyncMock(return_value={'count': 0})
 
     from src.routers.curation._common import _raw_opensearch_dep
-    from src.routers.curation_train import router as train_router
+    from src.routers.curation.train import router as train_router
 
     app = FastAPI()
     from _curation_app import mount_curation_routers
