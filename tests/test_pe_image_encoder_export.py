@@ -13,7 +13,7 @@ graph on the ONNX Runtime CPU provider. The heavy halves (loading real PE
 weights through ``torch.onnx.export``, and the ``trtexec`` engine build) are
 covered only by a real export run against real hardware.
 
-Import convention follows ``tests/curation/test_trainer_protocol.py``: the
+Import convention follows ``tests/curation/trainer_protocol/``: the
 export scripts ship as standalone entry points rather than an installed
 package, so the directory is put on ``sys.path`` explicitly.
 """

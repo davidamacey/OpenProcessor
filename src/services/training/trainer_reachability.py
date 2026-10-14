@@ -40,7 +40,7 @@ from src.services.training.gpu_arbiter import _container_status_sync, _docker_cl
 # src/services/training/preflight_checks.py's own TRAINER_CAPABILITIES_FILENAME and
 # the trainer image's copy -- same reasoning as those two: the trainer
 # ships as its own image with no src/ dependency, so there is nothing to
-# share an import with. tests/curation/test_trainer_protocol.py
+# share an import with. tests/curation/trainer_protocol/
 # conformance-tests all copies against the literal name.
 TRAINER_CAPABILITIES_FILENAME = '.trainer_capabilities.json'
 

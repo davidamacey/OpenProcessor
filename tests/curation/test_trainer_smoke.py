@@ -1,6 +1,6 @@
 """End-to-end smoke test: a *real* Ultralytics training run through the trainer.
 
-``test_trainer_protocol.py`` stubs Ultralytics out, which proves the file
+the ``trainer_protocol`` tests stub Ultralytics out, which proves the file
 protocol but not that the trainer can actually drive a training loop. This
 module runs the genuine thing -- ``trainer.run_job`` -> ``ultralytics`` ->
 ``best.pt`` -> ``results.csv`` -> ``status.json`` -> ``manifest.json`` -- on a

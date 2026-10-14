@@ -7,7 +7,7 @@ block -- both this module and ``job_protocol.write_manifest`` read the same
 tracked run and its manifest disagree about which dataset/build produced it.
 
 Exercised with a fake ``mlflow`` module (no tracking server needed) and the
-same ``sys.path`` trick ``test_trainer_protocol.py`` uses to import the
+same ``sys.path`` trick the ``trainer_protocol`` conftest uses to import the
 trainer's flat module layout.
 """
 
