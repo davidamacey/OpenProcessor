@@ -113,12 +113,42 @@ repos:
         files: ^(src|scripts|docker|export)/.*\.py$|^(pyproject\.toml|requirements-test\.txt)$
 
       - id: max-file-size
-        name: Enforce 700 LOC max per source file (ratchet)
-        entry: python3 scripts/codegen/check_file_size.py --max 700
+        name: File size ratchet (700 lines; CLAUDE.md 400)
+        entry: python3 scripts/codegen/check_file_size.py
         language: system
-        files: ^(src|scripts)/.*\.py$
-        # No exemptions: every source file is under the cap. Split a new
-        # oversize module before committing it; do not add an exclude.
+        pass_filenames: false
+        always_run: true
+        # Scope, baseline and the warn band are in the script. Split an oversize file
+        # by concern; do not collapse lines to fit.
+
+      - id: check-layering
+        name: Layering ratchet (routers > services > clients; fastapi only in routers)
+        entry: python3 scripts/codegen/check_layering.py
+        language: system
+        pass_filenames: false
+        files: ^(src|scripts)/.*\.py$|^scripts/codegen/baselines/layering\.txt$
+
+      # Both ratchets run ruff from the project interpreter, so they use the pinned version.
+      - id: check-ruff-ratchet
+        name: Complexity (per function) and broad-except (per file) ratchets
+        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/check_ruff_ratchet.py'
+        language: system
+        pass_filenames: false
+        files: ^(src|scripts|docker|export|models)/.*\.py$|^scripts/codegen/baselines/(complexity|broad_except)\.txt$
+
+      - id: check-process-ids
+        name: No work-package ids or history names in comments, docstrings or file names
+        entry: python3 scripts/codegen/check_process_ids.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: check-vulture
+        name: No new unused code (vulture)
+        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/check_vulture.py'
+        language: system
+        pass_filenames: false
+        files: ^(src|scripts|export|docker)/.*\.py$|^scripts/codegen/baselines/vulture\.txt$
 
       - id: check-no-literal-region-fields
         name: Ban 'plate_...' literals in ported curation code
