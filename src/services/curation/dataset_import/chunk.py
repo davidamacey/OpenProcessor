@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.occ import occ_update_one
 from src.core.logging import get_logger
+from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.curation.class_label import ItemLabel
 from src.services.curation.dataset_import import reconcile, region_labels
 from src.services.curation.dataset_import.image_load import ImageLoadError, load_image_bytes
@@ -41,7 +42,6 @@ from src.services.curation.dataset_import.proposals import (
 from src.services.curation.dataset_import.regions import ParentCandidate, attach_region_boxes
 from src.services.curation.dataset_import.report import ImportReport
 from src.services.curation.dataset_import.scan import LabelBox
-from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.curation.ingest_index import ImageContext
 from src.services.curation.item_doc import DetectedItem
 from src.services.curation.proposal_merge import count_disagreements

@@ -11,9 +11,9 @@ import pytest
 from curation.occ_fakes import FakeIngestOpenSearch
 from curation.test_ingest_service import FakePEEncoder, FakeTritonPool, _jpeg_bytes
 from src.config import CurationConfig, DetectionProfile
+from src.domain.ingest_class_sources import is_classifier_class_source
 from src.services.curation.autolabel.selection import vlm_selection_query
 from src.services.curation.ingest import CurationIngestService
-from src.services.curation.ingest_class_sources import is_classifier_class_source
 from src.services.curation.ingest_policy import (
     DetectFilter,
     IngestPolicy,

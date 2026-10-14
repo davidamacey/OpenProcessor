@@ -14,7 +14,13 @@ and be writable before workers start).
 
 import os
 
-from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Histogram, generate_latest
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    CollectorRegistry,
+    Counter,
+    Histogram,
+    generate_latest,
+)
 
 
 # Request latency by route template. Buckets skew low because most
@@ -25,6 +31,26 @@ HTTP_REQUEST_DURATION_SECONDS = Histogram(
     'HTTP request latency by method, route template, and status code.',
     labelnames=('method', 'route', 'status'),
     buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0),
+)
+
+
+# ---------------------------------------------------------------------------
+# Ingest OCC upsert. A blind bulk upsert can silently clobber
+# human-applied labels whenever a deterministic ``crop_id`` already
+# exists. The OCC-aware upsert helper preserves human-set guard fields
+# and surfaces these two counters so Grafana can show the fix firing in
+# production.
+# ---------------------------------------------------------------------------
+
+OP_INGEST_OCC_FINAL_CONFLICT = Counter(
+    'op_ingest_occ_final_conflict',
+    'Ingest upsert OCC writes that exhausted retries (skipped without clobber).',
+)
+
+OP_INGEST_PRESERVED_HUMAN_LABEL = Counter(
+    'op_ingest_preserved_human_label',
+    'Ingest upserts that preserved a pre-existing human-applied label field.',
+    labelnames=('field',),
 )
 
 

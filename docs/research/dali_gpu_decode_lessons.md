@@ -2,7 +2,7 @@
 
 Status: research snapshot (2026-09); measured on one RTX A6000 under a host load average of about 20, with 20 MP (5472x3648) JPEGs and YOLO26n / YOLO11n at 640 px; numbers are preliminary and will drift.
 
-Implemented in the public repo: no. There is no DALI pipeline or DALI-based Triton ensemble in the repo today (preprocessing is CPU-side, for example `center_crop_cpu` in `src/services/cpu_preprocess.py`). Everything below is guidance for anyone building GPU decode into an ensemble or BLS; the DALI snippet and the config are proposals. Measurements came from an independent benchmark harness (a separate Rust YOLO server) compared against Triton.
+Implemented in the public repo: no. There is no DALI pipeline or DALI-based Triton ensemble in the repo today (preprocessing is CPU-side, for example `center_crop_cpu` in `src/utils/cpu_preprocess.py`). Everything below is guidance for anyone building GPU decode into an ensemble or BLS; the DALI snippet and the config are proposals. Measurements came from an independent benchmark harness (a separate Rust YOLO server) compared against Triton.
 
 ## 1. What Triton 26.08 ships
 

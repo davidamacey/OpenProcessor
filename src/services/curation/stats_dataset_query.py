@@ -6,8 +6,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from src.config.region_state import RegionStatus
+from src.domain.region_boxes import box_query
 from src.services.curation import stats_imports as imp
-from src.services.curation.region_boxes import box_query
 from src.services.curation.stats_embedding import embedding_aggregations
 
 

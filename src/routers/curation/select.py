@@ -14,11 +14,11 @@ from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from src.domain.embedding_state import embedded_clause
 from src.routers.curation._common import OpenSearchDep, items_index, router
 from src.services.curation import review_queries
 from src.services.curation.diverse_limits import DIVERSE_SELECT_MAX_K
 from src.services.curation.diverse_order import diverse_enabled, job_max_n, max_n, sync_max_ops
-from src.services.curation.embedding_state import embedded_clause
 from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.selection import k_center_greedy
 from src.services.curation.selection.pool_fetch import (

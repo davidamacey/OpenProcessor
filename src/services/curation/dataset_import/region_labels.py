@@ -17,12 +17,8 @@ from src.clients.occ import occ_update_one
 from src.config.region_source import CANDIDATE_IMPORT
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
-from src.services.curation.dataset_import.item_labels import human_owned, import_stamp
-from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
-from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
-from src.services.curation.item_doc import DetectedItem
-from src.services.curation.region_box_edits import same_box
-from src.services.curation.region_boxes import (
+from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
+from src.domain.region_boxes import (
     RegionBox,
     boxes_write_fields,
     derive_status,
@@ -30,6 +26,10 @@ from src.services.curation.region_boxes import (
     next_box_id,
     read_boxes,
 )
+from src.services.curation.dataset_import.item_labels import human_owned, import_stamp
+from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
+from src.services.curation.item_doc import DetectedItem
+from src.services.curation.region_box_edits import same_box
 
 
 if TYPE_CHECKING:

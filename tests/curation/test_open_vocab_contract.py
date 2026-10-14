@@ -17,8 +17,8 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from curation._fake_config_opensearch import FakeConfigOpenSearch
+from src.clients.curation_opensearch.open_vocab_fields import OpenVocabStatus
 from src.services.curation import open_vocab_vocabulary as vocab
-from src.services.curation.open_vocab_fields import OpenVocabStatus
 from src.services.curation.reprocess_models import ReprocessFilter
 from src.services.detection import profile_registry
 from src.services.detection.open_vocab_select import DropReason

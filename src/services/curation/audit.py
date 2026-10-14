@@ -19,7 +19,7 @@ from typing import Any
 from src.clients.occ import is_locked_class
 from src.clients.occ_bulk import occ_update_bulk
 from src.config.curation import items_index
-from src.services.curation.audit_math import (
+from src.domain.audit_math import (
     AUDIT_BATCH,
     AUDIT_HUMAN,
     AUDIT_LABEL_NAME,
@@ -31,8 +31,8 @@ from src.services.curation.audit_math import (
     allocate_sample,
     build_report,
 )
+from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.curation.class_sources import VLM_CLASS_SOURCES
-from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.curation.reprocess_targets import scan_items
 
 

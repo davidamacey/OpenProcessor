@@ -16,6 +16,7 @@ from fastapi import HTTPException, Query
 
 from src.config import DetectionProfile, get_region_fields
 from src.config.region_state import RegionStatus, region_status_catalog
+from src.domain.region_boxes import BOX_STATES, box_query
 from src.routers.curation._common import (
     OpenSearchDep,
     RegionProfileDep,
@@ -29,7 +30,6 @@ from src.routers.curation._region_row_models import RegionRowPage
 from src.routers.curation._region_vocabulary_models import RegionVocabularyResponse
 from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.item_filter import item_filter_clauses
-from src.services.curation.region_boxes import BOX_STATES, box_query
 from src.services.curation.region_rows import search_region_rows
 from src.services.curation.region_vocabulary import region_vocabulary_catalog
 from src.services.curation.review_queries import region_text_clause

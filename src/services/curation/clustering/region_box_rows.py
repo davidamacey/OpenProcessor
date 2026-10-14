@@ -11,7 +11,7 @@ Every write is an OCC read-modify-write over the live item
 is now*, so a box a human moved, re-stated or deleted while the model was
 fitting is never overwritten with a stale decision, and the list, counts
 and ``region_revision`` go through
-:func:`~src.services.curation.region_boxes.boxes_write_fields` like every
+:func:`~src.domain.region_boxes.boxes_write_fields` like every
 other box writer. A version conflict re-merges against the new version
 rather than dropping the write.
 """
@@ -28,14 +28,14 @@ from src.clients.occ import occ_skip_on_conflict_bulk
 from src.clients.occ_locks import is_locked_box
 from src.config import get_region_fields
 from src.core.logging import get_logger
-from src.services.curation.region_box_embeddings import box_vector_source_includes, join_box_vectors
-from src.services.curation.region_boxes import (
+from src.domain.region_boxes import (
     RegionBox,
     box_query,
     boxes_write_fields,
     read_boxes,
     without_cluster,
 )
+from src.services.curation.region_box_embeddings import box_vector_source_includes, join_box_vectors
 
 
 if TYPE_CHECKING:

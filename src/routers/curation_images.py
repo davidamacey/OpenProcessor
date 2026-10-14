@@ -25,6 +25,7 @@ from fastapi.responses import FileResponse, Response
 from src.config import get_curation_config, get_region_fields
 from src.core.dependencies import get_curation_opensearch as _raw_opensearch_dep
 from src.core.logging import get_logger
+from src.domain.region_boxes import read_boxes
 from src.services.curation.image_serving import (
     THUMBNAIL_CACHE,
     _fetch_crop,
@@ -33,7 +34,6 @@ from src.services.curation.image_serving import (
     resolve_safe_path,
     source_media_type,
 )
-from src.services.curation.region_boxes import read_boxes
 
 
 if TYPE_CHECKING:

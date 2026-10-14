@@ -18,8 +18,7 @@ import pytest
 from src.config.region_fields import RegionFields
 from src.config.region_rejection import REJECT_REASON_HUMAN
 from src.config.region_state import RegionStatus
-from src.services.curation.region_box_edits import apply_put_boxes, boxes_with_status
-from src.services.curation.region_boxes import (
+from src.domain.region_boxes import (
     BOX_STATES,
     RegionBox,
     RegionBoxWriteError,
@@ -32,6 +31,7 @@ from src.services.curation.region_boxes import (
     next_box_id,
     read_boxes,
 )
+from src.services.curation.region_box_edits import apply_put_boxes, boxes_with_status
 
 
 F = RegionFields()

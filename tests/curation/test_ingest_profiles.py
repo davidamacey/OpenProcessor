@@ -229,7 +229,7 @@ def test_assigns_class_and_labels_path_from_env(clean_env: pytest.MonkeyPatch) -
 
 
 def test_class_sources_follow_profile_names(clean_env: pytest.MonkeyPatch) -> None:
-    from src.services.curation import ingest_class_sources as cs
+    from src.domain import ingest_class_sources as cs
 
     clean_env.setenv('OP_INGEST_PRIMARY_NAME', 'proposer')
     assert cs.unlabeled_proposal_class_sources() == {

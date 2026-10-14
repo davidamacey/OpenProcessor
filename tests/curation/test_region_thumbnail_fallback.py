@@ -18,8 +18,8 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from src.config import CurationConfig, get_region_fields
+from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.services.curation import image_serving
-from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 
 
 if TYPE_CHECKING:

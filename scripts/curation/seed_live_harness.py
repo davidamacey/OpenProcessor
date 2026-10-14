@@ -257,9 +257,9 @@ def _region_fields(
     box in the permanent FP cluster)."""
     import numpy as np
 
+    from src.domain.region_boxes import RegionBox, boxes_write_fields
     from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
     from src.services.curation.region_box_embeddings import entry_for
-    from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 
     is_fp = region == RegionStatus.FALSE_POSITIVE
     n_boxes = 1 if is_fp else 1 + (global_index % 3)

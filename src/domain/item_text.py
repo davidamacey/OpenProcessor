@@ -12,13 +12,27 @@ normalized here with the same rule the tokens were written with.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from src.services.detection.region_text import OcrLine
+
+class OcrLine(Protocol):
+    """One recognized text line (``src.services.detection.region_text.OcrLine``)."""
+
+    @property
+    def text(self) -> str: ...
+
+    @property
+    def box(self) -> tuple[float, float, float, float]: ...
+
+    @property
+    def score(self) -> float: ...
+
+    @property
+    def height(self) -> float: ...
 
 
 ITEM_TEXT_LINES_FIELD = 'item_text_lines'

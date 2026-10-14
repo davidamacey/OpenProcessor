@@ -26,8 +26,8 @@ from src.config import CurationConfig, get_curation_config
 from src.config.project_context import project_api_base, run_in_executor_bound
 from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
+from src.domain.embedding_state import not_embedded_clause
 from src.services.curation import review_queries
-from src.services.curation.embedding_state import not_embedded_clause
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 from src.services.curation.wire import item_list_source_excludes, serialize_item
 

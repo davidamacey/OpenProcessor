@@ -17,8 +17,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from src.core.logging import get_logger
+from src.domain.embedding_state import not_embedded_clause
 from src.routers.curation._common import items_index
-from src.services.curation.embedding_state import not_embedded_clause
 
 
 if TYPE_CHECKING:

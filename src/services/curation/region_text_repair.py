@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import get_region_fields
-from src.services.curation.region_boxes import RegionBox, box_query, boxes_write_fields, read_boxes
+from src.domain.region_boxes import RegionBox, box_query, boxes_write_fields, read_boxes
 from src.services.detection.region_text import (
     TEXT_SOURCE_OCR,
     TEXT_SOURCE_VLM,
@@ -251,7 +251,7 @@ async def apply_region_text_repair(
     """Rewrite the planned items under OCC, re-deriving each box from its
     current state (a box that changed since planning is re-judged; human
     text is left alone). The box list is written through
-    :func:`~src.services.curation.region_boxes.boxes_write_fields`."""
+    :func:`~src.domain.region_boxes.boxes_write_fields`."""
     F = get_region_fields()
     now = datetime.now(UTC).isoformat()
 

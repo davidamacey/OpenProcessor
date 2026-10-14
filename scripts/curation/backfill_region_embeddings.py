@@ -48,8 +48,8 @@ if str(_REPO_ROOT) not in sys.path:
 from src.clients.pe_encoder import PEEncoder
 from src.clients.triton_pool import AsyncTritonPool
 from src.config import get_curation_config, get_region_fields
+from src.domain.region_boxes import box_query
 from src.services.curation.region_box_embeddings import EMBEDDED_BOX_STATES, missing_boxes
-from src.services.curation.region_boxes import box_query
 from src.services.curation.reprocess_embed import EmbedTarget, reembed_items
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import add_project_argument, bind_script_project

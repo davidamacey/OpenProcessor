@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from src.clients.occ_locks import is_human_marker
-from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
+from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.detection.geometry import iou
 
 

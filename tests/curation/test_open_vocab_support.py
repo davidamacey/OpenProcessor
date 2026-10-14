@@ -8,17 +8,17 @@ from typing import Any
 import httpx
 import pytest
 
-from src.clients.curation_opensearch.registry import ClassRegistryError
-from src.services.curation.class_ensure import ensure_class_by_name
-from src.services.curation.ingest_class_sources import (
-    OPEN_VOCAB_CLASS_SOURCE,
-    unlabeled_proposal_class_sources,
-)
-from src.services.curation.open_vocab_fields import (
+from src.clients.curation_opensearch.open_vocab_fields import (
     OPEN_VOCAB_IMAGE_MAPPING,
     OPEN_VOCAB_ITEM_MAPPING,
     ensure_open_vocab_fields,
 )
+from src.clients.curation_opensearch.registry import ClassRegistryError
+from src.domain.ingest_class_sources import (
+    OPEN_VOCAB_CLASS_SOURCE,
+    unlabeled_proposal_class_sources,
+)
+from src.services.curation.class_ensure import ensure_class_by_name
 
 
 class _Entry:

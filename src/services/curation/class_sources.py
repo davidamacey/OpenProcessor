@@ -3,7 +3,7 @@
 ``class_source`` records which writer set an item's class. Some values are
 fixed writer names (``vlm``, ``human``, …); the ingest ones are derived
 from the configured ingest profiles
-(:mod:`src.services.curation.ingest_class_sources`). This module is the
+(:mod:`src.domain.ingest_class_sources`). This module is the
 single catalog of both, served by ``GET {prefix}/class_sources`` so a
 client can render any value without hardcoding one deployment's detector
 names. ``tests/curation/test_class_sources.py`` scans the codebase's
@@ -18,8 +18,7 @@ from __future__ import annotations
 from typing import Any, Literal, get_args
 
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
-from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
-from src.services.curation.ingest_class_sources import (
+from src.domain.ingest_class_sources import (
     CLUSTER_MAJORITY_CLASS_SOURCE,
     DEFAULT_PROPOSAL_CLASS_SOURCE,
     HUMAN_CLASS_SOURCE,
@@ -29,6 +28,7 @@ from src.services.curation.ingest_class_sources import (
     VLM_CLASS_SOURCE,
     is_classifier_class_source,
 )
+from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.detection.region_text import VLM_TEXT_CONFIDENCE
 
 

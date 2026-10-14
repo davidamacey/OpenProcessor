@@ -45,6 +45,7 @@ import numpy as np
 from src.config import get_curation_config
 from src.config.curation import ITEM_EMBEDDING_FIELD
 from src.core.logging import get_logger
+from src.domain.embedding_state import embedded_clause
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.clustering.assignment_writer import (
     BULK_CHUNK,
@@ -53,7 +54,6 @@ from src.services.curation.clustering.assignment_writer import (
 )
 from src.services.curation.clustering.page_rows import hits_to_rows
 from src.services.curation.clustering.pit_pages import iter_pages
-from src.services.curation.embedding_state import embedded_clause
 
 
 logger = get_logger(__name__)

@@ -19,10 +19,10 @@ from fastapi.testclient import TestClient
 from src.config import region_fields as region_fields_mod
 from src.config.project_context import project_api_base
 from src.config.region_fields import RegionFields
+from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.routers.curation import _common
 from src.routers.curation._common import ItemDoc
 from src.services.curation import index_bootstrap, semantic_search, wire
-from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 from src.services.curation.region_rows import INNER_HITS_NAME
 from src.services.curation.wire import (
     ITEM_WIRE_KEYS,

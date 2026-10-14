@@ -54,8 +54,8 @@ if str(_REPO_ROOT) not in sys.path:
 
 from src.clients.occ import is_locked_class, occ_skip_on_conflict_bulk
 from src.config.curation import items_index
+from src.domain.ingest_class_sources import CLUSTER_MAJORITY_CLASS_SOURCE
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
-from src.services.curation.ingest_class_sources import CLUSTER_MAJORITY_CLASS_SOURCE
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 

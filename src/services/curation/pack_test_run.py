@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel
 
 from src.config import get_curation_config, get_region_fields
+from src.domain.region_boxes import read_boxes
 from src.services.curation.class_write_guard import class_state_token, class_write_locked
 from src.services.curation.crop_bytes import (
     load_item_crop_jpeg,
@@ -32,7 +33,6 @@ from src.services.curation.region_box_pass import (
     finalize_region_write,
     worker_stamps,
 )
-from src.services.curation.region_boxes import read_boxes
 from src.services.curation.region_preview import preview_item
 from src.services.curation.region_verify import BoxVerdict, verifiable_boxes, verify_regions_update
 from src.services.labeling.vlm_class_names import resolve_class_name

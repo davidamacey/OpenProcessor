@@ -21,9 +21,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 from src.config.region_state import RegionStatus
+from src.domain.region_boxes import accepted, read_boxes
 from src.services.curation.export_negatives import scroll_negative_frames
 from src.services.curation.export_support import scroll_hits
-from src.services.curation.region_boxes import accepted, read_boxes
 
 
 if TYPE_CHECKING:

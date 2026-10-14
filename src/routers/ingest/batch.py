@@ -10,7 +10,7 @@ from fastapi import File, Form, HTTPException, UploadFile, status
 
 from src.core.dependencies import VisualSearchDep
 from src.routers.ingest._router import router
-from src.routers.ingest.models import (
+from src.schemas.ingest import (
     BatchIndexedCounts,
     BatchIngestResponse,
     DuplicateDetail,

@@ -22,8 +22,8 @@ from src.clients.curation_opensearch.ensure_overlay_fields import (
 )
 from src.config import IndexRole, get_region_fields, index_name
 from src.config.curation import base_curation_config
+from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
-from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 
 
 F = get_region_fields()

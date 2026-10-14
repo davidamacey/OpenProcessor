@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
-from src.services.curation.embedding_state import DEFERRED, FAILED, NOT_SELECTED
+from src.domain.embedding_state import DEFERRED, FAILED, NOT_SELECTED
 from src.services.curation.item_filter import ItemFilter, item_filter_query
 from src.services.curation.reprocess_models import (
     EmbedOptions,

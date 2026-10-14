@@ -29,8 +29,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
+from src.domain.history import record_class_snapshot
 from src.services.curation.class_write_guard import class_write_locked
-from src.services.curation.history import record_class_snapshot
 
 
 REPAIR_WRITER = 'operator:repair_stale_label_source'

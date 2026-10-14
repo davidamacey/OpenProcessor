@@ -25,8 +25,9 @@ from PIL import Image, ImageOps
 
 from src.config import get_curation_config
 from src.core.logging import get_logger
+from src.domain.embedding_state import EMBEDDED
+from src.domain.region_boxes import read_boxes
 from src.services.curation.clustering.ivf_ingest import get_ivf_ingest_store
-from src.services.curation.embedding_state import EMBEDDED
 from src.services.curation.image_serving import is_servable_image_path
 from src.services.curation.ingest_index import crop_pil, residual_placement
 from src.services.curation.region_box_embeddings import (
@@ -35,7 +36,6 @@ from src.services.curation.region_box_embeddings import (
     missing_boxes,
     write_box_embeddings,
 )
-from src.services.curation.region_boxes import read_boxes
 from src.services.detection.region_embed import embed_region_crops
 from src.utils.vectors import float_list
 

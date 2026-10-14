@@ -5,7 +5,7 @@ item's class history.
 Every human class write (``PUT /crops/{id}/label``, ``PUT
 /crops/batch_label``, ``POST /crops/move``) records the item's full
 pre-write class state in ``class_id_history`` (see
-:func:`src.services.curation.history.record_class_snapshot`). The routes
+:func:`src.domain.history.record_class_snapshot`). The routes
 here restore that state, so the labeler never has to decide itself
 whether "undo" means re-applying an earlier label or reverting to the
 machine suggestion — the backend knows what the item looked like.
@@ -19,6 +19,15 @@ from typing import Any
 from fastapi import HTTPException
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
+from src.domain.history import (
+    CLASS_STATE_FIELDS,
+    HUMAN_DISCARD_WRITER,
+    HUMAN_UNLABEL_WRITER,
+    REVIEW_DISMISS_FIELDS,
+    find_undo_snapshot,
+    record_class_snapshot,
+    restore_class_state,
+)
 from src.routers.curation._common import (
     OpenSearchDep,
     _now_iso,
@@ -35,15 +44,6 @@ from src.routers.curation._common_models import (
 from src.services.curation.class_sources import vlm_suggestion
 from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
 from src.services.curation.exclusion import park_restored_state_while_excluded
-from src.services.curation.history import (
-    CLASS_STATE_FIELDS,
-    HUMAN_DISCARD_WRITER,
-    HUMAN_UNLABEL_WRITER,
-    REVIEW_DISMISS_FIELDS,
-    find_undo_snapshot,
-    record_class_snapshot,
-    restore_class_state,
-)
 from src.services.curation.wire import item_source_excludes, serialize_item
 
 

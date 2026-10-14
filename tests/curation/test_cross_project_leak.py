@@ -873,11 +873,11 @@ def _docs(slug: str) -> dict[str, dict[str, dict[str, Any]]]:
     a pending new-class proposal, a residual pool to refit UMAP on, and
     an ingested image whose label file can be imported."""
     from src.config.region_fields import get_region_fields
+    from src.domain.history import record_class_snapshot
+    from src.domain.ingest_class_sources import classifier_class_sources
+    from src.domain.region_boxes import RegionBox, boxes_write_fields
     from src.services.curation.class_sources import VLM_NEW_CLASS_PENDING_CLASS_SOURCE
     from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
-    from src.services.curation.history import record_class_snapshot
-    from src.services.curation.ingest_class_sources import classifier_class_sources
-    from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 
     F = get_region_fields()
     image_id = f'{slug}-img-0001'

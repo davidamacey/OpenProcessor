@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config import get_region_fields
 from src.config.curation import base_curation_config
-from src.services.curation.ingest_class_sources import unlabeled_proposal_class_sources
+from src.domain.ingest_class_sources import unlabeled_proposal_class_sources
 from src.services.curation.review_queries import KNOWN_TABS, review_tab_catalog, tab_filters
 
 

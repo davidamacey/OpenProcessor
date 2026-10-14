@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-    from src.services.clustering import ClusterIndex
+    from src.config.cluster_index import ClusterIndex
 
 
 # =============================================================================
@@ -81,7 +81,7 @@ def get_class_name(class_id: int) -> str:
 def get_cluster_index_name(index_name: IndexName) -> ClusterIndex:
     """Map OpenSearch IndexName to FAISS ClusterIndex."""
     # Import here to avoid circular imports
-    from src.services.clustering import ClusterIndex
+    from src.config.cluster_index import ClusterIndex
 
     mapping = {
         IndexName.GLOBAL: ClusterIndex.GLOBAL,

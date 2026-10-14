@@ -8,11 +8,8 @@ from typing import TYPE_CHECKING, Any
 
 from src.config.region_source import CANDIDATE_IMPORT
 from src.config.region_state import RegionStatus
-from src.services.curation.ingest_class_sources import (
-    LABEL_IMPORT_CLASS_SOURCE,
-    LABEL_SOURCE_IMPORT,
-)
-from src.services.curation.region_boxes import (
+from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE, LABEL_SOURCE_IMPORT
+from src.domain.region_boxes import (
     RegionBox,
     boxes_write_fields,
     derive_status,

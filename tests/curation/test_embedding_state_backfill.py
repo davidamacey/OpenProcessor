@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from src.services.curation.embedding_state import backfill_embedded_state, legacy_embedded_clause
+from src.domain.embedding_state import backfill_embedded_state, legacy_embedded_clause
 
 
 class _Client:

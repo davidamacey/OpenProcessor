@@ -242,8 +242,8 @@ async def test_clear_detection_drops_machine_boxes_but_keeps_a_human_ones():
 
 @pytest.mark.asyncio
 async def test_clear_detection_prunes_the_embedding_of_the_dropped_box():
+    from src.domain.region_boxes import read_boxes
     from src.services.curation.region_box_embeddings import entry_for
-    from src.services.curation.region_boxes import read_boxes
 
     fake = _fake()
     doc = fake.docs(ITEMS)['f1']

@@ -17,7 +17,7 @@ from PIL import Image
 
 import scripts.curation.worker.region_embed_stage as stage
 from scripts.curation.worker.state import _ItemTask
-from src.services.curation.region_boxes import RegionBox
+from src.domain.region_boxes import RegionBox
 
 
 def _make_jpeg(width: int = 320, height: int = 240) -> bytes:

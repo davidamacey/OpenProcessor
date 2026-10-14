@@ -14,7 +14,7 @@ from typing import Annotated
 
 from fastapi import Depends, Query
 
-from src.services.curation.embedding_state import EmbeddingState  # noqa: TC001 - FastAPI resolves it
+from src.domain.embedding_state import EmbeddingState  # noqa: TC001 - FastAPI resolves it
 from src.services.curation.item_filter import ItemFilter, Origin, ReviewStatus
 
 

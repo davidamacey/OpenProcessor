@@ -1,7 +1,7 @@
 """DF6 guard: the `/embed/boxes` preprocessing comment must describe the
 actual resampler used (`cv2.INTER_LINEAR` / bilinear), not LANCZOS.
 
-`center_crop_cpu` (src/services/cpu_preprocess.py) has always used
+`center_crop_cpu` (src/utils/cpu_preprocess.py) has always used
 `cv2.INTER_LINEAR`; the router comment claimed LANCZOS, which never matched
 the code. This locks the comment to the true behavior so the two can't
 silently drift apart again.

@@ -3,7 +3,7 @@
 The container command used to be `python scripts/curation/vlm_worker.py
 --continuous`, which puts `scripts/curation` (not the repo root) on
 `sys.path[0]`. The producer's first-ever iteration builds the pending
-query, which does a lazy `from src.services.curation.ingest_class_sources
+query, which does a lazy `from src.domain.ingest_class_sources
 import classifier_class_sources` -- that raised `ModuleNotFoundError: No
 module named 'src'` in production, and the only handler around the
 producer loop catches `httpx.HTTPError`, so the worker silently never

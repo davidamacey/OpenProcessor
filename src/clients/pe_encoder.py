@@ -71,14 +71,14 @@ import numpy as np
 
 from src.config.settings import TritonModelConfig
 from src.core.logging import get_logger
-from src.services.detection.pe_preprocess import (
+from src.utils.cpu_pool import run_cpu
+from src.utils.pe_preprocess import (
     PE_SIZE,
     resize_crop_rgb,
     to_chw,
     to_chw_into,
     whole_frame_rgb_from_image,
 )
-from src.utils.cpu_pool import run_cpu
 from src.utils.stage_timing import stage_timer
 
 
@@ -385,7 +385,7 @@ class PEEncoder:
 
         Applies the canonical PE preprocessing (resize-shorter-edge,
         center-crop to uint8 pixels; the engine applies the PE-Core 0.5/0.5 normalize — see
-        :mod:`src.services.detection.pe_preprocess`) to each crop, then
+        :mod:`src.utils.pe_preprocess`) to each crop, then
         chunks at ``max_batch`` to respect the encoder's configured Triton
         max batch size. :meth:`encode_images` already L2-normalizes its
         output, so the returned rows are unit-norm.
@@ -413,7 +413,7 @@ class PEEncoder:
     async def embed_whole_frame_image(self, img: Image.Image) -> np.ndarray:
         """PE-Core whole-frame embedding of a decoded frame (EXIF orientation applied).
 
-        Goes through :func:`src.services.detection.pe_preprocess.whole_frame_rgb_from_image`, the
+        Goes through :func:`src.utils.pe_preprocess.whole_frame_rgb_from_image`, the
         one whole-frame preprocessing, so ingest, re-embedding and any backfill share a space.
         The caller passes the frame it already decoded: a photo is decoded once.
         """

@@ -12,14 +12,14 @@ from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation import base_curation_config
-from src.services.curation.audit_math import (
+from src.domain.audit_math import (
     AUDIT_HUMAN,
     AUDIT_LABEL_NAME,
     AUDIT_LABEL_SOURCE,
     AUDIT_OUTCOME,
     AUDIT_SAMPLE,
 )
-from src.services.curation.ingest_class_sources import classifier_class_sources
+from src.domain.ingest_class_sources import classifier_class_sources
 
 
 ITEMS = base_curation_config().items_index

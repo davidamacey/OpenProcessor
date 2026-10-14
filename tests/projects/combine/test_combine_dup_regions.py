@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 
 from src.config.region_fields import get_region_fields
-from src.services.curation.region_boxes import read_boxes
+from src.domain.region_boxes import read_boxes
 
 from .world import World, run_job
 

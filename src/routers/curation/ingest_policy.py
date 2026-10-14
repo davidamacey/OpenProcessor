@@ -13,6 +13,7 @@ from collections import Counter
 
 from src.config import get_curation_config
 from src.config.ingest_profiles import ingest_primary_profile
+from src.domain.embedding_state import DEFERRED, EMBEDDED, FAILED, NOT_SELECTED
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
 from src.routers.curation._error_models import (
@@ -27,7 +28,6 @@ from src.routers.curation._ingest_policy_models import (
 )
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.services.curation.detector_vocabulary import detector_labels
-from src.services.curation.embedding_state import DEFERRED, EMBEDDED, FAILED, NOT_SELECTED
 from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.ingest_detector import detector_problems, effective_profile
 from src.services.curation.ingest_policy import (

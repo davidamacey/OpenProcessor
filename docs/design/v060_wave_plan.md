@@ -399,7 +399,7 @@ exporter `export/export_yolo26.py`, `export/export_pe_image_encoder.py`, `export
 `models/yolov11_small_trt_end2end/config.pbtxt` (input FP32 [3,640,640]),
 `models/pe_image_encoder/config.pbtxt` (FP32 [3,336,336]), new version directories `2/` selected by
 `version_policy`, `src/services/curation/ingest_detect.py` (`:132`, `:182`, `:333`, `:374`),
-`src/clients/pe_encoder.py` (`encode_images`), `src/services/detection/pe_preprocess.py`
+`src/clients/pe_encoder.py` (`encode_images`), `src/utils/pe_preprocess.py`
 (`normalize_chw` becomes in-graph), `scripts/lib/model_setup.sh` (stamp includes input dtype).
 
 Steps: Part A detector: uint8 NCHW input (letterbox stays on CPU), `/255` in graph; gates P-box,

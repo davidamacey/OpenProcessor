@@ -42,7 +42,7 @@ def _region_item(*, text: str | None = None, **extra: Any) -> dict[str, Any]:
 def _rejected_candidate_item(**extra: Any) -> dict[str, Any]:
     """A realistic ``verify_rejected`` item (DQ-B2): no accepted box, only
     the candidate box the verifier rejected (kept, ``state='rejected'``)."""
-    from src.services.curation.region_boxes import RegionBox, boxes_write_fields
+    from src.domain.region_boxes import RegionBox, boxes_write_fields
 
     doc = _region_item(**extra)
     doc[F.status] = RegionStatus.VERIFY_REJECTED.value
@@ -128,7 +128,7 @@ def test_text_search_treats_wildcard_characters_literally() -> None:
 
 
 def _boxed_item(*states: str, status: RegionStatus) -> dict[str, Any]:
-    from src.services.curation.region_boxes import RegionBox, boxes_write_fields
+    from src.domain.region_boxes import RegionBox, boxes_write_fields
 
     boxes = [
         RegionBox(box_id=f'b{i + 1}', bbox_norm=(0.1, 0.1, 0.2, 0.2), state=state)

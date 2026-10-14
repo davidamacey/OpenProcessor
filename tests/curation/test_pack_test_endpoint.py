@@ -12,8 +12,8 @@ import pytest
 from curation.config_test_stack import profile_body
 from curation.conftest import ACTIVE
 from src.config import get_region_fields
+from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.routers.curation._item_models import ItemDoc
-from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 

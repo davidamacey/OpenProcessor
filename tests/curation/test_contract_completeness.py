@@ -10,10 +10,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from src.domain.embedding_state import EmbeddingState
 from src.routers.curation._stats_models import DatasetStatsResponse
 from src.routers.curation.stats import stats_dataset
 from src.services.curation import review_queries
-from src.services.curation.embedding_state import EmbeddingState
 from src.services.curation.item_filter import Origin, ReviewStatus
 from src.services.curation.review_filter_specs import EMBEDDING_STATE_LABELS, FILTER_SPECS
 from src.services.curation.stats_embedding import EmbeddingByState, embedding_summary

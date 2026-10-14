@@ -59,7 +59,7 @@ def test_stats_never_terms_aggregates_embedding_state() -> None:
 
 
 def test_item_filter_state_uses_the_shared_state_clause() -> None:
-    from src.services.curation.embedding_state import state_clause
+    from src.domain.embedding_state import state_clause
     from src.services.curation.item_filter import item_filter_clauses
 
     out = item_filter_clauses(ItemFilter(embedding_state=['failed']))

@@ -38,8 +38,8 @@ from scripts.curation.worker.bulk_writer import _bulk_update
 from scripts.curation.worker.client import SegmenterRequestFailed
 from src.config import get_region_fields
 from src.config.project_context import current_project
+from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.services.curation.class_write_guard import class_state_token
-from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
 from src.services.labeling.region_overlay import VlmBoxVerdict

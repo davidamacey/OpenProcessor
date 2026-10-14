@@ -30,7 +30,7 @@ visualization. Without this export a fresh deployment has no way to build
 the model its own curation code requires.
 
 The input tensor must be preprocessed exactly the way
-``src/services/detection/pe_preprocess.py`` does it: resize shorter edge to
+``src/utils/pe_preprocess.py`` does it: resize shorter edge to
 336, center-crop 336x336, CHW uint8 RGB pixels. The exported ONNX takes float
 input already scaled to [0, 1] and PE-Core 0.5/0.5 normalized; the two build
 scripts put that arithmetic in the graph (``export/uint8_input.py``) so the
@@ -227,7 +227,7 @@ def render_config(cfg: PETritonConfig) -> str:
 # visualization. The tensor names below are a contract with that client.
 #
 # Input:  {cfg.input_name} [B, 3, {cfg.image_size}, {cfg.image_size}] UINT8 RGB pixels,
-#         resized and center-cropped (see src/services/detection/pe_preprocess.py);
+#         resized and center-cropped (see src/utils/pe_preprocess.py);
 #         the engine scales them and applies PE-Core's 0.5/0.5 mean/std itself
 #         (export/uint8_input.py)
 # Output: {cfg.output_name} [B, {cfg.embedding_dim}] FP32, L2-normalized

@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation import base_curation_config
-from src.services.curation.audit_math import AUDIT_OUTCOME, AUDIT_SAMPLE
+from src.domain.audit_math import AUDIT_OUTCOME, AUDIT_SAMPLE
 from src.services.curation.class_label import ItemLabel, class_label_update, human_move_class_update
 from src.services.curation.holdout import build_cohort_query
 

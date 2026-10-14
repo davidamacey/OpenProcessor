@@ -18,14 +18,11 @@ from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation import base_curation_config
+from src.domain.ingest_class_sources import classifier_class_sources, is_classifier_class_source
 from src.services.curation.class_sources import (
     VLM_CATEGORY_SCORE,
     class_confidence,
     class_source_catalog,
-)
-from src.services.curation.ingest_class_sources import (
-    classifier_class_sources,
-    is_classifier_class_source,
 )
 from src.services.curation.review_queries import TAB_LABELS
 from src.services.curation.wire import serialize_item

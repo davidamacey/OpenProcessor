@@ -283,7 +283,7 @@ async def test_invariant_4_history_preserved_across_two_relabels() -> None:
     ``class_id_history`` with ``at``/``writer`` recorded on each entry —
     neither is lost or overwritten by the next relabel."""
     from src.clients.occ import occ_update_one
-    from src.services.curation.history import record_class_history
+    from src.domain.history import record_class_history
 
     client = _VersionedFakeOpenSearch()
     index = 'op_items_test'

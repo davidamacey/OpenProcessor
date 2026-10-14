@@ -32,7 +32,7 @@ from src.config.curation import IndexRole
 from src.config.project_context import bind_project
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
-from src.services.curation import embedding_state as es
+from src.domain import embedding_state as es
 from src.services.curation.ops_metrics import (
     OP_EMBEDDING_STATE_ITEMS,
     OP_OPENSEARCH_SHARDS,

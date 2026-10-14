@@ -16,22 +16,14 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from enum import Enum
 from pathlib import Path
 
 import numpy as np
 
+from src.config.cluster_index import ClusterIndex
+
 
 logger = logging.getLogger(__name__)
-
-
-class ClusterIndex(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and format() as Class.MEMBER; StrEnum would change both
-    """FAISS cluster index names matching OpenSearch indexes."""
-
-    GLOBAL = 'global'
-    VEHICLES = 'vehicles'
-    PEOPLE = 'people'
-    FACES = 'faces'
 
 
 @dataclass

@@ -36,7 +36,7 @@ from scripts.curation.worker.state import _ItemTask, items_index
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
-    from src.services.curation.region_boxes import RegionBox
+    from src.domain.region_boxes import RegionBox
 
 
 def _current_config_stamp() -> tuple[str | None, int | None, str | None]:
