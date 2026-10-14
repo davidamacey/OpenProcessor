@@ -188,7 +188,7 @@ npm run test:e2e # Playwright against an in-browser stub backend (own venv, auto
 ```
 
 **Live, read-only tests** against a real deployed backend:
-`CROPWRIGHT_LIVE_URL=http://localhost:5184 npm run test:live` — skipped
+`OP_CROPWRIGHT_LIVE_URL=http://localhost:5184 npm run test:live` — skipped
 entirely unless that env var is set; structurally read-only (aborts any
 non-GET/HEAD request to the API and fails the test if one was even
 attempted).

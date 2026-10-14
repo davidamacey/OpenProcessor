@@ -62,7 +62,7 @@ npm run lint       # prettier --check + eslint
 npx vitest run     # unit and component tests (jsdom)
 npm run build      # static build to build/
 npm run test:e2e   # stubbed Playwright suite (own venv at e2e/.venv, auto-provisioned)
-npm run test:live  # live read-only tier; needs CROPWRIGHT_LIVE_URL, skipped otherwise
+npm run test:live  # live read-only tier; needs OP_CROPWRIGHT_LIVE_URL, skipped otherwise
 npm run test:mutation   # Stryker, 15-20 minutes
 ```
 
@@ -254,7 +254,7 @@ Under `src/lib/contract/`:
     `artifacts_local/e2e-failures/<test id>/`; read those first when a test flakes.
   - A `py_compile` hook and CI step gate `scripts/*.py` and `e2e/**/*.py` syntax.
 - **Live read-only tier (`e2e/live/`):** drives the real deployed build against a real
-  backend (`CROPWRIGHT_LIVE_URL=... npm run test:live`; skipped when unset, never in CI).
+  backend (`OP_CROPWRIGHT_LIVE_URL=... npm run test:live`; skipped when unset, never in CI).
   Structurally read-only: the `guarded_page` fixture aborts any non-GET/HEAD request under
   the API prefix and its teardown fails if one was attempted. It is project-aware
   (`live_project` resolves the served default slug; reads go through
