@@ -21,7 +21,7 @@ export const LEGACY_RESULTS_MESSAGE =
   'This run predates the v2 comparison format, so its results cannot be shown here.';
 
 /** Display labels for served metric keys; an unknown key shows verbatim. */
-export const METRIC_LABELS: Record<string, string> = {
+const METRIC_LABELS: Record<string, string> = {
   map_50: 'mAP@.5',
   map_50_95: 'mAP@.5:.95',
   map_75: 'mAP@.75',
@@ -110,7 +110,7 @@ export interface RunSelection {
   profile: string;
 }
 
-export function selectedModelRefs(sel: RunSelection): BakeoffModelRef[] {
+function selectedModelRefs(sel: RunSelection): BakeoffModelRef[] {
   return [
     ...sel.runIds.map((run_id): BakeoffModelRef => ({ source: 'run', run_id })),
     ...sel.baselineNames.map((name): BakeoffModelRef => ({ source: 'baseline', name })),
@@ -168,12 +168,6 @@ export function isBest(
   model: string,
 ): boolean {
   return matrix?.best?.[datasetId]?.[metric]?.includes(model) ?? false;
-}
-
-export function formatTime(iso: string | null | undefined): string {
-  if (!iso) return MISSING;
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
 }
 
 /**

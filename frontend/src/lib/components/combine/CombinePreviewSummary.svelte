@@ -5,8 +5,8 @@
    * link/copy byte estimate. No count is computed here.
    */
   import CombineIssueList from '$components/combine/CombineIssueList.svelte';
-  import { formatBytes } from '$lib/combine/combineText';
-  import { formatCount } from '$lib/formatCount';
+  import { formatBytes } from '$lib/format/bytes';
+  import { formatCount } from '$lib/format/count';
   import type { CombinePreview } from '$lib/types_combine';
 
   interface Props {

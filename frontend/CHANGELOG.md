@@ -22,6 +22,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Every dialog is the one shared `Modal` component: `role="dialog"`, `aria-modal`, an accessible name, focus
+  moved in on open and trapped while open, Escape and a click on the dimmed backdrop close it, and focus returns
+  to the control that opened it. The 28 hand-rolled dialogs and their `a11y_click_events_have_key_events`
+  suppressions are gone; the lightboxes in the card and the embedding plot, and the keymap save and reset
+  confirms, now also close on Escape and carry a name. A scan test fails on a hand-rolled dialog.
+
+- Durations read `1h 05m`, `5m 03s` or `42s` on every panel (dashboard ETA, training ETA, auto-label elapsed and
+  ETA, bulk ingest); the dashboard no longer prints minutes alone or days, and the training ETA now shows
+  seconds. One byte formatter (`/projects` heap size now reads B, KB, MB, GB or TB like the combine pages) and
+  one time-of-day formatter replace the copies; the bake-off run list shows its start time as UTC
+  (`2026-09-24 21:13:41 UTC`) like the other served timestamps. All formatters live in `src/lib/format/`.
+
+- The three server-event subscriptions (project events, scoped events, pipeline events) share one open,
+  backoff and reconnect helper; behavior is unchanged and now covered by tests.
+
+- The `$lib`, `$components`, `$stores` and `$contracts` import aliases are configured in `vite.config.ts` and
+  `tsconfig.json` instead of the deprecated SvelteKit `alias` option; the build no longer prints the
+  deprecation warning, and CI fails if it comes back.
+
+- `frontend/CLAUDE.md` is cut from 3,104 to about 300 lines of current rules (history lives here).
+
+- Dead code removed: 46 exports no other file used are now file-local, an unused declaration file and the `tslib`
+  dev dependency are gone, and `knip` runs in CI to keep it that way.
+
 - `ProjectCounts.images` and `.items` are `number | null` (the API serves `null` when OpenSearch could not be counted); the project list already renders `null` as an em dash.
 
 - Work-package ids and history names are gone from comments, JSDoc and test titles in `src/` and `e2e/`,
@@ -32,6 +56,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   policy page, a project with its VLM off, the audit page, a cluster page, the dataset imports list and the prompt-pack,
   region-profile and open-vocabulary lists. `scripts/docs_screenshot_fixtures.py` gains `bulk` and `vlm-off` to set up
   throwaway `cwlife-*` projects for them.
+
+### Removed
+
+- Standalone-repository leftovers: the release scripts (`scripts/release.sh`, `scripts/release/`,
+  `scripts/release-smoke.sh`), the frontend's own compose files, pre-commit config, diagram and GIF scripts,
+  and its own `SECURITY.md` and `CONTRIBUTING.md`. The Cropwright image ships through the repository's
+  `scripts/release/build_and_publish.sh`; the README and docs point at the root files.
 
 ## [0.5.0] - 2026-10-09
 
@@ -196,7 +227,7 @@ database of its own and requires a running OpenProcessor backend.
 - **The curation API has no authentication.** Anyone who can reach the
   Cropwright origin can label, ingest, export and train. Run it only on a
   trusted network or behind an authenticating reverse proxy; never expose
-  it to the public internet. See [SECURITY.md](SECURITY.md).
+  it to the public internet. See [SECURITY.md](../SECURITY.md).
 - nginx sends X-Frame-Options, X-Content-Type-Options, Referrer-Policy and
   Permissions-Policy on every response and does not reveal its version.
 - The container drops all capabilities and sets `no-new-privileges` in

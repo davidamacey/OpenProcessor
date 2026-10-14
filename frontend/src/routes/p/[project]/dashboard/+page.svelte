@@ -26,8 +26,6 @@
    * the gap between polls.
    */
   import { apiBase } from '$lib/api';
-  import { focusOnMount } from '$lib/actions/focusOnMount';
-  import { trapFocus } from '$lib/actions/trapFocus';
   import { healthStore } from '$stores/health.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import AutoLabelPanel from '$components/AutoLabelPanel.svelte';
@@ -48,6 +46,7 @@
   } from '$lib/api';
   import type { Crop, ExportResult, StatsSummary, TestHoldoutStats } from '$lib/types';
   import { toastStore } from '$stores/toast.svelte';
+  import Modal from '$components/Modal.svelte';
 
   $effect(() => {
     keyboardStore.setScope('dashboard');
@@ -285,147 +284,115 @@
 </div>
 
 {#if vlmOpen}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <div
-    class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Run VLM on cluster"
-    tabindex="-1"
-    use:focusOnMount
-    use:trapFocus={{ onEscape: closeVlmDialog }}
-    onclick={(e) => {
-      if (e.target === e.currentTarget) closeVlmDialog();
-    }}
-  >
-    <div
-      class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
-    >
-      <h3 class="mb-3 text-base font-semibold">Run VLM on cluster</h3>
-      <label class="mb-3 block text-sm">
-        <span class="mb-1 block text-zinc-400">Cluster ID</span>
-        <input
-          type="number"
-          min="0"
-          bind:value={vlmClusterId}
-          class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-          placeholder="e.g. 42"
-        />
-      </label>
-      <p class="mb-4 text-xs text-zinc-500">
-        Only un-validated crops in the cluster will be sent. Test-holdout crops are
-        excluded by the API.
-      </p>
-      <div class="mb-4 text-sm">
-        <VlmRunPicker
-          vlm={vlmChoice}
-          acknowledgeExternal={vlmAck}
-          disabled={vlmBusy}
-          onchange={(next) => {
-            vlmChoice = next.vlm;
-            vlmAck = next.acknowledgeExternal;
-          }}
-        />
-      </div>
-      {#if vlmJob}
-        <p class="mb-4 text-xs text-zinc-400">
-          {vlmJob.status === 'running'
-            ? `Running — stage: ${vlmJob.stage || 'preparing…'}${vlmJob.total > 0 ? ` (${vlmJob.processed}/${vlmJob.total})` : ''}`
-            : `Status: ${vlmJob.status}`}
-        </p>
-      {/if}
-      <div class="flex justify-end gap-2">
-        <button type="button" class="btn" onclick={closeVlmDialog} disabled={vlmBusy}>
-          Cancel
-        </button>
-        <button type="button" class="btn btn-primary" onclick={runVlm} disabled={vlmBusy}>
-          {vlmBusy ? 'Running...' : 'Run'}
-        </button>
-      </div>
+  <Modal label="Run VLM on cluster" onclose={closeVlmDialog}>
+    <h3 class="mb-3 text-base font-semibold">Run VLM on cluster</h3>
+    <label class="mb-3 block text-sm">
+      <span class="mb-1 block text-zinc-400">Cluster ID</span>
+      <input
+        type="number"
+        min="0"
+        bind:value={vlmClusterId}
+        class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+        placeholder="e.g. 42"
+      />
+    </label>
+    <p class="mb-4 text-xs text-zinc-500">
+      Only un-validated crops in the cluster will be sent. Test-holdout crops are excluded
+      by the API.
+    </p>
+    <div class="mb-4 text-sm">
+      <VlmRunPicker
+        vlm={vlmChoice}
+        acknowledgeExternal={vlmAck}
+        disabled={vlmBusy}
+        onchange={(next) => {
+          vlmChoice = next.vlm;
+          vlmAck = next.acknowledgeExternal;
+        }}
+      />
     </div>
-  </div>
+    {#if vlmJob}
+      <p class="mb-4 text-xs text-zinc-400">
+        {vlmJob.status === 'running'
+          ? `Running — stage: ${vlmJob.stage || 'preparing…'}${vlmJob.total > 0 ? ` (${vlmJob.processed}/${vlmJob.total})` : ''}`
+          : `Status: ${vlmJob.status}`}
+      </p>
+    {/if}
+    <div class="flex justify-end gap-2">
+      <button type="button" class="btn" onclick={closeVlmDialog} disabled={vlmBusy}>
+        Cancel
+      </button>
+      <button type="button" class="btn btn-primary" onclick={runVlm} disabled={vlmBusy}>
+        {vlmBusy ? 'Running...' : 'Run'}
+      </button>
+    </div>
+  </Modal>
 {/if}
 
 {#if exportConfirmOpen}
   <!-- M13 (2026-09-24 interactive pass): confirm before kicking off a
        synchronous full-dataset YOLO export, and show the served result
        (or error) once it resolves — no "job started" fiction. -->
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <div
-    class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Export dataset confirm"
-    tabindex="-1"
-    use:focusOnMount
-    use:trapFocus={{ onEscape: closeExportConfirm }}
-    onclick={(e) => {
-      if (e.target === e.currentTarget) closeExportConfirm();
-    }}
-  >
-    <div
-      class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
-    >
-      <h3 class="mb-3 text-base font-semibold">Export dataset (YOLO)</h3>
+  <Modal label="Export dataset confirm" onclose={closeExportConfirm}>
+    <h3 class="mb-3 text-base font-semibold">Export dataset (YOLO)</h3>
+    {#if !exportResult && !exportError}
+      <p class="mb-4 text-xs text-zinc-500">
+        Runs the full YOLO export pipeline synchronously (resize, stratified split
+        honoring the frozen test holdout, manifest write) — this can take a while and the
+        page will wait for it to finish.
+      </p>
+    {/if}
+    {#if exportRunning}
+      <p class="mb-4 text-xs text-zinc-400">Exporting… this may take a few minutes.</p>
+    {/if}
+    {#if exportError}
+      <p class="mb-4 text-xs text-red-300">Export failed: {exportError}</p>
+    {/if}
+    {#if exportResult}
+      <dl class="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+        <dt class="text-zinc-500">Status</dt>
+        <dd class="font-mono text-zinc-200">{exportResult.status}</dd>
+        {#if exportResult.export_dir}
+          <dt class="text-zinc-500">Export dir</dt>
+          <dd class="break-all font-mono text-zinc-200">{exportResult.export_dir}</dd>
+        {/if}
+        {#if exportResult.dataset_sha}
+          <dt class="text-zinc-500">Dataset SHA</dt>
+          <dd class="break-all font-mono text-zinc-200">{exportResult.dataset_sha}</dd>
+        {/if}
+        {#if exportResult.split_counts}
+          <dt class="text-zinc-500">Split counts</dt>
+          <dd class="font-mono text-zinc-200">
+            {Object.entries(exportResult.split_counts)
+              .map(([k, v]) => `${k}: ${v}`)
+              .join(' · ')}
+          </dd>
+        {/if}
+        {#if exportResult.finished_at}
+          <dt class="text-zinc-500">Finished</dt>
+          <dd class="font-mono text-zinc-200">{exportResult.finished_at}</dd>
+        {/if}
+      </dl>
+    {/if}
+    <div class="flex justify-end gap-2">
+      <button
+        type="button"
+        class="btn"
+        onclick={closeExportConfirm}
+        disabled={exportRunning}
+      >
+        {exportResult || exportError ? 'Close' : 'Cancel'}
+      </button>
       {#if !exportResult && !exportError}
-        <p class="mb-4 text-xs text-zinc-500">
-          Runs the full YOLO export pipeline synchronously (resize, stratified split
-          honoring the frozen test holdout, manifest write) — this can take a while and
-          the page will wait for it to finish.
-        </p>
-      {/if}
-      {#if exportRunning}
-        <p class="mb-4 text-xs text-zinc-400">Exporting… this may take a few minutes.</p>
-      {/if}
-      {#if exportError}
-        <p class="mb-4 text-xs text-red-300">Export failed: {exportError}</p>
-      {/if}
-      {#if exportResult}
-        <dl class="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-          <dt class="text-zinc-500">Status</dt>
-          <dd class="font-mono text-zinc-200">{exportResult.status}</dd>
-          {#if exportResult.export_dir}
-            <dt class="text-zinc-500">Export dir</dt>
-            <dd class="break-all font-mono text-zinc-200">{exportResult.export_dir}</dd>
-          {/if}
-          {#if exportResult.dataset_sha}
-            <dt class="text-zinc-500">Dataset SHA</dt>
-            <dd class="break-all font-mono text-zinc-200">{exportResult.dataset_sha}</dd>
-          {/if}
-          {#if exportResult.split_counts}
-            <dt class="text-zinc-500">Split counts</dt>
-            <dd class="font-mono text-zinc-200">
-              {Object.entries(exportResult.split_counts)
-                .map(([k, v]) => `${k}: ${v}`)
-                .join(' · ')}
-            </dd>
-          {/if}
-          {#if exportResult.finished_at}
-            <dt class="text-zinc-500">Finished</dt>
-            <dd class="font-mono text-zinc-200">{exportResult.finished_at}</dd>
-          {/if}
-        </dl>
-      {/if}
-      <div class="flex justify-end gap-2">
         <button
           type="button"
-          class="btn"
-          onclick={closeExportConfirm}
+          class="btn btn-primary"
+          onclick={runExport}
           disabled={exportRunning}
         >
-          {exportResult || exportError ? 'Close' : 'Cancel'}
+          {exportRunning ? 'Exporting…' : 'Export'}
         </button>
-        {#if !exportResult && !exportError}
-          <button
-            type="button"
-            class="btn btn-primary"
-            onclick={runExport}
-            disabled={exportRunning}
-          >
-            {exportRunning ? 'Exporting…' : 'Export'}
-          </button>
-        {/if}
-      </div>
+      {/if}
     </div>
-  </div>
+  </Modal>
 {/if}

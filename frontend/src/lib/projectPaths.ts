@@ -12,7 +12,7 @@ import { ProjectNotSelectedError } from '$lib/api';
 import { projectsStore } from '$stores/projects.svelte';
 
 /** The page sections that live under `/p/[project]/`. */
-export const PROJECT_SECTIONS = [
+const PROJECT_SECTIONS = [
   'dashboard',
   'ingest',
   'datasets',

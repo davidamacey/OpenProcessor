@@ -76,7 +76,7 @@ export function blankForm(): SourceForm {
   };
 }
 
-export function formFromStatus(s: IngestSourceStatus): SourceForm {
+function formFromStatus(s: IngestSourceStatus): SourceForm {
   return {
     name: s.name,
     backend: s.backend,

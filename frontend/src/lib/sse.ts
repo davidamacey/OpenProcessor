@@ -94,6 +94,89 @@ export interface CurationEventSubscription {
 const RECONNECT_INITIAL_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
 
+/** Absolute URL of an SSE endpoint. `apiBase` is empty in the default Docker
+ *  deployment (nginx proxies `{API_PREFIX}/*` on the same origin) and
+ *  `new URL('/path')` throws without a base, so a relative base is anchored to
+ *  `window.location.origin`; the result is still same-origin. */
+function streamUrl(path: string): URL {
+  const origin =
+    apiBase && /^https?:\/\//i.test(apiBase)
+      ? ''
+      : typeof window !== 'undefined'
+        ? window.location.origin
+        : '';
+  return new URL(`${origin}${apiBase}${path}`);
+}
+
+interface StreamOptions {
+  url: string;
+  /** Event names to listen for; read again on every (re)connect. */
+  eventTypes: () => string[];
+  /** A frame whose `data` parsed as JSON. */
+  onFrame: (type: string, payload: unknown) => void;
+  onError?: (err: Event | Error) => void;
+  onOpen?: () => void;
+}
+
+/**
+ * Open an EventSource and keep it open: on any error close it and reconnect
+ * after a capped exponential backoff (the browser retries on its own, but
+ * Firefox gives up after a few rapid retries). A successful open resets the
+ * backoff so one old blip does not slow a later reconnect. A frame that is
+ * not valid JSON is logged and skipped; it never closes the channel. The
+ * caller must `close()` on unmount, otherwise it reconnects forever.
+ */
+function openStream(opts: StreamOptions): CurationEventSubscription {
+  let es: EventSource | null = null;
+  let backoff = RECONNECT_INITIAL_MS;
+  let closed = false;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function open(): void {
+    if (closed) return;
+    es = new EventSource(opts.url);
+    es.onopen = () => {
+      backoff = RECONNECT_INITIAL_MS;
+      opts.onOpen?.();
+    };
+    // The backend names each frame with an `event:` line, so EventSource
+    // dispatches typed events and `message` never fires.
+    for (const type of opts.eventTypes()) {
+      es.addEventListener(type, (ev: MessageEvent) => {
+        try {
+          opts.onFrame(type, JSON.parse(ev.data));
+        } catch (err) {
+          console.warn('[sse] failed to parse event', type, err);
+        }
+      });
+    }
+    es.onerror = (err) => {
+      opts.onError?.(err);
+      if (closed) return;
+      es?.close();
+      es = null;
+      reconnectTimer = setTimeout(() => {
+        backoff = Math.min(backoff * 2, RECONNECT_MAX_MS);
+        open();
+      }, backoff);
+    };
+  }
+
+  open();
+
+  return {
+    close(): void {
+      closed = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      es?.close();
+      es = null;
+    },
+  };
+}
+
 /**
  * Event types we care about. Everything else is silently ignored so a
  * future event type added on the backend doesn't trip up older clients
@@ -127,12 +210,24 @@ function knownEventTypes(): string[] {
 }
 
 /**
- * Open an SSE subscription to {API_PREFIX}/events.
- *
- * Reconnects with exponential backoff on error. The caller must invoke
- * `subscription.close()` on component unmount, otherwise the
- * EventSource will keep reconnecting forever.
+ * Open an SSE subscription to {API_PREFIX}/events (project-scoped). The caller
+ * must `close()` the subscription on component unmount.
  */
+export function subscribeCurationEvents(
+  opts: CurationEventSubscribeOptions,
+): CurationEventSubscription {
+  const url = streamUrl(`${scoped()}/events`);
+  if (opts.topic) url.searchParams.set('topic', opts.topic);
+  if (opts.class_id != null) url.searchParams.set('class_id', String(opts.class_id));
+  return openStream({
+    url: url.toString(),
+    eventTypes: knownEventTypes,
+    onFrame: (_type, payload) => opts.onEvent(payload as CurationEvent),
+    onError: opts.onError,
+    onOpen: opts.onOpen,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Pipeline events SSE — {API_PREFIX}/pipeline/events
 // ---------------------------------------------------------------------------
@@ -184,80 +279,25 @@ export interface PipelineSubscribeOptions {
 export function subscribePipelineEvents(
   opts: PipelineSubscribeOptions,
 ): CurationEventSubscription {
-  let es: EventSource | null = null;
-  let backoff = RECONNECT_INITIAL_MS;
-  let closed = false;
-  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-
-  const url = (() => {
-    const base =
-      apiBase && /^https?:\/\//i.test(apiBase)
-        ? `${apiBase}${scoped()}/pipeline/events`
-        : `${
-            typeof window !== 'undefined' ? window.location.origin : ''
-          }${apiBase}${scoped()}/pipeline/events`;
-    return new URL(base).toString();
-  })();
-
-  function open(): void {
-    if (closed) return;
-    es = new EventSource(url);
-    es.onopen = () => {
-      backoff = RECONNECT_INITIAL_MS;
-      opts.onOpen?.();
-    };
-    es.addEventListener('snapshot', (ev: MessageEvent) => {
-      try {
-        const payload = JSON.parse(ev.data) as {
+  return openStream({
+    url: streamUrl(`${scoped()}/pipeline/events`).toString(),
+    eventTypes: () => ['snapshot', 'state', 'stats'],
+    onFrame: (type, payload) => {
+      if (type === 'snapshot') {
+        const p = payload as {
           state: Record<string, unknown>;
           stats: Record<string, unknown>;
         };
-        opts.onSnapshot?.(payload.state ?? {}, payload.stats ?? {});
-      } catch (err) {
-        console.warn('[sse] failed to parse snapshot', err);
+        opts.onSnapshot?.(p.state ?? {}, p.stats ?? {});
+      } else if (type === 'state') {
+        opts.onState?.(payload as Record<string, unknown>);
+      } else {
+        opts.onStats?.(payload as Record<string, unknown>);
       }
-    });
-    es.addEventListener('state', (ev: MessageEvent) => {
-      try {
-        const payload = JSON.parse(ev.data) as Record<string, unknown>;
-        opts.onState?.(payload);
-      } catch (err) {
-        console.warn('[sse] failed to parse state', err);
-      }
-    });
-    es.addEventListener('stats', (ev: MessageEvent) => {
-      try {
-        const payload = JSON.parse(ev.data) as Record<string, unknown>;
-        opts.onStats?.(payload);
-      } catch (err) {
-        console.warn('[sse] failed to parse stats', err);
-      }
-    });
-    es.onerror = (err) => {
-      opts.onError?.(err);
-      if (closed) return;
-      es?.close();
-      es = null;
-      reconnectTimer = setTimeout(() => {
-        backoff = Math.min(backoff * 2, RECONNECT_MAX_MS);
-        open();
-      }, backoff);
-    };
-  }
-
-  open();
-
-  return {
-    close(): void {
-      closed = true;
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-        reconnectTimer = null;
-      }
-      es?.close();
-      es = null;
     },
-  };
+    onError: opts.onError,
+    onOpen: opts.onOpen,
+  });
 }
 
 /**
@@ -306,139 +346,11 @@ const GLOBAL_EVENT_TYPES = [
 export function subscribeGlobalEvents(
   opts: GlobalEventSubscribeOptions,
 ): CurationEventSubscription {
-  let es: EventSource | null = null;
-  let backoff = RECONNECT_INITIAL_MS;
-  let closed = false;
-  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-
-  const url = (() => {
-    const base =
-      apiBase && /^https?:\/\//i.test(apiBase)
-        ? `${apiBase}${globalApi()}/events`
-        : `${typeof window !== 'undefined' ? window.location.origin : ''}${apiBase}${globalApi()}/events`;
-    return new URL(base).toString();
-  })();
-
-  function open(): void {
-    if (closed) return;
-    es = new EventSource(url);
-    es.onopen = () => {
-      backoff = RECONNECT_INITIAL_MS;
-      opts.onOpen?.();
-    };
-    for (const t of GLOBAL_EVENT_TYPES) {
-      es.addEventListener(t, (ev: MessageEvent) => {
-        try {
-          const payload = JSON.parse(ev.data) as ProjectEvent;
-          opts.onEvent(payload);
-        } catch (err) {
-          console.warn('[sse] failed to parse global event', t, err);
-        }
-      });
-    }
-    es.onerror = (err) => {
-      opts.onError?.(err);
-      if (closed) return;
-      es?.close();
-      es = null;
-      reconnectTimer = setTimeout(() => {
-        backoff = Math.min(backoff * 2, RECONNECT_MAX_MS);
-        open();
-      }, backoff);
-    };
-  }
-
-  open();
-
-  return {
-    close(): void {
-      closed = true;
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-        reconnectTimer = null;
-      }
-      es?.close();
-      es = null;
-    },
-  };
-}
-
-export function subscribeCurationEvents(
-  opts: CurationEventSubscribeOptions,
-): CurationEventSubscription {
-  let es: EventSource | null = null;
-  let backoff = RECONNECT_INITIAL_MS;
-  let closed = false;
-  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-
-  const url = (() => {
-    // apiBase is empty in the default Docker deployment (nginx proxies
-    // {API_PREFIX}/* on the same origin). `new URL('{API_PREFIX}/events')` throws because
-    // it lacks a base, so we anchor to window.location.origin when
-    // apiBase is relative. The resulting URL is still same-origin and
-    // hits the labeler's nginx proxy.
-    const base =
-      apiBase && /^https?:\/\//i.test(apiBase)
-        ? `${apiBase}${scoped()}/events`
-        : `${typeof window !== 'undefined' ? window.location.origin : ''}${apiBase}${scoped()}/events`;
-    const u = new URL(base);
-    if (opts.topic) u.searchParams.set('topic', opts.topic);
-    if (opts.class_id != null) u.searchParams.set('class_id', String(opts.class_id));
-    return u.toString();
-  })();
-
-  function open(): void {
-    if (closed) return;
-    es = new EventSource(url);
-    es.onopen = () => {
-      // Reset backoff on a successful connect — a long-lived connection
-      // shouldn't pay the penalty of an old transient blip.
-      backoff = RECONNECT_INITIAL_MS;
-      opts.onOpen?.();
-    };
-    // Subscribe to each known event-type listener separately. The
-    // backend uses `event: <type>` headers so EventSource dispatches
-    // typed events instead of falling back to `message`.
-    for (const t of knownEventTypes()) {
-      es.addEventListener(t, (ev: MessageEvent) => {
-        try {
-          const payload = JSON.parse(ev.data) as CurationEvent;
-          opts.onEvent(payload);
-        } catch (err) {
-          // Garbled payload — log and skip. A bad event shouldn't
-          // close the channel.
-          console.warn('[sse] failed to parse event', t, err);
-        }
-      });
-    }
-    es.onerror = (err) => {
-      // The browser will set readyState to CLOSED on a permanent
-      // failure (e.g. CORS, 4xx). On a transient drop it goes to
-      // CONNECTING and the browser reconnects on its own — but to be
-      // safe (Firefox is known to give up after a few retries) we
-      // explicitly close + reconnect ourselves with backoff.
-      opts.onError?.(err);
-      if (closed) return;
-      es?.close();
-      es = null;
-      reconnectTimer = setTimeout(() => {
-        backoff = Math.min(backoff * 2, RECONNECT_MAX_MS);
-        open();
-      }, backoff);
-    };
-  }
-
-  open();
-
-  return {
-    close(): void {
-      closed = true;
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-        reconnectTimer = null;
-      }
-      es?.close();
-      es = null;
-    },
-  };
+  return openStream({
+    url: streamUrl(`${globalApi()}/events`).toString(),
+    eventTypes: () => GLOBAL_EVENT_TYPES,
+    onFrame: (_type, payload) => opts.onEvent(payload as ProjectEvent),
+    onError: opts.onError,
+    onOpen: opts.onOpen,
+  });
 }

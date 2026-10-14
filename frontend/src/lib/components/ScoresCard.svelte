@@ -24,8 +24,6 @@
     type ScoresCoverage,
     type ScoresJob,
   } from '$lib/api';
-  import { focusOnMount } from '$lib/actions/focusOnMount';
-  import { trapFocus } from '$lib/actions/trapFocus';
   import {
     classifyScoresPoll,
     formatCoverageCounts,
@@ -33,6 +31,7 @@
   } from '$lib/scores';
   import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
+  import Modal from '$components/Modal.svelte';
 
   const JOB_POLL_MS = 3000;
 
@@ -313,42 +312,22 @@
 </section>
 
 {#if confirmScorers !== undefined}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <div
-    class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Confirm compute curation scores"
-    tabindex="-1"
-    use:focusOnMount
-    use:trapFocus={{ onEscape: closeConfirm }}
-    onclick={(e) => {
-      if (e.target === e.currentTarget) closeConfirm();
-    }}
-  >
-    <div
-      class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
-    >
-      <h3 class="mb-3 text-base font-semibold">Compute curation scores</h3>
-      <p class="mb-3 text-sm text-zinc-300">
-        {confirmScorers === null
-          ? 'Runs every enabled scorer against the full pool.'
-          : `Runs: ${confirmScorers?.join(', ')}.`}
-      </p>
-      <p class="mb-3 text-xs text-zinc-400">
-        This is a deployment-wide, potentially long-running operation over the whole crop
-        pool. Only one compute job can run at a time.
-      </p>
-      <div class="flex justify-end gap-2">
-        <button type="button" class="btn" onclick={closeConfirm}>Cancel</button>
-        <button
-          type="button"
-          class="btn btn-primary"
-          onclick={() => void confirmCompute()}
-        >
-          Confirm
-        </button>
-      </div>
+  <Modal label="Confirm compute curation scores" onclose={closeConfirm}>
+    <h3 class="mb-3 text-base font-semibold">Compute curation scores</h3>
+    <p class="mb-3 text-sm text-zinc-300">
+      {confirmScorers === null
+        ? 'Runs every enabled scorer against the full pool.'
+        : `Runs: ${confirmScorers?.join(', ')}.`}
+    </p>
+    <p class="mb-3 text-xs text-zinc-400">
+      This is a deployment-wide, potentially long-running operation over the whole crop
+      pool. Only one compute job can run at a time.
+    </p>
+    <div class="flex justify-end gap-2">
+      <button type="button" class="btn" onclick={closeConfirm}>Cancel</button>
+      <button type="button" class="btn btn-primary" onclick={() => void confirmCompute()}>
+        Confirm
+      </button>
     </div>
-  </div>
+  </Modal>
 {/if}

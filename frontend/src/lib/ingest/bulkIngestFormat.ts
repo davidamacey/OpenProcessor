@@ -2,18 +2,6 @@
  *  shown is the one the backend served. */
 import type { BulkIngestProgress, BulkIngestRun } from '$lib/types_bulkIngest';
 
-/** `1h05m`, `4m09s`, `12s`; `--` when the backend has no estimate yet. */
-export function formatDuration(seconds: number | null | undefined): string {
-  if (seconds == null || !Number.isFinite(seconds)) return '--';
-  const total = Math.max(0, Math.round(seconds));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  if (h > 0) return `${h}h${String(m).padStart(2, '0')}m`;
-  if (m > 0) return `${m}m${String(s).padStart(2, '0')}s`;
-  return `${s}s`;
-}
-
 /** The rate to headline: while the run is live the last 30 s once it exists, else the
  *  run average (the recent window is empty once the run has stopped). */
 export function headlineRate(p: BulkIngestProgress, live: boolean): number | null {

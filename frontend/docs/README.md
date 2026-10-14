@@ -15,4 +15,4 @@ developer-side references only.
 Root-level docs: [README](../README.md) (setup and configuration),
 [CLAUDE.md](../CLAUDE.md) (the authoritative architecture, route,
 keyboard-shortcut and testing reference), [CHANGELOG](../CHANGELOG.md),
-[CONTRIBUTING](../CONTRIBUTING.md) and [SECURITY](../SECURITY.md).
+[CONTRIBUTING](../../CONTRIBUTING.md) and [SECURITY](../../SECURITY.md).

@@ -217,10 +217,7 @@ export function vlmNeedsAcknowledgement(entry: VlmMethodInfo): boolean {
 
 /** True when the server marks any of this axis's `/methods` entries
  *  `settable`. */
-export function isAxisSettable(
-  methods: MethodsResponse,
-  spec: SettingsAxisSpec,
-): boolean {
+function isAxisSettable(methods: MethodsResponse, spec: SettingsAxisSpec): boolean {
   return (methods[spec.bucket] as MethodInfoBase[]).some((e) => e.settable === true);
 }
 

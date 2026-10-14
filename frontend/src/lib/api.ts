@@ -270,7 +270,7 @@ export function scopeGeneration(): number {
  * it silently"), so a late answer from the previous project never
  * renders in the new one.
  */
-export function staleProjectError(): DOMException {
+function staleProjectError(): DOMException {
   return new DOMException('response from a previous project', 'AbortError');
 }
 
@@ -761,7 +761,7 @@ export function deleteProject(
  * validation list). The UI renders `message` verbatim and branches only on
  * the served `error` code.
  */
-export function structuredDetail<T extends { error: string; message: string }>(
+function structuredDetail<T extends { error: string; message: string }>(
   e: unknown,
 ): T | null {
   if (!(e instanceof ApiError)) return null;
@@ -2664,7 +2664,7 @@ export async function undoCropLabel(cropId: string, signal?: AbortSignal): Promi
  * an empty list is a guaranteed 422. Refuse it here, before any request
  * goes out — callers disable the action instead of sending it.
  */
-export function assertNonEmptyBatch(what: string, ids: readonly unknown[]): void {
+function assertNonEmptyBatch(what: string, ids: readonly unknown[]): void {
   if (ids.length === 0) {
     throw new Error(`${what}: nothing selected — no request sent`);
   }

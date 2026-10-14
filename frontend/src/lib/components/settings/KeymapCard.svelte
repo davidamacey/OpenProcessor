@@ -42,12 +42,12 @@
     type KeymapValidationReport,
   } from '$lib/api';
   import { focusOnMount } from '$lib/actions/focusOnMount';
-  import { trapFocus } from '$lib/actions/trapFocus';
   import { formatShortcutKey } from '$lib/keyboardDisplay';
   import { normalize, keyboardStore } from '$stores/keyboard.svelte';
   import { keymapStore } from '$stores/keymap.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import type { KeymapAction } from '$lib/keymapFallback';
+  import Modal from '$components/Modal.svelte';
 
   const VALIDATE_DEBOUNCE_MS = 350;
 
@@ -690,63 +690,55 @@
   </div>
 
   {#if confirmOpen}
-    <div
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      role="dialog"
-      aria-modal="true"
-      use:trapFocus={{ onEscape: closeConfirm }}
+    <Modal
+      label="Save keyboard shortcuts"
+      onclose={closeConfirm}
+      layer="top"
+      scrim="bg-black/70"
+      panelClass="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-950 p-4"
     >
-      <div
-        class="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-950 p-4"
-        use:focusOnMount
-      >
-        <h3 class="mb-2 text-sm font-semibold text-white">Save keyboard shortcuts?</h3>
-        <ul class="mb-3 max-h-48 overflow-y-auto text-xs text-zinc-400">
-          {#each changedActionIds() as id (id)}
-            <li>
-              {keymapStore.label(id)}: {keysOf(id).map(formatShortcutKey).join(', ')}
-            </li>
-          {/each}
-        </ul>
-        <div class="flex justify-end gap-2">
-          <button class="text-sm text-zinc-400" onclick={closeConfirm}>Cancel</button>
-          <button
-            class="rounded bg-blue-700 px-3 py-1.5 text-sm text-white hover:bg-blue-600"
-            onclick={() => void doSave(false)}
-          >
-            Save
-          </button>
-        </div>
+      <h3 class="mb-2 text-sm font-semibold text-white">Save keyboard shortcuts?</h3>
+      <ul class="mb-3 max-h-48 overflow-y-auto text-xs text-zinc-400">
+        {#each changedActionIds() as id (id)}
+          <li>
+            {keymapStore.label(id)}: {keysOf(id).map(formatShortcutKey).join(', ')}
+          </li>
+        {/each}
+      </ul>
+      <div class="flex justify-end gap-2">
+        <button class="text-sm text-zinc-400" onclick={closeConfirm}>Cancel</button>
+        <button
+          class="rounded bg-blue-700 px-3 py-1.5 text-sm text-white hover:bg-blue-600"
+          onclick={() => void doSave(false)}
+        >
+          Save
+        </button>
       </div>
-    </div>
+    </Modal>
   {/if}
 
   {#if resetAllOpen}
-    <div
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      role="dialog"
-      aria-modal="true"
-      use:trapFocus={{ onEscape: () => (resetAllOpen = false) }}
+    <Modal
+      label="Reset every shortcut"
+      onclose={() => (resetAllOpen = false)}
+      layer="top"
+      scrim="bg-black/70"
+      panelClass="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-950 p-4"
     >
-      <div
-        class="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-950 p-4"
-        use:focusOnMount
-      >
-        <h3 class="mb-2 text-sm font-semibold text-white">
-          Reset every shortcut to its default?
-        </h3>
-        <div class="flex justify-end gap-2">
-          <button class="text-sm text-zinc-400" onclick={() => (resetAllOpen = false)}>
-            Cancel
-          </button>
-          <button
-            class="rounded bg-red-700 px-3 py-1.5 text-sm text-white hover:bg-red-600"
-            onclick={() => void doResetAll()}
-          >
-            Reset all
-          </button>
-        </div>
+      <h3 class="mb-2 text-sm font-semibold text-white">
+        Reset every shortcut to its default?
+      </h3>
+      <div class="flex justify-end gap-2">
+        <button class="text-sm text-zinc-400" onclick={() => (resetAllOpen = false)}>
+          Cancel
+        </button>
+        <button
+          class="rounded bg-red-700 px-3 py-1.5 text-sm text-white hover:bg-red-600"
+          onclick={() => void doResetAll()}
+        >
+          Reset all
+        </button>
       </div>
-    </div>
+    </Modal>
   {/if}
 </div>

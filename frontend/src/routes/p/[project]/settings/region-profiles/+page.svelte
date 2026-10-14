@@ -13,7 +13,7 @@
   import ProfileImpactPanel from '$components/profiles/ProfileImpactPanel.svelte';
   import ProfileVocabularyPanel from '$components/profiles/ProfileVocabularyPanel.svelte';
   import type { CloneSource } from '$lib/config/configList.svelte';
-  import { formatTimestamp } from '$lib/formatDate';
+  import { formatTimestamp } from '$lib/format/date';
   import { PROFILE_ACTIVE_COPY } from '$lib/profiles/profileCopy';
   import { createProfileList } from '$lib/profiles/profileListController.svelte';
   import { profilesAvailability } from '$lib/profiles/profilesAvailability.svelte';

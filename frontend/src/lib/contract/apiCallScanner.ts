@@ -144,7 +144,7 @@ function maskNonCode(src: string): string {
  *  the small set of routes that stay global — P1 projects cutover),
  *  skipping comments and ordinary string literals so JSDoc examples
  *  don't count. */
-export function findApiPrefixTemplates(
+function findApiPrefixTemplates(
   src: string,
   marker: string = '${scoped()}',
 ): Array<{ start: number; end: number; text: string }> {

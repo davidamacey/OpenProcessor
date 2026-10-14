@@ -140,10 +140,10 @@ describe('EmbeddingPlot.svelte: side-by-side layout + click-to-enlarge', () => {
     // ge=32, le=512) -- 640 was silently rejected with a 422 and never
     // rendered anything, caught by live browser verification.
     expect(src).toMatch(/getThumbUrl\(expandedPreviewId, 512\)/);
-    expect(src).toMatch(/role="dialog"/);
+    expect(src).toMatch(/<Modal\s[^>]*label="Selected crop preview"/);
   });
 
-  it("the enlarge modal is dismissible via a close button, matching CropCard's existing modal pattern (no backdrop-click/keydown a11y footguns)", () => {
+  it('the enlarge modal is the shared Modal (Escape and scrim close it) and keeps its close button, with no hand-written keydown handler', () => {
     const start = src.indexOf('{#if expandedPreviewId}');
     const block = src.slice(start); // last top-level block in the file
     expect(block).toMatch(/aria-label="Close"/);
