@@ -211,6 +211,57 @@ def _check_handles(ids: list[str], handles: Mapping[str, str | None] | None) -> 
             raise _refuse('the scroll/task handle belongs to another project', target=handle[:32])
 
 
+def _check_index_request(
+    method: str, segs: list[str], body: Any, snapshot: Mapping[str, ProjectRecord]
+) -> None:
+    """``/{index}[,{index}]/<action>``: the allowlisted index-scoped shapes."""
+    head = segs[0]
+    if segs[1:] == ['_search', 'point_in_time'] and method == 'POST':
+        # Opens a point-in-time; its id is remembered as this bind's handle.
+        _check_targets(head.split(','), write=False, snapshot=snapshot)
+        return
+    rest = tuple(segs[1:2]) + (('*',) if len(segs) > 2 else ())
+    if len(segs) > 3 or method not in _INDEX_SHAPES.get(rest, frozenset()):
+        raise _refuse(f'{method} /{head}/{"/".join(segs[1:])} is not an allowed request shape')
+    action = rest[0] if rest else ''
+    targets = head.split(',')
+    write = _is_write(method, action)
+    if action in _QUERY_ACTIONS or action in {'_msearch', '_bulk'}:
+        targets = targets + _body_targets(action, body)
+    if not rest and method == 'PUT':
+        payload = _json_value(body)
+        if isinstance(payload, dict) and payload.get('aliases'):
+            raise _refuse('creating an index with aliases is never allowed', target=head)
+    _check_targets(targets, write=write, snapshot=snapshot)
+
+
+def _check_pit_search(body: Any, handles: Mapping[str, str | None] | None) -> None:
+    """The only index-less search: a point-in-time search, which reaches
+    exactly the index its (remembered) PIT was opened on."""
+    payload = _json_value(body)
+    pit = payload.get('pit') if isinstance(payload, dict) else None
+    pit_id = pit.get('id') if isinstance(pit, dict) else None
+    if not isinstance(pit_id, str):
+        raise _refuse('a search must name its index (it would reach every index)')
+    if _index_refs(payload):
+        raise _refuse('a point-in-time search may not name other indexes')
+    _check_handles([pit_id], handles)
+
+
+def _check_pit_close(body: Any, handles: Mapping[str, str | None] | None) -> None:
+    payload = _json_value(body)
+    raw = payload.get('pit_id') if isinstance(payload, dict) else None
+    ids = [raw] if isinstance(raw, str) else [str(x) for x in raw or []]
+    _check_handles(ids, handles)
+
+
+def _check_cat_indices(segs: list[str]) -> None:
+    if not _REGISTRY_ADMIN.get():
+        raise _refuse('_cat/indices is only for the global project list')
+    for name in segs[2].split(','):
+        _check_name(name)
+
+
 def check_request(  # noqa: PLR0911 - one branch per allowlisted shape family
     method: str,
     url: str,
@@ -229,23 +280,7 @@ def check_request(  # noqa: PLR0911 - one branch per allowlisted shape family
     head = segs[0] if segs else ''
 
     if not head.startswith('_') and segs:
-        if segs[1:] == ['_search', 'point_in_time'] and method == 'POST':
-            # Opens a point-in-time; its id is remembered as this bind's handle.
-            _check_targets(head.split(','), write=False, snapshot=snapshot)
-            return
-        rest = tuple(segs[1:2]) + (('*',) if len(segs) > 2 else ())
-        if len(segs) > 3 or method not in _INDEX_SHAPES.get(rest, frozenset()):
-            raise _refuse(f'{method} /{head}/{"/".join(segs[1:])} is not an allowed request shape')
-        action = rest[0] if rest else ''
-        targets = head.split(',')
-        write = _is_write(method, action)
-        if action in _QUERY_ACTIONS or action in {'_msearch', '_bulk'}:
-            targets = targets + _body_targets(action, body)
-        if not rest and method == 'PUT':
-            payload = _json_value(body)
-            if isinstance(payload, dict) and payload.get('aliases'):
-                raise _refuse('creating an index with aliases is never allowed', target=head)
-        _check_targets(targets, write=write, snapshot=snapshot)
+        _check_index_request(method, segs, body, snapshot)
         return
 
     key = (method, tuple(segs))
@@ -261,22 +296,10 @@ def check_request(  # noqa: PLR0911 - one branch per allowlisted shape family
         )
         return
     if segs == ['_search'] and method in _READ_POST:
-        # The only index-less search: a point-in-time search, which reaches
-        # exactly the index its (remembered) PIT was opened on.
-        payload = _json_value(body)
-        pit = payload.get('pit') if isinstance(payload, dict) else None
-        pit_id = pit.get('id') if isinstance(pit, dict) else None
-        if not isinstance(pit_id, str):
-            raise _refuse('a search must name its index (it would reach every index)')
-        if _index_refs(payload):
-            raise _refuse('a point-in-time search may not name other indexes')
-        _check_handles([pit_id], handles)
+        _check_pit_search(body, handles)
         return
     if segs == ['_search', 'point_in_time'] and method == 'DELETE':
-        payload = _json_value(body)
-        raw = payload.get('pit_id') if isinstance(payload, dict) else None
-        ids = [raw] if isinstance(raw, str) else [str(x) for x in raw or []]
-        _check_handles(ids, handles)
+        _check_pit_close(body, handles)
         return
     if segs[:2] == ['_search', 'scroll'] and len(segs) <= 3 and method in {'GET', 'POST', 'DELETE'}:
         _check_handles(_handle_ids(segs, body, params), handles)
@@ -288,10 +311,7 @@ def check_request(  # noqa: PLR0911 - one branch per allowlisted shape family
         _check_targets(segs[3].split(','), write=False, snapshot=snapshot)
         return
     if segs[:2] == ['_cat', 'indices'] and len(segs) == 3 and method == 'GET':
-        if not _REGISTRY_ADMIN.get():
-            raise _refuse('_cat/indices is only for the global project list')
-        for name in segs[2].split(','):
-            _check_name(name)
+        _check_cat_indices(segs)
         return
     raise _refuse(f'{method} {url.split("?", 1)[0]} is not an allowed request shape')
 
