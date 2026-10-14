@@ -1,15 +1,10 @@
 """Split-assignment, atomic-write and image-pixel helpers shared by the
 curation dataset exporters.
 
-Pulled out of ``export.py`` to keep that module under the repo's 700-LOC
-file-size ratchet. Everything here is imported straight back
-into ``export.py`` and re-exported from there, so callers of the
-multi-class exporter only ever need ``from
-src.services.curation.export import ...``. The single-class / class-subset
-exporter (:mod:`src.services.curation.export_single_class`) imports the
-same building blocks directly — deliberately, so the two exporters share
-one sampler, one splitter, one resize worker and one atomic-write
-primitive rather than growing divergent copies.
+Both exporters (:mod:`src.services.curation.export` and
+:mod:`src.services.curation.export_single_class`) import these building
+blocks directly, so they share one sampler, one splitter, one resize worker
+and one atomic-write primitive rather than growing divergent copies.
 """
 
 from __future__ import annotations

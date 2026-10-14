@@ -18,11 +18,8 @@ from pydantic import BaseModel, Field
 
 from src.routers.curation._common import OpenSearchDep, RegistryDep, items_index, logger, router
 from src.routers.curation._common_models import ExportYoloRequest
-from src.services.curation.export import (
-    REGISTRY_ARTIFACT_CONTENT_TYPES,
-    GenericYoloExportService,
-    resolve_current_export_dir,
-)
+from src.services.curation.export import GenericYoloExportService, resolve_current_export_dir
+from src.services.curation.export_models import REGISTRY_ARTIFACT_CONTENT_TYPES
 from src.services.curation.export_readiness import NothingToExportError, export_blocking_reasons
 
 
@@ -118,7 +115,7 @@ SINGLE_CLASS_DATASET_KIND = 'single_class'
 
 
 def _read_manifest(d: Path) -> dict[str, Any] | None:
-    from src.services.curation.export import ARTIFACT_FILENAMES
+    from src.services.curation.export_models import ARTIFACT_FILENAMES
 
     manifest = d / ARTIFACT_FILENAMES['manifest']
     if not manifest.is_file():
@@ -165,10 +162,8 @@ def _scan_export_datasets() -> list[dict[str, Any]]:
     a profile root.
     """
     from src.config import get_curation_config
-    from src.services.curation.export_single_class import (
-        SingleClassExportProfile,
-        resolve_current_single_class_dir,
-    )
+    from src.services.curation.export_models import SingleClassExportProfile
+    from src.services.curation.export_single_class import resolve_current_single_class_dir
 
     cfg = get_curation_config()
     root = cfg.export_root

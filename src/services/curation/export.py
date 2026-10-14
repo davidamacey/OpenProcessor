@@ -54,7 +54,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -68,6 +67,12 @@ from src.services.curation.export_images import (
     normalized_box,
     select_export_images,
     yolo_line,
+)
+from src.services.curation.export_models import (
+    ARTIFACT_FILENAMES,
+    ExportProfile,
+    ExportResult,
+    SplitCounts,
 )
 from src.services.curation.export_negatives import (
     plan_multi_class_negatives,
@@ -97,13 +102,12 @@ from src.services.curation.export_support import (
     allocate_export_dir,
     atomic_symlink_flip,
     atomic_write_text,
-    even_stratified_sample,
     frozen_test_sha_of,
-    hash_split,
     label_content_sha,
     scroll_hits,
     source_frozen_test_sha,
 )
+from src.services.curation.export_writers import class_split_rows
 from src.services.curation.holdout import compute_holdout_sha
 
 
@@ -112,88 +116,6 @@ if TYPE_CHECKING:
 
 
 logger = get_logger(__name__)
-
-# Artifact filenames served read-only by `GET /curation/export/registry/{artifact}`.
-# Fixed, whitelisted set — never derived from user input.
-ARTIFACT_FILENAMES: dict[str, str] = {
-    'manifest': 'manifest.json',
-    'data_yaml': 'data.yaml',
-    'class_registry': 'class_registry.json',
-    'label_stats': 'label_stats.json',
-}
-
-REGISTRY_ARTIFACT_CONTENT_TYPES: dict[str, str] = {
-    'class_registry.json': 'application/json',
-    'data.yaml': 'application/x-yaml',
-    'manifest.json': 'application/json',
-    'label_stats.json': 'application/json',
-}
-
-
-@dataclass(frozen=True)
-class ExportProfile:
-    """Deployment-tunable export knobs."""
-
-    name: str = 'default'
-    train_ratio: float = 0.8
-    val_ratio: float = 0.1
-    # test_ratio is whatever remains: 1 - train_ratio - val_ratio.
-
-
-@dataclass
-class SplitCounts:
-    train: int = 0
-    val: int = 0
-    test: int = 0
-
-    def to_dict(self) -> dict[str, int]:
-        return {'train': self.train, 'val': self.val, 'test': self.test}
-
-
-@dataclass
-class ExportResult:
-    """What one export wrote. ``split_counts`` / ``image_count`` count
-    images; ``split_object_counts`` / ``object_count`` count label lines."""
-
-    export_dir: str
-    version_tag: str
-    manifest_path: str
-    data_yaml_path: str
-    dataset_sha: str
-    split_counts: SplitCounts
-    image_count: int
-    class_count: int
-    classes_with_objects: int
-    started_at: str
-    finished_at: str
-    current_symlink: str
-    object_count: int = 0
-    split_object_counts: SplitCounts = field(default_factory=SplitCounts)
-    unlabeled_items_on_exported_images: int = 0
-    images_with_unlabeled_items: int = 0
-    images_dropped_not_fully_labeled: int = 0
-    skipped_items: dict[str, int] = field(default_factory=dict)
-
-
-def _class_split_rows(
-    per_class: dict[int, SplitCounts], id_map: dict[int, int], names: list[str]
-) -> list[dict[str, Any]]:
-    """Per-class object counts per split, one row per dense export id.
-
-    Every class in the export's vocabulary gets a row, including one with
-    no instances at all — training preflight reads these rows to block a
-    class the run would train on but that has nothing in train or val.
-    """
-    registry_id_of = {dense_id: registry_id for registry_id, dense_id in id_map.items()}
-    return [
-        {
-            'class_id': registry_id_of[dense_id],
-            'export_id': dense_id,
-            'class_name': names[dense_id],
-            **per_class[dense_id].to_dict(),
-        }
-        for dense_id in range(len(names))
-    ]
 
 
 def resolve_current_export_dir(config: CurationConfig | None = None) -> Path:
@@ -589,7 +511,7 @@ class GenericYoloExportService:
             'object_count': len(item_ids),
             'split_counts': counts.to_dict(),
             'split_object_counts': object_counts.to_dict(),
-            'class_split_counts': _class_split_rows(per_class, id_map, names),
+            'class_split_counts': class_split_rows(per_class, id_map, names),
             'class_count': len(names),
             'classes_with_objects': classes_with_objects,
             **partial,
@@ -646,20 +568,3 @@ class GenericYoloExportService:
             images_dropped_not_fully_labeled=partial['images_dropped_not_fully_labeled'],
             skipped_items=skipped_items,
         )
-
-
-__all__ = [
-    'ARTIFACT_FILENAMES',
-    'REGISTRY_ARTIFACT_CONTENT_TYPES',
-    'ExportProfile',
-    'ExportResult',
-    'GenericYoloExportService',
-    'SplitCounts',
-    'atomic_symlink_flip',
-    'atomic_write_text',
-    'even_stratified_sample',
-    'frozen_test_sha_of',
-    'hash_split',
-    'label_content_sha',
-    'resolve_current_export_dir',
-]

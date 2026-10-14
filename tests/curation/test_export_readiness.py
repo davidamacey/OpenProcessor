@@ -280,10 +280,8 @@ def test_preflight_blocks_an_empty_multi_class_export(
 @pytest.mark.asyncio
 async def test_single_class_export_with_no_matching_item_refuses(tmp_path: Path) -> None:
     from src.config.region_fields import RegionFields
-    from src.services.curation.export_single_class import (
-        SingleClassExportProfile,
-        SingleClassExportService,
-    )
+    from src.services.curation.export_models import SingleClassExportProfile
+    from src.services.curation.export_single_class import SingleClassExportService
 
     cfg = CurationConfig(export_root=tmp_path / 'exports', source_root=tmp_path / 'images')
     reg = ClassRegistry(path=tmp_path / 'registry' / 'class_registry.json')

@@ -17,11 +17,13 @@ from fastapi.testclient import TestClient
 
 from src.routers.curation._common_models import ExportYoloRequest
 from src.routers.curation.export import export_yolo as export_yolo_handler
-from src.services.curation.export import ExportResult, GenericYoloExportService, SplitCounts
+from src.services.curation.export_models import ExportResult, SplitCounts
 
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from src.services.curation.export import GenericYoloExportService
 
 
 @pytest.mark.asyncio
@@ -351,12 +353,12 @@ async def test_single_class_handler_builds_the_profile_from_the_request(
     from src.routers.curation.export_single_class import (
         export_single_class as export_single_class_handler,
     )
-    from src.services.curation.export_single_class import (
+    from src.services.curation.export_models import (
         SingleClassExportProfile,
         SingleClassExportResult,
-        SingleClassExportService,
-        SingleClassSplitCounts,
+        SplitCounts,
     )
+    from src.services.curation.export_single_class import SingleClassExportService
 
     captured: dict[str, Any] = {}
 
@@ -381,7 +383,7 @@ async def test_single_class_handler_builds_the_profile_from_the_request(
             data_yaml_path='/tmp/fake-single-class/data.yaml',
             dataset_sha='abc123',
             frozen_test_sha='def456',
-            split_counts=SingleClassSplitCounts(train=8, val=1, test=1),
+            split_counts=SplitCounts(train=8, val=1, test=1),
             image_count=10,
             class_count=2,
             positive_images=10,
