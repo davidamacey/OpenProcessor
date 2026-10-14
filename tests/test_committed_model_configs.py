@@ -84,13 +84,13 @@ def test_yolo26_config_matches_the_exporter(tmp_path: Path) -> None:
 
 
 def test_pe_image_config_matches_the_renderer() -> None:
-    from export_pe_image_encoder import PETritonConfig, render_config
+    from pe_image_triton_config import PETritonConfig, render_config
 
     assert committed('pe_image_encoder') == signature(render_config(PETritonConfig()))
 
 
 def test_pe_text_config_matches_the_renderer() -> None:
-    from export_pe_text_encoder import PETextTritonConfig, render_config
+    from pe_text_triton_config import PETextTritonConfig, render_config
 
     assert committed('pe_text_encoder') == signature(render_config(PETextTritonConfig()))
 

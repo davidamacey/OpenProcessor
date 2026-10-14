@@ -19,8 +19,8 @@ export/export_mobileclip_image_encoder.py	2	ratchet: may only go down
 export/export_models.py	1	ratchet: may only go down
 export/export_paddleocr_det.py	2	ratchet: may only go down
 export/export_paddleocr_rec.py	5	ratchet: may only go down
-export/export_pe_text_encoder.py	2	ratchet: may only go down
 export/export_scrfd.py	2	ratchet: may only go down
+export/pe_text_validate.py	2	ratchet: may only go down
 export/trt_utils.py	2	ratchet: may only go down
 export/yolo_formats.py	2	ratchet: may only go down
 export/yolo_model_config.py	1	ratchet: may only go down

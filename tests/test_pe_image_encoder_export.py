@@ -34,6 +34,10 @@ if str(EXPORT_DIR) not in sys.path:
     sys.path.insert(0, str(EXPORT_DIR))
 
 import export_pe_image_encoder as pe_export  # noqa: E402
+import pe_image_constants  # noqa: E402
+import pe_image_triton_config  # noqa: E402
+import pe_image_validate  # noqa: E402
+import pe_onnx_common  # noqa: E402
 
 
 # =============================================================================
@@ -45,7 +49,7 @@ class TestClientContract:
     """The rendered config must match what PEEncoder actually sends/reads."""
 
     def test_defaults_match_the_client_constants(self) -> None:
-        cfg = pe_export.PETritonConfig()
+        cfg = pe_image_triton_config.PETritonConfig()
         assert cfg.model_name == PE_IMAGE_MODEL
         assert cfg.embedding_dim == PE_EMBEDDING_DIM
         assert cfg.image_size == PE_SIZE
@@ -58,12 +62,12 @@ class TestClientContract:
         """PEEncoder chunks crops at PE_CROP_MAX_BATCH; Triton must accept that."""
         from src.clients.pe_encoder import PE_CROP_MAX_BATCH
 
-        assert pe_export.PETritonConfig().max_batch_size >= PE_CROP_MAX_BATCH
+        assert pe_image_triton_config.PETritonConfig().max_batch_size >= PE_CROP_MAX_BATCH
 
     def test_committed_template_matches_the_renderer(self) -> None:
         committed = Path(__file__).resolve().parents[1] / 'models' / PE_IMAGE_MODEL
         body = (committed / 'config.pbtxt').read_text()
-        assert body == pe_export.render_config(pe_export.PETritonConfig())
+        assert body == pe_image_triton_config.render_config(pe_image_triton_config.PETritonConfig())
 
     def test_checkpoint_flags(self) -> None:
         parser = pe_export.build_parser()
@@ -75,7 +79,7 @@ class TestClientContract:
         assert args.verify_checkpoint is False
 
     def test_rendered_config_declares_the_client_tensors(self) -> None:
-        out = pe_export.render_config(pe_export.PETritonConfig())
+        out = pe_image_triton_config.render_config(pe_image_triton_config.PETritonConfig())
         assert f'name: "{PE_IMAGE_MODEL}"' in out
         assert 'platform: "tensorrt_plan"' in out
         assert 'name: "images"' in out
@@ -93,39 +97,49 @@ class TestClientContract:
 
 class TestRenderConfig:
     def test_dynamic_batching_block_is_bounded_by_max_batch(self) -> None:
-        out = pe_export.render_config(pe_export.PETritonConfig(max_batch_size=8))
+        out = pe_image_triton_config.render_config(
+            pe_image_triton_config.PETritonConfig(max_batch_size=8)
+        )
         assert 'max_batch_size: 8' in out
         assert 'preferred_batch_size: [ 4, 8 ]' in out
         assert 'dynamic_batching' in out
 
     def test_max_batch_below_the_ladder_still_renders_a_valid_list(self) -> None:
-        out = pe_export.render_config(pe_export.PETritonConfig(max_batch_size=2))
+        out = pe_image_triton_config.render_config(
+            pe_image_triton_config.PETritonConfig(max_batch_size=2)
+        )
         assert 'preferred_batch_size: [ 2 ]' in out
 
     def test_ort_platform_switches_backend_and_provenance(self) -> None:
-        out = pe_export.render_config(pe_export.PETritonConfig(platform='onnxruntime_onnx'))
+        out = pe_image_triton_config.render_config(
+            pe_image_triton_config.PETritonConfig(platform='onnxruntime_onnx')
+        )
         assert 'platform: "onnxruntime_onnx"' in out
         assert 'tensorrt_plan' not in out
         assert 'build_pe_ort_fallback.sh' in out
 
     def test_trt_platform_points_at_the_trt_builder(self) -> None:
-        out = pe_export.render_config(pe_export.PETritonConfig())
+        out = pe_image_triton_config.render_config(pe_image_triton_config.PETritonConfig())
         assert 'build_pe_trt.sh' in out
         assert 'onnxruntime_onnx' not in out
 
     def test_multi_gpu_instance_group(self) -> None:
-        out = pe_export.render_config(pe_export.PETritonConfig(gpu_ids=(0, 2), instance_count=3))
+        out = pe_image_triton_config.render_config(
+            pe_image_triton_config.PETritonConfig(gpu_ids=(0, 2), instance_count=3)
+        )
         assert 'gpus: [ 0, 2 ]' in out
         assert 'count: 3' in out
 
     def test_custom_image_size_and_dim(self) -> None:
-        out = pe_export.render_config(pe_export.PETritonConfig(image_size=224, embedding_dim=768))
+        out = pe_image_triton_config.render_config(
+            pe_image_triton_config.PETritonConfig(image_size=224, embedding_dim=768)
+        )
         assert 'dims: [ 3, 224, 224 ]' in out
         assert 'dims: [ 768 ]' in out
 
     @pytest.mark.parametrize('max_batch', [1, 4, 32, 64, 128])
     def test_preferred_ladder_never_exceeds_max_batch(self, max_batch: int) -> None:
-        ladder = pe_export.preferred_batch_sizes(max_batch)
+        ladder = pe_image_triton_config.preferred_batch_sizes(max_batch)
         assert ladder
         assert max(ladder) <= max_batch
 
@@ -155,11 +169,11 @@ class TestConfigValidation:
     )
     def test_rejects_invalid_field(self, field: str, value: object) -> None:
         with pytest.raises(ValueError, match=field.split('_', maxsplit=1)[0]):
-            pe_export.PETritonConfig(**{field: value})
+            pe_image_triton_config.PETritonConfig(**{field: value})
 
     def test_accepts_the_two_supported_platforms(self) -> None:
-        for platform in pe_export.PLATFORMS:
-            assert pe_export.PETritonConfig(platform=platform).platform == platform
+        for platform in pe_image_constants.PLATFORMS:
+            assert pe_image_triton_config.PETritonConfig(platform=platform).platform == platform
 
 
 # =============================================================================
@@ -255,8 +269,8 @@ class TestConfigOnlyMode:
 # =============================================================================
 
 
-def _good_report() -> pe_export.OnnxReport:
-    return pe_export.OnnxReport(
+def _good_report() -> pe_image_validate.OnnxReport:
+    return pe_image_validate.OnnxReport(
         input_name='images',
         input_shape=['batch', 3, PE_SIZE, PE_SIZE],
         outputs=[('image_embeddings', ['batch', PE_EMBEDDING_DIM])],
@@ -268,14 +282,21 @@ def _good_report() -> pe_export.OnnxReport:
 
 class TestCheckClientContract:
     def test_a_conforming_graph_reports_no_problems(self) -> None:
-        assert pe_export.check_client_contract(_good_report(), pe_export.PETritonConfig()) == []
+        assert (
+            pe_image_validate.check_client_contract(
+                _good_report(), pe_image_triton_config.PETritonConfig()
+            )
+            == []
+        )
 
     def test_optimum_style_tensor_names_are_flagged(self) -> None:
         report = _good_report()
         report.input_name = 'pixel_values'
         report.embedding_name = 'image_embeds'
         report.outputs = [('image_embeds', ['batch', PE_EMBEDDING_DIM])]
-        problems = pe_export.check_client_contract(report, pe_export.PETritonConfig())
+        problems = pe_image_validate.check_client_contract(
+            report, pe_image_triton_config.PETritonConfig()
+        )
         assert len(problems) == 2
         assert any('pixel_values' in p for p in problems)
         assert any('image_embeds' in p for p in problems)
@@ -284,27 +305,36 @@ class TestCheckClientContract:
         """The batch-1 trace bug: loads fine, then rejects every batch > 1."""
         report = _good_report()
         report.dynamic_batch = False
-        problems = pe_export.check_client_contract(report, pe_export.PETritonConfig())
+        problems = pe_image_validate.check_client_contract(
+            report, pe_image_triton_config.PETritonConfig()
+        )
         assert any('static' in p for p in problems)
 
     def test_wrong_embedding_width_is_flagged(self) -> None:
         report = _good_report()
         report.embedding_dim = 512
         report.outputs = [('image_embeddings', ['batch', 512])]
-        problems = pe_export.check_client_contract(report, pe_export.PETritonConfig())
+        problems = pe_image_validate.check_client_contract(
+            report, pe_image_triton_config.PETritonConfig()
+        )
         assert any('512' in p for p in problems)
 
     def test_missing_pooled_output_is_flagged(self) -> None:
         report = _good_report()
         report.embedding_name = None
         report.embedding_dim = None
-        problems = pe_export.check_client_contract(report, pe_export.PETritonConfig())
+        problems = pe_image_validate.check_client_contract(
+            report, pe_image_triton_config.PETritonConfig()
+        )
         assert any('pooled-embedding' in p for p in problems)
 
     def test_a_skipped_probe_asserts_nothing(self) -> None:
         """No onnxruntime installed must not fabricate a passing verdict."""
-        report = pe_export.OnnxReport(skipped=True)
-        assert pe_export.check_client_contract(report, pe_export.PETritonConfig()) == []
+        report = pe_image_validate.OnnxReport(skipped=True)
+        assert (
+            pe_image_validate.check_client_contract(report, pe_image_triton_config.PETritonConfig())
+            == []
+        )
 
 
 class TestValidateOnnxAgainstARealGraph:
@@ -350,7 +380,7 @@ class TestValidateOnnxAgainstARealGraph:
         )
         model = helper.make_model(
             graph,
-            opset_imports=[helper.make_opsetid('', pe_export.ONNX_OPSET_VERSION)],
+            opset_imports=[helper.make_opsetid('', pe_image_constants.ONNX_OPSET_VERSION)],
             # Pin the IR version to the one paired with opset 17. The
             # installed onnx package defaults to a newer IR than the
             # installed onnxruntime accepts ("Unsupported model IR version").
@@ -362,31 +392,36 @@ class TestValidateOnnxAgainstARealGraph:
 
     def test_dynamic_batch_export_satisfies_the_contract(self, tmp_path: Path) -> None:
         onnx_path = self._stub_onnx(tmp_path / 'dyn.onnx', batch_dim='batch')
-        report = pe_export.validate_onnx(onnx_path)
+        report = pe_image_validate.validate_onnx(onnx_path)
         assert report.skipped is False
         assert report.input_name == 'images'
         assert report.embedding_name == 'image_embeddings'
         assert report.embedding_dim == PE_EMBEDDING_DIM
         assert report.dynamic_batch is True
-        assert pe_export.check_client_contract(report, pe_export.PETritonConfig()) == []
+        assert (
+            pe_image_validate.check_client_contract(report, pe_image_triton_config.PETritonConfig())
+            == []
+        )
 
     def test_batch_one_trace_is_caught_as_a_static_leading_axis(self, tmp_path: Path) -> None:
         """The exact bug the batch-2 trace dummy exists to prevent."""
         onnx_path = self._stub_onnx(tmp_path / 'static.onnx', batch_dim=1)
-        report = pe_export.validate_onnx(onnx_path)
+        report = pe_image_validate.validate_onnx(onnx_path)
         assert report.dynamic_batch is False
-        problems = pe_export.check_client_contract(report, pe_export.PETritonConfig())
+        problems = pe_image_validate.check_client_contract(
+            report, pe_image_triton_config.PETritonConfig()
+        )
         assert any('static' in p for p in problems)
 
 
 class TestDynamicDimDetection:
     @pytest.mark.parametrize('dim', ['batch', None, -1, 0])
     def test_symbolic_dims_are_dynamic(self, dim: object) -> None:
-        assert pe_export._is_dynamic(dim) is True
+        assert pe_onnx_common._is_dynamic(dim) is True
 
     @pytest.mark.parametrize('dim', [1, 2, 32, PE_SIZE])
     def test_concrete_dims_are_static(self, dim: int) -> None:
-        assert pe_export._is_dynamic(dim) is False
+        assert pe_onnx_common._is_dynamic(dim) is False
 
 
 class TestRotaryLayoutStep:
