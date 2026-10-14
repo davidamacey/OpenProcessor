@@ -1,4 +1,3 @@
-export/export_scrfd.py	738	split in PR 7
 frontend/CLAUDE.md	3104	trim in PR 5
 frontend/e2e/conftest.py	825	split in PR 8
 frontend/scripts/capture_docs_screenshots.py	1008	split in PR 8
