@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { reviewPageSource } from '$lib/testing/reviewPageSources';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -34,12 +35,12 @@ describe('StrategyBar.svelte', () => {
 });
 
 describe('routes wired to <StrategyBar> keep their keydown listener count unchanged', () => {
-  it('review/+page.svelte still has exactly the one pre-existing window keydown forward', () => {
+  it('the review page (route, controllers, components) still has exactly the one pre-existing window keydown forward', () => {
     // Pre-existing (not introduced by this phase): forwards arrow/[/]/
     // Backspace keys into the region bbox canvas while in edit mode. If
     // wiring in <StrategyBar> ever adds a second window.addEventListener
     // call here, this catches it.
-    const src = read('../../routes/p/[project]/review/+page.svelte');
+    const src = reviewPageSource();
     const matches = src.match(/window\.addEventListener\(['"]keydown['"]/g) ?? [];
     expect(matches).toHaveLength(1);
   });

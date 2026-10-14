@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { reviewPageSource } from '$lib/testing/reviewPageSources';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..', '..');
@@ -73,7 +74,6 @@ describe('widget_tag assignment-hiding wiring', () => {
   });
 
   it('the review page does not import classVisibility itself — it delegates to classPicker.ts/classesStore', () => {
-    const src = read('src/routes/p/[project]/review/+page.svelte');
-    expect(src).not.toMatch(/classVisibility/);
+    expect(reviewPageSource()).not.toMatch(/classVisibility/);
   });
 });

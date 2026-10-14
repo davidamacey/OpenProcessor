@@ -4,18 +4,18 @@
  * in this repo; see reviewFilterConsistency.test.ts's header comment for the
  * established precedent).
  */
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { reviewSource } from '$lib/testing/reviewPageSources';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.resolve(here, './+page.svelte'), 'utf-8');
+const src = reviewSource('lib/review/reviewFilterController.svelte.ts');
+const barSrc = reviewSource('lib/components/review/ReviewFilterBar.svelte');
+const tabsSrc = reviewSource('lib/review/reviewTabsController.svelte.ts');
+const loaderSrc = reviewSource('lib/review/reviewQueueLoader.svelte.ts');
 
 describe('generic served-enum filter bar (no tab/param-specific code)', () => {
   it('renders one ServedFilterField (drawn by the spec kind) per activeFilterSpecs entry, keyed by spec.param', () => {
-    expect(src).toMatch(/\{#each activeFilterSpecs as spec \(spec\.param\)\}/);
-    expect(src).toMatch(/<ServedFilterField[\s\S]*?onchange=\{setEnumFilter\}/);
+    expect(barSrc).toMatch(/\{#each activeFilterSpecs as spec \(spec\.param\)\}/);
+    expect(barSrc).toMatch(/<ServedFilterField[\s\S]*?onchange=\{setEnumFilter\}/);
   });
 
   it("activeFilterSpecs is the active tab's served specs minus the params the page draws itself", () => {
@@ -51,11 +51,20 @@ describe('generic served-enum filter bar (no tab/param-specific code)', () => {
   });
 
   it('enumFilterValues resets (state + URL) on every tab-click, not just on mount', () => {
-    const idx = src.indexOf("url.searchParams.set('tab', t.urlId);");
+    // The tab switch (tabs controller) hands its URL to the filter
+    // controller's resetForTab, which clears the enum values in both.
+    const idx = tabsSrc.indexOf("url.searchParams.set('tab', t.urlId);");
     expect(idx).toBeGreaterThan(-1);
-    const nearby = src.slice(idx, idx + 500);
-    expect(nearby).toMatch(/for \(const param of Object\.keys\(enumFilterValues\)\)/);
-    expect(nearby).toMatch(/enumFilterValues = \{\};/);
+    const nearby = tabsSrc.slice(idx, idx + 500);
+    expect(nearby).toMatch(/opts\.resetTabFilters\(url\);/);
+    const routeSrc = reviewSource('routes/p/[project]/review/+page.svelte');
+    expect(routeSrc).toMatch(/resetTabFilters: \(url\) => filters\.resetForTab\(url\)/);
+    const resetStart = src.indexOf('function resetForTab(url: URL)');
+    expect(resetStart).toBeGreaterThan(-1);
+    const reset = src.slice(resetStart, src.indexOf('\n  }\n', resetStart));
+    expect(reset).toMatch(/for \(const param of Object\.keys\(enumFilterValues\)\)/);
+    expect(reset).toMatch(/url\.searchParams\.delete\(param\);/);
+    expect(reset).toMatch(/enumFilterValues = \{\};/);
   });
 
   it('the debounced filter effect keys on activeEnumParams, so a select change or a late-loading spec refetches', () => {
@@ -64,9 +73,9 @@ describe('generic served-enum filter bar (no tab/param-specific code)', () => {
     // spec arriving changes what _filter() sends but not enumFilterValues.
     // e2e test_region_status_from_the_url_reaches_the_queue_request
     // covers the behavior; this pins the wiring.
-    const effectIdx = src.indexOf('let lastFilterKey: string | null = null;');
+    const effectIdx = loaderSrc.indexOf('let lastFilterKey: string | null = null;');
     expect(effectIdx).toBeGreaterThan(-1);
-    const effectBody = src.slice(effectIdx, effectIdx + 1500);
+    const effectBody = loaderSrc.slice(effectIdx, effectIdx + 1500);
     expect(effectBody).toMatch(/void activeEnumParams;/);
     expect(effectBody).toMatch(
       /activeEnumParams,\s*activeUrlFilters,\s*itemFilterQuery,\s*\]\);/,
