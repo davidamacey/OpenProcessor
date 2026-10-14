@@ -13,60 +13,44 @@ from __future__ import annotations
 
 import dataclasses
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from src.clients.occ import occ_update_one
 from src.core.logging import get_logger
-from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
-from src.services.curation.class_label import ItemLabel
 from src.services.curation.dataset_import import reconcile, region_labels
 from src.services.curation.dataset_import.image_load import ImageLoadError, load_image_bytes
+from src.services.curation.dataset_import.image_plan import (
+    ImagePlan,
+    NewItems,
+    new_items,
+    plan_image,
+    split_boxes,
+)
 from src.services.curation.dataset_import.item_labels import (
     ItemPlan,
     apply_item_updates,
-    import_stamp,
-    plan_item_labels,
     stamp_matched_noops,
 )
 from src.services.curation.dataset_import.op_export_stems import (
     project_item_crop_boxes,
     resolve_stems,
 )
-from src.services.curation.dataset_import.proposals import (
-    detection_bbox_norm,
-    note_matches,
-    parent_detections,
-    plan_proposals,
-    run_detector,
-)
-from src.services.curation.dataset_import.regions import ParentCandidate, attach_region_boxes
+from src.services.curation.dataset_import.proposals import note_matches
 from src.services.curation.dataset_import.report import ImportReport
-from src.services.curation.dataset_import.scan import LabelBox
 from src.services.curation.ingest_index import ImageContext
-from src.services.curation.item_doc import DetectedItem
 from src.services.curation.proposal_merge import count_disagreements
-from src.services.curation.wire import item_source_excludes
-from src.services.detection.geometry import crop_id as make_crop_id, stored_bbox_norm
 from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
     from src.services.curation.dataset_import.context import ImportContext
-    from src.services.curation.dataset_import.mapping import MapTarget
-    from src.services.curation.dataset_import.scan import ScanEntry
+    from src.services.curation.dataset_import.scan import LabelBox, ScanEntry
     from src.services.curation.dataset_import.store import ImportStore
     from src.services.curation.proposal_merge import MergePlan
 
 logger = get_logger(__name__)
 
 _FINAL = ('ok', 'failed', 'skipped')
-
-
-@dataclasses.dataclass
-class _Boxes:
-    items: list[tuple[LabelBox, MapTarget]]
-    regions: list[LabelBox]
-    skipped: int
 
 
 def _resolve_stem(ctx: ImportContext, entry: ScanEntry) -> ScanEntry:
@@ -79,31 +63,6 @@ def _resolve_stem(ctx: ImportContext, entry: ScanEntry) -> ScanEntry:
         return entry
     boxes = project_item_crop_boxes(entry.boxes, res) if res.kind == 'item_crop' else entry.boxes
     return dataclasses.replace(entry, abs_image_path=Path(res.image_path), boxes=list(boxes))
-
-
-def _split_boxes(ctx: ImportContext, entry: ScanEntry) -> _Boxes:
-    out = _Boxes([], [], 0)
-    for box in entry.boxes:
-        target = ctx.resolved.targets.get(box.dataset_class)
-        if target is None or target.kind == 'skip':
-            out.skipped += 1
-        elif target.kind == 'item':
-            out.items.append((box, target))
-        else:
-            out.regions.append(box)
-    return out
-
-
-async def _items_for_image(ctx: ImportContext, image_id: str) -> list[dict[str, Any]]:
-    resp = await ctx.opensearch.search(
-        index=ctx.items_index,
-        body={
-            'size': 1000,
-            'query': {'term': {'image_id': image_id}},
-            '_source': {'excludes': item_source_excludes()},
-        },
-    )
-    return [h['_source'] for h in (resp.get('hits') or {}).get('hits') or []]
 
 
 def _image_stamp(
@@ -143,42 +102,106 @@ async def _stamp_existing_image(
     )
 
 
-def _labeled_item(
-    ctx: ImportContext, entry: ScanEntry, plan: ItemPlan, width: int, height: int, now: str
-) -> DetectedItem:
-    x1, y1, x2, y2 = plan.box.bbox_norm
-    target = plan.target
-    return DetectedItem(
-        bbox_pixel=(x1 * width, y1 * height, x2 * width, y2 * height),
-        score=1.0,
-        class_id=target.class_id,
-        class_name=target.class_name,
-        class_source=LABEL_IMPORT_CLASS_SOURCE,
-        label=ItemLabel.imported(
-            import_id=ctx.import_id,
-            class_id=target.class_id,  # type: ignore[arg-type]
-            class_name=target.class_name,  # type: ignore[arg-type]
-            trust=ctx.options.label_trust,
-            now=now,
-            writer=ctx.writer,
-        ),
-        extra_fields=import_stamp(ctx, entry, {}, now),
+@dataclasses.dataclass
+class _Rejected:
+    """An image that could not be imported: why, and whether it counts as failed or skipped."""
+
+    outcome: Literal['failed', 'skipped']
+    kind: str
+    message: str = ''
+
+
+async def _ingest_entry_image(ctx: ImportContext, entry: ScanEntry) -> ImageContext | _Rejected:
+    """Load and ingest the entry's image; a load error, an unreadable image or a
+    declared size that disagrees with the pixels rejects the entry."""
+    try:
+        data, stored = load_image_bytes(ctx, entry)
+    except ImageLoadError as exc:
+        return _Rejected('failed', exc.kind, str(exc))
+
+    known = ctx.seen_images.get(_hash_of(data))
+    img = await ctx.service.ingest_image(
+        data,
+        str(stored),
+        ctx.options.source_tag,
+        ingest_run_id=ctx.import_id,
+        adopt_existing=True,
+        known_existing=known,
     )
+    if not isinstance(img, ImageContext):
+        return _Rejected('failed', img.error_kind or 'image_unreadable', img.error or '')
+    if entry.declared_size is not None:
+        actual = (img.width, img.height)
+        if actual != entry.declared_size:
+            return _Rejected('skipped', 'image_size_mismatch')
+    return img
 
 
-def _apply_prior_actions(plans: list[ItemPlan], prior: dict[str, Any] | None) -> None:
-    """A resumed image keeps the actions its write-ahead row recorded: the
-    docs now exist, so a fresh plan would call ``created`` items ``noop``."""
-    if not prior:
-        return
-    recorded = {i['crop_id']: i for i in prior.get('items') or []}
-    for plan in plans:
-        item = recorded.get(plan.crop_id)
-        if item is None:
-            continue
-        plan.action = item['action']
-        plan.snapshot_index = item.get('snapshot_index')
-        plan.holdout_prior = item.get('holdout_prior')
+def _reject(
+    store: ImportStore, chunk: int, base: dict[str, Any], rejected: _Rejected, report: ImportReport
+) -> ImportReport:
+    if rejected.outcome == 'skipped':
+        return _skipped(store, chunk, base, rejected.kind, report)
+    return _failed(store, chunk, base, rejected.kind, rejected.message, report)
+
+
+def _pending_row(
+    base: dict[str, Any], img: ImageContext, created_image: Any, plan: ImagePlan
+) -> dict[str, Any]:
+    """The write-ahead ledger row: what this image is about to do."""
+    return {
+        **base,
+        'status': 'pending',
+        'image_id': img.image_id,
+        'image_path': img.image_path,
+        'image_created': bool(created_image),
+        'items': [
+            {
+                'crop_id': p.crop_id,
+                'action': p.action,
+                'snapshot_index': p.snapshot_index,
+                'holdout_prior': p.holdout_prior,
+            }
+            for p in plan.plans
+        ]
+        + plan.dropped,
+    }
+
+
+def _tally_proposals(
+    report: ImportReport, entry: ScanEntry, merge_plan: MergePlan, created: int
+) -> None:
+    report.proposals_merged += len(merge_plan.merged_into_locked)
+    report.proposals_created += created
+    for dis in merge_plan.disagreements:
+        report.disagreement_samples.append({'rel_path': entry.rel_path, **dataclasses.asdict(dis)})
+    for key, value in count_disagreements(merge_plan.disagreements).items():
+        report.disagreement_counts[key] += value
+
+
+def _tally_image(
+    report: ImportReport,
+    ctx: ImportContext,
+    entry: ScanEntry,
+    state: str,
+    created_image: Any,
+    plan: ImagePlan,
+    new: NewItems,
+) -> None:
+    """The per-image report counters that do not depend on the apply results."""
+    if state == 'negative':
+        report.negatives += 1
+    elif state == 'unlabeled':
+        report.unlabeled += 1
+    report.images_created += 1 if created_image else 0
+    report.images_reused += 0 if created_image else 1
+    if ctx.freeze_test and entry.split == 'test':
+        report.holdout_frozen += (
+            len(new.labeled)
+            + len(new.standalone)
+            + len(new.parents)
+            + sum(1 for p in plan.plans if p.action == 'updated')
+        )
 
 
 async def _import_one(
@@ -197,132 +220,29 @@ async def _import_one(
         'froze_test': bool(ctx.freeze_test and entry.split == 'test'),
     }
     entry = _resolve_stem(ctx, entry)
-    boxes = _split_boxes(ctx, entry)
+    boxes = split_boxes(ctx, entry)
     state = entry.label_state
     if state == 'labeled' and not boxes.items and not boxes.regions:
         state = 'unlabeled'  # every box was skipped: says nothing about the frame
 
-    try:
-        data, stored = load_image_bytes(ctx, entry)
-    except ImageLoadError as exc:
-        return _failed(store, chunk, base, exc.kind, str(exc), report)
-
-    known = ctx.seen_images.get(_hash_of(data))
-    img = await ctx.service.ingest_image(
-        data,
-        str(stored),
-        ctx.options.source_tag,
-        ingest_run_id=ctx.import_id,
-        adopt_existing=True,
-        known_existing=known,
-    )
-    if not isinstance(img, ImageContext):
-        return _failed(
-            store, chunk, base, img.error_kind or 'image_unreadable', img.error or '', report
-        )
-    if entry.declared_size is not None:
-        actual = (img.width, img.height)
-        if actual != entry.declared_size:
-            return _skipped(store, chunk, base, 'image_size_mismatch', report)
+    img = await _ingest_entry_image(ctx, entry)
+    if isinstance(img, _Rejected):
+        return _reject(store, chunk, base, img, report)
     created_image = prior.get('image_created') if prior else img.created
     img.image_extra = _image_stamp(ctx, entry, state, {})
     now = now_iso()
 
-    existing = await _items_for_image(ctx, img.image_id)
-    stored_boxes = [
-        (LabelBox(b.dataset_class, stored_bbox_norm(b.bbox_norm, img.width, img.height)), t)
-        for b, t in boxes.items
-    ]
-    plans = plan_item_labels(existing, stored_boxes, image_id=img.image_id)
-    _apply_prior_actions(plans, prior)
-    dropped = await reconcile.dropped_entries(
-        ctx, existing, entry, plans, image_id=img.image_id, prior=prior
-    )
+    plan = await plan_image(ctx, entry, boxes, state, img, prior)
+    plans = plan.plans
+    new = new_items(ctx, entry, plan, img, state, now)
+    parent_keys = {c.key for c in plan.parent_cands}
 
-    detections: list[DetectedItem] = []
-    if ctx.uses_detector:
-        detections = await run_detector(ctx, img.require_pil(), img.image_path)
-
-    # Parents for region labels, and the standalone items for boxes with none.
-    region_targets = bool(boxes.regions) or any(
-        t.kind == 'region' for t in ctx.resolved.targets.values()
-    )
-    parent_classes = frozenset(ctx.profile.parent_classes) if ctx.profile else frozenset()
-    parent_cands: list[ParentCandidate] = []
-    detect_parents: list[DetectedItem] = []
-    if region_targets and ctx.parents == 'labels':
-        parent_cands = [
-            ParentCandidate(p.crop_id, p.box.bbox_norm, p.target.class_name)
-            for p in plans
-            if not parent_classes
-            or (p.target.class_name or '').lower() in {c.lower() for c in parent_classes}
-        ]
-    elif region_targets and ctx.parents == 'detect':
-        detect_parents = parent_detections(ctx, detections)
-        for d in detect_parents:
-            nb = detection_bbox_norm(d, img.width, img.height)
-            parent_cands.append(
-                ParentCandidate(make_crop_id(img.image_id, list(nb)), nb, d.class_name)  # type: ignore[arg-type]
-            )
-    attach = attach_region_boxes(
-        parent_cands,
-        boxes.regions,
-        containment_threshold=ctx.options.region_containment,
-        parent_classes=parent_classes or None,
-    )
-
-    # Proposals (propose): merge against everything the image will hold.
-    merge_plan: MergePlan | None = None
-    created_detections: list[DetectedItem] = []
-    if ctx.options.processing == 'propose':
-        merge_plan, created_detections = plan_proposals(
-            _docs_after_import(ctx, existing, plans),
-            detections,
-            width=img.width,
-            height=img.height,
-            on_negative_frame=state == 'negative',
-        )
-
-    new_items = [
-        _labeled_item(ctx, entry, plan, img.width, img.height, now)
-        for plan in plans
-        if plan.action == 'created'
-    ]
-    standalone_items = [
-        region_labels.standalone_item(ctx, entry, box, width=img.width, height=img.height, now=now)
-        for box in attach.standalone
-    ]
-    parent_items = [_tag_proposed(ctx, d, state) for d in detect_parents]
-    machine_new = [
-        _tag_proposed(ctx, d, state)
-        for d in created_detections
-        if not any(d is p for p in detect_parents)
-    ]
-    parent_keys = {c.key for c in parent_cands}
-
-    row: dict[str, Any] = {
-        **base,
-        'status': 'pending',
-        'image_id': img.image_id,
-        'image_path': img.image_path,
-        'image_created': bool(created_image),
-        'items': [
-            {
-                'crop_id': p.crop_id,
-                'action': p.action,
-                'snapshot_index': p.snapshot_index,
-                'holdout_prior': p.holdout_prior,
-            }
-            for p in plans
-        ]
-        + dropped,
-    }
+    row = _pending_row(base, img, created_image, plan)
     store.append_ledger(chunk, row)
 
     # ---- apply
-    all_new = [*new_items, *standalone_items, *parent_items, *machine_new]
     seed = ctx.options.processing == 'propose'
-    outcome = await ctx.service.index_items(img, all_new, seed_region=seed)
+    outcome = await ctx.service.index_items(img, new.all(), seed_region=seed)
     if outcome.result.status == 'failed':
         return _failed(
             store,
@@ -337,11 +257,11 @@ async def _import_one(
         await _stamp_existing_image(ctx, img.image_id, entry, state)
     await stamp_matched_noops(ctx, plans)
     updates = await apply_item_updates(ctx, entry, plans, now)
-    report.items_reconciled_removed += await reconcile.remove_dropped(ctx, dropped)
+    report.items_reconciled_removed += await reconcile.remove_dropped(ctx, plan.dropped)
 
     ledger_items = list(row['items'])
     cids = outcome.crop_ids
-    n_labeled, n_standalone, n_parent = len(new_items), len(standalone_items), len(parent_items)
+    n_labeled, n_standalone, n_parent = len(new.labeled), len(new.standalone), len(new.parents)
     standalone_ids = cids[n_labeled : n_labeled + n_standalone]
     parent_ids = cids[n_labeled + n_standalone : n_labeled + n_standalone + n_parent]
     machine_ids = cids[n_labeled + n_standalone + n_parent :]
@@ -350,39 +270,20 @@ async def _import_one(
     ledger_items.extend({'crop_id': cid, 'action': 'proposal'} for cid in machine_ids)
 
     ledger_boxes: list[dict[str, Any]] = []
-    await _write_regions(ctx, entry, attach, parent_keys, state, now, report, ledger_boxes)
+    await _write_regions(ctx, entry, plan.attach, parent_keys, state, now, report, ledger_boxes)
 
-    if merge_plan is not None:
-        await note_matches(ctx, merge_plan)
-        report.proposals_merged += len(merge_plan.merged_into_locked)
-        report.proposals_created += len(machine_ids)
-        for dis in merge_plan.disagreements:
-            report.disagreement_samples.append(
-                {'rel_path': entry.rel_path, **dataclasses.asdict(dis)}
-            )
-        for key, value in count_disagreements(merge_plan.disagreements).items():
-            report.disagreement_counts[key] += value
+    if plan.merge_plan is not None:
+        await note_matches(ctx, plan.merge_plan)
+        _tally_proposals(report, entry, plan.merge_plan, len(machine_ids))
 
-    _count_plans(report, plans, updates, len(new_items))
+    _count_plans(report, plans, updates, n_labeled)
     report.parents_detected += n_parent
     report.standalone_regions += n_standalone
     ledger_boxes.extend(
         {'crop_id': cid, 'box_id': 'b1', 'bbox_norm': list(box.bbox_norm)}
-        for cid, box in zip(standalone_ids, attach.standalone, strict=True)
+        for cid, box in zip(standalone_ids, plan.attach.standalone, strict=True)
     )
-    if state == 'negative':
-        report.negatives += 1
-    elif state == 'unlabeled':
-        report.unlabeled += 1
-    report.images_created += 1 if created_image else 0
-    report.images_reused += 0 if created_image else 1
-    if ctx.freeze_test and entry.split == 'test':
-        report.holdout_frozen += (
-            len(new_items)
-            + len(standalone_items)
-            + len(parent_items)
-            + sum(1 for p in plans if p.action == 'updated')
-        )
+    _tally_image(report, ctx, entry, state, created_image, plan, new)
 
     final = {
         **row,
@@ -395,43 +296,10 @@ async def _import_one(
     return report
 
 
-def _docs_after_import(
-    ctx: ImportContext, existing: list[dict[str, Any]], plans: list[ItemPlan]
-) -> list[dict[str, Any]]:
-    """The image's items as they will be once this entry's labels are
-    written: proposals are merged against the labels, not around them."""
-    claimed = {p.crop_id for p in plans}
-    docs = [d for d in existing if d.get('crop_id') not in claimed]
-    validated = ctx.options.label_trust == 'validated'
-    for plan in plans:
-        base = dict(plan.existing or {})
-        if plan.action in ('created', 'updated'):
-            base.update(
-                {
-                    'crop_id': plan.crop_id,
-                    'bbox_norm': list(plan.box.bbox_norm),
-                    'class_name': plan.target.class_name,
-                    'class_source': LABEL_IMPORT_CLASS_SOURCE,
-                    'class_validated': validated,
-                }
-            )
-        docs.append(base)
-    return docs
-
-
 def _hash_of(data: bytes) -> str:
     from src.services.curation.ingest import _imohash_bytes
 
     return _imohash_bytes(data)
-
-
-def _tag_proposed(ctx: ImportContext, item: DetectedItem, state: str) -> DetectedItem:
-    item.extra_fields = {
-        **item.extra_fields,
-        'proposed_by_import': ctx.import_id,
-        **({'on_negative_frame': True} if state == 'negative' else {}),
-    }
-    return item
 
 
 def _count_plans(

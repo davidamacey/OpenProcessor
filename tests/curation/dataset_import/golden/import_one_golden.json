@@ -1,0 +1,2777 @@
+{
+ "basic": {
+  "images": {
+   "IMG[both]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "labeled",
+    "import_source_stem": "both"
+   },
+   "IMG[neg]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "negative",
+    "import_source_stem": "neg",
+    "negative_for": [
+     "car",
+     "truck"
+    ]
+   },
+   "IMG[skipped]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "unlabeled",
+    "import_source_stem": "skipped"
+   },
+   "IMG[unl]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "unlabeled",
+    "import_source_stem": "unl"
+   }
+  },
+  "items": {
+   "CROP[IMG[both]|0.200,0.200,0.400,0.400]": {
+    "bbox_norm": [
+     0.2,
+     0.2,
+     0.4,
+     0.4
+    ],
+    "class_id": 0,
+    "class_name": "car",
+    "class_source": "external_label",
+    "class_validated": true,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[both]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "both",
+    "label_source": "import",
+    "test_holdout": false
+   },
+   "CROP[IMG[both]|0.600,0.600,0.800,0.800]": {
+    "bbox_norm": [
+     0.6,
+     0.6,
+     0.8,
+     0.8
+    ],
+    "class_id": 1,
+    "class_name": "truck",
+    "class_source": "external_label",
+    "class_validated": true,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[both]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "both",
+    "label_source": "import",
+    "test_holdout": false
+   }
+  },
+  "ledger": [
+   {
+    "boxes": [],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[both]",
+    "image_path": "<tmp>/ds/images/train/both.jpg",
+    "items": [
+     {
+      "action": "created",
+      "crop_id": "CROP[IMG[both]|0.200,0.200,0.400,0.400]",
+      "holdout_prior": null,
+      "snapshot_index": null
+     },
+     {
+      "action": "created",
+      "crop_id": "CROP[IMG[both]|0.600,0.600,0.800,0.800]",
+      "holdout_prior": null,
+      "snapshot_index": null
+     }
+    ],
+    "label_state": "labeled",
+    "rel_path": "images/train/both.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 2,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 2,
+     "negatives": 0,
+     "parents_detected": 0,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "both",
+    "split": "train",
+    "status": "ok"
+   },
+   {
+    "boxes": [],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[neg]",
+    "image_path": "<tmp>/ds/images/train/neg.jpg",
+    "items": [],
+    "label_state": "negative",
+    "rel_path": "images/train/neg.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 0,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 0,
+     "negatives": 1,
+     "parents_detected": 0,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "neg",
+    "split": "train",
+    "status": "ok"
+   },
+   {
+    "boxes": [],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[skipped]",
+    "image_path": "<tmp>/ds/images/train/skipped.jpg",
+    "items": [],
+    "label_state": "labeled",
+    "rel_path": "images/train/skipped.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 0,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 0,
+     "negatives": 0,
+     "parents_detected": 0,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 1
+    },
+    "source_stem": "skipped",
+    "split": "train",
+    "status": "ok"
+   },
+   {
+    "boxes": [],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[unl]",
+    "image_path": "<tmp>/ds/images/train/unl.jpg",
+    "items": [],
+    "label_state": "unlabeled",
+    "rel_path": "images/train/unl.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 0,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 0,
+     "negatives": 0,
+     "parents_detected": 0,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 1
+    },
+    "source_stem": "unl",
+    "split": "train",
+    "status": "ok"
+   }
+  ],
+  "report": {
+   "boxes_written": 0,
+   "disagreement_counts": {
+    "mismatches": 0,
+    "missed_labels": 0,
+    "unmatched_detections": 0
+   },
+   "disagreement_samples": [],
+   "holdout_frozen": 0,
+   "images_created": 4,
+   "images_failed": 0,
+   "images_reused": 0,
+   "images_skipped": 0,
+   "items_created": 2,
+   "items_noop": 0,
+   "items_reconciled_removed": 0,
+   "items_updated": 0,
+   "label_conflicts_locked": 0,
+   "labels_written": 2,
+   "negatives": 1,
+   "parents_detected": 0,
+   "proposals_created": 0,
+   "proposals_merged": 0,
+   "standalone_regions": 0,
+   "unlabeled": 2
+  }
+ },
+ "freeze_test_split": {
+  "images": {
+   "IMG[e1]": {
+    "dataset_split": "test",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "labeled",
+    "import_source_stem": "e1"
+   },
+   "IMG[e2]": {
+    "dataset_split": "test",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "negative",
+    "import_source_stem": "e2",
+    "negative_for": [
+     "car"
+    ]
+   },
+   "IMG[t1]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "labeled",
+    "import_source_stem": "t1"
+   }
+  },
+  "items": {
+   "CROP[IMG[e1]|0.100,0.100,0.500,0.500]": {
+    "bbox_norm": [
+     0.09999999999999998,
+     0.09999999999999998,
+     0.5,
+     0.5
+    ],
+    "class_id": 0,
+    "class_name": "car",
+    "class_source": "external_label",
+    "class_validated": true,
+    "dataset_split": "test",
+    "embedding_state": "embedded",
+    "image_id": "IMG[e1]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "e1",
+    "label_source": "import",
+    "test_holdout": true
+   },
+   "CROP[IMG[e1]|0.750,0.750,0.850,0.850]": {
+    "bbox_norm": [
+     0.75,
+     0.75,
+     0.8500000000000001,
+     0.8500000000000001
+    ],
+    "class_id": 0,
+    "class_name": "car",
+    "class_source": "external_label",
+    "class_validated": true,
+    "dataset_split": "test",
+    "embedding_state": "embedded",
+    "image_id": "IMG[e1]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "e1",
+    "label_source": "import",
+    "test_holdout": true
+   },
+   "CROP[IMG[t1]|0.100,0.100,0.500,0.500]": {
+    "bbox_norm": [
+     0.09999999999999998,
+     0.09999999999999998,
+     0.5,
+     0.5
+    ],
+    "class_id": 0,
+    "class_name": "car",
+    "class_source": "external_label",
+    "class_validated": true,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[t1]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "t1",
+    "label_source": "import",
+    "test_holdout": false
+   }
+  },
+  "ledger": [
+   {
+    "boxes": [],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[t1]",
+    "image_path": "<tmp>/ds/images/train/t1.jpg",
+    "items": [
+     {
+      "action": "created",
+      "crop_id": "CROP[IMG[t1]|0.100,0.100,0.500,0.500]",
+      "holdout_prior": null,
+      "snapshot_index": null
+     }
+    ],
+    "label_state": "labeled",
+    "rel_path": "images/train/t1.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 1,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 1,
+     "negatives": 0,
+     "parents_detected": 0,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "t1",
+    "split": "train",
+    "status": "ok"
+   },
+   {
+    "boxes": [],
+    "froze_test": true,
+    "image_created": true,
+    "image_id": "IMG[e1]",
+    "image_path": "<tmp>/ds/images/test/e1.jpg",
+    "items": [
+     {
+      "action": "created",
+      "crop_id": "CROP[IMG[e1]|0.100,0.100,0.500,0.500]",
+      "holdout_prior": null,
+      "snapshot_index": null
+     },
+     {
+      "action": "created",
+      "crop_id": "CROP[IMG[e1]|0.750,0.750,0.850,0.850]",
+      "holdout_prior": null,
+      "snapshot_index": null
+     }
+    ],
+    "label_state": "labeled",
+    "rel_path": "images/test/e1.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 2,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 2,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 2,
+     "negatives": 0,
+     "parents_detected": 0,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "e1",
+    "split": "test",
+    "status": "ok"
+   },
+   {
+    "boxes": [],
+    "froze_test": true,
+    "image_created": true,
+    "image_id": "IMG[e2]",
+    "image_path": "<tmp>/ds/images/test/e2.jpg",
+    "items": [],
+    "label_state": "negative",
+    "rel_path": "images/test/e2.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 0,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 0,
+     "negatives": 1,
+     "parents_detected": 0,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "e2",
+    "split": "test",
+    "status": "ok"
+   }
+  ],
+  "report": {
+   "boxes_written": 0,
+   "disagreement_counts": {
+    "mismatches": 0,
+    "missed_labels": 0,
+    "unmatched_detections": 0
+   },
+   "disagreement_samples": [],
+   "holdout_frozen": 2,
+   "images_created": 3,
+   "images_failed": 0,
+   "images_reused": 0,
+   "images_skipped": 0,
+   "items_created": 3,
+   "items_noop": 0,
+   "items_reconciled_removed": 0,
+   "items_updated": 0,
+   "label_conflicts_locked": 0,
+   "labels_written": 3,
+   "negatives": 1,
+   "parents_detected": 0,
+   "proposals_created": 0,
+   "proposals_merged": 0,
+   "standalone_regions": 0,
+   "unlabeled": 0
+  }
+ },
+ "freeze_updated_item": {
+  "images": {
+   "IMG[e1]": {
+    "dataset_split": "test",
+    "import_ids": [
+     "<import>",
+     "<import>"
+    ],
+    "import_label_state": "labeled",
+    "import_source_stem": "e1"
+   }
+  },
+  "items": {
+   "CROP[IMG[e1]|0.100,0.100,0.500,0.500]": {
+    "bbox_norm": [
+     0.09999999999999998,
+     0.09999999999999998,
+     0.5,
+     0.5
+    ],
+    "class_id": 1,
+    "class_name": "truck",
+    "class_source": "external_label",
+    "class_validated": true,
+    "dataset_split": "test",
+    "embedding_state": "embedded",
+    "image_id": "IMG[e1]",
+    "import_ids": [
+     "<import>",
+     "<import>"
+    ],
+    "import_source_stem": "e1",
+    "label_source": "import",
+    "test_holdout": true
+   }
+  },
+  "ledger": [
+   {
+    "boxes": [],
+    "froze_test": true,
+    "image_created": false,
+    "image_id": "IMG[e1]",
+    "image_path": "<tmp>/ds1/images/test/e1.jpg",
+    "items": [
+     {
+      "action": "updated",
+      "crop_id": "CROP[IMG[e1]|0.100,0.100,0.500,0.500]",
+      "holdout_prior": false,
+      "snapshot_index": 0
+     }
+    ],
+    "label_state": "labeled",
+    "rel_path": "images/test/e1.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 1,
+     "images_created": 0,
+     "images_failed": 0,
+     "images_reused": 1,
+     "images_skipped": 0,
+     "items_created": 0,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 1,
+     "label_conflicts_locked": 0,
+     "labels_written": 1,
+     "negatives": 0,
+     "parents_detected": 0,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "e1",
+    "split": "test",
+    "status": "ok"
+   }
+  ],
+  "report": {
+   "boxes_written": 0,
+   "disagreement_counts": {
+    "mismatches": 0,
+    "missed_labels": 0,
+    "unmatched_detections": 0
+   },
+   "disagreement_samples": [],
+   "holdout_frozen": 1,
+   "images_created": 0,
+   "images_failed": 0,
+   "images_reused": 1,
+   "images_skipped": 0,
+   "items_created": 0,
+   "items_noop": 0,
+   "items_reconciled_removed": 0,
+   "items_updated": 1,
+   "label_conflicts_locked": 0,
+   "labels_written": 1,
+   "negatives": 0,
+   "parents_detected": 0,
+   "proposals_created": 0,
+   "proposals_merged": 0,
+   "standalone_regions": 0,
+   "unlabeled": 0
+  }
+ },
+ "propose": {
+  "images": {
+   "IMG[far]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "labeled",
+    "import_source_stem": "far"
+   },
+   "IMG[match]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "labeled",
+    "import_source_stem": "match"
+   },
+   "IMG[neg]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "negative",
+    "import_source_stem": "neg",
+    "negative_for": [
+     "car"
+    ]
+   },
+   "IMG[unl]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "unlabeled",
+    "import_source_stem": "unl"
+   }
+  },
+  "items": {
+   "CROP[IMG[far]|0.100,0.100,0.500,0.500]": {
+    "bbox_norm": [
+     0.10000000149011612,
+     0.10000000149011612,
+     0.5,
+     0.5
+    ],
+    "class_source": "primary_proposal",
+    "class_validated": false,
+    "embedding_state": "embedded",
+    "image_id": "IMG[far]",
+    "label_source": "primary_proposal",
+    "proposed_by_import": "<import>",
+    "test_holdout": false
+   },
+   "CROP[IMG[far]|0.750,0.750,0.850,0.850]": {
+    "bbox_norm": [
+     0.75,
+     0.75,
+     0.8500000000000001,
+     0.8500000000000001
+    ],
+    "class_id": 0,
+    "class_name": "car",
+    "class_source": "external_label",
+    "class_validated": true,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[far]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "far",
+    "label_source": "import",
+    "test_holdout": false
+   },
+   "CROP[IMG[match]|0.100,0.100,0.500,0.500]": {
+    "bbox_norm": [
+     0.09999999999999998,
+     0.09999999999999998,
+     0.5,
+     0.5
+    ],
+    "class_id": 0,
+    "class_name": "car",
+    "class_source": "external_label",
+    "class_validated": true,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[match]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "match",
+    "label_source": "import",
+    "proposal_chain": [
+     "primary:match"
+    ],
+    "test_holdout": false
+   },
+   "CROP[IMG[neg]|0.100,0.100,0.500,0.500]": {
+    "bbox_norm": [
+     0.10000000149011612,
+     0.10000000149011612,
+     0.5,
+     0.5
+    ],
+    "class_source": "primary_proposal",
+    "class_validated": false,
+    "embedding_state": "embedded",
+    "image_id": "IMG[neg]",
+    "label_source": "primary_proposal",
+    "on_negative_frame": true,
+    "proposed_by_import": "<import>",
+    "test_holdout": false
+   },
+   "CROP[IMG[unl]|0.100,0.100,0.500,0.500]": {
+    "bbox_norm": [
+     0.10000000149011612,
+     0.10000000149011612,
+     0.5,
+     0.5
+    ],
+    "class_source": "primary_proposal",
+    "class_validated": false,
+    "embedding_state": "embedded",
+    "image_id": "IMG[unl]",
+    "label_source": "primary_proposal",
+    "proposed_by_import": "<import>",
+    "test_holdout": false
+   }
+  },
+  "ledger": [
+   {
+    "boxes": [],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[far]",
+    "image_path": "<tmp>/ds/images/train/far.jpg",
+    "items": [
+     {
+      "action": "created",
+      "crop_id": "CROP[IMG[far]|0.750,0.750,0.850,0.850]",
+      "holdout_prior": null,
+      "snapshot_index": null
+     },
+     {
+      "action": "proposal",
+      "crop_id": "CROP[IMG[far]|0.100,0.100,0.500,0.500]"
+     }
+    ],
+    "label_state": "labeled",
+    "rel_path": "images/train/far.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 1,
+      "unmatched_detections": 1
+     },
+     "disagreement_samples": [
+      {
+       "bbox_norm": [
+        0.10000000149011612,
+        0.10000000149011612,
+        0.5,
+        0.5
+       ],
+       "crop_id": null,
+       "detector_class": "0",
+       "iou": null,
+       "kind": "unmatched_detection",
+       "label_class": null,
+       "rel_path": "images/train/far.jpg"
+      },
+      {
+       "bbox_norm": [
+        0.75,
+        0.75,
+        0.8500000000000001,
+        0.8500000000000001
+       ],
+       "crop_id": "CROP[IMG[far]|0.750,0.750,0.850,0.850]",
+       "detector_class": null,
+       "iou": null,
+       "kind": "missed_label",
+       "label_class": "car",
+       "rel_path": "images/train/far.jpg"
+      }
+     ],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 1,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 1,
+     "negatives": 0,
+     "parents_detected": 0,
+     "proposals_created": 1,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "far",
+    "split": "train",
+    "status": "ok"
+   },
+   {
+    "boxes": [],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[match]",
+    "image_path": "<tmp>/ds/images/train/match.jpg",
+    "items": [
+     {
+      "action": "created",
+      "crop_id": "CROP[IMG[match]|0.100,0.100,0.500,0.500]",
+      "holdout_prior": null,
+      "snapshot_index": null
+     }
+    ],
+    "label_state": "labeled",
+    "rel_path": "images/train/match.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 1,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [
+      {
+       "bbox_norm": [
+        0.09999999999999998,
+        0.09999999999999998,
+        0.5,
+        0.5
+       ],
+       "crop_id": "CROP[IMG[match]|0.100,0.100,0.500,0.500]",
+       "detector_class": "0",
+       "iou": 0.9999999925494192,
+       "kind": "class_mismatch",
+       "label_class": "car",
+       "rel_path": "images/train/match.jpg"
+      }
+     ],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 1,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 1,
+     "negatives": 0,
+     "parents_detected": 0,
+     "proposals_created": 0,
+     "proposals_merged": 1,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "match",
+    "split": "train",
+    "status": "ok"
+   },
+   {
+    "boxes": [],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[neg]",
+    "image_path": "<tmp>/ds/images/train/neg.jpg",
+    "items": [
+     {
+      "action": "proposal",
+      "crop_id": "CROP[IMG[neg]|0.100,0.100,0.500,0.500]"
+     }
+    ],
+    "label_state": "negative",
+    "rel_path": "images/train/neg.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 1
+     },
+     "disagreement_samples": [
+      {
+       "bbox_norm": [
+        0.10000000149011612,
+        0.10000000149011612,
+        0.5,
+        0.5
+       ],
+       "crop_id": null,
+       "detector_class": "0",
+       "iou": null,
+       "kind": "unmatched_detection",
+       "label_class": null,
+       "rel_path": "images/train/neg.jpg"
+      }
+     ],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 0,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 0,
+     "negatives": 1,
+     "parents_detected": 0,
+     "proposals_created": 1,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "neg",
+    "split": "train",
+    "status": "ok"
+   },
+   {
+    "boxes": [],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[unl]",
+    "image_path": "<tmp>/ds/images/train/unl.jpg",
+    "items": [
+     {
+      "action": "proposal",
+      "crop_id": "CROP[IMG[unl]|0.100,0.100,0.500,0.500]"
+     }
+    ],
+    "label_state": "unlabeled",
+    "rel_path": "images/train/unl.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 0,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 0,
+     "negatives": 0,
+     "parents_detected": 0,
+     "proposals_created": 1,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 1
+    },
+    "source_stem": "unl",
+    "split": "train",
+    "status": "ok"
+   }
+  ],
+  "report": {
+   "boxes_written": 0,
+   "disagreement_counts": {
+    "mismatches": 1,
+    "missed_labels": 1,
+    "unmatched_detections": 2
+   },
+   "disagreement_samples": [
+    {
+     "bbox_norm": [
+      0.10000000149011612,
+      0.10000000149011612,
+      0.5,
+      0.5
+     ],
+     "crop_id": null,
+     "detector_class": "0",
+     "iou": null,
+     "kind": "unmatched_detection",
+     "label_class": null,
+     "rel_path": "images/train/far.jpg"
+    },
+    {
+     "bbox_norm": [
+      0.75,
+      0.75,
+      0.8500000000000001,
+      0.8500000000000001
+     ],
+     "crop_id": "CROP[IMG[far]|0.750,0.750,0.850,0.850]",
+     "detector_class": null,
+     "iou": null,
+     "kind": "missed_label",
+     "label_class": "car",
+     "rel_path": "images/train/far.jpg"
+    },
+    {
+     "bbox_norm": [
+      0.09999999999999998,
+      0.09999999999999998,
+      0.5,
+      0.5
+     ],
+     "crop_id": "CROP[IMG[match]|0.100,0.100,0.500,0.500]",
+     "detector_class": "0",
+     "iou": 0.9999999925494192,
+     "kind": "class_mismatch",
+     "label_class": "car",
+     "rel_path": "images/train/match.jpg"
+    },
+    {
+     "bbox_norm": [
+      0.10000000149011612,
+      0.10000000149011612,
+      0.5,
+      0.5
+     ],
+     "crop_id": null,
+     "detector_class": "0",
+     "iou": null,
+     "kind": "unmatched_detection",
+     "label_class": null,
+     "rel_path": "images/train/neg.jpg"
+    }
+   ],
+   "holdout_frozen": 0,
+   "images_created": 4,
+   "images_failed": 0,
+   "images_reused": 0,
+   "images_skipped": 0,
+   "items_created": 2,
+   "items_noop": 0,
+   "items_reconciled_removed": 0,
+   "items_updated": 0,
+   "label_conflicts_locked": 0,
+   "labels_written": 2,
+   "negatives": 1,
+   "parents_detected": 0,
+   "proposals_created": 3,
+   "proposals_merged": 1,
+   "standalone_regions": 0,
+   "unlabeled": 1
+  }
+ },
+ "propose_with_detected_parents": {
+  "images": {
+   "IMG[a]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "labeled",
+    "import_source_stem": "a"
+   },
+   "IMG[neg]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "negative",
+    "import_source_stem": "neg",
+    "negative_for": [
+     "wheel"
+    ]
+   }
+  },
+  "items": {
+   "CROP[IMG[a]|0.100,0.100,0.500,0.500]": {
+    "bbox_norm": [
+     0.10000000149011612,
+     0.10000000149011612,
+     0.5,
+     0.5
+    ],
+    "class_source": "primary_proposal",
+    "class_validated": false,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[a]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "a",
+    "label_source": "primary_proposal",
+    "proposed_by_import": "<import>",
+    "region_boxes": [
+     {
+      "bbox_correct": null,
+      "bbox_norm": [
+       0.27499999999999997,
+       0.27499999999999997,
+       0.325,
+       0.325
+      ],
+      "box_id": "b1",
+      "cluster_distance": null,
+      "cluster_id": null,
+      "cluster_subid": null,
+      "confidence": null,
+      "detector": "import",
+      "detector_version": "<import>",
+      "rejection_reason": null,
+      "score": 1.0,
+      "source": "import",
+      "state": "accepted",
+      "text": null,
+      "text_choice": null,
+      "text_confidence": null,
+      "text_disagreement": null,
+      "text_engine_version": null,
+      "text_ocr": null,
+      "text_raw": null,
+      "text_source": null,
+      "text_vlm": null,
+      "text_vlm_invalid": null
+     }
+    ],
+    "test_holdout": false
+   },
+   "CROP[IMG[neg]|0.100,0.100,0.500,0.500]": {
+    "bbox_norm": [
+     0.10000000149011612,
+     0.10000000149011612,
+     0.5,
+     0.5
+    ],
+    "class_source": "primary_proposal",
+    "class_validated": false,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[neg]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "neg",
+    "label_source": "primary_proposal",
+    "on_negative_frame": true,
+    "proposed_by_import": "<import>",
+    "region_boxes": [],
+    "test_holdout": false
+   }
+  },
+  "ledger": [
+   {
+    "boxes": [
+     {
+      "bbox_norm": [
+       0.27499999999999997,
+       0.27499999999999997,
+       0.325,
+       0.325
+      ],
+      "box_id": "b1",
+      "crop_id": "CROP[IMG[a]|0.100,0.100,0.500,0.500]",
+      "state": "accepted"
+     }
+    ],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[a]",
+    "image_path": "<tmp>/ds/images/train/a.jpg",
+    "items": [
+     {
+      "action": "parent",
+      "crop_id": "CROP[IMG[a]|0.100,0.100,0.500,0.500]"
+     }
+    ],
+    "label_state": "labeled",
+    "rel_path": "images/train/a.jpg",
+    "report": {
+     "boxes_written": 1,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 0,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 0,
+     "negatives": 0,
+     "parents_detected": 1,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "a",
+    "split": "train",
+    "status": "ok"
+   },
+   {
+    "boxes": [],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[neg]",
+    "image_path": "<tmp>/ds/images/train/neg.jpg",
+    "items": [
+     {
+      "action": "parent",
+      "crop_id": "CROP[IMG[neg]|0.100,0.100,0.500,0.500]"
+     }
+    ],
+    "label_state": "negative",
+    "rel_path": "images/train/neg.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 1
+     },
+     "disagreement_samples": [
+      {
+       "bbox_norm": [
+        0.10000000149011612,
+        0.10000000149011612,
+        0.5,
+        0.5
+       ],
+       "crop_id": null,
+       "detector_class": "0",
+       "iou": null,
+       "kind": "unmatched_detection",
+       "label_class": null,
+       "rel_path": "images/train/neg.jpg"
+      }
+     ],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 0,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 0,
+     "negatives": 1,
+     "parents_detected": 1,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "neg",
+    "split": "train",
+    "status": "ok"
+   }
+  ],
+  "report": {
+   "boxes_written": 1,
+   "disagreement_counts": {
+    "mismatches": 0,
+    "missed_labels": 0,
+    "unmatched_detections": 1
+   },
+   "disagreement_samples": [
+    {
+     "bbox_norm": [
+      0.10000000149011612,
+      0.10000000149011612,
+      0.5,
+      0.5
+     ],
+     "crop_id": null,
+     "detector_class": "0",
+     "iou": null,
+     "kind": "unmatched_detection",
+     "label_class": null,
+     "rel_path": "images/train/neg.jpg"
+    }
+   ],
+   "holdout_frozen": 0,
+   "images_created": 2,
+   "images_failed": 0,
+   "images_reused": 0,
+   "images_skipped": 0,
+   "items_created": 0,
+   "items_noop": 0,
+   "items_reconciled_removed": 0,
+   "items_updated": 0,
+   "label_conflicts_locked": 0,
+   "labels_written": 0,
+   "negatives": 1,
+   "parents_detected": 2,
+   "proposals_created": 0,
+   "proposals_merged": 0,
+   "standalone_regions": 0,
+   "unlabeled": 0
+  }
+ },
+ "regions_detected_parents": {
+  "images": {
+   "IMG[a]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "labeled",
+    "import_source_stem": "a"
+   },
+   "IMG[b]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "labeled",
+    "import_source_stem": "b"
+   },
+   "IMG[neg]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "negative",
+    "import_source_stem": "neg",
+    "negative_for": [
+     "wheel"
+    ]
+   }
+  },
+  "items": {
+   "CROP[IMG[a]|0.100,0.100,0.500,0.500]": {
+    "bbox_norm": [
+     0.10000000149011612,
+     0.10000000149011612,
+     0.5,
+     0.5
+    ],
+    "class_source": "primary_proposal",
+    "class_validated": false,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[a]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "a",
+    "label_source": "primary_proposal",
+    "proposed_by_import": "<import>",
+    "region_boxes": [
+     {
+      "bbox_correct": null,
+      "bbox_norm": [
+       0.27499999999999997,
+       0.27499999999999997,
+       0.325,
+       0.325
+      ],
+      "box_id": "b1",
+      "cluster_distance": null,
+      "cluster_id": null,
+      "cluster_subid": null,
+      "confidence": null,
+      "detector": "import",
+      "detector_version": "<import>",
+      "rejection_reason": null,
+      "score": 1.0,
+      "source": "import",
+      "state": "accepted",
+      "text": null,
+      "text_choice": null,
+      "text_confidence": null,
+      "text_disagreement": null,
+      "text_engine_version": null,
+      "text_ocr": null,
+      "text_raw": null,
+      "text_source": null,
+      "text_vlm": null,
+      "text_vlm_invalid": null
+     }
+    ],
+    "test_holdout": false
+   },
+   "CROP[IMG[b]|0.100,0.100,0.500,0.500]": {
+    "bbox_norm": [
+     0.10000000149011612,
+     0.10000000149011612,
+     0.5,
+     0.5
+    ],
+    "class_source": "primary_proposal",
+    "class_validated": false,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[b]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "b",
+    "label_source": "primary_proposal",
+    "proposed_by_import": "<import>",
+    "region_boxes": [],
+    "test_holdout": false
+   },
+   "CROP[IMG[b]|0.875,0.875,0.925,0.925]": {
+    "bbox_norm": [
+     0.875,
+     0.875,
+     0.925,
+     0.925
+    ],
+    "class_source": "external_label",
+    "class_validated": false,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[b]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "b",
+    "label_source": "external_label",
+    "region_boxes": [
+     {
+      "bbox_correct": null,
+      "bbox_norm": [
+       0.875,
+       0.875,
+       0.925,
+       0.925
+      ],
+      "box_id": "b1",
+      "cluster_distance": null,
+      "cluster_id": null,
+      "cluster_subid": null,
+      "confidence": null,
+      "detector": "import",
+      "detector_version": "<import>",
+      "rejection_reason": null,
+      "score": 1.0,
+      "source": "import",
+      "state": "accepted",
+      "text": null,
+      "text_choice": null,
+      "text_confidence": null,
+      "text_disagreement": null,
+      "text_engine_version": null,
+      "text_ocr": null,
+      "text_raw": null,
+      "text_source": null,
+      "text_vlm": null,
+      "text_vlm_invalid": null
+     }
+    ],
+    "test_holdout": false
+   },
+   "CROP[IMG[neg]|0.100,0.100,0.500,0.500]": {
+    "bbox_norm": [
+     0.10000000149011612,
+     0.10000000149011612,
+     0.5,
+     0.5
+    ],
+    "class_source": "primary_proposal",
+    "class_validated": false,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[neg]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "neg",
+    "label_source": "primary_proposal",
+    "on_negative_frame": true,
+    "proposed_by_import": "<import>",
+    "region_boxes": [],
+    "test_holdout": false
+   }
+  },
+  "ledger": [
+   {
+    "boxes": [
+     {
+      "bbox_norm": [
+       0.27499999999999997,
+       0.27499999999999997,
+       0.325,
+       0.325
+      ],
+      "box_id": "b1",
+      "crop_id": "CROP[IMG[a]|0.100,0.100,0.500,0.500]",
+      "state": "accepted"
+     }
+    ],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[a]",
+    "image_path": "<tmp>/ds/images/train/a.jpg",
+    "items": [
+     {
+      "action": "parent",
+      "crop_id": "CROP[IMG[a]|0.100,0.100,0.500,0.500]"
+     }
+    ],
+    "label_state": "labeled",
+    "rel_path": "images/train/a.jpg",
+    "report": {
+     "boxes_written": 1,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 0,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 0,
+     "negatives": 0,
+     "parents_detected": 1,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "a",
+    "split": "train",
+    "status": "ok"
+   },
+   {
+    "boxes": [
+     {
+      "bbox_norm": [
+       0.875,
+       0.875,
+       0.925,
+       0.925
+      ],
+      "box_id": "b1",
+      "crop_id": "CROP[IMG[b]|0.875,0.875,0.925,0.925]"
+     }
+    ],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[b]",
+    "image_path": "<tmp>/ds/images/train/b.jpg",
+    "items": [
+     {
+      "action": "standalone",
+      "crop_id": "CROP[IMG[b]|0.875,0.875,0.925,0.925]"
+     },
+     {
+      "action": "parent",
+      "crop_id": "CROP[IMG[b]|0.100,0.100,0.500,0.500]"
+     }
+    ],
+    "label_state": "labeled",
+    "rel_path": "images/train/b.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 0,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 0,
+     "negatives": 0,
+     "parents_detected": 1,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 1,
+     "unlabeled": 0
+    },
+    "source_stem": "b",
+    "split": "train",
+    "status": "ok"
+   },
+   {
+    "boxes": [],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[neg]",
+    "image_path": "<tmp>/ds/images/train/neg.jpg",
+    "items": [
+     {
+      "action": "parent",
+      "crop_id": "CROP[IMG[neg]|0.100,0.100,0.500,0.500]"
+     }
+    ],
+    "label_state": "negative",
+    "rel_path": "images/train/neg.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 0,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 0,
+     "negatives": 1,
+     "parents_detected": 1,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "neg",
+    "split": "train",
+    "status": "ok"
+   }
+  ],
+  "report": {
+   "boxes_written": 1,
+   "disagreement_counts": {
+    "mismatches": 0,
+    "missed_labels": 0,
+    "unmatched_detections": 0
+   },
+   "disagreement_samples": [],
+   "holdout_frozen": 0,
+   "images_created": 3,
+   "images_failed": 0,
+   "images_reused": 0,
+   "images_skipped": 0,
+   "items_created": 0,
+   "items_noop": 0,
+   "items_reconciled_removed": 0,
+   "items_updated": 0,
+   "label_conflicts_locked": 0,
+   "labels_written": 0,
+   "negatives": 1,
+   "parents_detected": 3,
+   "proposals_created": 0,
+   "proposals_merged": 0,
+   "standalone_regions": 1,
+   "unlabeled": 0
+  }
+ },
+ "regions_label_parents": {
+  "images": {
+   "IMG[bare]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "labeled",
+    "import_source_stem": "bare"
+   },
+   "IMG[inside]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "labeled",
+    "import_source_stem": "inside"
+   },
+   "IMG[outside]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "labeled",
+    "import_source_stem": "outside"
+   }
+  },
+  "items": {
+   "CROP[IMG[bare]|0.500,0.500,0.700,0.700]": {
+    "bbox_norm": [
+     0.5,
+     0.5,
+     0.7,
+     0.7
+    ],
+    "class_id": 0,
+    "class_name": "car",
+    "class_source": "external_label",
+    "class_validated": true,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[bare]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "bare",
+    "label_source": "import",
+    "region_boxes": [],
+    "test_holdout": false
+   },
+   "CROP[IMG[inside]|0.100,0.100,0.500,0.500]": {
+    "bbox_norm": [
+     0.09999999999999998,
+     0.09999999999999998,
+     0.5,
+     0.5
+    ],
+    "class_id": 0,
+    "class_name": "car",
+    "class_source": "external_label",
+    "class_validated": true,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[inside]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "inside",
+    "label_source": "import",
+    "region_boxes": [
+     {
+      "bbox_correct": null,
+      "bbox_norm": [
+       0.27499999999999997,
+       0.27499999999999997,
+       0.325,
+       0.325
+      ],
+      "box_id": "b1",
+      "cluster_distance": null,
+      "cluster_id": null,
+      "cluster_subid": null,
+      "confidence": null,
+      "detector": "import",
+      "detector_version": "<import>",
+      "rejection_reason": null,
+      "score": 1.0,
+      "source": "import",
+      "state": "accepted",
+      "text": null,
+      "text_choice": null,
+      "text_confidence": null,
+      "text_disagreement": null,
+      "text_engine_version": null,
+      "text_ocr": null,
+      "text_raw": null,
+      "text_source": null,
+      "text_vlm": null,
+      "text_vlm_invalid": null
+     }
+    ],
+    "test_holdout": false
+   },
+   "CROP[IMG[outside]|0.200,0.200,0.400,0.400]": {
+    "bbox_norm": [
+     0.2,
+     0.2,
+     0.4,
+     0.4
+    ],
+    "class_id": 0,
+    "class_name": "car",
+    "class_source": "external_label",
+    "class_validated": true,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[outside]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "outside",
+    "label_source": "import",
+    "region_boxes": [],
+    "test_holdout": false
+   },
+   "CROP[IMG[outside]|0.875,0.875,0.925,0.925]": {
+    "bbox_norm": [
+     0.875,
+     0.875,
+     0.925,
+     0.925
+    ],
+    "class_source": "external_label",
+    "class_validated": false,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[outside]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "outside",
+    "label_source": "external_label",
+    "region_boxes": [
+     {
+      "bbox_correct": null,
+      "bbox_norm": [
+       0.875,
+       0.875,
+       0.925,
+       0.925
+      ],
+      "box_id": "b1",
+      "cluster_distance": null,
+      "cluster_id": null,
+      "cluster_subid": null,
+      "confidence": null,
+      "detector": "import",
+      "detector_version": "<import>",
+      "rejection_reason": null,
+      "score": 1.0,
+      "source": "import",
+      "state": "accepted",
+      "text": null,
+      "text_choice": null,
+      "text_confidence": null,
+      "text_disagreement": null,
+      "text_engine_version": null,
+      "text_ocr": null,
+      "text_raw": null,
+      "text_source": null,
+      "text_vlm": null,
+      "text_vlm_invalid": null
+     }
+    ],
+    "test_holdout": false
+   }
+  },
+  "ledger": [
+   {
+    "boxes": [],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[bare]",
+    "image_path": "<tmp>/ds/images/train/bare.jpg",
+    "items": [
+     {
+      "action": "created",
+      "crop_id": "CROP[IMG[bare]|0.500,0.500,0.700,0.700]",
+      "holdout_prior": null,
+      "snapshot_index": null
+     }
+    ],
+    "label_state": "labeled",
+    "rel_path": "images/train/bare.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 1,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 1,
+     "negatives": 0,
+     "parents_detected": 0,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "bare",
+    "split": "train",
+    "status": "ok"
+   },
+   {
+    "boxes": [
+     {
+      "bbox_norm": [
+       0.27499999999999997,
+       0.27499999999999997,
+       0.325,
+       0.325
+      ],
+      "box_id": "b1",
+      "crop_id": "CROP[IMG[inside]|0.100,0.100,0.500,0.500]",
+      "state": "accepted"
+     }
+    ],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[inside]",
+    "image_path": "<tmp>/ds/images/train/inside.jpg",
+    "items": [
+     {
+      "action": "created",
+      "crop_id": "CROP[IMG[inside]|0.100,0.100,0.500,0.500]",
+      "holdout_prior": null,
+      "snapshot_index": null
+     }
+    ],
+    "label_state": "labeled",
+    "rel_path": "images/train/inside.jpg",
+    "report": {
+     "boxes_written": 1,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 1,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 1,
+     "negatives": 0,
+     "parents_detected": 0,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "inside",
+    "split": "train",
+    "status": "ok"
+   },
+   {
+    "boxes": [
+     {
+      "bbox_norm": [
+       0.875,
+       0.875,
+       0.925,
+       0.925
+      ],
+      "box_id": "b1",
+      "crop_id": "CROP[IMG[outside]|0.875,0.875,0.925,0.925]"
+     }
+    ],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[outside]",
+    "image_path": "<tmp>/ds/images/train/outside.jpg",
+    "items": [
+     {
+      "action": "created",
+      "crop_id": "CROP[IMG[outside]|0.200,0.200,0.400,0.400]",
+      "holdout_prior": null,
+      "snapshot_index": null
+     },
+     {
+      "action": "standalone",
+      "crop_id": "CROP[IMG[outside]|0.875,0.875,0.925,0.925]"
+     }
+    ],
+    "label_state": "labeled",
+    "rel_path": "images/train/outside.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 1,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 1,
+     "negatives": 0,
+     "parents_detected": 0,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 1,
+     "unlabeled": 0
+    },
+    "source_stem": "outside",
+    "split": "train",
+    "status": "ok"
+   }
+  ],
+  "report": {
+   "boxes_written": 1,
+   "disagreement_counts": {
+    "mismatches": 0,
+    "missed_labels": 0,
+    "unmatched_detections": 0
+   },
+   "disagreement_samples": [],
+   "holdout_frozen": 0,
+   "images_created": 3,
+   "images_failed": 0,
+   "images_reused": 0,
+   "images_skipped": 0,
+   "items_created": 3,
+   "items_noop": 0,
+   "items_reconciled_removed": 0,
+   "items_updated": 0,
+   "label_conflicts_locked": 0,
+   "labels_written": 3,
+   "negatives": 0,
+   "parents_detected": 0,
+   "proposals_created": 0,
+   "proposals_merged": 0,
+   "standalone_regions": 1,
+   "unlabeled": 0
+  }
+ },
+ "reimport": {
+  "images": {
+   "IMG[a]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>",
+     "<import>"
+    ],
+    "import_label_state": "labeled",
+    "import_source_stem": "a"
+   }
+  },
+  "items": {
+   "CROP[IMG[a]|0.150,0.150,0.250,0.250]": {
+    "bbox_norm": [
+     0.15000000000000002,
+     0.15000000000000002,
+     0.25,
+     0.25
+    ],
+    "class_id": 99,
+    "class_name": "bus",
+    "class_source": "human",
+    "class_validated": true,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[a]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "a",
+    "label_source": "import",
+    "test_holdout": false
+   },
+   "CROP[IMG[a]|0.450,0.450,0.550,0.550]": {
+    "bbox_norm": [
+     0.45,
+     0.45,
+     0.55,
+     0.55
+    ],
+    "class_id": 0,
+    "class_name": "car",
+    "class_source": "external_label",
+    "class_validated": true,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[a]",
+    "import_ids": [
+     "<import>",
+     "<import>"
+    ],
+    "import_source_stem": "a",
+    "label_source": "import",
+    "test_holdout": false
+   },
+   "CROP[IMG[a]|0.750,0.750,0.850,0.850]": {
+    "bbox_norm": [
+     0.75,
+     0.75,
+     0.8500000000000001,
+     0.8500000000000001
+    ],
+    "class_id": 0,
+    "class_name": "car",
+    "class_source": "external_label",
+    "class_validated": true,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[a]",
+    "import_ids": [
+     "<import>",
+     "<import>"
+    ],
+    "import_source_stem": "a",
+    "label_source": "import",
+    "test_holdout": false
+   }
+  },
+  "ledger": [
+   {
+    "boxes": [],
+    "froze_test": false,
+    "image_created": false,
+    "image_id": "IMG[a]",
+    "image_path": "<tmp>/ds/images/train/a.jpg",
+    "items": [
+     {
+      "action": "locked_conflict",
+      "crop_id": "CROP[IMG[a]|0.150,0.150,0.250,0.250]",
+      "holdout_prior": null,
+      "snapshot_index": null
+     },
+     {
+      "action": "updated",
+      "crop_id": "CROP[IMG[a]|0.450,0.450,0.550,0.550]",
+      "holdout_prior": false,
+      "snapshot_index": 0
+     },
+     {
+      "action": "noop",
+      "crop_id": "CROP[IMG[a]|0.750,0.750,0.850,0.850]",
+      "holdout_prior": null,
+      "snapshot_index": null
+     }
+    ],
+    "label_state": "labeled",
+    "rel_path": "images/train/a.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 0,
+     "images_failed": 0,
+     "images_reused": 1,
+     "images_skipped": 0,
+     "items_created": 0,
+     "items_noop": 1,
+     "items_reconciled_removed": 0,
+     "items_updated": 1,
+     "label_conflicts_locked": 1,
+     "labels_written": 1,
+     "negatives": 0,
+     "parents_detected": 0,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "a",
+    "split": "train",
+    "status": "ok"
+   }
+  ],
+  "report": {
+   "boxes_written": 0,
+   "disagreement_counts": {
+    "mismatches": 0,
+    "missed_labels": 0,
+    "unmatched_detections": 0
+   },
+   "disagreement_samples": [],
+   "holdout_frozen": 0,
+   "images_created": 0,
+   "images_failed": 0,
+   "images_reused": 1,
+   "images_skipped": 0,
+   "items_created": 0,
+   "items_noop": 1,
+   "items_reconciled_removed": 0,
+   "items_updated": 1,
+   "label_conflicts_locked": 1,
+   "labels_written": 1,
+   "negatives": 0,
+   "parents_detected": 0,
+   "proposals_created": 0,
+   "proposals_merged": 0,
+   "standalone_regions": 0,
+   "unlabeled": 0
+  }
+ },
+ "resumed_image": {
+  "images": {
+   "IMG[a]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "labeled",
+    "import_source_stem": "a"
+   },
+   "IMG[b]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "labeled",
+    "import_source_stem": "b"
+   }
+  },
+  "items": {
+   "CROP[IMG[a]|0.100,0.100,0.500,0.500]": {
+    "bbox_norm": [
+     0.09999999999999998,
+     0.09999999999999998,
+     0.5,
+     0.5
+    ],
+    "class_id": 0,
+    "class_name": "car",
+    "class_source": "external_label",
+    "class_validated": true,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[a]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "a",
+    "label_source": "import",
+    "test_holdout": false
+   },
+   "CROP[IMG[a]|0.750,0.750,0.850,0.850]": {
+    "bbox_norm": [
+     0.75,
+     0.75,
+     0.8500000000000001,
+     0.8500000000000001
+    ],
+    "class_id": 0,
+    "class_name": "car",
+    "class_source": "external_label",
+    "class_validated": true,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[a]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "a",
+    "label_source": "import",
+    "test_holdout": false
+   },
+   "CROP[IMG[b]|0.450,0.450,0.550,0.550]": {
+    "bbox_norm": [
+     0.45,
+     0.45,
+     0.55,
+     0.55
+    ],
+    "class_id": 0,
+    "class_name": "car",
+    "class_source": "external_label",
+    "class_validated": true,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[b]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "b",
+    "label_source": "import",
+    "test_holdout": false
+   }
+  },
+  "ledger": [
+   {
+    "boxes": [],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[a]",
+    "image_path": "<tmp>/ds/images/train/a.jpg",
+    "items": [
+     {
+      "action": "created",
+      "crop_id": "CROP[IMG[a]|0.100,0.100,0.500,0.500]",
+      "holdout_prior": null,
+      "snapshot_index": null
+     },
+     {
+      "action": "created",
+      "crop_id": "CROP[IMG[a]|0.750,0.750,0.850,0.850]",
+      "holdout_prior": null,
+      "snapshot_index": null
+     }
+    ],
+    "label_state": "labeled",
+    "rel_path": "images/train/a.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 2,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 2,
+     "negatives": 0,
+     "parents_detected": 0,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "a",
+    "split": "train",
+    "status": "ok"
+   },
+   {
+    "boxes": [],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[b]",
+    "image_path": "<tmp>/ds/images/train/b.jpg",
+    "items": [
+     {
+      "action": "created",
+      "crop_id": "CROP[IMG[b]|0.450,0.450,0.550,0.550]",
+      "holdout_prior": null,
+      "snapshot_index": null
+     }
+    ],
+    "label_state": "labeled",
+    "rel_path": "images/train/b.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 1,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 1,
+     "negatives": 0,
+     "parents_detected": 0,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "b",
+    "split": "train",
+    "status": "ok"
+   }
+  ],
+  "report": null,
+  "rerun_report": {
+   "boxes_written": 0,
+   "disagreement_counts": {
+    "mismatches": 0,
+    "missed_labels": 0,
+    "unmatched_detections": 0
+   },
+   "disagreement_samples": [],
+   "holdout_frozen": 0,
+   "images_created": 2,
+   "images_failed": 0,
+   "images_reused": 0,
+   "images_skipped": 0,
+   "items_created": 3,
+   "items_noop": 0,
+   "items_reconciled_removed": 0,
+   "items_updated": 0,
+   "label_conflicts_locked": 0,
+   "labels_written": 3,
+   "negatives": 0,
+   "parents_detected": 0,
+   "proposals_created": 0,
+   "proposals_merged": 0,
+   "standalone_regions": 0,
+   "unlabeled": 0
+  }
+ },
+ "size_mismatch": {
+  "chunk_report": {
+   "boxes_written": 0,
+   "disagreement_counts": {
+    "mismatches": 0,
+    "missed_labels": 0,
+    "unmatched_detections": 0
+   },
+   "disagreement_samples": [],
+   "holdout_frozen": 0,
+   "images_created": 1,
+   "images_failed": 0,
+   "images_reused": 0,
+   "images_skipped": 1,
+   "items_created": 1,
+   "items_noop": 0,
+   "items_reconciled_removed": 0,
+   "items_updated": 0,
+   "label_conflicts_locked": 0,
+   "labels_written": 1,
+   "negatives": 0,
+   "parents_detected": 0,
+   "proposals_created": 0,
+   "proposals_merged": 0,
+   "standalone_regions": 0,
+   "unlabeled": 0
+  },
+  "images": {
+   "IMG[b]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "labeled",
+    "import_source_stem": "b"
+   }
+  },
+  "items": {
+   "CROP[IMG[b]|0.400,0.400,0.600,0.600]": {
+    "bbox_norm": [
+     0.4,
+     0.4,
+     0.6,
+     0.6
+    ],
+    "class_id": 0,
+    "class_name": "car",
+    "class_source": "external_label",
+    "class_validated": true,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[b]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "b",
+    "label_source": "import",
+    "test_holdout": false
+   }
+  },
+  "ledger": [
+   {
+    "error_kind": "image_size_mismatch",
+    "froze_test": false,
+    "label_state": "labeled",
+    "rel_path": "images/train/a.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 0,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 1,
+     "items_created": 0,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 0,
+     "negatives": 0,
+     "parents_detected": 0,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "a",
+    "split": "train",
+    "status": "skipped"
+   },
+   {
+    "boxes": [],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[b]",
+    "image_path": "<tmp>/ds/images/train/b.jpg",
+    "items": [
+     {
+      "action": "created",
+      "crop_id": "CROP[IMG[b]|0.400,0.400,0.600,0.600]",
+      "holdout_prior": null,
+      "snapshot_index": null
+     }
+    ],
+    "label_state": "labeled",
+    "rel_path": "images/train/b.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 1,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 1,
+     "negatives": 0,
+     "parents_detected": 0,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "b",
+    "split": "train",
+    "status": "ok"
+   }
+  ],
+  "report": null
+ },
+ "unreadable": {
+  "images": {
+   "IMG[ok]": {
+    "dataset_split": "train",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_label_state": "labeled",
+    "import_source_stem": "ok"
+   }
+  },
+  "items": {
+   "CROP[IMG[ok]|0.200,0.200,0.400,0.400]": {
+    "bbox_norm": [
+     0.2,
+     0.2,
+     0.4,
+     0.4
+    ],
+    "class_id": 0,
+    "class_name": "car",
+    "class_source": "external_label",
+    "class_validated": true,
+    "dataset_split": "train",
+    "embedding_state": "embedded",
+    "image_id": "IMG[ok]",
+    "import_ids": [
+     "<import>"
+    ],
+    "import_source_stem": "ok",
+    "label_source": "import",
+    "test_holdout": false
+   }
+  },
+  "ledger": [
+   {
+    "error": "not a decodable image",
+    "error_kind": "decode_failed",
+    "froze_test": false,
+    "label_state": "labeled",
+    "rel_path": "images/train/bad.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 0,
+     "images_failed": 1,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 0,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 0,
+     "negatives": 0,
+     "parents_detected": 0,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "bad",
+    "split": "train",
+    "status": "failed"
+   },
+   {
+    "boxes": [],
+    "froze_test": false,
+    "image_created": true,
+    "image_id": "IMG[ok]",
+    "image_path": "<tmp>/ds/images/train/ok.jpg",
+    "items": [
+     {
+      "action": "created",
+      "crop_id": "CROP[IMG[ok]|0.200,0.200,0.400,0.400]",
+      "holdout_prior": null,
+      "snapshot_index": null
+     }
+    ],
+    "label_state": "labeled",
+    "rel_path": "images/train/ok.jpg",
+    "report": {
+     "boxes_written": 0,
+     "disagreement_counts": {
+      "mismatches": 0,
+      "missed_labels": 0,
+      "unmatched_detections": 0
+     },
+     "disagreement_samples": [],
+     "holdout_frozen": 0,
+     "images_created": 1,
+     "images_failed": 0,
+     "images_reused": 0,
+     "images_skipped": 0,
+     "items_created": 1,
+     "items_noop": 0,
+     "items_reconciled_removed": 0,
+     "items_updated": 0,
+     "label_conflicts_locked": 0,
+     "labels_written": 1,
+     "negatives": 0,
+     "parents_detected": 0,
+     "proposals_created": 0,
+     "proposals_merged": 0,
+     "standalone_regions": 0,
+     "unlabeled": 0
+    },
+    "source_stem": "ok",
+    "split": "train",
+    "status": "ok"
+   }
+  ],
+  "report": {
+   "boxes_written": 0,
+   "disagreement_counts": {
+    "mismatches": 0,
+    "missed_labels": 0,
+    "unmatched_detections": 0
+   },
+   "disagreement_samples": [],
+   "holdout_frozen": 0,
+   "images_created": 1,
+   "images_failed": 1,
+   "images_reused": 0,
+   "images_skipped": 0,
+   "items_created": 1,
+   "items_noop": 0,
+   "items_reconciled_removed": 0,
+   "items_updated": 0,
+   "label_conflicts_locked": 0,
+   "labels_written": 1,
+   "negatives": 0,
+   "parents_detected": 0,
+   "proposals_created": 0,
+   "proposals_merged": 0,
+   "standalone_regions": 0,
+   "unlabeled": 0
+  }
+ }
+}
