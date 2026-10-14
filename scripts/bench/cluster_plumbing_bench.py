@@ -251,11 +251,8 @@ async def one_run(client: Any, method: str, size: int, rep: int) -> dict[str, An
         'load_after': host_load(),
     }
     # The stage that contains the fetch before the fit starts: whatever is left of wall.
-    row['other_s'] = round(
-        row['wall_s']
-        - sum(row[k] for k in ('fetch_s', 'fit_s', 'distance_s', 'write_s', 'refresh_s', 'tail_s')),
-        3,
-    )
+    stages = ('fetch_s', 'fit_s', 'distance_s', 'write_s', 'refresh_s', 'tail_s')
+    row['other_s'] = round(row['wall_s'] - sum(row[k] for k in stages), 3)
     return row
 
 
