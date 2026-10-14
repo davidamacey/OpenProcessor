@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from curation.test_ingest_service import FakePEEncoder, _jpeg_bytes, _make_service
+from curation.ingest_fakes import FakePEEncoder, _jpeg_bytes, _make_service
 from src.services.curation.ingest_policy import DetectFilter, EmbeddingPolicy, IngestPolicy
 
 
@@ -25,7 +25,7 @@ class _IvfStore:
 
 
 def _service(policy: IngestPolicy) -> Any:
-    from curation.test_ingest_service import FakeClassRegistry, _FakeClassEntry
+    from curation.ingest_fakes import FakeClassRegistry, _FakeClassEntry
 
     registry = FakeClassRegistry([_FakeClassEntry(0, 'gadget'), _FakeClassEntry(1, 'widget')])
     svc, os_fake, _ = _make_service(detections=DETECTIONS, registry=registry)

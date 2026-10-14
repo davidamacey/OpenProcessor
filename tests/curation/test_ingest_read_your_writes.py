@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from curation.test_ingest_service import _jpeg_bytes, _make_service
+from curation.ingest_fakes import _jpeg_bytes, _make_service
 
 
 class _Indices:

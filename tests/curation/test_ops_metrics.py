@@ -24,7 +24,7 @@ from _fake_project_registry import StaticProjectRegistry, default_project_record
 from prometheus_client import REGISTRY
 from prometheus_client.metrics import MetricWrapperBase
 
-from curation.test_ingest_service import _jpeg_bytes, _make_service
+from curation.ingest_fakes import _jpeg_bytes, _make_service
 from curation.test_vlm_labeler import _fake_client, _make_chat_response
 from src.config.curation import IndexRole
 from src.config.project_context import bind_project
