@@ -554,8 +554,8 @@ async def delete_prompt_pack_route(
         ) from exc
     # A 204 must carry no body and no JSON content-type: a JSON response class
     # would stamp 'application/json' on an empty body, and a client calling
-    # .json() on it (as tests/curation/test_cross_project_leak.py's isolation
-    # sweep does on every JSON-labeled response) gets a JSONDecodeError.
+    # .json() on it (as the isolation sweep in tests/curation/cross_project_leak/
+    # does on every JSON-labeled response) gets a JSONDecodeError.
     return Response(status_code=204)
 
 

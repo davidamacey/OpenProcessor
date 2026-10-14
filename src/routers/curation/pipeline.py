@@ -172,7 +172,7 @@ async def _run_auto_label(
         # entirely in-process (no cross-process staleness to guard
         # against), and `resolve_run_prompt_pack` below already refreshes
         # when it needs to. An unconditional refresh here was proven, by a
-        # genuine `test_cross_project_leak.py` regression, to add a real
+        # genuine `tests/curation/cross_project_leak/` regression, to add a real
         # (if TTL-gated) extra OpenSearch call to a route that never
         # needed one -- not worth it for zero correctness gain there.
         from src.services.config_store import get_config_store
