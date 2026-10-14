@@ -31,7 +31,7 @@ def test_generic_defaults() -> None:
     assert f.boxes == 'region_boxes'
     assert f.box_embeddings == 'region_box_embeddings'
     assert f.class_id == 'region_class_id'
-    assert f.status_legacy == 'region_status_legacy'
+    assert f.status_before_requeue == 'region_status_before_requeue'
 
 
 def test_is_frozen() -> None:
@@ -65,7 +65,7 @@ def test_overridability_expresses_a_pre_existing_deployment_shape() -> None:
         pairing='roi_pairing',
         skip_verify='roi_skip_vlm_verify',
         gate_skip='roi_gate_skip',
-        status_legacy='roi_status_legacy',
+        status_before_requeue='roi_status_before_requeue',
         profile='roi_profile',
         profile_revision='roi_profile_revision',
         boxes='roi_boxes',
@@ -80,7 +80,7 @@ def test_overridability_expresses_a_pre_existing_deployment_shape() -> None:
     )
     assert f.status == 'roi_status'
     assert f.boxes == 'roi_boxes'
-    assert f.status_legacy == 'roi_status_legacy'
+    assert f.status_before_requeue == 'roi_status_before_requeue'
     # Every field really did take the override — nothing silently kept
     # its generic default.
     for field in dataclasses.fields(f):

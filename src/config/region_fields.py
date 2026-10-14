@@ -22,9 +22,8 @@ names — a rename becomes a config flip, not a code change.
   names, untouched in Phase 2.
 - Metric names — NO, deferred to a later phase.
 
-f-string composition of a legacy suffix (``f'{F.status}_legacy'``) is
-banned — use the explicit ``*_legacy`` attributes below, so the field names
-stay greppable.
+f-string composition of a suffixed field name (``f'{F.status}_before_requeue'``)
+is banned: use the explicit attribute below, so the field names stay greppable.
 """
 
 from __future__ import annotations
@@ -110,8 +109,9 @@ class RegionFields:
     # region requeue. A skipped item is not a miss: it was never looked at.
     gate_skip: str = 'region_gate_skip'
 
-    # Legacy-suffixed columns kept for rollback (e.g. roi_*_legacy).
-    status_legacy: str = 'region_status_legacy'
+    # The status an item had before a region requeue reset it (kept so the
+    # requeue can be traced back).
+    status_before_requeue: str = 'region_status_before_requeue'
 
     @classmethod
     def from_env(cls, env_prefix: str = 'OP_REGION_FIELD_') -> RegionFields:

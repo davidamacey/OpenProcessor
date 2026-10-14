@@ -22,7 +22,7 @@ anything moves. ``--apply`` then:
 
 - sets the status to ``pending_detection`` (``--to pending_verification``
   re-verifies the existing rejected boxes instead);
-- keeps the prior status in the region ``status_legacy`` field (first
+- keeps the prior status in the region ``status_before_requeue`` field (first
   re-run only) as an audit trail and clears the rejection reason;
 - for the default full re-detect, removes every unlocked machine box and
   keeps human-owned and imported ones (``--to pending_verification`` keeps

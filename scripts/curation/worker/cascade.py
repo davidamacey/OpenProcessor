@@ -1,6 +1,6 @@
 """Auto-split sub-module of the curation detection worker.
 
-See ``scripts/curation/region_worker_main.py`` for the entry point and
+See ``scripts/curation/worker/__main__.py`` for the entry point and
 the ``scripts/curation/worker/`` package for the rest of the split.
 
 The pre-W8 single-candidate cascade (``_process_crop`` + its
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
 
 def _build_pending_query(exclude_ids: list[str] | None = None) -> dict[str, Any]:
-    """Crops needing the worker's attention — pending or pending_verify.
+    """Crops needing the worker's attention: pending detection or pending verification.
 
     Skips crops whose region status is already terminal so we never
     overwrite a human or detector verdict on a re-run.
@@ -69,16 +69,10 @@ def _build_pending_query(exclude_ids: list[str] | None = None) -> dict[str, Any]
             'filter': [
                 {'exists': {'field': 'image_path'}},
                 {'exists': {'field': 'bbox_norm'}},
-                # Pull both legacy short names AND the renamed forms
-                # introduced by task #7. Compatibility window: worker
-                # consumes whichever name OS happens to carry today;
-                # writes only ever emit the new long-form names below.
                 {
                     'terms': {
                         F.status: [
-                            'pending',
                             RegionStatus.PENDING_DETECTION,
-                            'pending_verify',
                             RegionStatus.PENDING_VERIFICATION,
                         ]
                     }
@@ -204,7 +198,7 @@ def _source_to_crop(
     primary-detector region that was already projected into source
     coordinates.
 
-    Used only for ``pending_verify`` crops where the upstream ingest
+    Used only for pending-verification crops where the upstream ingest
     wrote the region bbox in source frame; the VLM needs a tight region
     JPEG, which we can only carve from the item crop.
     """

@@ -61,11 +61,6 @@ if TYPE_CHECKING:
 Box = tuple[float, float, float, float]
 
 DEFAULT_ACCEPTED_STATUSES: tuple[str, ...] = (RegionStatus.DETECTED.value,)
-# Pre-rename status strings the worker still reads as pending.
-LEGACY_STATUS_ALIASES: dict[str, str] = {
-    'pending': RegionStatus.PENDING_DETECTION.value,
-    'pending_verify': RegionStatus.PENDING_VERIFICATION.value,
-}
 PENDING_VALUES: frozenset[str] = frozenset(s.value for s in PENDING_STATUSES)
 SOURCE_FRAMES: frozenset[str] = frozenset({'source'})
 CROP_FRAMES: frozenset[str] = frozenset({'crop', 'item'})
@@ -221,8 +216,7 @@ class RegionRecord:
 def normalize_status(raw: Any) -> str:
     if raw is None or raw == '':
         return NO_STATUS
-    value = str(raw.value if isinstance(raw, RegionStatus) else raw)
-    return LEGACY_STATUS_ALIASES.get(value, value)
+    return str(raw.value if isinstance(raw, RegionStatus) else raw)
 
 
 # Per-box ``state`` (W8) -> the RegionStatus-shaped vocabulary this

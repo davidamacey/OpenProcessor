@@ -52,7 +52,7 @@ WIRE_REGION_FIELDS = RegionFields()
 _NON_WIRE_REGION_ATTRS = frozenset(
     {
         'prefix',
-        'status_legacy',
+        'status_before_requeue',
         'boxes',
         'boxes_state',
         'box_embeddings',

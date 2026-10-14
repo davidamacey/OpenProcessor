@@ -362,7 +362,7 @@ def _items_body() -> dict[str, Any]:
                 # Quarantine bookkeeping — a legacy-region quarantine script
                 # copies the original values into these fields before
                 # clearing the live fields and re-running detection.
-                F.status_legacy: {'type': 'keyword'},
+                F.status_before_requeue: {'type': 'keyword'},
                 # Class-label provenance (same shape as region provenance,
                 # scoped to the item class label rather than the
                 # region-of-interest sub-bbox).

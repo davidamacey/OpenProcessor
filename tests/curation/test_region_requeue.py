@@ -79,7 +79,7 @@ def _item(
     boxes: tuple[dict[str, Any], ...] = (),
     detector_chain: list[str] | None = None,
     validated: bool | None = None,
-    status_legacy: str | None = None,
+    status_before_requeue: str | None = None,
 ) -> dict[str, Any]:
     boxes = tuple(boxes)
     doc: dict[str, Any] = {
@@ -96,8 +96,8 @@ def _item(
         doc[F.detector_chain] = detector_chain
     if validated is not None:
         doc[F.validated] = validated
-    if status_legacy is not None:
-        doc[F.status_legacy] = status_legacy
+    if status_before_requeue is not None:
+        doc[F.status_before_requeue] = status_before_requeue
     return doc
 
 
@@ -144,7 +144,7 @@ def _corpus() -> dict[str, dict[str, Any]]:
         _item(
             'r3', REJECTED,
             boxes=(_box('b1', detector='det_b', reason=None, bbox=box),),
-            status_legacy=RegionStatus.NO_REGION_VISIBLE.value,
+            status_before_requeue=RegionStatus.NO_REGION_VISIBLE.value,
         ),
         _item(
             'd1', RegionStatus.DETECTED,
@@ -208,7 +208,7 @@ async def test_apply_requeues_only_the_filtered_cohort():
     assert _changed(fake) == {'f1'}
     f1 = fake.docs(ITEMS)['f1']
     assert f1[F.status] == RegionStatus.PENDING_DETECTION
-    assert f1[F.status_legacy] == FAILED
+    assert f1[F.status_before_requeue] == FAILED
     assert f1[F.rejection_reason] is None
     assert _box_ids(f1) == ['b1'], 'box kept without --clear-detection'
     assert f1[F.boxes][0]['bbox_norm'] == [0.2, 0.2, 0.4, 0.3]
@@ -311,7 +311,7 @@ async def test_pending_verification_target_needs_an_existing_box():
     r1 = fake.docs(ITEMS)['r1']
     assert r1[F.status] == RegionStatus.PENDING_VERIFICATION
     # an earlier requeue's audit trail is preserved, not overwritten
-    assert fake.docs(ITEMS)['r3'][F.status_legacy] == RegionStatus.NO_REGION_VISIBLE
+    assert fake.docs(ITEMS)['r3'][F.status_before_requeue] == RegionStatus.NO_REGION_VISIBLE
     # W8c M2 fix: the item's own box(es) were always `rejected` (a
     # REQUEUEABLE_STATUSES item can never already carry a `proposed` box
     # -- `derive_status` would report `pending_verification` instead).
@@ -419,7 +419,7 @@ async def test_custom_region_field_names_are_honoured():
         boxes='roi_boxes',
         count='roi_count',
         rejected_count='roi_rejected_count',
-        status_legacy='roi_state_prev',
+        status_before_requeue='roi_state_prev',
         validated='roi_ok',
     )
     doc = {
@@ -596,7 +596,7 @@ async def test_unseeded_backfill_seeds_pending_detection_into_worker_queue():
     for i in ('u0', 'u1', 'u2'):
         assert after[i][F.status] == RegionStatus.PENDING_DETECTION
         # No prior status existed, so there is nothing to stash or clear.
-        assert F.status_legacy not in after[i]
+        assert F.status_before_requeue not in after[i]
         assert F.rejection_reason not in after[i]
         assert matches(after[i], worker_query)
 

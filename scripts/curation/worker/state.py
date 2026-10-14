@@ -1,6 +1,6 @@
 """Auto-split sub-module of the curation detection worker.
 
-See ``scripts/curation/region_worker_main.py`` for the entry point and
+See ``scripts/curation/worker/__main__.py`` for the entry point and
 the ``scripts/curation/worker/`` package for the rest of the split.
 """
 
@@ -77,13 +77,8 @@ def region_profile() -> DetectionProfile:
     return profile
 
 
-# Status names (renamed to the long form). Worker emits the new
-# long-form names everywhere; reads accept both
-# legacy and new names until the OS migration completes.
 STATUS_PENDING_DETECTION = RegionStatus.PENDING_DETECTION
 STATUS_PENDING_VERIFICATION = RegionStatus.PENDING_VERIFICATION
-_PENDING_DETECTION_ALIASES = frozenset({STATUS_PENDING_DETECTION, 'pending'})
-_PENDING_VERIFICATION_ALIASES = frozenset({STATUS_PENDING_VERIFICATION, 'pending_verify'})
 
 # Terminal statuses the worker MUST NOT override.
 _TERMINAL_STATUSES: frozenset[str] = TERMINAL_STATUSES

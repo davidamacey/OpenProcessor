@@ -128,8 +128,7 @@ async def count_pending_ingest(opensearch: Any) -> int:
     A training claim that stops GPU-resident ingest containers
     (``gpu_arbiter.containers_to_stop``) pauses that detection/verification
     until the run ends. This lets preflight warn the operator how much
-    in-flight ingest that will stall. Legacy status names included so a
-    mid-migration backlog is still counted.
+    in-flight ingest that will stall.
     """
     body = {
         'query': {
@@ -137,8 +136,6 @@ async def count_pending_ingest(opensearch: Any) -> int:
                 F.status: [
                     RegionStatus.PENDING_DETECTION,
                     RegionStatus.PENDING_VERIFICATION,
-                    'pending',
-                    'pending_verify',
                 ]
             }
         }

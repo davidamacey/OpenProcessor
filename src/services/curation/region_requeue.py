@@ -22,7 +22,7 @@ The pieces:
   run).
 - :func:`apply_requeue` — flips the cohort to a pending status through the
   OCC skip-on-conflict bulk writer, so a concurrent worker or human write
-  always wins. The prior status is stashed in ``RegionFields.status_legacy``
+  always wins. The prior status is stashed in ``RegionFields.status_before_requeue``
   (first requeue only, so the original verdict survives repeated passes),
   the rejection reason is cleared, and with ``clear_detection`` every box
   a human hasn't touched (:func:`~src.services.curation.region_boxes.
@@ -413,8 +413,8 @@ class _Merger:
         if prior is not None:
             # An unseeded item has no prior verdict to stash or reason to clear.
             update[F.rejection_reason] = None
-            if current.get(F.status_legacy) is None:
-                update[F.status_legacy] = prior
+            if current.get(F.status_before_requeue) is None:
+                update[F.status_before_requeue] = prior
         if self.clear_detection:
             # Drop every box that is not locked (human-owned or imported)
             # so the cascade starts fresh. The worker's own fresh-detection

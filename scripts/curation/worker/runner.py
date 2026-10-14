@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from scripts.curation.worker.cascade import SegmenterClient
 from scripts.curation.worker.crop_gate import CropGate
 from scripts.curation.worker.fairness import FairnessScheduler, liveness_loop
 from scripts.curation.worker.flow import metrics_reporter, producer, writer
@@ -23,11 +24,14 @@ from scripts.curation.worker.pipeline import COMBINED_CHUNK, VISIBLE_CHUNK, Pipe
 from scripts.curation.worker.stage_a import stage_a_consumer, stage_a_vlm_visible
 from scripts.curation.worker.stage_b import stage_b_combined
 from scripts.curation.worker.stage_sam import stage_a_sam_consumer
+from src.clients.triton_pool import AsyncTritonPool
 from src.core.logging import get_logger
 from src.services.curation.worker_liveness import heartbeat_loop
 from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
 from src.services.detection.cascade_detect.region_detector import RegionDetector
 from src.services.detection.profile_registry import get_active_region_profile
+from src.services.labeling.vlm_factory import build_uncached_labeler as build_vlm_labeler
+from src.services.projects.guard import make_script_opensearch
 
 
 logger = get_logger('curation_worker')
@@ -105,12 +109,7 @@ async def run(args: argparse.Namespace) -> int:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, _on_signal)
 
-    # Look up heavy-IO constructors through the legacy shim module so
-    # tests that monkeypatch `scripts.curation.region_worker_main.AsyncTritonPool`
-    # (and friends) still intercept calls made from this split-out runner.
-    from scripts.curation import region_worker_main as _wkr
-
-    pool = _wkr.AsyncTritonPool(url=args.triton, pool_size=args.pool_size, max_concurrent=64)
+    pool = AsyncTritonPool(url=args.triton, pool_size=args.pool_size, max_concurrent=64)
     await pool.initialize()
 
     # LG-1: write RegionFields.embedding at flush time so a fresh install
@@ -145,7 +144,7 @@ async def run(args: argparse.Namespace) -> int:
     # The VLM class catalog (prompt class list + name -> registry id) is
     # per project: every classifying call reads bound_class_catalog()
     # under the item's own binding, never a process-wide list.
-    opensearch = _wkr.make_script_opensearch([args.opensearch])
+    opensearch = make_script_opensearch([args.opensearch])
 
     started_at = time.monotonic()
     sentinel = Path(args.pause_sentinel)
@@ -157,7 +156,7 @@ async def run(args: argparse.Namespace) -> int:
     # `opensearch` client above -- a second script_project_registry()
     # client would open its own real AsyncOpenSearch straight from
     # args.opensearch, bypassing whatever fake a caller/test installed
-    # at _wkr.make_script_opensearch.
+    # at make_script_opensearch.
     registry = ProjectRegistry(lambda: opensearch)
     project_filter = getattr(args, 'project', None)
 
@@ -243,8 +242,8 @@ async def run(args: argparse.Namespace) -> int:
                     get_active_vlm=_active_vlm_endpoint,
                     region_detector_cls=RegionDetector,
                     ocr_recognizer_cls=PaddleOcrTextRecognizer,
-                    segmenter_cls=_wkr.SegmenterClient,
-                    build_vlm=_wkr.build_vlm_labeler,
+                    segmenter_cls=SegmenterClient,
+                    build_vlm=build_vlm_labeler,
                 )
                 if rt is None:
                     return
@@ -288,7 +287,7 @@ async def run(args: argparse.Namespace) -> int:
     # visibility pre-filter shielding the slow segmenter GPU and the
     # heavy combined call from non-region crops):
     #
-    #   in_q             -> Stage A.primary (pending_verify + primary-
+    #   in_q             -> Stage A.primary (pending_verification + primary-
     #                       detector Triton call)
     #                       splits into:
     #                         - has candidate         -> combined_q
@@ -433,7 +432,7 @@ async def run(args: argparse.Namespace) -> int:
 
     try:
         prod_task = asyncio.create_task(producer(ctx, _sync_project_runtime))
-        # Stage A.primary pool: primary-detector + pending_verify
+        # Stage A.primary pool: primary-detector + pending_verification
         # routing only. Sized to keep the primary-detector Triton
         # instances saturated; secondary-segmenter work has moved to
         # its own pool below.

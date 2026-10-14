@@ -122,7 +122,7 @@ def test_items_has_region_of_interest_fields_via_region_fields() -> None:
         assert key in props, f'expected region field {key!r} in items mapping'
     # And the region key really is the RegionFields default (region_*), not
     # a hardcoded plate_* literal.
-    assert F.status_legacy == 'region_status_legacy'
+    assert F.status_before_requeue == 'region_status_before_requeue'
 
 
 def test_items_has_score_and_probe_fields() -> None:

@@ -22,9 +22,9 @@ from scripts.curation.worker.region_text_stage import (
     read_item_lines,
 )
 from scripts.curation.worker.state import (
-    _PENDING_DETECTION_ALIASES,
-    _PENDING_VERIFICATION_ALIASES,
     _TERMINAL_STATUSES,
+    STATUS_PENDING_DETECTION,
+    STATUS_PENDING_VERIFICATION,
     RegionProfileNotConfiguredError,
     _crop_jpeg_for_task,
     _is_secondary_shape,
@@ -48,10 +48,10 @@ logger = get_logger('curation_worker')
 
 
 async def stage_a_consumer(ctx: PipelineContext, consumer_id: int) -> None:
-    """Stage A.primary: load JPEG + primary/pending_verify routing only.
+    """Stage A.primary: load JPEG + primary/pending_verification routing only.
 
     Never calls the VLM or the secondary segmenter directly. Routes:
-      - pending_verify (existing primary-detector candidate) -> combined_q
+      - pending_verification (existing primary-detector candidate) -> combined_q
       - pending + non-secondary-shape with primary hit       -> combined_q
       - pending + secondary-shape OR primary miss             -> vlm_visible_q
         (let the VLM decide if a region is even visible before
@@ -123,7 +123,7 @@ async def stage_a_consumer(ctx: PipelineContext, consumer_id: int) -> None:
 
             is_secondary = _is_secondary_shape(t)
 
-            # Path 1: pending_verify — already has a candidate awaiting
+            # Path 1: pending_verification — already has a candidate awaiting
             # VLM verification; straight to the combined call (no
             # fresh detection needed). W8 B1 fix: the candidate comes
             # from this item's STORED ``region_boxes`` -- every box
@@ -131,7 +131,7 @@ async def stage_a_consumer(ctx: PipelineContext, consumer_id: int) -> None:
             # incl. a human's box set via `PUT /crops/{id}/regions`)
             # -- keeping its box_id.
             proposed_stored = [b for b in t.stored_boxes if b.state == 'proposed']
-            if t.region_status in _PENDING_VERIFICATION_ALIASES and proposed_stored:
+            if t.region_status == STATUS_PENDING_VERIFICATION and proposed_stored:
                 t.candidates = [
                     task_box_from_stored(b, item_bbox_norm=t.item_bbox_norm)
                     for b in proposed_stored
@@ -191,7 +191,7 @@ async def stage_a_consumer(ctx: PipelineContext, consumer_id: int) -> None:
             # still produce one) falls through to here too and runs a
             # fresh detection instead of a re-verify. Log it so that
             # silent mismatch is at least visible.
-            if t.region_status in _PENDING_VERIFICATION_ALIASES:
+            if t.region_status == STATUS_PENDING_VERIFICATION:
                 logger.warning(
                     'region_pending_verification_fallthrough',
                     crop_id=t.crop_id,
@@ -205,7 +205,7 @@ async def stage_a_consumer(ctx: PipelineContext, consumer_id: int) -> None:
             # no detector_model has no detector leg: straight to Path 3,
             # with nothing on the trace.
             if (
-                t.region_status in _PENDING_DETECTION_ALIASES
+                t.region_status == STATUS_PENDING_DETECTION
                 and not is_secondary
                 and rt.profile.detector_model
             ):

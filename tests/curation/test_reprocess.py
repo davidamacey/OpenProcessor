@@ -167,7 +167,7 @@ async def test_region_redetect_removes_machine_boxes_and_keeps_locked_ones_byte_
     after = docs(fake)
     assert after['m1'][F.status] == RegionStatus.PENDING_DETECTION
     assert after['m1'][F.boxes] == []
-    assert after['m1'][F.status_legacy] == FAILED
+    assert after['m1'][F.status_before_requeue] == FAILED
     # imported box survives untouched, the machine sibling is gone
     assert after['i1'][F.status] == RegionStatus.PENDING_DETECTION
     # (the write normalizes the stored element; compare the boxes themselves)

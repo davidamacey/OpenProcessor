@@ -9,10 +9,8 @@ shows). A failed read leaves the previous value in place -- never a made-up zero
 
 Queue mapping (what each ``queue`` label means in this codebase):
 
-* ``segment`` -- items awaiting region detection (``pending_detection`` and its
-  legacy alias ``pending``).
-* ``label`` -- items awaiting VLM verification (``pending_verification`` and the
-  legacy ``pending_verify``).
+* ``segment`` -- items awaiting region detection (``pending_detection``).
+* ``label`` -- items awaiting VLM verification (``pending_verification``).
 * ``embed`` -- items whose vector was deferred (``embedding_state=deferred``).
 * ``ingest`` -- not emitted: ingest is a synchronous request, nothing is persisted
   as waiting.
@@ -59,8 +57,8 @@ logger = get_logger(__name__)
 
 DEFAULT_INTERVAL_S = 30.0
 _CAT_CHUNK = 40
-_SEGMENT_STATUSES = (RegionStatus.PENDING_DETECTION.value, 'pending')
-_LABEL_STATUSES = (RegionStatus.PENDING_VERIFICATION.value, 'pending_verify')
+_SEGMENT_STATUSES = (RegionStatus.PENDING_DETECTION.value,)
+_LABEL_STATUSES = (RegionStatus.PENDING_VERIFICATION.value,)
 
 
 def _oldest(agg: dict[str, Any], now: float) -> float | None:
