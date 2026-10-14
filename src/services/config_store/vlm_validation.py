@@ -10,9 +10,9 @@ live in :mod:`src.services.config_store.vlm_pairing`.
 
 from __future__ import annotations
 
-import os
 from typing import TYPE_CHECKING, Any
 
+from src.config.env import env_str
 from src.services.labeling.vlm_catalog import catalog_entry
 from src.services.labeling.vlm_endpoint_body import FIELD_RANGES, VlmEndpointBody, VlmProbeRecord
 from src.services.labeling.vlm_endpoints import (
@@ -48,7 +48,7 @@ BYPASSABLE_CODES: frozenset[str] = frozenset(
 def external_policy() -> str:
     """``OP_VLM_EXTERNAL_POLICY``: ``ack`` (default) or ``deny``. Anything
     else fails closed to ``deny``."""
-    raw = os.environ.get('OP_VLM_EXTERNAL_POLICY', 'ack').strip().lower() or 'ack'
+    raw = env_str('OP_VLM_EXTERNAL_POLICY', 'ack').lower() or 'ack'
     return raw if raw == 'ack' else 'deny'
 
 

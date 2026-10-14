@@ -11,10 +11,10 @@ every project's own index set.
 
 from __future__ import annotations
 
-import os
 import threading
 from typing import Any, Literal
 
+from src.config.env import env_str
 from src.services.config_store.store import ConfigStore
 
 
@@ -28,7 +28,7 @@ def global_configs_index() -> str:
     from src.config.projects import project_index_prefix
     from src.services.projects.registry import projects_index
 
-    name = os.environ.get('OP_GLOBAL_CONFIGS_INDEX', 'op_global_configs')
+    name = env_str('OP_GLOBAL_CONFIGS_INDEX', 'op_global_configs')
     if name.startswith(project_index_prefix()):
         msg = (
             f"OP_GLOBAL_CONFIGS_INDEX '{name}' starts with the project index prefix "

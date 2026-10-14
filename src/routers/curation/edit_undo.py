@@ -23,7 +23,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
-from src.routers.curation._common import OpenSearchDep, RegionProfileDep, _now_iso, logger, router
+from src.routers.curation._common import OpenSearchDep, RegionProfileDep, logger, router
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.routers.curation.label_undo import _items_by_ids
 from src.services.curation.edit_history import (
@@ -35,6 +35,7 @@ from src.services.curation.edit_history import (
     record_edit,
     restore_edit_state,
 )
+from src.utils.timeutil import now_iso
 
 
 class CropRegionUndoBatchRequest(BaseModel):
@@ -61,7 +62,7 @@ def edit_undo_merger(kind: EditKind, writer: str) -> Any:
         return {
             **restore_edit_state(entry, kind, current=current),
             EDIT_HISTORY_FIELD: history,
-            'updated_at': _now_iso(),
+            'updated_at': now_iso(),
         }
 
     return _merge

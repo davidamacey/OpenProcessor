@@ -15,7 +15,7 @@ are allowlisted from the naming-leak scan.
 
 from __future__ import annotations
 
-import os
+from src.config.env import env_is_set
 
 
 # Old name -> new name. A value starting with ``removed:`` marks a setting
@@ -61,7 +61,7 @@ def reject_retired_env() -> None:
     Raises ``RuntimeError`` listing every retired name still set and its
     replacement. A no-op when none are set.
     """
-    stale = sorted(name for name in RETIRED_ENV if name in os.environ)
+    stale = sorted(name for name in RETIRED_ENV if env_is_set(name))
     if not stale:
         return
     renames = '; '.join(

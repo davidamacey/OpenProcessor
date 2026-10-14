@@ -9,7 +9,7 @@ Triton Clients:
 """
 
 from src.clients.opensearch.client import OpenSearchClient
-from src.clients.triton_client import TritonClient, get_triton_client
+from src.clients.triton_client import TritonClient, get_sync_triton_client
 from src.clients.triton_pool import TritonClientManager
 
 
@@ -19,5 +19,5 @@ __all__ = [
     # Unified Triton client (NEW)
     'TritonClient',
     'TritonClientManager',
-    'get_triton_client',
+    'get_sync_triton_client',
 ]

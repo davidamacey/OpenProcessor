@@ -43,8 +43,9 @@ intersects its GPU set, regardless of claim size (see
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
+
+from src.config.env import env_str
 
 
 def _parse_gpu_scope(name: str, raw_ids: str) -> frozenset[int]:
@@ -217,7 +218,7 @@ class GpuArbiterConfig:
         silently degrading — a typo in a GPU fence must not remove the
         fence.
         """
-        raw_ids = os.environ.get('OP_GPU_ALLOWED_IDS', '')
+        raw_ids = env_str('OP_GPU_ALLOWED_IDS', '')
         ids: set[int] = set()
         for token in (t.strip() for t in raw_ids.split(',')):
             if not token:
@@ -233,13 +234,13 @@ class GpuArbiterConfig:
                 msg = f'OP_GPU_ALLOWED_IDS must not contain negative ids, got {raw_ids!r}'
                 raise ValueError(msg)
             ids.add(gpu_id)
-        container_gpus = _parse_container_gpus(os.environ.get('OP_GPU_ARBITER_CONTAINERS', ''))
+        container_gpus = _parse_container_gpus(env_str('OP_GPU_ARBITER_CONTAINERS', ''))
         containers = tuple(name for name, _ in container_gpus)
-        trainer = os.environ.get('OP_GPU_ARBITER_TRAINER_CONTAINER', '').strip() or None
-        jobs_dir = os.environ.get('OP_BAKEOFF_JOBS_DIR', '').strip() or _default_bakeoff_jobs_dir()
-        gpu_labels = _parse_gpu_labels(os.environ.get('OP_GPU_LABELS', ''))
-        default_train_gpus = os.environ.get('OP_TRAIN_DEFAULT_GPUS', '').strip() or None
-        bakeoff_host_gpus = os.environ.get('OP_BAKEOFF_HOST_GPUS', '').strip() or None
+        trainer = env_str('OP_GPU_ARBITER_TRAINER_CONTAINER') or None
+        jobs_dir = env_str('OP_BAKEOFF_JOBS_DIR') or _default_bakeoff_jobs_dir()
+        gpu_labels = _parse_gpu_labels(env_str('OP_GPU_LABELS', ''))
+        default_train_gpus = env_str('OP_TRAIN_DEFAULT_GPUS') or None
+        bakeoff_host_gpus = env_str('OP_BAKEOFF_HOST_GPUS') or None
         return cls(
             allowed_gpu_ids=frozenset(ids),
             containers=containers,

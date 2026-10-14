@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.core.dependencies import get_curation_opensearch
-from src.routers import curation_umap
+from src.routers.curation import umap as curation_umap
 from src.services.curation.clustering import embedding_reduce as er, pool_size as ps
 
 

@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 
 from curation.occ_fakes import FakeOccOpenSearch, make_bulk_response, make_bulk_update_item
-from src.clients.occ_bulk import occ_update_bulk
+from src.clients.occ_bulk import occ_bulk_rounds, occ_update_bulk
 
 
 class TestOccUpdateBulk:
@@ -111,3 +111,59 @@ class TestOccUpdateBulk:
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+class _AlwaysConflict(FakeOccOpenSearch):
+    def __init__(self, *, transport_error: bool = False) -> None:
+        super().__init__({'a': {'class_id': 1, 'label_source': 'human'}})
+        self.transport_error = transport_error
+
+    async def bulk(
+        self,
+        *,
+        body: list[dict[str, Any]],
+        refresh: bool | str = False,  # noqa: ARG002
+    ) -> dict[str, Any]:
+        self.bulk_calls.append(body)
+        if self.transport_error:
+            raise RuntimeError('boom')
+        return make_bulk_response(
+            [make_bulk_update_item('a', status=409, error_type='version_conflict_engine_exception')]
+        )
+
+
+async def _run_rounds(client: FakeOccOpenSearch, **kwargs: Any) -> list[tuple[Any, ...]]:
+    seen: list[tuple[Any, ...]] = []
+    await occ_bulk_rounds(
+        client,
+        index='op_prj_default__items',
+        ids=['a'],
+        prepare=lambda _id, doc: None if doc is None else {'class_id': 2},
+        on_written=lambda i: seen.append(('written', i)),
+        on_failed=lambda i, doc, why: seen.append(('failed', i, why, doc['_source'])),
+        **kwargs,
+    )
+    return seen
+
+
+class TestOccBulkRounds:
+    @pytest.mark.asyncio
+    async def test_conflict_is_retried_then_reported_once_with_the_last_doc(self) -> None:
+        client = _AlwaysConflict()
+        seen = await _run_rounds(client, max_retries=2)
+        assert seen == [('failed', 'a', 'conflict', {'class_id': 1, 'label_source': 'human'})]
+        assert len(client.bulk_calls) == 3
+
+    @pytest.mark.asyncio
+    async def test_transport_error_is_retried_by_default(self) -> None:
+        client = _AlwaysConflict(transport_error=True)
+        seen = await _run_rounds(client, max_retries=1)
+        assert [s[:3] for s in seen] == [('failed', 'a', 'transport')]
+        assert len(client.bulk_calls) == 2
+
+    @pytest.mark.asyncio
+    async def test_transport_error_fails_at_once_when_not_retried(self) -> None:
+        client = _AlwaysConflict(transport_error=True)
+        seen = await _run_rounds(client, max_retries=3, retry_transport=False)
+        assert [s[:3] for s in seen] == [('failed', 'a', 'transport')]
+        assert len(client.bulk_calls) == 1

@@ -45,17 +45,6 @@ class OcrRegion:
     profile: DetectionProfile
 
     @property
-    def is_region_shaped(self) -> bool:
-        """Aspect-ratio test used by the general region sanity gate."""
-        x1, y1, x2, y2 = self.bbox_norm
-        w = max(0.0, x2 - x1)
-        h = max(0.0, y2 - y1)
-        if h <= 0.0 or w <= 0.0:
-            return False
-        ar = w / h
-        return self.profile.aspect_min <= ar <= self.profile.aspect_max
-
-    @property
     def is_region_text_candidate(self) -> bool:
         """Stricter test for text-hint detection promotion.
 

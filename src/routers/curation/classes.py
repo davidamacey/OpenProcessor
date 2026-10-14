@@ -24,7 +24,6 @@ from src.routers.curation._class_models import (
 from src.routers.curation._common import (
     CropsPageResponse,
     OpenSearchDep,
-    _now_iso,
     get_class_registry,
     items_index,
     labels_confirmed_index,
@@ -36,6 +35,7 @@ from src.services.curation.class_sources import class_source_catalog
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.dataset_thresholds import adequacy, dataset_thresholds
 from src.services.curation.item_filter import ItemFilter
+from src.utils.timeutil import now_iso
 
 
 @router.get('/class_sources')
@@ -498,7 +498,7 @@ async def merge_class(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     target = reg.get(payload.target_id)
     target_name = target.class_name if target is not None else ''
-    now = _now_iso()
+    now = now_iso()
     relabel_doc = {
         'class_id': payload.target_id,
         'class_name': target_name,

@@ -28,8 +28,9 @@ is banned: use the explicit attribute below, so the field names stay greppable.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, fields
+
+from src.config.env import env_raw
 
 
 @dataclass(frozen=True)
@@ -122,7 +123,7 @@ class RegionFields:
         overrides = {}
         for f in fields(defaults):
             env_name = f'{env_prefix}{f.name.upper()}'
-            value = os.environ.get(env_name)
+            value = env_raw(env_name)
             if value is not None:
                 overrides[f.name] = value
         return cls(**overrides)

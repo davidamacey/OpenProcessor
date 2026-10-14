@@ -53,7 +53,7 @@ def app_client(
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
 
     from src.routers.curation._common import _raw_opensearch_dep
-    from src.routers.curation_train import router as curation_train_router
+    from src.routers.curation.train import router as curation_train_router
 
     app = FastAPI()
     from _curation_app import mount_curation_routers

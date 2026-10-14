@@ -1,1 +1,0 @@
-src/services/detection/cascade_detect/ocr_recognizer.py::property is_region_shaped	1	profile aspect_min/aspect_max are read only here: either wire the region sanity gate or drop the two profile fields (owner decision)

@@ -19,7 +19,6 @@ isn't curation-specific, so its directory setting lives on the base
 import asyncio
 import json
 import logging
-import os
 import shutil
 import tempfile
 import uuid
@@ -27,6 +26,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from src.config.env import env_path
 from src.schemas.models import ExportStatus
 from src.services.triton_control import TritonControlService
 
@@ -54,7 +54,7 @@ def _task_dir() -> Path:
     the curation job modules use for their own state directories."""
     from src.config.settings import get_settings
 
-    return Path(os.environ.get('EXPORT_TASK_DIR', str(get_settings().export_task_dir)))
+    return env_path('EXPORT_TASK_DIR', get_settings().export_task_dir)
 
 
 def _task_file(task_id: str) -> Path:

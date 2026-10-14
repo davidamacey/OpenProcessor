@@ -26,15 +26,16 @@ stable `unavailable_since`, not "just now" every time.
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from src.config.env import env_path, env_str
 
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+    from pathlib import Path
 
     from src.config import DetectionProfile
 
@@ -45,7 +46,7 @@ def _state_dir() -> Path:
     from src.config.project_context import project_jobs_dir
 
     # Per project: the streak/stall state describes one project's queue.
-    return project_jobs_dir(Path(os.environ.get('OP_REGION_DRAIN_STATE_DIR', '/jobs/region_drain')))
+    return project_jobs_dir(env_path('OP_REGION_DRAIN_STATE_DIR', '/jobs/region_drain'))
 
 
 def _state_file() -> Path:
@@ -107,7 +108,7 @@ async def _default_check_segmenter_health() -> tuple[bool, str]:
     model (V-1 follow-up)."""
     from src.services.detection.segmenter_health import _segmenter_health
 
-    url = os.environ.get('OP_SEGMENTER_URL', '').strip()
+    url = env_str('OP_SEGMENTER_URL')
     if not url:
         return False, 'OP_SEGMENTER_URL is not configured'
     # OP_SEGMENTER_URLS may load-balance across several hosts; one healthy

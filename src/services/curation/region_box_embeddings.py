@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from src.clients.occ_bulk import BulkFailure, occ_bulk_rounds
 from src.config.region_fields import RegionFields, get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
@@ -156,68 +157,38 @@ async def write_box_embeddings(
     'skipped', 'errors'}`` (``skipped``: item missing or a conflict that
     outlasted the retries).
     """
-    from src.clients.curation_opensearch.crops import mget_crops
-
     F = get_region_fields()
-    pending = dict(by_crop)
     counts = {'written': 0, 'unchanged': 0, 'skipped': 0, 'errors': 0}
-    for attempt in range(_WRITE_ATTEMPTS):
-        if not pending:
-            break
-        docs = await mget_crops(
-            client,
-            list(pending),
-            index=index,
-            source_includes=[F.boxes, *box_vector_source_includes(F)],
-        )
-        body: list[dict[str, Any]] = []
-        order: list[str] = []
-        for crop_id, entries in pending.items():
-            doc = docs.get(crop_id)
-            if doc is None:
-                counts['skipped'] += 1
-                continue
-            src = doc.get('_source') or {}
-            stored = src.get(F.box_embeddings) or []
-            merged = merge_box_embeddings(stored, entries, read_boxes(src, F))
-            if merged == stored:
-                counts['unchanged'] += 1
-                continue
-            body.append(
-                {
-                    'update': {
-                        '_index': index,
-                        '_id': crop_id,
-                        'if_seq_no': doc['_seq_no'],
-                        'if_primary_term': doc['_primary_term'],
-                    }
-                }
-            )
-            body.append({'doc': {F.box_embeddings: merged}})
-            order.append(crop_id)
-        retry: dict[str, list[dict[str, Any]]] = {}
-        if body:
-            try:
-                resp = await client.bulk(body=body, refresh=False)
-            except Exception as exc:
-                logger.warning('box_embeddings_bulk_failed', error=str(exc))
-                counts['errors'] += len(order)
-                break
-            for crop_id, item in zip(order, resp.get('items') or [], strict=True):
-                action = item.get('update') or {}
-                status = action.get('status')
-                if status in (200, 201):
-                    counts['written'] += 1
-                elif status == 409 and attempt < _WRITE_ATTEMPTS - 1:
-                    retry[crop_id] = pending[crop_id]
-                elif status == 409:
-                    counts['skipped'] += 1
-                else:
-                    counts['errors'] += 1
-                    logger.warning(
-                        'box_embeddings_write_failed', crop_id=crop_id, error=action.get('error')
-                    )
-        pending = retry
+
+    def prepare(crop_id: str, doc: dict[str, Any] | None) -> dict[str, Any] | None:
+        if doc is None:
+            counts['skipped'] += 1
+            return None
+        src = doc.get('_source') or {}
+        stored = src.get(F.box_embeddings) or []
+        merged = merge_box_embeddings(stored, by_crop[crop_id], read_boxes(src, F))
+        if merged == stored:
+            counts['unchanged'] += 1
+            return None
+        return {F.box_embeddings: merged}
+
+    def on_written(_crop_id: str) -> None:
+        counts['written'] += 1
+
+    def on_failed(_crop_id: str, _doc: dict[str, Any] | None, why: BulkFailure) -> None:
+        counts['skipped' if why == 'conflict' else 'errors'] += 1
+
+    await occ_bulk_rounds(
+        client,
+        index=index,
+        ids=list(by_crop),
+        prepare=prepare,
+        on_written=on_written,
+        on_failed=on_failed,
+        max_retries=_WRITE_ATTEMPTS - 1,
+        retry_transport=False,
+        source_includes=[F.boxes, *box_vector_source_includes(F)],
+    )
     return counts
 
 

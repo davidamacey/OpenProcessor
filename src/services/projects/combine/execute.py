@@ -14,19 +14,18 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import os
 import uuid
 from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.registry import ClassRegistry
+from src.config.env import env_int
 from src.config.project_context import bind_project
 from src.config.region_fields import get_region_fields
 from src.core.logging import get_logger
 from src.services.curation.dataset_import.mapping import MapTarget, norm_class_name
 from src.services.curation.dataset_import.project_source import class_names_by_id, iter_source_pages
-from src.services.curation.dataset_import.store import now_iso
 from src.services.curation.file_job import heartbeat_ticker
 from src.services.curation.next_steps import recluster_items
 from src.services.projects.combine import holdout
@@ -34,6 +33,7 @@ from src.services.projects.combine.image_copy import CopyContext, copy_page
 from src.services.projects.combine.mapping import CombineMapping
 from src.services.projects.combine.models import CombineRequest
 from src.services.projects.combine.plan import Analysis, duplicates_from_wire, duplicates_wire
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
@@ -146,8 +146,7 @@ def build_target_registry(target: ProjectRecord, names: list[str]) -> dict[str, 
 
 def page_size() -> int:
     """Images per chunk (``OP_COMBINE_PAGE_SIZE``): the unit a resume redoes."""
-    raw = os.environ.get('OP_COMBINE_PAGE_SIZE', '')
-    return int(raw) if raw.isdigit() and int(raw) > 0 else 200
+    return env_int('OP_COMBINE_PAGE_SIZE', 200, minimum=1)
 
 
 def _resume_points(done: dict[int, dict[str, Any]]) -> dict[int, str]:

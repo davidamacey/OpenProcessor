@@ -84,7 +84,7 @@ vectors; assignment of a new vector is then a nearest-centroid lookup, so
 ingest does not need to re-cluster. Each document stores `cluster_id` and
 `cluster_distance`. Clusters are the basis of the auto-generated albums.
 
-Defaults (`src/services/clustering.py`):
+Defaults (`src/services/visual_search/clustering.py`):
 
 | Index | `n_clusters` | `nprobe` | Rebalance threshold |
 |---|---:|---:|---:|

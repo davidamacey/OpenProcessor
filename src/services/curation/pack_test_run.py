@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
@@ -37,6 +36,7 @@ from src.services.curation.region_preview import preview_item
 from src.services.curation.region_verify import BoxVerdict, verifiable_boxes, verify_regions_update
 from src.services.labeling.vlm_class_names import resolve_class_name
 from src.services.labeling.vlm_probe import ProbeCrop, probe
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
@@ -107,10 +107,6 @@ def jsonable(value: Any) -> dict[str, Any] | bool | None:
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return dataclasses.asdict(value)
     return dict(value)
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 def _jpeg(crop: CropInput) -> bytes:
@@ -255,7 +251,7 @@ async def _classify(
         probe_crops.append(ProbeCrop(crop_id=c.crop_id, jpeg=jpeg))
     result = await probe(labeler, call, probe_crops, class_names=class_names)
     run = PackTestRun(probe=result)
-    now = _now()
+    now = now_iso()
 
     def resolve(raw: str, *, confidence: str | None = None) -> str | None:
         return resolve_class_name(raw, name_to_id, confidence=confidence)  # type: ignore[arg-type]
@@ -323,7 +319,7 @@ async def _region_verify(
         write = verify_regions_update(
             crop.source,
             verdicts.get(crop.crop_id, []),
-            now=_now(),
+            now=now_iso(),
             pack_stamp=pack_stamp,
             vlm_stamp={
                 'vlm_endpoint': labeler.identity.endpoint_ref,

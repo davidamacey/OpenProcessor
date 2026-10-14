@@ -33,6 +33,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.config.env import env_str
+
 
 # =============================================================================
 # Hyperparameter profile table -- YOLO26 (Ultralytics YOLO Vision 2025 recipe)
@@ -208,10 +210,9 @@ def _extra_presets_from_env() -> list[dict[str, Any]]:
     list of preset objects, same shape as the built-ins). A malformed
     file raises rather than being silently skipped."""
     import json
-    import os
     from pathlib import Path
 
-    path = os.environ.get('OP_TRAIN_PRESETS_PATH', '').strip()
+    path = env_str('OP_TRAIN_PRESETS_PATH')
     if not path:
         return []
     try:

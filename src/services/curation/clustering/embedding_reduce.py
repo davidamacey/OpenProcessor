@@ -22,7 +22,7 @@ fetched in (1) directly — that's also what makes the AHC
 ``distance_threshold=0.25`` cosine cut dimensionally correct against
 the source vectors, not a reduced projection. The only caller of the
 UMAP-reduce path is ``POST /curation/cluster/umap/rebuild``
-(:mod:`src.routers.curation_umap`), which exists purely to feed the
+(:mod:`src.routers.curation.umap`), which exists purely to feed the
 labeler's 2D/3D scatter visualization. Any design note claiming "UMAP
 feeds the clustering pipeline" is wrong; correct it if you find one.
 
@@ -36,7 +36,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import io
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -45,6 +44,7 @@ from opensearchpy.exceptions import OpenSearchException
 
 from src.config import get_curation_config
 from src.config.curation import items_index, umap_state_index
+from src.config.env import env_str
 from src.core.logging import get_logger
 from src.domain.embedding_state import embedded_clause
 from src.domain.ingest_class_sources import confident_class_sources
@@ -94,7 +94,7 @@ UMAP_RANDOM_STATE = 42
 # than ``backbone_embedding`` (the secondary classifier's penultimate layer, which
 # clusters by framing/lighting outside its confident range). A visual
 # audit picked pe_embedding as the residual default.
-RESIDUAL_EMBEDDING_FIELD = os.environ.get('OP_RESIDUAL_EMBEDDING_FIELD', 'pe_embedding')
+RESIDUAL_EMBEDDING_FIELD = env_str('OP_RESIDUAL_EMBEDDING_FIELD', 'pe_embedding')
 
 # Crops with these class_source values are *confidently* labeled and
 # must NEVER be pulled into the residual pool — clustering would

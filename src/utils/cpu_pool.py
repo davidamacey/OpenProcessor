@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING, Any
 
 from PIL import Image
 
+from src.config.env import env_int
 from src.config.project_context import run_in_executor_bound
 
 
@@ -58,14 +59,12 @@ _lock = threading.Lock()
 
 def cpu_threads() -> int:
     """Threads in this process's CPU pool (``OP_CPU_POOL_THREADS``)."""
-    raw = os.environ.get('OP_CPU_POOL_THREADS', '').strip()
-    return max(1, int(raw) if raw else DEFAULT_CPU_THREADS)
+    return env_int('OP_CPU_POOL_THREADS', DEFAULT_CPU_THREADS, minimum=1)
 
 
 def inflight_mb() -> int:
     """Decoded RGB megabytes one process holds in the ingest pipeline (``OP_INGEST_INFLIGHT_MB``)."""
-    raw = os.environ.get('OP_INGEST_INFLIGHT_MB', '').strip()
-    return max(1, int(raw) if raw else DEFAULT_INFLIGHT_MB)
+    return env_int('OP_INGEST_INFLIGHT_MB', DEFAULT_INFLIGHT_MB, minimum=1)
 
 
 def mib(nbytes: int | None) -> int:

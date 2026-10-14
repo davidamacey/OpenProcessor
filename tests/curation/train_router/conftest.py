@@ -1,4 +1,4 @@
-"""Fixtures for the curation_train router tests: an app over a mocked OpenSearch and a temp jobs volume."""
+"""Fixtures for the curation train router tests: an app over a mocked OpenSearch and a temp jobs volume."""
 
 from __future__ import annotations
 
@@ -77,7 +77,7 @@ def app_client(
     monkeypatch.setattr('src.services.training.preflight_checks.get_class_registry', _Reg)
 
     from src.routers.curation._common import _raw_opensearch_dep
-    from src.routers.curation_train import router as curation_train_router
+    from src.routers.curation.train import router as curation_train_router
 
     app = FastAPI()
     from _curation_app import mount_curation_routers

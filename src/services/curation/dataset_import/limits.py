@@ -3,66 +3,55 @@ time (so a test can ``monkeypatch.setenv`` around one call)."""
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+from src.config.env import env_int, env_path
 
 
-def _positive_int(raw: str | None, default: int) -> int:
-    if raw is None or not raw.strip():
-        return default
-    try:
-        value = int(raw)
-    except ValueError:
-        return default
-    return value if value > 0 else default
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def imports_base_dir() -> Path:
-    return Path(os.environ.get('OP_DATASET_IMPORTS_DIR', '/jobs/imports'))
+    return env_path('OP_DATASET_IMPORTS_DIR', '/jobs/imports')
 
 
 def import_chunk_size() -> int:
-    return _positive_int(os.environ.get('OP_DATASET_IMPORT_CHUNK'), 64)
+    return env_int('OP_DATASET_IMPORT_CHUNK', 64, minimum=1)
 
 
 def import_max_pending() -> int:
-    return _positive_int(os.environ.get('OP_DATASET_IMPORT_MAX_PENDING'), 2000)
+    return env_int('OP_DATASET_IMPORT_MAX_PENDING', 2000, minimum=1)
 
 
 def import_max_failed_chunks() -> int:
-    return _positive_int(os.environ.get('OP_DATASET_IMPORT_MAX_FAILED_CHUNKS'), 5)
+    return env_int('OP_DATASET_IMPORT_MAX_FAILED_CHUNKS', 5, minimum=1)
 
 
 def preview_max_files() -> int:
-    return _positive_int(os.environ.get('OP_DATASET_PREVIEW_MAX_FILES'), 500_000)
+    return env_int('OP_DATASET_PREVIEW_MAX_FILES', 500_000, minimum=1)
 
 
 def upload_max_bytes() -> int:
-    return _positive_int(os.environ.get('OP_DATASET_UPLOAD_MAX_BYTES'), 2 * 1024**3)
+    return env_int('OP_DATASET_UPLOAD_MAX_BYTES', 2 * 1024**3, minimum=1)
 
 
 def upload_max_files() -> int:
-    return _positive_int(os.environ.get('OP_DATASET_UPLOAD_MAX_FILES'), 200_000)
+    return env_int('OP_DATASET_UPLOAD_MAX_FILES', 200_000, minimum=1)
 
 
 def upload_ttl_hours() -> int:
-    return _positive_int(os.environ.get('OP_DATASET_UPLOAD_TTL_H'), 72)
+    return env_int('OP_DATASET_UPLOAD_TTL_H', 72, minimum=1)
 
 
 def reprocess_sync_max() -> int:
-    return _positive_int(os.environ.get('OP_REPROCESS_SYNC_MAX'), 20)
+    return env_int('OP_REPROCESS_SYNC_MAX', 20, minimum=1)
 
 
 def open_vocab_sweep_interval_s() -> int:
     """Seconds between sweeps of images left ``pending`` by the ingest-time
     open-vocabulary pass; ``0`` turns the sweeper off."""
-    raw = os.environ.get('OP_OPEN_VOCAB_SWEEP_S')
-    if raw is None or not raw.strip():
-        return 120
-    try:
-        return max(0, int(raw))
-    except ValueError:
-        return 120
+    return env_int('OP_OPEN_VOCAB_SWEEP_S', 120, minimum=0)
 
 
 def open_vocab_stale_after_s() -> int:
@@ -71,19 +60,13 @@ def open_vocab_stale_after_s() -> int:
     = two sweep ticks: a live drain of a 64-image ingest batch (a few seconds per
     image at the default concurrency) finishes well inside it, and recovery after
     a restart takes 4 to 6 minutes instead of 10 to 12. Floor 30 s."""
-    raw = os.environ.get('OP_OPEN_VOCAB_STALE_S')
-    if raw is None or not raw.strip():
-        return 240
-    try:
-        return max(30, int(raw))
-    except ValueError:
-        return 240
+    return max(30, env_int('OP_OPEN_VOCAB_STALE_S', 240, minimum=0))
 
 
 def open_vocab_concurrency() -> int:
     """Images of the full-image SAM 3 pass in flight at once (each fans out
     one segmenter call per target, so calls in flight <= this x targets)."""
-    return _positive_int(os.environ.get('OP_OPEN_VOCAB_CONCURRENCY'), 4)
+    return env_int('OP_OPEN_VOCAB_CONCURRENCY', 4, minimum=1)
 
 
 # Per-file read caps for the small text files a dataset is described by. A

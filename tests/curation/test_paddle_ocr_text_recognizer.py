@@ -163,7 +163,6 @@ class TestPaddleOcrTextRecognizer:
         regions = await rec.detect_regions(_jpeg_bytes())
         # Loose plate-shape filter accepts them, but the stricter
         # is_region_text_candidate rejects all three because they lack digits.
-        assert all(r.is_region_shaped for r in regions)
         assert all(not r.is_region_text_candidate for r in regions)
         assert rec.pick_best_text_region(regions) is None
 
@@ -226,7 +225,6 @@ class TestPaddleOcrTextRecognizer:
         rec = PaddleOcrTextRecognizer(pool, NEUTRAL_REGION_PROFILE)
         regions = await rec.detect_regions(_jpeg_bytes())
         assert len(regions) == 1
-        assert not regions[0].is_region_shaped
         assert rec.pick_best_text_region(regions) is None
 
     @pytest.mark.asyncio

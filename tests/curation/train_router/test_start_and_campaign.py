@@ -25,7 +25,7 @@ def test_start_writes_job(app_client: TestClient, tmp_path: Any, project_export_
         'profile': 'medium',
     }
     with patch(
-        'src.routers.curation_train.start.run_preflight',
+        'src.routers.curation.train.start.run_preflight',
         new=AsyncMock(
             return_value=__import__(
                 'src.services.training.preflight_checks', fromlist=['PreflightReport']
@@ -128,7 +128,7 @@ def test_start_refuses_with_409_when_gpu_stop_required_and_docker_unavailable(
         'cuda_visible_devices': '0',
     }
     with patch(
-        'src.routers.curation_train.start.run_preflight',
+        'src.routers.curation.train.start.run_preflight',
         new=AsyncMock(
             return_value=__import__(
                 'src.services.training.preflight_checks', fromlist=['PreflightReport']

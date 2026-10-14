@@ -118,7 +118,7 @@ def _patch_infer_ocr(monkeypatch: pytest.MonkeyPatch, sanitized_result: dict[str
         def infer_ocr(self, _image_bytes: bytes) -> dict[str, Any]:
             return sanitized_result
 
-    monkeypatch.setattr(svc_mod, 'get_triton_client', lambda *_a, **_k: _FakeClient())
+    monkeypatch.setattr(svc_mod, 'get_sync_triton_client', lambda *_a, **_k: _FakeClient())
 
 
 def test_extract_text_filters_out_none_rec_score_even_under_negative_threshold(

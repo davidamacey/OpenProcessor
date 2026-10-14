@@ -3548,7 +3548,7 @@ done
 
 #### Install py-spy in Container
 
-Add to `requirements-dev.txt`:
+Add to `requirements.txt`:
 ```
 py-spy>=0.3.14
 ```

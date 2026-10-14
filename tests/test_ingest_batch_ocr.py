@@ -53,7 +53,7 @@ def service(monkeypatch: pytest.MonkeyPatch) -> tuple[VisualSearchService, _Fake
     svc.inference = None  # type: ignore[assignment]
 
     monkeypatch.setattr(
-        'src.clients.triton_client.get_triton_client',
+        'src.clients.triton_client.get_sync_triton_client',
         lambda url: object(),  # noqa: ARG005
     )
     monkeypatch.setattr(

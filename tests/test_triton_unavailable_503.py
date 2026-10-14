@@ -123,7 +123,9 @@ def test_analyze_returns_503_when_triton_unavailable(
         def infer_yolo_clip_cpu(self, *_a, **_k):
             raise RetryExhaustedError('triton unavailable: all retries exhausted')
 
-    monkeypatch.setattr(triton_client_mod, 'get_triton_client', lambda *_a, **_k: _BoomClient())
+    monkeypatch.setattr(
+        triton_client_mod, 'get_sync_triton_client', lambda *_a, **_k: _BoomClient()
+    )
     response = client.post('/analyze', files={'image': ('t.jpg', tiny_jpeg_bytes, 'image/jpeg')})
     _assert_503(response)
 

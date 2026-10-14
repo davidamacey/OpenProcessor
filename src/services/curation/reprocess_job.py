@@ -18,13 +18,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-import os
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
+from src.config.env import env_path
 from src.config.project_context import (
     current_project,
     ensure_marked_dir,
@@ -37,9 +36,12 @@ from src.services.curation.job_lock import exclusive_start_lock
 from src.services.curation.reprocess_embed_spec import EmbedSpec
 from src.services.curation.reprocess_images import process_images
 from src.services.curation.reprocess_models import ReprocessJobInfo, ReprocessScope
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from opensearchpy import AsyncOpenSearch
 
     from src.services.curation.ingest import CurationIngestService
@@ -62,9 +64,7 @@ class ReprocessBusyError(Exception):
 def jobs_root() -> Path:
     """The bound project's reprocess jobs dir (resolved per call so tests
     can ``monkeypatch.setenv``)."""
-    return mark_project_dir(
-        project_jobs_dir(Path(os.environ.get('OP_REPROCESS_JOBS_DIR', '/jobs/reprocess')))
-    )
+    return mark_project_dir(project_jobs_dir(env_path('OP_REPROCESS_JOBS_DIR', '/jobs/reprocess')))
 
 
 def _job(job_id: str) -> FileJob:
@@ -72,10 +72,6 @@ def _job(job_id: str) -> FileJob:
     if not job_id or '/' in job_id or '\\' in job_id or job_id.startswith('.'):
         raise KeyError(job_id)
     return FileJob(jobs_root() / job_id)
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 def _job_dirs() -> list[Path]:
@@ -163,8 +159,8 @@ def create_job(
                 'images_total': len(image_ids),
                 'images_done': 0,
                 'images_failed': 0,
-                'started_at': _now(),
-                'updated_at': _now(),
+                'started_at': now_iso(),
+                'updated_at': now_iso(),
             }
         )
         job.touch_heartbeat()
@@ -211,13 +207,13 @@ async def run_job(
                 "the job was planned for other indexes than the bound project's; refusing to run"
             )
     except Exception as exc:
-        job.update(status='failed', error=str(exc), finished_at=_now(), updated_at=_now())
+        job.update(status='failed', error=str(exc), finished_at=now_iso(), updated_at=now_iso())
         return
-    job.update(status='running', updated_at=_now())
+    job.update(status='running', updated_at=now_iso())
     ticker = asyncio.create_task(heartbeat_ticker(job))
 
     def _progress(done: int, failed: int) -> None:
-        job.update(images_done=done, images_failed=failed, updated_at=_now())
+        job.update(images_done=done, images_failed=failed, updated_at=now_iso())
         job.touch_heartbeat()
 
     try:
@@ -235,15 +231,15 @@ async def run_job(
         job.update(
             status=status,
             results=[r.model_dump() for r in results],
-            finished_at=_now(),
-            updated_at=_now(),
+            finished_at=now_iso(),
+            updated_at=now_iso(),
         )
     except asyncio.CancelledError:
-        job.update(status='cancelled', finished_at=_now(), updated_at=_now())
+        job.update(status='cancelled', finished_at=now_iso(), updated_at=now_iso())
         raise
     except Exception as exc:
         logger.error('reprocess_job_failed', job=job.directory.name, error=str(exc))
-        job.update(status='failed', error=str(exc), finished_at=_now(), updated_at=_now())
+        job.update(status='failed', error=str(exc), finished_at=now_iso(), updated_at=now_iso())
     finally:
         ticker.cancel()
         with contextlib.suppress(asyncio.CancelledError):

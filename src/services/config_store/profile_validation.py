@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
+from src.config.env import env_str
 from src.services.config_store.pack_validation import NAME_RE, RESERVED_NAMES
 from src.services.detection.region_text import TEXT_READER_MODES
 from src.services.labeling.vlm_endpoints import vlm_configured
@@ -481,12 +482,11 @@ async def _check_segmenter(
     for_activation: bool,
     segmenter_health: SegmenterHealthFn | None,
 ) -> list[ValidationIssue]:
-    import os
 
     issues = check_segmenter_prompt_text(
         profile.segmenter_text_prompt, sole_leg=not profile.detector_model
     )
-    configured = bool(os.environ.get('OP_SEGMENTER_URL', '').strip())
+    configured = bool(env_str('OP_SEGMENTER_URL'))
     if profile.segmenter_text_prompt and not configured:
         issues.append(
             _issue('segmenter_not_configured', 'warning', 'OP_SEGMENTER_URL is not configured')
@@ -509,9 +509,8 @@ async def _check_segmenter(
 
 
 def _check_candidate_source(profile: DetectionProfile) -> list[ValidationIssue]:
-    import os
 
-    configured = bool(os.environ.get('OP_SEGMENTER_URL', '').strip())
+    configured = bool(env_str('OP_SEGMENTER_URL'))
     if not profile.detector_model and (not profile.segmenter_text_prompt or not configured):
         return [
             _issue(

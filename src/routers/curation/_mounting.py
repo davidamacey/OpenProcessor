@@ -54,9 +54,9 @@ def mount_curation(
 def curation_scoped_routers() -> list[APIRouter]:
     """Every project-scoped curation router, in mount order."""
     from src.routers.curation import router as curation_router
-    from src.routers.curation_images import crops_router, router as images_router
-    from src.routers.curation_train import router as train_router
-    from src.routers.curation_umap import router as umap_router
+    from src.routers.curation.images import crops_router, router as images_router
+    from src.routers.curation.train import router as train_router
+    from src.routers.curation.umap import router as umap_router
 
     return [curation_router, images_router, crops_router, umap_router, train_router]
 

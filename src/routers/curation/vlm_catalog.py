@@ -11,9 +11,9 @@ after the host command ran and a probe recorded the new model root.
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
+from src.config.env import env_optional_str, env_str
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - FastAPI resolves it
 from src.routers.curation._vlm_endpoint_models import (
@@ -40,7 +40,7 @@ from src.services.labeling.vlm_endpoints import get_vlm_endpoint
 
 
 def _local_endpoint_name() -> str:
-    return os.environ.get('OP_LOCAL_VLM_ENDPOINT', '').strip()
+    return env_str('OP_LOCAL_VLM_ENDPOINT')
 
 
 async def _local_status(client: Any) -> VlmLocalStatus:
@@ -56,7 +56,7 @@ async def _local_status(client: Any) -> VlmLocalStatus:
             served_root=probe.root if probe else None,
             served_max_model_len=probe.max_model_len if probe else None,
             desired=store.current.local_vlm_desired,
-            gpu_total_gb=gpu_total_gb_from_env(os.environ.get('OP_LOCAL_VLM_GPU_TOTAL_MIB')),
+            gpu_total_gb=gpu_total_gb_from_env(env_optional_str('OP_LOCAL_VLM_GPU_TOTAL_MIB')),
         )
     )
 

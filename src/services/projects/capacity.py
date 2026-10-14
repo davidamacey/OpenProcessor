@@ -9,10 +9,11 @@ the cluster's hard shard limit and its heap, checked here.
 
 from __future__ import annotations
 
-import os
 import time
 from dataclasses import dataclass
 from typing import Any, Literal
+
+from src.config.env import env_float
 
 
 CapacityStatus = Literal['ok', 'warn', 'blocked']
@@ -94,7 +95,7 @@ def per_project_shards() -> int:
 
 
 def _shards_per_heap_gb() -> float:
-    return float(os.environ.get('OP_SHARDS_PER_HEAP_GB', '20'))
+    return env_float('OP_SHARDS_PER_HEAP_GB', 20)
 
 
 async def _fetch_cluster_facts(opensearch: Any) -> tuple[int, int, int, int]:

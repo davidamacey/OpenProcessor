@@ -20,7 +20,6 @@ Doc ids:
 from __future__ import annotations
 
 import datetime as dt
-import os
 import time
 import uuid
 from typing import TYPE_CHECKING, Any, Literal
@@ -28,7 +27,9 @@ from typing import TYPE_CHECKING, Any, Literal
 from opensearchpy.exceptions import ConflictError, NotFoundError, OpenSearchException
 
 from src.clients.optional_doc import get_doc_or_none
+from src.config.env import env_float
 from src.core.logging import get_logger
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
@@ -79,10 +80,6 @@ def runtime_doc_id(process: str, hostname: str) -> str:
     return f'runtime:{process}:{hostname}'
 
 
-def _now_iso() -> str:
-    return dt.datetime.now(dt.UTC).isoformat()
-
-
 class RevisionConflictError(Exception):
     """OCC mismatch on a stored config doc's ``expected_revision``."""
 
@@ -125,7 +122,7 @@ async def bump_config_revision(client: Any, index: str) -> int:
 def config_poll_interval_s() -> float:
     """The config-store poll interval; also how long an absent revision doc
     is remembered before it is looked up again."""
-    return float(os.environ.get('OP_CONFIG_POLL_S', str(OP_CONFIG_POLL_S_DEFAULT)))
+    return env_float('OP_CONFIG_POLL_S', OP_CONFIG_POLL_S_DEFAULT)
 
 
 async def get_config_revision(client: Any, index: str) -> int:
@@ -202,7 +199,7 @@ async def save_config(
     mismatch.
     """
     doc_id = config_doc_id(kind, name)
-    now = _now_iso()
+    now = now_iso()
     seq_no = primary_term = None
     current_revision = 0
     created_at = now
@@ -334,7 +331,7 @@ async def activate(
     ):
         raise ActiveConflictError(previous)
 
-    now = _now_iso()
+    now = now_iso()
     doc = {
         'doc_type': 'activation',
         'axis': axis,

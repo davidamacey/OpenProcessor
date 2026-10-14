@@ -16,7 +16,6 @@ endpoint is a new revision and needs a new ack.
 
 from __future__ import annotations
 
-import datetime as dt
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
@@ -40,6 +39,7 @@ from src.services.labeling.vlm_endpoints import (
     refresh_vlm_state,
     resolve_vlm_source,
 )
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
@@ -48,10 +48,6 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 _MAX_ACKED_REFS = 200
-
-
-def _now() -> str:
-    return dt.datetime.now(dt.UTC).isoformat()
 
 
 def expected_active_for(ref: AxisRef) -> dict[str, Any] | None:
@@ -73,7 +69,7 @@ def _carry(endpoint: VlmEndpoint | None, *, ack_now: bool):
     def fields(current: dict[str, Any] | None) -> dict[str, Any]:
         acked: dict[str, str] = dict((current or {}).get('acked_refs') or {})
         if endpoint is not None and ack_now:
-            acked.setdefault(endpoint.ref, _now())
+            acked.setdefault(endpoint.ref, now_iso())
         if len(acked) > _MAX_ACKED_REFS:
             newest = sorted(acked.items(), key=lambda kv: kv[1])[-_MAX_ACKED_REFS:]
             acked = dict(newest)

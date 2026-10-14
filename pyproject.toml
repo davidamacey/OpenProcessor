@@ -214,6 +214,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "PLR2004", # Magic values
     "PT028",   # Default arguments in test-like functions (standalone test scripts, not pytest)
     "RUF001",  # Ambiguous Unicode characters (intentional for display)
+    "TID251",  # Tests set and read os.environ directly; the ban is for src/
 ]
 
 # Scripts can be less strict
@@ -221,7 +222,13 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "T201",    # print() allowed in scripts
     "PLR2004", # Magic values
     "PT028",   # Default arguments in test-named functions (these are scripts, not pytest tests)
+    "TID251",  # Scripts are separate programs; the env ban is for src/
 ]
+
+# The side-car images and the export tools run outside the API process and do not import src/.
+"docker/**/*.py" = ["TID251"]
+# The one module that touches the environment.
+"src/config/env.py" = ["TID251"]
 
 # FastAPI routers use dependency injection in default arguments (standard pattern)
 "src/routers/**/*.py" = [
@@ -245,10 +252,14 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "ARG001",  # Unused arguments kept for interface consistency
     "ARG004",  # TensorRT plugin forward() requires all args for ONNX export
     "PT028",   # Default arguments in test-named functions (standalone scripts, not pytest)
+    "TID251",  # Standalone tools that do not import src/
 ]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
-# Populated when the typed env module lands; empty until then.
+# src reads the environment only through src/config/env.py (typed, fails closed
+# on a malformed value). Everything outside src/ is exempted in per-file-ignores.
+"os.environ".msg = "Read env through src.config.env (env_str/env_int/env_float/env_bool/env_path)."
+"os.getenv".msg = "Read env through src.config.env (env_str/env_int/env_float/env_bool/env_path)."
 
 [tool.ruff.lint.flake8-type-checking]
 # Pydantic resolves these annotations at runtime, so their imports are not TYPE_CHECKING-only.
@@ -399,7 +410,7 @@ ignore_missing_imports = true
 # Relax strict checks for ML/scientific code with FAISS and numpy operations
 [[tool.mypy.overrides]]
 module = [
-    "src.services.clustering",
+    "src.services.visual_search.clustering",
     "src.services.duplicate_detection",
     "src.services.duplicate_detection.*",
     "src.clients.opensearch.*",

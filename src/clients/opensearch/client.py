@@ -18,7 +18,7 @@ Key Features:
 
 Usage:
     # Initialize client with clustering
-    from src.services.clustering import get_clustering_service
+    from src.services.visual_search.clustering import get_clustering_service
 
     client = OpenSearchClient(hosts=["http://localhost:9200"])
     clustering = get_clustering_service()
@@ -61,6 +61,7 @@ from src.clients.opensearch.ingest import IngestMixin
 from src.clients.opensearch.ocr import OcrMixin
 from src.clients.opensearch.search import SearchMixin
 from src.clients.opensearch.serializer import OrjsonSerializer
+from src.config.env import env_optional_str
 
 
 logger = logging.getLogger(__name__)
@@ -97,9 +98,8 @@ class OpenSearchClient(IndexesMixin, IngestMixin, BulkMixin, SearchMixin, Cluste
         """
         # Use OPENSEARCH_HOSTS env var if set (for Docker), otherwise localhost
         import json
-        import os
 
-        default_hosts = os.environ.get('OPENSEARCH_HOSTS')
+        default_hosts = env_optional_str('OPENSEARCH_HOSTS')
         if default_hosts:
             try:
                 default_hosts = json.loads(default_hosts)

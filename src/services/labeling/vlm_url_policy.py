@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
-import os
 import re
 import socket
 import time
@@ -34,6 +33,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit, urlunsplit
+
+from src.config.env import env_str
 
 
 Locality = Literal['compose', 'host', 'private', 'external', 'unknown']
@@ -209,7 +210,7 @@ def _is_private(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
 
 
 def _compose_project() -> str:
-    return os.environ.get('COMPOSE_PROJECT_NAME', '').strip() or 'openprocessor'
+    return env_str('COMPOSE_PROJECT_NAME') or 'openprocessor'
 
 
 def _is_denied_service_name(host: str) -> bool:

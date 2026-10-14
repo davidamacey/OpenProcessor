@@ -39,10 +39,10 @@ profile is advertised and selectable by name.
 
 from __future__ import annotations
 
-import os
 import threading
 from typing import TYPE_CHECKING, Any
 
+from src.config.env import env_str
 from src.core.logging import get_logger
 
 
@@ -73,10 +73,20 @@ def register_profile(profile: DetectionProfile, *, default: bool = False) -> Non
         _DEFAULT_NAME = profile.name
 
 
-#: Profile keys removed in 0.5.0; a stored or submitted document that still
-#: carries one is rejected with a message naming it, never silently dropped.
+#: Profile keys removed from the schema; a stored or submitted document that
+#: still carries one is rejected with a message naming it, never silently
+#: dropped. A stored profile that fails to load is skipped with a logged
+#: warning (see :func:`_stored_profiles`), so an old dev-index document cannot
+#: take the registry down.
 RETIRED_PROFILE_FIELDS = frozenset(
-    {'ocr_det_model', 'ocr_det_version', 'ocr_det_input_size', 'ocr_det_prob_floor'}
+    {
+        'ocr_det_model',
+        'ocr_det_version',
+        'ocr_det_input_size',
+        'ocr_det_prob_floor',
+        'aspect_min',
+        'aspect_max',
+    }
 )
 
 
@@ -109,8 +119,8 @@ def region_profile_from_dict(data: dict[str, Any], *, source: str = 'file') -> D
     retired = sorted(RETIRED_PROFILE_FIELDS & values.keys())
     if retired:
         msg = (
-            f'region profile {source!r}: unknown field {retired[0]!r} (retired: the OCR text '
-            'detector fields were removed because nothing read them; drop '
+            f'region profile {source!r}: unknown field {retired[0]!r} (retired: removed because '
+            'nothing read it; drop '
             f'{", ".join(retired)} from the profile document)'
         )
         raise ValueError(msg)
@@ -159,8 +169,8 @@ def region_profile_from_env() -> DetectionProfile | None:
     from src.config.detection_profile import reject_legacy_detection_env
 
     reject_legacy_detection_env()
-    path = os.environ.get('OP_REGION_PROFILE_PATH', '').strip()
-    name = os.environ.get('OP_REGION_PROFILE', '').strip()
+    path = env_str('OP_REGION_PROFILE_PATH')
+    name = env_str('OP_REGION_PROFILE')
     has_overrides = DetectionProfile.env_overrides_present(REGION_DETECTION_ENV_PREFIX)
     if not path and not name and not has_overrides:
         return None

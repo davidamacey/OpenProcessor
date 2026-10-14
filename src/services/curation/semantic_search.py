@@ -8,9 +8,8 @@ query against the item's PE-Core **image**-tower embedding
 ``pe_encoder.py``'s module docstring), and hydrates the resulting doc ids
 into the same response shape ``review.review_queue`` uses.
 
-Gated end-to-end by ``OP_SEMANTIC_SEARCH_ENABLED`` (default off, inline
-``os.getenv`` — same house convention ``scores.py``/``select.py`` use for
-their own flags); see ``search.py`` for the disabled-flag 400 response.
+Gated end-to-end by ``OP_SEMANTIC_SEARCH_ENABLED`` (default off, read with
+``env_bool`` like the ``scores.py``/``select.py`` flags); see ``search.py`` for the disabled-flag 400 response.
 
 Always searches ``CurationConfig.items_index`` — the same override-aware
 config every other curation router uses, so an operator flipping the

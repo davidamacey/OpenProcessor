@@ -61,6 +61,7 @@ from src.services.curation.region_class import item_classes
 from src.services.curation.region_scope import out_of_scope_reason
 from src.services.curation.region_test_run import Leg, VerifyContext, run_region_test
 from src.services.curation.wire import item_source_excludes
+from src.services.detection.profile_registry import resolve_region_profile
 from src.services.detection.segmenter_health import configured_segmenter_health
 from src.services.detection.segmenter_http import first_segmenter_url
 from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError
@@ -188,12 +189,6 @@ def _pack_ref(pack: PromptPack, revision: int | None, draft: bool) -> PackTestPa
     return PackTestPackRef(name=None if draft else pack.name, revision=revision, draft=draft)
 
 
-def _profile_for(name: str | None) -> DetectionProfile | None:
-    from src.services.detection.profile_registry import get_active_region_profile, get_profiles
-
-    return get_active_region_profile() if name is None else get_profiles().get(name)
-
-
 # ---- POST /prompt_packs/test -----------------------------------------------------
 
 
@@ -218,7 +213,7 @@ async def test_prompt_pack(body: PackTestRequest, opensearch: OpenSearchDep) -> 
             limit=MAX_TEST_CROP_IDS,
         )
     await get_config_store().refresh(opensearch)
-    profile = _profile_for(body.profile_name)
+    profile = resolve_region_profile(body.profile_name)
     if body.profile_name is not None and profile is None:
         raise api_error(422, 'unknown_profile', f'{body.profile_name!r} is not a known profile')
     pack, revision, is_draft = await _resolve_pack(

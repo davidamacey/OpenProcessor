@@ -49,7 +49,6 @@ from src.services.training.job_files import (
     _job_path,
     _log_path,
     _manifest_path,
-    _now_iso,
     _read_json,
     _registry_snapshot_path,
     _resolve_jobs_dir,
@@ -64,6 +63,7 @@ from src.services.training.job_wire import (
     _public_mlflow_url,
     _rewrite_eval_for_wire,
 )
+from src.utils.timeutil import now_iso
 
 
 logger = get_logger(__name__)
@@ -277,7 +277,7 @@ async def write_job(job: TrainJobSpec) -> str:
     if not spec.job_id:
         spec.job_id = f'{_slug()}_{spec.model_family}{spec.model_size}'
     if not spec.submitted_at:
-        spec.submitted_at = _now_iso()
+        spec.submitted_at = now_iso()
 
     cfg = get_curation_config()
     spec.project = cfg.project_slug

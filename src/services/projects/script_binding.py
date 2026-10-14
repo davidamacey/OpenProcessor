@@ -13,9 +13,9 @@ read refuses to bind at all: a script never guesses.
 from __future__ import annotations
 
 import asyncio
-import os
 from typing import TYPE_CHECKING
 
+from src.config.env import env_str
 from src.config.project_context import bind_process_project
 from src.config.projects import DEFAULT_SLUG
 from src.services.projects.registry import ProjectRegistry
@@ -36,7 +36,7 @@ def add_project_argument(parser: argparse.ArgumentParser) -> None:
     """``--project SLUG`` (default ``$OP_CURATION_PROJECT`` or ``default``)."""
     parser.add_argument(
         '--project',
-        default=os.environ.get('OP_CURATION_PROJECT', DEFAULT_SLUG),
+        default=env_str('OP_CURATION_PROJECT', DEFAULT_SLUG),
         help='Project slug to act on (default: $OP_CURATION_PROJECT, else "default").',
     )
 
@@ -107,4 +107,4 @@ def only_project(records: list[ProjectRecord], slug: str | None) -> list[Project
 
 
 def _default_opensearch_url() -> str:
-    return os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
+    return env_str('OPENSEARCH_URL', 'http://opensearch:9200')

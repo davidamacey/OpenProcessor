@@ -12,9 +12,9 @@ built per run from ``OP_TRITON_URL`` / ``TRITON_URL`` (default
 from __future__ import annotations
 
 import asyncio
-import os
 from typing import TYPE_CHECKING, Any
 
+from src.config.env import env_optional_str, env_str
 from src.core.logging import get_logger
 from src.domain.embedding_state import DEFERRED, FAILED, NOT_SELECTED
 from src.services.curation.item_filter import ItemFilter
@@ -39,7 +39,7 @@ DEFAULT_TRITON_URL = 'triton-server:8001'
 
 
 def triton_url() -> str:
-    return os.environ.get('OP_TRITON_URL') or os.environ.get('TRITON_URL') or DEFAULT_TRITON_URL
+    return env_optional_str('OP_TRITON_URL') or env_str('TRITON_URL', DEFAULT_TRITON_URL)
 
 
 def stage_request(
