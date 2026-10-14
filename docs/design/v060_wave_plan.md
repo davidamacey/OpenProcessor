@@ -261,7 +261,7 @@ Candidate fixes, each kept only if WP-1.2 shows it costs >= 5 % of API CPU, each
    back); the guard keeps inspecting the same request paths (it does not parse bodies; verify).
 3. Off-event-loop pixel work: `embed_crops` preprocessing and `letterbox_to_square` via
    `asyncio.to_thread` (cv2 releases the GIL); parent plan Wave 1 item 4.
-4. Triton `--log-verbose=0` in `docker-compose.yml:116` (B12); update `tests/test_compose_contract.py`.
+4. Triton `--log-verbose=0` in `docker-compose.yml:116` (B12); update `tests/compose/`.
 5. Parent plan Wave 1 items 1 and 2 (crop view instead of `crop_pil` copy, one gray plane for blur)
    only if WP-1.2 shows them on COCO (B6 says crop is 0.6 ms: likely not; they matter on set B).
 
@@ -426,7 +426,7 @@ different GPUs (parent plan section 9).
 
 Gates: P-json identical (transport only). Acceptance: API CPU per image lower by a measured amount
 (record it; expected small after uint8, **estimate** 10-30 ms/image); no leaked regions after 3 runs
-and an API restart (`/v2/systemsharedmemory/status` before and after); `tests/test_compose_contract.py`
+and an API restart (`/v2/systemsharedmemory/status` before and after); `tests/compose/`
 updated. Rollback: setting to `grpc`. If the win is < 5 % of API CPU, close the WP as measured and
 not adopted.
 
