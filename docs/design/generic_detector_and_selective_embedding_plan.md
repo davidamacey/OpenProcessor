@@ -127,7 +127,7 @@ F8. Wire: vectors are excluded from every item read
     (`src/routers/curation/_item_models.py:25`) and `serialize_item`
     (`wire.py:214`) carry no embedding field.
 F9. Filtering by detector class name is not exposed: `GET /crops` has no
-    `proposal_name` filter (`src/routers/curation/crops.py:102-147`), though the
+    `proposal_name` filter (`src/services/curation/crop_listing.py`), though the
     field is mapped keyword (`curation_opensearch.py:504`). Region scope already
     matches by name case-insensitively against `class_name` OR `proposal_name`
     (`src/services/curation/region_scope.py:25-62`); that predicate is the model
@@ -360,7 +360,7 @@ The bulk ingest script prints them.
 - `seed_from_detector`: reads the label list the same way ingest does
   (`proposer_label` / `get_class_names`), slugifies (F10), skips names already
   in the registry (by name, case-insensitive), appends the rest through
-  `create_registry_class` (`routers/curation/classes.py:251` path), group
+  `create_registry_class` (`routers/curation/classes_write.py` path), group
   defaults to `detector`, `dry_run` default true. It does not align ids, so it
   never conflicts with a hand-built registry. The CLI
   `scripts/curation/seed_class_registry.py` (id-aligned, for a model that
@@ -497,7 +497,7 @@ with person, animal and food items (checked live in section 8).
 Files: `src/routers/curation/_common_models.py` (`IngestConfigResponse` +
 `IngestDetectorInfo`), `src/routers/curation/ingest.py:313`, new
 `src/services/curation/detector_vocabulary.py` (labels, slug, seed plan),
-`src/routers/curation/classes.py` (route `seed_from_detector`),
+`src/routers/curation/class_seed.py` (route `seed_from_detector`),
 `src/routers/curation/_class_models.py` (request/response), contracts.
 Tests (red-first): `tests/curation/test_detector_vocabulary.py` (slugify:
 `traffic light` -> `traffic_light`, collisions, duplicates), 

@@ -406,7 +406,7 @@ def test_human_class_writers_replace_detector_provenance(
     reg.validate_id.return_value = True
     reg.get.return_value = MagicMock(class_name='gadget')
 
-    with patch('src.routers.curation.crops.get_class_registry', return_value=reg):
+    with patch('src.routers.curation.crops_write.get_class_registry', return_value=reg):
         r = getattr(app_client, method)(url, json=body)
     assert r.status_code == 200, r.text
 

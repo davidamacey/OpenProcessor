@@ -1,9 +1,9 @@
-"""Curation review-queue router — ``GET/POST /curation/review/*``.
+"""Curation review-queue router — ``GET /curation/review/*``.
 
 ``POST /review/new_class_proposals/resolve`` lives in the sibling
-``review_resolve.py`` module and ``GET /review/new_class_proposals/summary``
-in ``review_proposals.py`` (LOC-ceiling splits), both registered on this
-same shared ``router``.
+``review_resolve.py`` module, ``GET /review/new_class_proposals/summary``
+in ``review_proposals.py`` and the raw-label aggregations in
+``review_terms.py``, all registered on this same shared ``router``.
 """
 
 from __future__ import annotations
@@ -19,10 +19,8 @@ from src.routers.curation._common import (
     guard_page_depth,
     is_not_found,
     items_index,
-    logger,
     router,
 )
-from src.routers.curation._common_models import TestHoldoutFreezeRequest, TestHoldoutFreezeResponse
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._page_models import ReviewLocateResponse, ReviewQueuePage
 from src.routers.curation._review_params import (  # noqa: TC001 - FastAPI resolves the aliases
@@ -41,22 +39,7 @@ from src.routers.curation._review_params import (  # noqa: TC001 - FastAPI resol
 )
 from src.routers.curation._review_tab_models import ReviewTabsResponse
 from src.services.curation import review_empty_reason, review_queries
-from src.services.curation.dataset_thresholds import MIN_TEST_CROPS_PER_CLASS
-from src.services.curation.holdout import (
-    MIN_TEST_PER_CLASS,
-    build_cohort_query,
-    compute_holdout_sha,
-    fetch_cohort_strata,
-    persist_freeze_record,
-    select_test_holdout,
-)
 from src.services.curation.index_bootstrap import ensure_indexes
-from src.services.curation.raw_label_clusters import (
-    CLUSTER_ID_FIELD,
-    CLUSTER_NAME_FIELD,
-    RAW_LABEL_FIELD,
-    UNMATCHED_CLASS_SOURCE,
-)
 from src.services.curation.review_filter_specs import REGION_STATUS_DEFAULT
 from src.services.curation.review_request import (
     ReviewFilters,
@@ -65,179 +48,6 @@ from src.services.curation.review_request import (
     build_review_request,
 )
 from src.services.curation.wire import item_list_source_excludes, serialize_item
-from src.utils.timeutil import now_iso
-
-
-@router.get('/review/unmatched_terms')
-async def review_unmatched_terms(
-    opensearch: OpenSearchDep,
-    size: int = Query(100, ge=1, le=1000),
-) -> dict[str, Any]:
-    """Aggregate the VLM's raw labels across every ``vlm_unmatched`` crop.
-
-    Returns the top-N most common raw labels the VLM produced for crops the
-    registry could not resolve. This is the main input to growing the
-    registry: high-count labels are obvious candidates for new class
-    entries (or new ``SYNONYMS`` mappings if the raw label is just a
-    phrasing of an existing class).
-
-    Once the registry (or the prompt pack's synonyms) has grown, run
-    ``scripts/curation/reclassify_after_registry_growth.py`` with
-    ``--label-prefix`` set to the prefix of the ``class_source`` /
-    raw-label pair aggregated here; it promotes every ``<prefix>_unmatched``
-    item whose raw label now resolves to ``<prefix>_reclassified`` (never
-    setting ``class_validated``).
-
-    Args:
-        size: Maximum number of distinct raw labels to return. Capped at
-            1000; default 100 (the long tail past 100 is usually noise).
-
-    Returns:
-        ``{"total_unmatched": <int>, "top_terms": [{"label": str, "count": int}, ...]}``
-    """
-    await ensure_indexes(opensearch)
-    body = {
-        'size': 0,
-        'query': {'term': {'class_source': 'vlm_unmatched'}},
-        'aggs': {
-            'top_raw': {
-                'terms': {
-                    'field': 'vlm_raw_label',
-                    'size': size,
-                    # Push rare/unknowns to the bottom and avoid empty buckets.
-                    'min_doc_count': 1,
-                }
-            },
-        },
-        'track_total_hits': True,
-    }
-    try:
-        resp = await opensearch.search(index=items_index(), body=body)
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
-
-    total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
-    buckets = (((resp.get('aggregations') or {}).get('top_raw') or {}).get('buckets')) or []
-    top_terms = [
-        {'label': str(b.get('key', '')), 'count': int(b.get('doc_count', 0))} for b in buckets
-    ]
-    return {'total_unmatched': int(total), 'top_terms': top_terms}
-
-
-@router.get('/review/raw_label_clusters')
-async def review_raw_label_clusters(
-    opensearch: OpenSearchDep,
-    size: int = Query(50, ge=1, le=500),
-    samples_per_cluster: int = Query(5, ge=1, le=20),
-) -> dict[str, Any]:
-    """Top-N hierarchical clusters of ``vlm_raw_label`` for the labeler UI.
-
-    Surfaces the output of ``scripts/curation/cluster_raw_labels.py``
-    (field contract: :mod:`src.services.curation.raw_label_clusters`) so
-    the labeler can:
-
-    1. Show fine-grained sub-classes the registry doesn't have yet
-       (e.g. "ford f150" + "ford ranger" rolled up under
-       ``ford_pickup`` → suggested registry parent ``pickup``).
-    2. Surface candidate registry promotions ranked by crop volume.
-    3. Let curators bulk-relabel a whole cluster at once instead of
-       clicking through individual ``vlm_unmatched`` crops.
-
-    The endpoint runs purely against the configured items index — no clustering
-    happens here, only aggregation. Cluster ids / names are written by
-    the offline script; if no crops have ``vlm_label_cluster_id`` yet
-    the endpoint returns an empty list with a populated ``hint``.
-
-    NOTE on route ordering: this endpoint MUST be declared before the
-    parameterised ``/review/{tab}`` below — FastAPI dispatches the first
-    matching route, and ``raw_label_clusters`` would otherwise be eaten
-    by the ``{tab}`` matcher.
-
-    Args:
-        size: Number of clusters to return (default 50).
-        samples_per_cluster: How many ``vlm_raw_label`` samples to
-            include per cluster (default 5 — enough to read at a glance).
-
-    Returns:
-        ``{"status": "ok|empty", "clusters": [{cluster_id, cluster_name,
-        n_crops, n_unmatched, sample_terms, parent_class_suggestion}, ...]}``
-    """
-    await ensure_indexes(opensearch)
-    body = {
-        'size': 0,
-        'query': {'exists': {'field': CLUSTER_ID_FIELD}},
-        'aggs': {
-            'by_cluster': {
-                'terms': {
-                    'field': CLUSTER_ID_FIELD,
-                    'size': size,
-                    'order': {'_count': 'desc'},
-                },
-                'aggs': {
-                    'name': {'terms': {'field': CLUSTER_NAME_FIELD, 'size': 1}},
-                    'samples': {
-                        'terms': {
-                            'field': RAW_LABEL_FIELD,
-                            'size': samples_per_cluster,
-                        }
-                    },
-                    'unmatched': {'filter': {'term': {'class_source': UNMATCHED_CLASS_SOURCE}}},
-                    # Most common already-resolved class within the cluster — used
-                    # as the ``parent_class_suggestion`` hint. If the cluster is
-                    # 100% vlm_unmatched the bucket is empty and we return None.
-                    'parent': {
-                        # ``class_name`` is mapped ``keyword`` directly on the
-                        # live index — no ``.keyword`` subfield exists (the
-                        # migration that assumed a ``text`` mapping has been
-                        # failing silently on every startup; see
-                        # the reference clusters router's top_class agg for the full story).
-                        'terms': {'field': 'class_name', 'size': 1},
-                    },
-                },
-            },
-        },
-    }
-    try:
-        resp = await opensearch.search(index=items_index(), body=body)
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
-
-    buckets = (((resp.get('aggregations') or {}).get('by_cluster') or {}).get('buckets')) or []
-    clusters: list[dict[str, Any]] = []
-    for b in buckets:
-        cid = int(b.get('key', 0))
-        n_crops = int(b.get('doc_count', 0))
-        name_buckets = (b.get('name') or {}).get('buckets') or []
-        cluster_name = str(name_buckets[0]['key']) if name_buckets else f'cluster_{cid}'
-        sample_buckets = (b.get('samples') or {}).get('buckets') or []
-        samples = [
-            {'label': str(sb.get('key', '')), 'count': int(sb.get('doc_count', 0))}
-            for sb in sample_buckets
-        ]
-        unmatched = int((b.get('unmatched') or {}).get('doc_count', 0))
-        parent_buckets = (b.get('parent') or {}).get('buckets') or []
-        parent = str(parent_buckets[0]['key']) if parent_buckets else None
-        clusters.append(
-            {
-                'cluster_id': cid,
-                'cluster_name': cluster_name,
-                'n_crops': n_crops,
-                'n_unmatched': unmatched,
-                'sample_terms': samples,
-                'parent_class_suggestion': parent,
-            }
-        )
-    status_str = 'ok' if clusters else 'empty'
-    return {
-        'status': status_str,
-        'clusters': clusters,
-        'hint': (
-            'Run scripts/curation/cluster_raw_labels.py to populate '
-            f'{CLUSTER_ID_FIELD} on items if status=empty.'
-        )
-        if not clusters
-        else None,
-    }
 
 
 if TYPE_CHECKING:
@@ -520,144 +330,3 @@ async def review_locate(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     rank = await _count({'bool': {'filter': [req.query, before]}})
     return {**out, 'in_queue': True, 'rank': rank, 'page': rank // page_size + 1}
-
-
-@router.post('/test_holdout/freeze', response_model=TestHoldoutFreezeResponse)
-async def freeze_test_holdout(
-    payload: TestHoldoutFreezeRequest,
-    opensearch: OpenSearchDep,
-    force: bool = Query(False, description='Allow re-running freeze (overwrites existing).'),
-) -> TestHoldoutFreezeResponse:
-    """Deterministic per-class sample of human-validated crops to ``test_holdout=true``.
-
-    Cohort: ``class_validated=true AND class_source='human'`` (Appendix C
-    Decision 2). Selection: SHA1-of-``crop_id`` deterministic per-class
-    sampling with a 5-crop floor via :func:`select_test_holdout` — the
-    single canonical holdout algorithm shared with
-    an offline promotion script (Appendix C
-    Decision 1). No seed (a ``seed`` field is a ``422``): the same cohort
-    always freezes the same set. The response names the method in
-    ``selection`` (``sha1_per_class``).
-
-    Refuses to run if a holdout already exists unless ``force=true``.
-    Refuses (422) to freeze zero rows — a freeze that freezes nothing is
-    never a success, and silently returning 200 with ``sha256('')`` hid
-    that this endpoint has never actually frozen anything. Persists a
-    durable freeze record under ``OP_STATE_DIR/test_holdout/`` so a bad
-    freeze can be diagnosed and reverted from the recorded crop-id list.
-    """
-    await ensure_indexes(opensearch)
-    # Refuse re-run if an existing holdout exists.
-    if not force:
-        try:
-            existing = await opensearch.count(
-                index=items_index(),
-                body={'query': {'term': {'test_holdout': True}}},
-            )
-            if (existing or {}).get('count', 0) > 0:
-                raise HTTPException(
-                    status_code=409,
-                    detail='test holdout already exists; pass ?force=true to re-run',
-                )
-        except HTTPException:
-            raise
-        except Exception as exc:
-            # Without the count the "a holdout already exists" guard cannot hold: refuse.
-            logger.warning('curation_test_holdout_count_failed', error=str(exc))
-            raise HTTPException(
-                status_code=503, detail='could not check for an existing test holdout'
-            ) from exc
-
-    cohort_query = build_cohort_query()
-    try:
-        strata = await fetch_cohort_strata(opensearch, items_index(), cohort_query)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
-
-    crop_ids_by_class: dict[int, list[str]] = {}
-    for bucket in strata:
-        ids = bucket.get('crop_ids') or []
-        if not ids:
-            continue
-        crop_ids_by_class.setdefault(bucket['class_id'], []).extend(ids)
-
-    fraction = payload.percent / 100.0
-    chosen_ids, per_class = select_test_holdout(crop_ids_by_class, fraction=fraction)
-
-    if not chosen_ids:
-        cohort_size = sum(len(v) for v in crop_ids_by_class.values())
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f'zero crops selected from a cohort of {cohort_size} across '
-                f'{len(crop_ids_by_class)} classes; refusing to freeze nothing'
-            ),
-        )
-
-    # Bulk-flag.
-    bulk: list[dict[str, Any]] = []
-    now = now_iso()
-    for crop_id in chosen_ids:
-        bulk.append({'update': {'_index': items_index(), '_id': crop_id}})
-        bulk.append({'doc': {'test_holdout': True, 'updated_at': now}})
-    try:
-        await opensearch.bulk(body=bulk, refresh=True)
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'bulk failed: {exc}') from exc
-
-    digest = compute_holdout_sha(chosen_ids)
-
-    persist_freeze_record(
-        crop_ids=chosen_ids,
-        sha=digest,
-        cohort_spec={
-            'query': cohort_query,
-            'selection': 'sha1_per_class',
-            'percent': payload.percent,
-            'fraction': fraction,
-            'force': force,
-        },
-        per_class_counts=per_class,
-    )
-
-    return TestHoldoutFreezeResponse(
-        n_frozen=len(chosen_ids),
-        n_classes_covered=len(per_class),
-        test_holdout_sha=digest,
-        per_class_counts=per_class,
-        percent=payload.percent,
-        min_per_class=MIN_TEST_PER_CLASS,
-    )
-
-
-@router.get('/test_holdout/stats')
-async def test_holdout_stats(opensearch: OpenSearchDep) -> dict[str, Any]:
-    """Per-class test-set counts."""
-    body = {
-        'size': 0,
-        'query': {'term': {'test_holdout': True}},
-        'aggs': {'by_class': {'terms': {'field': 'class_id', 'size': 1000}}},
-        'track_total_hits': True,
-    }
-    try:
-        resp = await opensearch.search(index=items_index(), body=body)
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
-    total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
-    buckets = (resp.get('aggregations') or {}).get('by_class', {}).get('buckets', [])
-    return {
-        'total': int(total),
-        # deficient: below the per-class test minimum preflight warns on.
-        'by_class': [
-            {**b, 'deficient': int(b.get('doc_count', 0)) < MIN_TEST_CROPS_PER_CLASS}
-            for b in buckets
-        ],
-        'min_test_per_class': MIN_TEST_CROPS_PER_CLASS,
-    }
-
-
-# =============================================================================
-# Export stub
-# =============================================================================

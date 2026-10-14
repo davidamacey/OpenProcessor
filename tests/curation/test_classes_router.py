@@ -1,4 +1,4 @@
-"""Tests for `src/routers/curation/classes.py`.
+"""Tests for `src/routers/curation/classes*.py`.
 
 Server-side reserved-hotkey guard on class create/update. The backend
 owns the reserved set and serves it on `GET /classes`.
