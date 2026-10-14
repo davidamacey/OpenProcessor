@@ -1,4 +1,4 @@
-"""W8-cleanup m1 regression guard: ``/stats/dataset``'s ``region_detectors``
+"""Regression guard: ``/stats/dataset``'s ``region_detectors``
 nested agg must count CROPS, not boxes.
 
 ``tests/integration/test_stats_router.py`` supplies a canned aggregation

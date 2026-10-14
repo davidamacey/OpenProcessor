@@ -1,4 +1,4 @@
-"""``vlm_prompt_pack`` (any_domain_plan.md §3.7/§9 W2) is stamped onto the
+"""``vlm_prompt_pack`` is stamped onto the
 item at every VLM write site: ``/vlm/label_batch``, ``/vlm/verify_regions``,
 the pipeline's inline VLM classification stage, and (the 4th site) the
 detection worker's bulk writer (``scripts/curation/worker/bulk_writer.py``),

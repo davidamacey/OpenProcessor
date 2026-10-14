@@ -1,4 +1,4 @@
-"""W10.9: an import freezes its test split under its own record; the curated
+"""An import freezes its test split under its own record; the curated
 freeze (``current.json``) is never replaced, and an imported holdout counts
 as an existing holdout for the curated freeze."""
 

@@ -1,6 +1,6 @@
-"""Tests for the F-66 fix: shell scripts must resolve ports from .env.
+"""Tests for the port-resolution fix: shell scripts must resolve ports from .env.
 
-Fresh-start E2E findings (2026-09-25), F-66: ``make status`` /
+``make status`` /
 ``scripts/openprocessor.sh`` hardcoded ``localhost:4603/4600/4607/4605``.
 On a shared host running a second, remapped-port OpenProcessor stack this
 silently read ANOTHER stack's ``/health`` and reported it as this one's,

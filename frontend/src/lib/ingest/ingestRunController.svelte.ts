@@ -431,7 +431,7 @@ export function createIngestRun(deps: IngestRunDeps): IngestRun {
       cursor = 0;
       totals.queued = queue.reduce((n, c) => n + c.length, 0);
       if (totals.queued === 0 && totals.skipped_known > 0 && totals.failed === 0) {
-        // F-59: a re-upload of already-indexed files used to toast
+        // a re-upload of already-indexed files used to toast
         // "Upload started (0 images queued)" and then show nothing.
         toastStore.info(
           `Nothing to upload: ${totals.skipped_known} already indexed (see the Skipped tab)`,

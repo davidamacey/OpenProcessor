@@ -46,8 +46,3 @@ router.include_router(clusters_router)  # /v1/clusters
 router.include_router(query_router)  # /v1/query
 router.include_router(ocr_router)  # /v1/ocr
 router.include_router(models_router)  # /v1/models
-
-
-# Export version info
-API_VERSION = '1.0.0'
-API_VERSION_DATE = '2025-01'

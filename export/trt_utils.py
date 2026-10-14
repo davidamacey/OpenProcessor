@@ -350,7 +350,7 @@ def atomic_write_plan(engine_bytes: bytes, plan_path: str | Path) -> Path:
 
 
 if __name__ == '__main__':
-    # F-16: a tiny CLI so a bash build script that shells out to `trtexec`
+    # a tiny CLI so a bash build script that shells out to `trtexec`
     # (build_pe_trt.sh) can bake FP16 into an ONNX the same way the
     # Python-builder exporters (ArcFace/SCRFD/MobileCLIP) do, without
     # embedding a Python one-liner in the shell script. Prints the status

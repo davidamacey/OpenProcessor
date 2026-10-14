@@ -1,5 +1,4 @@
-"""W8 region-cluster bulk triage (docs/design/
-w8-multibox-frontend-plan-2026-09-26.md, §7.7): "Triage from a cluster
+"""Region-cluster bulk triage: "Triage from a cluster
 goes through batch_box_state, never the item-level batch_status, which
 would flip every sibling box." Once a curator opens a region cluster
 bucket, the same Confirm/No-<region>/Mark-false-positive bulk toolbar

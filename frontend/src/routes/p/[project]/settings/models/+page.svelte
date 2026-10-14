@@ -1,11 +1,10 @@
 <script lang="ts">
   /**
-   * `/settings/models` (OpenProcessor W9; any_domain_plan.md §7.8.5;
-   * docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md §3.3): which VLM this
+   * `/settings/models`: which VLM this
    * project uses, the deployment-wide endpoint registry, the local-model
    * catalog and every model choice the deployment exposes. Everything
    * listed is served; `VlmModels` follows it. Absent (one line) until the
-   * backend serves W9.
+   * backend serves the VLM registry.
    */
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';

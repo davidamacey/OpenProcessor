@@ -284,7 +284,7 @@ async def write_job(job: TrainJobSpec) -> str:
     spec.project_export_root = str(cfg.export_root)
     spec.mlflow_experiment = cfg.mlflow_experiment
 
-    # F-73: dataset_export_dir is optional on the wire (defaults to the
+    # dataset_export_dir is optional on the wire (defaults to the
     # current export -- resolved by _run_preflight, which every /start
     # caller runs first). It can still reach here as None if the caller
     # used force=True to bypass a *blocking* preflight (the block fires

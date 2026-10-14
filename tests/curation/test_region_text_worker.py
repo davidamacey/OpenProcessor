@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from _fake_project_registry import install_static_project_registry
 
-import scripts.curation.region_worker_main as worker
 from scripts.curation.worker import runner as runner_mod, stage_a as stage_a_mod
+from scripts.curation.worker.__main__ import parse_args
 from src.config import get_region_fields
 from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.profile_registry import register_profile
@@ -76,15 +76,14 @@ async def _drive(
         register_profile(dataclasses.replace(_profile(), **profile_overrides), default=True)
 
     pool = MagicMock(initialize=AsyncMock(), close=AsyncMock())
-    monkeypatch.setattr(worker, 'AsyncTritonPool', MagicMock(return_value=pool))
-    monkeypatch.setattr(worker, 'make_script_opensearch', MagicMock(return_value=fake_os))
+    monkeypatch.setattr(runner_mod, 'AsyncTritonPool', MagicMock(return_value=pool))
+    monkeypatch.setattr(runner_mod, 'make_script_opensearch', MagicMock(return_value=fake_os))
     # The worker discovers its projects through the registry; keep that
     # read in-memory too, never against the unresolvable --opensearch host.
     install_static_project_registry(monkeypatch)
 
     primary_det = MagicMock()
     primary_det.confidence_floor = 0.0
-    primary_det.detect_batch = AsyncMock(return_value=[primary])
     primary_det.detect_batch_multi = AsyncMock(return_value=[[primary] if primary else []])
     monkeypatch.setattr(runner_mod, 'RegionDetector', MagicMock(return_value=primary_det))
 
@@ -100,7 +99,7 @@ async def _drive(
     seg = MagicMock(aclose=AsyncMock())
     seg.segment = AsyncMock(return_value=segmenter)
     seg.segment_multi = AsyncMock(return_value=[segmenter] if segmenter else [])
-    monkeypatch.setattr(worker, 'SegmenterClient', MagicMock(return_value=seg))
+    monkeypatch.setattr(runner_mod, 'SegmenterClient', MagicMock(return_value=seg))
 
     vlm = MagicMock(aclose=AsyncMock())
     vlm.class_names = []
@@ -111,7 +110,7 @@ async def _drive(
         side_effect=lambda crops, **_kw: dict.fromkeys((c.crop_id for c in crops), True)
     )
     vlm_cls = MagicMock(return_value=vlm)
-    monkeypatch.setattr(worker, 'build_vlm_labeler', vlm_cls)
+    monkeypatch.setattr(runner_mod, 'build_vlm_labeler', vlm_cls)
     monkeypatch.setattr(
         'src.clients.curation_opensearch.registry.ClassRegistry',
         MagicMock(side_effect=RuntimeError('no registry in test')),
@@ -125,7 +124,7 @@ async def _drive(
         monkeypatch.setenv('OP_VLM_URL', vlm_url)
     else:
         monkeypatch.delenv('OP_VLM_URL', raising=False)
-    args = worker.parse_args(
+    args = parse_args(
         [
             '--opensearch=http://os.invalid:9200',
             '--triton=triton.invalid:8001',
@@ -170,7 +169,7 @@ class TestNoVlmDeployment:
         doc = fake_os.live['c1']
         det = _profile().detector_model
         assert doc[F.status] == 'detected'
-        # W8: no-VLM-configured accept writes the box-list shape.
+        # no-VLM-configured accept writes the box-list shape.
         # RegionBox has no verified/validated/verifier concept (those
         # legacy item-level scalars are Item 2 scope) -- the box's own
         # state='accepted' is the acceptance signal.

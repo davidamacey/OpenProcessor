@@ -1,8 +1,7 @@
-"""W3/W4/W9 shared: every ``ValidationIssue.bypassable`` equals membership
+"""Every ``ValidationIssue.bypassable`` equals membership
 in that validator's ``BYPASSABLE_CODES``, and ``force_allowed`` is true
-only when every error present is bypassable. Each wave that adds a
-validator extends this file with its own rows -- W3 adds
-``pack_validation``; W4 adds ``profile_validation``.
+only when every error present is bypassable. Each validator has its own rows
+here: ``pack_validation`` and ``profile_validation``.
 """
 
 from __future__ import annotations
@@ -102,7 +101,7 @@ def test_profile_force_allowed_true_only_when_every_error_bypassable() -> None:
 
 
 def test_vlm_max_images_exceeds_server_is_reserved_never_bypassable() -> None:
-    """W9 owns raising this code; pinned here so a future BYPASSABLE_CODES
-    addition can never accidentally include it (any_domain_plan.md §3.3)."""
+    """The endpoint-registry validator owns raising this code; pinned here so a
+    future BYPASSABLE_CODES addition can never accidentally include it."""
     assert 'vlm_max_images_exceeds_server' not in PACK_BYPASSABLE
     assert 'vlm_max_images_exceeds_server' not in PROFILE_BYPASSABLE

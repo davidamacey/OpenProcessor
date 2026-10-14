@@ -1,4 +1,4 @@
-"""Archive upload for a dataset (W10.3): one ``.zip`` / ``.tar`` /
+"""Archive upload for a dataset: one ``.zip`` / ``.tar`` /
 ``.tar.gz``, streamed to disk, extracted by :func:`safe_extract` under
 ``<upload_root>/datasets/<sha256[:16]>/`` (content-addressed, inside a
 configured root, so every extracted image passes the servability guard).

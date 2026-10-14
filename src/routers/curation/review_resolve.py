@@ -30,7 +30,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.routers.curation.classes import create_registry_class
-from src.services.curation.class_label import human_label_update
+from src.services.curation.class_label import ItemLabel, class_label_update
 from src.services.curation.export_support import scroll_hits
 from src.services.curation.new_class_terms import is_open_proposal, proposal_term_query
 
@@ -55,12 +55,14 @@ def _resolve_merger(*, label: str, class_id: int, class_name: str, label_source:
             # doc: someone else already resolved (or otherwise changed)
             # this item's pending state between selection and this write.
             raise _PendingStateChangedError
-        update = human_label_update(
+        update = class_label_update(
             current,
-            class_id=class_id,
-            class_name=class_name,
-            label_source=label_source,
-            writer=_RESOLVE_WRITER,
+            ItemLabel.human(
+                class_id=class_id,
+                class_name=class_name,
+                label_source=label_source,
+                writer=_RESOLVE_WRITER,
+            ),
         )
         update['needs_new_class'] = False
         return update

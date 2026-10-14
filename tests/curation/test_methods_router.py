@@ -275,7 +275,7 @@ def test_detection_profile_axis_advertises_the_selected_profile(
     assert r.status_code == 200
     body = r.json()
     profile_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'detection_profile'}
-    # W2: an explicit 'off' choice is offered once there is a profile to turn off.
+    # an explicit 'off' choice is offered once there is a profile to turn off.
     assert set(profile_entries) == {REFERENCE_LICENSE_PLATE_PROFILE.name, 'off'}
     entry = profile_entries[REFERENCE_LICENSE_PLATE_PROFILE.name]
     assert entry['status'] == 'stable'
@@ -307,7 +307,7 @@ def test_detection_profile_registry_supports_more_than_one_profile() -> None:
             e['id']: e
             for e in detection_profile_strategies(profile_registry.get_default_profile_name())
         }
-        # W2: an explicit 'off' choice is offered once there is a profile to turn off.
+        # an explicit 'off' choice is offered once there is a profile to turn off.
         assert set(entries) == {'license_plate', 'shipping_label', 'off'}
         assert entries['license_plate']['default'] is True
         assert entries['shipping_label']['default'] is False
@@ -536,7 +536,7 @@ def test_methods_contract_declares_field_coverage() -> None:
     """The generated OpenAPI contract must type ``field_coverage`` /
     ``field_coverage_total`` as real StrategyEntry properties, not leave
     the whole response as a free-form (``additionalProperties: true``)
-    object -- that's the W2.3 contract gap this test locks down."""
+    object -- that's the contract gap this test locks down."""
     import json
     from pathlib import Path
 
@@ -589,7 +589,7 @@ def test_export_entries_serve_dedup_default_and_range(app_client: TestClient) ->
 def test_export_requests_enforce_the_served_dedup_range() -> None:
     from pydantic import ValidationError
 
-    from src.routers.curation._common import ExportSingleClassRequest, ExportYoloRequest
+    from src.routers.curation._common_models import ExportSingleClassRequest, ExportYoloRequest
 
     ExportYoloRequest(dedup_threshold=1.0)
     for bad in (-0.1, 1.01):

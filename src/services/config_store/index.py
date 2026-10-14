@@ -1,14 +1,14 @@
 """Low-level OpenSearch doc-id, OCC and revision-counter primitives for
-the config store (W2, any_domain_plan.md §3.1/§3.6).
+the config store.
 
 This module is deliberately dependency-light: it knows about doc shapes
-and OCC, nothing about prompt packs, region profiles or FastAPI. W3/W4's
-CRUD routes and W2's own settings bridge both call these.
+and OCC, nothing about prompt packs, region profiles or FastAPI. The
+CRUD routes and the settings bridge both call these.
 
-Doc ids (see any_domain_plan.md §3.1):
+Doc ids:
 - ``pack:<name>`` / ``pack:<name>@<rev>`` (current / immutable revision copy)
 - ``profile:<name>`` / ``profile:<name>@<rev>``
-- ``vlm:<name>`` / ``vlm:<name>@<rev>`` (W9; global index only)
+- ``vlm:<name>`` / ``vlm:<name>@<rev>`` (global index only)
 - ``ovset:<name>`` / ``ovset:<name>@<rev>`` (open-vocabulary prompt sets)
 - ``activation:<axis>`` (``axis`` is ``prompt_pack`` | ``detection_profile`` | ``vlm`` |
   ``open_vocab``)
@@ -308,7 +308,7 @@ async def activate(
     ``expected_active`` (``{"name": ..., "revision": ...}``; ``None`` or a
     null-name ref when nothing is active) must equal the current activation, else
     :class:`ActiveConflictError`. ``doc_fields`` is merged into the activation
-    doc (the VLM axis's external-images acknowledgement, W9.9); a callable
+    doc (the VLM axis's external-images acknowledgement); a callable
     receives the CURRENT activation doc's ``_source`` (``None`` when there
     is none) read by this same OCC step, so a carried-forward field cannot
     be lost to a concurrent writer.

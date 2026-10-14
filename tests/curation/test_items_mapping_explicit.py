@@ -29,7 +29,7 @@ _MUST_BE_KEYWORD = {
 # ``boxes_state`` is never a top-level document key at all: it names the
 # FIXED element key ``state`` inside one ``region_boxes`` nested-list
 # entry (used only to build nested queries), not an item-level property.
-_W8_NOT_YET_MAPPED = {
+_NOT_ITEM_LEVEL_KEYS = {
     'boxes_state',
 }
 
@@ -39,7 +39,7 @@ _W8_NOT_YET_MAPPED = {
     [
         f.name
         for f in dataclasses.fields(RegionFields)
-        if f.name != 'prefix' and f.name not in _W8_NOT_YET_MAPPED
+        if f.name != 'prefix' and f.name not in _NOT_ITEM_LEVEL_KEYS
     ],
 )
 def test_every_region_field_is_explicitly_mapped(attr: str) -> None:

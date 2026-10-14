@@ -1,4 +1,4 @@
-"""Idempotency, crash-resume and undo of an import batch (W10.11, W10.12)."""
+"""Idempotency, crash-resume and undo of an import batch."""
 
 from __future__ import annotations
 

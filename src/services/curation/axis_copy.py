@@ -1,5 +1,5 @@
 """Served per-axis label/blurb for ``GET /curation/methods`` ``axes[]``
-(W2, any_domain_plan.md §7.6 item 7): the client deletes its local copy
+the client deletes its local copy
 of these strings and renders whatever the endpoint serves.
 
 Split out of :mod:`strategy_registry` (which grew past the pre-commit
@@ -99,7 +99,7 @@ def detection_profile_strategies(default_id: str | None) -> list[dict[str, Any]]
         for profile in profiles.values()
     ]
     if profiles:
-        # W2: an explicit "no active profile" choice, distinct from the
+        # an explicit "no active profile" choice, distinct from the
         # unconfigured-deployment empty axis. Only offered once there is
         # at least one profile to turn off.
         entries.append(

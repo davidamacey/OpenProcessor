@@ -1,4 +1,4 @@
-"""W4: ``/region_profiles*`` full CRUD lifecycle, template read-only-ness,
+"""``/region_profiles*`` full CRUD lifecycle, template read-only-ness,
 activation/rollback/deactivate, and revisions (any_domain_plan.md §4/§7.3)."""
 
 from __future__ import annotations
@@ -231,7 +231,7 @@ def test_active_impact_route(app_client: TestClient) -> None:
 def test_from_project_clone_is_read_only_and_never_writes_to_source(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The one legitimate cross-project read in this wave (mirrors W3's
+    """The one legitimate cross-project read here (mirrors the
     prompt-pack from_project pin): cloning a region profile out of
     another project must never write anything to that project's own
     config-store index."""

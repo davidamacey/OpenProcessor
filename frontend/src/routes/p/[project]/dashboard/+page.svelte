@@ -65,7 +65,7 @@
   let vlmOpen = $state<boolean>(false);
   let vlmClusterId = $state<string>('');
   let vlmBusy = $state<boolean>(false);
-  // W9: the endpoint this one run uses (`null` = the project default) and
+  // the endpoint this one run uses (`null` = the project default) and
   // the acknowledgement for an external one.
   let vlmChoice = $state<string | null>(null);
   let vlmAck = $state<boolean>(false);

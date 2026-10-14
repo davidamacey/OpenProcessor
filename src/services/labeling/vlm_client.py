@@ -53,7 +53,7 @@ DEFAULT_API_KEY = os.environ.get('OP_VLM_API_KEY', 'EMPTY')
 
 @dataclass(frozen=True)
 class VlmIdentity:
-    """Who answered: stamped on every VLM-derived write (W9.3).
+    """Who answered: stamped on every VLM-derived write.
 
     ``endpoint_ref`` is ``name@revision`` (or ``env@<sha12>``); ``model`` is
     the resolved model (the probe's ``root`` when known, else the served
@@ -176,7 +176,7 @@ def build_http_client(
     keepalive = max_keepalive_connections or int(os.environ.get('OP_VLM_HTTPX_KEEPALIVE') or '128')
     limits = httpx.Limits(max_connections=max_conn, max_keepalive_connections=keepalive)
     # Never follow a redirect: an endpoint answering 3xx must not be able to
-    # steer this client (and its bearer token) to another host (SSRF, W9.9).
+    # steer this client (and its bearer token) to another host (SSRF).
     return httpx.AsyncClient(timeout=timeout_s, limits=limits, follow_redirects=False)
 
 

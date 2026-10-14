@@ -1,4 +1,4 @@
-"""A source class mapped to ``region`` (W10.7 semantics, for a project
+"""A source class mapped to ``region`` (dataset-import semantics, for a project
 source): its items stop being items and become region boxes on the item that
 contains them, or a standalone region item when nothing does."""
 

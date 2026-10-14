@@ -85,7 +85,7 @@ class DetectedItem:
     # class/proposal (primary, or a secondary that overrode it).
     class_detector: str | None = None
     class_detector_version: str | None = None
-    # W10: set for a labeled object from a dataset import (or, in
+    # set for a labeled object from a dataset import (or, in
     # principle, any other first-write labeler). When set,
     # build_item_doc() writes class_label_fields(label) instead of the
     # detector class fields above -- the single class-label writer

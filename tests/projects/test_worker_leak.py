@@ -282,7 +282,7 @@ async def test_detection_worker_keeps_every_read_and_write_in_its_project(
 
     async def _consume(task: _ItemTask) -> None:
         # As a pipeline consumer does: bind the item's project, then run
-        # the combined class+region call on it (W8: box-list path).
+        # the combined class+region call on it (box-list path).
         bind_task_project(task)
         task.crop_jpeg = b'jpeg'
         class_names, name_to_id = bound_class_catalog()

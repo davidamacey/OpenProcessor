@@ -1,4 +1,4 @@
-"""A credential in ``OP_VLM_URL`` (W9 review M5): the env built-in drops it at
+"""A credential in ``OP_VLM_URL``: the env built-in drops it at
 the source, so no route, log line or labeler carries it."""
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Request/response shapes of the unified reprocess (W10.13).
+"""Request/response shapes of the unified reprocess.
 
 Pydantic, in the service layer: the same models are the HTTP bodies, the
 persisted job request and the ``suggested_reprocess`` a profile-activation

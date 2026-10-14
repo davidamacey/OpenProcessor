@@ -1,6 +1,6 @@
 /**
  * `types_import.ts` and the Reprocess vocabulary vs the vendored OpenAPI
- * (OpenProcessor f582aa05, W10). Each key map is compile-time exact
+ * (OpenProcessor f582aa05). Each key map is compile-time exact
  * against its interface (`satisfies Record<keyof T, true>` rejects a
  * missing or an extra key) and is pinned here to the schema's property
  * set, so a served rename fails here instead of rendering blank. The

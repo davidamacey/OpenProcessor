@@ -11,8 +11,8 @@
 # kind "third": spec is the upstream image ref the release resolves to a
 #   digest; docker-compose.yml reads <env_var> with that ref as its default.
 #
-# vlm_generic points at the same vLLM build as vlm_gemma4 until any-domain
-# W9 verifies a mainline vLLM release for the Qwen catalog rows.
+# vlm_generic points at the same vLLM build as vlm_gemma4 until a mainline vLLM release is
+# verified for the Qwen catalog rows.
 
 [[ -n "${_IMAGE_KEYS_SH_LOADED:-}" ]] && return 0
 _IMAGE_KEYS_SH_LOADED=1

@@ -463,7 +463,7 @@ export interface Crop {
    *  `slotOf(crop, spec)` (annotations/cropSlots.ts), never `?.[...]`
    *  by hand, so the accessor can be tightened later. */
   slots?: Record<SlotKey, SlotData>;
-  // -- Class provenance (Wave 1) -----------------------------------------
+  // -- Class provenance -----------------------------------------
   class_detector?: string | null;
   class_detector_version?: string | null;
   class_labeled_at?: string | null;
@@ -540,14 +540,14 @@ export interface Crop {
    * scored at all.
    */
   probe_actionable?: boolean | null;
-  /** W9: the VLM endpoint (`name@revision`), model and prompt pack that
+  /** the VLM endpoint (`name@revision`), model and prompt pack that
    *  produced this item's VLM answer. Null when none ran. */
   vlm_endpoint?: string | null;
   vlm_model?: string | null;
   vlm_prompt_pack?: string | null;
-  /** W10: a human-locked label the pipeline must not overwrite. */
+  /** a human-locked label the pipeline must not overwrite. */
   label_locked?: boolean;
-  /** W10: ids of the dataset imports that carried this item. */
+  /** ids of the dataset imports that carried this item. */
   import_ids?: string[];
   dataset_split?: string | null;
   imported_at?: string | null;
@@ -591,13 +591,13 @@ export interface Cluster {
   id: number;
   /** Backend-derived: "class" | "candidate" | "unassigned". */
   cluster_kind: ClusterKind;
-  /** Items with >=1 box in the cluster. For a region cluster (W8), this
+  /** Items with >=1 box in the cluster. For a region cluster, this
    *  is DISTINCT from `box_count` below — an item can have more than one
    *  box in the same cluster. */
   size: number;
-  /** W8 (docs/design/w8-multibox-frontend-plan-2026-09-26.md): boxes
+  /** boxes
    *  (rows) in the cluster, region clusters only. Absent on an item
-   *  cluster or a pre-W8 backend. */
+   *  cluster or an older backend. */
   box_count?: number | null;
   /** class_validated=true count. */
   validated_count: number;
@@ -756,13 +756,12 @@ export interface ServedRegionProfile {
    *  writes). May be empty. */
   region_class_name: string;
   /** How region text is read (`vlm` / `ocr` / `vlm_then_ocr` / `both`),
-   *  or `'none'` for a text-free profile (OpenProcessor W1,
-   *  2026-09-26) — a profile that detects/segments a region but never
+   *  or `'none'` for a text-free profile — a profile that detects/segments a region but never
    *  reads text off it. */
   text_reader: string;
   /** False for a text-free profile: no region text is read, stored or
    *  editable — `region_text*` stays null and a `region_meta` PATCH
-   *  carrying `region_text` 422s (OpenProcessor W1). The one gate for the
+   *  carrying `region_text` 422s. The one gate for the
    *  region slot's text capability (`servedRegionSlot.ts`). */
   reads_text: boolean;
   /** Whether the OCR text-hint re-pass (after a segmenter miss) is
@@ -799,13 +798,13 @@ export type CoreReviewTab =
   | 'model_disagreements'
   | 'primary_low_conf'
   | 'classifier_blind_spots'
-  // New-class-proposal queue (2026-09-24 logic-moves W5): crops the VLM
+  // New-class-proposal queue: crops the VLM
   // couldn't match to any registered class (`class_source:
   // 'vlm_new_class_pending'`). Backed by the same `{API_PREFIX}/review/{tab}`
   // shape as every other core tab; `/classes`'s Proposals section reads
   // the separate `.../summary` aggregate instead (see api.ts).
   | 'new_class_proposals'
-  // Labels written by a W10 dataset import (`GET {prefix}/review/imported`);
+  // Labels written by a dataset import (`GET {prefix}/review/imported`);
   // only offered when `GET /review/tabs` serves an `imported` entry.
   | 'imported'
   // Machine labels whose class differs from the detector's own answer
@@ -866,7 +865,7 @@ export interface PaginatedResponse<T> {
    *  default when no `?sort=` was sent, or the requested id when it was
    *  honored. Shown in the StrategyBar summary chip so the operator can
    *  see what's actually ordering the queue, not just what they last
-   *  picked (2026-09-24 logic-moves W5). Absent on endpoints that don't
+   *  picked. Absent on endpoints that don't
    *  report it. */
   sort_applied?: string | null;
   /** Set by `{API_PREFIX}/review/{tab}` when `total === 0` — the server's

@@ -1,4 +1,4 @@
-"""Which projects run which VLM endpoint (W9.6).
+"""Which projects run which VLM endpoint.
 
 The registry is deployment-wide but activation is per project, so "is this
 endpoint in use" is answered from every project's LIVE ``activation:vlm``

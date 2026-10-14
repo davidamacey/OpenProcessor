@@ -10,7 +10,7 @@ from src.clients.curation_opensearch.items_extra import POLICY_DOC_MAPPING
 
 # Mismatch-provenance fields the now-deleted label_import.py used to write,
 # plus fields written by the class-merge relabel script (classes.py,
-# :506-518). W10 (any_domain_plan.md I13): the labels_confirmed index and
+# :506-518). The labels_confirmed index and
 # its mapping stay -- mappings are never dropped -- but nothing writes it
 # anymore; the dataset-import ledger is the record now. Kept
 # additive-only; see `ensure_labels_confirmed_fields`.
@@ -134,7 +134,7 @@ def _umap_viz_state_body() -> dict[str, Any]:
 
 
 def _configs_body() -> dict[str, Any]:
-    """The config store (W2, any_domain_plan.md §3.1): prompt packs,
+    """The config store: prompt packs,
     region profiles, activations, activation history and the
     cross-process revision counter -- one doc per row, ``doc_type``
     discriminates the shape (``config`` | ``revision`` | ``activation``

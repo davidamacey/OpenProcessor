@@ -1,4 +1,4 @@
-"""F-78 (coordinator, 2026-09-25): a slow or failed first `/health` used to
+"""A slow or failed first `/health` used to
 seed "no region profile"; the next poll disagreed, a spurious "region
 profile changed — reload" toast fired, and the region tab was missing.
 

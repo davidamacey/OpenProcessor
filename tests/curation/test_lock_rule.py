@@ -1,9 +1,8 @@
-"""W10.10 lock rule: ``is_locked_class`` / ``_is_locked_marker`` /
+"""The lock rule: ``is_locked_class`` / ``_is_locked_marker`` /
 ``is_locked_box`` / ``is_locked_item`` (``src/clients/occ.py``).
 
 A human-set label or box, or a validated imported one, is never touched
-by an automated writer. This module gates the table any_domain_plan.md
-W10.10 specifies, plus the two live call sites the plan calls out
+by an automated writer. This module gates the lock table, plus the two live call sites
 (re-ingest preserving an imported item; ``/vlm/label_batch`` skipping
 one).
 """
@@ -35,7 +34,7 @@ class TestIsLockedClass:
 
     def test_suggestion_trust_import_unlocked(self) -> None:
         """``label_trust: suggestion`` imports are NOT locked — the
-        machine pipeline may still relabel them (W10.10)."""
+        machine pipeline may still relabel them."""
         assert (
             is_locked_class({'class_source': 'external_label', 'class_validated': False}) is False
         )
@@ -124,12 +123,11 @@ class TestReingestPreservesImportedLabel:
     """A re-ingest merge must never clobber an imported item's guard
     fields — the OCC guard the ingest pipeline runs through
     ``occ_upsert_bulk`` (``ingest.py``'s ``_CROP_HUMAN_FIELD_GUARDS =
-    ('label_source', 'class_source')``). Red before W10:
+    ('label_source', 'class_source')``). Red before import provenance counted as a lock:
     ``_merge_preserving_human`` used ``is_human_marker``, which does not
     recognize import provenance.
 
-    W10 fix-pass note (Opus review 2026-09-28, lock-rule call-site m4):
-    the guard now fires on ``is_locked_class`` for these two fields, which
+    Note: the guard now fires on ``is_locked_class`` for these two fields, which
     requires ``class_validated=True`` for an import to lock — matching
     ``is_locked_class``'s own contract that an unvalidated ("suggestion")
     import is NOT locked. The prior version of this test asserted the

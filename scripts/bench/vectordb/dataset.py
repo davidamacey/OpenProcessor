@@ -29,7 +29,6 @@ if TYPE_CHECKING:
 TRUTH_K = 100
 HELD_OUT_QUERIES = 1000
 IN_SET_QUERIES = 1000
-STRING_FIELDS = ('class_name',)
 
 
 @dataclass

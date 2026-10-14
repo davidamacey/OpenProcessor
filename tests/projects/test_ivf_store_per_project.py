@@ -87,7 +87,6 @@ def test_centroids_path_property_matches_instance_dir(tmp_path: Any) -> None:
         store = IVFCentroidStore()
     assert store.centroids_path == store._dir / 'centroids.faiss'
     assert store.metadata_path == store._dir / 'metadata.json'
-    assert store.gate_path == store._dir / 'gate.json'
 
 
 def test_ivf_ingest_mtime_check_reads_each_projects_own_file(tmp_path: Any) -> None:

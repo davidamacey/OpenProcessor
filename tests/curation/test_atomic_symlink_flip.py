@@ -1,4 +1,4 @@
-"""Tests for ``atomic_symlink_flip`` (F-38, fresh-start E2E findings 2026-09-25).
+"""Tests for ``atomic_symlink_flip``.
 
 The ``current`` export symlink dangled on a stock install:
 ``atomic_symlink_flip`` linked to the export dir's path *verbatim*. With
@@ -8,7 +8,7 @@ target resolves relative to the link's own directory, not the process
 cwd, so ``data/exports/current`` pointed at
 ``data/exports/data/exports/<timestamp>``, which doesn't exist. Every
 ``GET /export/registry/{artifact}`` 404'd, and the UI's export status /
-download buttons broke (F-61).
+download buttons broke.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 class TestAtomicSymlinkFlipSiblingTarget:
     def test_relative_sibling_target_resolves_to_the_real_directory(self, tmp_path: Path) -> None:
-        """Reproduces F-38: export_root is relative, target is a relative
+        """Reproduces the dangling symlink: export_root is relative, target is a relative
         sibling path (export_root / timestamp) -- the exact shape
         GenericYoloExportService and SingleClassExportService pass."""
         export_root = tmp_path / 'data' / 'exports'

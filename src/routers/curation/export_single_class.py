@@ -24,7 +24,8 @@ from typing import Any
 
 from fastapi import HTTPException, Query
 
-from src.routers.curation._common import ExportSingleClassRequest, OpenSearchDep, logger, router
+from src.routers.curation._common import OpenSearchDep, logger, router
+from src.routers.curation._common_models import ExportSingleClassRequest
 from src.services.curation.export_readiness import NothingToExportError
 from src.services.curation.export_single_class import (
     MANIFEST_FILENAME,

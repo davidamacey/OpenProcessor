@@ -21,13 +21,15 @@ from fastapi import HTTPException
 
 from src.config import get_curation_config
 from src.routers.curation._common import (
-    BatchIngestResponse as _BatchIngestResponse,
-    IngestImageResponse,
     OpenSearchDep,
     RegistryDep,
     _ensure_indexes,
     images_index,
     router,
+)
+from src.routers.curation._common_models import (
+    BatchIngestResponse as _BatchIngestResponse,
+    IngestImageResponse,
 )
 from src.routers.curation._config_common_models import api_error
 from src.routers.curation._ingest_objects_models import (

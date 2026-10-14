@@ -1,4 +1,4 @@
-"""Read an OpenProcessor export back as a dataset (W10.2.2).
+"""Read an OpenProcessor export back as a dataset.
 
 An export directory (``data.yaml``, ``images/``, ``labels/``,
 ``manifest.json``, ``class_registry.json``, optionally ``stratum_map.json``
@@ -95,10 +95,6 @@ class OpExportInfo:
     parent_classes: list[str]
     """Region export: the parent-class filter the export was built with."""
     freeze_test_split_default: bool
-
-    @property
-    def is_region_export(self) -> bool:
-        return self.box_source == 'region'
 
 
 # --------------------------------------------------------------------- reading

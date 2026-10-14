@@ -102,7 +102,7 @@ _GLOBAL_CONFIGS_READ: contextvars.ContextVar[bool] = contextvars.ContextVar(
 
 @contextmanager
 def global_configs_read() -> Generator[None, None, None]:
-    """Allow READS of the ``op_global_configs`` registry (W9: the VLM
+    """Allow READS of the ``op_global_configs`` registry (the VLM
     endpoint registry) while a project is bound. Project-scoped code
     (a run's ``?vlm=``, the worker's per-project runtime) resolves the
     deployment-wide endpoints through the config store, which enters this

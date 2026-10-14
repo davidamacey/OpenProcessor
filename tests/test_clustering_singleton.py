@@ -1,5 +1,5 @@
 """Coverage for the ``ClusteringService`` singleton bootstrap and its
-``load_index``/``load_all_indexes`` fail-open branch.
+``load_index`` fail-open branch.
 
 This module is pure collateral test-drop damage — it predates the
 curation port and has zero import dependency on it — so this is a
@@ -9,7 +9,6 @@ straight restoration, not a genericization port.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -47,19 +46,6 @@ def test_get_clustering_service_is_a_singleton(tmp_path: Path) -> None:
     b = get_clustering_service(index_dir=tmp_path / 'other', use_gpu=True)
     assert a is b
     assert b.index_dir == tmp_path  # unchanged — the first call won
-
-
-def test_load_all_indexes_calls_load_index_for_every_cluster_index(tmp_path: Path) -> None:
-    svc = ClusteringService(index_dir=tmp_path, use_gpu=False)
-    fake_load = MagicMock(return_value=False)
-    svc.load_index = fake_load  # type: ignore[method-assign]
-
-    results = svc.load_all_indexes()
-
-    assert set(results.keys()) == set(ClusterIndex)
-    assert fake_load.call_count == len(ClusterIndex)
-    for index_name in ClusterIndex:
-        fake_load.assert_any_call(index_name)
 
 
 def test_load_index_returns_false_when_no_file_on_disk(tmp_path: Path) -> None:

@@ -72,7 +72,7 @@ def _get_vlm_labeler(
     pack_name: str | None = None, revision: int | None = None, *, endpoint: Any = None
 ) -> Any:
     """The labeler for ``(endpoint, pack)`` -- a thin wrapper over the one
-    factory (:func:`~src.services.labeling.vlm_factory.labeler_for`, W9).
+    factory (:func:`~src.services.labeling.vlm_factory.labeler_for`).
 
     ``endpoint=None`` uses the bound project's ACTIVE endpoint from the
     in-process snapshots (callers on an async path refreshed them first,

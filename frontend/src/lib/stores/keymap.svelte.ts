@@ -208,7 +208,7 @@ export const keymapStore = new KeymapStore();
  * `keymapAvailability` — provisional capability gate for the `/settings`
  * Keyboard section (K2, plan §5.1).
  *
- * A pre-W2b backend 404s/501s `GET {prefix}/keymap`: `available` becomes
+ * A backend without the keymap route 404s/501s `GET {prefix}/keymap`: `available` becomes
  * `false`, `keymapStore` stays on `FALLBACK_KEYMAP`, and the editor is
  * ABSENT, not disabled. Any other failure (network, 5xx) leaves
  * `available` at its current, optimistic value — a transient outage must
@@ -279,7 +279,7 @@ function sleep(ms: number): Promise<void> {
  *
  * - 404/501 -> `keymapAvailability.available = false`, stays on the
  *   fallback silently (this is expected on every deployment until
- *   OpenProcessor W2b lands).
+ *   the keymap route ships).
  * - Any other failure on every try -> availability left unchanged, stays
  *   on the fallback.
  * - Success -> `keymapAvailability.available = true`,

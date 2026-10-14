@@ -1,4 +1,4 @@
-"""OpenSearch write ceiling for ingest-shaped documents (work package WP-S5).
+"""OpenSearch write ceiling for ingest-shaped documents.
 
 Replays synthetic documents shaped like real ones into fresh indexes with the real mapping and
 settings, and reports how fast one node takes them: documents/s, the images/s that equals, bulk

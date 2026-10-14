@@ -1,4 +1,4 @@
-"""``/vlm/catalog`` and ``/vlm/local*`` (W9.7): the API records which local
+"""``/vlm/catalog`` and ``/vlm/local*``: the API records which local
 model is DESIRED and never restarts anything; the host CLI applies it."""
 
 from __future__ import annotations

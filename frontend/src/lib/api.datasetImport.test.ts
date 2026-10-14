@@ -1,5 +1,5 @@
 /**
- * W10 wrappers (any_domain_plan.md W10.14): every route is scoped, every
+ * Dataset-import wrappers: every route is scoped, every
  * body is sent as given (no `project` key, delta 15), and the structured
  * `ConfigErrorDetail` refusal surfaces its served `message`.
  */

@@ -1,9 +1,8 @@
 <script lang="ts">
   /**
-   * `/settings/prompt-packs` — the project's VLM prompt packs
-   * (any_domain_plan.md §7.2, §7.6 items 1 and 4; docs/design/
-   * w3-pack-editor-ui-plan-2026-09-27.md §2). Everything listed is served;
-   * `PackList` follows it. Absent (one line) until the backend serves W3.
+   * `/settings/prompt-packs` — the project's VLM prompt packs.
+   * Everything listed is served; `PackList` follows it. Absent (one line)
+   * until the backend serves prompt packs.
    */
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';

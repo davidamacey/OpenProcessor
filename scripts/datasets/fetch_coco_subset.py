@@ -108,7 +108,6 @@ ANNOTATIONS_URL = 'http://images.cocodataset.org/annotations/annotations_trainva
 # Verified by direct download 2026-09-25 (runbook §3.1: 252,907,541 bytes).
 # COCO's file at this URL has been stable since the 2017 release.
 ANNOTATIONS_SHA256 = '113a836d90195ee1f884e704da6304dfaaecff1f023f49b6ca93c4aaae470268'
-ANNOTATIONS_SIZE = 252_907_541
 
 DEFAULT_CLASSES = (
     'bicycle',

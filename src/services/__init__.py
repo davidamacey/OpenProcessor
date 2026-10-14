@@ -5,7 +5,6 @@ Separates business logic from API routes for cleaner architecture.
 """
 
 from src.services.embedding import EmbeddingService
-from src.services.image import ImageService
 from src.services.inference import InferenceService
 from src.services.model_export import (
     create_export_task,
@@ -21,7 +20,6 @@ from src.services.visual_search import VisualSearchService
 
 __all__ = [
     'EmbeddingService',
-    'ImageService',
     'InferenceService',
     'TritonControlService',
     'VisualSearchService',

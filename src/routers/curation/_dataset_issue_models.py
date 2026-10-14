@@ -1,4 +1,4 @@
-"""Wire shape of one dataset-import issue (W10.4), shared by the preview,
+"""Wire shape of one dataset-import issue, shared by the preview,
 the job, the issue-page route and the structured 4xx detail
 (``ConfigErrorDetail.issues``). Its own module so the error-detail model
 can import it without a cycle."""

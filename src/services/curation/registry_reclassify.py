@@ -166,7 +166,7 @@ async def reclassify_unmatched(
     from src.services.labeling.vlm_prompts import active_prompt_pack
 
     cfg = config or get_curation_config()
-    # Minor 6 (W2 review): the docstring promises "the active pack" -- that
+    # the docstring promises "the active pack" -- that
     # means the config-store-aware resolution (falls back to the env/file
     # default itself when nothing is activated), not the env/file default
     # unconditionally.

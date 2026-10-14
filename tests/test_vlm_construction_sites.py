@@ -1,5 +1,5 @@
 """Where a VLM labeler may be built, and how an HTTP client to an endpoint
-may be built (W9.0). One factory constructs every labeler, so an endpoint's
+may be built. One factory constructs every labeler, so an endpoint's
 image cap, JSON mode, timeout, rate limit and identity apply the same way
 everywhere; and no client to a model endpoint follows a redirect, so a
 registered URL cannot bounce a request (or its key) somewhere else."""
@@ -41,7 +41,7 @@ def test_only_the_factory_constructs_a_vlm_labeler() -> None:
 
 
 def test_the_worker_builds_its_labeler_through_the_factory_alias() -> None:
-    rel = 'scripts/curation/worker/__init__.py'
+    rel = 'scripts/curation/worker/runner.py'
     tree = dict(_sources())[rel]
     imported = {
         alias.asname or alias.name

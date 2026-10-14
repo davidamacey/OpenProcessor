@@ -1,5 +1,5 @@
 """The ONE `for_activation` gate every activation-writing entry point must
-call (W3/W4 round-4 review, R4-1).
+call.
 
 Round 3 fixed the gate bypass for `PUT /settings` (N1) by copying the
 `/activate` route's checks into ``settings.py``. Round 4 found the SAME
@@ -8,7 +8,7 @@ its region-profile twin) re-activate a revision with **no** gate at all,
 so a pack/profile that ``/activate`` correctly 422s (even with
 ``force: true``) can still go live through rollback.
 
-The round-3 reviewer's own diagnosis: "the lasting fix is one gate
+The reviewer's own diagnosis: "the lasting fix is one gate
 function that every activation path calls, plus a single test that walks
 all of them with a revision that should fail." This module is that
 function. Every writer of an ``activation:*`` doc must call
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 # Sentinel distinguishing "no override supplied -- use the OTHER axis's
 # currently-STORED value" from "override supplied, even if that override
-# is itself None/off" (R5-1 fix, W3/W4 round-5 review). A real `None`
+# is itself None/off". A real `None`
 # override means "the other axis is being deactivated in this same
 # request" and must NOT fall back to the stored value.
 _UNSET: Any = object()
@@ -63,10 +63,11 @@ async def run_activation_gate(
     revision-copy doc, a legitimate rollback to an old-but-real revision
     would incorrectly 404 here. Callers with no client (none exist today)
     keep the current-revision-only behavior the dedicated activate routes
-    already had (round-1..3 Minor 2: activating a genuinely past revision
-    through those routes is a separate, pre-existing, non-blocking gap).
+    already had
+    (activating a genuinely past revision through those routes is a
+    separate, non-blocking gap).
 
-    ``pending_sibling`` (R5-1 fix, W3/W4 round-5 review): the OTHER
+    ``pending_sibling``: the OTHER
     axis's PENDING (about-to-be-applied) value, for a caller that is
     activating BOTH axes in the same request (``PUT /settings`` with
     both ``prompt_pack`` and ``detection_profile`` set). Left unset, the
@@ -81,12 +82,12 @@ async def run_activation_gate(
     pending active ``PromptPack`` (never ``None`` -- a pack axis always
     resolves to *some* pack, env/file default included).
 
-    ``pending_vlm`` (W9): the same idea for the VLM axis -- the endpoint a
+    ``pending_vlm``: the same idea for the VLM axis -- the endpoint a
     combined ``PUT /settings`` is about to activate (``None`` = about to be
     switched off). Left unset, the pack/profile is paired with the
     project's stored active VLM.
 
-    ``body`` (R5-3 fix, W3/W4 round-5 review, Major -- project clone):
+    ``body`` (project clone):
     when supplied, skips the ``build_record``/``get_revision_record``
     name lookup (and the template 403 check) entirely and validates
     THIS body under ``name``/``revision`` instead. For a caller
@@ -176,7 +177,7 @@ async def run_activation_gate(
             project_slug=bound_project_slug(),
         )
 
-    # W9.5: a change to one side of the pack <-> profile <-> VLM triple is
+    # a change to one side of the pack <-> profile <-> VLM triple is
     # checked against the active VLM here, in the one gate every activation
     # path calls (never a per-route copy).
     from src.routers.curation._config_common_models import ValidationReport

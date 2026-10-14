@@ -134,8 +134,8 @@ def _region_entry(index: int | None) -> dict[str, Any]:
     return entry
 
 
-# M7 fix (W8 pipeline-wiring review, 2026-09-27): the combined reply's
-# per-box verdicts are nested under `region_boxes` (W8.6's numbered-
+# the combined reply's
+# per-box verdicts are nested under `region_boxes` (the numbered-
 # overlay list shape), not flat `region_bbox_correct`/`region_text`/
 # `region_confidence` top-level keys -- the box_verdicts() parser raises
 # MultiRegionKeysMissingError on the old flat shape, which the pipeline

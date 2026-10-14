@@ -1,4 +1,4 @@
-"""W2b: per-project configurable keymap.
+"""Per-project configurable keymap.
 
 The action registry (``src/config/keymap_actions.json``) is static data
 shared by every project. What varies per project is the *override map*
@@ -6,8 +6,7 @@ stored on the project's ``configs`` index (doc id ``keymap:default``):
 ``{action_id: [combo, ...]}``. The effective keymap is defaults (+)
 overrides.
 
-See ``docs/design/openprocessor_internal/any_domain_plan.md`` W2b and the
-configurable-keyboard-shortcuts wire proposal (CW-K) §0 (binding), §2, §3.
+The wire shape follows the configurable-keyboard-shortcuts wire proposal.
 """
 
 from __future__ import annotations
@@ -81,10 +80,6 @@ class ActionRegistry:
             seen.add(cid)
             stack.extend(self.contexts[cid].includes)
         return seen
-
-    def actions_in_context(self, context_id: str) -> list[KeymapAction]:
-        active = self.active_set(context_id)
-        return [a for a in self.actions.values() if a.context in active]
 
     def locked_action_default(self, action: KeymapAction) -> set[str]:
         """The subset of ``action.default`` that is a grammar-locked key
@@ -305,7 +300,7 @@ async def save_keymap_doc(
             real_current = -1
         raise RevisionConflictError(real_current) from exc
 
-    # W2's atomic bump_config_revision (painless script + retry_on_conflict)
+    # The atomic bump_config_revision (painless script + retry_on_conflict)
     # -- not a second read-then-write, so a concurrent config write can't
     # lose an increment (M6).
     from src.services.config_store.index import bump_config_revision

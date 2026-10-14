@@ -184,17 +184,17 @@ _PROCESS_CACHES = (
     ('src.clients.curation_opensearch.ensure_overlay_fields', '_INNER_RESULT_WINDOWS'),
     ('src.routers.curation.regions_fp', '_suspected_fp_cache'),
     ('src.services.curation.eval_datasets', '_CACHE'),
-    # Config-store snapshots (W2): one ConfigStore per project, keyed by
+    # Config-store snapshots: one ConfigStore per project, keyed by
     # slug in a module-level dict -- every test binds the same ``default``
     # project, so a store one test mutates would leak into the next.
     ('src.services.config_store.store', '_STORES'),
     # The global (non-project-scoped) config store singleton (M3) -- its
     # own cache dict, never conflated with `_STORES` above.
     ('src.services.config_store.global_store', '_GLOBAL_STORE'),
-    # W9: immutable VLM endpoint revision copies fetched from the registry.
+    # immutable VLM endpoint revision copies fetched from the registry.
     ('src.services.config_store.vlm_snapshot', '_REVISION_CACHE'),
     ('src.services.training.preflight_scan', '_scan_cache'),
-    # W9: the labeler factory's LRU (one labeler per endpoint revision + pack).
+    # the labeler factory's LRU (one labeler per endpoint revision + pack).
     ('src.services.labeling.vlm_factory', '_LABELERS'),
 )
 

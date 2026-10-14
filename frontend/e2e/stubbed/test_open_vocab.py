@@ -1,6 +1,5 @@
-"""OpenProcessor v0.4.0 SAM 3 open-vocabulary sets,
-docs/design/v040-backend-deltas-ui-plan-2026-10-03.md §6 (Track A). Payloads
-follow the vendored contract (fce17771) in the neutral widget domain. The
+"""SAM 3 open-vocabulary sets. Payloads
+follow the vendored contract in the neutral widget domain. The
 fail-closed stub means any open-vocab request the page makes that a test did
 not expect fails the test.
 

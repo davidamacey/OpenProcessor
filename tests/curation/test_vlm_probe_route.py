@@ -1,6 +1,6 @@
 """``POST /vlm/endpoints/validate?probe=true`` and ``/{name}/probe``: the
 probe resolves the endpoint's key and sends it, so it is gated like a use
-(W9 review M1, M2, P2) and records its result per revision (M3, M4)."""
+ and records its result per revision (M3, M4)."""
 
 from __future__ import annotations
 

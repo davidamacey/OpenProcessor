@@ -427,7 +427,7 @@ describe('getReviewQueue', () => {
     expect(res.items[0]?.mistakenness_score).toBeNull();
   });
 
-  // 2026-09-24 logic-moves W5: proposed_class_id/name are served on every
+  // proposed_class_id/name are served on every
   // crop-shaped item now (item 11) and flow through mapRawCrop — no more
   // review-only special casing — while probe_pred_class_id/needs_new_class/
   // needs_new_class_note (item 14) are still review-item-only extras.
@@ -513,8 +513,7 @@ describe('getReviewQueue', () => {
 });
 
 /**
- * `GET {API_PREFIX}/review/{tab}/locate` (item 10, 2026-09-24 logic-moves
- * W5) — powers the `/review?crop_id=` deep link without paging through
+ * `GET {API_PREFIX}/review/{tab}/locate` — powers the `/review?crop_id=` deep link without paging through
  * the queue by hand.
  */
 describe('locateInReviewQueue', () => {
@@ -587,8 +586,7 @@ describe('locateInReviewQueue', () => {
 });
 
 /**
- * `GET {API_PREFIX}/review/new_class_proposals/summary` (2026-09-24
- * logic-moves W5) — the aggregate `/classes`'s Proposals section renders.
+ * `GET {API_PREFIX}/review/new_class_proposals/summary` — the aggregate `/classes`'s Proposals section renders.
  */
 describe('getNewClassProposalsSummary', () => {
   const jsonResponse = (body: unknown) =>
@@ -1604,7 +1602,7 @@ describe('startAutoLabel', () => {
 });
 
 /**
- * `runVlmOnCluster` (2026-09-24 logic-moves W3) — a single
+ * `runVlmOnCluster` — a single
  * `POST {API_PREFIX}/vlm/label_cluster/{id}[?prompt_pack=]`, replacing the
  * old fetch-200-crops-then-chunk-of-64 loop against
  * `{API_PREFIX}/vlm/label_batch`. No client-side crop selection or
@@ -1864,7 +1862,7 @@ describe('pollAutoLabelJob', () => {
 
 /**
  * `getClusters`/`getCluster` map the served `purity_tier`, `promotable`
- * and `core_similarity_min` (2026-09-24 logic-moves W6) — no client 0.8
+ * and `core_similarity_min` — no client 0.8
  * "pure" threshold, no recomputation.
  */
 describe('getClusters purity_tier/promotable/core_similarity_min', () => {

@@ -1,4 +1,4 @@
-"""Dataset-import issue vocabulary (W10.4): a stable, served catalog of
+"""Dataset-import issue vocabulary: a stable, served catalog of
 codes, so ``GET /datasets/formats`` never needs a hardcoded copy on the
 client.
 
@@ -233,21 +233,6 @@ class IssueCollector:
                 )
             )
         return out
-
-    def has_unbypassable_blocking(self, *, force: bool) -> bool:
-        """Whether ``POST /datasets/imports`` must refuse (W10.4): any
-        blocking issue present, unless every blocking issue is
-        bypassable and ``force`` is set."""
-        blocking_codes = [
-            c
-            for c in self._order
-            if ISSUE_CATALOG.get(c, IssueSpec('info', False, False, c)).blocking
-        ]
-        if not blocking_codes:
-            return False
-        return not (
-            force and all(ISSUE_CATALOG[c].bypassable for c in blocking_codes if c in ISSUE_CATALOG)
-        )
 
 
 __all__ = [

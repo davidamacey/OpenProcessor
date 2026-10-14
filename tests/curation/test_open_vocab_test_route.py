@@ -1,4 +1,4 @@
-"""Wave 5: ``POST /open_vocab/test`` -- shows what a pass would keep, writes nothing."""
+"""``POST /open_vocab/test`` -- shows what a pass would keep, writes nothing."""
 
 from __future__ import annotations
 

@@ -1,8 +1,7 @@
-"""W8.5/W8.15: :func:`verdicts_to_boxes` -- verifier verdicts -> RegionBox list.
+""":func:`verdicts_to_boxes` -- verifier verdicts -> RegionBox list.
 
 Standalone unit coverage of the pure verdict-to-storage function (not yet
-wired into the streaming runner's stage consumers -- see the W8 handback
-report). ``candidates`` are :class:`TaskBoxInput` (a bounded, decoupled
+wired into the streaming runner's stage consumers). ``candidates`` are :class:`TaskBoxInput` (a bounded, decoupled
 stand-in for the eventual ``TaskBox``).
 """
 
@@ -43,7 +42,7 @@ def test_accepted_box_from_true_verdict() -> None:
     assert status == RegionStatus.DETECTED
     assert len(boxes) == 1
     assert boxes[0].state == 'accepted'
-    # W8 M1 fix: a fresh candidate gets a PLACEHOLDER id here -- a real
+    # A fresh candidate gets a PLACEHOLDER id here -- a real
     # ``b<N>`` id is only minted at write time, against the CURRENT
     # stored ``region_box_seq`` (bulk_writer._merge / finalize_box_ids),
     # never against a snapshot this pure function has no access to.

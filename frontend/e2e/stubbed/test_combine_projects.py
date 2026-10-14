@@ -1,7 +1,6 @@
-"""OpenProcessor P4 (combine projects), projects_plan.md §6, §8;
-docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md §4.
+"""Combine projects.
 
-The wire follows the vendored contract (f582aa05) and `plan.py` /
+The wire follows the vendored contract and `plan.py` /
 `execute.py`. The fail-closed stub means any combine request the page makes
 that a test did not expect fails the test.
 

@@ -305,8 +305,7 @@ a given worker actually serves — never at warm time). **ONNX Runtime**
 (`OP_PE_TEXT_BACKEND=onnx`); `auto` no longer considers it at all. This
 matters because it's an in-process backend: with N uvicorn workers, N
 independent ~1.4 GB ONNX Runtime sessions (or worse, N PyTorch eager
-loads) is exactly the failure this ordering avoids — see F-07 in
-`docs/design/openprocessor_internal/fresh_start_e2e_findings_2026-09-25.md`.
+loads) is exactly the failure this ordering avoids.
 Pin with `onnx` / `triton` / `torch`. A Triton call that fails switches
 the process to in-process encoding for good, so Triton is never a hard
 dependency. `GET /health/pe_text` (`make pe-text-status`) reports the

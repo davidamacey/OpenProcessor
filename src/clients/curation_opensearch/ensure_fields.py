@@ -166,7 +166,7 @@ async def ensure_items_provenance_fields(
             F.verifier_version: {'type': 'keyword'},
             F.verified_at: {'type': 'date'},
             F.rejection_reason: {'type': 'keyword'},
-            F.status_legacy: {'type': 'keyword'},
+            F.status_before_requeue: {'type': 'keyword'},
             'class_detector': {'type': 'keyword'},
             'class_detector_version': {'type': 'keyword'},
             'class_labeler': {'type': 'keyword'},

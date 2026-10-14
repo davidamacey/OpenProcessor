@@ -1,4 +1,4 @@
-"""F-56 repair script: re-deprecate registry classes left active with
+"""Repair script: re-deprecate registry classes left active with
 ``merged_into`` set (a broken/hand-edited registry, or one written before
 this fix existed)."""
 

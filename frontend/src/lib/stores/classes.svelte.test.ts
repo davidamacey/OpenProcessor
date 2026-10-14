@@ -36,7 +36,7 @@ describe('classesStore — widget_tag is a normal class', () => {
   });
 });
 
-// W4 (docs/design/logic-moves-adoption-plan-2026-09-24.md §2 W4): refresh()
+// refresh()
 // must populate thresholds/reservedHotkeys from the same /classes response
 // that populates classes — classHotkey.ts's reservedHotkeyLetters() and
 // adequacy.ts's chip rendering both read these store fields directly.

@@ -1,8 +1,8 @@
-"""Region-class label attachment (W10.7): a dataset's region-class boxes
+"""Region-class label attachment: a dataset's region-class boxes
 (e.g. "wheel") attach to their parent item (e.g. "car") by containment.
 
 Pure — no I/O. ``dataset_import/job.py`` calls this per image, then
-writes the result through W8's ``boxes_write_fields``.
+writes the result through ``boxes_write_fields``.
 """
 
 from __future__ import annotations
@@ -75,7 +75,7 @@ class AttachResult:
 def parents_mode(
     mode: Literal['auto', 'labels', 'detect'], *, has_item_parent_labels: bool
 ) -> Literal['labels', 'detect']:
-    """Resolve ``options.parents: "auto"`` (W10.7)."""
+    """Resolve ``options.parents: "auto"``."""
     if mode != 'auto':
         return mode
     return 'labels' if has_item_parent_labels else 'detect'

@@ -352,7 +352,7 @@ class Stub:
                 "false_positive_status": "false_positive",
             },
         )
-        # W0 naming-sweep finding m9: the deployment-configured detector/
+        # The deployment-configured detector/
         # segmenter/verifier vocabulary. Shapes lifted from the vendored
         # OpenAPI description (contracts/openapi/curation.json,
         # `/curation/regions/vocabulary`) — `{detectors, region_sources,
@@ -387,7 +387,7 @@ class Stub:
                 "chain_actors": [
                     {"id": "tag_verifier", "label": "Tag verifier", "role": "verifier"},
                 ],
-                # OpenProcessor 3f1a11e adoption: labeled
+                # Labeled
                 # `region_rejection_reason` vocabulary. Empty by default —
                 # unlike detectors/chain_actors above, no shared default
                 # data is needed for most tests (the rejection-styled
@@ -400,7 +400,7 @@ class Stub:
                 "region_profile": REGION_PROFILE,
             },
         )
-        # W0 naming-sweep finding m9: every review tab's served
+        # Every review tab's served
         # id/label/description (contracts/openapi/curation.json,
         # `/curation/review/tabs`). The region tab's label is served (the
         # region profile's display name), so tests find that tab by
@@ -465,11 +465,10 @@ class Stub:
                 },
             },
         )
-        # K2 (docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md
-        # §5.1): the root layout's `loadKeymap()` fires `GET {prefix}/keymap`
+        # The root layout's `loadKeymap()` fires `GET {prefix}/keymap`
         # on EVERY route now, same "every existing test needs a default"
         # rationale as `/bakeoff/runs`/`/ingest/status` above. Defaults to a
-        # 404 — the pre-W2b behaviour every test was written against — so
+        # 404 — what the tests were written against — so
         # every existing test stays green without editing each one;
         # `test_keymap.py` overrides this per-test with a served document.
         self.on("GET", r"/keymap(\?|$)", (404, {"detail": "not found"}))
@@ -479,31 +478,31 @@ class Stub:
         # for every selectable row. Default: not paused.
         # `test_projects_pause.py` overrides it with a stateful stub.
         self.on("GET", r"/pause$", self._pause_state)
-        # W10 (dataset import + Reprocess): /ingest, the item-detail panel
+        # /ingest, the item-detail panel
         # and the cluster toolbar probe `GET {prefix}/datasets/formats`
-        # once per project. Defaults to a 404 — a backend without W10,
-        # where every W10 surface is absent — so existing tests stay
+        # once per project. Defaults to a 404 — a backend without
+        # dataset import, where every import surface is absent — so existing tests stay
         # green; test_dataset_import.py overrides it with served formats.
         self.on("GET", r"/datasets/formats(\?|$)", (404, {"detail": "Not Found"}))
         # The Reprocess dialog and the lock badge read the served
         # `reprocess` block of `GET {prefix}/config/vocabulary` (only once
-        # W10 is served); tests that need the full vocabulary override it.
+        # import is served); tests that need the full vocabulary override it.
         self.on("GET", r"/config/vocabulary(\?|$)", (200, {"reprocess": REPROCESS_VOCABULARY}))
-        # W3 (prompt-pack CRUD): /settings and the pack pages probe
+        # /settings and the pack pages probe
         # `GET {prefix}/prompt_packs` once per project. Defaults to a 404 —
-        # a backend without W3, where every pack surface is absent — so
+        # a backend without prompt packs, where every pack surface is absent — so
         # existing tests stay green; test_prompt_packs.py overrides it.
         self.on("GET", r"/prompt_packs(\?|$)", (404, {"detail": "Not Found"}))
-        # W4 (region-profile CRUD): /settings and the profile pages probe
+        # /settings and the profile pages probe
         # `GET {prefix}/region_profiles` once per project. Defaults to a
-        # 404 — a backend without W4, where every profile surface is
+        # 404 — a backend without region profiles, where every profile surface is
         # absent — so existing tests stay green; test_region_profiles.py
         # overrides it.
         self.on("GET", r"/region_profiles(\?|$)", (404, {"detail": "Not Found"}))
-        # W9 (VLM endpoint registry): the Settings card and /models probe the
+        # the Settings card and /models probe the
         # GLOBAL `GET {prefix}/vlm/endpoints` once. Defaults to a 404 — a
-        # backend without W9 — so existing tests stay green; the Track A
-        # specs override it.
+        # backend without the VLM registry — so existing tests stay green; the
+        # VLM specs override it.
         self.on("GET", r"/vlm/endpoints(\?|$)", (404, {"detail": "Not Found"}))
         # P4 (combine projects): `/projects` probes
         # `GET {prefix}/projects/combine/<sentinel>` once. A plain 404 is the

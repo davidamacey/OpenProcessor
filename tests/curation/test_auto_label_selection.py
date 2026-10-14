@@ -107,9 +107,9 @@ def test_start_rejects_any_detection_profile(client: TestClient, value: str) -> 
     assert r.status_code == 422
     detail = r.json()['detail']
     assert detail['param'] == 'detection_profile'
-    # W4 reworded E7 off the OP_REGION_PROFILE env var onto the region-profile
-    # CRUD activation route (region_profiles.py) now that it's the real config
-    # surface for detection.
+    # The error points at the region-profile CRUD activation route
+    # (region_profiles.py), the real config surface for detection, not the
+    # OP_REGION_PROFILE env var.
     assert 'POST /region_profiles/{name}/activate' in detail['error']
 
 

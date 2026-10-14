@@ -30,7 +30,7 @@ Triton round-trips and is measurably slower for identical output. It is:
    prefilled results via ``ingest_one``'s ``prefilled_*`` arguments.
 
 Ingesting an already-labeled dataset will be ``POST /datasets/imports``
-(planned, W10 route not yet built) — this module carries no
+(planned, route not yet built) — this module carries no
 label-import machinery.
 
 If the batched inference raises, the prefilled detections are dropped
@@ -319,7 +319,7 @@ async def run_ingest_batch(
             summary.n_filtered += res.n_filtered
         else:
             summary.failed += 1
-        # F-43: an otherwise-'successful' ingest that silently skipped a
+        # an otherwise-'successful' ingest that silently skipped a
         # configured secondary detector call must still be visible in the
         # batch summary, not just a per-item field a caller has to notice.
         if res.secondary_detector_error:

@@ -1,4 +1,4 @@
-"""W0 naming-sweep finding m9: the /clusters region gallery's Detector
+"""The /clusters region gallery's Detector
 filter used to hardcode one deployment's detector-id `<option>`s
 (`SlotGallery.svelte`). It now renders the served
 `GET {API_PREFIX}/regions/vocabulary` response's filterable detectors instead —

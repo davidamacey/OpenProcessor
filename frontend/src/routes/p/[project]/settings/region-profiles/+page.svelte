@@ -1,10 +1,8 @@
 <script lang="ts">
   /**
    * `/settings/region-profiles` — the project's region profiles
-   * (any_domain_plan.md §4, §7.3, §7.4, §7.6 items 2 and 4; docs/design/
-   * w4-profile-editor-ui-plan-2026-09-27.md §3). Everything listed is
-   * served; `ProfileList` follows it. Absent (one line) until the backend
-   * serves W4.
+   * Everything listed is served; `ProfileList` follows it. Absent (one line)
+   * until the backend serves region profiles.
    */
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';

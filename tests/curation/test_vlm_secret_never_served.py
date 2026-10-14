@@ -1,4 +1,4 @@
-"""Secrets by reference only (W9.9): a key is written to a file on the host,
+"""Secrets by reference only: a key is written to a file on the host,
 an endpoint stores ``secret:<slug>``, and the value is read at call time. It
 is never stored, served, logged or echoed -- and nothing but a plain file
 inside the secrets mount can be a reference."""

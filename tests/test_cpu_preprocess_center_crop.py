@@ -1,4 +1,4 @@
-"""F-28: ``center_crop_cpu`` must always return exactly (3, target_size,
+"""``center_crop_cpu`` must always return exactly (3, target_size,
 target_size), for any input crop size.
 
 Root cause: ``new_w = int(orig_w * scale)`` truncates instead of rounds.
@@ -15,7 +15,7 @@ On a real ingest batch this showed up as ``np.stack`` failing with "all
 input arrays must have the same shape" once two boxes on the same
 image (or across images in a batch) happened to round differently --
 e.g. a 640x480 COCO image with several small detection crops
-(``000000008690.jpg``, F-28).
+(``000000008690.jpg``).
 """
 
 from __future__ import annotations

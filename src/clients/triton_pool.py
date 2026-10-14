@@ -2,8 +2,7 @@
 Unified Triton gRPC Client Pool.
 
 Provides both sync and async client management with connection pooling.
-This is the canonical implementation - use this instead of the legacy
-triton_async_client.py and triton_shared_client.py in utils/.
+This is the one Triton client implementation.
 
 Features:
 - Singleton pattern for connection reuse
@@ -15,7 +14,7 @@ Features:
 - Monitoring and statistics
 
 Usage:
-    # Sync client (for background tasks, legacy code)
+    # Sync client (for background tasks)
     client = TritonClientManager.get_sync_client("triton-server:8001")
 
     # Async client (for FastAPI endpoints - RECOMMENDED)
@@ -358,28 +357,6 @@ class AsyncTritonPool:
         metadata = await client.get_model_metadata(model_name, as_json=True, client_timeout=timeout)
         return [str(out.get('name', '')) for out in metadata.get('outputs', [])]
 
-    async def infer_batch(
-        self,
-        model_name: str,
-        inputs_list: list[list],
-        outputs: list,
-        timeout: float = 30.0,
-    ) -> list[Any]:
-        """
-        Execute multiple inferences concurrently.
-
-        Args:
-            model_name: Name of the Triton model
-            inputs_list: List of input lists (one per inference)
-            outputs: List of InferRequestedOutput objects (shared)
-            timeout: Timeout in seconds per inference
-
-        Returns:
-            List of InferResult objects
-        """
-        tasks = [self.infer(model_name, inputs, outputs, timeout) for inputs in inputs_list]
-        return await asyncio.gather(*tasks, return_exceptions=True)
-
     def get_stats(self) -> dict[str, Any]:
         """Get pool statistics."""
         return {
@@ -395,12 +372,6 @@ class AsyncTritonPool:
             'max_concurrent': self.max_concurrent,
             'url': self.url,
         }
-
-    def reset_stats(self) -> None:
-        """Reset statistics."""
-        self._stats = PoolStats()
-        for i in range(self.pool_size):
-            self._stats.requests_per_channel[i] = 0
 
     async def health_check(self) -> bool:
         """Check if all clients are healthy."""
@@ -624,16 +595,6 @@ class TritonClientManager:
             cls._async_clients.clear()
             logger.info('All async Triton clients closed')
 
-    @classmethod
-    async def get_async_stats(cls) -> dict[str, Any]:
-        """Get async client pool statistics."""
-        async with cls._get_async_lock():
-            return {
-                'active_connections': len(cls._async_clients),
-                'urls': list(cls._async_clients.keys()),
-                'type': 'async',
-            }
-
     # =========================================================================
     # Combined Operations
     # =========================================================================
@@ -644,57 +605,29 @@ class TritonClientManager:
         await cls.close_async_clients()
         logger.info('All Triton clients closed')
 
-    @classmethod
-    async def get_all_stats(cls) -> dict[str, Any]:
-        """Get combined statistics for all client pools."""
-        sync_stats = cls.get_sync_stats()
-        async_stats = await cls.get_async_stats()
-
-        return {
-            'sync': sync_stats,
-            'async': async_stats,
-            'total_connections': (
-                sync_stats['active_connections'] + async_stats['active_connections']
-            ),
-        }
-
 
 # =============================================================================
-# Factory Functions (for backward compatibility)
+# Factory functions
 # =============================================================================
 def get_triton_client(triton_url: str = 'triton-server:8001', **kwargs):
     """
-    Get sync Triton client (backward compatible).
-
-    Prefer TritonClientManager.get_sync_client() for new code.
+    Get the sync Triton client (see TritonClientManager.get_sync_client()).
     """
     return TritonClientManager.get_sync_client(triton_url, **kwargs)
 
 
 async def get_async_triton_client(triton_url: str = 'triton-server:8001', **kwargs):
     """
-    Get async Triton client (backward compatible).
-
-    Prefer TritonClientManager.get_async_client() for new code.
+    Get the async Triton client (see TritonClientManager.get_async_client()).
     """
     return await TritonClientManager.get_async_client(triton_url, **kwargs)
 
 
-def close_all_clients():
-    """Close sync clients (backward compatible)."""
-    TritonClientManager.close_sync_clients()
-
-
 async def close_async_clients():
-    """Close async clients (backward compatible)."""
+    """Close the async clients."""
     await TritonClientManager.close_async_clients()
 
 
 def get_client_pool_stats() -> dict[str, Any]:
-    """Get sync pool stats (backward compatible)."""
+    """Get the sync pool statistics."""
     return TritonClientManager.get_sync_stats()
-
-
-async def get_async_client_pool_stats() -> dict[str, Any]:
-    """Get async pool stats (backward compatible)."""
-    return await TritonClientManager.get_async_stats()

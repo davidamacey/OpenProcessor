@@ -1,7 +1,7 @@
 /**
  * The import wizard's controller: debounced preview of exactly what the
  * operator chose, Start tied to the preview's `import_key`, and every
- * served Start outcome (§7.12 item 1, W10.11).
+ * served Start outcome.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '$lib/api';

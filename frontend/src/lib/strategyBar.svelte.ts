@@ -148,7 +148,7 @@ export function createStrategyBar(opts: StrategyBarOptions = {}): StrategyBar {
 
 /**
  * What the StrategyBar summary chip should show for the server's
- * `sort_applied` (2026-09-24 logic-moves W5, item 10's `sort_applied`).
+ * `sort_applied`.
  * Pure so it's testable without mounting the component: returns `null`
  * when there's nothing worth surfacing (no applied value yet, or it
  * matches what the operator already selected — a tab's own default id

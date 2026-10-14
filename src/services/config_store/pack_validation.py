@@ -1,4 +1,4 @@
-"""Prompt-pack validation (W3, any_domain_plan.md §3.3).
+"""Prompt-pack validation.
 
 One function, :func:`validate_pack`, runs on ``POST /prompt_packs/validate``,
 create, clone (on the resulting body), ``PUT``, ``POST /prompt_packs/test``
@@ -336,7 +336,7 @@ def _check_reply_keys(body: dict[str, Any]) -> list[ValidationIssue]:
 def check_multi_region_keys(
     body: dict[str, Any], *, max_regions_per_item: int, for_activation: bool
 ) -> ValidationIssue | None:
-    """W8/D-B: the combined calls must name every ``multi_region`` key
+    """The combined calls must name every ``multi_region`` key
     when the profile context calls for more than one box. Warning
     everywhere except activation pairing, where it is an error that
     ``force`` never bypasses."""

@@ -1,6 +1,6 @@
 """Tests for the shared TensorRT builder helpers in ``export/trt_utils.py``.
 
-F-17 round 2 (fresh-start E2E findings 2026-09-25): ``export_paddleocr_rec.py``
+``export_paddleocr_rec.py``
 used to build a raw ``NetworkDefinitionCreationFlag.EXPLICIT_BATCH`` lookup
 (removed in TRT 11) and wrote engines straight to the destination
 ``model.plan``, deleting the old one first -- a failed rebuild left the
@@ -126,7 +126,7 @@ class TestAtomicWritePlan:
 
 
 class TestBakeFp16OnnxOrFallback:
-    """F-16: PE's build_pe_trt.sh shells out to trtexec instead of driving
+    """PE's build_pe_trt.sh shells out to trtexec instead of driving
     the TRT Python builder, so it can't wrap bake_fp16_onnx in a Python
     try/except the way export_face_recognition.py / export_scrfd.py /
     export_mobileclip_image_encoder.py do. bake_fp16_onnx_or_fallback is
@@ -234,7 +234,7 @@ class TestBakeFp16OnnxOrFallback:
 
 
 class TestTrtUtilsCli:
-    """F-16: build_pe_trt.sh (bash) invokes `python trt_utils.py <onnx>
+    """build_pe_trt.sh (bash) invokes `python trt_utils.py <onnx>
     [out]` to run the bake step without embedding Python in the shell
     script. Prints 'fp16'/'fp32' to stderr, the resolved path (and only
     that) to stdout -- build_pe_trt.sh captures stdout for the path it

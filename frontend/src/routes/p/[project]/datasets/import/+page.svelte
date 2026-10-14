@@ -39,7 +39,7 @@
       .sort((a, b) => a.name.localeCompare(b.name)),
   );
 
-  // The side reads fire once, only after the gate confirms W10 is served
+  // The side reads fire once, only after the gate confirms dataset import is served
   // (a backend without it gets no dataset request beyond the probe).
   let sideReadsLoaded = false;
   $effect(() => {

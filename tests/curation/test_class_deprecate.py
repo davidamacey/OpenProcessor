@@ -184,7 +184,7 @@ def test_restore_name_clash_is_409(client: TestClient, registry: ClassRegistry) 
 
 
 # =============================================================================
-# Restore on a merged class (F-56: class merge is one-way)
+# Restore on a merged class (class merge is one-way)
 # =============================================================================
 
 

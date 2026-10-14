@@ -1,4 +1,4 @@
-"""Wire models for ``/prompt_packs*`` (W3, any_domain_plan.md §7.2)."""
+"""Wire models for ``/prompt_packs*``."""
 
 from __future__ import annotations
 
@@ -122,7 +122,7 @@ class PromptPackCloneRequest(BaseModel):
     revision: int | None = None
     source: PackSourceWire | None = None
     description: str | None = None
-    # W3: the one legitimate cross-project read in this wave -- clone a
+    # the one legitimate cross-project read in this wave -- clone a
     # pack out of another project's config store. Read-only bind on
     # ``from_project``; the write always lands in the bound (target)
     # project.

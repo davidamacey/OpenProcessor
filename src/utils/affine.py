@@ -6,47 +6,10 @@ Performance optimizations:
 - Fast JPEG header parsing (no full decode)
 """
 
-from functools import lru_cache
 from io import BytesIO
 
 import numpy as np
 from PIL import Image
-
-
-@lru_cache(maxsize=1000)
-def calculate_affine_matrix(
-    orig_width: int, orig_height: int, target_size: int = 640
-) -> tuple[np.ndarray, float, tuple[float, float]]:
-    """
-    Calculate YOLO letterbox affine transformation matrix.
-
-    Cached by dimensions - same image dimensions = same matrix.
-    This is ~1000x faster for repeated image sizes.
-
-    Args:
-        orig_width: Original image width
-        orig_height: Original image height
-        target_size: Target size for YOLO (default 640)
-
-    Returns:
-        Tuple of:
-        - affine_matrix: np.ndarray [2, 3] for warp affine
-        - scale: float for inverse transformation
-        - padding: tuple (pad_x, pad_y) for inverse transformation
-    """
-    scale = target_size / max(orig_height, orig_width)
-    scale = min(scale, 1.0)  # Don't upscale (matches YOLO scaleup=False)
-
-    new_w = round(orig_width * scale)
-    new_h = round(orig_height * scale)
-
-    pad_x = (target_size - new_w) / 2.0
-    pad_y = (target_size - new_h) / 2.0
-
-    # Warp affine format: [[scale_x, 0, offset_x], [0, scale_y, offset_y]]
-    affine_matrix = np.array([[scale, 0.0, pad_x], [0.0, scale, pad_y]], dtype=np.float32)
-
-    return affine_matrix, scale, (pad_x, pad_y)
 
 
 def get_jpeg_dimensions_fast(image_bytes: bytes) -> tuple[int, int]:
@@ -92,64 +55,6 @@ def get_jpeg_dimensions_fast(image_bytes: bytes) -> tuple[int, int]:
     # Fallback: Use PIL (handles all formats)
     img = Image.open(BytesIO(image_bytes))
     return img.size  # (width, height)
-
-
-def prepare_triton_inputs(image_bytes: bytes, target_size: int = 640) -> dict:
-    """
-    Prepare inputs for Triton GPU pipeline.
-
-    CPU work is minimal:
-    - Fast JPEG header parse for dimensions (~0.1ms)
-    - Cached affine matrix lookup (~0.001ms for cache hit)
-
-    Everything else (decode, resize, normalize) is handled by cpu_preprocess.
-
-    Args:
-        image_bytes: Raw JPEG/PNG file bytes
-        target_size: YOLO input size (default 640)
-
-    Returns:
-        Dictionary with:
-        - encoded_images: np.ndarray (uint8 bytes)
-        - affine_matrix: np.ndarray [1, 2, 3] (batched)
-        - orig_shape: (height, width) tuple
-        - scale: float for inverse transformation
-        - padding: (pad_x, pad_y) tuple for inverse transformation
-    """
-    # Get dimensions (fast header parse)
-    orig_w, orig_h = get_jpeg_dimensions_fast(image_bytes)
-
-    # Get cached affine matrix
-    affine_matrix, scale, padding = calculate_affine_matrix(orig_w, orig_h, target_size)
-
-    # Prepare numpy arrays for Triton
-    encoded_images = np.frombuffer(image_bytes, dtype=np.uint8)
-    affine_matrix_batched = np.expand_dims(affine_matrix, axis=0)  # Add batch dim
-
-    return {
-        'encoded_images': encoded_images,
-        'affine_matrix': affine_matrix_batched,
-        'orig_shape': (orig_h, orig_w),
-        'scale': scale,
-        'padding': padding,
-    }
-
-
-def clear_affine_cache():
-    """Clear the affine matrix cache (for testing/memory management)."""
-    calculate_affine_matrix.cache_clear()
-
-
-def get_affine_cache_stats() -> dict:
-    """Get affine matrix cache statistics."""
-    info = calculate_affine_matrix.cache_info()
-    return {
-        'hits': info.hits,
-        'misses': info.misses,
-        'size': info.currsize,
-        'maxsize': info.maxsize,
-        'hit_rate': info.hits / (info.hits + info.misses) if (info.hits + info.misses) > 0 else 0.0,
-    }
 
 
 def inverse_letterbox_coords(
@@ -319,8 +224,7 @@ def format_detections_from_triton(
         model_name: Which Triton model produced ``result`` -- resolves
             ``class_name`` from that model's own labels (see
             :mod:`src.utils.class_names`) instead of always assuming the
-            stock 80-class COCO vocabulary (F-42, fresh-start E2E
-            findings 2026-09-25). ``None`` keeps the historical
+            stock 80-class COCO vocabulary. ``None`` keeps the historical
             COCO-only behavior for callers that genuinely never see
             anything but the stock detector.
 

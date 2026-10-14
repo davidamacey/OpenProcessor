@@ -1,6 +1,6 @@
 """Auto-split sub-module of the curation detection worker.
 
-See ``scripts/curation/region_worker_main.py`` for the entry point and
+See ``scripts/curation/worker/__main__.py`` for the entry point and
 the ``scripts/curation/worker/`` package for the rest of the split.
 """
 
@@ -43,7 +43,7 @@ def _current_config_stamp() -> tuple[str | None, int | None, str | None]:
     """``(profile_name, profile_revision, pack_stamp)`` for whatever
     project is currently bound -- called from inside ``_bulk_update``'s
     ``with bind_project(...):`` block, so this resolves the *task's own*
-    project's config store (W2 sec 4.5 "item stamping"), never a
+    project's config store, never a
     process-wide default. ``profile_revision`` is ``None`` for an
     env/file-registered profile never activated through the store."""
     from src.services.config_store import get_config_store
@@ -134,7 +134,7 @@ async def _bulk_update_one_project(
         # `t.pending_boxes is not None` is also a real write even when
         # `t.update_doc` itself is empty -- the box-list fields (status,
         # region_boxes, revision, ...) are computed below, inside
-        # `_merge`, against the live doc (W8 B1/M1), not stashed onto
+        # `_merge`, against the live doc, not stashed onto
         # `update_doc` at task-processing time.
         if not t.update_doc and t.pending_boxes is None:
             n_skipped_empty += 1
@@ -160,7 +160,7 @@ async def _bulk_update_one_project(
             )
             return {}
         update = dict(task.update_doc)
-        # W8 B1 + M1 fix: the box list write is finished HERE, against
+        # The box list write is finished HERE, against
         # the live `current` doc this closure was just handed (re-read
         # immediately before the write by `occ_skip_on_conflict_bulk`) --
         # never against `task`'s own (possibly stale) fetch-time

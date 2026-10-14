@@ -446,7 +446,7 @@ class CurationIngestService:
         else:
             items = await self.detector.run_primary(img)
 
-        # F-43: surfaced on the response (IngestResult.secondary_detector_error)
+        # surfaced on the response (IngestResult.secondary_detector_error)
         # and rolled into IngestSummary.secondary_detector_failures instead of
         # only ever reaching a 'warning' log line.
         secondary_detector_error: str | None = None
@@ -628,7 +628,7 @@ class CurationIngestService:
         — see that module's docstring for why the batch path is more than
         ``ingest_one`` run N times concurrently. To ingest an
         already-labeled dataset, use ``POST /datasets/imports``
-        (planned, W10 route not yet built).
+        (planned, route not yet built).
 
         Args:
             images: Raw image bytes, one per entry.

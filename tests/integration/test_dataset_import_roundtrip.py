@@ -1,4 +1,4 @@
-"""An OpenProcessor export re-imports faithfully (W10.2.2): into a fresh
+"""An OpenProcessor export re-imports faithfully: into a fresh
 project the labels, splits and frozen test set round-trip; into the project
 that exported it nothing is written."""
 
@@ -90,7 +90,7 @@ async def test_export_reimports_into_a_fresh_project_and_round_trips(
     state_b = store_b.job.read()
     assert state_b['status'] == 'completed', state_b
     assert state_b['source_format'] == 'openprocessor_export'
-    # The export's frozen test split is kept by default (W10.2.2).
+    # The export's frozen test split is kept by default.
     test_items = [d for d in b.items.values() if d['dataset_split'] == 'test']
     assert test_items
     assert all(d['test_holdout'] is True for d in test_items)

@@ -1,4 +1,4 @@
-"""Wave 5: the ingest-time opt-in -- off by default, never inline, durable
+"""The ingest-time opt-in -- off by default, never inline, durable
 ``pending`` marker, outage leaves the image pending."""
 
 from __future__ import annotations

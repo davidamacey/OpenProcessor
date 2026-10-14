@@ -28,7 +28,7 @@ class IndexName(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and format
 class IndexMappingError(RuntimeError):
     """An index exists but its embedding field isn't mapped as knn_vector.
 
-    F-25 (fresh-start E2E findings 2026-09-25): this happens when
+    this happens when
     something writes to an index (e.g. the first POST /ingest) before
     ``create_all_indexes`` ever runs against it -- OpenSearch then
     dynamically maps the embedding field as a plain ``float`` array

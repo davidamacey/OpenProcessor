@@ -1,4 +1,4 @@
-"""Wave 2: the pure select + dedup function of the full-image SAM 3 pass."""
+"""The pure select + dedup function of the full-image SAM 3 pass."""
 
 from __future__ import annotations
 

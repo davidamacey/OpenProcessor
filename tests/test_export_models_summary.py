@@ -1,4 +1,4 @@
-"""Tests for the F-08 crash and F-12 fail-open exit code in
+"""Tests for the summary crash and the fail-open exit code in
 ``export/export_models.py``.
 
 A fresh clone has no ``make`` target that fetches ``yolo11s.pt`` before
@@ -83,7 +83,7 @@ class TestMissingPtFileSurfacesARealError:
 
 
 class TestAnyExportFailed:
-    """F-12(c): main() used to exit 0 no matter what results said -- a
+    """main() used to exit 0 no matter what results said -- a
     total, silent failure looked identical to a clean run to CI/make/an
     operator's shell."""
 
@@ -92,7 +92,7 @@ class TestAnyExportFailed:
         assert export_models._any_export_failed(results) is True
 
     def test_a_per_format_error_is_a_failure(self) -> None:
-        """The realistic F-12 shape: export_model() succeeds overall but
+        """The realistic shape: export_model() succeeds overall but
         an individual format (e.g. 'trt') reports its own error dict."""
         results: list[dict[str, Any]] = [
             {
@@ -119,7 +119,7 @@ class TestAnyExportFailed:
 
 
 class TestCudaVisibleDevicesRepairBeforeTrtBuild:
-    """F-09/F-12(a): /opt/venv-y11's CPU-only torch means the ONNX-export
+    """/opt/venv-y11's CPU-only torch means the ONNX-export
     step always runs Ultralytics with device='cpu', which sets
     CUDA_VISIBLE_DEVICES=-1 as a side effect -- in the same process, this
     then blinds the TensorRT builder created right after it
@@ -167,7 +167,7 @@ class TestCudaVisibleDevicesRepairBeforeTrtBuild:
 
 
 class TestSaveTritonConfigWriteOnlyOnChange:
-    """F-15: models/*/config.pbtxt is tracked in git. Every export run
+    """models/*/config.pbtxt is tracked in git. Every export run
     called save_triton_config unconditionally, rewriting the file (new
     mtime, often byte-identical content) and dirtying the tree even when
     nothing about the generated config actually changed."""

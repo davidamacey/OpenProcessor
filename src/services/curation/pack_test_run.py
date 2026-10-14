@@ -1,5 +1,5 @@
-"""Run one pack call over stored crops and preview each item's write (W5,
-``POST /prompt_packs/test``).
+"""Run one pack call over stored crops and preview each item's write
+(``POST /prompt_packs/test``).
 
 The VLM call is the production one, observed
 (:func:`~src.services.labeling.vlm_probe.probe`); each parsed answer is turned

@@ -1,7 +1,7 @@
-"""W8.6/W8.15: the numbered-overlay VLM contract.
+"""The numbered-overlay VLM contract.
 
 ``draw_region_overlay`` / ``overlay_description`` / ``render_region_block``
-/ ``box_verdicts``. D-B: the pre-W8 flat reply shape is dropped -- a
+/ ``box_verdicts``. The old flat reply shape is dropped -- a
 reply lacking the list key raises ``MultiRegionKeysMissingError``.
 """
 

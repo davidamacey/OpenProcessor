@@ -133,7 +133,7 @@ services:
       # verify_prj_default__<role>.
       - OP_PROJECT_INDEX_PREFIX=verify_prj_
       - OP_PROJECTS_INDEX=verify_projects
-      # MJ2 (W2-finish review): op_global_configs (M3) is unprefixed by
+      # op_global_configs is unprefixed by
       # default and would otherwise trip tests/live/conftest.py's
       # verify_-prefix safety guard.
       - OP_GLOBAL_CONFIGS_INDEX=verify_global_configs
@@ -159,7 +159,7 @@ services:
       # Region routes 409 without an active region profile, and the text
       # routes need a text-bearing one.
       - OP_REGION_PROFILE_PATH=/region_profile.json
-      # W9: this harness has no in-compose vLLM to switch (keeps the live
+      # This harness has no in-compose vLLM to switch (keeps the live
       # guard's local-model routes on their no_local_vlm path).
       - OP_LOCAL_VLM_ENDPOINT=
       # Three write endpoints are disabled by default; without these the

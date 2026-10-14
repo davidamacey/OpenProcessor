@@ -183,63 +183,6 @@ async def ensure_items_quality_fields(
         }
 
 
-async def ensure_items_class_name_keyword(
-    client: AsyncOpenSearch,
-) -> dict[str, Any]:
-    """Add a ``.keyword`` subfield to the ``class_name`` field on the items
-    index so terms aggregations + sorts work.
-
-    Some legacy index instantiations mapped ``class_name`` as ``text``
-    (no subfield). ``text`` fields aren't doc-values backed, so
-    aggregations like ``terms`` on bare ``class_name`` fail with
-    ``Text fields are not optimised for operations that require
-    per-document field data``. OpenSearch ALLOWS adding subfields to an
-    existing text field via ``PUT <index>/_mapping`` — no reindex
-    required, no breaking change to text-search behaviour on the parent
-    field. Idempotent: calling repeatedly after the subfield exists is
-    a no-op acknowledged by OpenSearch.
-    """
-    index = config.items_index
-    body = {
-        'properties': {
-            'class_name': {
-                'type': 'text',
-                'fields': {'keyword': {'type': 'keyword', 'ignore_above': 256}},
-            }
-        }
-    }
-    try:
-        resp = await client.indices.put_mapping(index=index, body=body)
-        ack = bool(resp.get('acknowledged', False))
-        logger.info(
-            'curation_mapping_migration',
-            index=index,
-            fields=['class_name.keyword'],
-            acknowledged=ack,
-        )
-        return {
-            'acknowledged': ack,
-            'index': index,
-            'fields_added': ['class_name.keyword'],
-        }
-    except Exception as exc:
-        msg = str(exc)
-        is_field_conflict = _is_recoverable_mapping_conflict(msg)
-        log_fn = logger.info if is_field_conflict else logger.error
-        log_fn(
-            'curation_mapping_migration_failed',
-            index=index,
-            error=msg,
-            recoverable=is_field_conflict,
-        )
-        return {
-            'acknowledged': False,
-            'index': index,
-            'fields_added': ['class_name.keyword'],
-            'error': msg,
-        }
-
-
 async def ensure_items_score_fields(
     client: AsyncOpenSearch,
 ) -> dict[str, Any]:

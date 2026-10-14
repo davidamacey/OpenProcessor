@@ -1,6 +1,5 @@
 """The cross-process config-store cache: a global revision counter plus a
-per-process, per-project in-memory snapshot (any_domain_plan.md §3.6,
-projects_plan.md §11 W2).
+per-process, per-project in-memory snapshot.
 
 A ``ConfigStore`` instance is scoped to one project's ``configs`` index.
 :func:`get_config_store` keys instances by the *currently bound*
@@ -48,7 +47,7 @@ logger = get_logger(__name__)
 #: ``(name, revision)`` = activated; ``None`` = never activated through
 #: the store (the axis's env/file/registered default applies);
 #: ``'off'`` = explicitly deactivated (``PUT /settings {"defaults": {axis:
-#: null}}`` / ``/deactivate``, W4) -- distinct from "never activated" so a
+#: null}}`` / ``/deactivate``) -- distinct from "never activated" so a
 #: deployment can turn an axis off on purpose without it silently
 #: reverting to the hardcoded default.
 AxisRef = tuple[str, int | None] | Literal['off'] | None
@@ -88,13 +87,13 @@ class ConfigSnapshot:
     active_profile_body: StoredConfig | None = None
     loaded_at: float = 0.0
     stale: bool = False
-    # W9 -- global (op_global_configs) snapshot: the endpoint registry
+    # Global (op_global_configs) snapshot: the endpoint registry
     # (current docs), each endpoint's last probe record and the desired
     # local model. Empty on a project's store.
     vlm_endpoints: dict[str, StoredConfig] = field(default_factory=dict)
     vlm_probes: dict[str, dict[str, Any]] = field(default_factory=dict)
     local_vlm_desired: dict[str, Any] | None = None
-    # W9 -- project snapshot: this project's VLM activation, the activated
+    # Project snapshot: this project's VLM activation, the activated
     # revision's body pinned from the registry, and the ``name@rev`` refs of
     # external endpoints this project has acknowledged. Unset/empty on the
     # global store.
@@ -153,7 +152,7 @@ async def _resolve_active_body(
         return local
     if pinned_revision is None:
         return None
-    # B1 round-2: only a 404 means "nothing to pin"; any other exception
+    # Only a 404 means "nothing to pin"; any other exception
     # must propagate (never fail-open, §3.6) -- `refresh()` then stales.
     try:
         doc = await client.get(index=index, id=config_doc_id(kind, name, pinned_revision))
@@ -189,7 +188,7 @@ class ConfigStore:
         self.index = index
         self.mode = mode
         self.label = label
-        # The one deployment-wide store (op_global_configs, W9): loads the
+        # The one deployment-wide store (op_global_configs): loads the
         # endpoint registry instead of a project's packs/profiles/activations.
         self.is_global = is_global
         self.current: ConfigSnapshot = _EMPTY_SNAPSHOT
@@ -357,7 +356,7 @@ class ConfigStore:
         stale). Recognized keys: ``pack``, ``profile`` (a
         :class:`StoredConfig` or ``None`` to delete; pair with ``name``
         when deleting), ``active_pack``, ``active_profile``
-        (:data:`AxisRef`), ``config_revision``, and the W9 fields
+        (:data:`AxisRef`), ``config_revision``, and the VLM fields
         (``vlm_endpoints``, ``vlm_probes``, ``local_vlm_desired``,
         ``active_vlm``, ``active_vlm_body``, ``active_vlm_ack_at``,
         ``acked_refs``), each replacing the whole field.
@@ -453,9 +452,9 @@ async def activate_axis(
     """Activate (or deactivate, ``name=None``) ``axis`` on ``store``'s
     project: writes through :func:`~src.services.config_store.index.activate`,
     applies the result to ``store`` immediately (read-after-write in this
-    process), and publishes the ``config.changed`` SSE event (§9 W2) --
+    process), and publishes the ``config.changed`` SSE event --
     the one place both effects happen together, so every caller (the
-    ``PUT /settings`` bridge now; W3/W4's activate routes later) gets
+    ``PUT /settings`` bridge and the activate routes) gets
     both for free.
     """
     from src.services.config_store.activation_apply import activate_and_apply
@@ -506,7 +505,7 @@ async def _poll_all_active_projects(client: Any, interval: float) -> None:
     registry = ProjectRegistry(lambda: client)
     while True:
         try:
-            # W9: the deployment-wide VLM registry, refreshed unbound (its
+            # the deployment-wide VLM registry, refreshed unbound (its
             # index belongs to no project) so a probe or an endpoint edit
             # made through another uvicorn worker shows up here within a tick.
             await get_global_config_store(mode='live').refresh(client)
@@ -565,7 +564,7 @@ async def startup_bootstrap_config_store_safe() -> Any:
     so that first tick genuinely does eventually run, on every worker,
     every time.
 
-    MJ1 (W2-finish review, 2026-09-27): this used to also call
+    This used to also call
     ``get_config_store(mode='live')`` + ``store.refresh(client)`` to warm
     "the bound project's store" -- but the lifespan runs unbound by
     design (``src.main``'s startup binds each project in turn only for
@@ -576,7 +575,7 @@ async def startup_bootstrap_config_store_safe() -> Any:
     ``_poll_all_active_projects`` binds and refreshes every active
     project on its own first tick.
 
-    MJ3 (W2-finish review, 2026-09-27, fix-on-fix): MJ1's fix still ran
+    An earlier fix still ran
     ``ensure_global_configs_index`` inline before ``create_task``, inside
     a broad ``except`` that returned ``None`` on any failure there --
     including a plain unreachable-OpenSearch startup or a lost

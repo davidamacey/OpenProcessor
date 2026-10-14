@@ -141,23 +141,6 @@ class SearchMixin:
             cluster_ids=cluster_ids,
         )
 
-    async def get_faces_by_person_id(
-        self,
-        person_id: str,
-        limit: int = 50,
-    ) -> list[dict[str, Any]]:
-        """Get all faces belonging to a person identity."""
-        query = {
-            'query': {'term': {'person_id': person_id}},
-            'size': limit,
-            'sort': [{'confidence': {'order': 'desc'}}],
-        }
-        response = await self.client.search(
-            index=IndexName.FACES.value,
-            body=query,
-        )
-        return [hit['_source'] for hit in response['hits']['hits']]
-
     async def _search_index(
         self,
         index_name: str,
@@ -234,7 +217,7 @@ class SearchMixin:
         except Exception as e:
             message = str(e)
             if 'knn_vector' in message and 'is not' in message:
-                # F-25: don't swallow this one -- an unmapped/misconfigured
+                # don't swallow this one -- an unmapped/misconfigured
                 # index is not the same thing as "no similar images", and
                 # the caller (a router that turns an unhandled exception
                 # into a 500) needs to see it as an error, not a success

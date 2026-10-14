@@ -1,4 +1,4 @@
-"""Class-hotkey validation against the bound project's keymap (W2b).
+"""Class-hotkey validation against the bound project's keymap.
 
 Split out of ``classes.py`` to stay under the repo's 700-LOC pre-commit
 ratchet; ``classes.py`` imports these helpers directly.

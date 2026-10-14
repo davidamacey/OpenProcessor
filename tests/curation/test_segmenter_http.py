@@ -1,4 +1,4 @@
-"""W5: the API-side segmenter call used by ``POST /region_profiles/test``.
+"""The API-side segmenter call used by ``POST /region_profiles/test``.
 
 It is a plain one-shot HTTP call (no worker circuit breaker) that returns
 EVERY candidate with its polygon, so an author sees what a prompt finds."""

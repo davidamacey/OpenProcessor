@@ -2,11 +2,11 @@
 (:mod:`src.services.curation.region_requeue` and
 ``scripts/curation/requeue_regions.py``).
 
-W8c: the corpus is ``region_boxes``-shaped (the worker's only write
-target since W8b) rather than the deleted single-scalar fields
+the corpus is ``region_boxes``-shaped (the worker's only write
+target) rather than the deleted single-scalar fields
 (``bbox_norm`` / item-level ``detector`` / ``rejection_reason`` /
-``embedding`` / ``cluster_id``) the pre-W8c version of this test used --
-those are never populated by a fresh W8 write, so a query against them
+``embedding`` / ``cluster_id``) an older version of this test used --
+those are never populated by a fresh write, so a query against them
 would silently select nothing for the pipeline this branch ships.
 
 Backed by :class:`curation.query_fakes.QueryFakeOpenSearch`, which evaluates
@@ -79,7 +79,7 @@ def _item(
     boxes: tuple[dict[str, Any], ...] = (),
     detector_chain: list[str] | None = None,
     validated: bool | None = None,
-    status_legacy: str | None = None,
+    status_before_requeue: str | None = None,
 ) -> dict[str, Any]:
     boxes = tuple(boxes)
     doc: dict[str, Any] = {
@@ -96,8 +96,8 @@ def _item(
         doc[F.detector_chain] = detector_chain
     if validated is not None:
         doc[F.validated] = validated
-    if status_legacy is not None:
-        doc[F.status_legacy] = status_legacy
+    if status_before_requeue is not None:
+        doc[F.status_before_requeue] = status_before_requeue
     return doc
 
 
@@ -144,7 +144,7 @@ def _corpus() -> dict[str, dict[str, Any]]:
         _item(
             'r3', REJECTED,
             boxes=(_box('b1', detector='det_b', reason=None, bbox=box),),
-            status_legacy=RegionStatus.NO_REGION_VISIBLE.value,
+            status_before_requeue=RegionStatus.NO_REGION_VISIBLE.value,
         ),
         _item(
             'd1', RegionStatus.DETECTED,
@@ -191,7 +191,7 @@ async def test_breakdown_groups_by_detector_then_reason():
     assert by_det['det_b']['count'] == 1
     assert by_det[NONE_BUCKET]['count'] == 1  # f6: a box exists, no detector on it
     assert by_det[NONE_BUCKET]['reasons'] == [{'reason': NONE_BUCKET, 'count': 1}]
-    # W8c nit fix: f4 (no box at all) is invisible to the nested breakdown
+    # f4 (no box at all) is invisible to the nested breakdown
     # above, but IS counted here -- `total - no_box` (5 - 1 = 4) is
     # exactly the item count with at least one box, restoring the
     # pre-nested-query "(none)" bucket's information.
@@ -208,7 +208,7 @@ async def test_apply_requeues_only_the_filtered_cohort():
     assert _changed(fake) == {'f1'}
     f1 = fake.docs(ITEMS)['f1']
     assert f1[F.status] == RegionStatus.PENDING_DETECTION
-    assert f1[F.status_legacy] == FAILED
+    assert f1[F.status_before_requeue] == FAILED
     assert f1[F.rejection_reason] is None
     assert _box_ids(f1) == ['b1'], 'box kept without --clear-detection'
     assert f1[F.boxes][0]['bbox_norm'] == [0.2, 0.2, 0.4, 0.3]
@@ -264,7 +264,7 @@ async def test_clear_detection_prunes_the_embedding_of_the_dropped_box():
 
 @pytest.mark.asyncio
 async def test_clear_detection_protects_a_human_reject_action_on_a_machine_box():
-    """W8c M3 fix: `source == 'human'` alone only protects a box a human
+    """`source == 'human'` alone only protects a box a human
     CREATED. A human's per-box REJECT action on a MACHINE-created box
     (`PATCH .../regions/{box_id}`, `POST /regions/batch_box_state`) never
     changes `source`/`detector` -- the only trace is the rejection reason
@@ -311,8 +311,8 @@ async def test_pending_verification_target_needs_an_existing_box():
     r1 = fake.docs(ITEMS)['r1']
     assert r1[F.status] == RegionStatus.PENDING_VERIFICATION
     # an earlier requeue's audit trail is preserved, not overwritten
-    assert fake.docs(ITEMS)['r3'][F.status_legacy] == RegionStatus.NO_REGION_VISIBLE
-    # W8c M2 fix: the item's own box(es) were always `rejected` (a
+    assert fake.docs(ITEMS)['r3'][F.status_before_requeue] == RegionStatus.NO_REGION_VISIBLE
+    # The item's own box(es) were always `rejected` (a
     # REQUEUEABLE_STATUSES item can never already carry a `proposed` box
     # -- `derive_status` would report `pending_verification` instead).
     # This requeue must re-propose them, or the worker's Path 1 has
@@ -325,7 +325,7 @@ async def test_pending_verification_target_needs_an_existing_box():
 
 @pytest.mark.asyncio
 async def test_pending_verification_skips_item_whose_only_box_is_human_owned():
-    """W8c M2 fix: a human's rejected verdict is a verdict, not a failure
+    """A human's rejected verdict is a verdict, not a failure
     to re-propose -- an item with nothing else to re-verify must not move
     to `pending_verification` (that would silently fall through to a
     fresh detection pass instead, per the review's exact finding)."""
@@ -419,7 +419,7 @@ async def test_custom_region_field_names_are_honoured():
         boxes='roi_boxes',
         count='roi_count',
         rejected_count='roi_rejected_count',
-        status_legacy='roi_state_prev',
+        status_before_requeue='roi_state_prev',
         validated='roi_ok',
     )
     doc = {
@@ -507,7 +507,7 @@ def test_cli_defaults_to_dry_run(monkeypatch, capsys):
     fake = _cli_fake()
     assert _run_cli(monkeypatch, ['--status', 'detection_failed'], fake) == 0
     out = capsys.readouterr().out
-    # W8c nit fix: "items selected" (not "regions" -- the count is items,
+    # "items selected" (not "regions" -- the count is items,
     # never boxes, and the per-detector/reason lines below it are boxes;
     # conflating the two units in one label is exactly what confused the
     # review). The selection includes the one human-validated item f5,
@@ -596,7 +596,7 @@ async def test_unseeded_backfill_seeds_pending_detection_into_worker_queue():
     for i in ('u0', 'u1', 'u2'):
         assert after[i][F.status] == RegionStatus.PENDING_DETECTION
         # No prior status existed, so there is nothing to stash or clear.
-        assert F.status_legacy not in after[i]
+        assert F.status_before_requeue not in after[i]
         assert F.rejection_reason not in after[i]
         assert matches(after[i], worker_query)
 

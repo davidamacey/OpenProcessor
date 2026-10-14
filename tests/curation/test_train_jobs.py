@@ -132,7 +132,7 @@ async def test_write_job_rejects_duplicate(jobs_dir: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_write_job_refuses_a_missing_dataset_export_dir_clearly(jobs_dir: Path) -> None:
-    """F-73: dataset_export_dir is optional on the wire (defaults to the
+    """``dataset_export_dir`` is optional on the wire (defaults to the
     current export via _run_preflight), but write_job must still refuse
     clearly if it's still unset here -- e.g. a force=True /start call
     that bypassed a blocking preflight with no current export -- instead

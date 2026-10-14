@@ -1,6 +1,5 @@
-"""W2 sec 4.5: the detection worker's hot-reloadable runtime --
-``scripts/curation/worker/runtime.py`` (``build_runtime``,
-``RuntimeHolder``, ``quiesce_and_swap``), and the write-path stamping
+"""The detection worker's hot-reloadable runtime (``scripts/curation/worker/runtime.py``:
+``build_runtime``, ``RuntimeHolder``, ``quiesce_and_swap``) and the write-path stamping
 (``RegionFields.profile``/``profile_revision``, ``vlm_prompt_pack``) in
 ``scripts/curation/worker/bulk_writer.py``."""
 
@@ -12,9 +11,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-import scripts.curation.region_worker_main as worker
 from curation._fake_config_opensearch import FakeConfigOpenSearch, TwoProjectOpenSearch
 from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_mget_response
+from scripts.curation.worker.bulk_writer import _bulk_update
 from scripts.curation.worker.state import _ItemTask
 from src.config import get_region_fields
 from src.config.curation import base_curation_config
@@ -504,7 +503,7 @@ async def test_bulk_write_stamps_region_profile_and_pack() -> None:
     F = get_region_fields()
     a = _make_task(crop_id='a')
     a.update_doc = {F.status: 'detected', F.max_score: 0.9}
-    # Minor 5 (W2 review): the pack stamp is per-TASK, gated on whether a
+    # the pack stamp is per-TASK, gated on whether a
     # VLM call actually contributed to this task's write this pass.
     a.vlm_called = True
 
@@ -522,7 +521,7 @@ async def test_bulk_write_stamps_region_profile_and_pack() -> None:
     opensearch.mget = AsyncMock(side_effect=_fake_mget)
     opensearch.bulk = AsyncMock(side_effect=_fake_bulk)
 
-    n_written, _ = await worker._bulk_update(opensearch, [a])
+    n_written, _ = await _bulk_update(opensearch, [a])
     assert n_written == 1
 
     assert opensearch.bulk.await_args is not None
@@ -538,7 +537,7 @@ async def test_bulk_write_stamps_region_profile_and_pack() -> None:
 
 @pytest.mark.asyncio
 async def test_bulk_write_does_not_stamp_pack_when_no_vlm_call_happened() -> None:
-    """Minor 5 (W2 review): a write whose task never actually involved a
+    """a write whose task never actually involved a
     VLM call (no VLM configured, or a write path that skipped it, e.g.
     the high-confidence secondary-segmenter auto-skip) must not carry
     ``vlm_prompt_pack`` -- that would claim a VLM ran when it didn't."""
@@ -561,7 +560,7 @@ async def test_bulk_write_does_not_stamp_pack_when_no_vlm_call_happened() -> Non
     opensearch.mget = AsyncMock(side_effect=_fake_mget)
     opensearch.bulk = AsyncMock(side_effect=_fake_bulk)
 
-    n_written, _ = await worker._bulk_update(opensearch, [a])
+    n_written, _ = await _bulk_update(opensearch, [a])
     assert n_written == 1
 
     assert opensearch.bulk.await_args is not None
@@ -621,7 +620,7 @@ async def test_bulk_write_stamps_store_activated_profile_revision() -> None:
         opensearch.mget = AsyncMock(side_effect=_fake_mget)
         opensearch.bulk = AsyncMock(side_effect=_fake_bulk)
 
-        n_written, _ = await worker._bulk_update(opensearch, [a])
+        n_written, _ = await _bulk_update(opensearch, [a])
         assert n_written == 1
         assert opensearch.bulk.await_args is not None
         bulk_body = opensearch.bulk.await_args.kwargs['body']
@@ -638,7 +637,7 @@ async def test_bulk_write_stamps_store_activated_profile_revision() -> None:
 async def _eventually(check: Callable[[], bool], *, timeout: float = 15.0) -> None:
     """Poll until ``check()`` holds, or ``timeout`` passes.
 
-    The real ``worker.run()`` builds its runtimes on the event loop, and fixed sleeps
+    The real ``run()`` builds its runtimes on the event loop, and fixed sleeps
     made this test fail whenever the host was busy. On timeout this returns and the
     caller's own assertion reports the state it actually saw.
     """
@@ -651,11 +650,10 @@ async def _eventually(check: Callable[[], bool], *, timeout: float = 15.0) -> No
 @pytest.mark.asyncio
 async def test_two_project_worker_alpha_activation_swaps_alpha_only() -> None:
     """B1, through the real worker (not a RuntimeHolder unit test):
-    ``worker.run()`` with two active projects (alpha, beta) from a real
+    ``run()`` with two active projects (alpha, beta) from a real
     ``ProjectRegistry`` build. Activating a profile in alpha's config
     store mid-run must rebuild alpha's runtime (its own detector
     construction count increases) while beta's stays untouched."""
-    import scripts.curation.region_worker_main as worker
     from src.config.curation import base_curation_config
     from src.config.projects import resources_for_new
     from src.services.projects.registry import record_to_doc
@@ -721,12 +719,14 @@ async def test_two_project_worker_alpha_activation_swaps_alpha_only() -> None:
         monkeypatch_targets.append((obj, name, getattr(obj, name)))
         setattr(obj, name, value)
 
-    _patch(worker, 'AsyncTritonPool', MagicMock(return_value=pool))
-    _patch(worker, 'make_script_opensearch', MagicMock(return_value=client))
     import scripts.curation.worker.runner as runner_mod
+    from scripts.curation.worker.__main__ import parse_args
+
+    _patch(runner_mod, 'AsyncTritonPool', MagicMock(return_value=pool))
+    _patch(runner_mod, 'make_script_opensearch', MagicMock(return_value=client))
 
     _patch(runner_mod, 'RegionDetector', _counting_detector)
-    _patch(worker, 'SegmenterClient', _counting_segmenter)
+    _patch(runner_mod, 'SegmenterClient', _counting_segmenter)
 
     def _noop_signal_handler(*_a: object, **_k: object) -> None:
         return None
@@ -736,7 +736,7 @@ async def test_two_project_worker_alpha_activation_swaps_alpha_only() -> None:
     _patch(_asyncio.get_event_loop().__class__, 'add_signal_handler', _noop_signal_handler)
 
     try:
-        args = worker.parse_args(
+        args = parse_args(
             [
                 '--opensearch=http://os.local:9200',
                 '--triton=triton:8001',
@@ -745,7 +745,7 @@ async def test_two_project_worker_alpha_activation_swaps_alpha_only() -> None:
                 '--poll-interval=0.01',
             ]
         )
-        run_task = asyncio.create_task(worker.run(args))
+        run_task = asyncio.create_task(runner_mod.run(args))
         try:
             # Both projects get their first runtime built.
             await _eventually(lambda: detector_calls == {'alpha': 1, 'beta': 1})

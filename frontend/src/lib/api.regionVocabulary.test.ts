@@ -1,5 +1,5 @@
 /**
- * W0 naming-sweep finding m9 — the deployment-configured detector/
+ * The deployment-configured detector/
  * segmenter/verifier vocabulary, served whole by
  * `GET {API_PREFIX}/regions/vocabulary`, and every review tab's served
  * label/description, served whole by `GET {API_PREFIX}/review/tabs`. Consumed

@@ -1,4 +1,4 @@
-"""The durable record of an import's frozen test split (W10.9): written once
+"""The durable record of an import's frozen test split: written once
 when the import finishes, under the import freeze dir, never replacing the
 curated ``current.json``."""
 

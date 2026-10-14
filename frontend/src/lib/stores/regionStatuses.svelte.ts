@@ -73,8 +73,8 @@ class RegionStatusesStore {
   confirmStatus = $state<string | null>(null);
   rejectStatus = $state<string | null>(null);
   falsePositiveStatus = $state<string | null>(null);
-  /** W8.7: served per-box state vocabulary — distinct from `list` above
-   *  (item-level `region_status`). Empty on a pre-W8 backend; every
+  /** served per-box state vocabulary — distinct from `list` above
+   *  (item-level `region_status`). Empty on a backend without multi-box; every
    *  caller falls back to a hardcoded palette (see `multiBoxRingColor`/
    *  `multiBoxStateLabel` in `/review`, `SourceImageOverlay.svelte`,
    *  `CropMetaPanel.svelte`) when a value isn't found here. */
@@ -101,15 +101,15 @@ class RegionStatusesStore {
   /** The box-state value (not the item-level `region_status`) whose
    *  served `role` is `role` — e.g. `boxStateByRole('accepted')` for the
    *  cluster-triage "Verify" action. `null` when `box_states` hasn't
-   *  loaded (pre-W8 backend); callers fall back to the literal role
-   *  string, which is the fixed W8.7 wire vocabulary, not a guess. */
+   *  loaded (older backend); callers fall back to the literal role
+   *  string, which is the fixed wire vocabulary, not a guess. */
   boxStateByRole(role: string): string | null {
     return this.boxStates.find((s) => s.role === role)?.value ?? null;
   }
 
   /** The served `tone` for a box `state` value — `'neutral'` when
    *  `box_states` hasn't loaded, the state is unrecognized, or the
-   *  backend predates `tone` (a pre-W8.7-follow-up backend). Callers use
+   *  backend predates `tone` (an older backend). Callers use
    *  this (never the raw `role`/`state` string) to pick a ring/chip
    *  color, so a served tone always wins over any client role→color
    *  guess. */

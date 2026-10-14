@@ -1125,7 +1125,7 @@ class TestBackboneEmbedding:
 
 
 # =============================================================================
-# F-43 — a failing secondary detector call must be visible, not swallowed
+# a failing secondary detector call must be visible, not swallowed
 # =============================================================================
 
 
@@ -1177,7 +1177,7 @@ def _make_failing_secondary_service() -> tuple[
 class TestSecondaryDetectorFailureVisibility:
     @pytest.mark.asyncio
     async def test_ingest_one_still_succeeds_but_reports_the_secondary_error(self) -> None:
-        """F-43: the image ingests fine on the primary detector alone, but
+        """The image ingests fine on the primary detector alone, but
         the caller must be able to see that the configured secondary
         detector never ran -- not just a 'warning' log line."""
         svc, os_fake, _triton = _make_failing_secondary_service()
@@ -1194,7 +1194,7 @@ class TestSecondaryDetectorFailureVisibility:
 
     @pytest.mark.asyncio
     async def test_batch_summary_counts_secondary_failures(self) -> None:
-        """F-43: a batch of otherwise-successful ingests must roll up how
+        """A batch of otherwise-successful ingests must roll up how
         many of them silently lost their secondary classifier, in the
         summary the caller actually reads (not just per-item)."""
         svc, _os_fake, _triton = _make_failing_secondary_service()
@@ -1209,7 +1209,7 @@ class TestSecondaryDetectorFailureVisibility:
 
     @pytest.mark.asyncio
     async def test_router_batch_response_echoes_secondary_failures(self) -> None:
-        """F-43: the wire response (what an operator/CI actually reads)
+        """The wire response (what an operator/CI actually reads)
         must carry the count and the per-item error, not just the
         internal service-layer dataclass."""
         from src.routers.curation.ingest import _batch_response

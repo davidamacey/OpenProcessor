@@ -1,4 +1,4 @@
-"""Imported reviewed-negative frames, for both exporters (W10.8).
+"""Imported reviewed-negative frames, for both exporters.
 
 A dataset import records a frame whose label file existed and was empty as
 ``import_label_state: negative`` on its images doc, with ``negative_for``

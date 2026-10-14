@@ -112,7 +112,9 @@ def test_region_records_pending_item_falls_back_to_configured_status_field() -> 
     no ``region_boxes`` entry to read at all -- the one case where
     ``region_records`` still reads a customizable item-level field."""
     fields = RegionFields(status='roi_state')
-    recs = region_records({'crop_id': 'c', 'roi_state': 'pending'}, fields)
+    recs = region_records(
+        {'crop_id': 'c', 'roi_state': RegionStatus.PENDING_DETECTION.value}, fields
+    )
     assert len(recs) == 1
     assert (recs[0].status, recs[0].detector, recs[0].box) == (
         RegionStatus.PENDING_DETECTION.value,
@@ -267,7 +269,7 @@ def _fake() -> QueryFakeOpenSearch:
             _item('f1', 'F', RegionStatus.PENDING_DETECTION.value),
             _item('f2', 'F', DET, GT_F),
             _item('h1', 'H', DET, (0.0, 0.0, 0.5, 0.5), frame='crop', item_box=[0.5, 0.5, 1, 1]),
-            _item('i1', 'I', 'pending'),  # legacy pending alias
+            _item('i1', 'I', RegionStatus.PENDING_DETECTION.value),
             _item('o1', 'orig', DET, (0.7, 0.7, 0.8, 0.8)),
         ]
     )
@@ -310,7 +312,7 @@ async def test_metrics_backgrounds_pending_and_frames() -> None:
 
     assert (t['images'], t['positives'], t['backgrounds']) == (10, 7, 3)
     assert t['not_ingested'] == 1  # G
-    assert (t['pending_images'], t['pending_gt_boxes']) == (2, 1)  # F + legacy-pending I
+    assert (t['pending_images'], t['pending_gt_boxes']) == (2, 1)  # F + I
     assert (t['no_item_images'], t['no_item_gt_boxes']) == (1, 1)  # E
     # Evaluated: A(2) B(1) C(0) D(0) E(1) H(1) dup(1)
     assert (t['evaluated_images'], t['evaluated_gt_boxes']) == (7, 6)
@@ -475,7 +477,7 @@ def _run_cli(monkeypatch, fake: QueryFakeOpenSearch, argv: list[str]) -> int:
 
 def _dataset_with_duplicated_split_dir(root: Path) -> Path:
     """A data.yaml where train: and val: both point at images/validation --
-    the F-76 bug shape (originally produced by
+    the bug shape (originally produced by
     scripts/datasets/fetch_openimages_plates.py)."""
     img = root / 'images' / 'validation' / 'a.jpg'
     img.parent.mkdir(parents=True, exist_ok=True)
@@ -491,7 +493,7 @@ def _dataset_with_duplicated_split_dir(root: Path) -> Path:
 def test_build_cohort_deduplicates_when_a_yaml_lists_the_same_dir_twice(
     tmp_path: Path,
 ) -> None:
-    """F-76: train: and val: both resolving to images/validation must not
+    """``train:`` and ``val:`` both resolving to images/validation must not
     make build_cohort() count and score the same image twice."""
     mod = _cli()
     data = _dataset_with_duplicated_split_dir(tmp_path / 'ds')
@@ -550,7 +552,7 @@ def test_cli_state_dir_cohort_uses_recorded_ids(monkeypatch, tmp_path: Path) -> 
 
 
 # test_cli_unknown_frame_exits_3 (and test_unknown_frame_is_refused above)
-# were removed in the W8-cleanup port: both simulated a stored
+# were removed when boxes became lists: both simulated a stored
 # `region_bbox_frame='pixels'` on an item to exercise the CLI's
 # RegionFrameError -> exit(3) path. `region_boxes` entries have no stored
 # per-box frame marker at all (every writer projects to source frame
@@ -562,7 +564,7 @@ def test_cli_state_dir_cohort_uses_recorded_ids(monkeypatch, tmp_path: Path) -> 
 
 
 # =============================================================================
-# --import-id cohort (W10)
+# --import-id cohort
 # =============================================================================
 
 SERVER = '/server/ds/images/test'

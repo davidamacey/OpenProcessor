@@ -1,6 +1,6 @@
 """The item write one VLM class prediction becomes (``POST /vlm/label_batch``).
 
-Shared by the route and the pack test-on-crop preview (W5): the update for
+Shared by the route and the pack test-on-crop preview: the update for
 one prediction (:func:`label_batch_update`) and the merge onto the item's
 current doc (:func:`label_batch_merge`: cluster placement, unmatched-class
 clearing and the class-history snapshot), so a preview is the write the

@@ -48,7 +48,9 @@ def test_letterbox_matches_product_geometry_and_passes_t(size: tuple[int, int]) 
     assert (got_hwc[pad_mask] == 114).all()
     assert (ref_hwc[pad_mask] == 114).all()
     d = lib.tensor_diff(ref_hwc, got_hwc)
-    assert lib.t_gate(d), d
+    assert d.best_shift == (0, 0), d
+    assert d.mean_abs < 0.5, d
+    assert d.max_abs <= 8, d
 
 
 @pytest.mark.parametrize('size', [(400, 300), (90, 1200), (2000, 1500), (12, 7)])
@@ -58,7 +60,9 @@ def test_pe_square_matches_cv2_linear(size: tuple[int, int]) -> None:
     got = k.pe_square_u8(torch.from_numpy(rgb)).numpy()
     assert got.shape == ref.shape == (336, 336, 3)
     d = lib.tensor_diff(ref, got)
-    assert lib.t_gate(d), d
+    assert d.best_shift == (0, 0), d
+    assert d.mean_abs < 0.5, d
+    assert d.max_abs <= 8, d
 
 
 def test_crop_matches_crop_pil_including_out_of_frame_fill() -> None:

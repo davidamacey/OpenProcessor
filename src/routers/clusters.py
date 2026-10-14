@@ -17,7 +17,7 @@ import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Path, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 from src.core.dependencies import VisualSearchDep
 
@@ -130,15 +130,6 @@ class BalanceCheckResponse(BaseModel):
     needs_rebalance: bool = Field(..., description='Whether rebalancing is recommended')
     reason: str | None = Field(default=None, description='Reason for rebalance recommendation')
     error: str | None = Field(default=None, description='Error message if failed')
-
-
-class AlbumInfo(BaseModel):
-    """Single auto-generated album."""
-
-    cluster_id: int = Field(..., alias='key', description='Cluster ID (album ID)')
-    count: int = Field(..., alias='doc_count', description='Number of images in album')
-
-    model_config = ConfigDict(populate_by_name=True)
 
 
 class ListAlbumsResponse(BaseModel):

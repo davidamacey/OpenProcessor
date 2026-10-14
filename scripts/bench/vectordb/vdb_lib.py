@@ -20,17 +20,6 @@ PROJECT_COUNT = 10
 FIELD_SHARES = {'class_validated': 0.10, 'test_holdout': 0.05, 'review_dismissed': 0.02}
 CLUSTER_COUNT = 512
 
-# Fields every engine stores next to the vector, in this order.
-SCALAR_FIELDS = (
-    'project',
-    'class_name',
-    'class_validated',
-    'test_holdout',
-    'review_dismissed',
-    'cluster_id',
-    'sel',
-)
-
 
 @dataclass(frozen=True)
 class FilterSpec:
@@ -162,18 +151,5 @@ def median_range(values: list[float]) -> tuple[float, float, float]:
     return float(np.median(arr)), float(arr.min()), float(arr.max())
 
 
-def differs_beyond_noise(a: list[float], b: list[float]) -> bool:
-    """True only when the repetition ranges of ``a`` and ``b`` do not overlap."""
-    return min(a) > max(b) or min(b) > max(a)
-
-
 def bytes_per_vector(total_bytes: int, vectors: int) -> float:
     return total_bytes / vectors if vectors else float('nan')
-
-
-def pick_cheapest(
-    rows: list[dict[str, Any]], target: float, recall_key: str
-) -> dict[str, Any] | None:
-    """The row with the lowest p95 among those reaching ``target`` recall, else ``None``."""
-    ok = [r for r in rows if r.get(recall_key, 0.0) >= target]
-    return min(ok, key=lambda r: r['p95_ms']) if ok else None

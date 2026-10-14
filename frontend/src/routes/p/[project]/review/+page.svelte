@@ -119,8 +119,7 @@
   // tab (below); Outliers retired entirely (see reviewTabs.ts doc
   // comment). The remaining 4 narrower tabs stay available for
   // diagnosing where uncertainty came from — each is a real, distinct
-  // signal, not a rebrand of "everything." `new_class_proposals` (added
-  // 2026-09-24, logic-moves W5) is a 6th real tab, not a preset — a
+  // signal, not a rebrand of "everything." `new_class_proposals` is a 6th real tab, not a preset — a
   // distinct triage workflow (confirm / map-to-existing / create-a-class)
   // over crops the VLM flagged as needing a class the registry doesn't
   // have yet.
@@ -159,7 +158,7 @@
     visibleReviewTabs(REVIEW_TABS, (id) => reviewTabsVocabularyStore.hasEntry(id)),
   );
   // The imported tab's empty state links to the import page only when
-  // W10 is served; probe lazily, never on tabs that don't need it.
+  // dataset import is served; probe lazily, never on tabs that don't need it.
   $effect(() => {
     if (tab === 'imported') void datasetsAvailability.init();
   });
@@ -596,7 +595,7 @@
     }
     return out;
   });
-  // URL-seeded non-enum filters (W10 `import_id`, P4 `combine_conflict`):
+  // URL-seeded non-enum filters (`import_id`, `combine_conflict`):
   // no toggle of their own (they would be noise in every project), only a
   // removable chip when a link carries them. Sent to `/review/{tab}` and
   // `/locate` only on a tab whose served `filters` list them: unlike the
@@ -703,7 +702,7 @@
   const loadFirst = () => queue.loadFirst();
   const loadMore = () => queue.loadMore();
 
-  // `/review?crop_id=` deep link (item 10, 2026-09-24 logic-moves W5):
+  // `/review?crop_id=` deep link:
   // ask the backend exactly where the crop sits under the active tab's
   // filters/sort via GET {API_PREFIX}/review/{tab}/locate, rather than the old
   // approach of blindly paging forward up to 300 items hoping to find
@@ -948,17 +947,17 @@
   // scalar `bboxField` is display-only: the backend has no write route for
   // it, so it has no edit mode.
   const isMultiBoxSlot = $derived(activeSlot?.capabilities.subBox?.listField != null);
-  // 3f1a11e adoption, updated for W8: the authoritative, kind-styled
+  // The authoritative, kind-styled
   // explanation for the "Reason" row — the generic per-item `reason`
   // string (see below) always says "verifier rejected this candidate
-  // (…)", wrong wording for a needs_human item. W8 moved the MACHINE
-  // reason off the item (`region_rejection_reason` is now the reviewer's
-  // free-text note only, per spec) onto each rejected box
-  // (`SlotBox.rejectionReason`) — for a multi-box slot this reads the
+  // (…)", wrong wording for a needs_human item. The MACHINE
+  // reason lives on each rejected box (`SlotBox.rejectionReason`), not
+  // the item (`region_rejection_reason` is the reviewer's free-text
+  // note only, per spec) — for a multi-box slot this reads the
   // first rejected box's reason; a tier-2 single-box slot still reads
   // the item-level field. Only falls back to `current.reason` when
   // neither is present (core tabs, e.g. the mismatches preset).
-  // W10: the served per-box `locked` flag, by box id, for the canvas's
+  // the served per-box `locked` flag, by box id, for the canvas's
   // lock glyph (the editable working set carries no `locked`).
   const lockedBoxIds = $derived<Set<string>>(
     new Set(
@@ -1318,9 +1317,8 @@
   const undoHint = () =>
     `Press ${kg('review.undo')} to undo, step back with ${kg('review.region.back')}.`;
 
-  // W8 multi-box: per-box state → ring color/dash. The ring color now
-  // reads the served box_states `tone` (backend follow-up to W8.7,
-  // feat/w8-multibox-lockstep) via `toneRingRgb(boxStateTone(state))` —
+  // Multi-box: per-box state → ring color/dash. The ring color
+  // reads the served box_states `tone` via `toneRingRgb(boxStateTone(state))` —
   // `boxStateTone` returns 'neutral' on a pre-tone backend or an
   // unrecognized state, so this never invents a color the server didn't
   // choose.
@@ -1569,7 +1567,7 @@
   }
 
   /**
-   * W8 multi-box Enter (owner decision): confirms only `proposed` boxes,
+   * Multi-box Enter: confirms only `proposed` boxes,
    * leaving `rejected`/`false_positive` siblings exactly as they are, in
    * the same `PUT /crops/{id}/regions` write as any pending geometry edit
    * (add/move/delete) — see `multiBoxRegionController.confirmAndSave`.
@@ -1719,7 +1717,7 @@
         });
       }
       if (isMultiBoxSlot && current) {
-        // W8 per-box actions (y/r/Tab) — reserved letters, see
+        // Per-box actions (y/r/Tab) — reserved letters, see
         // keymapFallback.ts. Available in both scan and edit mode, since
         // accept/reject/select don't require entering edit.
         const cropId = current.id;
@@ -1852,7 +1850,7 @@
       {/each}
     </ScrollStrip>
     {#if regionProfileStore.unknown}
-      <!-- F-78: boot couldn't read the region profile yet; the region tab
+      <!-- Boot couldn't read the region profile yet; the region tab
            appears once a /health poll answers (the layout re-mounts). -->
       <span
         class="shrink-0 pl-2 text-[11px] text-zinc-500"
@@ -2302,7 +2300,7 @@
           class="flex h-[210px] shrink-0 items-center justify-center overflow-hidden bg-zinc-950 lg:h-auto lg:max-h-[40%] lg:min-h-[210px]"
         >
           {#if isMultiBoxSlot && activeSlot}
-            <!-- W8 multi-box (docs/design/w8-multibox-frontend-plan-2026-09-26.md):
+            <!-- Multi-box:
                  every box drawn at once, numbered by list position. Same
                  select/add/delete/Tab interaction in scan and edit mode;
                  only edit mode allows geometry changes (readonly canvas
@@ -2397,7 +2395,7 @@
               </span>
             {/if}
             {#if multiBox.maxBoxes != null}
-              <!-- W8.8: the served region_profile.limits.max_boxes_per_write —
+              <!-- The served region_profile.limits.max_boxes_per_write —
                    never a client-guessed cap. -->
               <span
                 class="text-[11px] text-zinc-500"
@@ -2743,7 +2741,7 @@
                 <!-- The mistakenness chip lives in the Scores row above, not
                      next to the detector provenance chips. -->
                 {#if isMultiBoxSlot && activeSlot}
-                  <!-- W8: no separate "candidate" concept — a
+                  <!-- No separate "candidate" concept — a
                        verifier-rejected box is just a SlotBox with
                        state: 'rejected' and its own rejectionReason
                        (owner decision 2026-09-26, no backward
@@ -2771,7 +2769,7 @@
                   {/each}
                 </span>
               {/if}
-              <!-- OpenProcessor W1 (text-free regions): a slot with no
+              <!-- Text-free regions: a slot with no
                    text capability renders no text row/edit at all — not
                    even a disabled input — since the backend 422s
                    `region_text` on such a profile. -->

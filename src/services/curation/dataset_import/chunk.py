@@ -1,4 +1,4 @@
-"""The per-image import flow (W10.6) and its chunk loop.
+"""The per-image import flow and its chunk loop.
 
 For each image: load it, plan the item labels against what the image
 already holds, write the plan ahead to the ledger, then apply it: item

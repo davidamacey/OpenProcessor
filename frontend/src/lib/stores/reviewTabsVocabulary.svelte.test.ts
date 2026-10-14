@@ -2,7 +2,7 @@
  * reviewTabsVocabularyStore — loads GET {API_PREFIX}/review/tabs once,
  * degrading to an empty map (never a throw) on failure so every caller's
  * `labelFor(id, fallback)` falls back to the tab's own static label
- * (W0 naming-sweep finding m9). The store is a module singleton, so every
+ * The store is a module singleton, so every
  * test resets it first.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

@@ -37,7 +37,7 @@ def _classes_page_stubs(stub) -> None:
 
 
 def test_breadcrumb_is_not_truncated_at_800(stub, page, app_url):
-    """F8 D10 / F-51: the route crumb next to the logo truncated to
+    """The route crumb next to the logo truncated to
     "classe" at 800px."""
     page.set_viewport_size(NARROW)
     _classes_page_stubs(stub)
@@ -87,7 +87,7 @@ def test_bakeoff_ranked_table_shows_scroll_cue_at_800(stub, page, app_url):
 
 
 def test_settings_unset_sort_is_not_blank(stub, page, app_url):
-    """F-69: with no pinned sort and no served default the review-sort
+    """With no pinned sort and no served default the review-sort
     select rendered blank."""
     from test_curation_settings import METHODS_TODAY, SETTINGS_EMPTY, register
 
@@ -108,8 +108,8 @@ def test_settings_unset_sort_is_not_blank(stub, page, app_url):
 
 
 def test_region_inventory_card_uses_served_display_name(stub, page, app_url):
-    """F8 D7: the pinned region inventory card showed the raw class id as
-    both title and subtitle instead of the served display name. F-37: the
+    """The pinned region inventory card showed the raw class id as
+    both title and subtitle instead of the served display name. The
     class cluster's chip reads cohesion, not purity."""
     from fixtures.wire import REGION_CLASS, REGION_TAB_LABEL, make_item
     from test_visual_fix_pages_narrow import CLASSES as NARROW_CLASSES

@@ -1,4 +1,4 @@
-"""Row shapes of the region list routes (W8.10).
+"""Row shapes of the region list routes.
 
 A row is the full wire item plus ``region_box_id``. A request that selects
 boxes returns one row per matching box (all box filters matching the SAME

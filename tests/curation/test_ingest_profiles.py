@@ -256,7 +256,7 @@ def test_class_sources_follow_profile_names(clean_env: pytest.MonkeyPatch) -> No
     )
 
 
-# A pre-W8 unit test named test_worker_cohort_gate_uses_configured_names
+# A unit test named test_worker_cohort_gate_uses_configured_names
 # lived here, covering the deleted combined module's cohort-gate helper.
 # That "cohort gate" concept doesn't exist in the live streaming
 # pipeline: the runner's combined stage always takes the combined-call

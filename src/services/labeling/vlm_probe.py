@@ -1,4 +1,4 @@
-"""Run one VLM call against supplied crops and report what was asked and answered (W5).
+"""Run one VLM call against supplied crops and report what was asked and answered.
 
 ``probe`` is the test-on-crop hook behind ``POST /prompt_packs/test``: it runs the
 PRODUCTION labeler method for the call (so the parsed result is, by

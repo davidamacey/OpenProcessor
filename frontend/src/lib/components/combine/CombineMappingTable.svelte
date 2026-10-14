@@ -4,7 +4,7 @@
    * `sources[].classes` (name, count, the served `mapped_to`). `create`
    * defines a target class by name; `map` picks one of the names the
    * form's own `create` rows define (across every source); `skip` and
-   * `region` need nothing more. This is deliberately not the W10
+   * `region` need nothing more. This is deliberately not the dataset-import
    * `MappingTable`: combine maps into classes the request itself creates,
    * by name, with no registry, `resolved` or match chips.
    */

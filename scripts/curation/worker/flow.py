@@ -87,7 +87,7 @@ async def producer(
         fairness_scheduler.set_in_flight(dict(inflight_counts))
         await project_registry.ensure_fresh()
 
-        # W2 sec 4.5 (B1): one hot-reload check per active project,
+        # One hot-reload check per active project,
         # each bound in turn -- never a single process-wide runtime.
         # A brand-new project (first cycle it is seen) builds its
         # first runtime here too; a project whose sync fails this

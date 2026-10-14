@@ -1,5 +1,5 @@
 """``validate_vlm_endpoint``: the one validator behind validate, create,
-clone, PUT, activate and per-run resolution (W9.4)."""
+clone, PUT, activate and per-run resolution."""
 
 from __future__ import annotations
 

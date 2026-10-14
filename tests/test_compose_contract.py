@@ -11,7 +11,7 @@ Covers:
 (b) every curation worker service carries ``profiles: [curation]``, so
     the default ``docker compose up`` experience never starts it;
 (c) no two services share a ``container_name`` or a host port;
-(d) the ``vlm`` service's command (W9.7): one compose file serves every
+(d) the ``vlm`` service's command: one compose file serves every
     catalog entry and its defaults are the command this stack was tested
     with, checked by a hermetic evaluation of the shell command and, when a
     Docker CLI is present, by ``docker compose config``.
@@ -45,7 +45,7 @@ _CURATION_WORKER_SERVICES = (
     'curation-cluster-refresh',
 )
 
-# F-3 (fresh-start E2E findings 2026-09-25): the monitoring stack used to
+# the monitoring stack used to
 # start on a bare `docker compose up -d` alongside the core services --
 # a surprise on a shared host (alloy mounts /var/run/docker.sock and tails
 # EVERY container on the host; dcgm-exporter reserves `count: all` GPUs).
@@ -277,7 +277,7 @@ def test_evaluator_sees_exports_at_the_api_path() -> None:
 
 
 def test_evaluator_gets_the_same_mlflow_tracking_url_as_the_trainer() -> None:
-    """F-46 (fresh-start E2E findings 2026-09-25): the trainer gets
+    """The trainer gets
     MLFLOW_TRACKING_URI but the evaluator didn't, so bake-off runs always
     logged 'mlflow logging skipped: ... port=5000' against localhost
     instead of the curation-mlflow service."""
@@ -302,7 +302,7 @@ def test_evaluator_gets_the_same_mlflow_tracking_url_as_the_trainer() -> None:
 
 
 def test_api_evaluator_segmenter_gpu_ids_are_env_driven_not_hardcoded() -> None:
-    """F-2 (fresh-start E2E findings 2026-09-25): api, curation-evaluator
+    """api, curation-evaluator
     and segmenter used to hardcode device_ids: ['0'] regardless of
     TRITON_GPU_ID/VLM_GPU_ID, so a host whose free GPU wasn't 0 needed a
     compose edit to run them at all."""
@@ -698,7 +698,7 @@ def test_examples_reachable_on_api_and_detection_worker() -> None:
         )
 
 
-# F-33/F-34 (fresh-start E2E findings 2026-09-25): curation-auto-label-worker
+# curation-auto-label-worker
 # runs the same in-process pipeline (cascade_detect / profile_registry /
 # source-image serving) as curation-detection-worker, not a thin HTTP client
 # like curation-vlm-worker/curation-cluster-refresh -- it needs the same
@@ -717,7 +717,7 @@ _HTTP_CLIENT_ONLY_CURATION_SERVICES = ('curation-vlm-worker', 'curation-cluster-
 
 
 def test_class_registry_data_mounted_where_needed() -> None:
-    """F-34b: each project's class registry lives under OP_PROJECTS_DATA_ROOT
+    """Each project's class registry lives under OP_PROJECTS_DATA_ROOT
     (default ./data/projects/<project>/class_registry.json).
     Without ./data mounted, the registry loads empty and any class-aware
     stage (the VLM auto-label stage, training, promote, eval) raises
@@ -809,7 +809,7 @@ def test_vlm_image_pinned_by_digest() -> None:
 
 
 def test_api_default_trainer_container_matches_the_trainer_service_name() -> None:
-    """F-72: /train/preflight's trainer-reachability probe
+    """/train/preflight's trainer-reachability probe
     (GpuArbiterConfig.trainer_container, env OP_GPU_ARBITER_TRAINER_CONTAINER)
     used to default to unset -- reporting the misleading "no trainer
     container configured" even while curation-trainer was up and healthy,
@@ -841,7 +841,7 @@ def test_api_default_trainer_container_matches_the_trainer_service_name() -> Non
 
 
 # =============================================================================
-# F-75: a container must never read a *host*-port env var (the left side of
+# a container must never read a *host*-port env var (the left side of
 # a `ports:` mapping, e.g. SEGMENTER_PORT) as its own in-container config.
 # `env_file: .env` loads the whole file into the container, so a same-named
 # Dockerfile ENV default silently gets overridden by the host-port value --
@@ -854,7 +854,7 @@ _DOCKERFILE_ENV_VAR_RE = re.compile(r'^\s*([A-Z0-9_]+)=', re.MULTILINE)
 
 # installer plan §7: every published port now also carries a leading
 # ${OP_BIND_ADDRESS:-127.0.0.1} publish-address segment (`ADDR:HOST:CONTAINER`
-# short syntax), which is never the F-75 host-port-var-reused-as-container-ENV
+# short syntax), which is never the host-port-var-reused-as-container-ENV
 # case this check guards against -- exclude it explicitly rather than
 # reworking the leading-anchor match for a 3-segment string.
 _NON_HOST_PORT_VARS = frozenset({'OP_BIND_ADDRESS', 'OP_UI_BIND_ADDRESS'})
@@ -893,7 +893,7 @@ def _dockerfile_env_var_names(dockerfile_path: Path) -> set[str]:
 
 
 def test_no_service_reads_a_host_port_var_as_its_own_container_config() -> None:
-    """Regression guard for F-75 (segmenter bound to the host port because
+    """Regression guard (segmenter bound to the host port because
     SEGMENTER_PORT named both the host mapping and the Dockerfile's default
     listen-port ENV).
 
@@ -927,10 +927,10 @@ def test_no_service_reads_a_host_port_var_as_its_own_container_config() -> None:
 COMPOSE = REPO_ROOT / 'docker-compose.yml'
 SERVER = 'python3 -m vllm.entrypoints.openai.api_server'
 
-#: The argv the vlm service ran before W9 (docker-compose.yml at b3163f8c), with
+#: The argv the vlm service ran before it became catalog-driven, with
 #: --max-model-len raised from 8192 to 16384 (an 8-image combined batch plus its
 #: 6144 output tokens does not fit in 8192 -- found live).
-PRE_W9_ARGV = [
+ORIGINAL_VLM_ARGV = [
     '--model=google/gemma-4-E4B-it',
     '--served-model-name=gemma-4-e4b',
     '--dtype=bfloat16',
@@ -993,8 +993,8 @@ def _evaluate(overrides: dict[str, str] | None = None) -> list[str]:
     return result.stdout.splitlines()
 
 
-def test_the_defaults_are_exactly_the_pre_w9_command() -> None:
-    assert _evaluate() == PRE_W9_ARGV
+def test_the_defaults_are_exactly_the_original_vlm_command() -> None:
+    assert _evaluate() == ORIGINAL_VLM_ARGV
 
 
 def test_the_service_execs_the_server_so_it_receives_signals() -> None:
@@ -1012,7 +1012,7 @@ def test_the_service_execs_the_server_so_it_receives_signals() -> None:
 def test_a_set_but_empty_value_drops_that_flag(override: dict[str, str], flag: str) -> None:
     argv = _evaluate(override)
     assert not [a for a in argv if a.startswith(flag)]
-    assert len(argv) == len(PRE_W9_ARGV) - 1
+    assert len(argv) == len(ORIGINAL_VLM_ARGV) - 1
 
 
 def test_an_unset_value_keeps_the_gemma_defaults_but_an_empty_one_is_not_a_default() -> None:
@@ -1048,7 +1048,7 @@ def test_a_catalog_models_own_values_replace_the_defaults() -> None:
 def test_extra_args_are_appended_and_split_on_whitespace() -> None:
     argv = _evaluate({'VLM_EXTRA_ARGS': '--quantization fp8 --enforce-eager'})
     assert argv[-3:] == ['--quantization', 'fp8', '--enforce-eager']
-    assert argv[: len(PRE_W9_ARGV)] == PRE_W9_ARGV
+    assert argv[: len(ORIGINAL_VLM_ARGV)] == ORIGINAL_VLM_ARGV
 
 
 def test_a_value_with_spaces_or_shell_syntax_stays_one_argument() -> None:

@@ -171,7 +171,7 @@
   // and swaps `keymapStore`'s document in place; every dispatch resolves
   // an action's keys through the store at keypress time, so a rebind
   // takes effect immediately. Only subscribed once the keymap route is
-  // known to exist (`available !== false`) — a pre-W2b backend has no
+  // known to exist (`available !== false`) — a backend without the keymap route has no
   // `config.changed axis=keymap` event to wait for anyway.
   $effect(() => {
     if (!slug || keymapAvailability.available === false) return;
@@ -325,7 +325,7 @@
 
       <AboutModal open={aboutOpen} onclose={() => (aboutOpen = false)} {appName} />
 
-      <!-- F8 D10 / F-51: the crumb never shrinks (it truncated to "reviev" /
+      <!-- The crumb never shrinks (it truncated to "reviev" /
          "classe" at 800px); the primary nav strip to its right scrolls
          with a chevron instead. -->
       <nav
@@ -436,7 +436,7 @@
       </span>
     </header>
 
-    <!-- Content. Keyed on the region profile's seedVersion (F-78): the
+    <!-- Content. Keyed on the region profile's seedVersion: the
        slot registry is a plain module binding, so when a slow boot left
        the profile unknown and a later /health poll seeds it, re-mounting
        the page is what makes the region tab and other region surfaces

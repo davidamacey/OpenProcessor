@@ -1,4 +1,4 @@
-"""WP-1.5 (#212) equivalence gate: moving the retrain into the background job
+"""Issue #212 equivalence gate: moving the retrain into the background job
 changes where it runs, never what it computes.
 
 * The job route and the synchronous route carry the same defaults for every

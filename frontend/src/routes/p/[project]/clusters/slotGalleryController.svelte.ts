@@ -55,11 +55,11 @@ export function createSlotGalleryController(slot: SlotSpec) {
     regionStatusesStore.falsePositiveStatus ??
     slot.capabilities.lifecycle?.falsePositiveState;
 
-  // W8.7: per-box `state` triage, a different vocabulary from the
+  // per-box `state` triage, a different vocabulary from the
   // item-level region_status above (`accepted`/`rejected`/
   // `false_positive`/`proposed`, keyed here by the served `box_states`
   // entry's `role`). Falls back to the literal role string — the fixed
-  // W8.7 wire vocabulary, not a client guess — for a pre-W8 backend that
+  // wire vocabulary, not a client guess — for a backend that
   // hasn't served `box_states` yet.
   const confirmBoxState = (): string =>
     regionStatusesStore.boxStateByRole('accepted') ?? 'accepted';
@@ -552,10 +552,10 @@ export function createSlotGalleryController(slot: SlotSpec) {
       const conflictCount = res.conflicts?.length ?? 0;
       const invalid = res.invalid ?? [];
       if (conflictCount > 0 || invalid.length > 0) {
-        // W8: a conflict now carries a served `message` (RegionBatchConflict)
-        // on a W8 backend — show it verbatim instead of just a count when
+        // a conflict now carries a served `message` (RegionBatchConflict)
+        // on a current backend — show it verbatim instead of just a count when
         // present, since it names the real reason ("The item changed
-        // since it was loaded."). A pre-W8 backend has no `message`, so
+        // since it was loaded."). An older backend has no `message`, so
         // this falls back to the bare count exactly as before.
         const conflictDetail = res.conflicts?.find((c) => c.message)?.message;
         const parts = [
@@ -582,15 +582,15 @@ export function createSlotGalleryController(slot: SlotSpec) {
   }
 
   /**
-   * W8: per-box triage over the selected rows (region gallery triage — a
-   * cluster is a set of boxes, W8.8/§7.7). Unlike `applyStatus` above
+   * per-box triage over the selected rows (region gallery triage — a
+   * cluster is a set of boxes). Unlike `applyStatus` above
    * (whole-item `region_status`, `PATCH region_meta` / `POST
    * batch_status`), this goes through `POST /regions/batch_box_state`,
    * which flips only the targeted box on each item, never its siblings —
    * exactly the spec's rule for triage from a cluster ("never the
    * item-level batch_status, which would flip every sibling box").
    * Targets are built from the row's own served `region_box_id`
-   * (`RegionBrowseItem`, W8.10) — a pre-W8 row without one is skipped
+   * (`RegionBrowseItem`) — a row without one is skipped
    * rather than silently flipping a whole item.
    */
   async function applyBoxState(rowKeys: string[], state: string): Promise<void> {

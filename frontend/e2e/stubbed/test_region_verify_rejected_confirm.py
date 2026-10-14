@@ -1,11 +1,7 @@
-"""W8 multi-box regions (docs/design/w8-multibox-frontend-plan-2026-09-26.md;
-owner decision recorded 2026-09-26): Enter confirms only `proposed` boxes,
+"""Multi-box regions: Enter confirms only `proposed` boxes,
 leaving `rejected`/`false_positive` siblings exactly as they are — a
-whole-set confirm never overrides a per-box decision. This supersedes the
-pre-W8 file this replaces (`test_confirming_a_verify_rejected_item_...`),
-which tested the OLD single-box "confirm promotes the rejected candidate"
-behavior; W8 removes candidate promotion entirely (a rejected candidate is
-just a box with `state: 'rejected'`, per §7.7).
+whole-set confirm never overrides a per-box decision. There is no candidate
+promotion: a rejected candidate is just a box with `state: 'rejected'`.
 
 The multi-box UI activates per-item, gated on the crop actually carrying a
 served `region_boxes` list (`readSlot.ts`) — every fixture here serves it,
@@ -292,7 +288,7 @@ def test_z_undo_after_a_multibox_confirm_calls_the_single_region_undo_route(
 
     def region_undo(request, match):
         undo_calls.append(match.string)
-        # Backend-confirmed W8 undo contract: restores the whole prior
+        # Undo contract: restores the whole prior
         # region_boxes list + region_status + region_revision in one step.
         return (
             200,
@@ -331,7 +327,7 @@ def test_z_undo_after_a_multibox_confirm_calls_the_single_region_undo_route(
 
 
 def test_on_screen_confirm_button_uses_the_multibox_write_too(stub, page, app_url):
-    """The Confirm button (not just Enter) must call the W8 multi-box
+    """The Confirm button (not just Enter) must call the multi-box
     confirm — a real bug found live: the action-button row was wired to
     the legacy single-box confirmSlot()/saveBboxAndExit() unconditionally,
     so clicking Confirm (or Save bbox in edit mode) sent nothing (or

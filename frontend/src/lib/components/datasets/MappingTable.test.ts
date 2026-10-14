@@ -1,5 +1,5 @@
 /**
- * The class-mapping step, mounted (§7.12 item 1, W10.5): one row per
+ * The class-mapping step, mounted: one row per
  * served class with its served suggestion label, the highlight driven by
  * the served `resolved`, and controls that write names/ids the operator
  * picked — never a dataset index.

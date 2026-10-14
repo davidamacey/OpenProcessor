@@ -1,8 +1,7 @@
-"""OpenProcessor W10 (labeled-dataset import + Reprocess), any_domain_plan.md
-§7.12; docs/design/w10-import-reprocess-ui-plan-2026-09-27.md.
+"""Labeled-dataset import and Reprocess.
 
-The backend has not shipped W10 yet, so every payload below follows the
-spec's own examples. The fail-closed stub means any W10 request the page
+The dataset-import routes are stubbed with payloads shaped like the served
+contract. The fail-closed stub means any import request the page
 makes that a test did not expect fails the test.
 
   1. `test_import_with_mapping_starts_and_follows_the_job` — /ingest links
@@ -17,7 +16,7 @@ makes that a test did not expect fails the test.
      precedes the apply; both bodies asserted.
   5. `test_feature_absent_when_formats_404` — conftest's default 404:
      no ingest link, no Reprocess button, the wizard route says so, and no
-     other W10 request fires.
+     other import request fires.
 """
 
 from __future__ import annotations
@@ -314,7 +313,7 @@ def completed_job() -> dict[str, Any]:
     return j
 
 
-def serve_w10(stub: Any) -> None:
+def serve_import_page(stub: Any) -> None:
     stub.on("GET", r"/datasets/formats(\?|$)", copy.deepcopy(FORMATS))
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
 
@@ -339,7 +338,7 @@ def serve_job_sequence(stub: Any, sequence: list[dict[str, Any]]) -> list[int]:
 
 
 def test_import_with_mapping_starts_and_follows_the_job(stub, page, app_url):
-    serve_w10(stub)
+    serve_import_page(stub)
     stub.on("GET", r"/datasets/imports(\?|$)", {"items": [], "total": 0, "page": 1, "page_size": 50})
     previews: list[dict[str, Any]] = []
 
@@ -410,7 +409,7 @@ def test_import_with_mapping_starts_and_follows_the_job(stub, page, app_url):
 
 
 def test_job_progresses_to_done(stub, page, app_url):
-    serve_w10(stub)
+    serve_import_page(stub)
     reads = serve_job_sequence(stub, [job(), job(), completed_job()])
 
     page.goto(f"{app_url}/p/default/datasets/imports/{IMPORT_ID}")
@@ -430,7 +429,7 @@ def test_job_progresses_to_done(stub, page, app_url):
 
 
 def test_failed_job_shows_its_served_error(stub, page, app_url):
-    serve_w10(stub)
+    serve_import_page(stub)
     failed = job(
         status="failed",
         poll_after_s=None,
@@ -493,7 +492,7 @@ def serve_cluster(stub: Any) -> None:
 
 
 def test_reprocess_confirm_on_cluster_selection(stub, page, app_url):
-    serve_w10(stub)
+    serve_import_page(stub)
     serve_cluster(stub)
     bodies: list[dict[str, Any]] = []
 

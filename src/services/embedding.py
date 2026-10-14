@@ -4,7 +4,6 @@ Embedding service for MobileCLIP encoding.
 Handles image and text embedding generation with caching.
 """
 
-import asyncio
 import hashlib
 import io
 import logging
@@ -184,40 +183,3 @@ class EmbeddingService:
             cache.set(cache_key, embedding)
 
         return embedding
-
-    async def encode_image_batch(
-        self, image_bytes_list: list[bytes], use_cache: bool = True
-    ) -> list[np.ndarray]:
-        """
-        Encode multiple images concurrently.
-
-        Uses asyncio.gather for concurrent Triton requests.
-        Triton batches these requests automatically.
-
-        Args:
-            image_bytes_list: List of JPEG/PNG bytes
-            use_cache: Use embedding cache (default True)
-
-        Returns:
-            List of 512-dim L2-normalized embeddings
-        """
-        tasks = [
-            self.encode_image(img_bytes, use_cache=use_cache) for img_bytes in image_bytes_list
-        ]
-
-        return await asyncio.gather(*tasks)
-
-    @staticmethod
-    def get_embedding_norm(embedding: np.ndarray) -> float:
-        """
-        Calculate L2 norm of embedding.
-
-        For L2-normalized embeddings, this should be ~1.0.
-
-        Args:
-            embedding: Embedding vector
-
-        Returns:
-            L2 norm (float)
-        """
-        return float(np.linalg.norm(embedding))

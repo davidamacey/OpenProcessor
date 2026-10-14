@@ -232,32 +232,6 @@ def get_text_cache(max_size: int = 1000, ttl_seconds: int = 3600) -> EmbeddingCa
     return _text_embedding_cache
 
 
-def clear_all_caches():
-    """Clear all global caches."""
-    if _image_embedding_cache:
-        _image_embedding_cache.clear()
-    if _text_embedding_cache:
-        _text_embedding_cache.clear()
-
-
-def get_all_cache_stats() -> dict[str, dict[str, Any]]:
-    """
-    Get statistics for all caches.
-
-    Returns:
-        Dictionary with stats for each cache
-    """
-    stats = {}
-
-    if _image_embedding_cache:
-        stats['image_cache'] = _image_embedding_cache.get_stats()
-
-    if _text_embedding_cache:
-        stats['text_cache'] = _text_embedding_cache.get_stats()
-
-    return stats
-
-
 # CLIPTokenizer singleton (loading is expensive - ~500ms)
 # Justification: Tokenizer loading from HuggingFace is expensive (~500ms)
 # - Shared instance across all text embedding requests prevents repeated loading

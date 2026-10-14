@@ -12,7 +12,7 @@ Two independent prunes, both dry-run by default:
 Neither touches MLflow runs.
 
 Loops over every active AND archived project by default, pruning each
-project's own runs under its own binding (projects_plan.md §11 W7).
+project's own runs under its own binding.
 ``--project SLUG`` restricts the run to just that one project.
 
     # See what would be removed, every project.

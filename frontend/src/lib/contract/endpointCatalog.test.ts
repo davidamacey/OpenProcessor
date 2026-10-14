@@ -145,7 +145,7 @@ const MANUAL_OVERRIDES: Array<{
     file: 'lib/api.ts',
     marker: 'export function runServedNextStep(',
     // step.method/step.path: a finished import's served `next_steps`
-    // entry (W10.11). The spec's one documented example is
+    // entry. The spec's one documented example is
     // `POST /regions/cluster`; anything else it serves is the server's
     // own route.
     path: '/regions/cluster',

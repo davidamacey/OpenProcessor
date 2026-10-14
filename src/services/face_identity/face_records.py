@@ -18,49 +18,6 @@ class FaceRecordMixin:
     # Utility Methods
     # =========================================================================
 
-    async def get_face_by_id(self, face_id: str) -> dict | None:
-        """
-        Get a single face document by ID.
-
-        Args:
-            face_id: Face identifier
-
-        Returns:
-            Face document or None if not found
-        """
-        try:
-            response = await self.opensearch.client.get(
-                index=IndexName.FACES.value,
-                id=face_id,
-                _source={'excludes': ['embedding']},
-            )
-            return response['_source']
-        except Exception as e:
-            logger.error(f'Failed to get face {face_id}: {e}')
-            return None
-
-    async def delete_face(self, face_id: str) -> bool:
-        """
-        Delete a face from the index.
-
-        Args:
-            face_id: Face identifier to delete
-
-        Returns:
-            True if deleted, False otherwise
-        """
-        try:
-            await self.opensearch.client.delete(
-                index=IndexName.FACES.value,
-                id=face_id,
-                refresh=True,
-            )
-            logger.info(f'Deleted face {face_id}')
-            return True
-        except Exception as e:
-            logger.error(f'Failed to delete face {face_id}: {e}')
-            return False
-
     async def get_all_persons(self, limit: int = 100) -> list[dict]:
         """
         Get all unique person IDs with face counts.

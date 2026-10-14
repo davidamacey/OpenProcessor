@@ -1,4 +1,4 @@
-"""The one place a :class:`VlmLabeler` is constructed (W9.0/M4).
+"""The one place a :class:`VlmLabeler` is constructed.
 
 ``labeler_for(endpoint, pack)`` builds -- and caches -- a labeler from a
 resolved :class:`~src.services.labeling.vlm_endpoints.VlmEndpoint` and a

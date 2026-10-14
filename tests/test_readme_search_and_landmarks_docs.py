@@ -1,4 +1,4 @@
-"""F-27 (fresh-start E2E findings 2026-09-25): README/CLAUDE.md doc
+"""README/CLAUDE.md doc
 examples must match the real API.
 
 Two mismatches:

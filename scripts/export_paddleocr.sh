@@ -47,7 +47,7 @@ PYTORCH_MODELS_DIR="$PROJECT_DIR/pytorch_models/paddleocr"
 # shellcheck source=lib/ports.sh
 source "${SCRIPT_DIR}/lib/ports.sh"
 
-# F-66: resolve from THIS deployment's .env instead of hardcoding
+# resolve from THIS deployment's .env instead of hardcoding
 # localhost:4600/4603 -- a remapped port (second isolated stack) must
 # still export/test against the right containers.
 API_PORT="$(env_port API_PORT 4603)"

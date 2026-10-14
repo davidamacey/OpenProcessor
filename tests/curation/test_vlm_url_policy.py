@@ -1,4 +1,4 @@
-"""The VLM endpoint URL policy (W9.4 / W9.9): syntax, the SSRF denials that
+"""The VLM endpoint URL policy: syntax, the SSRF denials that
 can never be bypassed, and the locality classification behind the
 external-images acknowledgement. Every DNS answer here is pinned through
 ``_resolve``; nothing touches the network."""

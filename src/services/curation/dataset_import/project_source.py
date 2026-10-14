@@ -1,7 +1,7 @@
-"""A project as a dataset source (W10.19): another project's validated items,
+"""A project as a dataset source: another project's validated items,
 region boxes, negatives and splits, read page by page under a read-only
-binding and projected onto W10's :class:`ScanEntry` stream so the mapping,
-completeness and provenance rules stay W10's.
+binding and projected onto the :class:`ScanEntry` stream so the mapping,
+completeness and provenance rules stay the import's.
 
 Every read binds the source ``read_only`` around that one call only (never
 across a ``yield``), so the project guard refuses any write to it and the
@@ -197,7 +197,7 @@ async def scan_project(
     client: Any, record: ProjectRecord, *, validated_only: bool = False
 ) -> DatasetScan:
     """The whole source as a :class:`DatasetScan` (``format='project'``,
-    ``root`` = the source slug): W10's mapping completeness reads its class
+    ``root`` = the source slug): the import's mapping completeness reads its class
     box counts."""
     names = class_names_by_id(record)
     entries: list[ScanEntry] = []

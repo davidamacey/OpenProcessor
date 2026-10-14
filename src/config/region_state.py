@@ -132,10 +132,10 @@ HUMAN_WRITABLE_STATUSES: frozenset[RegionStatus] = frozenset(
 
 @dataclass(frozen=True)
 class BoxStateInfo:
-    """What one per-box ``state`` (W8) means, served on ``box_states``.
+    """What one per-box ``state`` means, served on ``box_states``.
 
-    ``tone`` is a semantic meaning, not a CSS color (W8.7, Cropwright
-    ask, coordinator-approved 2026-09-26): Cropwright maps tone to its
+    ``tone`` is a semantic meaning, not a CSS color (a Cropwright
+    ask): Cropwright maps tone to its
     own theme palette instead of keeping its own state->color rules.
     """
 
@@ -163,7 +163,7 @@ BOX_STATE_INFO: dict[str, BoxStateInfo] = {
 class BoxStateRoute:
     """Which per-box ``state`` values one region-box write route accepts,
     and what a new box (``box_id: null``) defaults to when the route
-    doesn't set one explicitly (W8.7/W8.8). The served list
+    doesn't set one explicitly. The served list
     (``box_state_routes`` on ``GET {prefix}/regions/statuses``) and the
     routes' own validators both read this table, so they can't drift."""
 

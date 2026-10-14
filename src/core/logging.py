@@ -45,12 +45,6 @@ def bind_request_id(request_id: str) -> None:
     structlog.contextvars.bind_contextvars(request_id=request_id)
 
 
-def clear_request_id() -> None:
-    """Reset both ContextVar + structlog contextvars to defaults."""
-    request_id_ctx.set('-')
-    structlog.contextvars.unbind_contextvars('request_id')
-
-
 _OUTAGE_LOGGERS = ('opensearch', 'elastic_transport')
 
 

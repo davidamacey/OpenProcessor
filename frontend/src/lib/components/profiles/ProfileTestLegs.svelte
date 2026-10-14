@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * The legs of a region-profile test (W5): per leg its served status,
+   * The legs of a region-profile test: per leg its served status,
    * reason and elapsed time, and a candidate table. Dropped candidates
    * are greyed with the served `drop_reason` in the tooltip. Nothing is
    * judged here; the server's `selected` / `drop_reason` decide.

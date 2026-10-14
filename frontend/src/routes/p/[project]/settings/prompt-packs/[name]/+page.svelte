@@ -52,7 +52,7 @@
   const fieldIds = $derived(ed.schema?.fields.map((f) => f.field) ?? []);
 
   /** Schema rows grouped by the served `group`, in first-appearance order;
-   *  the heading is the served label of the call with that id (W3-Q3). */
+   *  the heading is the served label of the call with that id. */
   const groups = $derived.by(() => {
     const schema = ed.schema;
     if (!schema)

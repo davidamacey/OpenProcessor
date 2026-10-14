@@ -52,7 +52,7 @@ WIRE_REGION_FIELDS = RegionFields()
 _NON_WIRE_REGION_ATTRS = frozenset(
     {
         'prefix',
-        'status_legacy',
+        'status_before_requeue',
         'boxes',
         'boxes_state',
         'box_embeddings',
@@ -322,7 +322,7 @@ def serialize_item(
         # human- or import-owned label, box or verdict that no automated
         # writer will touch. The client never re-derives it.
         'label_locked': is_locked_item(src, f),
-        # Dataset-import provenance (W10.10).
+        # Dataset-import provenance.
         'import_ids': list(src.get('import_ids') or []),
         'dataset_split': src.get('dataset_split'),
         'imported_at': src.get('imported_at'),
@@ -436,10 +436,8 @@ def region_boxes_to_wire(
     crop_id: str = '',
     prefix: str = '',
 ) -> dict[str, Any]:
-    """The W8 per-item box list plus its item-level summary fields
-    (any_domain_plan.md W8.9). Additive alongside the legacy per-box
-    scalar wire keys above -- see the W8 handback report for why those
-    are not removed yet. Each ``RegionBoxWire`` element also carries
+    """The per-item box list plus its item-level summary fields.
+    Each ``RegionBoxWire`` element also carries
     ``bbox_in_parent`` (the item-crop frame, derived; ``None`` with no
     usable item box) and ``thumbnail_url`` (``crop_id`` unset -> both
     keys omitted, e.g. a bare doc with no crop identity)."""

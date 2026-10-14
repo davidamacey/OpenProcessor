@@ -285,7 +285,7 @@ def test_empty_queue_offers_embed_them_only_when_served_and_relevant(stub, page,
             "suggested_reprocess": _EMBED_REQUEST,
         },
     )
-    # Reprocess is present only while the deployment serves the W10 vocabulary.
+    # Reprocess is present only while the deployment serves the import/reprocess vocabulary.
     stub.on("GET", r"/datasets/formats(\?|$)", copy.deepcopy(FORMATS))
     page.set_viewport_size({"width": 1600, "height": 1000})
     page.goto(f"{app_url}/p/default/review?tab=uncertainty")
@@ -397,7 +397,7 @@ def test_region_panel_shows_served_rejection_label_and_neutral_text_placeholder(
     )
     page.set_viewport_size({"width": 1600, "height": 1000})
     page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
-    # W8: the reason lives on the rejected box and renders as its served
+    # the reason lives on the rejected box and renders as its served
     # label in the Reason row, not as a raw id in an editable input.
     served = page.get_by_text("Verifier gave no verdict").first
     served.wait_for(timeout=ACTION_TIMEOUT_MS)

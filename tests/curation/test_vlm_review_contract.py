@@ -1,4 +1,4 @@
-"""The wire contract of the VLM surfaces (W9, §7.8): everything a UI needs
+"""The wire contract of the VLM surfaces: everything a UI needs
 is served (labels, choices, warnings), and what one project can see of the
 registry never tells it about another project."""
 

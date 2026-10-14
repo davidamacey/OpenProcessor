@@ -32,7 +32,6 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -310,36 +309,6 @@ def _resolve_pipeline(config: AugConfig) -> A.Compose:
 
 
 # ---------------------------------------------------------------------------
-# Public -- auto-balance
-# ---------------------------------------------------------------------------
-
-
-def compute_auto_balance(
-    class_counts: dict[int, int],
-    target_count: int,
-    max_multiplier: int,
-) -> dict[int, int]:
-    """Compute per-class multipliers that lift rare classes toward a target.
-
-    For each class with ``count < target_count``, set its multiplier to
-    ``min(max_multiplier, ceil(target_count / count))``. Classes already at or
-    above the target get multiplier 1. ``count == 0`` classes are skipped (no
-    augmentation can resurrect a missing class).
-    """
-    if target_count <= 0:
-        return {}
-    out: dict[int, int] = {}
-    for cid, count in class_counts.items():
-        if count <= 0:
-            continue
-        if count >= target_count:
-            out[cid] = 1
-            continue
-        out[cid] = min(max_multiplier, math.ceil(target_count / count))
-    return out
-
-
-# ---------------------------------------------------------------------------
 # Public -- build_augmented_dataset
 # ---------------------------------------------------------------------------
 
@@ -494,27 +463,3 @@ def build_augmented_dataset(
 def _iter_images(src_images: Path) -> Iterator[Path]:
     for ext in IMG_EXTS:
         yield from src_images.glob(f'*{ext}')
-
-
-# ---------------------------------------------------------------------------
-# MLflow hook (called by trainer.py after augmentation completes)
-# ---------------------------------------------------------------------------
-
-
-def log_augmentation_to_mlflow(result: AugResult) -> None:
-    """Log the augmentation config + sample images to the active MLflow run.
-
-    Best-effort: failures are swallowed so a flaky tracking server can't kill a
-    training run.
-    """
-    try:
-        import mlflow
-    except Exception as exc:  # MLflow is optional at runtime
-        log.warning('augment: mlflow unavailable, skipping log: %s', exc)
-        return
-    try:
-        mlflow.log_artifact(str(result.config_path), artifact_path='augmentation')
-        for sample in result.samples_log:
-            mlflow.log_artifact(str(sample), artifact_path='augmentation/samples')
-    except Exception as exc:  # tracking hiccup must not kill the run
-        log.warning('augment: mlflow log failed: %s', exc)

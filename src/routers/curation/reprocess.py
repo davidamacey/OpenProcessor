@@ -1,4 +1,4 @@
-"""Curation router sub-module: unified reprocess (W10.13).
+"""Curation router sub-module: unified reprocess.
 
 ``POST /reprocess`` (batch, dry run by default), the thin per-image and
 per-item forms (an explicit button: apply by default) and the job status /

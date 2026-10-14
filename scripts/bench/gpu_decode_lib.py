@@ -227,11 +227,6 @@ def tensor_diff(ref: np.ndarray, cand: np.ndarray, max_shift: int = 1) -> Tensor
     return TensorDiff(best[1], float(full.mean()), int(full.max()), float((full > 0).mean()))
 
 
-def t_gate(d: TensorDiff, mean_max: float = 0.5, abs_max: int = 8) -> bool:
-    """Gate T of the parent plan: no shift, mean under half a grey level, max at most 8."""
-    return d.best_shift == (0, 0) and d.mean_abs < mean_max and d.max_abs <= abs_max
-
-
 # --------------------------------------------------------------------- stats and ceilings
 
 
@@ -262,22 +257,6 @@ def _fit(points: list[tuple[float, float]]) -> tuple[float, float]:
     return float(a), float(b)
 
 
-def crossover_megapixels(
-    cpu: list[tuple[float, float]], gpu: list[tuple[float, float]]
-) -> float | None:
-    """Megapixels above which the GPU path costs less per image than the CPU path.
-
-    Each list holds ``(megapixels, ms per image)`` points; both are fitted with a line. None
-    when the GPU line is never below the CPU line for a positive size.
-    """
-    a_c, b_c = _fit(cpu)
-    a_g, b_g = _fit(gpu)
-    if b_c <= b_g:
-        return None
-    mp = (a_g - a_c) / (b_c - b_g)
-    return max(mp, 0.0)
-
-
 def ceiling(
     *, host_cpu_s: float, host_cores: float, gpu_ms: list[tuple[float, int]]
 ) -> dict[str, Any]:
@@ -294,12 +273,3 @@ def ceiling(
         'images_per_s': min(host, gpu),
         'binding': 'host' if host < gpu else 'gpu',
     }
-
-
-def clean_reps(reps: list[dict[str, Any]], max_foreign: float = 0.0) -> list[dict[str, Any]]:
-    """Repetitions whose sampled foreign SM share on the card is known and at most the limit."""
-    return [
-        r
-        for r in reps
-        if r.get('foreign_sm_pct') is not None and r['foreign_sm_pct'] <= max_foreign
-    ]

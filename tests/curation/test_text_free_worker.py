@@ -98,7 +98,7 @@ class TestTextFreeWrites:
     async def test_rejected_box_vlm_reading_is_also_dropped(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """W8 M6 fix (pipeline-wiring review, 2026-09-27): the text-free
+        """The text-free
         leak fix only ever covered ACCEPTED boxes
         (``_box_with_resolved_text`` runs on the per-box text-resolution
         loop's accepted branch only). A REJECTED box's ``text`` came
@@ -151,7 +151,7 @@ class TestTextFreeWrites:
         assert doc[F.status] == 'detected'
         box = doc[F.boxes][0]
         assert box['bbox_norm']
-        # W8: no verified/validated concept per box (RegionBox carries
+        # no verified/validated concept per box (RegionBox carries
         # none) -- state='accepted' is the machine-acceptance signal.
         assert box['state'] == 'accepted'
         assert _text_keys(doc) == []
@@ -219,7 +219,6 @@ class TestNoDetectorLeg:
         pool.infer = AsyncMock()
         detector = RegionDetector(pool, _profile().__class__(name='p', detector_model=''))
         assert await detector.detect(_jpeg()) is None
-        assert await detector.detect_batch([_jpeg(), _jpeg()]) == [None, None]
         assert await detector.detect_multi(_jpeg()) == []
         assert await detector.detect_batch_multi([_jpeg(), _jpeg()]) == [[], []]
         pool.infer.assert_not_awaited()
@@ -258,7 +257,7 @@ class TestLegacyCascade:
     ) -> None:
         """No detector leg (text-free, ``detector_model=''``) and the
         segmenter also misses -> terminal ``no_region_box``, detector
-        never called. W8: ported off the deleted per-crop
+        never called. Ported off the deleted per-crop
         ``_process_crop`` onto the real streaming pipeline via
         ``_drive``."""
         fake_os = _fake_os()

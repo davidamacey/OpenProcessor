@@ -1,8 +1,8 @@
-"""Dataset scanning (W10.2, W10.4): read a directory (YOLO or COCO
+"""Dataset scanning: read a directory (YOLO or COCO
 format) into an ordered, format-neutral :class:`DatasetScan` — no writes,
 no OpenSearch, no Triton. ``POST /datasets/preview`` and the import job
 both call :func:`scan_dataset`; the job re-runs the same scan so preview
-stays advisory and the job authoritative (W10.4).
+stays advisory and the job authoritative.
 
 ``scan_dataset`` is the one entry point: it applies the path policy to the
 root, detects the format, and dispatches to the reader.
@@ -43,7 +43,7 @@ class LabelBox:
 @dataclass
 class ScanEntry:
     """One dataset image, format-neutral. Consumed by
-    ``dataset_import/job.py``'s per-image import flow and (W10.19) by
+    ``dataset_import/job.py``'s per-image import flow and by
     P4's project-source reader."""
 
     rel_path: str
@@ -55,7 +55,7 @@ class ScanEntry:
     stratum: str | None = None
     hard_negative: bool = False
     """An OpenProcessor-export ``neg:`` frame: a human marked a detector
-    region false-positive there (W10.2.2)."""
+    region false-positive there."""
     declared_size: tuple[int, int] | None = None
     """A COCO image's declared ``(width, height)``; the job compares it with
     the decoded size (``image_size_mismatch``)."""
@@ -78,7 +78,7 @@ class DatasetScan:
     op_export: OpExportInfo | None = None
     class_box_counts: dict[str, int] = field(default_factory=dict)
     """dataset_class -> total box count across every entry (only classes
-    with >=1 box need a mapping decision, W10.5)."""
+    with >=1 box need a mapping decision)."""
 
 
 def exif_transposed_size(path: Path) -> tuple[int, int] | None:
@@ -96,7 +96,7 @@ def exif_transposed_size(path: Path) -> tuple[int, int] | None:
 
 
 def detect_format(root: Path) -> DatasetFormat:
-    """First match wins (W10.2.1)."""
+    """First match wins."""
     from src.services.curation.dataset_import.op_export import is_op_export
 
     if is_op_export(root):
@@ -128,7 +128,7 @@ def source_sha(scan: DatasetScan) -> str:
     (encoded as the boxes themselves, since a full second read of every
     label file's raw bytes is the job's job, not the scan's).
 
-    Simplification note: any_domain_plan.md W10.11 hashes label FILE
+    Simplification note: the intended design hashes label FILE
     BYTES directly (so an edit that doesn't change parsed boxes, e.g. a
     reordered row, still changes the hash) and separately hashes image
     (path, size). This implementation hashes over the parsed

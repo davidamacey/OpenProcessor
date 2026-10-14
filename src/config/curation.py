@@ -70,9 +70,8 @@ class IndexRole(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and format
     # index.
     UMAP_STATE = 'umap_state'
     UMAP_VIZ_STATE = 'umap_viz_state'
-    # The config store (W2, docs/design/openprocessor_internal/any_domain_plan.md
-    # §3.1): prompt packs, region profiles, activations and the
-    # cross-process revision counter. For a project created after W2,
+    # The config store: prompt packs, region profiles, activations and the
+    # cross-process revision counter. For a new project,
     # ``resources_for_new`` also folds SETTINGS and UMAP_VIZ_STATE onto
     # this index's name (projects_plan.md §2.3, owner D4) -- ``default``
     # keeps its own separate settings/umap-viz-state indexes.
@@ -128,7 +127,7 @@ class CurationConfig:
     # UMAP_VIZ_STATE folds onto CONFIGS's name (shard folding, owner D4).
     umap_state_index: str = _FROM_DEFAULT_PROJECT
     umap_viz_state_index: str = _FROM_DEFAULT_PROJECT
-    # Prompt packs, region profiles, activations, revision counter (W2).
+    # Prompt packs, region profiles, activations, revision counter.
     configs_index: str = _FROM_DEFAULT_PROJECT
 
     class_registry_path: Path = _FROM_DEFAULT_PROJECT_PATH
@@ -247,7 +246,7 @@ class CurationConfig:
     # a deployment-tunable bar, not a magic number.
     probe_actionable_min_confidence: float = 0.5
 
-    # W8: served abuse guard on human region-box writes. Human box lists
+    # served abuse guard on human region-box writes. Human box lists
     # are unbounded per the owner's rule -- this caps the ELEMENT COUNT of
     # one write request (PUT .../regions, batch PUT, batch_box_state
     # targets), not a labeling rule. Served on /health and

@@ -84,7 +84,7 @@ logger = logging.getLogger('ingest_upload')
 
 DEFAULT_EXTENSIONS = frozenset({'.jpg', '.jpeg', '.png'})
 PATH_LOOKUP_CHUNK = 2000
-MAX_BATCH = 128  # server-side MAX_UPLOAD_IMAGES
+MAX_BATCH = 128  # the server's upload_max_images_per_request default
 
 
 @dataclass

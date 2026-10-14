@@ -1,4 +1,4 @@
-"""Class-identity E2E (W10.17, the owner's "Class identity invariant"
+"""Class-identity E2E (the "Class identity invariant"
 section): class numbering is local to each boundary; the NAME is the
 identity. This test walks import -> export (real exporter) -> stub-train
 (class_remap.json) -> promote (labels.txt) -> predict, and asserts a
@@ -7,10 +7,10 @@ every hop — nothing ever crosses a boundary by raw index.
 
 Two public-style YOLO fixtures share class names but use DIFFERENT
 ``data.yaml`` index orders, and fixture B adds one extra class
-(``bus``) fixture A never saw. The pre-W10 bug (index-based mapping)
+(``bus``) fixture A never saw. The old bug (index-based mapping)
 would silently swap ``car``/``truck`` here.
 
-W10 fix-pass note (Opus review 2026-09-28, finding M4): the prior
+Note: an earlier
 version of this test passed even with ``yolo._names_list`` (now
 ``_names_map``) monkeypatched to return class names reversed — every
 hop it asserted either compared two values both derived from the same
@@ -30,7 +30,7 @@ never touched a real writer/reader. This version:
   code, for the stub-train/promote/predict hops.
 
 Structured as composable steps (module-level functions, not one
-monolithic test) so P4 (combine-projects, W10.19) can insert an
+monolithic test) so a combine-projects step can insert an
 additional "combine A+B into project C" hop between
 :func:`step_import_fixture` and the export hop without rewriting this
 test.

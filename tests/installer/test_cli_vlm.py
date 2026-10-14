@@ -1,4 +1,4 @@
-"""``openprocessor vlm status|use|apply|probe`` (any-domain W9.7), driven
+"""``openprocessor vlm status|use|apply|probe`` (any-domain), driven
 through the installer shim harness: docker, curl, nvidia-smi are test
 doubles, so nothing here starts a container or touches a GPU."""
 

@@ -16,10 +16,10 @@ Schema produced by ``stats._rollup_class_sources`` + ``stats_dataset``:
   (a majority-agreement rule) lives in ``by_classifier``, deliberately
   separate from ``by_human`` so the dashboard can distinguish
   "human applied this label" from "any validator approved it".
-  F-23: ``by_proposal`` moved to ``unlabeled`` -- it counts
+  ``by_proposal`` moved to ``unlabeled`` -- it counts
   detector-proposed-but-not-yet-classified crops, which never carry a
   class_id, so it was always 0 here.
-- ``regions.{total_detected, by_detector, by_segmenter, by_human}`` —
+- ``regions.{total_detected, by_detector, by_segmenter, by_human_drew}`` —
   *region-detector* provenance. ``by_detector`` is the primary region
   detector's count and intentionally lives here (not under ``labeled``)
   because it's a region detector, not a class labeler.
@@ -83,8 +83,8 @@ def _fake_dataset_search_response() -> dict[str, Any]:
                     ],
                 },
             },
-            # W8-cleanup: region_detectors is a nested agg over region_boxes
-            # now (the detector lives on each box, not an item scalar).
+            # region_detectors is a nested agg over region_boxes
+            # (the detector lives on each box, not an item scalar).
             'region_detectors': {
                 'doc_count': 3,
                 'by_detector': {'buckets': [{'key': 'region_detector_v1', 'doc_count': 3}]},
@@ -141,14 +141,14 @@ def test_stats_dataset_endpoint_responds_with_full_schema(app_client: TestClient
         'total_detected',
         'by_detector',
         'by_segmenter',
-        'by_human',
+        'by_human_drew',
         'verified_by_human',
         'verified_by_vlm',
     ):
         assert k in regions, f'regions.{k} missing'
         assert isinstance(regions[k], int)
         assert regions[k] >= 0
-    for old in ('by_lpr', 'by_sam3', 'verified_by_' + 'gemma'):
+    for old in ('by_human', 'by_lpr', 'by_sam3', 'verified_by_' + 'gemma'):
         assert old not in regions
 
     unlabeled = body.get('unlabeled')
@@ -163,7 +163,7 @@ def test_stats_dataset_endpoint_responds_with_full_schema(app_client: TestClient
         assert k in unlabeled, f'unlabeled.{k} missing'
         assert isinstance(unlabeled[k], int)
         assert unlabeled[k] >= 0
-    # F-23: by_proposal + vlm_no_class are both subsets of no_label_source
+    # by_proposal + vlm_no_class are both subsets of no_label_source
     # (every proposal/vlm_unmatched source is class-less by construction),
     # never a superset.
     assert unlabeled['by_proposal'] <= unlabeled['no_label_source']

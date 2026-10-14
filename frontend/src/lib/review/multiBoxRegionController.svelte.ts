@@ -1,6 +1,5 @@
 /**
- * W8 multi-box region editing controller (docs/design/
- * w8-multibox-frontend-plan-2026-09-26.md) — owns the working `EditableBox[]`
+ * Multi-box region editing controller — owns the working `EditableBox[]`
  * set for the active crop's region slot and every write path over it,
  * following the existing factory-function convention
  * (`reviewController.svelte.ts`, `slotGalleryController.svelte.ts`):
@@ -18,7 +17,7 @@
  *   operator is typically still working through sibling boxes.
  * - Geometry edits (add/move/delete) stay purely local until the next
  *   confirm or explicit flush — sent as one `PUT /crops/{id}/regions` so
- *   an add+move+delete session becomes one write, one undo step (W8.8).
+ *   an add+move+delete session becomes one write, one undo step.
  * - Enter (`confirmAndAdvance`) is the owner-decided semantic: flips only
  *   `proposed` boxes to `accepted` (siblings' states are never touched),
  *   sends the accumulated geometry diff in the SAME PUT with

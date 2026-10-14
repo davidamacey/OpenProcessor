@@ -1,4 +1,4 @@
-"""The stored box-list write for one detection pass (W8 B1/M1, shared W5).
+"""The stored box-list write for one detection pass.
 
 One function, :func:`box_pass_update`, decides what a pass's resolved boxes
 become on top of the item's CURRENT stored doc: which stored boxes survive,
@@ -78,7 +78,7 @@ def box_pass_update(
     item status; otherwise it is derived from the final list, with
     ``empty_status`` for an empty one; a pass with neither is a caller bug.
 
-    The fresh-detection rule is the W8c M1 fix: a new answer to "where are
+    The fresh-detection rule is: a new answer to "where are
     the regions?" is not a partial update, so a stale MACHINE-sourced box (a
     prior pass's sanity-gate reject, say) must not accumulate and keep
     overriding the derived status; boxes a human created or acted on

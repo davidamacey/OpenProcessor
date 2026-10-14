@@ -1,5 +1,5 @@
-"""Address spellings that reach a denied address by another route (W9 review
-m9): IPv6 forms that embed 169.254.169.254, and full-width service names."""
+"""Address spellings that reach a denied address by another route: IPv6 forms that embed 169.254.169.254, and full-width
+service names."""
 
 from __future__ import annotations
 

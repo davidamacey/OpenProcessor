@@ -23,7 +23,6 @@ from typing import Any, Literal
 from src.config import get_curation_config
 from src.core.dependencies import AsyncTritonDep  # noqa: TC001  # FastAPI resolves the annotation at runtime
 from src.routers.curation._common import (
-    HealthResponse,
     OpenSearchDep,
     classes_index,
     get_class_registry,
@@ -32,6 +31,7 @@ from src.routers.curation._common import (
     labels_confirmed_index,
     router,
 )
+from src.routers.curation._common_models import HealthResponse
 from src.routers.curation.vlm import _get_vlm_labeler
 from src.services.resource_links import service_url
 

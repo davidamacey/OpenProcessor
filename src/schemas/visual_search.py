@@ -74,29 +74,6 @@ class PredictFullResponse(BaseModel):
     total_time_ms: float | None = None
 
 
-class DetectOnlyResponse(BaseModel):
-    """
-    Response for detection-only endpoint.
-
-    Matches standard detection format exactly.
-    """
-
-    # Core detection results
-    detections: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description='List of detected objects with normalized [0,1] coordinates',
-    )
-    num_detections: int = Field(default=0)
-    status: str = Field(default='success')
-
-    # Image metadata
-    image: ImageMetadata | None = None
-    model: ModelMetadata | None = None
-
-    # Timing
-    total_time_ms: float | None = None
-
-
 # =============================================================================
 # Embedding Responses
 # =============================================================================
@@ -234,34 +211,6 @@ class FaceRecognizeResponse(BaseModel):
     total_time_ms: float | None = None
 
 
-class FaceFullResponse(BaseModel):
-    """Response for unified YOLO + Face + CLIP pipeline."""
-
-    # YOLO detections
-    detections: list[dict[str, Any]] = Field(default_factory=list)
-    num_detections: int = Field(default=0)
-
-    # Face detections and embeddings
-    num_faces: int = Field(default=0)
-    faces: list[FaceDetection] = Field(default_factory=list)
-    face_embeddings: list[list[float]] = Field(default_factory=list)
-
-    # Global embedding (MobileCLIP 512-dim)
-    image_embedding: list[float] | None = Field(
-        default=None, description='MobileCLIP global image embedding'
-    )
-    embedding_norm: float | None = Field(default=None, description='L2 norm of global embedding')
-
-    status: str = Field(default='success')
-
-    # Image metadata
-    image: ImageMetadata | None = None
-    model: ModelMetadata | None = None
-
-    # Timing
-    total_time_ms: float | None = None
-
-
 # =============================================================================
 # Face Search Response Models
 # =============================================================================
@@ -300,78 +249,3 @@ class FaceIdentifyResponse(BaseModel):
     person_name: str | None = None
     match_score: float | None = None
     associated_faces: list[FaceSearchResult] = Field(default_factory=list)
-
-
-class PersonFacesResponse(BaseModel):
-    """Response for person faces lookup."""
-
-    person_id: str
-    person_name: str | None = None
-    face_count: int
-    faces: list[FaceSearchResult]
-
-
-# =============================================================================
-# Face Identity Management Schemas
-# =============================================================================
-
-
-class FaceIngestRequest(BaseModel):
-    """Request for face ingestion."""
-
-    person_id: str | None = Field(default=None, description='Person ID to assign face to')
-    face_id: str | None = Field(
-        default=None, description='Face ID (auto-generated if not provided)'
-    )
-    source_image_id: str | None = Field(default=None, description='ID of source image')
-    metadata: dict | None = Field(default=None, description='Additional metadata')
-
-
-class FaceIngestResponse(BaseModel):
-    """Response for face ingestion."""
-
-    status: str = 'success'
-    num_faces: int = Field(description='Number of faces detected and ingested')
-    faces: list[dict] = Field(description='List of ingested face info (face_id, person_id, etc)')
-    source_image_id: str | None = None
-
-
-class FaceIdentityIdentifyRequest(BaseModel):
-    """Request for 1:N face identification."""
-
-    top_k: int = Field(5, ge=1, le=100, description='Number of matches to return per face')
-    threshold: float = Field(0.6, ge=0.0, le=1.0, description='Similarity threshold for match')
-    face_detector: str = Field('scrfd', description='Face detector to use')
-
-
-class FaceIdentityIdentifyResponse(BaseModel):
-    """Response for face identification."""
-
-    status: str = 'success'
-    num_faces: int = Field(description='Number of faces detected in query image')
-    matches: list[dict] = Field(description='Matches for each detected face')
-    query_time_ms: float = Field(description='Query processing time')
-
-
-class PersonFacesListResponse(BaseModel):
-    """Response for getting all faces of a person."""
-
-    status: str = 'success'
-    person_id: str
-    num_faces: int
-    faces: list[dict] = Field(description='List of face records')
-
-
-class FaceAssignRequest(BaseModel):
-    """Request to assign face to person."""
-
-    person_id: str = Field(description='Person ID to assign face to')
-
-
-class FaceAssignResponse(BaseModel):
-    """Response for face assignment."""
-
-    status: str = 'success'
-    face_id: str
-    previous_person_id: str | None
-    new_person_id: str

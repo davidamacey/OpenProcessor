@@ -17,11 +17,7 @@ from src.clients.curation_opensearch.ensure_overlay_fields import (
     ensure_items_probe_fields,
     ensure_items_score_fields,
 )
-from src.clients.curation_opensearch.lifecycle import (
-    INDEX_BODIES,
-    create_curation_indexes,
-    get_curation_index_settings,
-)
+from src.clients.curation_opensearch.lifecycle import INDEX_BODIES, create_curation_indexes
 from src.clients.curation_opensearch.registry import ClassRegistry, ClassRegistryError
 from src.config import IndexRole, get_curation_config
 
@@ -126,7 +122,7 @@ def test_items_has_region_of_interest_fields_via_region_fields() -> None:
         assert key in props, f'expected region field {key!r} in items mapping'
     # And the region key really is the RegionFields default (region_*), not
     # a hardcoded plate_* literal.
-    assert F.status_legacy == 'region_status_legacy'
+    assert F.status_before_requeue == 'region_status_before_requeue'
 
 
 def test_items_has_score_and_probe_fields() -> None:
@@ -193,22 +189,6 @@ def test_classes_mirrors_registry_schema() -> None:
         'notes',
     ):
         assert k in props
-
-
-@pytest.mark.asyncio
-async def test_get_curation_index_settings_returns_string_keyed_dict() -> None:
-    out = await get_curation_index_settings()
-    # SETTINGS and UMAP_VIZ_STATE fold onto the same name as CONFIGS
-    # (shard folding, owner D4) -- so the string-keyed dict has 6 distinct
-    # keys covering all 8 roles, not 8.
-    assert set(out.keys()) == {
-        'op_prj_default__images',
-        'op_prj_default__items',
-        'op_prj_default__labels_confirmed',
-        'op_prj_default__classes',
-        'op_prj_default__umap_state',
-        'op_prj_default__configs',
-    }
 
 
 # =============================================================================

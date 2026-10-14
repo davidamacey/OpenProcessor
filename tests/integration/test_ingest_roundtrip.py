@@ -107,7 +107,7 @@ def test_ingest_batch_then_crops_and_status(
 
 
 def test_ingest_batch_rejects_the_removed_label_fields(client: TestClient) -> None:
-    """W10: ``label_txt_path``/``label_source``/``detect_mismatches`` are
+    """``label_txt_path``/``label_source``/``detect_mismatches`` are
     removed from ``/ingest/batch`` outright (no back-compat) -- ingesting
     an already-labeled dataset is ``POST /datasets/imports`` now. The old
     G12 companion-label roundtrip this replaces

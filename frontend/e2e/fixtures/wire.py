@@ -174,11 +174,11 @@ _EXPLICIT: dict[str, Any] = {
     "class_labeled_at": "2026-01-02T03:04:05Z",
     "class_labeler": "labeler@example.com",
     "vlm_confidence": "high",
-    # Backend main c011721 (VLM class-answer fix): when did the VLM last
+    # When did the VLM last
     # attempt a class answer, and why it came back empty if it did.
     "vlm_class_attempted_at": "2026-01-02T03:03:00Z",
     "vlm_class_empty_reason": "no_visible_vehicle",
-    # Backend main 63d57d8 (dq-queues): a class confidence that matches
+    # A class confidence that matches
     # class_source (DQ-M8's served-side half) and the VLM's raw,
     # pre-registry-match class string. Not adopted by any UI in this
     # batch (per instructions, a separate pass wires these up) -- just
@@ -266,7 +266,7 @@ _EXPLICIT: dict[str, Any] = {
     "region_pairing": "paired",
     "region_skip_verify": False,
     "item_text_lines": [],
-    # W8/W10/W3/W4 item keys (backend f582aa05). `region_boxes` is the real
+    # Multi-box, import, prompt-pack and region-profile item keys. `region_boxes` is the real
     # per-box list; a test passes its own boxes via make_item(region_boxes=...).
     "vlm_prompt_pack": "tag_pack",
     "vlm_endpoint": "vlm-main",
@@ -294,7 +294,7 @@ _EXPLICIT: dict[str, Any] = {
     "combine_conflict": False,
     "combine_conflict_origins": [],
     "combine_merged_origins": [],
-    # v0.4.0 item keys (backend fce17771): an ordinary embedded item that no
+    # Open-vocabulary item keys: an ordinary embedded item that no
     # open-vocabulary pass found and no region gate skipped.
     "embedding_state": "embedded",
     "source_prompt": None,
@@ -302,7 +302,7 @@ _EXPLICIT: dict[str, Any] = {
     "open_vocab_revision": None,
     "mask_polygon": None,
     "region_gate_skip": None,
-    # Backend main 22a3e65 (dq-region), adopted on the frontend by
+    # Adopted on the frontend by
     # readSlot (SlotData.text.choice/invalidReason,
     # SlotData.subBox.candidate, SlotData.lifecycle.validated/
     # autoConfirmed) and /review's candidate-box confirm flow. See

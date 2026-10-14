@@ -1,28 +1,24 @@
-"""W10.0/W10.17 gate: there is exactly one class-label writer.
+"""Gate: there is exactly one class-label writer.
 
-Before this wave, ``label_import.py`` wrote a second, parallel
+Previously ``label_import.py`` wrote a second, parallel
 ``class_validated: True`` body (raw ``opensearch.bulk`` on the items
-index, no OCC, no restorable snapshot — see any_domain_plan.md W10.1
-I2/I3/I4). Every human AND dataset-import class-label write now goes
-through ``src/services/curation/class_label.py``
+index, no OCC, no restorable snapshot). Every human AND dataset-import
+class-label write now goes through ``src/services/curation/class_label.py``
 (``class_label_fields`` / ``class_label_update``).
 
-Scope note (deviation from the literal any_domain_plan.md W10.17
-wording, which reads "no dict literal sets class_validated: True
-outside class_label.py" with no carve-outs): one pre-existing,
-out-of-scope automated validator — ``clustering/auto_promote.py``'s
+Scope note (the rule is "no dict literal sets class_validated: True
+outside class_label.py", with one carve-out): one pre-existing
+automated validator — ``clustering/auto_promote.py``'s
 ``_merge_promote`` (majority-agreement auto-validation, not a human or
-imported label) — is allowlisted below. It predates W10, is not part
-of the W10.0 human/import label abstraction table, and rewriting it is
-out of this wave's scope. See the report for the full reasoning.
+imported label) — is allowlisted below. It is not a human or import
+label write, so it is outside the shared label abstraction.
 
-W10 fix-pass note (Opus review 2026-09-28, minor N3): the allowlist is
-scoped to the specific ``(file, function)`` pair, not the whole file —
-a future second writer added anywhere else in ``auto_promote.py`` is
+The allowlist is scoped to the specific ``(file, function)`` pair, not
+the whole file — a future second writer added anywhere else in ``auto_promote.py`` is
 still caught. The scan is also literal-only (a subscript assignment
 like ``update['class_validated'] = True`` or a variable value like
 ``{'class_validated': validated}`` is not detected) -- documented, not
-fixed, in this pass; see ``test_class_sources.py`` for the same
+fixed; see ``test_class_sources.py`` for the same
 known limit on its own scanner.
 """
 
@@ -136,8 +132,7 @@ def test_no_second_class_validated_writer() -> None:
 
 
 def test_label_import_module_removed() -> None:
-    """``label_import.py`` — the parallel raw-bulk item writer (W10.1
-    I2/I3/I4) — is deleted outright, not kept as a second path."""
+    """``label_import.py`` — the parallel raw-bulk item writer — is deleted outright, not kept as a second path."""
     assert not (REPO_ROOT / 'src/services/curation/label_import.py').exists()
 
 
@@ -152,7 +147,7 @@ def test_label_import_functions_have_no_importers(symbol: str) -> None:
 
 
 def test_is_human_owned_class_symbol_removed() -> None:
-    """``is_human_owned_class`` is renamed to ``is_locked_class`` (W10.10)
+    """``is_human_owned_class`` is renamed to ``is_locked_class``
     — no symbol of that name remains anywhere (docstrings/comments only
     reference it as history)."""
     for path in _iter_py_files():

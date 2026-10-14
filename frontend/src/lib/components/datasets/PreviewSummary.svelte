@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * The served dry run (`POST /datasets/preview`, W10.4): per-split
+   * The served dry run (`POST /datasets/preview`): per-split
    * counts, totals, the processing estimate, an OpenProcessor export's
    * facts, the region block and the issues. All numbers are served.
    */

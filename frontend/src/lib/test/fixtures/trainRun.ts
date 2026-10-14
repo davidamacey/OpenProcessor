@@ -8,12 +8,12 @@
  * the results-view tests exercise the actual wire shape rather than a
  * hand-typed guess.
  *
- * **OpenProcessor #34 W1 adoption (2026-09-25):** this run predates the
+ * This run predates the
  * `last_epoch_metric`/`best_checkpoint_metric` split — re-fetched live
  * against the currently-deployed (pre-fix) backend, its status still
  * carries the OLD `best_metric`/`last_metric` keys AND a buggy
  * `best_checkpoint_metric` back-filled from the wrong (test-split) eval
- * numbers. Per the W1 backend fix (not yet deployed): a run whose
+ * numbers. Per the backend fix: a run whose
  * status.json predates these fields serves `null` for BOTH
  * `last_epoch_metric` and `best_checkpoint_metric` — no incorrect
  * back-fill. This fixture is hand-corrected to that post-fix shape
@@ -226,7 +226,7 @@ export const trainManifestFixture: TrainManifest = {
 };
 
 /**
- * Hand-constructed (not live-captured) example of a genuinely post-W1
+ * Hand-constructed (not live-captured) example of a genuinely post-fix
  * run — no live run exists yet whose `status.json` was written after
  * the fix, so this fills in realistic `last_epoch_metric`/
  * `best_checkpoint_metric` (with their own `epoch` numbers, one

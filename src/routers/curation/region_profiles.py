@@ -1,7 +1,6 @@
-"""``/region_profiles*`` + ``/config/vocabulary`` -- region-profile CRUD
-(W4, any_domain_plan.md §4/§7.3).
+"""``/region_profiles*`` + ``/config/vocabulary`` -- region-profile CRUD.
 
-Route-order note (§4.2, mirrors W3's §3.2): ``schema``, ``validate``,
+Route-order note (mirrors the prompt-pack routes): ``schema``, ``validate``,
 ``validate_segmenter_prompt``, ``test``, ``active`` (+ its children) and
 ``deactivate`` are declared before ``/{name}`` and its children.
 ``config_vocabulary.py`` registers ``GET /config/vocabulary`` separately
@@ -219,7 +218,7 @@ async def rollback_active_region_profile(
     try:
         await rollback_profile(opensearch, expected_active=expected)
     except LookupError as exc:
-        # m-b fix (W3/W4 round-5 review): `previous_deleted` is distinct
+        # m-b fix: `previous_deleted` is distinct
         # from `no_previous` -- the profile was deleted while it was the
         # rollback target, not "there is no target."
         if exc.args and exc.args[0] == 'previous_deleted':
@@ -483,7 +482,7 @@ async def activate_region_profile_route(
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
 
-    # R4-1 fix (W3/W4 round-4 review): the ONE shared `for_activation` gate
+    # the ONE shared `for_activation` gate
     # every activation writer calls -- activate, settings-bridge, rollback.
     report = await run_activation_gate(
         'detection_profile', name, record.revision, force=body.force, client=opensearch

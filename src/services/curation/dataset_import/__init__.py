@@ -1,4 +1,4 @@
-"""Dataset import (W10): bring an already-labeled dataset (YOLO or COCO
+"""Dataset import: bring an already-labeled dataset (YOLO or COCO
 format) into a project, mapping its classes onto the registry by name
 (never by index — see the class-identity invariant in
 ``docs/design/openprocessor_internal/any_domain_plan.md``).

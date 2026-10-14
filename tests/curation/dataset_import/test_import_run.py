@@ -1,4 +1,4 @@
-"""The import job end to end (W10.6): class mapping by name, ledger,
+"""The import job end to end: class mapping by name, ledger,
 locks, regions, negatives, splits. Ports every assertion of the retired
 ``test_job_import.py``."""
 
@@ -21,7 +21,7 @@ def _items_of(h: Harness, class_name: str) -> list[dict]:
 @pytest.mark.asyncio
 async def test_import_maps_classes_by_name_not_index(tmp_path: Path, monkeypatch) -> None:
     """Dataset ``{0: truck, 1: car}`` against registry ``[car(0), truck(1)]``
-    must import trucks as truck: the pre-W10 bug this wave fixes."""
+    must import trucks as truck: the bug of resolving classes by index."""
     h = Harness(tmp_path, monkeypatch)
     h.registry.add_class('car')
     h.registry.add_class('truck')

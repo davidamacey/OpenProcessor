@@ -8,8 +8,8 @@
  * message, and does so without special-casing every other 422 shape
  * (`body.detail.field` absent ⇒ unchanged behavior).
  *
- * Same static source-scan convention as `interactivePassFixes.test.ts`/
- * `logicMovesW6TrainingCohorts.test.ts` — no component-mount harness for
+ * Same static source-scan convention as `cohortPreviewInline.test.ts`/
+ * `servedTrainingCohorts.test.ts` — no component-mount harness for
  * this page (many polling intervals/onMount effects; a route-level
  * mount would leak timers across tests).
  */

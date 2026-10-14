@@ -1,8 +1,8 @@
-"""M1b regression (W3/W4 review 2026-09-28, round 2): a planted write
+"""M1b regression: a planted write
 attempt inside each ``bind_project(source, read_only=True)`` scope must be
 rejected by the guard.
 
-The round-1 M1b test (``test_prompt_packs_router.py::
+The M1b test (``test_prompt_packs_router.py::
 test_from_project_clone_is_read_only_and_never_writes_to_source`` and this
 module's sibling ``test_clone_settings.py::
 test_clone_source_stays_byte_identical``) only prove that the CURRENT
@@ -11,7 +11,7 @@ they never plant a write, so removing ``read_only=True`` from any of the
 five source binds (``clone_shared.py``'s ``read_source_record`` plus the
 four in ``clone.py``: ``settings_defaults``, ``keymap``,
 ``copy_stored_configs``, ``_clone_activations``) leaves the whole suite
-green (confirmed by the round-2 reviewer). These tests close that gap by
+green (confirmed by the reviewer). These tests close that gap by
 making a read step *inside* each bind also attempt a real write via the
 guard's own ``check_request`` -- mirroring exactly what
 ``ProjectGuardedTransport`` does for a live OpenSearch client -- and

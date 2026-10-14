@@ -15,7 +15,7 @@ from _route_helpers import api_routes
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.routers.curation._common import ExportYoloRequest
+from src.routers.curation._common_models import ExportYoloRequest
 from src.routers.curation.export import export_yolo as export_yolo_handler
 from src.services.curation.export import ExportResult, GenericYoloExportService, SplitCounts
 
@@ -345,7 +345,7 @@ async def test_single_class_handler_builds_the_profile_from_the_request(
 ) -> None:
     """The target vocabulary comes from the REQUEST, not from anything
     hardcoded in the service — the whole point of G2's genericization."""
-    from src.routers.curation._common import ExportSingleClassRequest
+    from src.routers.curation._common_models import ExportSingleClassRequest
     from src.routers.curation.export_single_class import (
         export_single_class as export_single_class_handler,
     )
@@ -424,7 +424,7 @@ async def test_single_class_handler_maps_bad_config_to_422_not_500(
     """An empty class_ids is a caller mistake, not a server fault."""
     from fastapi import HTTPException
 
-    from src.routers.curation._common import ExportSingleClassRequest
+    from src.routers.curation._common_models import ExportSingleClassRequest
     from src.routers.curation.export_single_class import (
         export_single_class as export_single_class_handler,
     )

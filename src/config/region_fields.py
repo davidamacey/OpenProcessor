@@ -22,9 +22,8 @@ names — a rename becomes a config flip, not a code change.
   names, untouched in Phase 2.
 - Metric names — NO, deferred to a later phase.
 
-f-string composition of a legacy suffix (``f'{F.status}_legacy'``) is
-banned — use the explicit ``*_legacy`` attributes below, so the field names
-stay greppable.
+f-string composition of a suffixed field name (``f'{F.status}_before_requeue'``)
+is banned: use the explicit attribute below, so the field names stay greppable.
 """
 
 from __future__ import annotations
@@ -72,17 +71,16 @@ class RegionFields:
     detector_chain: str = 'region_detector_chain'
     detected_at: str = 'region_detected_at'
 
-    # Config-store provenance (W2): which activated region profile
+    # Config-store provenance: which activated region profile
     # (name) + revision produced this write. Item-level fields, in
     # ``_items_body()`` from the start -- not folded into ``kind ==
     # 'config'`` docs.
     profile: str = 'region_profile'
     profile_revision: str = 'region_profile_revision'
 
-    # W8 multi-box list. ``boxes`` is the indirected storage name of the
+    # Multi-box list. ``boxes`` is the indirected storage name of the
     # list itself; the element keys inside each list entry are FIXED
-    # strings (see docs/design/openprocessor_internal/any_domain_plan.md
-    # W8.2) since the list is new and no deployment has legacy names for
+    # strings, since the list is new and no deployment has legacy names for
     # them. ``boxes_state`` below is only used to build nested queries
     # (``box_query``) against the fixed element key ``state``.
     boxes: str = 'region_boxes'
@@ -110,8 +108,9 @@ class RegionFields:
     # region requeue. A skipped item is not a miss: it was never looked at.
     gate_skip: str = 'region_gate_skip'
 
-    # Legacy-suffixed columns kept for rollback (e.g. roi_*_legacy).
-    status_legacy: str = 'region_status_legacy'
+    # The status an item had before a region requeue reset it (kept so the
+    # requeue can be traced back).
+    status_before_requeue: str = 'region_status_before_requeue'
 
     @classmethod
     def from_env(cls, env_prefix: str = 'OP_REGION_FIELD_') -> RegionFields:

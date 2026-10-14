@@ -1,4 +1,4 @@
-"""Builders for the VLM endpoint wire shapes (W9, §7.8): summaries, docs and
+"""Builders for the VLM endpoint wire shapes: summaries, docs and
 the form schema. No routes live here."""
 
 from __future__ import annotations

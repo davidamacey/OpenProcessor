@@ -144,7 +144,6 @@ Business logic separated into `services/`:
 - `VisualSearchService` - OpenSearch k-NN operations and ingestion
 - `OCRService` - PP-OCRv5 text detection and recognition
 - `ClusteringService` - FAISS clustering for albums
-- `ImageService` - Image processing and validation
 
 ---
 

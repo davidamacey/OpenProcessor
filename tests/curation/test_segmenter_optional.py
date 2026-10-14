@@ -11,7 +11,7 @@ degrades cleanly instead of crashing or hanging on an unreachable host.
 ``TestCascadeWithoutSegmenter`` exercises the real streaming pipeline
 (``scripts.curation.worker.runner.run``, via the ``_drive_worker`` harness
 in ``test_region_cascade_integrity.py``) with the segmenter leg
-missing -- W8: ported from the deleted per-crop ``_process_crop`` entry
+missing -- ported from the deleted per-crop ``_process_crop`` entry
 point, same intent (the cascade degrades to a terminal
 ``no_region_box`` write, never crashes or hangs, when neither detector
 leg finds anything).

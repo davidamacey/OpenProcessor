@@ -99,10 +99,6 @@ def s3_source_id(bucket: str, prefix: str) -> str:
     return 's3_' + hashlib.sha256(f'{bucket}/{prefix}'.encode()).hexdigest()[:12]
 
 
-def folder_source_id(path: str) -> str:
-    return 'fld_' + hashlib.sha256(path.encode()).hexdigest()[:12]
-
-
 def new_source_id() -> str:
     return 'src_' + uuid.uuid4().hex[:10]
 

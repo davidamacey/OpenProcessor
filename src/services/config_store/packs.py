@@ -1,4 +1,4 @@
-"""Prompt-pack CRUD service functions (W3, any_domain_plan.md §3).
+"""Prompt-pack CRUD service functions.
 
 Thin wrappers over :mod:`src.services.config_store.index`'s OCC
 primitives, specialized to the ``prompt_pack`` kind/axis and to the
@@ -298,7 +298,7 @@ async def activate_pack(
 
 
 async def rollback_pack(client: Any, *, expected_active: dict[str, Any] | None) -> dict[str, Any]:
-    # N4 fix (W3/W4 round-3 review): `rollback_axis` resolves the pinned
+    # `rollback_axis` resolves the pinned
     # body BEFORE writing the new activation doc, so a transient error
     # aborts cleanly instead of surfacing a 500 after the write already
     # committed. Replaces the old write-then-resolve call into

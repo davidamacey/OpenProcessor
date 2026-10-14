@@ -1,5 +1,5 @@
 /**
- * The W4 "not yet deployed" gate: a 404/501 on `/region_profiles` hides
+ * The region-profile "not yet deployed" gate: a 404/501 on `/region_profiles` hides
  * every profile surface; a 200 marks it available; any other failure
  * keeps availability unknown; a project switch re-probes.
  */

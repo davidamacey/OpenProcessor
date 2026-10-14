@@ -4,7 +4,7 @@ Every human class-label write (``label_crop``, ``batch_label_crops``
 (``src/routers/curation/crops.py``), ``move_crops``, and
 ``POST /review/new_class_proposals/resolve``
 (``src/routers/curation/review_resolve.py``)) and every dataset-import
-class-label write (W10, ``dataset_import/job.py``) go through this module.
+class-label write (``dataset_import/job.py``) go through this module.
 There is no second dict literal anywhere else that sets
 ``class_validated: True`` together with a human/import ``class_source`` —
 ``tests/test_class_label_single_writer.py`` is the gate.
@@ -47,7 +47,7 @@ def human_class_provenance() -> dict[str, Any]:
 
 
 def import_class_provenance(import_id: str, *, now: str | None = None) -> dict[str, Any]:
-    """Class provenance for a dataset-import class write (W10.10)."""
+    """Class provenance for a dataset-import class write."""
     return class_provenance(
         detector='import', detector_version=import_id, labeler='import', labeled_at=now
     )
@@ -61,8 +61,8 @@ class ItemLabel:
     ``"human"`` -> ``class_source=HUMAN_CLASS_SOURCE``; ``"import"`` ->
     ``class_source=LABEL_IMPORT_CLASS_SOURCE`` (``external_label``),
     ``label_source=LABEL_SOURCE_IMPORT``. ``validated=False`` is only
-    valid for ``source="import"`` (``options.label_trust: "suggestion"``,
-    W10.10): the machine pipeline may still relabel it, so it must not be
+    valid for ``source="import"`` (``options.label_trust: "suggestion"``):
+    the machine pipeline may still relabel it, so it must not be
     locked (:func:`src.clients.occ.is_locked_class`).
     """
 
@@ -144,17 +144,15 @@ def class_label_update(current: dict[str, Any], label: ItemLabel) -> dict[str, A
     """Merge body for a class-label write on an EXISTING item: a
     restorable pre-write snapshot plus :func:`class_label_fields`.
 
-    This is the single function every ``human_label_update``-shaped
-    human writer calls — the one class-label writer the AST gate
+    This is the single function every human writer calls — the one
+    class-label writer the AST gate
     (``tests/test_class_label_single_writer.py``) checks for.
 
-    W10 fix-pass correction (Opus review 2026-09-28, minor m10): dataset
-    import's `import_dataset()` (`dataset_import/job.py`) does NOT call
-    this on its update path — it goes through `occ_upsert_bulk`'s
-    generic `_merge_preserving_human` guard instead (now with an
-    explicit `is_locked_item` pre-filter, see the W10 fix-pass CHANGELOG
-    entry), which has no restorable snapshot. Routing dataset import's
-    update path through this function for a real snapshot is future
+    Note: dataset import's `import_dataset()` (`dataset_import/job.py`)
+    does NOT call this on its update path — it goes through
+    `occ_upsert_bulk`'s generic `_merge_preserving_human` guard instead
+    (now with an explicit `is_locked_item` pre-filter), which has no
+    restorable snapshot. Routing dataset import's update path through this function for a real snapshot is future
     work, not done this pass.
     """
     from src.services.curation.history import record_class_snapshot
@@ -166,25 +164,6 @@ def class_label_update(current: dict[str, Any], label: ItemLabel) -> dict[str, A
     if label.source == 'human' and label.validated:
         fields.update(audit_outcome_fields(current, label.class_name))
     return fields
-
-
-def human_label_update(
-    current: dict[str, Any],
-    *,
-    class_id: int,
-    class_name: str,
-    label_source: str,
-    writer: str,
-) -> dict[str, Any]:
-    """Back-compat call shape for the existing human-write call sites
-    (``label_crop``, ``batch_label_crops``) — builds an :class:`ItemLabel`
-    and delegates to :func:`class_label_update`."""
-    return class_label_update(
-        current,
-        ItemLabel.human(
-            class_id=class_id, class_name=class_name, label_source=label_source, writer=writer
-        ),
-    )
 
 
 def human_move_class_update(
@@ -246,7 +225,6 @@ __all__ = [
     'class_label_fields',
     'class_label_update',
     'human_class_provenance',
-    'human_label_update',
     'human_move_class_update',
     'import_class_provenance',
 ]

@@ -177,7 +177,7 @@ def test_preflight_ok_when_trainer_reachable(
 
 
 # =============================================================================
-# trainer_gpus preflight check (W5.2 -- TR-2 GPU scoping)
+# trainer_gpus preflight check (GPU scoping)
 # =============================================================================
 
 
@@ -1230,7 +1230,7 @@ def test_promote_endpoint_returns_422_when_gate_fails(
 def test_promote_endpoint_job_not_ready_422_is_structured_and_force_disallowed(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """F-64 (fresh-start E2E findings 2026-09-25): every promote-blocking
+    """Every promote-blocking
     422 -- not just the score gate -- must carry {code, message} failures
     and say whether force=true can help. A job that isn't finished/exporting
     yet can't be force-promoted (there's no export to promote)."""
@@ -1745,7 +1745,7 @@ def test_reload_promoted_route_defaults_to_empty_lists(
 
 
 # =============================================================================
-# F-73 -- dataset_export_dir defaults to the current export
+# dataset_export_dir defaults to the current export
 # =============================================================================
 
 

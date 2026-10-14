@@ -102,7 +102,7 @@ def guard_page_depth(page: int, page_size: int) -> None:
     ``index.max_result_window`` and the app would surface that as a bare
     503/500 instead of a clear, cheap client-side rejection. Cursor-based
     pagination (``search_after``) is the documented way past this limit;
-    Wave 1 doesn't add a cursor param, so depth is capped instead."""
+    This route doesn't add a cursor param, so depth is capped instead."""
     if (page - 1) * page_size + page_size > MAX_RESULT_WINDOW:
         raise HTTPException(
             status_code=422,
@@ -245,13 +245,6 @@ async def _ensure_indexes_locked(opensearch: Any) -> None:
             await ensure_images_upload_fields(opensearch)
         except Exception as exc:
             logger.warning('curation_images_upload_fields_migration_failed', error=str(exc))
-        # ensure_items_class_name_keyword is NOT called here: the generic
-        # `class_name` field is mapped `keyword` directly (not `text`), so
-        # this migration's PUT mapping always fails with "cannot be changed
-        # from type [keyword] to [text]". All aggregations/scripts query
-        # `class_name` directly instead of a `.keyword` subfield that can
-        # never exist here. The function itself is left in place for any
-        # legacy index that genuinely still maps `class_name` as `text`.
         try:
             await ensure_items_quality_fields(opensearch)
         except Exception as exc:
@@ -331,90 +324,3 @@ async def _ensure_indexes_locked(opensearch: Any) -> None:
         _INDEXES_BOOTSTRAPPED.add(config.project_slug)
     except Exception as exc:
         logger.warning('curation_index_bootstrap_failed', error=str(exc))
-
-
-# =============================================================================
-# Pydantic models (all request/response models for the curation router) live
-# in _common_models.py to stay under the 700-LOC ratchet; re-exported here so
-# every existing `from src.routers.curation._common import <Model>` call site
-# is unaffected by the split.
-# =============================================================================
-
-from src.routers.curation._common_models import (  # noqa: E402  # bottom-of-module import breaks a circular import
-    HUMAN_REGION_STATUS_VALUES,
-    BatchIngestResponse,
-    BatchIngestSummaryResponse,
-    CropBatchLabelRequest,
-    CropBatchStatusRequest,
-    CropDiscardBatchRequest,
-    CropDiscardRequest,
-    CropExcludeRequest,
-    CropFlagNewClassRequest,
-    CropLabelRequest,
-    CropMoveRequest,
-    CropUndoBatchRequest,
-    CropUnexcludeRequest,
-    CurationSettingsResponse,
-    CurationSettingsUpdateRequest,
-    ExportSingleClassRequest,
-    ExportYoloRequest,
-    HealthResponse,
-    IngestBatchConfig,
-    IngestConfigResponse,
-    IngestDetectorInfo,
-    IngestDetectorLabel,
-    IngestImageRequest,
-    IngestImageResponse,
-    IngestRegionDrainConfig,
-    IngestRegionDrainResponse,
-    IngestStatusResponse,
-    IngestUploadConfig,
-    ItemRegionMetaRequest,
-    RegionDependencyStatusResponse,
-    StatusResponse,
-    TestHoldoutFreezeRequest,
-    TestHoldoutFreezeResponse,
-    _PathLookupRequest,
-    _PathLookupResponse,
-    _PublishEvent,
-)
-
-
-__all__ = [
-    'HUMAN_REGION_STATUS_VALUES',
-    'BatchIngestResponse',
-    'BatchIngestSummaryResponse',
-    'CropBatchLabelRequest',
-    'CropBatchStatusRequest',
-    'CropDiscardBatchRequest',
-    'CropDiscardRequest',
-    'CropExcludeRequest',
-    'CropFlagNewClassRequest',
-    'CropLabelRequest',
-    'CropMoveRequest',
-    'CropUndoBatchRequest',
-    'CropUnexcludeRequest',
-    'CurationSettingsResponse',
-    'CurationSettingsUpdateRequest',
-    'ExportSingleClassRequest',
-    'ExportYoloRequest',
-    'HealthResponse',
-    'IngestBatchConfig',
-    'IngestConfigResponse',
-    'IngestDetectorInfo',
-    'IngestDetectorLabel',
-    'IngestImageRequest',
-    'IngestImageResponse',
-    'IngestRegionDrainConfig',
-    'IngestRegionDrainResponse',
-    'IngestStatusResponse',
-    'IngestUploadConfig',
-    'ItemRegionMetaRequest',
-    'RegionDependencyStatusResponse',
-    'StatusResponse',
-    'TestHoldoutFreezeRequest',
-    'TestHoldoutFreezeResponse',
-    '_PathLookupRequest',
-    '_PathLookupResponse',
-    '_PublishEvent',
-]

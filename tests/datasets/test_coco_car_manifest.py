@@ -1,4 +1,4 @@
-"""The ``sample-coco-cars`` selection (W6): CC BY car images, pinned.
+"""The ``sample-coco-cars`` selection: CC BY car images, pinned.
 
 The committed ``coco_car_60.json`` is pinned here (it was generated from the
 COCO annotation zip with ``make sample-coco-cars``). The selection logic

@@ -111,15 +111,15 @@ async def _run_auto_label(
     vlm_scope: str | None = None,
     # Internal (never an HTTP param; the public route forces the defaults):
     # `/start` resolves `prompt_pack` once at request time and hands the
-    # resolved pin here (R4-3). `prompt_pack_revision` is that pin.
+    # resolved pin here. `prompt_pack_revision` is that pin.
     prompt_pack_revision: int | None = None,
-    # `/start` already ran `resolve_run_prompt_pack` (R5-2): do not re-pin.
+    # `/start` already ran `resolve_run_prompt_pack`: do not re-pin.
     prompt_pack_resolved: bool = False,
-    # The ORIGINAL request omitted `prompt_pack` (R6-1b): resolve the
+    # The ORIGINAL request omitted `prompt_pack`: resolve the
     # labeler against "whatever is active now", not the echoed name, which
     # can go stale before the VLM stage runs.
     prompt_pack_omitted: bool = False,
-    # W9: the run's VLM endpoint. The public route passes the raw `vlm` /
+    # the run's VLM endpoint. The public route passes the raw `vlm` /
     # `acknowledge_external` (resolved and gated here); `/start` resolves
     # and gates at request time and hands the PINNED `(name, revision)`
     # with `vlm_resolved=True`, which the public route can never set.
@@ -158,7 +158,7 @@ async def _run_auto_label(
         # Refused even when this run has no VLM stage, as /start does.
         await resolve_run_vlm(opensearch, vlm, pack=None, acknowledge_external=acknowledge_external)
     if opensearch is not None and prompt_pack_resolved:
-        # R6-1a fix (Blocker, W3/W4 round-6 review): auto_label_worker runs
+        # auto_label_worker runs
         # this in its OWN container/process, with its own config-store
         # snapshot that starts empty and was refreshed nowhere on the job
         # path -- `/start`'s own `ensure_fresh` runs in the api
@@ -184,24 +184,24 @@ async def _run_auto_label(
         # the caller passes an explicit `prompt_pack` name). Resolve (and
         # validate) it now, same as before this fix.
         #
-        # R5-2 fix (W3/W4 round-5 review, Blocker): this used to key off
+        # this used to key off
         # `prompt_pack_revision is None` instead of a dedicated
         # "already resolved" flag. `/start`'s truly-omitted-pack path
         # (the Cropwright default) resolves at request time to
         # `(active_name, None)` -- `None` there means "follow the active
         # pack's PINNED body dynamically" (`_get_vlm_labeler`/
         # `get_prompt_pack` redirect a bare active name with
-        # `revision=None` to the pinned body, B1 round-2), NOT "not yet
+        # `revision=None` to the pinned body), NOT "not yet
         # resolved." Re-running `resolve_run_prompt_pack` on that
         # already-resolved bare `active_name` here re-entered the N7
         # "bare name -> latest saved revision" branch and silently pinned
-        # an un-activated draft -- the round-1 B1 bug, reachable again via
+        # an un-activated draft -- the B1 bug, reachable again via
         # the no-pack default path since the job no longer crashes.
         # `prompt_pack_resolved` is `/start`'s own explicit "I already ran
         # the resolver" signal, set unconditionally there -- so this
         # branch only fires for a call that never went through `/start`.
         #
-        # R6-1b fix: capture "was `prompt_pack` omitted" from the RAW
+        # Capture "was `prompt_pack` omitted" from the RAW
         # incoming param before `resolve_run_prompt_pack` overwrites it
         # below -- this branch is the only place besides `/start` itself
         # that ever resolves an omitted pack, so it must compute the same
@@ -209,7 +209,7 @@ async def _run_auto_label(
         prompt_pack_omitted = not isinstance(prompt_pack, str)
         prompt_pack, prompt_pack_revision = await resolve_run_prompt_pack(opensearch, prompt_pack)
         if prompt_pack_omitted:
-            # R7-2 fix: only the store-active case has TOCTOU draft risk.
+            # only the store-active case has TOCTOU draft risk.
             prompt_pack_omitted = omitted_pack_is_store_active(prompt_pack)
     # `/start` already resolved this `(prompt_pack, prompt_pack_revision)`
     # at request time when the branch above is skipped -- re-running
@@ -416,7 +416,7 @@ async def _run_auto_label(
     ]
     # The run's selected pack (resolve_prompt_pack() default when unset).
     #
-    # R6-1b fix: when the request omitted `prompt_pack`, resolve the
+    # When the request omitted `prompt_pack`, resolve the
     # labeler against `None`/`None` -- ALWAYS "whatever is active right
     # now" -- never the echoed `(prompt_pack, prompt_pack_revision)`
     # name/revision, which can go stale between request time and here

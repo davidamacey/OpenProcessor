@@ -103,7 +103,7 @@ def test_training_candidates_request_body_carries_crop_id_tiebreaker() -> None:
 
 
 # ---------------------------------------------------------------------------
-# W8-cleanup: GET /regions and /regions/training_candidates now query the
+# GET /regions and /regions/training_candidates now query the
 # region_boxes nested list, not the retired item-level region_bbox_norm /
 # region_detector / region_score scalars. These exercise the real match
 # semantics via QueryFakeOpenSearch (not a canned response), so a nested
@@ -211,7 +211,7 @@ def test_training_candidates_false_positives_matches_the_kept_fp_box() -> None:
 
 
 def test_low_conf_correct_excludes_a_verifier_rejected_primary_box() -> None:
-    """W8-cleanup M4: the cohort must require the SAME box to be
+    """The cohort must require the SAME box to be
     `accepted`, not just any low-score box from the primary detector plus
     `verified=True` somewhere on the item -- otherwise a primary box the
     verifier REJECTED at a low score still matches as long as some other

@@ -1,4 +1,4 @@
-"""The endpoint probe (W9.4) against an in-process ``httpx.MockTransport``:
+"""The endpoint probe against an in-process ``httpx.MockTransport``:
 what it sends, what it records, and what it never does (send user data,
 follow a redirect, echo a key)."""
 

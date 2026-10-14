@@ -1,6 +1,6 @@
 /**
- * One config doc's editor state, shared by the prompt-pack (W3) and
- * region-profile (W4) editors (any_domain_plan.md §3.5, §4.4, §7.2, §7.3,
+ * One config doc's editor state, shared by the prompt-pack and
+ * region-profile editors (any_domain_plan.md §3.5, §4.4, §7.2, §7.3,
  * §7.6 items 1, 2 and 4).
  *
  * The draft is the served body plus the operator's edits. Validation is
@@ -246,7 +246,7 @@ export class ConfigEditor<
   }
 
   /** Posts the draft to `/validate`. `name: null`: the doc's own name
-   *  would read as taken (W3-Q9, W4-Q14). */
+   *  would read as taken. */
   async validateNow(): Promise<void> {
     this.#validateAbort?.abort();
     const ctl = new AbortController();

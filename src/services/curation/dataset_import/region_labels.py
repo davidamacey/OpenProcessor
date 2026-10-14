@@ -1,4 +1,4 @@
-"""Region-class labels (W10.7): write a dataset's region boxes onto their
+"""Region-class labels: write a dataset's region boxes onto their
 parent items, make standalone items for boxes with no parent, and record the
 reviewed-negative "no region here" verdict.
 
@@ -44,7 +44,6 @@ class ParentWrite:
     outcome: str
     """``written`` | ``noop`` (this import already wrote it) | ``locked``."""
     boxes: list[dict[str, Any]] = dataclasses.field(default_factory=list)
-    accepted_bbox: tuple[float, float, float, float] | None = None
 
 
 def _validated(ctx: ImportContext) -> bool:
@@ -75,7 +74,7 @@ def region_state_fields(
     status = derive_status(boxes, empty_status=RegionStatus.NO_REGION_VISIBLE)
     if ctx.options.processing == 'propose' and boxes:
         # The region worker proposes what the dataset missed around the
-        # locked boxes (W10.7); the set stays validated until it adds one.
+        # locked boxes; the set stays validated until it adds one.
         status = RegionStatus.PENDING_DETECTION
     fields[F.status] = status.value
     fields[F.validated] = _validated(ctx)
@@ -141,8 +140,6 @@ async def write_parent_regions(
         result.boxes = [
             {'box_id': b.box_id, 'bbox_norm': list(b.bbox_norm), 'state': b.state} for b in written
         ]
-        accepted = [b for b in written if b.state == 'accepted']
-        result.accepted_bbox = accepted[0].bbox_norm if accepted else None
         return fields
 
     await occ_update_one(
@@ -165,7 +162,7 @@ def standalone_item(
     now: str,
 ) -> DetectedItem:
     """An item for a region box with no parent: its own bbox, no class, one
-    accepted region box equal to itself (W10.7)."""
+    accepted region box equal to itself."""
     bbox = box.bbox_norm
     region_box = new_import_box(ctx, bbox, 'b1', now)
     extra: dict[str, Any] = import_stamp(ctx, entry, {}, now)

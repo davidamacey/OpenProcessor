@@ -1,4 +1,4 @@
-"""Wire models for ``/datasets/*`` (W10.14). Request models live with the
+"""Wire models for ``/datasets/*``. Request models live with the
 service (:mod:`src.services.curation.dataset_import.options`); every
 request model is ``extra='forbid'``."""
 

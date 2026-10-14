@@ -87,7 +87,7 @@ def test_one_missing_index_after_ensure_indexes_ends_failed_not_active() -> None
     creating only 5 of 6 distinct indexes, and assert create still ends
     'failed', never 'active' with a missing index.
 
-    Post-W2 (config store), a project's 8 IndexRole members resolve to
+    With the config store, a project's 8 IndexRole members resolve to
     only 6 distinct index names: SETTINGS and UMAP_VIZ_STATE both fold
     onto the CONFIGS index name (resources_for_new, "shard folding"). A
     role that shares its name with another role is the wrong one to skip

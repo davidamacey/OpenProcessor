@@ -21,15 +21,17 @@ from fastapi import HTTPException
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.config import get_region_fields
 from src.routers.curation._common import (
-    HUMAN_REGION_STATUS_VALUES,
-    CropBatchStatusRequest,
-    ItemRegionMetaRequest,
     OpenSearchDep,
     RegionProfileDep,
     _now_iso,
     items_index,
     logger,
     router,
+)
+from src.routers.curation._common_models import (
+    HUMAN_REGION_STATUS_VALUES,
+    CropBatchStatusRequest,
+    ItemRegionMetaRequest,
 )
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.routers.curation._region_write_models import (
@@ -118,7 +120,7 @@ async def patch_crop_region_meta(
 
     Box edits (geometry, per-box text) go through ``PUT
     /crops/{crop_id}/regions`` / ``PATCH /crops/{crop_id}/regions/{box_id}``
-    (W8.8) -- ``region_text`` is no longer accepted here (D decision,
+    -- ``region_text`` is no longer accepted here (D decision,
     2026-09-26). Only the fields present in the payload are written; a
     status write applies the lifecycle invariants (see
     :mod:`src.services.curation.region_writes`). Returns
@@ -163,11 +165,11 @@ async def patch_crop_region_meta(
                 )
             )
         elif 'region_rejection_reason' in fields_set:
-            # W8-cleanup: no status change, just editing the rejection
+            # No status change, just editing the rejection
             # reason already on the item's rejected box(es) -- the retired
             # item-level region_rejection_reason scalar covered this same
             # case unconditionally; now it patches every currently-rejected
-            # box (or, box-less, the item mirror -- W8-cleanup N3, see
+            # box (or, box-less, the item mirror; see
             # reason_only_box_write's docstring).
             doc.update(reason_only_box_write(current, payload.region_rejection_reason))
         return doc

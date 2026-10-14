@@ -265,7 +265,7 @@
                   onSelectChange(spec, (e.currentTarget as HTMLSelectElement).value)}
               >
                 {#if selected == null}
-                  <!-- F-69: nothing pinned and no served default for this
+                  <!-- Nothing pinned and no served default for this
                        axis (e.g. review sort: each tab keeps its own), so
                        say that instead of rendering a blank select. -->
                   <option value="" disabled

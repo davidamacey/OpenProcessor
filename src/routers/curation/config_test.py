@@ -1,6 +1,5 @@
-"""``POST /prompt_packs/test`` and ``POST /region_profiles/test`` (W5,
-any_domain_plan.md §5): run a draft or saved pack / profile (and VLM
-endpoint) against stored crops of the bound project and return the preview.
+"""``POST /prompt_packs/test`` and ``POST /region_profiles/test``: run a draft or saved
+pack / profile (and VLM endpoint) against stored crops of the bound project and return the preview.
 
 Read-only: neither route writes to any index, bumps a revision or touches the
 crop cache beyond reading. Both go through the one VLM gate (mode ``test``:

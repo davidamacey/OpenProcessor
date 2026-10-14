@@ -1,6 +1,4 @@
-"""Wire models for the per-project keymap surface (W2b). See
-``docs/design/openprocessor_internal/any_domain_plan.md`` W2b and CW-K
-§4."""
+"""Wire models for the per-project keymap surface."""
 
 from __future__ import annotations
 

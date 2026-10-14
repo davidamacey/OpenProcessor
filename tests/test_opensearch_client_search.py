@@ -1,4 +1,4 @@
-"""F-25 (fresh-start E2E findings 2026-09-25): core visual-search indexes
+"""Core visual-search indexes
 must not fail open.
 
 Nothing called ``OpenSearchClient.create_all_indexes()`` at startup, so on

@@ -1,7 +1,7 @@
 /**
  * Served issues render grouped by served severity, headed by the served
  * catalog label, with the served message, count, blocking flag and
- * samples (W10.4) — the same component shows a 422 `import_blocked`'s
+ * samples — the same component shows a 422 `import_blocked`'s
  * issues.
  */
 import { afterEach, describe, expect, it } from 'vitest';

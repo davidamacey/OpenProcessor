@@ -1,6 +1,5 @@
 /**
- * Test-on-crop for one region profile (`POST /region_profiles/test`, W5;
- * any_domain_plan.md §5.2, §7.6, §7.7).
+ * Test-on-crop for one region profile (`POST /region_profiles/test`).
  *
  * Sends exactly what the operator chose: one crop id; the unsaved draft,
  * or the saved profile at the revision on screen; the segmenter prompt

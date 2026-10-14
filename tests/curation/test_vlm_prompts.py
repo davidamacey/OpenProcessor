@@ -20,7 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_vlm_prompt_resolution_importable_before_vlm_prompts() -> None:
-    """N6 fix (W3/W4 round-3 review): ``vlm_prompt_resolution.py`` used to
+    """``vlm_prompt_resolution.py`` used to
     import ``PromptPack``/``BUILT_IN_PACKS``/``_BUILT_IN_NAMES`` from
     ``vlm_prompts.py`` at module level, while ``vlm_prompts.py`` itself
     imports this module back (for its re-export block) AFTER defining
@@ -70,12 +70,12 @@ def test_from_dict_missing_required_field_raises() -> None:
         PromptPack.from_dict(data)
 
 
-def test_to_json_from_json_round_trips(tmp_path: Path) -> None:
+def test_from_json_round_trips_to_dict(tmp_path: Path) -> None:
     path = tmp_path / 'pack.json'
-    GENERIC_ITEM_PACK.to_json(path)
+    path.write_text(json.dumps(GENERIC_ITEM_PACK.to_dict()))
     loaded = PromptPack.from_json(path)
     assert loaded == GENERIC_ITEM_PACK
-    # Pretty-printed, real JSON -- not a repr dump.
+    # Real JSON -- not a repr dump.
     parsed = json.loads(path.read_text())
     assert parsed['name'] == 'generic_item_v1'
 
@@ -99,9 +99,9 @@ def test_example_pack_file_loads_and_differs_from_generic() -> None:
 
 @pytest.mark.parametrize('pack', [GENERIC_ITEM_PACK], ids=['generic_item_v1'])
 def test_shipped_packs_ask_for_the_nested_region_boxes_shape(pack: PromptPack) -> None:
-    """W8 M7 fix (pipeline-wiring review, 2026-09-27): every shipped
-    combined prompt must ask for the W8.6 list shape (``region_boxes:
-    [{"box": ..., ...}]``), never the pre-W8 flat
+    """Every shipped
+    combined prompt must ask for the list shape (``region_boxes:
+    [{"box": ..., ...}]``), never the old flat
     ``region_bbox_correct``/``region_text``/``region_confidence`` top-
     level keys -- a flat-shape pack makes ``box_verdicts`` raise
     ``MultiRegionKeysMissingError`` on every combined call, silently
@@ -148,7 +148,7 @@ def test_resolve_prompt_pack_falls_back_on_malformed_json(tmp_path: Path) -> Non
 def test_resolve_prompt_pack_loads_a_configured_pack(tmp_path: Path) -> None:
     custom = replace(GENERIC_ITEM_PACK, name='pallet_v1')
     path = tmp_path / 'pallet.json'
-    custom.to_json(path)
+    path.write_text(json.dumps(custom.to_dict()))
 
     resolved = resolve_prompt_pack(_FakeCfg(path))
     assert resolved.name == 'pallet_v1'

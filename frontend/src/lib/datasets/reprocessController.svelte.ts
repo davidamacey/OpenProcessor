@@ -1,6 +1,5 @@
 /**
- * Reprocess dialog state (any_domain_plan.md §7.12 item 6, W10.13;
- * docs/design/w10-import-reprocess-ui-plan-2026-09-27.md §5).
+ * Reprocess dialog state.
  *
  * - One crop: `POST /crops/{id}/reprocess` with `dry_run: false` (the
  *   route's own default; the dialog is the confirm step). The served
@@ -11,9 +10,8 @@
  *   per-scope `selected` / `locked_skipped` / `breakdown`),
  *   then the same request with `dry_run: false`. A served `job` is
  *   followed at `GET /reprocess/jobs/{job_id}`.
- * - A served request (W4's activation `impact.suggested_reprocess`,
- *   docs/design/w4-profile-editor-ui-plan-2026-09-27.md §5): the same
- *   dry-run-then-apply, sending the request exactly as served; its scopes
+ * - A served request (a profile activation's `impact.suggested_reprocess`):
+ *   the same dry-run-then-apply, sending the request exactly as served; its scopes
  *   and region mode can't be changed.
  *
  * Human and imported labels are locked server-side; the client never

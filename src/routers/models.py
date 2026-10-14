@@ -89,13 +89,6 @@ class ModelStatusResponse(BaseModel):
     file_size_mb: float | None = Field(default=None, description='PyTorch model file size in MB')
 
 
-class TestInferenceRequest(BaseModel):
-    """Request body for test inference."""
-
-    confidence: float = Field(default=0.25, ge=0.0, le=1.0, description='Confidence threshold')
-    use_end2end: bool = Field(default=True, description='Use End2End TRT model (GPU NMS)')
-
-
 class TestInferenceResponse(BaseModel):
     """Response for test inference."""
 

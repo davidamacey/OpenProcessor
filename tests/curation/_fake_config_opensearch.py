@@ -22,7 +22,7 @@ class _FakeIndices:
 
     ``exists``/``create`` back a bare in-memory set of created index
     names -- just enough for ``ensure_global_configs_index``'s
-    create-if-missing check (op_global_configs, W2 M3)."""
+    create-if-missing check (op_global_configs)."""
 
     def __init__(self) -> None:
         self._created: set[str] = set()

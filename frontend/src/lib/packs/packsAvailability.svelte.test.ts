@@ -1,5 +1,5 @@
 /**
- * The W3 "not yet deployed" gate: a 404/501 on `/prompt_packs` hides every
+ * The prompt-pack "not yet deployed" gate: a 404/501 on `/prompt_packs` hides every
  * pack surface; a 200 marks it available; any other failure keeps
  * availability unknown and records the error.
  */

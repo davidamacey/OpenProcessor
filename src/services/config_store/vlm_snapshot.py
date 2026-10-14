@@ -1,5 +1,5 @@
-"""The VLM axis's part of a :class:`~src.services.config_store.store.ConfigSnapshot`
-(W9.2). Kept out of ``store.py`` (size ratchet, and it is one concern).
+"""The VLM axis's part of a :class:`~src.services.config_store.store.ConfigSnapshot`.
+Kept out of ``store.py`` (size ratchet, and it is one concern).
 
 Two indexes, two halves:
 

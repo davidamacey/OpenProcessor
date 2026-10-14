@@ -30,15 +30,3 @@ class DuplicateGroup:
     primary_image_path: str
     member_count: int
     members: list[dict[str, Any]]
-
-
-@dataclass
-class ScanStats:
-    """Statistics from a duplicate scan operation."""
-
-    total_images: int
-    images_scanned: int
-    groups_created: int
-    duplicates_found: int
-    already_grouped: int
-    scan_time_seconds: float

@@ -5,10 +5,10 @@ are the generic curation ingest front door: they create ``images`` +
 ``items`` documents, backed by
 :class:`~src.services.curation.ingest.CurationIngestService`. Importing
 an already-labeled dataset will be ``POST /datasets/imports`` (planned,
-W10 route not yet built — ``dataset_import.import_dataset()`` exists as
+route not yet built — ``dataset_import.import_dataset()`` exists as
 a pure Python API with no HTTP route fronting it yet) — the per-image
 ``/import_labels*`` routes this module used to carry are deleted
-outright (no 410; see any_domain_plan.md W10.5). Everything else in this
+outright (no 410). Everything else in this
 module (status/backlog introspection, the path-existence lookup) is
 unchanged pure-OpenSearch read queries.
 
@@ -29,6 +29,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.config import DetectionProfile, RegionStatus, get_region_fields
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.routers.curation._common import (
+    OpenSearchDep,
+    RegistryDep,
+    _ensure_indexes,
+    images_index,
+    items_index,
+    router,
+)
+from src.routers.curation._common_models import (
     BatchIngestResponse as _BatchIngestResponse,
     BatchIngestSummaryResponse as _BatchIngestSummaryResponse,
     IngestBatchConfig,
@@ -41,15 +49,9 @@ from src.routers.curation._common import (
     IngestRegionDrainResponse,
     IngestStatusResponse,
     IngestUploadConfig,
-    OpenSearchDep,
     RegionDependencyStatusResponse,
-    RegistryDep,
-    _ensure_indexes,
     _PathLookupRequest,
     _PathLookupResponse,
-    images_index,
-    items_index,
-    router,
 )
 from src.services.curation.detector_vocabulary import detector_labels
 from src.services.curation.image_serving import UNSERVABLE_PATH_ERROR, is_servable_image_path
@@ -65,7 +67,7 @@ class IngestBatchItem(IngestImageRequest):
 
 
 class IngestBatchRequest(BaseModel):
-    # F-22: extra='forbid' + a required, non-empty items list. Previously a
+    # extra='forbid' + a required, non-empty items list. Previously a
     # body with a wrong key (e.g. {'paths': [...]}) validated fine with
     # items defaulting to [] and the endpoint returned 200 status=success
     # with all-zero counts -- a silent no-op indistinguishable from "ingested
@@ -173,7 +175,7 @@ async def curation_ingest_batch(
     Every item shares its ``source`` tag independently; a per-item read
     failure is reported as a ``failed`` result rather than aborting the
     whole batch. To ingest an already-labeled dataset, use
-    ``POST /datasets/imports`` (planned, W10 route not yet built).
+    ``POST /datasets/imports`` (planned, route not yet built).
 
     The whole-image detector inference is issued in batched Triton calls
     (one per ``DetectionProfile.batch_limit`` chunk), so a larger batch

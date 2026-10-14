@@ -3,7 +3,7 @@ under the repo's 700-LOC pre-commit ratchet (same pattern as
 ``_models_sharing.py``/``models.py`` and ``_region_profile_clone.py``/
 ``region_profiles.py``).
 
-R6-m1 fix (Minor, W3/W4 round-6 review): this is the thin, PUBLIC route
+R6-m1 fix: this is the thin, PUBLIC route
 wrapper around :func:`~src.routers.curation.pipeline._run_auto_label`.
 ``prompt_pack_revision``/``prompt_pack_resolved`` used to be hidden
 (``include_in_schema=False``) query params directly on the combined

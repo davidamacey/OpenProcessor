@@ -1,8 +1,8 @@
 <script lang="ts">
   /**
-   * Renders its content only once the backend is known to serve W10
+   * Renders its content only once the backend is known to serve dataset import
    * (`datasetsAvailability`, a one-shot `GET /datasets/formats` probe).
-   * A backend without W10 gets one line instead of a broken page; this is
+   * A backend without dataset import gets one line instead of a broken page; this is
    * the "not yet deployed" gate, not a compatibility path.
    */
   import type { Snippet } from 'svelte';

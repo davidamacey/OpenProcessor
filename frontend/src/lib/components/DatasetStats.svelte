@@ -536,7 +536,7 @@
       <div class="surface p-4">
         <header class="mb-3 flex items-center justify-between">
           <h3 class="text-sm font-semibold text-zinc-300">Unlabeled</h3>
-          <!-- F-69: the header used to sum pending_detection +
+          <!-- The header used to sum pending_detection +
                pending_verification + no_label_source, but those buckets
                overlap (a crop can be pending region detection AND have no
                class), so the "total" could exceed total_crops. The server
@@ -579,7 +579,7 @@
               {fmt(stats.unlabeled.vlm_no_class)}
             </dd>
           </div>
-          <!-- F-23: detector-proposed crops nothing has classified yet,
+          <!-- Detector-proposed crops nothing has classified yet,
                a subset of the class-less count above (served here
                instead of the old, always-0 labeled.by_proposal). -->
           <div class="flex justify-between">

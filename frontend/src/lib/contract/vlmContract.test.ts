@@ -1,5 +1,5 @@
 /**
- * `types_vlm.ts` (and the W9 additions on `types_profiles.ts`) vs the
+ * `types_vlm.ts` (and the VLM additions on `types_profiles.ts`) vs the
  * vendored OpenAPI schemas (OpenProcessor f582aa05). Each key map is
  * compile-time exact against its type (`satisfies Record<keyof T, true>`
  * rejects a missing or an extra key) and the test pins it to the schema's

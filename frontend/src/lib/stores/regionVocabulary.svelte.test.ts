@@ -2,7 +2,7 @@
  * regionVocabularyStore — loads GET {API_PREFIX}/regions/vocabulary once,
  * degrading to empty lists (never a throw) on failure, so ProvenanceChip
  * and SlotGallery's detector filter always have a defined input
- * (W0 naming-sweep finding m9). The store is a module singleton, so every
+ * The store is a module singleton, so every
  * test resets it first.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

@@ -1,6 +1,6 @@
 /**
  * The cohort preview's cards refresh the preview after an image Reprocess
- * (W10): both card kinds pass `onreprocessed`, which re-runs the cohort
+ *both card kinds pass `onreprocessed`, which re-runs the cohort
  * preview query. A source scan: mounting the whole train page to drive a
  * reprocess dialog from a cohort card is out of proportion, and the
  * card-side behavior is covered by CropCard.test.ts / SlotCard.test.ts.

@@ -1,7 +1,7 @@
 """Tests for :mod:`src.routers.curation.pipeline`.
 
 Includes the ``TestPipelineSkipFilter`` class, exercising the pipeline
-router's unvalidated-crops query. W8: the combined-VLM-path cohort
+router's unvalidated-crops query. The combined-VLM-path cohort
 tests that used to live in ``test_label_combined_wireup.py`` were
 deleted with the ``_process_crop``/cohort-gate code they exercised —
 see ``test_region_cascade_integrity.py`` and ``test_write_guards.py``

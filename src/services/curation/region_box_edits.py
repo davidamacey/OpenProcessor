@@ -1,4 +1,4 @@
-"""Human edits over the per-item region-box list (W8.7 / W8.8).
+"""Human edits over the per-item region-box list.
 
 Pure (no I/O). Every human writer -- ``PUT /crops/{id}/regions`` and its
 batch form, ``PATCH /crops/{id}/regions/{box_id}``, ``POST
@@ -78,7 +78,7 @@ _BOX_STATE_ROUTES_BY_NAME = {r.route: r.states for r in BOX_STATE_ROUTES}
 
 
 def validate_box_state(route: str, state: str | None) -> None:
-    """W8c: enforce ``BOX_STATE_ROUTES`` (``src/config/region_state.py``) on
+    """Enforce ``BOX_STATE_ROUTES`` (``src/config/region_state.py``) on
     write, not just serve it on ``GET .../regions/statuses``.
 
     ``route`` is the exact ``BoxStateRoute.route`` string (e.g. ``'PATCH
@@ -108,7 +108,7 @@ def with_state(box: RegionBox, state: str, *, rejection_reason: str | None = Non
       re-reject re-stamps the reason: a human reject over a verifier
       reject is a human decision now.
     - every other state clears the reason, so a box never carries a stale
-      verdict from an earlier state (W8-cleanup m5).
+      verdict from an earlier state.
     - ``false_positive``: parked in the permanent FP cluster; leaving it
       releases the box for re-clustering. Re-asserting the box's current
       non-rejected state changes nothing (cluster placement stays).
@@ -182,19 +182,19 @@ def apply_put_boxes(
 ) -> list[RegionBox]:
     """Sibling-preserving merge for ``PUT /crops/{crop_id}/regions``.
 
-    ``requested`` is the full list, in display order (any_domain_plan.md
-    W8.8): an element with only ``box_id`` keeps its stored box untouched;
+    ``requested`` is the full list, in display order: an element with only ``box_id`` keeps its stored box
+    untouched;
     one with ``box_id`` plus other keys patches just those keys onto the
     stored box (:func:`human_geometry`, :func:`with_state`,
     :func:`human_text_fields`); ``box_id: None`` (or omitted) is a new
     human box, assigned the next id (``bbox_norm`` required) and
-    defaulting to ``accepted`` when ``state`` is omitted (W8 pin 2).
+    defaulting to ``accepted`` when ``state`` is omitted.
     Omitting a stored box from ``requested`` deletes it. A duplicate
     ``box_id`` is an error.
 
     ``now`` stamps ``detected_at`` on the boxes a human draws or moves.
     ``project_parent_to_source(bbox, item_bbox_norm)`` is supplied by the
-    caller for ``frame == 'parent'`` (W8 pin 1; the item crop's own
+    caller for ``frame == 'parent'`` (the item crop's own
     ``bbox_norm`` is the frame to project through); this module stays pure
     and does no frame geometry itself.
     """
@@ -266,7 +266,7 @@ def _is_verifier_rejected(box: RegionBox) -> bool:
 def boxes_with_status(
     status: str, boxes: Sequence[RegionBox], *, rejection_reason: str | None = None
 ) -> list[RegionBox]:
-    """Whole-set human status transition over the list (W8.7 table).
+    """Whole-set human status transition over the list.
 
     A whole-set confirm never overrides a per-box decision that already
     settled a box; it only settles the undecided ones. ``rejection_reason``
@@ -281,7 +281,7 @@ def boxes_with_status(
         if not any(b.state == 'accepted' for b in result):
             # Nothing was proposed or accepted: this confirm is a human
             # reversing the verifier's rejection of every box. Reopen only
-            # the boxes the VERIFIER rejected (W8-cleanup M3) -- a human's
+            # the boxes the VERIFIER rejected -- a human's
             # own per-box reject or a sanity-gate reject is never silently
             # overridden. A whole-set HUMAN reject followed by a confirm
             # therefore 422s: a per-box and a whole-set human reject share

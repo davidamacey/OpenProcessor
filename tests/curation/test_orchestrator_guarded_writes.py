@@ -83,8 +83,8 @@ def test_class_cluster_write_guard_matches_is_locked_class() -> None:
 
 
 def test_class_cluster_write_guard_intentionally_diverges_on_test_holdout() -> None:
-    """W10 fix pass (Opus review 2026-09-28, lock-rule call-site m3): an
-    unvalidated ``test_holdout`` item IS locked by ``is_locked_class``
+    """An unvalidated
+    ``test_holdout`` item IS locked by ``is_locked_class``
     (its class must never be touched by an automated writer), but this
     clause list intentionally does NOT guard it -- this write is cluster
     PLACEMENT (cluster_id/cluster_distance), not a class write, so

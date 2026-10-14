@@ -74,7 +74,6 @@ dependencies = [
     "joblib",
     "einops",
     "regex",
-    "paddleocr",
     "docker>=7,<8",
 ]
 
@@ -207,6 +206,8 @@ unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [tool.ruff.lint.per-file-ignores]
+# The whitelist is read by vulture, never run: each line is a bare attribute read on purpose.
+"scripts/codegen/vulture_whitelist.py" = ["B018"]
 # Test files can have additional flexibility
 "tests/**/*.py" = [
     "ARG001",  # Unused function argument (fixtures)
@@ -252,6 +253,8 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 [tool.ruff.lint.flake8-type-checking]
 # Pydantic resolves these annotations at runtime, so their imports are not TYPE_CHECKING-only.
 runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings"]
+# FastAPI resolves the route request/response annotations at call time, so the router modules import these models at runtime.
+exempt-modules = ["typing", "src.routers.curation._common_models"]
 
 [tool.ruff.lint.isort]
 # Import sorting configuration (follows black/blue style)
@@ -406,7 +409,6 @@ module = [
     "src.services.visual_search.*",
     "src.utils.retry",
     "src.utils.image_processing",
-    "src.services.image",
     "src.services.face_identity",
     "src.services.face_identity.*",
     "src.routers.detect",

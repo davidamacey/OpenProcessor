@@ -9,13 +9,7 @@ from fastapi import HTTPException, Query
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.clients.occ_bulk import occ_update_bulk
 from src.routers.curation._common import (
-    CropBatchLabelRequest,
-    CropExcludeRequest,
-    CropFlagNewClassRequest,
-    CropLabelRequest,
-    CropMoveRequest,
     CropsPageResponse,
-    CropUnexcludeRequest,
     ItemDoc,
     OpenSearchDep,
     RegistryDep,
@@ -27,6 +21,14 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.routers.curation._common_models import (
+    CropBatchLabelRequest,
+    CropExcludeRequest,
+    CropFlagNewClassRequest,
+    CropLabelRequest,
+    CropMoveRequest,
+    CropUnexcludeRequest,
+)
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._review_params import UnsetIfEmpty
 from src.routers.curation._selection import selected_crop_ids
@@ -37,8 +39,9 @@ from src.routers.curation._selection_write_models import (
     SelectionDryRunResponse,
 )
 from src.services.curation.class_label import (
+    ItemLabel,
     candidate_move_update,
-    human_label_update,
+    class_label_update,
     human_move_class_update,
 )
 from src.services.curation.cluster_ids import cluster_kind
@@ -368,12 +371,14 @@ async def label_crop(
     class_name = entry.class_name if entry is not None else ''
 
     def _merge_label(current: dict[str, Any]) -> dict[str, Any]:
-        return human_label_update(
+        return class_label_update(
             current,
-            class_id=payload.class_id,
-            class_name=class_name,
-            label_source=payload.label_source,
-            writer='human:label_crop',
+            ItemLabel.human(
+                class_id=payload.class_id,
+                class_name=class_name,
+                label_source=payload.label_source,
+                writer='human:label_crop',
+            ),
         )
 
     try:
@@ -421,12 +426,14 @@ async def batch_label_crops(
         return {'updated': 0, 'updated_ids': [], 'conflicts': []}
 
     def _merge(current: dict[str, Any]) -> dict[str, Any]:
-        return human_label_update(
+        return class_label_update(
             current,
-            class_id=payload.class_id,
-            class_name=class_name,
-            label_source=payload.label_source,
-            writer='human:batch_label_crops',
+            ItemLabel.human(
+                class_id=payload.class_id,
+                class_name=class_name,
+                label_source=payload.label_source,
+                writer='human:batch_label_crops',
+            ),
         )
 
     # One mget page + one bulk call (regardless of batch size) via

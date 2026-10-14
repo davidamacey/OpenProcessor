@@ -1,5 +1,5 @@
 /**
- * F-52 (fresh-start findings 2026-09-25): the `/classes` proposals help
+ * the `/classes` proposals help
  * line interpolated empty served lists raw ("(, plus …)" / "()").
  */
 import { describe, expect, it } from 'vitest';

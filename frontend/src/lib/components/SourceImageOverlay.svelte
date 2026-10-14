@@ -145,9 +145,8 @@
     return [b.cx - b.w / 2, b.cy - b.h / 2, b.cx + b.w / 2, b.cy + b.h / 2];
   }
 
-  /** W8 multi-box (docs/design/w8-multibox-frontend-plan-2026-09-26.md):
-   *  per-box state -> ring color/dash. The ring color reads the served
-   *  box_states `tone` (backend follow-up to W8.7) via
+  /** Multi-box: per-box state -> ring color/dash. The ring color reads
+   *  the served box_states `tone` via
    *  `toneBorderClass(boxStateTone(state))` — 'neutral' on a pre-tone
    *  backend or an unrecognized state, matching `+page.svelte`'s
    *  `multiBoxRingColor`. */

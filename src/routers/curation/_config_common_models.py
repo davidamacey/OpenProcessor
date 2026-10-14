@@ -1,10 +1,6 @@
 """Shared structured-error and validation models for the config-store /
-projects surface (P1 creates this module ahead of W2, because P1 lands
-first in the merge order -- see
-docs/design/openprocessor_internal/projects_plan.md §7 and
-any_domain_plan.md §7.1/§9 W2). W2 extends the Literals and adds the
-validation-report shapes and ``ActiveRef``/``ActiveConfigResponse``;
-W3/W4/W8/W9 extend the Literals further as their routes land.
+projects surface: the error-code and validation-code Literals, the
+validation-report shapes and ``ActiveRef``/``ActiveConfigResponse``.
 
 Every project or config route raises through :func:`api_error`, never a
 bare string ``detail`` -- gives Cropwright one stable shape
@@ -22,10 +18,9 @@ from src.routers.curation._dataset_issue_models import DatasetIssueWire
 from src.services.issue_ids import stamp_issue_ids
 
 
-# P1 seeded the project-related codes it raises. W2 adds the codes its
-# own low-level primitives (``src.services.config_store``) and the
-# ``PUT /settings`` bridge raise; W3/W4/W8/W9 add the rest as their
-# routes land (see any_domain_plan.md §7.1's full table).
+# Project-related codes, then the codes the low-level config-store primitives
+# (``src.services.config_store``) and the ``PUT /settings`` bridge raise,
+# then the pack/profile, region and VLM routes' codes.
 ErrorCode = Literal[
     'project_not_found',
     'project_archived',
@@ -50,12 +45,11 @@ ErrorCode = Literal[
     'model_name_reserved',
     'internal_isolation_error',
     'revision_conflict',
-    # W2
     'not_found',
     'unknown_revision',
     'active_conflict',
     'no_previous',
-    # m-b fix (W3/W4 round-5 review): rollback's `previous` target was
+    # m-b fix: rollback's `previous` target was
     # deleted since it was activated -- distinct from `no_previous`
     # (there was never a target at all).
     'previous_deleted',
@@ -71,7 +65,6 @@ ErrorCode = Literal[
     'empty_val_split',
     'model_not_found',
     'project_owned_model',
-    # W2b
     'class_hotkey_conflict',
     'hotkey_reserved',
     'hotkey_taken',
@@ -83,7 +76,7 @@ ErrorCode = Literal[
     # was refused because a first finish for it is still in flight --
     # distinct from project_busy (a step *inside* one finish failed).
     'finish_in_progress',
-    # W10: dataset import and reprocess.
+    # dataset import and reprocess.
     'dataset_not_found',
     'import_not_found',
     'upload_not_found',
@@ -121,7 +114,7 @@ ErrorCode = Literal[
     # P4: combine projects.
     'combine_not_found',
     'combine_not_resumable',
-    # W9: VLM endpoint registry / selection
+    # VLM endpoint registry / selection
     'unknown_vlm',
     'vlm_external_not_acknowledged',
     'vlm_not_configured',
@@ -130,7 +123,7 @@ ErrorCode = Literal[
     'unknown_catalog_id',
     'vlm_catalog_does_not_fit',
     'probe_busy',
-    # W5: the test-on-crop routes
+    # the test-on-crop routes
     'crop_not_found',
     'test_busy',
     'test_timeout',
@@ -150,10 +143,7 @@ ErrorCode = Literal[
     'audit_precision_low',
 ]
 
-# Seeded with the codes W2 raises (none yet -- W2 has no validated
-# writes of its own, only the low-level OCC primitives). W3/W4 add the
-# pack/profile validation codes; W8/W9 add theirs. W2b adds the
-# keymap_* codes (CW-K §3.1).
+# Pack/profile, region and VLM validation codes, plus the keymap_* codes.
 ValidationCode = Literal[
     'name_conflict',
     'keymap_unknown_action',
@@ -168,7 +158,7 @@ ValidationCode = Literal[
     'keymap_class_hotkey_shadowed',
     'keymap_focus_key',
     'keymap_context_no_confirm',
-    # W3: prompt-pack validation (any_domain_plan.md §3.3/§7.1)
+    # prompt-pack validation (any_domain_plan.md §3.3/§7.1)
     'pack_name_invalid',
     'pack_name_reserved',
     'pack_field_missing',
@@ -186,7 +176,7 @@ ValidationCode = Literal[
     'pack_description_class_unknown',
     'pack_example_values',
     'pack_multi_region_keys_missing',
-    # W4: region-profile validation (any_domain_plan.md §4.3/§7.1)
+    # region-profile validation (any_domain_plan.md §4.3/§7.1)
     'profile_name_invalid',
     'profile_name_reserved',
     'profile_field_unknown',
@@ -246,7 +236,7 @@ ValidationCode = Literal[
     'embedding_model_mismatch',
     'region_profiles_differ',
     'class_mapping_invalid',
-    # W9: VLM endpoint validation (any_domain_plan.md W9.4/W9.5)
+    # VLM endpoint validation
     'vlm_name_invalid',
     'vlm_name_reserved',
     'vlm_field_range',
@@ -355,7 +345,7 @@ class ConfigErrorDetail(BaseModel):
     hard_limit: int | None = None
     heap_max_bytes: int | None = None
     current_revision: int | None = None
-    # W2 (activation OCC / validation reports)
+    # Activation OCC / validation reports
     report: ValidationReport | None = None
     current: ActiveRef | None = None
     axis: str | None = None
@@ -367,14 +357,14 @@ class ConfigErrorDetail(BaseModel):
     # invalid_transition: the status the project is in, and the action refused.
     project_status: str | None = None
     action: str | None = None
-    # W2b: 409 class_hotkey_conflict / the unbind-and-save response, and
+    # 409 class_hotkey_conflict / the unbind-and-save response, and
     # 422 hotkey_reserved / 409 hotkey_taken on PUT /classes/{id}.
     class_conflicts: list[dict[str, Any]] | None = None
     unbound_class_hotkeys: list[dict[str, Any]] | None = None
     actions: list[dict[str, Any]] | None = None
     class_id: int | None = None
     class_name: str | None = None
-    # W10: 422 import_blocked / dataset_path_not_allowed carry the issues,
+    # 422 import_blocked / dataset_path_not_allowed carry the issues,
     # 422 class_mapping_incomplete the unmapped dataset classes, a 409 or a
     # 413 the import id / byte limit it concerns.
     issues: list[DatasetIssueWire] | None = None
@@ -385,7 +375,7 @@ class ConfigErrorDetail(BaseModel):
     limit: int | None = None
     # 422 too_few_items: the smallest pool the clustering route accepts.
     min_items: int | None = None
-    # W9: unknown_vlm carries `requested`; a refused external endpoint names
+    # unknown_vlm carries `requested`; a refused external endpoint names
     # itself and where its acknowledgement is given.
     requested: str | None = None
     endpoint: str | None = None
@@ -394,7 +384,7 @@ class ConfigErrorDetail(BaseModel):
     unknown_names: list[str] | None = None
     # 422 detector_not_servable: every problem found with the override.
     reasons: list[str] | None = None
-    # W5: 404 crop_not_found names every crop id the project does not have.
+    # 404 crop_not_found names every crop id the project does not have.
     crop_ids: list[str] | None = None
     # 409 in_use on PUT /models/{name}/sharing: who still runs the model.
     used_by: list[ModelSharingUser] | None = None
@@ -487,10 +477,10 @@ class ActiveRef(BaseModel):
 
 
 class AppliedRuntime(BaseModel):
-    """One worker process's "what did I actually apply" record (any_domain_plan.md
-    §4.5/§7.3), served under ``ActiveConfigResponse.applied[]`` from
-    ``runtime:<process>:<host>`` docs (``upsert_project_runtime_doc``,
-    W2). ``lagging`` is ``true`` when ``applied_config_revision`` is
+    """One worker process's "what did I actually apply" record,
+    served under ``ActiveConfigResponse.applied[]`` from
+    ``runtime:<process>:<host>`` docs (``upsert_project_runtime_doc``).
+    ``lagging`` is ``true`` when ``applied_config_revision`` is
     behind the axis's current ``config_revision`` for longer than the
     drain-plus-poll grace period (§4.5) -- a stuck/slow worker, not a
     momentary swap in progress."""
@@ -500,7 +490,7 @@ class AppliedRuntime(BaseModel):
     applied_config_revision: int
     profile: ActiveRef
     pack: ActiveRef
-    # W9: the VLM endpoint this worker's runtime was built from. ``null``
+    # the VLM endpoint this worker's runtime was built from. ``null``
     # = the worker never reported a VLM axis (older worker); an ActiveRef
     # with ``name=None`` = it reported "no VLM configured".
     vlm: ActiveRef | None
@@ -531,11 +521,11 @@ class AppliedRuntime(BaseModel):
 
 
 class ActiveConfigResponse(BaseModel):
-    """``GET /prompt_packs/active`` / ``GET /region_profiles/active`` (W3/W4);
-    also the activation-mutation response shape used by W2's settings
+    """``GET /prompt_packs/active`` / ``GET /region_profiles/active``;
+    also the activation-mutation response shape used by the settings
     bridge and by ``store.activate``'s callers.
 
-    ``source`` (Cropwright W3 UI, C2/Q5): where ``active`` came from --
+    ``source``: where ``active`` came from --
     ``'stored'`` (an activation doc names a saved pack/profile),
     ``'env'`` (never activated through the store; the env/file default
     applies, and ``active.name`` names it), or ``'off'`` (explicitly

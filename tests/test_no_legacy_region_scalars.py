@@ -1,7 +1,7 @@
 """No code may read or write a region's per-box data off the ITEM.
 
-W8 moved every per-box attribute -- geometry, score, detector, source,
-verdict, text, candidate box, vector, cluster placement -- into the
+Every per-box attribute -- geometry, score, detector, source,
+verdict, text, candidate box, vector, cluster placement -- lives in the
 ``region_boxes`` list. The item-level ``RegionFields`` storage names that
 used to hold them are gone, and so are their mappings and wire keys. This
 guard keeps them gone, across ``src/`` and ``scripts/``:

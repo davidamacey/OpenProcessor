@@ -354,63 +354,6 @@ class ClusteringService:
         ]
 
     # =========================================================================
-    # CLUSTER SEARCH
-    # =========================================================================
-
-    def search_similar_clusters(
-        self,
-        index_name: ClusterIndex,
-        query_embedding: np.ndarray,
-        n_clusters: int | None = None,
-    ) -> list[int]:
-        """
-        Find clusters most similar to a query embedding.
-
-        Use this to narrow down which clusters to search in OpenSearch.
-
-        Args:
-            index_name: Which index to use
-            query_embedding: Query embedding vector
-            n_clusters: Number of clusters to return (uses nprobe default if None)
-
-        Returns:
-            List of cluster IDs ordered by similarity
-        """
-        index = self._get_index(index_name)
-
-        if n_clusters is None:
-            n_clusters = self.configs[index_name].nprobe
-
-        # Reshape and normalize
-        query = query_embedding.reshape(1, -1).astype(np.float32)
-        query = self._normalize(query)
-
-        # Search quantizer
-        _, cluster_ids = index.quantizer.search(query, n_clusters)
-
-        return cluster_ids[0].tolist()
-
-    def get_cluster_centroid(
-        self,
-        index_name: ClusterIndex,
-        cluster_id: int,
-    ) -> np.ndarray:
-        """
-        Get the centroid (representative vector) for a cluster.
-
-        Args:
-            index_name: Which index to use
-            cluster_id: Cluster ID
-
-        Returns:
-            Centroid embedding vector
-        """
-        index = self._get_index(index_name)
-
-        # Extract centroid from quantizer
-        return index.quantizer.reconstruct(cluster_id)
-
-    # =========================================================================
     # REBALANCING
     # =========================================================================
 
@@ -476,26 +419,6 @@ class ClusteringService:
             reason=reason,
         )
 
-    async def rebalance(
-        self,
-        index_name: ClusterIndex,
-        embeddings: np.ndarray,
-    ) -> ClusterStats:
-        """
-        Rebalance clusters by re-training from current data.
-
-        Args:
-            index_name: Which index to rebalance
-            embeddings: All current embeddings to re-cluster
-
-        Returns:
-            New ClusterStats after rebalancing
-        """
-        logger.info(f'Rebalancing {index_name} index with {len(embeddings)} embeddings')
-
-        # Re-train with current data
-        return await self.train_index(index_name, embeddings)
-
     # =========================================================================
     # PERSISTENCE
     # =========================================================================
@@ -544,13 +467,6 @@ class ClusteringService:
             logger.error(f'Failed to load {index_name} index: {e}')
             return False
 
-    def load_all_indexes(self) -> dict[ClusterIndex, bool]:
-        """Load all indexes from disk."""
-        results = {}
-        for index_name in ClusterIndex:
-            results[index_name] = self.load_index(index_name)
-        return results
-
     # =========================================================================
     # STATISTICS
     # =========================================================================
@@ -595,10 +511,6 @@ class ClusteringService:
     def get_stats(self, index_name: ClusterIndex) -> ClusterStats:
         """Get statistics for an index."""
         return self._compute_stats(index_name)
-
-    def get_all_stats(self) -> dict[ClusterIndex, ClusterStats]:
-        """Get statistics for all indexes."""
-        return {name: self._compute_stats(name) for name in ClusterIndex}
 
     def is_trained(self, index_name: ClusterIndex) -> bool:
         """Check if an index has been trained."""

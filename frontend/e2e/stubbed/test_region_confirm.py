@@ -1,9 +1,8 @@
-"""W8 multi-box regions (docs/design/w8-multibox-frontend-plan-2026-09-26.md).
-Supersedes the pre-W8 B2 test this file originally covered: confirming an
+"""Multi-box regions: confirming an
 UNCHANGED box must never rewrite the detector's own provenance
-(`region_detector`/`region_score`). Under W8 this is no longer a
+(`region_detector`/`region_score`). This is no longer a
 "status-only PATCH region_meta instead of PUT" split — it is the PUT
-element-addressing rule itself (W8.8): a box included with `state` but NO
+element-addressing rule itself: a box included with `state` but NO
 `bbox_norm` keeps its stored geometry AND provenance server-side, only its
 state changes. So Enter on an untouched `proposed` box sends exactly one
 `PUT {API_PREFIX}/crops/{id}/regions` with `boxes: [{box_id, state:
@@ -121,7 +120,7 @@ def test_region_confirm_unchanged_box_sends_state_only_no_bbox_norm(stub, page, 
         page.keyboard.press("Enter")
 
     assert region_meta_calls == [], (
-        f"W8 confirm goes through PUT .../regions, never PATCH region_meta: {region_meta_calls}"
+        f"Confirm goes through PUT .../regions, never PATCH region_meta: {region_meta_calls}"
     )
     assert len(region_puts) == 1, region_puts
     path, body = region_puts[0]

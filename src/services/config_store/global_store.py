@@ -3,7 +3,7 @@
 Everything in :mod:`src.services.config_store.store` is per-project (keyed
 by the bound project's slug, unusable unbound). This is its sibling: ONE
 store for the whole deployment, for a config axis that is not scoped to any
-project -- W9's VLM endpoint registry (endpoint docs, revision copies, probe
+project -- the VLM endpoint registry (endpoint docs, revision copies, probe
 docs and the desired local model), the same way ``op_projects``
 (src.services.projects.registry) is the one other index that lives outside
 every project's own index set.

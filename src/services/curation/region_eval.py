@@ -8,7 +8,7 @@ background images) and reports recall / precision / F1 / mean IoU, the
 false-positive gate on background images, and why each missed box was
 missed.
 
-Coordinate frames. W8-cleanup port: boxes now come from the item's
+Coordinate frames. Boxes come from the item's
 ``region_boxes`` list (:mod:`src.services.curation.region_boxes`), whose
 element ``bbox_norm`` is ALWAYS stored in source-frame coordinates --
 every writer (the cascade, the human PUT-box routes) projects into source
@@ -61,11 +61,6 @@ if TYPE_CHECKING:
 Box = tuple[float, float, float, float]
 
 DEFAULT_ACCEPTED_STATUSES: tuple[str, ...] = (RegionStatus.DETECTED.value,)
-# Pre-rename status strings the worker still reads as pending.
-LEGACY_STATUS_ALIASES: dict[str, str] = {
-    'pending': RegionStatus.PENDING_DETECTION.value,
-    'pending_verify': RegionStatus.PENDING_VERIFICATION.value,
-}
 PENDING_VALUES: frozenset[str] = frozenset(s.value for s in PENDING_STATUSES)
 SOURCE_FRAMES: frozenset[str] = frozenset({'source'})
 CROP_FRAMES: frozenset[str] = frozenset({'crop', 'item'})
@@ -221,11 +216,10 @@ class RegionRecord:
 def normalize_status(raw: Any) -> str:
     if raw is None or raw == '':
         return NO_STATUS
-    value = str(raw.value if isinstance(raw, RegionStatus) else raw)
-    return LEGACY_STATUS_ALIASES.get(value, value)
+    return str(raw.value if isinstance(raw, RegionStatus) else raw)
 
 
-# Per-box ``state`` (W8) -> the RegionStatus-shaped vocabulary this
+# Per-box ``state`` -> the RegionStatus-shaped vocabulary this
 # evaluator has always scored against. ``proposed`` (awaiting verification)
 # is treated as a pending value, same as the item-level pending statuses.
 _BOX_STATE_TO_STATUS: dict[str, str] = {

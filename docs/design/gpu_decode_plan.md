@@ -160,7 +160,7 @@ GPU decode removes.
 | Engines | the `ref-u8fp16` plans (detector uint8, PE uint8 FP16, PE plan sha256 `a4feb7df...`) |
 | Isolation | own containers and compose project `gpudec`, loopback ports 4910-4937; `nvidia-smi pmon` on GPU 2 for the whole session: only this work's processes ran on GPU 2 during every timed run (another project's `trtexec` started at 09:24:14, 3 s after the timing session released the lock); timed commands under `flock /tmp/ortloom-bench.lock` |
 | Combined sessions (R4) | one timing session (CPU decoders, GPU decoders, decoder threads, contention: 36 minutes, one lock hold), one stack session (baseline and spike sweeps back to back), one untimed parity session (all variants in one capture per set) |
-| Tools | `scripts/bench/gpu_decode_bench.py` (`cpu`, `gpu`, `pe-load`, `formats`, `make-formats`), `scripts/bench/gpu_decode_parity.py` (`capture`, `compare`), `scripts/bench/detector_quality.py` (AP), `scripts/bench/parity.py` (stack gates), `scripts/bench/wave0_suite.py` (stack sweeps) |
+| Tools | `scripts/bench/gpu_decode_bench.py` (`cpu`, `gpu`, `pe-load`, `formats`, `make-formats`), `scripts/bench/gpu_decode_parity.py` (`capture`, `compare`), `scripts/bench/detector_quality.py` (AP), `scripts/bench/parity.py` (stack gates), `scripts/bench/ingest_sweep_suite.py` (stack sweeps) |
 
 Raw JSON stays in the scratch directory of the run (section 12); the tables here are the record.
 
@@ -674,7 +674,7 @@ work package.
   of D1, profile `precision`, plus the CPU-against-GPU table of this plan re-run with
   `gpu_decode_parity.py` on sets A, B, OI and OIO (the cascade rejects removed), and
   `detector_quality.py` AP on set A (val2017 split too). Pass rules: section 7.2.
-- Benchmark: `wave0_suite.py` set B `8x16` and set A `32x16`, `/ingest/batch`, 3 repetitions, both
+- Benchmark: `ingest_sweep_suite.py` set B `8x16` and set A `32x16`, `/ingest/batch`, 3 repetitions, both
   backends in the same session, one and two A6000s; acceptance in section 7.1.
 - Default: `auto` with the measured threshold only after D1 and both gates; otherwise ship `cpu`.
 - Rollback: setting `ingest_decode` back to `cpu`; the model stays loaded and unused.

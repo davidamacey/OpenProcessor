@@ -1,6 +1,5 @@
 /**
- * W3 prompt-pack fixtures, shaped after the spec's own examples
- * (any_domain_plan.md §7.1, §7.2, §7.5) in the neutral widget/tag domain.
+ * Prompt-pack fixtures, shaped after the spec's own examples in the neutral widget/tag domain.
  */
 import type {
   ActiveConfigResponse,

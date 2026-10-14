@@ -300,7 +300,7 @@ def persist_freeze_record(
       freeze (tmp-write + fsync + rename, same durability contract as
       ``ClassRegistry._atomic_write``).
 
-    ``kind='import'`` (a dataset import freezing its test split, W10.9)
+    ``kind='import'`` (a dataset import freezing its test split)
     writes only the snapshot, under ``<state_dir>/imports/``: an import
     freeze never replaces ``current.json``, which stays the curated freeze.
 

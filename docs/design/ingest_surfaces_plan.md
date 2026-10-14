@@ -70,7 +70,7 @@ replication logic.
   and runs alone); the process gate `ingest_gate()` counts decoded MiB (`OP_INGEST_INFLIGHT_MB`, 1024).
 - Coalesced OpenSearch writer (`ingest_writer.py`), content-hash dedup (msearch of imohash), OCC and the lock rule:
   inherited because the new path calls `ingest_batch`.
-- No scheduler exists in the repo (`cluster_maintenance.py` only mentions APScheduler in a docstring). The pattern
+- No scheduler exists in the repo. The pattern
   for a periodic in-process job is `open_vocab_sweeper.py` (task per worker, `for_each_project`, non-blocking
   `exclusive_start_lock`).
 - `boto3` is not a dependency yet. API runs `uvicorn --workers=32` (N processes): every shared fact lives on disk.

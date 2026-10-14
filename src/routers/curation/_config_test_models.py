@@ -1,4 +1,4 @@
-"""Wire models for the test-on-crop routes (W5): ``POST /prompt_packs/test``
+"""Wire models for the test-on-crop routes: ``POST /prompt_packs/test``
 and ``POST /region_profiles/test``. Both run a draft or saved pack / profile
 (and, for the VLM, a draft or saved endpoint) against stored crops of the
 bound project and return the preview. Neither writes anything.

@@ -1,5 +1,5 @@
 /**
- * The assist bar's VLM control (W9): expanded, it shows the picker only
+ * The assist bar's VLM control: expanded, it shows the picker only
  * when `/methods` serves a usable `vlm` axis; a pick lands in the scope
  * (`vlm`, and `acknowledge_external` only after the checkbox) and the
  * collapsed chip names it; a stale pick is dropped when the axis goes

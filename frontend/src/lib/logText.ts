@@ -1,5 +1,5 @@
 /**
- * F-63(a) (fresh-start findings 2026-09-25): the trainer's log is a
+ * The trainer's log is a
  * terminal stream — every progress line starts with an ANSI erase-line
  * (`ESC[K`) and may carry colors or `\r`-overwritten progress updates,
  * which the `/train` log tail rendered as boxed glyphs. Display only: the

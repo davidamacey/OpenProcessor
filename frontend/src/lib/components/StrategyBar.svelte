@@ -103,7 +103,7 @@
      *  next to the stepper — not a new prominent UI element. */
     diverseMeta?: DiverseMeta | null;
     /** The sort id the backend actually applied (`sort_applied` on the
-     *  review-queue response, 2026-09-24 logic-moves W5 item 10) — may
+     *  review-queue response) — may
      *  differ from `bar.sort` (a tab's own default beats the deployment
      *  default when the operator hasn't picked one, or a requested sort
      *  fell back). Omit on a route that doesn't have it yet. */

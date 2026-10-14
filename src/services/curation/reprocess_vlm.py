@@ -1,4 +1,4 @@
-"""The ``vlm`` scope (W10.13): clear a VLM class answer so the VLM worker and
+"""The ``vlm`` scope: clear a VLM class answer so the VLM worker and
 auto-label select the item again.
 
 An unlocked item whose ``class_source`` came from a VLM reply is put back to

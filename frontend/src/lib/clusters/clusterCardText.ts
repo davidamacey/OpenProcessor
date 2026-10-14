@@ -34,7 +34,7 @@ export function dominantShareTitle(
 }
 
 /**
- * F-37 (fresh-start findings 2026-09-25): "purity 19% · noisy" on a class
+ * "purity 19% · noisy" on a class
  * cluster whose labels are 90% right read as "bad labels". The served
  * `purity` measures geometry, so the UI calls it cohesion. The value is
  * still the served `purity`/`purity_n`; the tier word stays the served

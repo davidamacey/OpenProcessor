@@ -1,4 +1,4 @@
-"""Bounds on the test-on-crop routes (W5, ``POST /prompt_packs/test`` and
+"""Bounds on the test-on-crop routes (``POST /prompt_packs/test`` and
 ``POST /region_profiles/test``).
 
 A test run sends a real crop to a VLM or a segmenter, so each kind is capped

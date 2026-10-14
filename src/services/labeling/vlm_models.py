@@ -54,8 +54,8 @@ class RegionCrop(BaseModel):
 class CombinedCrop(BaseModel):
     """Input for the batched ``label_combined_batch`` call.
 
-    Carries the item crop JPEG, this item's candidate region boxes (W8:
-    always a list -- N=1 is a list of one, empty when no candidate
+    Carries the item crop JPEG, this item's candidate region boxes
+    (always a list -- N=1 is a list of one, empty when no candidate
     exists from an upstream detector), and a per-crop ``classify`` flag
     so a single batch can mix low-confidence crops (need class label)
     and high-confidence crops (caller already trusts the class).
@@ -69,7 +69,7 @@ class CombinedCrop(BaseModel):
         default_factory=list,
         description=(
             'This item candidate region bboxes in normalized crop coords '
-            '[x1, y1, x2, y2] (W8: always a list, possibly empty). When '
+            '[x1, y1, x2, y2] (always a list, possibly empty). When '
             'non-empty, every box is drawn as a numbered overlay on the JPEG '
             'before encoding so the VLM can confirm each one visually.'
         ),
@@ -154,12 +154,12 @@ class VlmCombinedReply(BaseModel):
     to a single round-trip. Crops with a caller-trusted class skip
     class_id and answer just the region fields.
 
-    **D-B (owner decision, 2026-09-26):** the pre-W8 flat region-verify
+    The earlier flat region-verify
     shape (``region_bbox_correct`` / ``region_text_reply`` /
     ``region_confidence`` as top-level fields) is dropped -- replaced by
     ``region_boxes``, one :class:`~src.services.labeling.region_overlay
     .VlmBoxVerdict` per candidate box offered (aligned by position with
-    the request's ``region_bboxes_norm``, W8.6). ``region_visible``
+    the request's ``region_bboxes_norm``). ``region_visible``
     stays a separate top-level answer ("is anything region-like visible
     in this photo at all", independent of any specific candidate box).
     """

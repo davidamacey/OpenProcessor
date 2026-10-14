@@ -163,12 +163,6 @@ class Settings(BaseSettings):
         """Triton host without port."""
         return self.triton_url.split(':')[0]
 
-    @property
-    def triton_port(self) -> int:
-        """Triton gRPC port."""
-        parts = self.triton_url.split(':')
-        return int(parts[1]) if len(parts) > 1 else 8001
-
     # ==========================================================================
     # Model Configurations (class-level, not from env)
     # ==========================================================================

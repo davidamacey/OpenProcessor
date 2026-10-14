@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 log = logging.getLogger('segmenter')
 
 
-# W8c: verified against the upstream source (facebookresearch/sam3,
+# verified against the upstream source (facebookresearch/sam3,
 # ``sam3/model/sam3_image_processor.py``, ``Sam3Processor.__init__``) --
 # not runnable here (no docker run; the package isn't installed in this
 # environment), so this is a read of the public GitHub source, not a
@@ -380,7 +380,7 @@ class ProcessorPool:
         round-robin-selected one. That keeps fairness without preferring
         any single instance.
 
-        ``min_score`` (W8c): when given, sets the leased processor's
+        ``min_score``: when given, sets the leased processor's
         ``confidence_threshold`` for the duration of this call (this is
         the only SAM 3 score threshold -- see the module-level note above
         ``DEFAULT_CONFIDENCE_THRESHOLD``) and restores whatever value it

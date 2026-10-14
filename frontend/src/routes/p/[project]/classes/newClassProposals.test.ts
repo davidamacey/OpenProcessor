@@ -1,8 +1,6 @@
 /**
- * W5 (docs/design/logic-moves-adoption-plan-2026-09-24.md) plus the
- * 2026-09-24 bulk-resolve adoption (OpenProcessor 2f5cda2) — the
- * `/classes` Proposals section: GET {API_PREFIX}/review/new_class_proposals/
- * summary, and "Create class & assign" / "Map to existing", both now
+ * The `/classes` Proposals section, including bulk resolve:
+ * GET {API_PREFIX}/review/new_class_proposals/summary, and "Create class & assign" / "Map to existing", both now
  * dry-running `POST {API_PREFIX}/review/new_class_proposals/resolve`
  * for a confirm count before the real resolve. This fully replaces the
  * old sample_crop_ids-only bulkLabel path — there is no bulkLabel call

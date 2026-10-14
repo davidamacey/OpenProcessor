@@ -186,7 +186,7 @@ def unload_models_for_memory():
 def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path | None:
     """Build the TensorRT engine in-process with the TensorRT Python API.
 
-    F-17 (fresh-start E2E findings 2026-09-25): this script runs inside
+    this script runs inside
     ``api`` (see the module docstring's ``Usage``), which has no
     docker CLI or docker.sock, and shelling out to
     ``docker exec <TRITON_CONTAINER> trtexec ...`` also hardcoded the
@@ -208,7 +208,7 @@ def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path
     # so a build failure below still leaves whatever plan already exists.
     unload_models_for_memory()
 
-    # F-17(b) (fresh-start E2E findings 2026-09-25, round 2): this used to
+    # This used to
     # unlink the existing plan_path before attempting the build, so a
     # failed rebuild left the model with NO plan at all -- destroying a
     # working install. Build to a temp file, validate it, then swap it
@@ -234,11 +234,10 @@ def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path
         config = builder.create_builder_config()
         config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 8192 * (1 << 20))
 
-        # F-17(a) (fresh-start E2E findings 2026-09-25, round 2):
         # NetworkDefinitionCreationFlag.EXPLICIT_BATCH was removed in
         # TRT 11 (networks are always explicit-batch now); the hardcoded
         # flag lookup raised AttributeError on the image's TRT 11.1,
-        # regressing the F-17 fix. create_explicit_network passes the
+        # failing the build. create_explicit_network passes the
         # flag only where it still exists (TRT <= 10.x) -- same helper
         # export_models.py uses, which already works on TRT 11.1.
         network = create_explicit_network(builder)

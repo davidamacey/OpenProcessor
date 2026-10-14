@@ -98,7 +98,7 @@ def _base_ingest_stubs(
             "drained": drained,
             "stable_for_s": 30 if drained else 0,
             "observed_at": "2026-09-25T00:00:00Z",
-            # OpenProcessor d72cc63 (V-1): always served.
+            # Always served.
             "region_dependencies": region_dependencies or [],
             "stall_reason": stall_reason,
         },
@@ -381,7 +381,7 @@ def test_upload_disabled_shows_one_line_and_no_upload_panel(stub, page, app_url)
 
 
 def test_region_drain_shows_served_stall_reason(stub, page, app_url):
-    """V-1 (d72cc63): a stalled drain renders the served reason verbatim."""
+    """A stalled drain renders the served reason verbatim."""
     reason = "segmenter seg_b unavailable since 2026-09-25T09:57:00Z"
     _base_ingest_stubs(
         stub,
@@ -404,7 +404,7 @@ def test_region_drain_shows_served_stall_reason(stub, page, app_url):
 
 
 def test_duplicate_only_reupload_reports_already_indexed(stub, page, app_url):
-    """F-59: re-selecting files the backend already has sends no upload and
+    """Re-selecting files the backend already has sends no upload and
     says so, instead of the result panel disappearing."""
     _base_ingest_stubs(stub)
 

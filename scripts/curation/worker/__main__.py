@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Auto-split sub-module of the curation detection worker.
+"""Entry point of the curation detection worker (``python -m scripts.curation.worker``).
 
-See ``scripts/curation/region_worker_main.py`` for the entry point and
-the ``scripts/curation/worker/`` package for the rest of the split.
+Argument parsing and ``main``; the pipeline itself is in the rest of the
+``scripts/curation/worker/`` package.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from src.services.projects.script_binding import add_project_argument, bind_scri
 logger = get_logger('curation_worker')
 
 
-from scripts.curation.worker import run
+from scripts.curation.worker.runner import run
 from scripts.curation.worker.state import (
     DEFAULT_OPENSEARCH,
     DEFAULT_PAUSE_SENTINEL,

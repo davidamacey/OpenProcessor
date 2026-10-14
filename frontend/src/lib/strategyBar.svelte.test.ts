@@ -5,7 +5,7 @@ import {
   formatPinnedSortFallback,
 } from './strategyBar.svelte';
 
-// 2026-09-24 logic-moves W5, item 10: `sort_applied` on {API_PREFIX}/review/{tab}
+// `sort_applied` on {API_PREFIX}/review/{tab}
 // is what the StrategyBar summary chip surfaces next to the operator's
 // own selection.
 describe('formatAppliedSort', () => {

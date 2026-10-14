@@ -1,6 +1,5 @@
 /**
- * Wire types for OpenProcessor W10: labeled-dataset import and Reprocess
- * (`any_domain_plan.md` §7.12, W10.4, W10.11-W10.14). Every route is
+ * Wire types for labeled-dataset import and Reprocess. Every route is
  * project-scoped (`{prefix}/datasets/...`, `{prefix}/reprocess...`).
  *
  * Pinned field-for-field to the vendored OpenAPI (OpenProcessor f582aa05)
@@ -28,7 +27,7 @@ export interface DatasetFormatInfo {
 
 export type DatasetIssueSeverity = 'error' | 'warning' | 'info';
 
-/** One `/datasets/formats` issue-catalog row (W10.4 `ISSUE_CATALOG`). */
+/** One `/datasets/formats` issue-catalog row (`ISSUE_CATALOG`). */
 export interface DatasetIssueCatalogEntry {
   code: string;
   severity: string;
@@ -74,7 +73,7 @@ export interface DatasetSource {
   coco_annotations?: CocoAnnotationFile[];
 }
 
-/** One explicit mapping row (W10.5). Names only — never an index. */
+/** One explicit mapping row. Names only — never an index. */
 export interface ClassMappingEntry {
   dataset_class: string;
   action: MappingAction | string;
@@ -84,7 +83,7 @@ export interface ClassMappingEntry {
 }
 
 /**
- * `DatasetImportOptions` (W10.14). Every field is optional on the wire:
+ * `DatasetImportOptions`. Every field is optional on the wire:
  * the client sends only what the operator set, so the server's default
  * applies to the rest (question 6).
  */
@@ -101,7 +100,7 @@ export interface DatasetImportOptions {
   force?: boolean;
 }
 
-/** `DatasetPreviewRequest` — no `project` field (delta 15, W10.3). */
+/** `DatasetPreviewRequest` — no `project` field. */
 export interface DatasetPreviewRequest {
   source: DatasetSource;
   mapping: ClassMappingEntry[];
@@ -274,7 +273,7 @@ export interface DatasetImportReport {
   disagreements: { counts: Record<string, number>; samples: unknown[] };
 }
 
-/** W10.11 `next_steps` entry (question 10). */
+/** A `next_steps` entry. */
 export interface NextStep {
   action: string;
   method: string;
@@ -360,7 +359,7 @@ export type DatasetImportList = Page<DatasetImportJob>;
  *  the served rows are `DatasetIssue`-shaped. */
 export type DatasetIssuePage = Page<DatasetIssue>;
 
-/** Question 4: one ledger line (W10.11). */
+/** Question 4: one ledger line. */
 export interface DatasetImportEntry {
   source_stem: string;
   rel_path: string;
@@ -384,7 +383,7 @@ export interface DatasetUploadResponse {
   files: number;
 }
 
-/** `ConfigErrorDetail` (§7.1) with the W10 optional fields (W10.14). */
+/** `ConfigErrorDetail` with the dataset-import optional fields. */
 export interface DatasetErrorDetail {
   error: string;
   message: string;
@@ -394,7 +393,7 @@ export interface DatasetErrorDetail {
   limit?: number | null;
 }
 
-// -- Reprocess (W10.13) --------------------------------------------------
+// -- Reprocess --------------------------------------------------
 
 /** The ids the contract enumerates (`ReprocessOneRequest.scopes`), in
  *  served order. */

@@ -27,7 +27,7 @@ from fastapi.testclient import TestClient
 from curation.test_regions_router import _FakeRegionOS
 from src.config import get_region_fields
 from src.config.region_state import RegionStatus
-from src.routers.curation._common import HUMAN_REGION_STATUS_VALUES
+from src.routers.curation._common_models import HUMAN_REGION_STATUS_VALUES
 from src.services.curation.wire import ITEM_WIRE_KEYS, REGION_ROW_EXTRA_KEYS
 
 
@@ -44,7 +44,7 @@ def _boxed(crop_id: str) -> dict[str, Any]:
     return {
         'crop_id': crop_id,
         'bbox_norm': [0.0, 0.0, 0.5, 0.5],
-        # W8-cleanup: PATCH region_meta / POST batch_status now operate on
+        # PATCH region_meta / POST batch_status now operate on
         # region_boxes (boxes_with_status), not the retired item-level
         # region_bbox_norm/region_score scalars -- an accepted box is what
         # a DETECTED item actually carries under the box-list model.
@@ -130,7 +130,7 @@ def test_false_positive_keeps_box(client: TestClient, fake_os: _FakeRegionOS) ->
 def test_patch_meta_no_region_visible_with_reason_persists_it(
     client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
-    """W8-cleanup M1(a): the main Reject action (`no_region_visible`) with
+    """The main Reject action (`no_region_visible`) with
     a reason used to drop the reason entirely -- `boxes_with_status`
     returns `[]` for it, so no box could carry it, and the mirror was set
     to `None` unconditionally."""
@@ -148,7 +148,7 @@ def test_patch_meta_no_region_visible_with_reason_persists_it(
 def test_patch_meta_reason_only_updates_the_item_level_mirror(
     client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
-    """W8-cleanup M1(b): a reason-only PATCH (no status change) used to
+    """A reason-only PATCH (no status change) used to
     patch the box's `rejection_reason` but never the item-level mirror
     the labeler reads as authoritative -- the operator saw the stale
     reason right after changing it."""
@@ -181,8 +181,8 @@ def test_patch_meta_reason_only_updates_the_item_level_mirror(
 def test_patch_meta_reason_only_on_box_less_item_updates_not_wipes_the_reason(
     client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
-    """W8-cleanup N3 regression: a reason-only PATCH on a box-less
-    `no_region_visible` item (M1(a)'s case) must update the stored
+    """A reason-only PATCH on a box-less
+    `no_region_visible` item (the Reject-with-reason case) must update the stored
     reason, not erase it -- `boxes_write_fields([])` always re-derives
     `rejection_reason=None` from an empty box list."""
     fake_os._docs['no-region-1'] = {
@@ -205,11 +205,11 @@ def test_patch_meta_reason_only_on_box_less_item_updates_not_wipes_the_reason(
 def test_patch_meta_reason_only_on_accepted_only_item_does_not_store_reason(
     client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
-    """W8-cleanup R3-1 regression: a reason-only PATCH on an item with no
+    """A reason-only PATCH on an item with no
     rejected box (e.g. an accepted-only `detected` item) must not store or
     serve a `region_rejection_reason` -- `reason_only_box_write`'s original
-    N3 condition (`not any(rejected box)`) was true for any non-rejected
-    item, not just a box-less one, which brought back N1's symptom."""
+    condition (`not any(rejected box)`) was true for any non-rejected
+    item, not just a box-less one, which brought back an item-level reason on accepted-only items."""
     resp = client.patch(
         '/curation/projects/default/crops/boxed-1/region_meta',
         json={'region_rejection_reason': 'Y'},

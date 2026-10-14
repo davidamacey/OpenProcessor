@@ -54,7 +54,7 @@ export function proposalRows(summary: NewClassProposalsSummary): ProposalRow[] {
 
 /**
  * The help line explaining which terms get auto-flagged, built from the
- * served `term_rules`. F-52: an empty served list used to render as
+ * served `term_rules`. An empty served list used to render as
  * "(, plus …)" / "()"; each clause now appears only when it has content.
  * Returns null when nothing is configured.
  */

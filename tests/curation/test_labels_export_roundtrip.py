@@ -9,8 +9,8 @@ out with zero rows. On this codebase the contract is the other way round:
   auto-promote, dataset import) sets ``class_validated=true`` on the item;
 - :class:`~src.services.curation.export.GenericYoloExportService` selects
   ``class_validated=true`` items straight from the items index and never
-  reads the confirmed-labels index, which nothing writes anymore (W10:
-  dataset import's own ledger is the provenance record now).
+  reads the confirmed-labels index, which nothing writes anymore;
+  dataset import's own ledger is the provenance record now.
 
 These tests run each real write path against one query-evaluating in-memory
 OpenSearch and then run the real exporter over the result, so they fail if
@@ -103,7 +103,7 @@ async def _export(fake: QueryFakeOpenSearch, registry: ClassRegistry, tmp_path: 
 
 async def _human_label_paths(fake, registry, monkeypatch) -> None:
     from src.routers.curation import crops
-    from src.routers.curation._common import (
+    from src.routers.curation._common_models import (
         CropBatchLabelRequest,
         CropLabelRequest,
         CropMoveRequest,
@@ -133,11 +133,11 @@ async def test_human_labels_alone_produce_a_non_empty_export(fake, registry, tmp
 @pytest.mark.asyncio
 @pytest.mark.usefixtures('reference_ingest_profiles')
 async def test_every_label_path_reaches_the_export(fake, registry, tmp_path, monkeypatch):
-    """The fifth "every label path" writer, post-W10: dataset import.
+    """The fifth "every label path" writer: dataset import.
 
-    Ported from the pre-W10 version of this test, which used the since-
+    Ported from the earlier version of this test, which used the since-
     deleted ``label_import.import_yolo_labels`` (a parallel write path
-    with no OCC, no restorable snapshot — any_domain_plan.md W10.1 I2).
+    with no OCC, no restorable snapshot).
     Dataset import now goes through the SAME ``class_label_update()`` /
     ``occ_upsert_bulk()`` primitive every other writer exercised by this
     test uses.
@@ -178,7 +178,7 @@ async def test_every_label_path_reaches_the_export(fake, registry, tmp_path, mon
     validated = {i for i, d in items.items() if d.get('class_validated') is True}
     assert validated == {'h1', 'b1', 'b2', 'm1', 'ap0', 'ap1', 'ap2', 'ap3'} | imported_ids
     assert 'never' not in validated
-    # W10 (any_domain_plan.md I13): dataset import no longer writes the
+    # dataset import no longer writes the
     # labels_confirmed ledger at all -- the import's own ledger (not
     # built this pass; see the wave report) is the record now.
     assert fake.docs(CONFIRMED) == {}

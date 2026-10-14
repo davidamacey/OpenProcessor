@@ -1,4 +1,4 @@
-"""Tests for the W8 per-box storage primitives (``region_boxes.py``).
+"""Tests for the per-box storage primitives (``region_boxes.py``).
 
 Scope note (honest, see final report): this covers the core list-shaped
 storage primitives (``RegionBox``, ``read_boxes``, ``boxes_write_fields``,
@@ -79,7 +79,7 @@ def test_boxes_write_fields_sets_counts_and_bumps_revision() -> None:
 
 
 def test_boxes_write_fields_accepted_plus_rejected_has_no_item_level_reason() -> None:
-    # W8-cleanup N1 regression: an ordinary multi-box `detected` item
+    # Regression: an ordinary multi-box `detected` item
     # (one accepted box, one rejected sibling) must NOT carry a
     # rejection reason on the item mirror -- that field is only for
     # box-less rejected/no_region_visible items. Otherwise the labeler
@@ -191,8 +191,7 @@ def test_has_any_box_query_is_count_or_rejected() -> None:
 
 
 # ---------------------------------------------------------------------------
-# apply_put_boxes: sibling-preserving PUT merge (W8a, any_domain_plan.md
-# §7.7 wire-write table + W8 pins 1-2)
+# apply_put_boxes: sibling-preserving PUT merge
 # ---------------------------------------------------------------------------
 
 
@@ -260,7 +259,7 @@ def test_apply_put_boxes_unknown_box_id_raises() -> None:
 
 
 def test_apply_put_boxes_patching_existing_box_to_rejected_stamps_human_reason() -> None:
-    """W8c M3 fix: patching an EXISTING (machine-created) stored box to
+    """Patching an EXISTING (machine-created) stored box to
     `rejected` via PUT is a human verdict too -- stamp the same reason
     `boxes_with_status`'s whole-set path uses so `is_human_owned`
     recognizes it later."""
@@ -276,7 +275,7 @@ def test_apply_put_boxes_patching_existing_box_to_rejected_stamps_human_reason()
 
 
 # ---------------------------------------------------------------------------
-# is_human_owned (W8c M3)
+# is_human_owned
 # ---------------------------------------------------------------------------
 
 
@@ -322,7 +321,7 @@ def test_is_human_owned_false_for_an_untouched_machine_box() -> None:
 
 
 # ---------------------------------------------------------------------------
-# boxes_with_status: whole-set human status transitions (W8.7 table)
+# boxes_with_status: whole-set human status transitions
 # ---------------------------------------------------------------------------
 
 
@@ -376,8 +375,7 @@ def test_boxes_with_status_no_region_visible_clears() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Item-level wire serialization of the box list (W8a, any_domain_plan.md
-# §7.7 "wire read")
+# Item-level wire serialization of the box list (the wire read)
 # ---------------------------------------------------------------------------
 
 
@@ -396,7 +394,7 @@ def test_serialize_item_carries_region_boxes_and_stats() -> None:
     }
     item = serialize_item(src, 'x')
     # bbox_in_parent / thumbnail_url / locked are derived wire-only additions
-    # on top of the stored element (W8.9, W10 lock rule) -- not part of
+    # on top of the stored element (the lock rule) -- not part of
     # RegionBox.to_doc().
     assert item['region_boxes'] == [
         {

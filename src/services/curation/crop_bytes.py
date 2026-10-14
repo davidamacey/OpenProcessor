@@ -4,7 +4,7 @@ Cache first, source image second: the ingest-time RAM crop cache
 (``<crop_cache_dir>/<crop_id>.jpg``) when it has the crop, else open the
 source image, EXIF-transpose, crop and re-encode. The detection worker's
 ``_crop_jpeg_for_task`` delegates here, and so do the test-on-crop routes
-(W5), so a preview crop is byte-for-byte the crop the worker would send to
+, so a preview crop is byte-for-byte the crop the worker would send to
 its detector and VLM.
 """
 

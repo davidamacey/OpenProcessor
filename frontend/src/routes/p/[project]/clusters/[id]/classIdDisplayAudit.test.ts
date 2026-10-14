@@ -9,8 +9,8 @@
  * `liveClassId` (hotkey/assign) and the validated/count figures — not for
  * display naming.
  *
- * Same static source-scan convention as the other clusters/[id] logic-
- * moves tests (dqM3CutLineVisibility.test.ts) — no mount harness for a
+ * Same static source-scan convention as the other clusters/[id]
+ * tests (clusterCutLineVisibility.test.ts) — no mount harness for a
  * page this size.
  */
 import { readFileSync } from 'node:fs';

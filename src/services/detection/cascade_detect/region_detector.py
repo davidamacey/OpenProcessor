@@ -120,7 +120,7 @@ def _decode_yolo_output(
     )
 
 
-# Pre-NMS safety cap on a raw detector output before it reaches W8's
+# Pre-NMS safety cap on a raw detector output before it reaches
 # ``select_region_candidates`` (region_candidates.py): a 640-input YOLO
 # head emits thousands of anchors, and greedy NMS there is O(n^2) --
 # keeping only the top-scoring ``_MAX_PRE_NMS_ANCHORS`` bounds that cost
@@ -140,7 +140,7 @@ def _decode_yolo_output_multi(
     source: str = '',
 ) -> list[RegionCandidate]:
     """Decode a YOLOv11-shaped ``[1, 5, N]`` raw output to every candidate
-    region above ``confidence_floor`` (W8: multi-candidate detector leg).
+    region above ``confidence_floor`` (the multi-candidate detector leg).
 
     Same geometry pipeline as :func:`_decode_yolo_output` (letterbox
     undo, crop-frame normalization, degenerate-box drop) but keeps every
@@ -330,7 +330,7 @@ class RegionDetector:
         )
 
     async def detect_multi(self, crop_jpeg: bytes) -> list[RegionCandidate]:
-        """W8: every region candidate above the confidence floor (not just
+        """Every region candidate above the confidence floor (not just
         the top one), for :func:`~src.services.detection.region_candidates
         .select_region_candidates` to floor/NMS/cap.
 
@@ -359,62 +359,11 @@ class RegionDetector:
     # Batched API
     # ------------------------------------------------------------------
 
-    async def detect_batch(
-        self,
-        crops_jpeg: list[bytes],
-    ) -> list[RegionCandidate | None]:
-        """Run region detection on many crops in parallel.
-
-        Sends N concurrent batch=1 ``infer`` calls and lets Triton's
-        dynamic batching coalesce them into real GPU batches. Measured
-        (on the region-detector model): this is faster than Python-side
-        stacking — Triton forms tighter batches across the whole
-        instance group than we can in one process, and we don't pay the
-        ``np.stack`` + per-batch decode loop overhead.
-
-        Args:
-            crops_jpeg: JPEG-encoded crop bytes, one per item crop.
-
-        Returns:
-            A list aligned 1:1 with ``crops_jpeg``. Failed crops yield
-            ``None``; with no detector model configured every entry is
-            ``None`` and Triton is never called.
-        """
-        import asyncio
-
-        if not crops_jpeg:
-            return []
-        if not self.model_name:
-            return [None] * len(crops_jpeg)
-
-        results: list[RegionCandidate | None] = [None] * len(crops_jpeg)
-
-        # Chunk so a single huge call doesn't pin every channel in the
-        # pool. ``profile.batch_limit`` is well under the pool's typical
-        # ``max_concurrent``, leaving headroom for other Triton users to
-        # overlap.
-        batch_limit = self.profile.batch_limit
-        for start in range(0, len(crops_jpeg), batch_limit):
-            chunk = crops_jpeg[start : start + batch_limit]
-            chunk_results = await asyncio.gather(
-                *[self.detect(crop) for crop in chunk],
-                return_exceptions=True,
-            )
-            for offset, res in enumerate(chunk_results):
-                idx = start + offset
-                if isinstance(res, BaseException):
-                    logger.warning('region_batch_item_failed: idx=%d err=%s', idx, res)
-                    results[idx] = None
-                else:
-                    results[idx] = res
-
-        return results
-
     async def detect_batch_multi(
         self,
         crops_jpeg: list[bytes],
     ) -> list[list[RegionCandidate]]:
-        """W8: :meth:`detect_batch`'s multi-candidate counterpart.
+        """Run :meth:`detect_multi` over a batch of crops.
 
         Returns a list aligned 1:1 with ``crops_jpeg``; each entry is
         every candidate :meth:`detect_multi` found for that crop (``[]``

@@ -1,4 +1,4 @@
-"""The ingest stage timers that name the work which used to run untimed (WP-1.2, #210).
+"""The ingest stage timers that name the work which used to run untimed (#210).
 
 Each test drives the real function with fakes at the Triton and OpenSearch boundary and asserts
 the stage histogram moved, so a stage that stops being recorded fails here rather than silently

@@ -1,7 +1,6 @@
 /**
  * RegionVocabularyStore — the deployment-configured detector/segmenter/
- * verifier vocabulary (`GET {API_PREFIX}/regions/vocabulary`, W0 naming-sweep
- * finding m9), loaded once. Built by the backend from the active region
+ * verifier vocabulary (`GET {API_PREFIX}/regions/vocabulary`), loaded once. Built by the backend from the active region
  * profile / ingest profiles / `OP_VLM_MODEL` — never a hardcoded model
  * id — so this is the only way the UI knows a detector's human label and
  * role. `ProvenanceChip.svelte` reads the label from here and derives

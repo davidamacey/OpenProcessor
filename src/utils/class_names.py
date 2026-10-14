@@ -1,6 +1,6 @@
 """Per-model class-id -> name resolution for detection responses.
 
-F-42 (fresh-start E2E findings 2026-09-25, round 2): ``/detect`` and
+``/detect`` and
 ``/detect/batch`` accept an arbitrary ``model_name`` query param, but the
 class-name lookup used to be a single hardcoded ``COCO_CLASSES.get(...)``
 (see :mod:`src.utils.affine`) applied to *every* model. A promoted

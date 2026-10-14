@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * A served Reprocess response's per-scope counts (W10.13). Shared by the
+   * A served Reprocess response's per-scope counts. Shared by the
    * Reprocess dialog and the region-profile impact panel's Re-run; nothing
    * here words an outcome.
    */

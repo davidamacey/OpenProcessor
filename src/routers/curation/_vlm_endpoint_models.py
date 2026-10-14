@@ -1,5 +1,4 @@
-"""Wire models for ``/vlm/endpoints*`` and the local-model routes (W9,
-any_domain_plan.md §7.8). Every request model is ``extra='forbid'``.
+"""Wire models for ``/vlm/endpoints*`` and the local-model routes. Every request model is ``extra='forbid'``.
 
 The stored body and the service-level probe record are defined in
 ``src/services/labeling/vlm_endpoint_body.py`` (pure pydantic, shared with

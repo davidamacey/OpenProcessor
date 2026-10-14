@@ -63,11 +63,6 @@ def test_percentile_is_nearest_rank() -> None:
     assert np.isnan(lib.percentile([], 50))
 
 
-def test_noise_rule_needs_non_overlapping_ranges() -> None:
-    assert not lib.differs_beyond_noise([10, 12], [11, 13])
-    assert lib.differs_beyond_noise([10, 11], [12, 13])
-
-
 def test_filter_mask_and_selectivity_fields() -> None:
     image_ids = np.repeat(np.arange(2000), 5)
     fields = lib.make_filter_fields(image_ids, np.arange(len(image_ids)), seed=3)
@@ -88,13 +83,3 @@ def test_filter_mask_and_selectivity_fields() -> None:
     # Crops of one image share a project: the project is a function of the image only.
     by_image = fields['project'].reshape(2000, 5)
     assert (by_image == by_image[:, :1]).all()
-
-
-def test_pick_cheapest_takes_lowest_p95_that_reaches_target() -> None:
-    rows = [
-        {'recall@10': 0.90, 'p95_ms': 1.0},
-        {'recall@10': 0.96, 'p95_ms': 5.0},
-        {'recall@10': 0.99, 'p95_ms': 9.0},
-    ]
-    assert lib.pick_cheapest(rows, 0.95, 'recall@10') == rows[1]
-    assert lib.pick_cheapest(rows, 0.999, 'recall@10') is None

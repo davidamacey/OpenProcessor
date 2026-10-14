@@ -99,7 +99,7 @@ def _probe_cuda_device_count() -> int | None:
     """``torch.cuda.device_count()``, run in an isolated, short-lived
     subprocess rather than in this process.
 
-    F-47: this trainer runs as a long-lived daemon (``--watch`` never
+    this trainer runs as a long-lived daemon (``--watch`` never
     returns) sharing one process for its entire container lifetime.
     ``write_trainer_capabilities`` used to ``import torch`` and call this
     in-process, at startup, exactly once -- but that is also the *first*
@@ -140,7 +140,7 @@ def _probe_cuda_device_count() -> int | None:
 # while idle. The API's probe_trainer_reachable (src/services/training/
 # gpu_arbiter.py TRAINER_HEARTBEAT_STALE_SECONDS=120) treats anything
 # older than 4x this as stale -- this is the socket-free signal that
-# replaced the previous docker-only reachability check (F-72).
+# replaced the previous docker-only reachability check.
 HEARTBEAT_INTERVAL_S = 30.0
 
 # Cached across heartbeats so re-touching written_at doesn't re-fork a

@@ -2,7 +2,7 @@
 
 History: the first filters matched container names (``/triton-server.*``),
 which never matched this compose's ``${COMPOSE_PROJECT_NAME}-triton``
-names; the Wave 0 fix matched the ``-triton`` / ``-api`` suffix, which
+names; an earlier fix matched the ``-triton`` / ``-api`` suffix, which
 also matched every other OpenProcessor stack on the host, so one install
 collected another's logs (installer acceptance item K-4).
 

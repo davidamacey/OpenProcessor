@@ -74,8 +74,7 @@ def _guard_condition_matches(clauses: list[GuardClause], source: dict[str, Any])
     return False
 
 
-# NOT a full mirror of src.clients.occ_locks.is_locked_class (W10 fix
-# pass, Opus review 2026-09-28, lock-rule call-site m3): this covers the
+# NOT a full mirror of src.clients.occ_locks.is_locked_class: this covers the
 # human-marker class_source check (a string containing 'human') plus the
 # class_validated / class_excluded guards vlm.py's _class_locked already
 # applies on its own write path, but it deliberately does NOT cover

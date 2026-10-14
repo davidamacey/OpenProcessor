@@ -433,14 +433,9 @@ def test_publish_endpoint_rejects_unknown_keys(monkeypatch: pytest.MonkeyPatch) 
     assert r.status_code == 422
 
 
-def test_in_process_region_event_uses_wire_keys(monkeypatch: pytest.MonkeyPatch) -> None:
-    from src.services.curation import event_hub
-
-    hub = _RecordingHub()
-    monkeypatch.setattr(event_hub, 'get_event_hub', lambda: hub)
+def test_region_event_payload_uses_wire_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(region_fields_mod, '_default_region_fields', _OVERRIDE_STORAGE)
-    event_hub.publish_region_verified('crop-1', region_status='detected')
-    (event,) = hub.events
+    event = wire.region_event_payload('crop-1', region_status='detected')
     assert event['region_status'] == 'detected'
     assert _event_data_keys(event) <= ITEM_WIRE_KEYS
 

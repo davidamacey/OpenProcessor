@@ -57,7 +57,7 @@ def test_class_source_rollup_buckets(monkeypatch: pytest.MonkeyPatch) -> None:
         {'key': 'unlabeled_proposal', 'doc_count': 8},
         {'key': 'something_else', 'doc_count': 9},
     ]
-    # F-23: proposal sources never carry a class_id (they're the
+    # proposal sources never carry a class_id (they're the
     # detector's "no class assigned yet" marker), so this function --
     # which callers only ever feed class_id-scoped buckets -- no longer
     # special-cases them; they fall into 'other' here. The real count is
@@ -74,7 +74,7 @@ def test_class_source_rollup_buckets(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_count_by_proposal_sums_proposal_and_low_conf_and_default_sources(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """F-23: the fixed accounting for 'detector proposed it, nothing has
+    """The fixed accounting for 'detector proposed it, nothing has
     classified it yet' -- fed class-less (no class_id) buckets."""
     monkeypatch.setenv('OP_INGEST_PRIMARY_NAME', 'proposer')
     no_class_buckets = [

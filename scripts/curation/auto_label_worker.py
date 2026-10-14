@@ -127,7 +127,7 @@ HEARTBEAT_INTERVAL_S = 5.0
 # centroids should be retrained. 0 disables auto-retrain entirely.
 AUTO_RETRAIN_CHECK_INTERVAL_S = float(os.getenv('OP_IVF_RETRAIN_CHECK_S', '1800'))
 
-# R7-1 fix (Blocker, W3/W4 round-7 review): must be the internal
+# must be the internal
 # `_run_auto_label` implementation, not the public route wrapper
 # `pipeline_auto_label` -- since round 6's 3-way `pipeline.py` split,
 # that name resolves to the thin public-route wrapper, which has no

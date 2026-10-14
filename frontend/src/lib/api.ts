@@ -869,7 +869,7 @@ export async function putCurationDefaults(
 //
 // The keymap is per-project (owner decision §0.1): every route below is
 // scoped through `scoped()`, and there is no separate global route. A
-// backend that predates OpenProcessor W2b 404s/501s `GET {prefix}/keymap`
+// backend that predates the keymap route 404s/501s `GET {prefix}/keymap`
 // — `keymapAvailability`/`loadKeymap()` treat that as "stay on
 // FALLBACK_KEYMAP", not an error.
 
@@ -1551,8 +1551,7 @@ export function getTrainingCandidates(
 }
 
 /**
- * `GET {API_PREFIX}/training_cohorts?class_id=` (2026-09-24 logic-moves
- * W6, item 13) — the deployment's own training-cohort definitions,
+ * `GET {API_PREFIX}/training_cohorts?class_id=` — the deployment's own training-cohort definitions,
  * already resolved for the requested class (params fold `class_id` into
  * every cohort). `row_kind: 'region'` cohorts only appear when the
  * backend has a region profile configured; `class_id` omitted returns
@@ -1743,7 +1742,7 @@ export interface DatasetStats {
     /** Subset of `no_label_source` the VLM looked at but couldn't (or
      *  didn't) resolve to a class (#36 item 2). */
     vlm_no_class: number;
-    /** F-23 (OpenProcessor d72cc63): crops a detector proposed but
+    /** crops a detector proposed but
      *  nothing has classified yet — a subset of `no_label_source`, like
      *  `vlm_no_class`. */
     by_proposal: number;
@@ -2168,7 +2167,7 @@ export type RawCrop = {
   excluded_reason?: string | null;
   excluded_at?: string | null;
   item_text_lines?: unknown;
-  // W9 / W10 / P4 item provenance (contract f582aa05 `ItemDoc`); each is
+  // VLM / import / combine item provenance (`ItemDoc`); each is
   // served on every item, a missing key maps to null / false / [].
   vlm_endpoint?: string | null;
   vlm_model?: string | null;
@@ -2877,9 +2876,8 @@ export async function undoCropRegionBatch(
 }
 
 /* ------------------------------------------------------------------ */
-/* W8 multi-box region writes (lockstep with the backend's W8; see     */
-/* docs/design/w8-multibox-frontend-plan-2026-09-26.md). Element shapes */
-/* are RegionBoxInput from annotations/multiBox.ts.                     */
+/* Multi-box region writes. Element shapes are RegionBoxInput from      */
+/* annotations/multiBox.ts.                                             */
 /* ------------------------------------------------------------------ */
 
 /** A per-item region write: the served post-write item and, when served,
@@ -2889,7 +2887,7 @@ export interface RegionItemWrite {
   vectorRefresh: VectorRefresh | null;
 }
 
-/** `PUT /crops/{crop_id}/regions` (W8.8) — replaces the box list on one
+/** `PUT /crops/{crop_id}/regions` — replaces the box list on one
  *  crop. `regionStatus` optionally applies a whole-set status to the
  *  built list in the same write (Enter-after-edit: `'detected'`). */
 export async function putRegionBoxes(
@@ -2915,7 +2913,7 @@ export async function putRegionBoxes(
   return { crop: mapRawCrop(raw.item), vectorRefresh: raw.vector_refresh ?? null };
 }
 
-/** `PUT /crops/batch_regions` (W8.8) — replaces every listed crop's box
+/** `PUT /crops/batch_regions` — replaces every listed crop's box
  *  list with the SAME new boxes (every element must be `box_id: null`;
  *  typically `boxes: []`, "none visible"). */
 export async function putBatchRegions(
@@ -2935,7 +2933,7 @@ export async function putBatchRegions(
   return { vectorRefresh: raw.vector_refresh ?? null };
 }
 
-/** `PATCH /crops/{crop_id}/regions/{box_id}` (W8.8) — per-box state/text
+/** `PATCH /crops/{crop_id}/regions/{box_id}` — per-box state/text
  *  flip. Used by the selected-box accept/reject keymap actions. */
 export async function patchRegionBox(
   cropId: string,
@@ -3001,7 +2999,7 @@ export interface RegionBatchBoxStateResult {
   vectorRefresh: VectorRefresh | null;
 }
 
-/** `POST /regions/batch_box_state` (W8.8) — one state on many boxes
+/** `POST /regions/batch_box_state` — one state on many boxes
  *  across items (region-gallery triage / a region cluster = a set of
  *  boxes). Never flips a whole item's other boxes — use `batchRegionStatus`
  *  for that. */
@@ -3050,7 +3048,7 @@ export interface RegionStatusEntry {
   wants_reason: boolean;
 }
 
-/** W8.7: per-box state styling/labels, distinct from the item-level
+/** per-box state styling/labels, distinct from the item-level
  *  `RegionStatusEntry` vocabulary above — a box's `state` is
  *  `proposed`/`accepted`/`rejected`/`false_positive`, never one of the
  *  item's `region_status` values. */
@@ -3066,9 +3064,8 @@ export interface BoxStateEntry {
   dim: boolean;
   badge: string | null;
   /**
-   * PENDING_BACKEND_W8 (feat/w8-multibox-lockstep, docs/design/
-   * w8-multibox-frontend-plan-2026-09-26.md): the backend approved this
-   * as a follow-up to the W8.7 `box_states` vocabulary — the served
+   * Pending backend contract: the backend approved this
+   * as a follow-up to the `box_states` vocabulary — the served
    * color/theme mapping for a box state, since `box_states` itself only
    * ever served `dashed`/`dim`/`badge` (styling flags, no color). Not in
    * the vendored OpenAPI snapshot yet (no `box_states` schema exists
@@ -3086,8 +3083,8 @@ export interface RegionStatusesResponse {
   confirm_status: string;
   reject_status: string;
   false_positive_status: string;
-  /** W8.7: served box-state vocabulary (`GET /regions/statuses`), absent
-   *  on a pre-W8 backend. */
+  /** served box-state vocabulary (`GET /regions/statuses`), absent
+   *  on a backend that predates multi-box. */
   box_states?: BoxStateEntry[];
 }
 
@@ -3102,7 +3099,7 @@ export function getRegionStatuses(signal?: AbortSignal): Promise<RegionStatusesR
 }
 
 /** What kind of writer a detector/source/chain-actor vocabulary entry names
- *  (`GET {API_PREFIX}/regions/vocabulary`, W0 naming-sweep finding m9). Forward-tolerant —
+ *  (`GET {API_PREFIX}/regions/vocabulary`). Forward-tolerant —
  *  an unrecognized role string is still carried through, it just falls
  *  back to the neutral chip color. */
 export type RegionVocabularyRole =
@@ -3185,7 +3182,7 @@ export interface RegionVocabularyResponse {
 }
 
 /** The deployment-configured detector/segmenter/verifier vocabulary
- *  (`GET {API_PREFIX}/regions/vocabulary`, W0 finding m9), built from the active region
+ *  (`GET {API_PREFIX}/regions/vocabulary`), built from the active region
  *  profile / ingest profiles / `OP_VLM_MODEL` — never a hardcoded model id.
  *  Meant to be loaded once by a store — see `$stores/regionVocabulary.svelte`. */
 export async function getRegionVocabulary(
@@ -3250,7 +3247,7 @@ export interface ReviewFilterSpec {
   allows_unset: boolean;
 }
 
-/** One entry of `GET {API_PREFIX}/review/tabs` (W0 finding m9) — the served
+/** One entry of `GET {API_PREFIX}/review/tabs` — the served
  *  label/description for a review tab or preset id. */
 export interface ReviewTabVocabularyEntry {
   id: string;
@@ -3275,7 +3272,7 @@ export interface ReviewTabVocabularyEntry {
 export interface ReviewEmptyState {
   has_probe_predictions: boolean;
   has_item_scores: boolean;
-  /** Whether any labeled-dataset import has written labels (W10). */
+  /** Whether any labeled-dataset import has written labels. */
   has_imported_labels: boolean;
   /** v0.4.0: whether any item has no vector, and the request that would
    *  embed them (served only then). */
@@ -3359,8 +3356,7 @@ export async function patchSlotMeta(
  * The cluster-view triage op: select outlier regions → mark all false_positive,
  * or bulk-confirm good regions (status='detected' + verified=true).
  *
- * Reads its path from `spec.endpoints.batchStatus` (Wave 2 C13,
- * docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §8.2 trap 2)
+ * Reads its path from `spec.endpoints.batchStatus`
  * rather than hardcoding `${REGION_BASE}/batch_status` a second time —
  * closes the "declared but dead" gap without importing a specific
  * profile into this generic module (falls back to the REGION_BASE path
@@ -3379,9 +3375,9 @@ export async function batchRegionStatus(
   signal?: AbortSignal,
 ): Promise<{
   updated: number;
-  // W8 (rev3, "one RegionBatchConflict shape across every region batch
-  // route"): a pre-W8 backend serves only {crop_id, current_source}; a
-  // W8 backend serves the full RegionBatchConflict. Typed as a superset
+  // One RegionBatchConflict shape across every region batch route: an older
+  // backend serves only {crop_id, current_source}; a current backend
+  // serves the full RegionBatchConflict. Typed as a superset
   // (every RegionBatchConflict field optional here) so both eras read
   // safely without a second type.
   conflicts: Array<{
@@ -3427,7 +3423,7 @@ export async function batchRegionStatus(
  * selects every unvalidated, non-holdout, non-excluded member itself —
  * the frontend no longer fetches the crop page or chunks ids client-side
  * (that was the old `{API_PREFIX}/vlm/label_batch` chunk-of-64 loop,
- * deleted 2026-09-24 logic-moves W3). Returns the queued job's state
+ * since removed). Returns the queued job's state
  * (`AutoLabelJobState`, defined below); 409 when another auto-label job
  * is already running. Progress and the final per-stage result come from
  * polling `{API_PREFIX}/pipeline/auto_label/status` — see
@@ -3437,7 +3433,7 @@ export function runVlmOnCluster(
   clusterId: number,
   opts: {
     promptPack?: string | null;
-    /** W9: a registry endpoint name (or `off`) for this run only. */
+    /** a registry endpoint name (or `off`) for this run only. */
     vlm?: string | null;
     /** Sent only when `true`. */
     acknowledgeExternal?: boolean;
@@ -3594,8 +3590,8 @@ export async function getReviewQueue(
 
 /** `GET {API_PREFIX}/review/{tab}/locate`— where a specific crop sits in a
  *  review queue under the given filters/sort, without paging through it
- *  by hand. Powers `/review?crop_id=` deep links (2026-09-24 logic-moves
- *  W5): `in_queue: false` means the crop doesn't match this tab's
+ *  by hand. Powers `/review?crop_id=` deep links:
+ *  `in_queue: false` means the crop doesn't match this tab's
  *  filters (or is already handled) — `reason` explains why when the
  *  backend sends one. */
 export interface ReviewLocateResult {
@@ -4249,7 +4245,7 @@ export function classStillReferencedDetail(
 }
 
 /** `POST /classes/{id}/restore`'s structured 409 for a class that was
- *  merged into another (OpenProcessor 4c125ec, F-56). */
+ *  merged into another */
 export interface ClassMergedDetail {
   error: 'class_merged';
   message: string;
@@ -4972,14 +4968,14 @@ export interface AutoLabelStartParams {
    */
   prompt_pack?: string | null;
   /**
-   * W9: per-run VLM endpoint (a registry name, or `off`) for this job
+   * per-run VLM endpoint (a registry name, or `off`) for this job
    * only; omitted/null = the project's active endpoint. An unknown id is
    * a 422 `unknown_vlm`. Produced in exactly one place
    * (`createAssistScope().toStartParams()`).
    */
   vlm?: string | null;
   /**
-   * W9: acknowledges that this run's crops go to an external endpoint.
+   * acknowledges that this run's crops go to an external endpoint.
    * Sent only when `true` (`startAutoLabel` drops `false`).
    */
   acknowledge_external?: boolean;
@@ -5220,12 +5216,11 @@ export function bakeoffMatrix(
   return apiFetch(`${scoped()}/bakeoff/matrix/${encodeURIComponent(jobId)}`, {}, signal);
 }
 
-// -- labeled-dataset import and Reprocess (OpenProcessor W10) ------------
+// -- labeled-dataset import and Reprocess --------------------------------
 //
-// any_domain_plan.md §7.12 / W10.14; docs/design/
-// w10-import-reprocess-ui-plan-2026-09-27.md. Every route is scoped to the
+// Every route is scoped to the
 // active project (the import's target is the path's project; no body
-// carries `project`). A backend without W10 404s `GET /datasets/formats`,
+// carries `project`). A backend without dataset import 404s `GET /datasets/formats`,
 // which `datasetsAvailability` treats as "not deployed yet".
 
 export function getDatasetFormats(signal?: AbortSignal): Promise<DatasetFormatsResponse> {
@@ -5455,19 +5450,17 @@ export function cancelReprocessJob(
 }
 
 /**
- * The structured W10 refusal (`{detail: ConfigErrorDetail}` with the
+ * The structured dataset-import refusal (`{detail: ConfigErrorDetail}` with the
  * optional `issues`/`unmapped`/`import_id`), or `null` when the error
  * isn't one. The UI shows `message` and branches only on `error`.
  */
 export const datasetErrorDetail = (e: unknown): DatasetErrorDetail | null =>
   structuredDetail<DatasetErrorDetail>(e);
 
-// -- Prompt packs (OpenProcessor W3; test-on-crop W5) --------------------
-// any_domain_plan.md §3, §5.1, §7.2, §7.5;
-// docs/design/w3-pack-editor-ui-plan-2026-09-27.md §1.
+// -- Prompt packs (and test-on-crop) -------------------------------------
 
 /** `GET /prompt_packs`: every pack (builtin, file, stored) plus the
- *  clone-only templates and the active ref. Also the W3 gate's probe. */
+ *  clone-only templates and the active ref. Also the pack gate's probe. */
 export function listPromptPacks(signal?: AbortSignal): Promise<PromptPackList> {
   return apiFetch<PromptPackList>(`${scoped()}/prompt_packs`, {}, signal);
 }
@@ -5587,13 +5580,11 @@ export function rollbackPromptPack(body: {
   });
 }
 
-// -- Region profiles and the config vocabulary (OpenProcessor W4) ---------
-// any_domain_plan.md §4, §7.3, §7.4;
-// docs/design/w4-profile-editor-ui-plan-2026-09-27.md §2.
+// -- Region profiles and the config vocabulary ---------------------------
 
 /** `GET /region_profiles?include_templates=true`: every profile (env,
  *  registered, stored) plus the clone-only templates and the active ref.
- *  Also the W4 gate's probe. */
+ *  Also the profile gate's probe. */
 export function listRegionProfiles(signal?: AbortSignal): Promise<RegionProfileList> {
   return apiFetch<RegionProfileList>(
     `${scoped()}/region_profiles${qs({ include_templates: true })}`,

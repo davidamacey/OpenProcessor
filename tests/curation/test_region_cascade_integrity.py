@@ -1,9 +1,8 @@
 """Region-cascade integrity regressions found on a live deployment.
 
-1. ``region_text`` must be the text transcribed off the region — never a
-   description of the region or the item's class — and every VLM reply
-   field that drives an accept is read strictly (fail-closed), with batch
-   replies aligned to the right crop.
+1. ``region_text`` is the text transcribed off the region — never a description
+   of it or the item's class — and every VLM reply field that drives an accept
+   is read strictly (fail-closed), with batch replies aligned to the right crop.
 2. ``region_detector_chain`` entries are exactly ``<actor>:<event>`` and
    the training-candidate readers' ``term`` filters match what the worker
    writes.
@@ -26,8 +25,10 @@ import pytest
 from _fake_project_registry import install_static_project_registry
 from PIL import Image
 
-import scripts.curation.region_worker_main as worker
 from scripts.curation.worker import runner as runner_mod, stage_a as stage_a_mod
+from scripts.curation.worker.__main__ import parse_args
+from scripts.curation.worker.bulk_writer import _bulk_update
+from scripts.curation.worker.state import _ItemTask
 from src.config import get_region_fields
 from src.config.project_context import current_project
 from src.services.detection.cascade_detect.candidate import RegionCandidate
@@ -81,7 +82,7 @@ def _jpeg() -> bytes:
 def _combined(**over: Any) -> dict[str, Any]:
     """A realistic combined reply, as the deployment pack asks for it.
 
-    W8: the box-verdict fields (``region_bbox_correct`` / ``region_text``
+    the box-verdict fields (``region_bbox_correct`` / ``region_text``
     / ``region_confidence``) are nested one level down, under
     ``region_boxes: [{"box": 1, ...}]`` -- pass them as flat kwargs here
     (unchanged call sites) and they land on box 1.
@@ -134,10 +135,9 @@ class TestCombinedSingle:
         reply = await _labeler(_combined(region_text=echo)).label_combined(
             'c1', _jpeg(), class_names=CLASS_NAMES, region_bboxes_norm=[(0.2, 0.6, 0.5, 0.8)]
         )
-        # W8 M5 fix (pipeline-wiring review, 2026-09-27): restored --
         # box_verdicts' text cleaning (region_overlay._clean_text_reply)
         # now suppresses an item-answer echo (the picked class name, make,
-        # model, or their join) the same way the pre-W8 flat parser's
+        # model, or their join) the same way the old flat parser's
         # _clean_combined_region_text did. The class side still resolves
         # regardless.
         assert reply.region_boxes[0].text_reply is None
@@ -146,9 +146,8 @@ class TestCombinedSingle:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         'sentinel',
-        # 'unreadable' / '-' restored (W8 M5 fix): the W8 rewrite's
-        # region_overlay._clean_text_reply only dropped 4 of the pre-W8
-        # flat parser's 7 sentinels.
+        # 'unreadable' / '-' are sentinels too: region_overlay._clean_text_reply
+        # must drop all 7 the old flat parser dropped, not just 4.
         [None, '', 'unknown', 'N/A', 'null', 'unreadable', '-'],
     )
     async def test_no_text_is_null(self, sentinel: str | None) -> None:
@@ -470,8 +469,8 @@ def _item(status: str = 'pending_detection') -> dict[str, Any]:
 
 
 def _as_candidate_list(c: RegionCandidate | list[RegionCandidate] | None) -> list[RegionCandidate]:
-    """Normalize a ``_drive_worker`` leg input to a list (W8 M8: a test
-    can now feed 2+ raw candidates per leg, not just 0 or 1)."""
+    """Normalize a ``_drive_worker`` leg input to a list (a test
+    can feed 2+ raw candidates per leg, not just 0 or 1)."""
     if c is None:
         return []
     if isinstance(c, list):
@@ -508,7 +507,7 @@ async def _drive_worker(
     dataclass fields replaced (e.g. ``secondary_shape_groups``).
 
     ``primary`` / ``segmenter`` each take a single :class:`RegionCandidate`,
-    ``None``, OR a ``list[RegionCandidate]`` (W8 M8) -- a list feeds N raw
+    ``None``, OR a ``list[RegionCandidate]`` -- a list feeds N raw
     candidates through that leg's ``detect_batch_multi`` / ``segment_multi``
     in one pass, exercising the real multi-box selection/verify/write path
     instead of the single-candidate shape every pre-M8 test used.
@@ -532,8 +531,8 @@ async def _drive_worker(
     pool = MagicMock(initialize=AsyncMock(), close=AsyncMock())
     if region_embed_ready:
         pool.is_model_ready = AsyncMock(return_value=True)
-    monkeypatch.setattr(worker, 'AsyncTritonPool', MagicMock(return_value=pool))
-    monkeypatch.setattr(worker, 'make_script_opensearch', MagicMock(return_value=fake_os))
+    monkeypatch.setattr(runner_mod, 'AsyncTritonPool', MagicMock(return_value=pool))
+    monkeypatch.setattr(runner_mod, 'make_script_opensearch', MagicMock(return_value=fake_os))
     # The worker discovers its projects through the registry; keep that
     # read in-memory too, never against the unresolvable --opensearch host.
     install_static_project_registry(monkeypatch)
@@ -543,7 +542,6 @@ async def _drive_worker(
 
     primary_det = MagicMock()
     primary_det.confidence_floor = 0.0
-    primary_det.detect_batch = AsyncMock(return_value=[primary_list[0] if primary_list else None])
     primary_det.detect_batch_multi = AsyncMock(return_value=[primary_list])
     monkeypatch.setattr(runner_mod, 'RegionDetector', MagicMock(return_value=primary_det))
     ocr = MagicMock()
@@ -555,7 +553,7 @@ async def _drive_worker(
     seg = MagicMock(aclose=AsyncMock())
     seg.segment = AsyncMock(return_value=segmenter_list[0] if segmenter_list else None)
     seg.segment_multi = AsyncMock(return_value=segmenter_list)
-    monkeypatch.setattr(worker, 'SegmenterClient', MagicMock(return_value=seg))
+    monkeypatch.setattr(runner_mod, 'SegmenterClient', MagicMock(return_value=seg))
 
     vlm = MagicMock(aclose=AsyncMock())
     vlm.class_names = []
@@ -567,7 +565,7 @@ async def _drive_worker(
         or (lambda crops, **_kw: {} if visible is None else {c.crop_id: visible for c in crops})
     )
     vlm_cls = MagicMock(return_value=vlm)
-    monkeypatch.setattr(worker, 'build_vlm_labeler', vlm_cls)
+    monkeypatch.setattr(runner_mod, 'build_vlm_labeler', vlm_cls)
     # Registry load is best-effort; keep it out of the test.
     monkeypatch.setattr(
         'src.clients.curation_opensearch.registry.ClassRegistry',
@@ -581,7 +579,7 @@ async def _drive_worker(
     )
 
     monkeypatch.setenv('OP_VLM_URL', 'http://vlm.invalid:8000')
-    args = worker.parse_args(
+    args = parse_args(
         [
             '--opensearch=http://os.invalid:9200',
             '--triton=triton.invalid:8001',
@@ -595,9 +593,7 @@ async def _drive_worker(
     )
 
     async def _stopper() -> None:
-        # W8 pipeline-review flaky-test fix (2026-09-27, comment corrected
-        # 2026-09-27 re-review): this used to be a FIXED 500 x 10ms
-        # iteration budget -- a ~5s nominal wall-clock allowance assuming
+        # This used to be a FIXED 500 x 10ms iteration budget -- a ~5s nominal wall-clock allowance assuming
         # each `asyncio.sleep(0.01)` returns close to schedule. The actual
         # cause of the flake is plain wall-clock variance against that
         # fixed ~5s budget, not individual sleeps somehow running long
@@ -725,7 +721,7 @@ class TestOnePassPerItem:
         fake_os = _FakeOpenSearch(
             {'c1': {**_item(), F.status: 'detected'}}, search_delay=0.0, lag_searches=0
         )
-        task = worker._ItemTask(
+        task = _ItemTask(
             project=current_project().record,
             crop_id='c1',
             image_path='',
@@ -736,7 +732,7 @@ class TestOnePassPerItem:
         )
         task.update_doc = {F.status: 'detected', F.reason: 'again'}
         task.detection_trace = ['det:hit']
-        n_written, _ = await worker._bulk_update(fake_os, [task])  # type: ignore[arg-type]
+        n_written, _ = await _bulk_update(fake_os, [task])  # type: ignore[arg-type]
         assert n_written == 0
         assert fake_os.writes == []
 

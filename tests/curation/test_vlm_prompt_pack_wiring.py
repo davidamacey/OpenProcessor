@@ -12,6 +12,7 @@ singleton construction (below) fixes ``models.py`` for free.
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
@@ -41,11 +42,10 @@ def test_get_vlm_labeler_resolves_a_configured_pack(tmp_path: Path) -> None:
 
     custom = replace(GENERIC_ITEM_PACK, name='pallet_v1')
     path = tmp_path / 'pack.json'
-    custom.to_json(path)
+    path.write_text(json.dumps(custom.to_dict()))
 
     # resolve_prompt_pack's defining module is vlm_prompt_resolution.py
-    # (split out of vlm_prompts.py to stay under the 700-LOC ratchet, W3/W4
-    # review round 2) -- vlm_prompts.py only re-exports the name, and
+    # (split out of vlm_prompts.py to stay under the 700-LOC ratchet) -- vlm_prompts.py only re-exports the name, and
     # active_prompt_pack() (also in vlm_prompt_resolution.py) calls the
     # function via that module's own namespace, so the patch target must
     # be the defining module, not the re-export.
@@ -83,8 +83,8 @@ def test_get_vlm_labeler_selects_and_caches_per_pack_name(
 
     default_path = tmp_path / 'default.json'
     extra_path = tmp_path / 'extra.json'
-    replace(GENERIC_ITEM_PACK, name='pallet_v1').to_json(default_path)
-    replace(GENERIC_ITEM_PACK, name='food_v2').to_json(extra_path)
+    default_path.write_text(json.dumps(replace(GENERIC_ITEM_PACK, name='pallet_v1').to_dict()))
+    extra_path.write_text(json.dumps(replace(GENERIC_ITEM_PACK, name='food_v2').to_dict()))
     cfg = CurationConfig(prompt_pack_path=default_path, prompt_pack_paths=(extra_path,))
     monkeypatch.setattr('src.config.curation.get_curation_config', lambda: cfg)
 

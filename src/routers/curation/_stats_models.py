@@ -34,7 +34,6 @@ class RegionStats(BaseModel):
     )
     by_detector: int
     by_segmenter: int
-    by_human: int = Field(description='Legacy name of by_human_drew.')
     by_human_drew: int
     verified_by_human: int
     verified_by_vlm: int

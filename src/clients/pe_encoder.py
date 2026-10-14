@@ -29,9 +29,8 @@ Text backends (picked once by :meth:`PEEncoder.warm_text_encoder`):
     ONNX Runtime ``CPUExecutionProvider`` over the same text-tower graph,
     loaded **in-process** from ``OP_PE_TEXT_ONNX_PATH``. Explicit opt-in
     only (``OP_PE_TEXT_BACKEND=onnx``) -- this is exactly the backend that
-    used to run once per uvicorn worker (F-07, fresh-start E2E findings
-    2026-09-25): with 32 workers each loading its own ~1.4 GB ONNX Runtime
-    session, ``auto`` mode alone put container RSS at ~84 GiB. ``auto``
+    used to run once per uvicorn worker: with 32 workers each loading its own ~1.4 GB ONNX
+    Runtime session, ``auto`` mode alone put container RSS at ~84 GiB. ``auto``
     no longer considers this backend at all; pin it explicitly only for a
     single-worker/CLI process where Triton isn't available. Also loaded
     lazily, never at warm time.
@@ -240,7 +239,7 @@ class OnnxTextBackend:
 class LazyOnnxTextBackend:
     """Defers ``ort.InferenceSession`` construction until the first query.
 
-    F-07 remainder (fresh-start E2E findings 2026-09-25): even as an
+    Even as an
     explicit ``OP_PE_TEXT_BACKEND=onnx`` opt-in, this must not load at
     warm time -- ``warm_text_encoder()`` runs in every uvicorn worker at
     startup, and only workers that actually serve a text-search request
@@ -450,7 +449,7 @@ class PEEncoder:
 
             pref = self._text_backend_pref
             backend: Any = None
-            # F-07 remainder (fresh-start E2E findings 2026-09-25): 'auto'
+            # 'auto'
             # tries Triton's shared pe_text_encoder first -- NOT the
             # in-process ONNX path, which used to load its own ~1.4 GB
             # session in every uvicorn worker. In-process ONNX is now only
@@ -586,8 +585,7 @@ class PEEncoder:
         ``OP_PE_TEXT_BACKEND=torch`` loads eagerly, same as always — the
         operator asked for it explicitly, so failing fast on load is
         correct. ``auto``/``triton`` instead defer the torch load to first
-        query via :class:`LazyTorchTextBackend` (see F-07 in the
-        fresh-start E2E findings): eagerly loading a multi-GB fallback
+        query via :class:`LazyTorchTextBackend` eagerly loading a multi-GB fallback
         model in every uvicorn worker at startup is the bug, not a
         feature.
         """

@@ -1,4 +1,4 @@
-"""W10.7/W10.17: region-box attachment to parent items."""
+"""Region-box attachment to parent items."""
 
 from __future__ import annotations
 

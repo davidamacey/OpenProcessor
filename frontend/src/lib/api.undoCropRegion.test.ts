@@ -1,15 +1,13 @@
 /**
- * W8 (docs/design/w8-multibox-frontend-plan-2026-09-26.md; supersedes the
- * pre-W8 dq-region "candidate" round trip this file originally covered —
- * a rejected box is just a `SlotBox` with `state: 'rejected'` now, no
- * separate candidate concept). `POST {API_PREFIX}/crops/{id}/region/undo`
+ * A rejected box is just a `SlotBox` with `state: 'rejected'`, no
+ * separate candidate concept. `POST {API_PREFIX}/crops/{id}/region/undo`
  * (`undoCropRegion`) returns the post-undo item, mapped through
  * `mapRawCrop` -> `mapCropSlots` -> `readSlot` like any other crop — a
  * Z-undo that restores an earlier `region_boxes` list re-renders it from
  * the server's own response, with no client-side reconstruction. This is
  * the contract `review/+page.svelte`'s `undoLast()` relies on: whatever
  * this function returns is what `queue.items[idx]` gets replaced with
- * directly. The backend-confirmed W8 undo contract (owner resolution,
+ * directly. The backend-confirmed undo contract (owner resolution,
  * 2026-09-26): one call restores the whole prior `region_boxes` list plus
  * `region_status`/`region_revision` in one step.
  */

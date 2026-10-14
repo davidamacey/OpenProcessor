@@ -255,7 +255,7 @@ def region_reason(src: dict[str, Any], fields: Any, default: str) -> str:
     words the reason from the served rejection-reason vocabulary and only
     says "needs human review" for a ``needs_human``-kind reason.
 
-    W8-cleanup: the rejection reason lives on the rejected box itself now
+    The rejection reason lives on the rejected box itself now
     (``region_boxes[].rejection_reason``), not an item-level scalar. The
     first ``rejected`` box's reason is used (a ``verify_rejected`` item has
     only rejected boxes, but may have several; the reviewer sees each box's
@@ -441,7 +441,7 @@ def build_tab_query(
         # item's class. VLM and cluster agreement validate most classes
         # automatically, so excluding them hid nearly every unreviewed region.
         #
-        # W8-cleanup: `region_bbox_norm` / `region_candidate_bbox_norm` are
+        # `region_bbox_norm` / `region_candidate_bbox_norm` are
         # retired -- a box is now `accepted` (the old "has bbox_norm")
         # or `rejected` (the old "has a kept candidate") inside the item's
         # `region_boxes` list, checked via a nested query.

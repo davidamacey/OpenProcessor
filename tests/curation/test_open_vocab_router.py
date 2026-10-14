@@ -1,4 +1,4 @@
-"""Wave 3: the ``/open_vocab*`` config axis -- CRUD lifecycle, validation,
+"""The ``/open_vocab*`` config axis -- CRUD lifecycle, validation,
 activation gate, rollback, clone, schema."""
 
 from __future__ import annotations

@@ -1,5 +1,5 @@
 /**
- * W5 test-on-crop wrappers (`api_configTest.ts`): scoped URLs, bodies sent
+ * Test-on-crop wrappers (`api_configTest.ts`): scoped URLs, bodies sent
  * as given, the preview item mapped through `mapRawCrop` (raw kept), and
  * a refusal's served detail surfacing. The request bodies' keys are
  * pinned to the contract in `contract/configTestContract.test.ts`.

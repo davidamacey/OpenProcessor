@@ -1,6 +1,6 @@
 /**
- * W10 wire fixtures, lifted from the spec's own examples
- * (any_domain_plan.md §7.12 JSON, W10.4, W10.12, W10.13) with the
+ * Dataset-import wire fixtures, lifted from the spec's own examples
+ * with the
  * neutral fixture domain's class names (widgets, gadgets).
  */
 import type {

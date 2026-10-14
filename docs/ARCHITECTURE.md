@@ -418,8 +418,8 @@ time. Single-target forms:
   and auto-label jobs are JSON files the API writes and the long-lived worker
   claims; status flows back as files. A heartbeat marks a live claim; a job
   whose heartbeat is stale is reported `interrupted` and can be resumed.
-- **Detection worker** (`scripts/curation/region_worker_main.py`, package
-  `scripts/curation/worker/`): fetches pending items, runs the cascade, writes
+- **Detection worker** (package `scripts/curation/worker/`, started with
+  `python -m scripts.curation.worker`): fetches pending items, runs the cascade, writes
   boxes in an OCC merge, and skips any document a human changed meanwhile.
 - **Pause and resume.** `POST /curation/projects/{project}/pause` and
   `.../resume` write and remove a flag file; workers skip a paused project and

@@ -77,11 +77,11 @@ def test_global_configs_index_is_a_legitimate_unowned_index(snapshot) -> None:
     """M3: ``op_global_configs`` (the one config-store index scoped to no
     project -- sibling to ``op_projects``, ``visual_search_*``) is
     readable and writable unbound, same as any other unowned index -- the
-    shape its future global-router routes (W9) will use. A request
+    shape its future global-router routes will use. A request
     already bound to a project has no business touching it, so it is
     refused there exactly like any other unowned index (fail-closed).
 
-    m1 (W2-finish review): built from the real ``global_configs_index()``
+    Built from the real ``global_configs_index()``
     resolver, not a hardcoded literal -- so this test would catch the
     index resolving into a project's own namespace, not just prove the
     generic unowned-index rule against a string that happens to match
@@ -96,7 +96,7 @@ def test_global_configs_index_is_a_legitimate_unowned_index(snapshot) -> None:
 def test_a_bound_project_reads_the_global_registry_only_inside_the_config_store_block(
     snapshot,
 ) -> None:
-    """W9: a project-bound request resolves the deployment-wide VLM endpoints
+    """A project-bound request resolves the deployment-wide VLM endpoints
     through the config store, which enters ``global_configs_read`` for its own
     reads. Outside that block the same read is still refused."""
     index = global_configs_index()

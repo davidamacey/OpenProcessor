@@ -38,7 +38,7 @@ def test_items_mapping_region_fields_match_the_module_singleton() -> None:
         'verifier_version',
         'verified_at',
         'rejection_reason',
-        'status_legacy',
+        'status_before_requeue',
         'validated',
         # This was a domain-named, vendor-named literal (historic)
         # baked into the mapping until it was wired through
@@ -72,7 +72,7 @@ def test_items_mapping_rebuilt_with_overridden_region_fields_uses_override_keys(
         verifier_version='roi_verifier_version',
         verified_at='roi_verified_at',
         rejection_reason='roi_rejection_reason',
-        status_legacy='roi_status_legacy',
+        status_before_requeue='roi_status_before_requeue',
         validated='roi_validated',
         visible='roi_visible',
     )

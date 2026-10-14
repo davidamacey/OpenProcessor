@@ -116,7 +116,7 @@ def crops(monkeypatch: pytest.MonkeyPatch, registry: ClassRegistry):
 
 
 async def _label(crops, fake, registry, crop_id: str, class_id: int) -> None:
-    from src.routers.curation._common import CropLabelRequest
+    from src.routers.curation._common_models import CropLabelRequest
 
     await crops.label_crop(crop_id, CropLabelRequest(class_id=class_id), fake, registry)
 
@@ -170,7 +170,7 @@ async def test_undo_restores_prior_vlm_label(crops, registry, ids) -> None:
 
 @pytest.mark.asyncio
 async def test_undo_reverses_batch_label_and_move(crops, registry, ids) -> None:
-    from src.routers.curation._common import CropBatchLabelRequest, CropMoveRequest
+    from src.routers.curation._common_models import CropBatchLabelRequest, CropMoveRequest
 
     fake = QueryFakeOpenSearch({ITEMS: {'b': _proposal_doc('b'), 'm': _proposal_doc('m')}})
     before = {k: _class_state(v) for k, v in fake.docs(ITEMS).items()}
@@ -243,13 +243,13 @@ async def test_undo_without_history_clears_class(crops) -> None:
 
 
 async def _exclude(crops, fake, crop_ids: list[str]) -> dict[str, Any]:
-    from src.routers.curation._common import CropExcludeRequest
+    from src.routers.curation._common_models import CropExcludeRequest
 
     return await crops.batch_exclude_crops(CropExcludeRequest(crop_ids=crop_ids), fake)
 
 
 async def _unexclude(crops, fake, crop_ids: list[str]) -> dict[str, Any]:
-    from src.routers.curation._common import CropUnexcludeRequest
+    from src.routers.curation._common_models import CropUnexcludeRequest
 
     return await crops.batch_unexclude_crops(CropUnexcludeRequest(crop_ids=crop_ids), fake)
 
@@ -352,7 +352,7 @@ async def test_unexclude_unvalidated_item_from_another_class_cluster_goes_residu
 
 @pytest.mark.asyncio
 async def test_move_into_candidate_cluster_sets_placement_not_class(crops, registry, ids) -> None:
-    from src.routers.curation._common import CropMoveRequest
+    from src.routers.curation._common_models import CropMoveRequest
 
     doc = _proposal_doc('m')
     doc.update(cluster_id=None, cluster_subid=None)
@@ -377,7 +377,7 @@ async def test_move_into_candidate_cluster_sets_placement_not_class(crops, regis
 async def test_move_into_candidate_clears_a_human_class(crops, registry, ids) -> None:
     """A human-validated crop moved into a candidate group is no longer that
     class; keeping it validated would leak the old class into export."""
-    from src.routers.curation._common import CropMoveRequest
+    from src.routers.curation._common_models import CropMoveRequest
 
     fake = QueryFakeOpenSearch({ITEMS: {'h': _proposal_doc('h'), 'peer': _proposal_doc('peer')}})
     await _label(crops, fake, registry, 'h', ids['widget'])
@@ -393,7 +393,7 @@ async def test_move_into_candidate_clears_a_human_class(crops, registry, ids) ->
 async def test_move_rejects_unassigned_and_unregistered_targets(crops, registry, target) -> None:
     from fastapi import HTTPException
 
-    from src.routers.curation._common import CropMoveRequest
+    from src.routers.curation._common_models import CropMoveRequest
 
     fake = QueryFakeOpenSearch({ITEMS: {'m': _proposal_doc('m')}})
     before = dict(fake.docs(ITEMS)['m'])
@@ -409,7 +409,7 @@ async def test_move_rejects_a_candidate_target_with_no_members(crops, registry) 
     not a move target; writing it would invent a phantom cluster."""
     from fastapi import HTTPException
 
-    from src.routers.curation._common import CropMoveRequest
+    from src.routers.curation._common_models import CropMoveRequest
 
     fake = QueryFakeOpenSearch({ITEMS: {'m': _proposal_doc('m')}})
     before = dict(fake.docs(ITEMS)['m'])
@@ -548,7 +548,7 @@ def test_undo_route_unknown_crop_is_404(client_for) -> None:
 
 @pytest.mark.asyncio
 async def test_undo_batch_reverses_a_batch_label(crops, ids, client_for) -> None:
-    from src.routers.curation._common import CropBatchLabelRequest
+    from src.routers.curation._common_models import CropBatchLabelRequest
 
     fake = QueryFakeOpenSearch({ITEMS: {k: _proposal_doc(k) for k in ('b1', 'b2', 'untouched')}})
     before = {k: _class_state(v) for k, v in fake.docs(ITEMS).items()}

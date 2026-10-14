@@ -21,9 +21,9 @@ from src.clients.curation_opensearch.registry import ClassRegistry
 from src.services.curation.keymap import reserved_hotkeys
 
 
-# The legacy hardcoded set, kept only as the W2b regression fixture (CW-K
-# §3.4): the derived default must equal this set plus W8's y/r and the
-# overlay's backtick.
+# The legacy hardcoded set, kept only as a regression fixture: the
+# derived default must equal this set plus the per-box accept/reject keys
+# y/r and the overlay's backtick.
 LEGACY_RESERVED_HOTKEY_LETTERS = frozenset('gndzxuam/feb')
 
 

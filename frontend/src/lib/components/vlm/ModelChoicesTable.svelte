@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * Every model choice the deployment exposes, read only
-   * (`GET /config/vocabulary` `model_choices`, W9.8): the label, where it
+   * (`GET /config/vocabulary` `model_choices`): the label, where it
    * is set (the served scope label), its current value, the dimensions,
    * the choices, and whether it is settable (with the served
    * `settable_via` / `reason` as help). A role that has an editor links to

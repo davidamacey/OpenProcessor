@@ -1,4 +1,4 @@
-"""W4: region-profile validation (any_domain_plan.md §4.3) --
+"""Region-profile validation (any_domain_plan.md §4.3) --
 ``src.services.config_store.profile_validation.validate_profile``.
 
 Deviation note: the plan's §4.3 table names a ``segmenter_min_score``

@@ -64,7 +64,7 @@ if [ ! -f "$ONNX_PATH" ]; then
 fi
 
 # -----------------------------------------------------------------------------
-# F-16: bake FP16 into the ONNX (TRT 11 typed builds have no --fp16 flag;
+# bake FP16 into the ONNX (TRT 11 typed builds have no --fp16 flag;
 # reduced precision must live in the graph -- trt_utils.bake_fp16_onnx, the
 # same helper export_face_recognition.py / export_scrfd.py /
 # export_mobileclip_image_encoder.py call). PE was shipping FP32-only

@@ -1,11 +1,11 @@
-"""YOLO-format dataset reading (W10.2.1).
+"""YOLO-format dataset reading.
 
 Discovery (``data.yaml`` / ``images/<split>`` tree) is a fresh
 implementation here rather than a straight move of
 ``scripts/curation/yolo_dataset.py`` (which stays in place, still used by
 ``scripts/curation/eval_regions_vs_gt.py``). The row-level rules (clamp
-tolerance, polygon-to-box, class-range checks) are new: the pre-W10
-per-image importer had none of them.
+tolerance, polygon-to-box, class-range checks) are new: the earlier per-image
+importer had none of them.
 
 A dataset is untrusted input. Every path it names goes through
 :mod:`~src.services.curation.dataset_import.paths`, every text file is
@@ -254,7 +254,7 @@ def read_yolo_labels(
 ) -> tuple[list[LabelBox], bool]:
     """Parse one YOLO ``.txt`` -> ``(boxes, label_file_exists)``.
 
-    Row rules (W10.2.1): 5 fields is a plain box; ``1 + 2k`` fields
+    Row rules: 5 fields is a plain box; ``1 + 2k`` fields
     (``k >= 3``) is a YOLO-seg polygon / YOLO-OBB row, imported as its
     axis-aligned bounding box (``yolo_polygon_to_box``, info). Any other
     field count is ``label_row_malformed`` (row skipped). A coordinate

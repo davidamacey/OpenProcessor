@@ -378,10 +378,9 @@ describe('SourceImageOverlay', () => {
     expect(el.querySelectorAll('[data-testid="overlay-box"]').length).toBe(1);
   });
 
-  it('draws a W8 multi-box region ring in the served box_states tone, not the client role fallback', async () => {
-    // Backend follow-up to W8.7 (feat/w8-multibox-lockstep,
-    // docs/design/w8-multibox-frontend-plan-2026-09-26.md): each
-    // box_states entry now serves `tone`. A served `rejected` tone must
+  it('draws a multi-box region ring in the served box_states tone, not the client role fallback', async () => {
+    // Each
+    // box_states entry serves `tone`. A served `rejected` tone must
     // win over the role→color guess this file used before (which mapped
     // a `rejected` box to the same neutral zinc as `false_positive`).
     regionStatusesStore.boxStates = [

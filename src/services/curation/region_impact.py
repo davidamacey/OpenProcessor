@@ -1,9 +1,8 @@
-"""Region-profile activation impact aggregation (W4, any_domain_plan.md
-§4.6): "if I activate this profile, what happens to existing items",
-served by ``GET /region_profiles/active/impact`` and embedded in the
+"""Region-profile activation impact aggregation: "if I activate this
+profile, what happens to existing items", served by ``GET /region_profiles/active/impact`` and embedded in the
 activate response.
 
-No silent data rewrite, ever (§4.6): this module only counts; nothing
+No silent data rewrite, ever: this module only counts; nothing
 here writes to an item.
 """
 
@@ -16,7 +15,6 @@ from pydantic import BaseModel
 from src.config import PENDING_STATUSES, RegionStatus
 from src.config.curation import items_index
 from src.config.region_fields import get_region_fields
-from src.services.curation.region_eval import LEGACY_STATUS_ALIASES
 from src.services.curation.region_requeue import REQUEUEABLE_STATUSES
 from src.services.curation.region_scope import parent_classes_clause
 from src.services.curation.reprocess_models import (
@@ -30,12 +28,8 @@ from src.services.curation.reprocess_targets import selector_clauses
 if TYPE_CHECKING:
     from src.config import DetectionProfile
 
-#: Both the current and legacy pending-status spellings (operators rename
-#: 'pending' -> 'pending_detection' etc.; the worker reads both). Sourced
-#: from the enum module + region_eval's alias map, not re-literaled here.
-_PENDING_STATUSES: tuple[str, ...] = tuple(status.value for status in PENDING_STATUSES) + tuple(
-    LEGACY_STATUS_ALIASES
-)
+#: The pending statuses, sourced from the enum module and not re-literaled here.
+_PENDING_STATUSES: tuple[str, ...] = tuple(status.value for status in PENDING_STATUSES)
 
 #: Sentinel terms-agg bucket key for "no region_profile stamp at all"
 #: (an item ingested while region detection was off, or never in scope).
@@ -145,7 +139,7 @@ async def compute_activation_impact(
         index=index,
         body={
             'size': 0,
-            # M-4 fix (W3/W4 review 2026-09-28): without this, OpenSearch's
+            # without this, OpenSearch's
             # default 10,000-hit tracking cap silently truncates
             # `items_total` for any project past that size -- see
             # `src/routers/curation/stats.py`'s own note on the same trap

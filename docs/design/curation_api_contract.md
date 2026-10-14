@@ -2007,7 +2007,7 @@ items is `422`. Response: `n_frozen`, `n_classes_covered`,
   landed a class) and `by_proposal` (the detector proposed it, nothing
   classified it). The last two are disjoint subsets of `no_label_source`.
 - `regions`: `boxed`, `confirmed`, `total_detected`, `by_detector`,
-  `by_segmenter`, `by_human`, `by_human_drew`, `by_import`,
+  `by_segmenter`, `by_human_drew`, `by_import`,
   `verified_by_human`, `verified_by_vlm` (every non-human, non-import
   verifier), `verified_by_import`, `validated_by_human`,
   `validated_by_import`. The detector and segmenter buckets match the active

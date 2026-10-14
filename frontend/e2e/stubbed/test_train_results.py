@@ -4,10 +4,10 @@ GET {API_PREFIX}/train/status/{job_id} and GET
 {API_PREFIX}/train/manifest/{job_id}. Fixture data mirrors the real
 served shape captured live from the 2026-09-24T23-47-55_yolo26n
 train-smoke run (artifacts_local/cw-live/train-smoke/f_status.json /
-f_manifest.json), hand-corrected for OpenProcessor #34 W1's
+f_manifest.json), hand-corrected for the
 best_metric/last_metric removal: that run predates
 last_epoch_metric/best_checkpoint_metric, so both serve null under the
-W1 fix (never a back-filled guess) -- see
+fix (never a back-filled guess) -- see
 src/lib/test/fixtures/trainRun.ts's doc comment for the same call on
 the frontend fixture this mirrors.
 """

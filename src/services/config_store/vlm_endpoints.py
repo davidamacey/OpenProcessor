@@ -1,8 +1,8 @@
-"""The VLM endpoint registry's storage operations (W9.6).
+"""The VLM endpoint registry's storage operations.
 
 Endpoints are global (deployment-wide): docs live in ``op_global_configs``
 (``vlm:<name>`` current, ``vlm:<name>@<rev>`` immutable copies,
-``vlm_probe:<name>@<rev>``, ``local_vlm:desired``) and are written through W2's
+``vlm_probe:<name>@<rev>``, ``local_vlm:desired``) and are written through the
 OCC primitives, so revision numbers, conflicts and the config revision
 counter behave exactly like packs and profiles. Which endpoint a *project*
 runs is that project's own activation

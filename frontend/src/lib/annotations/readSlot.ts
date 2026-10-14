@@ -137,8 +137,8 @@ export function readSlot(
   const cap = spec.capabilities;
 
   if (cap.subBox?.listField) {
-    // W8 multi-box list — always an array, [] when none (owner decision:
-    // no backward compatibility with the pre-W8 scalar shape, so this is
+    // Multi-box list — always an array, [] when none (owner decision:
+    // no backward compatibility with the old scalar shape, so this is
     // the only region box path; the legacy single-box block below never
     // runs for a capability declaring listField — see next `if`).
     out.subBoxes = mapRegionBoxList(pick(raw, cap.subBox.listField));

@@ -1,4 +1,4 @@
-"""The ``env`` built-in endpoint (W9.2): the operator's own ``OP_VLM_*``
+"""The ``env`` built-in endpoint: the operator's own ``OP_VLM_*``
 settings as a read-only endpoint, so a stack that never opens the picker
 keeps working exactly as before."""
 

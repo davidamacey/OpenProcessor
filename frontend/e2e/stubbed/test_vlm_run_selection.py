@@ -1,5 +1,4 @@
-"""OpenProcessor W9 per-run VLM selection and the `/settings` dropdown,
-any_domain_plan.md §7.8; docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md §3.3.
+"""Per-run VLM selection and the `/settings` dropdown.
 
   1. `test_dashboard_auto_label_with_a_picked_external_endpoint` — the
      assist bar's picker shows the served warning and the acknowledgement;
@@ -79,7 +78,7 @@ DATASET_STATS = {
     "test_holdout": 0,
     "by_source": [],
     "labeled": {"by_human": 0, "by_vlm": 0, "by_classifier": 0, "other": 0},
-    "regions": {"total_detected": 0, "by_detector": 0, "by_segmenter": 0, "by_human": 0},
+    "regions": {"total_detected": 0, "by_detector": 0, "by_segmenter": 0},
     "unlabeled": {"pending_detection": 0, "no_label_source": 0},
     "in_progress": {"region_drain_total_unfinished": 0},
     "clusters": {"last_run_at": None, "cluster_count": 0, "residual_count": 0, "noise_count": 0, "method": None},

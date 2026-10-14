@@ -1,5 +1,5 @@
 /**
- * W0 naming-sweep finding m9: ProvenanceChip's label and chip color used
+ * ProvenanceChip's label and chip color used
  * to come from a hardcoded per-model name→label/palette table
  * (`builtinDetectors.ts`). Both are now backend-driven — the label from
  * `regionVocabularyStore` (served by `GET {API_PREFIX}/regions/vocabulary`), the

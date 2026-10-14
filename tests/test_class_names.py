@@ -1,6 +1,6 @@
 """Tests for src/utils/class_names.py.
 
-F-42 (fresh-start E2E findings 2026-09-25, round 2): a promoted model's
+a promoted model's
 detections used to always come back labeled from the stock 80-class COCO
 vocabulary regardless of which model actually produced the class ids
 (src/utils/affine.py:344's bare ``COCO_CLASSES.get(...)``). These tests
@@ -54,7 +54,7 @@ class TestLabelsFileResolution:
     def test_a_promoted_models_class_0_is_never_read_as_coco_person(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """The exact F-42 symptom: a vehicle detector's class 0 ('car')
+        """The symptom: a vehicle detector's class 0 ('car')
         must not come back as COCO's class 0 ('person'), or any other
         COCO word that happens to share the id."""
         models_dir = _point_at(tmp_path, monkeypatch)
@@ -139,7 +139,7 @@ class TestStockCocoFallback:
     def test_an_unrecognized_model_with_no_labels_never_gets_coco_names(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """The actual F-42 bug: a promoted model with no labels.txt (not
+        """The bug: a promoted model with no labels.txt (not
         yet written, or removed) must render class_{id} placeholders,
         never silently borrow COCO's vocabulary."""
         _point_at(tmp_path, monkeypatch)

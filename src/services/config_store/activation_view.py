@@ -1,5 +1,5 @@
 """Shared ``ActiveConfigResponse`` builder for the pack/profile activation
-routes (W3/W4, any_domain_plan.md §7.2/§7.3) -- one axis-agnostic builder
+routes -- one axis-agnostic builder
 so ``GET /prompt_packs/active`` and ``GET /region_profiles/active`` (and
 each axis's activate/rollback response) serve byte-identical shapes.
 """
@@ -54,7 +54,7 @@ async def build_active_config_response(client: Any, *, axis: Axis) -> ActiveConf
         source = 'off'
     else:
         active = ActiveRef(name=ref[0], revision=ref[1])
-        # Minor m-b fix (W3/W4 round-5 review): `ref[0] in stored_names`
+        # Minor m-b fix: `ref[0] in stored_names`
         # only sees names the store CURRENTLY lists -- a pack/profile
         # deleted while it is (or becomes, via rollback) the activation's
         # target drops out of `stored_names` even though the activated

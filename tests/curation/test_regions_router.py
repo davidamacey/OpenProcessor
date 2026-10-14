@@ -206,7 +206,7 @@ def test_put_regions_new_box_stamps_the_human_verifier_and_provenance(
 def test_put_regions_leaving_a_proposed_box_is_a_partial_review(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
-    """W8.7: a human write that leaves a ``proposed`` box is a partial
+    """A human write that leaves a ``proposed`` box is a partial
     review -- not validated, set_complete untouched -- so the item stays
     in the review queue."""
     resp = app_client.put(
@@ -342,7 +342,7 @@ def test_patch_region_box_text_only_does_not_touch_cluster_fields(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     """``region_text`` moved off ``region_meta`` onto the per-box PATCH
-    route (W8, D decision, 2026-09-26)."""
+    route."""
     fake_os._docs['crop-1'][F.boxes] = [
         {'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'accepted'}
     ]
@@ -368,7 +368,7 @@ def test_patch_region_meta_response_reports_wire_names(
 ) -> None:
     """``updated_fields`` echoes the fixed ``region_*`` wire names, never
     storage keys (docs/design/curation_api_contract.md). ``region_text``
-    is gone from this route (W8, D decision) -- ``region_status`` alone."""
+    is gone from this route -- ``region_status`` alone."""
     resp = app_client.patch(
         '/curation/projects/default/crops/crop-1/region_meta',
         json={'region_status': 'detected', 'region_label_source': 'human'},

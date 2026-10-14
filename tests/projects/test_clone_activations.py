@@ -1,7 +1,7 @@
-"""Glue G1 (projects_plan.md sec 11 W2): CLONEABLE_AXES gains
-``activations`` -- cloning copies the source project's active
-prompt-pack/region-profile config bodies plus the activation itself
-into the target project's own (isolated) configs index."""
+"""CLONEABLE_AXES includes ``activations``: cloning copies the source project's active
+prompt-pack/region-profile config bodies plus the activation itself into the target
+project's own (isolated) configs index, and refuses a profile whose detector is private to
+the source project."""
 
 from __future__ import annotations
 
@@ -11,6 +11,14 @@ from typing import TYPE_CHECKING
 import pytest
 from curation._fake_config_opensearch import FakeConfigOpenSearch
 
+from projects.clone_flow_fakes import (  # noqa: F401 - isolated_state is an autouse fixture
+    Fake,
+    activate_config,
+    clone_into,
+    isolated_state,
+    patch_lifecycle,
+    save,
+)
 from src.config.curation import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
@@ -126,7 +134,7 @@ async def test_clone_activations_copies_active_pack_and_profile() -> None:
 
 @pytest.mark.asyncio
 async def test_clone_activations_copies_the_activated_revision_not_the_current_body() -> None:
-    """Minor 2 (W2 review): a pack saved again after being activated
+    """a pack saved again after being activated
     diverges ``pack:<name>`` (current) from ``pack:<name>@<rev>`` (the
     activated revision's immutable copy) -- the clone must copy the body
     that was actually ACTIVE, not whatever the source has saved since."""
@@ -258,3 +266,73 @@ async def test_clone_activations_refuses_a_target_that_already_has_one_up_front(
         activation = await get_activation(client, tgt_idx, 'prompt_pack')
     assert activation is not None
     assert activation['name'] == 'other'  # unchanged
+
+
+@pytest.mark.asyncio
+async def test_clone_refuses_a_profile_whose_detector_is_private_to_the_source_project(
+    monkeypatch,
+) -> None:
+    import src.services.training.model_classes as mc
+    import src.services.training.promoted_models as pm
+    from src.config import get_curation_config
+    from src.services.config_store.profile_validation import validate_profile
+    from src.services.triton_control import TritonControlService
+
+    owner = {'alpha__wheel_det': 'alpha'}
+    monkeypatch.setattr(mc, 'model_owner_project', owner.get)
+    monkeypatch.setattr(pm, 'model_owner_project', owner.get)
+    monkeypatch.setattr(mc, 'is_model_shared', lambda _n: False)
+    monkeypatch.setattr(pm, 'is_model_shared', lambda _n: False)
+
+    # Triton must report the detector READY: the clone's activation gate also checks
+    # that, and without it the clone would fail on `detector_model_not_found` before the
+    # ownership check (`detector_model_not_shared`) ever runs, passing for the wrong reason.
+    async def _repo():
+        return [{'name': 'alpha__wheel_det', 'state': 'READY', 'version': '1'}]
+
+    monkeypatch.setattr(TritonControlService, 'get_repository_index', lambda _s: _repo())
+
+    client = Fake()
+    source, target = _record('alpha'), _record('beta')
+    body = {'detector_model': 'alpha__wheel_det', 'text_reader': 'none'}
+    await save(client, source, 'region_profile', 'private_rp', body)
+    await activate_config(client, source, 'detection_profile', 'private_rp', 1)
+
+    # What the gate says in the TARGET's own context.
+    with bind_project(target):
+        report = await validate_profile(
+            None,
+            body,
+            for_activation=True,
+            project_slug='beta',
+            get_repository_index=_repo,
+        )
+    codes = sorted(e.code for e in report.errors)
+    print('target-context gate errors:', codes)
+    assert 'detector_model_not_shared' in codes
+
+    patch_lifecycle(monkeypatch, source, target)
+    clone_codes: list[str] = []
+    try:
+        await clone_into(client, source, target)
+        outcome = 'ok'
+    except Exception as exc:
+        outcome = repr(exc)[:200]
+        cause = exc.__cause__
+        detail = getattr(cause, 'detail', cause)
+        if isinstance(detail, dict) and 'report' in detail:
+            clone_codes = sorted(e['code'] for e in detail['report']['errors'])
+    with bind_project(target):
+        act = await get_activation(client, get_curation_config().configs_index, 'detection_profile')
+    print(
+        'clone ->',
+        outcome,
+        clone_codes,
+        '| target detection_profile activation:',
+        act and act.get('name'),
+    )
+    assert not (act and act.get('name') == 'private_rp'), (
+        "clone activated a profile using another project's non-shared detector in the target"
+    )
+    # The clone must fail on the ownership check specifically, not on Triton not being set up.
+    assert clone_codes == ['detector_model_not_shared'], clone_codes

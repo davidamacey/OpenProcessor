@@ -1,6 +1,5 @@
 """``prompt_pack_stamp`` -- the ``"<name>@<revision|sha12>"`` provenance
-string every VLM write site stamps onto ``vlm_prompt_pack`` (any_domain_plan.md
-§3.7/§9 W2, execution_schedule.md §4.4 W2 gap)."""
+string every VLM write site stamps onto ``vlm_prompt_pack``."""
 
 from __future__ import annotations
 

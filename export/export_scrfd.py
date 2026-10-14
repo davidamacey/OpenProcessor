@@ -62,7 +62,6 @@ logger = logging.getLogger(__name__)
 
 INPUT_SIZE = 640
 MAX_BATCH_SIZE = 64  # Must match max profile's max_batch_size
-FP16_MODE = True
 WORKSPACE_GB = 4
 
 # Paths
@@ -620,7 +619,7 @@ dynamic_batching {{
 
 instance_group [
   {{
-    # F-19: count 1 is the default core loadout's baseline (~1.7 GB);
+    # Count 1 is the default core loadout's baseline (~1.7 GB);
     # raise on a card with headroom to spare (see README "GPU sizing").
     count: 1
     kind: KIND_GPU

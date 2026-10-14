@@ -541,7 +541,7 @@
       {/if}
     </div>
     {#if points.length > 0}
-      <!-- F-68: what the colors mean. Color = cluster id; the biggest
+      <!-- What the colors mean. Color = cluster id; the biggest
            clusters in this projection are listed. -->
       <div
         class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-zinc-400"

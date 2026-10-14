@@ -87,8 +87,8 @@ class VlmLabelerCore:
             )
         if max_images_per_call < 1:
             raise ValueError('max_images_per_call must be >= 1')
-        # Hard cap = the endpoint's own per-prompt image limit (W9:
-        # ``labeler_for`` passes the registered endpoint's
+        # Hard cap = the endpoint's own per-prompt image limit
+        # (``labeler_for`` passes the registered endpoint's
         # ``max_images_per_call``); ``None`` keeps the deployment env cap
         # (OP_VLM_MAX_IMAGES_PER_CALL), so even an explicit caller value
         # can't exceed what the serving engine accepts per prompt.
@@ -163,7 +163,7 @@ class VlmLabelerCore:
 
     def _json_mode_kwargs(self) -> dict[str, Any]:
         """``response_format: json_object`` for every payload, unless the
-        endpoint rejects it (W9: some OpenAI-compatible servers 400 on it).
+        endpoint rejects it (some OpenAI-compatible servers 400 on it).
         The one place that key is added."""
         return {'response_format': {'type': 'json_object'}} if self.json_mode else {}
 

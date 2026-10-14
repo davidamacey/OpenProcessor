@@ -1,4 +1,4 @@
-"""W10.2.2: an OpenProcessor export is read back faithfully.
+"""An OpenProcessor export is read back faithfully.
 
 Every export here is produced by the REAL exporters; the reader must take
 class names from ``class_registry.json`` (never from a position in any
@@ -186,7 +186,6 @@ async def test_region_export_backgrounds_strata_and_names(tmp_path: Path) -> Non
     scan = read_op_export(export_dir)
     info = scan.op_export
     assert info is not None
-    assert info.is_region_export
     assert info.box_source == 'region'
     assert scan.class_ids == {'plate': 0}
     assert info.parent_classes == ['car']

@@ -44,8 +44,6 @@ MAX_BATCH_SIZE = 128  # Max batch for TensorRT (faces per image)
 ONNX_PATH = Path('pytorch_models/arcface_w600k_r50.onnx')
 PLAN_PATH = Path('models/arcface_w600k_r50/1/model.plan')
 
-# TensorRT settings
-FP16_MODE = True
 WORKSPACE_GB = 4
 
 
@@ -54,7 +52,7 @@ WORKSPACE_GB = 4
 # =============================================================================
 
 
-# F-18 (fresh-start E2E findings 2026-09-25): Triton's config.pbtxt and the
+# Triton's config.pbtxt and the
 # clients (src/clients/triton_client.py, fast_face_client.py) hardcode this
 # tensor contract. Keep the export the one place that reconciles it against
 # whatever names the buffalo_l checkpoint's raw graph happens to use (its
@@ -422,7 +420,7 @@ dynamic_batching {{
 }}
 
 instance_group [{{
-    # F-19: count 1 is the default core loadout's baseline (~0.7 GB);
+    # Count 1 is the default core loadout's baseline (~0.7 GB);
     # raise on a card with headroom to spare (see README "GPU sizing").
     count: 1
     kind: KIND_GPU

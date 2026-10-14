@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * Which VLM endpoint a test-on-crop call asks (W9 per-run picker in its
+   * Which VLM endpoint a test-on-crop call asks (the per-run picker in its
    * "test" mode: the no-pick option is the active endpoint). Absent when
    * `/methods` serves no VLM entry to pick. The test route is the gate for
    * an external endpoint's acknowledgement; its refusal shows in the

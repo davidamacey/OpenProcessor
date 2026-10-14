@@ -60,8 +60,8 @@ def _region_box(score: float | None) -> list[dict[str, Any]]:
 def _region_docs() -> dict[str, dict[str, Any]]:
     # Production-shaped: only `region_boxes` + the flat `region_max_score`
     # counter every box writer maintains via `boxes_write_fields` -- no
-    # `region_score`/`region_candidate_score` dual-write. The real W8
-    # worker never writes those two scalars (see B1), so a fixture that
+    # `region_score`/`region_candidate_score` dual-write. The real
+    # worker never writes those two scalars, so a fixture that
     # dual-writes them hides a broken sort instead of exercising the
     # production shape.
     scores = {'r01': 0.9, 'r02': 0.5, 'r03': 0.9, 'r04': None, 'r05': 0.7, 'r06': None, 'r07': 0.5}

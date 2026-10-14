@@ -20,10 +20,10 @@
 #   docker compose --profile curation run --rm curation-evaluator \
 #     python -m scripts.curation.bakeoff.bakeoff_runner --job /eval_jobs/x.job.json
 #
-# WAIVER (installer plan §3.4 release checklist, Wave 0): still a single
+# WAIVER (release checklist): still a single
 # `FROM`, not multi-stage. build-essential/cmake/pkg-config stay in the
 # final image to compile wheel deps at `pip install` time, which the
-# other images' builder-stage split avoids. Deferred: Wave 0 scope is the
+# other images' builder-stage split avoids. Deferred: the current scope is the
 # compose/mount split, not image-size hardening, and this image is
 # on-demand only (`docker compose ... run --rm`), never a long-running
 # service. Track the multi-stage conversion as release-checklist debt

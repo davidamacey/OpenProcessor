@@ -1,4 +1,4 @@
-"""W5 (§5.1): ``probe`` is the production call, observed.
+"""``probe`` is the production call, observed.
 
 For every call a test run can make, a canned upstream reply is parsed by
 ``probe`` and by the production labeler method, and the two parses are

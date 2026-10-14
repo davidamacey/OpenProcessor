@@ -1,6 +1,6 @@
 /**
- * Reprocess (§7.12 item 6, W10.13), mounted against the contract shapes:
- * present whenever W10 is served (the backend serves no `reprocess`
+ * Reprocess, mounted against the contract shapes:
+ * present whenever dataset import is served (the backend serves no `reprocess`
  * vocabulary block, so nothing is gated on one); the scope and region-mode
  * ids are the contract's enums; one crop or one image applies from the
  * dialog and hands back the served post-write items; several crops run a

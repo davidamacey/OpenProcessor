@@ -34,7 +34,7 @@ REJECT_REASON_VERIFIER = 'region_visible_elsewhere'
 REJECT_REASON_NO_VERDICT = 'verifier_no_verdict'
 # The geometry gate rejected the box; its own reason follows the prefix.
 REJECT_REASON_SANITY_PREFIX = 'sanity_reject:'
-# A human reviewer rejected the box (W8.7). Every OTHER reason here is a
+# A human reviewer rejected the box. Every OTHER reason here is a
 # machine verdict; this is the one a person wrote by hand.
 REJECT_REASON_HUMAN = 'human'
 

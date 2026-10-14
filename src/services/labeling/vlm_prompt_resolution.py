@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 from src.core.logging import get_logger
 
 
-# N6 fix (W3/W4 round-3 review): a module-level `from
+# a module-level `from
 # src.services.labeling.vlm_prompts import PromptPack, ...` here is a
 # circular import in a cold interpreter -- `vlm_prompts.py` imports this
 # module back (for its re-export block) AFTER defining `PromptPack`/
@@ -104,14 +104,14 @@ def available_prompt_packs(cfg: Any | None = None) -> dict[str, PromptPack]:
     text-free :data:`GENERIC_REGION_PACK`), plus each
     loadable file in ``OP_PROMPT_PACK_PATHS``, the default
     ``OP_PROMPT_PACK_PATH`` pack, and every stored pack in the bound
-    project's config-store snapshot (W2; empty until W3 CRUD exists, or
+    project's config-store snapshot (empty until a pack is stored, or
     on any process whose snapshot hasn't refreshed yet -- callers that
     need the latest cross-process state should
     ``await store.ensure_fresh(...)`` first). Unloadable files are
     skipped with a logged warning (same degrade-not-crash contract as
     :func:`resolve_prompt_pack`). On a name collision: stored packs
     cannot collide by construction (name uniqueness is enforced at
-    save-time, W3); a file/default pack colliding with a built-in name
+    save-time); a file/default pack colliding with a built-in name
     is skipped; otherwise the default pack wins, then the earlier
     ``OP_PROMPT_PACK_PATHS`` entry.
     """
@@ -183,7 +183,7 @@ def active_prompt_pack(cfg: Any | None = None) -> PromptPack:
             return PromptPack.from_dict({**pinned.body, 'name': name})
         except Exception as exc:
             logger.warning('active_prompt_pack_pinned_body_invalid', name=name, error=str(exc))
-            # N5 fix (W3/W4 round-3 review): a decode failure on the
+            # a decode failure on the
             # pinned body must not fail open to the unvalidated current
             # doc below either -- same reasoning as the missing-copy
             # case right after this block.
@@ -221,7 +221,7 @@ def get_prompt_pack(
     the still-active-but-superseded revision, §3.7) -- ``None`` (honest)
     for any other revision this process hasn't cached. ``revision=None``:
     the *pinned* body when ``name`` is the store's active pack (B1
-    round-2 -- every "active pack by name" caller must see
+    -- every "active pack by name" caller must see
     :func:`active_prompt_pack`'s body, never an un-activated current
     doc); any other name resolves to its current doc, unchanged.
     """
@@ -243,7 +243,7 @@ def get_prompt_pack(
         except Exception as exc:
             logger.warning('get_prompt_pack_stored_body_invalid', name=name, error=str(exc))
             return None
-        # N2 fix (W3/W4 round-3 review): tag the EXACT revision this call
+        # tag the EXACT revision this call
         # resolved -- explicitly pinned per-run (`name@rev`), which can
         # be a still-active-but-superseded revision or, per N7, the
         # current/latest one -- onto the returned instance so
@@ -269,24 +269,24 @@ def get_prompt_pack(
 
 def prompt_pack_stamp(pack: PromptPack, *, revision: int | None = None) -> str:
     """``"<name>@<revision|sha12>"`` provenance stamp for ``vlm_prompt_pack``
-    (any_domain_plan.md §3.7/§9 W2) -- every VLM write site stamps this
-    onto the item it wrote so a later audit can tell which pack produced
-    the write.
+    -- every VLM write site stamps this
+       onto the item it wrote so a later audit can tell which pack produced
+       the write.
 
-    ``revision``, when given, is the revision that was ACTUALLY resolved
-    and served for this call (N2 fix, W3/W4 round-3 review): a caller
-    that pinned a per-run ``name@<revision>`` (including a draft revision
-    that was never activated -- exactly §3.7's motivating per-run-pin
-    workflow) must pass that resolved revision through here, or every
-    write it produces gets mis-stamped with whatever the *active*
-    revision happens to be, not the body that actually produced the
-    write. When ``revision`` is omitted (the "default/active pack" call
-    sites, which never resolve a revision independently of the store's
-    own active ref), the stamp falls back to matching ``pack`` against
-    the store's currently *activated* pack, unchanged from before this
-    fix. Otherwise (a file/built-in pack, or a name the store has no
-    revision for) a content hash distinguishes two edits of the same
-    name.
+       ``revision``, when given, is the revision that was ACTUALLY resolved
+       and served for this call: a caller
+       that pinned a per-run ``name@<revision>`` (including a draft revision
+       that was never activated -- exactly §3.7's motivating per-run-pin
+       workflow) must pass that resolved revision through here, or every
+       write it produces gets mis-stamped with whatever the *active*
+       revision happens to be, not the body that actually produced the
+       write. When ``revision`` is omitted (the "default/active pack" call
+       sites, which never resolve a revision independently of the store's
+       own active ref), the stamp falls back to matching ``pack`` against
+       the store's currently *activated* pack, unchanged from before this
+       fix. Otherwise (a file/built-in pack, or a name the store has no
+       revision for) a content hash distinguishes two edits of the same
+       name.
     """
     if revision is None:
         # `get_prompt_pack(name, revision=N)` tags the pack it resolved

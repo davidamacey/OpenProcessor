@@ -60,9 +60,8 @@ VLM_DISMISS_FIELDS: tuple[str, ...] = (
 
 def region_state_fields() -> tuple[str, ...]:
     """Storage names of every region field a human region write can change:
-    the item-level region state plus the box list and its summaries (W8
-    pin 4), so ``POST /crops/{id}/region/undo`` restores the whole prior
-    list. ``region_revision`` and ``region_box_seq`` are never snapshot
+    the item-level region state plus the box list and its summaries, so
+    ``POST /crops/{id}/region/undo`` restores the whole prior list. ``region_revision`` and ``region_box_seq`` are never snapshot
     fields (a restore is itself a write that moves the revision forward,
     and the box-id high-water mark never decreases); per-box embeddings
     live in their own field and are keyed by box id, so a restored box

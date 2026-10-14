@@ -1,7 +1,7 @@
 /**
- * Pure logic for W8 multi-box region edits — box selection/geometry
+ * Pure logic for multi-box region edits — box selection/geometry
  * helpers and the `PUT /crops/{crop_id}/regions` request body builder
- * (backend spec W8.7/W8.8). Kept dependency-
+ * (the backend wire spec). Kept dependency-
  * free (no api.ts, no Svelte) so it can be unit-tested in isolation and
  * mutation-checked without a component mount.
  *
@@ -68,7 +68,7 @@ export function addBox(
   return { boxes: next, selected: next.length - 1 };
 }
 
-/** One element of `PUT /crops/{crop_id}/regions` `boxes` (W8.8). */
+/** One element of `PUT /crops/{crop_id}/regions` `boxes`. */
 export type RegionBoxInput =
   | { box_id: string }
   | { box_id: string; bbox_norm: XYXY }
@@ -84,7 +84,7 @@ function toXyxy(b: BBoxNormLike): XYXY {
  * Builds the `boxes` array for `PUT /crops/{crop_id}/regions` from the
  * editor's current working set against the originally-loaded boxes.
  *
- * Per W8.8: an untouched stored box is sent as `{box_id}` alone (keeps
+ * An untouched stored box is sent as `{box_id}` alone (keeps
  * geometry/state/reason/text verbatim); a moved one as `{box_id,
  * bbox_norm}` (keeps state); a box whose `state` was flipped includes
  * `state`; a brand-new box is `{box_id: null, bbox_norm}` with no `state`
@@ -124,7 +124,7 @@ export function buildRegionsPutBoxes(
 /**
  * Owner decision (binding): Enter confirms only `proposed` boxes.
  * `rejected`/`false_positive` boxes are left exactly as they are — a
- * whole-set confirm never overrides a per-box decision (W8.7).
+ * whole-set confirm never overrides a per-box decision.
  * Returns the edited set with every `proposed` box flipped to `accepted`,
  * for building the confirm-write's boxes; does NOT itself decide whether
  * the result has an accepted box (see `hasAcceptedBox`) — the server is

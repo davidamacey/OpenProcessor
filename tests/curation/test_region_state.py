@@ -108,7 +108,7 @@ def test_no_bare_status_literal_outside_the_enum_module() -> None:
 
 
 def test_box_states_catalog_has_a_tone_per_entry() -> None:
-    """W8.7 pin: each served box_states entry carries a semantic ``tone``
+    """Each served box_states entry carries a semantic ``tone``
     (a meaning, not a CSS color) so Cropwright maps tone to its own
     theme palette instead of keeping its own state->color rules."""
     catalog = region_status_catalog()

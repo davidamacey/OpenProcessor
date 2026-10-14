@@ -19,8 +19,8 @@ import type {
  * The served list a schema row's `choices_from` names, as its uniform
  * `choice` entries. Where each list lives is the spec's own table (§7.3
  * `CHOICE_SOURCES`): the vocabulary's top-level keys, or `ocr.*`.
- * `vlm_catalog` and `secret_refs` live on W9 routes, not the vocabulary:
- * `null`, and the row falls back to a text input (W4-Q8).
+ * `vlm_catalog` and `secret_refs` live on the VLM routes, not the vocabulary:
+ * `null`, and the row falls back to a text input.
  */
 export function choiceList(
   vocab: ConfigVocabulary | null,
@@ -80,7 +80,7 @@ export function selectOptions(
 
 /**
  * Whether a row's `applies_when` holds in the saved revision, read from
- * that revision's served `effective` (W4-Q2: nothing is served for the
+ * that revision's served `effective` (nothing is served for the
  * draft). `null` when the row has no condition, or the condition or the
  * `effective` block isn't known.
  */
@@ -136,7 +136,7 @@ export function valueText(v: unknown): string {
   return String(v);
 }
 
-/** A number input's value: an empty input is `null` (W4-Q9). */
+/** A number input's value: an empty input is `null`. */
 export function numberFromInput(raw: string): number | null {
   if (raw.trim() === '') return null;
   const n = Number(raw);

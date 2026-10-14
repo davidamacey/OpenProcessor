@@ -98,3 +98,28 @@ def test_third_party_patches_are_excluded(
 
 def test_the_real_repo_passes() -> None:
     assert guard.main([]) == 0
+
+
+def test_handlers_registered_on_an_app_factory_variable_are_not_dead(
+    scratch_repo: ScratchRepo, baseline_file: Callable[[str], Path]
+) -> None:
+    scratch_repo.write(
+        'src/main.py',
+        'def create_app():\n    application = object()\n\n'
+        '    @application.middleware("http")\n    async def timing(request, call_next):\n'
+        '        return await call_next(request)\n\n    return application\n\n\ncreate_app()\n',
+    )
+    assert run(scratch_repo, baseline_file('')) == 0
+
+
+def test_a_whitelisted_attribute_name_is_a_use(
+    scratch_repo: ScratchRepo, baseline_file: Callable[[str], Path]
+) -> None:
+    scratch_repo.write(
+        'src/m.py', 'class H:\n    def do_GET(self):\n        return 1\n\n\nprint(H)\n'
+    )
+    scratch_repo.write(
+        'scripts/codegen/vulture_whitelist.py',
+        'from types import SimpleNamespace\n\n_ = SimpleNamespace()\n_.do_GET  # http.server dispatch\n',
+    )
+    assert run(scratch_repo, baseline_file('')) == 0

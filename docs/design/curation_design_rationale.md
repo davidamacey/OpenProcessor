@@ -391,8 +391,7 @@ proprietary driver and is not shipped: the request has no field for it.
 
 **Scope.** The harness is a measurement tool. Scripts that only produce one
 paper's tables and figures (threshold sweeps, number generators, figure
-prototypes) are outside it and not shipped; the reusable lean-angle core lives
-in `src/services/detection/region_lean.py`.
+prototypes) are outside it and not shipped.
 `tests/curation/test_bakeoff_harness.py` guards the harness core against
 domain vocabulary creeping back in.
 

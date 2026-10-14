@@ -187,7 +187,7 @@ src/utils/
 
 ```python
 from fastapi import FastAPI, File, UploadFile
-from src.utils import decode_image, validate_image
+from src.utils.image_processing import decode_image, validate_image
 from src.utils.pytorch_utils import load_yolo_model, format_detections
 
 app = FastAPI()

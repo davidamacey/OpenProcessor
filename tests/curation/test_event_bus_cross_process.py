@@ -30,7 +30,6 @@ def _make_hub(log_path: Path, max_bytes: int | None = None) -> EventHub:
     hub = EventHub.__new__(EventHub)
     hub._subscribers = set()
     hub._lock = asyncio.Lock()
-    hub._published = 0
     hub._published_by_project = {}
     hub._dropped = 0
     hub._bus = 'file'

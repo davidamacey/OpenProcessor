@@ -43,7 +43,6 @@ class CoreMLDetector:
     ) -> None:
         import coremltools as ct
 
-        self._ct = ct
         units = ct.ComputeUnit[compute_units]
         self._model = ct.models.MLModel(weights, compute_units=units)
         spec = self._model.get_spec()

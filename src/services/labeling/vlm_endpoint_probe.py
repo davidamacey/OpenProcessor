@@ -1,4 +1,4 @@
-"""The VLM endpoint probe (W9.4): does this endpoint list its model, see
+"""The VLM endpoint probe: does this endpoint list its model, see
 images, honour ``response_format``, and accept its own image cap?
 
 Never run implicitly (only ``?probe=true`` and ``POST .../probe`` call it).

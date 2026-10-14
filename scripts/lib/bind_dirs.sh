@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# Bind-mount source directories (F-29/F-71 follow-up)
+# Bind-mount source directories
 # =============================================================================
 # Docker creates a missing bind-mount source root-owned on the first `up`,
 # after which the host user cannot write into it. `openprocessor vlm key set`

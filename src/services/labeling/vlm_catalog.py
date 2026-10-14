@@ -1,4 +1,4 @@
-"""The local VLM catalog: what the in-compose vLLM *can serve* (W9.7).
+"""The local VLM catalog: what the in-compose vLLM *can serve*.
 
 One file, two readers. ``examples/vlm/catalog.tsv`` is read by the
 installer/CLI's bash (``scripts/lib/vlm_catalog.sh``, which PICKS) and by
@@ -114,7 +114,7 @@ def _entry(row: dict[str, str]) -> CatalogEntry:
 
 
 @functools.lru_cache(maxsize=8)
-def _load(path_str: str, mtime_ns: int) -> tuple[CatalogEntry, ...]:  # noqa: ARG001 - cache key
+def _load(path_str: str, _mtime_ns: int) -> tuple[CatalogEntry, ...]:
     lines = [
         line
         for line in Path(path_str).read_text(encoding='utf-8').splitlines()

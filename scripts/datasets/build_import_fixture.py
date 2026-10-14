@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the dataset-import test fixture from a fetched COCO subset (W10.15).
+"""Build the dataset-import test fixture from a fetched COCO subset.
 
 Input: the directory ``fetch_coco_subset.py`` writes (``coco_gt.json``,
 ``images/``, ``SELECTION.json``, ``ATTRIBUTION.csv``), e.g.::

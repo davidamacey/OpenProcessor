@@ -200,7 +200,7 @@ def ensure_env_region_profile() -> None:
 
 def _stored_profiles() -> dict[str, DetectionProfile]:
     """The bound project's stored region profiles from the process-local
-    config-store snapshot (W2; empty until W4 CRUD exists). No I/O --
+    config-store snapshot (empty until profile CRUD stores any). No I/O --
     reads whatever the last refresh cached. Malformed stored bodies are
     skipped with a logged warning."""
     try:
@@ -220,7 +220,7 @@ def _stored_profiles() -> dict[str, DetectionProfile]:
 def get_profiles() -> dict[str, DetectionProfile]:
     """Every registered profile, keyed by ``name`` -- env/file-registered
     plus every stored profile in the bound project's config-store
-    snapshot (W2)."""
+    snapshot."""
     ensure_env_region_profile()
     return {**_REGISTRY, **_stored_profiles()}
 
@@ -240,7 +240,7 @@ def get_default_profile_name() -> str | None:
 def get_active_region_profile() -> DetectionProfile | None:
     """The deployment's active region profile.
 
-    The config store's activation (§3.6/§4.4, W2) wins when set:
+    The config store's activation wins when set:
     ``'off'`` (explicit deactivation) returns ``None`` even if an
     env-registered default exists; a ``(name, revision)`` activation
     resolves against :func:`get_profiles` (env-registered or stored).
@@ -260,7 +260,7 @@ def get_active_region_profile() -> DetectionProfile | None:
         return None
     if ref is not None:
         name, revision = ref
-        # B1 fix (W3/W4 review 2026-09-28): serve the revision pinned at
+        # serve the revision pinned at
         # activation time, not whatever `<name>`'s current doc says now --
         # a PUT after activation must not go live until a separate
         # activate call re-runs the for-activation checks.
@@ -277,7 +277,7 @@ def get_active_region_profile() -> DetectionProfile | None:
                 logger.warning(
                     'active_region_profile_pinned_body_invalid', name=name, error=str(exc)
                 )
-                # N5 fix (W3/W4 round-3 review): a decode failure on the
+                # a decode failure on the
                 # pinned body must not fail open to the current
                 # (possibly-draft) doc below either.
                 return _REGISTRY.get(_DEFAULT_NAME) if _DEFAULT_NAME is not None else None

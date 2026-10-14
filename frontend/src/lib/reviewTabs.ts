@@ -64,7 +64,7 @@ export const CORE_REVIEW_TABS: ReviewTabDef[] = [
     urlId: 'classifier_blind_spots',
     endpointId: 'classifier_blind_spots',
   },
-  // New-class-proposal queue (2026-09-24 logic-moves W5) — crops the VLM
+  // New-class-proposal queue — crops the VLM
   // flagged as needing a class the registry doesn't have yet
   // (`needs_new_class`/`class_source: 'vlm_new_class_pending'`). A real
   // top-level tab, not a preset: it's a distinct triage workflow (confirm
@@ -77,7 +77,7 @@ export const CORE_REVIEW_TABS: ReviewTabDef[] = [
     urlId: 'new_class_proposals',
     endpointId: 'new_class_proposals',
   },
-  // W10: items whose labels came from a labeled-dataset import. Not in the
+  // items whose labels came from a labeled-dataset import. Not in the
   // tab bar unless the backend serves an `imported` entry in
   // `GET /review/tabs` (see `visibleReviewTabs`): absent, never disabled.
   {
@@ -220,7 +220,7 @@ export function reviewDeepLink(params: Pick<URLSearchParams, 'get' | 'getAll'>):
   tab: ReviewTab;
   cropId: string | null;
   preset: ReviewPresetId | null;
-  /** `?import_id=` (a W10 import's own id), or null. Whether it is sent
+  /** `?import_id=` (a dataset import's own id), or null. Whether it is sent
    *  is the served `filters` list's call, not this function's. */
   importId: string | null;
   /** `?combine_conflict=true`. */

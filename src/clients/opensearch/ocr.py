@@ -175,61 +175,6 @@ class OcrMixin:
             logger.error(f'OCR text search failed: {e}')
             return []
 
-    async def get_ocr_for_image(self, image_id: str) -> list[dict[str, Any]]:
-        """
-        Get all OCR results for a specific image.
-
-        Args:
-            image_id: Image identifier
-
-        Returns:
-            List of OCR results for the image
-        """
-        try:
-            response = await self.client.search(
-                index=IndexName.OCR.value,
-                body={
-                    'query': {'term': {'image_id': image_id}},
-                    'size': 1000,  # Get all text from image
-                    'sort': [{'det_score': 'desc'}],
-                },
-            )
-
-            return [
-                {
-                    'text': hit['_source'].get('text'),
-                    'box': hit['_source'].get('box'),
-                    'box_normalized': hit['_source'].get('box_normalized'),
-                    'det_score': hit['_source'].get('det_score'),
-                    'rec_score': hit['_source'].get('rec_score'),
-                }
-                for hit in response['hits']['hits']
-            ]
-
-        except Exception as e:
-            logger.error(f'Failed to get OCR for image {image_id}: {e}')
-            return []
-
-    async def delete_ocr_for_image(self, image_id: str) -> int:
-        """
-        Delete all OCR results for a specific image.
-
-        Args:
-            image_id: Image identifier
-
-        Returns:
-            Number of deleted documents
-        """
-        try:
-            response = await self.client.delete_by_query(
-                index=IndexName.OCR.value,
-                body={'query': {'term': {'image_id': image_id}}},
-            )
-            return response.get('deleted', 0)
-        except Exception as e:
-            logger.error(f'Failed to delete OCR for image {image_id}: {e}')
-            return 0
-
     async def search_ocr(
         self, query_text: str, top_k: int = 10, min_score: float = 0.3
     ) -> list[dict[str, Any]]:

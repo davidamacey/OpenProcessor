@@ -1,9 +1,9 @@
-"""W8.4: select up to N region candidates per item.
+"""Select up to N region candidates per item.
 
 One function, used by every candidate-producing leg (detector, segmenter,
 text-hint re-pass) and by ``POST /region_profiles/test`` (the ``selected``
 / ``drop_reason`` flags): :func:`select_region_candidates`. Regions are
-always a list per item (W8.0) -- N=1 is a list of one, not a separate
+always a list per item -- N=1 is a list of one, not a separate
 code path.
 
 Pure, no I/O (stdlib + the existing :class:`RegionCandidate` dataclass

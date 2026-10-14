@@ -1,5 +1,5 @@
-"""The ``vlm_activation`` axis of project ``clone_settings`` (W9,
-projects_plan.md §11 W9: ``CLONEABLE_AXES += {'vlm_activation'}``).
+"""The ``vlm_activation`` axis of project ``clone_settings``
+(``CLONEABLE_AXES`` includes ``'vlm_activation'``).
 
 Copies which VLM endpoint the source project runs. The endpoint registry is
 deployment-wide, so nothing else moves; what must NOT move is the

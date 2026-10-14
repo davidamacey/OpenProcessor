@@ -160,7 +160,7 @@ def test_undo_status_write(
 def test_undo_restores_the_whole_box_list_after_a_multi_box_edit(
     client: TestClient, fake_os: QueryFakeOpenSearch
 ) -> None:
-    """W8 pin 4: one PUT that moves a box, adds one and deletes another is
+    """One PUT that moves a box, adds one and deletes another is
     one undo step that restores the whole prior list."""
     client.put(
         '/curation/projects/default/crops/c1/regions',

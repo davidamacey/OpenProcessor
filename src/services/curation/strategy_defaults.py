@@ -108,11 +108,10 @@ def _advertised_ids_for_axis(axis: str) -> frozenset[str]:
 # has exactly one kind), so PUT /curation/settings rejects them rather than
 # silently accepting a value nothing will ever honor.
 #
-# 'detection_profile' joined this set in W2 (any_domain_plan.md §7.6 item
-# 7, §9 W2): the detection worker now hot-reloads its active profile via
-# the config store's quiesce-and-swap (§4.5) instead of only reading
+# 'detection_profile' is in this set because the detection worker hot-reloads its active
+# profile via the config store's quiesce-and-swap instead of only reading
 # OP_REGION_PROFILE at startup, so a PUT here actually changes what runs.
-# 'vlm' (W9) is the third config-store axis: an endpoint activation per
+# 'vlm' is the third config-store axis: an endpoint activation per
 # project (``src.services.config_store.vlm_activation``).
 # 'prompt_pack', 'detection_profile' and 'vlm' are special-cased in
 # ``src.routers.curation.settings`` -- their PUT delegates to the config

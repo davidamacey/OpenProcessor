@@ -244,7 +244,7 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/regions/batch_box_state'): {
             'json': {'targets': [{'crop_id': item, 'box_id': 'b1'}], 'state': 'accepted'}
         },
-        # W10: unified reprocess. The batch form names one item; the
+        # unified reprocess. The batch form names one item; the
         # single forms take their target from the path.
         ('POST', '/reprocess'): {
             'json': {'targets': {'crop_ids': [proposal]}, 'scopes': ['region'], 'dry_run': False}
@@ -258,7 +258,7 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         },
         ('POST', '/scores/compute'): {'json': {}},
         ('POST', '/select/diverse'): {'json': {'k': 1}},
-        # minor 7 (W2 review): a config-store axis in the body, not just
+        # minor 7: a config-store axis in the body, not just
         # an empty `defaults`, so the sweep actually exercises the
         # config-store write path (`activate` + `bump_config_revision`'s
         # painless script) instead of only the generic settings-doc merge.
@@ -299,7 +299,7 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/archive'): {'json': {'expected_revision': 1}},
         ('POST', '/unarchive'): {'json': {'expected_revision': 1}},
         ('POST', '/clone_settings'): {'json': {'from': slug, 'expected_revision': 1}},
-        # W3: prompt-pack CRUD. '{name}' (route_params) is a stored pack
+        # prompt-pack CRUD. '{name}' (route_params) is a stored pack
         # PREPARE resets to revision 1 immediately before each of these
         # (see the _prompt_pack_* PREPARE hooks) -- independent of
         # whatever an earlier route in the same pass left behind.
@@ -319,7 +319,7 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/prompt_packs/{name}/activate'): {
             'json': {'revision': None, 'expected_active': None, 'force': False}
         },
-        # W4: region-profile CRUD. Same PREPARE-resets-to-a-known-revision
+        # region-profile CRUD. Same PREPARE-resets-to-a-known-revision
         # pattern as the pack routes above.
         ('POST', '/region_profiles'): {
             'json': {'name': f'{slug}-newprofile', 'body': _region_profile_body()}
@@ -572,7 +572,7 @@ def _promoted_model(env: LeakEnv, slug: str) -> None:
 
 def _region_box_seeded(env: LeakEnv, slug: str) -> None:
     """A box ``b1`` on the item, so the per-box PATCH/batch_box_state
-    routes (W8a) have a real box_id to act on. Writes directly into the
+    routes have a real box_id to act on. Writes directly into the
     fake transport's store (not through the app's own PUT
     /crops/{crop_id}/regions): another sweep call earlier in the same
     run may already have bumped this item's region_box_seq, which would
@@ -1233,7 +1233,7 @@ class _FakeTransport:
             if method == 'DELETE':
                 self._write(indices[0], doc_id, None, merge=False)
             elif action == '_update':
-                # minor 7 (W2 review) / W2b M6: `bump_config_revision`'s
+                # `bump_config_revision`'s
                 # painless script + upsert body needs real semantics here,
                 # not the generic doc-merge below -- mirrors
                 # tests/curation/_fake_config_opensearch.py's
@@ -1513,7 +1513,7 @@ def leak_env(
     # The seed-from-detector route reads the detector's label list.
     (tmp_path / 'detector_labels.txt').write_text('seed probe\n')
     monkeypatch.setenv('OP_INGEST_PRIMARY_LABELS_PATH', str(tmp_path / 'detector_labels.txt'))
-    # W4: so a segmenter-only region-profile body (_region_profile_body())
+    # so a segmenter-only region-profile body (_region_profile_body())
     # never trips no_candidate_source in the sweep -- the segmenter health
     # probe itself still fails closed (network is disabled here), which is
     # exactly the segmenter_unreachable warning/activation-error path
@@ -1754,7 +1754,7 @@ def _is_streaming(app: Any, path: str) -> bool:
 
 def _markers(slug: str) -> tuple[str, ...]:
     return (
-        # M-1 fix (W3/W4 review 2026-09-28): `_stored_prompt_pack`/
+        # `_stored_prompt_pack`/
         # `_stored_region_profile` already name every seeded pack/profile
         # `f'{slug}-model'` -- but nothing scanned responses for that
         # pattern, so a config-store *content* leak (another project's
@@ -2143,8 +2143,7 @@ def test_a_planted_unkeyed_cache_behind_a_shared_helper_is_caught(
 
 
 # --------------------------------------------------------------------------
-# W2b review (w2b_review_2026-09-27.md): B1/B2/B3 + isolation gaps, through
-# the real leak_env guard.
+# Config-store isolation gaps, through the real leak_env guard.
 # --------------------------------------------------------------------------
 
 
@@ -2371,7 +2370,7 @@ def test_region_actions_available_with_env_registered_profile(
 def test_from_project_clone_reads_source_index_only_under_the_real_guard(
     leak_env: LeakEnv,
 ) -> None:
-    """Isolation gap (b) (W3/W4 review 2026-09-28): the leak sweep's fixed
+    """Isolation gap (b): the leak sweep's fixed
     route table never sends `from_project`, so a `read_only=True`
     regression on either clone route's source bind was invisible to it
     (M1b in the review: dropping `read_only=True` left the whole 151-test

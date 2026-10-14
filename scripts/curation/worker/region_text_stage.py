@@ -1,6 +1,6 @@
 """Region-text OCR reader + item-text reader for the curation detection worker.
 
-See ``scripts/curation/region_worker_main.py`` for the entry point.
+See ``scripts/curation/worker/__main__.py`` for the entry point.
 
 Two OCR jobs ride on the region cascade:
 
@@ -242,7 +242,7 @@ def resolve_rejected_box_text(
     profile: DetectionProfile,
     rules: RegionTextRules | None = None,
 ) -> RegionBox:
-    """W8 M6 fix: a non-accepted box must never carry a raw, unvalidated
+    """A non-accepted box must never carry a raw, unvalidated
     VLM text reply the way an accepted box's ``apply_region_text`` output
     is validated.
 
@@ -276,7 +276,7 @@ async def accept_without_vlm(
 ) -> None:
     """No VLM configured: write every candidate region unverified.
 
-    W8: writes the box-list shape. With no VLM to adjudicate, each candidate
+    writes the box-list shape. With no VLM to adjudicate, each candidate
     (a re-verified stored ``proposed`` box keeps its id, so none stays
     ``proposed`` forever) is accepted if it passes the same geometry gate the
     verified path uses, else rejected with the sanity reason. The item lands

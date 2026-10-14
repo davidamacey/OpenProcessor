@@ -1,4 +1,4 @@
-"""Merge machine proposals into an image's existing items (W10.6).
+"""Merge machine proposals into an image's existing items.
 
 One pure function shared by the two callers that run a detector over an
 image that may already hold labeled items:

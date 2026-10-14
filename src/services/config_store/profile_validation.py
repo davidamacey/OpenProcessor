@@ -1,4 +1,4 @@
-"""Region-profile validation (W4, any_domain_plan.md §4.3).
+"""Region-profile validation.
 
 One function, :func:`validate_profile`, runs on
 ``POST /region_profiles/validate``, create, clone, ``PUT``,
@@ -36,7 +36,7 @@ PROFILE_FIELD_RANGES: dict[str, tuple[float, float]] = {
     'batch_limit': (1, 256),
     'input_size': (32, 2048),
     'max_regions_per_item': (1, 64),
-    # W8.4: (0, 1] -- exclusive 0, checked separately below.
+    # (0, 1] -- exclusive 0, checked separately below.
     'region_nms_iou': (0.0, 1.0),
     'gate_hit_window': (1, 1000),
     'gate_hit_miss_threshold': (1, 1000),

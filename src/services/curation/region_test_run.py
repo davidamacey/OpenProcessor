@@ -1,5 +1,5 @@
 """Run a region profile's legs over one stored crop and preview the item
-(W5, ``POST /region_profiles/test``).
+(``POST /region_profiles/test``).
 
 The legs run as the worker runs them: the detector leg when the profile
 names a detector model, the segmenter leg when there is a prompt and the

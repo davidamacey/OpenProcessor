@@ -13,16 +13,10 @@ from fastapi import Depends
 
 from src.clients.opensearch.client import OpenSearchClient
 from src.clients.triton_pool import TritonClientManager
-from src.config.settings import Settings, get_settings
+from src.config.settings import get_settings
 
 
 logger = logging.getLogger(__name__)
-
-
-# =============================================================================
-# Type Aliases for Dependency Injection
-# =============================================================================
-SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
 # =============================================================================
@@ -38,7 +32,6 @@ class AppState:
 
     def __init__(self):
         self.pytorch_models: dict[str, Any] = {}
-        self._triton_sync_client = None
         self._triton_async_client = None
         self._opensearch_client = None
 
@@ -128,9 +121,8 @@ async def bootstrap_opensearch_indexes() -> 'asyncio.Task[None] | None':
 
     Wrapped so a missing/not-yet-up OpenSearch instance doesn't block
     startup -- the curation router retries its own create on the first
-    /curation/* request. F-25 (fresh-start E2E findings 2026-09-25):
-    nothing else creates the core visual_search_* indexes, so a fresh
-    install's first /ingest previously auto-created them with a dynamic
+    /curation/* request. Nothing else creates the core visual_search_*
+    indexes, so a fresh install's first /ingest previously auto-created them with a dynamic
     (non-knn_vector) mapping, silently breaking every k-NN search
     forever after; create_all_indexes is idempotent, so calling it here
     on every boot is safe (see OpenSearchClient._search_index /

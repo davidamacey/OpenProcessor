@@ -33,14 +33,6 @@ INDEX_BODIES: dict[IndexRole, dict[str, Any]] = {
 }
 
 
-async def get_curation_index_settings() -> dict[str, dict[str, Any]]:
-    """Return the schema dict keyed by index name (string).
-
-    Used by tests + introspection routes.
-    """
-    return {index_name(config, role): body for role, body in INDEX_BODIES.items()}
-
-
 # =============================================================================
 # Index lifecycle
 # =============================================================================
@@ -100,7 +92,7 @@ async def create_curation_indexes(
     active_cfg = cfg or config
     # A project may fold several roles onto one index name (shard folding,
     # owner D4 -- SETTINGS / UMAP_VIZ_STATE onto CONFIGS for a project
-    # created after W2). Merge their mapping properties into one body per
+    # created with the config store). Merge their mapping properties into one body per
     # distinct name rather than creating the name once with only
     # whichever role's body happened to be seen first.
     bodies_by_name: dict[str, dict[str, Any]] = {}

@@ -1,4 +1,4 @@
-"""The ``region`` scope (W10.13): regenerate an item's machine region boxes.
+"""The ``region`` scope: regenerate an item's machine region boxes.
 
 ``redetect`` (default) removes every unlocked machine box, keeps locked ones
 (human-owned or imported) and queues the item for the detection worker

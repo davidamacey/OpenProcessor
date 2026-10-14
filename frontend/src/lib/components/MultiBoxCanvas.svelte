@@ -4,15 +4,15 @@
    * w8-multibox-frontend-plan-2026-09-26.md). Operates in the crop-local
    * (parent) frame. Renders
    * every box in `boxes`, numbered by its current list position (spec:
-   * "not a stable id — use box_id", W8.7). Click selects a box; dragging
+   * "not a stable id — use box_id"). Click selects a box; dragging
    * empty canvas draws a new one; Backspace/Delete removes the selected
    * box; Tab cycles the selection; arrow keys nudge the selected box.
    *
    * No client-GUESSED box cap (owner decision) — `boxes` is unbounded by
    * default. The only real limit is the served
-   * `region_profile.limits.max_boxes_per_write` (`maxBoxes` prop, W8.8);
+   * `region_profile.limits.max_boxes_per_write` (`maxBoxes` prop);
    * when set, drag-create is disabled once `boxes.length >= maxBoxes`
-   * (never on a pre-W8.8 backend, which passes `null`). `onadd` /
+   * (never on a backend that serves no limit, which passes `null`). `onadd` /
    * `ondelete` / `onmove` / `onselect` let the parent own the actual
    * `EditableBox[]` state (via `annotations/multiBox.ts`'s pure helpers)
    * so this component stays presentation-only.

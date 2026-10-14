@@ -1,5 +1,5 @@
 /**
- * W7/W8 (docs/design/logic-moves-adoption-plan-2026-09-24.md) — item
+ * Item
  * detail: label history, source image + siblings, and the
  * include_excluded / item_text crop-filter params.
  */

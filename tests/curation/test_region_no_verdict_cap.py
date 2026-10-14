@@ -198,7 +198,7 @@ class TestCombinedNoVerdictIsCapped:
         def requeue(n: int) -> None:
             if n == 1:
                 fake_os.live['c1'][F.status] = 'pending_detection'
-                # W8c: a real requeue-to-scratch (region_requeue.apply_requeue
+                # a real requeue-to-scratch (region_requeue.apply_requeue
                 # with clear_detection=True) drops this pass's machine box
                 # so the next fresh-detection pass merges onto an empty
                 # list -- a bare status flip that left the accepted box in
@@ -425,7 +425,7 @@ class TestRejectionReasonVocabulary:
             )
         ]
         asyncio.run(accept_without_vlm(t, ocr=MagicMock(), profile=_profile()))
-        # W8 B1/M1: the box list is stashed on `t.pending_boxes` (the
+        # The box list is stashed on `t.pending_boxes` (the
         # writer merges + finalizes ids against the live doc at write
         # time), not computed straight onto `t.update_doc` any more.
         assert t.pending_boxes is not None

@@ -1,4 +1,4 @@
-"""Tests for the F-18 IO-rename fix in ``export/export_face_recognition.py``.
+"""Tests for the IO-rename fix in ``export/export_face_recognition.py``.
 
 The buffalo_l ``arcface_w600k_r50.onnx`` checkpoint's raw graph keeps
 whatever tensor names its PyTorch tracer happened to emit ('input.1' /

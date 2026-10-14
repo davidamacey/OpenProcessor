@@ -1,5 +1,5 @@
 /**
- * `/models` VLM rows (W9): one `kind: 'vlm'` row per registered endpoint,
+ * `/models` VLM rows: one `kind: 'vlm'` row per registered endpoint,
  * the row name is the endpoint name, the served resolved model, the status
  * through the served registry labels (raw when unlabeled), the served
  * "active" chip, no Unload (`unloadable: false`), and a link to Settings →

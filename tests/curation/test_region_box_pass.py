@@ -1,4 +1,4 @@
-"""W5: the ONE function that turns a detection pass's boxes into the stored
+"""The ONE function that turns a detection pass's boxes into the stored
 box-list write, shared by the worker's bulk writer and the test-on-crop
 preview, so a preview is the write the worker would land."""
 

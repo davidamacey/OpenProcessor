@@ -1,11 +1,9 @@
 """
-Face Identity Service for 1:N face identification.
+Face Identity Service: person management over stored faces.
 
-Provides face identity management and search capabilities:
-- Face ingestion with automatic embedding extraction
-- 1:N face identification against database
+Provides:
 - Person management (grouping faces by identity)
-- Face-to-person assignment
+- Face records and the faces of a person
 
 Uses OpenSearch 'visual_search_faces' index for storage and k-NN search.
 

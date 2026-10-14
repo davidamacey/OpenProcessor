@@ -32,12 +32,10 @@ if TYPE_CHECKING:
 from fastapi import HTTPException
 
 from src.core.logging import get_logger
-from src.routers.curation._common import (
+from src.routers.curation._common import OpenSearchDep, _ensure_indexes, router
+from src.routers.curation._common_models import (
     CurationSettingsResponse,
     CurationSettingsUpdateRequest,
-    OpenSearchDep,
-    _ensure_indexes,
-    router,
 )
 from src.services.resource_links import schedule_reachability_refresh
 
@@ -110,8 +108,8 @@ async def _validate_defaults(defaults: dict[str, str | None], opensearch: Any) -
         raise HTTPException(status_code=422, detail='; '.join(errors))
 
 
-# Axes W2 moved off the generic settings-doc ``defaults`` map onto the
-# config store's activation docs (any_domain_plan.md §3.7, §9 W2): a PUT
+# Axes moved off the generic settings-doc ``defaults`` map onto the
+# config store's activation docs: a PUT
 # here delegates to ``store.activate_axis`` instead of writing into
 # ``defaults``, and a GET merges the store's active name back in so the
 # response shape is unchanged for callers. See ``_config_store_axes``.
@@ -137,7 +135,7 @@ async def _config_store_axis_defaults(opensearch: Any) -> dict[str, str | None]:
     await store.refresh(opensearch)
     snapshot = store.current
     result: dict[str, str | None] = {}
-    # W9: the third config-store axis is the project's VLM endpoint.
+    # the third config-store axis is the project's VLM endpoint.
     await refresh_vlm_state(opensearch)
     if (vlm_default := active_default_id()) is not None:
         result['vlm'] = vlm_default
@@ -147,7 +145,7 @@ async def _config_store_axis_defaults(opensearch: Any) -> dict[str, str | None]:
     ):
         if ref is None:
             continue
-        # Minor 4 (W2 review): 'off' (an explicit deactivation) is a real,
+        # 'off' (an explicit deactivation) is a real,
         # distinct state from "never activated" (the store's own
         # docstring, src/services/config_store/store.py's `AxisRef`) --
         # report it, don't fold it into the same absence as `None`.
@@ -164,7 +162,7 @@ async def get_curation_settings_route(opensearch: OpenSearchDep) -> CurationSett
     ``defaults: {}``, ``updated_at: null``, ``updated_by: null``.
 
     ``prompt_pack`` / ``detection_profile`` are reported from the config
-    store's activation (W2), not this settings document -- see
+    store's activation, not this settings document -- see
     :func:`_config_store_axis_defaults`.
     """
     from src.clients.curation_opensearch.settings_doc import get_curation_settings
@@ -185,7 +183,7 @@ async def update_curation_settings_route(
     """Partially update the shared curation-strategy defaults.
 
     ``prompt_pack`` / ``detection_profile`` in ``body.defaults`` delegate
-    to the config store's activation (W2, any_domain_plan.md §3.7): the
+    to the config store's activation: the
     id must be currently advertised for the axis (or ``off`` for
     ``detection_profile``), else ``422``; ``null`` deactivates the axis
     through the store rather than clearing a settings-doc override. Every
@@ -210,14 +208,14 @@ async def update_curation_settings_route(
     }
 
     await _validate_defaults(settings_doc_defaults, opensearch)
-    # m1 fix (W3/W4 round-4 review): resolve + gate EVERY config-store axis
+    # resolve + gate EVERY config-store axis
     # before writing ANY of them. The old loop activated axis 1, then
     # 422'd resolving axis 2, leaving axis 1's activation committed and
     # the settings-doc write skipped -- a half-applied PUT. Resolve is
     # read-only (raises on any validation/gate failure); apply only runs
     # once every axis has cleared resolve+gate.
     #
-    # R5-1 fix (W3/W4 round-5 review): resolving axis 1's TARGET, then
+    # resolving axis 1's TARGET, then
     # immediately gating axis 1 against axis 2's OLD stored value, then
     # resolving+gating axis 2 the same way, let a combined PUT pair a
     # multi-box-stripped pack with a multi-region profile in one request
@@ -232,10 +230,10 @@ async def update_curation_settings_route(
         for axis, value in config_store_defaults.items()
     }
     combined = len(resolved) > 1
-    # W9: the VLM is the third side of the pack <-> profile <-> VLM triple.
+    # the VLM is the third side of the pack <-> profile <-> VLM triple.
     # It is resolved and gated against the PENDING pack/profile of this same
     # request, and the pack/profile gates below pair with the PENDING VLM
-    # (never each against the other sides' stored values: R5-1).
+    # (never each against the other sides' stored values).
     vlm_plan = None
     if 'vlm' in body.defaults:
         vlm_plan = await _plan_vlm(body.defaults['vlm'], resolved, opensearch)
@@ -284,7 +282,7 @@ async def _resolve_config_store_axis(
     """``PUT /settings {"defaults": {axis: value}}`` for a config-store
     axis: resolve ``value`` (or ``None``/``'off'``) against the live
     registry. Read-only -- writes nothing, and does NOT run the
-    activation gate (R5-1 fix, W3/W4 round-5 review: gating happens
+    activation gate (gating happens
     after every axis in the request has been resolved, so a combined
     PUT can gate each axis against the OTHER axis's PENDING target
     instead of its stored one -- see the caller,
@@ -298,7 +296,7 @@ async def _resolve_config_store_axis(
     current_ref = (
         store.current.active_pack if axis == 'prompt_pack' else store.current.active_profile
     )
-    # R4-2 fix (W3/W4 round-4 review): the same `expected_active` shape
+    # the same `expected_active` shape
     # bug N3a fixed in clone.py. `index.activate`'s OCC compares against
     # the REAL stored activation doc -- `None` only when no doc has ever
     # been written for this axis. Once any doc exists, an explicit
@@ -352,7 +350,7 @@ async def _resolve_config_store_axis(
 
 async def _pending_sibling_for_gate(other_axis: str, other: _AxisActivationPlan) -> Any:
     """The value to pass as ``run_activation_gate``'s ``pending_sibling``
-    for a combined two-axis ``PUT /settings`` (R5-1 fix): the OTHER
+    for a combined two-axis ``PUT /settings``: the OTHER
     axis's PENDING target from THIS SAME request, resolved to the same
     shape the gate itself validates against for that axis (a
     ``DetectionProfile`` for a pending profile target, a ``PromptPack``
@@ -458,8 +456,8 @@ async def _run_activation_gate(
     pending_sibling: Any = _NO_PENDING_OVERRIDE,
     pending_vlm: Any = _NO_PENDING_OVERRIDE,
 ) -> None:
-    """N1 fix (W3/W4 round-3 review), now routed through the single
-    shared gate (round-4 R4-1): the Cropwright default-pack dropdown
+    """N1 fix, now routed through the single
+    shared gate: the Cropwright default-pack dropdown
     calls ``PUT /settings``, not ``POST .../activate`` -- this bridge must
     run the exact same never-bypassable ``for_activation`` validation the
     dedicated activate routes (and rollback) run, or a multi-box-stripped
@@ -467,7 +465,7 @@ async def _run_activation_gate(
     goes live silently through this route instead. This bridge passes no
     ``force``, so it never bypasses -- any blocking error 422s.
 
-    ``pending_sibling`` (R5-1 fix): forwarded to
+    ``pending_sibling``: forwarded to
     :func:`~src.services.config_store.activation_gate.run_activation_gate`
     only when explicitly supplied (a combined two-axis PUT) -- see
     :func:`_pending_sibling_for_gate`. Left as the default sentinel for a

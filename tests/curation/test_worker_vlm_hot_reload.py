@@ -1,4 +1,4 @@
-"""The detection worker follows a project's VLM at quiesce points (W9.3).
+"""The detection worker follows a project's VLM at quiesce points.
 
 The worker is a separate process: its stores start cold, are pinned (a
 change is applied only at a quiesce point, after the queues drained), and ONE
@@ -16,6 +16,7 @@ import pytest
 
 from curation._fake_config_opensearch import FakeConfigOpenSearch
 from curation.conftest import good_probe
+from scripts.curation.worker.bulk_writer import _bulk_update
 from scripts.curation.worker.runtime import (
     RuntimeHolder,
     current_want,
@@ -466,7 +467,6 @@ def _task() -> _ItemTask:
 async def test_a_write_carries_the_identity_of_the_call_not_of_the_runtime_at_write_time() -> None:
     """An item called the old endpoint, then a swap happened before its
     write flushed: the write must still name the endpoint that answered."""
-    import scripts.curation.region_worker_main as worker_main
     from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_mget_response
     from src.config import get_region_fields
 
@@ -486,7 +486,7 @@ async def test_a_write_carries_the_identity_of_the_call_not_of_the_runtime_at_wr
     opensearch = MagicMock()
     opensearch.mget = AsyncMock(side_effect=_mget)
     opensearch.bulk = AsyncMock(side_effect=_bulk)
-    written, _ = await worker_main._bulk_update(opensearch, [task])
+    written, _ = await _bulk_update(opensearch, [task])
     assert written == 1
     assert opensearch.bulk.await_args is not None
     doc = opensearch.bulk.await_args.kwargs['body'][1]['doc']
@@ -496,7 +496,6 @@ async def test_a_write_carries_the_identity_of_the_call_not_of_the_runtime_at_wr
 
 @pytest.mark.asyncio
 async def test_an_item_that_never_called_the_vlm_is_stamped_with_no_endpoint() -> None:
-    import scripts.curation.region_worker_main as worker_main
     from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_mget_response
     from src.config import get_region_fields
 
@@ -515,7 +514,7 @@ async def test_an_item_that_never_called_the_vlm_is_stamped_with_no_endpoint() -
     opensearch = MagicMock()
     opensearch.mget = AsyncMock(side_effect=_mget)
     opensearch.bulk = AsyncMock(side_effect=_bulk)
-    await worker_main._bulk_update(opensearch, [task])
+    await _bulk_update(opensearch, [task])
     assert opensearch.bulk.await_args is not None
     doc = opensearch.bulk.await_args.kwargs['body'][1]['doc']
     assert 'vlm_endpoint' not in doc
@@ -525,7 +524,7 @@ async def test_an_item_that_never_called_the_vlm_is_stamped_with_no_endpoint() -
 @pytest.mark.asyncio
 async def test_probing_a_newer_revision_does_not_change_the_running_revisions_marker() -> None:
     """The probe of ``one@2`` is not the probe of the ``one@1`` this project
-    runs, so it must not make the worker rebuild (W9 review M3)."""
+    runs, so it must not make the worker rebuild."""
     client = FakeConfigOpenSearch()
     alpha = _record('alpha')
     await _endpoint(client, 'one', root='org/one')

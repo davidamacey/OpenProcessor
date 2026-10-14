@@ -119,7 +119,7 @@ async def run_preflight(
     checks: list[PreflightCheck] = []
 
     # ---- 0. dataset_export_dir defaults to the current export ---------------
-    # F-73: required-with-no-default forced every caller (including
+    # required-with-no-default forced every caller (including
     # CURATION.md's own worked example) to look up and paste the current
     # export path by hand. Null/omitted now resolves to the same `current`
     # symlink target GET /export/status reports, mutating `spec` in place

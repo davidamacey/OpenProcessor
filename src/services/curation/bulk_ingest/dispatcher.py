@@ -30,7 +30,12 @@ from typing import TYPE_CHECKING, Any, Literal
 from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.services.curation.bulk_ingest import runner
-from src.services.curation.bulk_ingest.schedule import Cron, InvalidCronError, interval_due
+from src.services.curation.bulk_ingest.schedule import (
+    Cron,
+    InvalidCronError,
+    interval_due,
+    schedule_due,
+)
 from src.services.curation.bulk_ingest.source_runs import last_run_summary, start_source_run
 from src.services.curation.bulk_ingest.source_scan import scan_source
 from src.services.curation.bulk_ingest.sources import (
@@ -100,10 +105,14 @@ def decide(
         last = state.get('last_fire_at')
         if last:
             try:
-                due = Cron.parse(source.schedule.cron).next_after(datetime.fromisoformat(last))
+                due = schedule_due(
+                    Cron.parse(source.schedule.cron),
+                    datetime.fromisoformat(last),
+                    datetime.fromtimestamp(now, UTC),
+                )
             except (InvalidCronError, ValueError):
-                due = None
-            if due is not None and due.timestamp() <= now:
+                due = False
+            if due:
                 return Action('run_scan', source.source_id)
     if source.watch.enabled and interval_due(
         state.get('last_poll_started_at'), source.watch.interval_s, now

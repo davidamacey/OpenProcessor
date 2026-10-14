@@ -49,7 +49,7 @@ if [[ -f "$PROJECT_DIR/src/main.py" ]]; then
 fi
 dc() { docker compose "${DC_FILES[@]}" "$@"; }
 
-# G-04 / F-66: env_port() (scripts/lib/ports.sh) reads a single KEY=value
+# env_port() (scripts/lib/ports.sh) reads a single KEY=value
 # out of .env without sourcing the whole file. Smoke tests below hit
 # whatever ports THIS deployment's .env actually configured, not the
 # hardcoded defaults -- a remapped API_PORT/TRITON_HTTP_PORT/OPENSEARCH_PORT

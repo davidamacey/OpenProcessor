@@ -116,7 +116,7 @@ def test_region_profile_summary_serves_both_display_names(
 def test_region_profile_summary_serves_max_boxes_per_write_limit(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """W8: the served abuse guard (element count of one write request,
+    """The served abuse guard (element count of one write request,
     not a labeling rule) travels on region_profile.limits so Cropwright
     never hardcodes it."""
     import src.config.curation as curation_config_mod

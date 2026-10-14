@@ -1,5 +1,5 @@
 /**
- * F-63(b) / F-64 (fresh-start findings 2026-09-25). Source scan: the
+ * Source scan: the
  * route page isn't mountable in this harness (matching this directory's
  * other tests).
  */

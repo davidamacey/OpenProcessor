@@ -1,9 +1,9 @@
-"""M3 (W2 review): ``op_global_configs`` -- the one ``ConfigStore`` that
+"""``op_global_configs`` -- the one ``ConfigStore`` that
 is NOT scoped to any project (sibling to ``op_projects``), built as the
-foundation for W9's VLM endpoint registry / any future
+foundation for the VLM endpoint registry / any future
 ``local_vlm:desired``-style global config axis.
 
-No CRUD routes exist yet (W9's job); this covers the storage primitive
+No CRUD routes live here; this covers the storage primitive
 only: isolation from every per-project store, no project binding
 required, and the guard's recognition of ``op_global_configs`` as a
 legitimate global-scope index.

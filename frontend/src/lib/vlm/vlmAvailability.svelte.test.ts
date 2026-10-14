@@ -1,5 +1,5 @@
 /**
- * The W9 "not yet deployed" gate: a 404/501 on the GLOBAL `/vlm/endpoints`
+ * The VLM-registry "not yet deployed" gate: a 404/501 on the GLOBAL `/vlm/endpoints`
  * hides every registry surface (and that one request is the only one that
  * fires); a 200 marks it available and keeps the served status labels for
  * `/models`; any other failure keeps availability unknown; unlike the

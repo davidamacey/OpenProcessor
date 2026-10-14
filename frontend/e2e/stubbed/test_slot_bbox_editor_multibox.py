@@ -1,8 +1,7 @@
-"""W8 multi-box editor modal (docs/design/w8-multibox-frontend-plan-
-2026-09-26.md): `SlotBboxEditor.svelte` (the CropCard pencil ✎, `/clusters/
+"""Multi-box editor modal: `SlotBboxEditor.svelte` (the CropCard pencil ✎, `/clusters/
 [id]`) now reuses `MultiBoxCanvas`/`multiBoxRegionController` for the
 region slot instead of the legacy single-box canvas — the served region
-slot has no `bboxField` at all under W8, so the old single-box modal was
+slot has no `bboxField` at all, so the old single-box modal was
 unreachable for region. This proves the pencil opens the multi-box
 canvas, adding a box and saving sends a plain `PUT /crops/{id}/regions`
 with the accumulated diff and no `region_status` key (this modal has no

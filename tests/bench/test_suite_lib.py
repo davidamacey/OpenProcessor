@@ -100,20 +100,6 @@ def test_parse_perf_csv_converts_microseconds_to_ms() -> None:
     assert s.best_point(rows)['concurrency'] == 6.0
 
 
-def test_storage_summary_bytes_per_image_and_vector() -> None:
-    cat = [
-        {'index': 'a__images', 'docs.count': '10', 'docs.deleted': '0', 'pri.store.size': '1000'},
-        {'index': 'a__items', 'docs.count': '25', 'docs.deleted': '1', 'pri.store.size': '9000'},
-    ]
-    out = s.storage_summary(cat, images=10, vectors=40)
-    assert out['total_bytes'] == 10000
-    assert out['bytes_per_image'] == 1000.0
-    assert out['bytes_per_vector'] == 250.0
-    assert s.compare_storage({'bytes_per_vector': 250.0}, {'bytes_per_vector': 500.0}) == {
-        'bytes_per_vector': 0.5
-    }
-
-
 PMON = """# gpu pid type sm mem enc dec jpg ofa fb ccpm command
 # Idx # C/G % % % % % % MB MB name
     0       10     C     40      -      -      -      -      -   100      0    tritonserver

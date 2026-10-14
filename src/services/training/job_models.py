@@ -130,7 +130,7 @@ class TrainJobSpec(BaseModel):
     profile: Literal['probe', 'nano', 'small', 'medium', 'large', 'xlarge', 'custom'] = 'medium'
 
     # Data -------------------------------------------------------------------
-    # F-73: optional, not required. Null/omitted defaults to the current
+    # optional, not required. Null/omitted defaults to the current
     # export (data/exports/current -- see
     # src.services.curation.export.resolve_current_export_dir), resolved by
     # _run_preflight before any check reads this field. When no export has

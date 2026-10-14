@@ -1,5 +1,5 @@
 /**
- * W9 VLM wrappers: the endpoint registry, the local-model catalog and the
+ * VLM wrappers: the endpoint registry, the local-model catalog and the
  * per-project activation (any_domain_plan.md §7.8; OpenProcessor f582aa05).
  *
  * The registry, schema, validate, probe, catalog and local-model routes
@@ -32,7 +32,7 @@ import type {
 const GLOBAL = { global: true } as const;
 
 /** `GET /vlm/endpoints`: the registry, the secret refs and the served
- *  labels. Also the availability probe (a 404/501 = no W9 backend). */
+ *  labels. Also the availability probe (a 404/501 = no VLM registry backend). */
 export function listVlmEndpoints(signal?: AbortSignal): Promise<VlmEndpointList> {
   return apiFetch<VlmEndpointList>(`${globalApi()}/vlm/endpoints`, {}, signal, GLOBAL);
 }

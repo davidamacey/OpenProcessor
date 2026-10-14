@@ -1,5 +1,5 @@
 /**
- * W1 (docs/design/logic-moves-adoption-plan-2026-09-24.md) — discard,
+ * Discard,
  * VLM dismiss, review un-dismiss and the region-statuses vocabulary.
  * Each is a thin wrapper: verify the request shape and that the
  * response is unwrapped/mapped, not passed through raw.

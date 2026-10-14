@@ -211,7 +211,7 @@
       toastStore.success(`Restored ${cls.name}.`);
       await classesStore.clearAndRefetch();
     } catch (e) {
-      // F-56: a merged class 409s with a structured `class_merged` detail
+      // a merged class 409s with a structured `class_merged` detail
       // (its crops already live on the merge target); say where they went
       // and that un-merge isn't supported, using the served text.
       const merged = classMergedDetail(e);
@@ -339,8 +339,7 @@
     }
   }
 
-  // -- New-class proposals (2026-09-24 logic-moves W5; bulk resolve added
-  //    2026-09-24 for OpenProcessor 2f5cda2) --------------------------------
+  // -- New-class proposals -------------------------------------------------
   //
   // Aggregate view of the same cohort the `/review` "New Class Proposals"
   // tab pages through one crop at a time — top VLM-proposed-but-unmatched
@@ -556,8 +555,8 @@
     </div>
   {/if}
 
-  <!-- Active classes. F-53: the registry is the page's primary content,
-       so it renders first and the proposals list sits below it. F-50: no
+  <!-- Active classes. The registry is the page's primary content,
+       so it renders first and the proposals list sits below it. No
        inner scroll pane; the page scrolls and the sticky header sticks to
        the main scroll container. -->
   <section class="surface overflow-x-auto">
@@ -801,7 +800,7 @@
 
   <SeedFromDetectorPanel />
 
-  <!-- New-class proposals (2026-09-24 logic-moves W5) — aggregate view of
+  <!-- New-class proposals — aggregate view of
        the same cohort /review's "New Class Proposals" tab pages one crop
        at a time. Absent (not shown as an error banner) while nothing has
        loaded yet or the pool is empty; shown as an inline error when the

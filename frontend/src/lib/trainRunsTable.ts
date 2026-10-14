@@ -1,7 +1,6 @@
 /**
  * Pure helper for `/train`'s past-runs table single mAP50 column
- * (coordinator finding 6, 2026-09-24 visual review, updated for
- * OpenProcessor #34 W1's `best_metric`/`last_metric` removal): the
+ * (the old `best_metric`/`last_metric` keys are gone): the
  * column shows the run's own headline number, `eval.map50`, labelled by
  * the backend's own `eval.split` ('test' when the frozen-holdout pass
  * ran, 'val' when it fell back). `best_checkpoint_metric` (a per-epoch

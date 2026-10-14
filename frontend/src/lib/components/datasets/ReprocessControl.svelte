@@ -1,8 +1,7 @@
 <script lang="ts">
   /**
-   * "Reprocess…" button + dialog (any_domain_plan.md §7.12 item 6,
-   * W10.13). Absent unless the backend serves W10 (the one-shot
-   * `datasetsAvailability` probe). The scope and region-mode ids are the
+   * "Reprocess…" button + dialog. Absent unless the backend serves dataset
+   * import (the one-shot `datasetsAvailability` probe). The scope and region-mode ids are the
    * contract's enums (`reprocessVocabulary.ts`); the backend serves no
    * labels or lock-rule copy for them. One crop or image applies directly
    * from the dialog; several crops run a served dry run first and apply

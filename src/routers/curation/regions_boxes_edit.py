@@ -90,7 +90,7 @@ class ItemBatchRegionsRequest(BaseModel):
     region_status: str | None = None
     region_label_source: str = 'human'
 
-    def model_post_init(self, __context: Any) -> None:
+    def model_post_init(self, _context: Any) -> None:
         for b in self.boxes:
             if b.box_id is not None:
                 raise HTTPException(
@@ -137,7 +137,7 @@ class RegionConflictError(Exception):
 
 def _check_text_allowed(elements: list[BoxWriteElement] | list[Any], profile: Any) -> None:
     """422 ``region_text_disabled`` when any element sets ``text`` on a
-    profile that doesn't read text (W8.8; moved off ``region_meta``)."""
+    profile that doesn't read text (moved off ``region_meta``)."""
     if profile.reads_text:
         return
     if any(getattr(e, 'text', None) is not None for e in elements):
@@ -151,7 +151,7 @@ def _check_text_allowed(elements: list[BoxWriteElement] | list[Any], profile: An
 
 
 def _check_box_states(route: str, elements: list[Any]) -> None:
-    """W8c: 422 ``region_box_edits.validate_box_state`` per element instead
+    """422 ``region_box_edits.validate_box_state`` per element instead
     of only serving ``BOX_STATE_ROUTES`` on ``GET .../regions/statuses``
     without ever enforcing it on write."""
     for e in elements:
@@ -176,7 +176,7 @@ def _too_many_boxes_check(n_boxes: int) -> None:
 
 
 def _check_put_status(payload: ItemRegionsRequest | ItemBatchRegionsRequest) -> None:
-    """``region_status: no_region_visible`` with boxes is contradictory (W8.8)."""
+    """``region_status: no_region_visible`` with boxes is contradictory."""
     if payload.region_status == RegionStatus.NO_REGION_VISIBLE.value and payload.boxes:
         raise HTTPException(
             status_code=422,
@@ -287,10 +287,10 @@ async def set_crop_regions(
     bbox_norm}`` for a moved box (keeps state; a moved box is human
     geometry, an unmoved one a confirmation), ``{box_id, state}`` /
     ``{box_id, bbox_norm, state}`` to change state too, and ``{box_id:
-    null, bbox_norm, state?}`` for a new box (default ``accepted``, W8
-    pin 2). ``frame: "parent"`` projects into the source frame
-    server-side (W8 pin 1). Optional ``region_status`` applies a
-    whole-set status to the built list in the same write (W8 pin 3);
+    null, bbox_norm, state?}`` for a new box (default ``accepted``).
+    ``frame: "parent"`` projects into the source frame
+    server-side. Optional ``region_status`` applies a
+    whole-set status to the built list in the same write;
     an empty list is the human "no region visible".
     A stale ``expected_region_revision`` is 409 ``region_conflict``.
     Over ``region_profile.limits.max_boxes_per_write`` is 422
