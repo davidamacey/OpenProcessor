@@ -259,11 +259,11 @@ def analyze_image(
 
         def run_yolo_and_clip():
             t0 = time.perf_counter()
-            from src.clients.triton_client import get_triton_client
+            from src.clients.triton_client import get_sync_triton_client
             from src.config import get_settings
 
             settings = get_settings()
-            client = get_triton_client(settings.triton_url)
+            client = get_sync_triton_client(settings.triton_url)
             result = client.infer_yolo_clip_cpu(image_bytes)
             timing['yolo_clip_ms'] = (time.perf_counter() - t0) * 1000
             return result
@@ -291,7 +291,7 @@ def analyze_image(
             if not det_list or img_w <= 0 or img_h <= 0:
                 return None
             t0 = time.perf_counter()
-            from src.clients.triton_client import get_triton_client
+            from src.clients.triton_client import get_sync_triton_client
             from src.config import get_settings
             from src.utils.cpu_preprocess import center_crop_cpu
 
@@ -315,7 +315,7 @@ def analyze_image(
 
             # Single batched Triton inference call
             settings = get_settings()
-            client = get_triton_client(settings.triton_url)
+            client = get_sync_triton_client(settings.triton_url)
             embeddings = client.infer_mobileclip_batch(batch_tensor)
             timing['crop_embeddings_ms'] = (time.perf_counter() - t0) * 1000
             return embeddings  # [N, 512]
@@ -523,11 +523,11 @@ def analyze_batch(
             # Run unified pipeline
             import numpy as np
 
-            from src.clients.triton_client import get_triton_client
+            from src.clients.triton_client import get_sync_triton_client
             from src.config import get_settings
 
             settings = get_settings()
-            client = get_triton_client(settings.triton_url)
+            client = get_sync_triton_client(settings.triton_url)
 
             # Run YOLO + CLIP with CPU preprocessing
             yolo_clip_result = client.infer_yolo_clip_cpu(image_bytes)

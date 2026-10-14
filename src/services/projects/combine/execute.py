@@ -26,7 +26,6 @@ from src.config.region_fields import get_region_fields
 from src.core.logging import get_logger
 from src.services.curation.dataset_import.mapping import MapTarget, norm_class_name
 from src.services.curation.dataset_import.project_source import class_names_by_id, iter_source_pages
-from src.services.curation.dataset_import.store import now_iso
 from src.services.curation.file_job import heartbeat_ticker
 from src.services.curation.next_steps import recluster_items
 from src.services.projects.combine import holdout
@@ -34,6 +33,7 @@ from src.services.projects.combine.image_copy import CopyContext, copy_page
 from src.services.projects.combine.mapping import CombineMapping
 from src.services.projects.combine.models import CombineRequest
 from src.services.projects.combine.plan import Analysis, duplicates_from_wire, duplicates_wire
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:

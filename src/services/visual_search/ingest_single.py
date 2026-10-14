@@ -74,7 +74,7 @@ class IngestSingleMixin:
             import imohash
 
             from src.clients.fast_face_client import get_fast_face_client
-            from src.clients.triton_client import get_triton_client
+            from src.clients.triton_client import get_sync_triton_client
             from src.config import get_settings
 
             image_hash = imohash.hashfileobject(io.BytesIO(image_bytes)).hex()
@@ -97,7 +97,7 @@ class IngestSingleMixin:
                     }
 
             settings = get_settings()
-            client = get_triton_client(settings.triton_url)
+            client = get_sync_triton_client(settings.triton_url)
 
             # Initialize results
             result = {'num_dets': 0, 'image_embedding': None}

@@ -51,7 +51,6 @@ from src.services.curation.dataset_import.store import (
     COMPLETED_STATUSES,
     RESUMABLE_STATUSES,
     list_stores,
-    now_iso,
     open_store,
 )
 from src.services.curation.dataset_import.undo import UndoContext, undo_import
@@ -65,6 +64,7 @@ from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.ingest import CurationIngestService
 from src.services.curation.ingest_detector import effective_profile
 from src.services.curation.ingest_policy_store import get_ingest_policy
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:

@@ -67,7 +67,7 @@ class IngestBatchMixin:
         import imohash
 
         from src.clients.fast_face_client import get_fast_face_client
-        from src.clients.triton_client import get_triton_client
+        from src.clients.triton_client import get_sync_triton_client
         from src.config import get_settings
 
         if not images_data:
@@ -83,7 +83,7 @@ class IngestBatchMixin:
 
         total = len(images_data)
         settings = get_settings()
-        client = get_triton_client(settings.triton_url)
+        client = get_sync_triton_client(settings.triton_url)
         face_client = get_fast_face_client(settings.triton_url)
 
         ocr_service = None

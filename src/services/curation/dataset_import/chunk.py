@@ -47,6 +47,7 @@ from src.services.curation.item_doc import DetectedItem
 from src.services.curation.proposal_merge import count_disagreements
 from src.services.curation.wire import item_source_excludes
 from src.services.detection.geometry import crop_id as make_crop_id, stored_bbox_norm
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
@@ -91,12 +92,6 @@ def _split_boxes(ctx: ImportContext, entry: ScanEntry) -> _Boxes:
         else:
             out.regions.append(box)
     return out
-
-
-def _now() -> str:
-    from datetime import UTC, datetime
-
-    return datetime.now(UTC).isoformat()
 
 
 async def _items_for_image(ctx: ImportContext, image_id: str) -> list[dict[str, Any]]:
@@ -231,7 +226,7 @@ async def _import_one(
             return _skipped(store, chunk, base, 'image_size_mismatch', report)
     created_image = prior.get('image_created') if prior else img.created
     img.image_extra = _image_stamp(ctx, entry, state, {})
-    now = _now()
+    now = now_iso()
 
     existing = await _items_for_image(ctx, img.image_id)
     stored_boxes = [

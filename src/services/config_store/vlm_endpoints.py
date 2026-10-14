@@ -15,7 +15,6 @@ project guard refuses a bound write to this index.
 from __future__ import annotations
 
 import contextlib
-import datetime as dt
 from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import NotFoundError
@@ -35,14 +34,11 @@ from src.services.labeling.vlm_endpoints import (
     probe_key,
     stored_endpoint,
 )
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
     from src.services.labeling.vlm_endpoint_body import VlmEndpointBody, VlmProbeRecord
-
-
-def _now() -> str:
-    return dt.datetime.now(dt.UTC).isoformat()
 
 
 async def _reload(client: Any, axis: str = 'registry') -> Any:
@@ -153,7 +149,7 @@ async def record_probe(
 
 async def set_local_desired(client: Any, *, catalog_id: str) -> dict[str, Any]:
     store = get_global_config_store()
-    doc = {'doc_type': 'local_vlm', 'catalog_id': catalog_id, 'requested_at': _now()}
+    doc = {'doc_type': 'local_vlm', 'catalog_id': catalog_id, 'requested_at': now_iso()}
     await client.index(index=store.index, id=LOCAL_DESIRED_DOC_ID, body=doc, refresh=WRITE_REFRESH)
     await bump_config_revision(client, store.index)
     await _reload(client, 'local_vlm')

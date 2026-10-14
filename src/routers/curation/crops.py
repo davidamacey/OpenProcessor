@@ -13,7 +13,6 @@ from src.routers.curation._common import (
     ItemDoc,
     OpenSearchDep,
     RegistryDep,
-    _now_iso,
     get_class_registry,
     guard_page_depth,
     items_index,
@@ -54,6 +53,7 @@ from src.services.curation.wire import (
     item_source_excludes,
     serialize_item,
 )
+from src.utils.timeutil import now_iso
 
 
 _MAX_IDS = 500
@@ -498,12 +498,12 @@ async def move_crops(
 
     def _merge(current: dict[str, Any]) -> dict[str, Any]:
         if kind == 'candidate':
-            return candidate_move_update(current, cluster_id=target_id, now=_now_iso())
+            return candidate_move_update(current, cluster_id=target_id, now=now_iso())
         # Move-from-cluster is a class gesture ("move this to the X
         # cluster" means "this is an X") — routed through class_label.py,
         # the single class-label writer (tests/test_class_label_single_writer.py).
         return human_move_class_update(
-            current, class_id=target_id, class_name=target_name, now=_now_iso()
+            current, class_id=target_id, class_name=target_name, now=now_iso()
         )
 
     # Batched via occ_update_bulk — see batch_label_crops above.
@@ -529,7 +529,7 @@ async def flag_new_class(
     """
     if not payload.crop_ids:
         return {'updated': 0}
-    now = _now_iso()
+    now = now_iso()
     bulk: list[dict[str, Any]] = []
     for crop_id in payload.crop_ids:
         bulk.append({'update': {'_index': items_index(), '_id': crop_id}})
@@ -583,7 +583,7 @@ async def batch_exclude_crops(
         return {'excluded': 0, 'updated_ids': [], 'errors': 0}
     from src.services.curation.exclusion import exclusion_update
 
-    now = _now_iso()
+    now = now_iso()
     reason = payload.reason or 'ignore'
     updated_ids, n_errors = await _occ_bulk_human_write(
         opensearch,
@@ -655,7 +655,7 @@ async def batch_unexclude_crops(
         live = await live_candidate_ids(opensearch, items_index(), ids)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
-    now = _now_iso()
+    now = now_iso()
     updated_ids, n_errors = await _occ_bulk_human_write(
         opensearch,
         ids,
@@ -678,9 +678,9 @@ async def review_dismiss_crop(crop_id: str, opensearch: OpenSearchDep) -> dict[s
     """
     body = {
         'doc': {
-            'review_dismissed_at': _now_iso(),
+            'review_dismissed_at': now_iso(),
             'review_dismissed_by': 'human',
-            'updated_at': _now_iso(),
+            'updated_at': now_iso(),
         }
     }
     try:

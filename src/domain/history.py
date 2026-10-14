@@ -15,8 +15,9 @@ and the merge used by every writer.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
+
+from src.utils.timeutil import now_iso
 
 
 MAX_HISTORY_ENTRIES = 32
@@ -33,10 +34,6 @@ MAX_REGION_CHAIN_ENTRIES = 16
 """Cap the region detector-chain length. The cascade typically emits 2-4
 entries per detection (e.g. detector:hit, secondary:hit, verifier:verify_ok);
 16 entries covers ~4 re-detection events worth of history."""
-
-
-def _now_iso() -> str:
-    return datetime.now(tz=UTC).isoformat(timespec='seconds')
 
 
 def record_class_history(
@@ -84,7 +81,7 @@ def record_class_history(
         # unvalidated one without re-deriving it from elsewhere.
         'class_validated': bool(current_source.get('class_validated')),
         'writer': writer,
-        'at': now or _now_iso(),
+        'at': now or now_iso(),
     }
     # Dedupe: skip the append when class_id AND class_source are both
     # unchanged from the last recorded entry. Without this, a writer
@@ -184,7 +181,7 @@ def record_class_snapshot(
         entry.update({f: current_source.get(f) for f in REVIEW_DISMISS_FIELDS})
     entry['restorable'] = restorable
     entry['writer'] = writer
-    entry['at'] = now or _now_iso()
+    entry['at'] = now or now_iso()
     history.append(entry)
     return _cap(history, current_source)
 

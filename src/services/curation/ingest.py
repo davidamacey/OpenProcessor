@@ -61,7 +61,6 @@ import hashlib
 import io
 import os
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config, get_region_fields
@@ -148,10 +147,6 @@ def _decode_image(image_bytes: bytes) -> DecodedImage:
     """Decode bytes into the upright RGB frame (:func:`~src.services.curation.image_decode.decode_image`)."""
     with stage_timer('decode', nbytes=len(image_bytes)):
         return decode_image(image_bytes)
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 def _crop_id(image_id: str, bbox_norm: list[float]) -> str:

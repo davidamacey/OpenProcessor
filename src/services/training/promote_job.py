@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 from src.core.logging import get_logger
 from src.services.curation.file_job import FileJob, heartbeat_ticker
 from src.services.curation.job_lock import exclusive_start_lock
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
@@ -56,10 +57,6 @@ def jobs_root() -> Path:
     from src.services.training.job_files import _resolve_jobs_dir
 
     return _resolve_jobs_dir() / 'promote'
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 def _job(promote_id: str) -> FileJob:
@@ -160,8 +157,8 @@ def claim(*, run_job_id: str, triton_name: str) -> tuple[FileJob, bool]:
                 'status': 'queued',
                 'job_id': run_job_id,
                 'triton_name': triton_name,
-                'started_at': _now(),
-                'updated_at': _now(),
+                'started_at': now_iso(),
+                'updated_at': now_iso(),
             }
         )
         job.touch_heartbeat()
@@ -204,16 +201,16 @@ async def _run(
     job: FileJob, work: Callable[[Callable[[str], None]], Awaitable[dict[str, Any]]]
 ) -> None:
     def on_phase(phase: str) -> None:
-        job.update(status=phase, updated_at=_now())
+        job.update(status=phase, updated_at=now_iso())
         job.touch_heartbeat()
 
     ticker = asyncio.create_task(heartbeat_ticker(job))
     try:
         on_phase('exporting')
         result = await work(on_phase)
-        job.update(status='done', result=result, finished_at=_now(), updated_at=_now())
+        job.update(status='done', result=result, finished_at=now_iso(), updated_at=now_iso())
     except asyncio.CancelledError:
-        job.update(status='failed', error='cancelled', finished_at=_now(), updated_at=_now())
+        job.update(status='failed', error='cancelled', finished_at=now_iso(), updated_at=now_iso())
         raise
     except Exception as exc:
         # HTTPException carries .status_code/.detail; PromoteError .status_code
@@ -224,8 +221,8 @@ async def _run(
             status='failed',
             error=str(detail if detail is not None else exc),
             error_status=code,
-            finished_at=_now(),
-            updated_at=_now(),
+            finished_at=now_iso(),
+            updated_at=now_iso(),
         )
     finally:
         ticker.cancel()

@@ -54,10 +54,6 @@ def new_run_id(*, now: datetime | None = None) -> str:
     return f'bulk_{stamp}_{uuid.uuid4().hex[:8]}'
 
 
-def now_iso() -> str:
-    return datetime.now(UTC).isoformat()
-
-
 def _iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
     try:
         text = path.read_text(encoding='utf-8')

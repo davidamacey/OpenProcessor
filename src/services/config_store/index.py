@@ -29,6 +29,7 @@ from opensearchpy.exceptions import ConflictError, NotFoundError, OpenSearchExce
 
 from src.clients.optional_doc import get_doc_or_none
 from src.core.logging import get_logger
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
@@ -77,10 +78,6 @@ def activation_event_doc_id() -> str:
 
 def runtime_doc_id(process: str, hostname: str) -> str:
     return f'runtime:{process}:{hostname}'
-
-
-def _now_iso() -> str:
-    return dt.datetime.now(dt.UTC).isoformat()
 
 
 class RevisionConflictError(Exception):
@@ -202,7 +199,7 @@ async def save_config(
     mismatch.
     """
     doc_id = config_doc_id(kind, name)
-    now = _now_iso()
+    now = now_iso()
     seq_no = primary_term = None
     current_revision = 0
     created_at = now
@@ -334,7 +331,7 @@ async def activate(
     ):
         raise ActiveConflictError(previous)
 
-    now = _now_iso()
+    now = now_iso()
     doc = {
         'doc_type': 'activation',
         'axis': axis,

@@ -54,11 +54,11 @@ from src.services.curation.bulk_ingest.store import (
     active_run,
     list_stores,
     new_run_id,
-    now_iso,
     runs_root,
 )
 from src.services.curation.file_job import heartbeat_ticker
 from src.services.curation.job_lock import exclusive_start_lock
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:

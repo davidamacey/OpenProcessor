@@ -90,7 +90,6 @@ src/routers/curation/pipeline_events.py	1	triage every return-empty handler in P
 src/services/curation/auto_label_run.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/autolabel/health_snapshot.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/curation/projects.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/curation/regions_edit.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/curation/review_resolve.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/curation/select.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/curation/vlm.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
@@ -159,7 +158,7 @@ src/services/curation/open_vocab_sweeper.py	1	triage every return-empty handler 
 src/services/curation/ops_metrics_refresh.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/probe_job.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/probe_predictions.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/region_box_embeddings.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/region_box_embeddings.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/region_box_refresh.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/region_dependency_health.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/region_impact.py	1	triage every return-empty handler in PR 3; ratchet: may only go down

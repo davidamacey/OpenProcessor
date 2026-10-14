@@ -109,7 +109,9 @@ class TestInferenceServiceThreadsModelNameThrough:
         fake_client = MagicMock()
         fake_client.infer_yolo_end2end.return_value = {'boxes': [], 'scores': [], 'classes': []}
         fake_client.format_detections.return_value = []
-        monkeypatch.setattr(inference_module, 'get_triton_client', lambda *_a, **_k: fake_client)
+        monkeypatch.setattr(
+            inference_module, 'get_sync_triton_client', lambda *_a, **_k: fake_client
+        )
         monkeypatch.setattr(
             inference_module, 'decode_image', lambda *_a, **_k: np.zeros((10, 10, 3), np.uint8)
         )

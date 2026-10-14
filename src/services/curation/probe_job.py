@@ -54,7 +54,6 @@ import asyncio
 import contextlib
 import os
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -62,6 +61,7 @@ from src.config.curation import get_curation_config
 from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
 from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob, heartbeat_ticker
+from src.utils.timeutil import now_iso
 
 
 logger = get_logger(__name__)
@@ -93,10 +93,6 @@ def _job() -> FileJob:
 
 def _lock_file() -> Path:
     return _jobs_dir() / 'start.lock'
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 @dataclass
@@ -157,7 +153,7 @@ def get_status() -> dict[str, Any]:
         if age is not None and age > HEARTBEAT_STALE_S:
             state.status = 'failed'
             state.error = state.error or f'probe job heartbeat stale ({age:.1f}s ago)'
-            state.finished_at = state.finished_at or _now_iso()
+            state.finished_at = state.finished_at or now_iso()
             _job().write(state.to_dict())
     return state.to_dict()
 
@@ -199,12 +195,12 @@ async def _run(
         else:
             state.status = 'completed'
             state.updated_count = updated
-        state.finished_at = _now_iso()
+        state.finished_at = now_iso()
         _job().write(state.to_dict())
     except asyncio.CancelledError:
         state = _read_state()
         state.status = 'cancelled'
-        state.finished_at = _now_iso()
+        state.finished_at = now_iso()
         _job().write(state.to_dict())
         raise
     except Exception as exc:
@@ -212,7 +208,7 @@ async def _run(
         state = _read_state()
         state.status = 'failed'
         state.error = str(exc)
-        state.finished_at = _now_iso()
+        state.finished_at = now_iso()
         _job().write(state.to_dict())
     finally:
         ticker.cancel()
@@ -279,7 +275,7 @@ async def start_probe_job(
             train_job_id=train_job_id,
             model_path=str(model_path),
             gpu=gpu,
-            started_at=_now_iso(),
+            started_at=now_iso(),
         )
         _job().write(state.to_dict())
 

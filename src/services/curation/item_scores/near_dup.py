@@ -30,7 +30,6 @@ pools — e.g. tests) it degrades to one global pass.
 from __future__ import annotations
 
 import os
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
@@ -41,6 +40,7 @@ from src.services.detection.frame_dedup import (
     most_central,
     near_dup_groups,
 )
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
@@ -55,10 +55,6 @@ def _threshold() -> float:
         return float(os.environ.get('OP_CROP_DUP_THRESHOLD', str(DEFAULT_FRAME_DEDUP_THRESHOLD)))
     except ValueError:
         return DEFAULT_FRAME_DEDUP_THRESHOLD
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 def _assign_buckets(embeddings: np.ndarray, centroids: np.ndarray) -> np.ndarray:
@@ -147,7 +143,7 @@ class NearDupScorer:
     ) -> ScoreResult:
         centroids = self._load_centroids()
         groups = compute_near_dup_groups(embeddings, threshold=self.threshold, centroids=centroids)
-        now = _now_iso()
+        now = now_iso()
         fields: dict[str, dict[str, Any]] = {}
         for gi, group in enumerate(groups):
             rep_local = most_central(embeddings, group)

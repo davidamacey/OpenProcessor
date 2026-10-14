@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 from src.config.curation import get_curation_config
 from src.core.logging import get_logger
 from src.schemas.curation.config_common import ValidationIssue, ValidationReport
-from src.services.curation.dataset_import.store import now_iso
 from src.services.curation.job_lock import exclusive_start_lock
 from src.services.projects import lifecycle
 from src.services.projects.combine import store as job_store
@@ -32,6 +31,7 @@ from src.services.projects.combine.plan import (
 )
 from src.services.projects.registry import get_record_with_seq
 from src.services.rejections import rejection
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:

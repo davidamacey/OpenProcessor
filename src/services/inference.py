@@ -12,7 +12,7 @@ from typing import Any
 import numpy as np
 
 from src.clients.fast_face_client import get_fast_face_client
-from src.clients.triton_client import get_triton_client
+from src.clients.triton_client import get_sync_triton_client
 from src.config import get_settings
 from src.config.settings import TritonModelConfig
 from src.utils.cache import clip_text_tokens, get_image_cache, get_text_cache
@@ -117,7 +117,7 @@ class InferenceService:
         image_shape = img.shape[:2]  # (height, width)
 
         # Run inference via Triton
-        client = get_triton_client(self.settings.triton_url)
+        client = get_sync_triton_client(self.settings.triton_url)
         result = client.infer_yolo_end2end(img, model_name)
         detections = client.format_detections(result, model_name=model_name)
 
@@ -247,7 +247,7 @@ class InferenceService:
         """
         from concurrent.futures import ThreadPoolExecutor
 
-        client = get_triton_client(self.settings.triton_url)
+        client = get_sync_triton_client(self.settings.triton_url)
         face_client = get_fast_face_client(self.settings.triton_url)
 
         try:
@@ -350,7 +350,7 @@ class InferenceService:
                 return cached_embedding
 
         # Get Triton client and encode
-        client = get_triton_client(self.settings.triton_url)
+        client = get_sync_triton_client(self.settings.triton_url)
         embedding = client.encode_image(image_bytes)
 
         # Cache the result
@@ -382,7 +382,7 @@ class InferenceService:
             if cached_embedding is not None:
                 return cached_embedding
 
-        client = get_triton_client(self.settings.triton_url)
+        client = get_sync_triton_client(self.settings.triton_url)
         embedding = client.encode_text(clip_text_tokens(text))
 
         # Cache the result

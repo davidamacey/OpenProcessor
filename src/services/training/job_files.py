@@ -54,10 +54,6 @@ JOB_ID_RE = re.compile(r'^[A-Za-z0-9_.\-:+T]{1,128}$')
 # =============================================================================
 
 
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
-
-
 def _slug() -> str:
     """Filesystem-safe ISO timestamp (``2026-05-09T08-30-14``)."""
     return datetime.now(UTC).strftime('%Y-%m-%dT%H-%M-%S')

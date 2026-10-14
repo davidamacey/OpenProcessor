@@ -40,13 +40,13 @@ from src.services.curation.dataset_import.store import (
     imports_root,
     latest_with_key,
     new_import_id,
-    now_iso,
     open_store,
 )
 from src.services.curation.dataset_import.undo import UndoContext, undo_import
 from src.services.curation.file_job import heartbeat_ticker
 from src.services.curation.job_lock import exclusive_start_lock
 from src.services.curation.next_steps import cluster_regions
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:

@@ -21,7 +21,6 @@ from src.config import get_curation_config, get_region_fields
 from src.routers.curation._common import (
     OpenSearchDep,
     RegionProfileDep,
-    _now_iso,
     get_class_registry,
     items_index,
     logger,
@@ -47,6 +46,7 @@ from src.services.curation.crop_bytes import load_region_jpeg, load_vlm_item_jpe
 from src.services.curation.label_batch_write import label_batch_merge, label_batch_update
 from src.services.labeling.detector_hint import DETECTOR_HINT_FIELDS, hinted_crop
 from src.services.labeling.run_labeler import get_vlm_labeler, resolve_pack, vlm_stamp
+from src.utils.timeutil import now_iso
 
 
 _F = get_region_fields()
@@ -217,7 +217,7 @@ async def vlm_label_batch(
     # so a concurrent human edit always wins.
     updates_by_id: dict[str, dict[str, Any]] = {}
     proposals: list[dict[str, Any]] = []
-    now = _now_iso()
+    now = now_iso()
 
     # Track force-fit bypasses (low-confidence VLM replies where we skip
     # the synonym/fuzzy match and route to the unmatched cohort).
@@ -330,7 +330,7 @@ async def vlm_verify_regions(
     # loop's VLM round-trips are in flight wins outright (conflict -> skip,
     # never retried against).
     verdicts_by_id: dict[str, list[BoxVerdict]] = {}
-    now = _now_iso()
+    now = now_iso()
     # One mget_crops() call instead of N separate opensearch.get()
     # round trips.
     from src.clients.curation_opensearch.crops import mget_crops

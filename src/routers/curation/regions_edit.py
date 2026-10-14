@@ -18,13 +18,13 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from src.clients.occ import OCCFinalConflictError, occ_update_one
+from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES, OCCFinalConflictError, occ_update_one
+from src.clients.occ_bulk import BulkFailure, occ_bulk_rounds
 from src.config import get_region_fields
 from src.domain.region_boxes import RegionBoxWriteError
 from src.routers.curation._common import (
     OpenSearchDep,
     RegionProfileDep,
-    _now_iso,
     items_index,
     logger,
     router,
@@ -48,6 +48,7 @@ from src.services.curation.region_writes import (
     post_write_item,
     reason_only_box_write,
 )
+from src.utils.timeutil import now_iso
 
 
 def _write_error(exc: RegionBoxWriteError) -> HTTPException:
@@ -136,7 +137,7 @@ async def patch_crop_region_meta(
     if 'region_status' in fields_set:
         _validate_status(payload.region_status)
 
-    base: dict[str, Any] = {'updated_at': _now_iso()}
+    base: dict[str, Any] = {'updated_at': now_iso()}
     # Wire names of the fields this request changed — never `doc.keys()`,
     # which are RegionFields storage keys.
     wire_fields: list[str] = []
@@ -202,106 +203,57 @@ async def _batch_write(
     build: Any,
     writer_id: str,
 ) -> dict[str, Any]:
-    """Apply ``build`` to every crop via one batched mget + bulk round-trip
-    per retry round, instead of one ``occ_update_one`` round-trip
-    per crop.
+    """Apply ``build`` to every crop through :func:`occ_bulk_rounds`.
 
-    Doesn't route through :func:`src.clients.occ_bulk.occ_update_bulk` — that
-    helper's merge_fn contract only distinguishes "wrote" vs "nothing to
-    write" (a falsy return is a documented noop counted as updated), but
-    a region-batch write needs a third outcome (``invalid``, a
-    :class:`RegionBoxWriteError` from ``build``) that must never be reported
-    as updated. ``refresh`` is attached only to the final bulk call of
-    the final retry round — no forced ``indices.refresh`` per call.
+    A region-batch write has a third outcome besides written and conflicted:
+    ``invalid`` (a :class:`RegionBoxWriteError` from ``build``), which must never
+    be reported as updated, so it uses the callback form rather than
+    :func:`occ_update_bulk`. A bulk request that fails as a whole is reported
+    as a conflict, not retried.
     """
-    from src.clients.curation_opensearch.crops import mget_crops
-    from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES, OCC_BULK_PAGE_SIZE
-
     F = get_region_fields()
-    updated = 0
     conflicts: list[dict[str, Any]] = []
     invalid: list[dict[str, Any]] = []
     items: list[dict[str, Any]] = []
+    recorders: dict[str, _Recorder] = {}
 
-    pending_ids = list(dict.fromkeys(crop_ids))
-    max_retries = 2
-    for attempt in range(max_retries + 1):
-        if not pending_ids:
-            break
-        next_round: list[str] = []
-        page_starts = list(range(0, len(pending_ids), OCC_BULK_PAGE_SIZE))
-        for page_idx, start in enumerate(page_starts):
-            page_ids = pending_ids[start : start + OCC_BULK_PAGE_SIZE]
-            docs = await mget_crops(
-                opensearch,
-                page_ids,
-                index=items_index(),
-                source_excludes=OCC_BULK_MGET_SOURCE_EXCLUDES,
-                seq_no=True,
-            )
+    def prepare(crop_id: str, doc: dict[str, Any] | None) -> dict[str, Any] | None:
+        if doc is None:
+            conflicts.append({'crop_id': crop_id, 'current_source': None})
+            return None
+        rec = _Recorder(build, writer_id)
+        try:
+            update_doc = rec(doc.get('_source') or {})
+        except RegionBoxWriteError as exc:
+            invalid.append({'crop_id': crop_id, 'detail': str(exc)})
+            return None
+        recorders[crop_id] = rec
+        return update_doc
 
-            pending: list[tuple[str, dict[str, Any], _Recorder]] = []
-            for crop_id in page_ids:
-                doc = docs.get(crop_id)
-                if doc is None:
-                    conflicts.append({'crop_id': crop_id, 'current_source': None})
-                    continue
-                source = doc.get('_source') or {}
-                rec = _Recorder(build, writer_id)
-                try:
-                    update_doc = rec(source)
-                except RegionBoxWriteError as exc:
-                    invalid.append({'crop_id': crop_id, 'detail': str(exc)})
-                    continue
-                pending.append((crop_id, update_doc, rec))
+    def on_written(crop_id: str) -> None:
+        items.append(as_row(recorders[crop_id].item(crop_id), None))
 
-            if not pending:
-                continue
+    def on_failed(crop_id: str, doc: dict[str, Any] | None, why: BulkFailure) -> None:
+        if why == 'transport':
+            logger.warning('batch_region_write_failed', writer_id=writer_id)
+            conflicts.append({'crop_id': crop_id, 'current_source': None})
+            return
+        source = ((doc or {}).get('_source') or {}).get(F.label_source)
+        conflicts.append({'crop_id': crop_id, 'current_source': source})
 
-            bulk_body: list[dict[str, Any]] = []
-            for crop_id, update_doc, _rec in pending:
-                doc = docs[crop_id]
-                bulk_body.append(
-                    {
-                        'update': {
-                            '_index': items_index(),
-                            '_id': crop_id,
-                            'if_seq_no': doc['_seq_no'],
-                            'if_primary_term': doc['_primary_term'],
-                        }
-                    }
-                )
-                bulk_body.append({'doc': update_doc})
-
-            is_last_page = page_idx == len(page_starts) - 1
-            call_refresh: bool | str = 'wait_for' if is_last_page else False
-            try:
-                resp = await opensearch.bulk(body=bulk_body, refresh=call_refresh)
-            except Exception as exc:
-                logger.warning('batch_region_write_failed', writer_id=writer_id, error=str(exc))
-                for crop_id, _update_doc, _rec in pending:
-                    conflicts.append({'crop_id': crop_id, 'current_source': None})
-                continue
-
-            resp_items = resp.get('items') or []
-            for (crop_id, _update_doc, rec), item in zip(pending, resp_items, strict=True):
-                action = item.get('update') or {}
-                status = action.get('status')
-                if status in (200, 201):
-                    updated += 1
-                    items.append(as_row(rec.item(crop_id), None))
-                    continue
-                error = action.get('error') or {}
-                is_conflict = status == 409 or 'version_conflict' in error.get('type', '')
-                if is_conflict and attempt < max_retries:
-                    next_round.append(crop_id)
-                else:
-                    current_source = docs.get(crop_id, {}).get('_source', {}).get(F.label_source)
-                    conflicts.append({'crop_id': crop_id, 'current_source': current_source})
-
-        pending_ids = next_round
-
-    return {'updated': updated, 'conflicts': conflicts, 'invalid': invalid, 'items': items}
+    await occ_bulk_rounds(
+        opensearch,
+        index=items_index(),
+        ids=crop_ids,
+        prepare=prepare,
+        on_written=on_written,
+        on_failed=on_failed,
+        max_retries=2,
+        refresh='wait_for',
+        retry_transport=False,
+        source_excludes=OCC_BULK_MGET_SOURCE_EXCLUDES,
+    )
+    return {'updated': len(items), 'conflicts': conflicts, 'invalid': invalid, 'items': items}
 
 
 @router.post(
@@ -330,7 +282,7 @@ async def batch_set_region_status(
     _validate_status(payload.region_status)
     base: dict[str, Any] = {
         F.label_source: payload.region_label_source,
-        'updated_at': _now_iso(),
+        'updated_at': now_iso(),
     }
     if label_source_is_human(payload.region_label_source):
         base[F.validated] = True

@@ -21,12 +21,12 @@ sparse neighbourhood); lower = redundant (near-duplicate cluster core).
 from __future__ import annotations
 
 import os
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
 from src.services.curation.item_scores.base import ScoreResult
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
@@ -50,10 +50,6 @@ def _nprobe() -> int:
         return max(1, int(os.environ.get('OP_SCORES_NPROBE', str(DEFAULT_NPROBE))))
     except ValueError:
         return DEFAULT_NPROBE
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 def compute_uniqueness(
@@ -165,7 +161,7 @@ class UniquenessScorer:
     ) -> ScoreResult:
         centroids = self._load_centroids()
         scores = compute_uniqueness(embeddings, centroids, k=_knn_k(), nprobe=_nprobe())
-        now = _now_iso()
+        now = now_iso()
         fields: dict[str, dict[str, Any]] = {
             crop_id: {
                 'uniqueness_score': float(scores[i]),
