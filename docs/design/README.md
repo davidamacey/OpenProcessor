@@ -30,6 +30,7 @@ in GitHub issues; the repository file is the canonical, versioned copy of each p
 | [label_confirmation_plan.md](label_confirmation_plan.md) | partially done (`vlm_scope` is implemented; #192 fixed the `representatives` bound) | #192 | Detector against VLM against human ground truth: whether the VLM runs on every crop, and how labels are confirmed |
 | [v060_execution_path.md](v060_execution_path.md) | in progress (status table, updated as packages merge) | umbrella #40 | Status of the v0.6.0 packages and the order of the remaining work; companion to `v060_wave_plan.md` |
 | [docs_overhaul_plan.md](docs_overhaul_plan.md) | in progress | n/a | Documentation overhaul: audit, task guides, pipeline modes, screenshots, and the work breakdown |
+| [repo_cleanup_plan.md](repo_cleanup_plan.md) | in progress (PR 1 of 9, the guards) | n/a | Repo cleanup: effective guards, dead code, naming, fail-open handlers, duplicates, and splits of oversize files, in nine PRs |
 
 ## Issues without a plan doc
 
