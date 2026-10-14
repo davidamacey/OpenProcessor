@@ -43,7 +43,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
 
-HEARTBEAT_DIR = Path(os.environ.get('OP_HEARTBEAT_DIR', '/tmp/openprocessor_heartbeat'))  # nosec B108 — container-local, no mount needed
+# This module is the compose healthcheck, run by file path under a 5 s timeout, so it
+# stays stdlib-only and cannot import src.config.env.
+HEARTBEAT_DIR = Path(os.environ.get('OP_HEARTBEAT_DIR', '/tmp/openprocessor_heartbeat'))  # nosec B108 — container-local, no mount needed  # noqa: TID251  # stdlib-only healthcheck CLI
 
 DEFAULT_INTERVAL_S = 15.0
 DEFAULT_MAX_AGE_S = 120.0

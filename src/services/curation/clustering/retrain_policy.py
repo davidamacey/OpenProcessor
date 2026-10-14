@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from src.config.curation import items_index
+from src.config.env import env_float
 from src.domain.embedding_state import embedded_clause
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.clustering.pool_size import MIN_RESIDUALS_FOR_CLUSTERING
@@ -33,10 +33,10 @@ if TYPE_CHECKING:
 # Per-crop ingest assignment (always on) keeps new crops query-able in
 # the meantime against the existing centroids — retraining is only about
 # refreshing the partition, not about routing new data.
-RETRAIN_GROWTH_FACTOR = float(os.getenv('OP_IVF_RETRAIN_GROWTH', '1.5'))
+RETRAIN_GROWTH_FACTOR = env_float('OP_IVF_RETRAIN_GROWTH', 1.5)
 # Default 24h cooldown — reindexing daily-or-slower is the conventional
 # cadence; keeps centroids stable enough for multi-hour sort sessions.
-RETRAIN_MIN_INTERVAL_S = float(os.getenv('OP_IVF_RETRAIN_MIN_INTERVAL_S', '86400'))
+RETRAIN_MIN_INTERVAL_S = env_float('OP_IVF_RETRAIN_MIN_INTERVAL_S', 86400)
 
 
 async def _count_residual_pool(client: AsyncOpenSearch, *, strict: bool = False) -> int:

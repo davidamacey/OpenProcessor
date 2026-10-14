@@ -7,7 +7,6 @@ sub-modules import from here. _common.py MUST NOT import from sub-modules.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -55,10 +54,6 @@ router = APIRouter(
 # ("Result window is too large") instead of paging -- reject it explicitly
 # with a 422 before it ever reaches OpenSearch.
 MAX_RESULT_WINDOW = 10_000
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 def guard_page_depth(page: int, page_size: int) -> None:

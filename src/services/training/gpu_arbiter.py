@@ -443,7 +443,7 @@ async def start_gpu_services(
 # to stay under the 700-LOC ratchet) -- it borrows _container_status_sync/
 # _docker_client below for its optional docker-confirmation path. Imported
 # and re-exported at the bottom of this module so existing callers
-# (src.routers.curation_train, this module's own __all__) don't need to
+# (src.routers.curation.train, this module's own __all__) don't need to
 # know it moved.
 
 

@@ -32,11 +32,8 @@ from src.services.curation.vlm_class_attempt import (
     class_attempt_fields,
     empty_answer_reason_for_index,
 )
-from src.services.detection.cascade_detect.sanity import (
-    _now_iso,
-    class_provenance,
-    is_plausible_region_bbox,
-)
+from src.services.detection.cascade_detect.sanity import class_provenance, is_plausible_region_bbox
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
@@ -142,7 +139,7 @@ def _combined_class_update(
     persisted in that case so the class column is preserved.
     """
     update: dict[str, Any] = {}
-    ts = now or _now_iso()
+    ts = now or now_iso()
     names = class_names or []
     if names and reply.class_id is not None and reply.class_id >= 0 and reply.class_id < len(names):
         cname = names[reply.class_id]
@@ -376,7 +373,7 @@ def verdicts_to_boxes(
       at least one sibling did). ``status = derive_status(boxes,
       empty_status=RegionStatus.NO_REGION_BOX)``.
     """
-    now = now or _now_iso()
+    now = now or now_iso()
     any_verdict = any(v.bbox_correct is not None for v in verdicts)
     if not any_verdict and not force_resolve:
         return [], None, {'no_verdict': True}
@@ -465,7 +462,7 @@ def item_verification_fields(
         F.verifier_version: '1' if verified else None,
     }
     if verified:
-        doc[F.verified_at] = now or _now_iso()
+        doc[F.verified_at] = now or now_iso()
     return doc
 
 

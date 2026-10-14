@@ -33,11 +33,12 @@ afterward, not stale for the lifetime of the process.
 
 from __future__ import annotations
 
-import os
 import re
 import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol
+
+from src.config.env import env_path
 
 
 if TYPE_CHECKING:
@@ -56,8 +57,7 @@ _class_name_cache: dict[str, dict[int, str]] = {}
 
 
 def _triton_models_dir() -> Path:
-    override = os.environ.get('OP_TRITON_MODEL_REPO')
-    return Path(override) if override else _DEFAULT_TRITON_MODELS_DIR
+    return env_path('OP_TRITON_MODEL_REPO', _DEFAULT_TRITON_MODELS_DIR)
 
 
 def _read_labels_file(path: Path) -> dict[int, str] | None:

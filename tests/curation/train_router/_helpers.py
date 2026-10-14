@@ -1,4 +1,4 @@
-"""Helpers shared by the curation_train router tests."""
+"""Helpers shared by the curation train router tests."""
 
 from __future__ import annotations
 

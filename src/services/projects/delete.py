@@ -10,13 +10,12 @@ working unchanged.
 from __future__ import annotations
 
 import asyncio
-import os
 import shutil
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from src.config.env import env_path
 from src.config.project_context import bind_project
 from src.config.projects import DEFAULT_SLUG, ProjectStatus
 from src.core.logging import get_logger
@@ -26,9 +25,12 @@ from src.services.projects.mlflow_cleanup import MlflowCleanup, delete_experimen
 from src.services.projects.registry import get_project_registry, get_record_with_seq
 from src.services.rejections import rejection
 from src.services.training.model_classes import owned_model_names
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from src.config.projects import ProjectRecord
 
 
@@ -240,15 +242,11 @@ def _project_scoped_dirs(record: ProjectRecord) -> list[tuple[Path, Path]]:
     base = base_curation_config()
     data_root = projects_data_root()
     state_projects_root = base.state_dir / 'projects'
-    autolabel_projects_root = (
-        Path(os.environ.get('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label')) / 'projects'
-    )
+    autolabel_projects_root = env_path('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label') / 'projects'
     from src.services.curation.bulk_ingest.limits import bulk_ingest_base_dir
 
     bulk_ingest_projects_root = bulk_ingest_base_dir() / 'projects'
-    reprocess_projects_root = (
-        Path(os.environ.get('OP_REPROCESS_JOBS_DIR', '/jobs/reprocess')) / 'projects'
-    )
+    reprocess_projects_root = env_path('OP_REPROCESS_JOBS_DIR', '/jobs/reprocess') / 'projects'
     return [
         (record.resources.export_root, data_root),
         (record.resources.class_registry_path.parent, data_root),
@@ -326,7 +324,6 @@ async def delete_project(
     from src.services.projects.lifecycle import (
         _get_mutable_record,
         _last_active_check,
-        _now,
         _require_transition,
         running_jobs,
         write_record,
@@ -441,7 +438,7 @@ async def delete_project(
     # record's real prior status.
     pre_delete_status = 'failed' if started_from_stale_building else record.status
     deleting = replace(
-        record, status='deleting', pre_delete_status=pre_delete_status, updated_at=_now()
+        record, status='deleting', pre_delete_status=pre_delete_status, updated_at=now_iso()
     )
     await write_record(client, deleting, if_seq_no=seq, if_primary_term=term)
     await get_project_registry().ensure_fresh()
@@ -544,7 +541,7 @@ async def delete_project_finish(client: Any, *, slug: str) -> DeleteFinished:
     "already gone", index delete uses ``ignore=[404]``,
     ``rmtree(ignore_errors=True)``, and the final ``deleted`` write is
     OCC-guarded so a duplicate run is a no-op)."""
-    from src.services.projects.lifecycle import _now, _refetch_for_write, write_record
+    from src.services.projects.lifecycle import _refetch_for_write, write_record
 
     stored, _, _ = await get_record_with_seq(client, slug)
     if stored is None:
@@ -584,7 +581,7 @@ async def delete_project_finish(client: Any, *, slug: str) -> DeleteFinished:
                 expect_status='deleting',
                 status=cast('ProjectStatus', record.pre_delete_status) or 'failed',
                 pre_delete_status=None,
-                updated_at=_now(),
+                updated_at=now_iso(),
             )
             await write_record(client, rolled_back, if_seq_no=seq, if_primary_term=term)
             await get_project_registry().ensure_fresh()
@@ -616,7 +613,7 @@ async def delete_project_finish(client: Any, *, slug: str) -> DeleteFinished:
         # won this race, not the possibly-stale read from the top of this
         # function.
         claimed, seq, term = await _refetch_for_write(
-            client, slug, expect_status='deleting', updated_at=_now()
+            client, slug, expect_status='deleting', updated_at=now_iso()
         )
         await write_record(client, claimed, if_seq_no=seq, if_primary_term=term)
         record = claimed
@@ -656,7 +653,7 @@ async def delete_project_finish(client: Any, *, slug: str) -> DeleteFinished:
         # rollback above, on the write that makes the tombstone
         # permanent.
         tombstoned, seq, term = await _refetch_for_write(
-            client, slug, expect_status='deleting', status='deleted', updated_at=_now()
+            client, slug, expect_status='deleting', status='deleted', updated_at=now_iso()
         )
         await write_record(client, tombstoned, if_seq_no=seq, if_primary_term=term)
         await get_project_registry().ensure_fresh()

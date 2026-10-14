@@ -18,7 +18,6 @@ through :func:`class_label_fields` (a brand-new item, no snapshot) or
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any, Literal
 
 from src.domain.audit_math import audit_outcome_fields
@@ -28,10 +27,7 @@ from src.domain.ingest_class_sources import (
     LABEL_SOURCE_IMPORT,
 )
 from src.services.detection.cascade_detect.sanity import class_provenance
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
+from src.utils.timeutil import now_iso
 
 
 def human_class_provenance() -> dict[str, Any]:
@@ -160,7 +156,7 @@ def class_label_update(current: dict[str, Any], label: ItemLabel) -> dict[str, A
     history = record_class_snapshot(current, writer=label.writer, restorable=True)
     fields = class_label_fields(label)
     fields['class_id_history'] = history
-    fields['updated_at'] = _now_iso()
+    fields['updated_at'] = now_iso()
     if label.source == 'human' and label.validated:
         fields.update(audit_outcome_fields(current, label.class_name))
     return fields

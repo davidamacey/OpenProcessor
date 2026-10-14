@@ -18,13 +18,13 @@ cheap member-count check invalidates the cache when membership changes
 from __future__ import annotations
 
 import json
-import os
 import time
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from opensearchpy.exceptions import OpenSearchException
 
+from src.config.env import env_float, env_int
 from src.core.logging import get_logger
 
 
@@ -37,8 +37,8 @@ logger = get_logger(__name__)
 OUTLIER_EMBEDDING_FIELD = 'pe_embedding'
 # Above this many members the pairwise scroll + sort isn't worth it for an
 # interactive request — callers fall back to the default sort.
-_MAX_MEMBERS = int(os.getenv('OP_OUTLIER_MAX_MEMBERS', '20000'))
-_TTL_S = float(os.getenv('OP_OUTLIER_CACHE_TTL_S', '600'))
+_MAX_MEMBERS = env_int('OP_OUTLIER_MAX_MEMBERS', 20000)
+_TTL_S = env_float('OP_OUTLIER_CACHE_TTL_S', 600)
 _SCROLL_PAGE = 2000
 
 # cache_key -> {'order': list[str], 'count': int, 'at': float}

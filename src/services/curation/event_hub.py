@@ -81,6 +81,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
+from src.config.env import env_int, env_str
 from src.config.project_context import current_project
 from src.core.logging import get_logger
 
@@ -186,9 +187,7 @@ class _EventLog:
         if max_bytes is not None:
             self.max_bytes = max_bytes
         else:
-            self.max_bytes = int(
-                os.environ.get('OP_EVENT_LOG_MAX_BYTES', str(_DEFAULT_MAX_LOG_BYTES))
-            )
+            self.max_bytes = env_int('OP_EVENT_LOG_MAX_BYTES', _DEFAULT_MAX_LOG_BYTES, minimum=1)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         # Touch now so a startup-time permissions problem surfaces as a
         # clear log line (caught by the caller) instead of a silent
@@ -345,7 +344,7 @@ class EventHub:
         self._lock = asyncio.Lock()
         self._published_by_project: dict[str | None, int] = {}
         self._dropped = 0
-        self._bus = os.environ.get('OP_EVENT_BUS', 'file')
+        self._bus = env_str('OP_EVENT_BUS', 'file')
         self._log: _EventLog | None = None
         self._tail_task: asyncio.Task[None] | None = None
         if self._bus == 'file':

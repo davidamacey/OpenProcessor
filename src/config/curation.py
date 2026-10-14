@@ -16,11 +16,20 @@ logical role.
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
+
+from src.config.env import (
+    env_bool,
+    env_float,
+    env_int,
+    env_optional_path,
+    env_optional_str,
+    env_path,
+    env_str,
+)
 
 
 if TYPE_CHECKING:
@@ -334,33 +343,25 @@ class CurationConfig:
         defaults = cls()
 
         def _str(name: str, default: str) -> str:
-            return os.environ.get(f'{prefix}{name}', default)
+            return env_str(f'{prefix}{name}', default)
 
         def _path(name: str, default: Path) -> Path:
-            value = os.environ.get(f'{prefix}{name}')
-            return Path(value) if value else default
+            return env_path(f'{prefix}{name}', default)
 
         def _optional_path(name: str, default: Path | None) -> Path | None:
-            value = os.environ.get(f'{prefix}{name}')
-            return Path(value) if value else default
+            return env_optional_path(f'{prefix}{name}') or default
 
         def _optional_str(name: str, default: str | None) -> str | None:
-            value = os.environ.get(f'{prefix}{name}')
-            return value.strip() if value and value.strip() else default
+            return env_optional_str(f'{prefix}{name}') or default
 
         def _int(name: str, default: int) -> int:
-            value = os.environ.get(f'{prefix}{name}')
-            return int(value) if value else default
+            return env_int(f'{prefix}{name}', default)
 
         def _float(name: str, default: float) -> float:
-            value = os.environ.get(f'{prefix}{name}')
-            return float(value) if value else default
+            return env_float(f'{prefix}{name}', default)
 
         def _bool(name: str, default: bool) -> bool:
-            value = os.environ.get(f'{prefix}{name}')
-            if value is None or not value.strip():
-                return default
-            return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+            return env_bool(f'{prefix}{name}', default)
 
         return cls(
             prompt_pack_path=_optional_path('PROMPT_PACK_PATH', defaults.prompt_pack_path),

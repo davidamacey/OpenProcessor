@@ -14,7 +14,6 @@ only under the global router or a project's scoped prefix.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
 from typing import Any
 
 from src.config.project_context import bind_project
@@ -35,13 +34,10 @@ from src.services.projects.registry import (
     write_record as _raw_write_record,
 )
 from src.services.rejections import rejection
+from src.utils.timeutil import now_iso
 
 
 logger = get_logger(__name__)
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 async def write_record(
@@ -310,7 +306,7 @@ async def create_project(
 
     warnings = await _capacity_error_or_warning(client)
 
-    now = _now()
+    now = now_iso()
     resources = resources_for_new(slug, base_curation_config())
     record = ProjectRecord(
         slug=slug,
@@ -343,7 +339,7 @@ async def create_project(
         # (the delete.py stale-building escape hatch) can recover it.
         existing, seq, term = await get_record_with_seq(client, slug)
         if existing is not None and existing.status == 'building':
-            failed_doc = replace(existing, status='failed', updated_at=_now())
+            failed_doc = replace(existing, status='failed', updated_at=now_iso())
             await write_record(client, failed_doc, if_seq_no=seq, if_primary_term=term)
         raise
 
@@ -435,7 +431,7 @@ async def create_project(
         # MA1's exact resurrection probe in the P3 review.
         try:
             failed, seq, term = await _refetch_for_write(
-                client, slug, expect_status='building', status='failed', updated_at=_now()
+                client, slug, expect_status='building', status='failed', updated_at=now_iso()
             )
         except RequestRejectedError as refetch_exc:
             await _cleanup_orphaned_by_concurrent_delete(client, record, refetch_exc)
@@ -466,7 +462,7 @@ async def finish_building(client: Any, record: ProjectRecord, *, ok: bool = True
             record.slug,
             expect_status='building',
             status='active' if ok else 'failed',
-            updated_at=_now(),
+            updated_at=now_iso(),
         )
     except RequestRejectedError as refetch_exc:
         await _cleanup_orphaned_by_concurrent_delete(client, record, refetch_exc)
@@ -498,7 +494,7 @@ async def patch_project(
         display_name=display_name if display_name is not None else record.display_name,
         description=description if description is not None else record.description,
         revision=record.revision + 1,
-        updated_at=_now(),
+        updated_at=now_iso(),
     )
     await write_record(client, updated, if_seq_no=seq, if_primary_term=term)
     await get_project_registry().ensure_fresh()
@@ -611,7 +607,7 @@ async def archive_project(client: Any, *, slug: str, expected_revision: int) -> 
             jobs=[j.to_wire() for j in jobs],
         )
     await _last_active_check(record)
-    updated = replace(record, status='archived', revision=record.revision + 1, updated_at=_now())
+    updated = replace(record, status='archived', revision=record.revision + 1, updated_at=now_iso())
     await write_record(client, updated, if_seq_no=seq, if_primary_term=term)
     await get_project_registry().ensure_fresh()
     return updated
@@ -622,7 +618,7 @@ async def unarchive_project(client: Any, *, slug: str, expected_revision: int) -
     record, seq, term = await _get_mutable_record(client, slug)
     _require_transition(record, 'unarchive', UNARCHIVABLE_STATUSES)
     _require_revision(record, expected_revision)
-    updated = replace(record, status='active', revision=record.revision + 1, updated_at=_now())
+    updated = replace(record, status='active', revision=record.revision + 1, updated_at=now_iso())
     await write_record(client, updated, if_seq_no=seq, if_primary_term=term)
     await get_project_registry().ensure_fresh()
     return updated

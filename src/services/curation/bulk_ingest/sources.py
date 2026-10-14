@@ -32,8 +32,9 @@ from src.services.curation.bulk_ingest.limits import (
 )
 from src.services.curation.bulk_ingest.object_queue import ObjectQueue
 from src.services.curation.bulk_ingest.schedule import Cron, InvalidCronError
-from src.services.curation.bulk_ingest.store import now_iso, runs_root
+from src.services.curation.bulk_ingest.store import runs_root
 from src.services.curation.file_job import FileJob
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:

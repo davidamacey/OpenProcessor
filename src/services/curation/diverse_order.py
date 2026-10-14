@@ -18,8 +18,8 @@ mAP50-95 >= +1.0pt) has NOT run. Until it does, ``diverse`` stays
 to ``stable`` by this module or by flipping ``OP_SELECT_DIVERSE_ENABLED``
 alone.
 
-Gated end-to-end by ``OP_SELECT_DIVERSE_ENABLED`` (default off, inline
-``os.getenv`` per house convention):
+Gated end-to-end by ``OP_SELECT_DIVERSE_ENABLED`` (default off, read with
+``env_bool``):
 
 * ``GET /curation/crops?order=diverse`` with the flag off behaves exactly like
   today's handling of any other unrecognized ``order`` value — silently
@@ -85,10 +85,10 @@ from __future__ import annotations
 
 import json
 import math
-import os
 import time
 from typing import Any
 
+from src.config.env import env_bool, env_float, env_int
 from src.services.curation.selection import k_center_greedy
 from src.services.curation.selection.pool_fetch import (
     EMBEDDING_FIELD,
@@ -107,31 +107,26 @@ def diverse_enabled() -> bool:
     every other feature flag in this codebase (e.g.
     ``strategy_registry._scores_enabled``): tests ``monkeypatch.setenv``
     without reimporting."""
-    return os.environ.get('OP_SELECT_DIVERSE_ENABLED', '').strip().lower() in {
-        '1',
-        'true',
-        'yes',
-        'on',
-    }
+    return env_bool('OP_SELECT_DIVERSE_ENABLED')
 
 
 def max_n() -> int:
     try:
-        return max(1, int(os.environ.get('OP_SELECT_MAX_N', str(DEFAULT_MAX_N))))
+        return env_int('OP_SELECT_MAX_N', DEFAULT_MAX_N, minimum=1)
     except ValueError:
         return DEFAULT_MAX_N
 
 
 def sync_max_ops() -> int:
     try:
-        return max(1, int(os.environ.get('OP_SELECT_SYNC_MAX_OPS', str(DEFAULT_SYNC_MAX_OPS))))
+        return env_int('OP_SELECT_SYNC_MAX_OPS', DEFAULT_SYNC_MAX_OPS, minimum=1)
     except ValueError:
         return DEFAULT_SYNC_MAX_OPS
 
 
 def job_max_n() -> int:
     try:
-        return max(1, int(os.environ.get('OP_SELECT_JOB_MAX_N', str(DEFAULT_JOB_MAX_N))))
+        return env_int('OP_SELECT_JOB_MAX_N', DEFAULT_JOB_MAX_N, minimum=1)
     except ValueError:
         return DEFAULT_JOB_MAX_N
 
@@ -145,7 +140,7 @@ def _get_diverse_inline_max() -> int:
 
 
 _ORDER_CACHE: dict[str, dict[str, Any]] = {}
-_CACHE_TTL_S = float(os.getenv('OP_SELECT_CACHE_TTL_S', '600'))
+_CACHE_TTL_S = env_float('OP_SELECT_CACHE_TTL_S', 600)
 
 
 def _cache_key(index: str, query: dict[str, Any], k: int | None = None) -> str:

@@ -3,18 +3,14 @@
 from __future__ import annotations
 
 import math
-from datetime import UTC, datetime
 from typing import Any
+
+from src.utils.timeutil import now_iso
 
 
 # =============================================================================
 # Sanity gate + provenance helpers (Phase A2 / A3)
 # =============================================================================
-
-
-def _now_iso() -> str:
-    """ISO-8601 UTC timestamp used for region_detected_at / class_labeled_at."""
-    return datetime.now(UTC).isoformat()
 
 
 def is_plausible_region_bbox(
@@ -87,7 +83,7 @@ def class_provenance(
         'class_detector': detector,
         'class_detector_version': detector_version,
         'class_labeler': labeler,
-        'class_labeled_at': labeled_at or _now_iso(),
+        'class_labeled_at': labeled_at or now_iso(),
     }
 
 

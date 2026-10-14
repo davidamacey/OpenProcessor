@@ -28,13 +28,13 @@ the ``index=`` keyword.
 from __future__ import annotations
 
 import asyncio
-import os
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from src.clients.occ_locks import is_locked_box, is_locked_class, is_locked_item
 from src.config import BACKBONE_EMBEDDING_FIELD, ITEM_EMBEDDING_FIELD, get_region_fields
 from src.config.curation import items_index
+from src.config.env import env_int
 from src.core.logging import get_logger
 
 
@@ -55,7 +55,7 @@ _RETRY_BACKOFF_SEC = (0.05, 0.15, 0.45)
 # takes O(N / OCC_BULK_PAGE_SIZE) round trips. Tunable via
 # OCC_BULK_PAGE_SIZE env if a caller's payload size or OS cluster needs
 # a different page.
-OCC_BULK_PAGE_SIZE = int(os.environ.get('OCC_BULK_PAGE_SIZE', '500'))
+OCC_BULK_PAGE_SIZE = env_int('OCC_BULK_PAGE_SIZE', 500)
 
 # Embedding fields are large (512-d+ float vectors) and no existing
 # occ_skip_on_conflict_bulk merger reads them (verified: auto_promote,

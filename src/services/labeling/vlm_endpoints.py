@@ -20,12 +20,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from src.config.env import env_int, env_optional_str, env_path, env_str
 from src.core.logging import get_logger
 from src.services.labeling.vlm_endpoint_body import VlmEndpointBody, VlmProbeRecord
 from src.services.labeling.vlm_url_policy import (
@@ -38,6 +37,7 @@ from src.services.labeling.vlm_url_policy import (
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from pathlib import Path
 
     from src.services.config_store.store import ConfigSnapshot, StoredConfig
 
@@ -180,7 +180,7 @@ def endpoint_status(probe: VlmProbeRecord | None) -> EndpointStatus:
 
 
 def secrets_dir() -> Path:
-    return Path(os.environ.get('OP_VLM_SECRETS_DIR', '/run/secrets/op_vlm'))
+    return env_path('OP_VLM_SECRETS_DIR', '/run/secrets/op_vlm')
 
 
 def _secret_file(slug: str) -> Path | None:
@@ -225,7 +225,7 @@ def _resolve(ref: str, *, is_env_builtin: bool) -> str | None:
         if not is_env_builtin:
             msg = f'{ENV_KEY_REF} is only valid on the built-in env endpoint'
             raise VlmKeyRefInvalidError(msg)
-        return (os.environ.get('OP_VLM_API_KEY') or '').strip() or None
+        return env_optional_str('OP_VLM_API_KEY')
     match = SECRET_REF_RE.match(ref)
     if match is None:
         msg = 'api_key_ref must be secret:<slug>'
@@ -253,13 +253,6 @@ def resolve_api_key(ref: str | None, *, is_env_builtin: bool = False) -> str | N
 # --- the env built-in -------------------------------------------------------------
 
 
-def _env_int(name: str, default: int) -> int:
-    try:
-        return max(1, int(os.environ.get(name) or default))
-    except ValueError:
-        return default
-
-
 def env_endpoint(probe_doc: dict[str, Any] | None = None) -> VlmEndpoint | None:
     """The read-only ``env`` endpoint, or ``None`` when ``OP_VLM_URL`` is
     empty (then no VLM exists unless a stored one is activated).
@@ -267,7 +260,7 @@ def env_endpoint(probe_doc: dict[str, Any] | None = None) -> VlmEndpoint | None:
     its fingerprint still matches the env values)."""
     from src.services.labeling.vlm_catalog import catalog_entry_for_root
 
-    raw_url = os.environ.get('OP_VLM_URL', '').strip()
+    raw_url = env_str('OP_VLM_URL')
     if not raw_url:
         return None
     # Credentials in the URL are dropped here, at the source, so no route,
@@ -279,10 +272,10 @@ def env_endpoint(probe_doc: dict[str, Any] | None = None) -> VlmEndpoint | None:
         return None
     base = VlmEndpointBody(
         base_url=url,
-        model=os.environ.get('OP_VLM_MODEL', '').strip(),
+        model=env_str('OP_VLM_MODEL'),
         api_key_ref='secret:env' if _secret_file('env') is not None else ENV_KEY_REF,
-        max_images_per_call=_env_int('OP_VLM_MAX_IMAGES_PER_CALL', 8),
-        open_images_per_call=_env_int('OP_VLM_OPEN_IMAGES_PER_CALL', 3),
+        max_images_per_call=env_int('OP_VLM_MAX_IMAGES_PER_CALL', 8, minimum=1),
+        open_images_per_call=env_int('OP_VLM_OPEN_IMAGES_PER_CALL', 3, minimum=1),
         timeout_s=240.0,
         requests_per_second=500.0,
         json_mode='auto',

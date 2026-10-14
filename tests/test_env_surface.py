@@ -5,7 +5,7 @@ there is no mechanism to keep the two in sync as new ones get added.
 
 Two directions:
 
-1. Every ``OP_*`` literal passed to ``os.environ.get(...)``/``os.getenv(...)``
+1. Every ``OP_*`` literal passed to ``os.environ.get(...)``/``os.getenv(...)`` or a ``src.config.env`` ``env_*(...)`` reader
    anywhere under :data:`_SCANNED_ROOTS`, PLUS every var implied by the
    three ``from_env``-driven config dataclasses (``CurationConfig``,
    ``RegionFields``, ``DetectionProfile``), must appear somewhere in
@@ -34,7 +34,10 @@ from src.config.region_fields import RegionFields
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-_DIRECT_ENV_RE = re.compile(r"os\.(?:environ\.get|getenv)\(\s*['\"](OP_[A-Z0-9_]+)['\"]")
+_DIRECT_ENV_RE = re.compile(
+    r'(?:os\.(?:environ\.get|getenv)|env_(?:str|optional_str|int|float|bool|path|optional_path|raw|is_set))'
+    r"\(\s*['\"](OP_[A-Z0-9_]+)['\"]"
+)
 
 # First-party Python this repo ships. ``docker/`` holds the side-car container
 # sources (the trainer watcher, the test-harness fakes) -- they are not

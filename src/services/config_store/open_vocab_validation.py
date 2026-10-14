@@ -12,9 +12,9 @@ operator may want SAM 3's boxes anyway.
 
 from __future__ import annotations
 
-import os
 from typing import TYPE_CHECKING, Any
 
+from src.config.env import env_str
 from src.services.config_store.pack_validation import NAME_RE, RESERVED_NAMES
 from src.services.config_store.profile_validation import _issue, check_segmenter_prompt_text
 from src.services.detection.open_vocab_set import (
@@ -217,7 +217,7 @@ async def _check_segmenter(
     for_activation: bool, segmenter_health: SegmenterHealthFn | None
 ) -> list[ValidationIssue]:
     severity = 'error' if for_activation else 'warning'
-    if not os.environ.get('OP_SEGMENTER_URL', '').strip():
+    if not env_str('OP_SEGMENTER_URL'):
         return [_issue('segmenter_not_configured', severity, 'OP_SEGMENTER_URL is not configured')]
     if segmenter_health is None:
         return []

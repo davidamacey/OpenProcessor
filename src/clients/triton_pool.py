@@ -609,13 +609,6 @@ class TritonClientManager:
 # =============================================================================
 # Factory functions
 # =============================================================================
-def get_triton_client(triton_url: str = 'triton-server:8001', **kwargs):
-    """
-    Get the sync Triton client (see TritonClientManager.get_sync_client()).
-    """
-    return TritonClientManager.get_sync_client(triton_url, **kwargs)
-
-
 async def get_async_triton_client(triton_url: str = 'triton-server:8001', **kwargs):
     """
     Get the async Triton client (see TritonClientManager.get_async_client()).

@@ -20,10 +20,11 @@ a snapshot, not a per-process partial.
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from prometheus_client import Counter, Gauge, Histogram
+
+from src.config.env import env_int
 
 
 OTHER_PROJECT = 'other'
@@ -131,12 +132,7 @@ OP_OPENSEARCH_STORE_BYTES = Gauge(
 
 
 def max_project_labels() -> int:
-    try:
-        return max(
-            1, int(os.environ.get('OP_METRICS_MAX_PROJECT_LABELS', _DEFAULT_MAX_PROJECT_LABELS))
-        )
-    except ValueError:
-        return _DEFAULT_MAX_PROJECT_LABELS
+    return env_int('OP_METRICS_MAX_PROJECT_LABELS', _DEFAULT_MAX_PROJECT_LABELS, minimum=1)
 
 
 def allowed_project_slugs(slugs: Any) -> frozenset[str]:

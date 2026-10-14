@@ -8,8 +8,13 @@ without holding more decoded images than the process admission gate allows.
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+from src.config.env import env_path
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 DEFAULT_BATCH_SIZE = 16
@@ -31,4 +36,4 @@ RATE_WINDOW_S = 30.0
 def bulk_ingest_base_dir() -> Path:
     """Deployment-wide root of the run directories, on the shared jobs volume so
     every ``api`` worker process sees them (nested per project below it)."""
-    return Path(os.environ.get('OP_BULK_INGEST_DIR', '/jobs/bulk_ingest'))
+    return env_path('OP_BULK_INGEST_DIR', '/jobs/bulk_ingest')

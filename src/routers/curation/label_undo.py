@@ -28,14 +28,7 @@ from src.domain.history import (
     record_class_snapshot,
     restore_class_state,
 )
-from src.routers.curation._common import (
-    OpenSearchDep,
-    _now_iso,
-    is_not_found,
-    items_index,
-    logger,
-    router,
-)
+from src.routers.curation._common import OpenSearchDep, is_not_found, items_index, logger, router
 from src.routers.curation._common_models import (
     CropDiscardBatchRequest,
     CropDiscardRequest,
@@ -45,6 +38,7 @@ from src.services.curation.class_sources import vlm_suggestion
 from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
 from src.services.curation.exclusion import park_restored_state_while_excluded
 from src.services.curation.wire import item_source_excludes, serialize_item
+from src.utils.timeutil import now_iso
 
 
 class NothingToUndoError(Exception):
@@ -62,7 +56,7 @@ def _undo_merger(*, require_history: bool) -> Any:
             # un-exclude should bring back, not what applies right now.
             restored = park_restored_state_while_excluded(restored)
         history = record_class_snapshot(current, writer=HUMAN_UNLABEL_WRITER, restorable=False)
-        return {**restored, 'class_id_history': history, 'updated_at': _now_iso()}
+        return {**restored, 'class_id_history': history, 'updated_at': now_iso()}
 
     return _merge
 
@@ -190,7 +184,7 @@ async def unlabel_crop(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any
 
 def _discard_merger(payload: CropDiscardRequest) -> Any:
     def _merge(current: dict[str, Any]) -> dict[str, Any]:
-        now = _now_iso()
+        now = now_iso()
         update: dict[str, Any] = {
             'class_id_history': record_class_snapshot(
                 current, writer=HUMAN_DISCARD_WRITER, restorable=True
@@ -311,11 +305,11 @@ async def dismiss_vlm_suggestion(crop_id: str, opensearch: OpenSearchDep) -> dic
         return {
             'vlm_dismissed_class_id': class_id,
             'vlm_dismissed_class_name': class_name,
-            'vlm_dismissed_at': _now_iso(),
+            'vlm_dismissed_at': now_iso(),
             EDIT_HISTORY_FIELD: record_edit(
                 current, kind=EditKind.VLM_DISMISS, writer='human:vlm_dismiss'
             ),
-            'updated_at': _now_iso(),
+            'updated_at': now_iso(),
         }
 
     try:
@@ -381,7 +375,7 @@ async def review_undismiss(crop_id: str, opensearch: OpenSearchDep) -> dict[str,
             merger=lambda _c: {
                 'review_dismissed_at': None,
                 'review_dismissed_by': None,
-                'updated_at': _now_iso(),
+                'updated_at': now_iso(),
             },
             refresh='wait_for',
             writer_id='human:review_undismiss',

@@ -110,11 +110,11 @@ class SearchMixin:
         Returns:
             dict with query vehicle info and matching vehicles
         """
-        from src.clients.triton_client import get_triton_client
+        from src.clients.triton_client import get_sync_triton_client
         from src.config import get_settings
 
         settings = get_settings()
-        client = get_triton_client(settings.triton_url)
+        client = get_sync_triton_client(settings.triton_url)
         result = client.infer_yolo_clip_cpu(image_bytes)
 
         if result['num_dets'] == 0:
@@ -184,11 +184,11 @@ class SearchMixin:
         Returns:
             dict with query person info and matching people
         """
-        from src.clients.triton_client import get_triton_client
+        from src.clients.triton_client import get_sync_triton_client
         from src.config import get_settings
 
         settings = get_settings()
-        client = get_triton_client(settings.triton_url)
+        client = get_sync_triton_client(settings.triton_url)
         result = client.infer_yolo_clip_cpu(image_bytes)
 
         if result['num_dets'] == 0:
@@ -254,11 +254,11 @@ class SearchMixin:
         Returns:
             dict with results and query box info
         """
-        from src.clients.triton_client import get_triton_client
+        from src.clients.triton_client import get_sync_triton_client
         from src.config import get_settings
 
         settings = get_settings()
-        client = get_triton_client(settings.triton_url)
+        client = get_sync_triton_client(settings.triton_url)
         result = client.infer_yolo_clip_cpu(image_bytes)
 
         if result['num_dets'] == 0:

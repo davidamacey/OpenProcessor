@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import OpenSearchException
 
+from src.config.env import env_optional_str
 from src.core.logging import get_logger
 
 
@@ -501,7 +502,7 @@ def _code_sha() -> str:
     time; falls back to a live ``git rev-parse HEAD`` in a dev checkout,
     and to ``'unknown'`` if neither is available.
     """
-    override = os.environ.get('OP_BUILD_SHA')
+    override = env_optional_str('OP_BUILD_SHA')
     if override:
         return override
     git_bin = shutil.which('git')

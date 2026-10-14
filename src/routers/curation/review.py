@@ -15,7 +15,6 @@ from fastapi import HTTPException, Path as PathParam, Query
 from src.config import get_region_fields
 from src.routers.curation._common import (
     OpenSearchDep,
-    _now_iso,
     get_class_registry,
     guard_page_depth,
     is_not_found,
@@ -66,6 +65,7 @@ from src.services.curation.review_request import (
     build_review_request,
 )
 from src.services.curation.wire import item_list_source_excludes, serialize_item
+from src.utils.timeutil import now_iso
 
 
 @router.get('/review/unmatched_terms')
@@ -598,7 +598,7 @@ async def freeze_test_holdout(
 
     # Bulk-flag.
     bulk: list[dict[str, Any]] = []
-    now = _now_iso()
+    now = now_iso()
     for crop_id in chosen_ids:
         bulk.append({'update': {'_index': items_index(), '_id': crop_id}})
         bulk.append({'doc': {'test_holdout': True, 'updated_at': now}})

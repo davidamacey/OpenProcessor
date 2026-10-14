@@ -20,7 +20,6 @@ dispatcher needs is on disk, so a worker that dies loses nothing: a stale run be
 from __future__ import annotations
 
 import asyncio
-import os
 import random
 import time
 from dataclasses import dataclass
@@ -28,6 +27,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from src.config import get_curation_config
+from src.config.env import env_float, env_str
 from src.core.logging import get_logger
 from src.services.curation.bulk_ingest import runner
 from src.services.curation.bulk_ingest.schedule import (
@@ -70,12 +70,11 @@ class Action:
 
 
 def tick_interval_s() -> float:
-    raw = os.environ.get('OP_INGEST_DISPATCH_S', '').strip()
-    return float(raw) if raw else float(DEFAULT_TICK_S)
+    return env_float('OP_INGEST_DISPATCH_S', float(DEFAULT_TICK_S), minimum=0.0)
 
 
 def loopback_url() -> str:
-    return os.environ.get('OP_API_LOOPBACK_URL', '').strip() or DEFAULT_BASE_URL
+    return env_str('OP_API_LOOPBACK_URL') or DEFAULT_BASE_URL
 
 
 def _held(last_run: dict[str, Any] | None, now: float) -> bool:

@@ -61,7 +61,6 @@ Embedding contract (both paths):
 
 from __future__ import annotations
 
-import os
 import threading
 from collections import OrderedDict, namedtuple
 from pathlib import Path
@@ -69,6 +68,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from src.config.env import env_int, env_str
 from src.config.settings import TritonModelConfig
 from src.core.logging import get_logger
 from src.utils.cpu_pool import run_cpu
@@ -316,18 +316,19 @@ class PEEncoder:
     ) -> None:
         self.triton_pool = triton_pool
         self._text_backend_pref = (
-            (text_backend or os.environ.get('OP_PE_TEXT_BACKEND') or 'auto').strip().lower()
+            (text_backend or env_str('OP_PE_TEXT_BACKEND', 'auto')).strip().lower()
         )
         self._text_onnx_path = str(
-            text_onnx_path or os.environ.get('OP_PE_TEXT_ONNX_PATH') or DEFAULT_PE_TEXT_ONNX_PATH
+            text_onnx_path or env_str('OP_PE_TEXT_ONNX_PATH', str(DEFAULT_PE_TEXT_ONNX_PATH))
         )
-        self._text_triton_model = (
-            text_triton_model or os.environ.get('OP_PE_TEXT_TRITON_MODEL') or PE_TEXT_TRITON_MODEL
+        self._text_triton_model = text_triton_model or env_str(
+            'OP_PE_TEXT_TRITON_MODEL', PE_TEXT_TRITON_MODEL
         )
-        threads = (
-            ort_threads if ort_threads is not None else os.environ.get('OP_PE_TEXT_ORT_THREADS')
+        self._ort_threads = (
+            ort_threads
+            if ort_threads is not None
+            else env_int('OP_PE_TEXT_ORT_THREADS', 0, minimum=0)
         )
-        self._ort_threads = int(threads) if threads else 0
         self._triton_client_factory = triton_client_factory
 
         # Populated by warm_text_encoder().

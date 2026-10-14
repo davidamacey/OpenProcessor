@@ -10,7 +10,7 @@ Non-negotiable design rules:
    lives at ``umap_viz_state.joblib``
    (disk) and the ``op_umap_viz_state`` index — deliberately distinct
    names, never imported by/from ``embedding_reduce.py`` /
-   ``curation_umap.py`` / ``clustering/orchestrator.py`` /
+   ``routers/curation/umap.py`` / ``clustering/orchestrator.py`` /
    ``clustering/methods/``.
 2. **Never fits on a request path.** ``fit_projection`` (the only
    function importing ``umap`` / calling ``.fit_transform``) is reachable
@@ -55,7 +55,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import io
-import os
 import time
 import uuid
 from dataclasses import asdict, dataclass
@@ -66,6 +65,7 @@ import numpy as np
 
 from src.config import get_curation_config
 from src.config.curation import items_index, umap_viz_state_index
+from src.config.env import env_path
 from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
 from src.domain.embedding_state import embedded_clause
@@ -130,7 +130,7 @@ _active_tasks: dict[str, asyncio.Task[None]] = {}  # per project slug
 def _jobs_dir() -> Path:
     """Resolved fresh each call so tests can override via monkeypatch
     (same convention as ``item_scores.job._state_dir``)."""
-    return project_jobs_dir(Path(os.environ.get('OP_VIZ_JOBS_DIR', '/jobs/viz')))
+    return project_jobs_dir(env_path('OP_VIZ_JOBS_DIR', '/jobs/viz'))
 
 
 def _job() -> FileJob:

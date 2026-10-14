@@ -60,7 +60,7 @@ def sample_image(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def app_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, sample_image: Path) -> TestClient:
-    from src.routers import curation_images
+    from src.routers.curation import images as curation_images
 
     # Both resolve_crop_root and resolve_safe_path's absolute-path branch
     # read the config lazily via image_serving.get_curation_config() --
@@ -172,7 +172,7 @@ def test_region_thumbnail_is_revalidated_not_cached_for_an_hour(app_client: Test
 def test_region_thumbnail_etag_changes_when_the_box_moves(
     app_client: TestClient,
 ) -> None:
-    from src.routers import curation_images
+    from src.routers.curation import images as curation_images
 
     before = _get(app_client, 'detected', box_id='b1').headers['etag']
     docs = _docs_behind(app_client, curation_images)

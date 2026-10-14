@@ -9,15 +9,16 @@ delete; owner decision D5).
 
 from __future__ import annotations
 
-import os
 import re
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Literal
+
+from src.config.env import env_path, env_str
 
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from pathlib import Path
 
     from src.config.curation import CurationConfig, IndexRole
 
@@ -103,11 +104,11 @@ class ProjectRecord:
 
 
 def project_index_prefix() -> str:
-    return os.environ.get('OP_PROJECT_INDEX_PREFIX', 'op_prj_')
+    return env_str('OP_PROJECT_INDEX_PREFIX', 'op_prj_')
 
 
 def projects_data_root() -> Path:
-    return Path(os.environ.get('OP_PROJECTS_DATA_ROOT', './data/projects'))
+    return env_path('OP_PROJECTS_DATA_ROOT', './data/projects')
 
 
 def trainer_jobs_root() -> Path:
@@ -115,7 +116,7 @@ def trainer_jobs_root() -> Path:
     project's ``train_jobs_dir`` nests under ``<root>/projects/<slug>``;
     trainer-global files (``.trainer_capabilities.json``) live at the
     root itself, since one trainer serves every project."""
-    return Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs'))
+    return env_path('OP_TRAIN_JOBS_DIR', '/jobs')
 
 
 def resources_for_new(slug: str, base: CurationConfig) -> ProjectResources:
@@ -145,9 +146,7 @@ def resources_for_new(slug: str, base: CurationConfig) -> ProjectResources:
         bakeoff_eval_root=data_root / 'bakeoff_eval',
         project_state_dir=base.state_dir / 'projects' / slug,
         train_jobs_dir=trainer_jobs_root() / 'projects' / slug,
-        autolabel_dir=Path(os.environ.get('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label'))
-        / 'projects'
-        / slug,
+        autolabel_dir=env_path('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label') / 'projects' / slug,
         bakeoff_jobs_dir=base.state_dir / 'projects' / slug / 'bakeoff_jobs',
         mlflow_experiment=f'openprocessor-{slug}',
         # §5.3/§5.5: `default`'s model_prefix stays empty (not `default__`)

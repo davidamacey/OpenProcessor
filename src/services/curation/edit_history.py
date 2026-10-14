@@ -29,11 +29,11 @@ successive edits.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
 from src.config import get_region_fields
+from src.utils.timeutil import now_iso
 
 
 EDIT_HISTORY_FIELD = 'edit_history'
@@ -92,10 +92,6 @@ def state_fields(kind: EditKind) -> tuple[str, ...]:
     return VLM_DISMISS_FIELDS
 
 
-def _now_iso() -> str:
-    return datetime.now(tz=UTC).isoformat(timespec='seconds')
-
-
 def record_edit(
     current: dict[str, Any],
     *,
@@ -112,7 +108,7 @@ def record_edit(
         {
             'kind': kind.value,
             'writer': writer,
-            'at': now or _now_iso(),
+            'at': now or now_iso(),
             'restorable': restorable,
             'state': {f: current.get(f) for f in state_fields(kind)},
         }

@@ -35,7 +35,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     from _curation_app import mount_curation_routers
 
     from src.routers.curation._common import _raw_opensearch_dep
-    from src.routers.curation_train import router
+    from src.routers.curation.train import router
 
     app = FastAPI()
     mount_curation_routers(app, router)

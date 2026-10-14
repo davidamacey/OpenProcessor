@@ -32,21 +32,25 @@ from __future__ import annotations
 
 import contextlib
 import json
-import os
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from src.config.env import env_float, env_int, env_path
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def region_drain_poll_interval_s() -> float:
     """Read per call (not frozen at import time) so tests and a running
     process both see an env change take effect."""
-    return float(os.environ.get('OP_REGION_DRAIN_POLL_INTERVAL_S', '10'))
+    return env_float('OP_REGION_DRAIN_POLL_INTERVAL_S', 10)
 
 
 def region_drain_stable_polls() -> int:
-    return int(os.environ.get('OP_REGION_DRAIN_STABLE_POLLS', '3'))
+    return env_int('OP_REGION_DRAIN_STABLE_POLLS', 3)
 
 
 def _state_dir() -> Path:
@@ -56,7 +60,7 @@ def _state_dir() -> Path:
     from src.config.project_context import project_jobs_dir
 
     # Per project: the streak/stall state describes one project's queue.
-    return project_jobs_dir(Path(os.environ.get('OP_REGION_DRAIN_STATE_DIR', '/jobs/region_drain')))
+    return project_jobs_dir(env_path('OP_REGION_DRAIN_STATE_DIR', '/jobs/region_drain'))
 
 
 def _state_file() -> Path:

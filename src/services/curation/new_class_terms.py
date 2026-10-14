@@ -26,10 +26,10 @@ thing (``sports_car`` under a generic ``car``) stays a proposal.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Any
 
+from src.config.env import env_str
 from src.services.curation.class_sources import VLM_NEW_CLASS_PENDING_CLASS_SOURCE
 from src.services.curation.review_queries import build_tab_query
 
@@ -124,8 +124,8 @@ def load_term_rules(registry: Any) -> ProposalTermRules:
         if not getattr(entry, 'deprecated', False):
             existing[normalize_term(entry.class_name)] = int(entry.class_id)
     return ProposalTermRules(
-        generic_terms=_terms(os.environ.get('OP_NEW_CLASS_GENERIC_TERMS', '')),
-        non_object_terms=_terms(os.environ.get('OP_NEW_CLASS_NON_OBJECT_TERMS', '')),
+        generic_terms=_terms(env_str('OP_NEW_CLASS_GENERIC_TERMS', '')),
+        non_object_terms=_terms(env_str('OP_NEW_CLASS_NON_OBJECT_TERMS', '')),
         registry_groups=frozenset(g for g in groups if g),
         existing_classes=existing,
     )

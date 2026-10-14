@@ -26,13 +26,7 @@ from src.domain.ingest_class_sources import (
     classifier_class_sources,
     unlabeled_proposal_class_sources,
 )
-from src.routers.curation._common import (
-    OpenSearchDep,
-    _now_iso,
-    get_class_registry,
-    items_index,
-    router,
-)
+from src.routers.curation._common import OpenSearchDep, get_class_registry, items_index, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._stats_models import DatasetStatsResponse
 from src.services.curation import stats_imports as imp
@@ -41,6 +35,7 @@ from src.services.curation.item_filter import ItemFilter, item_filter_query
 from src.services.curation.stats_dataset_query import build_dataset_query_body
 from src.services.curation.stats_embedding import embedding_summary
 from src.services.detection.profile_registry import region_profile_or_neutral
+from src.utils.timeutil import now_iso
 
 
 @router.get('/stats/classes')
@@ -418,7 +413,7 @@ async def dataset_stats(opensearch: Any, item_filter: ItemFilter) -> dict[str, A
     )
 
     return {
-        'as_of': _now_iso(),
+        'as_of': now_iso(),
         # --- wire fields Cropwright's getStats() reads (do not remove) ----
         'total_crops': int(total),
         'validated': (aggs.get('validated') or {}).get('doc_count', 0),

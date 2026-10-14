@@ -21,7 +21,6 @@ Skip-rules: > MAX_REFINE_MEMBERS (default 8000) members (skip+warn);
 from __future__ import annotations
 
 import asyncio
-import os
 from collections import Counter
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
@@ -30,6 +29,7 @@ import numpy as np
 from opensearchpy.exceptions import OpenSearchException
 
 from src.config.curation import items_index
+from src.config.env import env_int
 from src.core.logging import get_logger
 from src.services.curation.clustering.cluster_write_guard import _log_bulk_write_errors
 from src.services.curation.clustering.methods.ahc import (
@@ -56,7 +56,7 @@ logger = get_logger(__name__)
 # Plus ~4 KB/member to fetch embeddings. It's fast (AHC fit is seconds even
 # at 8k) and off-loaded to a worker thread, so the binding constraint is RAM,
 # not latency. Raise via OP_MAX_REFINE_MEMBERS as far as the container allows.
-MAX_REFINE_MEMBERS = int(os.getenv('OP_MAX_REFINE_MEMBERS', '8000'))
+MAX_REFINE_MEMBERS = env_int('OP_MAX_REFINE_MEMBERS', 8000)
 # < this — skip (AHC needs at least a few points). The floor used to be 50 on
 # the theory that small clusters don't benefit, but operators also use refine
 # purely to *organize* a small bucket into like-kind sub-groups for faster

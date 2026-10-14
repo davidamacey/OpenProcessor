@@ -18010,16 +18010,6 @@
         "additionalProperties": true,
         "description": "Every :class:`~src.config.DetectionProfile` field except ``name``,\nJSON-typed (tuples/frozensets round-trip as lists). Defaults mirror\nthe dataclass so a partial draft validates with informative issues\nrather than a pydantic 422.",
         "properties": {
-          "aspect_max": {
-            "default": 8.0,
-            "title": "Aspect Max",
-            "type": "number"
-          },
-          "aspect_min": {
-            "default": 1.2,
-            "title": "Aspect Min",
-            "type": "number"
-          },
           "assigns_class": {
             "default": false,
             "title": "Assigns Class",

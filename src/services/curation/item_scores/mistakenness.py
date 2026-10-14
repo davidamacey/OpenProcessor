@@ -33,12 +33,12 @@ Two layers, because of a real persistence constraint:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
 from src.services.curation.item_scores.base import ScoreResult
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
@@ -46,10 +46,6 @@ if TYPE_CHECKING:
 
 
 MISTAKENNESS_VERSION = 'v1'
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 def compute_mistakenness_from_posterior(
@@ -124,7 +120,7 @@ class MistakennessScorer:
         if opensearch is None:
             raise ValueError('mistakenness scorer requires an opensearch client')
         if not ids:
-            now = _now_iso()
+            now = now_iso()
             return ScoreResult(scorer=self.name, version=self.version, scored_at=now, fields={})
 
         from src.clients.curation_opensearch.crops import mget_crops
@@ -166,7 +162,7 @@ class MistakennessScorer:
             confs.append(float(conf))
             margins.append(float(margin))
 
-        now = _now_iso()
+        now = now_iso()
         if not scored_ids:
             return ScoreResult(scorer=self.name, version=self.version, scored_at=now, fields={})
 

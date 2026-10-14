@@ -71,7 +71,7 @@ class ClusterMixin:
         """
         import time
 
-        from src.services.clustering import get_clustering_service
+        from src.services.visual_search.clustering import get_clustering_service
 
         cluster_index = self._get_cluster_index(index_name)
         opensearch_index = self._get_opensearch_index(index_name)
@@ -137,7 +137,7 @@ class ClusterMixin:
         Returns:
             Assignment stats
         """
-        from src.services.clustering import get_clustering_service
+        from src.services.visual_search.clustering import get_clustering_service
 
         cluster_index = self._get_cluster_index(index_name)
         opensearch_index = self._get_opensearch_index(index_name)
@@ -195,7 +195,7 @@ class ClusterMixin:
         Returns:
             Cluster statistics
         """
-        from src.services.clustering import get_clustering_service
+        from src.services.visual_search.clustering import get_clustering_service
 
         cluster_index = self._get_cluster_index(index_name)
         opensearch_index = self._get_opensearch_index(index_name)
@@ -235,7 +235,7 @@ class ClusterMixin:
         Returns:
             Balance assessment with recommendation
         """
-        from src.services.clustering import get_clustering_service
+        from src.services.visual_search.clustering import get_clustering_service
 
         cluster_index = self._get_cluster_index(index_name)
 

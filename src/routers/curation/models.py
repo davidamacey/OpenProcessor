@@ -12,7 +12,6 @@ guard for free.
 
 from __future__ import annotations
 
-import os
 import re
 from typing import Annotated, Any
 
@@ -20,6 +19,7 @@ import httpx
 from fastapi import HTTPException, Query
 from pydantic import BaseModel
 
+from src.config.env import env_str
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, logger, router
 from src.routers.curation._models_class_mapping import (
@@ -107,7 +107,7 @@ async def models_status(
     matched by name onto this project's registry).
     """
     triton_http = resolve_triton_http_url()
-    triton_metrics_url = os.environ.get('TRITON_METRICS_URL', 'http://triton-server:8002/metrics')
+    triton_metrics_url = env_str('TRITON_METRICS_URL', 'http://triton-server:8002/metrics')
 
     state_by_name: dict[str, dict[str, Any]] = {}
     metrics_by_model: dict[str, dict[str, float]] = {}

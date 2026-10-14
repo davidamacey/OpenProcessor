@@ -5,12 +5,13 @@ All configuration is loaded from environment variables with sensible defaults.
 Use get_settings() to access the singleton settings instance.
 """
 
-import os
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from src.config.env import env_str
 
 
 def _read_version() -> str:
@@ -30,27 +31,27 @@ class TritonModelConfig:
     # (e.g. YOLO_MODEL=yolo26_small_trt); the output-format adapter is
     # resolved per model from Triton metadata, so both YOLO11 end2end and
     # YOLO26 fused engines work interchangeably.
-    YOLO_MODEL = os.environ.get('YOLO_MODEL', 'yolov11_small_trt_end2end')
+    YOLO_MODEL = env_str('YOLO_MODEL', 'yolov11_small_trt_end2end')
 
     # Face Detection/Recognition (SCRFD + Umeyama alignment + ArcFace)
-    FACE_DETECT_MODEL = os.environ.get('FACE_DETECT_MODEL', 'scrfd_10g_bnkps')
-    ARCFACE_MODEL = os.environ.get('ARCFACE_MODEL', 'arcface_w600k_r50')
+    FACE_DETECT_MODEL = env_str('FACE_DETECT_MODEL', 'scrfd_10g_bnkps')
+    ARCFACE_MODEL = env_str('ARCFACE_MODEL', 'arcface_w600k_r50')
 
     # CLIP Embeddings
-    CLIP_IMAGE_MODEL = os.environ.get('CLIP_IMAGE_MODEL', 'mobileclip2_s2_image_encoder')
-    CLIP_TEXT_MODEL = os.environ.get('CLIP_TEXT_MODEL', 'mobileclip2_s2_text_encoder')
+    CLIP_IMAGE_MODEL = env_str('CLIP_IMAGE_MODEL', 'mobileclip2_s2_image_encoder')
+    CLIP_TEXT_MODEL = env_str('CLIP_TEXT_MODEL', 'mobileclip2_s2_text_encoder')
 
     # OCR
-    OCR_DET_MODEL = os.environ.get('OCR_DET_MODEL', 'paddleocr_det_trt')
-    OCR_REC_MODEL = os.environ.get('OCR_REC_MODEL', 'paddleocr_rec_trt')
-    OCR_PIPELINE_MODEL = os.environ.get('OCR_PIPELINE_MODEL', 'ocr_pipeline')
+    OCR_DET_MODEL = env_str('OCR_DET_MODEL', 'paddleocr_det_trt')
+    OCR_REC_MODEL = env_str('OCR_REC_MODEL', 'paddleocr_rec_trt')
+    OCR_PIPELINE_MODEL = env_str('OCR_PIPELINE_MODEL', 'ocr_pipeline')
 
     # PE-Core (semantic search / curation embeddings)
-    PE_IMAGE_MODEL = os.environ.get('PE_IMAGE_MODEL', 'pe_image_encoder')
-    PE_TEXT_MODEL = os.environ.get('PE_TEXT_MODEL', 'pe_text_encoder')
+    PE_IMAGE_MODEL = env_str('PE_IMAGE_MODEL', 'pe_image_encoder')
+    PE_TEXT_MODEL = env_str('PE_TEXT_MODEL', 'pe_text_encoder')
 
     # GPU decode (decode once, letterbox, squares, blur, crop JPEGs; Python backend)
-    GPU_IMAGE_PREP_MODEL = os.environ.get('GPU_IMAGE_PREP_MODEL', 'gpu_image_prep')
+    GPU_IMAGE_PREP_MODEL = env_str('GPU_IMAGE_PREP_MODEL', 'gpu_image_prep')
 
 
 class Settings(BaseSettings):

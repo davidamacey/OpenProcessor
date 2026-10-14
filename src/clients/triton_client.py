@@ -595,7 +595,7 @@ class TritonClient:
 _client_instance: TritonClient | None = None
 
 
-def get_triton_client(triton_url: str = 'triton-server:8001') -> TritonClient:
+def get_sync_triton_client(triton_url: str = 'triton-server:8001') -> TritonClient:
     """Get singleton Triton client instance."""
     global _client_instance  # noqa: PLW0603  # module-level cache set lazily
     if _client_instance is None:

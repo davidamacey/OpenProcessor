@@ -14,18 +14,18 @@ so an operator can always see the current state even with the flag off.
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
+from src.config.env import env_bool
 from src.routers.curation._common import OpenSearchDep, router
 from src.services.curation.index_bootstrap import ensure_indexes
 
 
 def _scores_enabled() -> bool:
-    return os.environ.get('OP_SCORES_ENABLED', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+    return env_bool('OP_SCORES_ENABLED')
 
 
 class ScoresComputeRequest(BaseModel):

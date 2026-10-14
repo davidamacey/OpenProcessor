@@ -17,6 +17,7 @@ from src.config.project_context import bind_project
 from src.config.projects import CLONEABLE_AXES
 from src.core.logging import get_logger
 from src.services.rejections import rejection
+from src.utils.timeutil import now_iso
 
 
 logger = get_logger(__name__)
@@ -635,7 +636,6 @@ async def clone_settings_into(
     changes the target's revision."""
     from src.services.projects.lifecycle import (
         _get_mutable_record,
-        _now,
         _require_revision,
         _require_transition,
         write_record,
@@ -655,7 +655,7 @@ async def clone_settings_into(
         axes=resolved_axes,
         target_activations=target_activations,
     )
-    updated = replace(record, revision=record.revision + 1, updated_at=_now())
+    updated = replace(record, revision=record.revision + 1, updated_at=now_iso())
     await write_record(client, updated, if_seq_no=seq, if_primary_term=term)
     await get_project_registry().ensure_fresh()
     return updated, conflicts

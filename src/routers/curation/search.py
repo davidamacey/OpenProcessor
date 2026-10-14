@@ -4,20 +4,18 @@
 curation semantic search. No other ``/search/*`` prefix is used
 anywhere in this module.
 
-Gated end-to-end by ``OP_SEMANTIC_SEARCH_ENABLED`` (default off, inline
-``os.getenv`` per house convention — see ``scores.py``'s
-``scores_compute``/``select.py``'s diverse-overlay docstring for the
-precedent this mirrors): disabled returns ``400`` with a message telling
+Gated end-to-end by ``OP_SEMANTIC_SEARCH_ENABLED`` (default off, read with
+``env_bool`` like ``scores.py``'s and ``select.py``'s flags): disabled returns ``400`` with a message telling
 the operator which flag to flip, same shape ``scores.py`` uses.
 """
 
 from __future__ import annotations
 
-import os
 from typing import Annotated, Any
 
 from fastapi import HTTPException, Query, Request
 
+from src.config.env import env_bool
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._page_models import SearchTextResponse
@@ -31,12 +29,7 @@ def _semantic_search_enabled() -> bool:
     ``OP_SCORES_ENABLED``/``OP_SELECT_DIVERSE_ENABLED`` live-read
     convention ``strategy_registry.py`` documents, so tests can
     ``monkeypatch.setenv`` without reimporting."""
-    return os.environ.get('OP_SEMANTIC_SEARCH_ENABLED', '').strip().lower() in {
-        '1',
-        'true',
-        'yes',
-        'on',
-    }
+    return env_bool('OP_SEMANTIC_SEARCH_ENABLED')
 
 
 def _get_pe_encoder(request: Request) -> Any:

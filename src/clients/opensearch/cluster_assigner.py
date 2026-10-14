@@ -18,7 +18,7 @@ class ClusterAssignmentLike(Protocol):
 
 class ClusterAssigner(Protocol):
     """Assigns an embedding to a cluster once the index is trained
-    (``src.services.clustering.ClusteringService``)."""
+    (``src.services.visual_search.clustering.ClusteringService``)."""
 
     def is_trained(self, index: ClusterIndex) -> bool: ...
 

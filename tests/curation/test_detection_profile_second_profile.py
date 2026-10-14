@@ -37,8 +37,6 @@ BOX_PROFILE = DetectionProfile(
     confidence_floor=0.6,
     batch_limit=8,
     letterbox_fill=(0, 0, 0),
-    aspect_min=0.7,
-    aspect_max=1.4,
     text_hint_aspect_min=0.8,
     text_hint_aspect_max=1.2,
     text_hint_rec_floor=0.9,
@@ -65,7 +63,7 @@ def test_profiles_are_distinct_instances() -> None:
     """Sanity: the two profiles really do carry different values."""
     assert BOX_PROFILE.name != REFERENCE_LICENSE_PLATE_PROFILE.name
     assert BOX_PROFILE.detector_model != REFERENCE_LICENSE_PLATE_PROFILE.detector_model
-    assert BOX_PROFILE.aspect_min != REFERENCE_LICENSE_PLATE_PROFILE.aspect_min
+    assert BOX_PROFILE.text_hint_aspect_min != REFERENCE_LICENSE_PLATE_PROFILE.text_hint_aspect_min
     assert BOX_PROFILE.confidence_floor != REFERENCE_LICENSE_PLATE_PROFILE.confidence_floor
     assert BOX_PROFILE.input_size != REFERENCE_LICENSE_PLATE_PROFILE.input_size
 
@@ -114,33 +112,6 @@ async def test_region_detector_uses_profile_model_name_and_floor() -> None:
     pool_low.infer = AsyncMock(return_value=_FakeInferResult(raw_low))
     detector_low = RegionDetector(pool_low, BOX_PROFILE)
     assert await detector_low.detect(_make_jpeg()) is None
-
-
-def test_ocr_region_shape_checks_use_the_bound_profile() -> None:
-    """``OcrRegion``'s aspect/length checks read the profile it was built with.
-
-    A near-square region (aspect ~1.0) fails the license-plate profile's
-    aspect band (1.2-8.0) but passes the box profile's (0.7-1.4) — same
-    bbox, different verdict, purely because of the bound profile.
-    """
-    square_region_default = OcrRegion(
-        bbox_norm=(0.1, 0.1, 0.3, 0.3),  # aspect 1.0
-        text='AB12',
-        text_raw='AB12',
-        det_score=0.9,
-        rec_score=0.95,
-        profile=REFERENCE_LICENSE_PLATE_PROFILE,
-    )
-    square_region_box = OcrRegion(
-        bbox_norm=(0.1, 0.1, 0.3, 0.3),
-        text='AB12',
-        text_raw='AB12',
-        det_score=0.9,
-        rec_score=0.95,
-        profile=BOX_PROFILE,
-    )
-    assert not square_region_default.is_region_shaped
-    assert square_region_box.is_region_shaped
 
 
 def test_ocr_region_text_candidate_gate_is_profile_scoped() -> None:

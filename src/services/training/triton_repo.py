@@ -5,8 +5,9 @@ Split out of :mod:`src.services.training.triton_promote`.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
+
+from src.config.env import env_optional_str, env_path, env_str
 
 
 # Same default as src/routers/models.py — the Triton model repo mounted
@@ -26,8 +27,7 @@ DEFAULT_TRITON_MODELS_DIR = Path('/app/models')
 
 def resolve_triton_models_dir() -> Path:
     """``OP_TRITON_MODEL_REPO``, falling back to :data:`DEFAULT_TRITON_MODELS_DIR`."""
-    override = os.environ.get('OP_TRITON_MODEL_REPO')
-    return Path(override) if override else DEFAULT_TRITON_MODELS_DIR
+    return env_path('OP_TRITON_MODEL_REPO', DEFAULT_TRITON_MODELS_DIR)
 
 
 # Triton's HTTP control endpoint. The api container shares the
@@ -40,10 +40,8 @@ def resolve_triton_http_url() -> str:
     name if that's the only one set anywhere in this deployment), else
     :data:`DEFAULT_TRITON_HTTP_URL`.
     """
-    return (
-        os.environ.get('OP_TRITON_HTTP_URL')
-        or os.environ.get('TRITON_HTTP_URL')
-        or DEFAULT_TRITON_HTTP_URL
+    return env_optional_str('OP_TRITON_HTTP_URL') or env_str(
+        'TRITON_HTTP_URL', DEFAULT_TRITON_HTTP_URL
     )
 
 

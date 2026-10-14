@@ -24,7 +24,7 @@ from src.config import get_region_fields
 from src.config.curation import get_curation_config
 from src.config.region_state import RegionStatus
 from src.domain.region_boxes import RegionBoxWriteError, read_boxes
-from src.routers.curation._common import OpenSearchDep, RegionProfileDep, _now_iso, router
+from src.routers.curation._common import OpenSearchDep, RegionProfileDep, router
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.routers.curation._region_write_models import (
     RegionBatchWriteResponse,
@@ -51,6 +51,7 @@ from src.services.curation.region_writes import (
     parent_to_source_bbox,
     post_write_item,
 )
+from src.utils.timeutil import now_iso
 
 
 class BoxWriteElement(BaseModel):
@@ -239,7 +240,7 @@ def _put_boxes_build(
     """Merger body shared by the single and batch PUT: build the new box
     list from the request, apply the optional whole-set status, and write
     it through :func:`human_box_write` (one revision bump)."""
-    now = _now_iso()
+    now = now_iso()
     requested = [b.model_dump() for b in payload.boxes]
 
     def _build(current: dict[str, Any]) -> dict[str, Any]:
@@ -364,7 +365,7 @@ async def patch_crop_region_box(
         raise HTTPException(status_code=400, detail='at least one of state, text is required')
     _check_text_allowed([payload], profile)
     _check_box_states('PATCH /crops/{crop_id}/regions/{box_id}', [payload])
-    now = _now_iso()
+    now = now_iso()
 
     def _build(current: dict[str, Any]) -> dict[str, Any]:
         F = get_region_fields()
@@ -430,7 +431,7 @@ async def batch_set_region_box_state(
     for t in payload.targets:
         by_crop.setdefault(t.crop_id, []).append(t.box_id)
     expected_revisions = payload.expected_region_revisions or {}
-    now = _now_iso()
+    now = now_iso()
 
     def _build_for(crop_id: str, box_ids: list[str]) -> Any:
         def _build(current: dict[str, Any]) -> dict[str, Any]:

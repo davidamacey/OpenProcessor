@@ -243,10 +243,6 @@ def running_import_ids() -> list[tuple[str, str | None]]:
     ]
 
 
-def now_iso() -> str:
-    return datetime.now(UTC).isoformat()
-
-
 __all__ = [
     'ACTIVE_STATUSES',
     'COMPLETED_STATUSES',
@@ -259,7 +255,6 @@ __all__ = [
     'latest_with_key',
     'list_stores',
     'new_import_id',
-    'now_iso',
     'open_store',
     'running_import_ids',
     'valid_import_id',
