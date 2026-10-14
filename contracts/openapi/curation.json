@@ -931,6 +931,23 @@
             "title": "Processed",
             "type": "integer"
           },
+          "queue_age_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Seconds a queued job has waited for a worker; null once it is not queued.",
+            "title": "Queue Age Seconds"
+          },
+          "queue_max_age_seconds": {
+            "description": "A job still queued after this long fails: no worker is running.",
+            "title": "Queue Max Age Seconds",
+            "type": "number"
+          },
           "result": {
             "additionalProperties": true,
             "description": "Per-stage outcomes under `stages` (cluster_residuals, auto_promote, vlm, embed, ...); each stage reports its own counters.",
@@ -991,6 +1008,8 @@
           "stage_durations",
           "eta_seconds",
           "elapsed_seconds",
+          "queue_age_seconds",
+          "queue_max_age_seconds",
           "cancelled"
         ],
         "title": "AutoLabelCancelResponse",
@@ -1103,6 +1122,23 @@
             "title": "Processed",
             "type": "integer"
           },
+          "queue_age_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Seconds a queued job has waited for a worker; null once it is not queued.",
+            "title": "Queue Age Seconds"
+          },
+          "queue_max_age_seconds": {
+            "description": "A job still queued after this long fails: no worker is running.",
+            "title": "Queue Max Age Seconds",
+            "type": "number"
+          },
           "result": {
             "additionalProperties": true,
             "description": "Per-stage outcomes under `stages` (cluster_residuals, auto_promote, vlm, embed, ...); each stage reports its own counters.",
@@ -1162,7 +1198,9 @@
           "peak_vram_mb",
           "stage_durations",
           "eta_seconds",
-          "elapsed_seconds"
+          "elapsed_seconds",
+          "queue_age_seconds",
+          "queue_max_age_seconds"
         ],
         "title": "AutoLabelJobState",
         "type": "object"

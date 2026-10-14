@@ -107,6 +107,11 @@ def _trigger_file() -> Path:
 # leaves room for a long blocking call inside a stage without false-positives.
 _ACTIVE = frozenset({'running'})
 
+# How long a job may sit queued (trigger unclaimed) before it fails. The worker runs one
+# job at a time across all projects, so a wait behind another project's run is normal; an
+# hour past that means no worker is running.
+QUEUE_MAX_AGE_S = 3600.0
+
 
 @dataclass
 class _JobState:
@@ -141,6 +146,11 @@ class _JobState:
         else:
             d['eta_seconds'] = None
         d['elapsed_seconds'] = round(elapsed, 1) if elapsed else 0.0
+        queued = self.status == 'queued'
+        d['queue_age_seconds'] = (
+            round(max(0.0, time.time() - self.started_at), 1) if queued else None
+        )
+        d['queue_max_age_seconds'] = QUEUE_MAX_AGE_S
         return d
 
 
@@ -148,7 +158,7 @@ def _read_state() -> _JobState:
     """Load the on-disk state. Returns a default idle state if missing."""
     state = _JobState()
     for k, v in _job().read().items():
-        if k in {'eta_seconds', 'elapsed_seconds'}:
+        if k in {'eta_seconds', 'elapsed_seconds', 'queue_age_seconds', 'queue_max_age_seconds'}:
             continue  # derived in to_dict
         if hasattr(state, k):
             setattr(state, k, v)
@@ -168,8 +178,8 @@ def _is_busy() -> bool:
     'busy' — a second :func:`start_job` while a trigger sits unread
     would otherwise stomp on it.
     """
-    if _trigger_file().exists():
-        return True
+    if _trigger_file().exists() or _job().state_problem() is not None:
+        return True  # an unreadable state cannot show the run is over: fail closed
     age = _job().heartbeat_age()
     if age is None:
         return False
@@ -233,10 +243,13 @@ def get_state() -> dict[str, Any]:
     operators see an actionable message instead of stale 'running'.
 
     A 'queued' state with no heartbeat is fine — the trigger is sitting
-    in the worker's poll cycle. Liveness only matters once a run is
-    actually executing.
+    in the worker's poll cycle — until it has waited longer than
+    :data:`QUEUE_MAX_AGE_S`: then no worker is running and the job fails
+    with that reason instead of waiting for ever.
     """
     state = _read_state()
+    if state.status == 'queued' and time.time() - state.started_at > QUEUE_MAX_AGE_S:
+        _fail_unclaimed(state)
     if state.status == 'running':
         age = _job().heartbeat_age()
         if not _trigger_file().exists() and (age is None or age > HEARTBEAT_STALE_S):
@@ -251,6 +264,22 @@ def get_state() -> dict[str, Any]:
             _job().write(asdict(state))
             _reap_stale_artifacts()
     return state.to_dict()
+
+
+def _fail_unclaimed(state: _JobState) -> None:
+    """Fail a job whose trigger no worker claimed within :data:`QUEUE_MAX_AGE_S`. The
+    trigger is withdrawn first: if the worker claimed it meanwhile the unlink fails and
+    the job is left to the worker."""
+    try:
+        _trigger_file().unlink()
+    except FileNotFoundError:
+        return
+    state.status = 'failed'
+    state.error = state.error or (
+        f'auto_label worker not running: the job was not picked up within {QUEUE_MAX_AGE_S:.0f}s'
+    )
+    state.finished_at = state.finished_at or time.time()
+    _job().write(asdict(state))
 
 
 def get_job_state(job_id: str) -> dict[str, Any] | None:

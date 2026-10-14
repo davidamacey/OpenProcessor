@@ -36,6 +36,12 @@ class AutoLabelJobState(BaseModel):
     stage_durations: dict[str, float] = Field(description='Wall seconds per finished stage.')
     eta_seconds: float | None
     elapsed_seconds: float
+    queue_age_seconds: float | None = Field(
+        description='Seconds a queued job has waited for a worker; null once it is not queued.'
+    )
+    queue_max_age_seconds: float = Field(
+        description='A job still queued after this long fails: no worker is running.'
+    )
 
 
 class AutoLabelCancelResponse(AutoLabelJobState):
