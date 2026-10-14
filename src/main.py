@@ -96,8 +96,7 @@ class AppResources:
     project_registry_poll_task: asyncio.Task[None] | None = None
     ops_metrics_task: asyncio.Task[None] | None = None
     config_store_poll_task: asyncio.Task[None] | None = None
-    open_vocab_sweeper_task: asyncio.Task[None] | None = None
-    ingest_dispatcher_task: asyncio.Task[None] | None = None
+    curation_background_jobs: list[asyncio.Task[None]] = []
     event_bus_started: bool = False
 
 
@@ -349,15 +348,9 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning('pe_text_encoder_warm_skipped', error=str(exc))
 
-    # Resume ingest-time open-vocabulary passes a restart left pending.
-    from src.services.curation.open_vocab_sweeper import start_open_vocab_sweeper
+    from src.services.curation.background_jobs import start_background_jobs, stop_background_jobs
 
-    AppResources.open_vocab_sweeper_task = start_open_vocab_sweeper()
-
-    # Act on due source triggers (watch polls, cron schedules, webhook-queued objects).
-    from src.services.curation.bulk_ingest.dispatcher import start_ingest_dispatcher
-
-    AppResources.ingest_dispatcher_task = start_ingest_dispatcher()
+    AppResources.curation_background_jobs = start_background_jobs()
 
     logger.info(
         'service_ready',
@@ -388,15 +381,8 @@ async def lifespan(app: FastAPI):
         AppResources.arbiter_task = None
         logger.info('gpu_arbiter_loop_stopped')
 
-    from src.services.curation.open_vocab_sweeper import stop_open_vocab_sweeper
-
-    await stop_open_vocab_sweeper(AppResources.open_vocab_sweeper_task)
-    AppResources.open_vocab_sweeper_task = None
-
-    from src.services.curation.bulk_ingest.dispatcher import stop_ingest_dispatcher
-
-    await stop_ingest_dispatcher(AppResources.ingest_dispatcher_task)
-    AppResources.ingest_dispatcher_task = None
+    await stop_background_jobs(AppResources.curation_background_jobs)
+    AppResources.curation_background_jobs = []
 
     from src.services.projects.bootstrap import shutdown_project_registry
 

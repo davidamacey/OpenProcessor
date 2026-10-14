@@ -34,6 +34,12 @@ STATE_PENDING = 'pending'
 STATE_DONE = 'done'
 STATE_FAILED = 'failed'
 STATE_DEAD = 'dead'
+_FAIL_SQL = (
+    'UPDATE objects SET attempts=attempts+1, error=?, updated_at=?,'
+    ' state=CASE WHEN ? OR attempts+1>=? THEN ? ELSE ? END WHERE '
+)
+_FAIL_SQL_ONE_ETAG = _FAIL_SQL + 'key=? AND etag=? AND state!=?'
+_FAIL_SQL_ANY_ETAG = _FAIL_SQL + 'key=? AND state!=?'
 STATES = (STATE_PENDING, STATE_DONE, STATE_FAILED, STATE_DEAD)
 # Failures that retrying cannot fix.
 TERMINAL_ERROR_KINDS = frozenset(
@@ -133,13 +139,8 @@ class ObjectQueue:
             conn.execute('BEGIN IMMEDIATE')
             for key, etag, error, kind in items:
                 terminal = kind in TERMINAL_ERROR_KINDS
-                where, args = (
-                    ('key=?', (key,)) if etag is None else ('key=? AND etag=?', (key, etag))
-                )
                 conn.execute(
-                    'UPDATE objects SET attempts=attempts+1, error=?, updated_at=?,'
-                    ' state=CASE WHEN ? OR attempts+1>=? THEN ? ELSE ? END'
-                    f' WHERE {where} AND state!=?',
+                    _FAIL_SQL_ANY_ETAG if etag is None else _FAIL_SQL_ONE_ETAG,
                     (
                         error[:300],
                         now,
@@ -147,7 +148,7 @@ class ObjectQueue:
                         MAX_ATTEMPTS,
                         STATE_DEAD,
                         STATE_FAILED,
-                        *args,
+                        *((key,) if etag is None else (key, etag)),
                         STATE_DONE,
                     ),
                 )

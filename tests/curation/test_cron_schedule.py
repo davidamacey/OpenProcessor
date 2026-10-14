@@ -15,8 +15,10 @@ from src.services.curation.bulk_ingest.schedule import (
 )
 
 
-def at(*args: int) -> datetime:
-    return datetime(*args, tzinfo=UTC)
+def at(
+    year: int, month: int, day: int, hour: int = 0, minute: int = 0, second: int = 0
+) -> datetime:
+    return datetime(year, month, day, hour, minute, second, tzinfo=UTC)
 
 
 @pytest.mark.parametrize(

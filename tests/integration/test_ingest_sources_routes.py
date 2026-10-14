@@ -167,7 +167,8 @@ def test_failed_objects_are_kept_dead_or_retryable_and_retry_dead_requeues_them(
     source = _create(client)
     run = _wait(client, client.post(f'{BASE}/sources/{source["source_id"]}/run').json()['run_id'])
     assert run['status'] == 'completed_with_errors'
-    assert run['progress']['ingested'] == 3 and run['progress']['failed'] == 2
+    assert run['progress']['ingested'] == 3
+    assert run['progress']['failed'] == 2
 
     status = client.get(f'{BASE}/sources/{source["source_id"]}').json()
     assert status['counts'] == {'pending': 0, 'done': 3, 'failed': 1, 'dead': 1}
@@ -191,7 +192,8 @@ def test_the_one_shot_bucket_start_uses_the_same_source_and_stays_inside_the_all
     started = client.post(f'{BASE}/bulk', json={'s3': S3_BODY, 'source': 'oneshot'})
     assert started.status_code == 202, started.text
     run = _wait(client, started.json()['run_id'])
-    assert run['progress']['ingested'] == 3 and run['source']['kind'] == 'queue'
+    assert run['progress']['ingested'] == 3
+    assert run['source']['kind'] == 'queue'
     assert len(client.get(f'{BASE}/sources').json()['items']) == 1
 
     again = _wait(client, client.post(f'{BASE}/bulk', json={'s3': S3_BODY}).json()['run_id'])

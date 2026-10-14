@@ -7,10 +7,7 @@ from typing import Any
 
 import pytest
 
-from src.services.curation.bulk_ingest.s3_events import (
-    InvalidS3EventError,
-    parse_s3_event,
-)
+from src.services.curation.bulk_ingest.s3_events import InvalidS3EventError, parse_s3_event
 
 
 def _record(name: str = 'ObjectCreated:Put', **obj: Any) -> dict[str, Any]:

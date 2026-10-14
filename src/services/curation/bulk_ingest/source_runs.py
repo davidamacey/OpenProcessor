@@ -90,7 +90,7 @@ def last_run_summary(state: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def run_is_live(summary: dict[str, Any] | None) -> bool:
-    return bool(summary) and summary['status'] in ACTIVE_STATUSES
+    return summary is not None and summary['status'] in ACTIVE_STATUSES
 
 
 def source_status(source: IngestSource) -> dict[str, Any]:

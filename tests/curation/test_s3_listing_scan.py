@@ -43,7 +43,8 @@ def test_a_first_pass_queues_every_image_across_pages_and_partitions(tmp_path: P
     assert result.queued == expected  # type: ignore[attr-defined]
     assert queue.counts()['pending'] == expected
     keys = {e.key for e in queue.iter_pending()}
-    assert 'p/d0/readme.txt' not in keys and 'p/d0/' not in keys
+    assert 'p/d0/readme.txt' not in keys
+    assert 'p/d0/' not in keys
     assert result.pages > 3  # type: ignore[attr-defined]
 
 

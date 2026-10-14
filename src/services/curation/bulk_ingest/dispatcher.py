@@ -20,7 +20,6 @@ dispatcher needs is on disk, so a worker that dies loses nothing: a stale run be
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import os
 import random
 import time
@@ -232,11 +231,3 @@ def start_ingest_dispatcher() -> asyncio.Task[None] | None:
     if interval <= 0:
         return None
     return asyncio.create_task(_loop(interval))
-
-
-async def stop_ingest_dispatcher(task: asyncio.Task[None] | None) -> None:
-    if task is None:
-        return
-    task.cancel()
-    with contextlib.suppress(asyncio.CancelledError, Exception):
-        await task

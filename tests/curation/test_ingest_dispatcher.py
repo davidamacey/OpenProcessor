@@ -154,7 +154,8 @@ def test_a_failed_poll_records_the_error_and_backs_off_and_a_good_one_clears_it(
     state = source_state(src.source_id).read()
     assert 'listing unavailable' in state['last_poll_error']
     first_backoff = state['backoff_until']
-    assert first_backoff > 0 and state['failures'] == 1
+    assert first_backoff > 0
+    assert state['failures'] == 1
     asyncio.run(dispatcher._poll(src, start_run=lambda _s, scan: started.append(scan)))
     assert source_state(src.source_id).read()['backoff_until'] > first_backoff - 1
     assert source_state(src.source_id).read()['failures'] == 2
@@ -166,3 +167,19 @@ def test_a_failed_poll_records_the_error_and_backs_off_and_a_good_one_clears_it(
     state = source_state(src.source_id).read()
     assert (state['failures'], state['last_poll_error'], state['backoff_until']) == (0, None, None)
     assert started == [False]  # pending rows: a drain, without another scan
+
+
+def test_background_jobs_start_only_enabled_jobs_and_stop_cancels_them(monkeypatch):
+    from src.services.curation.background_jobs import start_background_jobs, stop_background_jobs
+
+    monkeypatch.setenv('OP_INGEST_DISPATCH_S', '0')
+    monkeypatch.setenv('OP_OPEN_VOCAB_SWEEP_S', '0')
+
+    async def lifecycle() -> tuple[int, int, bool]:
+        none_started = len(start_background_jobs())
+        monkeypatch.setenv('OP_INGEST_DISPATCH_S', '60')
+        jobs = start_background_jobs()
+        await stop_background_jobs(jobs)
+        return none_started, len(jobs), jobs[0].cancelled()
+
+    assert asyncio.run(lifecycle()) == (0, 1, True)
