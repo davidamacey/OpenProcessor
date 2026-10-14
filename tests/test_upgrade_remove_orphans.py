@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # file -> regex matching the whole-stack `up` lines that must carry the flag
 _WHOLE_STACK_UP = {
     'openprocessor': r'^\s*dc up -d( --remove-orphans)?$',
-    'scripts/setup.sh': r'^\s*dc up -d( --remove-orphans)?$',
+    'scripts/lib/setup_services.sh': r'^\s*dc up -d( --remove-orphans)?$',
     'Makefile': r'^\t\$\((DEV_)?COMPOSE\) (--profile monitoring )?up -d( --build)?( --remove-orphans)?$',
     'setup-openprocessor.sh': r'dc up -d( --remove-orphans)?( opensearch)?( \|\||$)',
 }

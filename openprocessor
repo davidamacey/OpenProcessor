@@ -190,6 +190,19 @@ load_config_lib() {
     source "${SCRIPT_DIR}/lib/config.sh"
 }
 
+# Command groups, loaded by main() only for the command that needs them.
+load_cli_core_lib() {
+    source "${SCRIPT_DIR}/lib/cli_core.sh"
+}
+
+load_cli_dev_lib() {
+    source "${SCRIPT_DIR}/lib/cli_dev.sh"
+}
+
+load_cli_gpu_lib() {
+    source "${SCRIPT_DIR}/lib/cli_gpu.sh"
+}
+
 # =============================================================================
 # Service Management
 # =============================================================================
@@ -322,681 +335,6 @@ cmd_health() {
     fi
 }
 
-# =============================================================================
-# Model Management
-# =============================================================================
-
-cmd_models() {
-    local sub="${1:-status}"
-    shift 2>/dev/null || true
-    case "$sub" in
-        status|list) cmd_models_status ;;
-        install|repair)
-            local only=""
-            if [[ "${1:-}" == "--only" ]]; then
-                only="${2:?--only needs a group name}"
-            fi
-            cmd_models_install "$only"
-            ;;
-        *)
-            log_error "usage: openprocessor models status|install [--only GROUP]|repair"
-            return 2
-            ;;
-    esac
-}
-
-# Engines that were not built at the preferred precision (the installer's
-# precision ledger). A local file, so it prints even when Triton is down.
-_models_precision_section() {
-    local degraded model precision reason
-    # shellcheck source=scripts/lib/model_setup.sh
-    source "${SCRIPT_DIR}/lib/model_setup.sh"
-    local stamps trt cc sha
-    stamps="$(OP_DIR="$PROJECT_DIR" model_setup_stamp_report)"
-    if [[ -n "$stamps" ]]; then
-        echo -e "${BOLD}Engine build stamps:${NC}"
-        while IFS=$'\t' read -r model precision trt cc sha; do
-            echo "  ${model}: ${precision}, TensorRT ${trt}, compute capability ${cc}, ONNX ${sha}"
-        done <<< "$stamps"
-        echo ""
-    fi
-    degraded="$(OP_DIR="$PROJECT_DIR" model_setup_precision_report)"
-    [[ -n "$degraded" ]] || return 0
-    echo -e "${BOLD}Degraded precision:${NC}"
-    while IFS=$'\t' read -r model precision reason; do
-        echo -e "  ${YELLOW}[${precision^^}]${NC} ${model}: not the FP16 default. ${reason}"
-    done <<< "$degraded"
-    echo "  Retry FP16 after fixing the cause: ./openprocessor models install --only pe"
-    echo ""
-}
-
-cmd_models_status() {
-    _models_precision_section
-    log_info "Fetching the model repository index from Triton..."
-    local response
-    response=$(curl -s -X POST "localhost:${TRITON_HTTP_PORT}/v2/repository/index" 2>/dev/null)
-    if [[ -z "$response" ]]; then
-        log_error "Triton not responding"
-        return 1
-    fi
-    echo ""
-    echo -e "${BOLD}Models:${NC}"
-    # No host Python: split the JSON array into objects with sed.
-    printf '%s\n' "$response" | sed 's/},{/}\n{/g' | while IFS= read -r obj; do
-        local name state
-        name="$(printf '%s' "$obj" | sed -n -E 's/.*"name":"([^"]*)".*/\1/p')"
-        state="$(printf '%s' "$obj" | sed -n -E 's/.*"state":"([^"]*)".*/\1/p')"
-        [[ -z "$name" ]] && continue
-        if [[ "$state" == READY ]]; then
-            echo -e "  ${GREEN}[READY]${NC} ${name}"
-        else
-            echo -e "  ${YELLOW}[${state:-UNAVAILABLE}]${NC} ${name}"
-        fi
-    done
-}
-
-# One implementation with the installer: scripts/lib/model_setup.sh.
-cmd_models_install() {
-    local only="$1" tiers="core" profiles
-    # shellcheck source=scripts/lib/model_setup.sh
-    source "${SCRIPT_DIR}/lib/model_setup.sh"
-    profiles="$(_env_value COMPOSE_PROFILES)"
-    [[ ",${profiles}," == *",curation,"* ]] && tiers="core curation"
-    OP_DIR="$PROJECT_DIR"
-    OP_HEALTH_HOST=127.0.0.1
-    GPU_PROFILE="$(_env_value GPU_PROFILE)"
-    MODEL_SETUP_TRITON_DIGEST=""
-    if [[ -f "$PROJECT_DIR/.install/state.json" ]]; then
-        MODEL_SETUP_TRITON_DIGEST="$(sed -n -E 's/^  "triton_image_digest": "([^"]*)",?$/\1/p' "$PROJECT_DIR/.install/state.json" | head -n1)"
-    else
-        log_info "no .install/state.json (a checkout, not an installed directory): every model group is built"
-    fi
-    export OP_DIR OP_HEALTH_HOST GPU_PROFILE MODEL_SETUP_TRITON_DIGEST
-    dc up -d triton-server
-    if model_setup_run_groups "$tiers" "$only"; then
-        log_success "model groups done"
-    else
-        log_error "some model groups failed; see ${PROJECT_DIR}/.install/logs"
-        return 1
-    fi
-    if [[ -z "$only" || "$only" == pe ]] && [[ "$tiers" == *curation* ]]; then
-        dc restart api
-    fi
-}
-
-cmd_export() {
-    local model="${1:-all}"
-
-    load_export_lib
-
-    case "$model" in
-        all)
-            export_all_models
-            ;;
-        essential)
-            export_essential_models
-            ;;
-        status)
-            check_exported_models
-            ;;
-        *)
-            export_model "$model"
-            ;;
-    esac
-}
-
-cmd_download() {
-    local target="${1:-all}"
-
-    load_download_lib
-
-    case "$target" in
-        all)
-            download_all_models
-            ;;
-        essential)
-            download_essential_models
-            ;;
-        ocr|paddleocr)
-            download_paddleocr_models
-            ;;
-        status)
-            check_downloaded_models
-            ;;
-        *)
-            download_model "$target"
-            ;;
-    esac
-}
-
-# =============================================================================
-# Profile Management
-# =============================================================================
-
-cmd_profile() {
-    local profile="${1:-}"
-
-    if [[ -z "$profile" ]]; then
-        # Show current profile
-        if [[ -f "$PROJECT_DIR/.env" ]]; then
-            local current
-            current=$(grep "^GPU_PROFILE=" "$PROJECT_DIR/.env" | cut -d'=' -f2)
-            echo "Current profile: $current"
-        else
-            echo "No profile configured. Run: ./scripts/setup.sh"
-        fi
-        echo ""
-        echo "Available profiles:"
-        echo "  minimal   - 6-8GB VRAM (RTX 3060, RTX 4060)"
-        echo "  standard  - 12-24GB VRAM (RTX 3080, RTX 4090)"
-        echo "  full      - 48GB+ VRAM (A6000, A100)"
-        return 0
-    fi
-
-    # Validate profile
-    if [[ ! "$profile" =~ ^(minimal|standard|full)$ ]]; then
-        log_error "Invalid profile: $profile"
-        echo "Valid profiles: minimal, standard, full"
-        return 1
-    fi
-
-    load_config_lib
-
-    local gpu_id="${2:-0}"
-
-    log_step "Switching to profile: $profile"
-
-    # Generate new configs
-    generate_all_configs "$profile" "$gpu_id"
-    generate_env_file "$profile" "$gpu_id"
-    generate_compose_override "$profile" "$gpu_id"
-
-    log_success "Profile switched to: $profile"
-    log_info "Restart services to apply: ./scripts/openprocessor.sh restart"
-}
-
-# =============================================================================
-# Testing
-# =============================================================================
-
-cmd_test() {
-    local test_type="${1:-quick}"
-
-    cd "$PROJECT_DIR"
-
-    case "$test_type" in
-        quick|smoke)
-            log_step "Running quick smoke tests..."
-            # Simple curl tests
-            echo ""
-            echo "Health check:"
-            curl -s "localhost:${API_PORT}/health" | python3 -m json.tool 2>/dev/null || curl -s "localhost:${API_PORT}/health"
-            echo ""
-            ;;
-        full)
-            log_step "Running full test suite..."
-            if [[ ! -x "$PROJECT_DIR/.venv/bin/python" ]]; then
-                log_error "$PROJECT_DIR/.venv/bin/python not found — create the venv first"
-                return 1
-            fi
-            if [[ -f "$PROJECT_DIR/tests/test_full_system.py" ]]; then
-                "$PROJECT_DIR/.venv/bin/python" "$PROJECT_DIR/tests/test_full_system.py"
-            else
-                log_error "Test suite not found"
-                return 1
-            fi
-            ;;
-        visual)
-            log_step "Running visual validation..."
-            if [[ ! -x "$PROJECT_DIR/.venv/bin/python" ]]; then
-                log_error "$PROJECT_DIR/.venv/bin/python not found — create the venv first"
-                return 1
-            fi
-            if [[ -f "$PROJECT_DIR/tests/validate_visual_results.py" ]]; then
-                "$PROJECT_DIR/.venv/bin/python" "$PROJECT_DIR/tests/validate_visual_results.py"
-            else
-                log_error "Visual validation script not found"
-                return 1
-            fi
-            ;;
-        *)
-            log_error "Unknown test type: $test_type"
-            echo "Available: quick, full, visual"
-            return 1
-            ;;
-    esac
-}
-
-# =============================================================================
-# Curation subsystem — EXPERIMENTAL, opt-in compose profile
-# =============================================================================
-# Mirrors the `curation-*` Makefile targets. The curation worker services
-# (curation-detection-worker, curation-vlm-worker, curation-auto-label-worker,
-# curation-cluster-refresh) all carry `profiles: [curation]` in
-# docker-compose.yml, so `start`/`stop` above never touch them.
-
-cmd_curation() {
-    local subcommand="${1:-status}"
-    shift 2>/dev/null || true
-
-    cd "$PROJECT_DIR"
-
-    case "$subcommand" in
-        up)
-            log_step "Starting curation subsystem (profile: curation)..."
-            dc --profile curation up -d
-            log_success "Curation services starting. Check with: $0 curation status"
-            ;;
-        down)
-            log_step "Stopping curation subsystem (profile: curation)..."
-            dc --profile curation down
-            log_success "Curation services stopped"
-            ;;
-        logs)
-            dc --profile curation logs -f \
-                curation-detection-worker curation-vlm-worker \
-                curation-auto-label-worker curation-cluster-refresh
-            ;;
-        status)
-            dc --profile curation ps \
-                curation-detection-worker curation-vlm-worker \
-                curation-auto-label-worker curation-cluster-refresh curation-evaluator
-            ;;
-        seed)
-            log_warn "curation seed: not yet implemented."
-            echo "scripts/curation/seed_live_harness.py does not exist on this branch yet"
-            echo "(live write-path verification harness). Nothing was run."
-            ;;
-        *)
-            log_error "Unknown curation subcommand: $subcommand"
-            echo "Available: up, down, logs, status, seed"
-            return 1
-            ;;
-    esac
-}
-
-cmd_bench() {
-    local mode="${1:-quick}"
-
-    cd "$PROJECT_DIR"
-
-    if [[ ! -f "$PROJECT_DIR/benchmarks/triton_bench" ]]; then
-        log_info "Building benchmark tool..."
-        cd "$PROJECT_DIR/benchmarks"
-        ./build.sh
-        cd "$PROJECT_DIR"
-    fi
-
-    log_step "Running benchmark ($mode mode)..."
-    "$PROJECT_DIR/benchmarks/triton_bench" --mode "$mode"
-}
-
-# =============================================================================
-# Cleanup
-# =============================================================================
-
-cmd_clean() {
-    local target="${1:-cache}"
-
-    case "$target" in
-        cache)
-            log_step "Cleaning caches..."
-            rm -rf "$PROJECT_DIR/.mypy_cache"
-            rm -rf "$PROJECT_DIR/.ruff_cache"
-            rm -rf "$PROJECT_DIR/.pytest_cache"
-            find "$PROJECT_DIR" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-            log_success "Caches cleaned"
-            ;;
-        models)
-            log_warn "This will remove downloaded PyTorch models."
-            read -r -p "Continue? [y/N]: " reply
-            if [[ "$reply" =~ ^[Yy]$ ]]; then
-                rm -rf "$PROJECT_DIR/pytorch_models"/*.pt
-                rm -rf "$PROJECT_DIR/pytorch_models"/*.onnx
-                log_success "Models cleaned"
-            fi
-            ;;
-        exports)
-            log_warn "This will remove TensorRT exports."
-            read -r -p "Continue? [y/N]: " reply
-            if [[ "$reply" =~ ^[Yy]$ ]]; then
-                find "$PROJECT_DIR/models" -name "model.plan" -delete
-                log_success "Exports cleaned"
-            fi
-            ;;
-        all)
-            cmd_clean cache
-            cmd_clean models
-            cmd_clean exports
-            ;;
-        *)
-            log_error "Unknown target: $target"
-            echo "Available: cache, models, exports, all"
-            return 1
-            ;;
-    esac
-}
-
-# =============================================================================
-# Update
-# =============================================================================
-
-cmd_update() {
-    if [[ "$IS_CHECKOUT" != 1 ]]; then
-        cmd_upgrade "$@"
-        return
-    fi
-    log_step "Updating OpenProcessor (checkout)..."
-
-    cd "$PROJECT_DIR"
-
-    # Pull latest images
-    log_info "Pulling latest Docker images..."
-    dc pull
-
-    # Rebuild if needed
-    log_info "Rebuilding containers..."
-    dc build
-
-    log_success "Update complete"
-    log_info "Restart to apply: ./scripts/openprocessor.sh restart"
-}
-
-# =============================================================================
-# Help
-# =============================================================================
-
-show_help() {
-    cat << EOF
-OpenProcessor Management CLI
-
-Usage: ./scripts/openprocessor.sh <command> [options]
-
-Service Commands:
-  start               Start all services
-  stop                Stop all services
-  restart [service]   Restart service(s)
-  logs [service] [-f] View logs (optionally follow)
-  status              Show service status and health
-  health              Check API health endpoint
-
-Model Commands:
-  models [status]     List Triton models and their state
-  models install [--only GROUP]
-                      Export/load model groups (skips up-to-date ones)
-  models repair       Same as install: re-runs failed or missing groups
-  export <model>      Export model to TensorRT
-                      Options: yolo, scrfd, arcface, clip-image, clip-text, ocr, all, essential, status
-  download <model>    Download model
-                      Options: all, essential, ocr, status, <model-name>
-
-Configuration:
-  profile [name]      Show/switch GPU profile
-                      Options: minimal, standard, full
-
-Testing:
-  test [type]         Run tests
-                      Options: quick (default), full, visual
-  bench [mode]        Run benchmarks
-                      Options: quick (default), full
-
-Curation (experimental, opt-in compose profile):
-  curation [action]   Manage the curation worker services
-                      Options: up, down, logs, status (default), seed
-
-Maintenance:
-  clean [target]      Clean files
-                      Options: cache (default), models, exports, all
-  update              Checkout: pull + rebuild. Install dir: same as upgrade
-  upgrade [--version vX.Y.Z]   Upgrade this install (setup-openprocessor.sh)
-  repair              Re-verify files, re-pull images, re-run failed model groups
-  uninstall [--purge-volumes] [--purge-data] [--remove-images]
-
-Deploy:
-  sample coco [--full]  Fetch the public COCO sample (inside the API image)
-  config show           Print .env with every secret redacted
-  gpu plan              Show the GPU placement from .env
-  vlm list|status|use <id> [--force] [--yes]|apply|probe|key set <slug>
-  train-mode on|off     Stop/start the VLM (and a co-located segmenter) for training
-
-Setup:
-  setup               Run initial setup wizard
-
-Examples:
-  ./scripts/openprocessor.sh status
-  ./scripts/openprocessor.sh logs api -f
-  ./scripts/openprocessor.sh export all
-  ./scripts/openprocessor.sh profile standard
-  ./scripts/openprocessor.sh test full
-  ./scripts/openprocessor.sh clean cache
-
-EOF
-}
-
-# =============================================================================
-# New in the deploy-mode CLI (installer plan section 5.5)
-# =============================================================================
-
-cmd_sample() {
-    local sub="${1:-coco}"
-    shift 2>/dev/null || true
-    case "$sub" in
-        coco)
-            # shellcheck source=scripts/lib/model_setup.sh
-            source "${SCRIPT_DIR}/lib/model_setup.sh"
-            log_step "Fetching the public COCO sample (writes to /app/data/samples, no host Python)..."
-            model_setup_sample_coco "${1:-}"
-            ;;
-        *)
-            log_error "unknown sample: $sub (only 'coco' is supported)"
-            return 1
-            ;;
-    esac
-}
-
-cmd_config() {
-    local sub="${1:-show}"
-    case "$sub" in
-        show)
-            local env_file="${PROJECT_DIR}/.env"
-            [[ -f "$env_file" ]] || { log_error "no .env at ${env_file}"; return 1; }
-            # Redact every token/key/secret/password value, with or
-            # without a leading `export`.
-            sed -E 's/^([[:space:]]*(export[[:space:]]+)?[A-Z0-9_]*(TOKEN|KEY|SECRET|PASSWORD)[A-Z0-9_]*)=.*/\1=***/' "$env_file"
-            ;;
-        *)
-            log_error "unknown config subcommand: $sub"
-            return 1
-            ;;
-    esac
-}
-
-# Explain where the PE image encoder runs and refuse a TRITON_GPU_ID that this
-# host cannot honour (missing card, mixed architectures, no room).
-_gpu_plan_placement() {
-    local ids pe_mib running=0 project table out line rc=0 primary_mib
-    ids="$(_env_value TRITON_GPU_ID)"
-    ids="${ids:-0}"
-    if ! command -v nvidia-smi &> /dev/null; then
-        log_warn "nvidia-smi not found: the placement of TRITON_GPU_ID=${ids} is not verified"
-        return 0
-    fi
-    pe_mib="$(sed -n -E '/GPU_MIB_PER_INSTANCE/{n;s/.*string_value: *"([0-9]+)".*/\1/p}' \
-        "${PROJECT_DIR}/models/pe_image_encoder/config.pbtxt" 2>/dev/null | head -1)" || true
-    pe_mib="${pe_mib:-1536}"
-    project="$(_env_value COMPOSE_PROJECT_NAME)"
-    if command -v docker &> /dev/null \
-        && docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "${project:-openprocessor}-triton"; then
-        running=1
-    fi
-    case "$(_env_value GPU_PROFILE)" in
-        minimal) primary_mib=8192 ;;
-        full) primary_mib=17408 ;;
-        *) primary_mib=12288 ;;
-    esac
-    table="$(nvidia-smi --query-gpu=index,name,memory.total,memory.used,compute_cap \
-        --format=csv,noheader,nounits | awk -F', ' '{ print $1 "|" $2 "|" $3 "|" $4 "|" $5 }')"
-    out="$(gpu_pe_placement "$ids" "$pe_mib" "$table" "$running" "$primary_mib")" || rc=$?
-    echo "  PE image encoder (about ${pe_mib} MiB per card):"
-    while IFS= read -r line; do
-        case "$line" in
-            gpu=*) echo "    GPU ${line#gpu=}" ;;
-            warn=*) log_warn "${line#warn=}" ;;
-            problem=*) log_error "${line#problem=}" ;;
-        esac
-    done <<< "$out"
-    echo "  every other Triton model runs on the primary card (the lowest id in TRITON_GPU_ID)"
-    _gpu_plan_decode "$ids" "$table" "$running" "$primary_mib"
-    return "$rc"
-}
-
-# Say whether the GPU decode is on and why. Refuses nothing: the GPU decode loads on first
-# use and falls back to the CPU path per image, so a forced-on card without room only warns.
-_gpu_plan_decode() {
-    local ids="$1" table="$2" running="$3" primary_mib="$4" setting profile source primary
-    local decode_mib=8704
-    setting="$(_env_value OP_INGEST_GPU_DECODE)"
-    profile="$(_env_value GPU_PROFILE)"
-    profile="${profile:-standard}"
-    if [[ -n "$setting" ]]; then
-        source="OP_INGEST_GPU_DECODE=${setting} in .env"
-    else
-        setting=1
-        source="code default (on); the installer writes 0 for profiles without room"
-    fi
-    case "${setting,,}" in
-        1|true|yes|on) setting=1 ;;
-        *) setting=0 ;;
-    esac
-    if (( setting == 0 )); then
-        echo "  GPU decode (ingest): off (${source}); photos decode on the CPU. Needs about ${decode_mib} MiB more on the primary card"
-        return 0
-    fi
-    echo "  GPU decode (ingest): on (${source}); about ${decode_mib} MiB more on the primary card, loaded on first use"
-    primary="$(tr ',' '\n' <<< "$ids" | sort -n | head -1)"
-    local idx name total used cc need=$(( primary_mib + decode_mib )) have
-    while IFS='|' read -r idx name total used cc; do
-        [[ "$idx" == "$primary" ]] || continue
-        # A running Triton already holds its models, so only the card's total can be judged then.
-        if [[ "$running" == 1 ]]; then have=$total; else have=$(( total - used )); fi
-        if (( have < need )); then
-            log_warn "GPU ${idx} has ${have} MiB $([[ "$running" == 1 ]] && echo total || echo free); the ${profile} profile's models (${primary_mib} MiB) plus the GPU decode (${decode_mib} MiB) need about ${need} MiB. Without room the GPU decode fails to load and ingest stays on the CPU path; set OP_INGEST_GPU_DECODE=0 to silence this"
-        fi
-    done <<< "$table"
-}
-
-cmd_gpu() {
-    local sub="${1:-plan}"
-    case "$sub" in
-        plan)
-            log_step "GPU plan (from .env)"
-            for key in TRITON_GPU_ID API_GPU_ID SEGMENTER_GPU_ID VLM_GPU_ID EVALUATOR_GPU_ID GPU_PROFILE; do
-                local value
-                value="$(_env_value "$key")"
-                echo "  ${key}=${value:-<unset>}"
-            done
-            _gpu_plan_placement
-            ;;
-        *)
-            log_error "unknown gpu subcommand: $sub"
-            return 1
-            ;;
-    esac
-}
-
-cmd_vlm() {
-    local sub="${1:-list}"
-    shift 2>/dev/null || true
-    case "$sub" in
-        list)
-            log_step "VLM catalog"
-            printf '%-20s %-10s %-8s %-10s\n' "id" "licence" "vram_gb" "status"
-            while IFS=$'\t' read -r id _repo licence vram _sctx _mctx _maximg status _rank _gated _key; do
-                printf '%-20s %-10s %-8s %-10s\n' "$id" "$licence" "$vram" "$status"
-            done < <(vlm_catalog_rows)
-            ;;
-        status) _vlm_status ;;
-        use) _vlm_use "$@" ;;
-        apply) _vlm_apply "$@" ;;
-        probe) _vlm_probe ;;
-        key)
-            local action="${1:-}" slug="${2:-}"
-            if [[ "$action" != "set" || -z "$slug" ]]; then
-                log_error "usage: openprocessor vlm key set <slug>"
-                return 2
-            fi
-            if [[ ! "$slug" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]]; then
-                log_error "slug must match [a-z0-9][a-z0-9_-]{0,63}"
-                return 2
-            fi
-            if ! { : </dev/tty; } 2>/dev/null; then
-                log_error "no terminal to read the key from"
-                return 2
-            fi
-            ( umask 077; mkdir -p "${PROJECT_DIR}/secrets/vlm" )
-            chmod 700 "${PROJECT_DIR}/secrets" "${PROJECT_DIR}/secrets/vlm"
-            local key_value=""
-            printf "VLM API key for '%s' (input hidden): " "$slug" >/dev/tty
-            IFS= read -rs key_value </dev/tty || true
-            printf '\n' >/dev/tty
-            [[ -n "$key_value" ]] || { log_error "empty key"; return 2; }
-            ( umask 077; printf '%s' "$key_value" > "${PROJECT_DIR}/secrets/vlm/${slug}" )
-            key_value=""
-            chmod 600 "${PROJECT_DIR}/secrets/vlm/${slug}"
-            log_success "stored secrets/vlm/${slug} (mode 600); reference it as secret:${slug}"
-            ;;
-        *)
-            log_error "unknown vlm subcommand: $sub"
-            return 1
-            ;;
-    esac
-}
-
-cmd_train_mode() {
-    local mode="${1:-}" state="${PROJECT_DIR}/.install/train_mode" trn seg services=(vlm)
-    trn="$(_env_value OP_TRAIN_GPU_ORDER)"
-    seg="$(_env_value SEGMENTER_GPU_ID)"
-    if [[ -n "$trn" && "$trn" == "$seg" ]]; then
-        services+=(segmenter)
-    fi
-    case "$mode" in
-        on)
-            log_step "train-mode on: stopping ${services[*]} for the training run"
-            dc stop "${services[@]}"
-            ( umask 077; mkdir -p "${PROJECT_DIR}/.install"; printf 'on %s\n' "${services[*]}" > "$state" )
-            log_success "train-mode on (stopped: ${services[*]})"
-            ;;
-        off)
-            if [[ -f "$state" ]]; then
-                read -r _ services_line < "$state" || true
-                read -ra services <<< "${services_line:-vlm}"
-            fi
-            log_step "train-mode off: starting ${services[*]}"
-            dc up -d "${services[@]}"
-            ( umask 077; printf 'off\n' > "$state" )
-            log_success "train-mode off (started: ${services[*]})"
-            ;;
-        *)
-            log_error "usage: openprocessor train-mode on|off"
-            return 2
-            ;;
-    esac
-}
-
-# One code path: lifecycle commands run this install's own verified
-# setup-openprocessor.sh against this directory.
-_run_setup() {
-    if [[ "$IS_CHECKOUT" == 1 || ! -x "$PROJECT_DIR/setup-openprocessor.sh" ]]; then
-        log_error "this is not an installer-managed directory (use git + make in a checkout)"
-        return 1
-    fi
-    resolve_project
-    exec "$PROJECT_DIR/setup-openprocessor.sh" --dir "$PROJECT_DIR" "$@"
-}
-
-cmd_upgrade() { _run_setup "$@"; }
-cmd_repair() { _run_setup --repair "$@"; }
-cmd_uninstall() { _run_setup --uninstall "$@"; }
 
 # =============================================================================
 # Main
@@ -1026,67 +364,86 @@ main() {
             cmd_health "$@"
             ;;
         models)
+            load_cli_core_lib
             cmd_models "$@"
             ;;
         export)
+            load_cli_core_lib
             cmd_export "$@"
             ;;
         download)
+            load_cli_core_lib
             cmd_download "$@"
             ;;
         profile)
+            load_cli_dev_lib
             require_checkout "profile" && cmd_profile "$@"
             ;;
         test)
+            load_cli_dev_lib
             require_checkout "test" && cmd_test "$@"
             ;;
         curation)
+            load_cli_core_lib
             cmd_curation "$@"
             ;;
         bench)
+            load_cli_dev_lib
             require_checkout "bench" && cmd_bench "$@"
             ;;
         clean)
+            load_cli_dev_lib
             cmd_clean "$@"
             ;;
         update)
+            load_cli_core_lib
             cmd_update "$@"
             ;;
         setup)
             require_checkout "setup" && exec "${SCRIPT_DIR}/setup.sh" "$@"
             ;;
         sample)
+            load_cli_core_lib
             cmd_sample "$@"
             ;;
         config)
+            load_cli_core_lib
             cmd_config "$@"
             ;;
         gpu)
+            load_cli_gpu_lib
             cmd_gpu "$@"
             ;;
         vlm)
+            load_cli_gpu_lib
             cmd_vlm "$@"
             ;;
         train-mode)
+            load_cli_gpu_lib
             cmd_train_mode "$@"
             ;;
         upgrade)
+            load_cli_core_lib
             cmd_upgrade "$@"
             ;;
         repair)
+            load_cli_core_lib
             cmd_repair "$@"
             ;;
         uninstall)
+            load_cli_core_lib
             cmd_uninstall "$@"
             ;;
         version)
             echo "openprocessor CLI ${OP_CLI_VERSION:-0.5.0}"
             ;;
         help|--help|-h)
+            load_cli_core_lib
             show_help
             ;;
         *)
             log_error "Unknown command: $command"
+            load_cli_core_lib
             echo ""
             show_help
             exit 1
