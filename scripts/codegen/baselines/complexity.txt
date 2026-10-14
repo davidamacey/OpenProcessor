@@ -48,7 +48,7 @@ src/services/labeling/vlm_labeler_combined.py::_parse_combined_batch_response	18
 src/services/labeling/vlm_labeler_verify.py::_parse_region_batch_response	20	ratchet: may only go down
 src/services/labeling/vlm_labeler_visibility.py::_parse_region_visible_response	22	ratchet: may only go down
 src/services/model_export.py::run_export	18	ratchet: may only go down
-src/services/projects/guard.py::check_request	20	ratchet: may only go down
+src/services/projects/guard_policy.py::check_request	20	ratchet: may only go down
 src/services/training/gpu_arbiter.py::reconcile_on_startup	19	ratchet: may only go down
 src/services/training/jobs.py::list_runs	18	ratchet: may only go down
 src/services/training/preflight_scan.py::scan_export_labels	18	ratchet: may only go down

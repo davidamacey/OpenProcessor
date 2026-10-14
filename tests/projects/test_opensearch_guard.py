@@ -12,14 +12,13 @@ from src.config.curation import base_curation_config
 from src.config.project_context import ProjectNotBound, bind_project
 from src.config.projects import ProjectRecord, resources_for_new
 from src.services.config_store.global_store import global_configs_index
-from src.services.projects.guard import (
+from src.services.projects.guard import ProjectGuardedTransport
+from src.services.projects.guard_errors import (
     CrossProjectAccess,
-    ProjectGuardedTransport,
     ProjectReadOnly,
-    check_request,
     cross_project_access_count,
-    global_configs_read,
 )
+from src.services.projects.guard_policy import check_request, global_configs_read
 
 
 # These tests are about binding itself: no autouse `default` binding.
@@ -247,16 +246,16 @@ def _bulk(n_items: int, index: str) -> bytes:
 
 
 def test_bulk_document_lines_are_not_parsed(snapshot, monkeypatch) -> None:
-    from src.services.projects import guard
+    from src.services.projects import guard_parse
 
     parsed: list[int] = []
-    real_loads = guard.json.loads
+    real_loads = guard_parse.json.loads
 
     def counting_loads(text, *args, **kwargs):
         parsed.append(len(text))
         return real_loads(text, *args, **kwargs)
 
-    monkeypatch.setattr(guard.json, 'loads', counting_loads)
+    monkeypatch.setattr(guard_parse.json, 'loads', counting_loads)
     with bind_project(snapshot['alpha']):
         check_request('POST', '/_bulk', _bulk(6, 'op_prj_alpha__items'), snapshot)
     assert len(parsed) == 6  # one action line per item

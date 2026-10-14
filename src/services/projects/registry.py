@@ -145,7 +145,7 @@ async def write_record(
     exists (the storage-level create race two concurrent ``POST
     /projects`` for the same slug would otherwise lose -- M1)."""
     from src.services.projects.bootstrap import bump_revision
-    from src.services.projects.guard import bind_registry_admin
+    from src.services.projects.guard_policy import bind_registry_admin
 
     kwargs: dict[str, Any] = {}
     if if_seq_no is not None:

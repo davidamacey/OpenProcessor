@@ -15,7 +15,8 @@ import pytest
 from src.config.curation import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
-from src.services.projects.guard import CrossProjectAccess, bind_registry_admin, check_request
+from src.services.projects.guard_errors import CrossProjectAccess
+from src.services.projects.guard_policy import bind_registry_admin, check_request
 
 
 pytestmark = pytest.mark.unbound

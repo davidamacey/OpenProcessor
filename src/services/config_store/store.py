@@ -216,7 +216,7 @@ class ConfigStore:
         own); a project's own store needs no allowance."""
         if not self.is_global:
             return contextlib.nullcontext()
-        from src.services.projects.guard import global_configs_read
+        from src.services.projects.guard_policy import global_configs_read
 
         return global_configs_read()
 
