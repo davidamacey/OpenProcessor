@@ -47,4 +47,3 @@ tests/curation/test_train_jobs.py	1020	split in PR 7
 tests/curation/test_train_router.py	1865	split in PR 7
 tests/curation/test_trainer_protocol.py	1522	split in PR 7
 tests/curation/test_triton_promote.py	939	split in PR 7
-tests/curation/test_worker_hot_reload.py	803	split in PR 7
