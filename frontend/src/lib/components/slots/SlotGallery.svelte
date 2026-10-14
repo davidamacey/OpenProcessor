@@ -10,7 +10,7 @@
   import { resolveApiUrl } from '$lib/api';
   import SlotBboxEditor from '$lib/components/SlotBboxEditor.svelte';
   import SlotCard from '$lib/components/SlotCard.svelte';
-  import type { SlotGalleryController } from '../../../routes/p/[project]/clusters/slotGalleryController.svelte';
+  import type { SlotGalleryController } from '$lib/slots/slotGalleryController.svelte';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 

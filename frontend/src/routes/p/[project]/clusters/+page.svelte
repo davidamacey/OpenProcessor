@@ -26,7 +26,7 @@
   import {
     createSlotGalleryController,
     type SlotGalleryController,
-  } from './slotGalleryController.svelte';
+  } from '$lib/slots/slotGalleryController.svelte';
   import { createSelection } from '$lib/selection.svelte';
   import {
     isEmbeddingVizAvailable,

@@ -12,7 +12,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import SlotGallery from './SlotGallery.svelte';
-import { createSlotGalleryController } from '../../../routes/p/[project]/clusters/slotGalleryController.svelte';
+import { createSlotGalleryController } from '$lib/slots/slotGalleryController.svelte';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import type { Cluster } from '$lib/types';
 
