@@ -15,7 +15,11 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const LIB = path.resolve(here, '../../../../lib');
+const src = readFileSync(
+  path.join(LIB, 'components/clusters/ClustersStatusBar.svelte'),
+  'utf-8',
+);
 
 describe('DQ-p2: the status bar reads the pager that actually backs the visible grid', () => {
   it('branches on slotGallery to read its pager in gallery mode', () => {

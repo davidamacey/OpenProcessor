@@ -9,7 +9,6 @@ frontend/src/lib/components/TrainForm.svelte	708	split in PR 8
 frontend/src/lib/components/settings/KeymapCard.svelte	744	split in PR 8
 frontend/src/lib/strategies.test.ts	1128	split in PR 8
 frontend/src/lib/types.ts	1430	split in PR 8
-frontend/src/routes/p/[project]/clusters/+page.svelte	1488	split in PR 8
 frontend/src/routes/p/[project]/clusters/[id]/+page.svelte	1462	split in PR 8
 frontend/src/routes/p/[project]/export/+page.svelte	1012	split in PR 8
 frontend/src/routes/p/[project]/review/+page.svelte	3243	split in PR 8

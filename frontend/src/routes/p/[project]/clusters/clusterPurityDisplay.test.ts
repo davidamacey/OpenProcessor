@@ -15,7 +15,15 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const gridSrc = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const LIB = path.resolve(here, '../../../../lib');
+const gridSrc = readFileSync(
+  path.join(LIB, 'components/clusters/ClusterGridCard.svelte'),
+  'utf-8',
+);
+const toolbarSrc = readFileSync(
+  path.join(LIB, 'components/clusters/ClustersToolbar.svelte'),
+  'utf-8',
+);
 const detailSrc = readFileSync(path.join(here, '[id]/+page.svelte'), 'utf-8');
 
 describe('/clusters cards show purity_n/purity_basis and label_purity/labelled_share', () => {
@@ -29,7 +37,7 @@ describe('/clusters cards show purity_n/purity_basis and label_purity/labelled_s
     const block = gridSrc.slice(idx, idx + 400);
     expect(block).toMatch(/c\.label_agreement/);
     expect(block).toMatch(/c\.labelled_share/);
-    expect(gridSrc).not.toMatch(/>purity (asc|desc)</);
+    expect(toolbarSrc).not.toMatch(/>purity (asc|desc)</);
   });
 
   it('purity_tier is still what drives the badge color/text', () => {

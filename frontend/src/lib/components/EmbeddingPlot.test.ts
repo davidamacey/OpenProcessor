@@ -151,19 +151,34 @@ describe('EmbeddingPlot.svelte: side-by-side layout + click-to-enlarge', () => {
   });
 });
 
+const CLUSTERS_PAGE_FILES = [
+  '../../routes/p/[project]/clusters/+page.svelte',
+  '../clusters/clusterListController.svelte.ts',
+  '../clusters/clusterSearchModes.svelte.ts',
+  '../clusters/slotInventory.svelte.ts',
+  './clusters/ClustersToolbar.svelte',
+  './clusters/ClustersGrid.svelte',
+  './clusters/ClusterGridCard.svelte',
+  './clusters/ClustersStatusBar.svelte',
+];
+
 describe('/clusters wiring adds zero new keydown listeners', () => {
-  it('routes/clusters/+page.svelte still registers zero direct window/document keydown listeners', () => {
-    const src = read('../../routes/p/[project]/clusters/+page.svelte');
-    expect(src).not.toMatch(/(window|document)\.addEventListener\(['"]keydown['"]/);
+  it('routes/clusters/+page.svelte and its split modules still register zero direct window/document keydown listeners', () => {
+    for (const rel of CLUSTERS_PAGE_FILES) {
+      const src = read(rel);
+      expect(src, rel).not.toMatch(
+        /(window|document)\.addEventListener\(['"]keydown['"]/,
+      );
+    }
   });
 
   it('the embedding-plot toggle exists and the component is mounted behind an {#if} (lazy, never eager)', () => {
-    const src = read('../../routes/p/[project]/clusters/+page.svelte');
+    const src = read('./clusters/ClustersGrid.svelte');
     expect(src).toMatch(/EmbeddingPlot/);
     // Lazily mounted: the component tag must be inside a conditional
     // block keyed on the toggle state, not rendered unconditionally at
     // the top of the template.
-    expect(src).toMatch(/\{#if\s+showEmbeddingViz\}[\s\S]*<EmbeddingPlot/);
+    expect(src).toMatch(/\{(#|:else )if\s+showEmbeddingViz\}[\s\S]*<EmbeddingPlot/);
   });
 
   it('the toggle button is gated on isEmbeddingVizAvailable (absent, not just disabled, for a backend that has not shipped it)', () => {

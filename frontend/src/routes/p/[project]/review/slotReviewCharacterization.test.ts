@@ -37,10 +37,19 @@ import { classesStore } from '$lib/stores/classes.svelte';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const reviewPageSrc = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
-const clustersPageSrc = readFileSync(
-  path.resolve(here, '..', 'clusters', '+page.svelte'),
-  'utf-8',
-);
+// The /clusters page and the modules it was split into.
+const clustersPageSrc = [
+  '../clusters/+page.svelte',
+  '../../../../lib/clusters/clusterListController.svelte.ts',
+  '../../../../lib/clusters/clusterSearchModes.svelte.ts',
+  '../../../../lib/clusters/slotInventory.svelte.ts',
+  '../../../../lib/components/clusters/ClustersToolbar.svelte',
+  '../../../../lib/components/clusters/ClustersGrid.svelte',
+  '../../../../lib/components/clusters/ClusterGridCard.svelte',
+  '../../../../lib/components/clusters/ClustersStatusBar.svelte',
+]
+  .map((rel) => readFileSync(path.resolve(here, rel), 'utf-8'))
+  .join('\n');
 afterEach(() => resetDeploymentSlots());
 
 describe('T4: slot-tab keymap + reserved-letters invariant (Finding C.2)', () => {
