@@ -12,12 +12,17 @@ import { describe, expect, it } from 'vitest';
 import { normalize } from '$lib/testing/sourceScan';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const src = normalize(readFileSync(path.resolve(here, './+page.svelte'), 'utf-8'));
+const src = normalize(
+  readFileSync(
+    path.resolve(here, '../../../../lib/components/train/TrainingCohortsPanel.svelte'),
+    'utf-8',
+  ),
+);
 
 describe('train cohort preview cards', () => {
   it('re-run the preview when a slot or crop card reprocesses its image', () => {
     const wired = src.match(
-      /onreprocessed=\{\(\) => void loadCohortPreview\(group, activeCohort\)\}/g,
+      /onreprocessed=\{\(\) => void ctl\.loadCohortPreview\(group, activeCohort\)\}/g,
     );
     expect(wired).toHaveLength(2);
     expect(src).toMatch(/<SlotCard .{0,300}?onreprocessed=/);
