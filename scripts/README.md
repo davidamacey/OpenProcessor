@@ -96,8 +96,13 @@ and `vlm_switch.sh` (`openprocessor vlm use|apply|status|probe`).
 | `generate_contracts.py` | Regenerates (or `--check`s) every file under `contracts/` (`make contracts`, `make contracts-check`) |
 | `export_api_contracts.py`, `export_region_status_to_ts.py` | The individual generators |
 | `check_naming_leaks.py` | Pre-commit scan for private names and domain vocabulary in the tracked tree; allowlist in `naming_leak_allowlist.txt` |
-| `check_no_literal_region_fields.py` | Region-field literal ratchet (see [CONTRIBUTING.md](../CONTRIBUTING.md)) |
-| `check_file_size.py` | Per-file line-count cap |
+| `check_file_size.py` | Per-file line-count cap over all first-party code, with a shrink-only baseline |
+| `check_layering.py` | Import-direction contracts between routers, services and clients |
+| `check_ruff_ratchet.py` | Per-function complexity and per-file broad-except ratchets |
+| `check_process_ids.py` | No work-package ids or history names in comments, docstrings or file names |
+| `check_vulture.py` | No new unused code; reviewed false positives in `vulture_whitelist.py` |
+
+The ratchets read `baselines/*.txt` (see [CONTRIBUTING.md](../CONTRIBUTING.md#guards-and-baselines)).
 
 ## `scripts/datasets/`
 

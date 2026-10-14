@@ -186,9 +186,10 @@ body. The core route list is in [README.md](README.md#api-endpoints).
 ## Pre-commit and checks
 
 Run `.venv/bin/pre-commit run --all-files` before every commit. Notable
-hooks: ruff, mypy, bandit, the per-file size ratchet
-(`scripts/codegen/check_file_size.py`), the region-field literal ratchet
-(`check_no_literal_region_fields.py`), the naming-leak scan
+hooks: ruff, mypy (run from the project interpreter), bandit, the ratchets in
+`scripts/codegen/` (file size, layering, complexity, broad excepts, process ids,
+unused code; baselines in `scripts/codegen/baselines/` only shrink, see
+CONTRIBUTING.md), the `noqa` reason check, the naming-leak scan
 (`scripts/codegen/check_naming_leaks.py`: no private product or domain names
 in the tracked tree) and the contract-drift hooks. Docs are checked against
 the code:

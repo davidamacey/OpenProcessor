@@ -1,6 +1,6 @@
-# Pre-commit configuration for Triton API
-# Install: pip install pre-commit && pre-commit install
-# Run manually: pre-commit run --all-files
+# Pre-commit configuration for OpenProcessor
+# Install: .venv/bin/pre-commit install   (hook types come from default_install_hook_types)
+# Run manually: .venv/bin/pre-commit run --all-files
 
 repos:
   # Standard pre-commit hooks (basic file checks)
@@ -8,13 +8,12 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^(.*\.md|.*\.txt|security-reports/|src/static/docs/)
+        exclude: ^(.*\.md|.*\.txt|src/static/docs/)
       - id: end-of-file-fixer
-        exclude: ^(.*\.md|.*\.txt|security-reports/|src/static/docs/)
+        exclude: ^(.*\.md|.*\.txt|src/static/docs/)
       - id: check-yaml
         args: [--unsafe]  # Allow custom YAML tags for docker-compose
       - id: check-json
-        exclude: ^security-reports/
       - id: check-toml
       - id: check-added-large-files
         args: [--maxkb=10240]  # Allow model files up to 10MB
@@ -22,7 +21,6 @@ repos:
       - id: check-case-conflict
       - id: mixed-line-ending
         args: [--fix=lf]
-        exclude: ^security-reports/
       - id: check-executables-have-shebangs
       - id: check-shebang-scripts-are-executable
       - id: detect-private-key
@@ -76,7 +74,6 @@ repos:
     hooks:
       - id: gitleaks
         args: [--verbose, --no-banner]
-        exclude: ^security-reports/
 
   # Python security linting with bandit
   - repo: https://github.com/PyCQA/bandit
@@ -111,17 +108,6 @@ repos:
         language: system
         files: ^benchmarks/.*\.go$
         types: [go]
-      # mypy runs from the project interpreter so numpy, fastapi and pydantic types are
-      # real (the isolated mirror hook saw none of them and passed vacuously). It falls
-      # back to python3, where CI has the dependencies installed. Targets and the
-      # pydantic plugin are in [tool.mypy] in pyproject.toml.
-      - id: mypy
-        name: mypy
-        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" -m mypy'
-        language: system
-        pass_filenames: false
-        files: ^(src|scripts|docker|export)/.*\.py$|^(pyproject\.toml|requirements-test\.txt)$
-
       - id: max-file-size
         name: File size ratchet (700 lines; CLAUDE.md 400)
         entry: python3 scripts/codegen/check_file_size.py
@@ -160,14 +146,16 @@ repos:
         pass_filenames: false
         files: ^(src|scripts|export|docker)/.*\.py$|^scripts/codegen/baselines/vulture\.txt$
 
-      - id: check-no-literal-region-fields
-        name: Ban 'plate_...' literals in ported curation code
-        entry: python3 scripts/codegen/check_no_literal_region_fields.py
+      # mypy runs from the project interpreter so numpy, fastapi and pydantic types are
+      # real (the isolated mirror hook saw none of them and passed vacuously). It falls
+      # back to python3, where CI has the dependencies installed. Targets and the
+      # pydantic plugin are in [tool.mypy] in pyproject.toml.
+      - id: mypy
+        name: mypy
+        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" -m mypy'
         language: system
-        files: ^(src|scripts|tests)/.*\.py$
-        # Allowlist of already-ported paths lives inside the script
-        # (PORTED_PATHS) — starts empty in Chunk 0; each later wave
-        # appends its newly-ported paths there in the same commit.
+        pass_filenames: false
+        files: ^(src|scripts|docker|export)/.*\.py$|^(pyproject\.toml|requirements-test\.txt)$
 
       - id: check-naming-leaks
         name: Ban private-company and domain-vendor naming leaks (naming sweep)
@@ -201,39 +189,34 @@ repos:
         pass_filenames: false
         files: ^(src/.*\.py|contracts/json/item_wire\.json|contracts/openapi/curation\.json|contracts/ts/(itemWire|classSources)\.ts|scripts/codegen/(export_api_contracts|_contract_runtime)\.py)$
 
-  # Commit message linting (conventional commits)
-  # Note: Disabled for now - requires separate hook installation with:
-  # pre-commit install --hook-type commit-msg
-  # - repo: https://github.com/compilerla/conventional-pre-commit
-  #   rev: v3.6.0
-  #   hooks:
-  #     - id: conventional-pre-commit
-  #       stages: [commit-msg]
-  #       args: [--force-scope]
+  # Commit message linting (conventional commits). Scope stays optional.
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert, security]
 
 # Global configuration
 default_language_version:
   python: python3.12
 
+# `pre-commit install` installs both hook types.
+default_install_hook_types: [pre-commit, commit-msg]
 default_stages: [pre-commit]
 fail_fast: false
 
 # Files to exclude
 exclude: |
   (?x)^(
-      \.git/|
       \.venv/|
       __pycache__/|
       \.pytest_cache/|
       \.mypy_cache/|
       \.ruff_cache/|
-      reference_repos/|
       pytorch_models/|
-      models/|
+      models/.*\.(plan|onnx|engine|bin|pt)$|
       cache/|
       benchmarks/results/|
-      outputs/|
-      test_images/|
-      security-reports/|
       .*\.egg-info/
   )

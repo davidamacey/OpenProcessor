@@ -116,30 +116,28 @@ not a brace-expanded shorthand). Public data only in docs and fixtures (COCO,
 Open Images); no real hostnames, secrets or private product names
 (`scripts/codegen/check_naming_leaks.py` enforces the last one).
 
-## The `check-no-literal-region-fields` ratchet
+## Guards and baselines
 
-`scripts/codegen/check_no_literal_region_fields.py` is a pre-commit hook
-that rejects new `'plate_...'`/`"plate_..."` string literals in changed
-`src/`, `scripts/`, and `tests/` files. `RegionFields`
-(`src/config/region_fields.py`) is the single source of truth for
-OpenSearch region field names — a hardcoded `plate_*` literal almost
-always means code was copied in without being routed through
-`RegionFields`, silently reintroducing a domain-specific name into
-otherwise-generic code.
+`.venv/bin/pre-commit run --all-files` runs the guards below; each is a script in
+`scripts/codegen/` with unit tests in `tests/codegen/`. The ratchets keep a baseline of
+today's findings in `scripts/codegen/baselines/` (`key<TAB>value<TAB>reason`, one reason
+per line). A baseline only shrinks: a new finding, a finding that grew, a recorded value
+higher than reality and an entry with no finding left all fail. After you fix something,
+run the guard with `--tighten` to lower or drop the lines it names, and commit the result.
+Never add a line to hide a new finding; fix it.
 
-It only checks files already listed in the script's `PORTED_PATHS`
-allowlist — new files aren't retroactively checked until you add them.
-**If you port or rewrite a file that touches region fields, add its
-path to `PORTED_PATHS` in the same commit.** This makes the guard a
-ratchet: once a module is clean, it can never regress.
+| Guard | Rule |
+|---|---|
+| `check_file_size.py` | 700 lines per first-party file (`CLAUDE.md` 400); a file in the 640-700 band is split by concern when you touch it, never by collapsing lines |
+| `check_layering.py` | routers import services and clients, never the reverse; clients never import services; only routers import `fastapi` |
+| `check_ruff_ratchet.py` | no function above complexity 15, no new `except Exception` |
+| `check_process_ids.py` | no wave, round or work-package ids, and no history names, in comments, docstrings or file names |
+| `check_vulture.py` | no unused code; a reviewed false positive goes in `vulture_whitelist.py` with a reason |
+| `check_naming_leaks.py` | no private product or domain names in the tracked tree |
+| `noqa-needs-reason` | every `# noqa: CODE` ends with `  # <why>` |
 
-`src/config/region_fields.py`'s docstrings and
-`tests/curation/test_region_fields.py`'s overridability fixture use
-`roi_*` as their illustrative "existing deployment" example name, so
-neither needs an exemption from the `plate_*` guard. See the script's
-module docstring for the frozen-wire-contract exemptions
-(`region_status` etc. are legitimate on the HTTP JSON contract; see
-`docs/design/curation_api_contract.md`).
+Commit messages follow Conventional Commits (`type(scope): summary`); the `commit-msg` hook
+checks them.
 
 ## Commit conventions
 
