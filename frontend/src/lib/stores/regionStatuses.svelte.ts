@@ -16,7 +16,7 @@ import {
   type BoxStateEntry,
   type BoxStateTone,
   type RegionStatusEntry,
-} from '$lib/api';
+} from '$lib/api_regions';
 import { onProjectChange } from '$lib/projectChange';
 
 const VALID_TONES: readonly BoxStateTone[] = [

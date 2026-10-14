@@ -1,19 +1,17 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
   import { page } from '$app/state';
   import { cohesionText, COHESION_TOOLTIP } from '$lib/clusters/clusterCardText';
   import { dndzone, SOURCES, TRIGGERS } from 'svelte-dnd-action';
   import {
-    flagNeedsNewClass,
-    getCluster,
     pollAutoLabelJob,
-    refineCluster,
     runVlmOnCluster,
     type AutoLabelJobState,
-    type ExcludeReason,
-  } from '$lib/api';
+  } from '$lib/api_autoLabel';
+  import { getCluster, refineCluster } from '$lib/api_clusters';
+  import { flagNeedsNewClass, type ExcludeReason } from '$lib/api_cropWrites';
   import {
     createClusterActionController,
     createExclusionGuard,

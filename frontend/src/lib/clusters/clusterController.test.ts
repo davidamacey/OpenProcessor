@@ -16,8 +16,14 @@ import { createPager } from '$lib/pager.svelte';
 import { createSelection } from '$lib/selection.svelte';
 import type { Crop, RegistryClass } from '$lib/types';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_clusters', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_clusters')>('$lib/api_clusters');
+  return { ...actual, moveCropsToCluster: vi.fn() };
+});
+vi.mock('$lib/api_cropWrites', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_cropWrites')>('$lib/api_cropWrites');
   return {
     ...actual,
     putCropLabel: vi.fn(),
@@ -26,25 +32,24 @@ vi.mock('$lib/api', async () => {
     discardCropsBatch: vi.fn(),
     excludeCrops: vi.fn(),
     unexcludeCrops: vi.fn(),
-    moveCropsToCluster: vi.fn(),
     vlmDismissCrop: vi.fn(),
     undoCropLabel: vi.fn(),
     undoLabelBatch: vi.fn(),
   };
 });
 
+import { moveCropsToCluster } from '$lib/api_clusters';
 import {
-  ApiError,
   bulkLabel,
   discardCrop,
   discardCropsBatch,
   excludeCrops,
-  moveCropsToCluster,
   putCropLabel,
   unexcludeCrops,
   undoCropLabel,
   vlmDismissCrop,
-} from '$lib/api';
+} from '$lib/api_cropWrites';
+import { ApiError } from '$lib/api_errors';
 import { classesStore } from '$stores/classes.svelte';
 import { undoStore } from '$stores/undo.svelte';
 import { toastStore } from '$stores/toast.svelte';

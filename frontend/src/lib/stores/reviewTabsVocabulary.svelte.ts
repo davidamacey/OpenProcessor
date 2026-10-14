@@ -21,7 +21,7 @@ import {
   type ReviewEmptyState,
   type ReviewFilterSpec,
   type ReviewTabVocabularyEntry,
-} from '$lib/api';
+} from '$lib/api_review';
 import { onProjectChange } from '$lib/projectChange';
 
 class ReviewTabsVocabularyStore {

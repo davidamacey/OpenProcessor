@@ -180,7 +180,7 @@ per-entry `settable` flag on `/methods`. An empty queue shows the served reason.
   `cluster_kind === 'false_positive'`, never by an id constant.
 - Regions are lists of boxes. Per-box actions come from the multi-box surface; a stale box
   state is refused by the backend and shown as served.
-- `api.ts` wrappers of `/regions` endpoints use `Region`; the view layer uses `Slot` or
+- `api_regions.ts` wrappers of `/regions` endpoints use `Region`; the view layer uses `Slot` or
   no prefix. No rename crosses the wire: paths and JSON keys are the backend's.
 
 ### Domain neutrality

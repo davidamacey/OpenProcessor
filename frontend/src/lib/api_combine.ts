@@ -8,7 +8,9 @@
 // two reads that address an EXISTING project (its served mapping
 // vocabulary, a finished job's next step) go through that project's own
 // served prefix.
-import { ApiError, apiFetch, globalApi, projectPrefix } from '$lib/api';
+import { apiFetch, globalApi } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
+import { projectPrefix } from '$lib/api_projects';
 import type {
   CombineFormatsVocabulary,
   CombineJobResponse,

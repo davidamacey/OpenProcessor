@@ -6,39 +6,31 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { apiBase, API_PREFIX, apiFetch, normalizeApiPrefix } from '$lib/api';
 import {
-  apiBase,
-  API_PREFIX,
-  ApiError,
-  apiErrorText,
-  cancelScores,
-  cancelSelect,
-  computeScores,
   getAutoLabelJobStatus,
-  getCluster,
-  getClusters,
-  getClassRegistryUrl,
-  getCurationSettings,
-  getDataYamlUrl,
-  getManifestUrl,
-  getMethods,
+  pollAutoLabelJob,
+  runVlmOnCluster,
+  startAutoLabel,
+} from '$lib/api_autoLabel';
+import { getCluster, getClusters } from '$lib/api_clusters';
+import { searchCrops } from '$lib/api_cropRead';
+import { ApiError, apiErrorText } from '$lib/api_errors';
+import { getClassRegistryUrl, getDataYamlUrl, getManifestUrl } from '$lib/api_export';
+import {
   getNewClassProposalsSummary,
   getReviewQueue,
+  locateInReviewQueue,
+} from '$lib/api_review';
+import {
+  cancelScores,
+  computeScores,
   getScoresCoverage,
   getScoresStatus,
-  apiFetch,
-  getSelectStatus,
-  getVizProjection,
-  locateInReviewQueue,
-  normalizeApiPrefix,
-  pollAutoLabelJob,
-  putCurationDefaults,
-  rebuildVizProjection,
-  runVlmOnCluster,
-  searchCrops,
-  selectDiverse,
-  startAutoLabel,
-} from './api';
+} from '$lib/api_scores';
+import { cancelSelect, getSelectStatus, selectDiverse } from '$lib/api_select';
+import { getCurationSettings, getMethods, putCurationDefaults } from '$lib/api_settings';
+import { getVizProjection, rebuildVizProjection } from '$lib/api_viz';
 
 const URL = `http://localhost:4603${API_PREFIX}/crops/batch_label`;
 

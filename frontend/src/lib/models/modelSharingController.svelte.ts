@@ -10,12 +10,9 @@
  * the follow-up (`revision_conflict` reloads the list so the next attempt
  * carries the fresh served revision; `in_use` offers the served `force`).
  */
-import {
-  getModelClassMapping,
-  projectErrorDetail,
-  apiErrorText,
-  setModelSharing,
-} from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { getModelClassMapping, setModelSharing } from '$lib/api_models';
+import { projectErrorDetail } from '$lib/api_projects';
 import type { ModelInfo } from '$lib/types';
 import type {
   ModelClassMappingResponse,

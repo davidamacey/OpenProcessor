@@ -7,7 +7,7 @@
  * `validation_failed` show the served message and report.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import { VALIDATE_DEBOUNCE_MS } from '$lib/config/configEditor.svelte';
 import {
   catalogFixture,

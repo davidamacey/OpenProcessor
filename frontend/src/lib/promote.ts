@@ -8,7 +8,7 @@
  * force retry is offered is the server's `force_allowed`, never a client
  * guess.
  */
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import { isPromoteActive } from '$lib/promoteJobController.svelte';
 import type { PromoteJobStatus, PromoteResponse, TrainJobStatus } from '$lib/types_train';
 

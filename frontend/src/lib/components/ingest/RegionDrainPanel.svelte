@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   /**
    * Shows `pending_detection`/`pending_verification`/`total_unfinished`
    * plus the BA-3 `drained` stability verdict and "last checked"
@@ -14,7 +14,7 @@
    * a second fetch.
    */
   import { onDestroy, onMount } from 'svelte';
-  import { getRegionDrain } from '$lib/api';
+  import { getRegionDrain } from '$lib/api_ingest';
   import { formatTime } from '$lib/format/time';
   import type { RegionDrain } from '$lib/types';
 

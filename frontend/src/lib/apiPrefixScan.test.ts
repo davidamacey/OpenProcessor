@@ -140,17 +140,55 @@ describe('no bare /curation literal composes a URL outside api.ts', () => {
 const apiSrc = readFileSync(path.resolve(libRoot, 'api.ts'), 'utf-8');
 const sseSrc = readFileSync(path.resolve(libRoot, 'sse.ts'), 'utf-8');
 
-describe('api.ts composition ratchet — every apiFetch path starts with ${scoped()}', () => {
+/** The HTTP core and the `api_<domain>.ts` modules split out of it (the
+ *  older per-track wrappers such as `api_vlm.ts` are pinned by
+ *  `contract/endpointCatalog.test.ts` instead). */
+const API_DOMAINS = [
+  'autoLabel',
+  'bakeoff',
+  'classes',
+  'clusters',
+  'cropMap',
+  'cropRead',
+  'cropWrites',
+  'datasetImport',
+  'errors',
+  'export',
+  'ingest',
+  'models',
+  'packs',
+  'profiles',
+  'projects',
+  'regionBoxes',
+  'regions',
+  'reprocess',
+  'review',
+  'scores',
+  'select',
+  'settings',
+  'stats',
+  'train',
+  'viz',
+] as const;
+const apiFamily: [string, string][] = [
+  ['lib/api.ts', apiSrc],
+  ...API_DOMAINS.map((d): [string, string] => [
+    `lib/api_${d}.ts`,
+    readFileSync(path.resolve(libRoot, `api_${d}.ts`), 'utf-8'),
+  ]),
+];
+
+describe('api*.ts composition ratchet — every apiFetch path starts with ${scoped()}', () => {
   /**
    * Call sites are written across several lines and sometimes carry an
-   * interleaved `//` comment before the path argument (e.g. api.ts's
-   * getCluster). Capture the first 28 characters after the opening
+   * interleaved `//` comment before the path argument (e.g.
+   * api_clusters.ts's getCluster). Capture the first 28 characters after the opening
    * paren, skipping whitespace and line comments, and require the path
    * to open with the interpolation.
    */
   const CALL = /apiFetch(?:<[^>]*>)?\(\s*(?:\/\/[^\n]*\n\s*)*(.{0,28})/g;
 
-  const heads = [...apiSrc.matchAll(CALL)].map((m) => m[1]);
+  const heads = apiFamily.flatMap(([, src]) => [...src.matchAll(CALL)].map((m) => m[1]));
   // Two of these are the declaration itself (`apiFetch<T>(\n  path: string`)
   // and its internal recursion guard, whose first argument is named `path`.
   const declarations = heads.filter((h) => h.startsWith('path'));
@@ -179,7 +217,7 @@ describe('api.ts composition ratchet — every apiFetch path starts with ${scope
 
 describe('${apiBase} is always followed by ${scoped()}', () => {
   /**
-   * The eight `${apiBase}…` template builders in api.ts bypass
+   * The `${apiBase}…` template builders in the api*.ts modules bypass
    * `apiFetch` entirely (thumbnail/image/registry URL helpers), as do
    * sse.ts's four EventSource URLs and export/+page.svelte's raw
    * `fetch`. They are exactly the sites the original P4.1 spec
@@ -198,7 +236,7 @@ describe('${apiBase} is always followed by ${scoped()}', () => {
    * is unchanged.
    */
   const files: [string, string][] = [
-    ['lib/api.ts', apiSrc],
+    ...apiFamily,
     ['lib/sse.ts', sseSrc],
     [
       'routes/p/[project]/export/+page.svelte',

@@ -1,4 +1,4 @@
-import type { DatasetStats } from '$lib/api';
+import type { DatasetStats } from '$lib/api_stats';
 
 /** A full served `GET {API_PREFIX}/stats/dataset` body, with top-level overrides. */
 export function datasetStatsFixture(overrides: Partial<DatasetStats> = {}): DatasetStats {

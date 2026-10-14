@@ -5,7 +5,7 @@
  * An id the vocabulary does not list, or any id before it loads, prints as
  * served, never as a guessed label.
  */
-import { getConfigVocabulary } from '$lib/api';
+import { getConfigVocabulary } from '$lib/api_profiles';
 import { onProjectChange } from '$lib/projectChange';
 import type { ReprocessVocabulary } from '$lib/types_profiles';
 

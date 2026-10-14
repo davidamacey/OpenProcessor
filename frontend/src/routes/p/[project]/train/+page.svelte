@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText, ApiError } from '$lib/api_errors';
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
   /**
@@ -20,32 +20,35 @@
    */
   import { goto } from '$app/navigation';
   import { onDestroy, onMount } from 'svelte';
+  import { getCrops } from '$lib/api_cropRead';
   import {
-    ApiError,
-    cancelTrainCampaign,
-    cancelTrainJob,
     exportSingleClass,
     exportSingleClassStatus,
     exportStatus,
-    getCrops,
-    getReviewQueue,
     getTestHoldoutStats,
+    listDatasets,
+  } from '$lib/api_export';
+  import {
     getTrainingCandidates,
+    type RegionBrowseItem,
+    type TrainingCohortMode,
+  } from '$lib/api_regions';
+  import { getReviewQueue } from '$lib/api_review';
+  import {
+    cancelTrainCampaign,
+    cancelTrainJob,
     getTrainingCohorts,
     getTrainManifest,
     getTrainPresets,
     getTrainProfiles,
     getTrainRuns,
     getTrainStatus,
-    listDatasets,
     tailTrainLog,
     trainPreflight,
     trainStart,
     trainStartCampaign,
-    type RegionBrowseItem,
     type ServedTrainingCohort,
-    type TrainingCohortMode,
-  } from '$lib/api';
+  } from '$lib/api_train';
   import { formatCount } from '$lib/format/count';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import ResourceLinksRow from '$lib/components/ResourceLinksRow.svelte';

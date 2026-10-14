@@ -14,11 +14,12 @@ import { createSlotGalleryController } from '../../../routes/p/[project]/cluster
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import type { Cluster } from '$lib/types';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_regions', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_regions')>('$lib/api_regions');
   return { ...actual, getRegionClusters: vi.fn(), getRegions: vi.fn() };
 });
-import { getRegionClusters, getRegions } from '$lib/api';
+import { getRegionClusters, getRegions } from '$lib/api_regions';
 
 function fpCluster(): Cluster {
   return {

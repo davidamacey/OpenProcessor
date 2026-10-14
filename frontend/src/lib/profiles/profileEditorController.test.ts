@@ -8,7 +8,7 @@
  * projects on request; the `detection_profile` wake-up.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import { VALIDATE_DEBOUNCE_MS } from '$lib/config/configEditor.svelte';
 import type { CurationEvent } from '$lib/sse';
 import { cleanReport, issue } from '$lib/test/fixtures/promptPacks';

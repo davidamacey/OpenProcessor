@@ -5,7 +5,7 @@
  * resource has the route, and `active_conflict` re-reads.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import {
   activateResponseFixture,
   profileActiveFixture,

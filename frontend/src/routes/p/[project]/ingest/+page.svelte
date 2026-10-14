@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   /**
    * `/ingest` — bring images into the pool
    * (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §A). The
@@ -26,7 +26,7 @@
   import IngestDetectorCard from '$lib/components/ingest/IngestDetectorCard.svelte';
   import RegionStagePanel from '$lib/components/ingest/RegionStagePanel.svelte';
   import { resolve } from '$app/paths';
-  import { getIngestConfig } from '$lib/api';
+  import { getIngestConfig } from '$lib/api_ingest';
   import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
   import { projectHref } from '$lib/projectPaths';
   import {

@@ -5,7 +5,7 @@
  * refusals show the served message and name a `crop_not_found` id.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import { regionTestResponseFixture } from '$lib/test/fixtures/configTest';
 import { createProfileTest } from './profileTestController.svelte';
 

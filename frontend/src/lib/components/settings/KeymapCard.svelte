@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   /**
    * "Keyboard shortcuts" card — `/settings#keyboard` (K2 + K2b,
    * docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md §5.4).
@@ -40,7 +40,7 @@
     validateKeymap,
     type KeymapClassConflict,
     type KeymapValidationReport,
-  } from '$lib/api';
+  } from '$lib/api_settings';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { formatShortcutKey } from '$lib/keyboardDisplay';
   import { normalize, keyboardStore } from '$stores/keyboard.svelte';

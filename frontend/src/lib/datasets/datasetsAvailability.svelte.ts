@@ -16,7 +16,8 @@
  * Probed lazily (the surfaces that need it call `init()`), at most once
  * per project; reset on a project switch.
  */
-import { apiErrorText, getDatasetFormats, type ApiError } from '$lib/api';
+import { getDatasetFormats } from '$lib/api_datasetImport';
+import { apiErrorText, type ApiError } from '$lib/api_errors';
 import { onProjectChange } from '$lib/projectChange';
 import type { DatasetFormatsResponse } from '$lib/types_import';
 

@@ -5,7 +5,7 @@
  * it polls next and what a cron means are the backend's answers; this class only
  * holds the form, sends mutations and refreshes.
  */
-import { apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
 import {
   createIngestSource,
   deleteIngestSource,

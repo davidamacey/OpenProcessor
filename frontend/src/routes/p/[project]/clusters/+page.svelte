@@ -1,22 +1,16 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText, ApiError } from '$lib/api_errors';
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
   import { goto } from '$app/navigation';
   import { untrack } from 'svelte';
   import { SvelteMap } from 'svelte/reactivity';
   import { page } from '$app/state';
-  import {
-    ApiError,
-    bulkLabel,
-    excludeCrops,
-    getClusters,
-    getCrops,
-    getRegions,
-    getThumbUrl,
-    resolveApiUrl,
-    unexcludeCrops,
-  } from '$lib/api';
+  import { resolveApiUrl } from '$lib/api';
+  import { getClusters } from '$lib/api_clusters';
+  import { getCrops, getThumbUrl } from '$lib/api_cropRead';
+  import { bulkLabel, excludeCrops, unexcludeCrops } from '$lib/api_cropWrites';
+  import { getRegions } from '$lib/api_regions';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import { slotForClassName, registeredSlots } from '$lib/annotations/registeredSlots';
   import type { SlotSpec } from '$lib/annotations/types';

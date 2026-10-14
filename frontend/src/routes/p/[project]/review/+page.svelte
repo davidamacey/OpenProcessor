@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   import ItemFilterBar from '$lib/components/itemFilter/ItemFilterBar.svelte';
   import ServedFilterField from '$lib/components/itemFilter/ServedFilterField.svelte';
   import {
@@ -10,18 +10,10 @@
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
   import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
-  import {
-    cancelSelect,
-    reviewUndismissCrop,
-    getCrop,
-    getCrops,
-    getReviewQueue,
-    getSelectStatus,
-    getThumbUrl,
-    locateInReviewQueue,
-    selectDiverse,
-    patchSlotMeta,
-  } from '$lib/api';
+  import { getCrop, getCrops, getThumbUrl } from '$lib/api_cropRead';
+  import { reviewUndismissCrop, patchSlotMeta } from '$lib/api_cropWrites';
+  import { getReviewQueue, locateInReviewQueue } from '$lib/api_review';
+  import { cancelSelect, getSelectStatus, selectDiverse } from '$lib/api_select';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import BlurSlider from '$lib/components/BlurSlider.svelte';
   import CropMetaPanel from '$lib/components/CropMetaPanel.svelte';

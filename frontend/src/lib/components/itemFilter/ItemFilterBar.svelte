@@ -12,7 +12,7 @@
   import ServedFilterField from './ServedFilterField.svelte';
   import { resolveControls } from '$lib/itemFilter/itemFilterControls';
   import type { ItemFilterState } from '$lib/itemFilter/itemFilterState.svelte';
-  import type { ReviewFilterSpec } from '$lib/api';
+  import type { ReviewFilterSpec } from '$lib/api_review';
 
   interface Props {
     state: ItemFilterState;

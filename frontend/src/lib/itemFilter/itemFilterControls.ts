@@ -6,7 +6,7 @@
  * only what the contract fixes: the enum value lists (`types_itemFilter`).
  */
 import { humanizeId } from '$lib/humanizeId';
-import type { ReviewFilterSpec } from '$lib/api';
+import type { ReviewFilterSpec } from '$lib/api_review';
 import { EMBEDDING_STATES, ITEM_ORIGINS, REVIEW_STATUSES } from '$lib/types_itemFilter';
 
 const opts = (values: readonly string[]) =>

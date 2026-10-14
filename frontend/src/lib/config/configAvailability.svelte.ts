@@ -15,7 +15,7 @@
  * Probed lazily (the editor surfaces call `init()`), at most once per
  * project; each instance's module registers its reset on project change.
  */
-import { apiErrorText, type ApiError } from '$lib/api';
+import { apiErrorText, type ApiError } from '$lib/api_errors';
 
 export class ConfigAvailability {
   /** `null` until the probe answers. */

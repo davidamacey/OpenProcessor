@@ -5,7 +5,8 @@
  * (live: op_items' region_status mapping isn't aggregatable).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { API_PREFIX, getStats } from './api';
+import { API_PREFIX } from '$lib/api';
+import { getStats } from '$lib/api_stats';
 
 const ok = (body: unknown) =>
   new Response(JSON.stringify(body), {

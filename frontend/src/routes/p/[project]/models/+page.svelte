@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   import { onMount, onDestroy } from 'svelte';
-  import { getModelsStatus, unloadModel } from '$lib/api';
+  import { getModelsStatus, unloadModel } from '$lib/api_models';
   import {
     showsProtectedChip,
     unloadButtonState,

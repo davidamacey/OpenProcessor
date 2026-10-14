@@ -5,7 +5,7 @@
  * `pack_invalid`, the served report; `crop_not_found` names the ids.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import { packTestResponseFixture } from '$lib/test/fixtures/configTest';
 import { issue } from '$lib/test/fixtures/promptPacks';
 import { createPackTest, parseCropIds } from './packTestController.svelte';

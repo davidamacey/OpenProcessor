@@ -1,6 +1,7 @@
 /** Promote is a background job (OpenProcessor #87): 202 PromoteJobStatus. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { API_PREFIX, getPromoteJob, promoteTrainJob } from './api';
+import { API_PREFIX } from '$lib/api';
+import { getPromoteJob, promoteTrainJob } from '$lib/api_train';
 
 const JOB = { promote_id: 'p1', job_id: 'run 1', triton_name: 'm', status: 'queued' };
 

@@ -7,7 +7,9 @@
  * `$stores/reviewTabsVocabulary.svelte` respectively.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getRegionVocabulary, getReviewTabs, API_PREFIX } from './api';
+import { API_PREFIX } from '$lib/api';
+import { getRegionVocabulary } from '$lib/api_regions';
+import { getReviewTabs } from '$lib/api_review';
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

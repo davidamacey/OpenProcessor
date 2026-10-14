@@ -1,23 +1,24 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText, ApiError } from '$lib/api_errors';
   import {
-    ApiError,
     classStillReferencedDetail,
     deprecateClass,
-    getNewClassProposalsSummary,
-    getTestHoldoutStats,
-    getThumbUrl,
     mergeClasses,
     previewClassMerge,
     renameClass,
-    resolveNewClassProposal,
     restoreClass,
     classMergedDetail,
     classMergedRestoreText,
     syncClassesToOpensearch,
+  } from '$lib/api_classes';
+  import { getThumbUrl } from '$lib/api_cropRead';
+  import { getTestHoldoutStats } from '$lib/api_export';
+  import {
+    getNewClassProposalsSummary,
+    resolveNewClassProposal,
     type NewClassProposalsSummary,
     type NewClassProposalTerm,
-  } from '$lib/api';
+  } from '$lib/api_review';
   import AddClassModal from '$components/AddClassModal.svelte';
   import SeedFromDetectorPanel from '$lib/components/detector/SeedFromDetectorPanel.svelte';
   import { adequacyChipClass, adequacyTooltip } from '$lib/adequacy';

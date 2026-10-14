@@ -5,12 +5,8 @@
  * verbatim copies of this validation.
  */
 
-import {
-  hotkeyReservedDetail,
-  hotkeyTakenDetail,
-  renameClass,
-  apiErrorText,
-} from '$lib/api';
+import { hotkeyReservedDetail, hotkeyTakenDetail, renameClass } from '$lib/api_classes';
+import { apiErrorText } from '$lib/api_errors';
 import { isPickerHiddenClass } from '$lib/classVisibility';
 import { slotRegistry } from '$lib/annotations/registeredSlots';
 import type { SlotRegistry } from '$lib/annotations/registry';

@@ -5,19 +5,18 @@
  * keys: a class is sent by NAME (`class_name`, repeated), never `class_id`.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { API_PREFIX } from '$lib/api';
+import { getClusters } from '$lib/api_clusters';
+import { excludeCrops, unexcludeCrops } from '$lib/api_cropWrites';
+import { exportYolo } from '$lib/api_export';
+import { getRegions } from '$lib/api_regions';
 import {
-  API_PREFIX,
   batchExcludeSelection,
   batchUnexcludeSelection,
   bulkLabelSelection,
-  excludeCrops,
-  exportYolo,
-  getClusters,
-  getMatchingItemCount,
-  getRegions,
   moveSelectionToCluster,
-  unexcludeCrops,
-} from './api';
+} from '$lib/api_select';
+import { getMatchingItemCount } from '$lib/api_stats';
 import type { ItemFilterQuery, ItemSelection } from '$lib/types_itemFilter';
 
 function ok(body: unknown): Response {

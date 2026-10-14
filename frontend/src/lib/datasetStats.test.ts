@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { resolveStatsUpdate, summarizeStatsError } from './datasetStats';
-import type { DatasetStats } from './api';
+import type { DatasetStats } from '$lib/api_stats';
 import { datasetStatsFixture } from './test/fixtures/datasetStats';
 
 const GOOD: DatasetStats = datasetStatsFixture({

@@ -7,7 +7,8 @@
  *   the server doesn't provide an authoritative answer.
  */
 
-import { getClasses, apiErrorText } from '$lib/api';
+import { getClasses } from '$lib/api_classes';
+import { apiErrorText } from '$lib/api_errors';
 import { onProjectChange } from '$lib/projectChange';
 import type { ClassThresholds, RegistryClass } from '$lib/types';
 

@@ -4,12 +4,12 @@
  * separate output roots and `current` symlinks on the backend.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { API_PREFIX } from '$lib/api';
 import {
-  API_PREFIX,
   exportSingleClass,
   exportSingleClassStatus,
   listDatasets,
-} from './api';
+} from '$lib/api_export';
 import { datasetExportForSlot } from './annotations/datasetExport';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 

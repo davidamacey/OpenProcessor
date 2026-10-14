@@ -15,22 +15,21 @@
  */
 
 import { untrack } from 'svelte';
+import { getCrop } from '$lib/api_cropRead';
+import { apiErrorText } from '$lib/api_errors';
+import { batchRegionStatus, postBatchBoxState } from '$lib/api_regionBoxes';
 import {
-  batchRegionStatus,
   buildRegionFpCentroids,
   clusterRegions,
-  getCrop,
   getRegionClusters,
   getRegionClusterStatus,
   getRegionFpCentroidStatus,
   getRegions,
   getSuspectedFalsePositives,
-  postBatchBoxState,
   refineRegionCluster,
   type RegionBrowseItem,
   type SuspectedFpItem,
-  apiErrorText,
-} from '$lib/api';
+} from '$lib/api_regions';
 import { createPager } from '$lib/pager.svelte';
 import { createSelection } from '$lib/selection.svelte';
 import type { Cluster, Crop } from '$lib/types';
@@ -230,7 +229,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
     },
   );
 
-  function browseQuery(page: number): import('$lib/api').RegionsQuery {
+  function browseQuery(page: number): import('$lib/api_regions').RegionsQuery {
     return {
       page,
       page_size: GALLERY_PAGE_SIZE,

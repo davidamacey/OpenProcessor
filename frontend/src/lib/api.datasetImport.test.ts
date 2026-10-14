@@ -4,28 +4,29 @@
  * `ConfigErrorDetail` refusal surfaces its served `message`.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { API_PREFIX } from '$lib/api';
 import {
-  API_PREFIX,
-  ApiError,
   cancelDatasetImport,
-  cancelReprocessJob,
   datasetErrorDetail,
-  apiErrorText,
   getDatasetFormats,
   getDatasetImport,
   getDatasetImportEntries,
   getDatasetImportIssues,
-  getReprocessJob,
   listDatasetImports,
   previewDataset,
-  reprocessBatch,
-  reprocessCrop,
   resumeDatasetImport,
-  runServedNextStep,
   startDatasetImport,
   undoDatasetImport,
   uploadDatasetArchive,
-} from './api';
+} from '$lib/api_datasetImport';
+import { ApiError, apiErrorText } from '$lib/api_errors';
+import {
+  cancelReprocessJob,
+  getReprocessJob,
+  reprocessBatch,
+  reprocessCrop,
+  runServedNextStep,
+} from '$lib/api_reprocess';
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

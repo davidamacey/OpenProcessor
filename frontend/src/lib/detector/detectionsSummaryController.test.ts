@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import type { DetectionsSummary } from '$lib/types_detector';
 import { DetectionsSummaryState } from './detectionsSummaryController.svelte';
 

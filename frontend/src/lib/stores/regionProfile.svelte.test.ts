@@ -5,12 +5,8 @@
  * an error toast.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  API_PREFIX,
-  apiFetch,
-  RegionProfileUnavailableError,
-  type ApiError,
-} from '$lib/api';
+import { API_PREFIX, apiFetch } from '$lib/api';
+import { RegionProfileUnavailableError, type ApiError } from '$lib/api_errors';
 import {
   registeredSlots,
   resetDeploymentSlots,

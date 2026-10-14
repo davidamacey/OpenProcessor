@@ -11,8 +11,9 @@ import { flushSync, mount, unmount } from 'svelte';
 import ClusteringHandoff from './ClusteringHandoff.svelte';
 import type { RegionDrain } from '$lib/types';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_autoLabel', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_autoLabel')>('$lib/api_autoLabel');
   return {
     ...actual,
     getAutoLabelStatus: vi.fn(async () => ({

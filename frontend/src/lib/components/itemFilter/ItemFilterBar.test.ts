@@ -10,7 +10,7 @@ import ItemFilterBar from './ItemFilterBar.svelte';
 import ServedFilterField from './ServedFilterField.svelte';
 import { ItemFilterState } from '$lib/itemFilter/itemFilterState.svelte';
 import { classesStore } from '$stores/classes.svelte';
-import type { ReviewFilterSpec } from '$lib/api';
+import type { ReviewFilterSpec } from '$lib/api_review';
 import type { RegistryClass } from '$lib/types';
 
 let target: HTMLDivElement;

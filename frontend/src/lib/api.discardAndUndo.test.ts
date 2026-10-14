@@ -5,16 +5,16 @@
  * response is unwrapped/mapped, not passed through raw.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { API_PREFIX } from '$lib/api';
+import { moveCropsToCluster } from '$lib/api_clusters';
 import {
-  ApiError,
   bulkLabel,
   discardCrop,
   discardCropsBatch,
-  moveCropsToCluster,
   vlmDismissCrop,
   reviewUndismissCrop,
-  API_PREFIX,
-} from './api';
+} from '$lib/api_cropWrites';
+import { ApiError } from '$lib/api_errors';
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -150,7 +150,8 @@ describe('strict batch bodies (OpenProcessor d72cc63): an empty list is never se
   it('discardCropsBatch / undo batches / ingestBatch reject [] without calling fetch', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    const { undoLabelBatch, undoCropRegionBatch, ingestBatch } = await import('./api');
+    const { undoLabelBatch, undoCropRegionBatch } = await import('$lib/api_cropWrites');
+    const { ingestBatch } = await import('$lib/api_ingest');
     await expect(discardCropsBatch([])).rejects.toThrow(/no request sent/);
     await expect(undoLabelBatch([])).rejects.toThrow(/no request sent/);
     await expect(undoCropRegionBatch([])).rejects.toThrow(/no request sent/);

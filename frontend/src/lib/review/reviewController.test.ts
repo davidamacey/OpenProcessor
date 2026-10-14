@@ -10,8 +10,9 @@ import { createReviewQueueController } from './reviewController.svelte';
 import { createPager } from '$lib/pager.svelte';
 import type { ReviewItem } from '$lib/types';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_cropWrites', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_cropWrites')>('$lib/api_cropWrites');
   return {
     ...actual,
     putCropLabel: vi.fn(),
@@ -21,7 +22,12 @@ vi.mock('$lib/api', async () => {
   };
 });
 
-import { putCropLabel, reviewDismissCrop, undoCropLabel, undoLabelBatch } from '$lib/api';
+import {
+  putCropLabel,
+  reviewDismissCrop,
+  undoCropLabel,
+  undoLabelBatch,
+} from '$lib/api_cropWrites';
 import { classesStore } from '$stores/classes.svelte';
 import { undoStore } from '$stores/undo.svelte';
 import { toastStore } from '$stores/toast.svelte';

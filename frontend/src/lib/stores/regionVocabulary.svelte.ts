@@ -21,7 +21,7 @@ import {
   type RegionVocabularyRole,
   type RejectionReasonEntry,
   type RejectionReasonKind,
-} from '$lib/api';
+} from '$lib/api_regions';
 import { onProjectChange } from '$lib/projectChange';
 
 /** Titlecases a `snake_case` id as a display-label placeholder for a

@@ -1,20 +1,19 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
+  import { apiBase, scoped } from '$lib/api';
   import {
-    apiBase,
-    scoped,
     exportStatus,
     exportYolo,
     freezeTestHoldout,
     getClassRegistryUrl,
     getDataYamlUrl,
     getManifestUrl,
-    getStats,
     getTestHoldoutStats,
     listDatasets,
-  } from '$lib/api';
+  } from '$lib/api_export';
+  import { getStats } from '$lib/api_stats';
   import type { ExportStatus, StatsSummary, TestHoldoutStats } from '$lib/types';
   import {
     buildExportRows,

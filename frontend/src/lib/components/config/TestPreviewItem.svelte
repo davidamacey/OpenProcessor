@@ -7,7 +7,8 @@
    * region-profile test panels. Nothing is written. `extraShapes` adds
    * overlay shapes (profile-test candidates) in the source-image frame.
    */
-  import { getCropContext, apiErrorText } from '$lib/api';
+  import { getCropContext } from '$lib/api_cropRead';
+  import { apiErrorText } from '$lib/api_errors';
   import SourceImageOverlay from '$components/SourceImageOverlay.svelte';
   import type { OverlayShape } from '$lib/configTest/overlayShapes';
   import type { Crop, CropContextResponse } from '$lib/types';

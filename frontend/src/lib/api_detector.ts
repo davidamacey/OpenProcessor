@@ -5,7 +5,8 @@
  * `api.ts` (that would make the two modules circular). Types live in
  * `$lib/types_detector`.
  */
-import { ApiError, apiFetch, qs, scoped, apiErrorText } from '$lib/api';
+import { apiFetch, qs, scoped } from '$lib/api';
+import { ApiError, apiErrorText } from '$lib/api_errors';
 import type {
   DetectionsSummary,
   IngestPolicy,

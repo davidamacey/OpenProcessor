@@ -5,7 +5,7 @@
  * pack surface absent). See `ConfigAvailability`. Reset on
  * a project switch.
  */
-import { listPromptPacks } from '$lib/api';
+import { listPromptPacks } from '$lib/api_packs';
 import { ConfigAvailability } from '$lib/config/configAvailability.svelte';
 import { onProjectChange } from '$lib/projectChange';
 

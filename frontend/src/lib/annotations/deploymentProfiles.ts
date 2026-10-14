@@ -1,4 +1,4 @@
-import { apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
 /**
  * Tier-2 deployment profile loading (contract §2 tier 2, §9 step 1).
  *

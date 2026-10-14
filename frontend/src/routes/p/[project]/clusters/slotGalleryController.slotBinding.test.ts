@@ -11,11 +11,18 @@ import type { Crop } from '$lib/types';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import { makeSlotBox } from '$lib/test/fixtures/slotBox';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
-  return { ...actual, getRegions: vi.fn(), batchRegionStatus: vi.fn() };
+vi.mock('$lib/api_regionBoxes', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_regionBoxes')>('$lib/api_regionBoxes');
+  return { ...actual, batchRegionStatus: vi.fn() };
 });
-import { batchRegionStatus, getRegions } from '$lib/api';
+vi.mock('$lib/api_regions', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_regions')>('$lib/api_regions');
+  return { ...actual, getRegions: vi.fn() };
+});
+import { batchRegionStatus } from '$lib/api_regionBoxes';
+import { getRegions } from '$lib/api_regions';
 import { createSlotGalleryController } from './slotGalleryController.svelte';
 
 const gadgetMarkSlot: SlotSpec = {

@@ -14,7 +14,7 @@ import { createSlotGalleryController } from './slotGalleryController.svelte';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import type { Crop } from '$lib/types';
 import type { SlotData } from '$lib/annotations/types';
-import type { RegionBrowseItem } from '$lib/api';
+import type { RegionBrowseItem } from '$lib/api_regions';
 import { makeSlotBox } from '$lib/test/fixtures/slotBox';
 
 function fakeCropWithSlot(id: string, slot: SlotData): Crop {

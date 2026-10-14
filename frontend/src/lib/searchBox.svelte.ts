@@ -1,4 +1,4 @@
-import { apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
 /**
  * State/logic for `<SemanticSearchBox>` (P2-14 — free-text search over
  * crops, `GET {API_PREFIX}/search/text`). Same "logic extracted from the

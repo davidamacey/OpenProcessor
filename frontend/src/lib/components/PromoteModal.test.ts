@@ -6,13 +6,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import PromoteModal from './PromoteModal.svelte';
-import { ApiError, getPromoteJob, promoteTrainJob } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
+import { getPromoteJob, promoteTrainJob } from '$lib/api_train';
 import type { PromoteJobStatus } from '$lib/types_train';
 import { defaultTritonName } from '$lib/promote';
 import { toastStore } from '$stores/toast.svelte';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_train', async () => {
+  const actual = await vi.importActual<typeof import('$lib/api_train')>('$lib/api_train');
   return { ...actual, promoteTrainJob: vi.fn(), getPromoteJob: vi.fn() };
 });
 

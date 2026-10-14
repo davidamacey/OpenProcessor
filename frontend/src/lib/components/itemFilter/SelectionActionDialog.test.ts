@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_select', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_select')>('$lib/api_select');
   return {
     ...actual,
     bulkLabelSelection: vi.fn(),
@@ -12,7 +13,8 @@ vi.mock('$lib/api', async () => {
   };
 });
 
-import { ApiError, batchExcludeSelection, bulkLabelSelection } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
+import { batchExcludeSelection, bulkLabelSelection } from '$lib/api_select';
 import SelectionActionDialog from './SelectionActionDialog.svelte';
 import { createSelectionActionController } from '$lib/itemFilter/selectionActionController.svelte';
 import { classesStore } from '$stores/classes.svelte';

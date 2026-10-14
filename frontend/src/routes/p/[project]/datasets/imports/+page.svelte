@@ -6,7 +6,8 @@
    */
   import { resolve } from '$app/paths';
   import DatasetsGate from '$components/datasets/DatasetsGate.svelte';
-  import { apiErrorText, listDatasetImports } from '$lib/api';
+  import { listDatasetImports } from '$lib/api_datasetImport';
+  import { apiErrorText } from '$lib/api_errors';
   import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
   import { projectHref } from '$lib/projectPaths';
   import type { DatasetImportList } from '$lib/types_import';

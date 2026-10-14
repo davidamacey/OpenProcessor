@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   /**
    * Promote-to-Triton modal. Phase 4 wiring; the labeler-side knob set
    * is intentionally minimal — Triton model name + max_batch_size +

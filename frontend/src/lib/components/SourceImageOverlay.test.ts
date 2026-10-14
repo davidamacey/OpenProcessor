@@ -21,13 +21,13 @@ import { aircraftTailNumberSlot } from '$lib/test/fixtures/aircraftTailNumberSlo
 import { makeSlotBox } from '$lib/test/fixtures/slotBox';
 import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
-vi.mock('$lib/api', () => ({
+vi.mock('$lib/api', () => ({ activeProjectKey: vi.fn(() => 'default') }));
+vi.mock('$lib/api_cropRead', () => ({
   getCropContext: vi.fn(),
   getSourceImageScaled: (id: string) => `/image/${id}`,
-  activeProjectKey: vi.fn(() => 'default'),
 }));
 
-const { getCropContext } = await import('$lib/api');
+const { getCropContext } = await import('$lib/api_cropRead');
 const { default: SourceImageOverlay } = await import('./SourceImageOverlay.svelte');
 
 function item(overrides: Partial<Crop> = {}): Crop {

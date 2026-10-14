@@ -9,11 +9,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_regions', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_regions')>('$lib/api_regions');
   return { ...actual, getRegions: vi.fn(), getRegionClusters: vi.fn() };
 });
-import { getRegionClusters, getRegions } from '$lib/api';
+import { getRegionClusters, getRegions } from '$lib/api_regions';
 import { createSlotGalleryController } from './slotGalleryController.svelte';
 
 let cleanup: (() => void) | undefined;

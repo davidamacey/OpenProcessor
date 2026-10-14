@@ -8,7 +8,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { AuditController } from '$lib/labelConfirmation/auditController.svelte';
 import { classSourcesStore } from '$stores/classSources.svelte';
 import { makeItem } from '$lib/test/makeItem';
-import { mapRawCrop } from '$lib/api';
+import { mapRawCrop } from '$lib/api_cropMap';
 import AuditClassTable from './AuditClassTable.svelte';
 import AuditQueueList from './AuditQueueList.svelte';
 import AuditStartForm from './AuditStartForm.svelte';
@@ -183,7 +183,7 @@ describe('AuditStartForm', () => {
   });
 
   it('shows the served refusal', async () => {
-    const { ApiError } = await import('$lib/api');
+    const { ApiError } = await import('$lib/api_errors');
     const audit = makeAudit(
       vi.fn().mockRejectedValue(
         new ApiError(409, 'u', {

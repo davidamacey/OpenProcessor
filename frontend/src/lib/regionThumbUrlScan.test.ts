@@ -63,7 +63,6 @@ function walk(dir: string, out: string[] = []): string[] {
 
 function isExcluded(file: string): boolean {
   const rel = path.relative(srcRoot, file);
-  if (rel === path.join('lib', 'api.ts')) return true;
   // Slot profiles declare prefix-RELATIVE path templates by design
   // (`/crops/{id}/region_thumbnail`, joined with API_PREFIX at the call
   // site — see annotations/cohorts.ts:36). That is the sanctioned

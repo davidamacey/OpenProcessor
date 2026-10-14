@@ -5,7 +5,7 @@
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
-import { mapRawCrop } from '$lib/api';
+import { mapRawCrop } from '$lib/api_cropMap';
 import type { Crop } from '$lib/types';
 import VlmProvenanceRows from './VlmProvenanceRows.svelte';
 

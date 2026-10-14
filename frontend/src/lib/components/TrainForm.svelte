@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   /**
    * Training form. Decomposed sub-pieces (`ClassSubsetPicker`,
    * `AugmentationPanel`) own their own UI; this component owns:
@@ -16,7 +16,11 @@
   import ClassSubsetPicker from './ClassSubsetPicker.svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { defaultTrainSelection } from '$lib/trainClassSelection';
-  import { defaultGpuValue, getTrainGpus, type TrainGpuOptionsResponse } from '$lib/api';
+  import {
+    defaultGpuValue,
+    getTrainGpus,
+    type TrainGpuOptionsResponse,
+  } from '$lib/api_train';
   import type { TestHoldoutStats } from '$lib/types';
   import type {
     AugmentationSpec,

@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   import type {
     Crop,
     CropContextResponse,
     CropHistoryEntry,
     CropImageMeta,
   } from '$lib/types';
-  import { getCropHistory, getCropContext, getThumbUrl } from '$lib/api';
+  import { getCropHistory, getCropContext, getThumbUrl } from '$lib/api_cropRead';
   import ProvenanceChip from './ProvenanceChip.svelte';
   import ConfirmationChip from './labelConfirmation/ConfirmationChip.svelte';
   import DetectorClass from './labelConfirmation/DetectorClass.svelte';

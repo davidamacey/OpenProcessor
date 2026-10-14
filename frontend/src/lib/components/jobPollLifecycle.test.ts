@@ -15,14 +15,28 @@ const getProbeStatus = vi.fn();
 const getVizProjection = vi.fn();
 const getVizProjectionStatus = vi.fn();
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_scores', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_scores')>('$lib/api_scores');
   return {
     ...actual,
     getScoresCoverage: (...a: unknown[]) => getScoresCoverage(...a),
     getScoresStatus: (...a: unknown[]) => getScoresStatus(...a),
-    getMethods: (...a: unknown[]) => getMethods(...a),
-    getProbeStatus: (...a: unknown[]) => getProbeStatus(...a),
+  };
+});
+vi.mock('$lib/api_settings', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_settings')>('$lib/api_settings');
+  return { ...actual, getMethods: (...a: unknown[]) => getMethods(...a) };
+});
+vi.mock('$lib/api_train', async () => {
+  const actual = await vi.importActual<typeof import('$lib/api_train')>('$lib/api_train');
+  return { ...actual, getProbeStatus: (...a: unknown[]) => getProbeStatus(...a) };
+});
+vi.mock('$lib/api_viz', async () => {
+  const actual = await vi.importActual<typeof import('$lib/api_viz')>('$lib/api_viz');
+  return {
+    ...actual,
     getVizProjection: (...a: unknown[]) => getVizProjection(...a),
     getVizProjectionStatus: (...a: unknown[]) => getVizProjectionStatus(...a),
   };

@@ -24,19 +24,18 @@
  * comment for why).
  */
 
+import { moveCropsToCluster } from '$lib/api_clusters';
 import {
-  ApiError,
   bulkLabel,
   discardCrop,
   discardCropsBatch,
   excludeCrops,
-  moveCropsToCluster,
   putCropLabel,
   unexcludeCrops,
   vlmDismissCrop,
   type ExcludeReason,
-  apiErrorText,
-} from '$lib/api';
+} from '$lib/api_cropWrites';
+import { ApiError, apiErrorText } from '$lib/api_errors';
 import type { Pager } from '$lib/pager.svelte';
 import type { Selection } from '$lib/selection.svelte';
 import type { Crop, RegistryClass } from '$lib/types';
