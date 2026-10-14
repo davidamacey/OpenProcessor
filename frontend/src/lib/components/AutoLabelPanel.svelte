@@ -40,6 +40,7 @@
   import { createAssistScope } from '$lib/assistScope.svelte';
   import { resolveAutoLabelRunVlm } from '$lib/autoLabelRunVlm';
   import { isScopedAssistAvailable } from '$lib/strategies';
+  import { formatDuration } from '$lib/format/duration';
   import { classesStore } from '$stores/classes.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
@@ -150,16 +151,6 @@
   function stageIndex(order: string[], s: string): number {
     const i = order.indexOf(s);
     return i < 0 ? 0 : i;
-  }
-
-  function formatDuration(seconds: number | null): string {
-    if (seconds == null || !Number.isFinite(seconds)) return '—';
-    if (seconds < 60) return `${Math.round(seconds)}s`;
-    if (seconds < 3600)
-      return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    return `${h}h ${m}m`;
   }
 
   async function poll(): Promise<void> {

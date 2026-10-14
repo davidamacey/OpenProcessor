@@ -170,12 +170,6 @@ export function isBest(
   return matrix?.best?.[datasetId]?.[metric]?.includes(model) ?? false;
 }
 
-export function formatTime(iso: string | null | undefined): string {
-  if (!iso) return MISSING;
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
-}
-
 /**
  * V-5 (fresh-start coordinator review 2026-09-25): the bake-off's mAP and
  * the trainer's own mAP50 differ on the same test split because they use

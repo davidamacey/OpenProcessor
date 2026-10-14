@@ -25,7 +25,7 @@
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
   import { regionStatusesStore, toneChipClass } from '$stores/regionStatuses.svelte';
   import { humanizeId } from '$lib/humanizeId';
-  import { formatTimestamp } from '$lib/formatDate';
+  import { formatTimestamp } from '$lib/format/date';
 
   interface Props {
     crop: Crop;

@@ -19,7 +19,7 @@
   import { ApiError, configErrorDetail, unknownStrategyDetail } from '$lib/api';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
-  import { formatTimestamp } from '$lib/formatDate';
+  import { formatTimestamp } from '$lib/format/date';
   import {
     advisoryAxes,
     axisCopy,

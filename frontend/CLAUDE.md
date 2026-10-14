@@ -194,7 +194,7 @@ allow-list. Tests use the neutral widget domain (`WIDGET_TAG_PROFILE`, `widgetTa
 
 ### Shared helpers (one home each)
 
-- Formatters: `src/lib/format/` (`duration.ts`, `bytes.ts`, `count.ts`, `time.ts`).
+- Formatters: `src/lib/format/` (`duration.ts`, `bytes.ts`, `count.ts`, `date.ts`, `latency.ts`, `time.ts`).
   `format.scan.test.ts` fails on a second definition of `formatDuration|fmtBytes|formatTime|fmtEta`.
 - Dialogs: `lib/components/Modal.svelte` (role `dialog`, `aria-modal`, Escape closes, focus
   trap and restore, backdrop click). No page hand-rolls a backdrop; `modal.scan.test.ts`

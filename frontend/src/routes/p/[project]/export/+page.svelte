@@ -25,7 +25,7 @@
     splitExportClasses,
     type ExportRow,
   } from '$lib/export/exportDatasetRows';
-  import { formatCount } from '$lib/formatCount';
+  import { formatCount } from '$lib/format/count';
   import ValidatedRatioNotice from '$lib/components/labelConfirmation/ValidatedRatioNotice.svelte';
   import ExportItemFilter from '$lib/components/itemFilter/ExportItemFilter.svelte';
   import { ItemFilterState } from '$lib/itemFilter/itemFilterState.svelte';

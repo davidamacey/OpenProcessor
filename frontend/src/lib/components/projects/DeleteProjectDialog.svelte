@@ -22,7 +22,7 @@
   import { trapFocus } from '$lib/actions/trapFocus';
   import type { ProjectsAdmin } from '$lib/projects/projectsAdminController.svelte';
   import { usedByText } from '$lib/modelSharing';
-  import { formatBytes } from '$lib/combine/combineText';
+  import { formatBytes } from '$lib/format/bytes';
   import type {
     DeleteDryRunResponse,
     ProjectErrorDetail,

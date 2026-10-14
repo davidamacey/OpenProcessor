@@ -8,8 +8,8 @@
    * render through the shared issue list.
    */
   import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
-  import { formatLatencyMs } from '$lib/formatLatency';
-  import { formatTimestamp } from '$lib/formatDate';
+  import { formatLatencyMs } from '$lib/format/latency';
+  import { formatTimestamp } from '$lib/format/date';
   import type { VlmProbeResult } from '$lib/types_vlm';
 
   interface Props {

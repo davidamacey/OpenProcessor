@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCount } from './formatCount';
+import { formatCount } from './count';
 
 describe('formatCount', () => {
   it('renders null as an em dash, not 0', () => {

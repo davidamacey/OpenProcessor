@@ -4,7 +4,7 @@
    * served; "View" opens one read-only in the editor.
    */
   import type { ConfigEditorView } from '$lib/config/configEditor.svelte';
-  import { formatTimestamp } from '$lib/formatDate';
+  import { formatTimestamp } from '$lib/format/date';
 
   interface Props {
     ed: ConfigEditorView;

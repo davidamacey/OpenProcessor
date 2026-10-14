@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDateOnly, formatTimestamp } from './formatDate';
+import { formatDateOnly, formatTimestamp } from './date';
 
 describe('formatTimestamp (visual audit K7)', () => {
   it('drops microseconds and the offset suffix, normalised to UTC', () => {

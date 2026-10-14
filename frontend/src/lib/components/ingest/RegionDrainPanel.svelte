@@ -15,6 +15,7 @@
    */
   import { onDestroy, onMount } from 'svelte';
   import { getRegionDrain } from '$lib/api';
+  import { formatTime } from '$lib/format/time';
   import type { RegionDrain } from '$lib/types';
 
   interface Props {
@@ -56,11 +57,6 @@
     if (intervalId) clearInterval(intervalId);
     document.removeEventListener('visibilitychange', onVisibilityChange);
   });
-
-  function formatTime(t: number | null): string {
-    if (t === null) return '—';
-    return new Date(t).toLocaleTimeString();
-  }
 </script>
 
 <div>

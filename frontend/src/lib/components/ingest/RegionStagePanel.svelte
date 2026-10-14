@@ -11,7 +11,7 @@
   import ConfirmDialog from '$components/ConfirmDialog.svelte';
   import ReprocessControl from '$components/datasets/ReprocessControl.svelte';
   import { createRegionStage } from '$lib/openVocab/regionStageController.svelte';
-  import { formatTimestamp } from '$lib/formatDate';
+  import { formatTimestamp } from '$lib/format/date';
 
   const stage = createRegionStage();
 

@@ -31,7 +31,8 @@
   import EditProjectDialog from '$components/projects/EditProjectDialog.svelte';
   import PauseProjectDialog from '$components/projects/PauseProjectDialog.svelte';
   import { combineAvailability } from '$lib/combine/combineAvailability.svelte';
-  import { formatCount } from '$lib/formatCount';
+  import { formatBytes } from '$lib/format/bytes';
+  import { formatCount } from '$lib/format/count';
   import { projectHref } from '$lib/projectPaths';
   import {
     createProjectsAdmin,
@@ -94,10 +95,6 @@
       toastStore.error(res.message);
     }
   }
-
-  function fmtBytes(n: number): string {
-    return `${(n / 1024 ** 3).toFixed(1)} GB`;
-  }
 </script>
 
 <div class="flex min-h-screen flex-col bg-zinc-950 text-zinc-100">
@@ -135,7 +132,7 @@
           {capacity.hard_limit}) · {capacity.per_project_shards} per project ·
           {capacity.projects_until_soft_limit} more project(s) before the recommended limit
           ·
-          {fmtBytes(capacity.heap_max_bytes)} heap
+          {formatBytes(capacity.heap_max_bytes)} heap
         </p>
       </section>
     {:else if !admin.loading && !admin.loadError}

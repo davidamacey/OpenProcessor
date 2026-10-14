@@ -25,7 +25,7 @@
     metricEpochLabel,
   } from '$lib/trainResults';
   import { TRAINER_PROTOCOL_LABEL } from '$lib/bakeoff/view';
-  import { formatCount } from '$lib/formatCount';
+  import { formatCount } from '$lib/format/count';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
   import ProbeControl from './ProbeControl.svelte';

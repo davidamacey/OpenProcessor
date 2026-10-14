@@ -22,7 +22,7 @@
   import SeedFromDetectorPanel from '$lib/components/detector/SeedFromDetectorPanel.svelte';
   import { adequacyChipClass, adequacyTooltip } from '$lib/adequacy';
   import { proposalRows, termRulesText } from '$lib/classes/proposalRows';
-  import { formatDateOnly } from '$lib/formatDate';
+  import { formatDateOnly } from '$lib/format/date';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
   import { reservedHotkeyLetters, setClassHotkey } from '$lib/classHotkey';
