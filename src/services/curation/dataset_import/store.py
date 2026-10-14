@@ -15,7 +15,6 @@ job's scan summary), ``state.json`` / ``heartbeat`` / ``cancel.flag`` (the
 
 from __future__ import annotations
 
-import contextlib
 import json
 import os
 import re
@@ -160,14 +159,6 @@ class ImportStore:
                 if isinstance(rel, str):
                     latest[rel] = row
             yield from latest.values()
-
-    def drop_ledger(self) -> None:
-        """Remove the ledger (an undo that finished consumes it)."""
-        ledger_dir = self.directory / 'ledger'
-        if ledger_dir.is_dir():
-            for path in ledger_dir.glob('*.jsonl'):
-                with contextlib.suppress(OSError):
-                    path.unlink()
 
     # ------------------------------------------------------------ chunk marks
 

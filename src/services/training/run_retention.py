@@ -34,11 +34,10 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-# Mirrors src.services.training.jobs.TRAIN_STATES' terminal subset. Kept as
-# a literal tuple here (rather than importing TRAIN_STATES) so this module
-# stays a light, dependency-free filesystem scanner -- importing
-# jobs.py would pull in its Pydantic status model and OpenSearch-adjacent
-# imports for something that only needs four literal strings.
+# The terminal states a trainer job can end in. A literal here (rather than an
+# import from jobs.py) keeps this module a light, dependency-free filesystem
+# scanner: jobs.py would pull in its Pydantic status model and
+# OpenSearch-adjacent imports for four strings.
 TERMINAL_STATES = frozenset({'finished', 'failed', 'cancelled', 'lost'})
 
 

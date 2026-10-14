@@ -272,7 +272,6 @@ async def stage_a_sam_consumer(ctx: PipelineContext, consumer_id: int) -> None:
                         ]
                         _sync_singular_candidate(t)
                         t.candidate_text = ocr_pick.text
-                        t.candidate_text_confidence = ocr_pick.rec_score
                         if rt.vlm_available:
                             await combined_q.put(t)
                         else:

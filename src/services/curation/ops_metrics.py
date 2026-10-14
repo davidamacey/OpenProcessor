@@ -29,12 +29,6 @@ from prometheus_client import Counter, Gauge, Histogram
 OTHER_PROJECT = 'other'
 _DEFAULT_MAX_PROJECT_LABELS = 50
 
-INGEST_OUTCOMES = ('ok', 'failed', 'skipped')
-QUEUES = ('ingest', 'embed', 'label', 'segment')
-EMBEDDING_STATES = ('pending', 'embedded', 'failed')
-SEGMENTER_OUTCOMES = ('hit', 'miss', 'error')
-DETECTION_OUTCOMES = ('ok', 'skipped', 'failed')
-VLM_OUTCOMES = ('ok', 'error')
 
 # Heartbeat file name (src.services.curation.worker_liveness) -> ``worker`` label.
 WORKER_LABELS = {

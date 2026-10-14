@@ -129,19 +129,3 @@ def test_apply_arm_maps_keys_to_model_knobs() -> None:
     assert by_model[MODEL_KEYS['det']] == {'drop_preferred': True}
     with pytest.raises(ValueError, match='unknown arm knob'):
         suite.apply_arm(Fake(), {'pe_bogus': 1})  # type: ignore[arg-type]
-
-
-@pytest.mark.parametrize(
-    ('gpu', 'host', 'api', 'expected'),
-    [
-        (95.0, 20.0, 1.0, 'gpu'),
-        (60.0, 20.0, 31.0, 'api-cpu'),
-        (60.0, 95.0, 5.0, 'host-cpu'),
-        (60.0, 30.0, 5.0, 'latency/feeding'),
-    ],
-)
-def test_binding_resource(gpu: float, host: float, api: float, expected: str) -> None:
-    got = w.binding_resource(
-        gpu_busy_pct=gpu, host_busy_pct_=host, api_cores=api, api_cores_available=32.0
-    )
-    assert got == expected

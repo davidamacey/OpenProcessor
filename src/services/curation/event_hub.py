@@ -83,7 +83,6 @@ from typing import TYPE_CHECKING, Any
 from src.config import get_curation_config
 from src.config.project_context import current_project
 from src.core.logging import get_logger
-from src.services.curation.wire import region_event_payload
 
 
 if TYPE_CHECKING:
@@ -344,7 +343,6 @@ class EventHub:
     def __init__(self) -> None:
         self._subscribers: set[_Subscriber] = set()
         self._lock = asyncio.Lock()
-        self._published = 0
         self._published_by_project: dict[str | None, int] = {}
         self._dropped = 0
         self._bus = os.environ.get('OP_EVENT_BUS', 'file')
@@ -404,7 +402,6 @@ class EventHub:
     def _publish(self, event: dict[str, Any]) -> None:
         if 'ts' not in event:
             event['ts'] = time.time()
-        self._published += 1
         self._published_by_project[event['project']] = (
             self._published_by_project.get(event['project'], 0) + 1
         )
@@ -524,19 +521,6 @@ def publish_crop_classified(
             'class_name': class_name,
             'class_source': class_source,
         }
-    )
-
-
-def publish_region_verified(
-    crop_id: str,
-    *,
-    region_status: str,
-    region_count: int | None = None,
-) -> None:
-    """Convenience wrapper for sam-worker region updates. Payload keys are
-    the fixed wire names, never the storage field names."""
-    get_event_hub().publish(
-        region_event_payload(crop_id, region_status=region_status, region_count=region_count)
     )
 
 

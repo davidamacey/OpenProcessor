@@ -33,7 +33,6 @@ from typing import Any
 
 
 Det = tuple[float, float, float, float, float, int]
-Dets = dict[int, list[Det]]
 Box = tuple[float, float, float, float]
 
 # Boxes whose IoU with the baseline engine's box is below this "moved".

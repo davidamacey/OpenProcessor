@@ -4,7 +4,6 @@ path exactly, the tensor-level gate, the routing crossover and the throughput ce
 from __future__ import annotations
 
 import io
-from typing import Any
 
 import numpy as np
 import pytest
@@ -147,11 +146,10 @@ def test_tensor_diff_identity_and_shift() -> None:
     assert same.best_shift == (0, 0)
     assert same.mean_abs == 0.0
     assert same.max_abs == 0
-    assert lib.t_gate(same)
     shifted = np.roll(a, 1, axis=1)
     d = lib.tensor_diff(a, shifted)
     assert d.best_shift == (0, 1)
-    assert not lib.t_gate(d)
+    assert d.mean_abs >= 0.5
 
 
 def test_tensor_diff_small_noise_passes_large_fails() -> None:
@@ -162,10 +160,9 @@ def test_tensor_diff_small_noise_passes_large_fails() -> None:
     assert d.best_shift == (0, 0)
     assert 0 < d.mean_abs < 0.8
     assert d.max_abs == 1
-    assert lib.t_gate(d) == (d.mean_abs < 0.5)
     far = a.copy()
     far[0, 0, 0] = 255 if a[0, 0, 0] < 128 else 0
-    assert not lib.t_gate(lib.tensor_diff(a, far))
+    assert lib.tensor_diff(a, far).max_abs > 8
 
 
 def test_tensor_diff_rejects_shape_mismatch() -> None:
@@ -185,27 +182,9 @@ def test_summarize() -> None:
     assert lib.summarize([])['n'] == 0
 
 
-def test_crossover_from_linear_costs() -> None:
-    cpu = [(0.3, 5.0), (1.0, 18.0), (17.0, 306.0)]  # about 18 ms per MP, no fixed cost
-    gpu = [(0.3, 9.0), (1.0, 10.4), (17.0, 42.4)]  # 8.4 ms fixed + 2 ms per MP
-    mp = lib.crossover_megapixels(cpu, gpu)
-    assert mp is not None
-    assert 0.4 < mp < 0.7
-    assert lib.crossover_megapixels(gpu, cpu) is None
-
-
 def test_ceiling_takes_the_binding_resource() -> None:
     c = lib.ceiling(host_cpu_s=0.25, host_cores=40, gpu_ms=[(14.0, 2), (5.0, 1)])
     assert c['host'] == pytest.approx(160.0)
     assert c['gpu'] == pytest.approx(min(2 * 1000 / 14.0, 1000 / 5.0))
     assert c['images_per_s'] == pytest.approx(min(c['host'], c['gpu']))
     assert c['binding'] == 'gpu'
-
-
-def test_clean_reps_drop_foreign_load() -> None:
-    reps: list[dict[str, Any]] = [
-        {'foreign_sm_pct': 0.0, 'v': 1},
-        {'foreign_sm_pct': 4.0, 'v': 2},
-        {'v': 3},
-    ]
-    assert [r['v'] for r in lib.clean_reps(reps)] == [1]

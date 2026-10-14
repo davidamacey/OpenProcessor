@@ -32,7 +32,7 @@ TARGETS = ('src', 'scripts', 'export', 'docker')
 EXCLUDE = '*/ultralytics_patches/*'
 MIN_CONFIDENCE = '60'
 IGNORE_DECORATORS = (
-    '@*router.*,@app.*,@*.on_event,@field_validator,@model_validator,@validator,'
+    '@*router.*,@app.*,@application.*,@*.on_event,@field_validator,@model_validator,@validator,'
     '@computed_field,@asynccontextmanager,@pytest.fixture,@abstractmethod,@*.setter'
 )
 _FINDING = re.compile(r"^(?P<path>.+?):(?P<line>\d+): unused (?P<kind>\w+) '(?P<name>.+)' \(")

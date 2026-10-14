@@ -13,8 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import hashlib
-import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -480,10 +478,6 @@ def prepare_resume(store: ImportStore, registry: ClassRegistry) -> None:
     raw = store.read_mapping()
     raw.update(mapping_to_dict(resolved))
     store.write_mapping(raw)
-
-
-def stable_hash(value: Any) -> str:
-    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
 def cancel_import(import_id: str) -> ImportStore | None:

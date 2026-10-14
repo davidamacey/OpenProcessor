@@ -108,7 +108,7 @@ const RECONNECT_MAX_MS = 30_000;
 export function slotVerifiedEventTypes(): string[] {
   const derived = slotRegistry.queues.map((s) => `crop.${s.key}_verified`);
   // 'crop.region_verified' is the one generic event OpenProcessor emits
-  // for every region verify (event_hub.publish_region_verified), whatever
+  // for every region verify (the region worker's HTTP event), whatever
   // the slot key — the per-slot names above cover a backend that
   // namespaces verify events per slot.
   return Array.from(new Set(['crop.region_verified', ...derived]));

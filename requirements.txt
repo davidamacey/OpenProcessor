@@ -89,12 +89,6 @@ imohash  # Fast constant-time image hashing (48KB sampled, ~1ms for any file siz
 einops
 regex
 
-# Text-detection lean/angle recovery (src/services/detection/region_lean.py,
-# lazily imported in default_detector()). Also currently undeclared anywhere;
-# the module has no production importer yet (pending the Wave 2 ingest
-# wiring), but it is real ported code with a real hard (non-optional) import.
-paddleocr
-
 # Curation Clustering (lazily imported -- ImportError only surfaces on first
 # call to a clustering endpoint if these are missing from the image)
 scikit-learn  # src/services/curation/clustering/orchestrator.py, methods/ahc.py, backend.py; scripts/curation/bakeoff/sample.py

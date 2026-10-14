@@ -213,11 +213,6 @@ def storage_summary(cat_rows: list[dict[str, Any]], *, images: int, vectors: int
     }
 
 
-def compare_storage(measured: dict[str, float], reference: dict[str, float]) -> dict[str, float]:
-    """Ratio of each measured number to its reference (keys in both)."""
-    return {k: measured[k] / reference[k] for k in reference if k in measured and reference[k]}
-
-
 def foreign_gpu_summary(samples: list[dict[int, float]], own_pids: set[int]) -> dict[str, float]:
     """Utilization attributed to processes outside the stack, from pmon samples.
 

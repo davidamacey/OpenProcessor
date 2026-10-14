@@ -72,13 +72,6 @@ def try_current_project() -> BoundProject | None:
     return _BOUND.get() or _PROCESS_BOUND
 
 
-def is_project_bound() -> bool:
-    """Non-raising check, for call sites that need to branch on bound vs
-    unbound *state itself* (for example a static test) rather than treat
-    unbound as an error."""
-    return (_BOUND.get() or _PROCESS_BOUND) is not None
-
-
 @contextmanager
 def bind_project(
     record: ProjectRecord, *, read_only: bool = False
@@ -197,9 +190,3 @@ async def run_in_executor_bound[T](
         return ctx.run(fn, *args)
 
     return await loop.run_in_executor(executor, _run_with_context)
-
-
-def project_env() -> dict[str, str]:
-    """Env additions for a subprocess launch (``Popen(env=...)``) so a
-    worker/trainer child process binds the same project as its parent."""
-    return {'OP_CURATION_PROJECT': current_project().record.slug}

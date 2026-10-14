@@ -151,7 +151,6 @@ class _ItemTask:
     # recognized text rides along so writers can persist it even when
     # the downstream VLM verify returns an empty read.
     candidate_text: str | None = None
-    candidate_text_confidence: float | None = None
     # W8: every selected candidate for this item (select_region_candidates
     # output, wrapped as TaskBoxInput -- box_id set only when read back
     # from an existing pending_verification box). Drives the multi-box

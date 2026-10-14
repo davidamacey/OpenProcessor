@@ -14,7 +14,6 @@ from src.config.project_context import (
     ProjectNotBound,
     bind_project,
     current_project,
-    project_env,
     run_in_executor_bound,
 )
 from src.config.projects import ProjectRecord, resources_for_new
@@ -107,11 +106,6 @@ def test_run_in_executor_bound_inherits_binding() -> None:
             return await run_in_executor_bound(loop, pool, _inner)
 
     assert asyncio.run(_run()) == 'alpha'
-
-
-def test_project_env() -> None:
-    with bind_project(_record('alpha')):
-        assert project_env() == {'OP_CURATION_PROJECT': 'alpha'}
 
 
 def test_two_sequential_testclient_requests_see_own_binding() -> None:

@@ -39,24 +39,9 @@ def trainer_root_dir() -> Path:
     return Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs'))
 
 
-# Public for callers that want the default without the env override.
-TRAIN_JOBS_DIR = Path('/jobs')
-
 # Heartbeat older than this -> flip status to ``lost`` in the API view.
 STALE_HEARTBEAT_SECONDS = 60
 
-# State the trainer writes; ``lost`` is API-side only.
-TRAIN_STATES = (
-    'queued',
-    'starting',
-    'running',
-    'exporting',
-    'finished',
-    'failed',
-    'cancelled',
-    'skipped',
-    'lost',
-)
 
 # Job-id format: ISO timestamp prefix + tag. Validated with this regex when
 # we accept a job-id in path params so we don't end up reading arbitrary

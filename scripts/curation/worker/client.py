@@ -176,15 +176,6 @@ class SegmenterClient:
         """
         return self.base_urls[0] if self.base_urls else ''
 
-    async def _next_url(self) -> str:
-        """Round-robin pick the next SAM3 URL (legacy; no health check)."""
-        if len(self.base_urls) == 1:
-            return self.base_urls[0]
-        async with self._rr_lock:
-            url = self.base_urls[self._rr_idx]
-            self._rr_idx = (self._rr_idx + 1) % len(self.base_urls)
-        return url
-
     async def _pick_healthy_url(self) -> str:
         """Round-robin a healthy host. Raises :class:`SegmenterAllHostsDown`.
 
@@ -378,33 +369,6 @@ class SegmenterClient:
         the failure contract (shared).
         """
         return await self._segment(crop_jpeg, self.text_prompt, self.max_candidates)
-
-    async def segment_image(
-        self,
-        jpeg: bytes,
-        prompt: str,
-        *,
-        min_score: float | None = None,
-        max_candidates: int | None = None,
-        return_masks: bool = False,
-    ) -> list[RegionCandidate]:
-        """Segment a whole image with a per-call ``prompt`` (full-image pass).
-
-        ``bbox_norm`` and ``mask_polygon`` come back in the submitted image's
-        normalized frame. ``min_score`` / ``return_masks`` are sent only
-        when set, so a caller that does not need them gets the segmenter's
-        defaults. Raises :class:`SegmenterUnavailable` when the request
-        failed or every host is UNHEALTHY (never reported as "no
-        candidate"). Returns ``[]`` for no candidates or when this client is
-        disabled.
-        """
-        return await self._segment(
-            jpeg,
-            prompt,
-            self.max_candidates if max_candidates is None else max_candidates,
-            min_score=min_score,
-            return_masks=return_masks,
-        )
 
     async def _segment(
         self,

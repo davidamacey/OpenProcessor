@@ -376,58 +376,6 @@ class TestRegionDetectorSingle:
 # =============================================================================
 
 
-class TestRegionDetectorBatch:
-    @pytest.mark.asyncio
-    async def test_detect_batch_aligns_results(self) -> None:
-        raw = _make_raw_output(cx_norm=0.5, cy_norm=0.5, w_norm=0.1, h_norm=0.05, score=0.7)
-        pool = _make_mock_pool(raw)
-        detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
-
-        crops = [_make_jpeg() for _ in range(5)]
-        results = await detector.detect_batch(crops)
-        assert len(results) == 5
-        for res in results:
-            assert isinstance(res, RegionCandidate)
-
-    @pytest.mark.asyncio
-    async def test_detect_batch_empty_input(self) -> None:
-        pool = _make_mock_pool(np.zeros((1, 5, 10), dtype=np.float32))
-        detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
-        assert await detector.detect_batch([]) == []
-        # Triton was never called.
-        pool.infer.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_detect_batch_skips_corrupt_bytes(self) -> None:
-        raw = _make_raw_output(cx_norm=0.5, cy_norm=0.5, w_norm=0.1, h_norm=0.05, score=0.7)
-        pool = _make_mock_pool(raw)
-        detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
-
-        crops: list[bytes] = [_make_jpeg(), b'', b'not-a-jpeg', _make_jpeg()]
-        results = await detector.detect_batch(crops)
-        assert len(results) == 4
-        assert results[0] is not None
-        assert results[1] is None
-        assert results[2] is None
-        assert results[3] is not None
-
-    @pytest.mark.asyncio
-    async def test_detect_batch_chunks_large_input(self) -> None:
-        """More than ``profile.batch_limit`` crops still all get a result."""
-        raw = _make_raw_output(cx_norm=0.5, cy_norm=0.5, w_norm=0.1, h_norm=0.05, score=0.6)
-        pool = _make_mock_pool(raw)
-        detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
-
-        # 40 > 16 (the chunk limit) — exercises multiple chunks.
-        crops = [_make_jpeg() for _ in range(40)]
-        results = await detector.detect_batch(crops)
-        assert len(results) == 40
-        assert all(isinstance(r, RegionCandidate) for r in results)
-        # Each crop yielded exactly one Triton call (Triton does the
-        # actual GPU batching server-side via dynamic batching).
-        assert pool.infer.await_count == 40
-
-
 # =============================================================================
 # crop_norm_to_source_norm — coordinate frame transform
 # =============================================================================

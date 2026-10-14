@@ -192,7 +192,7 @@ def test_unscoped_curation_path_is_404(client: TestClient) -> None:
 def test_global_routes_answer_with_nothing_bound(client: TestClient) -> None:
     """Requests start unbound (tests/conftest.py runs each in a fresh
     context, as uvicorn does); the global routes must not need a binding."""
-    from src.config.project_context import is_project_bound
+    from src.config.project_context import try_current_project
 
     assert client.get(f'{API}/projects').status_code == 200
     assert client.get(f'{API}/health').status_code == 200
@@ -200,7 +200,7 @@ def test_global_routes_answer_with_nothing_bound(client: TestClient) -> None:
 
     events = next(r for r in api_routes(app) if r.path == f'{API}/events')
     assert 'project' not in {p.name for p in events.original_route.dependant.path_params}
-    assert is_project_bound()  # the test's own binding is untouched
+    assert try_current_project() is not None  # the test's own binding is untouched
 
 
 def test_request_does_not_inherit_the_test_binding() -> None:
@@ -208,19 +208,19 @@ def test_request_does_not_inherit_the_test_binding() -> None:
     under uvicorn: the test's autouse binding never reaches the app."""
     from fastapi import FastAPI
 
-    from src.config.project_context import is_project_bound
+    from src.config.project_context import try_current_project
 
     app = FastAPI()
 
     @app.get('/probe')
     async def _probe_async() -> dict[str, bool]:
-        return {'bound': is_project_bound()}
+        return {'bound': (try_current_project() is not None)}
 
     @app.get('/probe_sync')
     def _probe_sync() -> dict[str, bool]:
-        return {'bound': is_project_bound()}
+        return {'bound': (try_current_project() is not None)}
 
-    assert is_project_bound()
+    assert try_current_project() is not None
     client = TestClient(app)
     assert client.get('/probe').json() == {'bound': False}
     assert client.get('/probe_sync').json() == {'bound': False}

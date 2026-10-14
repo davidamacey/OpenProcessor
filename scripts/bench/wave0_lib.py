@@ -205,21 +205,3 @@ def aggregate_collapsed(lines: list[str]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------- binding resource
-
-
-def binding_resource(
-    *, gpu_busy_pct: float, host_busy_pct_: float, api_cores: float, api_cores_available: float
-) -> str:
-    """One-word reading of a run: ``gpu``, ``api-cpu``, ``host-cpu`` or ``latency/feeding``.
-
-    GPU busy of 90 percent or more binds on the GPU; an API at 90 percent of the cores it can use
-    or a host at 90 percent busy binds on the host; otherwise the pipeline is neither saturated
-    (clients, batching or serial sections feed it too slowly).
-    """
-    if gpu_busy_pct >= 90.0:
-        return 'gpu'
-    if api_cores_available > 0 and api_cores / api_cores_available >= 0.9:
-        return 'api-cpu'
-    if host_busy_pct_ >= 90.0:
-        return 'host-cpu'
-    return 'latency/feeding'

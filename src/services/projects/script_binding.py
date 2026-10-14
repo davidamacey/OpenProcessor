@@ -89,12 +89,6 @@ async def abind_script_project(slug: str, *, opensearch_url: str | None = None) 
     return record
 
 
-def bind_script_project_from_env() -> ProjectRecord:
-    """For entry points with no argument parser (long-running workers):
-    bind ``$OP_CURATION_PROJECT``, else ``default``."""
-    return bind_script_project(os.environ.get('OP_CURATION_PROJECT', DEFAULT_SLUG))
-
-
 def script_project_registry(opensearch_url: str | None = None) -> ProjectRegistry:
     """A project registry for a multi-project worker or maintenance script,
     reading the projects index through the script's own guarded client

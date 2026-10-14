@@ -82,10 +82,6 @@ class ActionRegistry:
             stack.extend(self.contexts[cid].includes)
         return seen
 
-    def actions_in_context(self, context_id: str) -> list[KeymapAction]:
-        active = self.active_set(context_id)
-        return [a for a in self.actions.values() if a.context in active]
-
     def locked_action_default(self, action: KeymapAction) -> set[str]:
         """The subset of ``action.default`` that is a grammar-locked key
         (owner rule: a locked action keeps its default; that default

@@ -126,10 +126,6 @@ class PromptPack:
         known = {f.name for f in fields(cls)}
         return cls(**{k: v for k, v in data.items() if k in known})
 
-    def to_json(self, path: str | Path) -> None:
-        """Write this pack to ``path`` as pretty-printed JSON."""
-        Path(path).write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True) + '\n')
-
     @classmethod
     def from_json(cls, path: str | Path) -> PromptPack:
         """Load a :class:`PromptPack` from a JSON file at ``path``.

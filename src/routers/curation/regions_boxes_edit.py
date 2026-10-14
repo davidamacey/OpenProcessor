@@ -90,7 +90,7 @@ class ItemBatchRegionsRequest(BaseModel):
     region_status: str | None = None
     region_label_source: str = 'human'
 
-    def model_post_init(self, __context: Any) -> None:
+    def model_post_init(self, _context: Any) -> None:
         for b in self.boxes:
             if b.box_id is not None:
                 raise HTTPException(

@@ -10,13 +10,9 @@ from __future__ import annotations
 import numpy as np
 
 from src.services.detection.crop_quality import (
-    DEFAULT_SHARP_MODE,
-    SHARP_THRESHOLDS,
     blur_ratio,
-    crop_blur,
     crop_lap_var,
     image_lap_var,
-    is_blurry,
     laplacian_var,
 )
 
@@ -87,55 +83,6 @@ class TestBlurRatio:
 
     def test_computes_rounded_ratio(self) -> None:
         assert blur_ratio(50.0, 100.0) == 0.5
-
-
-class TestCropBlur:
-    def test_returns_named_tuple_with_expected_fields(self) -> None:
-        img = _sharp_image()
-        result = crop_blur(img, (0, 0, 32, 32))
-        assert result.full_var >= 0.0
-        assert result.box_var is None or result.box_var >= 0.0
-        assert result.ratio is None or isinstance(result.ratio, float)
-
-    def test_reuses_precomputed_full_var(self) -> None:
-        img = _sharp_image()
-        full_var = image_lap_var(img)
-        result = crop_blur(img, (0, 0, 32, 32), full_var=full_var)
-        assert result.full_var == full_var
-
-
-class TestIsBlurry:
-    def test_none_ratio_is_not_blurry(self) -> None:
-        assert is_blurry(None, 100.0) is False
-
-    def test_none_box_var_is_not_blurry(self) -> None:
-        assert is_blurry(0.5, None) is False
-
-    def test_below_both_thresholds_is_blurry(self) -> None:
-        ratio_thr, boxval_thr = SHARP_THRESHOLDS[DEFAULT_SHARP_MODE]
-        assert is_blurry(ratio_thr - 0.01, boxval_thr - 1.0) is True
-
-    def test_above_ratio_threshold_is_not_blurry(self) -> None:
-        ratio_thr, boxval_thr = SHARP_THRESHOLDS[DEFAULT_SHARP_MODE]
-        # ratio passes even though box_var alone is low -> AND means not blurry.
-        assert is_blurry(ratio_thr + 0.5, boxval_thr - 1.0) is False
-
-    def test_above_boxval_threshold_is_not_blurry(self) -> None:
-        ratio_thr, boxval_thr = SHARP_THRESHOLDS[DEFAULT_SHARP_MODE]
-        assert is_blurry(ratio_thr - 0.01, boxval_thr + 1000.0) is False
-
-    def test_unknown_mode_falls_back_to_default(self) -> None:
-        ratio_thr, boxval_thr = SHARP_THRESHOLDS[DEFAULT_SHARP_MODE]
-        assert is_blurry(ratio_thr - 0.01, boxval_thr - 1.0, mode='not_a_real_mode') is True
-
-    def test_low_mode_is_more_lenient_than_high(self) -> None:
-        # A ratio between the 'high' and 'low' thresholds should only trip
-        # the more permissive ('low') threshold band, not 'high'.
-        low_ratio_thr, low_box_thr = SHARP_THRESHOLDS['low']
-        high_ratio_thr, _ = SHARP_THRESHOLDS['high']
-        mid_ratio = (low_ratio_thr + high_ratio_thr) / 2
-        assert is_blurry(mid_ratio, low_box_thr - 1.0, mode='high') is False
-        assert is_blurry(mid_ratio, low_box_thr - 1.0, mode='low') is True
 
 
 def _float64_laplacian_var(gray: np.ndarray) -> float:

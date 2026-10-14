@@ -466,26 +466,3 @@ class IndexesMixin:
         except Exception as e:
             logger.error(f'Failed to create index {index_name}: {e}')
             return False
-
-    async def delete_all_indexes(self) -> dict[str, bool]:
-        """Delete all visual search indexes."""
-        results = {}
-        for index_name in [
-            IndexName.GLOBAL,
-            IndexName.VEHICLES,
-            IndexName.PEOPLE,
-            IndexName.FACES,
-            IndexName.OCR,
-        ]:
-            try:
-                exists = await self.client.indices.exists(index=index_name.value)
-                if exists:
-                    await self.client.indices.delete(index=index_name.value)
-                    results[index_name.value] = True
-                    logger.info(f'Deleted index: {index_name.value}')
-                else:
-                    results[index_name.value] = True  # Already doesn't exist
-            except Exception as e:
-                logger.error(f'Failed to delete {index_name.value}: {e}')
-                results[index_name.value] = False
-        return results

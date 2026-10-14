@@ -13,16 +13,10 @@ from fastapi import Depends
 
 from src.clients.opensearch.client import OpenSearchClient
 from src.clients.triton_pool import TritonClientManager
-from src.config.settings import Settings, get_settings
+from src.config.settings import get_settings
 
 
 logger = logging.getLogger(__name__)
-
-
-# =============================================================================
-# Type Aliases for Dependency Injection
-# =============================================================================
-SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
 # =============================================================================
@@ -38,7 +32,6 @@ class AppState:
 
     def __init__(self):
         self.pytorch_models: dict[str, Any] = {}
-        self._triton_sync_client = None
         self._triton_async_client = None
         self._opensearch_client = None
 

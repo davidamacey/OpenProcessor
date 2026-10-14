@@ -78,10 +78,6 @@ class IVFCentroidStore:
     def metadata_path(self) -> Path:
         return self._metadata_path
 
-    @property
-    def gate_path(self) -> Path:
-        return self._gate_path
-
     # -- existence / metadata ---------------------------------------------
 
     def is_trained(self) -> bool:
@@ -278,11 +274,6 @@ class IVFCentroidStore:
 
     # -- assign -----------------------------------------------------------
 
-    def assign_batch(self, embeddings: np.ndarray) -> np.ndarray:
-        """Assign each row to its nearest centroid. Returns int64 labels."""
-        labels, _ = self.assign_batch_with_distances(embeddings)
-        return labels
-
     def assign_batch_with_distances(self, embeddings: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Assign rows to nearest centroid; return ``(labels, cosine_dist)``.
 
@@ -301,10 +292,6 @@ class IVFCentroidStore:
         labels = assignments.reshape(-1).astype(np.int64)
         cosine_dist = np.clip(sq_l2.reshape(-1).astype(np.float32) / 2.0, 0.0, 2.0)
         return labels, cosine_dist
-
-    def assign_one(self, embedding: np.ndarray) -> int:
-        """Assign a single embedding to its nearest centroid index."""
-        return self.assign_one_with_distance(embedding)[0]
 
     def assign_one_with_distance(self, embedding: np.ndarray) -> tuple[int, float]:
         """Assign one embedding; return ``(centroid_index, cosine_dist)``."""

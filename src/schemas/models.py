@@ -34,34 +34,6 @@ class ExportStatus(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and for
     FAILED = 'failed'
 
 
-class ModelUploadRequest(BaseModel):
-    """Request parameters for model upload (form fields)."""
-
-    triton_name: str | None = Field(
-        default=None,
-        description='Custom Triton model name. If not provided, auto-generated from filename.',
-        examples=['vehicle_detector', 'custom_yolo_v1'],
-    )
-    max_batch: int = Field(
-        default=32,
-        ge=1,
-        le=128,
-        description='Maximum batch size for dynamic batching',
-    )
-    formats: list[ExportFormat] = Field(
-        default=[ExportFormat.TRT_END2END],
-        description='Export formats to generate',
-    )
-    normalize_boxes: bool = Field(
-        default=True,
-        description='Output boxes in [0,1] normalized range (recommended)',
-    )
-    auto_load: bool = Field(
-        default=True,
-        description='Automatically load model into Triton after export',
-    )
-
-
 class ExportTaskResponse(BaseModel):
     """Response for export task creation."""
 

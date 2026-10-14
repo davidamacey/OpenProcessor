@@ -70,12 +70,12 @@ def test_from_dict_missing_required_field_raises() -> None:
         PromptPack.from_dict(data)
 
 
-def test_to_json_from_json_round_trips(tmp_path: Path) -> None:
+def test_from_json_round_trips_to_dict(tmp_path: Path) -> None:
     path = tmp_path / 'pack.json'
-    GENERIC_ITEM_PACK.to_json(path)
+    path.write_text(json.dumps(GENERIC_ITEM_PACK.to_dict()))
     loaded = PromptPack.from_json(path)
     assert loaded == GENERIC_ITEM_PACK
-    # Pretty-printed, real JSON -- not a repr dump.
+    # Real JSON -- not a repr dump.
     parsed = json.loads(path.read_text())
     assert parsed['name'] == 'generic_item_v1'
 
@@ -148,7 +148,7 @@ def test_resolve_prompt_pack_falls_back_on_malformed_json(tmp_path: Path) -> Non
 def test_resolve_prompt_pack_loads_a_configured_pack(tmp_path: Path) -> None:
     custom = replace(GENERIC_ITEM_PACK, name='pallet_v1')
     path = tmp_path / 'pallet.json'
-    custom.to_json(path)
+    path.write_text(json.dumps(custom.to_dict()))
 
     resolved = resolve_prompt_pack(_FakeCfg(path))
     assert resolved.name == 'pallet_v1'

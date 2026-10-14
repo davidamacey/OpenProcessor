@@ -8,7 +8,6 @@ proportion (positive = a non-empty label file).
 
 from __future__ import annotations
 
-import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -42,15 +41,6 @@ def label_path_for(image: Path) -> Path:
             parts[i] = 'labels'
             return Path(*parts).with_suffix('.txt')
     return image.with_suffix('.txt')
-
-
-def _count_label_rows(label: Path) -> tuple[int, bool]:
-    try:
-        text = label.read_text(encoding='utf-8')
-    except FileNotFoundError:
-        return 0, False
-    rows = [ln for ln in text.splitlines() if ln.strip() and not ln.lstrip().startswith('#')]
-    return len(rows), True
 
 
 def _images_under(entry: Path, base: Path) -> list[Path]:
@@ -139,26 +129,3 @@ def discover(dataset: Path) -> tuple[dict[str, list[Path]], list[str] | None]:
     if not splits:
         raise DatasetError(f'{dataset}: no data.yaml, images/<split>/ or <split>/images/ found')
     return splits, None
-
-
-def load_samples(images: list[Path]) -> list[Sample]:
-    out = []
-    for image in images:
-        label = label_path_for(image)
-        n, exists = _count_label_rows(label)
-        out.append(Sample(image=image, label=label, n_labels=n, label_exists=exists))
-    return out
-
-
-def stratified_sample(samples: list[Sample], limit: int, seed: int) -> list[Sample]:
-    """Deterministic sample keeping the positive/background proportion."""
-    if limit >= len(samples):
-        return samples
-    rng = random.Random(seed)  # nosec B311 - reproducible cohort selection, not crypto
-    pos = [s for s in samples if s.positive]
-    neg = [s for s in samples if not s.positive]
-    n_pos = round(limit * len(pos) / len(samples))
-    n_pos = min(len(pos), max(n_pos, 1 if pos else 0))
-    n_neg = min(len(neg), limit - n_pos)
-    picked = rng.sample(pos, n_pos) + rng.sample(neg, n_neg)
-    return sorted(picked, key=lambda s: str(s.image))

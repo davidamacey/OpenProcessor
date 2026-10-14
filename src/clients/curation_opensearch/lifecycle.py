@@ -33,14 +33,6 @@ INDEX_BODIES: dict[IndexRole, dict[str, Any]] = {
 }
 
 
-async def get_curation_index_settings() -> dict[str, dict[str, Any]]:
-    """Return the schema dict keyed by index name (string).
-
-    Used by tests + introspection routes.
-    """
-    return {index_name(config, role): body for role, body in INDEX_BODIES.items()}
-
-
 # =============================================================================
 # Index lifecycle
 # =============================================================================

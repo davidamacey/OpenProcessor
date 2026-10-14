@@ -44,8 +44,6 @@ MAX_BATCH_SIZE = 128  # Max batch for TensorRT (faces per image)
 ONNX_PATH = Path('pytorch_models/arcface_w600k_r50.onnx')
 PLAN_PATH = Path('models/arcface_w600k_r50/1/model.plan')
 
-# TensorRT settings
-FP16_MODE = True
 WORKSPACE_GB = 4
 
 

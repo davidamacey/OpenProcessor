@@ -42,13 +42,3 @@ class ClientConnectionError(InferenceError):
         self.reason = reason
         message = f'Failed to connect to {service} at {url}: {reason}'
         super().__init__(message)
-
-
-class PreprocessingError(InferenceError):
-    """Raised when image preprocessing fails."""
-
-    def __init__(self, filename: str, reason: str):
-        self.filename = filename
-        self.reason = reason
-        message = f"Preprocessing failed for '{filename}': {reason}"
-        super().__init__(message)

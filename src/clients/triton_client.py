@@ -588,44 +588,6 @@ class TritonClient:
 
         return np.vstack(all_embeddings) if all_embeddings else np.empty((0, 512), dtype=np.float32)
 
-    def infer_arcface_batch(
-        self,
-        faces: np.ndarray,
-        max_batch_size: int = 128,
-    ) -> np.ndarray:
-        """
-        Batched ArcFace inference for face embeddings.
-
-        Args:
-            faces: [N, 3, 112, 112] FP32 tensor, range [-1, 1]
-            max_batch_size: Maximum batch size per Triton request
-
-        Returns:
-            [N, 512] FP32 L2-normalized embeddings
-        """
-        if faces.shape[0] == 0:
-            return np.empty((0, 512), dtype=np.float32)
-
-        n_faces = faces.shape[0]
-        all_embeddings = []
-
-        for i in range(0, n_faces, max_batch_size):
-            batch = faces[i : i + max_batch_size]
-            batch_size = batch.shape[0]
-
-            input_tensor = InferInput('input', [batch_size, 3, 112, 112], 'FP32')
-            input_tensor.set_data_from_numpy(batch.astype(np.float32))
-
-            output = InferRequestedOutput('output')
-            response = self._infer_with_retry(
-                TritonModelConfig.ARCFACE_MODEL, [input_tensor], [output]
-            )
-
-            embeddings = response.as_numpy('output')
-            all_embeddings.append(embeddings)
-
-        return np.vstack(all_embeddings) if all_embeddings else np.empty((0, 512), dtype=np.float32)
-
 
 # =============================================================================
 # Singleton Instance

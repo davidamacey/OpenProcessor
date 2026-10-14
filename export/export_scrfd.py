@@ -62,7 +62,6 @@ logger = logging.getLogger(__name__)
 
 INPUT_SIZE = 640
 MAX_BATCH_SIZE = 64  # Must match max profile's max_batch_size
-FP16_MODE = True
 WORKSPACE_GB = 4
 
 # Paths

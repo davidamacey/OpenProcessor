@@ -21,7 +21,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 
-from src.services.face_identity import FaceIdentityService, get_face_identity_service
+from src.services.face_identity import get_face_identity_service
 
 
 logger = logging.getLogger(__name__)
@@ -30,19 +30,6 @@ router = APIRouter(
     prefix='/persons',
     tags=['Person Management'],
 )
-
-
-# =============================================================================
-# Dependency
-# =============================================================================
-
-
-def get_face_identity() -> FaceIdentityService:
-    """Dependency for FaceIdentityService."""
-    return get_face_identity_service()
-
-
-FaceIdentityDep = Annotated[FaceIdentityService, get_face_identity]
 
 
 # =============================================================================

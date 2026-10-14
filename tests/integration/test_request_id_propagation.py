@@ -31,8 +31,15 @@ import pytest
 import structlog
 from fastapi.testclient import TestClient
 
+from src.core.logging import request_id_ctx
+
 
 pytestmark = pytest.mark.integration
+
+
+def _clear_request_id() -> None:
+    request_id_ctx.set('-')
+    structlog.contextvars.unbind_contextvars('request_id')
 
 
 @pytest.fixture(scope='module')
@@ -57,14 +64,14 @@ def test_request_id_is_generated_when_absent(client: TestClient) -> None:
 
 
 def test_bind_request_id_updates_context() -> None:
-    from src.core.logging import bind_request_id, clear_request_id, get_request_id
+    from src.core.logging import bind_request_id, get_request_id
 
     assert get_request_id() == '-'
     bind_request_id('ctx-abc')
     try:
         assert get_request_id() == 'ctx-abc'
     finally:
-        clear_request_id()
+        _clear_request_id()
     assert get_request_id() == '-'
 
 
@@ -105,7 +112,7 @@ def test_worker_structlog_emits_request_id() -> None:
     is wired up in :mod:`src.core.logging` and that worker emissions
     will carry ``request_id`` once the consumer binds it.
     """
-    from src.core.logging import bind_request_id, clear_request_id
+    from src.core.logging import bind_request_id
 
     # configure_logging() is invoked at FastAPI startup but not in pytest
     # context — apply a minimal capture chain that includes the
@@ -135,7 +142,7 @@ def test_worker_structlog_emits_request_id() -> None:
         bind_request_id('testid_def456')
         log.info('stage_b_verify_took_ms', crop_id='crop-2', ms=99.0)
     finally:
-        clear_request_id()
+        _clear_request_id()
         # Reset structlog so other tests get a fresh default config.
         structlog.reset_defaults()
 

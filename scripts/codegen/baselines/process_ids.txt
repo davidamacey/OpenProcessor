@@ -362,7 +362,7 @@ src/services/curation/dataset_import/chunk.py	1	stripped in PR 2
 src/services/curation/dataset_import/coco.py	2	stripped in PR 2
 src/services/curation/dataset_import/holdout_record.py	1	stripped in PR 2
 src/services/curation/dataset_import/image_load.py	1	stripped in PR 2
-src/services/curation/dataset_import/issues.py	2	stripped in PR 2
+src/services/curation/dataset_import/issues.py	1	stripped in PR 2
 src/services/curation/dataset_import/item_labels.py	1	stripped in PR 2
 src/services/curation/dataset_import/mapping.py	4	stripped in PR 2
 src/services/curation/dataset_import/op_export.py	1	stripped in PR 2
@@ -586,7 +586,6 @@ tests/curation/test_reprocess_open_vocab.py	1	stripped in PR 2
 tests/curation/test_review_locate.py	1	stripped in PR 2
 tests/curation/test_review_router.py	1	stripped in PR 2
 tests/curation/test_router_wireup.py	2	stripped in PR 2
-tests/curation/test_segmenter_client_full_image.py	1	stripped in PR 2
 tests/curation/test_segmenter_gate.py	1	stripped in PR 2
 tests/curation/test_segmenter_http.py	1	stripped in PR 2
 tests/curation/test_segmenter_optional.py	1	stripped in PR 2

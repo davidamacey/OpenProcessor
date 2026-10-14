@@ -141,23 +141,6 @@ class SearchMixin:
             cluster_ids=cluster_ids,
         )
 
-    async def get_faces_by_person_id(
-        self,
-        person_id: str,
-        limit: int = 50,
-    ) -> list[dict[str, Any]]:
-        """Get all faces belonging to a person identity."""
-        query = {
-            'query': {'term': {'person_id': person_id}},
-            'size': limit,
-            'sort': [{'confidence': {'order': 'desc'}}],
-        }
-        response = await self.client.search(
-            index=IndexName.FACES.value,
-            body=query,
-        )
-        return [hit['_source'] for hit in response['hits']['hits']]
-
     async def _search_index(
         self,
         index_name: str,

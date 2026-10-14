@@ -114,7 +114,7 @@ def _entry(row: dict[str, str]) -> CatalogEntry:
 
 
 @functools.lru_cache(maxsize=8)
-def _load(path_str: str, mtime_ns: int) -> tuple[CatalogEntry, ...]:  # noqa: ARG001 - cache key
+def _load(path_str: str, _mtime_ns: int) -> tuple[CatalogEntry, ...]:
     lines = [
         line
         for line in Path(path_str).read_text(encoding='utf-8').splitlines()

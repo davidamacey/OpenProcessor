@@ -44,7 +44,6 @@ class ParentWrite:
     outcome: str
     """``written`` | ``noop`` (this import already wrote it) | ``locked``."""
     boxes: list[dict[str, Any]] = dataclasses.field(default_factory=list)
-    accepted_bbox: tuple[float, float, float, float] | None = None
 
 
 def _validated(ctx: ImportContext) -> bool:
@@ -141,8 +140,6 @@ async def write_parent_regions(
         result.boxes = [
             {'box_id': b.box_id, 'bbox_norm': list(b.bbox_norm), 'state': b.state} for b in written
         ]
-        accepted = [b for b in written if b.state == 'accepted']
-        result.accepted_bbox = accepted[0].bbox_norm if accepted else None
         return fields
 
     await occ_update_one(

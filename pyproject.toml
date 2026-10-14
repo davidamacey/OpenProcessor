@@ -207,6 +207,8 @@ unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [tool.ruff.lint.per-file-ignores]
+# The whitelist is read by vulture, never run: each line is a bare attribute read on purpose.
+"scripts/codegen/vulture_whitelist.py" = ["B018"]
 # Test files can have additional flexibility
 "tests/**/*.py" = [
     "ARG001",  # Unused function argument (fixtures)
@@ -406,7 +408,6 @@ module = [
     "src.services.visual_search.*",
     "src.utils.retry",
     "src.utils.image_processing",
-    "src.services.image",
     "src.services.face_identity",
     "src.services.face_identity.*",
     "src.routers.detect",

@@ -90,7 +90,3 @@ ARMS: dict[str, dict[str, Any]] = {
     # Reference (not a datastore).
     'ref_flat': {'store': 'faiss_flat', 'grid': [{}]},
 }
-
-
-def engine_name(arm: dict[str, Any]) -> str:
-    return str(arm['store'])

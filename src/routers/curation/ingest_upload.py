@@ -31,11 +31,6 @@ from src.services.curation.upload_ingest import (
 )
 
 
-# Kept as the interim fallback default; the served source of truth
-# is GET /ingest/config, which reads CurationConfig.upload_max_images_per_request.
-MAX_UPLOAD_IMAGES = 128
-
-
 def early_failures_to_wire(early: list[EarlyFailure]) -> list[IngestImageResponse]:
     return [
         IngestImageResponse(

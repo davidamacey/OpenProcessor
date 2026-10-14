@@ -96,10 +96,6 @@ class OpExportInfo:
     """Region export: the parent-class filter the export was built with."""
     freeze_test_split_default: bool
 
-    @property
-    def is_region_export(self) -> bool:
-        return self.box_source == 'region'
-
 
 # --------------------------------------------------------------------- reading
 

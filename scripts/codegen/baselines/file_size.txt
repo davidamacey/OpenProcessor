@@ -4,7 +4,7 @@ export/export_detector_dual_head.py	814	split in PR 7
 export/export_models.py	1564	split in PR 7
 export/export_pe_image_encoder.py	802	split in PR 7
 export/export_pe_text_encoder.py	890	split in PR 7
-export/export_scrfd.py	739	split in PR 7
+export/export_scrfd.py	738	split in PR 7
 frontend/CLAUDE.md	3104	trim in PR 5
 frontend/e2e/conftest.py	826	split in PR 8
 frontend/scripts/capture_docs_screenshots.py	1008	split in PR 8
@@ -35,7 +35,7 @@ scripts/setup.sh	967	split in PR 7
 setup-openprocessor.sh	3214	cohesive: one __op_define function so a truncated curl-to-bash download is a syntax error; pre-install code cannot source libraries
 tests/curation/test_bakeoff_harness.py	1043	split in PR 7
 tests/curation/test_bakeoff_router.py	1382	split in PR 7
-tests/curation/test_cascade_detect.py	762	split in PR 7
+tests/curation/test_cascade_detect.py	710	split in PR 7
 tests/curation/test_cross_project_leak.py	2516	split in PR 7
 tests/curation/test_export_service.py	797	split in PR 7
 tests/curation/test_export_single_class.py	748	split in PR 7

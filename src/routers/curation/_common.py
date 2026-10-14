@@ -245,13 +245,6 @@ async def _ensure_indexes_locked(opensearch: Any) -> None:
             await ensure_images_upload_fields(opensearch)
         except Exception as exc:
             logger.warning('curation_images_upload_fields_migration_failed', error=str(exc))
-        # ensure_items_class_name_keyword is NOT called here: the generic
-        # `class_name` field is mapped `keyword` directly (not `text`), so
-        # this migration's PUT mapping always fails with "cannot be changed
-        # from type [keyword] to [text]". All aggregations/scripts query
-        # `class_name` directly instead of a `.keyword` subfield that can
-        # never exist here. The function itself is left in place for any
-        # legacy index that genuinely still maps `class_name` as `text`.
         try:
             await ensure_items_quality_fields(opensearch)
         except Exception as exc:
