@@ -67,7 +67,7 @@ export function summaryFixture(
   };
 }
 
-export function externalSummaryFixture(
+function externalSummaryFixture(
   over: Partial<VlmEndpointSummary> = {},
 ): VlmEndpointSummary {
   return summaryFixture({
@@ -89,9 +89,7 @@ export function externalSummaryFixture(
   });
 }
 
-export function envSummaryFixture(
-  over: Partial<VlmEndpointSummary> = {},
-): VlmEndpointSummary {
+function envSummaryFixture(over: Partial<VlmEndpointSummary> = {}): VlmEndpointSummary {
   return summaryFixture({
     name: 'env_default',
     source: 'env',

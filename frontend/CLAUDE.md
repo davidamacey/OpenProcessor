@@ -31,21 +31,21 @@ Do not add per-feature history here.
 
 ## Layout
 
-| Path | What is there |
-|---|---|
-| `src/routes/` | Pages. Every page is `p/[project]/<section>` except `/projects` and the redirects in `+page.ts` and `[...legacy]/+page.ts` |
-| `src/routes/p/[project]/+layout.svelte` | App shell: top nav, project switcher, status chip, the one global keydown listener |
-| `src/lib/api*.ts` | Typed API wrappers (`api.ts` plus `api_<area>.ts`); the only files that build `${API_PREFIX}` URLs |
-| `src/lib/stores/` | Rune stores (projects, health, keymap, region profile, vocabularies) |
-| `src/lib/components/` | Shared components (`Modal.svelte`, `StrategyBar`, `SlotCard`, ...) |
-| `src/lib/format/` | The only home of duration, byte, count and time formatters |
-| `src/lib/annotations/` | Slot model: capabilities, served-slot synthesis, cohorts |
-| `src/lib/contract/` | Tests that pin the frontend to `contracts/` |
-| `src/lib/sse.ts` | `openStream()`, the one SSE open/backoff/reconnect helper |
-| `e2e/` | Playwright via pytest: `stubbed/` (CI) and `live/` (read-only, manual) |
-| `examples/` | Tier-2 annotation profiles (JSON) |
-| `scripts/` | `run-e2e.mjs`, `mutation.mjs`, docs screenshot capture, `lib/previewServer.mjs` |
-| `sveltekit.options.js` | Adapter, preprocess, `$lib`/`$contracts` aliases, version polling |
+| Path                                    | What is there                                                                                                              |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `src/routes/`                           | Pages. Every page is `p/[project]/<section>` except `/projects` and the redirects in `+page.ts` and `[...legacy]/+page.ts` |
+| `src/routes/p/[project]/+layout.svelte` | App shell: top nav, project switcher, status chip, the one global keydown listener                                         |
+| `src/lib/api*.ts`                       | Typed API wrappers (`api.ts` plus `api_<area>.ts`); the only files that build `${API_PREFIX}` URLs                         |
+| `src/lib/stores/`                       | Rune stores (projects, health, keymap, region profile, vocabularies)                                                       |
+| `src/lib/components/`                   | Shared components (`Modal.svelte`, `StrategyBar`, `SlotCard`, ...)                                                         |
+| `src/lib/format/`                       | The only home of duration, byte, count and time formatters                                                                 |
+| `src/lib/annotations/`                  | Slot model: capabilities, served-slot synthesis, cohorts                                                                   |
+| `src/lib/contract/`                     | Tests that pin the frontend to `contracts/`                                                                                |
+| `src/lib/sse.ts`                        | `openStream()`, the one SSE open/backoff/reconnect helper                                                                  |
+| `e2e/`                                  | Playwright via pytest: `stubbed/` (CI) and `live/` (read-only, manual)                                                     |
+| `examples/`                             | Tier-2 annotation profiles (JSON)                                                                                          |
+| `scripts/`                              | `run-e2e.mjs`, `mutation.mjs`, docs screenshot capture, `lib/previewServer.mjs`                                            |
+| `sveltekit.options.js`                  | Adapter, preprocess, `$lib`/`$contracts` aliases, version polling                                                          |
 
 Aliases: `$lib`, `$components`, `$stores`, `$contracts` (`../contracts`, the backend's
 generated wire contract). Use them, never `../../` paths. 2-space indent, `npm` only,
@@ -77,21 +77,21 @@ URL path only. `/` redirects to `/p/<served default_slug>/dashboard`; bare legac
 redirect to the same path under the default project. Links and `goto()` are built with
 `projectHref()` (`$lib/projectPaths`) wrapped in `resolve()`, never hand-assembled.
 
-| Route | Purpose |
-|---|---|
-| `/dashboard` | Dataset stats (polled), `AutoLabelPanel` (clustering run), detections summary |
-| `/ingest` | Browser upload (chunked, pause/resume/cancel), server-path ingest panels gated by `GET /ingest/config`, status by source, region drain |
-| `/datasets` | Labeled-dataset import wizard, imports list, job view; absent without `GET /datasets/formats` |
-| `/clusters`, `/clusters/[id]` | Cluster grid, slot region gallery, strategy bar, semantic and item-text search, matching-items mode; one cluster with drag-and-drop and bulk ops |
-| `/review` | Review tabs (served by `GET /review/tabs`), filter bar, deep links via `/locate`, region tab with provenance |
-| `/classes` | Add, rename, merge, deprecate, restore classes; hotkeys; new-class proposals |
-| `/audit` | Label confirmation (VLM scope) |
-| `/export` | YOLO export, balance, test-holdout freeze, registry downloads |
-| `/models` | Model registry browser, shared models from other projects, VLM endpoint rows |
-| `/train` | Training cockpit: preflight, launch, progress, runs, promote, reproduce, cohorts |
-| `/bakeoff` | Model comparison on the served bake-off wire |
-| `/settings`, `/settings/{prompt-packs,region-profiles,models,open-vocab,ingest-policy}` | Deployment defaults, scores, keymap editor and the config-store editors; each sub-page absent until the backend serves it |
-| `/projects` | The one global page: project lifecycle, capacity, pipeline pause |
+| Route                                                                                   | Purpose                                                                                                                                          |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/dashboard`                                                                            | Dataset stats (polled), `AutoLabelPanel` (clustering run), detections summary                                                                    |
+| `/ingest`                                                                               | Browser upload (chunked, pause/resume/cancel), server-path ingest panels gated by `GET /ingest/config`, status by source, region drain           |
+| `/datasets`                                                                             | Labeled-dataset import wizard, imports list, job view; absent without `GET /datasets/formats`                                                    |
+| `/clusters`, `/clusters/[id]`                                                           | Cluster grid, slot region gallery, strategy bar, semantic and item-text search, matching-items mode; one cluster with drag-and-drop and bulk ops |
+| `/review`                                                                               | Review tabs (served by `GET /review/tabs`), filter bar, deep links via `/locate`, region tab with provenance                                     |
+| `/classes`                                                                              | Add, rename, merge, deprecate, restore classes; hotkeys; new-class proposals                                                                     |
+| `/audit`                                                                                | Label confirmation (VLM scope)                                                                                                                   |
+| `/export`                                                                               | YOLO export, balance, test-holdout freeze, registry downloads                                                                                    |
+| `/models`                                                                               | Model registry browser, shared models from other projects, VLM endpoint rows                                                                     |
+| `/train`                                                                                | Training cockpit: preflight, launch, progress, runs, promote, reproduce, cohorts                                                                 |
+| `/bakeoff`                                                                              | Model comparison on the served bake-off wire                                                                                                     |
+| `/settings`, `/settings/{prompt-packs,region-profiles,models,open-vocab,ingest-policy}` | Deployment defaults, scores, keymap editor and the config-store editors; each sub-page absent until the backend serves it                        |
+| `/projects`                                                                             | The one global page: project lifecycle, capacity, pipeline pause                                                                                 |
 
 ## Rules
 
@@ -104,7 +104,7 @@ redirect to the same path under the default project. Links and `goto()` are buil
   under the project's own **served** `prefix`, never assembled client-side.
 - `projectsStore` is read in the root `load()`; `p/[project]/+layout.ts` resolves the slug
   (an archived project opened by link is fetched by slug), calls `setScopedPrefix(<served
-  prefix>)` and runs every registered reset hook on a project change before loading the
+prefix>)` and runs every registered reset hook on a project change before loading the
   scoped region profile and vocabularies.
 - Combine projects and model sharing show served refusals and `class_mapping` verbatim.
   Class identity is the name, never an index.

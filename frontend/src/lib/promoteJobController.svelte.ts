@@ -13,7 +13,7 @@
 import { ApiError, apiErrorText, getPromoteJob, promoteTrainJob } from '$lib/api';
 import type { PromoteJobStatus, PromoteRequest, PromoteResponse } from '$lib/types_train';
 
-export const PROMOTE_DEFAULT_POLL_S = 3;
+const PROMOTE_DEFAULT_POLL_S = 3;
 const MAX_POLL_FAILURES = 5;
 
 /** Active phases, in the order the backend walks them. */

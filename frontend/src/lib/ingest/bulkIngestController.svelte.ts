@@ -23,7 +23,7 @@ import type {
 } from '$lib/types_bulkIngest';
 
 export const FAILURES_PAGE_SIZE = 20;
-export const RECENT_RUNS = 5;
+const RECENT_RUNS = 5;
 
 export interface BulkDeps {
   getBulkIngestConfig: typeof getBulkIngestConfig;

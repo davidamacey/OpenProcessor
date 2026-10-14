@@ -47,7 +47,7 @@ export interface BakeoffApi {
   matrix: typeof bakeoffMatrix;
 }
 
-export const defaultBakeoffApi: BakeoffApi = {
+const defaultBakeoffApi: BakeoffApi = {
   profiles: bakeoffProfiles,
   baselines: bakeoffBaselineModels,
   datasets: bakeoffEvalDatasets,
@@ -59,10 +59,10 @@ export const defaultBakeoffApi: BakeoffApi = {
   matrix: bakeoffMatrix,
 };
 
-export const TRAINED_MODELS_LIMIT = 100;
+const TRAINED_MODELS_LIMIT = 100;
 
 /** The served error text: `apiErrorText`. */
-export function errorText(e: unknown): string {
+function errorText(e: unknown): string {
   return apiErrorText(e);
 }
 

@@ -9,7 +9,7 @@ import type { TrainEpochMetric, TrainEval, TrainState } from './types_train';
 /** States a run no longer progresses past — the point at which a
  *  Results section has something to show (metrics for `finished`, the
  *  served error for `failed`, etc.). */
-export const TERMINAL_TRAIN_STATES: ReadonlySet<TrainState> = new Set([
+const TERMINAL_TRAIN_STATES: ReadonlySet<TrainState> = new Set([
   'finished',
   'failed',
   'cancelled',

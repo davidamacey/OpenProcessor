@@ -61,7 +61,7 @@ export type DryRunResult =
     };
 
 /** The served warnings on a lifecycle envelope, each as its own toast. */
-export function toastWarnings(warnings: ProjectWarning[] | undefined): void {
+function toastWarnings(warnings: ProjectWarning[] | undefined): void {
   for (const w of warnings ?? []) {
     toastStore.push({ kind: 'warn', text: w.message, ttl_ms: 8000 });
   }
@@ -70,14 +70,14 @@ export function toastWarnings(warnings: ProjectWarning[] | undefined): void {
 /** The keymap clone axis drops any action whose combo is already a class
  *  hotkey in the target: a report, never a silent unbind. One toast lists
  *  every served conflict (action id, combo, the class holding the key). */
-export function keymapConflictText(conflicts: KeymapCloneConflict[]): string {
+function keymapConflictText(conflicts: KeymapCloneConflict[]): string {
   const rows = conflicts.map(
     (c) => `${c.action_id} (${c.combo} is the hotkey of class "${c.class_name}")`,
   );
   return `${conflicts.length} keyboard shortcut${conflicts.length === 1 ? ' was' : 's were'} not copied: ${rows.join('; ')}.`;
 }
 
-export function toastKeymapConflicts(conflicts: KeymapCloneConflict[] | undefined): void {
+function toastKeymapConflicts(conflicts: KeymapCloneConflict[] | undefined): void {
   if (!conflicts?.length) return;
   toastStore.push({ kind: 'warn', text: keymapConflictText(conflicts), ttl_ms: 15000 });
 }
@@ -97,7 +97,7 @@ function failure(e: unknown): Extract<ActionResult, { ok: false }> {
 const TRANSIENT_STATUSES = ['building', 'deleting'];
 
 /** How often the list is re-read while any row is transient. */
-export const TRANSIENT_POLL_MS = 2000;
+const TRANSIENT_POLL_MS = 2000;
 
 export function createProjectsAdmin() {
   let list = $state<ProjectSummary[]>([]);

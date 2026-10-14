@@ -32,9 +32,9 @@ import { setRegionProfileUnavailableListener } from '$lib/regionProfileUnavailab
 import type { ServedRegionProfile } from '$lib/types';
 import { toastStore } from '$stores/toast.svelte';
 
-export const REGION_PROFILE_TIMEOUT_MS = 2000;
+const REGION_PROFILE_TIMEOUT_MS = 2000;
 /** Waits before boot retries 2 and 3 (bounded: 3 tries in total). */
-export const REGION_PROFILE_RETRY_DELAYS_MS = [250, 750];
+const REGION_PROFILE_RETRY_DELAYS_MS = [250, 750];
 
 export const REGION_PROFILE_CHANGED_NOTICE =
   "The backend's region profile changed — reload the page to apply it.";

@@ -3,6 +3,9 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
 // SvelteKit 3 reads its options from the sveltekit() plugin in vite.config.ts;
 // eslint imports this same object so the parser sees the same preprocessors.
+// The `$lib`, `$components`, `$stores` and `$contracts` import aliases are not
+// kit options (`kit.alias` is deprecated): vite.config.ts resolves them for
+// vite and vitest, tsconfig.json `paths` for the type checker.
 export default {
   preprocess: vitePreprocess(),
   adapter: adapter({
@@ -15,11 +18,4 @@ export default {
   // Poll _app/version.json so the `updated` store flips after a deploy;
   // SvelteKit then does a full-page load on the next failed navigation.
   version: { pollInterval: 60_000 },
-  alias: {
-    $lib: 'src/lib',
-    $components: 'src/lib/components',
-    $stores: 'src/lib/stores',
-    // The API contract the backend generates; one copy, in this repository.
-    $contracts: '../contracts',
-  },
 };
