@@ -253,7 +253,6 @@ def vlm_env(monkeypatch: pytest.MonkeyPatch) -> str:
 collect_ignore = [
     'test_full_system.py',
     'test_scrfd_pipeline.py',
-    'test_validate_models.py',
     'validate_visual_results.py',
 ]
 

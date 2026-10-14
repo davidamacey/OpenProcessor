@@ -17,6 +17,9 @@ SHIMS = sorted(
 SCRIPTS_WITH_DC = [
     'setup-openprocessor.sh',
     'openprocessor',
+    'scripts/lib/cli_core.sh',
+    'scripts/lib/cli_dev.sh',
+    'scripts/lib/cli_gpu.sh',
     'scripts/lib/model_setup.sh',
 ]
 
@@ -144,7 +147,7 @@ def _reads(rel: str) -> list[tuple[str, str, str, str]]:
 
 def test_secret_reads_are_silent_and_from_the_terminal() -> None:
     silent = 0
-    for rel in ('setup-openprocessor.sh', 'openprocessor'):
+    for rel in ('setup-openprocessor.sh', 'openprocessor', 'scripts/lib/cli_gpu.sh'):
         for line, opts, var, rest in _reads(rel):
             if SECRET_VAR.search(var):
                 assert 's' in opts, f'{rel}: a secret is read with echo on: {line}'

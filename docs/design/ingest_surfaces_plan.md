@@ -445,7 +445,7 @@ A first pass of S1 to S4 (not merged, not part of this plan's PR) found these; e
 - **Error codes are a closed literal.** `api_error(status, code, ...)` takes a code from `ErrorCode` in
   `src/routers/curation/_config_common_models.py`; add `s3_not_configured`, `s3_not_allowed`, `invalid_s3_event`,
   `ingest_source_not_found`, `ingest_source_invalid`, `webhook_disabled` there first (and the OpenAPI enum follows).
-- **Cross-project sweep.** `tests/curation/test_cross_project_leak.py` walks every scoped route: each new route
+- **Cross-project sweep.** `tests/curation/cross_project_leak/` walks every scoped route: each new route
   needs a `route_params` entry (`source_id`, a valid id such as `src_unknown00`), a body in `route_bodies` for every
   mutating route, a `NO_WRITE` reason when it writes nothing in the sweep, and the sweep must set the allow-list variable (`S3_ALLOWED` with the prefix)
   to a bucket the bodies do not name (otherwise the object routes answer 503, which the sweep rejects).

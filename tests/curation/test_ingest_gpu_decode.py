@@ -10,7 +10,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from curation.test_ingest_service import _jpeg_bytes, _make_service
+from curation.ingest_fakes import _jpeg_bytes, _make_service
 from src.services.curation import ingest_gpu_decode
 from src.services.curation.ingest_policy import EmbeddingPolicy, IngestPolicy
 

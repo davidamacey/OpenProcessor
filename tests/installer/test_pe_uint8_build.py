@@ -202,7 +202,7 @@ def test_check_input_dtype_accepts_the_prefixed_onnx(tmp_path: Path) -> None:
 # config directory -> the sources that build its engine
 UINT8_BUILDERS = {
     'pe_image_encoder': ['export/build_pe_trt.sh', 'scripts/lib/model_setup.sh'],
-    'yolov11_small_trt_end2end': ['export/export_models.py'],
+    'yolov11_small_trt_end2end': ['export/yolo_trt_build.py'],
     'yolo26_small_trt': ['export/export_yolo26.py'],
 }
 
@@ -231,9 +231,8 @@ def test_each_uint8_engine_builder_applies_the_prefix(model: str) -> None:
 
 
 def test_dual_head_exporter_declares_uint8_and_applies_the_prefix() -> None:
-    text = (REPO_ROOT / 'export/export_detector_dual_head.py').read_text()
-    assert 'TYPE_UINT8' in text
-    assert 'add_uint8_input(' in text
+    assert 'TYPE_UINT8' in (REPO_ROOT / 'export/dual_head_triton.py').read_text()
+    assert 'add_uint8_input(' in (REPO_ROOT / 'export/dual_head_model.py').read_text()
 
 
 # ---- #270: models install in a checkout without .install/state.json ----

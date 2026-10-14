@@ -76,7 +76,7 @@ LABEL org.opencontainers.image.title="OpenProcessor Curation Trainer" \
       org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor"
 
 # Build identity: the commit this trainer image was built from. Read by
-# job_protocol.build_lineage() as code_versions.trainer_sha (preferred over
+# job_manifest.build_lineage() as code_versions.trainer_sha (preferred over
 # the API's submit-time trainer_image_revision observation, since this is
 # the image actually running the code) -- see docker-compose.yml build.args.
 ARG OP_BUILD_SHA=""

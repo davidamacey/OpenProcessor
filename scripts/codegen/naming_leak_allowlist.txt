@@ -33,12 +33,12 @@ scripts/lib/image_keys.sh:gemma # shared images.lock key table (release script +
 tests/curation/test_vlm_catalog.py:gemma # asserts the shipped catalog's public default entry (gemma-4-e4b, Apache-2.0, ungated; any-domain plan W9.7) and its parser/template columns, not a leak
 tests/curation/test_vlm_local_select.py:gemma # exercises POST /vlm/local/select against the public catalog entries (gemma-4-e4b default, W9.7), not a leak
 tests/installer/test_cli_vlm.py:gemma # exercises `openprocessor vlm status|use` against the public catalog default (gemma-4-e4b, W9.7), not a leak
-tests/test_compose_contract.py:gemma # pins the vlm service's pre-W9 argv, which is the public gemma-4-e4b command line (W9.7), not a leak
+tests/compose/test_vlm_service_command.py:gemma # pins the vlm service's pre-W9 argv, which is the public gemma-4-e4b command line (W9.7), not a leak
 tests/installer/test_vlm_catalog.py # exercises examples/vlm/catalog.tsv's public gemma-4-e4b row (installer plan section 2.2), not a leak
 tests/installer/installer_harness.py:gemma # fake images.lock for the installer tests uses the release's public vlm_gemma4 image key (installer plan 3.1), not a leak
 tests/installer/shims/docker:gemma # test double echoes the compose file's public vLLM gemma4 image default, not a leak
 tests/installer/test_gpu_plan.py:gemma # asserts the public, tested gemma-4-e4b catalog entry is picked (installer plan 2.2), not a leak
-tests/installer/test_setup_dry_run.py:gemma # asserts VLM_IMAGE equals the lock's public vlm_gemma4 key (installer plan 2.2), not a leak
+tests/installer/test_setup_env_and_flags.py:gemma # asserts VLM_IMAGE equals the lock's public vlm_gemma4 key (installer plan 2.2), not a leak
 
 # The retired-env guard and its test spell every retired name on purpose:
 # that IS the mechanism that makes a stale env var fail loudly instead
@@ -57,13 +57,15 @@ tests/config/test_retired_env.py # exercises every retired env-var name in src/c
 tests/curation/test_vlm_vocabulary.py # guard test: pins gemma_*->vlm_* / v6_*->classifier_* renames via a literal vendor regex
 tests/curation/test_wire_contract.py:plate|gemma # negative assertions that these retired-name literals are absent / rejected on the wire
 tests/integration/test_stats_router.py:by_lpr|by_sam3|gemma # negative test: asserts these retired stats-key literals are absent
-tests/curation/test_bakeoff_harness.py # guard test + its own DOMAIN_WORDS regex scanning bakeoff harness files for domain words
-tests/curation/test_bakeoff_router.py # negative test: asserts the retired lpr_nanov11_640 id is absent from served baselines
+tests/curation/bakeoff_harness/test_domain_neutral_core_guard.py # guard test + its own DOMAIN_WORDS regex scanning bakeoff harness files for domain words
+tests/curation/bakeoff_harness/test_datasets_and_converters.py # negative assertion that the generic datasets module hardcodes no domain class constant
+tests/curation/bakeoff_router/test_profiles_and_baselines.py # negative test: asserts the retired lpr_nanov11_640 id is absent from served baselines
+tests/curation/bakeoff_router/test_contract_and_evaluator.py # asserts the harness file listing includes the example profile backend path
 tests/curation/test_models_unload.py # guard tests: prove there is no hardcoded 'lpr_' prefix special-case
 tests/curation/test_candidate_source_values.py # negative test: asserts retired sam3/sam3_text_hint/lpr/lpr_existing values never resolve specially
 tests/curation/test_methods_router.py # negative test: asserts the retired 'lpr' export id is omitted from served entries
 tests/curation/test_curation_opensearch.py # negative tests: assert v6_embedding / hardcoded plate_* literals are absent from the mapping
-tests/curation/test_train_router.py:lpr # negative test: the retired lpr_single_class alias must be rejected, by name
+tests/curation/train_router/test_preflight_class_and_label_checks.py:lpr # negative test: the retired lpr_single_class alias must be rejected, by name
 src/services/training/preflight_checks.py:lpr_single_class # comment explaining the retired alias by name, for the reader's benefit
 
 # Historical/provenance docstrings describing what a field or alias used to
@@ -102,7 +104,8 @@ docs/ARCHITECTURE.md # example prose illustrating a region sub-annotation
 docs/CURATION.md # user guide; references the public license_plate example profile/export/OCR wiring throughout
 docs/design/curation_api_contract.md # API contract; documents the public license_plate example profile's wire values (detector chain, OCR text-reject sequences, cluster card example)
 docs/design/curation_design_rationale.md # design rationale; documents the subsystem's license-plate origin and the license_plate bake-off example
-tests/curation/test_region_worker.py # uses the example profile's real detector_model id ('license_plate_detector') as a realistic detector-source literal
+tests/curation/test_region_worker_routing.py # uses the example profile's real detector_model id ('license_plate_detector') as a realistic detector-source literal
+tests/curation/test_region_worker_verdicts_and_provenance.py # uses the example profile's real detector_model id ('license_plate_detector') as a realistic detector-source literal
 tests/curation/test_models_status_optional_detector.py # uses the example profile's real detector_model id ('license_plate_detector', never-shipped) to exercise the optional/not_installed GET /models/status fields
 tests/test_example_region_profiles.py # loads the public license_plate example profile by name to pin its parent_classes
 CLAUDE.md # names the public license_plate example profile in the curation-subsystem summary
@@ -110,7 +113,7 @@ scripts/README.md # example prose for eval_regions_vs_gt.py's cohort description
 scripts/download_ocr_test_images.py # public Wikimedia OCR sample images (license plates), a legitimate OCR example domain
 scripts/create_ocr_test_images.py # public OCR sample image filename
 scripts/curation/eval_regions_vs_gt.py # docstring YAML example (license_plate class), matches the bakeoff example domain
-export/export_pe_text_encoder.py # public PE-Core text-encoder calibration prompt example
+export/pe_text_constants.py # public PE-Core text-encoder calibration prompt example
 tests/curation/test_pe_text_backends.py # exercises the same public calibration prompt example
 src/config/detection_profile.py # DetectionProfile docstring example value
 src/config/region_fields.py # RegionFields docstring example value
@@ -125,7 +128,9 @@ tests/conftest.py # reference_region_profile fixture: loads the public example p
 tests/curation/test_example_profiles.py # validates the shipped example region profiles (incl. the public license_plate one) load and keep their explicit flags
 tests/_region_profile_fixture.py # defines EXAMPLE_LICENSE_PLATE_PROFILE(_PATH) -- the public example profile fixture itself
 tests/curation/test_auto_label_selection.py # exercises the example profile via the reference_region_profile fixture
-tests/curation/test_cascade_detect.py # exercises the real example profile incl. its real secondary_shape_groups (also a scan-C exemption, see below)
+tests/curation/cascade_detect_helpers.py # builds the synthetic detector output from the real example profile input_size
+tests/curation/test_region_detector_decoding.py # exercises the real example profile confidence_floor
+tests/curation/test_region_detector_inference_and_crop_mapping.py # exercises the real example profile incl. its real secondary_shape_groups (also a scan-C exemption, see below)
 tests/curation/test_classes_router.py # exercises the example profile's region_class_name
 tests/curation/test_curation_settings_router.py # exercises the example profile
 tests/curation/test_detection_profile.py # DetectionProfile tests use the public example name/shape
@@ -135,14 +140,14 @@ tests/curation/test_region_profile.py # exercises the example profile via EXAMPL
 tests/curation/test_region_vocabulary.py # exercises the example profile's detector id + historical vendor-id docstring
 tests/curation/test_router_wireup.py # exercises the example profile's name/region_class_name
 tests/curation/test_train_preflight_scan.py # exercises the example profile
-tests/curation/test_train_router.py # negative assertion that 'license_plate' is NOT hardcoded into the class-balance message
+tests/curation/train_router/test_preflight_class_and_label_checks.py # negative assertion that 'license_plate' is NOT hardcoded into the class-balance message
 tests/curation/test_training_class_subset_presets.py # exercises the example profile's region_class_name in preset tests; docstring also names the hardcoded presets it replaces
-tests/curation/test_triton_promote.py # exercises the example profile
+tests/curation/triton_promote/test_promote_rollback_lineage_and_class_remap.py # exercises the example profile
 tests/curation/test_yolo26_triton_config.py # exercises the example profile
 tests/examples/test_bakeoff_license_plate_example.py # exercises the opt-in license_plate bake-off example under examples/bakeoff/ (loads it by path)
 scripts/datasets/fetch_openimages_plates.py # G-05 public sample fetcher: fetches Open Images V7's own "Vehicle registration plate" class by that exact public display name; same public license_plate example domain this allowlist section already covers throughout
 docker-compose.yml:license[ _-]?plate # G-08 (fresh-start gaps batch B): comment naming the public license_plate.json worked-example path that ./examples is mounted for
-tests/test_compose_contract.py:license[ _-]?plate # G-08 (fresh-start gaps batch B): docstring naming the same public license_plate.json worked-example path the mount test is pinning
+tests/compose/test_mounts_and_env_wiring.py:license[ _-]?plate # G-08 (fresh-start gaps batch B): docstring naming the same public license_plate.json worked-example path the mount test is pinning
 tests/curation/test_profile_validation.py # W4: exercises the public example profile (EXAMPLE_LICENSE_PLATE_PROFILE) through validate_profile
 tests/curation/test_region_profiles_router.py # W4: exercises the public license_plate template (clone/activate) through the new /region_profiles* routes
 
@@ -152,7 +157,7 @@ tests/curation/test_region_profiles_router.py # W4: exercises the public license
 # No scan-C-only entries needed: every current scan C hit is already covered
 # by a broader entry above -- `examples/` (directory prefix) covers
 # examples/region_profiles/license_plate.json's real secondary_shape_groups,
-# and the `tests/curation/test_cascade_detect.py` entry above covers its
+# and the `tests/curation/test_region_detector_inference_and_crop_mapping.py` entry above covers its
 # assertion on those same real groups.
 
 # ---------------------------------------------------------------------------

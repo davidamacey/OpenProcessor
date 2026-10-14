@@ -17,9 +17,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from curation.region_cascade_helpers import _FakeOpenSearch
 from src.config import get_region_fields
 
-from .test_region_cascade_integrity import _FakeOpenSearch
 from .test_region_pending_verification import PROPOSED_BBOX, SIBLING_BBOX, _seed_via_real_put_route
 from .test_region_text_worker import _drive
 

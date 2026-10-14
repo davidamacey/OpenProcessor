@@ -18,13 +18,12 @@ from unittest.mock import AsyncMock
 import pytest
 from PIL import Image
 
+from curation.region_cascade_helpers import _chat, _drive_worker, _FakeOpenSearch, _item
 from src.config import get_region_fields
 from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.labeling.region_overlay import draw_region_overlay
 from src.services.labeling.vlm_labeler import VlmLabeler
 from src.services.labeling.vlm_models import CombinedCrop, RegionCrop, VlmCombinedReply
-
-from .test_region_cascade_integrity import _chat, _drive_worker, _FakeOpenSearch, _item
 
 
 if TYPE_CHECKING:

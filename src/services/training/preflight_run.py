@@ -264,7 +264,7 @@ def _trainer_gpus_check(spec: TrainJobSpec) -> PreflightCheck:
     ``OP_TRAIN_GPU_ORDER`` drift, or a GPU-policy change that forgot to redeploy
     the trainer) writes job.json and sits in ``queued``/``starting`` forever with
     no error. The trainer publishes its attachment at startup
-    (``write_trainer_capabilities`` in docker/trainer/trainer.py); an absent file
+    (``write_trainer_capabilities`` in docker/trainer/gpu_select.py); an absent file
     (older image) only downgrades this to a warning.
     """
     trainer_gpu_order = read_trainer_gpu_order()

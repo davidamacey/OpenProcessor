@@ -20,13 +20,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from curation.region_cascade_helpers import _drive_worker, _FakeOpenSearch, _item, _profile
 from src.config import get_region_fields
 from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_models import VlmCombinedReply
-
-from .test_region_cascade_integrity import _drive_worker, _FakeOpenSearch, _item, _profile
 
 
 if TYPE_CHECKING:

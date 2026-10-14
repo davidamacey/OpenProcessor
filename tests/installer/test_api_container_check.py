@@ -78,7 +78,7 @@ def test_export_paddleocr_check_container_resolves_through_the_project(
 set -u
 PROJECT_DIR={tmp_path}
 source {repo_root}/scripts/lib/ports.sh
-source <(sed -n '/^dc() {{/,/^}}/p;/^check_container() {{/,/^}}/p' {repo_root}/scripts/export_paddleocr.sh)
+source <(sed -n '/^dc() {{/,/^}}/p;/^check_container() {{/,/^}}/p' {repo_root}/scripts/lib/paddleocr_export.sh)
 COMPOSE_PROJECT_NAME={PROJECT}
 check_container {service} && echo FOUND || echo MISSING
 check_container nothing-here && echo FOUND || echo MISSING

@@ -10,7 +10,7 @@ We mount just the shared curation router (models.py registers its
 routes onto `src.routers.curation._common.router`) and monkeypatch
 `unload_triton_model` at the point models.py imported it, so no real
 Triton HTTP call or filesystem mutation happens here — that's covered
-by `test_triton_promote.py`'s disposable-tmp_path unit tests instead.
+by `tests/curation/triton_promote/`'s disposable-tmp_path unit tests instead.
 """
 
 from __future__ import annotations

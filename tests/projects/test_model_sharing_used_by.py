@@ -7,14 +7,18 @@ runs on is refused (409 ``in_use``) unless ``force``.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
-from curation import test_cross_project_leak as _sweep
-from curation.test_cross_project_leak import LeakEnv, _promoted_model
+from curation.cross_project_leak import _env as _sweep
+from curation.cross_project_leak._seeders import _promoted_model
 from fastapi.testclient import TestClient
 
 from src.config.curation import IndexRole
+
+
+if TYPE_CHECKING:
+    from curation.cross_project_leak._transport import LeakEnv
 
 
 leak_env = _sweep.leak_env

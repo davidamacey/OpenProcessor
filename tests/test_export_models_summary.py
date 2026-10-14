@@ -37,6 +37,9 @@ if str(EXPORT_DIR) not in sys.path:
 # SystemExit would abort the whole session, so turn it into a module skip.
 try:
     import export_models
+    import yolo_export_report
+    import yolo_triton_config
+    import yolo_trt_build
 except SystemExit as exc:
     pytest.skip(str(exc), allow_module_level=True)
 
@@ -66,7 +69,7 @@ class TestMissingPtFileSurfacesARealError:
         ]
         # This is the exact crash from the finding: print_summary used to
         # raise KeyError('triton_name') here instead of printing the error.
-        export_models.print_summary(results)
+        yolo_export_report.print_summary(results)
         assert 'Model file not found' in caplog.text
 
     def test_print_summary_still_handles_a_successful_result(self, caplog) -> None:
@@ -78,7 +81,7 @@ class TestMissingPtFileSurfacesARealError:
                 'trt': {'status': 'success', 'host_path': '/app/models/yolov11_small_trt'},
             }
         ]
-        export_models.print_summary(results)
+        yolo_export_report.print_summary(results)
         assert 'yolov11_small' in caplog.text
 
 
@@ -89,7 +92,7 @@ class TestAnyExportFailed:
 
     def test_a_top_level_error_result_is_a_failure(self) -> None:
         results: list[dict[str, Any]] = [{'model': 'small', 'status': 'error', 'error': 'boom'}]
-        assert export_models._any_export_failed(results) is True
+        assert yolo_export_report._any_export_failed(results) is True
 
     def test_a_per_format_error_is_a_failure(self) -> None:
         """The realistic shape: export_model() succeeds overall but
@@ -102,7 +105,7 @@ class TestAnyExportFailed:
                 'trt_end2end': {'status': 'error', 'error': 'Failed to build engine'},
             }
         ]
-        assert export_models._any_export_failed(results) is True
+        assert yolo_export_report._any_export_failed(results) is True
 
     def test_all_successful_formats_is_not_a_failure(self) -> None:
         results: list[dict[str, Any]] = [
@@ -112,10 +115,10 @@ class TestAnyExportFailed:
                 'trt': {'status': 'success', 'host_path': '/app/models/yolov11_small_trt'},
             }
         ]
-        assert export_models._any_export_failed(results) is False
+        assert yolo_export_report._any_export_failed(results) is False
 
     def test_empty_results_is_not_a_failure(self) -> None:
-        assert export_models._any_export_failed([]) is False
+        assert yolo_export_report._any_export_failed([]) is False
 
 
 class TestCudaVisibleDevicesRepairBeforeTrtBuild:
@@ -128,7 +131,7 @@ class TestCudaVisibleDevicesRepairBeforeTrtBuild:
 
     ``setup_trt_builder`` still constructs a real ``trt.Builder`` (a real
     CUDA context) after the env-var repair, which needs an actual GPU --
-    not something a unit test should require. ``export_models.trt`` is
+    not something a unit test should require. ``yolo_trt_build.trt`` is
     patched with a bare stand-in so only the repair logic itself is
     under test here.
     """
@@ -141,29 +144,29 @@ class TestCudaVisibleDevicesRepairBeforeTrtBuild:
         fake_trt.Logger.INFO = 0
         fake_config = MagicMock()
         fake_trt.Builder.return_value.create_builder_config.return_value = fake_config
-        monkeypatch.setattr(export_models, 'trt', fake_trt)
+        monkeypatch.setattr(yolo_trt_build, 'trt', fake_trt)
         return fake_trt
 
     def test_poisoned_cuda_visible_devices_is_cleared_before_building(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv('CUDA_VISIBLE_DEVICES', '-1')
-        export_models.setup_trt_builder()
-        assert 'CUDA_VISIBLE_DEVICES' not in export_models.os.environ
+        yolo_trt_build.setup_trt_builder()
+        assert 'CUDA_VISIBLE_DEVICES' not in yolo_trt_build.os.environ
 
     def test_an_unset_cuda_visible_devices_is_left_alone(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.delenv('CUDA_VISIBLE_DEVICES', raising=False)
-        export_models.setup_trt_builder()
-        assert 'CUDA_VISIBLE_DEVICES' not in export_models.os.environ
+        yolo_trt_build.setup_trt_builder()
+        assert 'CUDA_VISIBLE_DEVICES' not in yolo_trt_build.os.environ
 
     def test_a_legitimate_gpu_pin_is_left_alone(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Only the exact '-1' (Ultralytics' CPU-mode sentinel) is
         cleared -- an operator's own GPU selection must survive."""
         monkeypatch.setenv('CUDA_VISIBLE_DEVICES', '0')
-        export_models.setup_trt_builder()
-        assert export_models.os.environ['CUDA_VISIBLE_DEVICES'] == '0'
+        yolo_trt_build.setup_trt_builder()
+        assert yolo_trt_build.os.environ['CUDA_VISIBLE_DEVICES'] == '0'
 
 
 class TestSaveTritonConfigWriteOnlyOnChange:
@@ -175,13 +178,13 @@ class TestSaveTritonConfigWriteOnlyOnChange:
     def test_does_not_rewrite_an_identical_config(self, tmp_path: Path) -> None:
         model_dir = tmp_path / 'yolov11_small_trt_end2end'
         model_dir.mkdir()
-        path1 = export_models.save_triton_config(
+        path1 = yolo_triton_config.save_triton_config(
             model_dir, 'yolov11_small_trt_end2end', 'trt_end2end', max_batch=64, has_nms=True
         )
         mtime_before = path1.stat().st_mtime_ns
         content_before = path1.read_text()
 
-        path2 = export_models.save_triton_config(
+        path2 = yolo_triton_config.save_triton_config(
             model_dir, 'yolov11_small_trt_end2end', 'trt_end2end', max_batch=64, has_nms=True
         )
 
@@ -192,10 +195,10 @@ class TestSaveTritonConfigWriteOnlyOnChange:
     def test_does_rewrite_when_content_actually_changes(self, tmp_path: Path) -> None:
         model_dir = tmp_path / 'yolov11_small_trt_end2end'
         model_dir.mkdir()
-        export_models.save_triton_config(
+        yolo_triton_config.save_triton_config(
             model_dir, 'yolov11_small_trt_end2end', 'trt_end2end', max_batch=64, has_nms=True
         )
-        path = export_models.save_triton_config(
+        path = yolo_triton_config.save_triton_config(
             model_dir, 'yolov11_small_trt_end2end', 'trt_end2end', max_batch=32, has_nms=True
         )
         assert 'max_batch_size: 32' in path.read_text()
