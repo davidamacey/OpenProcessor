@@ -106,11 +106,10 @@ def _is_stale_building(record: ProjectRecord) -> bool:
 
 async def dry_run_delete(client: Any, *, slug: str) -> dict[str, Any]:
     """§4 ``DELETE ?dry_run=true``: report only, writes nothing."""
-    from src.services.projects.lifecycle import (
+    from src.services.projects.lifecycle import _require_found, _resolve_existing
+    from src.services.projects.lifecycle_checks import (
         _LAST_ACTIVE_MESSAGE,
         _other_active_slugs,
-        _require_found,
-        _resolve_existing,
         running_jobs,
     )
 
@@ -240,12 +239,11 @@ async def delete_project(
     a background task so a slow delete never blocks past a proxy
     timeout. Call :func:`delete_project_finish` to run steps 3-9; this
     function only validates and flips the status."""
-    from src.services.projects.lifecycle import (
-        _get_mutable_record,
+    from src.services.projects.lifecycle import _get_mutable_record, write_record
+    from src.services.projects.lifecycle_checks import (
         _last_active_check,
         _require_transition,
         running_jobs,
-        write_record,
     )
 
     # MA1: read the record ONCE, fresh (bypassing the registry's

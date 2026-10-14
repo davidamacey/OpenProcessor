@@ -224,12 +224,8 @@ async def clone_settings_into(
     target emptiness) runs before anything is written, and the revision
     is bumped only after the copy succeeded -- a refused clone never
     changes the target's revision."""
-    from src.services.projects.lifecycle import (
-        _get_mutable_record,
-        _require_revision,
-        _require_transition,
-        write_record,
-    )
+    from src.services.projects.lifecycle import _get_mutable_record, write_record
+    from src.services.projects.lifecycle_checks import _require_revision, _require_transition
     from src.services.projects.registry import get_project_registry
 
     record, seq, term = await _get_mutable_record(client, slug)
