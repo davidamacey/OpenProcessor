@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `ProjectCounts.images` and `.items` are `number | null` (the API serves `null` when OpenSearch could not be counted); the project list already renders `null` as an em dash.
+
 - Work-package ids and history names are gone from comments, JSDoc and test titles in `src/` and `e2e/`,
   and the route tests under `src/routes/p/[project]/` are named by what they test (for example
   `reviewDismissedPanel`, `clusterPurityDisplay`, `servedTrainingCohorts`) instead of by the pass that

@@ -318,6 +318,33 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Fixed
 
+- An outage no longer reads as an empty answer. Project counts (`/projects`, `/projects/{project}/stats`
+  `images`, `items`, `pending_detection`, `holdout_items`) are `null` when OpenSearch could not be
+  counted, not `0`. Training preflight warns "pending ingest could not be counted" instead of "no
+  ingest backlog" and blocks on an unreadable export `manifest.json`. An unreadable class registry
+  stops VLM activation and the probe job instead of passing as "no classes". The index bootstrap
+  records a project as bootstrapped only when every migration succeeded (a migration that reports
+  `acknowledged: false` counts), so the next request retries. The core visual-search OpenSearch client
+  (k-NN and OCR search, cluster reads and writes, duplicate checks) raises an error the API answers
+  with `503` and `reason: opensearch_unavailable`, not `[]` or `0`. `GET/DELETE /query/image/{id}`
+  treat only a missing document or index as "not found". The test-holdout freeze refuses (`503`)
+  when it cannot check for an existing holdout, and the residual-parking and false-positive counts of
+  a cluster run raise instead of returning `0`. A crashed background job is logged at shutdown and
+  the ingest dispatch tick runs off the event loop. About thirty best-effort OpenSearch cleanup
+  handlers now catch only OpenSearch errors.
+- A job state file that exists but cannot be read counts as a running job in every start guard
+  (`FileJob.is_live`, and the auto-label guard), so a second job is not started beside one it cannot
+  see (#161).
+- The cluster-refresh daemon keeps its per-project growth state (items at the last retrain, the job
+  in flight, the previous poll's count) in the project's settings document, so a restart neither
+  retrains a project that was just retrained nor starts a retrain in the middle of an ingest (#235).
+  An audit-gate `409` from `auto_promote` no longer stops the retrain from being queued (#280).
+- An auto-label job still queued after `queue_max_age_seconds` (one hour) fails with "auto_label
+  worker not running" and its trigger is withdrawn; the status serves `queue_age_seconds` and
+  `queue_max_age_seconds` (#236).
+- An image that does not decode reports `not a decodable image` (or Pillow's own error for a damaged
+  file) instead of `No module named 'pi_heif'` from the Ultralytics `Image.open` patch (#297).
+
 - `scripts/bench/gpu_decode_parity.py` unpacked the decoded frame as a tuple, which the decoder has not
   returned since it became `DecodedImage`; the script now reads `.pil`.
 
