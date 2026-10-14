@@ -10,7 +10,10 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const src = readFileSync(
+  path.resolve(here, '../../../../lib/components/export/ExportClassTable.svelte'),
+  'utf-8',
+);
 
 describe('the /export Total column is labeled as the labelled (class_id) count', () => {
   it('the column header says "Total (labelled)", not a bare "Total"', () => {

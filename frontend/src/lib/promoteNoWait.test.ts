@@ -11,6 +11,7 @@ const FILES = [
   'src/lib/promoteJobController.svelte.ts',
   'src/lib/components/PromoteModal.svelte',
   'src/routes/p/[project]/train/+page.svelte',
+  'src/lib/train/trainActionsController.svelte.ts',
   'src/routes/p/[project]/models/+page.svelte',
 ];
 
