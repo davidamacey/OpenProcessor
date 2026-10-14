@@ -245,7 +245,7 @@ The config store, one document per row, discriminated by `doc_type`
 `kind` (`prompt_pack`, `region_profile`, ...), `name`, `revision`, `body`
 (stored, not indexed), `description`, `created_at`, `updated_at`, `updated_by`,
 `cloned_from`, `axis`, `previous`, `config_revision`, `process`, `applied_at`.
-The project's settings document (`defaults`, including the `ingest_policy` object with its `detect`, `embedding` and `detector` parts and a revision counter, addressed by id `default`) and the
+The project's settings document (`defaults`, including the `ingest_policy` object with its `detect`, `embedding` and `detector` parts and a revision counter, addressed by id `default`; the cluster-refresh daemon's growth state sits beside it under `cluster_refresh`) and the
 UMAP projection state (id `current`: `projection_version`, `scope`, `n_points`,
 `fitted_at`, ...) are stored in this same index, by fixed id and never searched,
 so a project needs six indexes rather than eight.

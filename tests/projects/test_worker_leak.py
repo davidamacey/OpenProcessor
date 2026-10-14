@@ -120,6 +120,7 @@ class _RecordingTransport:
         self.pending = pending
         self.calls: list[tuple[str | None, str, set[str]]] = []
         self.writes: list[tuple[str, str, dict[str, Any]]] = []
+        self.settings_docs: dict[str, dict[str, Any]] = {}
 
     async def perform_request(
         self, method: str, url: str, params: Any = None, body: Any = None, **_kw: Any
@@ -160,10 +161,24 @@ class _RecordingTransport:
         elif action == '_bulk':
             result = self._bulk(url_index, body, touched)
         elif method == 'GET' and parts[-2:-1] == ['_doc']:
-            # The project's settings document (its VLM policy): never written, so absent.
+            # The project's settings document (VLM policy, cluster-refresh state): absent
+            # until a worker writes it.
             touched.add(url_index)
             self.calls.append((bound.record.slug if bound else None, url, touched))
-            raise NotFoundError(404, 'not_found', {'found': False})
+            stored = self.settings_docs.get(url_index)
+            if stored is None:
+                raise NotFoundError(404, 'not_found', {'found': False})
+            return {
+                '_index': url_index,
+                '_id': parts[-1],
+                '_seq_no': 1,
+                '_primary_term': 1,
+                '_source': stored,
+            }
+        elif method == 'PUT' and parts[-2:-1] in (['_doc'], ['_create']):
+            touched.add(url_index)
+            self.settings_docs[url_index] = dict(body)
+            result = {'result': 'created', '_seq_no': 1, '_primary_term': 1}
         else:
             msg = f'unexpected OpenSearch call {method} {url}'
             raise AssertionError(msg)
