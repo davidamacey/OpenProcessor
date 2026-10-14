@@ -172,96 +172,11 @@ import, new embedding model) are covered by the same reprocess scope:
 
 ### Ingest sources and S3
 
-Every way of getting images in ends in the same pipeline. A request to `/ingest`,
-`/ingest/batch` or `/ingest/upload`, a bulk run over a folder or manifest, and an S3
-bucket all reach `ingest_batch`, so decode routing, the coalesced writer, the lock
-rule and project isolation are the same for each.
-
-**S3 and S3-compatible stores (MinIO and others).** Set `OP_S3_ALLOWED` to the
-`bucket` or `bucket/prefix` entries the deployment may read; with it empty S3 is off
-and every S3 route answers 503 `s3_not_configured`. A source or request outside the
-list is refused 422 `s3_not_allowed`, at creation and again at use. `OP_S3_ENDPOINT_URL`,
-`OP_S3_REGION` and `OP_S3_PATH_STYLE` point at a non-AWS store. Credentials are never
-part of a request or a stored source: boto3 finds them in the `api` container's
-environment (`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, or
-`AWS_SHARED_CREDENTIALS_FILE` naming a mounted secret file) or from an instance or task
-role. Give them read-only access to the listed prefixes.
-
-| Purpose | Route |
-|---|---|
-| List sources, with trigger and queue status | `GET /curation/projects/{project}/ingest/sources` |
-| Register a source (a bucket/prefix or a folder, options, triggers) | `POST /curation/projects/{project}/ingest/sources` |
-| Read, change or remove one | `GET`, `PATCH`, `DELETE /curation/projects/{project}/ingest/sources/{source_id}` |
-| Scan the source and ingest what is new, now | `POST /curation/projects/{project}/ingest/sources/{source_id}/run` |
-| Put objects that gave up back in the queue | `POST /curation/projects/{project}/ingest/sources/{source_id}/retry-dead` |
-| Receive S3 event notifications (webhook) | `POST /curation/projects/{project}/ingest/sources/{source_id}/events` |
-| Fetch and ingest named objects (what the runner calls for S3) | `POST /curation/projects/{project}/ingest/objects` |
-| A time-limited download URL of an original | `POST /curation/projects/{project}/ingest/objects/presign` |
-
-A one-shot bucket ingest is the same mechanism: `POST .../ingest/bulk` with
-`{"s3": {"bucket": "...", "prefix": "..."}}` (or `scripts/curation/bulk_ingest.py
---s3 s3://bucket/prefix`) finds or creates a trigger-less source for that bucket and
-prefix and runs it, so starting it again resumes or ingests only what is new.
-
-How it behaves:
-
-- **One queue per source.** Whatever notices a new object (a scan, a webhook event,
-  a manual run) inserts `(key, etag)` rows into the source's durable queue (SQLite on
-  the shared jobs volume, under the project's bulk-ingest directory); a bulk run of
-  kind `queue` drains the pending rows. A replayed event or a repeated scan queues
-  nothing twice.
-- **Staged, with the original referenced.** The API fetches an object into memory,
-  writes it once, content-addressed, under the project's upload root (the same as
-  `/ingest/upload`, so thumbnails, crops and the region worker keep working) and
-  stores the reference of the original as the image's `source_identifier`:
-  `s3://bucket/key#etag=...&version=...`. An object whose exact reference is already
-  stored is answered `duplicate` without a download; the same bytes under another key
-  are caught by the content hash as before. `.../objects/presign` turns a stored
-  reference into a download URL of the original (inside the allow-list only).
-- **Bounded.** Encoded bytes held by fetches are bounded per API process
-  (`OP_S3_INFLIGHT_MB`, with `OP_S3_MAX_OBJECT_MB` as the per-object cap and
-  `OP_S3_FETCH_WORKERS` threads), reserved per batch before any download so batches
-  cannot deadlock each other; decoded pixels stay under the existing ingest gate.
-- **Listing at scale.** A scan lists ObjectsV2 pages (1000 keys), one worker per
-  top-level sub-prefix (`OP_S3_LIST_WORKERS`), and writes its position after every page,
-  so a restart resumes instead of relisting. A finished pass moves a watermark (the
-  pass start minus two minutes); the next pass queues objects modified since. A very
-  large flat bucket is better served by the webhook than by relisting.
-- **Webhook.** A source created with `triggers.webhook_enabled` accepts the S3 event
-  notification JSON (`Records[].s3.bucket.name` and `.object.key`, `.eTag`, `.versionId`;
-  S3 and MinIO send it) at its `.../events` route, which its status gives as
-  `webhook.path`. Point the store's notification target at it (MinIO: `mc event add`
-  with a webhook target). The route only writes queue rows and answers 202 with
-  `{received, queued, duplicates, ignored}`; it validates the shape (422
-  `invalid_s3_event`, naming the first bad field), deduplicates by bucket, key and etag
-  so a redelivery queues nothing, and ignores records for other buckets, prefixes or file
-  types and every event that is not a creation, so one bucket-wide notification can feed
-  several sources. Keep the endpoint on loopback or a trusted network: like the rest of
-  the API it has no authentication.
-- **Watcher and schedule.** A source can poll (`triggers.watch`, `interval_s` at least 10)
-  and run on a cron schedule (`triggers.schedule.cron`, five fields in UTC). A poll scans
-  the bucket or folder into the queue on its own and starts a run only if something is
-  pending, so a quiet source makes no runs; a schedule fire always starts a run (scan, then
-  drain). A fire missed while the API was down is not replayed: the schedule resumes at its
-  next time. The local-folder watcher is the same code (a modification-time watermark;
-  a file changed in the last five seconds waits for the next pass so a copy in progress is
-  not read half written). `GET .../ingest/sources/{source_id}` reports `watch`
-  (`last_poll_at`, `next_poll_at`, `error`), `schedule` (`last_fire_at`, `next_fire_at`),
-  the scan's progress and the last run.
-- **The dispatcher.** One task in each API worker (`OP_INGEST_DISPATCH_S`, default 5
-  seconds; 0 turns every trigger off) acts per project under a file lock, so one worker
-  acts per tick. It also drains rows a webhook queued and resumes a run that a restart
-  interrupted; a cancelled run is left cancelled, a failed one waits five minutes. A scan
-  that fails (the store is unreachable, credentials are missing, the allow-list changed)
-  records its error under `watch.error` and backs off, doubling to ten minutes, while the
-  queue keeps what it has. Runs of the dispatcher send their batches to the API's own
-  address (`OP_API_LOOPBACK_URL`, default `http://127.0.0.1:8000`, the listen address inside
-  the container).
-- **Failures are per object.** A missing object (`gone`) or one over the size cap
-  (`too_large`), or one that is not an image, is `dead` at once; a permission or
-  network error (`forbidden`, `fetch_error`) is retried by later runs up to three
-  attempts. Each failure appears in the run's failure list with its reason and in the
-  source's `errors`; `retry-dead` queues them again.
+Bring images in from an S3 or S3-compatible bucket, and keep a project fed by a poll
+watcher, a cron schedule or an S3 event webhook. Covers the allow-list
+(`OP_S3_ALLOWED`), credentials, the source routes under
+`/curation/projects/{project}/ingest/sources`, resume and troubleshooting:
+[Ingest from S3 and watched sources](../docs-site/docs/guides/ingest-sources.mdx).
 
 ## Dataset import
 

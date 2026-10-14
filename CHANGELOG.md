@@ -13,6 +13,17 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Added
 
+- Ingest from S3 and S3-compatible stores (#264): `--s3` and `--source-id` on
+  `scripts/curation/bulk_ingest.py`, an `s3` or `source_id` start on
+  `POST /curation/projects/{project}/ingest/bulk`, and registered ingest sources under
+  `/curation/projects/{project}/ingest/sources` with a poll watcher, a cron schedule and an
+  S3 event webhook (`.../events`), all feeding one durable per-source queue drained by the
+  bulk runner. Objects are fetched and staged through `/ingest/objects`, referenced as
+  `s3://bucket/key#etag=...`, bounded in flight (`OP_S3_*`), and skipped before download when
+  already stored. S3 is off until `OP_S3_ALLOWED` is set; credentials come only from the `api`
+  container's environment, a mounted file or a role. A dispatcher in the API acts on due
+  triggers (`OP_INGEST_DISPATCH_S`). Guide: Ingest from S3 and watched sources.
+
 - `scripts/bench/vectordb/` and `docker/bench/vectordb/compose.yml`: a vector store benchmark on real
   PE embeddings of pinned public COCO images (exact filtered ground truth, recall-gated operating
   points, write, streaming, rewrite and delete phases) with adapters for OpenSearch, Milvus, Qdrant,

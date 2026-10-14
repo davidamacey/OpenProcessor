@@ -1,0 +1,272 @@
+---
+sidebar_position: 16
+title: Ingest from S3 and watched sources
+---
+
+# Ingest from S3 and watched sources
+
+This guide brings images in from an S3 bucket (AWS S3, MinIO or any S3-compatible
+store) and keeps a project up to date as new ones arrive. It covers the one-shot
+command, registering a **source** with a poll, a cron schedule or an S3 event
+webhook, where credentials go, what runs where, how a run resumes and what to
+check when it does not work.
+
+A folder on a NAS is a source too. For a one-time import of a mounted folder, see
+[Ingest a large folder](./ingest-large-folder.mdx); everything below about
+triggers applies to folder sources as well.
+
+:::note Before you start
+- The stack is healthy: `./openprocessor health`, and a detector is configured as in
+  [Ingest a large folder](./ingest-large-folder.mdx).
+- A curation project exists and its [ingest policy](./ingest-policy.mdx) is set.
+- You can reach the bucket from the `api` container (network and credentials).
+- The ingest-source routes were exercised by the offline test suite only. Nothing in
+  this guide was run against a live S3 or MinIO store when it was written; run the
+  [trial](#3-trial-run) first.
+:::
+
+## How it works
+
+Every way of getting images in ends in the same pipeline, so decode routing, the
+OpenSearch writer, the lock rule and project isolation are the same for S3 as for an
+upload.
+
+1. Something notices a new object: a scan of the bucket (manual, poll or cron) or an
+   S3 event delivered to the webhook. Each object becomes a row `(key, etag)` in the
+   source's durable queue, on the shared jobs volume. A replayed event or a repeated
+   scan queues nothing twice.
+2. A bulk run drains the queue. The API fetches each object into memory, writes it
+   once, content-addressed, under the project's upload root (so thumbnails, crops and
+   the region worker work as for any image) and ingests it. The original stays in the
+   bucket; the image stores its reference as `s3://bucket/key#etag=...`.
+3. An object whose exact reference is already stored is answered `duplicate` without a
+   download. The same bytes under another key are caught by the content hash.
+
+| Trigger | What it does |
+|---|---|
+| Run now / `--s3` / `--source-id` | Scans the source, then drains the queue |
+| Poll (`triggers.watch`) | Scans every `interval_s` (at least 10); starts a run only if something is pending |
+| Cron (`triggers.schedule`) | Scans and runs at each fire of a five-field UTC expression; a fire missed while the API was down is not replayed |
+| Webhook (`triggers.webhook_enabled`) | The bucket pushes events; the route only queues rows and the dispatcher drains within one tick |
+
+A **dispatcher** in the API (one task per worker, a file lock so one worker acts per
+project per tick) starts the polls, cron runs and webhook drains. Only one ingest run
+is live per project; a due source waits for the next tick.
+
+## 1. Allow the bucket
+
+S3 is **off** until the deployment lists what may be read. In `.env`:
+
+```bash
+OP_S3_ALLOWED=my-bucket/incoming/,archive-bucket
+```
+
+Each entry is `bucket` or `bucket/prefix`. With it empty every S3 route answers 503
+`s3_not_configured`. A source or request outside the list is refused 422
+`s3_not_allowed`, when the source is created and again at each use, so editing the
+list narrows access at once. For MinIO or another S3-compatible store also set:
+
+```bash
+OP_S3_ENDPOINT_URL=http://minio.example.lan:9000
+OP_S3_REGION=us-east-1
+OP_S3_PATH_STYLE=1
+```
+
+## 2. Give the API credentials
+
+Credentials are never part of a request, a source or a project document, and the API
+never returns them. boto3 finds them the usual way, in the **`api` container**:
+
+- Environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (compose loads
+  `.env` into the container, so putting them there works; keep `.env` out of version
+  control).
+- A mounted credentials file: set `AWS_SHARED_CREDENTIALS_FILE` to its in-container
+  path and mount it read-only with a compose override.
+- An instance or task role on AWS.
+
+A mounted file, as `docker-compose.override.yml`:
+
+```yaml
+services:
+  api:
+    environment:
+      - AWS_SHARED_CREDENTIALS_FILE=/run/secrets/aws_credentials
+    volumes:
+      - /srv/secrets/aws_credentials:/run/secrets/aws_credentials:ro
+```
+
+Use a key with read-only access (`s3:ListBucket` and `s3:GetObject`) to the listed
+prefixes only. Recreate the service after changing either file:
+
+```bash
+./openprocessor restart api
+```
+
+Missing or wrong credentials do not stop the API. A scan records the error, the
+source reports it and the dispatcher backs off (see [Troubleshooting](#troubleshooting)).
+
+## 3. Trial run
+
+The one-shot command ingests a bucket prefix and is the quickest check that the
+allow-list, the credentials and the endpoint are right. It is a client of the API, so
+run it inside the container (the API listens on port 8000 there):
+
+```bash
+docker compose exec api python scripts/curation/bulk_ingest.py \
+  --s3 s3://my-bucket/incoming/ --project my-project \
+  --api-base http://localhost:8000/curation
+```
+
+Add `--batch-size` and `--concurrency` to tune it. The command shows progress and exits
+0 when every image was stored, 1 when some failed and 2 when the run stopped. Start the
+same command again to resume or to ingest only what is new. The same start over HTTP:
+
+```bash
+curl -s -X POST http://localhost:4603/curation/projects/my-project/ingest/bulk \
+  -H 'Content-Type: application/json' \
+  -d '{"s3": {"bucket": "my-bucket", "prefix": "incoming/"}}'
+```
+
+This finds or creates a source for that bucket and prefix with no triggers and runs it.
+
+## 4. Register a source with triggers
+
+A source is stored per project and can be created in Cropwright or with the API.
+This one polls every five minutes and also accepts S3 events:
+
+```bash
+curl -s -X POST http://localhost:4603/curation/projects/my-project/ingest/sources \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "field uploads",
+    "backend": "s3",
+    "s3": {"bucket": "my-bucket", "prefix": "incoming/"},
+    "source": "field_uploads",
+    "triggers": {
+      "watch": {"enabled": true, "interval_s": 300},
+      "schedule": {"enabled": false, "cron": ""},
+      "webhook_enabled": true
+    }
+  }'
+```
+
+The answer is the source's status, with its `source_id`. For a nightly run at 02:30 UTC
+use `"schedule": {"enabled": true, "cron": "30 2 * * *"}`; fields are minute, hour,
+day of month, month, day of week, with `*`, lists, ranges and steps. For a folder
+source use `"backend": "folder", "folder": "/data/source/photos"` instead of `s3`.
+
+Read, change and control a source:
+
+```bash
+S=http://localhost:4603/curation/projects/my-project/ingest/sources
+curl -s $S                                       # all sources, with queue counts
+curl -s $S/<source_id>                           # one source's status
+curl -s -X PATCH $S/<source_id> -H 'Content-Type: application/json' \
+  -d '{"triggers": {"watch": {"enabled": false, "interval_s": 300},
+       "schedule": {"enabled": false, "cron": ""}, "webhook_enabled": true}}'
+curl -s -X POST $S/<source_id>/run               # scan and ingest now
+curl -s -X POST $S/<source_id>/retry-dead        # queue the given-up objects again
+curl -s -X DELETE $S/<source_id>
+```
+
+A PATCH replaces `triggers` as a whole, so send all of it. The location of a source never
+changes; delete it and create another.
+
+The status is everything the UI shows: `counts` (`pending`, `done`, `failed`, `dead`),
+`scan`, `watch` (`last_poll_at`, `next_poll_at`, `error`), `schedule`, `webhook`,
+`last_run`, the most recent object `errors`, and `can_run` with `blocked_reason` and
+`blocked_message` when it cannot (S3 not configured, outside the allow-list, an invalid
+definition, or another run live in the project).
+
+## 5. Connect the webhook
+
+With `webhook_enabled`, the source's status gives `webhook.path`, the route that
+receives S3 event notifications:
+
+```
+POST /curation/projects/my-project/ingest/sources/<source_id>/events
+```
+
+Point the store's notification target at that URL on the API's published address. For
+MinIO, with the `mc` client (these commands are the MinIO documented form and were not
+run against this stack):
+
+```bash
+mc admin config set local notify_webhook:field \
+  endpoint=http://api-host.example.lan:4603/curation/projects/my-project/ingest/sources/<source_id>/events
+mc admin service restart local
+mc event add local/my-bucket arn:minio:sqs::field:webhook --event put --prefix incoming/
+```
+
+The route accepts the S3 event JSON (`Records[].s3.bucket.name`, `.object.key`,
+`.eTag`, `.versionId`) and answers 202 with `{received, queued, duplicates, ignored}`.
+It ignores events that are not creations and records for another bucket, prefix or file
+type, so one bucket-wide notification can feed several sources. A body that is not an
+S3 event is 422 `invalid_s3_event` and names the first bad field. A source without the
+webhook enabled answers 409 `webhook_disabled`.
+
+:::warning The API has no authentication
+The events route, like every route, trusts its network. Keep the API on loopback or a
+trusted LAN (`OP_BIND_ADDRESS`); do not publish it to the internet to receive events.
+See [Security](../deployment/security.mdx).
+:::
+
+A webhook only reports what happens after it is configured. For objects already in the
+bucket, run the source once.
+
+## What runs where
+
+| Piece | Where |
+|---|---|
+| Source definitions, queue, state | The shared jobs volume, under `OP_BULK_INGEST_DIR`, per project |
+| Dispatcher | Inside each `api` worker; `OP_INGEST_DISPATCH_S` seconds per tick, `0` turns every trigger off |
+| Fetch and ingest | The `api` container; a run posts its batches to the API's own address (`OP_API_LOOPBACK_URL`) so they spread over all workers |
+| Credentials | The `api` container's environment or a file mounted into it |
+
+## Limits
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `OP_S3_INFLIGHT_MB` | `256` | Encoded MiB one API process holds while fetching; a batch reserves its size before any download |
+| `OP_S3_MAX_OBJECT_MB` | `256` | Largest object accepted; a bigger one fails alone as `too_large` |
+| `OP_S3_FETCH_WORKERS` | `8` | Download threads per API process |
+| `OP_S3_LIST_WORKERS` | `8` | Sub-prefixes listed in parallel |
+
+A scan lists 1000 keys per request, one worker per top-level sub-prefix, and saves its
+position after every page, so it resumes where it stopped. A finished pass moves a
+watermark (the pass start minus two minutes) and the next one queues what changed
+since. Listing a very large flat bucket costs one request per 1000 objects each pass;
+for those, use the webhook.
+
+## Resume, failures and retries
+
+- **Interrupted run.** A restart or a crash leaves the run `interrupted`; the next
+  dispatcher tick (or your next `--s3` / `--source-id` start) resumes it and skips what
+  it already stored. A cancelled run stays cancelled until you start it; a failed one
+  waits five minutes.
+- **Per-object failures** never fail the batch. A missing object (`gone`), one over the
+  cap (`too_large`) or one that is not an image is `dead` at once. A permission or
+  network error (`forbidden`, `fetch_error`) is retried by later runs, three attempts in
+  all, then `dead`. `retry-dead` puts dead rows back to `pending`.
+- **Failures list.** Each failure appears with its reason in the run's failures
+  (`GET /curation/projects/{project}/ingest/bulk/{run_id}/failures`) and in the source's
+  `errors`.
+- **Idempotency.** Starting anything twice is safe: the queue key `(key, etag)`, the
+  stored reference and the content hash each drop repeats.
+
+## Troubleshooting
+
+| Symptom | Cause and fix |
+|---|---|
+| 503 `s3_not_configured` | `OP_S3_ALLOWED` is empty or the API was not restarted after setting it |
+| 422 `s3_not_allowed` | The bucket or prefix is not under an `OP_S3_ALLOWED` entry |
+| 409 `bulk_ingest_busy` | A run is live in this project; wait or cancel it |
+| 409 `webhook_disabled` | The source was created without `webhook_enabled`; PATCH `triggers` |
+| 422 `invalid_s3_event` | The body is not an S3 event; the message names the field |
+| `watch.error` set, no runs start | The scan fails (credentials, endpoint, network). The dispatcher retries with a delay that doubles to ten minutes; fix the cause and it recovers by itself, or call `/run` |
+| Everything `forbidden` | The key lacks `s3:GetObject` on the prefix, or the endpoint and region do not match the store |
+| Objects `dead` with `gone` | They were deleted after being queued; nothing to do |
+| Nothing happens on a schedule | The API was down at the fire (not replayed), or `OP_INGEST_DISPATCH_S` is `0` |
+
+`./openprocessor logs api -f` shows the `ingest_source_poll_failed` and
+`ingest_dispatch_failed` events with the error.
