@@ -36,9 +36,20 @@ Notes:
   [VLM selection](../guides/vlm-selection.mdx). `./secrets/vlm` is mounted
   read-only into `api` and the workers so endpoints can reference keys
   as `secret:<slug>`.
-- **`curation-evaluator` is a long-lived watcher**, not a one-shot job.
-  Start it with `up -d`; `docker compose run --rm curation-evaluator`
-  just blocks your shell.
+- **`curation-evaluator` is documented as run on demand.** It watches the
+  bake-off job directories, has no restart policy, and reserves the card
+  named by `EVALUATOR_GPU_ID`. The compose file runs it with
+  `docker compose --profile curation run --rm curation-evaluator`, which
+  blocks your shell while it watches. `--profile curation up -d` and
+  `./openprocessor curation up` also start it.
+- **Starting only some curation services.** Name them:
+  `docker compose -p <project> --profile curation up -d curation-detection-worker`.
+  The CLI has no subset command (issue #285). Which workers a
+  workflow needs is in [Pipeline modes](../guides/pipeline-modes.mdx).
+- **In an installed directory the profiles come from `.env`.** The installer
+  writes `COMPOSE_PROFILES` from the tiers you chose, and `./openprocessor
+  start` uses it. `curation` in that list means `start` also starts the
+  workers.
 - **Training is its own profile on purpose**: a run holds a GPU for hours,
   so starting the trainer should be an explicit act.
 - **Monitoring is opt-in on shared hosts**: `alloy` mounts the Docker

@@ -1,0 +1,226 @@
+---
+sidebar_position: 9
+title: Upgrade, repair and back up
+---
+
+# Upgrade, repair and back up
+
+How to move to a new release, fix a broken install, and keep your data safe.
+Run every command from the install directory (the one that holds `.env` and
+`openprocessor`).
+
+Which kind of directory do you have?
+
+| You have | Look for | Use |
+|---|---|---|
+| An install made by the one-line installer | `.install/state.json` | `./openprocessor upgrade`, `repair`, and `./setup-openprocessor.sh --rollback` |
+| A git checkout | `.git/` and `src/main.py` | `git pull`, then `./openprocessor update` and `./openprocessor restart` |
+
+`upgrade`, `repair` and `uninstall` refuse to run in a checkout. In an
+installed directory `update` is the same as `upgrade`.
+
+## Before you upgrade
+
+1. Check the stack is healthy now, so you know what "healthy" looked like:
+
+   ```bash
+   ./openprocessor health
+   ```
+
+2. Stop any long job (import, training, bulk ingest) or let it finish. An
+   upgrade restarts the services.
+3. Take a data backup if the data matters (see [Back up your data](#back-up-your-data)).
+   The upgrade backs up release files and `.env`; it does not copy the
+   OpenSearch volume or `data/`.
+
+## Upgrade an installed directory
+
+```bash
+./openprocessor upgrade                    # latest published release
+./openprocessor upgrade --version vX.Y.Z   # a specific release
+```
+
+Add `--dry-run` to see every state-changing command without running any. A
+version change asks once before it starts; `--yes` skips the prompt.
+
+The installer, in order:
+
+1. downloads the release files and checks them against `SHA256SUMS`;
+2. copies the current release files, `.env` and `.install/` state to
+   `backups/<UTC timestamp>/`;
+3. installs the new files (your `.env` is never overwritten; new keys are added
+   with their defaults);
+4. updates the image pins in `images.lock`, pulls the images and restarts the
+   services;
+5. re-runs the model groups that need it and checks health.
+
+A re-run keeps your installed tiers, your VLM catalog choice and your GPU
+placement. Pass `--tiers`, `--vlm-model-id` or `--gpu-plan` only to change them.
+
+Afterwards:
+
+```bash
+./openprocessor health
+./openprocessor models status
+```
+
+If the Triton image changed, rebuild the TensorRT engines:
+
+```bash
+./openprocessor models install
+```
+
+### If the API will not start after an upgrade
+
+Retired environment variables are rejected at startup, on purpose, so a stale
+name cannot quietly do nothing. The API log names the replacement:
+
+```bash
+./openprocessor logs api
+```
+
+Rename the variable in `.env` (the log line says to what, and the list is in
+`src/config/retired_env.py`), then `./openprocessor restart api`.
+
+## Upgrade a git checkout
+
+```bash
+git pull
+./openprocessor update      # pulls images and rebuilds
+./openprocessor restart
+```
+
+`make rebuild` rebuilds the containers without cache when you need a clean
+build. Re-export models only when the release notes say the engines changed.
+
+## Repair
+
+`repair` re-installs the **same version** the install already has. It
+re-verifies the files, re-pulls missing images and re-runs model groups that
+failed or are missing. Use it when an install was interrupted or a file is
+damaged.
+
+```bash
+./openprocessor repair
+```
+
+## Roll back
+
+Rollback is not an `openprocessor` subcommand; call the installer script:
+
+```bash
+./setup-openprocessor.sh --rollback
+```
+
+It restores the newest backup of a **different version** than the one
+installed and re-pins that version's images. Backups made by a same-version
+re-run or a repair are skipped. The files it replaces are kept in
+`.install/rollback-undo/`. Rollback restores release files and `.env`; it does
+not restore OpenSearch data. If you also need the data from before the
+upgrade, restore your data backup (below).
+
+## What lives where
+
+| Data | Where | In the installer's backup? |
+|---|---|---|
+| Release files, scripts, compose files | the install directory | yes |
+| Settings and secrets | `.env`, `secrets/` (VLM keys under `secrets/vlm`) | `.env` yes, `secrets/` no |
+| Installer state | `.install/` | yes |
+| Project records, items, labels, clusters, prompt packs, region profiles, VLM activation | OpenSearch, volume `opensearch_data` | no |
+| Class registry, exports, bake-off evaluation sets, per project | `data/projects/<slug>/` | no |
+| Your source images | `OP_SOURCE_ROOT_HOST` (mounted read-only; OpenProcessor never writes there) | no |
+| Per-project state (uploads, bake-off jobs, event log) | volume `openprocessor-state` | no |
+| Training and auto-label job files | volume `openprocessor-jobs` | no |
+| MLflow runs | volume `mlflow_data` | no |
+| Triton model repository, promoted models | `models/` | no |
+| Hugging Face and vLLM caches | `cache/` | no |
+| Crop cache | tmpfs, rebuilt after a restart | not needed |
+| Prometheus, Grafana, Loki | named volumes (monitoring profile) | no |
+
+Volume names start with your compose project name (default `openprocessor`),
+for example `openprocessor_opensearch_data`. List yours with
+`docker volume ls`.
+
+`models/` and `cache/` can be rebuilt or re-downloaded
+(`./openprocessor models repair`), so they are the lowest priority. Your source
+images, `data/projects/` and the OpenSearch volume are the data that cannot be
+recreated.
+
+## Back up your data
+
+The compose file configures no OpenSearch snapshot repository, so the backup is a
+copy of the volume. Copy it with the stack stopped, so the files are
+consistent.
+
+```bash
+BK=~/op-backup-$(date -u +%Y%m%dT%H%M%SZ)
+mkdir -p "$BK"
+./openprocessor stop                      # removes containers, keeps volumes
+
+PROJECT=openprocessor                     # your COMPOSE_PROJECT_NAME
+for v in opensearch_data openprocessor-state openprocessor-jobs mlflow_data; do
+  docker volume inspect "${PROJECT}_${v}" >/dev/null 2>&1 || continue
+  docker run --rm -v "${PROJECT}_${v}":/d:ro -v "$BK":/b alpine \
+    tar czf "/b/${v}.tgz" -C /d .
+done
+tar czf "$BK/install-data.tgz" .env .install data/projects secrets 2>/dev/null
+
+./openprocessor start
+```
+
+You should see one `.tgz` per volume plus `install-data.tgz` in `$BK`. Back up
+your source-image folder with whatever you already use for that storage.
+
+To restore, stop the stack, then unpack each archive into an empty volume of the
+same name and start again:
+
+```bash
+./openprocessor stop
+docker run --rm -v "${PROJECT}_opensearch_data":/d -v "$BK":/b:ro alpine \
+  sh -c 'rm -rf /d/* /d/.[!.]* 2>/dev/null; tar xzf /b/opensearch_data.tgz -C /d'
+./openprocessor start
+```
+
+Repeat for each volume you saved. Restore into the same OpenProcessor version
+that wrote the backup, then upgrade.
+
+:::note
+Run a restore into a scratch install first if you have never done one. A backup
+you have not restored is a guess.
+:::
+
+**What was verified.** The volume `tar` backup and the restore command were run
+against a throwaway Docker volume (not an OpenProcessor volume): files, a nested
+directory and a hidden directory were archived with `tar czf ... -C /d .` in
+`alpine`, the volume was emptied with the `rm -rf /d/* /d/.[!.]*` line, the
+archive was unpacked with `tar xzf ... -C /d`, and the listing and contents
+matched. The `./openprocessor stop` and `start` steps, the `install-data.tgz`
+archive and a restore of a real `opensearch_data` volume into a running
+OpenSearch were not run here.
+
+## Prune old backups
+
+The installer adds a `backups/<timestamp>/` directory on every upgrade, repair
+and same-version re-run, and never removes one. Delete old ones by age once the
+new version is proven:
+
+```bash
+ls -1 backups/
+```
+
+Keep at least the newest backup of the previous version, because `--rollback`
+needs it. Old exports and training runs have their own pruning, see
+[Exports and retention](./exports-and-retention.mdx).
+
+## Uninstall
+
+```bash
+./openprocessor uninstall                  # stops and removes this install's containers
+```
+
+Volumes, `data/`, models and caches are kept unless you add `--purge-volumes`
+(the named volumes), `--purge-data` (`models/`, `pytorch_models/`, `cache/`,
+`data/`) or `--remove-images`. Every purge makes you type the project name. A
+source folder outside the install directory is never touched. See
+[INSTALLATION.md](https://github.com/davidamacey/OpenProcessor/blob/main/INSTALLATION.md#upgrade-repair-rollback-uninstall)
+for the full flag list.

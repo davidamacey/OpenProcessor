@@ -5,9 +5,11 @@ title: Dataset import and Reprocess
 
 # Dataset import and Reprocess (`/p/<project>/datasets`)
 
-Bring an **already-labeled** dataset into the current project, review what it
-brought, and re-run the backend's machine proposals on items without
-overwriting human work. These pages exist only when the backend supports
+Bring an already-labeled dataset into the current project and re-run the
+backend's machine proposals without overwriting human work. This page covers the
+screens; formats, class mapping rules and the API/CLI path are in the
+[Dataset import guide](../../guides/dataset-import.mdx) and the
+[Reprocess guide](../../guides/reprocess.mdx). These pages exist only when the backend supports
 dataset import; otherwise there is no link to them and nothing is requested.
 Compare with [Ingest](./ingest.md), which brings in unlabeled images.
 

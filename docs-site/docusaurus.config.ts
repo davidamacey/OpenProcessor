@@ -7,9 +7,7 @@ import {siteConfig} from './site.config';
 // This runs in Node.js - don't use client-side code here.
 //
 // Every project-specific value (title, repo, URLs, nav/footer, sibling
-// links) is read from `site.config.ts`, not hardcoded here — this file
-// should be nearly identical between sibling sites cloned from the shared framework.
-// See docs-site/TEMPLATE.md.
+// links) is read from `site.config.ts`, not hardcoded here.
 
 const config: Config = {
   title: siteConfig.title,

@@ -87,6 +87,8 @@ Corrections found while planning (verified in code, fold into the PR #206 text o
   default 200, `--auto-label` default on) posts the **synchronous** `/pipeline/auto_label` route
   (`train_clusters` defaults to true) every 200 new crops, so full IVF retrains run inside the API
   process while ingest is running. The module docstring still says 1000.
+  **Status, 2026-10-13:** changed by #212. The daemon now posts `/clusters/auto_promote` and
+  queues the `auto_label` background job, so the retrain runs in `curation-auto-label-worker`.
 - The installer reuses an existing plan if it loads and the Triton image digest is unchanged
   (`group_should_skip`, `scripts/lib/model_setup.sh:205-221`); there is no precision, TensorRT, GPU
   or ONNX stamp, and `_ms_pe_build_engine` (`:283-299`) silently retries FP32 when FP16 fails.

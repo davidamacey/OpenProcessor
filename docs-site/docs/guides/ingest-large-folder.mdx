@@ -1,0 +1,472 @@
+---
+sidebar_position: 15
+title: Ingest a large folder
+---
+
+# Ingest a large folder
+
+This guide takes you from a photo share on a NAS to a finished bulk ingest into a
+project. It covers mounting the share, a small trial run, the full run (command
+line or Cropwright), what to do when a run stops, how long it will take and how much
+disk it needs.
+
+:::note Before you start
+Work through this list once. Each item has a step below.
+
+- The stack is healthy: `./openprocessor health`.
+- A detector is configured. Ingest answers 503 `No detector configured for ingest`
+  until `OP_INGEST_PRIMARY_DETECTOR_MODEL` names a Triton model.
+- The share is mounted on the host and the container user can read it.
+- `OP_SOURCE_ROOT_HOST` is set and the three services that mount it were recreated.
+- `GET /curation/projects/{project}/ingest/bulk/config` lists `/data/source`.
+- A fresh project exists and its [ingest policy](./ingest-policy.mdx) is set. A policy
+  changes future ingests only.
+- A trial of 200 to 500 images passed (step 5).
+- Free disk was checked (step 11).
+- You know whether GPU decode is on: `./openprocessor gpu plan` (step 10).
+:::
+
+Example paths use `/srv/nas/photos` for the share on the host and `/data/source` for
+the same files inside the containers. Replace `<project>` with your compose project
+name (`openprocessor` by default; `./openprocessor` passes it for you) and `<slug>`
+with the curation project.
+
+## 1. Mount the share
+
+Mount the share on the Docker host first, read-only. Two common shapes:
+
+```bash
+# NFS
+sudo mkdir -p /srv/nas/photos
+sudo mount -t nfs -o ro nas.example.lan:/export/photos /srv/nas/photos
+
+# SMB
+sudo mount -t cifs -o ro,uid=1000,credentials=/root/.nas-credentials \
+  //nas.example.lan/photos /srv/nas/photos
+```
+
+The containers run as an unprivileged user (uid 1000 in `api`). It must be able to
+read every directory and file, so check the mode or mount with a matching `uid`.
+
+Check from the host:
+
+```bash
+ls /srv/nas/photos | head
+```
+
+## 2. Point the stack at it
+
+OpenProcessor reads images from one source root. Set it in `.env` as the host path:
+
+```bash
+OP_SOURCE_ROOT_HOST=/srv/nas/photos
+```
+
+Compose mounts that path read-only at `/data/source` in three services:
+
+- `api`;
+- `curation-detection-worker`;
+- `curation-auto-label-worker`.
+
+All three need the mount. Without it on the workers, thumbnails return 404 and the
+VLM stage predicts 0 labels while the job still reports `completed`. Every path you
+give an ingest command is the **container** path, so `/srv/nas/photos/2024/a.jpg`
+on the host is `/data/source/2024/a.jpg` in the commands below.
+
+Recreate the services so they pick up the new value:
+
+```bash
+./openprocessor start
+```
+
+In a checkout, the same thing without the CLI:
+
+```bash
+docker compose -p <project> -f docker-compose.yml -f docker-compose.dev.yml \
+  up -d api curation-detection-worker curation-auto-label-worker
+```
+
+`./openprocessor restart` is not enough: `docker compose restart` does not re-read
+`.env`, so the mount stays as it was.
+
+Check what the API sees:
+
+```bash
+curl -s http://localhost:4603/curation/projects/<slug>/ingest/bulk/config
+```
+
+`source_roots` must list `/data/source`. It also lists the project's own upload root,
+which is where browser and `ingest_upload.py` uploads are stored. The same response
+gives the limits: default and maximum `batch_size` and `concurrency`, and the default
+extensions (`.jpg`, `.jpeg`, `.png`).
+
+Check that the container can read the share:
+
+```bash
+docker compose -p <project> exec api sh -c 'ls /data/source | head'
+```
+
+## 3. More than one share: `OP_SOURCE_PATH_ALIASES`
+
+`OP_SOURCE_ROOT_HOST` is a single root. To ingest from a second share, name it with
+`OP_SOURCE_PATH_ALIASES` and mount it yourself. Set the alias in `.env`, either as
+JSON or as `alias=path` pairs:
+
+```bash
+OP_SOURCE_PATH_ALIASES=archive=/data/archive,nightly=/data/nightly
+# or
+OP_SOURCE_PATH_ALIASES={"archive": "/data/archive"}
+```
+
+An alias name cannot contain `/`, and a malformed value is rejected with an error instead of being dropped.
+
+Compose does **not** mount alias paths. Add the bind mount to the same three services
+in an override file next to `docker-compose.yml`, here `docker-compose.nas.yml`:
+
+```yaml
+services:
+  api:
+    volumes:
+      - /srv/nas/archive:/data/archive:ro
+  curation-detection-worker:
+    volumes:
+      - /srv/nas/archive:/data/archive:ro
+  curation-auto-label-worker:
+    volumes:
+      - /srv/nas/archive:/data/archive:ro
+```
+
+Start the stack with the override listed after the base files (add
+`-f docker-compose.dev.yml` in a checkout, and `--env-file .env` if you run from
+another directory):
+
+```bash
+docker compose -p <project> -f docker-compose.yml -f docker-compose.nas.yml \
+  up -d api curation-detection-worker curation-auto-label-worker
+```
+
+:::caution
+`./openprocessor start` builds its own list of compose files and does not read your
+override. Running it recreates the services without the alias mount. Use the
+`docker compose` command above for as long as you use the alias, or you will see 404
+thumbnails again.
+:::
+
+Ingest paths under the alias like any other (`--folder /data/archive/2023`). Images
+are served at `GET /curation/projects/{project}/images/root/{alias}`.
+
+## 4. Create a fresh project
+
+Ingest into a project of its own so you can test, inspect and discard it without
+touching other data.
+
+```bash
+curl -s -X POST http://localhost:4603/curation/projects \
+  -H 'content-type: application/json' \
+  -d '{"slug": "nas-photos", "display_name": "NAS photos"}'
+```
+
+The slug is 2 to 32 characters: lowercase letters and digits, with single hyphens
+between parts, starting with a letter (`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`). A few words
+are reserved (for example `new`, `all`, `none`, `projects`, `settings`, `vlm`,
+`health`), and the slug of a deleted project cannot be reused. To copy settings from an
+existing project, add `"clone_settings_from": "<other-slug>"`. In Cropwright, use the
+Projects page instead. See [Projects](./projects.mdx).
+
+Now decide what ingest keeps and embeds, before any image goes in. By default every
+detection is stored and embedded. Read the current policy and try a change on stored
+data first; see [Ingest policy](./ingest-policy.mdx).
+
+```bash
+curl -s http://localhost:4603/curation/projects/nas-photos/ingest/policy
+```
+
+## 5. Trial run on 200 to 500 images
+
+Run a small slice first. It shows whether the mount, the detector and the policy do
+what you expect, and it gives you a measured speed for your hardware.
+
+There is no dry-run or file-count option today: `bulk_ingest.py` has no such flag and
+the start request accepts only the fields in the flags table below. The closest you
+can get is to limit the input yourself.
+
+The simplest trial is a small sub-folder:
+
+```bash
+docker compose -p <project> exec api python scripts/curation/bulk_ingest.py \
+  --project nas-photos --folder /data/source/2024-03-sat \
+  --api-base http://localhost:8000/curation --source nas-trial
+```
+
+Or a manifest. It is a text file with one container path per line (or JSON Lines with
+a `path` field; blank lines and `#` lines are skipped). **The manifest itself must lie
+under a source root**, because the API checks its path like an image path. A manifest
+in `./data` or `/tmp` is refused with `bulk_ingest_invalid_source`. Write it on the
+host share, or somewhere under the same root:
+
+```bash
+find /srv/nas/photos -type f -iname '*.jpg' | head -n 300 \
+  | sed 's#^/srv/nas/photos#/data/source#' > /srv/nas/photos/trial.txt
+wc -l /srv/nas/photos/trial.txt
+```
+
+If the share is read-only for you on the host, use the sub-folder form.
+
+Run it. The output below is from a real run of 300 public COCO photos on the local
+test stack (project `cwlife-nas-trial`, one RTX A6000 shared with other work). On that
+stack the photos sat in the project's upload root rather than `/data/source`, so the
+path in the first line differs from yours:
+
+```bash
+docker compose -p <project> exec api python scripts/curation/bulk_ingest.py \
+  --project nas-photos --manifest /data/source/trial.txt \
+  --api-base http://localhost:8000/curation --source nas-trial
+```
+
+```text
+started run bulk_20261013T231156_e14c70f9 on manifest /var/lib/openprocessor/projects/cwlife-nas-trial/uploads/trial.txt
+running                48/300 ingested 48 duplicate 0 failed 0 | 7.9 img/s eta 0m32s
+completed              300/300 ingested 300 duplicate 0 failed 0 | 26.6 img/s eta --
+run bulk_20261013T231156_e14c70f9: completed
+  discovered 300, ingested 300, duplicates 0, failed 0, skipped (already stored) 0
+  crops 1926, embedded 1926, not embedded 0 (0 encoder failures)
+  26.13 img/s over 12s
+  stage seconds: embed 1603.0s, batch_requests 172.9s, opensearch_write 142.5s, ...
+```
+
+The command exits 0. Read three things from this:
+
+- **Speed.** `images / seconds` is your real rate (here 300 in 12 s). You use it in step 9.
+- **Items per image.** 1,926 crops from 300 images is 6.4 per image with the full
+  80-class detector. This number drives the size of the index (step 11).
+- **Stage seconds.** They are summed over all parallel batches, so they add up to far
+  more than the wall time. Compare stages with each other, not with the clock.
+
+Then check the result:
+
+- Open the project in Cropwright and look at the review page. Thumbnails must load.
+  If they 404, the workers do not have the mount (step 2).
+- Preview what a different policy would cost on this stored data (read-only):
+
+  ```bash
+  curl -s -X POST http://localhost:4603/curation/projects/nas-photos/ingest/policy/preview \
+    -H 'content-type: application/json' -d '{"embedding": {"mode": "lazy"}}'
+  ```
+
+  The answer has `would_embed`, `would_not_embed`, a per-class table and
+  `estimated_vector_mb`. That last number counts raw 1,024-float vectors only
+  (`items x 1024 x 4` bytes), not index overhead.
+
+Keep the trial in the project if the result is good. Running the same images again
+costs almost nothing, because images already stored are recognised by content hash and
+reported as `duplicate`. In the same test project a repeat of the 300 images reported
+`duplicate 300`. If the trial showed a wrong policy, delete the project from the
+Projects page and start again, since a policy change does not rewrite stored items.
+
+## 6. Full run, command line
+
+```bash
+docker compose -p <project> exec api python scripts/curation/bulk_ingest.py \
+  --project nas-photos --folder /data/source \
+  --api-base http://localhost:8000/curation
+```
+
+Pass `--api-base http://localhost:8000/curation` whenever you run the script inside
+`api`: the API listens on port 8000 in the container, while the script's default
+points at host port 4603. On the host (with the repo's Python environment and
+`OPENSEARCH_URL` set) the default works.
+
+`--folder` and `--manifest` are paths inside the API container and must lie under a
+source root. The script prints a live progress line, then a summary, and exits with
+the run's outcome.
+
+| Flag | Meaning |
+|---|---|
+| `--folder PATH` | Walk this directory (recursive). One of `--folder`, `--manifest`, `--status`, `--cancel` is required. |
+| `--manifest PATH` | Text file of image paths. |
+| `--status RUN_ID` | Print one run's progress and exit. |
+| `--cancel RUN_ID` | Ask a live run to stop and exit. |
+| `--project SLUG` | Project to bind. Default `$OP_CURATION_PROJECT`, else `default`. |
+| `--api-base URL` | Curation API mount, no trailing slash. |
+| `--source TAG` | Provenance tag stored on each image (default `bulk_ingest`). |
+| `--extensions LIST` | Comma-separated extensions for `--folder` (default `jpg,jpeg,png`). |
+| `--batch-size N` | Images per request. Server default 16, maximum 64. |
+| `--concurrency N` | Requests in flight. Server default 16, maximum 32. |
+| `--poll-interval S` | Seconds between progress reads (default 2). |
+| `--no-wait` | Start the run and exit; follow it with `--status`. |
+| `--show-failures N` | Failed images printed at the end (default 20). |
+
+Exit codes: `0` completed, `1` completed with failed images, `2` failed (the run
+stopped), `130` cancelled.
+
+For a share the server cannot mount at all (a laptop, a remote or very slow share),
+`scripts/curation/ingest_upload.py --root DIR` reads the files on the client and
+uploads the bytes. Those bytes are copied into the project's upload root, so plan disk
+for them (step 11).
+
+## 7. Full run, Cropwright
+
+Open the project, go to the Ingest page and use **Bulk ingest (folder or manifest)**.
+The panel lists the source roots the server reports. Choose Folder or Manifest, enter
+the container path (for example `/data/source`), and press **Start bulk ingest**. Under
+**Advanced** you can change extensions, images per batch and batches in flight; the
+placeholders are the server's defaults.
+
+<Screenshot name="cropwright/ingest-bulk-panel-1600.png" alt="Cropwright ingest page with the bulk ingest panel and the list of source roots" caption="The bulk ingest panel: the server's source roots, folder or manifest, and Start" />
+
+The page shows what the server reports: images found so far, ingested, duplicate and
+failed counts, recent and overall speed, time left, and a "Where the time went" table.
+The run belongs to the server, so it keeps going when you close the page.
+
+<Screenshot name="cropwright/ingest-bulk-run-1600.png" alt="A bulk ingest run in progress with counts, speed and the stage table" caption="A run in progress" />
+
+More on the page: [Ingest in Cropwright](../cropwright/user-guide/ingest.md).
+
+## 8. Progress, cancel, resume, failures
+
+These routes are the same ones the script and Cropwright use:
+
+```bash
+B=http://localhost:4603/curation/projects/nas-photos/ingest/bulk
+curl -s $B                       # list runs
+curl -s $B/<run_id>              # one run
+curl -s -X POST $B/<run_id>/cancel
+curl -s "$B/<run_id>/failures?offset=0&limit=100"
+```
+
+- **Progress.** A run reports `status`, `progress.discovered`,
+  `progress.discovery_complete` and a table of seconds per stage. A folder is scanned
+  while it ingests, so `discovered` keeps growing until `discovery_complete` is true;
+  the script shows it as `120/5000+`.
+- **Cancel.** The run stops after the batches in flight. Images already stored stay
+  stored. In the script, Ctrl-C once cancels; Ctrl-C again detaches and leaves the run
+  to the server.
+- **Resume.** There is no resume route. Start the **same source** again (same kind,
+  same path, same extensions). If the earlier run was interrupted, failed, cancelled or
+  completed with errors, the server continues that run from its ledger and answers
+  `resumed: true`. A source whose last run completed cleanly starts a new run, and
+  every image already stored shows as a duplicate.
+- **One run at a time.** A second start while a run is live is refused with 409
+  `bulk_ingest_busy`.
+- **Failures.** Each failed image has its path, an error kind and the reason. Page
+  through them with `offset` and `limit` (up to 1,000). A real example, a manifest with
+  one stored photo and two missing paths, exits with code 1:
+
+  ```text
+  completed_with_errors  3/3 ingested 0 duplicate 1 failed 2 | 13.8 img/s eta --
+  run bulk_20261013T231230_78a9e0d7: completed_with_errors
+    discovered 3, ingested 0, duplicates 1, failed 2, skipped (already stored) 0
+    FAILED .../photos/set-a/missing-1.jpg [decode_failed] [Errno 2] No such file or directory: '...'
+    FAILED .../photos/set-a/missing-2.jpg [decode_failed] [Errno 2] No such file or directory: '...'
+    start the same source again to resume: images already stored are skipped
+  ```
+
+- **Automatic stop.** A run stops as `failed` after 5 batches in a row in which every
+  image failed (a detector or datastore that is down). Fix the cause and start the same
+  source again.
+- **What the folder walk skips.** It does not follow symbolic links, and a directory it
+  cannot list (permission denied, a broken link, a mount that dropped) is skipped
+  without an error. If the discovered count is lower than the files on the share, look
+  for links and unreadable directories first.
+
+## 9. How long will it take
+
+Take the rate from your trial, not from a table:
+
+```text
+hours = images / (images_per_second x 3600)
+```
+
+For example, 100,000 images at the 21 images per second measured below take
+100,000 / (21 x 3,600), about 1.3 hours.
+
+Measured rates, all on an RTX A6000, from
+[`docs/PERFORMANCE.md`](https://github.com/davidamacey/OpenProcessor/blob/main/docs/PERFORMANCE.md):
+
+| What | Rate | Section |
+|---|---|---|
+| Bulk ingest runner, public COCO frames (640 x 480), one A6000, 16 images per request, 16 requests in flight, policy `all` | 21.29 images/s | Bulk ingest runner |
+| Ingest end to end after the stage 2 changes, same kind of frames, one card | 28.81 to 29.07 images/s | End to end, before and after |
+| The same, two cards | 55.08 images/s | End to end, before and after |
+| 12 to 24 MP photos, `/ingest/batch`, CPU decode, detect and embed | 27.0 images/s | Decode once and the GPU decode |
+| The same photos with GPU decode | 35.0 images/s | Decode once and the GPU decode |
+| The same photos, GPU decode, detect only | 44.0 images/s | Decode once and the GPU decode |
+
+Host CPU per photo at bulk was 1.12 s on the CPU path and 0.34 s with GPU decode.
+
+These are A6000 numbers. The `minimal` and `standard` profiles and a 12 GB card were
+not measured, so expect different rates there and trust your trial.
+
+## 10. GPU decode for large photos
+
+Phone and camera photos are large. Decoding them on the CPU is the slow part, so
+ingest can decode JPEGs on the GPU.
+
+- `OP_INGEST_GPU_DECODE` defaults to on in the code. The installer writes `1` for the
+  `full` profile and `0` for `minimal` and `standard`, so an installed stack may
+  already have it off.
+- Only images of at least `OP_INGEST_GPU_MIN_MEGAPIXELS` (default 3.0) use it. Small
+  frames are faster on the CPU.
+- It needs about 8.5 GB more VRAM on the Triton card, loaded on first use. If the model
+  cannot load, every photo is decoded on the CPU instead.
+- A JPEG that is not a baseline 8-bit file falls back to the CPU; the counter
+  `op_ingest_decode_total` shows how many were taken either way.
+- It applies to the `/ingest/batch` path, which bulk ingest uses.
+
+To see whether it is on and whether the card has room:
+
+```bash
+./openprocessor gpu plan
+```
+
+Set `OP_INGEST_GPU_DECODE=0` or `1` in `.env` and recreate the services to change it.
+
+## 11. How much disk
+
+**Source images.** A folder ingest reads the files in place through a read-only mount
+and does not copy them. Uploads (the browser, or `ingest_upload.py`) store a copy under
+the project's upload root. The index holds metadata and vectors, not your originals.
+
+**Index size.** `docs/PERFORMANCE.md`, "Ingest cost per image", gives the cost per 1,000
+images for a 1,024-float vector per embedded item and one per image for the whole frame:
+
+| Per 1,000 images | Total |
+|---|---:|
+| Narrow detector (1.37 items per image), every item embedded | 22.4 MB |
+| Full 80-class vocabulary (7 items per image), every item embedded | 79.8 MB |
+| Full vocabulary, no item embedded | 21.0 MB |
+
+New projects use the Lucene vector engine, which stores about 4.5 KiB per item with
+whole documents included, against 8.6 KiB on the older faiss engine. That measurement
+and a linear extrapolation to a million items (about 4.4 GiB of items and 0.5 GiB of
+images, labelled there as a guide and not a run) are in the section "Stage 4". The
+table above predates Lucene, so treat it as an upper bound for new projects.
+
+**Use your own numbers.** Items per image depend on your photos and detector. Take it
+from the trial (`crops / images`), then run the policy preview from step 5: it reports
+`estimated_vector_mb` for the stored items.
+
+**Memory.** Search keeps the vector graph in RAM. The sizing note in
+`docs/design/storage_sizing_and_ingest_baselines.md` gives about 4.6 KB per vector for
+the HNSW graph and says to verify the formula against the OpenSearch documentation.
+The 100,000-vector runs used an 8 GB OpenSearch heap, and `docs/PERFORMANCE.md` advises
+keeping 8 GB for the build buffers and leaving the rest to the page cache. See also
+[Sizing and storage](../deployment/sizing-and-storage.mdx).
+
+Check free space on the Docker data volume before a long run:
+
+```bash
+df -h /var/lib/docker
+```
+
+## Troubleshooting
+
+| You see | Cause and fix |
+|---|---|
+| 503 `No detector configured for ingest` | Set `OP_INGEST_PRIMARY_DETECTOR_MODEL` to a Triton model name and restart `api`. |
+| 422 `bulk_ingest_invalid_source` | The folder or manifest path is not under a source root, or does not exist. Use the container path and check `ingest/bulk/config`. |
+| Thumbnails 404 and the VLM stage predicts 0 | A worker is missing the source mount (step 2) or the alias mount (step 3). |
+| 409 `bulk_ingest_busy` | Another run of the project is live. Watch it with `--status`, or cancel it. |
+| Fewer files discovered than on the share | Symbolic links are not followed and unreadable directories are skipped (step 8). |
+| Script cannot connect to `localhost:4603` | Inside `api` pass `--api-base http://localhost:8000/curation`. |
+| Run `failed` right after the start | Five all-failed batches in a row. Read `error` in `GET .../ingest/bulk/<run_id>`, fix the detector or OpenSearch, start the same source again. |

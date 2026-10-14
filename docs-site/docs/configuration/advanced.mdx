@@ -83,9 +83,9 @@ checkout rarely needs them.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `OP_SOURCE_ROOT` | `/data/source` | Container path item paths resolve against; must match the mount on `api` and the detection worker |
-| `OP_SOURCE_ROOT_HOST` | `./data/source` | Host side of that mount |
-| `OP_SOURCE_PATH_ALIASES` | unset | Extra named roots, JSON object or `alias=path,...`, served at `GET /curation/projects/{project}/images/root/{alias}` |
+| `OP_SOURCE_ROOT` | `/data/source` | Container path item paths resolve against; must match the mount on all three services below |
+| `OP_SOURCE_ROOT_HOST` | `./data/source` in a source checkout; `./data` when the installer wrote `.env` | Host side of that mount, read-only. Mounted by `api`, `curation-detection-worker` and `curation-auto-label-worker`; recreate all three after changing it (`./openprocessor start`) |
+| `OP_SOURCE_PATH_ALIASES` | unset | Extra named roots, JSON object or `alias=path,...`, served at `GET /curation/projects/{project}/images/root/{alias}`. Compose does not mount them: bind-mount each alias path into the same three services with your own compose override file |
 | `OP_EXPORT_KEEP_LAST` | `5` | Keep-last retention for auto-named exports under each project's exports directory; `0` keeps all |
 | `OP_STATE_DIR` | `/var/lib/openprocessor` | Persistent state; projects nest under it |
 | `OP_CROP_CACHE_DIR` | `/dev/shm/openprocessor_crops` | Crop cache (compose points it at a dedicated volume) |
@@ -105,6 +105,12 @@ checkout rarely needs them.
 | `OP_REGION_DRAIN_STATE_DIR` | `/jobs/region_drain` (shared, so every uvicorn worker sees one streak) |
 
 All of these are served back on `GET /curation/projects/{project}/ingest/config`.
+
+GPU decode for large photos has two settings. `OP_INGEST_GPU_DECODE` has a code
+default of on, and the installer writes `1` for the `full` profile and `0` for
+`minimal` and `standard`. `OP_INGEST_GPU_MIN_MEGAPIXELS` (default `3.0`) is the
+size gate: smaller images stay on the CPU path, and so does any image the GPU
+path cannot decode.
 
 ## Ingest item detectors
 
@@ -144,7 +150,7 @@ deactivates).
 
 | Variable | Meaning |
 |---|---|
-| `OP_REGION_PROFILE_PATH` | Load a profile JSON. This is a **container** path; compose mounts `./examples` at `/app/examples` read-only. `examples/region_profiles/` holds worked examples, including `vehicle_wheel.json` |
+| `OP_REGION_PROFILE_PATH` | Load a profile JSON. This is a **container** path. Release images bake `examples/` in at `/app/examples`; in a source checkout `docker-compose.dev.yml` mounts `./examples` there read-only. `examples/region_profiles/` holds worked examples, including `vehicle_wheel.json` |
 | `OP_REGION_PROFILE` | Select a profile your own startup code registered by name (an unknown name fails at startup) |
 | `OP_REGION_DETECTION_<FIELD>` | Per-field overrides, e.g. `_NAME`, `_DETECTOR_MODEL`, `_SEGMENTER_TEXT_PROMPT`, `_SECONDARY_SHAPE_GROUPS` |
 | `OP_REGION_DETECTION_TEXT_READER` | `vlm`, `ocr`, `vlm_then_ocr` (default), `both`, or `none` for a text-free region |

@@ -17,8 +17,8 @@ title: Health and stall reasons
 | `GET /connection_pool_info` | Shared Triton gRPC client stats | |
 | `GET /` | Service info | Versions, loaded model names, Triton URL, GPU availability |
 
-`make status`, `make models-list` and `./scripts/openprocessor.sh status`
-wrap these for the terminal.
+`make status`, `make models-list`, `./openprocessor status` and
+`./openprocessor health` wrap these for the terminal.
 
 ## Curation health
 
@@ -142,15 +142,22 @@ curl -s -X POST "$API/curation/projects/$P/reprocess" -H 'content-type: applicat
   `POST .../crops/{crop_id}/reprocess` are the one-target forms.
 
 `scripts/curation/requeue_regions.py` is a client of this route (dry run by
-default):
+default). It ships in the `api` image, so run it there (add `-p <project>` to
+`docker compose` if your stack has a custom compose project name):
 
 ```bash
-python3 scripts/curation/requeue_regions.py --project $P --status detection_failed
-python3 scripts/curation/requeue_regions.py --project $P --status detection_failed --apply
+R="docker compose exec -T api python scripts/curation/requeue_regions.py"
+$R --project $P --status detection_failed
+$R --project $P --status detection_failed --apply
 # filters: --reason, --detector, --missing-provenance, --to pending_verification
 # (re-verify only)
-python3 scripts/curation/requeue_regions.py --project $P --missing-status --apply   # items that predate the region profile
+$R --project $P --missing-status --apply   # items that predate the region profile
 ```
+
+The dry run (`--status detection_failed`, no `--apply`) was run inside the `api`
+container against a public sample project. It printed
+`detection_failed -> pending_detection: 0 items selected` and
+`Dry-run only. Pass --apply to re-run.` The `--apply` form was not run.
 
 A VLM that keeps answering with no verdict does not loop forever: after
 `OP_REGION_WORKER_MAX_NO_VERDICT_ATTEMPTS` (default 3) replies, the

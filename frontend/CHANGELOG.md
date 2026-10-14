@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   seconds per stage), cancel, resume, and read the failed images with their reasons. Everything shown and every
   allowed action (`can_cancel`, `can_resume`) comes from the backend's `/ingest/bulk*` routes.
 
+### Changed
+
+- `scripts/capture_docs_screenshots.py` gains states for the bulk-ingest panel (idle, running, failures), the ingest
+  policy page, a project with its VLM off, the audit page, a cluster page, the dataset imports list and the prompt-pack,
+  region-profile and open-vocabulary lists. `scripts/docs_screenshot_fixtures.py` gains `bulk` and `vlm-off` to set up
+  throwaway `cwlife-*` projects for them.
+
 ## [0.5.0] - 2026-10-09
 
 Cropwright joins the OpenProcessor repository as `frontend/` and from here on is versioned with

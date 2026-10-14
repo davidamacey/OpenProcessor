@@ -20,8 +20,15 @@ the network, or a hosted API.
   limits. The API key is never stored. An endpoint only holds
   `api_key_ref`, a pointer to where the key lives.
 - **Built-in `env` endpoint.** Built from `OP_VLM_URL`, `OP_VLM_MODEL` and
-  `OP_VLM_API_KEY`. It is read-only. It is the default a new project runs.
-  Clone it to get an editable copy.
+  `OP_VLM_API_KEY`. It is read-only. Clone it to get an editable copy.
+  It is also what a project runs when nobody activated anything for it: with
+  `OP_VLM_URL` set, **every project that never activated an endpoint labels with it**
+  and `curation-vlm-worker` starts suggesting classes for it. The active
+  endpoint then shows `"source": "env"`. To stop that for a project, use the
+  explicit off state below. (Making this opt-in is issue #282.)
+- **Off.** A project can be switched off explicitly. That is a stored state
+  (`source` is `off`, `active.name` is null), not the same as never having
+  activated anything.
 - **Key references.** `secret:<slug>` names a file `<slug>` in the secrets
   directory (`OP_VLM_SECRETS_DIR`, a read-only mount of `secrets/vlm`). The
   reference `env:OP_VLM_API_KEY` is valid only on the built-in endpoint.
@@ -202,6 +209,19 @@ other activation calls) has:
 Workers swap to a newly activated endpoint at a quiet point, so `applied`
 can lag briefly.
 
+### Turn the VLM off for a project
+
+`deactivate` stores the explicit `off` state. After it, a call that needs the
+project's VLM and does not name an endpoint is refused with 409
+`vlm_not_configured`, and the VLM worker idles for that project. It does not
+touch the registry or other projects. To turn it back on, activate an endpoint
+(`env` for the built-in one).
+
+To keep the VLM available for explicit runs but stop the automated writers,
+set the VLM policy to `scope: off` instead (see
+[Scope and budget](#scope-and-budget)). When to use which, and the other
+pipeline settings, are in [Pipeline modes](./pipeline-modes.mdx).
+
 ```bash
 curl -s "$API/curation/projects/cars/vlm/endpoints/active"
 
@@ -367,6 +387,12 @@ its VLM stage reports why (`skipped` with the reason).
 ## Cropwright
 
 <Screenshot
+  name="cropwright/vlm-endpoint-off-1600.png"
+  alt="Models page for a project whose VLM is switched off"
+  caption="A project with its VLM deactivated: no active endpoint (public sample project)"
+/>
+
+<Screenshot
   name="vlm-models-1600.png"
   alt="Models page with the VLM endpoint registry, the local model section and the model choices table"
   caption="The endpoint registry (locality, status, last probe) and the model choices table (captured from Cropwright against the public COCO sample projects)"
@@ -376,6 +402,7 @@ its VLM stage reports why (`skipped` with the reason).
 
 - [Prompt packs](./prompt-packs.mdx)
 - [Region profiles](./region-profiles.mdx)
+- [Pipeline modes](./pipeline-modes.mdx)
 - [Multi-box regions](./multi-box-regions.mdx)
 - [Settings and configuration](./settings-and-config.mdx)
 - [Use your own domain](./use-your-own-domain.mdx)

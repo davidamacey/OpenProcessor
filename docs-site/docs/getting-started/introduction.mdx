@@ -8,7 +8,7 @@ title: Introduction
 OpenProcessor is a **self-hosted visual AI backend built on NVIDIA Triton
 Inference Server**. One FastAPI service (`api`, port `4603`) puts
 TensorRT-accelerated detection, face recognition, image/text embeddings,
-OCR and vector search behind a single REST API. An optional, experimental
+OCR and vector search behind a single REST API. An optional
 **curation subsystem** adds an active-learning dataset backend on top of
 the same models: ingest, clustering, review queues, VLM-assisted labeling,
 export, training, model comparison and promotion back into Triton.
@@ -26,7 +26,7 @@ It is licensed **AGPL-3.0-or-later** (see [Licenses](../reference/licenses.mdx))
 | OCR | `/ocr/predict`, `/ocr/batch` | PP-OCRv5 detection + recognition, orchestrated by a Triton Python-backend (BLS) model |
 | Combined analysis | `/analyze`, `/analyze/batch` | All of the above on one image |
 | Ingest | `/ingest`, `/ingest/batch`, `/ingest/directory` | Indexes global, face, object and OCR documents into OpenSearch |
-| Curation (experimental) | everything under `/curation`; data routes under `/curation/projects/{project}` | PE-Core embeddings, your own detector, an optional VLM, segmenter and trainer |
+| Curation | everything under `/curation`; data routes under `/curation/projects/{project}` | PE-Core embeddings, your own detector, an optional VLM, segmenter and trainer |
 
 Every core route is also mounted under `/v1` (for example `/v1/detect`).
 The `/curation` surface has a single, unversioned prefix. See the
@@ -53,9 +53,10 @@ together are on the [Architecture](../architecture/overview.mdx) page.
 The curation subsystem is **domain-agnostic**: nothing about "what an item
 or a region of interest is" is hardcoded. It is **bring-your-own-model**:
 you supply the item detector, and optionally a VLM, a region detector and
-training data. It ships **opt-in** behind the `curation` compose profile, is
-**experimental** in v0.5.0 (no backward-compatibility guarantee yet), and,
-like the rest of the API, has **no authentication**.
+training data. It ships **opt-in** behind the `curation` compose profile and,
+like the rest of the API, has **no authentication**. v0.5.0 keeps no
+compatibility shims: a renamed environment variable is rejected at startup,
+not translated.
 
 What a deployment configures, and where:
 
@@ -104,4 +105,5 @@ required to use OpenProcessor.
 - Roughly 30-60 minutes on first start for one-time TensorRT compilation;
   later starts take seconds.
 
-Next: [Quick start](./quick-start.mdx).
+Next: [Choose your path](./choose-your-path.mdx) to pick between the
+inference API and curation, then the [Quick start](./quick-start.mdx).

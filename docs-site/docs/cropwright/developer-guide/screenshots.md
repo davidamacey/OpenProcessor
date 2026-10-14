@@ -5,56 +5,24 @@ title: Screenshots
 
 # Capturing documentation screenshots
 
-Every screenshot in these docs (the homepage showcase and any
-`<Screenshot>` slot in a doc page) must come from a Cropwright instance
-pointed at an OpenProcessor backend holding **public sample data only** —
-COCO val2017 (`make sample-coco` in the OpenProcessor checkout) or the
-Open Images "Vehicle registration plate" subset (`make sample-plates`).
-
-**Never** capture from, or commit an image sourced from, a real deployment
-— its imagery, class names, and counts are not public data.
+How to run the capture script, the public-data rule, the fixtures and
+`make docs-screenshots` are in
+[Screenshots and image credits](../../developer-guide/screenshots.mdx#cropwright-screenshots).
+This page lists what is specific to the Cropwright UI: the read-only
+allow-list and the states each slot shows. Every screenshot must come from
+a project that holds public sample data only (COCO or Open Images plates).
 
 ## Image credits
 
-The screenshots in these docs show photographs from the
-[COCO](https://cocodataset.org) val2017 set and the
+The screenshots show photographs from the [COCO](https://cocodataset.org)
+val2017 set and the
 [Open Images](https://storage.googleapis.com/openimages/web/index.html)
-"Vehicle registration plate" subset. COCO images are from Flickr under
-their owners' Creative Commons licenses; Open Images images are listed by
-their authors as CC BY 2.0. Annotations and boxes shown are produced by
-Cropwright and OpenProcessor, not by either dataset.
+"Vehicle registration plate" subset. See
+[Image credits](../../developer-guide/screenshots.mdx#image-credits) for
+the licenses. Boxes, labels and scores shown are produced by OpenProcessor
+and drawn by Cropwright, not by either dataset.
 
-The state screenshots (projects, combine, prompt packs, reprocess, models)
-show only photographs from COCO: T.-Y. Lin et al., "Microsoft COCO: Common
-Objects in Context", ECCV 2014 (https://cocodataset.org). COCO annotations
-are CC BY 4.0; each image remains under its Flickr owner's Creative Commons
-license (per-image license and author are in the COCO annotation files).
-
-## Capture script
-
-`scripts/capture_docs_screenshots.py` (repo root) drives a real browser
-against a running Cropwright instance and writes full-page PNGs at 1600px
-and 800px wide into `docs-site/static/img/screenshots/cropwright/`. Only the 1600px
-images are committed; the 800px ones are for checking the narrow layout.
-The capture is read-only: every request other than GET/HEAD is aborted,
-except the small explicit allow-list below.
-
-```bash
-# once, to provision the Playwright venv used by the e2e suite
-npm run test:e2e
-
-e2e/.venv/bin/python scripts/capture_docs_screenshots.py \
-  --base-url http://localhost:<port-of-your-public-data-instance> \
-  --project <public-sample-project-slug>
-```
-
-`--project` prefixes the per-project routes with `/p/<slug>` (the bare paths
-would otherwise open the default, empty, project). `--only <name>...` captures
-just those routes or states; the scripted states (a dialog opened, a crop
-selected, a pack test run) live in the script's `STATES` and are captured at
-1600px only. A state only opens and looks: nothing is saved or confirmed.
-
-### Allow-listed side-effect-free calls
+## Allow-listed side-effect-free calls
 
 Besides GET/HEAD the guard (`READ_ONLY_CALLS` in the script) lets through
 exactly these calls, each of which writes nothing server-side:
@@ -72,39 +40,13 @@ exactly these calls, each of which writes nothing server-side:
 | `POST .../region_profiles/validate_segmenter_prompt` | "Check segmenter prompt" (a text-only check) |
 | `POST .../open_vocab/validate`, `.../open_vocab/test` | open-vocabulary validation and "Test a target" (runs the segmenter on one stored image, writes nothing) |
 
-### Fixtures that need a write
-
-A few slots show a state that only exists after a write (a paused project, a
-combine job, an editable prompt pack or region profile, a running job that
-blocks a delete). `scripts/docs_screenshot_fixtures.py setup|teardown` creates
-and removes throwaway projects whose slug starts with `cwlife-`; every write
-asserts that prefix first, and `teardown` waits for the asynchronous delete.
-The browser stays read-only throughout.
-
-The exact list of routes/states to capture is **not hardcoded in the
-script** — it reads `frontend/scripts/screenshot_routes.json`. Add a route there
-when a doc page gains a new `<Screenshot name="cropwright/...">` slot.
-
-## Preconditions
-
-1. `<repo>/OpenProcessor` (or another reachable checkout) running with
-   `make sample-coco` (and, for the region example, `make sample-plates`)
-   already ingested through `/ingest`.
-2. Cropwright pointed at that backend and reachable at the URL passed to
-   `--base-url`.
-3. Enough clusters/reviewed items exist that the pages being captured
-   aren't showing empty states (unless an empty state is the thing being
-   documented).
-
-Run the script, review each PNG for anything that leaked (hostnames,
-paths, unexpected text), then commit them under
-`docs-site/static/img/screenshots/cropwright/`.
-
 ## Slots for the project, import, configuration and VLM pages
 
+Fixtures that need a write are described in
+[Screenshots and image credits](../../developer-guide/screenshots.mdx#states-that-need-data-you-write-first).
 The import, multi-box and region-profile-test slots come from the `sample-coco-import` and `sample-coco-vehicles` projects (`IMPORT_PREVIEW_PATH` names a server path under an allowed source root, e.g. the project's uploaded archive). The region-profile test reads "not eligible" because the sample items carry no vehicle parent class; the candidates are still drawn. Every slot has its image; a slot added later renders as "pending" until it is captured. Capture them against a backend holding public sample
 data (never from a real deployment). Rows marked **route** are in
-`screenshot_routes.json` and the script captures them as-is. Rows marked
+`frontend/scripts/screenshot_routes.json` and the script captures them as-is. Rows marked
 **state** need the page put into a particular state first (a dialog open, an
 item selected) and, because the script aborts every non-GET request, either
 a manual capture or a small extension that drives the clicks read-only.
@@ -133,7 +75,7 @@ a manual capture or a small extension that drives the clicks read-only.
 | `models-sharing` | `/models` | state | The owner's model marked "Shared with other projects" with Stop sharing |
 | `models-unshare-force` | `/models` | state | The 409 in-use list (project and profile) and the Unshare anyway button, never armed |
 
-The routes in `screenshot_routes.json` use bare paths, which redirect to the
+The routes in `frontend/scripts/screenshot_routes.json` use bare paths, which redirect to the
 default project; the script follows the redirect. Check each capture for
 anything private: project slugs, host names, secret reference names and file
 paths must be sample-data values.
@@ -156,10 +98,10 @@ model twice there and the page stays on "Loading...".
 value; the "host has it" state needs a key file on the host, which the sample
 stack does not have.
 
-## Slots for the v0.4.0 features
+## Slots for the region, embedding and import-lock features
 
-These sixteen slots show the final v0.4.0 backend. They are scripted states
-(`--only <name>`) in `scripts/capture_docs_screenshots.py`, 1600px only (none of
+These sixteen slots are scripted states
+(`--only <name>`) in `frontend/scripts/capture_docs_screenshots.py`, 1600px only (none of
 these layouts is narrow-sensitive). Two environment variables pick the projects:
 `IMPORT_PROJECT=sample-coco-import-v2` and `LIFE_PROJECT=<the throwaway cwlife- project>`.
 

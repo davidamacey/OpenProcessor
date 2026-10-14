@@ -17,14 +17,63 @@ title: Deployment and GPU sizing
 
 ## GPU profiles
 
-`scripts/setup.sh` detects your GPU and picks one; switch later with
-`./scripts/openprocessor.sh profile <name>`.
+A profile (`minimal`, `standard` or `full`) is a set of **Triton model settings**. It
+does not choose which models exist. `scripts/setup.sh` and the installer detect your
+GPU and pick one from its VRAM.
 
-| Profile | VRAM | Example GPUs | Approx. throughput |
-|---|---|---|---|
-| `minimal` | 6-8 GB | RTX 3060, RTX 4060 | ~5 RPS |
-| `standard` | 12-24 GB | RTX 3080, RTX 4090 | ~15 RPS |
-| `full` | 48 GB+ | A6000, A100 | ~50 RPS |
+| Profile | VRAM | Example GPUs | Triton instances per model | Max batch | `ocr_pipeline` instances | GPU decode written to `.env` |
+|---|---|---|---|---|---|---|
+| `minimal` | 6-8 GB | RTX 3060, RTX 4060 | 1 | 16 | 1 | `OP_INGEST_GPU_DECODE=0` |
+| `standard` | 12-24 GB | RTX 3080, RTX 4090 | 2 | 32 | 2 | `0` |
+| `full` | 48 GB+ | A6000, A100 | 4 | 64 | 4 | `1` |
+
+The values are in `config_templates/profiles/*.json`. We have not measured a throughput
+figure per profile; the measured rows are in [Measured performance](#measured-performance)
+below and in `docs/PERFORMANCE.md`, and they come from one RTX A6000.
+
+What a profile changes, and what it does not:
+
+- **It rewrites `models/<name>/config.pbtxt`** for the YOLO, SCRFD, ArcFace, MobileCLIP and
+  PaddleOCR models and `ocr_pipeline`: instance count, batch sizes and the GPU id
+  (`gpus: [ 0 ]`). These are tracked files, so switching a profile in a checkout shows up
+  in `git status`. The PE encoders are not touched. Triton reads them when it starts.
+- **It writes `GPU_PROFILE` and `OP_INGEST_GPU_DECODE` to `.env`**, but only when there is no
+  `.env` yet. The installer uses `GPU_PROFILE` for its model setup, and the API reads
+  `OP_INGEST_GPU_DECODE`.
+- **It does not change the model list.** The Triton load list is fixed in
+  `docker-compose.yml`. A model that was never exported stays unloaded and the server
+  keeps running (`--exit-on-error=false`). `scripts/setup.sh --profile=minimal` exports the
+  essential models only, with no OCR.
+- **`TRITON_WORKERS`, `MAX_BATCH_SIZE` and `SHM_SIZE` in `.env` are not read by anything.**
+  The API runs 32 uvicorn workers and every service has `shm_size: 8g` in
+  `docker-compose.yml`, whatever the profile says. To change either, edit the compose
+  file or use your own override file.
+- **The `docker-compose.override.yml` that `setup.sh` writes is not loaded.** `setup.sh`,
+  `./openprocessor` and `make` all pass explicit `-f` files, so Compose does not pick the
+  file up automatically (a bare `docker compose up` in the directory would). `./openprocessor`
+  never loads override files you add.
+
+### Switching profile later
+
+`./openprocessor profile <name>` does not switch profiles cleanly yet:
+(issue #281). It needs a checkout. It regenerates the Triton configs, which works,
+but with an existing `.env` it leaves `GPU_PROFILE` and `OP_INGEST_GPU_DECODE` alone, and writes
+an override file the CLI never loads. Until it is fixed, switch by hand:
+
+```bash
+# not run on a stack. The generation step below was run on a scratch checkout with no .env.
+./openprocessor profile standard      # rewrites models/*/config.pbtxt
+# edit .env: set GPU_PROFILE=standard and OP_INGEST_GPU_DECODE=0 (or 1)
+./openprocessor restart triton-server
+./openprocessor gpu plan              # shows the GPU decode state and the VRAM it needs
+```
+
+Leave off the optional second argument (a GPU id): it writes that id into every
+`config.pbtxt`.
+
+A checkout also needs `COMPOSE_PROJECT_NAME` in `.env` before `./openprocessor` will
+run; a `.env` made by `scripts/setup.sh` or copied from `env.template` does not set it.
+Add `COMPOSE_PROJECT_NAME=openprocessor` (or your project name).
 
 ## Core Triton loadout
 
@@ -111,8 +160,8 @@ All default to `0`. Set each explicitly: `.env` values are not
 shell-expanded, so one can't reference another. The trainer accepts a
 single id from the variable; a multi-GPU trainer (`OP_TRAIN_GPU_ORDER=0,2`)
 also needs a compose override file listing the same `device_ids` in the
-same order. A setup-generated `docker-compose.override.yml` pins Triton
-and the API itself and takes precedence over these variables.
+same order. The `docker-compose.override.yml` that `setup.sh` writes is never
+loaded (see [GPU profiles](#gpu-profiles)), so it does not affect these variables.
 
 Example layout on a three-GPU host (one card per heavy tenant):
 

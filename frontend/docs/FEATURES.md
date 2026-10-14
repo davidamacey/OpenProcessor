@@ -5,11 +5,13 @@ A route-by-route walkthrough of what Cropwright does. See the main
 [CLAUDE.md](../CLAUDE.md) for the authoritative, detailed route and
 keyboard-shortcut tables.
 
-Screenshots are not published yet. Every public screenshot will be
-captured from a fresh-start run on public datasets only (COCO val2017 for
-the main flow, license-checked Open Images "Vehicle registration plate"
-images for the region example), which the backend fetches and Cropwright
-never bundles.
+Screenshots are published with the documentation site, in
+`docs-site/static/img/screenshots/cropwright/`, and embedded on the pages under
+`docs-site/docs/cropwright/user-guide/`. Each one is captured from a run on
+public datasets only (COCO val2017 for the main flow, license-checked Open
+Images "Vehicle registration plate" images for the region example), which the
+backend fetches and Cropwright never bundles. The user guide there is the
+task-oriented version of this tour.
 
 Everything below that depends on an optional backend feature is **absent,
 not broken**, when the backend doesn't serve it: the nav link or page

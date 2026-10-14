@@ -11,8 +11,8 @@ but backward compatibility across releases is not guaranteed until it
 graduates. It ships opt-in behind the `curation` compose profile.
 :::
 
-The generated contract, `contracts/openapi/curation.json`, lists **237
-method routes** and is the source of truth for every path, parameter and
+The generated contract, `contracts/openapi/curation.json`, lists every
+route and is the source of truth for every path, parameter and
 schema. This page groups them by area. Request models reject unknown keys
 (`extra='forbid'`), so a stale or misspelled field is a `422`, never a
 silent no-op. Consumers should read the mount prefix (`OP_API_PREFIX`,

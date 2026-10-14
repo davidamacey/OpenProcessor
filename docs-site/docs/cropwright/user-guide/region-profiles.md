@@ -5,13 +5,11 @@ title: Region-profile editor
 
 # Region profiles (`/p/<project>/settings/region-profiles`)
 
-A **region profile** defines the region type this project works with: what to
-detect inside an item crop (a tag on a part, a plate on a vehicle, a defect
-zone), which models find and verify it, and whether text is read from it. The
-profile that is **active** drives every region screen (the region review tab,
-the region gallery, the box editor), so changing it is a deliberate act with
-an impact preview. The pages exist only when the backend serves region
-profiles.
+This page covers the editor. What a region profile is and its fields are in the
+[Region profiles guide](../../guides/region-profiles.mdx). The **active** profile
+drives every region screen (the region review tab, the region gallery, the box
+editor), so changing it shows an impact preview first. The pages exist only when
+the backend serves region profiles.
 
 ## The list
 

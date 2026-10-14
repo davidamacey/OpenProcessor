@@ -5,24 +5,82 @@ title: Ingest policy, filter and select
 
 # Ingest policy, filter and select
 
-Each project has an ingest policy that decides what is kept and what gets a
-vector when images are ingested. Read and change it with
-`GET/PUT /curation/projects/{project}/ingest/policy`; try a change first with
-`POST .../ingest/policy/preview`, which counts what would be embedded and
-estimates the storage.
+Each project has an ingest policy. It decides which detections an ingest keeps and
+which of them get an embedding vector. Set it **before** a large ingest (see
+[Ingest a large folder](./ingest-large-folder.mdx)): a policy applies to future
+ingests and explicit embed runs only. It never rewrites what is already stored.
 
-- **Detect filter**: keep detections by class name, confidence, box area, or the
-  N largest per image. Off by default.
-- **Embedding mode**: `all` (default), `selected` (only items that pass the
-  embedding criteria) or `lazy` (none until you run the embed action).
-- **Class resolution**: `proposal` (default, detections stay unlabeled
-  proposals) or `by_name` (a detector label that matches a registry class name
-  assigns that class as a machine label).
-- **Detector**: an optional per-project detector model, checked against Triton
-  when you save.
+A project with no saved policy stores and embeds every detection.
+
+## Read, try and save a policy
+
+```bash
+B=http://localhost:4603/curation/projects/<slug>/ingest/policy
+curl -s $B                                  # current policy and its revision
+curl -s -X POST $B/preview \
+  -H 'content-type: application/json' \
+  -d '{"embedding": {"mode": "selected", "classes": ["person"]}}'
+curl -s -X PUT $B -H 'content-type: application/json' \
+  -d '{"expected_revision": 0, "embedding": {"mode": "lazy"}}'
+```
+
+- `GET` returns the policy and its `revision` (0 until the first save).
+- `POST .../preview` is read-only. It runs the policy over the items already stored
+  and answers with `would_embed`, `would_not_embed`, `embedded_because_labeled`, a
+  per-class table (`by_class`) and `estimated_vector_mb`. That size counts raw
+  1,024-float vectors only, not index overhead. On a project with nothing stored it
+  returns zeros, so preview on your trial run.
+- `PUT` replaces the whole policy and needs `expected_revision`, the revision you read.
+  A stale value gets 409 `revision_conflict`: read again and retry. Class names that
+  match no detector label or registry class are saved anyway and listed in
+  `unknown_names`.
+
+## The fields
+
+**`detect`** filters detector output. A filtered detection is not stored at all. Every
+field is empty by default (keep everything), and the criteria combine with AND.
+
+| Field | Meaning |
+|---|---|
+| `classes` | Keep only these detector class names (a list is an OR, matched by name). |
+| `exclude_classes` | Drop these class names. |
+| `min_confidence` | 0 to 1. |
+| `min_box_area_frac` | 0 to 1, the box area as a fraction of the image. |
+| `max_per_image` | Keep the N best detections per image (at least 1). |
+| `class_resolution` | `proposal` (default): detections stay unlabeled proposals. `by_name`: a detector label that matches a registry class name assigns that class as a machine label. |
+
+**`embedding.mode`** decides which stored detections get a vector:
+
+| Mode | Behavior |
+|---|---|
+| `all` (default) | Every stored detection is embedded. |
+| `selected` | Only detections that meet the `embedding` criteria (`classes`, `min_confidence`, `min_box_area_frac`, `max_per_image`). At least one criterion is required; `selected` with none is refused. The rest are stored as `not_selected`. |
+| `lazy` | No detection is embedded at ingest. They are stored as `deferred`. |
+
+An item that already carries a human or imported label always gets a vector, whatever
+the mode.
+
+:::caution `lazy` still computes the whole-frame vector
+`lazy` skips the **detection** vectors only. The whole-frame embedding of each new image
+is still computed and stored, so ingest still runs the image encoder once per image. No
+policy field skips it today.
+:::
+
+**`detector`** is an optional per-project detector (`model`, `version`, `input_size`,
+`labels_path`) that replaces the deployment's primary model for this project. It is
+checked against Triton when you save: a model that cannot be served is refused (422), and
+an unreachable Triton gives 503. Leave it `null` to use `OP_INGEST_PRIMARY_DETECTOR_MODEL`.
+
+## Cost of a choice
+
+The vectors dominate the index size, so the mode is the main lever. The per-1,000-image
+figures for `all`, `selected` and `lazy` are in
+[Ingest a large folder](./ingest-large-folder.mdx#11-how-much-disk). Use the preview to
+get the number for your own data.
 
 Anything left without a vector can be embedded later with the `embed` scope of
-[Reprocess](./reprocess.mdx), or by the `embed_missing` stage of auto-label.
+[Reprocess](./reprocess.mdx), or by the `embed_missing` stage of auto-label. Items
+without a vector are excluded from clustering, similarity search and the VLM until then.
 
 ## Filter, select, act
 

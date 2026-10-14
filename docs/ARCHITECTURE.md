@@ -519,7 +519,7 @@ project isolation against code bugs, not against a caller of the API.
 - The API scales by uvicorn workers (`--workers`, default 32) within one host.
   All workers share the Triton pool settings per process and the file-backed
   event bus.
-- OpenSearch heap is sized from RAM by the installer (RAM/8, 1-8 GB). Each
+- OpenSearch heap is sized from RAM by the installer (half of RAM, clamped to 2-30 GB, `scripts/lib/opensearch_heap.sh`). Each
   project adds six indexes, so watch the shard budget
   ([INSTALLATION.md](../INSTALLATION.md#opensearch-heap-sizing)); creating a
   project past the capacity limit answers 409 with the capacity figures.
