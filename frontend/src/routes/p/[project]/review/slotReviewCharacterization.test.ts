@@ -34,9 +34,12 @@ import { installedQueueSlots } from '$lib/test/fixtures/installedQueueSlots';
 import { reservedHotkeyLetters } from '$lib/classHotkey';
 import { REVIEW_TABS, tabFromUrlId } from '$lib/reviewTabs';
 import { classesStore } from '$lib/stores/classes.svelte';
+import { reviewSource } from '$lib/testing/reviewPageSources';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const reviewPageSrc = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const keyboardSrc = reviewSource('lib/review/reviewKeyboard.svelte.ts');
+const editSrc = reviewSource('lib/review/reviewSlotEditController.svelte.ts');
+const slotActionsSrc = reviewSource('lib/review/reviewSlotActions.svelte.ts');
 const clustersPageSrc = readFileSync(
   path.resolve(here, '..', 'clusters', '+page.svelte'),
   'utf-8',
@@ -57,7 +60,7 @@ describe('T4: slot-tab keymap + reserved-letters invariant (Finding C.2)', () =>
     // mode for a region slot and a second slot. What's pinned here now is
     // just that the page delegates to it rather than re-inlining the
     // table.
-    expect(reviewPageSrc).toMatch(/buildSlotKeymap\(activeSlot, editMode, \{/);
+    expect(keyboardSrc).toMatch(/buildSlotKeymap\(activeSlot, editMode, \{/);
   });
 
   it('class-drop registration early-returns on a slot tab (the invariant behind Finding C.2)', () => {
@@ -66,7 +69,7 @@ describe('T4: slot-tab keymap + reserved-letters invariant (Finding C.2)', () =>
     // colliding with a class hotkey. The invariant is the extracted
     // isSlotSuppressedTab() predicate (src/lib/review/slotTabGuard.ts,
     // its own slotTabGuard.test.ts).
-    expect(reviewPageSrc).toMatch(/if \(isSlotSuppressedTab\(tab\)\) return;/);
+    expect(keyboardSrc).toMatch(/if \(isSlotSuppressedTab\(tab\)\) return;/);
   });
 
   it(
@@ -107,24 +110,24 @@ describe('T1/T2 (real extraction, P0.1/P0.3): per-crop abort map + undo-stack de
   // to them the way the plan requires (keyed by crop id, not cursor;
   // $state.raw for identity-correct removal).
   it('keys the slot-tab save-abort registry by crop id, not by cursor index', () => {
-    expect(reviewPageSrc).toMatch(/slotMetaAborts = new AbortRegistry\(\)/);
-    expect(reviewPageSrc).toMatch(/slotMetaAborts\.start\(id\)/);
-    expect(reviewPageSrc).toMatch(/slotMetaAborts\.finish\(id, ac\)/);
+    expect(editSrc).toMatch(/slotMetaAborts = new AbortRegistry\(\)/);
+    expect(editSrc).toMatch(/slotMetaAborts\.start\(id\)/);
+    expect(editSrc).toMatch(/slotMetaAborts\.finish\(id, ac\)/);
   });
 
   it('undo stack is $state.raw and delegates push/remove/pop to slotQueueOps', () => {
     // Deep reactivity would proxy pushed entries, so removeUndo's
     // identity-based filter could never match a pushed entry.
-    expect(reviewPageSrc).toMatch(
+    expect(slotActionsSrc).toMatch(
       /slotUndoStack = \$state\.raw<SlotUndoEntry\[\]>\(\[\]\)/,
     );
-    expect(reviewPageSrc).toMatch(/pushUndo\(slotUndoStack, entry, SLOT_UNDO_MAX\)/);
-    expect(reviewPageSrc).toMatch(/removeUndo\(slotUndoStack, entry\)/);
-    expect(reviewPageSrc).toMatch(/popUndo\(slotUndoStack\)/);
+    expect(slotActionsSrc).toMatch(/pushUndo\(slotUndoStack, entry, SLOT_UNDO_MAX\)/);
+    expect(slotActionsSrc).toMatch(/removeUndo\(slotUndoStack, entry\)/);
+    expect(slotActionsSrc).toMatch(/popUndo\(slotUndoStack\)/);
   });
 
   it('slotBack() re-insertion delegates to reinsertAt (clamped splice)', () => {
-    expect(reviewPageSrc).toMatch(/reinsertAt\(queue\.items, last\.insertAt, fresh\)/);
+    expect(slotActionsSrc).toMatch(/reinsertAt\(queue\.items, last\.insertAt, fresh\)/);
   });
 });
 
@@ -135,7 +138,7 @@ describe('T1-adjacent: frozen-viewport effect uses untrack for the seed read', (
     // the effect on every drag tick and overwrite the operator's
     // in-progress resize with the server snapshot — see plan §3.5 point 1
     // and the 2026-09-25 bbox-edit fix (the whole body is untracked now).
-    expect(reviewPageSrc).toMatch(/untrack\(\(\) => reseedForCrop\(id \?\? null\)\)/);
+    expect(editSrc).toMatch(/untrack\(\(\) => reseedForCrop\(id \?\? null\)\)/);
   });
 });
 

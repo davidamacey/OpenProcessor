@@ -3,11 +3,11 @@
  * set for the active crop's region slot and every write path over it,
  * following the existing factory-function convention
  * (`reviewController.svelte.ts`, `slotGalleryController.svelte.ts`):
- * `/review/+page.svelte` owns `queue`/`current`/`cursor` and hands them to
- * this controller by reference/accessor, rather than this file reaching
- * into the page directly. Extracted as its own module — not piled into
- * the already-3000-line page — per the same "extract a controller"
- * convention `reviewController.svelte.ts` set.
+ * `/review`'s queue loader (`reviewQueueLoader.svelte.ts`) owns
+ * `queue`/`current`/`cursor`, and the slot edit controller
+ * (`reviewSlotEditController.svelte.ts`) creates this one with the active
+ * slot and an `onitem` callback that patches the queue's copy, rather than
+ * this file reaching into the page directly.
  *
  * Write policy (thin frontend — every write is immediate, no Save button,
  * matching the rest of this app):

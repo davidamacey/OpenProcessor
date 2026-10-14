@@ -14,7 +14,7 @@
  * an entry to make a red run green — read the key from the keymap.
  *
  * Mutation-check: put `<kbd>D</kbd>` back into a scratch copy of
- * `review/+page.svelte`'s hint strip and this test goes red.
+ * `ReviewFilterBar.svelte`'s hint strip and this test goes red.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -35,7 +35,7 @@ const SKIP_FILES = new Set([
 /** Exact substrings allowed in one file, each with its reason. */
 const ALLOWED: Record<string, string[]> = {
   // §1.2: the class picker's listbox keys are fixed form keys.
-  'routes/p/[project]/review/+page.svelte': [
+  'lib/components/review/ClassPickerModal.svelte': [
     '<kbd>↑↓</kbd> navigate · <kbd>Enter</kbd> assign · <kbd>Esc</kbd> close',
   ],
 };
