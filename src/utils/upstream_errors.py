@@ -23,3 +23,13 @@ def describe_upstream_error(exc: BaseException) -> str:
     if isinstance(exc, httpx.HTTPError):
         return f'{type(exc).__name__}: request failed'
     return f'{type(exc).__name__}: {_URL.sub("<upstream>", str(exc))}'
+
+
+class UpstreamError(RuntimeError):
+    """A backing service failed, so the request cannot be answered. Routes map
+    it to a 503; ``reason`` is the stable code, the cause stays in the logs."""
+
+    def __init__(self, service: str, reason: str) -> None:
+        super().__init__(f'{service}: {reason}')
+        self.service = service
+        self.reason = reason

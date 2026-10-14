@@ -56,10 +56,9 @@ src/clients/occ_bulk.py	1	triage every return-empty handler in PR 3; ratchet: ma
 src/clients/occ_upsert.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/clients/opensearch/bulk.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
 src/clients/opensearch/client.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/clients/opensearch/clusters.py	5	triage every return-empty handler in PR 3; ratchet: may only go down
 src/clients/opensearch/indexes.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/clients/opensearch/ingest.py	7	triage every return-empty handler in PR 3; ratchet: may only go down
-src/clients/opensearch/ocr.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/clients/opensearch/ingest.py	5	triage every return-empty handler in PR 3; ratchet: may only go down
+src/clients/opensearch/ocr.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/clients/opensearch/search.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/clients/pe_encoder.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/clients/triton_pool.py	6	triage every return-empty handler in PR 3; ratchet: may only go down
@@ -95,7 +94,6 @@ src/routers/embed.py	1	triage every return-empty handler in PR 3; ratchet: may o
 src/routers/health.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/ingest/directory.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/ocr.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/query.py	10	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/clustering.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/config_store/activation_view.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/config_store/index.py	1	triage every return-empty handler in PR 3; ratchet: may only go down

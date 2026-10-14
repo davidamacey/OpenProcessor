@@ -19,6 +19,7 @@ from src.core.wire_json import WireJSONResponse
 from src.schemas.detection import ImageMetadata
 from src.services.ocr_service import OcrService, ocr_error_http
 from src.utils.retry import RetryExhaustedError
+from src.utils.upstream_errors import UpstreamError
 
 
 logger = logging.getLogger(__name__)
@@ -201,7 +202,7 @@ def ocr_predict(
 
     except HTTPException:
         raise
-    except RetryExhaustedError:
+    except (RetryExhaustedError, UpstreamError):
         raise
     except Exception as e:
         logger.error(f'OCR failed for {filename}: {e}')
@@ -393,7 +394,7 @@ async def search_by_ocr(
             }
         )
 
-    except RetryExhaustedError:
+    except (RetryExhaustedError, UpstreamError):
         raise
     except Exception as e:
         logger.error(f'OCR search failed for "{text}": {e}')

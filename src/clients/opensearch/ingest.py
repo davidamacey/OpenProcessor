@@ -13,6 +13,7 @@ from src.clients.opensearch.names import (
     get_class_name,
     get_cluster_index_name,
 )
+from src.utils.upstream_errors import UpstreamError
 
 
 if TYPE_CHECKING:
@@ -274,7 +275,7 @@ class IngestMixin:
 
         except Exception as e:
             logger.warning(f'Duplicate check failed: {e}')
-            return None
+            raise UpstreamError('opensearch', 'opensearch_unavailable') from e
 
     async def check_duplicates_by_hash_batch(
         self, imohashes: list[str]
@@ -326,4 +327,4 @@ class IngestMixin:
 
         except Exception as e:
             logger.warning(f'Batch duplicate check failed: {e}')
-            return results
+            raise UpstreamError('opensearch', 'opensearch_unavailable') from e

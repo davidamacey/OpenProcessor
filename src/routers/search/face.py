@@ -8,6 +8,7 @@ from fastapi import File, HTTPException, Query, UploadFile, status
 from src.core.dependencies import VisualSearchDep
 from src.routers.search._router import router
 from src.routers.search.models import FaceSearchResponse, FaceSearchResult
+from src.utils.upstream_errors import UpstreamError
 
 
 logger = logging.getLogger(__name__)
@@ -137,7 +138,7 @@ async def search_by_face(
             search_time_ms=round(search_time_ms, 2),
         )
 
-    except HTTPException:
+    except (HTTPException, UpstreamError):
         raise
     except Exception as e:
         logger.error(f'Face search failed: {e}')

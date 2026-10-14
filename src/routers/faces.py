@@ -22,6 +22,7 @@ from src.core.dependencies import VisualSearchDep
 from src.schemas.detection import ImageMetadata
 from src.services.inference import InferenceService
 from src.utils.retry import RetryExhaustedError
+from src.utils.upstream_errors import UpstreamError
 
 
 logger = logging.getLogger(__name__)
@@ -197,7 +198,7 @@ def detect_faces(
 
     except HTTPException:
         raise
-    except RetryExhaustedError:
+    except (RetryExhaustedError, UpstreamError):
         raise
     except Exception as e:
         logger.error(f'Face detection failed: {e}')
@@ -264,7 +265,7 @@ def recognize_faces(
 
     except HTTPException:
         raise
-    except RetryExhaustedError:
+    except (RetryExhaustedError, UpstreamError):
         raise
     except Exception as e:
         logger.error(f'Face recognition failed: {e}')
@@ -349,7 +350,7 @@ def verify_faces(
 
     except HTTPException:
         raise
-    except RetryExhaustedError:
+    except (RetryExhaustedError, UpstreamError):
         raise
     except Exception as e:
         logger.error(f'Face verification failed: {e}')
@@ -464,7 +465,7 @@ async def search_faces(
 
     except HTTPException:
         raise
-    except RetryExhaustedError:
+    except (RetryExhaustedError, UpstreamError):
         raise
     except Exception as e:
         logger.error(f'Face search failed: {e}')
@@ -586,7 +587,7 @@ async def identify_faces(
 
     except HTTPException:
         raise
-    except RetryExhaustedError:
+    except (RetryExhaustedError, UpstreamError):
         raise
     except Exception as e:
         logger.error(f'Face identification failed: {e}')

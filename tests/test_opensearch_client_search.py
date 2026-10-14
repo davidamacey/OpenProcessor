@@ -12,9 +12,8 @@ k-NN search against that index then failed with an OpenSearch error
 
 Two things are tested here without a real OpenSearch:
 
-1. ``_search_index`` now raises :class:`IndexMappingError` instead of
-   swallowing that specific error class, while still swallowing other,
-   genuinely transient search failures the old way (unchanged behavior).
+1. ``_search_index`` raises :class:`IndexMappingError` for that specific
+   error class and ``UpstreamError`` for any other search failure.
 2. ``OpenSearchClient.create_all_indexes()`` is idempotent (a no-op
    against an index that already exists), so calling it on every startup
    -- the actual fix in ``src/main.py`` -- is safe.
@@ -29,6 +28,7 @@ import pytest
 
 from src.clients.opensearch.client import OpenSearchClient
 from src.clients.opensearch.names import IndexMappingError, IndexName
+from src.utils.upstream_errors import UpstreamError
 
 
 @pytest.fixture
@@ -54,16 +54,14 @@ class TestSearchIndexSurfacesMappingErrors:
             await client.search_global(np.zeros(512, dtype=np.float32), top_k=5)
 
     @pytest.mark.asyncio
-    async def test_an_unrelated_search_failure_still_degrades_to_empty(
+    async def test_an_unrelated_search_failure_is_an_upstream_error(
         self, client: OpenSearchClient
     ) -> None:
-        """Genuinely transient errors (timeouts, connection refused, ...)
-        keep the pre-existing fail-soft behavior -- this fix is scoped to
-        the specific mapping-type failure, not a blanket 'raise on
-        anything' change."""
+        """A timeout or refused connection is an outage, not "no similar
+        images": it raises ``UpstreamError`` instead of returning ``[]``."""
         client.client.search = AsyncMock(side_effect=ConnectionError('connection refused'))
-        results = await client.search_global(np.zeros(512, dtype=np.float32), top_k=5)
-        assert results == []
+        with pytest.raises(UpstreamError):
+            await client.search_global(np.zeros(512, dtype=np.float32), top_k=5)
 
     @pytest.mark.asyncio
     async def test_a_healthy_index_returns_real_results(self, client: OpenSearchClient) -> None:

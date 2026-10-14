@@ -6,6 +6,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from src.clients.opensearch.names import IndexMappingError, IndexName
+from src.utils.upstream_errors import UpstreamError
 
 
 if TYPE_CHECKING:
@@ -231,7 +232,7 @@ class SearchMixin:
                     f'OpenSearchClient.create_all_indexes(force_recreate=True) directly.'
                 ) from e
             logger.error(f'Search failed on {index_name}: {e}')
-            return []
+            raise UpstreamError('opensearch', 'opensearch_unavailable') from e
 
     async def get_all_index_stats(self) -> dict[str, Any]:
         """``{index: {doc_count, size_bytes, exists}}`` for every core index
