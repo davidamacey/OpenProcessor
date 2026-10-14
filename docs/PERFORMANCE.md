@@ -3275,6 +3275,99 @@ one shard, no replica, 1 s refresh). Medians of 2 repetitions on a loaded host.
 - The 4-writer, 1,000-document default was not tuned past the points above; ingest throughput at the
   GPU-bound rate does not depend on it.
 
+### Ingest transports (#263)
+
+Question: would a gRPC ingest channel beat HTTP beyond noise? Decision protocol:
+`docs/design/ingest_surfaces_plan.md` section 8. **Decision: no. The rule says skip, nothing is built.**
+
+Measured by: `scripts/bench/ingest_transport_bench.py` (transport only, no pipeline, no GPU, no
+OpenSearch) and, for the pipeline side, `scripts/bench/baseline_suite.py --phases ingest --modes upload`,
+both on 2026-10-14 on the shared dev host (load average 5 to 6, other projects running; whole-host CPU busy
+10 to 15 percent in every transport run, GPU 2 with no foreign load in every sample of the pipeline runs).
+Medians with the minimum and maximum of 3 repetitions in parentheses. The server reads each image's bytes,
+computes the imohash the real route computes first and returns a `BatchIngestResponse`-sized result; the client
+is a separate process; HTTP is uvicorn (uvloop, httptools) with FastAPI `File` parsing, gRPC is `grpc.aio`
+with hand-framed byte messages (a protobuf `bytes` field adds about 5 bytes per message). Server and client
+CPU are `psutil` process times. Bytes on the wire are computed from request and response sizes plus header
+and HTTP/2 frame estimates, not captured. HTTP/2 multipart was not measured: hypercorn and h2 are not in
+the repo venv.
+
+Data: set A is the pinned COCO set (2,000 images, 640 x 480, 333 MB, 32 per request). Set B is **only 8**
+of the 500 pinned Commons photos (45 MB, 5.6 MB mean, 8 per request, sent 12 times for 96 images): the
+Wikimedia server answered 429 to the bulk download, so the 500 were not fetched. The transport share for
+set B uses the 1.10 CPU-seconds per image recorded above, not a new pipeline run (no set B pipeline run was
+made).
+
+**Transport only, set A** (2,000 images; an earlier full run, with the same picture, differs by less than the ranges shown; raw
+JSON kept outside the repo):
+
+| contender | clients | images/s | request p99 s | server CPU s/image | client CPU s/image | wire B/image |
+|---|---:|---:|---:|---:|---:|---:|
+| HTTP/1.1 multipart | 4 | 2433 (2303-2440) | 0.06 | 0.00039 (0.00038-0.00040) | 0.00041 | 166,863 |
+| HTTP/1.1 multipart | 16 | 2203 (2197-2515) | 0.26 | 0.00041 (0.00036-0.00042) | 0.00045 | 166,863 |
+| HTTP/1.1 multipart | 32 | 2244 (2147-2459) | 0.48 | 0.00039 (0.00037-0.00041) | 0.00044 | 166,863 |
+| gRPC client stream | 4 | 3310 (2432-3572) | 0.07 | 0.00049 (0.00046-0.00056) | 0.00030 | 166,826 |
+| gRPC client stream | 16 | 2919 (2770-3931) | 0.22 | 0.00046 (0.00042-0.00050) | 0.00031 | 166,826 |
+| gRPC client stream | 32 | 3145 (2888-3478) | 0.38 | 0.00043 (0.00042-0.00046) | 0.00031 | 166,826 |
+| gRPC unary | 4 | 3320 (3053-4382) | 0.07 | 0.00040 (0.00031-0.00045) | 0.00026 | 166,820 |
+| gRPC unary | 16 | 3452 (3180-3566) | 0.21 | 0.00038 (0.00038-0.00040) | 0.00029 | 166,820 |
+| gRPC unary | 32 | 3051 (2758-3620) | 0.44 | 0.00040 (0.00036-0.00042) | 0.00034 | 166,820 |
+
+**Transport only, set B** (8 photos x 12, 8 per request):
+
+| contender | clients | images/s | server CPU s/image | client CPU s/image | wire B/image | server peak RSS MB |
+|---|---:|---:|---:|---:|---:|---:|
+| HTTP/1.1 multipart | 4 | 79.8 (74.8-86.2) | 0.0245 (0.0235-0.0263) | 0.0045 | 5,865,195 | 535 |
+| HTTP/1.1 multipart | 16 | 87.2 (75.7-88.2) | 0.0272 (0.0243-0.0300) | 0.0043 | 5,865,195 | 549 |
+| HTTP/1.1 multipart | 32 | 81.3 (79.9-88.8) | 0.0265 (0.0250-0.0285) | 0.0044 | 5,865,195 | 661 |
+| gRPC client stream | 4 | 67.0 (54.2-68.7) | 0.0198 (0.0191-0.0217) | 0.0112 | 5,868,394 | 664 |
+| gRPC client stream | 16 | 56.7 (50.2-60.1) | 0.0191 (0.0181-0.0215) | 0.0130 | 5,868,394 | 1520 |
+| gRPC unary | 4 | 76.9 (73.3-83.8) | 0.0147 (0.0142-0.0152) | 0.0145 | 5,868,258 | 970 |
+| gRPC unary | 16 | 63.0 (61.7-70.3) | 0.0143 (0.0140-0.0146) | 0.0151 | 5,868,258 | 1295 |
+
+(The 32-client gRPC rows follow the same pattern; they are in the harness output.) On set B gRPC
+moves server CPU to the client (client CPU rises by 0.007 to 0.011 s per image while server CPU falls by
+0.005 to 0.013), uses more server memory, and is slower in median images/s than HTTP at every client count.
+
+**Amdahl bound and the rule.** Pipeline API CPU per image on set A, measured live on the same day through
+`/ingest/upload` (640 images, 16 clients x 32 per request, policy `all`, 3 repetitions, fresh project each):
+**0.072 (0.070-0.075) s** at **29.0 (28.9-29.2) images/s**, GPU 2 **90.5 (90.5-95.2) percent** busy, no
+foreign GPU load, 0 failed; Triton CPU 0.013 s per image. For set B: 1.10 s per image, 15 images/s, GPU
+bound by CPU decode (the Wave 0 findings above). The rule (saving of at least 10 percent of that
+CPU, with repetition ranges that do not overlap):
+
+| set | best server CPU saving of gRPC, s/image | share of pipeline API CPU | passes |
+|---|---:|---:|---|
+| A | 0.00002 (unary, 16 clients; negative or zero in 5 of 6 rows) | 0.03 percent | no |
+| B | 0.0129 (unary, 16 clients; ranges do not overlap) | 1.17 percent | no |
+
+The best case is 8.5 times below the 10 percent bar. On set B the bar would need a pipeline API CPU of
+under 0.13 s per image, against 1.0 to 1.3 s measured.
+
+**Reading.**
+
+- Transport is not where the time goes: 0.0004 s of server CPU per image on set A against 0.072 s for the
+  pipeline (0.6 percent), 0.025 against 1.10 on set B (2.2 percent). The ingest rate is bound by the GPU on set A
+  (90 percent busy) and by decode CPU on set B, not by the
+  wire, so a faster transport cannot raise images/s.
+- Bytes per image are the same to within 0.1 percent (a JPEG is already compressed; gRPC adds 5 bytes of
+  framing per message, multipart a boundary and a few header lines).
+- `POST .../ingest/batch` sends no image bytes at all (paths the API reads itself, under 100 bytes per image
+  on the wire), so a byte channel could only compete with `/ingest/upload`, and the client already spends
+  0.0004 s of CPU per image there.
+- Caveats: one host with other jobs running (the ranges show the noise; set A server CPU differences of
+  0.0001 s are inside it); client concurrency is asyncio tasks, not threads; set B is 8 distinct photos; the
+  set B pipeline cost is a recorded figure, not a re-run; `/ingest/batch` was not re-measured live (its
+  paths must sit under the configured source root, which holds no public set here); HTTP/2 multipart not
+  measured; the pipeline run used 640 images, not 2,000. None of these can move a 1 percent share to 10.
+
+Reproduce:
+
+```bash
+.venv/bin/python -m scripts.bench.ingest_transport_bench --images <dir> --label <name> \
+  --pipeline-cpu <API CPU s/image> --concurrency 4,16,32 --reps 3 --out transport.json
+```
+
 ## Benchmarking
 
 ### Using the Go Benchmark Tool

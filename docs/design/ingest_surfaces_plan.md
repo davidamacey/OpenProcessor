@@ -361,6 +361,10 @@ worktree-local volumes) is proven in the final report with `docker ps`, `docker 
 
 Question: does a gRPC ingest service beat HTTP beyond noise on this pipeline?
 
+Status (2026-10-14): measured, decision **skip, build nothing**. The transport-only saving is below 1.2 percent
+of the pipeline's API CPU per image on both sets, against the 10 percent bar; numbers in `docs/PERFORMANCE.md`,
+section "Ingest transports (#263)". The harness is `scripts/bench/ingest_transport_bench.py`.
+
 Step 1, transport-only (no pipeline, no GPU, no OpenSearch). A harness `scripts/bench/ingest_transport_bench.py`
 sends the real bytes of COCO set A (the pinned 2,000, 640 x 480, median 166 KB) and set B (the pinned Commons
 photo set, 12 to 24 MP; if the 5 GB set cannot be fetched, the largest available subset with the count stated)
