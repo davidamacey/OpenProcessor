@@ -83,10 +83,10 @@ async def sweep_pending_open_vocab(
 
 
 async def default_service(opensearch: AsyncOpenSearch) -> CurationIngestService:
-    from src.routers.curation._common import get_class_registry
-    from src.routers.curation.ingest import _get_ingest_service
+    from src.clients.curation_opensearch.registry import get_class_registry
+    from src.services.curation.ingest_service_factory import get_ingest_service
 
-    return await _get_ingest_service(opensearch, get_class_registry())
+    return await get_ingest_service(opensearch, get_class_registry())
 
 
 async def _sweep_all_projects(service_factory: ServiceFactory) -> None:

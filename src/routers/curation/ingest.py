@@ -27,11 +27,10 @@ from fastapi import HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.config import DetectionProfile, RegionStatus, get_region_fields
-from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
+from src.config.ingest_profiles import ingest_primary_profile
 from src.routers.curation._common import (
     OpenSearchDep,
     RegistryDep,
-    _ensure_indexes,
     images_index,
     items_index,
     router,
@@ -55,10 +54,11 @@ from src.routers.curation._common_models import (
 )
 from src.services.curation.detector_vocabulary import detector_labels
 from src.services.curation.image_serving import UNSERVABLE_PATH_ERROR, is_servable_image_path
-from src.services.curation.ingest import CurationIngestService
-from src.services.curation.ingest_detector import effective_profile, project_ingest_profile
+from src.services.curation.index_bootstrap import ensure_indexes
+from src.services.curation.ingest_detector import effective_profile
 from src.services.curation.ingest_models import ERROR_KIND_DECODE_FAILED, ERROR_KIND_UNSERVABLE_PATH
 from src.services.curation.ingest_policy_store import get_ingest_policy
+from src.services.curation.ingest_service_factory import get_ingest_service
 from src.services.curation.open_vocab_ingest import schedule_open_vocab_after_ingest
 
 
@@ -80,51 +80,6 @@ class IngestBatchRequest(BaseModel):
     ingest_run_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
-def _get_detection_profile() -> DetectionProfile:
-    """The primary item-proposal detector profile (``OP_INGEST_PRIMARY_*``,
-    see :func:`src.config.ingest_profiles.ingest_primary_profile`)."""
-    return ingest_primary_profile()
-
-
-def _get_secondary_profile() -> DetectionProfile | None:
-    """The optional secondary classifier profile (``OP_INGEST_SECONDARY_*``)."""
-    return ingest_secondary_profile()
-
-
-async def _get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestService:
-    from src.main import app, get_async_triton_pool
-
-    pe_encoder = getattr(app.state, 'pe_encoder', None)
-    if pe_encoder is None:
-        raise HTTPException(
-            status_code=503,
-            detail='PE encoder not initialized; ingest is unavailable until app startup completes',
-        )
-    try:
-        base_profile = _get_detection_profile()
-        secondary = _get_secondary_profile()
-    except ValueError as exc:
-        raise HTTPException(status_code=503, detail=f'ingest misconfigured: {exc}') from exc
-    profile, policy = await project_ingest_profile(opensearch, base_profile)
-    if not profile.detector_model:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                'No detector configured for ingest — set OP_INGEST_PRIMARY_DETECTOR_MODEL '
-                'to a Triton model name that serves item proposals for this deployment'
-            ),
-        )
-    return CurationIngestService(
-        opensearch=opensearch,
-        triton_pool=get_async_triton_pool(),
-        registry=registry,
-        profile=profile,
-        secondary_profile=secondary,
-        pe_encoder=pe_encoder,
-        policy=policy,
-    )
-
-
 @router.post('/ingest/image', response_model=IngestImageResponse)
 async def curation_ingest_image(
     body: IngestImageRequest,
@@ -134,14 +89,14 @@ async def curation_ingest_image(
     """Ingest a single image from a path already reachable inside the container."""
     if not is_servable_image_path(body.path):
         raise HTTPException(status_code=422, detail=f'{body.path}: {UNSERVABLE_PATH_ERROR}')
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     path = Path(body.path)
     try:
         image_bytes = path.read_bytes()
     except OSError as exc:
         raise HTTPException(status_code=404, detail=f'cannot read {body.path}: {exc}') from None
 
-    service = await _get_ingest_service(opensearch, registry)
+    service = await get_ingest_service(opensearch, registry)
     result = await service.ingest_one(image_bytes, body.path, source=body.source)
     await service.refresh_indexes()
     if result.status == 'success' and result.image_id:
@@ -189,8 +144,8 @@ async def curation_ingest_batch(
             status_code=413,
             detail=f'{len(body.items)} items exceeds the per-request limit of {max_items}',
         )
-    await _ensure_indexes(opensearch)
-    service = await _get_ingest_service(opensearch, registry)
+    await ensure_indexes(opensearch)
+    service = await get_ingest_service(opensearch, registry)
 
     images: list[bytes] = []
     paths: list[str] = []
@@ -301,7 +256,7 @@ async def ingest_status(
     that ``ingest_run_id`` -- an upload run's own images doc field,
     set by ``POST /ingest/upload``'s optional ``run_id`` form field.
     """
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     query: dict[str, Any] = (
         {'term': {'ingest_run_id': run_id}} if run_id is not None else {'match_all': {}}
     )
@@ -382,7 +337,7 @@ async def ingest_config(opensearch: OpenSearchDep) -> IngestConfigResponse:
     cfg = get_curation_config()
     policy = await get_ingest_policy(opensearch)
     try:
-        detector = _detector_info(effective_profile(_get_detection_profile(), policy.detector))
+        detector = _detector_info(effective_profile(ingest_primary_profile(), policy.detector))
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=f'ingest misconfigured: {exc}') from exc
     return IngestConfigResponse(
@@ -448,7 +403,7 @@ async def ingest_region_drain(opensearch: OpenSearchDep) -> IngestRegionDrainRes
     from src.services.detection.profile_registry import region_profile_or_neutral
     from src.services.triton_control import TritonControlService
 
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     fields = get_region_fields()
     body = {
         'size': 0,

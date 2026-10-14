@@ -12,13 +12,8 @@ from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
 
-from src.routers.curation._common import (
-    OpenSearchDep,
-    _ensure_indexes,
-    get_class_registry,
-    items_index,
-    router,
-)
+from src.routers.curation._common import OpenSearchDep, get_class_registry, items_index, router
+from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.new_class_terms import (
     PROPOSED_NAME_FIELD,
     classify_term,
@@ -50,7 +45,7 @@ async def review_new_class_summary(
     one of ``existing_class`` (``class_id`` set: map to it),
     ``generic_parent`` or ``non_object``. ``term_rules`` serves the rule.
     """
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     terms: dict[str, Any] = {
         'terms': {'field': PROPOSED_NAME_FIELD, 'size': size, 'min_doc_count': 1}
     }

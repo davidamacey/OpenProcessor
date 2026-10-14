@@ -153,22 +153,23 @@ def test_class_registry_is_per_project(tmp_path: Any, monkeypatch: Any) -> None:
 
 
 def test_index_bootstrap_runs_once_per_project(tmp_path: Any, monkeypatch: Any) -> None:
+    from src.config import get_curation_config
     from src.config.project_context import bind_project
-    from src.routers.curation import _common
+    from src.services.curation import index_bootstrap
 
     created: list[str] = []
 
     async def _fake_locked(_opensearch: Any) -> None:
-        created.append(_common.config.project_slug)
-        _common._INDEXES_BOOTSTRAPPED.add(_common.config.project_slug)
+        created.append(get_curation_config().project_slug)
+        index_bootstrap._INDEXES_BOOTSTRAPPED.add(get_curation_config().project_slug)
 
-    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', set())
-    monkeypatch.setattr(_common, '_ensure_indexes_locked', _fake_locked)
+    monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', set())
+    monkeypatch.setattr(index_bootstrap, '_ensure_indexes_locked', _fake_locked)
 
     async def _run() -> None:
         for slug in ('alpha', 'alpha', 'beta'):
             with bind_project(_new_record(slug, tmp_path)):
-                await _common._ensure_indexes(object())
+                await index_bootstrap.ensure_indexes(object())
 
     asyncio.run(_run())
     assert created == ['alpha', 'beta']

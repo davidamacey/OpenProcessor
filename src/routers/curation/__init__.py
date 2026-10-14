@@ -69,6 +69,10 @@ import src.routers.curation.vlm
 import src.routers.curation.vlm_activation
 import src.routers.curation.vlm_policy  # noqa: F401 - side-effect import
 from src.clients.curation_opensearch.registry import get_class_registry
+from src.routers.curation._common import _raw_opensearch_dep, router
+from src.routers.curation.vlm import _get_vlm_labeler
+from src.routers.curation_images import crops_router as images_crops_router, router as images_router
+
 
 # Side-effect imports: each module registers its endpoints on `router`.
 # `curation_images` (two routers: `router`, `crops_router`), the
@@ -85,13 +89,9 @@ from src.clients.curation_opensearch.registry import get_class_registry
 # function body (not at module load time) to avoid a load-order
 # dependency. `settings` registers `GET,PUT /curation/settings` on this
 # same shared `router`.
-from src.routers.curation._common import _ensure_indexes, _raw_opensearch_dep, router
-from src.routers.curation.vlm import _get_vlm_labeler
-from src.routers.curation_images import crops_router as images_crops_router, router as images_router
 
 
 __all__ = [
-    '_ensure_indexes',
     '_get_vlm_labeler',
     '_raw_opensearch_dep',
     'get_class_registry',

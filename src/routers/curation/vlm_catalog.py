@@ -14,8 +14,8 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - FastAPI resolves it
-from src.routers.curation._config_common_models import api_error
 from src.routers.curation._vlm_endpoint_models import (
     CATALOG_STATUS_LABELS,
     Choice,

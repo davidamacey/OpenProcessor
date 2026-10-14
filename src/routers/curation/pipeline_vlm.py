@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from src.routers.curation._config_common_models import api_error
+from src.routers.curation._api_error import api_error
 from src.services.config_store.vlm_gate import current_pack_and_profile, enforce_vlm_gate
 from src.services.labeling.vlm_endpoints import (
     VlmEndpoint,

@@ -38,7 +38,9 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
             {'name': 'ocr_pipeline', 'state': 'READY', 'version': '1'},
         ]
 
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     monkeypatch.setattr(
         TritonControlService, 'get_repository_index', lambda _self: _fake_repo_index()
     )

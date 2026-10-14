@@ -12,9 +12,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 from curation import test_cross_project_leak as _sweep
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+from src.core.exceptions import RequestRejectedError
 from src.services.projects import lifecycle
 from src.services.projects.guard import make_curation_opensearch
 
@@ -100,7 +100,7 @@ def test_delete_retry_after_failed_index_delete_succeeds(leak_env: LeakEnv) -> N
 
     # First real attempt at the finish hits the fault: record stays
     # 'deleting', never tombstoned.
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.delete_project_finish(guarded_client, slug='alpha'))
     assert exc_info.value.detail['error'] == 'project_busy'
 

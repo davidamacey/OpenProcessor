@@ -68,7 +68,9 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     fake_os = AsyncMock()
     # No settings doc -> every axis resolves to its process default.
     fake_os.get = AsyncMock(side_effect=RuntimeError('no settings index'))
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     app = FastAPI()
     from _curation_app import mount_curation_routers
 

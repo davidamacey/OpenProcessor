@@ -262,9 +262,9 @@ def test_the_clone_of_a_project_refuses(rebound, monkeypatch: pytest.MonkeyPatch
                 client, target_record=target, from_slug='alpha', axes=['vlm_activation']
             )
 
-    from fastapi import HTTPException
+    from src.core.exceptions import RequestRejectedError
 
-    with pytest.raises(HTTPException) as caught:
+    with pytest.raises(RequestRejectedError) as caught:
         asyncio.run(clone())
     assert caught.value.status_code == 422
     assert DENIED in str(caught.value.detail)
@@ -275,8 +275,7 @@ def test_the_clone_of_a_project_refuses(rebound, monkeypatch: pytest.MonkeyPatch
 def test_a_draft_body_is_refused_and_can_never_be_activated(rebound) -> None:
     """A draft (an unsaved body under test) goes through the same gate; its
     ref is not an endpoint name, so it also cannot be activated."""
-    from fastapi import HTTPException
-
+    from src.core.exceptions import RequestRejectedError
     from src.services.config_store.vlm_gate import enforce_vlm_gate
     from src.services.labeling.vlm_endpoints import resolve_vlm_source
 
@@ -288,7 +287,7 @@ def test_a_draft_body_is_refused_and_can_never_be_activated(rebound) -> None:
         assert draft.name == '_draft'
         await enforce_vlm_gate(draft, mode='test')
 
-    with pytest.raises(HTTPException) as caught:
+    with pytest.raises(RequestRejectedError) as caught:
         asyncio.run(attempt())
     assert caught.value.status_code == 422
     assert DENIED in str(caught.value.detail)
@@ -304,8 +303,7 @@ def test_a_draft_body_is_refused_and_can_never_be_activated(rebound) -> None:
 def test_force_is_honoured_only_for_activation(rebound, mode: str) -> None:
     """The gate itself ignores ``force`` outside ``activate``: an unprobed
     endpoint stays refused however the caller asks."""
-    from fastapi import HTTPException
-
+    from src.core.exceptions import RequestRejectedError
     from src.services.config_store.vlm_gate import enforce_vlm_gate
     from src.services.labeling.vlm_endpoints import resolve_vlm_source
 
@@ -321,7 +319,7 @@ def test_force_is_honoured_only_for_activation(rebound, mode: str) -> None:
         # per-run modes do not require a probe at all
         assert asyncio.run(attempt(mode)).report.ok
         return
-    with pytest.raises(HTTPException) as caught:
+    with pytest.raises(RequestRejectedError) as caught:
         asyncio.run(attempt(mode))
     codes = [e['code'] for e in _detail_of(caught.value)['report']['errors']]
     assert codes == ['vlm_not_probed']

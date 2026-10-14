@@ -16,8 +16,8 @@ from typing import TYPE_CHECKING, Annotated, Any
 from fastapi import Query, Response
 
 from src.core.logging import get_logger
+from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - FastAPI resolves it
-from src.routers.curation._config_common_models import api_error
 from src.routers.curation._vlm_endpoint_models import (
     VlmEndpointCloneRequest,
     VlmEndpointCreate,
@@ -66,7 +66,7 @@ from src.services.labeling.vlm_endpoints import (
 
 
 if TYPE_CHECKING:
-    from src.routers.curation._config_common_models import ValidationReport
+    from src.schemas.curation.config_common import ValidationReport
     from src.services.labeling.vlm_endpoint_body import VlmEndpointBody
 
 logger = get_logger(__name__)

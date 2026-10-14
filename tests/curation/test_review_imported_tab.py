@@ -61,7 +61,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Any:
 
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', _noop)
+    monkeypatch.setattr('src.services.curation.index_bootstrap.ensure_indexes', _noop)
     fake = QueryFakeOpenSearch({ITEMS: dict(SEEDED)})
     app = FastAPI()
     mount_curation_routers(app, curation_router)

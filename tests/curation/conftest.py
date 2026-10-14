@@ -118,7 +118,9 @@ def vlm_api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> VlmApi:
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
     monkeypatch.delenv('OP_VLM_EXTERNAL_POLICY', raising=False)
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
 
     app = FastAPI()
     mount_curation(

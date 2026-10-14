@@ -1929,7 +1929,7 @@ it. Request: `triton_name`, `force`, `fp16`, `input_size`, `max_batch_size`,
 ## Bake-off
 
 Model comparison on frozen test sets. Models are in
-`src/routers/curation/_bakeoff_models.py`; every route has a response model.
+`src/schemas/bakeoff/`; every route has a response model.
 Evaluator-written files are validated on read. A file that is not schema
 version 2 is `409 bake-off result <file> has an unsupported schema`.
 

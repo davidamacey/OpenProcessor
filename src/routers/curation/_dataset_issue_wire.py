@@ -1,42 +1,17 @@
-"""Wire shape of one dataset-import issue, shared by the preview,
-the job, the issue-page route and the structured 4xx detail
-(``ConfigErrorDetail.issues``). Its own module so the error-detail model
-can import it without a cycle."""
+"""Conversion of dataset-import issues to their wire shape."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, Field
-
-from src.services.curation.dataset_import.issues import DatasetIssueCode
-from src.services.issue_ids import stamp_issue_ids
+from src.schemas.curation.dataset_issue import DatasetIssueSampleWire, DatasetIssueWire
+from src.utils.issue_ids import stamp_issue_ids
 
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from src.services.curation.dataset_import.issues import DatasetIssue
-
-
-class DatasetIssueSampleWire(BaseModel):
-    file: str
-    line: int | None = None
-    detail: dict[str, Any] = Field(default_factory=dict)
-
-
-class DatasetIssueWire(BaseModel):
-    id: str = Field(
-        default='',
-        description='Unique within the response (`code[:subject]`, `#2` on a repeat).',
-    )
-    code: DatasetIssueCode
-    severity: Literal['error', 'warning', 'info']
-    blocking: bool
-    bypassable: bool
-    message: str
-    count: int
-    samples: list[DatasetIssueSampleWire] = Field(default_factory=list)
 
 
 def _issue_to_wire(issue: DatasetIssue) -> DatasetIssueWire:
@@ -68,4 +43,4 @@ def issues_to_wire(issues: Iterable[DatasetIssue]) -> list[DatasetIssueWire]:
     return wired
 
 
-__all__ = ['DatasetIssueSampleWire', 'DatasetIssueWire', 'issues_to_wire']
+__all__ = ['issues_to_wire']

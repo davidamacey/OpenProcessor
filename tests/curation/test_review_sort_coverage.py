@@ -154,7 +154,7 @@ def review_client(monkeypatch: pytest.MonkeyPatch):
     )
     for mod in ('review', 'settings'):
         monkeypatch.setattr(
-            f'src.routers.curation.{mod}._ensure_indexes', AsyncMock(return_value=None)
+            f'src.routers.curation.{mod}.ensure_indexes', AsyncMock(return_value=None)
         )
     app = FastAPI()
     from _curation_app import mount_curation_routers
@@ -199,7 +199,7 @@ def _settings_client(monkeypatch: pytest.MonkeyPatch, fake: Any) -> TestClient:
 
     for mod in ('review', 'settings'):
         monkeypatch.setattr(
-            f'src.routers.curation.{mod}._ensure_indexes', AsyncMock(return_value=None)
+            f'src.routers.curation.{mod}.ensure_indexes', AsyncMock(return_value=None)
         )
     app = FastAPI()
     from _curation_app import mount_curation_routers

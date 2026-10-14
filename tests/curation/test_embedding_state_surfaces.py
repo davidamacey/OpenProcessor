@@ -95,7 +95,7 @@ async def test_ordered_page_reports_how_many_it_could_not_rank(
     async def _diverse(*_: Any, **__: Any) -> list[str]:
         return ['a', 'b']
 
-    monkeypatch.setattr('src.routers.curation.select.compute_diverse_order', _diverse)
+    monkeypatch.setattr('src.services.curation.diverse_order.compute_diverse_order', _diverse)
     os_fake = AsyncMock()
     os_fake.count = AsyncMock(return_value={'count': 7})
 

@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from curation.query_fakes import SettingsFakeOpenSearch
 from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import DetectionProfile, get_curation_config
-from src.routers.curation import _common
+from src.services.curation import index_bootstrap
 from src.services.curation.ingest_detector import detector_problems, effective_profile
 from src.services.curation.ingest_policy import DetectorOverride
 
@@ -71,7 +71,7 @@ def world(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> Any:
     fake = SettingsFakeOpenSearch()
     registry = ClassRegistry(path=tmp_path / 'class_registry.json')
     monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'env_model')
-    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', {'default'})
+    monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', {'default'})
     monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: registry)
     monkeypatch.setattr('src.routers.curation.class_seed.get_class_registry', lambda: registry)
     monkeypatch.setattr('src.routers.curation.ingest_policy.get_class_registry', lambda: registry)
@@ -161,7 +161,7 @@ async def test_the_ingest_service_runs_the_project_detector_and_its_policy(
     monkeypatch.setattr(main_module.app.state, 'pe_encoder', object(), raising=False)
     fake = SettingsFakeOpenSearch()
 
-    plain = await ingest_router._get_ingest_service(fake, object())
+    plain = await ingest_router.get_ingest_service(fake, object())
     assert plain.profile.detector_model == 'env_model'
 
     await put_ingest_policy(
@@ -172,7 +172,7 @@ async def test_the_ingest_service_runs_the_project_detector_and_its_policy(
         ),
         expected_revision=0,
     )
-    mine = await ingest_router._get_ingest_service(fake, object())
+    mine = await ingest_router.get_ingest_service(fake, object())
     assert mine.profile.detector_model == 'birds'
     assert mine.detector.profile is mine.profile
     assert mine.policy.detect.class_resolution == 'by_name'

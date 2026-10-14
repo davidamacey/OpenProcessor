@@ -7,7 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from src.config.settings import TritonModelConfig
-from src.routers.curation._config_common_models import ActivateResponse, ActiveRef, ValidationReport
+from src.schemas.curation.config_common import ActivateResponse, ActiveRef, ValidationReport
 from src.services.curation.region_impact import ActivationImpact  # noqa: TC001  # pydantic field type
 
 

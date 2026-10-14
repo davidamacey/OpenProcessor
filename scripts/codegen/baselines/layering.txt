@@ -1,6 +1,5 @@
 scripts/bench/serialization_bench.py -> src.routers.embed	1	moves out of the router package in PR 4
 scripts/bench/serialization_bench.py -> src.routers.ingest.models	1	moves out of the router package in PR 4
-scripts/curation/seed_live_harness.py -> src.routers.curation._common	1	moves out of the router package in PR 4
 src/clients/curation_opensearch/bodies_core.py -> src.services.curation.item_text	1	dependency reversed in PR 4
 src/clients/curation_opensearch/bodies_core.py -> src.services.curation.open_vocab_fields	1	dependency reversed in PR 4
 src/clients/curation_opensearch/bodies_core.py -> src.services.curation.vlm_class_attempt	1	dependency reversed in PR 4
@@ -19,46 +18,3 @@ src/clients/opensearch/ingest.py -> src.services.clustering	1	dependency reverse
 src/clients/opensearch/names.py -> src.services.clustering	2	dependency reversed in PR 4
 src/clients/pe_encoder.py -> src.services.detection.pe_preprocess	1	dependency reversed in PR 4
 src/clients/triton_client.py -> src.services.cpu_preprocess	1	dependency reversed in PR 4
-src/core/dependencies.py -> src.routers.curation._common	1	moves out of the router package in PR 4
-src/services/config_store/activation_gate.py -> src.routers.curation._common	1	moves out of the router package in PR 4
-src/services/config_store/activation_gate.py -> src.routers.curation._config_common_models	4	moves out of the router package in PR 4
-src/services/config_store/activation_gate.py -> src.routers.curation._models_segmenter	1	moves out of the router package in PR 4
-src/services/config_store/activation_gate.py -> src.routers.curation.open_vocab	1	moves out of the router package in PR 4
-src/services/config_store/activation_gate.py -> src.routers.curation.prompt_packs	1	moves out of the router package in PR 4
-src/services/config_store/activation_gate.py -> src.routers.curation.region_profiles	1	moves out of the router package in PR 4
-src/services/config_store/activation_view.py -> src.routers.curation._config_common_models	1	moves out of the router package in PR 4
-src/services/config_store/clone_shared.py -> src.routers.curation._config_common_models	2	moves out of the router package in PR 4
-src/services/config_store/open_vocab_validation.py -> src.routers.curation._config_common_models	2	moves out of the router package in PR 4
-src/services/config_store/pack_validation.py -> src.routers.curation._config_common_models	3	moves out of the router package in PR 4
-src/services/config_store/profile_validation.py -> src.routers.curation._config_common_models	3	moves out of the router package in PR 4
-src/services/config_store/profile_validation.py -> src.routers.curation._models_class_mapping	1	moves out of the router package in PR 4
-src/services/config_store/vlm_activation.py -> src.routers.curation._config_common_models	1	moves out of the router package in PR 4
-src/services/config_store/vlm_gate.py -> src.routers.curation._config_common_models	2	moves out of the router package in PR 4
-src/services/config_store/vlm_pairing.py -> src.routers.curation._config_common_models	1	moves out of the router package in PR 4
-src/services/config_store/vlm_validation.py -> src.routers.curation._config_common_models	3	moves out of the router package in PR 4
-src/services/curation/bakeoff_jobs.py -> src.routers.curation._bakeoff_models	2	moves out of the router package in PR 4
-src/services/curation/crop_orders.py -> src.routers.curation.select	1	moves out of the router package in PR 4
-src/services/curation/holdout.py -> fastapi	1	fastapi leaves this layer in PR 4
-src/services/curation/image_serving.py -> fastapi	1	fastapi leaves this layer in PR 4
-src/services/curation/image_serving.py -> fastapi.responses	1	fastapi leaves this layer in PR 4
-src/services/curation/keymap_validator.py -> src.routers.curation._config_common_models	1	moves out of the router package in PR 4
-src/services/curation/open_vocab_sweeper.py -> src.routers.curation._common	1	moves out of the router package in PR 4
-src/services/curation/open_vocab_sweeper.py -> src.routers.curation.ingest	1	moves out of the router package in PR 4
-src/services/curation/region_dependency_health.py -> src.routers.curation._models_segmenter	1	moves out of the router package in PR 4
-src/services/curation/review_queries.py -> fastapi	1	fastapi leaves this layer in PR 4
-src/services/ocr_service.py -> fastapi	1	fastapi leaves this layer in PR 4
-src/services/projects/clone.py -> src.routers.curation	1	moves out of the router package in PR 4
-src/services/projects/clone.py -> src.routers.curation._config_common_models	1	moves out of the router package in PR 4
-src/services/projects/clone.py -> src.routers.curation._project_models	1	moves out of the router package in PR 4
-src/services/projects/clone_activation_gate.py -> fastapi	1	fastapi leaves this layer in PR 4
-src/services/projects/clone_activation_gate.py -> src.routers.curation._config_common_models	1	moves out of the router package in PR 4
-src/services/projects/clone_activation_gate.py -> src.routers.curation.prompt_packs	1	moves out of the router package in PR 4
-src/services/projects/clone_open_vocab.py -> src.routers.curation._config_common_models	1	moves out of the router package in PR 4
-src/services/projects/clone_vlm.py -> src.routers.curation._config_common_models	1	moves out of the router package in PR 4
-src/services/projects/combine/plan.py -> fastapi	1	fastapi leaves this layer in PR 4
-src/services/projects/combine/service.py -> src.routers.curation._config_common_models	1	moves out of the router package in PR 4
-src/services/projects/delete.py -> src.routers.curation._config_common_models	1	moves out of the router package in PR 4
-src/services/projects/lifecycle.py -> fastapi	1	fastapi leaves this layer in PR 4
-src/services/projects/lifecycle.py -> src.routers.curation._common	1	moves out of the router package in PR 4
-src/services/projects/lifecycle.py -> src.routers.curation._config_common_models	1	moves out of the router package in PR 4
-src/services/projects/lifecycle.py -> src.routers.curation._project_models	1	moves out of the router package in PR 4

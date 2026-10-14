@@ -9,8 +9,8 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from fastapi import HTTPException
 
+from src.core.exceptions import RequestRejectedError
 from src.services.projects import lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
@@ -84,7 +84,7 @@ def test_archive_busy_409_carries_typed_job_refs(monkeypatch) -> None:
             lambda _rec: [busy.JobRef(kind='bakeoff', job_id='run-42')],
         )
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(RequestRejectedError) as exc_info:
             await lifecycle.archive_project(client, slug='cars', expected_revision=record.revision)
 
         detail = exc_info.value.detail
@@ -144,7 +144,7 @@ def test_delete_busy_409_carries_typed_job_refs(monkeypatch) -> None:
             lambda _rec: [busy.JobRef(kind='train', job_id='run-7')],
         )
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(RequestRejectedError) as exc_info:
             await lifecycle.delete_project(client, slug='cars', confirm='cars')
 
         detail = exc_info.value.detail

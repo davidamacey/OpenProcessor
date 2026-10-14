@@ -10,8 +10,8 @@ from fastapi import APIRouter, HTTPException
 from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config
 from src.config.curation import items_index
+from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - used at runtime by FastAPI
-from src.routers.curation._config_common_models import api_error
 from src.services.curation.dataset_thresholds import (
     HARD_MIN_CROPS_PER_CLASS,
     MIN_TEST_CROPS_PER_CLASS,

@@ -11,8 +11,8 @@ import asyncio
 from dataclasses import replace
 
 import pytest
-from fastapi import HTTPException
 
+from src.core.exceptions import RequestRejectedError
 from src.services.projects import lifecycle
 from src.services.projects.registry import (
     ProjectRegistry,
@@ -77,5 +77,5 @@ def test_two_concurrent_writers_one_loses_with_revision_conflict() -> None:
     assert len(oks) == 1, f'expected exactly one writer to win, got {oks!r}'
     assert len(errs) == 1, f'expected exactly one writer to lose, got {errs!r}'
     (err,) = errs
-    assert isinstance(err, HTTPException)
+    assert isinstance(err, RequestRejectedError)
     assert err.detail['error'] == 'revision_conflict'

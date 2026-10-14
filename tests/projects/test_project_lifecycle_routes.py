@@ -9,10 +9,10 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import HTTPException
 
+from src.core.exceptions import RequestRejectedError
 from src.routers.curation import projects as projects_router
-from src.routers.curation._project_models import (
+from src.schemas.curation.projects import (
     ArchiveRequest,
     CloneSettingsRequest,
     CreateProjectRequest,
@@ -42,7 +42,7 @@ def _env(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def _noop_ensure_indexes():
     with patch(
-        'src.routers.curation._common._ensure_indexes',
+        'src.services.curation.index_bootstrap.ensure_indexes',
         new=AsyncMock(side_effect=fake_ensure_indexes),
     ):
         yield
@@ -84,7 +84,7 @@ def test_patch_route_envelope_and_revision_conflict() -> None:
     assert patched.project.display_name == 'Cars 2'
     assert patched.project.revision == created.project.revision + 1
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(
             projects_router.patch_project(
                 'cars',

@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends
 from src.config import get_curation_config
 from src.core.dependencies import get_curation_opensearch as _raw_opensearch_dep
 from src.core.logging import get_logger
-from src.routers.curation._config_common_models import api_error
+from src.routers.curation._api_error import api_error
 from src.services.curation.clustering.embedding_reduce import umap_rebuild
 from src.services.curation.clustering.pool_size import TooFewItemsError
 

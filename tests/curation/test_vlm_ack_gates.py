@@ -10,12 +10,12 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException
 
 from curation.conftest import SCOPED
 from src.config.curation import IndexRole, base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
+from src.core.exceptions import RequestRejectedError
 
 
 def _record(slug: str) -> ProjectRecord:
@@ -81,7 +81,7 @@ def test_a_clone_refuses_an_acknowledged_external_endpoint(
                 vlm_api.fake_os, target_record=target, from_slug='alpha', axes=['vlm_activation']
             )
 
-    with pytest.raises(HTTPException) as caught:
+    with pytest.raises(RequestRejectedError) as caught:
         asyncio.run(clone())
     assert caught.value.status_code == 422
     assert 'vlm_external_not_acknowledged' in str(caught.value.detail)

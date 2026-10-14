@@ -25,11 +25,11 @@ def app_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
     from src.routers.curation._common import _raw_opensearch_dep, router as curation_router
 
     monkeypatch.setenv('OP_VIZ_JOBS_DIR', str(tmp_path / 'viz'))
-    # viz.py binds `_ensure_indexes` into its own module namespace (`from
-    # ..._common import _ensure_indexes`), so the patch target is the viz
-    # module's own name, not `_common`'s — patching `_common._ensure_indexes`
-    # would not affect viz.py's already-bound reference.
-    monkeypatch.setattr(viz_module, '_ensure_indexes', AsyncMock(return_value=None))
+    # viz.py binds `ensure_indexes` into its own module namespace (`from
+    # ...index_bootstrap import ensure_indexes`), so the patch target is the viz
+    # module's own name — patching `index_bootstrap.ensure_indexes` would not
+    # affect viz.py's already-bound reference.
+    monkeypatch.setattr(viz_module, 'ensure_indexes', AsyncMock(return_value=None))
 
     fake_os = AsyncMock()
     app = FastAPI()

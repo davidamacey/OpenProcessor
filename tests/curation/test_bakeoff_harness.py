@@ -994,7 +994,7 @@ def test_runner_v2_end_to_end_with_fake_backend(tmp_path: Path, monkeypatch) -> 
 _DOMAIN_WORDS = re.compile(r'(?i)plate|lpr|lpdnet|vehicle|open[_-]?image')
 _BAKEOFF_API_FILES = (
     'src/routers/curation/bakeoff.py',
-    'src/routers/curation/_bakeoff_models.py',
+    *(f'src/schemas/bakeoff/{m}.py' for m in ['datasets', 'job_spec', 'models', 'results', 'run']),
     'src/services/curation/eval_datasets.py',
     'src/services/curation/bakeoff_jobs.py',
 )

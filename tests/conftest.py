@@ -178,7 +178,7 @@ def _requests_start_unbound(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 # one test fills would answer the next test's first request.
 _PROCESS_CACHES = (
     ('src.services.curation.strategy_registry', '_COVERAGE_CACHE'),
-    ('src.routers.curation.select', '_ORDER_CACHE'),
+    ('src.services.curation.diverse_order', '_ORDER_CACHE'),
     ('src.services.curation.clustering.outliers', '_CACHE'),
     ('src.clients.curation_opensearch.settings_doc', '_settings_cache'),
     ('src.clients.curation_opensearch.ensure_overlay_fields', '_INNER_RESULT_WINDOWS'),

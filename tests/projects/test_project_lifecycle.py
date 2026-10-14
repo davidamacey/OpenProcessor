@@ -7,8 +7,8 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import HTTPException
 
+from src.core.exceptions import RequestRejectedError
 from src.services.projects import lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
@@ -44,7 +44,7 @@ def _noop_ensure_indexes():
     covered elsewhere) index bootstrap so these tests exercise only
     lifecycle.py's own decisions."""
     with patch(
-        'src.routers.curation._common._ensure_indexes',
+        'src.services.curation.index_bootstrap.ensure_indexes',
         new=AsyncMock(side_effect=fake_ensure_indexes),
     ):
         yield
@@ -53,7 +53,7 @@ def _noop_ensure_indexes():
 def test_create_project_slug_invalid() -> None:
     client = FakeLifecycleOpenSearch()
     _registry_for(client)
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.create_project(client, slug='Bad_Slug', display_name='x'))
     assert exc_info.value.detail['error'] == 'slug_invalid'
 
@@ -73,7 +73,7 @@ def test_create_project_slug_taken() -> None:
     client = FakeLifecycleOpenSearch()
     _registry_for(client)
     asyncio.run(lifecycle.create_project(client, slug='cars', display_name='Cars'))
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.create_project(client, slug='cars', display_name='Cars 2'))
     assert exc_info.value.detail['error'] == 'slug_taken'
 
@@ -97,7 +97,7 @@ def test_create_project_concurrent_same_slug_exactly_one_wins() -> None:
     failures = [r for r in results if isinstance(r, BaseException)]
     assert len(successes) == 1, results
     assert len(failures) == 1, results
-    assert isinstance(failures[0], HTTPException)
+    assert isinstance(failures[0], RequestRejectedError)
     assert failures[0].detail['error'] == 'slug_taken'
 
 
@@ -137,7 +137,7 @@ def test_write_record_create_op_type_refuses_second_writer() -> None:
     failures = [r for r in results if isinstance(r, BaseException)]
     assert len(successes) == 1, results
     assert len(failures) == 1, results
-    assert isinstance(failures[0], HTTPException)
+    assert isinstance(failures[0], RequestRejectedError)
     assert failures[0].detail['error'] == 'slug_taken'
 
 
@@ -149,7 +149,7 @@ def test_create_project_slug_retired_after_delete() -> None:
     asyncio.run(registry.ensure_fresh())
     asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
     asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha again'))
     assert exc_info.value.detail['error'] == 'slug_retired'
 
@@ -168,7 +168,7 @@ def test_create_project_capacity_blocked() -> None:
         raise NotImplementedError(url)
 
     client.transport.perform_request = _blocked  # type: ignore[method-assign]
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.create_project(client, slug='overbudget', display_name='x'))
     detail = exc_info.value.detail
     assert detail['error'] == 'shard_budget_exceeded'
@@ -229,7 +229,7 @@ def test_patch_project_occ() -> None:
     assert updated.display_name == 'Cars v2'
     assert updated.revision == record.revision + 1
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(
             lifecycle.patch_project(
                 client,
@@ -273,7 +273,7 @@ def test_archive_last_active_project_refused() -> None:
     asyncio.run(registry.ensure_fresh())
     default_record = registry.get('default')
     assert default_record is not None
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(
             lifecycle.archive_project(
                 client, slug='default', expected_revision=default_record.revision
@@ -290,7 +290,7 @@ def test_create_with_bad_clone_source_burns_no_slug_and_leaves_no_indexes() -> N
     client = FakeLifecycleOpenSearch()
     registry = _registry_for(client)
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(
             lifecycle.create_project(
                 client, slug='gamma', display_name='Gamma', clone_settings_from='alpah'
@@ -316,7 +316,7 @@ def test_create_with_bad_clone_axis_burns_no_slug() -> None:
     client = FakeLifecycleOpenSearch()
     registry = _registry_for(client)
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(
             lifecycle.create_project(
                 client,
@@ -336,7 +336,7 @@ def test_create_cloning_into_itself_is_a_clean_4xx_not_500() -> None:
     client = FakeLifecycleOpenSearch()
     _registry_for(client)
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(
             lifecycle.create_project(
                 client, slug='gamma', display_name='Gamma', clone_settings_from='gamma'
@@ -368,7 +368,7 @@ def test_create_cloning_from_a_building_source_is_refused() -> None:
     )
     asyncio.run(raw_write_record(client, record, op_type='create'))
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(
             lifecycle.create_project(
                 client, slug='gamma', display_name='Gamma', clone_settings_from='building_src'

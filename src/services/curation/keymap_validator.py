@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from src.routers.curation._config_common_models import ValidationIssue, ValidationReport
+from src.schemas.curation.config_common import ValidationIssue, ValidationReport
 from src.services.curation.keymap import (
     combo_grammar_error,
     effective_keys,

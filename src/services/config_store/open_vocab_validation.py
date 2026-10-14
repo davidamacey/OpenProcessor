@@ -28,7 +28,7 @@ from src.utils.class_names import normalize_class_name
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from src.routers.curation._config_common_models import ValidationIssue, ValidationReport
+    from src.schemas.curation.config_common import ValidationIssue, ValidationReport
 
     SegmenterHealthFn = Callable[[], Awaitable[tuple[str, str | None]]]
 
@@ -241,7 +241,7 @@ async def validate_open_vocab(
     detector_class_names: frozenset[str] = frozenset(),
     vlm_configured: bool = True,
 ) -> ValidationReport:
-    from src.routers.curation._config_common_models import ValidationReport
+    from src.schemas.curation.config_common import ValidationReport
 
     issues = _check_name(name, existing_names)
     try:

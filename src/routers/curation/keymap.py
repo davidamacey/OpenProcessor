@@ -11,8 +11,8 @@ from typing import Any
 
 from fastapi import Header
 
+from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, get_class_registry, logger, router
-from src.routers.curation._config_common_models import api_error
 from src.routers.curation._keymap_models import (
     KeymapActionWire,
     KeymapContextWire,
@@ -35,12 +35,6 @@ from src.services.curation.keymap import (
     save_keymap_doc,
 )
 
-
-# keymap_validator imports _config_common_models, which lives inside this
-# same package -- importing it at module scope here would re-enter
-# src.routers.curation.__init__ while it is still executing this very
-# import (the package imports this module for its route side effects).
-# Deferred to call sites instead.
 
 _IF_MATCH_RE = re.compile(r'^"?keymap:(\d+)"?$')
 
@@ -272,7 +266,7 @@ def _class_hotkey_conflict_error(
 ) -> Exception:
     """M3: the 409's ``report`` now carries the ``keymap_class_hotkey_conflict``
     issues too, not just the bare structured ``class_conflicts`` list."""
-    from src.routers.curation._config_common_models import ValidationReport
+    from src.schemas.curation.config_common import ValidationReport
 
     conflict = class_conflicts[0]
     return api_error(

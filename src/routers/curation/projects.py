@@ -19,9 +19,16 @@ from src.config import IndexRole
 from src.config.project_context import bind_project
 from src.config.projects import DEFAULT_SLUG
 from src.core.logging import get_logger
-from src.routers.curation._config_common_models import ApiErrorResponse, api_error
+from src.routers.curation._api_error import api_error
 from src.routers.curation._project_deps import bind_path_project
-from src.routers.curation._project_models import (
+from src.routers.curation._project_views import (
+    capacity_wire,
+    list_membership,
+    resources_wire,
+    summarize,
+)
+from src.schemas.curation.config_common import ApiErrorResponse
+from src.schemas.curation.projects import (
     ArchiveRequest,
     CloneSettingsRequest,
     CreateProjectRequest,
@@ -33,10 +40,6 @@ from src.routers.curation._project_models import (
     ProjectRecordResponse,
     ProjectsResponse,
     ProjectStatsResponse,
-    capacity_wire,
-    list_membership,
-    resources_wire,
-    summarize,
 )
 from src.services.projects import lifecycle
 from src.services.projects.guard import make_curation_opensearch

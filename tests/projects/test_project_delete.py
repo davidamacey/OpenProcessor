@@ -9,8 +9,8 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import HTTPException
 
+from src.core.exceptions import RequestRejectedError
 from src.services.projects import lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
@@ -36,7 +36,7 @@ def _env(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def _noop_ensure_indexes():
     with patch(
-        'src.routers.curation._common._ensure_indexes',
+        'src.services.curation.index_bootstrap.ensure_indexes',
         new=AsyncMock(side_effect=fake_ensure_indexes),
     ):
         yield
@@ -68,7 +68,7 @@ def test_delete_default_is_protected() -> None:
     asyncio.run(seed_default_project(client))
     asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.delete_project(client, slug='default', confirm='default'))
     assert exc_info.value.detail['error'] == 'project_protected'
 
@@ -81,7 +81,7 @@ def test_delete_confirm_mismatch() -> None:
     _registry_for(client)
     asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
     asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='not-alpha'))
     assert exc_info.value.detail['error'] == 'confirm_mismatch'
 
@@ -95,7 +95,7 @@ def test_delete_last_active_project_refused() -> None:
         lifecycle.archive_project(client, slug='default', expected_revision=default_record.revision)
     )
     asyncio.run(registry.ensure_fresh())
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.delete_project(client, slug='only', confirm='only'))
     assert exc_info.value.detail['error'] == 'last_active_project'
 
@@ -117,7 +117,7 @@ def test_delete_removes_exact_indexes_and_tombstones_slug() -> None:
     assert tombstoned.status == 'deleted'
     assert set(client.deleted_indexes) == expected_indexes  # exact names, never a pattern
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha again'))
     assert exc_info.value.detail['error'] == 'slug_retired'
 
@@ -159,7 +159,7 @@ def test_delete_refuses_from_building_or_deleting(monkeypatch) -> None:
     client._seq['project:alpha'] = client._seq.get('project:alpha', 0) + 1
     registry._by_slug['alpha'] = building  # _resolve_existing reads the in-memory snapshot
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
     assert exc_info.value.detail['error'] == 'invalid_transition'
 
@@ -196,7 +196,7 @@ def test_delete_finish_rolls_back_to_pre_delete_status_on_drain_timeout(monkeypa
         lambda record: [busy.JobRef(kind='detection_worker', job_id='still-busy')],  # noqa: ARG005
     )
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
     assert exc_info.value.detail['error'] == 'project_busy'
 
@@ -230,7 +230,7 @@ def test_delete_finish_index_failure_leaves_record_retryable_not_tombstoned() ->
     client.indices.delete = _delete_but_fail_one  # type: ignore[method-assign]
 
     asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
     assert exc_info.value.detail['error'] == 'project_busy'
 
@@ -294,7 +294,7 @@ def test_drain_timeout_rollback_preserves_a_concurrent_patch(monkeypatch) -> Non
     async def _finish_expect_busy():
         try:
             await lifecycle.delete_project_finish(client, slug='alpha')
-        except HTTPException as exc:
+        except RequestRejectedError as exc:
             return exc
         raise AssertionError('expected delete_project_finish to raise project_busy')
 
@@ -312,7 +312,7 @@ def test_drain_timeout_rollback_preserves_a_concurrent_patch(monkeypatch) -> Non
         return await asyncio.gather(_finish_expect_busy(), _patch_mid_drain())
 
     finish_result, patch_result = asyncio.run(_run())
-    assert isinstance(finish_result, HTTPException)
+    assert isinstance(finish_result, RequestRejectedError)
     assert finish_result.detail['error'] == 'project_busy'
     assert patch_result.display_name == 'Renamed mid-drain'
 

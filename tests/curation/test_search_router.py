@@ -41,7 +41,9 @@ def _fake_opensearch(hits: list[dict] | None = None) -> AsyncMock:
 def app_client(monkeypatch: pytest.MonkeyPatch):
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     monkeypatch.setenv('OP_SEMANTIC_SEARCH_ENABLED', 'true')
 
     fake_os = _fake_opensearch()

@@ -12,7 +12,7 @@ import pytest
 from src.config.curation import base_curation_config
 from src.config.projects import ProjectRecord, resources_for_new
 from src.routers.curation import projects as projects_router
-from src.routers.curation._config_common_models import ConfigErrorDetail
+from src.schemas.curation.config_common import ConfigErrorDetail
 from src.services.projects.registry import ProjectRegistry
 
 
@@ -270,7 +270,7 @@ def test_lifecycle_envelope_shape() -> None:
     keymap_clone_conflicts: [...]}`` -- the last one is only ever
     non-empty on a ``clone_settings`` response whose ``keymap`` axis
     dropped a conflicting action."""
-    from src.routers.curation._project_models import ProjectLifecycleResponse, ProjectWarning
+    from src.schemas.curation.projects import ProjectLifecycleResponse, ProjectWarning
 
     assert set(ProjectLifecycleResponse.model_fields) == {
         'project',

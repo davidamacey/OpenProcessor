@@ -68,7 +68,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Any:
     async def _noop(*_a: Any, **_k: Any) -> None:
         return None
 
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', _noop)
+    monkeypatch.setattr('src.services.curation.index_bootstrap.ensure_indexes', _noop)
     fake = QueryFakeOpenSearch(
         {
             ITEMS: {

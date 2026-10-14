@@ -31,9 +31,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import HTTPException
-
 from src.config.curation import get_curation_config
+from src.core.exceptions import RequestRejectedError
 from src.services.curation.dataset_thresholds import MIN_TEST_CROPS_PER_CLASS
 
 
@@ -142,7 +141,7 @@ async def scan_stratum_crop_ids(
             break
         search_after = hits[-1].get('sort')
     else:
-        raise HTTPException(
+        raise RequestRejectedError(
             status_code=503,
             detail=(
                 f'stratum (class_id={class_id}, source={source}) exceeded '

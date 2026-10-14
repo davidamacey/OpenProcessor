@@ -30,8 +30,6 @@ import logging
 from functools import lru_cache
 from typing import Any, Literal
 
-from fastapi import HTTPException
-
 from src.clients.triton_client import get_triton_client
 from src.config import get_settings
 from src.utils.image_processing import decode_image, validate_image
@@ -41,20 +39,6 @@ from src.utils.retry import RetryExhaustedError
 logger = logging.getLogger(__name__)
 
 OcrErrorKind = Literal['input', 'inference']
-
-
-def ocr_error_http(result: dict[str, Any]) -> HTTPException | None:
-    """The HTTP error for an OCR result that failed, ``None`` for one that did
-    not: 422 when the image itself was unusable, 502 when the inference
-    backend failed. One mapping for every route that surfaces an OCR result,
-    so an outage never reads as "no text"."""
-    if result.get('status') != 'error':
-        return None
-    if result.get('error_kind') == 'input':
-        return HTTPException(status_code=422, detail=result.get('error', 'unusable image'))
-    return HTTPException(
-        status_code=502, detail=f'OCR inference failed: {result.get("error", "unknown error")}'
-    )
 
 
 class OcrService:

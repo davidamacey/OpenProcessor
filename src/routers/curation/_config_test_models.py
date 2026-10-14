@@ -10,10 +10,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.routers.curation._config_common_models import ValidationReport
 from src.routers.curation._item_models import ItemDoc
 from src.routers.curation._prompt_pack_models import PromptPackBody
 from src.routers.curation._region_profile_models import RegionProfileBody
+from src.schemas.curation.config_common import ValidationReport
 from src.services.labeling.vlm_endpoint_body import VlmEndpointBody
 from src.services.labeling.vlm_probe import ProbeCall
 

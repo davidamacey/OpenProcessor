@@ -10,11 +10,11 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from fastapi import HTTPException
 
 from curation.query_fakes import matches
 from src.config.region_fields import get_region_fields
 from src.config.region_state import RegionStatus
+from src.core.exceptions import RequestRejectedError
 from src.services.curation.review_queries import build_tab_query
 
 
@@ -108,7 +108,7 @@ def test_detected_item_is_reachable_in_every_mode_except_verify_rejected_only() 
 
 
 def test_unknown_region_status_filter_raises_400() -> None:
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(RequestRejectedError) as exc:
         build_tab_query(
             'regions', include_test=False, text=None, max_rank=None, region_status='bogus'
         )

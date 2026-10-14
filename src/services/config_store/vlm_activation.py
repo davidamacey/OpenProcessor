@@ -128,13 +128,13 @@ async def write_vlm_activation(
 
 
 async def _target(client: Any, name: str, revision: int | None) -> VlmEndpoint:
-    from src.routers.curation._config_common_models import api_error
+    from src.services.rejections import rejection
 
     endpoint = await resolve_vlm_source(client, name, revision)
     if endpoint is None:
         if revision is not None and get_vlm_endpoint(name) is not None:
-            raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
-        raise api_error(404, 'not_found', f'{name!r} is not a known VLM endpoint')
+            raise rejection(404, 'unknown_revision', f'{name!r} has no revision {revision}')
+        raise rejection(404, 'not_found', f'{name!r} is not a known VLM endpoint')
     return endpoint
 
 
@@ -168,7 +168,7 @@ async def prepare_vlm_activation(
     """Resolve ``name@revision`` (``revision=None`` = its latest, pinned to a
     concrete number) and run the gate; write nothing. ``pack`` / ``profile``
     are the PENDING values of a combined settings request (see :data:`UNSET`).
-    Raises ``api_error`` (404 / 422)."""
+    Raises a rejection (404 / 422)."""
     await refresh_vlm_state(client)
     endpoint = await _target(client, name, revision)
     current_pack, current_profile = current_pack_and_profile()
@@ -218,7 +218,7 @@ async def activate_vlm(
     state: ProjectVlmState | None = None,
 ) -> tuple[dict[str, Any], GateResult]:
     """Gate, then activate ``name@revision`` in the bound project. Raises
-    ``api_error`` (404 / 422) or :class:`ActiveConflictError`."""
+    a rejection (404 / 422) or :class:`ActiveConflictError`."""
     prepared = await prepare_vlm_activation(
         client,
         name=name,

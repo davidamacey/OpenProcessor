@@ -30,7 +30,6 @@ from src.config.region_state import RegionStatus
 from src.routers.curation._common import (
     OpenSearchDep,
     RegionProfileDep,
-    _ensure_indexes,
     items_index,
     logger,
     router,
@@ -40,6 +39,7 @@ from src.routers.curation._region_row_models import RegionRowPage
 from src.routers.curation.regions import _REGION_SOURCE_EXCLUDES
 from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
 from src.services.curation.clustering.region_box_rows import box_state_clause
+from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.region_rows import rows_for_pairs
 from src.services.curation.wire import box_thumbnail_url
 
@@ -97,7 +97,7 @@ async def cluster_regions(
     ``force_repartition``). Poll GET {api_prefix}/regions/cluster/status."""
     from src.services.curation.clustering.region_cluster_jobs import start_region_cluster_job
 
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     return await start_region_cluster_job(
         opensearch,
         max_rank=max_rank,
@@ -126,7 +126,7 @@ async def refine_region_cluster_endpoint(
     from src.services.curation.clustering.region_box_clustering import refine_region_cluster
     from src.services.curation.clustering.region_cluster_jobs import mark_region_refine
 
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     try:
         result = await refine_region_cluster(opensearch, cluster_id)
     except Exception as exc:
@@ -160,7 +160,7 @@ async def list_region_clusters(
     thumbnails.
     """
     F = get_region_fields()
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     # A box sits in a cluster when it is accepted or false_positive (the FP
     # bucket keeps its geometry for FP analysis/training) and carries a
     # cluster id; the same nested scope drives the aggregation.
@@ -295,7 +295,7 @@ async def build_fp_centroids_endpoint(
     """
     from src.services.curation.clustering.region_cluster_jobs import start_region_fp_centroid_job
 
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     return await start_region_fp_centroid_job(opensearch)
 
 
@@ -342,7 +342,7 @@ async def suspected_false_positives(
 
     if threshold is None:
         threshold = SUSPECTED_FP_MAX_DISTANCE
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     store = FalsePositiveCentroidStore()
     if not store.load():
         return {

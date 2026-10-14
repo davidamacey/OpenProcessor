@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from src.routers.curation._config_common_models import api_error
+from src.routers.curation._api_error import api_error
 
 
 async def project_keymap_overrides(opensearch: Any) -> dict[str, list[str]]:

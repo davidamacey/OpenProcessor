@@ -259,7 +259,8 @@ def test_region_status_default_is_all_and_negative_frame_is_unset() -> None:
 
 
 def test_api_error_serves_only_the_fields_the_code_carries() -> None:
-    from src.routers.curation._config_common_models import ModelSharingUser, api_error
+    from src.routers.curation._api_error import api_error
+    from src.schemas.curation.config_common import ModelSharingUser
 
     exc = api_error(
         409,

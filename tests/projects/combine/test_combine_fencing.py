@@ -11,8 +11,8 @@ import time
 from typing import Any
 
 import pytest
-from fastapi import HTTPException
 
+from src.core.exceptions import RequestRejectedError
 from src.services.projects.combine import execute, service as svc
 from src.services.projects.combine.store import iter_jobs
 
@@ -54,7 +54,7 @@ async def test_a_stale_looking_job_whose_worker_is_alive_in_this_process_is_not_
     old = time.time() - 600
     os.utime(store.job.heartbeat_file, (old, old))
     assert svc.job_state(store.import_id)['status'] == 'interrupted'
-    with pytest.raises(HTTPException) as refused:
+    with pytest.raises(RequestRejectedError) as refused:
         await svc.resume(world.fake, store.import_id)
     assert refused.value.status_code == 409
     assert refused.value.detail['error'] == 'combine_not_resumable'  # type: ignore[index]

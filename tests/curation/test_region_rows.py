@@ -295,9 +295,9 @@ def test_an_item_with_more_matching_boxes_than_the_window_reports_truncation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # No ensure step ran (the project counts as bootstrapped): the window is OpenSearch's default 100.
-    from src.routers.curation import _common
+    from src.services.curation import index_bootstrap
 
-    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', {'default'})
+    monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', {'default'})
     client = _client(QueryFakeOpenSearch({ITEMS: _many_boxes_doc(150)}))
 
     resp = client.get(f'{PREFIX}/regions', params={'page_size': 10})

@@ -42,11 +42,10 @@ _HARNESS_SUFFIXES = {'.py', '.json', '.txt', '.md'}
 def _bakeoff_harness_files() -> list[str]:
     files = [
         'src/routers/curation/bakeoff.py',
-        'src/routers/curation/_bakeoff_models.py',
         'src/services/curation/eval_datasets.py',
         'src/services/curation/bakeoff_jobs.py',
     ]
-    for root in ('scripts/curation/bakeoff', 'examples/bakeoff'):
+    for root in ('scripts/curation/bakeoff', 'examples/bakeoff', 'src/schemas/bakeoff'):
         files += [
             p.relative_to(REPO_ROOT).as_posix()
             for p in sorted((REPO_ROOT / root).rglob('*'))
@@ -471,7 +470,7 @@ def test_dataset_id_rejects_traversal(env: dict[str, Path], client: TestClient) 
 
 
 def test_run_resolves_run_model_class_map(env: dict[str, Path], client: TestClient) -> None:
-    from src.routers.curation._bakeoff_models import BakeoffJobSpec
+    from src.schemas.bakeoff.job_spec import BakeoffJobSpec
 
     d = _live_export(env)
     ckpt = make_run(env, 'run5', export_dir=d, class_remap=LIVE_REMAP, imgsz=640)

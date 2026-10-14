@@ -12,8 +12,9 @@ import dataclasses
 from collections import Counter
 
 from src.config import get_curation_config
-from src.routers.curation._common import OpenSearchDep, _ensure_indexes, get_class_registry, router
-from src.routers.curation._config_common_models import ApiErrorResponse, api_error
+from src.config.ingest_profiles import ingest_primary_profile
+from src.routers.curation._api_error import api_error
+from src.routers.curation._common import OpenSearchDep, get_class_registry, router
 from src.routers.curation._error_models import (
     DetectorNotServableResponse,
     DetectorUnavailableResponse,
@@ -24,9 +25,10 @@ from src.routers.curation._ingest_policy_models import (
     IngestPolicyUpdate,
     PolicyPreviewClass,
 )
-from src.routers.curation.ingest import _get_detection_profile
+from src.schemas.curation.config_common import ApiErrorResponse
 from src.services.curation.detector_vocabulary import detector_labels
 from src.services.curation.embedding_state import DEFERRED, EMBEDDED, FAILED, NOT_SELECTED
+from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.ingest_detector import detector_problems, effective_profile
 from src.services.curation.ingest_policy import (
     DetectorOverride,
@@ -64,7 +66,7 @@ def _known_slugs(policy: IngestPolicyBody) -> set[str]:
     detector the project will run."""
     known = {c.class_name for c in get_class_registry().load().classes}
     try:
-        profile = effective_profile(_get_detection_profile(), policy.detector)
+        profile = effective_profile(ingest_primary_profile(), policy.detector)
         if profile.detector_model:
             known |= {label.slug for label in detector_labels(profile)}
     except (ValueError, OSError):
@@ -95,7 +97,7 @@ async def _require_servable(override: DetectorOverride) -> None:
 async def get_policy(opensearch: OpenSearchDep) -> IngestPolicy:
     """The project's ingest policy; the defaults (store and embed everything)
     when none was ever written."""
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     return await get_ingest_policy(opensearch)
 
 
@@ -114,7 +116,7 @@ async def put_policy(
     """Replace the policy. ``409`` when ``expected_revision`` is not the stored
     revision (re-read and retry). Affects future ingests and explicit embed
     runs only, never stored data."""
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     policy_body = IngestPolicyBody(
         detect=body.detect, embedding=body.embedding, detector=body.detector
     )
@@ -135,7 +137,7 @@ async def put_policy(
 async def preview_policy(body: IngestPolicyBody, opensearch: OpenSearchDep) -> IngestPolicyPreview:
     """What ``body.embedding`` would embed over the stored items (one image's
     items at a time, the same function ingest runs). Read-only."""
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     cfg = get_curation_config()
     total = (await opensearch.count(index=cfg.items_index)).get('count', 0)
     docs = await scan_items(

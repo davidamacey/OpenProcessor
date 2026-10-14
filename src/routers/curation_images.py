@@ -31,7 +31,7 @@ from src.services.curation.image_serving import (
     render_source_image,
     resolve_crop_root,
     resolve_safe_path,
-    serve_source_image,
+    source_media_type,
 )
 from src.services.curation.region_boxes import read_boxes
 
@@ -67,6 +67,19 @@ def _region_thumbnail_headers(image_path: Any, bbox: Any, size: int) -> dict[str
         f'{image_path}|{list(bbox)}|{size}'.encode(), usedforsecurity=False
     ).hexdigest()[:16]
     return {'Cache-Control': 'no-cache', 'ETag': f'"{tag}"'}
+
+
+async def serve_source_image(path: str, root: Path) -> FileResponse:
+    """Stream a source image under ``root`` via ``FileResponse`` (zero-copy), with
+    its media type and a 1h Cache-Control."""
+    safe_path = resolve_safe_path(path, root)
+    media_type = source_media_type(safe_path)
+    logger.debug('serve_source_image', path=path, resolved=str(safe_path), media_type=media_type)
+    return FileResponse(
+        path=str(safe_path),
+        media_type=media_type,
+        headers=_IMAGE_CACHE_HEADERS,
+    )
 
 
 # =============================================================================

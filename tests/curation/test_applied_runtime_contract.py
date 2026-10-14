@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from src.routers.curation._config_common_models import AppliedRuntime
+from src.schemas.curation.config_common import AppliedRuntime
 
 
 def _doc(**extra: object) -> dict[str, object]:

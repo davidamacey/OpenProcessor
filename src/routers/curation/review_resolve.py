@@ -24,7 +24,6 @@ from src.routers.curation._class_models import (
 )
 from src.routers.curation._common import (
     OpenSearchDep,
-    _ensure_indexes,
     get_class_registry,
     items_index,
     logger,
@@ -33,6 +32,7 @@ from src.routers.curation._common import (
 from src.routers.curation.classes import create_registry_class
 from src.services.curation.class_label import ItemLabel, class_label_update
 from src.services.curation.export_support import scroll_hits
+from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.new_class_terms import is_open_proposal, proposal_term_query
 
 
@@ -145,7 +145,7 @@ async def resolve_new_class_proposal(
     ``?dry_run=true`` reports ``matched`` / ``matched_ids`` and writes or
     creates nothing (``class_id`` is ``null`` when ``create`` was given).
     """
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     if (payload.class_id is None) == (payload.create is None):
         raise HTTPException(status_code=422, detail='exactly one of class_id or create is required')
 

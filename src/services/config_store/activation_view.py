@@ -8,11 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from src.routers.curation._config_common_models import (
-    ActiveConfigResponse,
-    ActiveRef,
-    AppliedRuntime,
-)
+from src.schemas.curation.config_common import ActiveConfigResponse, ActiveRef, AppliedRuntime
 from src.services.config_store import get_config_store
 from src.services.config_store.activation_apply import AXIS_STORAGE
 from src.services.config_store.index import get_activation, get_runtime_docs

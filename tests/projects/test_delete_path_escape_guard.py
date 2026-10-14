@@ -24,8 +24,8 @@ import dataclasses
 from dataclasses import replace
 
 import pytest
-from fastapi import HTTPException
 
+from src.core.exceptions import RequestRejectedError
 from src.services.projects import lifecycle
 from src.services.projects.registry import ProjectRegistry, record_to_doc, set_project_registry
 
@@ -75,7 +75,7 @@ def test_delete_refuses_path_escape_for_corrupted_train_jobs_dir(tmp_path) -> No
     deleting = asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
     assert exc_info.value.detail['error'] == 'path_escape'
     assert exc_info.value.status_code == 500
@@ -148,7 +148,7 @@ def test_delete_refuses_path_escape_when_dir_points_at_the_shared_root_itself(
     deleting = asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
     assert exc_info.value.detail['error'] == 'path_escape'
     assert exc_info.value.status_code == 500
@@ -184,7 +184,7 @@ def test_path_escape_check_runs_before_the_irreversible_index_delete() -> None:
     deleting = asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
     assert exc_info.value.detail['error'] == 'path_escape'
 

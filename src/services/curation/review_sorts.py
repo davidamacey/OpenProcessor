@@ -16,7 +16,7 @@ Selection semantics: ``?sort`` absent or literal
 ``sort_id``, or one whose current :class:`ReviewSort.status` is ``'shadow'``
 or ``'disabled'``, is a real user-facing selection error — :func:`build_sort`
 raises :class:`ValueError` so the router turns it into
-``HTTPException(400, ...)`` ("shadow entries are computed+logged but
+``RequestRejectedError(400, ...)`` ("shadow entries are computed+logged but
 ``?sort=<shadow-id>`` returns 400"). This is deliberately NOT a
 silent fallback to the tab default — that would hide a mistaken/stale
 client request behind a result that looks fine but isn't what was asked for.
@@ -467,7 +467,7 @@ async def build_sort(
       entry's clause is used; ``fallback_reason`` is ``None``.
     * ``sort_id`` is unknown, or names a ``'shadow'``/``'disabled'`` entry →
       raises :class:`ValueError` (the router converts this to
-      ``HTTPException(400, ...)``). This is an explicit user-facing
+      ``RequestRejectedError(400, ...)``). This is an explicit user-facing
       selection error, not a silent fallback — the caller
       asked for something that either doesn't exist or isn't ready, and
       the honest response is "that's not a valid choice," not quietly

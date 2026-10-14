@@ -18,14 +18,8 @@ from src.services.labeling.vlm_prompts import FORMATTED_PLACEHOLDERS, REPLY_KEY_
 
 
 if TYPE_CHECKING:
-    # Deferred at runtime (imported inside functions below): this module is
-    # imported by src.routers.curation.prompt_packs, which is itself
-    # imported (as a side effect) by src.routers.curation.__init__ --
-    # importing _config_common_models at module scope here would re-enter
-    # that package's __init__ while it is still executing (same fix
-    # keymap_validator.py already applies for the same reason).
     from src.config.detection_profile import DetectionProfile
-    from src.routers.curation._config_common_models import ValidationIssue, ValidationReport
+    from src.schemas.curation.config_common import ValidationIssue, ValidationReport
 
 
 #: Slug rule shared by packs and profiles (any_domain_plan.md §3.3).
@@ -68,7 +62,7 @@ def _issue(
     field: str | None = None,
     detail: dict[str, Any] | None = None,
 ) -> ValidationIssue:
-    from src.routers.curation._config_common_models import ValidationIssue
+    from src.schemas.curation.config_common import ValidationIssue
 
     return ValidationIssue(
         code=code,
@@ -464,7 +458,7 @@ def validate_pack(
     full set for create/clone and an empty set (or one already excluding
     itself) for PUT, where the name cannot change.
     """
-    from src.routers.curation._config_common_models import ValidationReport
+    from src.schemas.curation.config_common import ValidationReport
 
     errors: list[ValidationIssue] = []
     warnings: list[ValidationIssue] = []

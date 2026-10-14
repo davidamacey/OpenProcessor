@@ -24,7 +24,7 @@ from src.routers.curation._dataset_import_models import (
     NextStep,
     ResolvedMapTarget,
 )
-from src.routers.curation._dataset_issue_models import issues_to_wire
+from src.routers.curation._dataset_issue_wire import issues_to_wire
 from src.services.curation.dataset_import.actions import import_actions
 from src.services.curation.dataset_import.options import DatasetImportOptions
 from src.services.curation.dataset_import.prepare import mapping_from_dict
