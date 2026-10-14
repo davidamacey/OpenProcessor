@@ -11,9 +11,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { strategiesStore } from './strategies.svelte';
 import { EMPTY_METHODS, isScopedAssistAvailable } from '$lib/strategies';
 
-// Same METHODS_TODAY / METHODS_WITH_ASSIST_AXES fixtures as
-// strategies.test.ts (this plan §6) — inlined rather than cross-imported
-// from a sibling *.test.ts file, which isn't a pattern this repo uses.
+// The METHODS_TODAY / METHODS_WITH_ASSIST_AXES shapes of
+// $lib/test/fixtures/methodsPayloads.ts (this plan §6), trimmed to the
+// entries the store tests need.
 const METHODS_TODAY = {
   strategies: [
     {

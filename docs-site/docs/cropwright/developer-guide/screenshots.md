@@ -24,7 +24,7 @@ and drawn by Cropwright, not by either dataset.
 
 ## Allow-listed side-effect-free calls
 
-Besides GET/HEAD the guard (`READ_ONLY_CALLS` in the script) lets through
+Besides GET/HEAD the guard (`READ_ONLY_CALLS` in `frontend/scripts/docs_screenshots/guard.py`) lets through
 exactly these calls, each of which writes nothing server-side:
 
 | Call | Why |

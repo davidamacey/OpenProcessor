@@ -22,7 +22,7 @@ this exercises the fix for both.
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS
 
 import json
 import re
@@ -99,7 +99,7 @@ def test_dashboard_run_vlm_polls_the_per_job_status_endpoint(stub, page, app_url
     stub.on("GET", r"/pipeline/events", (200, sse_body, "text/event-stream"))
 
     # Registered FIRST so the more specific per-job pattern (registered
-    # below) is tried before it — conftest.py's Stub tries handlers in
+    # below) is tried before it — harness/stub.py's Stub tries handlers in
     # reverse registration order.
     def bare_status_handler(request, _match):
         bare_status_calls.append(request.url)

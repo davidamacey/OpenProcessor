@@ -63,7 +63,7 @@ describe('routes wired to <StrategyBar> keep their keydown listener count unchan
 // phase adds zero new global keybindings).
 // Audit-remediation plan Phase 6 (P1-2/P1-3): StrategyBar's coverage
 // gating logic must go through the shared, unit-tested `hasFieldCoverage`
-// (strategies.test.ts covers its null-vs-zero cases directly) rather than
+// (strategies.availability.test.ts covers its null-vs-zero cases directly) rather than
 // a local reimplementation. This is a static-scan regression guard for the
 // exact bug pattern that shipped before this phase -- `?? 0` conflating
 // "coverage unknown" with "coverage confirmed zero" -- since this repo has

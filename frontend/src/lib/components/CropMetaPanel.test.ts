@@ -27,20 +27,26 @@ import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(path.join(here, 'CropMetaPanel.svelte'), 'utf-8');
+const slotsSrc = readFileSync(
+  path.join(here, 'cropMeta', 'CropMetaSlots.svelte'),
+  'utf-8',
+);
 
 describe('DQ-m7: region/slot fields render for any crop carrying slot evidence, not just class-bound ones', () => {
   it("iterates every registered slot (slotRegistry.all), not slots bound to the crop's own class", () => {
-    expect(src).toMatch(/const presentSlots = \$derived\(\s*slotRegistry\.all\.filter/);
+    expect(slotsSrc).toMatch(
+      /const presentSlots = \$derived\(\s*slotRegistry\.all\.filter/,
+    );
     // The old `boundSlots` derived (backed by forClass()) is gone — a doc
     // comment above still mentions the old call for context.
-    expect(src).not.toMatch(/const boundSlots = /);
+    expect(slotsSrc).not.toMatch(/const boundSlots = /);
   });
 
   it('gates each slot block on slotIsPresent(slotOf(crop, spec)) — real evidence, not class binding', () => {
-    expect(src).toMatch(
+    expect(slotsSrc).toMatch(
       /slotRegistry\.all\.filter\(\(spec\) => slotIsPresent\(slotOf\(crop, spec\)\)\)/,
     );
-    expect(src).toMatch(/\{#each presentSlots as spec \(spec\.key\)\}/);
+    expect(slotsSrc).toMatch(/\{#each presentSlots as spec \(spec\.key\)\}/);
   });
 });
 

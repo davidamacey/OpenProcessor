@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import re
 
-from conftest import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS
 
 from fixtures.wire import project, projects_response
 

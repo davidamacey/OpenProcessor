@@ -6,7 +6,7 @@ empty_state.has_probe_predictions checks for.
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS
 
 from test_train_gpus import register_train_mount
 

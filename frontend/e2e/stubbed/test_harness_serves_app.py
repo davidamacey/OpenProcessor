@@ -7,7 +7,7 @@ container starting or stopping on this machine is enough). The SPA's ~60
 boot chunks queue behind 6 connections, so one such event failed a chunk
 import and left the page at SvelteKit's "500 Internal Error". The `stub`
 fixture now fulfills every app-origin request through `route.fetch()`
-(`serve_app_through_harness`, e2e/conftest.py), which never touches the
+(`serve_app_through_harness`, e2e/harness/assets.py), which never touches the
 browser's socket pool. If that routing is removed or its pattern stops
 matching, this test fails.
 """
@@ -16,7 +16,8 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
-from conftest import ACTION_TIMEOUT_MS, API_PREFIX, fetch_app_asset
+from harness.assets import fetch_app_asset
+from harness.constants import ACTION_TIMEOUT_MS, API_PREFIX
 
 
 def test_every_app_origin_request_is_fulfilled_by_the_harness(stub, page, app_url):

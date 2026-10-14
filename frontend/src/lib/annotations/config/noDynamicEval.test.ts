@@ -51,7 +51,17 @@ const SINKS: Array<{ name: string; pattern: RegExp }> = [
 describe('a deployment-supplied profile can never reach a code-evaluation sink', () => {
   it('scans a sane population', () => {
     expect(scanned.length).toBeGreaterThan(5);
-    expect(scanned).toContain(path.join('config', 'parseSlotConfig.ts'));
+    for (const parser of [
+      'parseSlotConfig.ts',
+      'parseCommon.ts',
+      'parseSlotRegion.ts',
+      'parseSlotAppearance.ts',
+      'parseSlotLifecycle.ts',
+      'parseSlotQueue.ts',
+      'parseSlotCohorts.ts',
+    ]) {
+      expect(scanned).toContain(path.join('config', parser));
+    }
   });
 
   it('finds zero offenders', () => {

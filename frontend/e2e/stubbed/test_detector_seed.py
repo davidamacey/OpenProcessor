@@ -11,7 +11,8 @@ from __future__ import annotations
 import copy
 from pathlib import Path
 
-from conftest import ACTION_TIMEOUT_MS, wait_for_paint
+from harness.constants import ACTION_TIMEOUT_MS
+from harness.waits import wait_for_paint
 from playwright.sync_api import expect
 
 from test_ingest_policy import DETECTOR, POLICY, _ingest_config

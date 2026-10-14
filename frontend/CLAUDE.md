@@ -190,7 +190,7 @@ word anywhere under `src/` (code, strings, comments, tests). Fix the file; do no
 allow-list. Tests use the neutral widget domain (`WIDGET_TAG_PROFILE`, `widgetTagSlot` in
 `src/lib/test/fixtures/regionSlot.ts`; `installServedRegionProfile(...)` /
 `resetDeploymentSlots()` for the live registry). `exampleProfile.test.ts` parses every
-`examples/annotation-profiles/*.json`. e2e `conftest.py` serves the widget profile on `/health`.
+`examples/annotation-profiles/*.json`. the e2e stub (`e2e/harness/stub.py`) serves the widget profile on `/health`.
 
 ### Shared helpers (one home each)
 

@@ -15,7 +15,7 @@ profile request the page makes that a test did not expect fails the test.
      real.
   4. `test_rollback_and_turn_off_from_the_list`.
   5. `test_clone_a_template_opens_the_new_profile`.
-  6. `test_absent_when_region_profiles_404` — conftest's default 404.
+  6. `test_absent_when_region_profiles_404` — the harness stub's default 404.
 """
 
 from __future__ import annotations
@@ -23,7 +23,9 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from conftest import ACTION_TIMEOUT_MS, REPROCESS_VOCABULARY, expect_handled
+from harness.constants import ACTION_TIMEOUT_MS
+from harness.stub import REPROCESS_VOCABULARY
+from harness.waits import expect_handled
 from playwright.sync_api import expect
 
 CLEAN = {"ok": True, "errors": [], "warnings": [], "force_allowed": False}

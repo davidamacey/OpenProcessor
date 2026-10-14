@@ -17,7 +17,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from conftest import ACTION_TIMEOUT_MS, expect_handled
+from harness.constants import ACTION_TIMEOUT_MS
+from harness.waits import expect_handled
 from playwright.sync_api import expect
 
 from test_prompt_packs import BODY as PACK_BODY
