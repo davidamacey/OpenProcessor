@@ -57,7 +57,8 @@ tests/config/test_retired_env.py # exercises every retired env-var name in src/c
 tests/curation/test_vlm_vocabulary.py # guard test: pins gemma_*->vlm_* / v6_*->classifier_* renames via a literal vendor regex
 tests/curation/test_wire_contract.py:plate|gemma # negative assertions that these retired-name literals are absent / rejected on the wire
 tests/integration/test_stats_router.py:by_lpr|by_sam3|gemma # negative test: asserts these retired stats-key literals are absent
-tests/curation/test_bakeoff_harness.py # guard test + its own DOMAIN_WORDS regex scanning bakeoff harness files for domain words
+tests/curation/bakeoff_harness/test_domain_neutral_core_guard.py # guard test + its own DOMAIN_WORDS regex scanning bakeoff harness files for domain words
+tests/curation/bakeoff_harness/test_datasets_and_converters.py # negative assertion that the generic datasets module hardcodes no domain class constant
 tests/curation/bakeoff_router/test_profiles_and_baselines.py # negative test: asserts the retired lpr_nanov11_640 id is absent from served baselines
 tests/curation/bakeoff_router/test_contract_and_evaluator.py # asserts the harness file listing includes the example profile backend path
 tests/curation/test_models_unload.py # guard tests: prove there is no hardcoded 'lpr_' prefix special-case
