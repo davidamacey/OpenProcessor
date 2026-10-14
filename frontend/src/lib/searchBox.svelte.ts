@@ -17,7 +17,7 @@ import { apiErrorText } from '$lib/api_errors';
  * touches labeling.
  */
 
-import type { SearchCrop } from './types';
+import type { SearchCrop } from '$lib/types_review';
 
 export interface SemanticSearchResult {
   items: SearchCrop[];

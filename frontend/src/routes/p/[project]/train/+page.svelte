@@ -78,13 +78,9 @@
   import { exportDedupDefault, isDatasetExportAvailable } from '$lib/strategies';
   import { isTerminalTrainState } from '$lib/trainResults';
   import { strategiesStore } from '$stores/strategies.svelte';
-  import type {
-    Crop,
-    ExportDataset,
-    ExportStatus,
-    ReviewItem,
-    TestHoldoutStats,
-  } from '$lib/types';
+  import type { Crop } from '$lib/types';
+  import type { ExportDataset, ExportStatus, TestHoldoutStats } from '$lib/types_export';
+  import type { ReviewItem } from '$lib/types_review';
   import type {
     ClassSubsetPreset,
     PreflightReport,

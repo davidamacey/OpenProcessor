@@ -14,7 +14,8 @@
     listDatasets,
   } from '$lib/api_export';
   import { getStats } from '$lib/api_stats';
-  import type { ExportStatus, StatsSummary, TestHoldoutStats } from '$lib/types';
+  import type { ExportStatus, TestHoldoutStats } from '$lib/types_export';
+  import type { StatsSummary } from '$lib/types_health';
   import {
     buildExportRows,
     GAP_COLUMN_TITLE,

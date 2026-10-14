@@ -29,7 +29,7 @@ import { getHealth } from '$lib/api_stats';
 import { installServedRegionProfile } from '$lib/annotations/registeredSlots';
 import { onProjectChange } from '$lib/projectChange';
 import { setRegionProfileUnavailableListener } from '$lib/regionProfileUnavailable';
-import type { ServedRegionProfile } from '$lib/types';
+import type { ServedRegionProfile } from '$lib/types_health';
 import { toastStore } from '$stores/toast.svelte';
 
 const REGION_PROFILE_TIMEOUT_MS = 2000;

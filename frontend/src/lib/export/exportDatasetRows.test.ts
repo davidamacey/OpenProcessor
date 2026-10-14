@@ -6,7 +6,8 @@ import {
   registryArtifactsAvailable,
   splitExportClasses,
 } from './exportDatasetRows';
-import type { ExportDataset, StatsSummary, TestHoldoutStats } from '$lib/types';
+import type { ExportDataset, TestHoldoutStats } from '$lib/types_export';
+import type { StatsSummary } from '$lib/types_health';
 
 function dataset(over: Partial<ExportDataset>): ExportDataset {
   return {

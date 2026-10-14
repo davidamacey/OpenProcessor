@@ -11,7 +11,7 @@ import IngestBatchPanel from './IngestBatchPanel.svelte';
 import { ingestBatch } from '$lib/api_ingest';
 import { resolveIngestConfig } from '$lib/ingest/ingestConfig';
 import { servedIngestConfig } from '$lib/test/fixtures/ingestConfig';
-import type { BatchIngestResponse } from '$lib/types';
+import type { BatchIngestResponse } from '$lib/types_ingest';
 
 vi.mock('$lib/api_ingest', async () => {
   const actual =

@@ -3,8 +3,11 @@
  * (projects P2, §5.5). Everything here reads served fields; nothing
  * derives a mapping, a count or an owner.
  */
-import type { ModelInfo } from '$lib/types';
-import type { ModelClassMappingSummary, ModelSharingUser } from '$lib/types_models';
+import type {
+  ModelInfo,
+  ModelClassMappingSummary,
+  ModelSharingUser,
+} from '$lib/types_models';
 
 /**
  * `owner`: the server says this project owns the model (`owned`), so the

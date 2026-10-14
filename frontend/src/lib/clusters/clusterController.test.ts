@@ -14,7 +14,8 @@ import {
 } from './clusterController.svelte';
 import { createPager } from '$lib/pager.svelte';
 import { createSelection } from '$lib/selection.svelte';
-import type { Crop, RegistryClass } from '$lib/types';
+import type { Crop } from '$lib/types';
+import type { RegistryClass } from '$lib/types_classes';
 
 vi.mock('$lib/api_clusters', async () => {
   const actual =

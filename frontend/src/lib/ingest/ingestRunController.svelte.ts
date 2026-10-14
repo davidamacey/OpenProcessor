@@ -28,7 +28,7 @@ import type {
   BatchIngestResponse,
   IngestPathLookupResponse,
   IngestUploadRequest,
-} from '$lib/types';
+} from '$lib/types_ingest';
 import type { IngestFile } from './fileSource';
 import {
   chunkForLookup,

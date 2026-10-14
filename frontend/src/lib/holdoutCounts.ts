@@ -8,7 +8,7 @@
  * (`GET /test_holdout/stats` `by_class`) next to it; the trainable count
  * itself is the served `trainable` on `/stats/classes`.
  */
-import type { TestHoldoutStats } from '$lib/types';
+import type { TestHoldoutStats } from '$lib/types_export';
 
 /** class_id -> served test-holdout count; empty when holdout stats are absent. */
 export function holdoutByClass(

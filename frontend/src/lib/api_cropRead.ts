@@ -10,8 +10,8 @@ import type {
   CropFilter,
   CropHistoryResponse,
   PaginatedResponse,
-  SearchCrop,
 } from '$lib/types';
+import type { SearchCrop } from '$lib/types_review';
 import type { ReprocessRequest } from '$lib/types_import';
 
 export async function getCrops(

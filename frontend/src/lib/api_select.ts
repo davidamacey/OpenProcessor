@@ -5,12 +5,12 @@
 import { apiFetch, isPlainObject, scoped } from '$lib/api';
 import { ApiError } from '$lib/api_errors';
 import type { ExcludeReason } from '$lib/api_cropWrites';
+import type { BulkLabelResult } from '$lib/types';
 import type {
-  BulkLabelResult,
   DiverseSelection,
   SelectDiverseScope,
   SelectJobStatus,
-} from '$lib/types';
+} from '$lib/types_review';
 import type {
   ItemSelection,
   SelectionDryRun,

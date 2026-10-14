@@ -16,7 +16,7 @@
   import { onDestroy, onMount } from 'svelte';
   import { getRegionDrain } from '$lib/api_ingest';
   import { formatTime } from '$lib/format/time';
-  import type { RegionDrain } from '$lib/types';
+  import type { RegionDrain } from '$lib/types_ingest';
 
   interface Props {
     pollIntervalS?: number;

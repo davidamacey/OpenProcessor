@@ -36,7 +36,7 @@
   import { regionProfileStore } from '$stores/regionProfile.svelte';
   import type { IngestFile } from '$lib/ingest/fileSource';
   import type { IngestRunState } from '$lib/ingest/ingestRunController.svelte';
-  import type { IngestConfig, RegionDrain } from '$lib/types';
+  import type { IngestConfig, RegionDrain } from '$lib/types_ingest';
 
   // the labeled-dataset import lives under /datasets; the link shows
   // only when the backend serves it (a one-shot probe per project).

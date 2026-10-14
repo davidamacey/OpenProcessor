@@ -73,13 +73,9 @@
   import { REGION_TAB_ID } from '$lib/annotations/servedRegionSlot';
   import { regionProfileStore } from '$stores/regionProfile.svelte';
   import { isDiverseOverlayAvailable } from '$lib/strategies';
-  import type {
-    Crop,
-    DiverseSelection,
-    RegistryClass,
-    ReviewItem,
-    ReviewTab,
-  } from '$lib/types';
+  import type { Crop } from '$lib/types';
+  import type { RegistryClass } from '$lib/types_classes';
+  import type { DiverseSelection, ReviewItem, ReviewTab } from '$lib/types_review';
   import { createPager } from '$lib/pager.svelte';
   import { capCropDisplayStyle } from '$lib/review/cropDisplaySize';
   import { createStrategyBar } from '$lib/strategyBar.svelte';

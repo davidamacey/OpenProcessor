@@ -13,7 +13,7 @@ import type { SlotRegistry } from '$lib/annotations/registry';
 import { classesStore } from '$stores/classes.svelte';
 import { keymapStore } from '$stores/keymap.svelte';
 import { toastStore } from '$stores/toast.svelte';
-import type { RegistryClass } from '$lib/types';
+import type { RegistryClass } from '$lib/types_classes';
 
 /**
  * Single-char keys reserved for a labeling action — never bindable to a

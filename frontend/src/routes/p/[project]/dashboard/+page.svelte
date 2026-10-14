@@ -42,7 +42,9 @@
   import { getCrops, getThumbUrl } from '$lib/api_cropRead';
   import { exportYolo, getTestHoldoutStats } from '$lib/api_export';
   import { getStats } from '$lib/api_stats';
-  import type { Crop, ExportResult, StatsSummary, TestHoldoutStats } from '$lib/types';
+  import type { Crop } from '$lib/types';
+  import type { ExportResult, TestHoldoutStats } from '$lib/types_export';
+  import type { StatsSummary } from '$lib/types_health';
   import { toastStore } from '$stores/toast.svelte';
   import Modal from '$components/Modal.svelte';
 

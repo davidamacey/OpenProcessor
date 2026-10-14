@@ -19,7 +19,7 @@ import SelectionActionDialog from './SelectionActionDialog.svelte';
 import { createSelectionActionController } from '$lib/itemFilter/selectionActionController.svelte';
 import { classesStore } from '$stores/classes.svelte';
 import { undoStore } from '$stores/undo.svelte';
-import type { RegistryClass } from '$lib/types';
+import type { RegistryClass } from '$lib/types_classes';
 
 let target: HTMLDivElement;
 let instance: ReturnType<typeof mount> | null = null;

@@ -3,7 +3,7 @@ import { reservedHotkeyLetters, setClassHotkey } from './classHotkey';
 import { classesStore } from '$stores/classes.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import { ApiError } from '$lib/api_errors';
-import type { RegistryClass } from '$lib/types';
+import type { RegistryClass } from '$lib/types_classes';
 import {
   installServedRegionProfile,
   resetDeploymentSlots,

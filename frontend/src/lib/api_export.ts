@@ -11,7 +11,7 @@ import type {
   SingleClassExportStatus,
   TestHoldoutFreezeResult,
   TestHoldoutStats,
-} from '$lib/types';
+} from '$lib/types_export';
 import type { DatasetExportSpec } from '$lib/annotations/datasetExport';
 
 /**

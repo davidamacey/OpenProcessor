@@ -21,7 +21,7 @@
     getTrainGpus,
     type TrainGpuOptionsResponse,
   } from '$lib/api_train';
-  import type { TestHoldoutStats } from '$lib/types';
+  import type { TestHoldoutStats } from '$lib/types_export';
   import type {
     AugmentationSpec,
     CampaignRunSpec,

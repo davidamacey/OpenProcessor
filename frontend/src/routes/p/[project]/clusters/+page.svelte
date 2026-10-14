@@ -44,7 +44,8 @@
   import SemanticSearchBox from '$lib/components/SemanticSearchBox.svelte';
   import ShortcutsButton from '$lib/components/ShortcutsButton.svelte';
   import SubjectScopeToggle from '$lib/components/SubjectScopeToggle.svelte';
-  import type { ClusterFilter, RegistryClass, Cluster, Crop } from '$lib/types';
+  import type { ClusterFilter, Cluster, Crop } from '$lib/types';
+  import type { RegistryClass } from '$lib/types_classes';
   import {
     filterPersistKey,
     parsePersistedFilter,

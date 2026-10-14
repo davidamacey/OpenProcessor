@@ -5,13 +5,13 @@
 import { apiFetch, qs, scoped } from '$lib/api';
 import { mapRawCrop, type RawCrop } from '$lib/api_cropMap';
 import type { ReprocessRequest } from '$lib/types_import';
+import type { PaginatedResponse } from '$lib/types';
 import type {
-  PaginatedResponse,
   ResolveNewClassRequest,
   ResolveNewClassResponse,
   ReviewItem,
   ReviewTab,
-} from '$lib/types';
+} from '$lib/types_review';
 
 /** One `value`/`label` option of a `ReviewFilterSpec` (3f1a11e adoption). */
 export interface ReviewFilterOption {

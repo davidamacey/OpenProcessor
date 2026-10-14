@@ -8,7 +8,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createReviewQueueController } from './reviewController.svelte';
 import { createPager } from '$lib/pager.svelte';
-import type { ReviewItem } from '$lib/types';
+import type { ReviewItem } from '$lib/types_review';
 
 vi.mock('$lib/api_cropWrites', async () => {
   const actual =

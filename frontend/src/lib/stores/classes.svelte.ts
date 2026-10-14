@@ -10,7 +10,7 @@
 import { getClasses } from '$lib/api_classes';
 import { apiErrorText } from '$lib/api_errors';
 import { onProjectChange } from '$lib/projectChange';
-import type { ClassThresholds, RegistryClass } from '$lib/types';
+import type { ClassThresholds, RegistryClass } from '$lib/types_classes';
 
 const REFRESH_INTERVAL_MS = 30_000;
 

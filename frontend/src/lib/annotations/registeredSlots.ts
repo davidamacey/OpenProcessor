@@ -31,7 +31,7 @@ import { resolveSlotRegistry, type SlotRegistry } from './registry';
 import { regionSlotFromServedProfile } from './servedRegionSlot';
 import { normalizeClassName } from '$lib/classNameKey';
 import type { SlotSpec } from './types';
-import type { ServedRegionProfile } from '$lib/types';
+import type { ServedRegionProfile } from '$lib/types_health';
 
 /** Slots compiled into this build — tier 1. Never mutated. */
 export const builtinSlots: SlotSpec[] = [];

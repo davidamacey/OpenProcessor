@@ -26,12 +26,11 @@
   import { formatDateOnly } from '$lib/format/date';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { reservedHotkeyLetters, setClassHotkey } from '$lib/classHotkey';
+  import type { ClassMergeDryRun, RegistryClass } from '$lib/types_classes';
   import type {
-    ClassMergeDryRun,
-    RegistryClass,
     ResolveNewClassRequest,
     ResolveNewClassResponse,
-  } from '$lib/types';
+  } from '$lib/types_review';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';

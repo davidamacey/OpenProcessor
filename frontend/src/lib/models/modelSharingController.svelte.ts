@@ -13,8 +13,8 @@
 import { apiErrorText } from '$lib/api_errors';
 import { getModelClassMapping, setModelSharing } from '$lib/api_models';
 import { projectErrorDetail } from '$lib/api_projects';
-import type { ModelInfo } from '$lib/types';
 import type {
+  ModelInfo,
   ModelClassMappingResponse,
   ModelSharingResponse,
   ModelSharingUser,

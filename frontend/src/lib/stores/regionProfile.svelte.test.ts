@@ -14,7 +14,7 @@ import {
 } from '$lib/annotations/registeredSlots';
 import { REGION_PROFILE_UNAVAILABLE_MESSAGE } from '$lib/regionProfileUnavailable';
 import { WIDGET_TAG_CLASS, WIDGET_TAG_PROFILE } from '$lib/test/fixtures/regionSlot';
-import type { ApiHealth } from '$lib/types';
+import type { ApiHealth } from '$lib/types_health';
 import { toastStore } from './toast.svelte';
 import {
   loadRegionProfile,

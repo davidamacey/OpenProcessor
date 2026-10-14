@@ -3,8 +3,9 @@
  * (`/models*`).
  */
 import { apiFetch, qs, scoped } from '$lib/api';
-import type { ModelsStatus, UnloadModelResponse } from '$lib/types';
 import type {
+  ModelsStatus,
+  UnloadModelResponse,
   ModelClassMappingResponse,
   ModelSharingRequest,
   ModelSharingResponse,

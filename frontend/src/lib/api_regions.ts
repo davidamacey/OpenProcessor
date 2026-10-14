@@ -6,7 +6,8 @@ import { apiFetch, qs, scoped } from '$lib/api';
 import type { SlotData, SlotKey, XYXY } from '$lib/annotations/types';
 import type { ItemFilterQuery } from '$lib/types_itemFilter';
 import { mapCropSlots } from '$lib/annotations/cropSlots';
-import type { Cluster, ServedRegionProfile } from '$lib/types';
+import type { Cluster } from '$lib/types';
+import type { ServedRegionProfile } from '$lib/types_health';
 
 // -- region browse / training-cohort selection --------------------------
 

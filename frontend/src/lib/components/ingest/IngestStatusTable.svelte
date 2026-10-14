@@ -9,7 +9,7 @@
    */
   import { onDestroy, onMount } from 'svelte';
   import { getIngestStatus } from '$lib/api_ingest';
-  import type { IngestStatus } from '$lib/types';
+  import type { IngestStatus } from '$lib/types_ingest';
 
   interface Props {
     /** Bump this (e.g. a counter) to trigger an out-of-band refresh. */

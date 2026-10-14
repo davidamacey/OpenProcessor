@@ -16,7 +16,7 @@
 
 import { apiErrorText } from '$lib/api_errors';
 import { projectErrorDetail } from '$lib/api_projects';
-import type { ModelInfo } from './types';
+import type { ModelInfo } from '$lib/types_models';
 
 export type UnloadButtonState = 'hidden' | 'normal' | 'force-required';
 

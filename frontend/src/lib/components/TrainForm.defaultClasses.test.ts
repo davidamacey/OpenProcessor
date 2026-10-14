@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import TrainForm from './TrainForm.svelte';
 import { classesStore } from '$stores/classes.svelte';
-import type { RegistryClass } from '$lib/types';
+import type { RegistryClass } from '$lib/types_classes';
 import type { TrainJobSpec } from '$lib/types_train';
 
 function cls(id: number, gap: number): RegistryClass {

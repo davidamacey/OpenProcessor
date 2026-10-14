@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import spec from '$contracts/openapi/curation.json';
-import type { ServedRegionProfile } from '$lib/types';
+import type { ServedRegionProfile } from '$lib/types_health';
 
 type Schema = { properties?: Record<string, unknown>; required?: string[] };
 const schemas = (spec as { components: { schemas: Record<string, Schema> } }).components

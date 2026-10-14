@@ -11,7 +11,7 @@ import type {
   RegistryClassCreate,
   RegistryClassMerge,
   RegistryClassUpdate,
-} from '$lib/types';
+} from '$lib/types_classes';
 
 /** `PUT /classes/{id}` 422 `hotkey_reserved` (plan §4.5). */
 export interface HotkeyReservedDetail {

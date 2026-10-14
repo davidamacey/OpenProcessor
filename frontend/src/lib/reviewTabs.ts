@@ -1,6 +1,6 @@
 import { registeredSlots, onRegisteredSlotsChanged } from './annotations/registeredSlots';
 import type { SlotKey, SlotSpec } from './annotations/types';
-import type { ReviewTab, SlotReviewTab } from './types';
+import type { ReviewTab, SlotReviewTab } from '$lib/types_review';
 
 export interface ReviewTabDef {
   id: ReviewTab;

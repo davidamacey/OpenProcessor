@@ -10,7 +10,7 @@
  * neutral rather than as a warning.
  */
 
-import type { ModelInfo } from './types';
+import type { ModelInfo } from '$lib/types_models';
 
 export interface StatusPill {
   label: string;

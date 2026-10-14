@@ -1,6 +1,6 @@
 <script module lang="ts">
   import { apiErrorText } from '$lib/api_errors';
-  import type { CropContextResponse } from '$lib/types';
+  import type { CropContextResponse, Crop } from '$lib/types';
   import { activeProjectKey } from '$lib/api';
   import { onProjectChange } from '$lib/projectChange';
 
@@ -42,7 +42,6 @@
    * matching registered `SlotSpec`, never a hardcoded noun.
    */
   import { getCropContext, getSourceImageScaled } from '$lib/api_cropRead';
-  import type { Crop } from '$lib/types';
   import type { OverlayShape } from '$lib/configTest/overlayShapes';
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import { slotOf, subBoxSlotFor } from '$lib/annotations/cropSlots';

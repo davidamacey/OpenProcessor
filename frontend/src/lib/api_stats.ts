@@ -3,7 +3,8 @@
  */
 import { apiFetch, globalApi, qs, scoped } from '$lib/api';
 import { apiErrorText } from '$lib/api_errors';
-import type { ApiHealth, ClassThresholds, GlobalHealth, StatsSummary } from '$lib/types';
+import type { ClassThresholds } from '$lib/types_classes';
+import type { ApiHealth, GlobalHealth, StatsSummary } from '$lib/types_health';
 import type { ItemFilterQuery } from '$lib/types_itemFilter';
 
 // -- endpoints -----------------------------------------------------------

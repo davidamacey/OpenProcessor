@@ -11,7 +11,7 @@ import type {
   IngestStatus,
   IngestUploadRequest,
   RegionDrain,
-} from '$lib/types';
+} from '$lib/types_ingest';
 
 // ===========================================================================
 // Ingest ({API_PREFIX}/ingest/*) — bring images into the pool.

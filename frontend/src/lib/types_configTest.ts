@@ -8,7 +8,7 @@
  * the wrappers in `api_configTest.ts` also map it through `mapRawCrop`
  * into `preview`.
  */
-import type { Crop } from './types';
+import type { Crop } from '$lib/types';
 import type { ValidationReport } from './types_config';
 import type { PromptPackBody } from './types_packs';
 import type { RegionProfileBody } from './types_profiles';

@@ -15,7 +15,7 @@
    * batches the detector inference internally.
    */
   import { ingestBatch } from '$lib/api_ingest';
-  import type { BatchIngestResponse } from '$lib/types';
+  import type { BatchIngestResponse } from '$lib/types_ingest';
   import type { ResolvedIngestConfig } from '$lib/ingest/ingestConfig';
   import { toastStore } from '$stores/toast.svelte';
 

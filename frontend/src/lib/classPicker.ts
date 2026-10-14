@@ -19,7 +19,7 @@
  */
 
 import { isAssignableClass, isItemClassTarget } from '$lib/classVisibility';
-import type { RegistryClass } from '$lib/types';
+import type { RegistryClass } from '$lib/types_classes';
 
 /** Rank buckets, lowest = best match. Exact match beats prefix beats
  *  substring beats subsequence ("fuzzy"); anything else doesn't match. */
