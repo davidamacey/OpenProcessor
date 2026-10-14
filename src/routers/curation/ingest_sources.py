@@ -174,7 +174,7 @@ def status_wire(source: IngestSource) -> IngestSourceStatus:
         errors=[SourceObjectError(**e) for e in data['errors']],
         can_run=reason is None and not run_is_live(run),
         can_retry_dead=data['counts']['dead'] > 0,
-        blocked_reason=reason,  # type: ignore[arg-type]
+        blocked_reason=reason,
         blocked_message=_BLOCKED_MESSAGES.get(reason) if reason else None,
     )
 
@@ -189,7 +189,9 @@ def _apply_triggers(source: IngestSource, triggers: TriggersWire) -> None:
 async def list_ingest_sources() -> IngestSourceList:
     s3 = S3Config.from_env()
     items = [status_wire(s) for s in list_sources()]
-    busy = any(i.scan.active or run_is_live(i.last_run and i.last_run.model_dump()) for i in items)
+    busy = any(
+        i.scan.active or run_is_live(i.last_run.model_dump() if i.last_run else None) for i in items
+    )
     return IngestSourceList(
         items=items,
         s3_configured=s3.configured,

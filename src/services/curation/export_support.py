@@ -352,7 +352,7 @@ def _letterbox_pil(img: Any, target: int) -> Any:
     w, h = img.size
     scale = min(target / w, target / h) if w and h else 1.0
     new_w, new_h = max(1, round(w * scale)), max(1, round(h * scale))
-    resized = img.resize((new_w, new_h), _Image.LANCZOS)
+    resized = img.resize((new_w, new_h), _Image.Resampling.LANCZOS)
     canvas = _Image.new('RGB', (target, target), (114, 114, 114))
     canvas.paste(resized, ((target - new_w) // 2, (target - new_h) // 2))
     return canvas
@@ -410,7 +410,7 @@ def _copy_or_resize_one(
             if resize_mode == 'letterbox':
                 rgb = _letterbox_pil(rgb, target_size)
             elif resize_mode == 'aspect':
-                rgb.thumbnail((target_size, target_size), Image.LANCZOS)
+                rgb.thumbnail((target_size, target_size), Image.Resampling.LANCZOS)
             elif resize_mode is not None:
                 msg = f'unknown resize_mode: {resize_mode!r}'
                 raise ValueError(msg)

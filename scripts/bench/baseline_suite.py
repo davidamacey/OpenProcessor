@@ -276,7 +276,7 @@ def ingest_rep(
     wire = Wire()
     slug = f'{args.prefix}-{mode}-{"warm" if warmup else f"r{rep}"}-{datetime.now(UTC):%H%M%S}'
     base = scoped_url(args.api_url, curation_api_prefix(), slug, '')
-    hooks = {'request': [wire.on_request], 'response': [wire.on_response]}
+    hooks: dict[str, list[Any]] = {'request': [wire.on_request], 'response': [wire.on_response]}
     with httpx.Client(timeout=httpx.Timeout(3600.0), event_hooks=hooks) as client:
         client.post(
             f'{args.api_url}{curation_api_prefix()}/projects',

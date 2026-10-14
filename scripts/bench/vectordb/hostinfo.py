@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import time
+from pathlib import Path
 from typing import Any
 
 
@@ -13,7 +14,7 @@ PROJECT = 'vecdb'
 
 
 def cpu_times() -> tuple[int, int]:
-    with open('/proc/stat') as fh:
+    with Path('/proc/stat').open() as fh:
         fields = [int(x) for x in fh.readline().split()[1:]]
     idle = fields[3] + fields[4]
     return sum(fields), idle
@@ -40,7 +41,7 @@ def container_name(service: str) -> str:
 
 
 def _docker(*args: str) -> str:
-    out = subprocess.run(['docker', *args], capture_output=True, text=True, check=True, timeout=300)
+    out = subprocess.run(['docker', *args], capture_output=True, text=True, check=True, timeout=300)  # nosec B603 B607  fixed argv list, no shell; docker from PATH
     return out.stdout
 
 

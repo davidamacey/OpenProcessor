@@ -44,7 +44,7 @@ SERVICES = {
 
 
 def compose(*args: str) -> None:
-    subprocess.run([*COMPOSE, *args], check=True, capture_output=True, text=True, timeout=900)
+    subprocess.run([*COMPOSE, *args], check=True, capture_output=True, text=True, timeout=900)  # nosec B603  fixed argv list, no shell
 
 
 def wait_ready(store: str, url: str, endpoint: str) -> None:
@@ -52,13 +52,17 @@ def wait_ready(store: str, url: str, endpoint: str) -> None:
     while time.time() < deadline:
         try:
             if url:
-                urllib.request.urlopen(url, timeout=5).read()
+                urllib.request.urlopen(url, timeout=5).read()  # nosec B310  URL is a loopback health endpoint from the SERVICES table
             else:
                 import psycopg
 
                 host, _, port = endpoint.partition(':')
                 psycopg.connect(
-                    host=host, port=int(port), user='postgres', password='bench', dbname='bench'
+                    host=host,
+                    port=int(port),
+                    user='postgres',
+                    password='bench',
+                    dbname='bench',  # nosec B106  credential of the throwaway benchmark container
                 ).close()
             time.sleep(5)
             return

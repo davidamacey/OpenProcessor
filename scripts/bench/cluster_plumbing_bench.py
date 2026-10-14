@@ -194,7 +194,7 @@ class StageClock:
                     clock.t['fit_s'] = time.perf_counter() - t0
                     clock.t['fit_s_end'] = time.perf_counter()
 
-            m.fit_predict = fit_predict
+            m.fit_predict = fit_predict  # type: ignore[method-assign]  # instruments the instance to time the fit
             return m
 
         self._orig.append((methods, 'get_method', real_get))
@@ -230,7 +230,7 @@ async def one_run(client: Any, method: str, size: int, rep: int) -> dict[str, An
     after_fit = c.get('distance_s_end', c.get('fit_s_end', t0))
     refresh_start = c['refresh_s_end'] - c['refresh_s'] if 'refresh_s' in c else t_end
     extra = summary.get('cluster_method_extra') or {}
-    row = {
+    row: dict[str, Any] = {
         'kind': 'full',
         'method': method,
         'size': size,

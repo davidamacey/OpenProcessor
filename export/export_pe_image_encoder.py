@@ -87,7 +87,7 @@ import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 
 logging.basicConfig(
@@ -343,7 +343,7 @@ def export_via_perception_models(
     # Inference mode. getattr indirection keeps the literal token away from
     # the python-no-eval pre-commit hook, which targets the builtin.
     getattr(clip_model, 'ev' + 'al')()
-    resolved_size = int(image_size or getattr(clip_model, 'image_size', IMAGE_SIZE))
+    resolved_size = int(image_size or cast('int', getattr(clip_model, 'image_size', IMAGE_SIZE)))
     logger.info(f'  Checkpoint loaded (input resolution {resolved_size})')
 
     class PEImageEncoder(torch.nn.Module):
@@ -375,7 +375,7 @@ def export_via_perception_models(
     with static_batch_safe_rearrange():
         torch.onnx.export(
             wrapper,
-            dummy,
+            (dummy,),
             str(onnx_path),
             export_params=True,
             opset_version=opset,

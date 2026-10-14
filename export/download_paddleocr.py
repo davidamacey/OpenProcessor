@@ -22,6 +22,7 @@ Usage:
 import sys
 import time
 from pathlib import Path
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import urlretrieve
 
@@ -32,7 +33,7 @@ from urllib.request import urlretrieve
 
 # PP-OCRv5 Mobile Models (best speed/accuracy tradeoff)
 # Source: https://github.com/MeKo-Christian/paddleocr-onnx/releases
-MODELS = {
+MODELS: dict[str, dict[str, Any]] = {
     # PP-OCRv5 Detection (DB++)
     # Input: [B, 3, H, W] where H,W are multiples of 32
     # Output: Text probability map
@@ -118,7 +119,7 @@ def download_with_progress(url: str, output_path: Path, desc: str = '') -> bool:
                 )
 
         # Download from trusted GitHub/Gitee releases - url is validated above
-        urlretrieve(url, output_path, reporthook=progress_hook)
+        urlretrieve(url, output_path, reporthook=progress_hook)  # nosec B310  URL comes from the hardcoded model source list
         print()  # New line after progress
         return True
 
@@ -226,7 +227,7 @@ def download_model(model_id: str, config: dict, force: bool = False) -> bool:
             # Dictionary file - just check it's not empty
             elif actual_size > 0:
                 # Count lines for dictionary
-                with open(output_path, encoding='utf-8') as f:
+                with Path(output_path).open(encoding='utf-8') as f:
                     lines = len(f.readlines())
                 print(f'  Dictionary: {lines} characters')
                 return True

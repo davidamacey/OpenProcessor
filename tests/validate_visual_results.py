@@ -160,7 +160,7 @@ def test_detection_visual() -> bool:
         return False
 
     # Call detection API
-    with open(TEST_IMAGE, 'rb') as f:
+    with Path(TEST_IMAGE).open('rb') as f:
         files = {'image': f}
         response = requests.post(f'{API_BASE}/detect', files=files, timeout=30)
 
@@ -201,7 +201,7 @@ def test_faces_visual() -> bool:
         return False
 
     # Call face detection API
-    with open(TEST_IMAGE, 'rb') as f:
+    with Path(TEST_IMAGE).open('rb') as f:
         files = {'image': f}
         response = requests.post(f'{API_BASE}/faces/detect', files=files, timeout=30)
 
@@ -249,7 +249,7 @@ def test_ocr_visual() -> bool:
         return False
 
     # Call OCR API
-    with open(test_img, 'rb') as f:
+    with Path(test_img).open('rb') as f:
         files = {'image': f}
         response = requests.post(f'{API_BASE}/ocr/predict', files=files, timeout=30)
 
@@ -291,7 +291,7 @@ def test_analyze_visual() -> bool:
         return False
 
     # Call analyze API
-    with open(TEST_IMAGE, 'rb') as f:
+    with Path(TEST_IMAGE).open('rb') as f:
         files = {'image': f}
         response = requests.post(f'{API_BASE}/analyze', files=files, timeout=30)
 

@@ -15,7 +15,7 @@ from src.routers.curation._common import (
     logger,
     router,
 )
-from src.routers.curation._item_models import ItemDoc  # noqa: TC001 - pydantic field type
+from src.routers.curation._item_models import ItemDoc
 from src.services.curation.wire import (
     item_context_source_excludes,
     item_source_excludes,

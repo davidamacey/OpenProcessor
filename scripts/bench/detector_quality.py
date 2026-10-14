@@ -322,7 +322,7 @@ def compare(
 
 def _load_dets(path: str) -> dict[int, list[Det]]:
     raw = json.loads(Path(path).read_text(encoding='utf-8'))
-    return {int(k): [tuple(d) for d in v] for k, v in raw.items()}  # type: ignore[misc]
+    return {int(k): [tuple(d) for d in v] for k, v in raw.items()}
 
 
 def evaluate(

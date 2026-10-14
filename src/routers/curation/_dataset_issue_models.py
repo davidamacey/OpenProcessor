@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
-from src.services.curation.dataset_import.issues import DatasetIssueCode  # noqa: TC001 - pydantic field type, resolved at runtime
+from src.services.curation.dataset_import.issues import DatasetIssueCode
 from src.services.issue_ids import stamp_issue_ids
 
 
@@ -41,7 +41,7 @@ class DatasetIssueWire(BaseModel):
 
 def _issue_to_wire(issue: DatasetIssue) -> DatasetIssueWire:
     return DatasetIssueWire(
-        code=issue.code,  # type: ignore[arg-type]
+        code=issue.code,
         severity=issue.severity,
         blocking=issue.blocking,
         bypassable=issue.bypassable,

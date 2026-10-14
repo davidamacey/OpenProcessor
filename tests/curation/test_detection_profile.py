@@ -5,7 +5,10 @@ See ``docs/design/curation_design_rationale.md`` §2.3.
 
 from __future__ import annotations
 
+import dataclasses
 import re
+
+import pytest
 
 from src.config import DetectionProfile
 
@@ -53,12 +56,8 @@ def test_text_pattern_is_a_plain_str_not_compiled() -> None:
 
 def test_is_frozen() -> None:
     profile = DetectionProfile(name='license_plate')
-    try:
+    with pytest.raises(dataclasses.FrozenInstanceError):
         profile.name = 'mutated'  # type: ignore[misc]
-    except Exception:
-        pass
-    else:
-        raise AssertionError('DetectionProfile must be immutable (frozen dataclass)')
 
 
 def test_ocr_rec_model_defaults_to_the_real_triton_directory_name() -> None:

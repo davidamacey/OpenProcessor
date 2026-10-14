@@ -7,7 +7,7 @@ a set of model class ids (the crop-mode coarse stage's context classes).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .base import Detection
 
@@ -53,7 +53,7 @@ class UltralyticsDetector:
     def detect(self, image_rgb: np.ndarray) -> list[Detection]:
         # Ultralytics accepts an RGB ndarray directly and returns boxes in
         # the ORIGINAL frame's pixel coords (it undoes its own letterbox).
-        res = self._model.predict(
+        res: Any = self._model.predict(
             image_rgb,
             imgsz=self.imgsz,
             device=self.device,

@@ -303,7 +303,7 @@ def _spawn(name: str, port: int) -> subprocess.Popen[bytes]:
         '--port',
         str(port),
     ]
-    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # nosec B603  fixed argv list, no shell
     import socket
 
     for _ in range(200):

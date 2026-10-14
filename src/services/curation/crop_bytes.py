@@ -71,7 +71,7 @@ def crop_jpeg_from_disk(image_path: str, bbox: tuple[float, float, float, float]
         return None
     try:
         with p.open('rb') as f:
-            img = Image.open(f)
+            img: Image.Image = Image.open(f)
             img.load()
             img = ImageOps.exif_transpose(img)
             if img.mode != 'RGB':

@@ -125,8 +125,12 @@ def main() -> None:
     model, _, _ = open_clip.create_model_and_transforms(args.model)
     model = model.train(False).half().cuda()
     ds = ImageCrops(paths, boxes, args, pp)
-    loader = torch.utils.data.DataLoader(
-        ds, batch_size=8, num_workers=args.workers, collate_fn=lambda b: b, prefetch_factor=4
+    loader: Any = torch.utils.data.DataLoader(
+        ds,  # type: ignore[arg-type]  # map-style dataset by protocol (__len__/__getitem__), no torch import at module level
+        batch_size=8,
+        num_workers=args.workers,
+        collate_fn=lambda b: b,
+        prefetch_factor=4,
     )
 
     vecs: list[np.ndarray] = []

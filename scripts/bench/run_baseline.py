@@ -81,7 +81,7 @@ def read_nvidia_smi(
     """One nvidia-smi reading, or ``None`` when the tool is absent or fails."""
     run = runner or (
         lambda cmd: (
-            subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10).stdout
+            subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10).stdout  # nosec B603  fixed argv list, no shell
         )
     )
     try:

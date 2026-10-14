@@ -136,7 +136,7 @@ def convert_to_tensorrt(
             onnx_path = bake_fp16_onnx(onnx_path)
         # Parse ONNX
         print('  Parsing ONNX model...')
-        with open(onnx_path, 'rb') as f:
+        with Path(onnx_path).open('rb') as f:
             if not parser.parse(f.read()):
                 for i in range(parser.num_errors):
                     print(f'    Error {i}: {parser.get_error(i)}')
@@ -181,7 +181,7 @@ def convert_to_tensorrt(
         # Save engine
         plan_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(plan_path, 'wb') as f:
+        with Path(plan_path).open('wb') as f:
             f.write(serialized_engine)
 
         print('\n  TensorRT engine saved!')
@@ -262,7 +262,7 @@ dynamic_batching {{
 }}
 """
 
-    with open(config_path, 'w') as f:
+    with Path(config_path).open('w') as f:
         f.write(config_content)
 
     print(f'\nTriton config created: {config_path}')

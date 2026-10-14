@@ -189,7 +189,7 @@ def _letterbox_yolov5_objectness(img: Any, target: int = YOLOV5_OBJ_INPUT_SIZE) 
     scale = min(target / orig_h, target / orig_w)
     new_w = max(1, round(orig_w * scale))
     new_h = max(1, round(orig_h * scale))
-    resized = img.resize((new_w, new_h), Image.BILINEAR)
+    resized = img.resize((new_w, new_h), Image.Resampling.BILINEAR)
 
     canvas = Image.new(
         'RGB',

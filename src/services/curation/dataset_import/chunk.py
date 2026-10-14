@@ -246,7 +246,7 @@ async def _import_one(
 
     detections: list[DetectedItem] = []
     if ctx.uses_detector:
-        detections = await run_detector(ctx, img.pil, img.image_path)
+        detections = await run_detector(ctx, img.require_pil(), img.image_path)
 
     # Parents for region labels, and the standalone items for boxes with none.
     region_targets = bool(boxes.regions) or any(

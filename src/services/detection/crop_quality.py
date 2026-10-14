@@ -82,7 +82,7 @@ def laplacian_var(gray: np.ndarray) -> float:
         return round(float(cv2.Laplacian(gray, cv2.CV_64F).var()), 2)
     lap = cv2.Laplacian(gray, cv2.CV_16S)
     total = int(cv2.sumElems(lap)[0])
-    squares = int(np.einsum('ij,ij->', lap, lap, dtype=np.int64))
+    squares = int(np.einsum('ij,ij->', lap, lap, dtype=np.int64))  # type: ignore[arg-type]  # numpy stubs type the int64 einsum overload as bool-only
     return variance_from_sums(lap.size, total, squares)
 
 

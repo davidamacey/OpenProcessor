@@ -145,7 +145,12 @@ def known_routes() -> set[tuple[str, str]]:
     from src.main import app
 
     for route in iter_route_contexts(app.routes):
-        if isinstance(route.original_route, APIRoute) and not route.path.startswith('/curation'):
+        if (
+            isinstance(route.original_route, APIRoute)
+            and route.path is not None
+            and route.methods is not None
+            and not route.path.startswith('/curation')
+        ):
             for method in route.methods & set(_METHODS):
                 routes.add((method, _norm(route.path)))
     return routes
@@ -269,12 +274,13 @@ def check_links() -> list[str]:
             if path_part.startswith('/') and 'docs-site' in rel.parts:
                 continue  # site-absolute routes are validated by the site build
             if not path_part:
-                dest: Path | None = doc
+                dest: Path = doc
             else:
-                dest = _resolve_link(doc, path_part)
-                if dest is None:
+                resolved = _resolve_link(doc, path_part)
+                if resolved is None:
                     errors.append(f'{rel}: link target missing: {target}')
                     continue
+                dest = resolved
             is_doc = dest.is_file() and dest.suffix in _DOC_SUFFIXES
             if frag and is_doc and frag not in anchors_of(dest):
                 errors.append(f'{rel}: anchor not found: {target}')

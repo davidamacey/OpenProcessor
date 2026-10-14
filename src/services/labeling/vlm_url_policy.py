@@ -31,6 +31,7 @@ import socket
 import time
 import unicodedata
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit, urlunsplit
 
@@ -260,7 +261,7 @@ def _docker_gateway_addresses() -> frozenset[str]:
         return _GATEWAY_CACHE
     found: set[str] = set()
     try:
-        with open('/proc/net/route', encoding='ascii') as fh:
+        with Path('/proc/net/route').open(encoding='ascii') as fh:
             next(fh, None)
             for line in fh:
                 cols = line.split()

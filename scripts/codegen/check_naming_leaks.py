@@ -119,7 +119,7 @@ def load_allowlist(path: Path) -> list[AllowlistEntry]:
 
 def git_grep(pattern: str, repo_root: Path, exclude_paths: tuple[str, ...]) -> list[str]:
     pathspecs = [f':(exclude){p}' for p in exclude_paths]
-    proc = subprocess.run(
+    proc = subprocess.run(  # nosec B603 B607  fixed argv list, no shell; git from PATH
         ['git', 'grep', '-n', '-I', '-P', pattern, '--', '.', *pathspecs],
         cwd=repo_root,
         capture_output=True,

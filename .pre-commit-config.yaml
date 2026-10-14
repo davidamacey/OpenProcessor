@@ -37,19 +37,6 @@ repos:
       - id: ruff-format
         types_or: [python, pyi]
 
-  # Python type checking with mypy
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.13.0
-    hooks:
-      - id: mypy
-        additional_dependencies:
-          - types-requests
-          - types-pyyaml
-          - types-tabulate
-          - types-tqdm
-        args: [--ignore-missing-imports, --check-untyped-defs]
-        exclude: ^(src/ultralytics_patches/|export/|scripts/|reference_repos/|frontend/)
-
   # Additional Python checks
   - repo: https://github.com/pre-commit/pygrep-hooks
     rev: v1.10.0
@@ -88,7 +75,7 @@ repos:
       - id: bandit
         args: [-c, pyproject.toml]
         additional_dependencies: ["bandit[toml]"]
-        exclude: ^(src/ultralytics_patches/|tests/|export/|scripts/|frontend/)
+        exclude: ^(src/ultralytics_patches/|tests/|models/|frontend/)
 
   # Shell script linting with shellcheck
   - repo: https://github.com/shellcheck-py/shellcheck-py
@@ -114,6 +101,17 @@ repos:
         language: system
         files: ^benchmarks/.*\.go$
         types: [go]
+      # mypy runs from the project interpreter so numpy, fastapi and pydantic types are
+      # real (the isolated mirror hook saw none of them and passed vacuously). It falls
+      # back to python3, where CI has the dependencies installed. Targets and the
+      # pydantic plugin are in [tool.mypy] in pyproject.toml.
+      - id: mypy
+        name: mypy
+        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" -m mypy'
+        language: system
+        pass_filenames: false
+        files: ^(src|scripts|docker|export)/.*\.py$|^(pyproject\.toml|requirements-test\.txt)$
+
       - id: max-file-size
         name: Enforce 700 LOC max per source file (ratchet)
         entry: python3 scripts/codegen/check_file_size.py --max 700

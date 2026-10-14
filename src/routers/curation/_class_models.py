@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.services.curation.class_sources import HumanLabelSource  # noqa: TC001
+from src.services.curation.class_sources import HumanLabelSource
 
 
 class ClassEntry(BaseModel):

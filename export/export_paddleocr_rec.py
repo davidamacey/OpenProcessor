@@ -243,7 +243,7 @@ def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path
         # export_models.py uses, which already works on TRT 11.1.
         network = create_explicit_network(builder)
         parser = trt.OnnxParser(network, trt_logger)
-        with open(onnx_path, 'rb') as f:
+        with Path(onnx_path).open('rb') as f:
             if not parser.parse(f.read()):
                 for i in range(parser.num_errors):
                     print(f'  ONNX parse error: {parser.get_error(i)}')
@@ -336,7 +336,7 @@ dynamic_batching {{
 }}
 """
 
-    with open(config_path, 'w') as f:
+    with Path(config_path).open('w') as f:
         f.write(config_content)
 
     print(f'  Config: {config_path}')

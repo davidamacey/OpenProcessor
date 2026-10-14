@@ -63,8 +63,8 @@ def issue(
     from src.routers.curation._config_common_models import ValidationIssue
 
     return ValidationIssue(
-        code=code,  # type: ignore[arg-type]
-        severity=severity,  # type: ignore[arg-type]
+        code=code,
+        severity=severity,
         field=field,
         message=message,
         detail=detail or {},

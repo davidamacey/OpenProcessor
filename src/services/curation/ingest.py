@@ -137,7 +137,7 @@ def _imohash_bytes(data: bytes) -> str:
     """
     with stage_timer('hash', nbytes=len(data)):
         try:
-            import imohash  # type: ignore[import-untyped]
+            import imohash
 
             return imohash.hashfileobject(io.BytesIO(data)).hex()
         except Exception:

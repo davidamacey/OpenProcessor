@@ -113,7 +113,7 @@ def validate_detection(image_path: str, expected: dict, verbose: bool = False) -
     vr = ValidationResult(f'Detection ({expected["image"]})')
 
     try:
-        with open(image_path, 'rb') as f:
+        with Path(image_path).open('rb') as f:
             r = requests.post(f'{API_BASE}/detect', files={'image': f}, timeout=30)
         data = r.json()
     except Exception as e:
@@ -181,7 +181,7 @@ def validate_faces(expected: dict, verbose: bool = False) -> ValidationResult:
     vr = ValidationResult(f'Face Recognition ({expected["image"]})')
 
     try:
-        with open(f'test_images/{expected["image"]}', 'rb') as f:
+        with Path(f'test_images/{expected["image"]}').open('rb') as f:
             r = requests.post(f'{API_BASE}/faces/recognize', files={'image': f}, timeout=30)
         data = r.json()
     except Exception as e:
@@ -260,7 +260,7 @@ def validate_clip_image(expected: dict, verbose: bool = False) -> ValidationResu
     vr = ValidationResult(f'CLIP Image Embedding ({expected["image"]})')
 
     try:
-        with open(f'test_images/{expected["image"]}', 'rb') as f:
+        with Path(f'test_images/{expected["image"]}').open('rb') as f:
             r = requests.post(f'{API_BASE}/embed/image', files={'image': f}, timeout=30)
         data = r.json()
     except Exception as e:
@@ -349,7 +349,7 @@ def validate_ocr(expected: dict, verbose: bool = False) -> ValidationResult:
     vr = ValidationResult(f'OCR ({expected["image"]})')
 
     try:
-        with open(f'test_images/{expected["image"]}', 'rb') as f:
+        with Path(f'test_images/{expected["image"]}').open('rb') as f:
             r = requests.post(f'{API_BASE}/ocr/predict', files={'image': f}, timeout=30)
         data = r.json()
     except Exception as e:
@@ -414,7 +414,7 @@ def validate_analyze(expected: dict, verbose: bool = False) -> ValidationResult:
     vr = ValidationResult(f'Analyze ({expected["image"]})')
 
     try:
-        with open(f'test_images/{expected["image"]}', 'rb') as f:
+        with Path(f'test_images/{expected["image"]}').open('rb') as f:
             r = requests.post(f'{API_BASE}/analyze', files={'image': f}, timeout=60)
         data = r.json()
     except Exception as e:
@@ -492,7 +492,7 @@ def update_ground_truth() -> None:
 
     # Detection - bus.jpg
     print('  1/7 Detection (bus.jpg)...')
-    with open('test_images/bus.jpg', 'rb') as img:
+    with Path('test_images/bus.jpg').open('rb') as img:
         r = requests.post(f'{API_BASE}/detect', files={'image': img}, timeout=30)
     data = r.json()
     class_counts: dict[str, int] = {}
@@ -518,7 +518,7 @@ def update_ground_truth() -> None:
 
     # Detection - zidane.jpg
     print('  2/7 Detection (zidane.jpg)...')
-    with open('test_images/zidane.jpg', 'rb') as img:
+    with Path('test_images/zidane.jpg').open('rb') as img:
         r = requests.post(f'{API_BASE}/detect', files={'image': img}, timeout=30)
     data = r.json()
     class_counts = {}
@@ -544,7 +544,7 @@ def update_ground_truth() -> None:
 
     # Face recognition - zidane.jpg
     print('  3/7 Face recognition (zidane.jpg)...')
-    with open('test_images/zidane.jpg', 'rb') as img:
+    with Path('test_images/zidane.jpg').open('rb') as img:
         r = requests.post(f'{API_BASE}/faces/recognize', files={'image': img}, timeout=30)
     data = r.json()
     faces_out = []
@@ -569,7 +569,7 @@ def update_ground_truth() -> None:
 
     # CLIP image embedding - bus.jpg
     print('  4/7 CLIP image embedding (bus.jpg)...')
-    with open('test_images/bus.jpg', 'rb') as img:
+    with Path('test_images/bus.jpg').open('rb') as img:
         r = requests.post(f'{API_BASE}/embed/image', files={'image': img}, timeout=30)
     data = r.json()
     emb = data['embedding']
@@ -598,7 +598,7 @@ def update_ground_truth() -> None:
 
     # OCR - bus.jpg
     print('  6/7 OCR (bus.jpg)...')
-    with open('test_images/bus.jpg', 'rb') as img:
+    with Path('test_images/bus.jpg').open('rb') as img:
         r = requests.post(f'{API_BASE}/ocr/predict', files={'image': img}, timeout=30)
     data = r.json()
     ground_truth['ocr_bus'] = {
@@ -619,7 +619,7 @@ def update_ground_truth() -> None:
 
     # Analyze - bus.jpg
     print('  7/7 Analyze (bus.jpg)...')
-    with open('test_images/bus.jpg', 'rb') as img:
+    with Path('test_images/bus.jpg').open('rb') as img:
         r = requests.post(f'{API_BASE}/analyze', files={'image': img}, timeout=60)
     data = r.json()
     det_classes = sorted({d.get('class_name', '') for d in data.get('detections', [])})
@@ -635,7 +635,7 @@ def update_ground_truth() -> None:
         'ocr_texts': [t for t in ocr.get('texts', []) if t] if ocr else [],
     }
 
-    with open(EXPECTED_FILE, 'w') as f:
+    with Path(EXPECTED_FILE).open('w') as f:
         json.dump(ground_truth, f, indent=2)
         f.write('\n')
 
@@ -665,7 +665,7 @@ def main() -> int:
         print('Run with --update to capture ground truth first.')
         return 1
 
-    with open(EXPECTED_FILE) as f:
+    with Path(EXPECTED_FILE).open() as f:
         expected = json.load(f)
 
     print()

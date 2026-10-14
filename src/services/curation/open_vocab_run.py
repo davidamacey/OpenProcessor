@@ -387,7 +387,7 @@ async def run_open_vocab_image(
         return result
 
     plan = await plan_open_vocab_image(
-        opensearch, image_id, ctx.pil, ov, todo, segment=segment, gate=gate
+        opensearch, image_id, ctx.require_pil(), ov, todo, segment=segment, gate=gate
     )
     selection, own, existing_ids = plan.selection, plan.own_ids, plan.existing_ids
     result.calls = len(plan.ran)

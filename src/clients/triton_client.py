@@ -27,7 +27,7 @@ Active models:
 import io
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 import cv2
 import numpy as np
@@ -160,7 +160,7 @@ class TritonClient:
             orig_shapes.append((orig_h, orig_w))
 
             img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            img_letterbox = letterbox(image=img_rgb)
+            img_letterbox = cast('np.ndarray', letterbox(image=img_rgb))
 
             scale = min(size / orig_h, size / orig_w)
             scale = min(scale, 1.0)

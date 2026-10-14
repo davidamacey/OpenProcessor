@@ -109,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     mean = tuple(args.mean) if args.mean else None
     std = tuple(args.std) if args.std else None
-    print(add_uint8_input(args.onnx_in, args.onnx_out, mean=mean, std=std))  # type: ignore[arg-type]
+    print(add_uint8_input(args.onnx_in, args.onnx_out, mean=mean, std=std))
     return 0
 
 

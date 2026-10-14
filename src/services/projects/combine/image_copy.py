@@ -302,15 +302,12 @@ async def _merge_duplicate(
     path, imohash = ctx.originals[(pri_index, pri_id)]
     tpath, tid, _ = _target_location(ctx, pri_index, path, imohash)
     existing = await _target_items(ctx, tid)
-    probes = [
-        Probe(tuple(d['bbox_norm']), d.get('class_name'), trust_rank(d))  # type: ignore[arg-type]
-        for d in existing
-    ]
+    probes = [Probe(tuple(d['bbox_norm']), d.get('class_name'), trust_rank(d)) for d in existing]
     docs, regions = _item_docs(ctx, source_index, image, tid, tpath)
     _apply_holdout(docs, _holdout_flag(ctx, image), ctx.request.holdout)
     changed: dict[str, dict[str, Any]] = {}
     added: list[dict[str, Any]] = []
-    incoming = [Probe(tuple(d['bbox_norm']), d.get('class_name'), trust_rank(d)) for d in docs]  # type: ignore[arg-type]
+    incoming = [Probe(tuple(d['bbox_norm']), d.get('class_name'), trust_rank(d)) for d in docs]
     for decision in decide_merges(probes, incoming, iou_min=ctx.request.dedup_iou):
         new = docs[decision.incoming]
         if decision.kind == 'union':
@@ -327,7 +324,7 @@ async def _merge_duplicate(
             continue
         merged_from = sorted({*keep.get('combine_merged_origins', [_origin(keep)]), _origin(new)})
         if decision.take_incoming_label:
-            flags = {
+            flags: dict[str, Any] = {
                 k: keep[k] for k in ('combine_conflict', 'combine_conflict_origins') if k in keep
             }
             keep.clear()

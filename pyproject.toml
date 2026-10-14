@@ -86,9 +86,9 @@ pe = [
 ]
 dev = [
     "pre-commit>=4.0.0",
-    "ruff>=0.8.4",
-    "mypy>=1.13.0",
-    "bandit[toml]>=1.8.0",
+    "ruff==0.17.0",
+    "mypy==2.4.0",
+    "bandit[toml]>=1.9.4",
     "pytest>=8.0.0",
     "pytest-cov>=5.0.0",
     "pytest-asyncio>=0.24.0",
@@ -113,7 +113,7 @@ line-length = 100
 include = [
     "src/**/*.py",
     "export/**/*.py",
-    "dali/**/*.py",
+    "models/**/*.py",
     "scripts/**/*.py",
     "tests/**/*.py",
     # Side-car container sources (trainer watcher, segmenter server, test
@@ -131,7 +131,6 @@ exclude = [
     ".ruff_cache",
     "reference_repos",
     "pytorch_models",
-    "models",
     "cache",
     "benchmarks/results",
     "*.egg-info",
@@ -177,6 +176,8 @@ select = [
     "PL",    # pylint
     "PERF",  # perflint (performance anti-patterns)
     "RUF",   # ruff-specific rules
+    "S110",  # try-except-pass (a swallowed error)
+    "S112",  # try-except-continue (a swallowed error)
 ]
 
 # Rules to ignore (with justification)
@@ -190,12 +191,9 @@ ignore = [
     "PLR2004", # Magic value comparison (common with thresholds)
     "N803",    # Argument name should be lowercase (allow numpy-style names)
     "N806",    # Variable should be lowercase (allow numpy-style names)
-    "DTZ005",  # datetime.now() without tz (not critical for logs)
     "EM101",   # Exception must not use string literal (too strict)
     "EM102",   # Exception must not use f-string (too strict)
-    "TRY003",  # Avoid long messages in exception (too strict)
     "SIM108",  # Use ternary operator (readability preference)
-    "PTH123",  # pathlib open() vs builtin open() (performance reasons)
     "RUF012",  # Mutable class attributes (common in Pydantic)
 ]
 
@@ -210,7 +208,6 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 # Test files can have additional flexibility
 "tests/**/*.py" = [
     "ARG001",  # Unused function argument (fixtures)
-    "S101",    # Use of assert
     "PLR2004", # Magic values
     "PT028",   # Default arguments in test-like functions (standalone test scripts, not pytest)
     "RUF001",  # Ambiguous Unicode characters (intentional for display)
@@ -221,14 +218,6 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "T201",    # print() allowed in scripts
     "PLR2004", # Magic values
     "PT028",   # Default arguments in test-named functions (these are scripts, not pytest tests)
-]
-
-# DALI pipeline scripts are not pytest tests despite test_* naming
-"dali/**/*.py" = [
-    "PT028",   # Default arguments in test-like functions (standalone validation scripts)
-    "ARG001",  # Unused function argument (kept for interface consistency)
-    "ERA001",  # Commented-out code (documentation comments describing matrix format)
-    "RUF022",  # Unsorted __all__ (intentionally grouped by category)
 ]
 
 # FastAPI routers use dependency injection in default arguments (standard pattern)
@@ -253,8 +242,14 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "ARG001",  # Unused arguments kept for interface consistency
     "ARG004",  # TensorRT plugin forward() requires all args for ONNX export
     "PT028",   # Default arguments in test-named functions (standalone scripts, not pytest)
-    "F401",    # Import for side effects (pycuda.autoinit, pycuda.driver)
 ]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# Populated when the typed env module lands; empty until then.
+
+[tool.ruff.lint.flake8-type-checking]
+# Pydantic resolves these annotations at runtime, so their imports are not TYPE_CHECKING-only.
+runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings"]
 
 [tool.ruff.lint.isort]
 # Import sorting configuration (follows black/blue style)
@@ -273,10 +268,6 @@ split-on-trailing-comma = false
 inline-quotes = "single"
 multiline-quotes = "double"
 docstring-quotes = "double"
-
-[tool.ruff.lint.pydocstyle]
-# Use Google-style docstrings
-convention = "google"
 
 [tool.ruff.lint.pylint]
 # Pylint-specific settings
@@ -370,6 +361,9 @@ exclude_lines = [
 
 [tool.mypy]
 python_version = "3.12"
+files = ["src", "scripts", "docker", "export"]
+exclude = ["^src/ultralytics_patches/"]
+plugins = ["pydantic.mypy"]
 warn_return_any = false  # Disabled for ML code with numpy/FAISS operations
 warn_unused_configs = true
 disallow_untyped_defs = false
@@ -377,7 +371,7 @@ disallow_incomplete_defs = false
 check_untyped_defs = true
 no_implicit_optional = true
 warn_redundant_casts = true
-warn_unused_ignores = false
+warn_unused_ignores = true
 warn_no_return = true
 strict_equality = true
 ignore_missing_imports = true
@@ -391,11 +385,8 @@ module = [
     "ultralytics.*",
     "tritonclient.*",
     "onnx.*",
-    "onnxslim.*",
-    "onnxsim.*",
     "onnxruntime.*",
     "tensorrt.*",
-    "nvidia.dali.*",
     "cv2.*",
     "opensearchpy.*",
     "transformers.*",
@@ -415,7 +406,6 @@ module = [
     "src.services.visual_search",
     "src.services.visual_search.*",
     "src.utils.retry",
-    "src.utils.face_alignment",
     "src.utils.image_processing",
     "src.services.image",
     "src.services.face_identity",
@@ -423,11 +413,6 @@ module = [
     "src.routers.detect",
 ]
 disable_error_code = ["attr-defined", "operator", "misc", "assignment", "return-value", "call-overload", "union-attr", "arg-type", "dict-item"]
-
-# Skip type checking on third-party patches
-[[tool.mypy.overrides]]
-module = "src.ultralytics_patches.*"
-ignore_errors = true
 
 # =============================================================================
 # Bandit Configuration (Security Linting)
@@ -444,8 +429,8 @@ exclude_dirs = [
 ]
 skips = [
     "B101",  # assert_used - common in test files
-    "B311",  # random - only used for non-cryptographic retry jitter
-    "B601",  # paramiko_calls - not used
+    "B311",  # random - non-cryptographic jitter, sampling and shuffling (12 sites; a coded nosec on each would add noise)
+    "B404",  # importing subprocess is advisory; each call is checked by B602/B603/B607
 ]
 
 [tool.bandit.assert_used]

@@ -6,8 +6,8 @@ external reference repositories, bundled here for seamless setup.
 """
 
 import copy
+from typing import Any, cast
 
-import torch
 from torch import nn
 
 
@@ -34,5 +34,5 @@ def reparameterize_model(model: nn.Module) -> nn.Module:
     model = copy.deepcopy(model)
     for module in model.modules():
         if hasattr(module, 'reparameterize'):
-            module.reparameterize()
+            cast('Any', module).reparameterize()
     return model

@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -30,10 +31,6 @@ from src.services.curation.export_readiness import (
     export_generation_check,
     export_size_check,
 )
-
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 INDEX_UUID = 'uuid-current'
@@ -116,7 +113,7 @@ async def test_export_with_only_unregistered_classes_refuses(tmp_path: Path) -> 
 async def test_export_manifest_records_the_items_index_generation(tmp_path: Path) -> None:
     service = _service(tmp_path, [_doc('a', 0)])
     result = await service.export_dataset(copy_images=False)
-    manifest = json.loads(open(result.manifest_path).read())  # noqa: SIM115
+    manifest = json.loads(Path(result.manifest_path).open().read())  # noqa: SIM115
     assert manifest['items_index']['uuid'] == INDEX_UUID
     assert manifest['items_index']['created_at'] == INDEX_CREATED.isoformat()
 

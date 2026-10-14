@@ -172,7 +172,7 @@ async def iter_source_pages(
 
 def to_scan_entry(image: SourceImage, names: dict[int, str]) -> ScanEntry:
     boxes = [
-        LabelBox(name, tuple(item['bbox_norm']))  # type: ignore[arg-type]
+        LabelBox(name, tuple(item['bbox_norm']))
         for item in image.items
         if (name := item_class_name(item, names)) and len(item.get('bbox_norm') or ()) == 4
     ]

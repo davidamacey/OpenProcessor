@@ -143,7 +143,7 @@ def letterbox_to_square(
         scale = min(target / orig_h, target / orig_w)
         new_w = max(1, round(orig_w * scale))
         new_h = max(1, round(orig_h * scale))
-        resized = img.resize((new_w, new_h), PILImage.BILINEAR)
+        resized = img.resize((new_w, new_h), PILImage.Resampling.BILINEAR)
 
         canvas = PILImage.new('RGB', (target, target), fill)
         pad_w = (target - new_w) / 2.0

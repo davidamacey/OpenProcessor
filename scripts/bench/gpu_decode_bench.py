@@ -79,7 +79,7 @@ def image_meta(data: bytes) -> dict[str, Any]:
 def _pil(data: bytes, scale: int = 1) -> np.ndarray:
     from PIL import Image, ImageOps
 
-    img = Image.open(io.BytesIO(data))
+    img: Image.Image = Image.open(io.BytesIO(data))
     if scale > 1:
         img.draft('RGB', (img.width // scale, img.height // scale))
     img = ImageOps.exif_transpose(img)
@@ -99,6 +99,9 @@ def _cv2(data: bytes, reduced: int = 1) -> np.ndarray:
         8: cv2.IMREAD_REDUCED_COLOR_8,
     }[reduced]
     bgr = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), flag)
+    if bgr is None:
+        msg = 'cv2 could not decode the image'
+        raise ValueError(msg)
     return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
 
@@ -201,7 +204,7 @@ class GpuSampler:
                 self.samples.append((time.time(), int(parts[0]), int(parts[1])))
 
     def __enter__(self) -> GpuSampler:
-        self._proc = subprocess.Popen(self._cmd, stdout=subprocess.PIPE, text=True)
+        self._proc = subprocess.Popen(self._cmd, stdout=subprocess.PIPE, text=True)  # nosec B603  fixed argv list, no shell
         self._t.start()
         return self
 

@@ -276,7 +276,10 @@ async def post_chat_with_retry(
             with attempt:
                 return await _attempt()
     except RetryError as exc:  # pragma: no cover - reraise=True covers most cases
-        raise exc.last_attempt.exception() from exc
+        last = exc.last_attempt.exception()
+        if last is None:
+            raise
+        raise last from exc
 
     # AsyncRetrying always returns at least once with reraise=True; this
     # is unreachable but satisfies the type checker.

@@ -72,7 +72,7 @@ def api_get(url: str, attempts: int = 8) -> dict[str, Any]:
     for attempt in range(1, attempts + 1):
         req = urllib.request.Request(url, headers={'User-Agent': USER_AGENT})
         try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
+            with urllib.request.urlopen(req, timeout=60) as resp:  # nosec B310  URL is built from the hardcoded public API host
                 return json.load(resp)
         except urllib.error.HTTPError as exc:
             if exc.code != 429 or attempt == attempts:

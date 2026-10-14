@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.routers.curation._item_models import ItemDoc  # noqa: TC001 - pydantic
+from src.routers.curation._item_models import ItemDoc
 from src.services.curation.audit import DEFAULT_MIN_PER_CLASS, DEFAULT_SAMPLE_SIZE
 
 

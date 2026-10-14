@@ -15,14 +15,11 @@ a reindex.
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING
+
+import pytest
 
 from src.config import RegionFields, get_region_fields
 from src.config.region_fields import get_region_fields as get_region_fields_direct
-
-
-if TYPE_CHECKING:
-    import pytest
 
 
 def test_generic_defaults() -> None:
@@ -39,12 +36,8 @@ def test_generic_defaults() -> None:
 
 def test_is_frozen() -> None:
     f = RegionFields()
-    try:
+    with pytest.raises(dataclasses.FrozenInstanceError):
         f.status = 'mutated'  # type: ignore[misc]
-    except Exception:
-        pass
-    else:
-        raise AssertionError('RegionFields must be immutable (frozen dataclass)')
 
 
 def test_overridability_expresses_a_pre_existing_deployment_shape() -> None:

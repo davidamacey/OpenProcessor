@@ -317,7 +317,7 @@ def _docker_client() -> Any:
     per outage, not per call -- G-15). Imported lazily so the module stays
     importable without the ``docker`` package or socket (unit tests)."""
     try:
-        import docker  # type: ignore[import-untyped]
+        import docker
 
         client = docker.from_env()  # type: ignore[attr-defined]
         client.ping()

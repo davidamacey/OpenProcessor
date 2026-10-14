@@ -13,13 +13,13 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.config.region_state import HUMAN_WRITABLE_STATUSES
-from src.routers.curation._region_vocabulary_models import RegionProfileSummary  # noqa: TC001
+from src.routers.curation._region_vocabulary_models import RegionProfileSummary
 
 # Runtime import: pydantic resolves the Literal annotation from module globals.
 from src.routers.curation._selection import SelectionTargets
-from src.services.curation.class_sources import HumanLabelSource  # noqa: TC001
+from src.services.curation.class_sources import HumanLabelSource
 from src.services.curation.ingest_policy import IngestPolicy
-from src.services.curation.item_filter import ItemFilter  # noqa: TC001 - pydantic field type
+from src.services.curation.item_filter import ItemFilter
 from src.services.detection.frame_dedup import FRAME_DEDUP_THRESHOLD_MAX, FRAME_DEDUP_THRESHOLD_MIN
 from src.services.resource_links import ResourceLink, resource_links_from_config
 

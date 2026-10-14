@@ -236,7 +236,8 @@ class IVFCentroidStore:
         centroids = centroids / np.where(cnorms == 0, 1.0, cnorms)
         final_obj: float | None = None
         with contextlib.suppress(Exception):
-            final_obj = float(kmeans.obj[-1]) if len(kmeans.obj) else None
+            objective = kmeans.obj
+            final_obj = float(objective[-1]) if objective is not None and len(objective) else None
         return np.ascontiguousarray(centroids, dtype=np.float32), final_obj
 
     # -- clustering gate policy -------------------------------------------

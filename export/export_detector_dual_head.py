@@ -228,18 +228,18 @@ def _load_yolov5_fork(weights: Path, fork: Path) -> tuple[nn.Module, dict[int, s
     if str(fork) not in sys.path:
         sys.path.insert(0, str(fork))
 
-    from models.experimental import attempt_load  # type: ignore[import-not-found]
+    from models.experimental import attempt_load
 
     original_load = torch.load
 
     def _trusting_load(*a: Any, **kw: Any) -> Any:
         return original_load(*a, **{**kw, 'weights_only': False})
 
-    torch.load = _trusting_load  # type: ignore[assignment]
+    torch.load = _trusting_load
     try:
         model = attempt_load(str(weights), device='cpu', inplace=True, fuse=True)
     finally:
-        torch.load = original_load  # type: ignore[assignment]
+        torch.load = original_load
     raw_names = getattr(model, 'names', {}) or {}
     names = dict(enumerate(raw_names)) if isinstance(raw_names, list) else dict(raw_names)
     return model, names

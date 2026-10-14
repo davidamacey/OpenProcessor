@@ -60,7 +60,7 @@ def _ultralytics_is_pre_84() -> bool:
 if not _ultralytics_is_pre_84():
     if Path(_Y11_VENV_PYTHON).exists() and os.environ.get('_Y11_REEXEC') != '1':
         os.environ['_Y11_REEXEC'] = '1'
-        os.execv(_Y11_VENV_PYTHON, [_Y11_VENV_PYTHON, *sys.argv])
+        os.execv(_Y11_VENV_PYTHON, [_Y11_VENV_PYTHON, *sys.argv])  # nosec B606  re-exec of the pinned interpreter path constant with our own argv
     raise SystemExit(
         'export_models.py requires ultralytics<8.4 (EfficientNMS end2end patch) '
         f'and no pinned toolchain was found at {_Y11_VENV_PYTHON}. '
@@ -306,7 +306,7 @@ def load_config_file(config_path: str) -> dict[str, dict[str, Any]]:
     if not path.exists():
         raise FileNotFoundError(f'Config file not found: {config_path}')
 
-    with open(path) as f:
+    with Path(path).open() as f:
         config = yaml.safe_load(f)
 
     if 'models' not in config:
@@ -442,7 +442,7 @@ def extract_class_names(model: 'YOLO') -> list[str]:
 
         # Fallback: check model.model.names
         if hasattr(model, 'model') and hasattr(model.model, 'names'):
-            names = model.model.names
+            names = model.model.names  # type: ignore[union-attr]  # ultralytics types YOLO.model as str | Module | None
             if isinstance(names, dict):
                 max_idx = max(names.keys())
                 return [names.get(i, f'class_{i}') for i in range(max_idx + 1)]
@@ -471,7 +471,7 @@ def save_labels_file(class_names: list[str], model_dir: Path) -> Path | None:
         return None
 
     labels_path = model_dir / 'labels.txt'
-    with open(labels_path, 'w') as f:
+    with Path(labels_path).open('w') as f:
         for name in class_names:
             f.write(f'{name}\n')
 
@@ -715,7 +715,7 @@ def build_and_save_engine(
         if serialized_engine is None:
             logger.error('Failed to build engine - builder returned None')
             return False
-        with open(output_path, 'wb') as f:
+        with Path(output_path).open('wb') as f:
             f.write(serialized_engine)
 
         file_size_mb = output_path.stat().st_size / (1024 * 1024)
@@ -910,16 +910,16 @@ def export_onnx_end2end(
         # Create and configure exporter
         exporter = Exporter(cfg=args, _callbacks=model.callbacks)
         exporter.args = args
-        exporter.model = model.model.to(DEVICE)
+        exporter.model = model.model.to(DEVICE)  # type: ignore[union-attr]  # ultralytics types YOLO.model as str | Module | None
         if hasattr(model, 'overrides'):
-            exporter.model.args = model.overrides
+            exporter.model.args = model.overrides  # type: ignore[assignment]  # overrides is a dict; Module.args is the legacy attribute
 
         exporter.im = torch.zeros(1, 3, IMG_SIZE, IMG_SIZE).to(DEVICE)
         exporter.file = Path(config['pt_file'])
 
         # Call export_onnx_trt directly
         logger.info('Calling patched export_onnx_trt() method...')
-        export_path, _ = exporter.export_onnx_trt(prefix='ONNX TRT:')
+        export_path, _ = exporter.export_onnx_trt(prefix='ONNX TRT:')  # type: ignore[attr-defined]  # method is added by the End2End patch above
 
         # Move to Triton model repository
         triton_name = config['triton_name']
@@ -1518,7 +1518,7 @@ Examples:
     # Save results
     results_file = Path('/app/scripts/export_results.json')
     results_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(results_file, 'w') as f:
+    with Path(results_file).open('w') as f:
         json.dump(
             {
                 'formats': args.formats,

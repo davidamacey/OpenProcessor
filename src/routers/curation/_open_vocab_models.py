@@ -14,7 +14,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from src.routers.curation._config_common_models import ActivateResponse, ActiveRef, ValidationReport
-from src.services.detection.open_vocab_select import DropReason  # noqa: TC001 - pydantic field type
+from src.services.detection.open_vocab_select import DropReason
 from src.services.detection.open_vocab_set import (
     DEFAULT_DEDUP_IOU,
     DEFAULT_IMAGE_MAX_SIDE,
@@ -25,7 +25,7 @@ from src.services.detection.open_vocab_set import (
     DEFAULT_MIN_SCORE,
     HitRateGate,
 )
-from src.services.detection.segmenter_gate import GateReason  # noqa: TC001 - pydantic field type
+from src.services.detection.segmenter_gate import GateReason
 
 
 SetSourceWire = Literal['stored', 'template']

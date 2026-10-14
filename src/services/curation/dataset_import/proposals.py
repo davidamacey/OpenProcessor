@@ -67,7 +67,7 @@ def existing_items(docs: list[dict[str, Any]]) -> list[ExistingItem]:
     return [
         ExistingItem(
             crop_id=str(d['crop_id']),
-            bbox_norm=tuple(d.get('bbox_norm') or (0.0, 0.0, 0.0, 0.0)),  # type: ignore[arg-type]
+            bbox_norm=tuple(d.get('bbox_norm') or (0.0, 0.0, 0.0, 0.0)),
             class_name=d.get('class_name'),
             locked=is_locked_item(d),
         )

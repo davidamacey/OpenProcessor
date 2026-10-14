@@ -65,7 +65,7 @@ def expected_active_for(ref: AxisRef) -> dict[str, Any] | None:
     return None
 
 
-def _carry(endpoint: VlmEndpoint | None, *, ack_now: bool):  # type: ignore[no-untyped-def]
+def _carry(endpoint: VlmEndpoint | None, *, ack_now: bool):
     """The activation doc's extras, computed from the CURRENT doc inside the
     same OCC step so a concurrent activation's acknowledgements are never
     lost."""

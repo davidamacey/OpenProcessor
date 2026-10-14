@@ -166,7 +166,7 @@ def _run_task(
     env['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
     env['CUDA_VISIBLE_DEVICES'] = str(gpu)
     try:
-        subprocess.run(_model_argv(ds_path, ds_out, ds_id, pinned), check=True, env=env)
+        subprocess.run(_model_argv(ds_path, ds_out, ds_id, pinned), check=True, env=env)  # nosec B603  fixed argv list, no shell
         return model['model'], True, None
     except subprocess.CalledProcessError as exc:
         return model['model'], False, str(exc)

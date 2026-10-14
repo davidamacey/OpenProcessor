@@ -231,7 +231,7 @@ def probes_of(
     for item in items:
         kind, target = class_target(mapping, project, item_class_name(item, names))
         if kind == 'item' and len(item.get('bbox_norm') or ()) == 4:
-            probes.append(Probe(tuple(item['bbox_norm']), target, trust_rank(item)))  # type: ignore[arg-type]
+            probes.append(Probe(tuple(item['bbox_norm']), target, trust_rank(item)))
     return probes
 
 

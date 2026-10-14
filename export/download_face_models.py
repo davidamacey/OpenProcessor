@@ -21,6 +21,7 @@ Usage:
 import sys
 import time
 from pathlib import Path
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import urlretrieve
 
@@ -29,7 +30,7 @@ from urllib.request import urlretrieve
 # Model Configuration
 # =============================================================================
 
-MODELS = {
+MODELS: dict[str, dict[str, Any]] = {
     # SCRFD-10G with Batch Normalization and Keypoints
     # Best accuracy/speed trade-off for GPU deployment
     # Note: bnkps = Batch Norm + KeyPoints, gnkps = Group Norm + KeyPoints
@@ -114,7 +115,7 @@ def download_with_progress(url: str, output_path: Path, desc: str = '') -> bool:
                 )
 
         # Download from trusted GitHub releases - url is validated above
-        urlretrieve(url, output_path, reporthook=progress_hook)
+        urlretrieve(url, output_path, reporthook=progress_hook)  # nosec B310  URL comes from the hardcoded model source list
         print()  # New line after progress
         return True
 

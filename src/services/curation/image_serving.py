@@ -60,7 +60,7 @@ except Exception:
     try:
         import structlog as _structlog
 
-        def _get_logger(name: str) -> Any:  # type: ignore[misc]
+        def _get_logger(name: str) -> Any:
             return _structlog.get_logger(name)
     except Exception:
         import logging as _stdlib_logging
@@ -89,7 +89,7 @@ except Exception:
             def error(self, msg: str, **kwargs: Any) -> None:
                 self._inner.error(self._format(msg, **kwargs))
 
-        def _get_logger(name: str) -> Any:  # type: ignore[misc]
+        def _get_logger(name: str) -> Any:
             return _KwargLogger(name)
 
 
@@ -307,7 +307,7 @@ async def serve_source_image(path: str, root: Path) -> FileResponse:
 # ``OrderedDict`` LRU. The fallback is enough for unit tests when the
 # package is not installed in a slim test env.
 try:
-    from cachetools import LRUCache as _CachetoolsLRU  # type: ignore[import-untyped]
+    from cachetools import LRUCache as _CachetoolsLRU
 
     _HAS_CACHETOOLS = True
 except ImportError:  # pragma: no cover - fallback path
@@ -423,7 +423,7 @@ class ThumbnailCache:
             # 200x600 tall crop displays at 43x128 inside a 128x128 cell
             # instead of being squashed to a 128x128 square.
             crop = img.crop((x1, y1, x2, y2))
-            crop.thumbnail((size, size), Image.LANCZOS)
+            crop.thumbnail((size, size), Image.Resampling.LANCZOS)
             buf = io.BytesIO()
             crop.save(buf, format='JPEG', quality=85)
             return buf.getvalue()
@@ -474,7 +474,7 @@ def _maybe_downscale(img: Image.Image, max_dim: int | None) -> Image.Image:
         return img
     scale = max_dim / longest
     new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
-    return img.resize(new_size, Image.LANCZOS)
+    return img.resize(new_size, Image.Resampling.LANCZOS)
 
 
 async def render_source_image(

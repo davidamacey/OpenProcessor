@@ -46,7 +46,11 @@ from src.config import get_curation_config
 from src.config.curation import ITEM_EMBEDDING_FIELD
 from src.core.logging import get_logger
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
-from src.services.curation.clustering.assignment_writer import BULK_CHUNK, AssignmentWriter
+from src.services.curation.clustering.assignment_writer import (
+    BULK_CHUNK,
+    AssignmentWriter,
+    bulk_item_failed,
+)
 from src.services.curation.clustering.page_rows import hits_to_rows
 from src.services.curation.clustering.pit_pages import iter_pages
 from src.services.curation.embedding_state import embedded_clause
@@ -182,11 +186,7 @@ async def _write(client: Any, actions: list[Any]) -> int:
     for start in range(0, len(actions), 2 * _BULK_CHUNK):
         resp = await client.bulk(body=actions[start : start + 2 * _BULK_CHUNK], refresh=False)
         if resp.get('errors'):
-            failed += sum(
-                1
-                for it in resp.get('items') or []
-                if (next(iter(it.values()), {}) or {}).get('error')
-            )
+            failed += sum(1 for it in resp.get('items') or [] if bulk_item_failed(it))
     return failed
 
 

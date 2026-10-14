@@ -446,7 +446,7 @@ class PaddleOcrTextRecognizer:
         orig_shape = np.asarray([h, w], dtype=np.int32)
 
         new_w, new_h = det_size or ocr_det_input_size(w, h)
-        resized = img.resize((new_w, new_h), Image.BILINEAR)
+        resized = img.resize((new_w, new_h), Image.Resampling.BILINEAR)
         arr = np.asarray(resized, dtype=np.float32)[:, :, ::-1]  # BGR
         arr = arr / 127.5 - 1.0
         ocr_chw = np.transpose(arr, (2, 0, 1))

@@ -46,6 +46,7 @@ from scripts.bench import gpu_decode_lib as lib, parity_metrics as pm  # noqa: E
 from src.config.settings import TritonModelConfig  # noqa: E402
 
 
+DetRow = tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
 ARMS = ('cpu', 'cpu_b1', 'dec', 'gpu')
 DET_MODEL = TritonModelConfig.YOLO_MODEL
 PE_MODEL = TritonModelConfig.PE_IMAGE_MODEL
@@ -67,11 +68,13 @@ class Engines:
         )
         return [res.as_numpy(o) for o in outputs]
 
-    def detect(self, chws: list[np.ndarray]) -> list[tuple[np.ndarray, ...]]:
-        rows: list[tuple[np.ndarray, ...]] = []
+    def detect(self, chws: list[np.ndarray]) -> list[DetRow]:
+        rows: list[DetRow] = []
         for i in range(0, len(chws), 16):
             outs = self._infer(DET_MODEL, np.stack(chws[i : i + 16]), DET_OUTPUTS)
-            rows.extend(tuple(o[j] for o in outs) for j in range(len(outs[0])))
+            rows.extend(
+                (outs[0][j], outs[1][j], outs[2][j], outs[3][j]) for j in range(len(outs[0]))
+            )
         return rows
 
     def embed(self, squares_hwc: list[np.ndarray]) -> np.ndarray:
@@ -116,10 +119,18 @@ def _gpu_decode(data: bytes) -> Any:
     return k.apply_orientation(chw.permute(1, 2, 0), lib.jpeg_header(data).orientation)
 
 
-def _dets(row: tuple[np.ndarray, ...], scale: float, pad: tuple[float, float]) -> list[list[float]]:
+def _dets(
+    row: DetRow,
+    scale: float,
+    pad: tuple[float, float],
+) -> list[list[float]]:
     from scripts.bench.detector_capture import decode_row
 
     return decode_row(*row, scale, pad)
+
+
+def _box4(box: list[float]) -> tuple[float, float, float, float]:
+    return (box[0], box[1], box[2], box[3])
 
 
 def _clamped_rect(box: list[float], w: int, h: int) -> tuple[int, int, int, int] | None:
@@ -141,7 +152,8 @@ def capture_image(name: str, data: bytes, eng: Engines, out: dict[str, Any]) -> 
     from src.services.detection.geometry import letterbox_to_square
     from src.services.detection.pe_preprocess import resize_crop_rgb, whole_frame_rgb_from_bytes
 
-    pil, w, h = _decode_image(data)
+    pil = _decode_image(data).pil
+    w, h = pil.size
     rgb = np.asarray(pil)
     try:
         frame = _gpu_decode(data)
@@ -174,6 +186,7 @@ def capture_image(name: str, data: bytes, eng: Engines, out: dict[str, Any]) -> 
     dets = {a: _dets(arm_rows[a], scale, pad) for a in ARMS}
 
     cpu_whole = whole_frame_rgb_from_bytes(data)
+    assert cpu_whole is not None
     gpu_whole = k.whole_frame_u8(frame).cpu().numpy()
     area_whole = k.whole_frame_u8(frame, mode='area').cpu().numpy()
     dct8_whole = k.whole_frame_u8(frame, mode='dct8').cpu().numpy()
@@ -202,19 +215,19 @@ def capture_image(name: str, data: bytes, eng: Engines, out: dict[str, Any]) -> 
         for det in dets[arm]:
             box = det[:4]
             if arm == 'gpu':
-                sq = k.pe_square_u8(k.crop_u8(frame, lib.crop_rect(tuple(box)))).cpu().numpy()
+                sq = k.pe_square_u8(k.crop_u8(frame, lib.crop_rect(_box4(box)))).cpu().numpy()
                 r = _clamped_rect(box, w, h)
                 bv = None if r is None else k.lap_var(frame[r[1] : r[3], r[0] : r[2]])
             else:
-                sq = resize_crop_rgb(np.asarray(crop_pil(src_pil, tuple(box))))
-                bv = crop_lap_var(src_rgb, tuple(box), 'rgb')
+                sq = resize_crop_rgb(np.asarray(crop_pil(src_pil, _box4(box))))
+                bv = crop_lap_var(src_rgb, _box4(box), 'rgb')
             squares[arm].append(sq)
-            out['items'][arm].append((name, *det, bv, full_var[arm], *lib.crop_rect(tuple(box))))
+            out['items'][arm].append((name, *det, bv, full_var[arm], *lib.crop_rect(_box4(box))))
     for det in dets['cpu']:
-        sq = k.pe_square_u8(k.crop_u8(frame, lib.crop_rect(tuple(det[:4])))).cpu().numpy()
+        sq = k.pe_square_u8(k.crop_u8(frame, lib.crop_rect(_box4(det)))).cpu().numpy()
         squares['gpu_on_cpu_boxes'].append(sq)
-        lb_box = tuple(
-            v * scale + (pad[0] if i % 2 == 0 else pad[1]) for i, v in enumerate(det[:4])
+        lb_box = _box4(
+            [v * scale + (pad[0] if i % 2 == 0 else pad[1]) for i, v in enumerate(det[:4])]
         )
         squares['cascade_on_cpu_boxes'].append(
             k.pe_square_u8(k.crop_u8(lb_hwc, lib.crop_rect(lb_box))).cpu().numpy()
@@ -273,7 +286,7 @@ def run_capture(args: argparse.Namespace) -> int:
         arrays[f'{arm}_rect'] = np.array([r[9:13] for r in rows], dtype=np.int32).reshape(-1, 4)
     for arm, chunks in out['item_vec'].items():
         arrays[f'{arm}_vec'] = np.concatenate(chunks) if chunks else np.zeros((0, 1024), np.float16)
-    np.savez_compressed(args.out, **arrays)
+    np.savez_compressed(args.out, **arrays)  # type: ignore[arg-type]  # mypy reads **dict as the allow_pickle flag
     Path(args.out).with_suffix('.fallbacks.json').write_text(json.dumps(out['fallbacks'], indent=1))
     print(json.dumps({'images': len(names), 'fallbacks': len(out['fallbacks'])}))
     return 0
@@ -282,7 +295,7 @@ def run_capture(args: argparse.Namespace) -> int:
 # ------------------------------------------------------------------------------- compare
 
 
-def _boxes(a: dict[str, np.ndarray], arm: str) -> tuple[np.ndarray, ...]:
+def _boxes(a: dict[str, np.ndarray], arm: str) -> DetRow:
     det = a[f'{arm}_det']
     return a[f'{arm}_image'], det[:, :4], det[:, 5].astype(int).astype(str), det[:, 4]
 

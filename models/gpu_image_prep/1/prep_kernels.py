@@ -18,11 +18,10 @@ from typing import Any
 
 import cupy as cp
 import numpy as np
-
 from prep_geometry import filter_weights
 
 
-_SRC = r'''
+_SRC = r"""
 extern "C" __global__ void resample_h(
     const unsigned char* src, int H, int W,
     int x0, int y0, int rows,
@@ -116,7 +115,7 @@ extern "C" __global__ void lap_sums(
         atomicAdd((unsigned long long*)&out[rid * 2 + 1], (unsigned long long)sq[0]);
     }
 }
-'''
+"""
 
 
 class PrepKernels:
@@ -127,13 +126,22 @@ class PrepKernels:
         self.k_lap = mod.get_function('lap_sums')
         self._cache: dict[tuple[int, int, int, int, bool], tuple[Any, ...]] = {}
 
-    def _weights(self, n_in: int, n_out: int, left: int, take: int, antialias: bool) -> tuple[Any, ...]:
+    def _weights(
+        self, n_in: int, n_out: int, left: int, take: int, antialias: bool
+    ) -> tuple[Any, ...]:
         key = (n_in, n_out, left, take, antialias)
         hit = self._cache.get(key)
         if hit is None:
             f, c, w = filter_weights(n_in, n_out, antialias=antialias)
             f, c, w = f[left : left + take], c[left : left + take], w[left : left + take]
-            hit = (cp.asarray(f), cp.asarray(c), cp.asarray(w), w.shape[1], int(f[0]), int((f + c).max()))
+            hit = (
+                cp.asarray(f),
+                cp.asarray(c),
+                cp.asarray(w),
+                w.shape[1],
+                int(f[0]),
+                int((f + c).max()),
+            )
             if len(self._cache) > 4096:
                 self._cache.clear()
             self._cache[key] = hit
@@ -182,5 +190,9 @@ class PrepKernels:
             return out[:0]
         r = cp.asarray(np.asarray(rects, np.int32).reshape(-1, 4))
         h_img, w_img = int(frame.shape[0]), int(frame.shape[1])
-        self.k_lap((64, len(rects)), (256,), (frame, np.int32(h_img), np.int32(w_img), r, np.int32(len(rects)), out))
+        self.k_lap(
+            (64, len(rects)),
+            (256,),
+            (frame, np.int32(h_img), np.int32(w_img), r, np.int32(len(rects)), out),
+        )
         return out

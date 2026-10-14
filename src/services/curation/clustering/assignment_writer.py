@@ -67,6 +67,12 @@ def _status(item: dict[str, Any]) -> int | None:
     return action.get('status')
 
 
+def bulk_item_failed(item: dict[str, Any]) -> bool:
+    """True when a bulk response item carries an ``error`` for its action."""
+    action: dict[str, Any] = next(iter(item.values()), {}) or {}
+    return bool(action.get('error'))
+
+
 async def send_batch(
     client: AsyncOpenSearch,
     op: str,
@@ -99,7 +105,7 @@ async def send_batch(
             else:
                 other.append(item)
         _log_bulk_write_errors(op, {'items': other})
-        failed = sum(1 for item in other if (next(iter(item.values()), {}) or {}).get('error'))
+        failed = sum(1 for item in other if bulk_item_failed(item))
         if not rejected:
             return failed
         pending = rejected

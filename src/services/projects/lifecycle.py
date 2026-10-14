@@ -237,7 +237,7 @@ async def _cleanup_orphaned_by_concurrent_delete(
     with the exact index names, so an operator can search for them if
     this cleanup itself fails (e.g. the same transient fault that made
     ``_ensure_indexes`` unreliable in the first place)."""
-    detail = exc.detail if isinstance(exc.detail, dict) else {}
+    detail: dict[str, Any] = exc.detail if isinstance(exc.detail, dict) else {}
     if detail.get('project_status') != 'deleted':
         return
     orphaned = sorted(set(record.resources.indexes.values()))

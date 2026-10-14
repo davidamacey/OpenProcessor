@@ -58,7 +58,7 @@ def report_of(issues: list[CombineIssue]) -> ValidationReport:
         ok=not issues,
         errors=[
             ValidationIssue(
-                code=i.code,  # type: ignore[arg-type]
+                code=i.code,
                 severity='error',
                 field=i.project,
                 message=i.message or i.code,

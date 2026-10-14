@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from fastapi import Response
+
 from src.core.wire_json import WireJSONResponse
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
 from src.routers.curation._config_common_models import (
@@ -529,8 +531,7 @@ async def save_prompt_pack(
 @router.delete('/prompt_packs/{name}', status_code=204)
 async def delete_prompt_pack_route(
     name: str, expected_revision: int, opensearch: OpenSearchDep
-) -> None:
-    from fastapi import Response
+) -> Response:
 
     store = get_config_store()
     await store.refresh(opensearch)

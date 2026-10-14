@@ -18,7 +18,7 @@ from typing import Any, Literal, Self
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, model_validator
 
-from src.routers.curation._dataset_issue_models import DatasetIssueWire  # noqa: TC001 - pydantic field type, resolved at runtime
+from src.routers.curation._dataset_issue_models import DatasetIssueWire
 from src.services.issue_ids import stamp_issue_ids
 
 

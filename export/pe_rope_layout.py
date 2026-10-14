@@ -281,14 +281,14 @@ def permute_rope_layout(
         inits[bias_name].CopyFrom(numpy_helper.from_array(np.ascontiguousarray(bias), bias_name))
 
         qkv = bias_add.output[0]
-        scaled_q, scaled_k_t, value = (
+        scaled_q, scaled_k_t, value_name = (
             prefix + 'Mul_12_output_0',
             prefix + 'Mul_13_output_0',
             prefix + 'Transpose_3_output_0',
         )
         drop |= {
             index_of[id(graph.node[i])]
-            for i in _ancestors(graph, [scaled_q, scaled_k_t, value], qkv, prefix)
+            for i in _ancestors(graph, [scaled_q, scaled_k_t, value_name], qkv, prefix)
         }
 
         # The scale constants of the original graph (Mul_12 / Mul_13) are kept by value.
@@ -297,7 +297,7 @@ def permute_rope_layout(
             graph.initializer.append(numpy_helper.from_array(scale, f'{prefix}rope_{suffix}'))
 
         after.setdefault(id(bias_add), []).extend(
-            _block_nodes(prefix, qkv, (scaled_q, scaled_k_t, value))
+            _block_nodes(prefix, qkv, (scaled_q, scaled_k_t, value_name))
         )
         blocks += 1
 

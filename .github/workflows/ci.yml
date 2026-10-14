@@ -85,5 +85,17 @@ jobs:
       - name: Install pre-commit
         run: pip install pre-commit
 
+      # Cold mypy over the whole tree takes minutes; the cache makes it seconds.
+      - name: Cache mypy
+        uses: actions/cache@v6
+        with:
+          path: .mypy_cache
+          key: mypy-${{ runner.os }}-${{ hashFiles('requirements-test.txt', 'pyproject.toml') }}-${{ github.sha }}
+          restore-keys: |
+            mypy-${{ runner.os }}-${{ hashFiles('requirements-test.txt', 'pyproject.toml') }}-
+
+      - name: Run all hooks
+        run: pre-commit run --all-files --show-diff-on-failure
+
       - name: Run all hooks
         run: pre-commit run --all-files --show-diff-on-failure

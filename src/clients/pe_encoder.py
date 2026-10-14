@@ -124,7 +124,7 @@ def _preprocess_crops(crops: list[np.ndarray]) -> np.ndarray:
         return batch
 
 
-def _timed_whole_frame(preprocess: Any, source: Any) -> np.ndarray | None:
+def _timed_whole_frame(preprocess: Any, source: Any) -> np.ndarray:
     """``preprocess(source)`` (a whole-frame square, decoding a path first) under the stage timer."""
     nbytes = len(source) if isinstance(source, bytes) else 0
     with stage_timer('whole_frame_preprocess', nbytes=nbytes):

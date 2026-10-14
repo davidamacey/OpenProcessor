@@ -152,7 +152,7 @@ def export_to_onnx(model, output_path):
     print('  Exporting with dynamic batch support...')
     torch.onnx.export(
         encoder,
-        dummy_input,
+        (dummy_input,),
         str(output_path),
         export_params=True,
         opset_version=ONNX_OPSET_VERSION,
@@ -278,7 +278,7 @@ def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=64):
         # ModelOpt calibration path and the encoder is small (~125 MB).
         # Parse ONNX
         print('  Parsing ONNX model...')
-        with open(onnx_path, 'rb') as f:
+        with Path(onnx_path).open('rb') as f:
             if not parser.parse(f.read()):
                 for i in range(parser.num_errors):
                     print(f'    Error {i}: {parser.get_error(i)}')
@@ -316,7 +316,7 @@ def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=64):
         plan_path = Path(plan_path)
         plan_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(plan_path, 'wb') as f:
+        with Path(plan_path).open('wb') as f:
             f.write(serialized_engine)
 
         print('\n  ✓ TensorRT engine saved!')

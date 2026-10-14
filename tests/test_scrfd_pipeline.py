@@ -255,7 +255,7 @@ def test_api_face_recognize(image_path: Path) -> bool:
 
     passed = True
 
-    with open(image_path, 'rb') as f:
+    with Path(image_path).open('rb') as f:
         files = {'file': (image_path.name, f, 'image/jpeg')}
         start = time.time()
         try:
@@ -339,7 +339,7 @@ def test_api_face_verify(image_path: Path) -> bool:
     """Test /faces/verify endpoint with the same face (should match)."""
     print('\n--- API /faces/verify Self-Match Test ---')
 
-    with open(image_path, 'rb') as f:
+    with Path(image_path).open('rb') as f:
         img_bytes = f.read()
 
     files = {
@@ -376,7 +376,7 @@ def test_scrfd_benchmark(image_path: Path, iterations: int = 20) -> bool:
     """Benchmark the face recognition pipeline throughput."""
     print(f'\n--- Pipeline Benchmark ({iterations} iterations) ---')
 
-    with open(image_path, 'rb') as f:
+    with Path(image_path).open('rb') as f:
         img_bytes = f.read()
 
     # Warmup

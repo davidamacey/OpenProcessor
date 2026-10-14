@@ -180,7 +180,7 @@ async def _fetch_pending(
 
 def _crop_region_jpeg(crop_jpeg: bytes, region_in_crop: tuple[float, float, float, float]) -> bytes:
     """Extract just the region of interest from a crop's JPEG bytes for VLM verify."""
-    img = Image.open(io.BytesIO(crop_jpeg))
+    img: Image.Image = Image.open(io.BytesIO(crop_jpeg))
     img.load()
     if img.mode != 'RGB':
         img = img.convert('RGB')

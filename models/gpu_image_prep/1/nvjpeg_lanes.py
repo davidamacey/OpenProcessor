@@ -45,22 +45,34 @@ def _check(status: int, call: str) -> None:
 
 
 class _Lane:
-    def __init__(self, lib: Any, handle: ctypes.c_void_p, decoders: dict[str, ctypes.c_void_p]) -> None:
+    def __init__(
+        self, lib: Any, handle: ctypes.c_void_p, decoders: dict[str, ctypes.c_void_p]
+    ) -> None:
         self.stream = cp.cuda.Stream(non_blocking=True)
         self.states: dict[str, ctypes.c_void_p] = {}
         for name, dec in decoders.items():
             st = ctypes.c_void_p()
-            _check(lib.nvjpegDecoderStateCreate(handle, dec, ctypes.byref(st)), 'DecoderStateCreate')
+            _check(
+                lib.nvjpegDecoderStateCreate(handle, dec, ctypes.byref(st)), 'DecoderStateCreate'
+            )
             pinned, device = ctypes.c_void_p(), ctypes.c_void_p()
-            _check(lib.nvjpegBufferPinnedCreate(handle, None, ctypes.byref(pinned)), 'BufferPinnedCreate')
-            _check(lib.nvjpegBufferDeviceCreate(handle, None, ctypes.byref(device)), 'BufferDeviceCreate')
+            _check(
+                lib.nvjpegBufferPinnedCreate(handle, None, ctypes.byref(pinned)),
+                'BufferPinnedCreate',
+            )
+            _check(
+                lib.nvjpegBufferDeviceCreate(handle, None, ctypes.byref(device)),
+                'BufferDeviceCreate',
+            )
             _check(lib.nvjpegStateAttachPinnedBuffer(st, pinned), 'AttachPinned')
             _check(lib.nvjpegStateAttachDeviceBuffer(st, device), 'AttachDevice')
             self.states[name] = st
         self.jstream = ctypes.c_void_p()
         _check(lib.nvjpegJpegStreamCreate(handle, ctypes.byref(self.jstream)), 'JpegStreamCreate')
         self.params = ctypes.c_void_p()
-        _check(lib.nvjpegDecodeParamsCreate(handle, ctypes.byref(self.params)), 'DecodeParamsCreate')
+        _check(
+            lib.nvjpegDecodeParamsCreate(handle, ctypes.byref(self.params)), 'DecodeParamsCreate'
+        )
         _check(lib.nvjpegDecodeParamsSetOutputFormat(self.params, _OUTPUT_RGBI), 'SetOutputFormat')
 
 
@@ -75,12 +87,18 @@ class NvJpegLanes:
     ) -> None:
         self.lib = ctypes.CDLL(library)
         self.handle = ctypes.c_void_p()
-        _check(self.lib.nvjpegCreateEx(0, None, None, _FLAG_INTERPOLATE, ctypes.byref(self.handle)), 'CreateEx')
+        _check(
+            self.lib.nvjpegCreateEx(0, None, None, _FLAG_INTERPOLATE, ctypes.byref(self.handle)),
+            'CreateEx',
+        )
         self.backends = backends
         self.decoders: dict[str, ctypes.c_void_p] = {}
         for name in backends:
             d = ctypes.c_void_p()
-            _check(self.lib.nvjpegDecoderCreate(self.handle, _BACKEND[name], ctypes.byref(d)), 'DecoderCreate')
+            _check(
+                self.lib.nvjpegDecoderCreate(self.handle, _BACKEND[name], ctypes.byref(d)),
+                'DecoderCreate',
+            )
             self.decoders[name] = d
         self.pool: queue.Queue[_Lane] = queue.Queue()
         for _ in range(lanes):
@@ -96,15 +114,25 @@ class NvJpegLanes:
     def _decode_on(self, lane: _Lane, data: bytes) -> tuple[Any, str]:
         lib = self.lib
         _check(
-            lib.nvjpegJpegStreamParse(self.handle, ctypes.c_char_p(data), ctypes.c_size_t(len(data)), 0, 0, lane.jstream),
+            lib.nvjpegJpegStreamParse(
+                self.handle, ctypes.c_char_p(data), ctypes.c_size_t(len(data)), 0, 0, lane.jstream
+            ),
             'JpegStreamParse',
         )
         w, h = ctypes.c_uint(), ctypes.c_uint()
-        _check(lib.nvjpegJpegStreamGetFrameDimensions(lane.jstream, ctypes.byref(w), ctypes.byref(h)), 'GetFrameDimensions')
+        _check(
+            lib.nvjpegJpegStreamGetFrameDimensions(lane.jstream, ctypes.byref(w), ctypes.byref(h)),
+            'GetFrameDimensions',
+        )
         for name in self.backends:
             dec = self.decoders[name]
             supported = ctypes.c_int(1)
-            _check(lib.nvjpegDecoderJpegSupported(dec, lane.jstream, lane.params, ctypes.byref(supported)), 'JpegSupported')
+            _check(
+                lib.nvjpegDecoderJpegSupported(
+                    dec, lane.jstream, lane.params, ctypes.byref(supported)
+                ),
+                'JpegSupported',
+            )
             if supported.value != 0:
                 continue
             state = lane.states[name]
@@ -114,9 +142,18 @@ class NvJpegLanes:
             img.channel[0] = out.data.ptr
             img.pitch[0] = w.value * 3
             cs = ctypes.c_void_p(lane.stream.ptr)
-            _check(lib.nvjpegDecodeJpegHost(self.handle, dec, state, lane.params, lane.jstream), 'DecodeJpegHost')
-            _check(lib.nvjpegDecodeJpegTransferToDevice(self.handle, dec, state, lane.jstream, cs), 'TransferToDevice')
-            _check(lib.nvjpegDecodeJpegDevice(self.handle, dec, state, ctypes.byref(img), cs), 'DecodeJpegDevice')
+            _check(
+                lib.nvjpegDecodeJpegHost(self.handle, dec, state, lane.params, lane.jstream),
+                'DecodeJpegHost',
+            )
+            _check(
+                lib.nvjpegDecodeJpegTransferToDevice(self.handle, dec, state, lane.jstream, cs),
+                'TransferToDevice',
+            )
+            _check(
+                lib.nvjpegDecodeJpegDevice(self.handle, dec, state, ctypes.byref(img), cs),
+                'DecodeJpegDevice',
+            )
             lane.stream.synchronize()
             return out, name
         raise NvJpegError('no nvJPEG backend supports this stream', -1)

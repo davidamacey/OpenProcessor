@@ -184,7 +184,7 @@ async def list_vlm_endpoints(client: OpenSearchDep) -> VlmEndpointList:
         ],
         config_revision=snapshot.config_revision,
         stale=snapshot.stale,
-        external_policy=external_policy(),  # type: ignore[arg-type]
+        external_policy=external_policy(),
         secret_refs=secret_refs_wire(),
         labels=labels_wire(),
     )

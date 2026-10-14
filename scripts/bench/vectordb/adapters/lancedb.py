@@ -133,7 +133,7 @@ class LanceAdapter(Adapter):
         self.table.optimize(cleanup_older_than=__import__('datetime').timedelta(seconds=0))
 
     def bytes_on_disk(self) -> int:
-        out = subprocess.run(
+        out = subprocess.run(  # nosec B603 B607  fixed argv list, no shell; du from PATH
             ['du', '-sb', str(self.path)], capture_output=True, text=True, check=True
         )
         return int(out.stdout.split()[0])

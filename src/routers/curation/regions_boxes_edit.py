@@ -464,7 +464,7 @@ async def batch_set_region_box_state(
             await _write_one_boxes(opensearch, crop_id, rec, 'human:batch_set_region_box_state')
         except HTTPException as exc:
             if exc.status_code == 409:
-                detail = exc.detail if isinstance(exc.detail, dict) else {}
+                detail: dict[str, Any] = exc.detail if isinstance(exc.detail, dict) else {}
                 conflicts.append({'crop_id': crop_id, **detail})
             else:
                 invalid.append({'crop_id': crop_id, 'detail': exc.detail})
