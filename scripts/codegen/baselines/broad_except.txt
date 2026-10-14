@@ -211,7 +211,8 @@ src/services/training/promote_run.py	1	triage every return-empty handler in PR 3
 src/services/training/trainer_reachability.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/training/triton_reload.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/triton_control.py	5	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/visual_search/ingest_batch.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/visual_search/batch_documents.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/visual_search/ingest_batch.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/visual_search/ingest_single.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
 src/utils/cpu_pool.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/utils/image_processing.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
