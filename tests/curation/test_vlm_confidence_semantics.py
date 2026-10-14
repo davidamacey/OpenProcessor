@@ -18,14 +18,11 @@ from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation import base_curation_config
+from src.domain.ingest_class_sources import classifier_class_sources, is_classifier_class_source
 from src.services.curation.class_sources import (
     VLM_CATEGORY_SCORE,
     class_confidence,
     class_source_catalog,
-)
-from src.services.curation.ingest_class_sources import (
-    classifier_class_sources,
-    is_classifier_class_source,
 )
 from src.services.curation.review_queries import TAB_LABELS
 from src.services.curation.wire import serialize_item
@@ -38,7 +35,9 @@ MODEL_SOURCE = 'secondary_model'
 def _client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     monkeypatch.setattr(
         'src.services.curation.strategy_registry.resolve_effective_default',
         AsyncMock(return_value=None),

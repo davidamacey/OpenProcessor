@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.services.curation.embedding_state import embedded_clause
+from src.domain.embedding_state import embedded_clause
 
 
 # Sortable item fields -> the ``unmapped_type`` OpenSearch needs when a
@@ -81,7 +81,7 @@ def classifier_low_confidence_clause(lt: float) -> dict[str, Any]:
     scored -- OR no classifier prediction at all (COCO/VLM-only blind spots),
     not silently dropped by a plain range clause.
     """
-    from src.services.curation.ingest_class_sources import (
+    from src.domain.ingest_class_sources import (
         classifier_class_sources,
         unlabeled_proposal_class_sources,
     )

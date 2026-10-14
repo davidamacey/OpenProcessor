@@ -26,8 +26,8 @@ from typing import TYPE_CHECKING, Any
 from src.config.region_fields import RegionFields, get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
+from src.domain.region_boxes import RegionBox, read_boxes
 from src.services.curation.region_box_edits import same_box
-from src.services.curation.region_boxes import RegionBox, read_boxes
 from src.utils.vectors import float_list
 
 

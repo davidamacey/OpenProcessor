@@ -35,7 +35,7 @@ _TOO_MANY_REQUESTS = 429
 async def _backfill_with_retry(client: Any, index: str) -> int:
     """The embedded-state backfill, retried with backoff while OpenSearch
     answers 429 (the node is busy, not the request wrong)."""
-    from src.services.curation.embedding_state import backfill_embedded_state
+    from src.domain.embedding_state import backfill_embedded_state
 
     for attempt in range(_RETRY_ATTEMPTS):
         try:

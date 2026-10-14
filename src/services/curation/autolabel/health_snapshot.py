@@ -1,13 +1,10 @@
-"""Curation router sub-module — pipeline health snapshot helper.
-
-Split out of :mod:`pipeline` so the parent module stays under the
-700-LOC pre-commit ceiling. Exposes exactly one public helper:
+"""Pipeline health snapshot for the auto-label run. Exposes exactly one public helper:
 
 * :func:`pipeline_health_snapshot` — one OpenSearch round-trip that
   rolls up the counts the labeler dashboard cares about (validated,
   unvalidated, has_class, cluster_id_mismatched).
 
-Used by ``pipeline_auto_label`` to render the ``baseline`` and
+Used by the auto-label run to render the ``baseline`` and
 ``after`` blocks on the run's final result so the labeler can show a
 real before/after delta.
 """
@@ -16,9 +13,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from src.config.curation import items_index
 from src.core.logging import get_logger
-from src.routers.curation._common import items_index
-from src.services.curation.embedding_state import not_embedded_clause
+from src.domain.embedding_state import not_embedded_clause
 
 
 if TYPE_CHECKING:

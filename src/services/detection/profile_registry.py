@@ -231,6 +231,13 @@ def get_profile(name: str) -> DetectionProfile | None:
     return get_profiles().get(name)
 
 
+def resolve_region_profile(profile_name: str | None) -> DetectionProfile | None:
+    """The profile called ``profile_name``, or the active one when it is ``None``."""
+    if profile_name is None:
+        return get_active_region_profile()
+    return get_profiles().get(profile_name)
+
+
 def get_default_profile_name() -> str | None:
     """The ``name`` of the default profile, or ``None`` if none registered."""
     ensure_env_region_profile()
@@ -336,4 +343,5 @@ __all__ = [
     'region_profile_from_file',
     'region_profile_or_neutral',
     'register_profile',
+    'resolve_region_profile',
 ]

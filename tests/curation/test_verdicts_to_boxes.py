@@ -14,7 +14,7 @@ from src.config.region_rejection import (
     REJECT_REASON_VERIFIER,
 )
 from src.config.region_state import RegionStatus
-from src.services.curation.region_boxes import new_box_placeholder
+from src.domain.region_boxes import new_box_placeholder
 from src.services.labeling.region_overlay import VlmBoxVerdict
 
 

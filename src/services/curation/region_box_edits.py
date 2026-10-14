@@ -28,13 +28,8 @@ from src.config.region_rejection import (
     REJECT_REASON_VERIFIER,
 )
 from src.config.region_state import BOX_STATE_ROUTES, RegionStatus
+from src.domain.region_boxes import RegionBox, RegionBoxWriteError, next_box_id, read_boxes
 from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
-from src.services.curation.region_boxes import (
-    RegionBox,
-    RegionBoxWriteError,
-    next_box_id,
-    read_boxes,
-)
 from src.services.detection.region_text import TEXT_CHOICE_HUMAN
 
 
@@ -104,7 +99,7 @@ def with_state(box: RegionBox, state: str, *, rejection_reason: str | None = Non
 
     - ``rejected``: carries ``rejection_reason`` (default
       :data:`REJECT_REASON_HUMAN`, which also marks the box human-owned,
-      :func:`~src.services.curation.region_boxes.is_human_owned`). A
+      :func:`~src.domain.region_boxes.is_human_owned`). A
       re-reject re-stamps the reason: a human reject over a verifier
       reject is a human decision now.
     - every other state clears the reason, so a box never carries a stale

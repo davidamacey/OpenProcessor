@@ -14,7 +14,8 @@ from fastapi.responses import JSONResponse
 from src.config.project_context import set_bound_project, try_current_project
 from src.config.projects import ProjectRecord  # noqa: TC001 - resolved at runtime by FastAPI
 from src.core.logging import get_logger
-from src.routers.curation._config_common_models import ConfigErrorDetail, api_error
+from src.routers.curation._api_error import api_error
+from src.schemas.curation.config_common import ConfigErrorDetail
 from src.services.projects.registry import get_project_registry
 
 
@@ -83,8 +84,11 @@ def install_project_exception_handlers(app: FastAPI) -> None:
     """Map the isolation exceptions to structured responses (§2.4): a
     cross-project access or an unbound project-scoped read is a server
     bug -> 500 ``internal_isolation_error`` (never partial data); a write
-    to a read-only binding -> 409 ``project_read_only``."""
+    to a read-only binding -> 409 ``project_read_only``; a service's refusal
+    (:class:`RequestRejectedError`) -> the status and body it carries."""
     from src.config.project_context import ProjectNotBound
+    from src.core.error_handlers import request_rejected_response
+    from src.core.exceptions import RequestRejectedError
     from src.services.projects.guard import CrossProjectAccess, ProjectReadOnly
 
     async def _isolation_error(_request: Request, exc: Exception) -> JSONResponse:
@@ -107,3 +111,4 @@ def install_project_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(CrossProjectAccess, _isolation_error)
     app.add_exception_handler(ProjectNotBound, _isolation_error)
     app.add_exception_handler(ProjectReadOnly, _read_only)
+    app.exception_handler(RequestRejectedError)(request_rejected_response)

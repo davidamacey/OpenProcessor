@@ -14,10 +14,10 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from src.config.curation import items_index
+from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPTED_AT_FIELD
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET, cluster_kind
 from src.services.curation.cluster_representatives import representatives_msearch_body
 from src.services.curation.policy_doc_store import PolicyConflictError
-from src.services.curation.vlm_class_attempt import VLM_CLASS_ATTEMPTED_AT_FIELD
 from src.services.curation.vlm_policy_store import get_vlm_policy
 from src.services.curation.vlm_rep_claims import (
     RepClaim,

@@ -7,7 +7,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException
 
 from projects.clone_flow_fakes import (  # noqa: F401 - isolated_state is an autouse fixture
     Fake,
@@ -20,6 +19,7 @@ from projects.clone_flow_fakes import (  # noqa: F401 - isolated_state is an aut
     target_docs,
 )
 from src.config.project_context import bind_project
+from src.core.exceptions import RequestRejectedError
 from src.services.projects.clone import _apply_clone, _validate_clone
 
 
@@ -124,7 +124,7 @@ async def test_existing_target_with_same_named_unactivated_profile_conflicts_bef
     try:
         await _clone(client, source, target, monkeypatch, axes=None)
         outcome = 'ok'
-    except HTTPException as exc:
+    except RequestRejectedError as exc:
         outcome = f'{exc.status_code} {exc.detail}'
     after = set(client._docs.get(tidx, {}))
     print('profile-collision clone ->', outcome, '| new target docs:', sorted(after - before))
@@ -158,7 +158,7 @@ async def test_existing_target_previously_deactivated_accepts_clone(monkeypatch)
     try:
         await _clone(client, source, target, monkeypatch, axes=None)
         outcome = 'ok'
-    except HTTPException as exc:
+    except RequestRejectedError as exc:
         outcome = f'{exc.status_code} {exc.detail}'
     after = set(client._docs.get(tidx, {}))
     print('deactivated-target clone ->', outcome, '| new target docs:', sorted(after - before))
@@ -185,7 +185,7 @@ async def test_clone_into_a_target_with_a_stored_unactivated_pack_of_the_same_na
     with bind_project(target):
         tidx = get_curation_config().configs_index
     before = {k: dict(v) for k, v in client._docs.get(tidx, {}).items()}
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(RequestRejectedError) as exc:
         await _clone(client, source, target, monkeypatch, axes=['settings_defaults', 'activations'])
     assert exc.value.status_code == 409
     assert exc.value.detail['error'] == 'target_not_empty'
@@ -238,7 +238,7 @@ async def test_clone_into_same_named_unactivated_config_409_before_writes(
     await save(client, target, kind, name, {'x': 'TARGET OWN'})
     patch_lifecycle(monkeypatch, source, target)
     before = target_docs(client, target)
-    with pytest.raises(HTTPException) as ei:
+    with pytest.raises(RequestRejectedError) as ei:
         await clone_into(client, source, target)
     after = target_docs(client, target)
     changed = sorted(k for k in set(after) | set(before) if after.get(k) != before.get(k))
@@ -276,7 +276,7 @@ async def test_clone_into_target_with_stale_cache_does_not_partially_write(monke
     try:
         await clone_into(client, source, target)
         outcome = 'ok'
-    except HTTPException as exc:
+    except RequestRejectedError as exc:
         outcome = f'{exc.status_code} {exc.detail}'
     after = target_docs(client, target)
     changed = sorted(k for k in set(after) | set(before) if after.get(k) != before.get(k))

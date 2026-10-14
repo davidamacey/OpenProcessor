@@ -79,17 +79,19 @@ class _Labeler:
 
 @pytest.fixture
 def pipeline_env(monkeypatch: pytest.MonkeyPatch) -> _Labeler:
-    from src.routers.curation import pipeline, pipeline_health
-    from src.services.curation.autolabel import selection
+    from src.services.curation import auto_label_run
+    from src.services.curation.autolabel import selection, vlm_stage
 
     monkeypatch.setattr(selection, 'classifier_class_sources', lambda: frozenset({'det_model'}))
 
     labeler = _Labeler()
-    monkeypatch.setattr(pipeline, '_get_vlm_labeler', lambda *_a, **_k: labeler)
-    monkeypatch.setattr(pipeline, 'resolve_run_prompt_pack', AsyncMock(return_value=(None, None)))
-    monkeypatch.setattr(pipeline_health, 'pipeline_health_snapshot', AsyncMock(return_value={}))
+    monkeypatch.setattr(vlm_stage, 'get_vlm_labeler', lambda *_a, **_k: labeler)
     monkeypatch.setattr(
-        'src.routers.curation.get_class_registry',
+        auto_label_run, 'resolve_run_prompt_pack', AsyncMock(return_value=(None, None))
+    )
+    monkeypatch.setattr(auto_label_run, 'pipeline_health_snapshot', AsyncMock(return_value={}))
+    monkeypatch.setattr(
+        'src.clients.curation_opensearch.registry.get_class_registry',
         lambda: _FakeRegistry([_FakeClassEntry(3, 'thing')]),
     )
     monkeypatch.setattr(
@@ -100,12 +102,10 @@ def pipeline_env(monkeypatch: pytest.MonkeyPatch) -> _Labeler:
 
 @pytest.mark.asyncio
 async def test_direct_call_with_omitted_args_uses_plain_defaults(pipeline_env: _Labeler) -> None:
-    from src.routers.curation import pipeline
+    from src.routers.curation.pipeline_public import pipeline_auto_label
 
     fake = QueryFakeOpenSearch({ITEMS: _docs()})
-    summary = await pipeline.pipeline_auto_label(
-        opensearch=fake, train_clusters=False, run_vlm=True
-    )
+    summary = await pipeline_auto_label(opensearch=fake, train_clusters=False, run_vlm=True)
     assert summary['class_id'] is None
     assert summary['cluster_id'] is None
     assert summary['prompt_pack'] is None
@@ -117,10 +117,10 @@ async def test_direct_call_with_omitted_args_uses_plain_defaults(pipeline_env: _
 
 @pytest.mark.asyncio
 async def test_cluster_scope_selects_every_unvalidated_member(pipeline_env: _Labeler) -> None:
-    from src.routers.curation import pipeline
+    from src.routers.curation.pipeline_public import pipeline_auto_label
 
     fake = QueryFakeOpenSearch({ITEMS: _docs()})
-    summary = await pipeline.pipeline_auto_label(
+    summary = await pipeline_auto_label(
         opensearch=fake, train_clusters=False, run_vlm=True, cluster_id=CLUSTER
     )
     assert summary['cluster_id'] == CLUSTER

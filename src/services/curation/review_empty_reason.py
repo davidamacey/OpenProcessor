@@ -12,9 +12,9 @@ from __future__ import annotations
 from typing import Any
 
 from src.config import IndexRole, get_curation_config, index_name
+from src.domain.embedding_state import not_embedded_clause
+from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.curation.detections_summary import suggested_embed_request
-from src.services.curation.embedding_state import not_embedded_clause
-from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.curation.item_filter import ItemFilter
 
 

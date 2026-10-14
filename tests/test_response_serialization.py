@@ -32,9 +32,9 @@ from pydantic import BaseModel, TypeAdapter
 from src.clients.occ import OCCFinalConflictError
 from src.core.wire_json import WireJSONResponse, WireRoute
 from src.main import app as main_app, create_app
-from src.routers.embed import BoxEmbeddingsResponse
-from src.routers.ingest.models import IngestResponse
 from src.schemas.detection import InferenceResult
+from src.schemas.embed import BoxEmbeddingsResponse
+from src.schemas.ingest import IngestResponse
 
 
 SRC = pathlib.Path(__file__).resolve().parents[1] / 'src'

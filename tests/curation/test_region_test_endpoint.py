@@ -11,8 +11,8 @@ import pytest
 
 from curation.config_test_stack import ITEM_BOX, profile_body
 from src.config import get_region_fields
+from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.routers.curation._item_models import ItemDoc
-from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 from src.services.curation.wire import region_box_to_wire, serialize_item
 
 

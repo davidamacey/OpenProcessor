@@ -23,8 +23,8 @@ from PIL import Image
 from src.config import get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
+from src.domain.region_boxes import read_boxes
 from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, class_state_token
-from src.services.curation.region_boxes import read_boxes
 from src.services.curation.region_scope import parent_classes_clause
 from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.profile_registry import get_active_region_profile

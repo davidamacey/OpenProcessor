@@ -20,21 +20,21 @@ import httpx
 from fastapi import HTTPException, Query
 from pydantic import BaseModel
 
+from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, logger, router
-from src.routers.curation._config_common_models import api_error
 from src.routers.curation._models_class_mapping import (
     bound_registry,
     dedupe_triton_rows,
     discover_foreign_shared_models,
     listing_fields,
 )
-from src.routers.curation._models_segmenter import (
-    build_segmenter_entry,
-    build_standalone_segmenter_entry,
-)
 from src.routers.curation._models_vlm import vlm_status_rows
 from src.services.curation.ingest_policy_store import get_ingest_policy
 from src.services.detection.profile_registry import get_active_region_profile
+from src.services.detection.segmenter_health import (
+    build_segmenter_entry,
+    build_standalone_segmenter_entry,
+)
 from src.services.model_unload_guard import (
     UnloadRefusedError,
     check_unload,

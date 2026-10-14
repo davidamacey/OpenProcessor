@@ -18,10 +18,11 @@ from typing import Annotated, Any
 
 from fastapi import HTTPException, Query, Request
 
-from src.routers.curation._common import OpenSearchDep, _ensure_indexes, router
+from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._page_models import SearchTextResponse
 from src.services.curation import semantic_search
+from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.item_filter import item_filter_clauses
 
 
@@ -107,7 +108,7 @@ async def search_text(
             ),
         )
 
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
 
     # Lazy import: src.main imports the curation router package (which
     # imports this module) at module load time, so importing

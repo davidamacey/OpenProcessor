@@ -57,7 +57,7 @@ def pair_stats(a: np.ndarray, b: np.ndarray) -> dict[str, float]:
 def capture(args: argparse.Namespace) -> None:
     from tritonclient import grpc  # only inside the API image
 
-    from src.services.detection.pe_preprocess import whole_frame_chw
+    from src.utils.pe_preprocess import whole_frame_chw
 
     files = sorted(
         p for p in args.images.iterdir() if p.suffix.lower() in {'.jpg', '.jpeg', '.png'}

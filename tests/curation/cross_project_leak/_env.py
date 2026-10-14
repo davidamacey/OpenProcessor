@@ -67,8 +67,7 @@ def leak_env(
     from src.config.curation import IndexRole, base_curation_config
     from src.config.projects import new_project_record, resources_for_new
     from src.core.dependencies import app_state, get_async_triton
-    from src.routers.curation import _common
-    from src.services.curation import event_hub
+    from src.services.curation import event_hub, index_bootstrap
     from src.services.projects import guard, registry as registry_mod
     from src.services.projects.registry import ProjectRegistry
 
@@ -123,7 +122,7 @@ def leak_env(
     monkeypatch.setenv('OP_SEGMENTER_URL', 'http://segmenter-disabled-in-leak-test:8000')
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
     monkeypatch.setattr(curation_registry, '_registries', {})
-    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', set())
+    monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', set())
     # Keyed by index (audited), but its 5 s TTL would let wall-clock time
     # change which index roles a route reaches between the two passes.
     monkeypatch.setattr(settings_doc, '_SETTINGS_CACHE_TTL_SECONDS', 0.0)

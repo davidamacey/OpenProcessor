@@ -20,24 +20,18 @@ from pathlib import PurePosixPath
 from fastapi import HTTPException
 
 from src.config import get_curation_config
-from src.routers.curation._common import (
-    OpenSearchDep,
-    RegistryDep,
-    _ensure_indexes,
-    images_index,
-    router,
-)
+from src.routers.curation._api_error import api_error
+from src.routers.curation._common import OpenSearchDep, RegistryDep, images_index, router
 from src.routers.curation._common_models import (
     BatchIngestResponse as _BatchIngestResponse,
     IngestImageResponse,
 )
-from src.routers.curation._config_common_models import api_error
 from src.routers.curation._ingest_objects_models import (
     IngestObjectsRequest,
     ObjectPresignRequest,
     ObjectPresignResponse,
 )
-from src.routers.curation.ingest import _batch_response, _get_ingest_service
+from src.routers.curation.ingest import _batch_response
 from src.routers.curation.ingest_upload import early_failures_to_wire
 from src.services.curation.bulk_ingest.object_fetch import held_fetch
 from src.services.curation.bulk_ingest.object_store import (
@@ -48,6 +42,8 @@ from src.services.curation.bulk_ingest.object_store import (
     S3NotConfiguredError,
     get_object_store,
 )
+from src.services.curation.index_bootstrap import ensure_indexes
+from src.services.curation.ingest_service_factory import get_ingest_service
 from src.services.curation.upload_ingest import EarlyFailure, StagedEntry, stage_and_ingest
 
 
@@ -116,8 +112,8 @@ async def curation_ingest_objects(
         )
     for item in body.items:
         _check_allowed(s3, item.bucket, item.key)
-    await _ensure_indexes(opensearch)
-    service = await _get_ingest_service(opensearch, registry)
+    await ensure_indexes(opensearch)
+    service = await get_ingest_service(opensearch, registry)
 
     refs = [ObjectRef(i.bucket, i.key, i.etag.strip('"'), i.version_id, i.size) for i in body.items]
     stored = await _already_stored(opensearch, [r.to_uri() for r in refs if r.etag])

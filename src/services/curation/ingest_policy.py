@@ -21,8 +21,8 @@ from typing import TYPE_CHECKING, Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from src.domain.embedding_state import DEFERRED, EMBEDDED, NOT_SELECTED
 from src.services.curation.class_write_guard import class_write_locked
-from src.services.curation.embedding_state import DEFERRED, EMBEDDED, NOT_SELECTED
 from src.services.curation.name_match import name_matches, normalized_names
 from src.utils.class_names import normalize_class_name
 

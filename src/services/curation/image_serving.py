@@ -39,11 +39,10 @@ from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Any
 
-from fastapi import HTTPException
-from fastapi.responses import FileResponse
 from PIL import Image, ImageOps
 
 from src.config import CurationConfig, get_curation_config
+from src.core.exceptions import RequestRejectedError
 
 
 if TYPE_CHECKING:
@@ -206,12 +205,12 @@ def resolve_safe_path(
         (relative input) or one of ``allowed_roots`` (absolute input).
 
     Raises:
-        HTTPException(400): If the path is absolute, contains traversal
+        RequestRejectedError(400): If the path is absolute, contains traversal
             segments, or resolves outside the whitelisted roots.
-        HTTPException(404): If the resolved path does not exist.
+        RequestRejectedError(404): If the resolved path does not exist.
     """
     if not rel_path:
-        raise HTTPException(status_code=400, detail='path is required')
+        raise RequestRejectedError(status_code=400, detail='path is required')
 
     normalized = rel_path.replace('\\', '/')
 
@@ -224,26 +223,26 @@ def resolve_safe_path(
         try:
             abs_candidate = Path(normalized).resolve()
         except OSError as exc:  # malformed input
-            raise HTTPException(status_code=400, detail=f'invalid path: {exc}') from exc
+            raise RequestRejectedError(status_code=400, detail=f'invalid path: {exc}') from exc
         for whitelisted in allowed:
             try:
                 abs_candidate.relative_to(whitelisted.resolve())
             except ValueError:
                 continue
             if not abs_candidate.exists():
-                raise HTTPException(status_code=404, detail=f'image not found: {rel_path}')
+                raise RequestRejectedError(status_code=404, detail=f'image not found: {rel_path}')
             return abs_candidate
         logger.warning('path_traversal_absolute', path=rel_path)
-        raise HTTPException(status_code=400, detail='absolute paths not allowed')
+        raise RequestRejectedError(status_code=400, detail='absolute paths not allowed')
 
     if normalized.startswith('~'):
         logger.warning('path_traversal_absolute', path=rel_path)
-        raise HTTPException(status_code=400, detail='absolute paths not allowed')
+        raise RequestRejectedError(status_code=400, detail='absolute paths not allowed')
 
     parts = [p for p in normalized.split('/') if p not in ('', '.')]
     if any(p == '..' for p in parts):
         logger.warning('path_traversal_dotdot', path=rel_path)
-        raise HTTPException(status_code=400, detail='path traversal not allowed')
+        raise RequestRejectedError(status_code=400, detail='path traversal not allowed')
 
     # Resolve and confirm the result is still under root.
     root_resolved = root.resolve()
@@ -254,48 +253,31 @@ def resolve_safe_path(
         logger.warning(
             'path_traversal_escape', path=rel_path, resolved=str(candidate), root=str(root_resolved)
         )
-        raise HTTPException(status_code=400, detail='path escapes root') from exc
+        raise RequestRejectedError(status_code=400, detail='path escapes root') from exc
 
     if not candidate.exists():
-        raise HTTPException(status_code=404, detail=f'image not found: {rel_path}')
+        raise RequestRejectedError(status_code=404, detail=f'image not found: {rel_path}')
 
     return candidate
 
 
 # =============================================================================
-# Source-image streaming
+# Source-image media type
 # =============================================================================
 
+_SOURCE_MEDIA_TYPES = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.webp': 'image/webp',
+    '.heic': 'image/heic',
+    '.heif': 'image/heif',
+}
 
-async def serve_source_image(path: str, root: Path) -> FileResponse:
-    """Stream a source JPEG via FastAPI ``FileResponse`` (zero-copy).
 
-    Args:
-        path: Relative path under ``root``.
-        root: Whitelisted root directory.
-
-    Returns:
-        ``FileResponse`` with proper media-type and 1h Cache-Control.
-    """
-    safe_path = resolve_safe_path(path, root)
-
-    # Best-effort media-type detection. Default JPEG.
-    suffix = safe_path.suffix.lower()
-    media_type = {
-        '.jpg': 'image/jpeg',
-        '.jpeg': 'image/jpeg',
-        '.png': 'image/png',
-        '.webp': 'image/webp',
-        '.heic': 'image/heic',
-        '.heif': 'image/heif',
-    }.get(suffix, 'application/octet-stream')
-
-    logger.debug('serve_source_image', path=path, resolved=str(safe_path), media_type=media_type)
-    return FileResponse(
-        path=str(safe_path),
-        media_type=media_type,
-        headers={'Cache-Control': 'public, max-age=3600'},
-    )
+def source_media_type(path: Path) -> str:
+    """Best-effort media type of a source image from its suffix."""
+    return _SOURCE_MEDIA_TYPES.get(path.suffix.lower(), 'application/octet-stream')
 
 
 # =============================================================================
@@ -550,7 +532,7 @@ async def _fetch_crop(
     client through the router dependency.
 
     Raises:
-        HTTPException(404) if the crop does not exist.
+        RequestRejectedError(404) if the crop does not exist.
     """
     cfg = config or get_curation_config()
     try:
@@ -565,13 +547,15 @@ async def _fetch_crop(
     except Exception as exc:
         msg = str(exc).lower()
         if 'notfound' in msg or 'not found' in msg or '404' in msg:
-            raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}') from exc
+            raise RequestRejectedError(
+                status_code=404, detail=f'crop not found: {crop_id}'
+            ) from exc
         logger.error('fetch_crop_failed', crop_id=crop_id, error=str(exc))
-        raise HTTPException(status_code=500, detail=f'crop lookup failed: {exc}') from exc
+        raise RequestRejectedError(status_code=500, detail=f'crop lookup failed: {exc}') from exc
 
     source = result.get('_source') if isinstance(result, dict) else None
     if not source:
-        raise HTTPException(status_code=404, detail=f'crop has no source: {crop_id}')
+        raise RequestRejectedError(status_code=404, detail=f'crop has no source: {crop_id}')
     return source
 
 

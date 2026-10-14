@@ -11,7 +11,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.routers.curation import _common, select
+from src.routers.curation import _common
+from src.services.curation import diverse_order, index_bootstrap
 
 
 class _RecordingOS:
@@ -45,7 +46,7 @@ def fake_os() -> _RecordingOS:
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch, fake_os: _RecordingOS) -> Any:
-    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', {'default'})
+    monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', {'default'})
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
@@ -155,8 +156,8 @@ def test_diverse_order_honors_k(
         return ids, emb, False
 
     monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
-    monkeypatch.setattr(select, 'fetch_pool_embeddings', _fake_fetch)
-    select._ORDER_CACHE.clear()
+    monkeypatch.setattr(diverse_order, 'fetch_pool_embeddings', _fake_fetch)
+    diverse_order._ORDER_CACHE.clear()
 
     r = client.get(f'{P}/crops', params={'order': 'diverse', 'k': 2})
     assert r.status_code == 200, r.text

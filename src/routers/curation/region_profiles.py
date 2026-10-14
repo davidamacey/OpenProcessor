@@ -13,20 +13,10 @@ from typing import Any
 
 from fastapi import Query
 
+from src.config import get_curation_config
 from src.core.wire_json import WireJSONResponse
-from src.routers.curation._common import (
-    OpenSearchDep,
-    bound_project_slug,
-    get_class_registry,
-    router,
-)
-from src.routers.curation._config_common_models import (
-    ActiveConfigResponse,
-    ActiveRef,
-    active_conflict_error,
-    api_error,
-)
-from src.routers.curation._models_segmenter import configured_segmenter_health
+from src.routers.curation._api_error import active_conflict_error, api_error
+from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._region_profile_models import (
     RegionProfileActivateRequest,
     RegionProfileActivateResponse,
@@ -47,6 +37,7 @@ from src.routers.curation._region_profile_models import (
     SegmenterPromptValidateRequest,
 )
 from src.routers.curation._region_profile_schema import build_region_profile_schema
+from src.schemas.curation.config_common import ActiveConfigResponse, ActiveRef
 from src.services.config_store import ActiveConflictError, RevisionConflictError, get_config_store
 from src.services.config_store.activation_view import build_active_config_response
 from src.services.config_store.profile_validation import validate_profile
@@ -61,12 +52,9 @@ from src.services.config_store.profiles import (
     rollback_profile,
     save_profile,
 )
+from src.services.curation.class_registry_names import registry_class_names
 from src.services.curation.region_impact import ActivationImpact, compute_activation_impact
-
-
-def _registry_class_names() -> frozenset[str]:
-    reg = get_class_registry().load()
-    return frozenset(c.class_name for c in reg.classes if not c.deprecated)
+from src.services.detection.segmenter_health import configured_segmenter_health
 
 
 def _effective(profile: Any) -> RegionProfileEffective:
@@ -174,15 +162,15 @@ async def validate_region_profile_route(
         existing_names=all_known_names(),
         for_activation=for_activation,
         segmenter_health=configured_segmenter_health,
-        class_names=_registry_class_names(),
-        project_slug=bound_project_slug(),
+        class_names=registry_class_names(),
+        project_slug=get_curation_config().project_slug,
     )
     return report.model_dump()
 
 
 @router.post('/region_profiles/validate_segmenter_prompt')
 async def validate_segmenter_prompt_route(body: SegmenterPromptValidateRequest) -> Any:
-    from src.routers.curation._config_common_models import ValidationReport
+    from src.schemas.curation.config_common import ValidationReport
     from src.services.config_store.profile_validation import check_segmenter_prompt_text
 
     issues = check_segmenter_prompt_text(body.text_prompt, sole_leg=body.sole_leg)
@@ -302,8 +290,8 @@ async def create_region_profile(
         body.body.model_dump(),
         existing_names=existing - {body.name},
         segmenter_health=configured_segmenter_health,
-        class_names=_registry_class_names(),
-        project_slug=bound_project_slug(),
+        class_names=registry_class_names(),
+        project_slug=get_curation_config().project_slug,
     )
     name_issues = [
         e for e in report.errors if e.code in ('profile_name_invalid', 'profile_name_reserved')
@@ -402,8 +390,8 @@ async def save_region_profile(
         name,
         body.body.model_dump(),
         segmenter_health=configured_segmenter_health,
-        class_names=_registry_class_names(),
-        project_slug=bound_project_slug(),
+        class_names=registry_class_names(),
+        project_slug=get_curation_config().project_slug,
     )
     if not report.ok:
         raise api_error(

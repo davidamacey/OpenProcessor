@@ -416,7 +416,7 @@ docker compose exec api python /app/export/export_paddleocr_rec.py
 ### PE-Core-L14-336 Image Encoder
 - Input: `images` `[B, 3, 336, 336]` UINT8 RGB
   (resize shorter edge to 336, center-crop — see
-  `src/services/detection/pe_preprocess.py`); the engine applies PE-Core's
+  `src/utils/pe_preprocess.py`); the engine applies PE-Core's
   `(x / 255 - 0.5) / 0.5` itself (`export/uint8_input.py`, run by `build_pe_trt.sh`
   after the FP16 bake)
 - Output: `image_embeddings` `[B, 1024]` FP32, L2-normalized

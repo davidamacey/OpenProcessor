@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation import base_curation_config
-from src.services.curation.audit_math import AUDIT_OUTCOME, AUDIT_SAMPLE
+from src.domain.audit_math import AUDIT_OUTCOME, AUDIT_SAMPLE
 from src.services.curation.class_label import ItemLabel, class_label_update, human_move_class_update
 from src.services.curation.holdout import build_cohort_query
 
@@ -67,7 +67,9 @@ def client(fake: QueryFakeOpenSearch, monkeypatch: pytest.MonkeyPatch) -> TestCl
 
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     app = FastAPI()
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake

@@ -59,7 +59,7 @@ def test_stats_never_terms_aggregates_embedding_state() -> None:
 
 
 def test_item_filter_state_uses_the_shared_state_clause() -> None:
-    from src.services.curation.embedding_state import state_clause
+    from src.domain.embedding_state import state_clause
     from src.services.curation.item_filter import item_filter_clauses
 
     out = item_filter_clauses(ItemFilter(embedding_state=['failed']))
@@ -95,7 +95,7 @@ async def test_ordered_page_reports_how_many_it_could_not_rank(
     async def _diverse(*_: Any, **__: Any) -> list[str]:
         return ['a', 'b']
 
-    monkeypatch.setattr('src.routers.curation.select.compute_diverse_order', _diverse)
+    monkeypatch.setattr('src.services.curation.diverse_order.compute_diverse_order', _diverse)
     os_fake = AsyncMock()
     os_fake.count = AsyncMock(return_value={'count': 7})
 
@@ -174,7 +174,7 @@ def test_combine_marks_a_dropped_vector_deferred() -> None:
 
 @pytest.mark.asyncio
 async def test_pipeline_snapshot_counts_items_waiting_for_a_vector() -> None:
-    from src.routers.curation.pipeline_health import pipeline_health_snapshot
+    from src.services.curation.autolabel.health_snapshot import pipeline_health_snapshot
 
     os_fake = AsyncMock()
     os_fake.search = AsyncMock(

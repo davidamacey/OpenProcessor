@@ -14,8 +14,11 @@ from fastapi import HTTPException, Query
 
 from src.routers.curation._autolabel_models import AutoLabelCancelResponse, AutoLabelJobState
 from src.routers.curation._common import OpenSearchDep, router
-from src.routers.curation.pipeline_params import PROMPT_PACK_DESC
-from src.routers.curation.pipeline_vlm import ACKNOWLEDGE_EXTERNAL_DESC, VLM_DESC
+from src.routers.curation.pipeline_params import (
+    ACKNOWLEDGE_EXTERNAL_DESC,
+    PROMPT_PACK_DESC,
+    VLM_DESC,
+)
 
 
 @router.get(

@@ -202,8 +202,8 @@ def test_update_waits_for_the_state_lock_another_fd_holds(tmp_path: Path) -> Non
 def test_undo_keeps_a_box_whose_ledger_row_has_no_bbox() -> None:
     """Ledgers written before standalone items recorded their box have rows
     without ``bbox_norm``: undo must keep that box, not crash."""
+    from src.domain.region_boxes import RegionBox
     from src.services.curation.dataset_import.undo import CANDIDATE_IMPORT, _import_boxes
-    from src.services.curation.region_boxes import RegionBox
 
     box = RegionBox(
         box_id='b1',

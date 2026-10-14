@@ -25,8 +25,8 @@ from typing import TYPE_CHECKING, Any
 from opensearchpy.exceptions import OpenSearchException
 
 from src.core.logging import get_logger
-from src.services.curation.embedding_state import embedded_clause
-from src.services.curation.ingest_class_sources import classifier_class_sources
+from src.domain.embedding_state import embedded_clause
+from src.domain.ingest_class_sources import classifier_class_sources
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 from src.services.curation.vlm_class_attempt import recent_empty_answer_clause
 from src.services.curation.vlm_policy import VlmPolicy

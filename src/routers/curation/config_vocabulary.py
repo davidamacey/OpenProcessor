@@ -263,8 +263,8 @@ async def _build_detectors(*, include_other_projects: bool) -> list[DetectorEntr
 
 
 async def _build_segmenter() -> list[SegmenterEntry]:
-    from src.routers.curation._models_segmenter import build_segmenter_entry
     from src.services.detection.profile_registry import get_active_region_profile
+    from src.services.detection.segmenter_health import build_segmenter_entry
 
     profile = get_active_region_profile()
     if profile is None or not profile.segmenter_name:

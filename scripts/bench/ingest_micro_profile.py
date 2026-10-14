@@ -37,7 +37,7 @@ sys.path.insert(0, '/app')
 # ruff: noqa: E402
 
 from src.services.detection.geometry import letterbox_to_square
-from src.services.detection.pe_preprocess import resize_crop_rgb, to_chw, whole_frame_chw_from_bytes
+from src.utils.pe_preprocess import resize_crop_rgb, to_chw, whole_frame_chw_from_bytes
 
 
 OPERATIONS = (

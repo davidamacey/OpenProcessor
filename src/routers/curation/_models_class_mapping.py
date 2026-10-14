@@ -19,8 +19,8 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel, Field
 
 from src.config.curation import get_curation_config
+from src.routers.curation._api_error import api_error
 from src.routers.curation._common import get_class_registry, logger, router
-from src.routers.curation._config_common_models import api_error
 from src.services.training.model_classes import (
     is_model_shared,
     model_class_mapping,

@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from src.routers.curation._config_common_models import ActivateResponse, ActiveRef, ValidationReport
+from src.schemas.curation.config_common import ActivateResponse, ActiveRef, ValidationReport
 from src.services.detection.open_vocab_select import DropReason
 from src.services.detection.open_vocab_set import (
     DEFAULT_DEDUP_IOU,

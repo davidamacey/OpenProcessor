@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, router
-from src.routers.curation._config_common_models import api_error
 from src.routers.curation._region_profile_models import RegionProfileCloneRequest, RegionProfileDoc
 from src.services.config_store import RevisionConflictError
 from src.services.config_store.clone_shared import (
@@ -25,6 +25,7 @@ from src.services.config_store.profiles import (
     get_revision_record,
     save_profile,
 )
+from src.services.curation.class_registry_names import registry_class_names
 
 
 async def _resolve_clone_source(
@@ -55,8 +56,8 @@ async def clone_region_profile(
     name: str, body: RegionProfileCloneRequest, opensearch: OpenSearchDep
 ) -> RegionProfileDoc:
     from src.config import get_curation_config
-    from src.routers.curation._models_segmenter import configured_segmenter_health
-    from src.routers.curation.region_profiles import _registry_class_names, _to_doc
+    from src.routers.curation.region_profiles import _to_doc
+    from src.services.detection.segmenter_health import configured_segmenter_health
 
     target_slug = get_curation_config().project_slug
 
@@ -79,7 +80,7 @@ async def clone_region_profile(
         source.body,
         existing_names=existing,
         segmenter_health=configured_segmenter_health,
-        class_names=_registry_class_names(),
+        class_names=registry_class_names(),
         project_slug=target_slug,
     )
     reject_invalid_clone_name(
@@ -95,7 +96,7 @@ async def clone_region_profile(
         None,
         new_body,
         segmenter_health=configured_segmenter_health,
-        class_names=_registry_class_names(),
+        class_names=registry_class_names(),
         project_slug=target_slug,
     )
     if not report.ok:

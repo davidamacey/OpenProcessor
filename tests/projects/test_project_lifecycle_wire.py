@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.routers.curation import projects as projects_router
+from src.routers.curation._project_deps import install_project_exception_handlers
 from src.services.projects import lifecycle
 from src.services.projects.registry import (
     ProjectRegistry,
@@ -60,7 +61,7 @@ def _env(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def _noop_ensure_indexes():
     with patch(
-        'src.routers.curation._common._ensure_indexes',
+        'src.services.curation.index_bootstrap.ensure_indexes',
         new=AsyncMock(side_effect=fake_ensure_indexes),
     ):
         yield
@@ -81,6 +82,7 @@ def client(monkeypatch) -> _CountingOpenSearch:
 def _app() -> FastAPI:
     app = FastAPI()
     app.include_router(projects_router.global_router, prefix='/curation')
+    install_project_exception_handlers(app)
     return app
 
 

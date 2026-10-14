@@ -46,6 +46,8 @@ from opensearchpy.exceptions import OpenSearchException
 from src.config import get_curation_config
 from src.config.curation import items_index, umap_state_index
 from src.core.logging import get_logger
+from src.domain.embedding_state import embedded_clause
+from src.domain.ingest_class_sources import confident_class_sources
 from src.services.curation.clustering.backend import (
     BackendInfo,
     detect_cluster_backend,
@@ -61,8 +63,6 @@ from src.services.curation.clustering.pool_size import (
     require_min_items,
     umap_shape,
 )
-from src.services.curation.embedding_state import embedded_clause
-from src.services.curation.ingest_class_sources import confident_class_sources
 
 
 if TYPE_CHECKING:
@@ -103,7 +103,7 @@ RESIDUAL_EMBEDDING_FIELD = os.environ.get('OP_RESIDUAL_EMBEDDING_FIELD', 'pe_emb
 # run on the unfiltered query overwrote ~129k labeled crops' cluster
 # ids before being cancelled).
 #
-# Specifically (src.services.curation.ingest_class_sources, derived from
+# Specifically (src.domain.ingest_class_sources, derived from
 # the configured ingest profiles -- resolved once at import like other
 # OP_* config):
 #   {secondary}_model — the ingest classifier labeled it above its floor

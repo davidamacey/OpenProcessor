@@ -26,8 +26,8 @@ import pytest
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config import get_region_fields
 from src.config.curation import base_curation_config
+from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.services.curation import image_serving
-from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
@@ -96,7 +96,7 @@ def _setup(monkeypatch: pytest.MonkeyPatch, labeler: Any) -> None:
         return None
 
     monkeypatch.setattr(vlm_mod, '_default_pack_name', _no_pack)
-    monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: labeler)
+    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: labeler)
     monkeypatch.setattr(image_serving, 'resolve_crop_root', lambda _path: SimpleNamespace())
     monkeypatch.setattr(image_serving, 'resolve_safe_path', lambda path, _root: path)
     monkeypatch.setattr(

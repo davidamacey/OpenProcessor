@@ -113,7 +113,9 @@ def test_review_queue_serves_empty_reason_when_zero_results(
     fake = AsyncMock()
     fake.search = AsyncMock(return_value={'hits': {'total': {'value': 0}, 'hits': []}})
     fake.count = AsyncMock(return_value={'count': 0})
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     r = _client(fake).get('/curation/projects/default/review/uncertainty')
     assert r.status_code == 200, r.text
     body = r.json()
@@ -134,7 +136,9 @@ def test_review_queue_empty_reason_is_null_when_items_exist(
         }
     )
     fake.count = AsyncMock(return_value={'count': 0})
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     r = _client(fake).get('/curation/projects/default/review/all')
     assert r.status_code == 200, r.text
     assert r.json()['empty_reason'] is None

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from src.config.curation import BACKBONE_EMBEDDING_FIELD
-from src.services.curation.embedding_state import DEFERRED
+from src.domain.embedding_state import DEFERRED
 from src.services.detection.geometry import crop_id as make_crop_id
 
 

@@ -169,10 +169,10 @@ def _scope_docs() -> dict[str, dict[str, Any]]:
 async def test_cluster_scoped_vlm_job_normalizes_only_its_members(
     pipeline_env: _Labeler,  # noqa: F811
 ) -> None:
-    from src.routers.curation import pipeline
+    from src.routers.curation.pipeline_public import pipeline_auto_label
 
     fake = _NormalizingOpenSearch({ITEMS: _scope_docs()})
-    summary = await pipeline.pipeline_auto_label(
+    summary = await pipeline_auto_label(
         opensearch=fake, train_clusters=False, run_vlm=True, cluster_id=CLUSTER
     )
     docs = fake.docs(ITEMS)
@@ -185,10 +185,10 @@ async def test_cluster_scoped_vlm_job_normalizes_only_its_members(
 async def test_unscoped_vlm_job_still_normalizes_everything(
     pipeline_env: _Labeler,  # noqa: F811
 ) -> None:
-    from src.routers.curation import pipeline
+    from src.routers.curation.pipeline_public import pipeline_auto_label
 
     fake = _NormalizingOpenSearch({ITEMS: _scope_docs()})
-    await pipeline.pipeline_auto_label(opensearch=fake, train_clusters=False, run_vlm=True)
+    await pipeline_auto_label(opensearch=fake, train_clusters=False, run_vlm=True)
     assert fake.docs(ITEMS)['out']['cluster_id'] == 3
 
 
@@ -201,7 +201,7 @@ async def test_cluster_scoped_job_skips_dataset_wide_stages(
     whole index; a cluster-scoped job skips them and says so."""
     from unittest.mock import AsyncMock
 
-    from src.routers.curation import pipeline
+    from src.routers.curation.pipeline_public import pipeline_auto_label
     from src.services.curation.clustering import orchestrator
 
     residuals = AsyncMock(return_value={})
@@ -211,7 +211,7 @@ async def test_cluster_scoped_job_skips_dataset_wide_stages(
         'src.services.curation.clustering.auto_promote.auto_promote_clusters', promote
     )
     fake = _NormalizingOpenSearch({ITEMS: _scope_docs()})
-    summary = await pipeline.pipeline_auto_label(
+    summary = await pipeline_auto_label(
         opensearch=fake,
         train_clusters=True,
         run_auto_promote=True,

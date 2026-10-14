@@ -196,7 +196,7 @@ async def ordered_crops_page(
         )
 
     if order == 'diverse':
-        from src.routers.curation.select import EMBEDDING_FIELD, compute_diverse_order
+        from src.services.curation.diverse_order import EMBEDDING_FIELD, compute_diverse_order
 
         pool_query, pool_count = await embedding_pool_query_and_count(
             opensearch, index, query_clause, EMBEDDING_FIELD

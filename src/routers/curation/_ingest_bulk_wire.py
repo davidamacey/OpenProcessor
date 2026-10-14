@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from fastapi import HTTPException, Request
 
 from src.config import get_curation_config
-from src.routers.curation._config_common_models import api_error
+from src.routers.curation._api_error import api_error
 from src.routers.curation._ingest_bulk_models import (
     BulkIngestProgress,
     BulkIngestRun,

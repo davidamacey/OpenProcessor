@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from scripts.curation.worker.no_verdict import NoVerdictCounter
     from scripts.curation.worker.runtime import RuntimeHolder
     from src.config.region_state import RegionStatus
-    from src.services.curation.region_boxes import RegionBox
+    from src.domain.region_boxes import RegionBox
 
 
 # Wait at most this long for a VLM chunk to fill before firing it under-full.
@@ -168,7 +168,7 @@ def _box_list_doc(
     immediately before the write (the same OCC discipline as
     ``occ_skip_on_conflict_bulk`` uses everywhere else) and merges/mints
     against THAT, never this snapshot. ``status`` here is the fallback
-    :func:`~src.services.curation.region_boxes.derive_status` uses when
+    :func:`~src.domain.region_boxes.derive_status` uses when
     the final (post-merge) box list is empty -- for every call site in
     this module that already equals what ``derive_status`` would compute
     from ``boxes`` alone, so this is a no-op for the common (no stored

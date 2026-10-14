@@ -17,8 +17,8 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from curation._fake_config_opensearch import FakeConfigOpenSearch
+from src.clients.curation_opensearch.open_vocab_fields import OpenVocabStatus
 from src.services.curation import open_vocab_vocabulary as vocab
-from src.services.curation.open_vocab_fields import OpenVocabStatus
 from src.services.curation.reprocess_models import ReprocessFilter
 from src.services.detection import profile_registry
 from src.services.detection.open_vocab_select import DropReason
@@ -49,7 +49,7 @@ def segmenter(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     monkeypatch.setenv('OP_SEGMENTER_URL', 'http://segmenter.invalid:8000')
     monkeypatch.setattr(
-        'src.routers.curation._models_segmenter.configured_segmenter_health', _health
+        'src.services.detection.segmenter_health.configured_segmenter_health', _health
     )
     return state
 
@@ -58,7 +58,9 @@ def segmenter(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 def client(monkeypatch: pytest.MonkeyPatch, segmenter: dict[str, Any]) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     monkeypatch.setattr(
         'src.config.ingest_profiles.ingest_primary_profile',
         type('P', (), {'detector_model': ''}),

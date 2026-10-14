@@ -57,9 +57,9 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
         }
     )
 
-    # Make _ensure_indexes a no-op so we never touch opensearch.indices.
+    # Make ensure_indexes a no-op so we never touch opensearch.indices.
     monkeypatch.setattr(
-        'src.routers.curation._ensure_indexes',
+        'src.services.curation.index_bootstrap.ensure_indexes',
         AsyncMock(return_value=None),
     )
 

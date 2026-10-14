@@ -36,7 +36,7 @@ def _setup(monkeypatch: pytest.MonkeyPatch, labeler: _Labeler) -> None:
         return None
 
     monkeypatch.setattr(vlm_mod, '_default_pack_name', _no_pack)
-    monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: labeler)
+    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: labeler)
 
 
 @pytest.mark.asyncio

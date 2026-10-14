@@ -7,9 +7,9 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from fastapi import HTTPException
 
 from curation.activation.constants import PREFIX, pack_body
+from src.core.exceptions import RequestRejectedError
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
@@ -24,25 +24,26 @@ def _activate_then_put(c):
 
 
 def test_vlm_route_default_serves_pinned_body_and_stamp(app_client):
-    from src.routers.curation.vlm import _default_pack_name, _get_vlm_labeler
+    from src.routers.curation.vlm import _default_pack_name
+    from src.services.labeling.run_labeler import get_vlm_labeler
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     _activate_then_put(app_client)
     name = asyncio.run(_default_pack_name(app_client.fake_os))
-    lab = _get_vlm_labeler(name)
+    lab = get_vlm_labeler(name)
     print('route default', name, lab._pack.class_system[:20], prompt_pack_stamp(lab._pack))
     assert lab._pack.class_system == GENERIC_ITEM_PACK.class_system
     assert prompt_pack_stamp(lab._pack) == 'my_pack@1'
 
 
 def test_pipeline_default_serves_pinned_body_and_stamp(app_client):
-    from src.routers.curation.pipeline_params import resolve_run_prompt_pack
-    from src.routers.curation.vlm import _get_vlm_labeler
+    from src.services.curation.autolabel.run_params import resolve_run_prompt_pack
+    from src.services.labeling.run_labeler import get_vlm_labeler
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     _activate_then_put(app_client)
     name, rev = asyncio.run(resolve_run_prompt_pack(app_client.fake_os, None))
-    lab = _get_vlm_labeler(name, rev)
+    lab = get_vlm_labeler(name, rev)
     print('pipeline default', name, rev, lab._pack.class_system[:20], prompt_pack_stamp(lab._pack))
     assert lab._pack.class_system == GENERIC_ITEM_PACK.class_system
     assert prompt_pack_stamp(lab._pack) == 'my_pack@1'
@@ -50,13 +51,13 @@ def test_pipeline_default_serves_pinned_body_and_stamp(app_client):
 
 def test_per_run_pin_of_current_draft_is_stamped_with_its_own_revision(app_client):
     """§3.7: every VLM write stamps <name>@<revision> of the body that wrote it."""
-    from src.routers.curation.pipeline_params import resolve_run_prompt_pack
-    from src.routers.curation.vlm import _get_vlm_labeler
+    from src.services.curation.autolabel.run_params import resolve_run_prompt_pack
+    from src.services.labeling.run_labeler import get_vlm_labeler
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     _activate_then_put(app_client)
     name, rev = asyncio.run(resolve_run_prompt_pack(app_client.fake_os, 'my_pack@2'))
-    lab = _get_vlm_labeler(name, rev)
+    lab = get_vlm_labeler(name, rev)
     stamp = prompt_pack_stamp(lab._pack)
     print('per-run my_pack@2 served', lab._pack.class_system[:20], 'stamp', stamp)
     assert lab._pack.class_system == 'R2 DRAFT'
@@ -65,24 +66,24 @@ def test_per_run_pin_of_current_draft_is_stamped_with_its_own_revision(app_clien
 
 def test_per_run_explicit_name_resolves_latest_revision(app_client):
     """§3.7: per-run `name` = latest saved revision."""
-    from src.routers.curation.pipeline_params import resolve_run_prompt_pack
-    from src.routers.curation.vlm import _get_vlm_labeler
+    from src.services.curation.autolabel.run_params import resolve_run_prompt_pack
+    from src.services.labeling.run_labeler import get_vlm_labeler
 
     _activate_then_put(app_client)
     name, rev = asyncio.run(resolve_run_prompt_pack(app_client.fake_os, 'my_pack'))
-    lab = _get_vlm_labeler(name, rev)
+    lab = get_vlm_labeler(name, rev)
     print('per-run explicit my_pack ->', rev, lab._pack.class_system[:20])
     assert lab._pack.class_system == 'R2 DRAFT'
 
 
 def test_per_run_pin_of_active_old_revision(app_client):
-    from src.routers.curation.pipeline_params import resolve_run_prompt_pack
-    from src.routers.curation.vlm import _get_vlm_labeler
+    from src.services.curation.autolabel.run_params import resolve_run_prompt_pack
+    from src.services.labeling.run_labeler import get_vlm_labeler
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     _activate_then_put(app_client)
     name, rev = asyncio.run(resolve_run_prompt_pack(app_client.fake_os, 'my_pack@1'))
-    lab = _get_vlm_labeler(name, rev)
+    lab = get_vlm_labeler(name, rev)
     assert (name, rev) == ('my_pack', 1)
     assert lab._pack.class_system == GENERIC_ITEM_PACK.class_system
     assert prompt_pack_stamp(lab._pack) == 'my_pack@1'
@@ -90,7 +91,7 @@ def test_per_run_pin_of_active_old_revision(app_client):
 
 def test_per_run_pin_of_superseded_revision_is_unresolvable(app_client):
     """r1 activated, r2 activated, r3 PUT. my_pack@1 exists in history."""
-    from src.routers.curation.pipeline_params import resolve_run_prompt_pack
+    from src.services.curation.autolabel.run_params import resolve_run_prompt_pack
 
     c = app_client
     assert c.post(PREFIX, json={'name': 'my_pack', 'body': pack_body('R1')}).status_code == 201
@@ -123,7 +124,7 @@ def test_per_run_pin_of_superseded_revision_is_unresolvable(app_client):
     # never-saved rev 9. Both must 422 with the same "not resolvable in
     # this process" wording.
     for far_past in ('my_pack@1', 'my_pack@9'):
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(RequestRejectedError) as exc_info:
             asyncio.run(resolve_run_prompt_pack(c.fake_os, far_past))
         assert exc_info.value.status_code == 422
         assert 'not resolvable in this process' in exc_info.value.detail['error']
@@ -182,13 +183,14 @@ def test_missing_pinned_copy_does_not_serve_draft(app_client):
 
 
 def test_vlm_api_default_labeler_serves_pinned_body(app_client):
-    """/vlm/label_batch & co use _get_vlm_labeler(await _default_pack_name(os))."""
-    from src.routers.curation.vlm import _default_pack_name, _get_vlm_labeler
+    """/vlm/label_batch & co use get_vlm_labeler(await _default_pack_name(os))."""
+    from src.routers.curation.vlm import _default_pack_name
+    from src.services.labeling.run_labeler import get_vlm_labeler
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     _activate_then_put(app_client)
     name = asyncio.run(_default_pack_name(app_client.fake_os))
-    labeler = _get_vlm_labeler(name)
+    labeler = get_vlm_labeler(name)
     stamp = prompt_pack_stamp(labeler._pack)
     print('default name', name, 'served', labeler._pack.class_system[:30], 'stamp', stamp)
     assert labeler._pack.class_system == GENERIC_ITEM_PACK.class_system, (
@@ -197,12 +199,12 @@ def test_vlm_api_default_labeler_serves_pinned_body(app_client):
 
 
 def test_pipeline_omitted_prompt_pack_serves_pinned_body(app_client):
-    from src.routers.curation.pipeline_params import resolve_run_prompt_pack
-    from src.routers.curation.vlm import _get_vlm_labeler
+    from src.services.curation.autolabel.run_params import resolve_run_prompt_pack
+    from src.services.labeling.run_labeler import get_vlm_labeler
 
     _activate_then_put(app_client)
     name, rev = asyncio.run(resolve_run_prompt_pack(app_client.fake_os, None))
-    labeler = _get_vlm_labeler(name, rev)
+    labeler = get_vlm_labeler(name, rev)
     print('pipeline default', name, rev, labeler._pack.class_system[:30])
     assert labeler._pack.class_system == GENERIC_ITEM_PACK.class_system
 
@@ -241,14 +243,14 @@ def test_put_on_active_pack_creates_new_revision_and_keeps_active_revision(app_c
 
 def test_per_run_name_at_past_revision_labels_successfully(app_client):
     """§3.7: ?prompt_pack=name@<rev> pins that exact revision."""
-    from src.routers.curation.pipeline_params import resolve_run_prompt_pack
-    from src.routers.curation.vlm import _get_vlm_labeler
+    from src.services.curation.autolabel.run_params import resolve_run_prompt_pack
+    from src.services.labeling.run_labeler import get_vlm_labeler
 
     _activate_then_put(app_client)
     name, rev = asyncio.run(resolve_run_prompt_pack(app_client.fake_os, 'my_pack@1'))
     print('resolved', name, rev)
     try:
-        labeler = _get_vlm_labeler(name, rev)
+        labeler = get_vlm_labeler(name, rev)
     except ValueError as exc:
         pytest.fail(
             f'valid past revision my_pack@1 accepted at request time but labeler raises: {exc}'
@@ -280,8 +282,9 @@ def test_active_revision_pin_is_honored(app_client) -> None:
 
 
 def test_per_run_tag_isolated_from_default_path(app_client):
-    from src.routers.curation.pipeline_params import resolve_run_prompt_pack
-    from src.routers.curation.vlm import _default_pack_name, _get_vlm_labeler
+    from src.routers.curation.vlm import _default_pack_name
+    from src.services.curation.autolabel.run_params import resolve_run_prompt_pack
+    from src.services.labeling.run_labeler import get_vlm_labeler
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     c = app_client
@@ -300,15 +303,15 @@ def test_per_run_tag_isolated_from_default_path(app_client):
         == 200
     )
     name, rev = asyncio.run(resolve_run_prompt_pack(c.fake_os, 'my_pack'))
-    lab = _get_vlm_labeler(name, rev)
+    lab = get_vlm_labeler(name, rev)
     assert rev == 3
     assert prompt_pack_stamp(lab._pack, revision=rev) == 'my_pack@3'
-    d = _get_vlm_labeler(asyncio.run(_default_pack_name(c.fake_os)))
+    d = get_vlm_labeler(asyncio.run(_default_pack_name(c.fake_os)))
     print('per-run', prompt_pack_stamp(lab._pack), 'default route', prompt_pack_stamp(d._pack))
     assert prompt_pack_stamp(d._pack) == 'my_pack@1'
     # per-run draft pin
     name, rev = asyncio.run(resolve_run_prompt_pack(c.fake_os, 'my_pack@3'))
-    assert prompt_pack_stamp(_get_vlm_labeler(name, rev)._pack) == 'my_pack@3'
+    assert prompt_pack_stamp(get_vlm_labeler(name, rev)._pack) == 'my_pack@3'
 
 
 def test_profile_missing_pinned_copy_does_not_serve_draft(app_client, monkeypatch):

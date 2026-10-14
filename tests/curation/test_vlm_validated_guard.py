@@ -106,7 +106,7 @@ async def test_label_batch_never_overwrites_validated_class(
                 for c in crops
             ]
 
-    monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: _Labeler())
+    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: _Labeler())
 
     await vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=ids), fake)
 

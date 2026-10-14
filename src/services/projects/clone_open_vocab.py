@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
 from src.config.project_context import bind_project
-from src.routers.curation._config_common_models import api_error
 from src.services.config_store import get_config_store
 from src.services.config_store.index import (
     ActiveConflictError,
@@ -18,6 +17,7 @@ from src.services.config_store.index import (
     save_config,
 )
 from src.services.projects.clone_stored import copy_stored_configs
+from src.services.rejections import rejection
 
 
 if TYPE_CHECKING:
@@ -35,7 +35,7 @@ async def validate_open_vocab_clone(
         store = get_config_store()
         await store.ensure_fresh(client)
         if store.current.open_vocab_sets:
-            raise api_error(
+            raise rejection(
                 409,
                 'target_not_empty',
                 f"'{target_record.slug}' already has stored open-vocabulary sets; "
@@ -44,7 +44,7 @@ async def validate_open_vocab_clone(
             )
         existing = await get_activation(client, get_curation_config().configs_index, 'open_vocab')
     if existing and existing.get('name'):
-        raise api_error(
+        raise rejection(
             409,
             'target_not_empty',
             f"'{target_record.slug}' already has an active open-vocabulary set; "
@@ -118,7 +118,7 @@ async def apply_open_vocab_clone(
                 expected_active=expected_active,
             )
     except (RevisionConflictError, ActiveConflictError) as exc:
-        raise api_error(
+        raise rejection(
             409,
             'target_not_empty',
             f"'{target_record.slug}' changed while open_vocab was being cloned",

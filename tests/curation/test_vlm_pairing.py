@@ -280,7 +280,7 @@ def test_entry_point_a_combined_change_that_switches_the_vlm_off_pairs_with_noth
 def test_entry_point_per_run_selection_only_warns_about_context(vlm_api) -> None:
     """A per-run selection carries no ``force``, so an estimate is a warning
     there (only the certain failure blocks)."""
-    from src.routers.curation.pipeline_vlm import resolve_run_vlm
+    from src.services.curation.autolabel.run_vlm import resolve_run_vlm
 
     _stored_pack(vlm_api)
     vlm_api.probe_record[0] = TINY

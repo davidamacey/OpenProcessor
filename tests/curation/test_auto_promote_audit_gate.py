@@ -12,14 +12,14 @@ from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation import base_curation_config
-from src.services.curation.audit_math import (
+from src.domain.audit_math import (
     AUDIT_HUMAN,
     AUDIT_LABEL_NAME,
     AUDIT_LABEL_SOURCE,
     AUDIT_OUTCOME,
     AUDIT_SAMPLE,
 )
-from src.services.curation.ingest_class_sources import classifier_class_sources
+from src.domain.ingest_class_sources import classifier_class_sources
 
 
 ITEMS = base_curation_config().items_index
@@ -78,7 +78,9 @@ def _client(fake: QueryFakeOpenSearch, monkeypatch: pytest.MonkeyPatch) -> TestC
 
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     app = FastAPI()
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
@@ -189,8 +191,8 @@ async def test_the_auto_label_pipeline_stage_goes_through_the_gate(
 ) -> None:
     import inspect
 
-    from src.routers.curation import pipeline
+    from src.services.curation import auto_label_run
 
-    source = inspect.getsource(pipeline._run_auto_label)
+    source = inspect.getsource(auto_label_run)
     assert 'gated_auto_promote(' in source
     assert 'auto_promote_clusters(' not in source

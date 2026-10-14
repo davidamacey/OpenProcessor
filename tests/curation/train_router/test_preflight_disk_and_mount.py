@@ -111,7 +111,7 @@ def test_preflight_blocks_when_mount_not_sane(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch, project_export_root: Path
 ) -> None:
     monkeypatch.setattr(
-        'src.routers.curation_train.preflight.training_volume_mount_sane',
+        'src.services.training.preflight_run.training_volume_mount_sane',
         lambda _path: False,
     )
     body = {'dataset_export_dir': str(project_export_root / 'x'), 'profile': 'medium'}
@@ -128,10 +128,10 @@ def test_preflight_reports_unknown_not_ok_when_disk_unreadable(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch, project_export_root: Path
 ) -> None:
     monkeypatch.setattr(
-        'src.routers.curation_train.preflight.training_volume_mount_sane',
+        'src.services.training.preflight_run.training_volume_mount_sane',
         lambda _path: True,
     )
-    monkeypatch.setattr('src.routers.curation_train.preflight.free_gb', lambda _path: None)
+    monkeypatch.setattr('src.services.training.preflight_run.free_gb', lambda _path: None)
     body = {'dataset_export_dir': str(project_export_root / 'x'), 'profile': 'medium'}
     r = app_client.post('/curation/projects/default/train/preflight', json=body)
     assert r.status_code == 200, r.text

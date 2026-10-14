@@ -22,9 +22,9 @@ from curation.reprocess_fixtures import (
     servable_root,
 )
 from curation.test_regions_router import _FakeRegionOS
+from src.domain.region_boxes import read_boxes
 from src.services.curation.region_box_embeddings import current_vectors, entry_for
 from src.services.curation.region_box_refresh import refresh_box_embeddings
-from src.services.curation.region_boxes import read_boxes
 
 
 if TYPE_CHECKING:
@@ -42,7 +42,7 @@ def _world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **extra: Any) -> Que
         box('proposed', state='proposed', detector='d', reason=None, bbox=(0.2, 0.6, 0.4, 0.9)),
     )
     stale_moved = box('moved', bbox=(0.0, 0.1, 0.2, 0.3))
-    from src.services.curation.region_boxes import RegionBox
+    from src.domain.region_boxes import RegionBox
 
     def entry(b: dict[str, Any], bbox: Any = None) -> dict[str, Any]:
         rb = RegionBox(

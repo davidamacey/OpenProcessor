@@ -14,9 +14,9 @@ from pydantic import BaseModel
 
 from src.config import get_curation_config
 from src.config.region_fields import get_region_fields
-from src.services.curation.embedding_state import not_embedded_clause
+from src.domain.embedding_state import not_embedded_clause
+from src.domain.region_boxes import read_boxes
 from src.services.curation.region_box_embeddings import embeddable, missing_boxes
-from src.services.curation.region_boxes import read_boxes
 from src.services.curation.reprocess_embed import ALL_PARTS, EmbedTarget, target_has_work
 from src.services.curation.reprocess_targets import items_by_terms, scan_items
 

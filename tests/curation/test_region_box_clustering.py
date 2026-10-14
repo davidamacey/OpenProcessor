@@ -18,6 +18,7 @@ import pytest
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config import get_region_fields
+from src.domain.region_boxes import RegionBox, boxes_write_fields, read_boxes
 from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
 from src.services.curation.clustering import region_box_clustering as rbc
 from src.services.curation.clustering.region_box_rows import (
@@ -27,7 +28,6 @@ from src.services.curation.clustering.region_box_rows import (
     write_box_edits,
 )
 from src.services.curation.region_box_embeddings import entry_for
-from src.services.curation.region_boxes import RegionBox, boxes_write_fields, read_boxes
 
 
 pytestmark = pytest.mark.asyncio

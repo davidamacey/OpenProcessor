@@ -17,14 +17,9 @@ from typing import TYPE_CHECKING, Any
 from fastapi import HTTPException
 
 from src.clients.curation_opensearch.crops import mget_crops
-from src.routers.curation._common import (
-    OpenSearchDep,
-    bound_project_slug,
-    get_class_registry,
-    items_index,
-    router,
-)
-from src.routers.curation._config_common_models import ValidationReport, api_error
+from src.config import get_curation_config
+from src.routers.curation._api_error import api_error
+from src.routers.curation._common import OpenSearchDep, get_class_registry, items_index, router
 from src.routers.curation._config_test_models import (
     PackTestCropResult,
     PackTestPackRef,
@@ -39,8 +34,6 @@ from src.routers.curation._config_test_models import (
     RegionTestResponse,
     RegionTestVerify,
 )
-from src.routers.curation._models_segmenter import configured_segmenter_health
-from src.routers.curation.pipeline_vlm import labeler_unavailable, resolve_test_vlm
 from src.services.config_store import (
     get_config_store,
     packs as pack_store,
@@ -48,6 +41,7 @@ from src.services.config_store import (
 )
 from src.services.config_store.pack_validation import validate_pack
 from src.services.config_store.profile_validation import validate_profile
+from src.services.curation.autolabel.run_vlm import labeler_unavailable, resolve_test_vlm
 from src.services.curation.config_test_limits import (
     MAX_TEST_CROP_IDS,
     ConfigTestBusyError,
@@ -67,6 +61,7 @@ from src.services.curation.region_class import item_classes
 from src.services.curation.region_scope import out_of_scope_reason
 from src.services.curation.region_test_run import Leg, VerifyContext, run_region_test
 from src.services.curation.wire import item_source_excludes
+from src.services.detection.segmenter_health import configured_segmenter_health
 from src.services.detection.segmenter_http import first_segmenter_url
 from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError
 from src.services.labeling.vlm_factory import assert_may_connect, labeler_for
@@ -77,6 +72,7 @@ from src.services.labeling.vlm_prompts import PromptPack, active_prompt_pack, pr
 if TYPE_CHECKING:
     from src.config import DetectionProfile
     from src.routers.curation._prompt_pack_models import PromptPackBody
+    from src.schemas.curation.config_common import ValidationReport
     from src.services.labeling.vlm_endpoints import VlmEndpoint
     from src.services.labeling.vlm_labeler import VlmLabeler
 
@@ -372,7 +368,7 @@ async def _resolve_profile(
         data,
         segmenter_health=configured_segmenter_health,
         class_names=frozenset(_registry()[0]),
-        project_slug=bound_project_slug(),
+        project_slug=get_curation_config().project_slug,
     )
     if not report.ok:
         raise api_error(422, 'profile_invalid', 'the profile has errors', report=report)

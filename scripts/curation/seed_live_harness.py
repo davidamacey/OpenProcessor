@@ -7,7 +7,7 @@ script refuses to run otherwise).
 What it creates
 ---------------
 1. Every curation index, through the application's own
-   :func:`src.routers.curation._common._ensure_indexes` — that chains
+   :func:`src.services.curation.index_bootstrap.ensure_indexes` — that chains
    ``create_curation_indexes`` plus the eleven ``ensure_*`` migrations in the
    right order, with the one intentionally-unwired migration correctly
    skipped. Hand-rolling the mappings here would mean testing a schema the
@@ -257,9 +257,9 @@ def _region_fields(
     box in the permanent FP cluster)."""
     import numpy as np
 
+    from src.domain.region_boxes import RegionBox, boxes_write_fields
     from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
     from src.services.curation.region_box_embeddings import entry_for
-    from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 
     is_fp = region == RegionStatus.FALSE_POSITIVE
     n_boxes = 1 if is_fp else 1 + (global_index % 3)
@@ -449,7 +449,7 @@ async def _bulk(client: Any, index: str, docs: list[dict[str, Any]], id_key: str
 async def _seed(args: argparse.Namespace) -> int:
     from src.clients.curation_opensearch.registry import ClassRegistry
     from src.config import get_curation_config, get_region_fields
-    from src.routers.curation._common import _ensure_indexes
+    from src.services.curation.index_bootstrap import ensure_indexes
 
     cfg = get_curation_config()
     fields = get_region_fields()
@@ -485,7 +485,7 @@ async def _seed(args: argparse.Namespace) -> int:
             print('wiped previous harness state')
 
         # 1. Indexes, through the application's own bootstrap chain.
-        await _ensure_indexes(client)
+        await ensure_indexes(client)
         print(f'indexes ensured: {cfg.items_index}, {cfg.images_index}, ...')
 
         # 2. Class registry — before any item or label write.

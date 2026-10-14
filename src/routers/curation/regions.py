@@ -16,10 +16,10 @@ from fastapi import HTTPException, Query
 
 from src.config import DetectionProfile, get_region_fields
 from src.config.region_state import RegionStatus, region_status_catalog
+from src.domain.region_boxes import BOX_STATES, box_query
 from src.routers.curation._common import (
     OpenSearchDep,
     RegionProfileDep,
-    _ensure_indexes,
     guard_page_depth,
     items_index,
     router,
@@ -28,8 +28,8 @@ from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._region_row_models import RegionRowPage
 from src.routers.curation._region_vocabulary_models import RegionVocabularyResponse
+from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.item_filter import item_filter_clauses
-from src.services.curation.region_boxes import BOX_STATES, box_query
 from src.services.curation.region_rows import search_region_rows
 from src.services.curation.region_vocabulary import region_vocabulary_catalog
 from src.services.curation.review_queries import region_text_clause
@@ -122,7 +122,7 @@ async def list_regions(
             status_code=400,
             detail=f'box_state must be one of {sorted(BOX_STATES)}; got {box_state!r}',
         )
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
 
     parts: list[dict[str, Any]] = []
     if box_state is not None:
@@ -360,7 +360,7 @@ async def training_candidates(
     row carries ``selection_reason``.
     """
     F = get_region_fields()
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     query, box_clause, reason = _training_candidate_query(mode)
     filters = list(query['bool']['filter'])
     if class_id is not None:

@@ -1,5 +1,5 @@
 """Wire models of the accuracy-audit routes (the arithmetic lives in
-:mod:`src.services.curation.audit_math`)."""
+:mod:`src.domain.audit_math`)."""
 
 from __future__ import annotations
 

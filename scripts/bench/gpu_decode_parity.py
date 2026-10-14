@@ -150,7 +150,7 @@ def capture_image(name: str, data: bytes, eng: Engines, out: dict[str, Any]) -> 
     from src.services.curation.ingest_index import crop_pil
     from src.services.detection.crop_quality import crop_lap_var, image_lap_var
     from src.services.detection.geometry import letterbox_to_square
-    from src.services.detection.pe_preprocess import resize_crop_rgb, whole_frame_rgb_from_bytes
+    from src.utils.pe_preprocess import resize_crop_rgb, whole_frame_rgb_from_bytes
 
     pil = _decode_image(data).pil
     w, h = pil.size

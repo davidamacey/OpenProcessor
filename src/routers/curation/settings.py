@@ -32,11 +32,12 @@ if TYPE_CHECKING:
 from fastapi import HTTPException
 
 from src.core.logging import get_logger
-from src.routers.curation._common import OpenSearchDep, _ensure_indexes, router
+from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._common_models import (
     CurationSettingsResponse,
     CurationSettingsUpdateRequest,
 )
+from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.resource_links import schedule_reachability_refresh
 
 
@@ -168,7 +169,7 @@ async def get_curation_settings_route(opensearch: OpenSearchDep) -> CurationSett
     from src.clients.curation_opensearch.settings_doc import get_curation_settings
 
     schedule_reachability_refresh()
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     doc = await get_curation_settings(opensearch)
     doc['defaults'] = _without_config_store_axes(doc.get('defaults', {})) | (
         await _config_store_axis_defaults(opensearch)
@@ -201,7 +202,7 @@ async def update_curation_settings_route(
     """
     from src.clients.curation_opensearch.settings_doc import update_curation_settings
 
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     config_store_defaults = {k: v for k, v in body.defaults.items() if k in _CONFIG_STORE_AXES}
     settings_doc_defaults = {
         k: v for k, v in body.defaults.items() if k not in _CONFIG_STORE_AXES and k != 'vlm'
@@ -287,7 +288,7 @@ async def _resolve_config_store_axis(
     PUT can gate each axis against the OTHER axis's PENDING target
     instead of its stored one -- see the caller,
     ``update_curation_settings_route``)."""
-    from src.routers.curation._config_common_models import api_error
+    from src.routers.curation._api_error import api_error
     from src.services.config_store import get_config_store
     from src.services.curation.strategy_defaults import _advertised_ids_for_axis
 
@@ -385,7 +386,7 @@ async def _plan_vlm(value: str | None, resolved: dict[str, Any], opensearch: Any
     """Resolve and gate the ``vlm`` default of a ``PUT /settings`` (write
     nothing): 422 ``unknown_vlm`` for an id nobody advertises, then the one
     VLM gate against the request's PENDING pack and profile."""
-    from src.routers.curation._config_common_models import api_error
+    from src.routers.curation._api_error import api_error
     from src.services.config_store.vlm_activation import UNSET, plan_default_vlm
     from src.services.curation.vlm_strategies import advertised_ids
     from src.services.labeling.vlm_endpoints import refresh_vlm_state
@@ -412,7 +413,7 @@ async def _plan_vlm(value: str | None, resolved: dict[str, Any], opensearch: Any
 
 
 async def _apply_vlm(plan: Any, opensearch: Any) -> None:
-    from src.routers.curation._config_common_models import active_conflict_error
+    from src.routers.curation._api_error import active_conflict_error
     from src.services.config_store import ActiveConflictError
     from src.services.config_store.vlm_activation import apply_default_vlm
 
@@ -426,7 +427,7 @@ async def _apply_config_store_axis(plan: _AxisActivationPlan, opensearch: Any) -
     """Write side of a resolved axis activation (see
     :func:`_resolve_config_store_axis`). Only called once every axis in
     the request has cleared resolve+gate."""
-    from src.routers.curation._config_common_models import active_conflict_error
+    from src.routers.curation._api_error import active_conflict_error
     from src.services.config_store import ActiveConflictError, get_config_store
     from src.services.config_store.store import activate_axis
 

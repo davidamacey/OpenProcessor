@@ -42,7 +42,9 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path))
     monkeypatch.setattr(curation_config, '_default_curation_config', None)
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     fake = make_fake(_corpus())
     app = FastAPI()
     mount_curation_routers(app, curation_router)

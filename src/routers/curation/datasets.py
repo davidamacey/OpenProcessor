@@ -17,8 +17,8 @@ from fastapi import File, Query, Response, UploadFile
 
 from src.config import get_curation_config
 from src.config.ingest_profiles import ingest_primary_profile
-from src.routers.curation._common import OpenSearchDep, RegistryDep, _ensure_indexes, router
-from src.routers.curation._config_common_models import api_error
+from src.routers.curation._api_error import api_error
+from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._dataset_import_models import (
     DatasetFormatsResponse,
     DatasetImportEntry,
@@ -32,7 +32,7 @@ from src.routers.curation._dataset_import_models import (
     DatasetUploadResponse,
 )
 from src.routers.curation._dataset_import_views import job_wire, preview_wire
-from src.routers.curation._dataset_issue_models import issues_to_wire
+from src.routers.curation._dataset_issue_wire import issues_to_wire
 from src.services.curation.dataset_import import runner
 from src.services.curation.dataset_import.context import ImportContext
 from src.services.curation.dataset_import.options import DatasetImportRequest, DatasetPreviewRequest
@@ -61,6 +61,7 @@ from src.services.curation.dataset_import.upload import (
     receive_archive,
 )
 from src.services.curation.file_job import heartbeat_ticker
+from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.ingest import CurationIngestService
 from src.services.curation.ingest_detector import effective_profile
 from src.services.curation.ingest_policy_store import get_ingest_policy
@@ -248,7 +249,7 @@ async def start_dataset_import(
     opensearch: OpenSearchDep,
     registry: RegistryDep,
 ) -> DatasetImportJob:
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     prepared = await _prepare(body, registry)
     if body.expected_import_key and body.expected_import_key != prepared.import_key:
         raise api_error(

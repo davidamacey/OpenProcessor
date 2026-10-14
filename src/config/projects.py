@@ -183,3 +183,19 @@ def new_project_record(
         origin=None,
         resources=resources_for_new(slug, base),
     )
+
+
+CLONEABLE_AXES: tuple[str, ...] = (
+    'settings_defaults',
+    'classes',
+    'activations',
+    'keymap',
+    'prompt_packs',
+    'open_vocab',
+    'vlm_activation',
+)
+
+# The only statuses archive / unarchive act on (lifecycle.py enforces them).
+ARCHIVABLE_STATUSES = frozenset({'active'})
+
+UNARCHIVABLE_STATUSES = frozenset({'archived'})

@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.base import _is_recoverable_mapping_conflict, config, logger
-from src.services.curation.audit_math import AUDIT_FIELDS
+from src.domain.audit_math import AUDIT_FIELDS
 
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ DETECTOR_MAPPING: dict[str, Any] = {
 }
 
 # The accuracy audit's sample marker and verdict
-# (src/services/curation/audit_math.py AUDIT_FIELDS).
+# (src/domain/audit_math.py AUDIT_FIELDS).
 AUDIT_MAPPING: dict[str, Any] = dict(AUDIT_FIELDS)
 
 ITEMS_EXTRA_MAPPING: dict[str, Any] = {**DETECTOR_MAPPING, **AUDIT_MAPPING}

@@ -64,6 +64,6 @@ def test_fresh_unlabeled_item_is_in_vlm_worker_cohort() -> None:
 
 
 def test_pipeline_vlm_sweep_fetches_the_item_embedding() -> None:
-    from src.routers.curation import pipeline
+    from src.services.curation import auto_label_run
 
-    assert ITEM_EMBEDDING_FIELD in pipeline.VLM_SWEEP_SOURCE_FIELDS
+    assert ITEM_EMBEDDING_FIELD in auto_label_run.VLM_SWEEP_SOURCE_FIELDS

@@ -125,7 +125,9 @@ def test_export_router_maps_nothing_to_export_to_422(monkeypatch: pytest.MonkeyP
         raise NothingToExportError('0 items are class_validated')
 
     monkeypatch.setattr(GenericYoloExportService, 'export_dataset', _refuse)
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     app = FastAPI()
     from _curation_app import mount_curation_routers
 
@@ -196,7 +198,7 @@ def train_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         def get(self, _cid: int) -> Any:
             return None
 
-    monkeypatch.setattr('src.routers.curation_train.preflight.get_class_registry', _Reg)
+    monkeypatch.setattr('src.services.training.preflight_run.get_class_registry', _Reg)
 
     monkeypatch.setattr('src.services.training.preflight_checks.get_class_registry', _Reg)
     fake = AsyncMock()

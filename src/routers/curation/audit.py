@@ -13,20 +13,22 @@ from typing import Any
 
 from fastapi import HTTPException, Query
 
+from src.routers.curation._api_error import api_error
 from src.routers.curation._audit_models import (
     AuditQueueResponse,
     AuditReport,
     AuditStartRequest,
     AuditStartResponse,
 )
-from src.routers.curation._common import OpenSearchDep, _ensure_indexes, items_index, router
-from src.routers.curation._config_common_models import ApiErrorResponse, api_error
+from src.routers.curation._common import OpenSearchDep, items_index, router
+from src.schemas.curation.config_common import ApiErrorResponse
 from src.services.curation.audit import (
     DEFAULT_MIN_PER_CLASS,
     load_report,
     pending_query,
     start_audit,
 )
+from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.wire import item_list_source_excludes, serialize_item
 
 
@@ -40,7 +42,7 @@ async def audit_start(body: AuditStartRequest, opensearch: OpenSearchDep) -> dic
     and are not validated, held out, excluded, dismissed, imported suggestions or
     already drawn. ``409 audit_no_candidates`` when none are eligible. Marking a crop
     never changes its class."""
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     result = await start_audit(
         opensearch, min_per_class=body.min_per_class, sample_size=body.sample_size
     )
@@ -61,7 +63,7 @@ async def audit_queue(
     page_size: int = Query(30, ge=1, le=200),
 ) -> dict[str, Any]:
     """Drawn crops still waiting for a human label, in a stable order."""
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     try:
         resp = await opensearch.search(
             index=items_index(),
@@ -95,5 +97,5 @@ async def audit_report(
     """Per-class precision of the detector and the VLM with Wilson 95% intervals, the
     confusion matrix and the outcome counts. A class with fewer than ``min_per_class``
     audited crops is flagged ``insufficient_sample``."""
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     return await load_report(opensearch, min_per_class=min_per_class)

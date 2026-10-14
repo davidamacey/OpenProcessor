@@ -4,13 +4,8 @@ from __future__ import annotations
 
 from curation.query_fakes import matches
 from src.config.curation import ITEM_EMBEDDING_FIELD
+from src.domain.embedding_state import EMBEDDED, FAILED, embedded_clause, not_embedded_clause
 from src.routers.curation._item_models import ItemDoc
-from src.services.curation.embedding_state import (
-    EMBEDDED,
-    FAILED,
-    embedded_clause,
-    not_embedded_clause,
-)
 from src.services.curation.item_doc import DetectedItem, build_item_doc
 from src.services.curation.wire import serialize_item
 

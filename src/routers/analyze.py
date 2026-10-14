@@ -293,7 +293,7 @@ def analyze_image(
             t0 = time.perf_counter()
             from src.clients.triton_client import get_triton_client
             from src.config import get_settings
-            from src.services.cpu_preprocess import center_crop_cpu
+            from src.utils.cpu_preprocess import center_crop_cpu
 
             pil_img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
             np_img = np.array(pil_img)
@@ -594,7 +594,7 @@ def analyze_batch(
 
                         from PIL import Image
 
-                        from src.services.cpu_preprocess import center_crop_cpu
+                        from src.utils.cpu_preprocess import center_crop_cpu
 
                         np_img = np.array(Image.open(io.BytesIO(image_bytes)).convert('RGB'))
                         preprocessed = []

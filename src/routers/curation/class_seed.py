@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from src.clients.curation_opensearch.registry import ClassRegistryError
+from src.config.ingest_profiles import ingest_primary_profile
+from src.routers.curation._api_error import api_error
 from src.routers.curation._class_models import (
     SeedConflict,
     SeededClass,
@@ -11,13 +13,11 @@ from src.routers.curation._class_models import (
     SeedSkipped,
 )
 from src.routers.curation._common import OpenSearchDep, get_class_registry, logger, router
-from src.routers.curation._config_common_models import api_error
 from src.routers.curation._error_models import (
     DetectorUnavailableResponse,
     UnknownDetectorNamesResponse,
 )
 from src.routers.curation.classes import create_registry_class
-from src.routers.curation.ingest import _get_detection_profile
 from src.services.curation.detector_vocabulary import detector_labels, plan_seed
 from src.services.curation.ingest_detector import effective_profile
 from src.services.curation.ingest_policy_store import get_ingest_policy
@@ -47,7 +47,7 @@ async def seed_from_detector(
     """
     try:
         profile = effective_profile(
-            _get_detection_profile(), (await get_ingest_policy(opensearch)).detector
+            ingest_primary_profile(), (await get_ingest_policy(opensearch)).detector
         )
         labels = detector_labels(profile) if profile.detector_model else []
     except (ValueError, OSError) as exc:

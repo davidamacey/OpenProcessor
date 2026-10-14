@@ -10,14 +10,15 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.clients.curation_opensearch.bodies_core import _items_body
-from src.routers.curation import _common
-from src.services.curation.item_text import (
+from src.domain.item_text import (
     ITEM_TEXT_LINES_FIELD,
     ITEM_TEXT_TOKENS_FIELD,
     item_text_query,
     item_text_update,
     normalize_tokens,
 )
+from src.routers.curation import _common
+from src.services.curation import index_bootstrap
 from src.services.curation.wire import serialize_item
 from src.services.detection.region_text import OcrLine
 
@@ -140,7 +141,7 @@ def fake_os() -> _RecordingOS:
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch, fake_os: _RecordingOS) -> Any:
-    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', {'default'})
+    monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', {'default'})
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()

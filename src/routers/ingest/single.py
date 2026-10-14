@@ -9,7 +9,7 @@ from fastapi import File, Form, HTTPException, Response, UploadFile, status
 
 from src.core.dependencies import VisualSearchDep
 from src.routers.ingest._router import router
-from src.routers.ingest.models import IndexedCounts, IngestResponse, NearDuplicateInfo, OCRInfo
+from src.schemas.ingest import IndexedCounts, IngestResponse, NearDuplicateInfo, OCRInfo
 
 
 logger = logging.getLogger(__name__)

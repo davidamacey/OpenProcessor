@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.routers.curation.pipeline_params import resolve_run_prompt_pack
+from src.services.curation.autolabel.run_params import resolve_run_prompt_pack
 
 
 @pytest.mark.asyncio
@@ -36,9 +36,9 @@ async def test_omitted_prompt_pack_resolves_to_default_with_no_revision() -> Non
 
 @pytest.mark.asyncio
 async def test_unknown_name_before_the_at_sign_is_422() -> None:
-    from fastapi import HTTPException
+    from src.core.exceptions import RequestRejectedError
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         await resolve_run_prompt_pack(None, 'not_a_real_pack@1')
     assert exc_info.value.status_code == 422
 

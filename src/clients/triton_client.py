@@ -262,7 +262,7 @@ class TritonClient:
                 padding,
                 yolo_size,
             ).astype(np.float32)
-            from src.services.cpu_preprocess import embed_boxes_from_full_res
+            from src.utils.cpu_preprocess import embed_boxes_from_full_res
 
             box_embeddings = embed_boxes_from_full_res(
                 img_array, normalized_boxes, self.infer_mobileclip_batch
@@ -319,7 +319,7 @@ class TritonClient:
         target_size = 256
 
         # round() + a max(target_size, ...) floor -- see the matching
-        # fix/comment in src.services.cpu_preprocess.center_crop_cpu. Without
+        # fix/comment in src.utils.cpu_preprocess.center_crop_cpu. Without
         # it, float truncation via int() could undershoot target_size by one
         # px and produce a smaller-than-256 crop instead of erroring.
         scale = target_size / min(orig_h, orig_w)

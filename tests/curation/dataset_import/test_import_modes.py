@@ -9,9 +9,9 @@ import pytest
 
 from curation.dataset_import.harness import Harness, activate_region_profile, map_all, write_yolo
 from src.config.region_fields import get_region_fields
+from src.domain.region_boxes import read_boxes
 from src.services.curation.dataset_import.mapping import ClassMappingEntry
 from src.services.curation.dataset_import.undo import undo_import
-from src.services.curation.region_boxes import read_boxes
 
 
 if TYPE_CHECKING:

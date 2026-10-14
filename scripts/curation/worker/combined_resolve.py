@@ -33,18 +33,15 @@ from scripts.curation.worker.verify import (
 )
 from src.config.region_rejection import REJECT_REASON_VERIFIER
 from src.config.region_state import RegionStatus
-from src.services.curation.ingest_class_sources import (
-    CLUSTER_MAJORITY_CLASS_SOURCE,
-    classifier_class_sources,
-)
-from src.services.curation.region_boxes import derive_status, has_human_text, new_box_placeholder
+from src.domain.ingest_class_sources import CLUSTER_MAJORITY_CLASS_SOURCE, classifier_class_sources
+from src.domain.region_boxes import derive_status, has_human_text, new_box_placeholder
 from src.services.labeling.region_overlay import VlmBoxVerdict
 
 
 if TYPE_CHECKING:
     from scripts.curation.worker.verify import TaskBoxInput
     from src.config import DetectionProfile
-    from src.services.curation.region_boxes import RegionBox
+    from src.domain.region_boxes import RegionBox
     from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
     from src.services.detection.region_text_rules import RegionTextRules
     from src.services.labeling.vlm_models import VlmCombinedReply

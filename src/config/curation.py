@@ -188,7 +188,7 @@ class CurationConfig:
     # source_root/export_root instead.
     bakeoff_eval_root: Path = _FROM_DEFAULT_PROJECT_PATH
 
-    # Searchable per-item text (src/services/curation/item_text.py): the
+    # Searchable per-item text (src/domain/item_text.py): the
     # region worker stores every OCR line read on the item crop. Effective
     # only when the active region profile names an OCR pipeline model.
     item_text_enabled: bool = True

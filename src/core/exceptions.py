@@ -4,6 +4,8 @@ Custom exceptions for the YOLO inference service.
 Provides domain-specific exceptions for better error handling.
 """
 
+from typing import Any
+
 
 class InferenceError(Exception):
     """Base exception for inference-related errors."""
@@ -42,3 +44,14 @@ class ClientConnectionError(InferenceError):
         self.reason = reason
         message = f'Failed to connect to {service} at {url}: {reason}'
         super().__init__(message)
+
+
+class RequestRejectedError(Exception):
+    """A service refused the request. The app answers ``status_code`` with
+    ``{"detail": detail}``, the body an ``HTTPException`` carries, so services
+    stay free of HTTP types."""
+
+    def __init__(self, status_code: int, detail: Any):
+        self.status_code = status_code
+        self.detail = detail
+        super().__init__(f'{status_code}: {detail}')

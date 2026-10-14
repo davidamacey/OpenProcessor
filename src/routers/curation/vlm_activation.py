@@ -11,19 +11,15 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from src.routers.curation._api_error import active_conflict_error, api_error
 from src.routers.curation._common import OpenSearchDep, router
-from src.routers.curation._config_common_models import (
-    ActiveRef,
-    AppliedRuntime,
-    active_conflict_error,
-    api_error,
-)
 from src.routers.curation._vlm_endpoint_models import (
     VlmActivateRequest,
     VlmActiveResponse,
     VlmDeactivateRequest,
     VlmRollbackRequest,
 )
+from src.schemas.curation.config_common import ActiveRef, AppliedRuntime
 from src.services.config_store import get_config_store
 from src.services.config_store.index import ActiveConflictError, get_activation, get_runtime_docs
 from src.services.config_store.vlm_activation import activate_vlm, deactivate_vlm, rollback_vlm

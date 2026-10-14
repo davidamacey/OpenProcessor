@@ -4,7 +4,7 @@ clone_settings / delete (dry-run and guarded).
 See ``docs/design/openprocessor_internal/projects_plan.md`` §4, §7, the
 owner decisions in §13 (D4 capacity, D5 ``default`` is undeletable), and
 the Cropwright rev-3 deltas 2 (envelope + revision), 3 (list membership,
-implemented in P1's ``_project_models.py``), 10 (delete fits a proxy
+implemented in P1's projects wire models), 10 (delete fits a proxy
 timeout), 11 (structured refusals) and 12 (full ``capacity`` on the
 409). There is no unscoped alias and no back-compat shim anywhere in
 this module (owner decision, 2026-09-26): every route this backs lives
@@ -17,13 +17,16 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import HTTPException
-
 from src.config.project_context import bind_project
-from src.config.projects import ProjectRecord, is_valid_slug, resources_for_new
+from src.config.projects import (
+    ARCHIVABLE_STATUSES,
+    UNARCHIVABLE_STATUSES,
+    ProjectRecord,
+    is_valid_slug,
+    resources_for_new,
+)
+from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
-from src.routers.curation._config_common_models import api_error
-from src.routers.curation._project_models import ARCHIVABLE_STATUSES, UNARCHIVABLE_STATUSES
 from src.services.projects.capacity import capacity_status
 from src.services.projects.registry import (
     RevisionConflictError,
@@ -31,6 +34,7 @@ from src.services.projects.registry import (
     get_record_with_seq,
     write_record as _raw_write_record,
 )
+from src.services.rejections import rejection
 
 
 logger = get_logger(__name__)
@@ -69,13 +73,13 @@ async def write_record(
         )
     except RevisionConflictError as exc:
         if op_type == 'create':
-            raise api_error(
+            raise rejection(
                 409,
                 'slug_taken',
                 f"a project named '{record.slug}' already exists",
                 project=record.slug,
             ) from exc
-        raise api_error(
+        raise rejection(
             409,
             'revision_conflict',
             f"'{record.slug}' was modified by another request; refresh and retry",
@@ -113,7 +117,7 @@ async def _capacity_error_or_warning(
     if capacity is None:
         return []
     if capacity.status == 'blocked':
-        raise api_error(
+        raise rejection(
             409,
             'shard_budget_exceeded',
             capacity.message,
@@ -143,7 +147,7 @@ async def _resolve_existing(slug: str) -> ProjectRecord | None:
 
 def _require_found(record: ProjectRecord | None, slug: str) -> ProjectRecord:
     if record is None or record.status == 'deleted':
-        raise api_error(404, 'project_not_found', f"no project named '{slug}'", project=slug)
+        raise rejection(404, 'project_not_found', f"no project named '{slug}'", project=slug)
     return record
 
 
@@ -157,7 +161,7 @@ async def _get_mutable_record(
     stored, seq, term = await get_record_with_seq(client, slug)
     if stored is not None:
         return stored, seq, term
-    raise api_error(404, 'project_not_found', f"no project named '{slug}'", project=slug)
+    raise rejection(404, 'project_not_found', f"no project named '{slug}'", project=slug)
 
 
 async def _refetch_for_write(
@@ -196,11 +200,11 @@ async def _refetch_for_write(
     finish clobbering someone else's write."""
     stored, seq, term = await get_record_with_seq(client, slug)
     if stored is None:
-        raise api_error(404, 'project_not_found', f"no project named '{slug}'", project=slug)
+        raise rejection(404, 'project_not_found', f"no project named '{slug}'", project=slug)
     if expect_status is not None:
         allowed = {expect_status} if isinstance(expect_status, str) else expect_status
         if stored.status not in allowed:
-            raise api_error(
+            raise rejection(
                 409,
                 'invalid_transition',
                 f"'{slug}' is no longer '{sorted(allowed)}' (now '{stored.status}'); "
@@ -212,7 +216,7 @@ async def _refetch_for_write(
 
 
 async def _cleanup_orphaned_by_concurrent_delete(
-    client: Any, record: ProjectRecord, exc: HTTPException
+    client: Any, record: ProjectRecord, exc: RequestRejectedError
 ) -> None:
     """F2 (known gap, documented rather than fully fixed -- see the P3
     review, "Re-review 2026-09-27, pass 3", item F2): create's own
@@ -223,7 +227,7 @@ async def _cleanup_orphaned_by_concurrent_delete(
     That is the correct refusal -- resurrecting a retired slug would be
     worse -- but by the time it fires, this same create may already have
     made up to 7 ``op_prj_<slug>__*`` indexes (:func:`create_project`'s
-    ``_ensure_indexes`` step) that are now permanently unreachable: the
+    ``ensure_indexes`` step) that are now permanently unreachable: the
     slug is retired forever, so no project-bound path can ever address
     them again. Reproducing this needs a create running past
     ``delete._BUILDING_STALE_SECONDS`` (120s, the N1 stale-``building``
@@ -236,7 +240,7 @@ async def _cleanup_orphaned_by_concurrent_delete(
     for an operator to find manually. Logged at error level either way,
     with the exact index names, so an operator can search for them if
     this cleanup itself fails (e.g. the same transient fault that made
-    ``_ensure_indexes`` unreliable in the first place)."""
+    ``ensure_indexes`` unreliable in the first place)."""
     detail: dict[str, Any] = exc.detail if isinstance(exc.detail, dict) else {}
     if detail.get('project_status') != 'deleted':
         return
@@ -278,18 +282,18 @@ async def create_project(
     from src.config.curation import base_curation_config
 
     if not is_valid_slug(slug):
-        raise api_error(422, 'slug_invalid', f"'{slug}' is not a valid project slug", project=slug)
+        raise rejection(422, 'slug_invalid', f"'{slug}' is not a valid project slug", project=slug)
 
     existing = await _resolve_existing(slug)
     if existing is not None:
         if existing.status == 'deleted':
-            raise api_error(
+            raise rejection(
                 409,
                 'slug_retired',
                 f"'{slug}' was used by a deleted project and its slug is retired",
                 project=slug,
             )
-        raise api_error(409, 'slug_taken', f"a project named '{slug}' already exists", project=slug)
+        raise rejection(409, 'slug_taken', f"a project named '{slug}' already exists", project=slug)
 
     if clone_settings_from:
         # M7: every refusal a clone can raise -- unknown axis, clone into
@@ -321,7 +325,7 @@ async def create_project(
     )
     try:
         await write_record(client, record, op_type='create')
-    except HTTPException:
+    except RequestRejectedError:
         # lifecycle.write_record already translated a genuine
         # storage-level create conflict (RevisionConflictError, i.e.
         # this exact slug really was taken by someone else) into this
@@ -354,11 +358,11 @@ async def create_project(
         await registry.refresh_strict()
 
         with bind_project(record):
-            from src.routers.curation._common import _ensure_indexes
+            from src.services.curation.index_bootstrap import ensure_indexes
 
             resources.upload_root.mkdir(parents=True, exist_ok=True)
             resources.project_state_dir.mkdir(parents=True, exist_ok=True)
-            await _ensure_indexes(client)
+            await ensure_indexes(client)
         if clone_settings_from:
             clone_conflicts = await clone_settings(
                 client,
@@ -401,7 +405,7 @@ async def create_project(
         with bind_project(record):
             ensure_region_class()
 
-        # B2(a) residual: _ensure_indexes is itself fail-open (every
+        # B2(a) residual: ensure_indexes is itself fail-open (every
         # create/migration failure inside it is logged and swallowed, so
         # it never raises) -- verify every index this record claims to
         # own actually exists before ever calling the project 'active'.
@@ -433,7 +437,7 @@ async def create_project(
             failed, seq, term = await _refetch_for_write(
                 client, slug, expect_status='building', status='failed', updated_at=_now()
             )
-        except HTTPException as refetch_exc:
+        except RequestRejectedError as refetch_exc:
             await _cleanup_orphaned_by_concurrent_delete(client, record, refetch_exc)
             raise
         await write_record(client, failed, if_seq_no=seq, if_primary_term=term)
@@ -464,7 +468,7 @@ async def finish_building(client: Any, record: ProjectRecord, *, ok: bool = True
             status='active' if ok else 'failed',
             updated_at=_now(),
         )
-    except HTTPException as refetch_exc:
+    except RequestRejectedError as refetch_exc:
         await _cleanup_orphaned_by_concurrent_delete(client, record, refetch_exc)
         raise
     await write_record(client, finished, if_seq_no=seq, if_primary_term=term)
@@ -565,12 +569,12 @@ async def _last_active_check(record: ProjectRecord) -> None:
     registry = get_project_registry()
     await registry.ensure_fresh()
     if not _other_active_slugs(dict(registry.snapshot()), record.slug):
-        raise api_error(409, 'last_active_project', _LAST_ACTIVE_MESSAGE, project=record.slug)
+        raise rejection(409, 'last_active_project', _LAST_ACTIVE_MESSAGE, project=record.slug)
 
 
 def _require_transition(record: ProjectRecord, action: str, allowed: frozenset[str]) -> None:
     if record.status not in allowed:
-        raise api_error(
+        raise rejection(
             409,
             'invalid_transition',
             f"cannot {action} '{record.slug}' while it is {record.status}",
@@ -582,7 +586,7 @@ def _require_transition(record: ProjectRecord, action: str, allowed: frozenset[s
 
 def _require_revision(record: ProjectRecord, expected_revision: int) -> None:
     if record.revision != expected_revision:
-        raise api_error(
+        raise rejection(
             409,
             'revision_conflict',
             f'expected revision {expected_revision}, current is {record.revision}',
@@ -599,7 +603,7 @@ async def archive_project(client: Any, *, slug: str, expected_revision: int) -> 
     _require_revision(record, expected_revision)
     jobs = await running_jobs(record)
     if jobs:
-        raise api_error(
+        raise rejection(
             409,
             'project_busy',
             f"'{slug}' has {len(jobs)} running job(s)",

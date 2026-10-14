@@ -16,7 +16,7 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
-from src.services.curation.embedding_state import DEFERRED, FAILED, NOT_SELECTED
+from src.domain.embedding_state import DEFERRED, FAILED, NOT_SELECTED
 from src.services.curation.item_filter import ItemFilter
 from src.services.curation.reprocess import plan_reprocess
 from src.services.curation.reprocess_images import CHUNK, embed_image_chunk

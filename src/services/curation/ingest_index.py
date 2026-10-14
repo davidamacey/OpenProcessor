@@ -22,9 +22,9 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from src.core.logging import get_logger, get_request_id
+from src.domain.embedding_state import EMBEDDED, FAILED
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.clustering.ivf_ingest import get_ivf_ingest_store, ingest_passes_gate
-from src.services.curation.embedding_state import EMBEDDED, FAILED
 from src.services.curation.ingest_gpu_decode import GpuDecodeFrame
 from src.services.curation.ingest_models import ERROR_KIND_BULK_INDEX, IngestResult
 from src.services.curation.ingest_policy import select_for_embedding

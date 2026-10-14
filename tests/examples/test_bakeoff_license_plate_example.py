@@ -165,7 +165,7 @@ def test_baselines_file_validates() -> None:
         'name', 'backend', 'weights', 'imgsz', 'mode', 'class_map',
         'backend_options', 'training_data', 'triton_model',
     }  # fmt: skip
-    from src.routers.curation._bakeoff_models import BaselineModel
+    from src.schemas.bakeoff.models import BaselineModel
 
     for b in baselines:
         assert set(b) <= allowed, (b['name'], set(b) - allowed)

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.routers.curation._api_error import api_error
 from src.routers.curation._common import (
     OpenSearchDep,
     RegistryDep,
@@ -21,7 +22,6 @@ from src.routers.curation._common import (
     items_index,
     router,
 )
-from src.routers.curation._config_common_models import api_error
 from src.routers.curation._reprocess_models import (
     ReprocessJobInfo,
     ReprocessOneRequest,
@@ -36,9 +36,9 @@ from src.services.curation.wire import item_source_excludes, serialize_item
 
 
 async def _service_factory(opensearch: Any, registry: Any) -> Any:
-    from src.routers.curation.ingest import _get_ingest_service
+    from src.services.curation.ingest_service_factory import get_ingest_service
 
-    return await _get_ingest_service(opensearch, registry)
+    return await get_ingest_service(opensearch, registry)
 
 
 async def _run(request: ReprocessRequest, opensearch: Any, registry: Any) -> ReprocessWireResponse:

@@ -30,7 +30,7 @@ from src.services.labeling.vlm_url_policy import (
 
 
 if TYPE_CHECKING:
-    from src.routers.curation._config_common_models import ValidationReport
+    from src.schemas.curation.config_common import ValidationReport
     from src.services.labeling.vlm_endpoint_body import VlmProbeRecord
     from src.services.labeling.vlm_endpoints import VlmEndpoint
 

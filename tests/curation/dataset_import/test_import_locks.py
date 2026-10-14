@@ -10,12 +10,12 @@ import pytest
 
 from curation.dataset_import.harness import Harness, activate_region_profile, map_all, write_yolo
 from src.config.region_fields import get_region_fields
+from src.domain.region_boxes import read_boxes
 from src.services.curation.dataset_import import runner
 from src.services.curation.dataset_import.item_labels import apply_item_updates, plan_item_labels
 from src.services.curation.dataset_import.mapping import ClassMappingEntry, MapTarget
 from src.services.curation.dataset_import.scan import LabelBox
 from src.services.curation.dataset_import.store import imports_root, open_store, valid_import_id
-from src.services.curation.region_boxes import read_boxes
 
 
 if TYPE_CHECKING:

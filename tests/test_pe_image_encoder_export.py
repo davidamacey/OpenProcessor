@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 
 from src.clients.pe_encoder import PE_EMBEDDING_DIM, PE_IMAGE_MODEL
-from src.services.detection.pe_preprocess import PE_SIZE
+from src.utils.pe_preprocess import PE_SIZE
 
 
 EXPORT_DIR = Path(__file__).resolve().parents[1] / 'export'

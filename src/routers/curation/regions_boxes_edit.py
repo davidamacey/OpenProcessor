@@ -23,6 +23,7 @@ from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.config import get_region_fields
 from src.config.curation import get_curation_config
 from src.config.region_state import RegionStatus
+from src.domain.region_boxes import RegionBoxWriteError, read_boxes
 from src.routers.curation._common import OpenSearchDep, RegionProfileDep, _now_iso, router
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.routers.curation._region_write_models import (
@@ -44,7 +45,6 @@ from src.services.curation.region_box_edits import (
     with_state,
 )
 from src.services.curation.region_box_refresh import refresh_box_embeddings
-from src.services.curation.region_boxes import RegionBoxWriteError, read_boxes
 from src.services.curation.region_rows import as_row
 from src.services.curation.region_writes import (
     human_box_write,
