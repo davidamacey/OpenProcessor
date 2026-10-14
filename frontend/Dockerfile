@@ -1,7 +1,7 @@
 # The bundle is architecture-independent static files, so build it once on
 # the native build platform; only the nginx stage below is per-arch. This
 # keeps a multi-arch (amd64 + arm64) build from running npm under emulation.
-FROM --platform=$BUILDPLATFORM node:26-alpine AS builder
+FROM --platform=$BUILDPLATFORM node:26-alpine@sha256:6f08a523443ddedf52941874c203475b0ad503e859ad70cb26ab8be9a517dbd5 AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
@@ -13,7 +13,7 @@ RUN npm run build
 # Runtime: nginx as a non-root user (uid 101) listening on 8080.
 # Pinned to an exact patch + Alpine tag (not a floating minor) so a base
 # rebuild never silently changes what's shipped; Dependabot bumps this.
-FROM nginxinc/nginx-unprivileged:1.31.2-alpine3.23
+FROM nginxinc/nginx-unprivileged:1.31.2-alpine3.23@sha256:6320020c7da8714feab524e02c08c5a1958675c4e68700e93a2fd8970b065786
 
 ARG VERSION=0.5.0
 ARG REVISION=unknown

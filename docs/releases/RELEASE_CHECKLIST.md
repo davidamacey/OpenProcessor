@@ -33,6 +33,25 @@ Cropwright is no longer released from its own repository or its own lock. There 
 tarball; do not run `frontend/scripts/release/*` for 0.5.0. The `cropwright` tier is a compose
 profile of the main project and takes its image from `images.lock`.
 
+## Base image digests: the bump procedure
+
+Every `FROM` in a tracked Dockerfile is `image:tag@sha256:<index digest>`: the tag says what
+was meant, the digest is what Docker pulls, so a rebuild never silently changes the base.
+`tests/test_dockerfile_hygiene.py` fails on a `FROM` without a digest. `docker/hardened/triton`
+pins through the `TRITON_TAG` and `TRITON_DIGEST` build args, which are bumped together.
+
+To bump a base (a Dependabot docker PR does the same edit):
+
+1. Look up the multi-arch index digest of the new tag:
+   `docker buildx imagetools inspect <image:tag> --format '{{json .Manifest.Digest}}'`
+   (or `docker manifest inspect <image:tag>` and hash the index). Use the index digest, not a
+   per-platform one, so amd64 and arm64 builds both resolve.
+2. Replace the tag and the digest together in every Dockerfile that names the image
+   (`rg 'python:3.13-slim-trixie@' --glob '*Dockerfile*'`), keeping the `AS <stage>` suffix.
+3. Rebuild the touched images (`docker compose -p <scratch> build api`, and the side-cars),
+   run `hadolint` (2.15.1) and `tests/test_dockerfile_hygiene.py`, then scan the new images
+   with Trivy (`make release-dry-run`, step 3 of Steps) before they are published.
+
 ## Release decisions (#44, #63): all DECIDED
 
 Carried forward from 0.4.1; nothing here changes for 0.5.0 unless noted.
