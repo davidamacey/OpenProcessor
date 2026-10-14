@@ -30,7 +30,6 @@ scripts/export_paddleocr.sh	702	split in PR 7
 scripts/lib/config.sh	823	split in PR 7
 scripts/lib/export.sh	702	split in PR 7
 scripts/release/acceptance_run.sh	758	split in PR 7
-scripts/setup.sh	967	split in PR 7
 setup-openprocessor.sh	3214	cohesive: one __op_define function so a truncated curl-to-bash download is a syntax error; pre-install code cannot source libraries
 tests/curation/test_bakeoff_harness.py	1043	split in PR 7
 tests/curation/test_bakeoff_router.py	1382	split in PR 7
