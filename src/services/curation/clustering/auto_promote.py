@@ -25,6 +25,8 @@ from typing import TYPE_CHECKING, Any, Literal
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config.curation import items_index
 from src.core.logging import get_logger
+from src.domain.history import record_class_history
+from src.domain.ingest_class_sources import CLUSTER_MAJORITY_CLASS_SOURCE, classifier_class_sources
 from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, ClassWriteGuard
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.cluster_purity import (
@@ -32,11 +34,6 @@ from src.services.curation.cluster_purity import (
     PROMOTE_MIN_PRECISION,
     PROMOTE_MIN_PURITY,
     is_promotable,
-)
-from src.services.curation.history import record_class_history
-from src.services.curation.ingest_class_sources import (
-    CLUSTER_MAJORITY_CLASS_SOURCE,
-    classifier_class_sources,
 )
 
 

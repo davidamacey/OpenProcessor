@@ -18,6 +18,15 @@ from src.clients.occ import occ_update_one
 from src.clients.occ_locks import is_human_marker, is_human_owned_item
 from src.config.region_source import CANDIDATE_IMPORT
 from src.config.region_state import RegionStatus
+from src.domain.history import CLASS_STATE_FIELDS, restore_class_state
+from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
+from src.domain.region_boxes import (
+    RegionBox,
+    boxes_write_fields,
+    derive_status,
+    is_human_owned,
+    read_boxes,
+)
 from src.services.curation.dataset_import import reconcile
 from src.services.curation.edit_history import (
     EDIT_HISTORY_FIELD,
@@ -25,16 +34,7 @@ from src.services.curation.edit_history import (
     region_state_fields,
     restore_edit_state,
 )
-from src.services.curation.history import CLASS_STATE_FIELDS, restore_class_state
-from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.curation.item_delete import delete_items
-from src.services.curation.region_boxes import (
-    RegionBox,
-    boxes_write_fields,
-    derive_status,
-    is_human_owned,
-    read_boxes,
-)
 
 
 if TYPE_CHECKING:

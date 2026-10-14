@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import Any, get_args
 
 from src.config.region_state import RegionStatus
-from src.services.curation.embedding_state import EmbeddingState
+from src.domain.embedding_state import EmbeddingState
 from src.services.curation.item_filter import ItemFilter, Origin, ReviewStatus
 
 

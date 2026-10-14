@@ -1,15 +1,10 @@
-"""``POST /pipeline/auto_label`` -- split out of ``pipeline.py`` to stay
-under the repo's 700-LOC pre-commit ratchet (same pattern as
-``_models_sharing.py``/``models.py`` and ``_region_profile_clone.py``/
-``region_profiles.py``).
-
-R6-m1 fix: this is the thin, PUBLIC route
-wrapper around :func:`~src.routers.curation.pipeline._run_auto_label`.
+"""``POST /pipeline/auto_label``: the thin, PUBLIC route wrapper around
+:func:`~src.services.curation.auto_label_run.run_auto_label`.
 ``prompt_pack_revision``/``prompt_pack_resolved`` used to be hidden
 (``include_in_schema=False``) query params directly on the combined
 route -- hidden from the OpenAPI docs but NOT off the wire
 (``?prompt_pack=nope&prompt_pack_resolved=true`` skipped the
-unknown-pack 422 ``_run_auto_label`` runs). Splitting the internal
+unknown-pack 422 ``run_auto_label`` runs). Splitting the internal
 implementation (called directly by the worker, and by ``/start``'s own
 resolved pin) from this public route -- which always forces
 ``prompt_pack_resolved=False``, ``prompt_pack_revision=None`` -- makes
@@ -24,19 +19,21 @@ from fastapi import Query
 
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation.pipeline_params import (
+    ACKNOWLEDGE_EXTERNAL_DESC,
     AUTO_PROMOTE_DESC as _AUTO_PROMOTE_DESC,
     CLASS_ID_DESC as _CLASS_ID_DESC,
     CLUSTER_ID_DESC as _CLUSTER_ID_DESC,
     PROMPT_PACK_DESC as _PROMPT_PACK_DESC,
     REASSIGN_ONLY_DESC as _REASSIGN_ONLY_DESC,
+    VLM_DESC,
     VLM_SCOPE_DESC as _VLM_SCOPE_DESC,
 )
-from src.routers.curation.pipeline_vlm import ACKNOWLEDGE_EXTERNAL_DESC, VLM_DESC
+from src.services.curation.auto_label_run import run_auto_label
 from src.services.curation.cluster_purity import PROMOTE_MIN_MEMBERS, PROMOTE_MIN_PURITY
 from src.services.curation.vlm_policy import VlmScope  # noqa: TC001 - FastAPI
 
 
-# Internal: a thin wrapper around `_run_auto_label` -- see that function
+# Internal: a thin wrapper around `run_auto_label` -- see that function
 # and the module docstring above for the Python-only params
 # (`prompt_pack_resolved`/`prompt_pack_revision`) this always forces,
 # never settable by an HTTP request. Kept as a comment (not the
@@ -97,9 +94,7 @@ async def pipeline_auto_label(
     For a background job with progress polling, see ``POST
     /pipeline/auto_label/start`` instead.
     """
-    from src.routers.curation.pipeline import _run_auto_label
-
-    return await _run_auto_label(
+    return await run_auto_label(
         opensearch=opensearch,
         train_clusters=train_clusters,
         promote_min_purity=promote_min_purity,

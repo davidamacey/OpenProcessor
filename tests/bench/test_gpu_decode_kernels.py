@@ -16,7 +16,7 @@ from scripts.bench import gpu_decode_kernels as k, gpu_decode_lib as lib
 from src.services.curation.ingest_index import crop_pil
 from src.services.detection.crop_quality import crop_lap_var, image_lap_var
 from src.services.detection.geometry import letterbox_to_square
-from src.services.detection.pe_preprocess import resize_crop_rgb
+from src.utils.pe_preprocess import resize_crop_rgb
 
 
 torch = pytest.importorskip('torch')
@@ -121,7 +121,7 @@ def test_dct8_whole_frame_tracks_the_reduced_decode() -> None:
     whole frame (Pillow ``BILINEAR`` from the full frame)."""
     from PIL import Image
 
-    from src.services.detection.pe_preprocess import resize_crop_rgb, whole_frame_rgb_from_image
+    from src.utils.pe_preprocess import resize_crop_rgb, whole_frame_rgb_from_image
 
     rgb = _photo(480, 640, seed=5)
     ok, enc = cv2.imencode(

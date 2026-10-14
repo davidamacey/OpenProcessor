@@ -39,13 +39,14 @@ from src.services.config_store.vlm_validation import (
     issue,
     validate_vlm_endpoint,
 )
+from src.services.curation.class_registry_names import registry_class_names
 from src.services.labeling.vlm_endpoints import external_ack_state
 from src.services.labeling.vlm_url_policy import sends_images_externally
 
 
 if TYPE_CHECKING:
     from src.config.detection_profile import DetectionProfile
-    from src.routers.curation._config_common_models import ValidationIssue, ValidationReport
+    from src.schemas.curation.config_common import ValidationIssue, ValidationReport
     from src.services.labeling.vlm_endpoints import ExternalAckState, VlmEndpoint
     from src.services.labeling.vlm_prompts import PromptPack
     from src.services.labeling.vlm_url_policy import Locality
@@ -99,13 +100,6 @@ def current_pack_and_profile() -> tuple[PromptPack | None, DetectionProfile | No
     return active_prompt_pack(), get_active_region_profile()
 
 
-def _registry_class_names() -> list[str]:
-    from src.clients.curation_opensearch.registry import get_class_registry
-
-    # An unreadable registry raises: the gate must not pass as "no classes".
-    return sorted(c.class_name for c in get_class_registry().load().classes if not c.deprecated)
-
-
 def _ack_ok(
     mode: GateMode,
     endpoint: VlmEndpoint,
@@ -128,12 +122,12 @@ def _ack_ok(
 def _refusal(
     mode: GateMode, endpoint: VlmEndpoint, report: ValidationReport, blocking: list[ValidationIssue]
 ) -> Any:
-    from src.routers.curation._config_common_models import api_error
+    from src.services.rejections import rejection
 
     only_ack = all(e.code == 'vlm_external_not_acknowledged' for e in blocking)
     if only_ack:
         via = f'POST /vlm/endpoints/{endpoint.name}/activate'
-        return api_error(
+        return rejection(
             422,
             'vlm_external_not_acknowledged',
             f'{endpoint.name!r} sends crops to a service outside this deployment and has not been '
@@ -142,7 +136,7 @@ def _refusal(
             activate_via=via,
             report=report,
         )
-    return api_error(
+    return rejection(
         422,
         'validation_failed',
         f'{endpoint.name!r} has {len(blocking)} blocking error(s) ({mode})',
@@ -190,7 +184,7 @@ async def active_vlm_pairing_issues(
     if endpoint is None:
         return []
     return vlm_pairing_issues(
-        endpoint, pack, profile, mode='activate', class_names=_registry_class_names()
+        endpoint, pack, profile, mode='activate', class_names=sorted(registry_class_names())
     )
 
 
@@ -205,7 +199,7 @@ async def enforce_vlm_gate(
     state: ProjectVlmState | None = None,
     class_names: list[str] | None = None,
 ) -> GateResult:
-    """Refuse (raise ``api_error`` 422) unless ``endpoint`` may be used for
+    """Refuse (raise a 422 rejection) unless ``endpoint`` may be used for
     ``mode``; return the report (its warnings included) otherwise.
 
     ``state`` defaults to the bound project's; a clone passes the TARGET's.
@@ -248,7 +242,7 @@ async def enforce_vlm_gate(
             pack,
             profile,
             mode='activate' if activation else 'run',
-            class_names=class_names if class_names is not None else _registry_class_names(),
+            class_names=class_names if class_names is not None else sorted(registry_class_names()),
         )
     )
     # The probe's image-cap error is raised by both the validator (activation)

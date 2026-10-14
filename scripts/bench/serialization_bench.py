@@ -183,8 +183,8 @@ def _model_case(model: type, payload: dict[str, Any]) -> dict[str, Callable[[Fas
 def run(
     iterations: int = 30, review_items: int = 100, boxes: int = 1000, dim: int = 512
 ) -> list[Row]:
-    from src.routers.embed import BoxEmbeddingsResponse
-    from src.routers.ingest.models import BatchIngestResponse
+    from src.schemas.embed import BoxEmbeddingsResponse
+    from src.schemas.ingest import BatchIngestResponse
 
     cases: dict[str, dict[str, Callable[[FastAPI], None]]] = {
         f'review_page_{review_items}': _wire_dict_case(_review_page(review_items)),

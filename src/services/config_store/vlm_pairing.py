@@ -20,7 +20,7 @@ from src.services.labeling.vlm_catalog import catalog_entry
 
 if TYPE_CHECKING:
     from src.config.detection_profile import DetectionProfile
-    from src.routers.curation._config_common_models import ValidationIssue
+    from src.schemas.curation.config_common import ValidationIssue
     from src.services.labeling.vlm_endpoints import VlmEndpoint
     from src.services.labeling.vlm_prompts import PromptPack
 

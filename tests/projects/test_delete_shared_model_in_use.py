@@ -13,8 +13,8 @@ import asyncio
 import json
 
 import pytest
-from fastapi import HTTPException
 
+from src.core.exceptions import RequestRejectedError
 from src.services.projects import delete as delete_mod, lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
@@ -59,7 +59,7 @@ def test_delete_refuses_when_project_owns_a_shared_model(tmp_path) -> None:
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(RequestRejectedError) as exc_info:
             await lifecycle.delete_project(client, slug='cars', confirm='cars')
         detail = exc_info.value.detail
         assert detail['error'] == 'in_use'
@@ -138,7 +138,7 @@ def test_delete_refusal_names_the_project_whose_active_profile_uses_the_model(
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(RequestRejectedError) as exc_info:
             await lifecycle.delete_project(client, slug='cars', confirm='cars')
         detail = exc_info.value.detail
         assert detail['error'] == 'in_use'
@@ -163,7 +163,7 @@ def test_delete_fails_closed_when_another_project_cannot_be_read(tmp_path, monke
         await lifecycle.create_project(client, slug='cars', display_name='Cars')
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(RequestRejectedError) as exc_info:
             await lifecycle.delete_project(client, slug='cars', confirm='cars')
         assert exc_info.value.status_code == 503
         assert exc_info.value.detail['error'] == 'config_store_unavailable'

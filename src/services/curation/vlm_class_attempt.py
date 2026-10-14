@@ -25,8 +25,9 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
-from src.services.curation.history import record_class_snapshot
-from src.services.curation.ingest_class_sources import OPEN_VOCAB_TARGET_CLASS_SOURCE
+from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPTED_AT_FIELD, VLM_CLASS_EMPTY_REASON_FIELD
+from src.domain.history import record_class_snapshot
+from src.domain.ingest_class_sources import OPEN_VOCAB_TARGET_CLASS_SOURCE
 from src.utils.class_names import normalize_class_name
 
 
@@ -35,9 +36,6 @@ if TYPE_CHECKING:
 
     from src.services.labeling.vlm_models import VlmClassPrediction
 
-
-VLM_CLASS_ATTEMPTED_AT_FIELD = 'vlm_class_attempted_at'
-VLM_CLASS_EMPTY_REASON_FIELD = 'vlm_class_empty_reason'
 
 EMPTY_ANSWER_RETRY_WINDOW = timedelta(hours=24)
 """How long an item whose VLM class attempt came back empty stays out of
@@ -239,18 +237,9 @@ def with_class_snapshot(
     }
 
 
-VLM_CLASS_ATTEMPT_MAPPING: dict[str, Any] = {
-    VLM_CLASS_ATTEMPTED_AT_FIELD: {'type': 'date'},
-    VLM_CLASS_EMPTY_REASON_FIELD: {'type': 'keyword'},
-}
-
-
 __all__ = [
     'EMPTY_ANSWER_RETRY_WINDOW',
     'NEW_CLASS_SENTINEL',
-    'VLM_CLASS_ATTEMPTED_AT_FIELD',
-    'VLM_CLASS_ATTEMPT_MAPPING',
-    'VLM_CLASS_EMPTY_REASON_FIELD',
     'EmptyClassReason',
     'class_attempt_fields',
     'empty_answer_reason_for_index',

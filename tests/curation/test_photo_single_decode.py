@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 from PIL import Image, ImageOps
 
-from src.services.detection.pe_preprocess import PE_SIZE
+from src.utils.pe_preprocess import PE_SIZE
 
 
 def _jpeg(width: int, height: int, orientation: int | None = None) -> bytes:
@@ -40,7 +40,7 @@ def _reference_square(img: Image.Image, target: int = PE_SIZE) -> np.ndarray:
 
 @pytest.mark.parametrize('size', [(1600, 1200), (900, 1400), (640, 480), (200, 150), (336, 336)])
 def test_whole_frame_square_is_the_full_frame_resized_then_centre_cropped(size) -> None:
-    from src.services.detection.pe_preprocess import whole_frame_rgb_from_image
+    from src.utils.pe_preprocess import whole_frame_rgb_from_image
 
     img = Image.open(io.BytesIO(_jpeg(*size))).convert('RGB')
     out = whole_frame_rgb_from_image(img)
@@ -50,7 +50,7 @@ def test_whole_frame_square_is_the_full_frame_resized_then_centre_cropped(size) 
 
 
 def test_whole_frame_from_a_file_applies_exif_and_matches_the_decoded_frame(tmp_path) -> None:
-    from src.services.detection.pe_preprocess import whole_frame_chw, whole_frame_rgb_from_image
+    from src.utils.pe_preprocess import whole_frame_chw, whole_frame_rgb_from_image
 
     data = _jpeg(800, 500, orientation=6)
     path = tmp_path / 'rotated.jpg'
@@ -156,7 +156,7 @@ def test_index_items_embeds_the_whole_frame_from_the_decoded_frame(tmp_path) -> 
 
 def test_embed_whole_frame_image_sends_the_square_of_the_frame() -> None:
     from src.clients.pe_encoder import PEEncoder
-    from src.services.detection.pe_preprocess import whole_frame_rgb_from_image
+    from src.utils.pe_preprocess import whole_frame_rgb_from_image
 
     sent: list[np.ndarray] = []
 

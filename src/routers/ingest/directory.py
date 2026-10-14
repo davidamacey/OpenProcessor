@@ -10,7 +10,7 @@ from fastapi import HTTPException, Query, status
 
 from src.core.dependencies import VisualSearchDep
 from src.routers.ingest._router import router
-from src.routers.ingest.models import BatchIndexedCounts, DirectoryIngestResponse
+from src.schemas.ingest import BatchIndexedCounts, DirectoryIngestResponse
 
 
 logger = logging.getLogger(__name__)

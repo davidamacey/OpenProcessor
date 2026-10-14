@@ -37,7 +37,7 @@ from src.config import get_region_fields
 from src.config.curation import IndexRole, base_curation_config
 from src.config.project_context import bind_project, try_current_project
 from src.config.projects import ProjectRecord, resources_for_new
-from src.services.curation.region_boxes import boxes_write_fields
+from src.domain.region_boxes import boxes_write_fields
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_models import VlmCombinedReply
 from src.services.projects.guard import cross_project_access_count, install_project_guard

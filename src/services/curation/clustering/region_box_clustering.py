@@ -30,6 +30,7 @@ from src.config import get_region_fields
 from src.config.curation import items_index
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
+from src.domain.region_boxes import RegionBox, derive_status
 from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
 from src.services.curation.clustering.methods.ahc import AHC_DISTANCE_THRESHOLD
 from src.services.curation.clustering.refine import (
@@ -46,7 +47,6 @@ from src.services.curation.clustering.region_box_rows import (
     write_box_edits,
 )
 from src.services.curation.region_box_edits import with_state
-from src.services.curation.region_boxes import RegionBox, derive_status
 
 
 if TYPE_CHECKING:

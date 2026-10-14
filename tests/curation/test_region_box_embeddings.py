@@ -14,6 +14,7 @@ import pytest
 
 from curation.test_regions_router import _FakeRegionOS
 from src.config import get_region_fields
+from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.services.curation.region_box_embeddings import (
     current_vectors,
     entry_for,
@@ -22,7 +23,6 @@ from src.services.curation.region_box_embeddings import (
     missing_boxes,
     write_box_embeddings,
 )
-from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 
 
 F = get_region_fields()

@@ -2,20 +2,20 @@
 projects surface: the error-code and validation-code Literals, the
 validation-report shapes and ``ActiveRef``/``ActiveConfigResponse``.
 
-Every project or config route raises through :func:`api_error`, never a
-bare string ``detail`` -- gives Cropwright one stable shape
-(``{"detail": ConfigErrorDetail}``) to parse everywhere.
+Every project or config route raises through ``api_error`` (the router
+helper) or a service rejection, never a bare string ``detail`` -- gives
+Cropwright one stable shape (``{"detail": ConfigErrorDetail}``) to parse
+everywhere. :func:`error_body` builds that shape.
 """
 
 from __future__ import annotations
 
 from typing import Any, Literal, Self
 
-from fastapi import HTTPException
 from pydantic import BaseModel, Field, model_validator
 
-from src.routers.curation._dataset_issue_models import DatasetIssueWire
-from src.services.issue_ids import stamp_issue_ids
+from src.schemas.curation.dataset_issue import DatasetIssueWire
+from src.utils.issue_ids import stamp_issue_ids
 
 
 # Project-related codes, then the codes the low-level config-store primitives
@@ -400,29 +400,13 @@ class ApiErrorResponse(BaseModel):
     detail: ConfigErrorDetail
 
 
-def api_error(status: int, code: ErrorCode, message: str, **fields: Any) -> HTTPException:
-    """Build ``HTTPException(status, {"detail": ConfigErrorDetail})`` with only the
-    top-level fields the code carries."""
+def error_body(code: ErrorCode, message: str, **fields: Any) -> dict[str, Any]:
+    """The ``detail`` of every structured error: a :class:`ConfigErrorDetail` with only
+    the top-level fields the code carries."""
     detail = ConfigErrorDetail(error=code, message=message, **fields)
     # Only the fields this code carries: a null top-level field is dropped, but a
     # nested object keeps its own (nullable) keys.
-    body = {k: v for k, v in detail.model_dump(exclude_none=False).items() if v is not None}
-    return HTTPException(status_code=status, detail=body)
-
-
-def active_conflict_error(what: str, current: dict[str, Any] | None) -> HTTPException:
-    """The 409 for every activation compare-and-set miss. The message spells out
-    the ``expected_active`` shape so a caller that omitted it (or sent the wrong
-    shape) can fix the request without reading the schema; ``current`` is what
-    to echo back."""
-    return api_error(
-        409,
-        'active_conflict',
-        f'{what} does not match expected_active; send expected_active as '
-        '{"name": <string or null>, "revision": <integer or null>} equal to `current` '
-        '(omit it, or send null name, only when nothing is active)',
-        current=ActiveRef(**current) if current else None,
-    )
+    return {k: v for k, v in detail.model_dump(exclude_none=False).items() if v is not None}
 
 
 class ValidationIssue(BaseModel):

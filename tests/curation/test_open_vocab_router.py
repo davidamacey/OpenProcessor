@@ -34,7 +34,7 @@ def segmenter(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     monkeypatch.setenv('OP_SEGMENTER_URL', 'http://segmenter.invalid:8000')
     monkeypatch.setattr(
-        'src.routers.curation._models_segmenter.configured_segmenter_health', _health
+        'src.services.detection.segmenter_health.configured_segmenter_health', _health
     )
     return state
 
@@ -45,7 +45,9 @@ def client(monkeypatch: pytest.MonkeyPatch, segmenter: dict[str, Any]) -> TestCl
 
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     monkeypatch.setattr(
         'src.config.ingest_profiles.ingest_primary_profile',
         type('P', (), {'detector_model': ''}),

@@ -110,7 +110,7 @@ def test_letterbox_geometry_matches_product(size: tuple[int, int]) -> None:
 
 @pytest.mark.parametrize('size', [(336, 336), (1000, 400), (400, 1000), (37, 3), (5472, 3648)])
 def test_pe_square_geometry_matches_product(size: tuple[int, int]) -> None:
-    from src.services.detection.pe_preprocess import resize_crop_rgb
+    from src.utils.pe_preprocess import resize_crop_rgb
 
     w, h = size
     g = lib.pe_square_geometry(w, h, 336)

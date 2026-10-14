@@ -12,14 +12,8 @@ from typing import Any, Literal
 from fastapi import Response
 
 from src.core.wire_json import WireJSONResponse
-from src.routers.curation._common import OpenSearchDep, get_class_registry, router
-from src.routers.curation._config_common_models import (
-    ActivateResponse,
-    ActiveConfigResponse,
-    ActiveRef,
-    active_conflict_error,
-    api_error,
-)
+from src.routers.curation._api_error import active_conflict_error, api_error
+from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._prompt_pack_models import (
     PromptPackActivateRequest,
     PromptPackBody,
@@ -39,6 +33,7 @@ from src.routers.curation._prompt_pack_models import (
     PromptPackTemplateSummary,
     PromptPackValidateRequest,
 )
+from src.schemas.curation.config_common import ActivateResponse, ActiveConfigResponse, ActiveRef
 from src.services.config_store import ActiveConflictError, RevisionConflictError, get_config_store
 from src.services.config_store.activation_view import build_active_config_response
 from src.services.config_store.pack_validation import validate_pack
@@ -53,6 +48,8 @@ from src.services.config_store.packs import (
     rollback_pack,
     save_pack,
 )
+from src.services.curation.class_registry_names import registry_class_names
+from src.services.detection.profile_registry import resolve_region_profile
 from src.services.labeling.detector_hint import MAX_DETECTOR_HINT_PCT
 from src.services.labeling.vlm_prompts import FORMATTED_PLACEHOLDERS, REPLY_KEY_CONTRACT
 
@@ -123,19 +120,6 @@ _FIELD_USED_BY: dict[str, list[str]] = {
 }
 
 
-def _registry_class_names() -> frozenset[str]:
-    reg = get_class_registry().load()
-    return frozenset(c.class_name for c in reg.classes if not c.deprecated)
-
-
-def _resolve_profile(profile_name: str | None) -> Any:
-    from src.services.detection.profile_registry import get_active_region_profile, get_profiles
-
-    if profile_name is None:
-        return get_active_region_profile()
-    return get_profiles().get(profile_name)
-
-
 def _to_doc(record: PackRecord, *, validation: Any = None) -> PromptPackDoc:
     return PromptPackDoc(
         name=record.name,
@@ -176,7 +160,7 @@ def _to_summary(record: PackRecord) -> PromptPackSummary:
 
 @router.get('/prompt_packs/schema', response_model=PromptPackSchema)
 async def get_prompt_pack_schema() -> PromptPackSchema:
-    class_names = sorted(_registry_class_names())[:5] or ['car', 'truck', 'bus']
+    class_names = sorted(registry_class_names())[:5] or ['car', 'truck', 'bus']
     fields: list[PromptPackFieldSchema] = []
     for f in PromptPackBody.model_fields:
         kind = _FIELD_KIND.get(f, 'text')
@@ -230,8 +214,8 @@ async def validate_prompt_pack_route(
         body.name,
         body.body.model_dump(),
         existing_names=existing,
-        profile=_resolve_profile(profile),
-        class_names=_registry_class_names(),
+        profile=resolve_region_profile(profile),
+        class_names=registry_class_names(),
     )
     return report.model_dump()
 
@@ -314,8 +298,8 @@ async def create_prompt_pack(
         body.name,
         body.body.model_dump(),
         existing_names=existing - {body.name},
-        profile=_resolve_profile(None),
-        class_names=_registry_class_names(),
+        profile=resolve_region_profile(None),
+        class_names=registry_class_names(),
     )
     name_issues = [
         e for e in report.errors if e.code in ('pack_name_invalid', 'pack_name_reserved')
@@ -444,7 +428,7 @@ async def clone_prompt_pack(
     existing = all_known_names()
     # M-2 fix: new_name must obey the same slug/reserved-word rules as create.
     name_report = validate_pack(
-        body.new_name, source.body, existing_names=existing, class_names=_registry_class_names()
+        body.new_name, source.body, existing_names=existing, class_names=registry_class_names()
     )
     reject_invalid_clone_name(
         name_report,
@@ -455,7 +439,7 @@ async def clone_prompt_pack(
     )
 
     new_body = dict(source.body)
-    report = validate_pack(None, new_body, class_names=_registry_class_names())
+    report = validate_pack(None, new_body, class_names=registry_class_names())
     if not report.ok:
         raise api_error(
             422, 'validation_failed', 'the cloned pack has content errors', report=report
@@ -502,7 +486,7 @@ async def save_prompt_pack(
     if existing is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known pack')
 
-    report = validate_pack(name, body.body.model_dump(), class_names=_registry_class_names())
+    report = validate_pack(name, body.body.model_dump(), class_names=registry_class_names())
     if not report.ok:
         raise api_error(
             422, 'validation_failed', f'the pack has {len(report.errors)} error(s)', report=report

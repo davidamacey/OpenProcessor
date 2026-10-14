@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from src.services.curation.region_boxes import RegionBox
+from src.domain.region_boxes import RegionBox
 from src.services.curation.wire import region_box_to_wire, serialize_item
 from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm

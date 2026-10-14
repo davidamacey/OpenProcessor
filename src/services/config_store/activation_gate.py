@@ -26,9 +26,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from src.config import get_curation_config
+
 
 if TYPE_CHECKING:
-    from src.routers.curation._config_common_models import ValidationReport
+    from src.schemas.curation.config_common import ValidationReport
     from src.services.config_store.index import ConfigAxis
 
 
@@ -100,7 +102,7 @@ async def run_activation_gate(
     caller must already have the body from the source project's own
     store.
 
-    Raises the router-shaped ``HTTPException`` (via ``api_error``) for:
+    Raises a :class:`~src.core.exceptions.RequestRejectedError` (via ``rejection``) for:
     - 404 ``not_found`` -- unknown name/revision;
     - 403 ``read_only`` -- a template can't be activated directly;
     - 422 ``validation_failed`` -- blocking `for_activation` errors, i.e.
@@ -109,30 +111,31 @@ async def run_activation_gate(
     Returns the ``ValidationReport`` on success (the caller may want it,
     e.g. to echo back in the response).
     """
-    from src.routers.curation._config_common_models import api_error
+    from src.services.rejections import rejection
 
     if axis == 'open_vocab':
         return await _run_open_vocab_gate(name, revision, force=force, client=client, body=body)
     if axis == 'prompt_pack':
-        from src.routers.curation.prompt_packs import _registry_class_names, _resolve_profile
         from src.services.config_store.pack_validation import BYPASSABLE_CODES, validate_pack
         from src.services.config_store.packs import (
             build_record as build_pack_record,
             get_revision_record as get_pack_revision,
         )
+        from src.services.curation.class_registry_names import registry_class_names
+        from src.services.detection.profile_registry import resolve_region_profile
 
         if body is None:
             record = build_pack_record(name, revision=revision)
             if record is None and revision is not None and client is not None:
                 record = await get_pack_revision(client, name, revision)
             if record is None:
-                raise api_error(404, 'not_found', f'{name!r} is not a known pack')
+                raise rejection(404, 'not_found', f'{name!r} is not a known pack')
             if record.read_only and record.source == 'template':
-                raise api_error(403, 'read_only', f'{name!r} is a template; clone it first')
+                raise rejection(403, 'read_only', f'{name!r} is a template; clone it first')
             pack_body = record.body
         else:
             pack_body = body
-        profile = _resolve_profile(None) if pending_sibling is _UNSET else pending_sibling
+        profile = resolve_region_profile(None) if pending_sibling is _UNSET else pending_sibling
         paired_profile = profile
         paired_pack = _decode_pack(name, pack_body)
         report = validate_pack(
@@ -140,17 +143,16 @@ async def run_activation_gate(
             pack_body,
             profile=profile,
             for_activation=True,
-            class_names=_registry_class_names(),
+            class_names=registry_class_names(),
         )
     else:
-        from src.routers.curation._common import bound_project_slug
-        from src.routers.curation._models_segmenter import configured_segmenter_health
-        from src.routers.curation.region_profiles import _registry_class_names
         from src.services.config_store.profile_validation import BYPASSABLE_CODES, validate_profile
         from src.services.config_store.profiles import (
             build_record as build_profile_record,
             get_revision_record as get_profile_revision,
         )
+        from src.services.curation.class_registry_names import registry_class_names
+        from src.services.detection.segmenter_health import configured_segmenter_health
         from src.services.labeling.vlm_prompts import active_prompt_pack
 
         if body is None:
@@ -158,9 +160,9 @@ async def run_activation_gate(
             if profile_record is None and revision is not None and client is not None:
                 profile_record = await get_profile_revision(client, name, revision)
             if profile_record is None:
-                raise api_error(404, 'not_found', f'{name!r} is not a known region profile')
+                raise rejection(404, 'not_found', f'{name!r} is not a known region profile')
             if profile_record.read_only and profile_record.source == 'template':
-                raise api_error(403, 'read_only', f'{name!r} is a template; clone it first')
+                raise rejection(403, 'read_only', f'{name!r} is a template; clone it first')
             profile_body = profile_record.body
         else:
             profile_body = body
@@ -173,14 +175,14 @@ async def run_activation_gate(
             for_activation=True,
             segmenter_health=configured_segmenter_health,
             active_pack=active_pack,
-            class_names=_registry_class_names(),
-            project_slug=bound_project_slug(),
+            class_names=registry_class_names(),
+            project_slug=get_curation_config().project_slug,
         )
 
     # a change to one side of the pack <-> profile <-> VLM triple is
     # checked against the active VLM here, in the one gate every activation
     # path calls (never a per-route copy).
-    from src.routers.curation._config_common_models import ValidationReport
+    from src.schemas.curation.config_common import ValidationReport
     from src.services.config_store.vlm_gate import active_vlm_pairing_issues
     from src.services.config_store.vlm_validation import BYPASSABLE_CODES as VLM_BYPASSABLE
 
@@ -206,7 +208,7 @@ async def run_activation_gate(
         if not (force and e.code in (VLM_BYPASSABLE if e in vlm_errors else BYPASSABLE_CODES))
     ]
     if blocking:
-        raise api_error(
+        raise rejection(
             422,
             'validation_failed',
             f'{name!r} has {len(blocking)} blocking error(s)',
@@ -226,27 +228,27 @@ async def _run_open_vocab_gate(
     """The ``for_activation`` gate of a prompt set: its body must validate and
     the segmenter it runs on must be configured and reachable (``force``
     bypasses only the outage codes). It pairs with no other axis."""
-    from src.routers.curation._config_common_models import api_error
-    from src.routers.curation.open_vocab import validation_inputs
     from src.services.config_store.open_vocab import build_record, get_revision_record
+    from src.services.config_store.open_vocab_inputs import validation_inputs
     from src.services.config_store.open_vocab_validation import (
         BYPASSABLE_CODES,
         validate_open_vocab,
     )
+    from src.services.rejections import rejection
 
     if body is None:
         record = build_record(name, revision=revision)
         if record is None and revision is not None and client is not None:
             record = await get_revision_record(client, name, revision)
         if record is None:
-            raise api_error(404, 'not_found', f'{name!r} is not a known open-vocabulary set')
+            raise rejection(404, 'not_found', f'{name!r} is not a known open-vocabulary set')
         if record.read_only and record.source == 'template':
-            raise api_error(403, 'read_only', f'{name!r} is a template; clone it first')
+            raise rejection(403, 'read_only', f'{name!r} is a template; clone it first')
         body = record.body
     report = await validate_open_vocab(name, body, for_activation=True, **validation_inputs())
     blocking = [e for e in report.errors if not (force and e.code in BYPASSABLE_CODES)]
     if blocking:
-        raise api_error(
+        raise rejection(
             422,
             'validation_failed',
             f'{name!r} has {len(blocking)} blocking error(s)',

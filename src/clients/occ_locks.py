@@ -32,10 +32,7 @@ def _is_locked_marker(value: Any) -> bool:
     """``is_human_marker`` plus the two import-provenance string values.
     Used wherever a re-ingest/automated writer must never clobber
     an imported label the same way it must never clobber a human one."""
-    from src.services.curation.ingest_class_sources import (
-        LABEL_IMPORT_CLASS_SOURCE,
-        LABEL_SOURCE_IMPORT,
-    )
+    from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE, LABEL_SOURCE_IMPORT
 
     return is_human_marker(value) or value in (LABEL_SOURCE_IMPORT, LABEL_IMPORT_CLASS_SOURCE)
 
@@ -63,7 +60,7 @@ def is_locked_class(source: dict[str, Any]) -> bool:
         protection);
       * the ingest pipeline router (defense-in-depth).
     """
-    from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
+    from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 
     class_source = source.get('class_source')
     if is_human_marker(class_source):
@@ -76,12 +73,12 @@ def is_locked_class(source: dict[str, Any]) -> bool:
 def is_locked_box(box: Any) -> bool:
     """True when a region box must never be touched by an automated
     writer: a human created/verdicted/transcribed it
-    (:func:`src.services.curation.region_boxes.is_human_owned`), or it
+    (:func:`src.domain.region_boxes.is_human_owned`), or it
     came from a dataset import and is not a mere suggestion (a
     ``label_trust: suggestion`` import writes ``state: proposed`` boxes with
     ``source: import``, which the machine pipeline may still replace)."""
     from src.config.region_source import CANDIDATE_IMPORT
-    from src.services.curation.region_boxes import is_human_owned as _box_is_human_owned
+    from src.domain.region_boxes import is_human_owned as _box_is_human_owned
 
     return _box_is_human_owned(box) or (box.source == CANDIDATE_IMPORT and box.state != 'proposed')
 
@@ -92,7 +89,7 @@ def is_locked_item(source: dict[str, Any], F: Any = None) -> bool:
     verifier is ``human``/``import``."""
     if is_locked_class(source):
         return True
-    from src.services.curation.region_boxes import read_boxes
+    from src.domain.region_boxes import read_boxes
 
     fields = F or get_region_fields()
     if any(is_locked_box(box) for box in read_boxes(source, fields)):
@@ -114,7 +111,7 @@ def is_human_owned_item(
     The one "an import is still the sole owner" test: everything that deletes
     what an import created (undo, reconcile) asks it, so none can be narrower
     than the others."""
-    from src.services.curation.region_boxes import is_human_owned, read_boxes
+    from src.domain.region_boxes import is_human_owned, read_boxes
 
     fields = F or get_region_fields()
     return (

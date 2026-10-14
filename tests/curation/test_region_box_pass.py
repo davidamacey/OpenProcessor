@@ -10,8 +10,8 @@ import pytest
 
 from src.config import get_region_fields
 from src.config.region_state import RegionStatus
+from src.domain.region_boxes import RegionBox, new_box_placeholder
 from src.services.curation.region_box_pass import box_pass_update, worker_stamps
-from src.services.curation.region_boxes import RegionBox, new_box_placeholder
 
 
 F = get_region_fields()

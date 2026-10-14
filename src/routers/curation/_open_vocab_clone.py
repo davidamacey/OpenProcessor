@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, router
-from src.routers.curation._config_common_models import api_error
 from src.routers.curation._open_vocab_models import OpenVocabCloneRequest, OpenVocabDoc
 from src.services.config_store import RevisionConflictError
 from src.services.config_store.clone_shared import (
@@ -46,7 +46,8 @@ async def clone_open_vocab(
     name: str, body: OpenVocabCloneRequest, opensearch: OpenSearchDep
 ) -> OpenVocabDoc:
     from src.config import get_curation_config
-    from src.routers.curation.open_vocab import _to_doc, validation_inputs
+    from src.routers.curation.open_vocab import _to_doc
+    from src.services.config_store.open_vocab_inputs import validation_inputs
 
     target_slug = get_curation_config().project_slug
 

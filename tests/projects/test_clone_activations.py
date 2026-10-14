@@ -21,8 +21,7 @@ from projects.clone_flow_fakes import (  # noqa: F401 - isolated_state is an aut
 )
 from src.config.curation import base_curation_config
 from src.config.project_context import bind_project
-from src.config.projects import ProjectRecord, resources_for_new
-from src.routers.curation._project_models import CLONEABLE_AXES
+from src.config.projects import CLONEABLE_AXES, ProjectRecord, resources_for_new
 from src.services.config_store.index import get_activation
 from src.services.config_store.store import reset_config_stores
 from src.services.projects.clone import _apply_clone
@@ -206,8 +205,7 @@ async def test_clone_activations_refuses_a_target_that_already_has_one_up_front(
     """M5: cloning 'activations' into a target that already has its own
     active pack/profile must 409 target_not_empty BEFORE anything is
     written -- not a bare RevisionConflictError/ActiveConflictError."""
-    from fastapi import HTTPException
-
+    from src.core.exceptions import RequestRejectedError
     from src.services.config_store.index import activate, save_config
     from src.services.projects.clone import _apply_clone
 
@@ -248,7 +246,7 @@ async def test_clone_activations_refuses_a_target_that_already_has_one_up_front(
             expected_active=None,
         )
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         await _apply_clone(
             client,
             target_record=target,

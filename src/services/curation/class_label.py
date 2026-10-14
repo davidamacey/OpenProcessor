@@ -21,8 +21,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from src.services.curation.audit_math import audit_outcome_fields
-from src.services.curation.ingest_class_sources import (
+from src.domain.audit_math import audit_outcome_fields
+from src.domain.ingest_class_sources import (
     HUMAN_CLASS_SOURCE,
     LABEL_IMPORT_CLASS_SOURCE,
     LABEL_SOURCE_IMPORT,
@@ -155,7 +155,7 @@ def class_label_update(current: dict[str, Any], label: ItemLabel) -> dict[str, A
     restorable snapshot. Routing dataset import's update path through this function for a real snapshot is future
     work, not done this pass.
     """
-    from src.services.curation.history import record_class_snapshot
+    from src.domain.history import record_class_snapshot
 
     history = record_class_snapshot(current, writer=label.writer, restorable=True)
     fields = class_label_fields(label)
@@ -172,7 +172,7 @@ def human_move_class_update(
     """Merge body for ``move_crops`` into a CLASS cluster: relabel via
     ``class_source='human_move'`` (crops.py's ``move_crops`` docstring:
     "move this to the X cluster" means "this is an X")."""
-    from src.services.curation.history import record_class_snapshot
+    from src.domain.history import record_class_snapshot
 
     history = record_class_snapshot(current, writer='human:move_crops', restorable=True)
     return {
@@ -199,7 +199,7 @@ def candidate_move_update(current: dict[str, Any], *, cluster_id: int, now: str)
     pre-write state is snapshotted so undo restores it exactly.
     """
     from src.clients.occ import is_locked_class
-    from src.services.curation.history import CLASS_STATE_FIELDS, record_class_snapshot
+    from src.domain.history import CLASS_STATE_FIELDS, record_class_snapshot
 
     update: dict[str, Any] = {
         'class_id_history': record_class_snapshot(

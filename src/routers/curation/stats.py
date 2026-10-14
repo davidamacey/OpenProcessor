@@ -17,6 +17,15 @@ from fastapi import HTTPException
 
 from src.config.region_fields import get_region_fields
 from src.config.region_state import RegionStatus
+from src.domain.ingest_class_sources import (
+    CLASSIFIER_VLM_AGREEMENT_CLASS_SOURCE,
+    CLUSTER_MAJORITY_CLASS_SOURCE,
+    DEFAULT_PROPOSAL_CLASS_SOURCE,
+    LABEL_IMPORT_CLASS_SOURCE,
+    VLM_CLASS_SOURCE,
+    classifier_class_sources,
+    unlabeled_proposal_class_sources,
+)
 from src.routers.curation._common import (
     OpenSearchDep,
     _now_iso,
@@ -28,15 +37,6 @@ from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC
 from src.routers.curation._stats_models import DatasetStatsResponse
 from src.services.curation import stats_imports as imp
 from src.services.curation.dataset_thresholds import adequacy, aug_target, dataset_thresholds
-from src.services.curation.ingest_class_sources import (
-    CLASSIFIER_VLM_AGREEMENT_CLASS_SOURCE,
-    CLUSTER_MAJORITY_CLASS_SOURCE,
-    DEFAULT_PROPOSAL_CLASS_SOURCE,
-    LABEL_IMPORT_CLASS_SOURCE,
-    VLM_CLASS_SOURCE,
-    classifier_class_sources,
-    unlabeled_proposal_class_sources,
-)
 from src.services.curation.item_filter import ItemFilter, item_filter_query
 from src.services.curation.stats_dataset_query import build_dataset_query_body
 from src.services.curation.stats_embedding import embedding_summary

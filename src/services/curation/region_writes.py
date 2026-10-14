@@ -4,13 +4,13 @@
 /crops/{id}/regions/{box_id}``, ``POST /regions/batch_box_state``, ``PATCH
 /crops/{id}/region_meta`` and ``POST /regions/batch_status`` all build
 their writes here, over the per-item box list
-(:mod:`src.services.curation.region_boxes`). The box transitions
+(:mod:`src.domain.region_boxes`). The box transitions
 themselves live in :mod:`src.services.curation.region_box_edits`; this
 module turns a new box list into the item-level update document, so the
 region invariants hold whichever writer a client picks:
 
 - every box write goes through
-  :func:`~src.services.curation.region_boxes.boxes_write_fields`, so the
+  :func:`~src.domain.region_boxes.boxes_write_fields`, so the
   list, the counts, ``max_score`` and ``region_revision`` never disagree;
 - the item status is re-derived from the list;
 - the confirm status needs an accepted box (``RegionBoxWriteError``).
@@ -27,14 +27,14 @@ from typing import TYPE_CHECKING, Any
 from src.config import get_region_fields
 from src.config.region_rejection import REJECT_REASON_VERIFIER
 from src.config.region_state import CONFIRM_STATUS, REGION_STATUS_INFO, RegionStatus
-from src.services.curation.region_box_edits import boxes_with_status
-from src.services.curation.region_boxes import (
+from src.domain.region_boxes import (
     RegionBox,
     RegionBoxWriteError,
     boxes_write_fields,
     derive_status,
     read_boxes,
 )
+from src.services.curation.region_box_edits import boxes_with_status
 from src.services.curation.wire import serialize_item
 from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
 
@@ -123,7 +123,7 @@ def human_status_box_write(
 
     Delegates the box-list transition to
     :func:`~src.services.curation.region_box_edits.boxes_with_status`
-    (raises :class:`~src.services.curation.region_boxes.RegionBoxWriteError`
+    (raises :class:`~src.domain.region_boxes.RegionBoxWriteError`
     for confirming with no box to confirm). ``rejection_reason`` is the
     reviewer's note on every box a ``verify_rejected`` write rejects.
 
@@ -175,7 +175,7 @@ def reason_only_box_write(current: dict[str, Any], reason: str | None) -> dict[s
     Patches every currently-rejected box's ``rejection_reason``, same as
     ``human_status_box_write``'s per-status reason update. For a box-less
     item (``no_region_visible``), there is no rejected box for
-    :func:`~src.services.curation.region_boxes.boxes_write_fields` to
+    :func:`~src.domain.region_boxes.boxes_write_fields` to
     derive a mirror reason from, so it always clears the item-level
     ``rejection_reason`` to ``None`` -- restore the reason this request
     is setting in that case.

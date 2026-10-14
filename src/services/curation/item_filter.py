@@ -22,14 +22,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.domain.embedding_state import EMBEDDED, EmbeddingState, embedded_clause, state_clause
+from src.domain.item_text import item_text_query
 from src.services.curation.crop_browse import classifier_low_confidence_clause, confidence_band
-from src.services.curation.embedding_state import (
-    EMBEDDED,
-    EmbeddingState,
-    embedded_clause,
-    state_clause,
-)
-from src.services.curation.item_text import item_text_query
 from src.services.curation.name_match import name_clause
 
 

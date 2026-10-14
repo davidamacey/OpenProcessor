@@ -9,7 +9,7 @@ false-positive gate on background images, and why each missed box was
 missed.
 
 Coordinate frames. Boxes come from the item's
-``region_boxes`` list (:mod:`src.services.curation.region_boxes`), whose
+``region_boxes`` list (:mod:`src.domain.region_boxes`), whose
 element ``bbox_norm`` is ALWAYS stored in source-frame coordinates --
 every writer (the cascade, the human PUT-box routes) projects into source
 frame before a box is appended to the list, so there is no longer a
@@ -46,8 +46,8 @@ from typing import TYPE_CHECKING, Any
 
 from src.config.region_rejection import REJECT_REASON_SANITY_PREFIX
 from src.config.region_state import PENDING_STATUSES, RegionStatus
+from src.domain.region_boxes import RegionBox, read_boxes
 from src.services.curation.export_support import scroll_hits
-from src.services.curation.region_boxes import RegionBox, read_boxes
 from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
 
 

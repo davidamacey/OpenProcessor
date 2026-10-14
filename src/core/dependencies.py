@@ -134,7 +134,7 @@ async def bootstrap_opensearch_indexes() -> 'asyncio.Task[None] | None':
     """
     try:
         from src.clients.curation_opensearch.lifecycle import create_curation_indexes
-        from src.routers.curation._common import warm_knn_indexes
+        from src.services.curation.index_bootstrap import warm_knn_indexes
         from src.services.projects.bootstrap import for_each_project
 
         os_client = await OpenSearchClientFactory.get_client()

@@ -9,8 +9,8 @@ import threading
 from typing import Any
 
 import pytest
-from fastapi import HTTPException
 
+from src.core.exceptions import RequestRejectedError
 from src.services.projects.combine import image_copy, plan, service as svc
 
 from .test_combine_execute import MAPPING, build
@@ -54,7 +54,7 @@ async def test_a_resume_of_a_job_that_was_already_resumed_is_refused(
 ) -> None:
     store, spawned = await _interrupted(world, monkeypatch)
     await svc.resume(world.fake, store.import_id)
-    with pytest.raises(HTTPException) as refused:
+    with pytest.raises(RequestRejectedError) as refused:
         await svc.resume(world.fake, store.import_id)
     assert refused.value.status_code == 409
     assert len(spawned) == 1
@@ -67,7 +67,7 @@ async def test_resume_refuses_a_source_that_preview_refuses(
 ) -> None:
     store, spawned = await _interrupted(world, monkeypatch)
     world.records['cars-b'] = dataclasses.replace(world.records['cars-b'], status=bad)
-    with pytest.raises(HTTPException) as refused:
+    with pytest.raises(RequestRejectedError) as refused:
         await svc.resume(world.fake, store.import_id)
     assert refused.value.status_code == 409
     assert refused.value.detail['error'] == 'combine_not_resumable'  # type: ignore[index]
@@ -84,7 +84,7 @@ async def test_resume_refuses_a_source_busy_with_another_job(
     store, spawned = await _interrupted(world, monkeypatch)
     other = busy.JobRef(kind='dataset_import', job_id='imp_x')
     monkeypatch.setattr(busy, 'running_jobs', lambda _record: [other])
-    with pytest.raises(HTTPException) as refused:
+    with pytest.raises(RequestRejectedError) as refused:
         await svc.resume(world.fake, store.import_id)
     assert refused.value.status_code == 409
     assert refused.value.detail['error'] == 'combine_not_resumable'  # type: ignore[index]
@@ -132,7 +132,7 @@ async def test_resume_refuses_when_a_source_changed_since_the_preview(
 ) -> None:
     store, spawned = await _interrupted(world, monkeypatch)
     world.add_image('cars-a', items=[{'cls': 'car', 'bbox': [0.1, 0.1, 0.4, 0.4]}])
-    with pytest.raises(HTTPException) as refused:
+    with pytest.raises(RequestRejectedError) as refused:
         await svc.resume(world.fake, store.import_id)
     assert refused.value.status_code == 409
     assert refused.value.detail['error'] == 'preview_stale'  # type: ignore[index]

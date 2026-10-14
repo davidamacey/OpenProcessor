@@ -15,7 +15,7 @@ from PIL import Image
 from src.services.curation.ingest_index import crop_pil
 from src.services.detection.crop_quality import crop_lap_var, variance_from_sums
 from src.services.detection.geometry import letterbox_to_square, undo_letterbox
-from src.services.detection.pe_preprocess import resize_crop_rgb, whole_frame_rgb_from_image
+from src.utils.pe_preprocess import resize_crop_rgb, whole_frame_rgb_from_image
 
 
 _PATH = Path(__file__).resolve().parents[2] / 'models' / 'gpu_image_prep' / '1' / 'prep_geometry.py'

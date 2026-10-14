@@ -99,7 +99,9 @@ def _reset_caches():
 def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     app = FastAPI()
     mount_curation_routers(app, curation_router)
     fake_os = FakeConfigOpenSearch()
@@ -231,7 +233,7 @@ async def test_label_batch_attaches_the_stored_detector_name_only_when_enabled(
     )
     crops: list[Any] = []
     monkeypatch.setattr(
-        vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: _RecordingLabeler(pack, crops)
+        vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: _RecordingLabeler(pack, crops)
     )
     await vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=['c1']), fake)
     assert len(crops) == 1

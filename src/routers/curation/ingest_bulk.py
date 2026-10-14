@@ -13,8 +13,8 @@ from typing import Annotated
 from fastapi import Query, Request
 
 from src.config import get_curation_config
-from src.routers.curation._common import OpenSearchDep, RegistryDep, _ensure_indexes, router
-from src.routers.curation._config_common_models import api_error
+from src.routers.curation._api_error import api_error
+from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._ingest_bulk_models import (
     BulkIngestConfig,
     BulkIngestFailure,
@@ -24,7 +24,6 @@ from src.routers.curation._ingest_bulk_models import (
     BulkIngestRun,
 )
 from src.routers.curation._ingest_bulk_wire import open_run, own_address, run_wire, slug
-from src.routers.curation.ingest import _get_ingest_service
 from src.routers.curation.ingest_sources import resolve_bulk_source, start_run_now
 from src.services.curation import image_serving
 from src.services.curation.bulk_ingest import limits, runner, sender
@@ -35,6 +34,8 @@ from src.services.curation.bulk_ingest.source import (
     validate_source,
 )
 from src.services.curation.bulk_ingest.store import list_stores
+from src.services.curation.index_bootstrap import ensure_indexes
+from src.services.curation.ingest_service_factory import get_ingest_service
 
 
 @router.get('/ingest/bulk/config', response_model=BulkIngestConfig)
@@ -71,9 +72,9 @@ async def start_bulk_ingest(
         validate_source(source)
     except InvalidSourceError as exc:
         raise api_error(422, 'bulk_ingest_invalid_source', str(exc), project=slug()) from None
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     # Refuse up front (503) what the first batch would refuse: no detector, no encoder.
-    await _get_ingest_service(opensearch, registry)
+    await get_ingest_service(opensearch, registry)
     address = own_address(request)
     options = runner.BulkOptions(body.source, body.batch_size, body.concurrency)
     try:

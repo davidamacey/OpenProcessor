@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     import numpy as np
     from opensearchpy import AsyncOpenSearch
 
-    from src.services.clustering import ClusteringService
+    from src.clients.opensearch.cluster_assigner import ClusterAssigner
 
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ class IngestMixin:
         image_width: int | None = None,
         image_height: int | None = None,
         metadata: dict[str, Any] | None = None,
-        clustering_service: ClusteringService | None = None,
+        clustering_service: ClusterAssigner | None = None,
         imohash: str | None = None,
         file_size_bytes: int | None = None,
     ) -> dict[str, Any]:
@@ -75,7 +75,7 @@ class IngestMixin:
             image_width: Image width in pixels
             image_height: Image height in pixels
             metadata: Optional dictionary for custom fields
-            clustering_service: Optional ClusteringService for cluster assignment
+            clustering_service: Optional cluster assigner (the clustering service) for cluster assignment
             imohash: Optional imohash for duplicate detection
             file_size_bytes: Optional file size for additional duplicate verification
 

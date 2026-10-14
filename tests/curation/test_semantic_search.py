@@ -145,9 +145,9 @@ def test_build_filter_reuses_tab_query():
 
 
 def test_build_filter_unknown_tab_raises_400():
-    from fastapi import HTTPException
+    from src.core.exceptions import RequestRejectedError
 
-    with pytest.raises(HTTPException):
+    with pytest.raises(RequestRejectedError):
         semantic_search._build_filter(
             tab='not_a_real_tab',
             cluster_id=None,

@@ -6,11 +6,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
-from src.routers.curation._config_common_models import (
-    ActiveConfigResponse,
-    ActiveRef,
-    ValidationReport,
-)
+from src.schemas.curation.config_common import ActiveConfigResponse, ActiveRef, ValidationReport
 from src.services.labeling.detector_hint import MAX_DETECTOR_HINT_PCT
 from src.services.labeling.vlm_prompts import REPLY_KEY_CONTRACT
 

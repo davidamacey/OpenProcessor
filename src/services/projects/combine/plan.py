@@ -15,11 +15,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from fastapi import HTTPException
-
 from src.config.curation import IndexRole
 from src.config.project_context import bind_project
 from src.config.projects import is_valid_slug
+from src.core.exceptions import RequestRejectedError
 from src.services.curation.dataset_import.project_source import (
     class_names_by_id,
     fetch_items,
@@ -193,7 +192,7 @@ async def check_target(
             )
             for w in await lifecycle._capacity_error_or_warning(client)
         )
-    except HTTPException as exc:
+    except RequestRejectedError as exc:
         detail: dict[str, Any] = exc.detail if isinstance(exc.detail, dict) else {}
         if detail.get('error') != 'shard_budget_exceeded':
             raise

@@ -14,9 +14,9 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from src.config.project_context import bind_project
+from src.config.projects import CLONEABLE_AXES
 from src.core.logging import get_logger
-from src.routers.curation._config_common_models import api_error
-from src.routers.curation._project_models import CLONEABLE_AXES
+from src.services.rejections import rejection
 
 
 logger = get_logger(__name__)
@@ -50,10 +50,10 @@ async def _validate_clone_source(
     resolved_axes = axes if axes else list(CLONEABLE_AXES)
     for axis in resolved_axes:
         if axis not in CLONEABLE_AXES:
-            raise api_error(422, 'combine_invalid', f"unknown clone axis '{axis}'")
+            raise rejection(422, 'combine_invalid', f"unknown clone axis '{axis}'")
 
     if from_slug == target_slug:
-        raise api_error(
+        raise rejection(
             422,
             'combine_invalid',
             f"'{target_slug}' cannot be cloned into itself",
@@ -62,7 +62,7 @@ async def _validate_clone_source(
 
     source = _require_found(await _resolve_existing(from_slug), from_slug)
     if source.status not in _CLONE_SOURCE_READY_STATUSES:
-        raise api_error(
+        raise rejection(
             409,
             'clone_source_not_ready',
             f"'{from_slug}' is {source.status}; only an active or archived project can be cloned",
@@ -97,7 +97,7 @@ async def _validate_clone(
 
             count_resp = await client.count(index=items_index())
         if (count_resp.get('count') or 0) > 0:
-            raise api_error(
+            raise rejection(
                 409,
                 'target_not_empty',
                 f"'{target_record.slug}' already has items; classes cannot be cloned",
@@ -115,7 +115,7 @@ async def _validate_clone(
             target_store = get_config_store()
             await target_store.ensure_fresh(client)
             if target_store.current.packs:
-                raise api_error(
+                raise rejection(
                     409,
                     'target_not_empty',
                     f"'{target_record.slug}' already has stored prompt packs; "
@@ -202,7 +202,7 @@ async def _validate_clone(
                 # raise `NotFoundError`/`KeyError`.
                 existing = await get_activation(client, target_index, axis)
                 if existing and existing.get('name'):
-                    raise api_error(
+                    raise rejection(
                         409,
                         'target_not_empty',
                         f"'{target_record.slug}' already has an active {axis}; "
@@ -243,7 +243,7 @@ async def _validate_clone(
                     except NotFoundError:
                         name_taken = False
                     if name_taken:
-                        raise api_error(
+                        raise rejection(
                             409,
                             'target_not_empty',
                             f"'{target_record.slug}' already has a stored {axis} named "
@@ -348,7 +348,7 @@ async def _apply_clone(
         with bind_project(target_record):
             target_cfg = get_curation_config()
             target_keymap = await get_keymap_doc(client, target_cfg.configs_index)
-            from src.routers.curation import get_class_registry
+            from src.clients.curation_opensearch.registry import get_class_registry
 
             target_classes = [
                 {
@@ -580,14 +580,14 @@ async def _clone_activations(
                     expected_active=(target_activations or {}).get(axis),
                 )
             except RevisionConflictError as exc:
-                raise api_error(
+                raise rejection(
                     409,
                     'target_not_empty',
                     f"'{target_record.slug}' already has a stored {kind} named '{name}'",
                     project=target_record.slug,
                 ) from exc
             except ActiveConflictError as exc:
-                raise api_error(
+                raise rejection(
                     409,
                     'target_not_empty',
                     f"'{target_record.slug}' already has an active {axis}",

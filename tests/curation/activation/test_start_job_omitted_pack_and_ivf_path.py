@@ -14,6 +14,7 @@ import pytest
 from curation.activation.constants import PREFIX, pack_body
 from curation.test_auto_label_selection import _run_kwargs, job_dir, labeler_spy, packs  # noqa: F401 - fixtures
 from curation.test_pipeline import _FakeClassEntry, _FakeOpenSearch, _FakeRegistry
+from src.services.curation.auto_label_run import run_auto_label
 from src.services.curation.item_filter import ItemFilter
 
 
@@ -44,17 +45,17 @@ def test_ivf_pipeline_path_accepts_worker_call_shape() -> None:
 
 def test_ivf_pipeline_path_is_the_internal_implementation() -> None:
     """Belt-and-suspenders: the resolved callable must be the real
-    ``_run_auto_label`` internal, not the public route wrapper -- the
+    ``run_auto_label`` internal, not the public route wrapper -- the
     wrapper forces ``prompt_pack_resolved=False``/``prompt_pack_
     revision=None``, silently re-resolving (and potentially re-pinning)
     every IVF retrain even if its signature happened to accept
     ``progress`` in the future."""
     import auto_label_worker as w
 
-    from src.routers.curation.pipeline import _run_auto_label
+    from src.services.curation.auto_label_run import run_auto_label
 
     fn = w._resolve_pipeline_fn(w._IVF_PIPELINE_PATH)
-    assert fn is _run_auto_label
+    assert fn is run_auto_label
 
 
 def test_start_job_pipeline_path_also_binds_worker_call_shape() -> None:
@@ -62,10 +63,10 @@ def test_start_job_pipeline_path_also_binds_worker_call_shape() -> None:
     the IVF constant -- must accept the worker's call shape."""
     import auto_label_worker as w
 
-    from src.routers.curation.pipeline import _run_auto_label
+    from src.services.curation.auto_label_run import run_auto_label
     from src.services.curation.autolabel.job import _pipeline_import_path
 
-    path = _pipeline_import_path(_run_auto_label)
+    path = _pipeline_import_path(run_auto_label)
     fn = w._resolve_pipeline_fn(path)
     inspect.signature(fn).bind(
         opensearch=None, progress=object(), train_clusters=False, run_vlm=False
@@ -88,15 +89,12 @@ async def test_omitted_stale_settings_doc_pack_is_ignored_and_echo_matches_label
     the config store (env/file default is 'pallet_v1'). Omitted
     ``prompt_pack``: the stale key is ignored (the activation record is the
     only source of truth) and the job echoes exactly what it ran."""
-    from src.routers.curation import pipeline
 
     monkeypatch.setattr(
         'src.clients.curation_opensearch.settings_doc.get_curation_settings',
         AsyncMock(return_value={'defaults': {'prompt_pack': 'food_v2'}}),
     )
-    summary = await pipeline._run_auto_label(
-        opensearch=_FakeOpenSearch({3: ['pallet-1']}), **_run_kwargs()
-    )
+    summary = await run_auto_label(opensearch=_FakeOpenSearch({3: ['pallet-1']}), **_run_kwargs())
     ran = [inst._pack.name for inst in labeler_spy]
     assert summary['prompt_pack'] == 'pallet_v1'
     assert ran == [summary['prompt_pack']]
@@ -112,8 +110,8 @@ async def test_omitted_store_active_pack_still_uses_none_none(
     activation (not a legacy settings doc / env / file default), the TOCTOU
     protection (resolve against ``(None, None)``, not the echoed name) must
     still apply."""
-    from src.routers.curation.pipeline_params import omitted_pack_is_store_active
     from src.services.config_store.store import ConfigSnapshot, get_config_store
+    from src.services.curation.autolabel.run_params import omitted_pack_is_store_active
 
     store = get_config_store()
     original = store.current
@@ -137,8 +135,8 @@ def test_omitted_pack_is_store_active_false_when_never_activated() -> None:
     """No activation in the store at all (env/file default only) ->
     never treated as store-active, so the echo == run guarantee holds
     for every env/file-default deployment."""
-    from src.routers.curation.pipeline_params import omitted_pack_is_store_active
     from src.services.config_store.store import get_config_store
+    from src.services.curation.autolabel.run_params import omitted_pack_is_store_active
 
     store = get_config_store()
     assert store.current.active_pack in (None, 'off')
@@ -185,16 +183,15 @@ async def test_start_then_active_switch_real_job_serves_pinned_or_new(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Drives the production call site of ``labeler_resolution_args`` inside
-    ``_run_auto_label`` through the real job path: build the trigger args
+    ``run_auto_label`` through the real job path: build the trigger args
     exactly as ``/start`` does (pack omitted), then activate a different
-    pack, then run ``_run_auto_label(**args, run_vlm=True)`` for real and
+    pack, then run ``run_auto_label(**args, run_vlm=True)`` for real and
     assert the ACTUAL labeler instance the job obtained never serves
     'my_pack''s un-activated draft.
 
-    Calling ``_get_vlm_labeler(prompt_pack, prompt_pack_revision)`` directly
+    Calling ``get_vlm_labeler(prompt_pack, prompt_pack_revision)`` directly
     instead of going through ``labeler_resolution_args`` must turn this red.
     """
-    from src.routers.curation import pipeline
 
     c = app_client
     assert c.post(PREFIX, json={'name': 'my_pack', 'body': pack_body('A')}).status_code == 201
@@ -232,7 +229,7 @@ async def test_start_then_active_switch_real_job_serves_pinned_or_new(
     args['train_clusters'] = False
     args['run_vlm'] = True
     monkeypatch.setattr(
-        'src.routers.curation.get_class_registry',
+        'src.clients.curation_opensearch.registry.get_class_registry',
         lambda: _FakeRegistry([_FakeClassEntry(3, 'wooden_pallet')]),
     )
     # `ensure_fresh` (prompt_pack_resolved=True) is a no-op here -- the
@@ -240,7 +237,7 @@ async def test_start_then_active_switch_real_job_serves_pinned_or_new(
     # calls above -- so this items-search-only client (distinct from
     # `c.fake_os`, which only models the configs index) never needs to
     # answer a config-store read.
-    await pipeline._run_auto_label(opensearch=_FakeOpenSearch({3: ['pallet-1']}), **args)
+    await run_auto_label(opensearch=_FakeOpenSearch({3: ['pallet-1']}), **args)
 
     ran = [inst._pack.class_system for inst in labeler_spy]
     assert ran
@@ -254,13 +251,10 @@ async def test_direct_call_omitted_labeler_matches_active(
     labeler_spy: list[Any],  # noqa: F811 - pytest fixture param shadows the import
 ) -> None:
     """Same guard for the direct-call branch (never through ``/start``):
-    a real ``_run_auto_label`` call with ``prompt_pack`` omitted must
+    a real ``run_auto_label`` call with ``prompt_pack`` omitted must
     use the currently-active pack for the labeler."""
-    from src.routers.curation import pipeline
 
-    summary = await pipeline._run_auto_label(
-        opensearch=_FakeOpenSearch({3: ['pallet-1']}), **_run_kwargs()
-    )
+    summary = await run_auto_label(opensearch=_FakeOpenSearch({3: ['pallet-1']}), **_run_kwargs())
     assert [inst._pack.name for inst in labeler_spy] == [summary['prompt_pack']]
 
 
@@ -270,33 +264,33 @@ async def test_direct_call_branch_computes_omitted_signal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Direct unit guard for the ``if not prompt_pack_resolved:`` branch
-    in ``_run_auto_label``: deleting its ``prompt_pack_omitted = not isinstance(...)``
+    in ``run_auto_label``: deleting its ``prompt_pack_omitted = not isinstance(...)``
     line (so ``prompt_pack_omitted`` silently stays at the function's
     ``False`` default for every direct call) must be observable --
     assert ``omitted_pack_is_store_active`` is actually invoked for an
     omitted-pack direct call, which only happens when that line ran."""
-    from src.routers.curation import pipeline
+    from src.services.curation import auto_label_run
 
     calls: list[Any] = []
-    real = pipeline.omitted_pack_is_store_active
+    real = auto_label_run.omitted_pack_is_store_active
 
     def _spy(resolved_name: Any) -> bool:
         calls.append(resolved_name)
         return real(resolved_name)
 
-    monkeypatch.setattr(pipeline, 'omitted_pack_is_store_active', _spy)
-    await pipeline._run_auto_label(
+    monkeypatch.setattr(auto_label_run, 'omitted_pack_is_store_active', _spy)
+    await run_auto_label(
         opensearch=_FakeOpenSearch({}), **_run_kwargs(train_clusters=False, run_vlm=False)
     )
     assert calls == ['pallet_v1']
 
 
 def test_labeler_resolution_args_uses_none_when_omitted():
-    """Direct unit test of `labeler_resolution_args`, which `_run_auto_label` otherwise
+    """Direct unit test of `labeler_resolution_args`, which `run_auto_label` otherwise
     only exercises indirectly (through `run_vlm=True` driving the full pipeline). It
     fails if the labeler is resolved from the echoed `(prompt_pack, prompt_pack_revision)`
     instead of `(None, None)` when the pack was omitted."""
-    from src.routers.curation.pipeline_params import labeler_resolution_args
+    from src.services.curation.autolabel.run_params import labeler_resolution_args
 
     assert labeler_resolution_args('my_pack', 1, prompt_pack_omitted=True) == (None, None)
     assert labeler_resolution_args('my_pack', 1, prompt_pack_omitted=False) == ('my_pack', 1)

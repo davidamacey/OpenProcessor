@@ -40,8 +40,8 @@ from typing import TYPE_CHECKING, Any
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import CurationConfig, get_curation_config
 from src.core.logging import get_logger
+from src.domain.history import record_class_history
 from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, ClassWriteGuard
-from src.services.curation.history import record_class_history
 
 
 if TYPE_CHECKING:

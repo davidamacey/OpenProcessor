@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from src.clients.occ import occ_update_one
 from src.clients.occ_locks import is_human_marker
+from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.curation.class_label import ItemLabel, class_label_update
-from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.detection.geometry import crop_id as make_crop_id, iou
 
 

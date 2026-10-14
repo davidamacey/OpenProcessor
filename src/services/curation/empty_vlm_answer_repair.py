@@ -46,9 +46,9 @@ from typing import Any
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
+from src.domain.ingest_class_sources import VLM_CLASS_SOURCE
 from src.services.curation.class_sources import VLM_UNMATCHED_CLASS_SOURCE
 from src.services.curation.class_write_guard import class_write_locked
-from src.services.curation.ingest_class_sources import VLM_CLASS_SOURCE
 from src.services.curation.item_doc import INGEST_CLASS_LABELER
 from src.services.curation.vlm_class_attempt import (
     EmptyClassReason,

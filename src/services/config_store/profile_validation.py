@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from src.config import DetectionProfile
-    from src.routers.curation._config_common_models import ValidationIssue, ValidationReport
+    from src.schemas.curation.config_common import ValidationIssue, ValidationReport
 
     RepositoryIndexFn = Callable[[], Awaitable[list[dict[str, Any]]]]
     SegmenterHealthFn = Callable[[], Awaitable[tuple[str, str | None]]]
@@ -86,7 +86,7 @@ def _issue(
     field: str | None = None,
     detail: dict[str, Any] | None = None,
 ) -> ValidationIssue:
-    from src.routers.curation._config_common_models import ValidationIssue
+    from src.schemas.curation.config_common import ValidationIssue
 
     return ValidationIssue(
         code=code,
@@ -353,9 +353,11 @@ async def _check_detector(
                     )
                 )
                 try:
-                    from src.routers.curation._models_class_mapping import bound_registry
+                    from src.clients.curation_opensearch.registry import get_class_registry
 
-                    mapping = model_class_mapping(name, bound_registry(), project=project_slug)
+                    mapping = model_class_mapping(
+                        name, get_class_registry().load(), project=project_slug
+                    )
                     if mapping.unmapped:
                         issues.append(
                             _issue(
@@ -534,7 +536,7 @@ async def validate_profile(
     project_slug: str | None = None,
 ) -> ValidationReport:
     """Validate a region-profile envelope (``{name, body}``)."""
-    from src.routers.curation._config_common_models import ValidationReport
+    from src.schemas.curation.config_common import ValidationReport
     from src.services.triton_control import TritonControlService
 
     name_issues = _check_name(name, existing_names=existing_names)

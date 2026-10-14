@@ -97,7 +97,7 @@ class World:
 @pytest.fixture
 def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[World]:
     import src.config.curation as curation_mod
-    from src.routers.curation import _common
+    from src.services.curation import index_bootstrap
     from src.services.projects import capacity as capacity_mod
     from src.services.projects.bootstrap import bootstrap_default_project
 
@@ -105,7 +105,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[World]:
     monkeypatch.setenv('OP_DATASET_IMPORTS_DIR', str(tmp_path / 'imports'))
     monkeypatch.setattr(curation_mod, '_default_curation_config', None)
     capacity_mod._cache = None
-    _common._INDEXES_BOOTSTRAPPED.clear()
+    index_bootstrap._INDEXES_BOOTSTRAPPED.clear()
     cluster = RoutedOpenSearch()
 
     async def _make() -> RoutedOpenSearch:
@@ -121,7 +121,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[World]:
     monkeypatch.setenv('OP_SEGMENTER_URL', SEGMENTER_URL)
     with (
         patch(
-            'src.routers.curation._common._ensure_indexes',
+            'src.services.curation.index_bootstrap.ensure_indexes',
             new=AsyncMock(side_effect=fake_ensure_indexes),
         ),
         curation_app(
@@ -139,7 +139,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[World]:
         asyncio.run(registry.ensure_fresh())
         yield World(client, cluster, tmp_path)
     set_project_registry(None)
-    _common._INDEXES_BOOTSTRAPPED.clear()
+    index_bootstrap._INDEXES_BOOTSTRAPPED.clear()
     capacity_mod._cache = None
 
 

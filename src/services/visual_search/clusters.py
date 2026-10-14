@@ -19,7 +19,7 @@ class ClusterMixin:
 
     def _get_cluster_index(self, index_name: str):
         """Convert string index name to ClusterIndex enum."""
-        from src.services.clustering import ClusterIndex
+        from src.config.cluster_index import ClusterIndex
 
         name_map = {
             'global': ClusterIndex.GLOBAL,

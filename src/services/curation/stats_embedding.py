@@ -10,7 +10,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from src.services.curation.embedding_state import (
+from src.domain.embedding_state import (
     DEFERRED,
     EMBEDDED,
     FAILED,

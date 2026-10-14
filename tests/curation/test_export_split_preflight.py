@@ -128,7 +128,7 @@ def train_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         def get(self, _cid: int) -> Any:
             return None
 
-    monkeypatch.setattr('src.routers.curation_train.preflight.get_class_registry', _Reg)
+    monkeypatch.setattr('src.services.training.preflight_run.get_class_registry', _Reg)
 
     monkeypatch.setattr('src.services.training.preflight_checks.get_class_registry', _Reg)
     fake = AsyncMock()

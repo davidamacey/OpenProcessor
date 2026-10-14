@@ -51,7 +51,9 @@ def env(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     )
     seg = _seg()
     monkeypatch.setattr('src.routers.curation.open_vocab_test.segment_image_http', seg)
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     monkeypatch.setattr(
         'src.config.ingest_profiles.ingest_primary_profile',
         type('P', (), {'detector_model': ''}),

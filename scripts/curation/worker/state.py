@@ -22,7 +22,7 @@ from src.services.detection.profile_registry import get_active_region_profile
 if TYPE_CHECKING:
     from scripts.curation.worker.verify import TaskBoxInput
     from src.config import DetectionProfile
-    from src.services.curation.region_boxes import RegionBox
+    from src.domain.region_boxes import RegionBox
     from src.services.detection.region_text import OcrLine
     from src.services.labeling.vlm_client import VlmIdentity
 

@@ -1,7 +1,7 @@
 """Restorable snapshots for the human item edits that are not class writes.
 
 Human class writes snapshot into ``class_id_history`` (see
-:mod:`src.services.curation.history`). Region edits (confirm, reject,
+:mod:`src.domain.history`). Region edits (confirm, reject,
 false positive, box edit, status/text changes) and VLM-suggestion
 dismissals snapshot here instead, into one kind-tagged list,
 :data:`EDIT_HISTORY_FIELD`:

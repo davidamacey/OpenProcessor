@@ -51,23 +51,23 @@ from pydantic import BaseModel, ValidationError
 from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config, get_gpu_arbiter_config
 from src.core.logging import get_logger
-from src.routers.curation._bakeoff_models import (
-    BakeoffComparison,
-    BakeoffMatrix,
+from src.routers.curation._common import router
+from src.schemas.bakeoff.datasets import EvalDataset, EvalDatasetList
+from src.schemas.bakeoff.models import (
     BakeoffProfileList,
     BakeoffProfileRow,
+    BaselineModelList,
+    TrainedModelList,
+)
+from src.schemas.bakeoff.results import BakeoffComparison, BakeoffMatrix
+from src.schemas.bakeoff.run import (
     BakeoffRunAccepted,
     BakeoffRunList,
     BakeoffRunRequest,
     BakeoffRunRow,
     BakeoffStatus,
-    BaselineModelList,
-    EvalDataset,
-    EvalDatasetList,
     JobProgress,
-    TrainedModelList,
 )
-from src.routers.curation._common import router
 from src.services.curation import bakeoff_jobs, eval_datasets
 from src.services.training.run_retention import bakeoff_out_dir
 

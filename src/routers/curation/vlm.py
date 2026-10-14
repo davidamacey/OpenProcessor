@@ -37,7 +37,7 @@ from src.routers.curation._vlm_route_models import (
     VlmVerifyRegionBatchResult,
     VlmVerifyRegionsRequest,
 )
-from src.routers.curation.pipeline_vlm import ACKNOWLEDGE_EXTERNAL_DESC, NO_VLM_MESSAGE, VLM_DESC
+from src.routers.curation.pipeline_params import ACKNOWLEDGE_EXTERNAL_DESC, VLM_DESC
 from src.services.curation.class_write_guard import (
     CLASS_GUARD_SOURCE_FIELDS,
     ClassWriteGuard,
@@ -46,47 +46,10 @@ from src.services.curation.class_write_guard import (
 from src.services.curation.crop_bytes import load_region_jpeg, load_vlm_item_jpeg
 from src.services.curation.label_batch_write import label_batch_merge, label_batch_update
 from src.services.labeling.detector_hint import DETECTOR_HINT_FIELDS, hinted_crop
+from src.services.labeling.run_labeler import get_vlm_labeler, resolve_pack, vlm_stamp
 
 
 _F = get_region_fields()
-
-
-def _resolve_pack(pack_name: str | None, revision: int | None = None) -> Any:
-    """The prompt pack a labeler is built with: the config store's *active*
-    pack when ``pack_name`` is ``None`` (the activated pack, else the
-    ``OP_PROMPT_PACK_PATH`` pack or the built-in generic pack), else the
-    named pack (``revision`` pins an exact saved revision, ``name@rev``,
-    §3.7). Unknown name -> ``ValueError``."""
-    from src.services.labeling.vlm_prompts import active_prompt_pack, get_prompt_pack
-
-    pack = (
-        active_prompt_pack() if pack_name is None else get_prompt_pack(pack_name, revision=revision)
-    )
-    if pack is None:
-        msg = f'unknown prompt pack {pack_name!r}'
-        raise ValueError(msg)
-    return pack
-
-
-def _get_vlm_labeler(
-    pack_name: str | None = None, revision: int | None = None, *, endpoint: Any = None
-) -> Any:
-    """The labeler for ``(endpoint, pack)`` -- a thin wrapper over the one
-    factory (:func:`~src.services.labeling.vlm_factory.labeler_for`).
-
-    ``endpoint=None`` uses the bound project's ACTIVE endpoint from the
-    in-process snapshots (callers on an async path refreshed them first,
-    ``refresh_vlm_state``); routes that resolved a per-run ``?vlm=`` pass it
-    explicitly. Raises ``VlmEndpointUnavailableError`` when there is none.
-    """
-    from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError, active_vlm_endpoint
-    from src.services.labeling.vlm_factory import labeler_for
-
-    pack = _resolve_pack(pack_name, revision)
-    resolved = endpoint if endpoint is not None else active_vlm_endpoint()
-    if resolved is None:
-        raise VlmEndpointUnavailableError(NO_VLM_MESSAGE)
-    return labeler_for(resolved, pack)
 
 
 async def request_labeler(opensearch: Any, vlm: Any, acknowledge_external: Any) -> Any:
@@ -94,7 +57,7 @@ async def request_labeler(opensearch: Any, vlm: Any, acknowledge_external: Any) 
     endpoint the request selected (``?vlm=``) or the project default, both
     through the shared gate. 409 ``vlm_not_configured`` when the project's
     VLM is off."""
-    from src.routers.curation.pipeline_vlm import labeler_unavailable, resolve_run_vlm
+    from src.services.curation.autolabel.run_vlm import labeler_unavailable, resolve_run_vlm
     from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError
     from src.services.labeling.vlm_factory import assert_may_connect
 
@@ -102,23 +65,15 @@ async def request_labeler(opensearch: Any, vlm: Any, acknowledge_external: Any) 
     run = await resolve_run_vlm(
         opensearch,
         vlm,
-        pack=_resolve_pack(pack_name),
+        pack=resolve_pack(pack_name),
         acknowledge_external=acknowledge_external,
     )
     try:
         if run.endpoint is not None:
             await assert_may_connect(run.endpoint)
-        return _get_vlm_labeler(pack_name, endpoint=run.endpoint)
+        return get_vlm_labeler(pack_name, endpoint=run.endpoint)
     except VlmEndpointUnavailableError as exc:
         raise labeler_unavailable(exc) from exc
-
-
-def _vlm_stamp(labeler: Any) -> dict[str, str]:
-    """Provenance of a VLM-derived write: which endpoint/model answered."""
-    return {
-        'vlm_endpoint': labeler.identity.endpoint_ref,
-        'vlm_model': labeler.identity.model,
-    }
 
 
 def _class_locked(source: dict[str, Any]) -> bool:
@@ -276,7 +231,7 @@ async def vlm_label_batch(
         return _resolve_class_name_fn(raw, name_to_id, confidence=confidence)  # type: ignore[arg-type]
 
     empty_answers = 0
-    stamp = _vlm_stamp(labeler)
+    stamp = vlm_stamp(labeler)
     for p in predictions:
         update, proposal = label_batch_update(
             p,
@@ -432,7 +387,7 @@ async def vlm_verify_regions(
                 verdicts_by_id[doc_id],
                 now=now,
                 pack_stamp=pack_stamp,
-                vlm_stamp=_vlm_stamp(labeler),
+                vlm_stamp=vlm_stamp(labeler),
             )
 
         try:
@@ -607,4 +562,4 @@ async def vlm_region_visible_batch(
     return VlmRegionVisibleBatchResponse(visible=visible)
 
 
-__all__ = ['_get_vlm_labeler', 'request_labeler']
+__all__ = ['get_vlm_labeler', 'request_labeler']

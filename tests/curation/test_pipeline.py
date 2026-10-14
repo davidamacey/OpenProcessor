@@ -158,12 +158,14 @@ class TestPipelineClassIdScoping:
     async def test_class_id_unset_behavior_unchanged(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """No ``class_id`` -> the scroll query carries no class_id filter
         and every class's items are in scope (pre-existing behavior)."""
-        from src.routers.curation import pipeline
+        from src.routers.curation.pipeline_public import pipeline_auto_label
 
-        monkeypatch.setattr('src.routers.curation.get_class_registry', self._registry)
+        monkeypatch.setattr(
+            'src.clients.curation_opensearch.registry.get_class_registry', self._registry
+        )
         fake_os = _FakeOpenSearch({3: ['pallet-1', 'pallet-2'], 7: ['forklift-1']})
 
-        summary = await pipeline.pipeline_auto_label(
+        summary = await pipeline_auto_label(
             opensearch=fake_os,
             train_clusters=False,
             promote_min_purity=0.85,
@@ -198,12 +200,14 @@ class TestPipelineClassIdScoping:
         """``class_id=3`` -> the scroll query carries a term filter on
         class_id=3, and only that class's two items are in scope --
         the other class's item never appears."""
-        from src.routers.curation import pipeline
+        from src.routers.curation.pipeline_public import pipeline_auto_label
 
-        monkeypatch.setattr('src.routers.curation.get_class_registry', self._registry)
+        monkeypatch.setattr(
+            'src.clients.curation_opensearch.registry.get_class_registry', self._registry
+        )
         fake_os = _FakeOpenSearch({3: ['pallet-1', 'pallet-2'], 7: ['forklift-1']})
 
-        summary = await pipeline.pipeline_auto_label(
+        summary = await pipeline_auto_label(
             opensearch=fake_os,
             train_clusters=False,
             promote_min_purity=0.85,
@@ -237,9 +241,9 @@ class TestVlmStageExplainsEmptySelection:
 
     @staticmethod
     async def _run(fake_os: Any, run_vlm: bool) -> dict[str, Any]:
-        from src.routers.curation import pipeline
+        from src.routers.curation.pipeline_public import pipeline_auto_label
 
-        return await pipeline.pipeline_auto_label(
+        return await pipeline_auto_label(
             opensearch=fake_os,
             train_clusters=False,
             promote_min_purity=0.85,
@@ -262,7 +266,7 @@ class TestVlmStageExplainsEmptySelection:
     @pytest.mark.asyncio
     async def test_fresh_project_reports_reason(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            'src.routers.curation.get_class_registry',
+            'src.clients.curation_opensearch.registry.get_class_registry',
             lambda: _FakeRegistry([_FakeClassEntry(3, 'x')]),
         )
         vlm = (await self._run(_FakeOpenSearch({}), True))['stages']['vlm']
@@ -272,7 +276,7 @@ class TestVlmStageExplainsEmptySelection:
     @pytest.mark.asyncio
     async def test_unembedded_items_reason(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            'src.routers.curation.get_class_registry',
+            'src.clients.curation_opensearch.registry.get_class_registry',
             lambda: _FakeRegistry([_FakeClassEntry(3, 'x')]),
         )
 
@@ -287,7 +291,7 @@ class TestVlmStageExplainsEmptySelection:
     @pytest.mark.asyncio
     async def test_run_vlm_false_reason(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            'src.routers.curation.get_class_registry',
+            'src.clients.curation_opensearch.registry.get_class_registry',
             lambda: _FakeRegistry([_FakeClassEntry(3, 'x')]),
         )
         vlm = (await self._run(_FakeOpenSearch({}), False))['stages']['vlm']

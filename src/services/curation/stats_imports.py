@@ -12,8 +12,8 @@ from __future__ import annotations
 from typing import Any
 
 from src.config.region_source import CANDIDATE_IMPORT
-from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
-from src.services.curation.region_boxes import box_query
+from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
+from src.domain.region_boxes import box_query
 
 
 #: The ``verifier`` an import stamps on a region it wrote

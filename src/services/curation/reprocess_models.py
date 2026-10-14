@@ -17,9 +17,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.clients.curation_opensearch.open_vocab_fields import OpenVocabStatus  # noqa: TC001 - pydantic
 from src.services.curation.item_filter import ItemFilter
 from src.services.curation.item_selection import Sample
-from src.services.curation.open_vocab_fields import OpenVocabStatus  # noqa: TC001 - pydantic
 
 
 ReprocessScope = Literal['detect', 'open_vocab', 'region', 'vlm', 'embed']

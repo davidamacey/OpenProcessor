@@ -156,7 +156,7 @@ async def test_label_batch_skips_item_restored_during_vlm_call(
                 for c in crops
             ]
 
-    monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: _Labeler())
+    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: _Labeler())
 
     await vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=['undone', 'plain']), fake)
 
@@ -175,9 +175,9 @@ async def test_pipeline_vlm_stage_skips_item_restored_during_vlm_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from curation.test_pipeline import _FakeClassEntry, _FakeRegistry
-    from src.routers.curation import pipeline, pipeline_health
-    from src.services.curation import image_serving
-    from src.services.curation.autolabel import selection
+    from src.routers.curation.pipeline_public import pipeline_auto_label
+    from src.services.curation import auto_label_run, image_serving
+    from src.services.curation.autolabel import selection, vlm_stage
 
     fake = QueryFakeOpenSearch({ITEMS: {'undone': _discarded('undone'), 'plain': _plain('plain')}})
 
@@ -194,11 +194,13 @@ async def test_pipeline_vlm_stage_skips_item_restored_during_vlm_call(
             ]
 
     monkeypatch.setattr(selection, 'classifier_class_sources', lambda: frozenset({'det_model'}))
-    monkeypatch.setattr(pipeline, '_get_vlm_labeler', lambda *_a, **_k: _Labeler())
-    monkeypatch.setattr(pipeline, 'resolve_run_prompt_pack', AsyncMock(return_value=(None, None)))
-    monkeypatch.setattr(pipeline_health, 'pipeline_health_snapshot', AsyncMock(return_value={}))
+    monkeypatch.setattr(vlm_stage, 'get_vlm_labeler', lambda *_a, **_k: _Labeler())
     monkeypatch.setattr(
-        'src.routers.curation.get_class_registry',
+        auto_label_run, 'resolve_run_prompt_pack', AsyncMock(return_value=(None, None))
+    )
+    monkeypatch.setattr(auto_label_run, 'pipeline_health_snapshot', AsyncMock(return_value={}))
+    monkeypatch.setattr(
+        'src.clients.curation_opensearch.registry.get_class_registry',
         lambda: _FakeRegistry([_FakeClassEntry(7, 'sportscar')]),
     )
     monkeypatch.setattr(
@@ -210,7 +212,7 @@ async def test_pipeline_vlm_stage_skips_item_restored_during_vlm_call(
         image_serving, 'THUMBNAIL_CACHE', SimpleNamespace(get_or_compute=lambda *_a, **_k: b'jpeg')
     )
 
-    await pipeline.pipeline_auto_label(opensearch=fake, train_clusters=False, run_vlm=True)
+    await pipeline_auto_label(opensearch=fake, train_clusters=False, run_vlm=True)
 
     docs = fake.docs(ITEMS)
     assert (docs['undone']['class_id'], docs['undone']['class_source']) == (12, 'det_model')

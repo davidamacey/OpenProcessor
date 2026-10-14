@@ -14,12 +14,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from src.routers.curation._config_common_models import api_error
+from src.services.rejections import rejection
 
 
 if TYPE_CHECKING:
     from src.config.projects import ProjectRecord
-    from src.routers.curation._config_common_models import ValidationReport
+    from src.schemas.curation.config_common import ValidationReport
 
 _CLONE_SOURCE_READY_STATUSES = frozenset({'active', 'archived'})
 
@@ -38,11 +38,11 @@ def reject_invalid_clone_name(
     then the plain uniqueness check -- shared so both nearly-identical
     checks stay in one place."""
     if any(e.code in name_codes for e in report.errors):
-        raise api_error(
+        raise rejection(
             422, 'validation_failed', f'the new {what} name is not usable', report=report
         )
     if new_name in existing:
-        raise api_error(409, 'name_conflict', f'{new_name!r} is already taken')
+        raise rejection(409, 'name_conflict', f'{new_name!r} is already taken')
 
 
 async def resolve_clone_source_project(from_project: str) -> ProjectRecord:
@@ -53,7 +53,7 @@ async def resolve_clone_source_project(from_project: str) -> ProjectRecord:
 
     source_record = _require_found(await _resolve_existing(from_project), from_project)
     if source_record.status not in _CLONE_SOURCE_READY_STATUSES:
-        raise api_error(
+        raise rejection(
             409,
             'clone_source_not_ready',
             f"'{from_project}' is {source_record.status}; only an active or "

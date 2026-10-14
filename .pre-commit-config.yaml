@@ -118,11 +118,11 @@ repos:
         # by concern; do not collapse lines to fit.
 
       - id: check-layering
-        name: Layering ratchet (routers > services > clients; fastapi only in routers)
+        name: Layering contract (routers > services > clients; fastapi only in routers)
         entry: python3 scripts/codegen/check_layering.py
         language: system
         pass_filenames: false
-        files: ^(src|scripts)/.*\.py$|^scripts/codegen/baselines/layering\.txt$
+        files: ^(src|scripts)/.*\.py$
 
       # Both ratchets run ruff from the project interpreter, so they use the pinned version.
       - id: check-ruff-ratchet

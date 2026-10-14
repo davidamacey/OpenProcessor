@@ -6,7 +6,7 @@
 # visualization. The tensor names below are a contract with that client.
 #
 # Input:  images [B, 3, 336, 336] UINT8 RGB pixels,
-#         resized and center-cropped (see src/services/detection/pe_preprocess.py);
+#         resized and center-cropped (see src/utils/pe_preprocess.py);
 #         the engine scales them and applies PE-Core's 0.5/0.5 mean/std itself
 #         (export/uint8_input.py)
 # Output: image_embeddings [B, 1024] FP32, L2-normalized

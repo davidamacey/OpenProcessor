@@ -68,7 +68,9 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     fake_os = AsyncMock()
     # No settings doc -> every axis resolves to its process default.
     fake_os.get = AsyncMock(side_effect=RuntimeError('no settings index'))
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     app = FastAPI()
     from _curation_app import mount_curation_routers
 
@@ -188,18 +190,19 @@ def _run_kwargs(**overrides: Any) -> dict[str, Any]:
 @pytest.fixture
 def labeler_spy(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
     """Record every labeler the pipeline obtains (real instances)."""
-    from src.routers.curation import pipeline, vlm
+    from src.routers.curation import vlm
+    from src.services.curation.autolabel import vlm_stage
 
     got: list[Any] = []
 
     def _spy(pack_name: str | None = None, revision: int | None = None, **kw: Any) -> Any:
-        inst = vlm._get_vlm_labeler(pack_name, revision, **kw)
+        inst = vlm.get_vlm_labeler(pack_name, revision, **kw)
         got.append(inst)
         return inst
 
-    monkeypatch.setattr(pipeline, '_get_vlm_labeler', _spy)
+    monkeypatch.setattr(vlm_stage, 'get_vlm_labeler', _spy)
     monkeypatch.setattr(
-        'src.routers.curation.get_class_registry',
+        'src.clients.curation_opensearch.registry.get_class_registry',
         lambda: _FakeRegistry([_FakeClassEntry(3, 'wooden_pallet')]),
     )
     return got
@@ -208,9 +211,9 @@ def labeler_spy(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
 @pytest.mark.usefixtures('packs')
 @pytest.mark.asyncio
 async def test_job_uses_the_overridden_pack(labeler_spy: list[Any]) -> None:
-    from src.routers.curation import pipeline
+    from src.routers.curation.pipeline_public import pipeline_auto_label
 
-    summary = await pipeline.pipeline_auto_label(
+    summary = await pipeline_auto_label(
         opensearch=_FakeOpenSearch({3: ['pallet-1']}), **_run_kwargs(prompt_pack='food_v2')
     )
     assert summary['prompt_pack'] == 'food_v2'
@@ -220,9 +223,9 @@ async def test_job_uses_the_overridden_pack(labeler_spy: list[Any]) -> None:
 @pytest.mark.usefixtures('packs')
 @pytest.mark.asyncio
 async def test_job_omitted_pack_uses_default(labeler_spy: list[Any]) -> None:
-    from src.routers.curation import pipeline
+    from src.routers.curation.pipeline_public import pipeline_auto_label
 
-    summary = await pipeline.pipeline_auto_label(
+    summary = await pipeline_auto_label(
         opensearch=_FakeOpenSearch({3: ['pallet-1']}), **_run_kwargs()
     )
     assert summary['prompt_pack'] == 'pallet_v1'
@@ -233,14 +236,11 @@ async def test_job_omitted_pack_uses_default(labeler_spy: list[Any]) -> None:
 @pytest.mark.usefixtures('packs')
 @pytest.mark.asyncio
 async def test_job_rejects_unknown_pack(labeler_spy: list[Any]) -> None:
-    from fastapi import HTTPException
+    from src.core.exceptions import RequestRejectedError
+    from src.routers.curation.pipeline_public import pipeline_auto_label
 
-    from src.routers.curation import pipeline
-
-    with pytest.raises(HTTPException) as info:
-        await pipeline.pipeline_auto_label(
-            opensearch=_FakeOpenSearch({}), **_run_kwargs(prompt_pack='nope')
-        )
+    with pytest.raises(RequestRejectedError) as info:
+        await pipeline_auto_label(opensearch=_FakeOpenSearch({}), **_run_kwargs(prompt_pack='nope'))
     assert info.value.status_code == 422
     assert labeler_spy == []
 
@@ -248,12 +248,11 @@ async def test_job_rejects_unknown_pack(labeler_spy: list[Any]) -> None:
 @pytest.mark.usefixtures('packs')
 @pytest.mark.asyncio
 async def test_job_rejects_detection_profile(labeler_spy: list[Any]) -> None:
-    from fastapi import HTTPException
+    from src.core.exceptions import RequestRejectedError
+    from src.routers.curation.pipeline_public import pipeline_auto_label
 
-    from src.routers.curation import pipeline
-
-    with pytest.raises(HTTPException) as info:
-        await pipeline.pipeline_auto_label(
+    with pytest.raises(RequestRejectedError) as info:
+        await pipeline_auto_label(
             opensearch=_FakeOpenSearch({}), **_run_kwargs(detection_profile='license_plate')
         )
     assert info.value.status_code == 422

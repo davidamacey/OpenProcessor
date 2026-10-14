@@ -66,7 +66,7 @@ and then processed, encoded, stored and shipped at that full size:
 | # | Stage | Code | What happens at full crop size |
 |---|---|---|---|
 | 1 | Cut | `src/services/curation/ingest_index.py:88` (`crop_pil`), `:115` | `PIL.Image.crop` copies the full-resolution region per item |
-| 2 | PE embed | `ingest_index.py:118-119`; `src/clients/pe_encoder.py:359` (`embed_crops`); `src/services/detection/pe_preprocess.py:34` (`resize_crop_rgb`) | `np.asarray` of the full crop (second copy), then `cv2.resize` from full size to 336 (INTER_LINEAR from, say, 2700x1900: an 8x downscale) |
+| 2 | PE embed | `ingest_index.py:118-119`; `src/clients/pe_encoder.py:359` (`embed_crops`); `src/utils/pe_preprocess.py:34` (`resize_crop_rgb`) | `np.asarray` of the full crop (second copy), then `cv2.resize` from full size to 336 (INTER_LINEAR from, say, 2700x1900: an 8x downscale) |
 | 3 | Blur | `ingest_index.py:156-158,182`; `src/services/detection/crop_quality.py:68-100` | RGB to BGR reversed-stride full-frame copy, CV_64F Laplacian on the full frame, then per crop |
 | 4 | Crop cache | `ingest_index.py:185`; `src/services/curation/source_image_cache.py:130` (`write_crop_cache`), quality 90 at `:43` | **JPEG-encodes the full-size crop** and writes it to tmpfs for every stored item |
 | 5 | Cache cap | `src/config/curation.py:154-158` (`crop_cache_dir`, 3 GiB), `ingest_index.py:224` | Full-size crops fill the cap fast; evicted crops fall to the disk path below |
@@ -150,7 +150,7 @@ gates (section 5.1 and open question Q1).
 Already done (do not redo): the OCR worker payload channel order is BGR
 (`cascade_detect.py:1263-1285`, the old RGB/BGR defect is fixed);
 `embedding_state` and `seed_from_detector` exist
-(`src/services/curation/embedding_state.py`, `src/routers/curation/class_seed.py`).
+(`src/domain/embedding_state.py`, `src/routers/curation/class_seed.py`).
 Not on main yet: the embedding policy store and ingest gating (#52 W4-W9). Until
 it lands, `ingest_index.py:115-127` embeds every item and marks `failed` when the
 encoder raises.
@@ -391,7 +391,7 @@ Each wave names its rollback switch. Order: 0, then 1 to 4 in any order after 0
 Goal: remove the redundant full-size copies without changing any output.
 
 - Files: `src/services/curation/ingest_index.py` (`crop_pil`, `index_items`),
-  `src/services/detection/pe_preprocess.py`, `src/clients/pe_encoder.py`
+  `src/utils/pe_preprocess.py`, `src/clients/pe_encoder.py`
   (`embed_crops`), `src/services/detection/crop_quality.py`,
   `src/services/curation/ingest_batch.py`, `src/services/curation/ingest.py`.
 - Changes:

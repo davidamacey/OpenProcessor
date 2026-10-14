@@ -40,7 +40,7 @@ def test_dataset_id_rejects_traversal(env: dict[str, Path], client: TestClient) 
 
 
 def test_run_resolves_run_model_class_map(env: dict[str, Path], client: TestClient) -> None:
-    from src.routers.curation._bakeoff_models import BakeoffJobSpec
+    from src.schemas.bakeoff.job_spec import BakeoffJobSpec
 
     d = _live_export(env)
     ckpt = make_run(env, 'run5', export_dir=d, class_remap=LIVE_REMAP, imgsz=640)

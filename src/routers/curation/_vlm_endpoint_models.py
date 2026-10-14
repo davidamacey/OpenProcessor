@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from src.routers.curation._config_common_models import (
+from src.schemas.curation.config_common import (
     ActiveConfigResponse,
     ActiveRef,
     ValidationIssue,

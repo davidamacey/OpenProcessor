@@ -1,7 +1,7 @@
-"""Segmenter roster-entry probe for `GET /curation/models/status`.
+"""Segmenter health probe and roster entry for `GET /curation/models/status`.
 
-Split out of ``models.py`` to stay under the repo's 700-LOC pre-commit
-ratchet. The segmenter (``DetectionProfile.segmenter_name``, e.g.
+Shared by the models roster, the profile routes and the activation gate.
+The segmenter (``DetectionProfile.segmenter_name``, e.g.
 ``sam3``) is its own HTTP service at ``OP_SEGMENTER_URL`` — never a
 Triton model. It has its own ``GET /health`` (``{"status": "healthy",
 "model": "sam3", "loaded": true, "instances": 2}``), so it must be

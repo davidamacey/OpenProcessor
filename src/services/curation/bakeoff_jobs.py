@@ -27,19 +27,18 @@ from typing import TYPE_CHECKING, Any
 from scripts.curation.bakeoff import class_map as cmap
 from src.config import get_curation_config
 from src.core.logging import get_logger
-from src.routers.curation._bakeoff_models import (
-    AcceptedDataset,
-    AcceptedModel,
-    BakeoffJobSpec,
-    BakeoffRunAccepted,
+from src.schemas.bakeoff.job_spec import BakeoffJobSpec, JobDataset, JobModel, JobQuantize
+from src.schemas.bakeoff.models import (
     BaselineModel,
-    ClassMapping as ClassMappingWire,
-    JobDataset,
-    JobModel,
-    JobQuantize,
     TrainedModel,
     TrainedModelForDataset,
     TrainTestOverlap,
+)
+from src.schemas.bakeoff.run import (
+    AcceptedDataset,
+    AcceptedModel,
+    BakeoffRunAccepted,
+    ClassMapping as ClassMappingWire,
 )
 from src.services.curation import eval_datasets as evd
 from src.services.training import jobs as train_jobs
@@ -49,7 +48,7 @@ from src.services.training.promote_errors import ClassRemapUnreadableError
 
 if TYPE_CHECKING:
     from scripts.curation.bakeoff.profile import BakeoffProfile
-    from src.routers.curation._bakeoff_models import (
+    from src.schemas.bakeoff.run import (
         BakeoffRunRequest,
         BaselineModelRef,
         CustomModelRef,

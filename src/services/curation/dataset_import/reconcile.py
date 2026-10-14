@@ -13,8 +13,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from src.clients.occ_locks import is_human_owned_item
+from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.curation.dataset_import.item_labels import match_existing
-from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.curation.item_delete import delete_items
 
 

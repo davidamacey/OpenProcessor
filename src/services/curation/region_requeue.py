@@ -25,7 +25,7 @@ The pieces:
   always wins. The prior status is stashed in ``RegionFields.status_before_requeue``
   (first requeue only, so the original verdict survives repeated passes),
   the rejection reason is cleared, and with ``clear_detection`` every box
-  a human hasn't touched (:func:`~src.services.curation.region_boxes.
+  a human hasn't touched (:func:`~src.domain.region_boxes.
   is_human_owned` — created, explicitly rejected or transcribed via the
   per-box edit routes; an accept of a machine box leaves no
   per-box trace) is dropped from
@@ -65,13 +65,8 @@ from src.clients.occ import is_locked_box, occ_skip_on_conflict_bulk
 from src.config import CurationConfig, RegionStatus, get_curation_config
 from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
+from src.domain.region_boxes import box_query, boxes_write_fields, has_any_box_query, read_boxes
 from src.services.curation.region_box_embeddings import prune_box_embeddings
-from src.services.curation.region_boxes import (
-    box_query,
-    boxes_write_fields,
-    has_any_box_query,
-    read_boxes,
-)
 from src.services.curation.reprocess_locks import region_locked_clause, region_set_locked
 
 
@@ -155,7 +150,7 @@ def box_values_filter(
     F: RegionFields, *, detectors: tuple[str, ...] = (), reasons: tuple[str, ...] = ()
 ) -> dict[str, Any] | None:
     """The detector and rejection-reason selections as ONE nested
-    ``region_boxes`` clause (:func:`~src.services.curation.region_boxes.box_query`),
+    ``region_boxes`` clause (:func:`~src.domain.region_boxes.box_query`),
     so both conditions must hold on the SAME box. Two separate nested clauses
     would match an item whose box A has the detector and whose box B has the
     reason. ``None`` when nothing is selected.

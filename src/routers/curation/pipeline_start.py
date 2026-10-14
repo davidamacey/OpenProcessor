@@ -1,8 +1,5 @@
-"""``POST /pipeline/auto_label/start`` -- split out of ``pipeline.py`` to
-stay under the repo's 700-LOC pre-commit ratchet (same pattern as
-``_region_profile_clone.py``/``region_profiles.py`` and this package's
-own ``pipeline_public.py``).
-"""
+"""``POST /pipeline/auto_label/start``: resolve and pin the run's options, then queue
+:func:`~src.services.curation.auto_label_run.run_auto_label` as a job."""
 
 from __future__ import annotations
 
@@ -14,28 +11,26 @@ from src.routers.curation._autolabel_models import AutoLabelJobState
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation.pipeline_params import (
+    ACKNOWLEDGE_EXTERNAL_DESC,
     AUTO_PROMOTE_DESC as _AUTO_PROMOTE_DESC,
     CLASS_ID_DESC as _CLASS_ID_DESC,
     CLUSTER_ID_DESC as _CLUSTER_ID_DESC,
     PROMPT_PACK_DESC as _PROMPT_PACK_DESC,
     REASSIGN_ONLY_DESC as _REASSIGN_ONLY_DESC,
     RUN_VLM_DESC as _RUN_VLM_DESC,
+    VLM_DESC,
     VLM_SCOPE_DESC as _VLM_SCOPE_DESC,
+)
+from src.services.curation.autolabel.run_params import (
     labeler_resolution_args,
     omitted_pack_is_store_active,
     reject_detection_profile,
     resolve_run_prompt_pack,
 )
-from src.routers.curation.pipeline_vlm import (
-    ACKNOWLEDGE_EXTERNAL_DESC,
-    VLM_DESC,
-    RunVlm,
-    require_run_vlm,
-    resolve_run_vlm,
-)
-from src.routers.curation.vlm import _resolve_pack
+from src.services.curation.autolabel.run_vlm import RunVlm, require_run_vlm, resolve_run_vlm
 from src.services.curation.cluster_purity import PROMOTE_MIN_MEMBERS, PROMOTE_MIN_PURITY
 from src.services.curation.vlm_policy import VlmScope  # noqa: TC001 - FastAPI
+from src.services.labeling.run_labeler import resolve_pack
 
 
 _EMBED_MISSING_DESC = (
@@ -83,7 +78,7 @@ async def pipeline_auto_label_start(
     Only one job runs at a time; a second start request returns HTTP 409
     while a job is in flight.
     """
-    from src.routers.curation.pipeline import _run_auto_label
+    from src.services.curation.auto_label_run import run_auto_label
     from src.services.curation.autolabel import job as auto_label_job
 
     # Resolved here (422 before queueing) so the job args echo what runs.
@@ -92,7 +87,7 @@ async def pipeline_auto_label_start(
     # `resolve_run_prompt_pack` overwrites `prompt_pack` below -- the raw
     # query param tells us whether this request omitted `prompt_pack`
     # entirely (the Cropwright default path), independent of what name it
-    # resolves to. See ``_run_auto_label``'s ``prompt_pack_omitted`` for
+    # resolves to. See ``run_auto_label``'s ``prompt_pack_omitted`` for
     # why the job needs this as its OWN signal, distinct from the echoed
     # `prompt_pack` name.
     prompt_pack_was_omitted = not isinstance(prompt_pack, str)
@@ -115,7 +110,7 @@ async def pipeline_auto_label_start(
         vlm_run = await resolve_run_vlm(
             opensearch,
             vlm,
-            pack=_resolve_pack(pack_name, pack_revision),
+            pack=resolve_pack(pack_name, pack_revision),
             acknowledge_external=acknowledge_external,
         )
         if run_vlm:
@@ -126,7 +121,7 @@ async def pipeline_auto_label_start(
             # directly, not the public route wrapper -- `pipeline_auto_label`
             # now always forces `prompt_pack_resolved=False`, which would
             # silently re-resolve (and potentially re-pin) every job.
-            _run_auto_label,
+            run_auto_label,
             {
                 'opensearch': opensearch,
                 'train_clusters': train_clusters,
@@ -156,12 +151,12 @@ async def pipeline_auto_label_start(
                 # above for every shape of this request, so the job must
                 # never re-run it.
                 'prompt_pack_resolved': True,
-                # Tells `_run_auto_label` whether THIS request
+                # Tells `run_auto_label` whether THIS request
                 # omitted `prompt_pack` -- when it did, the job must
                 # resolve the VLM labeler against `None` (always "whatever
                 # is active right now"), never the echoed `prompt_pack`
                 # name, which can go stale between `/start` and the VLM
-                # stage actually running (see `_run_auto_label`).
+                # stage actually running (see `run_auto_label`).
                 'prompt_pack_omitted': prompt_pack_was_omitted,
                 'vlm_endpoint': vlm_run.name,
                 'vlm_endpoint_revision': vlm_run.revision,

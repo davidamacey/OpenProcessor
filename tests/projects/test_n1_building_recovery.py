@@ -20,8 +20,8 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from fastapi import HTTPException
 
+from src.core.exceptions import RequestRejectedError
 from src.services.projects import delete as delete_mod, lifecycle
 from src.services.projects.registry import ProjectRegistry, record_to_doc, set_project_registry
 
@@ -49,7 +49,7 @@ def _fake_ensure_indexes_fixture():
     from unittest.mock import AsyncMock, patch
 
     with patch(
-        'src.routers.curation._common._ensure_indexes',
+        'src.services.curation.index_bootstrap.ensure_indexes',
         new=AsyncMock(side_effect=fake_ensure_indexes),
     ):
         yield
@@ -149,6 +149,6 @@ def test_fresh_building_record_delete_still_409s() -> None:
     registry._by_slug['live'] = record
     asyncio.run(registry.ensure_fresh())
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.delete_project(client, slug='live', confirm='live'))
     assert exc_info.value.detail['error'] == 'invalid_transition'

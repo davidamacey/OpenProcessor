@@ -45,7 +45,9 @@ def test_lifespan_fires_knn_warmup_in_background(monkeypatch: pytest.MonkeyPatch
     fake_wrapper = AsyncMock()
     fake_wrapper.client = AsyncMock()
 
-    monkeypatch.setattr('src.routers.curation._common.warm_knn_indexes', _fake_warm_knn_indexes)
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.warm_knn_indexes', _fake_warm_knn_indexes
+    )
     monkeypatch.setattr(
         'src.clients.curation_opensearch.lifecycle.create_curation_indexes',
         _fake_create_curation_indexes,

@@ -10,10 +10,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from src.domain.embedding_state import EmbeddingState
 from src.routers.curation._stats_models import DatasetStatsResponse
 from src.routers.curation.stats import stats_dataset
 from src.services.curation import review_queries
-from src.services.curation.embedding_state import EmbeddingState
 from src.services.curation.item_filter import Origin, ReviewStatus
 from src.services.curation.review_filter_specs import EMBEDDING_STATE_LABELS, FILTER_SPECS
 from src.services.curation.stats_embedding import EmbeddingByState, embedding_summary
@@ -259,7 +259,8 @@ def test_region_status_default_is_all_and_negative_frame_is_unset() -> None:
 
 
 def test_api_error_serves_only_the_fields_the_code_carries() -> None:
-    from src.routers.curation._config_common_models import ModelSharingUser, api_error
+    from src.routers.curation._api_error import api_error
+    from src.schemas.curation.config_common import ModelSharingUser
 
     exc = api_error(
         409,

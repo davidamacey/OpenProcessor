@@ -210,7 +210,9 @@ def _client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.services.curation.clustering import outliers
 
     outliers._CACHE.clear()
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     app = FastAPI()
     from _curation_app import mount_curation_routers
 

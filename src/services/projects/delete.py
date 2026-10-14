@@ -20,10 +20,11 @@ from typing import TYPE_CHECKING, Any, cast
 from src.config.project_context import bind_project
 from src.config.projects import DEFAULT_SLUG, ProjectStatus
 from src.core.logging import get_logger
-from src.routers.curation._config_common_models import ModelSharingUser, api_error
+from src.schemas.curation.config_common import ModelSharingUser
 from src.services.config_store.project_usage import model_dependents
 from src.services.projects.mlflow_cleanup import MlflowCleanup, delete_experiment
 from src.services.projects.registry import get_project_registry, get_record_with_seq
+from src.services.rejections import rejection
 from src.services.training.model_classes import owned_model_names
 
 
@@ -222,7 +223,7 @@ def _require_project_scoped_path(path: Path, shared_root: Path, slug: str) -> No
         path.resolve().relative_to(project_root)
     except ValueError:
         logger.error('project_delete_path_escape', path=str(path), expected_root=str(project_root))
-        raise api_error(500, 'path_escape', f'refusing to delete outside {project_root}') from None
+        raise rejection(500, 'path_escape', f'refusing to delete outside {project_root}') from None
 
 
 def _project_scoped_dirs(record: ProjectRecord) -> list[tuple[Path, Path]]:
@@ -345,10 +346,10 @@ async def delete_project(
     # racing through.
     record, seq, term = await _get_mutable_record(client, slug)
     if record.status == 'deleted':
-        raise api_error(404, 'project_not_found', f"no project named '{slug}'", project=slug)
+        raise rejection(404, 'project_not_found', f"no project named '{slug}'", project=slug)
 
     if record.slug == DEFAULT_SLUG:
-        raise api_error(
+        raise rejection(
             409,
             'project_protected',
             'The default project can be archived but not deleted.',
@@ -368,9 +369,9 @@ async def delete_project(
         # delete_project_finish after this returns, so returning the
         # unchanged record is sufficient to retry.
         if confirm is None:
-            raise api_error(422, 'confirm_mismatch', 'confirm is required for a real delete')
+            raise rejection(422, 'confirm_mismatch', 'confirm is required for a real delete')
         if confirm != slug:
-            raise api_error(422, 'confirm_mismatch', f"confirm must equal the slug '{slug}'")
+            raise rejection(422, 'confirm_mismatch', f"confirm must equal the slug '{slug}'")
         return record
 
     # N1 escape hatch: a 'building' record stale enough that its create
@@ -387,13 +388,13 @@ async def delete_project(
     )
     _require_transition(record, 'delete', allowed)
     if confirm is None:
-        raise api_error(422, 'confirm_mismatch', 'confirm is required for a real delete')
+        raise rejection(422, 'confirm_mismatch', 'confirm is required for a real delete')
     if confirm != slug:
-        raise api_error(422, 'confirm_mismatch', f"confirm must equal the slug '{slug}'")
+        raise rejection(422, 'confirm_mismatch', f"confirm must equal the slug '{slug}'")
 
     jobs = await running_jobs(record)
     if jobs:
-        raise api_error(
+        raise rejection(
             409,
             'project_busy',
             f"'{slug}' has {len(jobs)} running job(s)",
@@ -407,13 +408,13 @@ async def delete_project(
         try:
             dependents = await model_dependents(client, record.slug, shared_models)
         except Exception as exc:
-            raise api_error(
+            raise rejection(
                 503,
                 'config_store_unavailable',
                 "could not read every project to see who uses this project's shared models; "
                 'retry, or pass force',
             ) from exc
-        raise api_error(
+        raise rejection(
             409,
             'in_use',
             f"'{slug}' has {len(shared_models)} model(s) opted into cross-project "
@@ -547,7 +548,7 @@ async def delete_project_finish(client: Any, *, slug: str) -> DeleteFinished:
 
     stored, _, _ = await get_record_with_seq(client, slug)
     if stored is None:
-        raise api_error(404, 'project_not_found', f"no project named '{slug}'", project=slug)
+        raise rejection(404, 'project_not_found', f"no project named '{slug}'", project=slug)
     record = stored
     if record.status == 'deleted':
         return DeleteFinished(
@@ -555,7 +556,7 @@ async def delete_project_finish(client: Any, *, slug: str) -> DeleteFinished:
         )
 
     if slug in _FINISH_IN_PROGRESS:
-        raise api_error(
+        raise rejection(
             409,
             'finish_in_progress',
             f"a delete finish is already running for '{slug}'",
@@ -587,7 +588,7 @@ async def delete_project_finish(client: Any, *, slug: str) -> DeleteFinished:
             )
             await write_record(client, rolled_back, if_seq_no=seq, if_primary_term=term)
             await get_project_registry().ensure_fresh()
-            raise api_error(
+            raise rejection(
                 409, 'project_busy', f"'{slug}' did not drain within the timeout", project=slug
             )
 
@@ -626,7 +627,7 @@ async def delete_project_finish(client: Any, *, slug: str) -> DeleteFinished:
             # record 'deleting' (retryable via the M4 retry path in
             # delete_project) rather than tombstoning past a model still
             # live in Triton.
-            raise api_error(
+            raise rejection(
                 409,
                 'project_busy',
                 f"'{slug}' delete failed to unload {len(failed_models)} model(s); retry the delete",
@@ -640,7 +641,7 @@ async def delete_project_finish(client: Any, *, slug: str) -> DeleteFinished:
             # can never re-reach them). Leave the record 'deleting' so a
             # re-issued DELETE retries; every step here is itself
             # idempotent.
-            raise api_error(
+            raise rejection(
                 409,
                 'project_busy',
                 f"'{slug}' delete failed to remove {len(failed_indexes)} index(es); "

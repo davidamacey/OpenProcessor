@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from src.routers.curation._config_common_models import ValidationIssue, ValidationReport
-from src.routers.curation._dataset_issue_models import issues_to_wire
+from src.routers.curation._dataset_issue_wire import issues_to_wire
+from src.schemas.curation.config_common import ValidationIssue, ValidationReport
 from src.services.curation.dataset_import.issues import DatasetIssue, DatasetIssueSample
-from src.services.issue_ids import stamp_issue_ids
 from src.services.projects.combine.models import CombineIssue, CombinePreview
+from src.utils.issue_ids import stamp_issue_ids
 
 
 def _unique(ids: list[str]) -> None:

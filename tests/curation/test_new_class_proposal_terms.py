@@ -39,7 +39,9 @@ def registry(tmp_path: Any) -> ClassRegistry:
 def _client(fake: Any, registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: registry)
     monkeypatch.setattr(
         'src.services.curation.strategy_registry.resolve_effective_default',

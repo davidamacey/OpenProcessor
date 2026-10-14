@@ -243,7 +243,7 @@ Items index gets one explicit field (mapping at
   without a state get `failed`). Stacks are normally recreated, so this script
   is optional.
 
-New module `src/services/curation/embedding_state.py` (pure, no OpenSearch
+New module `src/domain/embedding_state.py` (pure, no OpenSearch
 client): constants for the four values; `embedded_clause(field=ITEM_EMBEDDING_FIELD)`
 returning `{'exists': {'field': field}}`; `not_embedded_clause(field)`;
 `select_for_embedding(items, policy, image_w, image_h) -> list[EmbedDecision]`
@@ -516,7 +516,7 @@ Minimum fallback if the release is too tight: ship only the `detector` block
 in `ingest/config` plus a `--labels` option on the CLI seed script.
 
 ### W3. `embedding_state` and vector-less consumer fixes - v0.4.0 if time allows, else first in v0.4.x
-Files: new `src/services/curation/embedding_state.py`; mapping
+Files: new `src/domain/embedding_state.py`; mapping
 (`curation_opensearch.py`); `item_doc.py`; `ingest_index.py` (failure path
 sets `failed`, counters); `ingest_models.py`; `wire.py`; `_item_models.py`;
 `scripts/curation/vlm_worker.py:172` and `autolabel/selection.py:30`

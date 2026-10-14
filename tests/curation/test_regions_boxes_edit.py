@@ -110,8 +110,8 @@ def test_put_regions_omitting_a_box_deletes_it(
 def test_put_regions_prunes_the_embedding_of_a_moved_and_of_a_deleted_box(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
+    from src.domain.region_boxes import read_boxes
     from src.services.curation.region_box_embeddings import entry_for
-    from src.services.curation.region_boxes import read_boxes
 
     doc = fake_os._docs['crop-1']
     doc[F.box_embeddings] = [entry_for(b, [1.0]) for b in read_boxes(doc, F)]
@@ -129,8 +129,8 @@ def test_put_regions_prunes_the_embedding_of_a_moved_and_of_a_deleted_box(
 def test_put_regions_keeps_the_embedding_of_a_box_it_leaves_alone(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
+    from src.domain.region_boxes import read_boxes
     from src.services.curation.region_box_embeddings import entry_for
-    from src.services.curation.region_boxes import read_boxes
 
     doc = fake_os._docs['crop-1']
     doc[F.box_embeddings] = [entry_for(b, [1.0]) for b in read_boxes(doc, F)]
@@ -257,8 +257,8 @@ def test_batch_regions_clears_every_crop(app_client: TestClient, fake_os: _FakeR
 def test_batch_regions_prune_leaves_no_box_embeddings(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
+    from src.domain.region_boxes import read_boxes
     from src.services.curation.region_box_embeddings import entry_for
-    from src.services.curation.region_boxes import read_boxes
 
     for crop_id in ('crop-1', 'crop-2'):
         doc = fake_os._docs[crop_id]

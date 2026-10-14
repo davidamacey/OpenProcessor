@@ -69,7 +69,7 @@ def _null_safe_floor(field: str, floor: float) -> dict[str, Any]:
 async def build_review_request(
     tab: str, filters: ReviewFilters, sort_id: str | None, opensearch: Any
 ) -> ReviewRequest:
-    """Raises ``HTTPException(400)`` for an unknown tab, ``ValueError`` for
+    """Raises ``RequestRejectedError(400)`` for an unknown tab, ``ValueError`` for
     a bad sort id or confidence band."""
     must, must_not, reason = review_queries.build_tab_query(
         tab,

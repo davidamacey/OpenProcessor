@@ -22,17 +22,17 @@ from typing import TYPE_CHECKING, Any
 from src.clients.occ_locks import is_locked_box, is_locked_item
 from src.config.curation import BACKBONE_EMBEDDING_FIELD, ITEM_EMBEDDING_FIELD
 from src.config.region_fields import RegionFields, get_region_fields
+from src.domain.item_text import ITEM_TEXT_LINES_FIELD, item_text_lines_to_wire
 from src.services.curation.class_sources import (
     class_confidence,
     vlm_suggestion,
     vlm_suggestion_dismissed,
 )
 from src.services.curation.cluster_ids import CORE_SIMILARITY_MIN, cluster_kind, cluster_similarity
-from src.services.curation.item_text import ITEM_TEXT_LINES_FIELD, item_text_lines_to_wire
 
 
 if TYPE_CHECKING:
-    from src.services.curation.region_boxes import RegionBox
+    from src.domain.region_boxes import RegionBox
 
 # Stock defaults double as the wire vocabulary. Never build this from env.
 WIRE_REGION_FIELDS = RegionFields()
@@ -441,7 +441,7 @@ def region_boxes_to_wire(
     ``bbox_in_parent`` (the item-crop frame, derived; ``None`` with no
     usable item box) and ``thumbnail_url`` (``crop_id`` unset -> both
     keys omitted, e.g. a bare doc with no crop identity)."""
-    from src.services.curation.region_boxes import read_boxes
+    from src.domain.region_boxes import read_boxes
 
     f = storage or get_region_fields()
     boxes = [

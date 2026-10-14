@@ -32,7 +32,7 @@ from src.services.detection.region_embed import embed_region_crops
 if TYPE_CHECKING:
     from scripts.curation.worker.state import _ItemTask
     from src.clients.pe_encoder import PEEncoder
-    from src.services.curation.region_boxes import RegionBox
+    from src.domain.region_boxes import RegionBox
 
 logger = get_logger('curation_worker')
 

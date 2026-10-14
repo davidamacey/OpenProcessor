@@ -447,7 +447,9 @@ async def test_max_images_caps_images_and_keeps_every_object_on_them(tmp_path: P
 def status_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     app = FastAPI()
     from _curation_app import mount_curation_routers
 

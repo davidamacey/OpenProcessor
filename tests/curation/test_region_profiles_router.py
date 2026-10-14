@@ -43,7 +43,9 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
             {'name': 'ocr_pipeline', 'state': 'READY', 'version': '1'},
         ]
 
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     from src.services.triton_control import TritonControlService
 
     monkeypatch.setattr(
@@ -197,12 +199,12 @@ def test_etag_header(app_client: TestClient) -> None:
 
 def test_clone_from_template(app_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('OP_SEGMENTER_URL', 'http://segmenter:8000')
-    from src.routers.curation import _models_segmenter
+    from src.services.detection import segmenter_health
 
     async def _health(url: str) -> tuple[str, str | None]:
         return 'ready', None
 
-    monkeypatch.setattr(_models_segmenter, '_segmenter_health', _health)
+    monkeypatch.setattr(segmenter_health, '_segmenter_health', _health)
     r = app_client.post(
         f'{PREFIX}/license_plate/clone', json={'new_name': 'my_plates', 'source': 'template'}
     )

@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 from curation.activation.constants import PREFIX, pack_body
+from src.services.curation.auto_label_run import run_auto_label
 
 
 pytestmark = pytest.mark.usefixtures('vlm_env')
@@ -18,14 +19,14 @@ def test_start_job_args_are_accepted_by_pipeline_fn():
     """The worker calls pipeline_fn(opensearch=, progress=, **trigger_args);
     /pipeline/auto_label/start puts 'prompt_pack_revision' in those args.
 
-    The worker's target is ``_run_auto_label``, not the public
+    The worker's target is ``run_auto_label``, not the public
     ``pipeline_auto_label`` route wrapper: the route does not accept these
     params at all (they would otherwise be reachable from an HTTP request)."""
     import inspect
 
-    from src.routers.curation.pipeline import _run_auto_label
+    from src.services.curation.auto_label_run import run_auto_label
 
-    assert 'prompt_pack_revision' in inspect.signature(_run_auto_label).parameters
+    assert 'prompt_pack_revision' in inspect.signature(run_auto_label).parameters
 
 
 def test_job_keeps_request_pin_without_reresolving(app_client, monkeypatch):
@@ -39,8 +40,8 @@ def test_job_keeps_request_pin_without_reresolving(app_client, monkeypatch):
     ``pipeline_auto_label`` must use the pin as-is and must NOT call
     ``resolve_run_prompt_pack`` again."""
     from curation.test_pipeline import _FakeOpenSearch
-    from src.routers.curation import pipeline
-    from src.routers.curation.pipeline_params import resolve_run_prompt_pack
+    from src.services.curation import auto_label_run
+    from src.services.curation.autolabel.run_params import resolve_run_prompt_pack
 
     c = app_client
     assert c.post(PREFIX, json={'name': 'my_pack', 'body': pack_body('A')}).status_code == 201
@@ -61,10 +62,10 @@ def test_job_keeps_request_pin_without_reresolving(app_client, monkeypatch):
             'pipeline_auto_label re-resolved a pinned prompt_pack instead of using the pin'
         )
 
-    monkeypatch.setattr(pipeline, 'resolve_run_prompt_pack', _must_not_be_called)
+    monkeypatch.setattr(auto_label_run, 'resolve_run_prompt_pack', _must_not_be_called)
     fake_os = _FakeOpenSearch({})
     summary = asyncio.run(
-        pipeline._run_auto_label(
+        run_auto_label(
             opensearch=fake_os,
             train_clusters=False,
             promote_min_purity=0.85,
@@ -97,9 +98,9 @@ def test_job_keeps_request_pin_without_reresolving(app_client, monkeypatch):
 
 def _run_job(c, monkeypatch, query):
     from curation.test_pipeline import _FakeOpenSearch
-    from src.routers.curation import pipeline
-    from src.routers.curation.pipeline_params import resolve_run_prompt_pack as real_resolve
+    from src.services.curation import auto_label_run
     from src.services.curation.autolabel import job as auto_label_job
+    from src.services.curation.autolabel.run_params import resolve_run_prompt_pack as real_resolve
 
     captured = {}
 
@@ -114,11 +115,11 @@ def _run_job(c, monkeypatch, query):
     async def _resolve(_os, pp):
         return await real_resolve(c.fake_os, pp)
 
-    monkeypatch.setattr(pipeline, 'resolve_run_prompt_pack', _resolve)
+    monkeypatch.setattr(auto_label_run, 'resolve_run_prompt_pack', _resolve)
     args = {k: v for k, v in captured.items() if k != 'opensearch'}
     args['train_clusters'] = False
     args['run_vlm'] = False
-    summary = asyncio.run(pipeline._run_auto_label(opensearch=_FakeOpenSearch({}), **args))
+    summary = asyncio.run(run_auto_label(opensearch=_FakeOpenSearch({}), **args))
     return captured, summary
 
 
@@ -127,7 +128,7 @@ def _run_job(c, monkeypatch, query):
     [('', 1), ('?prompt_pack=my_pack@1', 1), ('?prompt_pack=my_pack', 2)],
 )
 def test_start_job_runs_what_the_request_resolved(app_client, monkeypatch, query, want_rev):
-    from src.routers.curation.vlm import _get_vlm_labeler
+    from src.services.labeling.run_labeler import get_vlm_labeler
     from src.services.labeling.vlm_prompts import prompt_pack_stamp
 
     c = app_client
@@ -140,7 +141,7 @@ def test_start_job_runs_what_the_request_resolved(app_client, monkeypatch, query
         == 200
     )
     captured, summary = _run_job(c, monkeypatch, query)
-    lab = _get_vlm_labeler(summary['prompt_pack'], summary['prompt_pack_revision'])
+    lab = get_vlm_labeler(summary['prompt_pack'], summary['prompt_pack_revision'])
     stamp = prompt_pack_stamp(lab._pack, revision=summary['prompt_pack_revision'])
     print(
         repr(query),
@@ -196,10 +197,9 @@ def test_worker_process_with_cold_store_serves_requested_pack(app_client, monkey
     able to resolve the pack regardless of any fix and would not be
     testing what this is about (a stale in-memory snapshot, not a
     disconnected client)."""
-    from src.routers.curation import pipeline
-    from src.routers.curation.vlm import _get_vlm_labeler
     from src.services.config_store import get_config_store
     from src.services.config_store.store import reset_config_stores
+    from src.services.labeling.run_labeler import get_vlm_labeler
 
     c = app_client
     _pack_setup(c)
@@ -207,16 +207,16 @@ def test_worker_process_with_cold_store_serves_requested_pack(app_client, monkey
     reset_config_stores()  # a different process: cold store
     args['train_clusters'] = False
     args['run_vlm'] = False
-    summary = asyncio.run(pipeline._run_auto_label(opensearch=c.fake_os, **args))
+    summary = asyncio.run(run_auto_label(opensearch=c.fake_os, **args))
     print('store loaded after job stages:', get_config_store().current.loaded_at)
-    # Exactly what `_run_auto_label`'s VLM stage does: `prompt_pack_omitted`, not the
+    # Exactly what `run_auto_label`'s VLM stage does: `prompt_pack_omitted`, not the
     # echoed `summary['prompt_pack']`, decides whether the labeler resolves against
     # `None`/`None`.
     omitted = args.get('prompt_pack_omitted', False)
     try:
         pack_arg = None if omitted else summary['prompt_pack']
         rev_arg = None if omitted else summary['prompt_pack_revision']
-        lab = _get_vlm_labeler(pack_arg, rev_arg)
+        lab = get_vlm_labeler(pack_arg, rev_arg)
         got = lab._pack.class_system
     except Exception as exc:
         got = repr(exc)
@@ -228,7 +228,7 @@ def test_omitted_job_after_active_switch_never_serves_draft(app_client, monkeypa
     """/start omitted (my_pack@1 active, r2 draft). Before the VLM stage the
     operator activates another pack. The job must serve either the pin
     (A) or the new active (OTHER), never my_pack's un-activated draft."""
-    from src.routers.curation.vlm import _get_vlm_labeler
+    from src.services.labeling.run_labeler import get_vlm_labeler
 
     c = app_client
     _pack_setup(c)
@@ -239,9 +239,9 @@ def test_omitted_job_after_active_switch_never_serves_draft(app_client, monkeypa
     )
     assert r.status_code == 200, r.text
     # The job resolves against `None`/`None` when `prompt_pack_omitted` is set, exactly
-    # like `_run_auto_label`'s VLM stage, not the echoed `(prompt_pack, prompt_pack_revision)`.
+    # like `run_auto_label`'s VLM stage, not the echoed `(prompt_pack, prompt_pack_revision)`.
     assert args['prompt_pack_omitted'] is True
-    lab = _get_vlm_labeler(None, None)
+    lab = get_vlm_labeler(None, None)
     print(
         'trigger', args['prompt_pack'], args['prompt_pack_revision'], '->', lab._pack.class_system
     )

@@ -14,20 +14,20 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import HTTPException
-
 from src.config.curation import ITEM_EMBEDDING_FIELD, PROBE_ENTROPY_REVIEW_MIN
 from src.config.region_fields import get_region_fields
 from src.config.region_rejection import compose_rejection_reason
 from src.config.region_state import RegionStatus
-from src.services.curation.class_sources import VLM_CLASS_SOURCES
-from src.services.curation.embedding_state import embedded_clause
-from src.services.curation.ingest_class_sources import (
+from src.config.vlm_class_attempt import VLM_CLASS_EMPTY_REASON_FIELD
+from src.core.exceptions import RequestRejectedError
+from src.domain.embedding_state import embedded_clause
+from src.domain.ingest_class_sources import (
     LABEL_IMPORT_CLASS_SOURCE,
     classifier_class_sources,
     unlabeled_proposal_class_sources,
 )
-from src.services.curation.region_boxes import box_query, read_boxes
+from src.domain.region_boxes import box_query, read_boxes
+from src.services.curation.class_sources import VLM_CLASS_SOURCES
 from src.services.curation.review_filter_specs import (
     FILTER_SPECS,
     HAS_REJECTED_BOX,
@@ -35,7 +35,7 @@ from src.services.curation.review_filter_specs import (
     REGION_STATUS_FILTER_VALUES,
 )
 from src.services.curation.training_cohorts import LOW_CONFIDENCE_MAX
-from src.services.curation.vlm_class_attempt import VLM_CLASS_EMPTY_REASON_FIELD, EmptyClassReason
+from src.services.curation.vlm_class_attempt import EmptyClassReason
 
 
 # Both fields are keyword-mapped (see the model_disagreements note below), so the
@@ -311,7 +311,7 @@ def build_tab_query(
     """Return ``(must, must_not, reason)`` for one review tab.
 
     ``region_status`` (``regions`` tab only, ignored elsewhere): one of
-    :data:`REGION_STATUS_FILTER_VALUES`. Raises ``HTTPException(400, ...)``
+    :data:`REGION_STATUS_FILTER_VALUES`. Raises ``RequestRejectedError(400, ...)``
     for an unrecognized ``tab`` or an unrecognized ``region_status`` — same
     behavior the review router had inline before this split.
     """
@@ -425,7 +425,7 @@ def build_tab_query(
         # candidate's confirm promotes it into `bbox_norm` instead).
         region_status_filter = region_status or REGION_STATUS_DEFAULT
         if region_status_filter not in REGION_STATUS_FILTER_VALUES:
-            raise HTTPException(
+            raise RequestRejectedError(
                 status_code=400,
                 detail=(
                     f'unknown region_status filter: {region_status_filter!r}. '
@@ -630,7 +630,7 @@ def build_tab_query(
             must_not.append({'term': {'test_holdout': True}})
         reason = 'imported label: spot check'
     else:
-        raise HTTPException(
+        raise RequestRejectedError(
             status_code=400,
             detail=f'unknown review tab: {tab}. Must be one of: {", ".join(KNOWN_TABS)}',
         )

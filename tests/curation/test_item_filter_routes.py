@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.routers.curation import _common
+from src.services.curation import index_bootstrap
 
 
 SHARED_PARAMS = {
@@ -67,7 +68,7 @@ def fake_os() -> _RecordingOS:
 
 @pytest.fixture
 def app(monkeypatch: pytest.MonkeyPatch, fake_os: _RecordingOS) -> FastAPI:
-    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', {'default'})
+    monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', {'default'})
     from _curation_app import mount_curation_routers
 
     from src.routers.curation import _raw_opensearch_dep, router as curation_router

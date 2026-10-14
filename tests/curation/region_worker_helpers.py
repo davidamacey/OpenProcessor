@@ -13,7 +13,7 @@ from curation.region_cascade_helpers import _capture_signal_handler, _FakeOpenSe
 from scripts.curation.worker import runner as runner_mod, stage_a as stage_a_mod
 from scripts.curation.worker.__main__ import parse_args
 from src.config.project_context import current_project
-from src.services.curation.region_boxes import RegionBox, boxes_write_fields
+from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_models import VlmCombinedReply
 

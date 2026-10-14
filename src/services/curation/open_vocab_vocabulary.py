@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import get_args
 
-from src.services.curation.open_vocab_fields import OpenVocabStatus
+from src.clients.curation_opensearch.open_vocab_fields import OpenVocabStatus
 from src.services.detection.open_vocab_select import DropReason
 from src.services.detection.segmenter_gate import GateReason
 

@@ -12,7 +12,7 @@ evaluates the subset of the query DSL those paths use:
   list field satisfies the inner query. Elements are re-keyed with the
   ``<path>.`` prefix (e.g. ``region_boxes.detector``) before evaluation, so
   a nested clause's field names — always the full dotted path, matching
-  real OpenSearch and :func:`~src.services.curation.region_boxes.box_query`
+  real OpenSearch and :func:`~src.domain.region_boxes.box_query`
   — resolve the same way a top-level field does;
 - ``search`` with ``size``, a single-field ``sort``, ``search_after``,
   ``scroll`` (everything in the first page) and ``terms`` aggregations

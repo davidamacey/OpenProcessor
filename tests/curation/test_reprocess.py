@@ -25,8 +25,8 @@ from curation.reprocess_fixtures import (
     make_service,
     servable_root,
 )
+from src.domain.region_boxes import read_boxes
 from src.services.curation.region_box_embeddings import current_vectors
-from src.services.curation.region_boxes import read_boxes
 from src.services.curation.reprocess import apply_reprocess, plan_reprocess
 from src.services.curation.reprocess_models import (
     ReprocessFilter,

@@ -15,8 +15,8 @@ from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES
 from src.clients.occ_locks import _is_locked_marker, is_locked_class
 from src.config.curation import items_index
 from src.core.logging import get_logger
-from src.services.curation.embedding_state import keep_stored_vector_state
-from src.services.curation.history import CLASS_STATE_FIELDS
+from src.domain.embedding_state import keep_stored_vector_state
+from src.domain.history import CLASS_STATE_FIELDS
 
 
 if TYPE_CHECKING:
@@ -123,10 +123,7 @@ async def occ_upsert_bulk(
         index = items_index()
     # Local import: metrics module imports prometheus_client at top
     # level and we keep occ.py prometheus-free for unit-test ergonomics.
-    from src.services.curation.metrics import (
-        OP_INGEST_OCC_FINAL_CONFLICT,
-        OP_INGEST_PRESERVED_HUMAN_LABEL,
-    )
+    from src.core.metrics import OP_INGEST_OCC_FINAL_CONFLICT, OP_INGEST_PRESERVED_HUMAN_LABEL
 
     result = {
         'created': 0,
