@@ -2,14 +2,9 @@ docker/trainer/subset_dataset.py::build_subset_view	17	ratchet: may only go down
 export/download_paddleocr.py::download_model	16	ratchet: may only go down
 export/export_models.py::export_model	20	ratchet: may only go down
 scripts/curation/bakeoff/bakeoff_runner.py::run_job	18	ratchet: may only go down
-scripts/curation/vlm_worker.py::run	32	top 15: decompose in PR 6
 scripts/curation/worker/runner.py::run	20	ratchet: may only go down
 scripts/curation/worker/stage_a.py::stage_a_consumer	17	ratchet: may only go down
 scripts/curation/worker/stage_a.py::stage_a_vlm_visible	19	ratchet: may only go down
-scripts/curation/worker/stage_b.py::stage_b_combined	25	top 15: decompose in PR 6
-scripts/curation/worker/stage_sam.py::stage_a_sam_consumer	24	top 15: decompose in PR 6
-scripts/datasets/build_import_fixture.py::build_variants	27	top 15: decompose in PR 6
-scripts/datasets/fetch_coco_subset.py::run	16	ratchet: may only go down
 src/clients/occ_upsert.py::occ_upsert_bulk	25	top 15: decompose in PR 6
 src/clients/opensearch/bulk.py::bulk_ingest	19	ratchet: may only go down
 src/clients/opensearch/ingest.py::ingest_image	27	top 15: decompose in PR 6

@@ -9,7 +9,8 @@ import pytest
 
 from curation.open_vocab_fixtures import FakeSegmenter, StatefulRegistry, cand, ingested_world
 from curation.reprocess_fixtures import docs, images_index
-from src.services.config_store.store import StoredConfig, get_config_store, reset_config_stores
+from src.services.config_store.snapshot import StoredConfig
+from src.services.config_store.store import get_config_store, reset_config_stores
 from src.services.curation.open_vocab_ingest import (
     schedule_open_vocab_after_ingest,
     wait_for_scheduled,

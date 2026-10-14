@@ -381,7 +381,7 @@ def _recent_empty(now: datetime, hours_ago: float) -> dict[str, Any]:
 
 @pytest.mark.asyncio
 async def test_selectors_skip_items_with_a_recent_empty_answer() -> None:
-    from scripts.curation.vlm_worker import _build_pending_query
+    from scripts.curation.vlm_pending import _build_pending_query
     from src.services.curation.autolabel.selection import vlm_selection_query
 
     now = datetime.now(UTC)

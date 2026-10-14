@@ -23,7 +23,7 @@ from src.services.config_store.index import (
     get_config_revision,
     save_config as _save_config,
 )
-from src.services.config_store.store import StoredConfig
+from src.services.config_store.snapshot import StoredConfig
 
 
 if TYPE_CHECKING:

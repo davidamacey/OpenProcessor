@@ -148,7 +148,7 @@ async def _config_store_axis_defaults(opensearch: Any) -> dict[str, str | None]:
             continue
         # 'off' (an explicit deactivation) is a real,
         # distinct state from "never activated" (the store's own
-        # docstring, src/services/config_store/store.py's `AxisRef`) --
+        # docstring, src/services/config_store/snapshot.py's `AxisRef`) --
         # report it, don't fold it into the same absence as `None`.
         result[axis] = 'off' if ref == 'off' else ref[0]
     return result

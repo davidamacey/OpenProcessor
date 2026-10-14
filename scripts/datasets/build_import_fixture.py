@@ -38,6 +38,7 @@ import json
 import shutil
 import sys
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -129,6 +130,244 @@ def _empty_layout() -> dict[str, dict[str, Any]]:
     return {s: {'states': Counter(), 'boxes': Counter()} for s in SPLITS}
 
 
+@dataclass(frozen=True)
+class _Source:
+    """The COCO ground truth grouped the way the variant builders read it."""
+
+    cat_name: dict[int, str]
+    negative_ids: set[int]
+    images: list[dict[str, Any]]
+    by_image: dict[int, list[dict[str, Any]]]
+    positives: list[dict[str, Any]]
+    negatives: list[dict[str, Any]]
+
+    def usable(self, image_id: int) -> list[dict[str, Any]]:
+        return [a for a in self.by_image.get(image_id, []) if _usable(a)]
+
+
+def _load_source(annotations: dict[str, Any], images_meta: dict[str, Any]) -> _Source:
+    cat_name = {c['id']: c['name'] for c in annotations['categories']}
+    negative_ids = set(images_meta.get('negative_image_ids', []))
+    images = sorted((im for im in annotations['images']), key=lambda im: im['id'])
+    for im in images:
+        require_basename(im['file_name'])
+    by_image: dict[int, list[dict[str, Any]]] = {}
+    for ann in annotations['annotations']:
+        if cat_name.get(ann['category_id']) in TARGETS:
+            by_image.setdefault(ann['image_id'], []).append(ann)
+    src = _Source(cat_name, negative_ids, images, by_image, [], [])
+    positives = [im for im in images if im['id'] not in negative_ids and src.usable(im['id'])]
+    negatives = [im for im in images if im['id'] in negative_ids]
+    return _Source(cat_name, negative_ids, images, by_image, positives, negatives)
+
+
+_YOLO_ROLES = (
+    'missing_label',
+    'class_out_of_range',
+    'coords_out_of_range',
+    'malformed_row',
+    'polygon_row',
+)
+
+
+def _yolo_rows(src: _Source, im: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """The label rows of one image in the yolo layout and the class names they count."""
+    rows: list[str] = []
+    counted: list[str] = []
+    for ann in src.usable(im['id']):
+        name = src.cat_name[ann['category_id']]
+        if name == 'car':
+            cls = 2 if im['id'] % 2 else 1
+        else:
+            cls = 0 if name == 'truck' else 3
+        x, y, w, h = _norm_box(ann['bbox'], im['width'], im['height'])
+        rows.append(_row(cls, x, y, w, h))
+        counted.append(YOLO_NAMES[cls])
+    return rows, counted
+
+
+def _inject(role: str | None, rows: list[str], counted: list[str]) -> None:
+    """Append the one broken row a role stands for."""
+    if role == 'class_out_of_range':
+        rows.append('7 0.500000 0.500000 0.200000 0.200000')
+    elif role == 'coords_out_of_range':
+        rows.append('0 1.200000 0.500000 0.200000 0.200000')
+    elif role == 'malformed_row':
+        rows.append('0 0.500000 0.500000 0.200000')
+    elif role == 'polygon_row':
+        rows.append('0 0.100000 0.100000 0.400000 0.100000 0.250000 0.400000')
+        counted.append(YOLO_NAMES[0])
+
+
+def _yolo_variant(
+    src: _Source, out: Path, image_writer: Callable[[str, Path, int, int], None]
+) -> dict[str, Any]:
+    injectable = sorted((im for im in src.positives), key=lambda im: _order_key(im['id']))
+    chosen = dict(zip(_YOLO_ROLES, injectable, strict=False))
+    yolo_root = out / 'yolo'
+    layout = _empty_layout()
+    for im in src.images:
+        split = split_of(im['id'])
+        image_writer(
+            im['file_name'],
+            yolo_root / f'images/{split}/{im["file_name"]}',
+            im['width'],
+            im['height'],
+        )
+        stem = Path(im['file_name']).stem
+        rows, counted = _yolo_rows(src, im)
+        role = next((r for r, c in chosen.items() if c['id'] == im['id']), None)
+        if role == 'missing_label':
+            layout[split]['states']['unlabeled'] += 1
+            continue
+        _inject(role, rows, counted)
+        _write_text(yolo_root / f'labels/{split}/{stem}.txt', ''.join(r + '\n' for r in rows))
+        layout[split]['states']['labeled' if counted else 'negative'] += 1
+        layout[split]['boxes'].update(counted)
+    _write_text(yolo_root / 'labels/train/orphan_label.txt', '0 0.5 0.5 0.2 0.2\n')
+    _write_text(yolo_root / 'data.yaml', _yaml(YOLO_NAMES))
+    return {
+        'names': {str(k): v for k, v in YOLO_NAMES.items()},
+        'injected': {role: im['file_name'] for role, im in chosen.items()}
+        | {'orphan_label': 'labels/train/orphan_label.txt'},
+        'expected_report': _tally(layout),
+        'expected_issues': {
+            'label_file_missing': 1 if 'missing_label' in chosen else 0,
+            'label_class_out_of_range': 1 if 'class_out_of_range' in chosen else 0,
+            'label_coords_out_of_range': 1 if 'coords_out_of_range' in chosen else 0,
+            'label_row_malformed': 1 if 'malformed_row' in chosen else 0,
+            'yolo_polygon_to_box': 1 if 'polygon_row' in chosen else 0,
+            'label_file_orphan': 1,
+        },
+        'negatives': len(src.negatives),
+    }
+
+
+def _coco_variant(
+    annotations: dict[str, Any],
+    src: _Source,
+    out: Path,
+    image_writer: Callable[[str, Path, int, int], None],
+) -> dict[str, Any]:
+    coco_root = out / 'coco'
+    layout = _empty_layout()
+    per_split: dict[str, dict[str, list[Any]]] = {
+        s: {'images': [], 'annotations': []} for s in SPLITS
+    }
+    crowd = 0
+    for im in src.images:
+        split = split_of(im['id'])
+        image_writer(
+            im['file_name'], coco_root / f'images/{im["file_name"]}', im['width'], im['height']
+        )
+        per_split[split]['images'].append(
+            {k: im[k] for k in ('id', 'file_name', 'width', 'height')}
+        )
+        kept = [
+            a
+            for a in src.by_image.get(im['id'], [])
+            if a['bbox'][2] >= MIN_BOX_PX or a.get('iscrowd')
+        ]
+        for ann in kept:
+            per_split[split]['annotations'].append(ann)
+            if ann.get('iscrowd'):
+                crowd += 1
+        valid = [a for a in kept if _usable(a)]
+        layout[split]['states']['labeled' if valid else 'negative'] += 1
+        layout[split]['boxes'].update(src.cat_name[a['category_id']] for a in valid)
+    coco_categories = [c for c in annotations['categories'] if c['name'] in TARGETS]
+    for split in SPLITS:
+        _write_text(
+            coco_root / f'annotations/instances_{split}.json',
+            json.dumps({**per_split[split], 'categories': coco_categories}),
+        )
+    return {
+        # detect_format() sees ``images/`` first and answers yolo, which then
+        # finds no split (422 format_undetected): a COCO import must name its
+        # format explicitly.
+        'source_format': 'coco',
+        'names': {str(c['id']): c['name'] for c in coco_categories},
+        'expected_report': _tally(layout),
+        'expected_issues': {'coco_crowd_skipped': crowd},
+        'negatives': len(src.negatives),
+    }
+
+
+def _region_rows(
+    cars: list[dict[str, Any]],
+    norm_cars: list[tuple[float, float, float, float]],
+    *,
+    with_cars: bool,
+) -> tuple[list[str], list[str], int]:
+    """Car rows (when kept) and the wheel rows nested in tall cars."""
+    rows: list[str] = []
+    counted: list[str] = []
+    attached = 0
+    for (x, y, w, h), ann in zip(norm_cars, cars, strict=True):
+        if with_cars:
+            rows.append(_row(0, x, y, w, h))
+            counted.append('car')
+        if ann['bbox'][3] >= MIN_CAR_HEIGHT_PX:
+            ww, wh, inset = w * WHEEL_W, h * WHEEL_H, w * WHEEL_INSET
+            for wx in (x + inset, x + w - inset - ww):
+                rows.append(_row(1, wx, y + h - wh, ww, wh))
+                counted.append('wheel')
+                attached += 1
+    return rows, counted, attached
+
+
+def _region_variant(
+    src: _Source,
+    root: Path,
+    image_writer: Callable[[str, Path, int, int], None],
+    *,
+    with_cars: bool,
+) -> dict[str, Any]:
+    layout = _empty_layout()
+    attached = 0
+    standalone = 0
+    standalone_done = False
+    for im in [*src.positives, *src.negatives]:
+        cars = [a for a in src.usable(im['id']) if src.cat_name[a['category_id']] == 'car']
+        if im['id'] not in src.negative_ids and not cars:
+            continue  # truck/bus-only frames have no car parent to nest wheels in
+        split = split_of(im['id'])
+        image_writer(
+            im['file_name'],
+            root / f'images/{split}/{im["file_name"]}',
+            im['width'],
+            im['height'],
+        )
+        norm_cars = [_norm_box(a['bbox'], im['width'], im['height']) for a in cars]
+        rows, counted, image_attached = _region_rows(cars, norm_cars, with_cars=with_cars)
+        attached += image_attached
+        if im['id'] not in src.negative_ids and not standalone_done:
+            for slot in STANDALONE_SLOTS:
+                if not any(_intersects(slot, c) for c in norm_cars):
+                    rows.append(_row(1, *slot))
+                    counted.append('wheel')
+                    standalone += 1
+                    standalone_done = True
+                    break
+        stem = Path(im['file_name']).stem
+        _write_text(root / f'labels/{split}/{stem}.txt', ''.join(r + '\n' for r in rows))
+        layout[split]['states']['labeled' if counted else 'negative'] += 1
+        layout[split]['boxes'].update(counted)
+    _write_text(root / 'data.yaml', _yaml(REGION_NAMES))
+    return {
+        'names': {str(k): v for k, v in REGION_NAMES.items()},
+        'synthetic_geometry': (
+            'SYNTHETIC wheel boxes derived from COCO car boxes -- NOT wheel annotations. '
+            'They exercise parent attachment, not model quality.'
+        ),
+        'expected_report': _tally(layout),
+        'expected_issues': {},
+        'attachments': attached,
+        'standalone': standalone,
+        'negatives': len(src.negatives),
+    }
+
+
 def build_variants(
     annotations: dict[str, Any],
     images_meta: dict[str, Any],
@@ -143,22 +382,7 @@ def build_variants(
     ``license_note``. ``image_writer(file_name, dest, width, height)`` puts
     the image at ``dest``.
     """
-    cat_name = {c['id']: c['name'] for c in annotations['categories']}
-    negative_ids = set(images_meta.get('negative_image_ids', []))
-    images = sorted((im for im in annotations['images']), key=lambda im: im['id'])
-    for im in images:
-        require_basename(im['file_name'])
-    by_image: dict[int, list[dict[str, Any]]] = {}
-    for ann in annotations['annotations']:
-        if cat_name.get(ann['category_id']) in TARGETS:
-            by_image.setdefault(ann['image_id'], []).append(ann)
-
-    def usable(image_id: int) -> list[dict[str, Any]]:
-        return [a for a in by_image.get(image_id, []) if _usable(a)]
-
-    positives = [im for im in images if im['id'] not in negative_ids and usable(im['id'])]
-    negatives = [im for im in images if im['id'] in negative_ids]
-
+    src = _load_source(annotations, images_meta)
     fixture: dict[str, Any] = {
         'seed': images_meta.get('seed'),
         'manifest': images_meta.get('manifest'),
@@ -169,171 +393,12 @@ def build_variants(
         ),
         'variants': {},
     }
-
-    # --- yolo ---------------------------------------------------------------
-    injectable = sorted((im for im in positives), key=lambda im: _order_key(im['id']))
-    roles = (
-        'missing_label',
-        'class_out_of_range',
-        'coords_out_of_range',
-        'malformed_row',
-        'polygon_row',
-    )
-    chosen = dict(zip(roles, injectable, strict=False))
-    yolo_root = out / 'yolo'
-    layout = _empty_layout()
-    for im in images:
-        split = split_of(im['id'])
-        image_writer(
-            im['file_name'],
-            yolo_root / f'images/{split}/{im["file_name"]}',
-            im['width'],
-            im['height'],
-        )
-        stem = Path(im['file_name']).stem
-        rows: list[str] = []
-        counted: list[str] = []
-        for ann in usable(im['id']):
-            name = cat_name[ann['category_id']]
-            if name == 'car':
-                cls = 2 if im['id'] % 2 else 1
-            else:
-                cls = 0 if name == 'truck' else 3
-            x, y, w, h = _norm_box(ann['bbox'], im['width'], im['height'])
-            rows.append(_row(cls, x, y, w, h))
-            counted.append(YOLO_NAMES[cls])
-        role = next((r for r, c in chosen.items() if c['id'] == im['id']), None)
-        if role == 'missing_label':
-            layout[split]['states']['unlabeled'] += 1
-            continue
-        if role == 'class_out_of_range':
-            rows.append('7 0.500000 0.500000 0.200000 0.200000')
-        elif role == 'coords_out_of_range':
-            rows.append('0 1.200000 0.500000 0.200000 0.200000')
-        elif role == 'malformed_row':
-            rows.append('0 0.500000 0.500000 0.200000')
-        elif role == 'polygon_row':
-            rows.append('0 0.100000 0.100000 0.400000 0.100000 0.250000 0.400000')
-            counted.append(YOLO_NAMES[0])
-        _write_text(yolo_root / f'labels/{split}/{stem}.txt', ''.join(r + '\n' for r in rows))
-        layout[split]['states']['labeled' if counted else 'negative'] += 1
-        layout[split]['boxes'].update(counted)
-    _write_text(yolo_root / 'labels/train/orphan_label.txt', '0 0.5 0.5 0.2 0.2\n')
-    _write_text(yolo_root / 'data.yaml', _yaml(YOLO_NAMES))
-    fixture['variants']['yolo'] = {
-        'names': {str(k): v for k, v in YOLO_NAMES.items()},
-        'injected': {role: im['file_name'] for role, im in chosen.items()}
-        | {'orphan_label': 'labels/train/orphan_label.txt'},
-        'expected_report': _tally(layout),
-        'expected_issues': {
-            'label_file_missing': 1 if 'missing_label' in chosen else 0,
-            'label_class_out_of_range': 1 if 'class_out_of_range' in chosen else 0,
-            'label_coords_out_of_range': 1 if 'coords_out_of_range' in chosen else 0,
-            'label_row_malformed': 1 if 'malformed_row' in chosen else 0,
-            'yolo_polygon_to_box': 1 if 'polygon_row' in chosen else 0,
-            'label_file_orphan': 1,
-        },
-        'negatives': len(negatives),
-    }
-
-    # --- coco ---------------------------------------------------------------
-    coco_root = out / 'coco'
-    layout = _empty_layout()
-    per_split: dict[str, dict[str, list[Any]]] = {
-        s: {'images': [], 'annotations': []} for s in SPLITS
-    }
-    crowd = 0
-    for im in images:
-        split = split_of(im['id'])
-        image_writer(
-            im['file_name'], coco_root / f'images/{im["file_name"]}', im['width'], im['height']
-        )
-        per_split[split]['images'].append(
-            {k: im[k] for k in ('id', 'file_name', 'width', 'height')}
-        )
-        kept = [
-            a for a in by_image.get(im['id'], []) if a['bbox'][2] >= MIN_BOX_PX or a.get('iscrowd')
-        ]
-        for ann in kept:
-            per_split[split]['annotations'].append(ann)
-            if ann.get('iscrowd'):
-                crowd += 1
-        valid = [a for a in kept if _usable(a)]
-        layout[split]['states']['labeled' if valid else 'negative'] += 1
-        layout[split]['boxes'].update(cat_name[a['category_id']] for a in valid)
-    coco_categories = [c for c in annotations['categories'] if c['name'] in TARGETS]
-    for split in SPLITS:
-        _write_text(
-            coco_root / f'annotations/instances_{split}.json',
-            json.dumps({**per_split[split], 'categories': coco_categories}),
-        )
-    fixture['variants']['coco'] = {
-        # detect_format() sees ``images/`` first and answers yolo, which then
-        # finds no split (422 format_undetected): a COCO import must name its
-        # format explicitly.
-        'source_format': 'coco',
-        'names': {str(c['id']): c['name'] for c in coco_categories},
-        'expected_report': _tally(layout),
-        'expected_issues': {'coco_crowd_skipped': crowd},
-        'negatives': len(negatives),
-    }
-
-    # --- yolo_region / yolo_region_only ----------------------------------------
+    fixture['variants']['yolo'] = _yolo_variant(src, out, image_writer)
+    fixture['variants']['coco'] = _coco_variant(annotations, src, out, image_writer)
     for variant, with_cars in (('yolo_region', True), ('yolo_region_only', False)):
-        root = out / variant
-        layout = _empty_layout()
-        attached = 0
-        standalone = 0
-        standalone_done = False
-        for im in [*positives, *negatives]:
-            cars = [a for a in usable(im['id']) if cat_name[a['category_id']] == 'car']
-            if im['id'] not in negative_ids and not cars:
-                continue  # truck/bus-only frames have no car parent to nest wheels in
-            split = split_of(im['id'])
-            image_writer(
-                im['file_name'],
-                root / f'images/{split}/{im["file_name"]}',
-                im['width'],
-                im['height'],
-            )
-            rows = []
-            counted = []
-            norm_cars = [_norm_box(a['bbox'], im['width'], im['height']) for a in cars]
-            for (x, y, w, h), ann in zip(norm_cars, cars, strict=True):
-                if with_cars:
-                    rows.append(_row(0, x, y, w, h))
-                    counted.append('car')
-                if ann['bbox'][3] >= MIN_CAR_HEIGHT_PX:
-                    ww, wh, inset = w * WHEEL_W, h * WHEEL_H, w * WHEEL_INSET
-                    for wx in (x + inset, x + w - inset - ww):
-                        rows.append(_row(1, wx, y + h - wh, ww, wh))
-                        counted.append('wheel')
-                        attached += 1
-            if im['id'] not in negative_ids and not standalone_done:
-                for slot in STANDALONE_SLOTS:
-                    if not any(_intersects(slot, c) for c in norm_cars):
-                        rows.append(_row(1, *slot))
-                        counted.append('wheel')
-                        standalone += 1
-                        standalone_done = True
-                        break
-            stem = Path(im['file_name']).stem
-            _write_text(root / f'labels/{split}/{stem}.txt', ''.join(r + '\n' for r in rows))
-            layout[split]['states']['labeled' if counted else 'negative'] += 1
-            layout[split]['boxes'].update(counted)
-        _write_text(root / 'data.yaml', _yaml(REGION_NAMES))
-        fixture['variants'][variant] = {
-            'names': {str(k): v for k, v in REGION_NAMES.items()},
-            'synthetic_geometry': (
-                'SYNTHETIC wheel boxes derived from COCO car boxes -- NOT wheel annotations. '
-                'They exercise parent attachment, not model quality.'
-            ),
-            'expected_report': _tally(layout),
-            'expected_issues': {},
-            'attachments': attached,
-            'standalone': standalone,
-            'negatives': len(negatives),
-        }
+        fixture['variants'][variant] = _region_variant(
+            src, out / variant, image_writer, with_cars=with_cars
+        )
     return fixture
 
 

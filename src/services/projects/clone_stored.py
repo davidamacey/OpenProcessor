@@ -13,7 +13,7 @@ from src.config.project_context import bind_project
 if TYPE_CHECKING:
     from src.config.projects import ProjectRecord
     from src.services.config_store.index import ConfigKind
-    from src.services.config_store.store import StoredConfig
+    from src.services.config_store.snapshot import StoredConfig
 
 
 async def copy_stored_configs(
@@ -36,7 +36,7 @@ async def copy_stored_configs(
     from src.config import get_curation_config
     from src.services.config_store import get_config_store
     from src.services.config_store.index import save_config
-    from src.services.config_store.store import StoredConfig
+    from src.services.config_store.snapshot import StoredConfig
 
     with bind_project(source, read_only=True):
         source_store = get_config_store()

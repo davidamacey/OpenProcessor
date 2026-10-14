@@ -62,6 +62,7 @@ from scripts.bench.ingest_sweep_probes import (
     pyspy_record,
     thread_cpu_census,
 )
+from scripts.bench.suite_ingest import ingest_rep
 from scripts.bench.suite_lib import SCHEMA, summarize_runs, triton_stats_delta
 from scripts.bench.suite_probes import cgroup_cpu_s, phase_env, run_cmd, triton_snapshot, wait_idle
 from scripts.datasets.bench_set import load_pin
@@ -220,7 +221,7 @@ def phase_sweep(args: argparse.Namespace) -> dict[str, Any]:
                 label = arm_spec or 'shipped'
                 modes = args.modes.split(',')
                 for mode in modes:
-                    bs.ingest_rep(
+                    ingest_rep(
                         point_args(args, points[0][0], points[0][1]),
                         mode,
                         0,
@@ -233,7 +234,7 @@ def phase_sweep(args: argparse.Namespace) -> dict[str, Any]:
                     runs: dict[str, list[dict[str, Any]]] = {m: [] for m in modes}
                     for rep in range(1, args.reps + 1):
                         for mode in modes:
-                            run = bs.ingest_rep(pargs, mode, rep, files)
+                            run = ingest_rep(pargs, mode, rep, files)
                             enrich(run)
                             runs[mode].append(run)
                     results[f'b{batch}_c{conc}'] = {
@@ -362,11 +363,11 @@ def phase_attrib(args: argparse.Namespace) -> dict[str, Any]:
     }
     pargs = point_args(args, args.batch_size, args.concurrency)
     for mode in args.modes.split(','):
-        bs.ingest_rep(pargs, mode, 0, files[: args.warmup], warmup=True)
+        ingest_rep(pargs, mode, 0, files[: args.warmup], warmup=True)
         # Pass 1, no profiler: CPU seconds by thread name in the middle of the ingest window.
         with ThreadPoolExecutor(1) as pool:
             census = pool.submit(delayed_census, container, args.census_delay, args.census_seconds)
-            run = bs.ingest_rep(pargs, mode, 1, files)
+            run = ingest_rep(pargs, mode, 1, files)
             threads = census.result()
         enrich(run)
         cpu_stat = run_cmd(['docker', 'exec', container, 'cat', '/sys/fs/cgroup/cpu.stat'])
@@ -378,7 +379,7 @@ def phase_attrib(args: argparse.Namespace) -> dict[str, Any]:
                 args.pyspy_seconds, args.pyspy_rate,
             )  # fmt: skip
             time.sleep(5)
-            spied = bs.ingest_rep(pargs, mode, 2, files)
+            spied = ingest_rep(pargs, mode, 2, files)
             raws = spy.result()
         lines = [ln for raw in raws for ln in raw.read_text().splitlines()]
         results[mode] = {

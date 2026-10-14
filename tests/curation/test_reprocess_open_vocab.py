@@ -10,7 +10,8 @@ import pytest
 
 from curation.open_vocab_fixtures import FakeSegmenter, StatefulRegistry, cand, ingested_world
 from curation.reprocess_fixtures import docs, images_index
-from src.services.config_store.store import StoredConfig, get_config_store, reset_config_stores
+from src.services.config_store.snapshot import StoredConfig
+from src.services.config_store.store import get_config_store, reset_config_stores
 from src.services.curation.reprocess import apply_reprocess
 from src.services.curation.reprocess_models import (
     ReprocessFilter,

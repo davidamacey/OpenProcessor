@@ -19,7 +19,8 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.services.config_store.index import ConfigAxis, ConfigKind
-    from src.services.config_store.store import AxisRef, ConfigStore
+    from src.services.config_store.snapshot import AxisRef
+    from src.services.config_store.store import ConfigStore
 
 
 #: Per axis: the stored kind, the snapshot field holding the stored configs,
@@ -45,7 +46,7 @@ async def activate_and_apply(
     ``store``. B1 fix: pin the exact body activated now, not a later
     by-name re-derivation a subsequent PUT could change."""
     from src.services.config_store.index import activate as _activate
-    from src.services.config_store.store import _resolve_active_body
+    from src.services.config_store.snapshot import _resolve_active_body
 
     ref: AxisRef = (name, revision) if name else 'off'
     kind, stored_field, active_field = AXIS_STORAGE[axis]

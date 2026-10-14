@@ -16,10 +16,8 @@ from src.services.config_store.pack_validation import (
     check_multi_region_keys,
     validate_pack,
 )
-from src.services.config_store.profile_validation import (
-    BYPASSABLE_CODES as PROFILE_BYPASSABLE,
-    validate_profile,
-)
+from src.services.config_store.profile_issues import BYPASSABLE_CODES as PROFILE_BYPASSABLE
+from src.services.config_store.profile_validation import validate_profile
 
 
 def test_pack_bypassable_codes_are_empty() -> None:

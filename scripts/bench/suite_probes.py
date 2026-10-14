@@ -2,7 +2,7 @@
 
 Everything here reads the machine or the running stack (``docker``, ``nvidia-smi``, cgroup
 files, Triton and OpenSearch HTTP) and returns plain data; the arithmetic lives in
-``suite_lib.py`` and the measurement phases in ``baseline_suite.py``.
+``suite_lib.py`` and the measurement phases in ``suite_ingest.py`` and ``suite_phases.py``.
 """
 
 from __future__ import annotations

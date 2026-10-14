@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from src.services.config_store.store import ConfigSnapshot, StoredConfig
+    from src.services.config_store.snapshot import ConfigSnapshot, StoredConfig
 
 logger = get_logger(__name__)
 
