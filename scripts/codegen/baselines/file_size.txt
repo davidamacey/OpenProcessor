@@ -39,7 +39,6 @@ tests/curation/test_cross_project_leak.py	2515	split in PR 7
 tests/curation/test_ingest_service.py	1235	split in PR 7
 tests/curation/test_region_cascade_integrity.py	789	split in PR 7
 tests/curation/test_region_worker.py	1085	split in PR 7
-tests/curation/test_segmenter_service.py	737	split in PR 7
 tests/curation/test_train_jobs.py	1020	split in PR 7
 tests/curation/test_train_router.py	1865	split in PR 7
 tests/curation/test_trainer_protocol.py	1522	split in PR 7
