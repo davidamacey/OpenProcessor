@@ -69,6 +69,68 @@ def _normalize_rows(matrix: np.ndarray) -> np.ndarray:
     return matrix / norms
 
 
+def _residual_pool_query(
+    *,
+    include_candidate_clusters: bool,
+    candidate_cluster_id_min: int | None,
+    extra_must: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    """The residual-pool gate shared by both fetch variants.
+
+    Excludes confidently-labeled crops so clustering only touches the truly
+    residual cohort; see ``CONFIDENT_CLASS_SOURCES`` for the rule. The previous
+    filter (``class_validated != true``) only caught the 102 human-validated
+    rows because item_model and vlm writers don't set ``class_validated``; the
+    2026-05-23 IVF run pulled all 347k crops including 219k labeled ones and
+    started overwriting their ``cluster_id=class_id`` mappings before cancel.
+    """
+    filt: list[dict[str, Any]] = [embedded_clause(RESIDUAL_EMBEDDING_FIELD)]
+    must_not: list[dict[str, Any]] = [
+        {'term': {'class_validated': True}},
+        {'terms': {'class_source': list(CONFIDENT_CLASS_SOURCES)}},
+        # Human-ignored crops (blurry / unidentifiable) stay out of the
+        # residual pool so they're never re-clustered.
+        {'term': {'class_excluded': True}},
+    ]
+    if not include_candidate_clusters and candidate_cluster_id_min is not None:
+        # Include items with no cluster_id OR cluster_id below the
+        # candidate threshold. Items already in a candidate cluster
+        # (>= threshold) are excluded so they aren't re-pooled.
+        filt.append(
+            {
+                'bool': {
+                    'should': [
+                        {'bool': {'must_not': [{'exists': {'field': 'cluster_id'}}]}},
+                        {'range': {'cluster_id': {'lt': candidate_cluster_id_min}}},
+                    ],
+                    'minimum_should_match': 1,
+                },
+            },
+        )
+    if extra_must:
+        # Primary-subject clustering gate (rank / blur). Narrows the pool
+        # to the crops that should train centroids + be assigned.
+        filt.extend(extra_must)
+    return {'bool': {'filter': filt, 'must_not': must_not}}
+
+
+async def _precount(client: AsyncOpenSearch, query: dict[str, Any], progress: Any | None) -> int:
+    """Pre-count so the progress bar has a real total (0 without progress or on failure).
+
+    A separate count query is cheap (no _source, no scroll) and lets the
+    dashboard show 12,000 / 90,000 instead of "working...".
+    """
+    total_estimate = 0
+    if progress is not None:
+        try:
+            count_resp = await client.count(index=items_index(), body={'query': query})
+            total_estimate = int(count_resp.get('count', 0))
+            progress.update(processed=0, total=total_estimate)
+        except Exception as exc:
+            logger.debug('curation_embedding_count_failed', error=str(exc))
+    return total_estimate
+
+
 async def fetch_residual_embeddings(
     client: AsyncOpenSearch,
     *,
@@ -102,61 +164,17 @@ async def fetch_residual_embeddings(
     operator-initiated cancel takes effect within a single scroll
     batch (~50 ms) instead of waiting for the full fetch to finish.
     """
-    filt: list[dict[str, Any]] = [embedded_clause(RESIDUAL_EMBEDDING_FIELD)]
-    # Exclude confidently-labeled crops from the residual pool. The
-    # previous filter (class_validated != true) only caught the 102
-    # human-validated rows because item_model and vlm writers don't
-    # set class_validated; the 2026-05-23 IVF run pulled all 347k
-    # crops including 219k labeled ones and started overwriting their
-    # cluster_id=class_id mappings before cancel. CONFIDENT_CLASS_SOURCES
-    # is the right gate: only crops with no confident class_source go
-    # into clustering.
-    must_not: list[dict[str, Any]] = [
-        {'term': {'class_validated': True}},
-        {'terms': {'class_source': list(CONFIDENT_CLASS_SOURCES)}},
-        # Human-ignored crops (blurry / unidentifiable) stay out of the
-        # residual pool so they're never re-clustered.
-        {'term': {'class_excluded': True}},
-    ]
-    if not include_candidate_clusters and candidate_cluster_id_min is not None:
-        # Include items with no cluster_id OR cluster_id below the
-        # candidate threshold. Items already in a candidate cluster
-        # (>= threshold) are excluded so they aren't re-pooled.
-        filt.append(
-            {
-                'bool': {
-                    'should': [
-                        {'bool': {'must_not': [{'exists': {'field': 'cluster_id'}}]}},
-                        {'range': {'cluster_id': {'lt': candidate_cluster_id_min}}},
-                    ],
-                    'minimum_should_match': 1,
-                },
-            },
-        )
-    if extra_must:
-        # Primary-subject clustering gate (rank / blur). Narrows the pool
-        # to the crops that should train centroids + be assigned.
-        filt.extend(extra_must)
-
-    # Pre-count so the progress bar has a real total. A separate count
-    # query is cheap (no _source, no scroll) and lets the dashboard show
-    # 12,000 / 90,000 instead of "working…" during the scroll.
-    total_estimate = 0
-    if progress is not None:
-        try:
-            count_resp = await client.count(
-                index=items_index(),
-                body={'query': {'bool': {'filter': filt, 'must_not': must_not}}},
-            )
-            total_estimate = int(count_resp.get('count', 0))
-            progress.update(processed=0, total=total_estimate)
-        except Exception as exc:
-            logger.debug('curation_embedding_count_failed', error=str(exc))
+    query = _residual_pool_query(
+        include_candidate_clusters=include_candidate_clusters,
+        candidate_cluster_id_min=candidate_cluster_id_min,
+        extra_must=extra_must,
+    )
+    total_estimate = await _precount(client, query, progress)
 
     body: dict[str, Any] = {
         'size': 1000,
         '_source': [RESIDUAL_EMBEDDING_FIELD],
-        'query': {'bool': {'filter': filt, 'must_not': must_not}},
+        'query': query,
     }
     ids: list[str] = []
     pages: list[np.ndarray] = []
@@ -208,6 +226,84 @@ PARALLEL_FETCH_PAGE_SIZE = 2000
 PARALLEL_FETCH_PIT_KEEPALIVE = '5m'
 
 
+async def _create_pit(client: AsyncOpenSearch) -> str:
+    pit_resp = await client.create_pit(
+        index=items_index(),
+        keep_alive=PARALLEL_FETCH_PIT_KEEPALIVE,
+    )
+    pit_id = pit_resp.get('pit_id') or pit_resp.get('pit')
+    if not pit_id:
+        raise RuntimeError(f'create_pit returned no pit_id: {pit_resp!r}')
+    return pit_id
+
+
+class _SliceProgress:
+    """Progress shared across slices; integer mutation under the GIL is atomic
+    enough for an int-bucket counter, the lock keeps update + cancel check ordered."""
+
+    def __init__(self, progress: Any | None, total_estimate: int) -> None:
+        self._progress = progress
+        self._total_estimate = total_estimate
+        self._n = 0
+        self._lock = asyncio.Lock()
+
+    async def __call__(self, added: int) -> None:
+        if self._progress is None:
+            return
+        async with self._lock:
+            self._n += added
+            self._progress.update(processed=self._n, total=self._total_estimate or self._n)
+            self._progress.raise_if_cancelled()
+
+
+async def _fetch_one_slice(
+    client: AsyncOpenSearch,
+    slice_id: int,
+    *,
+    query: dict[str, Any],
+    pit_id: str,
+    n_slices: int,
+    page_size: int,
+    emit_progress: _SliceProgress,
+) -> tuple[list[str], list[np.ndarray]]:
+    ids_local: list[str] = []
+    embs_local: list[np.ndarray] = []
+    search_after: list[Any] | None = None
+    while True:
+        body: dict[str, Any] = {
+            'size': page_size,
+            '_source': [RESIDUAL_EMBEDDING_FIELD],
+            'query': query,
+            'pit': {'id': pit_id, 'keep_alive': PARALLEL_FETCH_PIT_KEEPALIVE},
+            # _shard_doc is a synthetic sort key OpenSearch exposes
+            # specifically for PIT pagination; doesn't require a
+            # mapping change. Same sort across all slices keeps the
+            # cursors comparable.
+            'sort': [{'_shard_doc': 'asc'}],
+        }
+        if n_slices > 1:
+            body['slice'] = {'id': slice_id, 'max': n_slices}
+        if search_after is not None:
+            body['search_after'] = search_after
+
+        resp = await client.search(body=body)
+        hits = resp.get('hits', {}).get('hits') or []
+        if not hits:
+            break
+        page_ids, page = hits_to_rows(hits, RESIDUAL_EMBEDDING_FIELD)
+        if page is not None:
+            ids_local.extend(page_ids)
+            embs_local.append(page)
+        await emit_progress(len(hits))
+        # search_after cursor = sort key of the last hit. Required
+        # to continue paging within this slice.
+        last_sort = hits[-1].get('sort')
+        if not last_sort:
+            break
+        search_after = last_sort
+    return ids_local, embs_local
+
+
 async def fetch_residual_embeddings_parallel(
     client: AsyncOpenSearch,
     *,
@@ -230,54 +326,17 @@ async def fetch_residual_embeddings_parallel(
     (older OpenSearch, missing _shard_doc sort support, etc.) so the
     pipeline never breaks on a fetch-layer issue.
     """
-    filt: list[dict[str, Any]] = [embedded_clause(RESIDUAL_EMBEDDING_FIELD)]
-    # Same residual-pool gate as the scroll variant — exclude
-    # confidently-labeled crops so clustering only touches the truly
-    # residual cohort. See CONFIDENT_CLASS_SOURCES for the rule.
-    must_not: list[dict[str, Any]] = [
-        {'term': {'class_validated': True}},
-        {'terms': {'class_source': list(CONFIDENT_CLASS_SOURCES)}},
-        # Human-ignored crops (blurry / unidentifiable) stay out of the
-        # residual pool so they're never re-clustered.
-        {'term': {'class_excluded': True}},
-    ]
-    if not include_candidate_clusters and candidate_cluster_id_min is not None:
-        filt.append(
-            {
-                'bool': {
-                    'should': [
-                        {'bool': {'must_not': [{'exists': {'field': 'cluster_id'}}]}},
-                        {'range': {'cluster_id': {'lt': candidate_cluster_id_min}}},
-                    ],
-                    'minimum_should_match': 1,
-                },
-            },
-        )
-    if extra_must:
-        # Primary-subject clustering gate (rank / blur).
-        filt.extend(extra_must)
-    query = {'bool': {'filter': filt, 'must_not': must_not}}
-
-    # Pre-count for progress.
-    total_estimate = 0
-    if progress is not None:
-        try:
-            count_resp = await client.count(index=items_index(), body={'query': query})
-            total_estimate = int(count_resp.get('count', 0))
-            progress.update(processed=0, total=total_estimate)
-        except Exception as exc:
-            logger.debug('curation_embedding_count_failed', error=str(exc))
+    query = _residual_pool_query(
+        include_candidate_clusters=include_candidate_clusters,
+        candidate_cluster_id_min=candidate_cluster_id_min,
+        extra_must=extra_must,
+    )
+    total_estimate = await _precount(client, query, progress)
 
     # Create a Point-In-Time. Without PIT we'd need scroll cursors per
     # slice -- PIT is the supported pattern for sliced parallel reads.
     try:
-        pit_resp = await client.create_pit(
-            index=items_index(),
-            keep_alive=PARALLEL_FETCH_PIT_KEEPALIVE,
-        )
-        pit_id = pit_resp.get('pit_id') or pit_resp.get('pit')
-        if not pit_id:
-            raise RuntimeError(f'create_pit returned no pit_id: {pit_resp!r}')
+        pit_id = await _create_pit(client)
     except Exception as exc:
         logger.warning('curation_embedding_pit_unavailable_fallback_scroll', error=str(exc))
         return await fetch_residual_embeddings(
@@ -288,60 +347,21 @@ async def fetch_residual_embeddings_parallel(
             progress=progress,
         )
 
-    # Shared progress counter across slices; integer mutation under the
-    # GIL is atomic enough for an int-bucket counter.
-    counter = {'n': 0}
-    lock = asyncio.Lock()
-
-    async def _emit_progress(added: int) -> None:
-        if progress is None:
-            return
-        async with lock:
-            counter['n'] += added
-            progress.update(processed=counter['n'], total=total_estimate or counter['n'])
-            progress.raise_if_cancelled()
-
-    async def _fetch_one_slice(slice_id: int) -> tuple[list[str], list[np.ndarray]]:
-        ids_local: list[str] = []
-        embs_local: list[np.ndarray] = []
-        search_after: list[Any] | None = None
-        while True:
-            body: dict[str, Any] = {
-                'size': page_size,
-                '_source': [RESIDUAL_EMBEDDING_FIELD],
-                'query': query,
-                'pit': {'id': pit_id, 'keep_alive': PARALLEL_FETCH_PIT_KEEPALIVE},
-                # _shard_doc is a synthetic sort key OpenSearch exposes
-                # specifically for PIT pagination; doesn't require a
-                # mapping change. Same sort across all slices keeps the
-                # cursors comparable.
-                'sort': [{'_shard_doc': 'asc'}],
-            }
-            if n_slices > 1:
-                body['slice'] = {'id': slice_id, 'max': n_slices}
-            if search_after is not None:
-                body['search_after'] = search_after
-
-            resp = await client.search(body=body)
-            hits = resp.get('hits', {}).get('hits') or []
-            if not hits:
-                break
-            page_ids, page = hits_to_rows(hits, RESIDUAL_EMBEDDING_FIELD)
-            if page is not None:
-                ids_local.extend(page_ids)
-                embs_local.append(page)
-            await _emit_progress(len(hits))
-            # search_after cursor = sort key of the last hit. Required
-            # to continue paging within this slice.
-            last_sort = hits[-1].get('sort')
-            if not last_sort:
-                break
-            search_after = last_sort
-        return ids_local, embs_local
-
+    emit_progress = _SliceProgress(progress, total_estimate)
     try:
         slice_results = await asyncio.gather(
-            *(_fetch_one_slice(i) for i in range(n_slices)),
+            *(
+                _fetch_one_slice(
+                    client,
+                    slice_id,
+                    query=query,
+                    pit_id=pit_id,
+                    n_slices=n_slices,
+                    page_size=page_size,
+                    emit_progress=emit_progress,
+                )
+                for slice_id in range(n_slices)
+            ),
         )
     finally:
         try:
