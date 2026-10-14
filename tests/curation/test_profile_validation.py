@@ -16,7 +16,8 @@ import pytest
 from _region_profile_fixture import EXAMPLE_LICENSE_PLATE_PROFILE
 
 from src.config import DetectionProfile
-from src.services.config_store.profile_validation import PROFILE_FIELD_RANGES, validate_profile
+from src.services.config_store.profile_field_checks import PROFILE_FIELD_RANGES
+from src.services.config_store.profile_validation import validate_profile
 
 
 def _body(*, profile: DetectionProfile | None = None, **overrides: Any) -> dict[str, Any]:

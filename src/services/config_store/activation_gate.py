@@ -146,7 +146,8 @@ async def run_activation_gate(
             class_names=registry_class_names(),
         )
     else:
-        from src.services.config_store.profile_validation import BYPASSABLE_CODES, validate_profile
+        from src.services.config_store.profile_issues import BYPASSABLE_CODES
+        from src.services.config_store.profile_validation import validate_profile
         from src.services.config_store.profiles import (
             build_record as build_profile_record,
             get_revision_record as get_profile_revision,

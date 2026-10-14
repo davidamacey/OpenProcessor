@@ -104,7 +104,7 @@ src/services/visual_search/clustering.py	1	triage every return-empty handler in 
 src/services/config_store/activation_view.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/config_store/open_vocab_validation.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/config_store/pack_validation.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/config_store/profile_validation.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/config_store/profile_dependency_checks.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/config_store/store.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/config_store/store_poll.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/autolabel/embed_stage.py	1	triage every return-empty handler in PR 3; ratchet: may only go down

@@ -22,7 +22,7 @@ from src.routers.curation._region_profile_models import (
     RegionProfileGroup,
     RegionProfileSchema,
 )
-from src.services.config_store.profile_validation import PROFILE_FIELD_RANGES
+from src.services.config_store.profile_field_checks import PROFILE_FIELD_RANGES
 
 
 _TYPES: dict[str, FieldType] = {
