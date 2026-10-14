@@ -13,6 +13,5 @@ frontend/src/routes/p/[project]/classes/+page.svelte	1054	split in PR 8
 frontend/src/routes/p/[project]/clusters/+page.svelte	1488	split in PR 8
 frontend/src/routes/p/[project]/clusters/[id]/+page.svelte	1462	split in PR 8
 frontend/src/routes/p/[project]/clusters/slotGalleryController.svelte.ts	868	split in PR 8
-frontend/src/routes/p/[project]/export/+page.svelte	1012	split in PR 8
 frontend/src/routes/p/[project]/review/+page.svelte	3243	split in PR 8
 setup-openprocessor.sh	3214	cohesive: one __op_define function so a truncated curl-to-bash download is a syntax error; pre-install code cannot source libraries
