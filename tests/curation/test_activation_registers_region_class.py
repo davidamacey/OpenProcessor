@@ -8,12 +8,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from curation.test_region_profiles_router import (  # noqa: F401
-    PREFIX,
-    _body,
-    _reset_caches,
-    app_client,
-)
+from curation.test_region_profiles_router import PREFIX, _body, _reset_caches, app_client  # noqa: F401
 from src.clients.curation_opensearch.registry import ClassRegistry
 
 

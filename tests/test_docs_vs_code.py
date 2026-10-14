@@ -31,7 +31,7 @@ def _reset_only():
     checker.set_only(None)
 
 
-@pytest.mark.parametrize('name', ['routes', 'env'])
+@pytest.mark.parametrize('name', ['routes', 'env', 'compose'])
 def test_real_docs_match_the_code(name: str) -> None:
     errors = checker.CHECKS[name]()
     assert errors == [], f'{name} check found {len(errors)} problem(s):\n' + '\n'.join(errors)
@@ -66,6 +66,23 @@ def test_env_check_rejects_unknown_var(tmp_path: Path) -> None:
     bad = _check_one(tmp_path, 'Set `OP_DEFINITELY_NOT_A_REAL_VAR` here.\n', 'env')
     assert len(bad) == 1
     assert 'OP_DEFINITELY_NOT_A_REAL_VAR' in bad[0]
+
+
+def test_compose_check_rejects_a_variable_missing_from_env_template(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / 'docker-compose.yml').write_text(
+        'services:\n  a:\n    image: ${KNOWN_IMAGE:-x}\n    environment:\n'
+        '      - B=${NOT_DOCUMENTED:-1}\n      - C=$${ESCAPED_BY_COMPOSE}\n'
+        '      - D=${COMMENTED_ONLY}\n',
+        encoding='utf-8',
+    )
+    (tmp_path / 'env.template').write_text('KNOWN_IMAGE=x\n# COMMENTED_ONLY=1\n', encoding='utf-8')
+    monkeypatch.setattr(checker, 'REPO_ROOT', tmp_path)
+
+    assert checker.check_compose_vars() == [
+        'docker-compose.yml: ${NOT_DOCUMENTED} is not in env.template (commented is fine)'
+    ]
 
 
 def test_link_check_rejects_missing_file_and_anchor(tmp_path: Path) -> None:

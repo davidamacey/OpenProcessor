@@ -580,8 +580,8 @@ def tee_to_run_log(run_log_path: Path) -> Iterator[None]:
             return False
 
     try:
-        sys.stdout = _Tee(orig_stdout, fp)  # type: ignore[assignment]
-        sys.stderr = _Tee(orig_stderr, fp)  # type: ignore[assignment]
+        sys.stdout = _Tee(orig_stdout, fp)
+        sys.stderr = _Tee(orig_stderr, fp)
         yield
     finally:
         sys.stdout = orig_stdout

@@ -9,8 +9,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from src.routers.curation._item_models import ItemDoc  # noqa: TC001 - pydantic field type
-from src.routers.curation._region_row_models import RegionRow  # noqa: TC001 - pydantic
+from src.routers.curation._item_models import ItemDoc
+from src.routers.curation._region_row_models import RegionRow
 
 
 class VectorRefresh(BaseModel):

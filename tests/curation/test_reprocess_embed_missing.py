@@ -171,7 +171,7 @@ class _Store:
 async def test_a_newly_embedded_unclassed_item_is_placed_like_an_ingested_one(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(reprocess_embed, 'get_ivf_ingest_store', lambda: _Store())
+    monkeypatch.setattr(reprocess_embed, 'get_ivf_ingest_store', _Store)
     fake, _, service = _world(tmp_path, monkeypatch)
     await apply_reprocess(fake, _req(crops=['car', 'human']), service_factory=_factory(service))
     car = docs(fake)['car']
@@ -184,7 +184,7 @@ async def test_a_newly_embedded_unclassed_item_is_placed_like_an_ingested_one(
 async def test_an_item_failing_the_clustering_gate_is_parked(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(reprocess_embed, 'get_ivf_ingest_store', lambda: _Store())
+    monkeypatch.setattr(reprocess_embed, 'get_ivf_ingest_store', _Store)
     monkeypatch.setattr('src.services.curation.ingest_index.ingest_passes_gate', lambda *_a: False)
     fake, _, service = _world(tmp_path, monkeypatch)
     await apply_reprocess(fake, _req(crops=['car']), service_factory=_factory(service))

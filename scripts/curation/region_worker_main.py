@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import sys
 
-from scripts.curation.worker import *  # noqa: F403
-from scripts.curation.worker import run  # noqa: F401
-from scripts.curation.worker.__main__ import main, parse_args  # noqa: F401
-from scripts.curation.worker.bulk_writer import _bulk_update  # noqa: F401
-from scripts.curation.worker.state import (  # noqa: F401
+from scripts.curation.worker import *  # noqa: F403  # compatibility re-export for the legacy entry point
+from scripts.curation.worker import run  # noqa: F401  # compatibility re-export for the legacy entry point
+from scripts.curation.worker.__main__ import main, parse_args  # noqa: F401  # compatibility re-export for the legacy entry point
+from scripts.curation.worker.bulk_writer import _bulk_update  # noqa: F401  # compatibility re-export for the legacy entry point
+from scripts.curation.worker.state import (  # noqa: F401  # compatibility re-export for the legacy entry point
     _class_group,
     _is_secondary_shape,
     _ItemTask,

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Triton Python Backend: PP-OCRv5 Text Detection & Recognition Pipeline
 
@@ -37,11 +36,12 @@ import cv2
 import numpy as np
 import triton_python_backend_utils as pb_utils
 
+
 # GPU-accelerated libraries
 try:
     import cupy as cp
     import torch
-    import torch.nn.functional as F
+
     HAS_GPU = True
 except ImportError:
     HAS_GPU = False
@@ -226,8 +226,7 @@ class DBPostProcess:
         except ImportError:
             # Fallback: simple box expansion
             center = box.mean(axis=0)
-            expanded = center + (box - center) * self.unclip_ratio
-            return expanded
+            return center + (box - center) * self.unclip_ratio
 
     def _order_points(self, pts: np.ndarray) -> np.ndarray:
         """Order points: top-left, top-right, bottom-right, bottom-left."""
@@ -250,7 +249,7 @@ class CTCLabelDecode:
     def __init__(self, character_dict_path: str | Path):
         self.character = ['blank']  # CTC blank token
 
-        with open(character_dict_path, 'r', encoding='utf-8') as f:
+        with Path(character_dict_path).open('r', encoding='utf-8') as f:
             for line in f:
                 char = line.strip('\n')
                 self.character.append(char)
@@ -271,17 +270,16 @@ class CTCLabelDecode:
         preds_idx = preds.argmax(axis=2)  # [B, T]
         preds_prob = preds.max(axis=2)  # [B, T]
 
-        for idx, prob in zip(preds_idx, preds_prob):
+        for idx, prob in zip(preds_idx, preds_prob, strict=True):
             text = ''
             conf_list = []
             prev_idx = 0
 
-            for i, (char_idx, char_prob) in enumerate(zip(idx, prob)):
+            for char_idx, char_prob in zip(idx, prob, strict=True):
                 # Skip blank and repeated
-                if char_idx != 0 and char_idx != prev_idx:
-                    if char_idx < len(self.character):
-                        text += self.character[char_idx]
-                        conf_list.append(char_prob)
+                if char_idx not in (0, prev_idx) and char_idx < len(self.character):
+                    text += self.character[char_idx]
+                    conf_list.append(char_prob)
                 prev_idx = char_idx
 
             conf = float(np.mean(conf_list)) if conf_list else 0.0
@@ -307,8 +305,8 @@ class TritonPythonModel:
 
         # DB post-processor - lower thresholds for better detection
         self.db_postprocess = DBPostProcess(
-            thresh=0.2,        # Lower for faint text
-            box_thresh=0.4,    # Lower for more candidates
+            thresh=0.2,  # Lower for faint text
+            box_thresh=0.4,  # Lower for more candidates
             max_candidates=1000,
             unclip_ratio=1.5,  # Standard expansion
             use_dilation=True,
@@ -374,9 +372,8 @@ class TritonPythonModel:
         original_image = pb_utils.get_input_tensor_by_name(request, 'original_image').as_numpy()
         orig_shape = pb_utils.get_input_tensor_by_name(request, 'orig_shape').as_numpy()
 
-        # ocr_image: [3, H, W] normalized [-1, 1]
-        # original_image: [3, H, W] normalized [0, 1]
-        # orig_shape: [2] = [H, W]
+        # Inputs: ocr_image is a [3, H, W] tensor normalized to [-1, 1], original_image a
+        # [3, H, W] tensor normalized to [0, 1], and orig_shape the pair (H, W).
 
         orig_h, orig_w = int(orig_shape[0]), int(orig_shape[1])
 
@@ -405,7 +402,9 @@ class TritonPythonModel:
         logger.debug(f'Got {len(text_crops)} text crops')
         # Debug: log crop sizes
         for i, crop in enumerate(text_crops[:3]):
-            logger.debug(f'  Crop {i}: shape={crop.shape}, dtype={crop.dtype}, range=[{crop.min()}, {crop.max()}]')
+            logger.debug(
+                f'  Crop {i}: shape={crop.shape}, dtype={crop.dtype}, range=[{crop.min()}, {crop.max()}]'
+            )
 
         if len(text_crops) == 0:
             return self._create_empty_response()
@@ -440,8 +439,7 @@ class TritonPythonModel:
             raise RuntimeError(f'Detection failed: {infer_response.error().message()}')
 
         output_tensor = pb_utils.get_output_tensor_by_name(infer_response, 'fetch_name_0')
-        output = self._triton_to_numpy(output_tensor)
-        return output  # [1, 1, H, W]
+        return self._triton_to_numpy(output_tensor)  # shape [1, 1, H, W]
 
     def _call_recognition(self, text_crops: list[np.ndarray]) -> tuple[list[str], list[float]]:
         """
@@ -474,7 +472,7 @@ class TritonPythonModel:
 
             # Calculate target width maintaining aspect ratio
             ratio = w / float(h)
-            target_w = int(math.ceil(self.rec_height * ratio))
+            target_w = math.ceil(self.rec_height * ratio)
             target_w = max(MIN_WIDTH, min(MAX_WIDTH, target_w))
 
             # Preprocess crop
@@ -510,7 +508,9 @@ class TritonPythonModel:
 
             if i < 3:
                 text, score = batch_results[0]
-                logger.debug(f'  Crop {i}: width={target_w}, text="{text[:30]}..." score={score:.3f}')
+                logger.debug(
+                    f'  Crop {i}: width={target_w}, text="{text[:30]}..." score={score:.3f}'
+                )
 
         # Extract texts and scores
         texts = [r[0] for r in all_results]
@@ -538,13 +538,13 @@ class TritonPythonModel:
         if math.ceil(imgH * ratio) > imgW:
             resized_w = imgW
         else:
-            resized_w = int(math.ceil(imgH * ratio))
+            resized_w = math.ceil(imgH * ratio)
 
         # Resize
         resized_image = cv2.resize(img, (resized_w, imgH))
         resized_image = resized_image.astype(np.float32)
 
-        # Normalize: (x / 255 - 0.5) / 0.5 = x / 127.5 - 1
+        # Normalize to [-1, 1]: (x / 255 - 0.5) / 0.5
         resized_image = resized_image.transpose(2, 0, 1) / 255.0
         resized_image -= 0.5
         resized_image /= 0.5
@@ -574,7 +574,7 @@ class TritonPythonModel:
         resized_image = cv2.resize(img, (target_w, imgH))
         resized_image = resized_image.astype(np.float32)
 
-        # Normalize: (x / 255 - 0.5) / 0.5 = x / 127.5 - 1
+        # Normalize to [-1, 1]: (x / 255 - 0.5) / 0.5
         resized_image = resized_image.transpose(2, 0, 1) / 255.0
         resized_image -= 0.5
         resized_image /= 0.5
@@ -621,9 +621,7 @@ class TritonPythonModel:
                 continue
 
             # Destination points
-            dst_pts = np.array(
-                [[0, 0], [width, 0], [width, height], [0, height]], dtype=np.float32
-            )
+            dst_pts = np.array([[0, 0], [width, 0], [width, height], [0, height]], dtype=np.float32)
 
             # Perspective transform
             M = cv2.getPerspectiveTransform(box.astype(np.float32), dst_pts)
@@ -673,7 +671,9 @@ class TritonPythonModel:
             padded_texts[i] = texts[i] if i < len(texts) else ''
 
         # Convert texts to bytes for Triton BYTES type
-        texts_bytes = np.array([t.encode('utf-8') if t else b'' for t in padded_texts], dtype=object)
+        texts_bytes = np.array(
+            [t.encode('utf-8') if t else b'' for t in padded_texts], dtype=object
+        )
 
         output_tensors = [
             pb_utils.Tensor('num_texts', np.array([num_texts], dtype=np.int32)),
@@ -691,7 +691,9 @@ class TritonPythonModel:
         output_tensors = [
             pb_utils.Tensor('num_texts', np.array([0], dtype=np.int32)),
             pb_utils.Tensor('text_boxes', np.zeros((self.max_texts, 8), dtype=np.float32)),
-            pb_utils.Tensor('text_boxes_normalized', np.zeros((self.max_texts, 4), dtype=np.float32)),
+            pb_utils.Tensor(
+                'text_boxes_normalized', np.zeros((self.max_texts, 4), dtype=np.float32)
+            ),
             pb_utils.Tensor('texts', np.array([b'' for _ in range(self.max_texts)], dtype=object)),
             pb_utils.Tensor('text_scores', np.zeros(self.max_texts, dtype=np.float32)),
             pb_utils.Tensor('rec_scores', np.zeros(self.max_texts, dtype=np.float32)),

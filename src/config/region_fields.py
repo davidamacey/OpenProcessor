@@ -23,9 +23,8 @@ names — a rename becomes a config flip, not a code change.
 - Metric names — NO, deferred to a later phase.
 
 f-string composition of a legacy suffix (``f'{F.status}_legacy'``) is
-banned — use the explicit ``*_legacy`` attributes below, so
-``scripts/codegen/check_no_literal_region_fields.py`` can stay a simple
-literal scan.
+banned — use the explicit ``*_legacy`` attributes below, so the field names
+stay greppable.
 """
 
 from __future__ import annotations

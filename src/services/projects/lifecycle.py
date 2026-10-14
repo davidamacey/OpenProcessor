@@ -237,7 +237,7 @@ async def _cleanup_orphaned_by_concurrent_delete(
     with the exact index names, so an operator can search for them if
     this cleanup itself fails (e.g. the same transient fault that made
     ``_ensure_indexes`` unreliable in the first place)."""
-    detail = exc.detail if isinstance(exc.detail, dict) else {}
+    detail: dict[str, Any] = exc.detail if isinstance(exc.detail, dict) else {}
     if detail.get('project_status') != 'deleted':
         return
     orphaned = sorted(set(record.resources.indexes.values()))
@@ -627,13 +627,9 @@ async def unarchive_project(client: Any, *, slug: str, expected_revision: int) -
 # clone_settings / clone_settings_into live in clone.py (700-LOC
 # ratchet); re-exported here so `lifecycle.clone_settings(...)` keeps
 # working for every existing caller.
-from src.services.projects.clone import clone_settings, clone_settings_into  # noqa: E402,F401
+from src.services.projects.clone import clone_settings, clone_settings_into  # noqa: E402,F401  # bottom-of-module import breaks a circular import; imported for its side effect
 
 # dry_run_delete / delete_project / delete_project_finish live in
 # delete.py (700-LOC ratchet); re-exported here so
 # `lifecycle.delete_project(...)` keeps working for every existing caller.
-from src.services.projects.delete import (  # noqa: E402,F401
-    delete_project,
-    delete_project_finish,
-    dry_run_delete,
-)
+from src.services.projects.delete import delete_project, delete_project_finish, dry_run_delete  # noqa: E402,F401  # bottom-of-module import breaks a circular import; imported for its side effect

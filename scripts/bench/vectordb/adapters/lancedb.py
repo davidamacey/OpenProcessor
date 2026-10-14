@@ -118,7 +118,7 @@ class LanceAdapter(Adapter):
         rows = q.select(['id']).limit(k).to_arrow()
         return [int(x) for x in rows['id'].to_pylist()]
 
-    def update_field(self, ids: np.ndarray, field: str, values: np.ndarray, threads: int) -> None:  # noqa: ARG002
+    def update_field(self, ids: np.ndarray, field: str, values: np.ndarray, threads: int) -> None:  # noqa: ARG002  # interface method; this implementation does not need the argument
         import pyarrow as pa
 
         data = pa.table(
@@ -133,7 +133,7 @@ class LanceAdapter(Adapter):
         self.table.optimize(cleanup_older_than=__import__('datetime').timedelta(seconds=0))
 
     def bytes_on_disk(self) -> int:
-        out = subprocess.run(
+        out = subprocess.run(  # nosec B603 B607  fixed argv list, no shell; du from PATH
             ['du', '-sb', str(self.path)], capture_output=True, text=True, check=True
         )
         return int(out.stdout.split()[0])

@@ -53,7 +53,7 @@ async def _build_knn_graph(
     import asyncio as _asyncio
 
     def _gpu_knn() -> Any:
-        from cuml.neighbors import NearestNeighbors as cuNN  # type: ignore[import-not-found]
+        from cuml.neighbors import NearestNeighbors as cuNN
 
         # cuML's kneighbors_graph includes each point as its own
         # nearest neighbor (n_neighbors=k+1 asks for k *other* points

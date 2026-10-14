@@ -9,9 +9,7 @@ from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from src.services.curation.dataset_import.mapping import (
-    ClassMappingEntry,  # noqa: TC001 - pydantic field type, resolved at runtime
-)
+from src.services.curation.dataset_import.mapping import ClassMappingEntry
 from src.services.issue_ids import stamp_issue_ids
 
 

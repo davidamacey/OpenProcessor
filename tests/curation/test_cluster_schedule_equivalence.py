@@ -79,7 +79,7 @@ def ivf_store_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     class _Cfg:
         project_state_dir = tmp_path
 
-    monkeypatch.setattr(ivf_store_mod, 'get_curation_config', lambda: _Cfg())
+    monkeypatch.setattr(ivf_store_mod, 'get_curation_config', _Cfg)
     return tmp_path
 
 

@@ -192,7 +192,7 @@ def _reply_for(kind: str, n_images: int, text: str = '') -> str:
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
 
-    def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
+    def log_message(self, format: str, *args: Any) -> None:  # noqa: A002  # overrides BaseHTTPRequestHandler.log_message
         # One compact line per request; the default logger is too chatty
         # for a container whose logs are read during a failing test.
         print(f'fake-vlm {self.command} {self.path} {format % args}')

@@ -32,7 +32,7 @@ def _client() -> TestClient:
     from _curation_app import mount_curation_routers
 
     mount_curation_routers(app, curation_router)
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
     # Entered as a context manager (not just constructed) so all requests
     # in a test share one persistent event loop/portal -- required for an
     # asyncio.create_task started by one request to still be running (and

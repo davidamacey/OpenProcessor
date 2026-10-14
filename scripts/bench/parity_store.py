@@ -126,7 +126,7 @@ def save_capture(out_dir: Path, capture: Capture) -> None:
     validate(capture.arrays)
     out_dir.mkdir(parents=True, exist_ok=True)
     npz = out_dir / ARRAYS_FILE
-    np.savez_compressed(npz, **capture.arrays)
+    np.savez_compressed(npz, **capture.arrays)  # type: ignore[arg-type]  # mypy reads **dict as the allow_pickle flag
     doc = {
         **capture.meta,
         'schema': SCHEMA,

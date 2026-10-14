@@ -70,7 +70,7 @@ def download(url: str, dest: Path, *, expected_sha256: str | None = None, retrie
     for attempt in range(1, retries + 1):
         try:
             req = urllib.request.Request(url, headers={'User-Agent': USER_AGENT})
-            with urllib.request.urlopen(req, timeout=60) as resp, part.open('wb') as out:
+            with urllib.request.urlopen(req, timeout=60) as resp, part.open('wb') as out:  # nosec B310  operator-supplied https dataset URL
                 while True:
                     chunk = resp.read(1 << 20)
                     if not chunk:

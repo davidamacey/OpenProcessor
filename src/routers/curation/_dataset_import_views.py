@@ -126,7 +126,7 @@ def preview_wire(prepared: PreparedImport, *, already_indexed: int) -> DatasetPr
             profile=({'name': profile.name, 'revision': profile.revision} if profile else None),
             region_class_name=profile.region_class_name if profile else None,
             parent_classes=list(profile.parent_classes) if profile else [],
-            parents_mode=prepared.parents,  # type: ignore[arg-type]
+            parents_mode=prepared.parents,
             standalone_boxes=prepared.standalone_boxes,
         )
     op = prepared.scan.op_export

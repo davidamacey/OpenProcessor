@@ -122,7 +122,7 @@ def test_while_a_run_is_live_only_scans_proceed(monkeypatch: pytest.MonkeyPatch)
     save_source(_source(source_id='src_dddddd', watch=WatchTrigger(True, 60)))
     acted: list[Action] = []
     monkeypatch.setattr(dispatcher, '_execute', lambda action, _src: acted.append(action))
-    monkeypatch.setattr(dispatcher, 'active_run', lambda: object())
+    monkeypatch.setattr(dispatcher, 'active_run', object)
     dispatcher.run_project_tick(now=NOW)
     assert [a.kind for a in acted] == ['poll']
 

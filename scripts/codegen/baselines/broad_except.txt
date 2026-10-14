@@ -1,0 +1,222 @@
+docker/segmenter/sam3_backend.py	1	ratchet: may only go down
+docker/trainer/augment.py	4	ratchet: may only go down
+docker/trainer/campaign.py	2	ratchet: may only go down
+docker/trainer/incumbent_compare.py	2	ratchet: may only go down
+docker/trainer/job_protocol.py	5	ratchet: may only go down
+docker/trainer/mlflow_callbacks.py	9	ratchet: may only go down
+docker/trainer/trainer.py	10	ratchet: may only go down
+export/download_face_models.py	2	ratchet: may only go down
+export/download_paddleocr.py	2	ratchet: may only go down
+export/download_pytorch_models.py	1	ratchet: may only go down
+export/export_detector_dual_head.py	1	ratchet: may only go down
+export/export_face_recognition.py	1	ratchet: may only go down
+export/export_mobileclip_image_encoder.py	2	ratchet: may only go down
+export/export_models.py	5	ratchet: may only go down
+export/export_paddleocr_det.py	2	ratchet: may only go down
+export/export_paddleocr_rec.py	5	ratchet: may only go down
+export/export_pe_text_encoder.py	2	ratchet: may only go down
+export/export_scrfd.py	2	ratchet: may only go down
+export/trt_utils.py	2	ratchet: may only go down
+models/gpu_image_prep/1/model.py	2	ratchet: may only go down
+models/ocr_pipeline/1/model.py	1	ratchet: may only go down
+scripts/bench/gpu_decode_bench.py	2	ratchet: may only go down
+scripts/bench/gpu_decode_parity.py	1	ratchet: may only go down
+scripts/bench/ingest_write_path.py	1	ratchet: may only go down
+scripts/bench/vectordb/orchestrate.py	1	ratchet: may only go down
+scripts/curation/_vlm_activity.py	1	ratchet: may only go down
+scripts/curation/auto_label_worker.py	3	ratchet: may only go down
+scripts/curation/backfill_region_embeddings.py	2	ratchet: may only go down
+scripts/curation/bakeoff/bakeoff_runner.py	3	ratchet: may only go down
+scripts/curation/bakeoff/report.py	2	ratchet: may only go down
+scripts/curation/cluster_raw_labels.py	1	ratchet: may only go down
+scripts/curation/cluster_refresh_daemon.py	2	ratchet: may only go down
+scripts/curation/ingest_upload.py	1	ratchet: may only go down
+scripts/curation/revert_class_cluster_promotions.py	1	ratchet: may only go down
+scripts/curation/seed_live_harness.py	1	ratchet: may only go down
+scripts/curation/vlm_worker.py	2	ratchet: may only go down
+scripts/curation/worker/bulk_writer.py	3	ratchet: may only go down
+scripts/curation/worker/flow.py	2	ratchet: may only go down
+scripts/curation/worker/region_embed_stage.py	1	ratchet: may only go down
+scripts/curation/worker/region_text_stage.py	2	ratchet: may only go down
+scripts/curation/worker/runner.py	2	ratchet: may only go down
+scripts/curation/worker/runtime.py	1	ratchet: may only go down
+scripts/curation/worker/stage_a.py	2	ratchet: may only go down
+scripts/curation/worker/stage_b.py	1	ratchet: may only go down
+scripts/curation/worker/stage_sam.py	2	ratchet: may only go down
+scripts/curation/worker/state.py	1	ratchet: may only go down
+scripts/download_ocr_test_images.py	1	ratchet: may only go down
+scripts/resize_images.py	1	ratchet: may only go down
+src/clients/curation_opensearch/ensure_fields.py	12	triage every return-empty handler in PR 3; ratchet: may only go down
+src/clients/curation_opensearch/ensure_overlay_fields.py	8	triage every return-empty handler in PR 3; ratchet: may only go down
+src/clients/curation_opensearch/items_extra.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/clients/curation_opensearch/lifecycle.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/clients/curation_opensearch/settings_doc.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/clients/occ.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/clients/occ_bulk.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/clients/occ_upsert.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/clients/opensearch/bulk.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
+src/clients/opensearch/client.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/clients/opensearch/clusters.py	5	triage every return-empty handler in PR 3; ratchet: may only go down
+src/clients/opensearch/indexes.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/clients/opensearch/ingest.py	7	triage every return-empty handler in PR 3; ratchet: may only go down
+src/clients/opensearch/ocr.py	5	triage every return-empty handler in PR 3; ratchet: may only go down
+src/clients/opensearch/search.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/clients/pe_encoder.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/clients/triton_pool.py	6	triage every return-empty handler in PR 3; ratchet: may only go down
+src/core/dependencies.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/main.py	11	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/analyze.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/_common.py	24	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/_models_vlm.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/bakeoff.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/classes.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/config_vocabulary.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/crop_context.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/datasets.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/edit_undo.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/global_status.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/health.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/keymap.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/label_undo.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/methods.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/pipeline.py	10	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/pipeline_events.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/pipeline_health.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/projects.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/regions_edit.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/review.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/review_resolve.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/select.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/vlm.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/vlm_activation.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/vlm_endpoints.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation_train/promote.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/detect.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/embed.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/health.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/ingest/directory.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/ocr.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/query.py	10	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/cluster_maintenance.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/clustering.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/config_store/activation_view.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/config_store/index.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/config_store/open_vocab_validation.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/config_store/pack_validation.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/config_store/profile_validation.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/config_store/store.py	9	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/config_store/vlm_gate.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/cpu_preprocess.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/autolabel/embed_stage.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/autolabel/selection.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/bulk_ingest/dispatcher.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/bulk_ingest/runner.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/bulk_ingest/s3_listing.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/assignment_writer.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/auto_promote.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/backend.py	5	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/cluster_geometry.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/embedding_reduce.py	10	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/id_normalize.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/ivf_ingest.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/methods/ahc.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/methods/hdbscan.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/methods/ivf.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/methods/ivf_store.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/orchestrator.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/outliers.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/pit_pages.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/refine.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/region_box_clustering.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/region_box_rows.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/region_cluster_jobs.py	12	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/residual_gate.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/crop_bytes.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/crop_orders.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/dataset_import/prepare.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/dataset_import/runner.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/dataset_import/scan.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/embedding_viz.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/embedding_viz_read.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/empty_vlm_answer_repair.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/eval_datasets.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/export.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/export_readiness.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/export_support.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/image_serving.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/ingest.py	10	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/ingest_batch.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/ingest_detect.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/ingest_detector.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/ingest_gpu_decode.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/ingest_index.py	5	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/ingest_writer.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/item_delete.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/item_scores/job.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/keymap.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/open_vocab_gate.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/open_vocab_ingest.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/open_vocab_run.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/open_vocab_sweeper.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/ops_metrics_refresh.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/probe_job.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/probe_predictions.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/region_box_embeddings.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/region_box_refresh.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/region_dependency_health.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/region_impact.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/region_test_run.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/reprocess_embed.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/reprocess_images.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/reprocess_job.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/reprocess_open_vocab.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/selection/job.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/selection/pool_fetch.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/source_image_cache.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/stale_label_source_repair.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/startup_reconcile.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/strategy_defaults.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/strategy_registry.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/unmatched_class_repair.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/vlm_strategies.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/worker_liveness.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/detection/fp_store.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/detection/profile_registry.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/detection/segmenter_gate.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/duplicate_detection/__init__.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/face_identity/face_records.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/face_identity/identification.py	6	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/face_identity/person_management.py	5	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/image.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/inference.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/labeling/region_overlay.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/labeling/vlm_factory.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/labeling/vlm_labeler_classify.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/labeling/vlm_labeler_core.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/labeling/vlm_labeler_verify.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/labeling/vlm_labeler_visibility.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/labeling/vlm_prompt_resolution.py	8	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/model_export.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/projects/bootstrap.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/projects/capacity.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/projects/combine/execute.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/projects/delete.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/projects/legacy_repair.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/projects/lifecycle.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/projects/mlflow_cleanup.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/projects/registry.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/projects/stats.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/training/gpu_arbiter.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/training/jobs.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/training/lineage.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/training/preflight_checks.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/training/promote_gate.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/training/promote_job.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/training/trainer_reachability.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/training/triton_reload.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/triton_control.py	5	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/visual_search/ingest_batch.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/visual_search/ingest_single.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
+src/utils/cpu_pool.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/utils/image_processing.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/utils/pytorch_utils.py	1	triage every return-empty handler in PR 3; ratchet: may only go down

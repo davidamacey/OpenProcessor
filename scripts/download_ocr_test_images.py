@@ -53,7 +53,7 @@ def download_image(url: str, output_path: Path) -> bool:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         req = Request(url, headers=headers)
         # Download from trusted roboflow.com dataset - URL is hardcoded
-        with urlopen(req, timeout=30) as response, open(output_path, 'wb') as f:
+        with urlopen(req, timeout=30) as response, Path(output_path).open('wb') as f:  # nosec B310  URL is hardcoded
             shutil.copyfileobj(response, f)
         size_kb = output_path.stat().st_size / 1024
         print(f' OK ({size_kb:.1f} KB)')

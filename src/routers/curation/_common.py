@@ -42,12 +42,7 @@ from src.clients.curation_opensearch.items_extra import (
 from src.clients.curation_opensearch.lifecycle import create_curation_indexes
 from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import get_curation_config
-from src.config.curation import (  # noqa: F401 - re-exported for the router modules
-    classes_index,
-    images_index,
-    items_index,
-    labels_confirmed_index,
-)
+from src.config.curation import classes_index, images_index, items_index, labels_confirmed_index  # noqa: F401 - re-exported for the router modules
 from src.core.dependencies import get_curation_opensearch
 from src.core.logging import get_logger
 from src.core.wire_json import WireRoute
@@ -345,7 +340,7 @@ async def _ensure_indexes_locked(opensearch: Any) -> None:
 # is unaffected by the split.
 # =============================================================================
 
-from src.routers.curation._common_models import (  # noqa: E402
+from src.routers.curation._common_models import (  # noqa: E402  # bottom-of-module import breaks a circular import
     HUMAN_REGION_STATUS_VALUES,
     BatchIngestResponse,
     BatchIngestSummaryResponse,

@@ -43,7 +43,7 @@ def create_simple_text_image(
                 '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf', font_size
             )
         except OSError:
-            font = ImageFont.load_default()
+            font = ImageFont.load_default()  # type: ignore[assignment]  # Pillow types the fallback as ImageFont
 
     # Center the text
     bbox = draw.textbbox((0, 0), text, font=font)
@@ -79,7 +79,7 @@ def create_multiline_text_image(
                 '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf', font_size
             )
         except OSError:
-            font = ImageFont.load_default()
+            font = ImageFont.load_default()  # type: ignore[assignment]  # Pillow types the fallback as ImageFont
 
     # Calculate total height
     line_height = font_size + 10

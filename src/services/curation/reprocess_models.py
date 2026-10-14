@@ -18,7 +18,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.services.curation.item_filter import ItemFilter
-from src.services.curation.item_selection import Sample  # noqa: TC001 - pydantic resolves it
+from src.services.curation.item_selection import Sample
 from src.services.curation.open_vocab_fields import OpenVocabStatus  # noqa: TC001 - pydantic
 
 

@@ -210,7 +210,7 @@ def parse_voc_xml(text: str) -> tuple[tuple[int, int] | None, list[tuple[str | N
     Returns ``((width, height) | None, [(object_name, (x1,y1,x2,y2) abs)])``.
     Size may be None if the XML omits it (then the caller reads the image).
     """
-    import xml.etree.ElementTree as ET
+    import xml.etree.ElementTree as ET  # nosec B405  parses local dataset annotation files; see the B314 note below
 
     try:
         root = ET.fromstring(text)  # nosec B314 - parsing local dataset files

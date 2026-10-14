@@ -29,6 +29,7 @@ import json
 import os
 import tempfile
 from datetime import UTC, datetime
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -78,9 +79,9 @@ def test_r7_clone_rejects_profile_with_targets_own_stripped_pack(
     with tempfile.TemporaryDirectory() as tmp:
         single = {**_stripped(), 'name': 'envsingle'}
         good = {**_body('FILEGOOD'), 'name': 'filegood'}
-        with open(f'{tmp}/single.json', 'w') as f:
+        with Path(f'{tmp}/single.json').open('w') as f:
             f.write(json.dumps(single))
-        with open(f'{tmp}/good.json', 'w') as f:
+        with Path(f'{tmp}/good.json').open('w') as f:
             f.write(json.dumps(good))
         keys = (
             'OP_STATE_DIR',

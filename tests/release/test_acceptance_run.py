@@ -269,8 +269,10 @@ def test_train_promote_infer_delete_chain_forces_after_gate_failure(fake, tmp_pa
     routes[('DELETE', f'{P}/models/{name}')] = (200, {'unloaded': True})
     routes[('GET', '/metrics')] = (
         200,
-        'op_ingest_images_total{project="acc-test",outcome="ok"} 3\nop_queue_depth{queue="embed"} 0\n'
-        'op_embedding_state_items{project="acc-test",state="embedded"} 3\n',
+        (
+            'op_ingest_images_total{project="acc-test",outcome="ok"} 3\nop_queue_depth{queue="embed"} 0\n'
+            'op_embedding_state_items{project="acc-test",state="embedded"} 3\n'
+        ),
     )
     f = fake(routes)
     proc, data = run(f, tmp_path, '--only', 'train,promote,infer,model_delete,metrics,teardown')

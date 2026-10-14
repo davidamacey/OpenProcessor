@@ -63,7 +63,7 @@ def _http(method: str, url: str, body: bytes | None = None, headers: dict | None
     for attempt in range(5):
         req = urllib.request.Request(url, data=body, method=method, headers=headers or {})
         try:
-            with urllib.request.urlopen(req, timeout=180) as resp:
+            with urllib.request.urlopen(req, timeout=180) as resp:  # nosec B310  URL is the local API
                 return json.loads(resp.read())
         except urllib.error.HTTPError as exc:
             if exc.code < 500 or attempt == 4:
@@ -130,8 +130,10 @@ def terminal_steps(api: str, image: bytes) -> list[tuple[str, dict]]:
     }
     steps.append(
         (
-            "curl -s -X POST $API/embed/text -H 'content-type: application/json' "
-            '-d \'{"text": "a person riding a bicycle"}\' | jq',
+            (
+                "curl -s -X POST $API/embed/text -H 'content-type: application/json' "
+                '-d \'{"text": "a person riding a bicycle"}\' | jq'
+            ),
             emb_view,
         )
     )
@@ -196,7 +198,7 @@ def capture(api: str, out: Path, cache: Path, mlflow: str | None = None) -> None
     cache.mkdir(parents=True, exist_ok=True)
     img_path = cache / COCO_FILE
     if not img_path.exists():
-        urllib.request.urlretrieve(COCO_URL, img_path)
+        urllib.request.urlretrieve(COCO_URL, img_path)  # nosec B310  URL is the hardcoded public COCO image
     steps = terminal_steps(api, img_path.read_bytes())
 
     with sync_playwright() as p:

@@ -43,7 +43,7 @@ MAX_EDIT_HISTORY_ENTRIES = 64
 matters: an undo record is always newer than the entry it cancels."""
 
 
-class EditKind(str, Enum):
+class EditKind(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and format() as Class.MEMBER; StrEnum would change both
     REGION = 'region'
     VLM_DISMISS = 'vlm_dismiss'
 

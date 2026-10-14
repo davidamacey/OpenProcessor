@@ -58,7 +58,7 @@ def test_route_refuses_an_ocr_model_and_removes_nothing(
     app = create_app()
     # The project delete also reads the ingest policy; the OCR guard refuses
     # before that, so no OpenSearch is needed (or reachable) here.
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: object()
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: object()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
     resp = TestClient(app).request(method, url, params={'force': str(force).lower()})
 
     assert resp.status_code == 403, (path, resp.text)

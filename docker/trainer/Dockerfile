@@ -134,7 +134,7 @@ USER appuser
 
 # The watcher is healthy while it is running and can see the jobs volume.
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
-    CMD test -d "$OP_TRAIN_JOBS_DIR" && pgrep -f trainer.py > /dev/null || exit 1
+    CMD ["sh", "-c", "test -d \"$OP_TRAIN_JOBS_DIR\" && pgrep -f trainer.py > /dev/null || exit 1"]
 
 ENTRYPOINT ["python", "-m", "trainer"]
 CMD ["--watch", "/jobs"]

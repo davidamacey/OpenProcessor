@@ -39,9 +39,9 @@ def box_iou(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 def match_boxes(
     ref_boxes: np.ndarray,
-    ref_cls: Sequence[str],
+    ref_cls: Sequence[str] | np.ndarray,
     cand_boxes: np.ndarray,
-    cand_cls: Sequence[str],
+    cand_cls: Sequence[str] | np.ndarray,
     min_iou: float = MATCH_IOU,
 ) -> tuple[list[tuple[int, int]], list[int], list[int]]:
     """Greedy one-to-one matching, best IoU first, only within the same class name.

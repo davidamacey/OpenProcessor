@@ -63,7 +63,7 @@ async def _start_metrics_http_server(*, port: int) -> web.AppRunner:
     app.router.add_get('/metrics', _metrics_handler)
     runner = _web.AppRunner(app, access_log=None)
     await runner.setup()
-    site = _web.TCPSite(runner, host='0.0.0.0', port=port)
+    site = _web.TCPSite(runner, host='0.0.0.0', port=port)  # nosec B104  container-internal metrics port, published nowhere; Prometheus scrapes it over the compose network
     await site.start()
     logger.info('region_worker_metrics_server_started', port=port)
     return runner

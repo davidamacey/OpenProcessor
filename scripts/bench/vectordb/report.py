@@ -169,6 +169,7 @@ def filter_table(runs: dict[str, list[dict[str, Any]]], arms: list[str], metric:
     rows = []
     for name in names:
         sel = detail_row(first, name)
+        assert sel is not None  # names come from first's own detail rows
         row = [name, f'{100 * sel["selectivity"]:.2f}%']
         for arm in arms:
             det = [r for r in (detail_row(d, name) for d in runs.get(arm, [])) if r]

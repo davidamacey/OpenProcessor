@@ -302,15 +302,14 @@ def main(argv: list[str] | None = None) -> int:
         n_images = round(args.docs / args.items_per_image)
         docs_by_mode: dict[str, dict[str, list[bytes]]] = {}
         for mode in sorted({arm_config(a)['vectors'] for a in args.arms.split(',')}):
-            src = None if mode == 'iid' else pool
+
+            def _pool(key: str, mode: str = mode) -> np.ndarray | None:
+                return None if mode == 'iid' else pool[key]
+
             docs_by_mode[mode] = {
                 'items': build_docs(
                     item_t,
-                    {
-                        'pe_embedding': synth_vectors(
-                            src and src['pe'], args.docs, 1024, rng, args.noise
-                        )
-                    },
+                    {'pe_embedding': synth_vectors(_pool('pe'), args.docs, 1024, rng, args.noise)},
                     'items',
                     args.docs,
                 ),
@@ -318,10 +317,10 @@ def main(argv: list[str] | None = None) -> int:
                     image_t,
                     {
                         'pe_embedding': synth_vectors(
-                            src and src['img_pe'], n_images, 1024, rng, args.noise
+                            _pool('img_pe'), n_images, 1024, rng, args.noise
                         ),
                         'embedding': synth_vectors(
-                            src and src['img_clip'], n_images, 512, rng, args.noise
+                            _pool('img_clip'), n_images, 512, rng, args.noise
                         ),
                     },
                     'images',

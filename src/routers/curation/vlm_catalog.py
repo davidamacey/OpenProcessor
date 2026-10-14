@@ -77,7 +77,7 @@ def _entry_wire(entry: CatalogEntry, local: VlmLocalStatus) -> VlmCatalogEntry:
         max_images=entry.max_images,
         vram_gb=entry.vram_gb,
         disk_gb=entry.disk_gb,
-        status=entry.status,  # type: ignore[arg-type]
+        status=entry.status,
         rank=entry.rank,
         multi_box_verified=entry.multi_box_verified,
         text_reading_verified=entry.text_reading_verified,

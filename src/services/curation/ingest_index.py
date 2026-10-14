@@ -42,6 +42,8 @@ from src.utils.stage_timing import stage_timer
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from PIL import Image
 
     from src.services.curation.clustering.methods.ivf_store import IVFCentroidStore
@@ -82,6 +84,13 @@ class ImageContext:
     indexed on this image later inherit it."""
     image_extra: dict[str, Any] = field(default_factory=dict)
     """Extra fields merged into the images doc this call creates."""
+
+    def require_pil(self) -> Image.Image:
+        """The host-side frame; raises when the GPU decode kept the pixels on the device."""
+        if self.pil is None:
+            msg = f'image {self.image_id} was decoded on the GPU and has no host frame'
+            raise ValueError(msg)
+        return self.pil
 
 
 @dataclass
@@ -212,6 +221,7 @@ async def index_items(
         crops = await run_cpu(_crop_all, img, items, nbytes=_box_bytes(items))
         await embed_items(service, items, crops, full_w, full_h, image_path)
 
+    crop_items: Sequence[Image.Image | bytes] = crops
     now = datetime.now(UTC).isoformat()
     image_doc: dict[str, Any] | None = None
     if ctx.created:
@@ -284,7 +294,7 @@ async def index_items(
                 service.config.crop_cache_dir,
                 nbytes=len(crop) if isinstance(crop, bytes) else crop.width * crop.height * 3,
             )
-            for cid, crop in zip(cids, crops, strict=True)
+            for cid, crop in zip(cids, crop_items, strict=True)
         )
     )
 

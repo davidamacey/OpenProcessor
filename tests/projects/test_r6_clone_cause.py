@@ -24,8 +24,8 @@ async def test_r6_clone_failure_cause(tmp_path, monkeypatch, shared):
         return [{'name': 'alpha__wheel_det', 'state': 'READY', 'version': '1'}]
 
     monkeypatch.setattr(TritonControlService, 'get_repository_index', lambda _s: _repo())
-    monkeypatch.setattr(mc, 'model_owner_project', lambda n: owner.get(n))
-    monkeypatch.setattr(pm, 'model_owner_project', lambda n: owner.get(n))
+    monkeypatch.setattr(mc, 'model_owner_project', owner.get)
+    monkeypatch.setattr(pm, 'model_owner_project', owner.get)
     monkeypatch.setattr(mc, 'is_model_shared', lambda _n: shared)
     monkeypatch.setattr(pm, 'is_model_shared', lambda _n: shared)
     client = Fake()

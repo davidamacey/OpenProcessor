@@ -26,12 +26,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from curation.test_auto_label_selection import (  # noqa: F401 - fixtures
-    _run_kwargs,
-    job_dir,
-    labeler_spy,
-    packs,
-)
+from curation.test_auto_label_selection import _run_kwargs, job_dir, labeler_spy, packs  # noqa: F401 - fixtures
 from curation.test_pipeline import _FakeClassEntry, _FakeOpenSearch, _FakeRegistry
 from curation.test_r4_probes import _body
 from curation.test_r5_probes import PREFIX, _reset_caches, app_client  # noqa: F401 - fixtures

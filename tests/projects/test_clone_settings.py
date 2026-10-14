@@ -326,7 +326,7 @@ def _clone_keymap(
     warnings: list[tuple[str, dict[str, Any]]] = []
     monkeypatch.setattr('src.services.curation.keymap.get_keymap_doc', _fake_get)
     monkeypatch.setattr('src.services.curation.keymap.save_keymap_doc', _fake_save)
-    monkeypatch.setattr(event_hub, 'get_event_hub', lambda: _Hub())
+    monkeypatch.setattr(event_hub, 'get_event_hub', _Hub)
     monkeypatch.setattr(
         clone_mod.logger, 'warning', lambda event, **kw: warnings.append((event, kw))
     )

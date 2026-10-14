@@ -5,7 +5,7 @@ into the public tree.
 Three independent scans, each a single ``git grep -n -I -P`` pass over the
 whole tracked tree:
 
-* **Scan A** — hard leak scan, zero tolerance. Company/product initials and
+* **Scan A** — hard leak scan, zero tolerance (no directory-prefix exemptions). Company/product initials and
   filesystem paths that must never appear in the public repo at all
   (the private company name, its two-letter initials used as an
   identifier/path prefix, the dataset provider, the parent org, private
@@ -90,6 +90,12 @@ class AllowlistEntry:
         return bool(self.regex.search(line_text))
 
 
+def _blanket_dir_on_scan_a(entry: AllowlistEntry, scan_name: str) -> bool:
+    """Scan A has no directory exemptions: a private name is wrong everywhere, including in
+    ``examples/``. A directory entry that names a line regex stays a line-level exemption."""
+    return scan_name == 'A' and entry.is_dir_prefix and entry.regex is None
+
+
 def load_allowlist(path: Path) -> list[AllowlistEntry]:
     if not path.exists():
         return []
@@ -119,7 +125,7 @@ def load_allowlist(path: Path) -> list[AllowlistEntry]:
 
 def git_grep(pattern: str, repo_root: Path, exclude_paths: tuple[str, ...]) -> list[str]:
     pathspecs = [f':(exclude){p}' for p in exclude_paths]
-    proc = subprocess.run(
+    proc = subprocess.run(  # nosec B603 B607  fixed argv list, no shell; git from PATH
         ['git', 'grep', '-n', '-I', '-P', pattern, '--', '.', *pathspecs],
         cwd=repo_root,
         capture_output=True,
@@ -149,7 +155,14 @@ def run_scans(
         for line in git_grep(pattern, repo_root, exclude_paths):
             path, _, rest = line.partition(':')
             _lineno, _, text = rest.partition(':')
-            entry = next((e for e in allowlist if e.allows(path, text)), None)
+            entry = next(
+                (
+                    e
+                    for e in allowlist
+                    if e.allows(path, text) and not _blanket_dir_on_scan_a(e, name)
+                ),
+                None,
+            )
             if entry is not None:
                 entry.used = True
                 continue

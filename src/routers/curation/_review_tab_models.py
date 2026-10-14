@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from src.services.curation.reprocess_models import ReprocessRequest  # noqa: TC001 - pydantic
+from src.services.curation.reprocess_models import ReprocessRequest
 
 
 ReviewFilterKind = Literal['enum', 'multi_enum', 'class_names', 'bool', 'number', 'integer', 'text']

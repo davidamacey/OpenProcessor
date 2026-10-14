@@ -35,8 +35,10 @@ def test_vlm_prompt_resolution_importable_before_vlm_prompts() -> None:
         [
             sys.executable,
             '-c',
-            'import src.services.labeling.vlm_prompt_resolution as m; '
-            'assert callable(m.active_prompt_pack)',
+            (
+                'import src.services.labeling.vlm_prompt_resolution as m; '
+                'assert callable(m.active_prompt_pack)'
+            ),
         ],
         check=False,
         cwd=REPO_ROOT,

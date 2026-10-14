@@ -41,7 +41,7 @@ STAGE_PREFIX = 'op_pipeline_stage'
 def run_cmd(cmd: list[str], timeout: float = 30.0) -> str:
     """stdout of a command, or an empty string when it is missing or fails."""
     try:
-        return subprocess.run(
+        return subprocess.run(  # nosec B603  fixed argv list, no shell
             cmd, capture_output=True, text=True, check=True, timeout=timeout
         ).stdout
     except (FileNotFoundError, subprocess.SubprocessError, OSError):

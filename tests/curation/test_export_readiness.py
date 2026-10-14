@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -30,10 +31,6 @@ from src.services.curation.export_readiness import (
     export_generation_check,
     export_size_check,
 )
-
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 INDEX_UUID = 'uuid-current'
@@ -116,7 +113,7 @@ async def test_export_with_only_unregistered_classes_refuses(tmp_path: Path) -> 
 async def test_export_manifest_records_the_items_index_generation(tmp_path: Path) -> None:
     service = _service(tmp_path, [_doc('a', 0)])
     result = await service.export_dataset(copy_images=False)
-    manifest = json.loads(open(result.manifest_path).read())  # noqa: SIM115
+    manifest = json.loads(Path(result.manifest_path).open().read())  # noqa: SIM115
     assert manifest['items_index']['uuid'] == INDEX_UUID
     assert manifest['items_index']['created_at'] == INDEX_CREATED.isoformat()
 
@@ -133,7 +130,7 @@ def test_export_router_maps_nothing_to_export_to_422(monkeypatch: pytest.MonkeyP
     from _curation_app import mount_curation_routers
 
     mount_curation_routers(app, curation_router)
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
     r = TestClient(app).post('/curation/projects/default/export/yolo', json={})
     assert r.status_code == 422
     assert '0 items are class_validated' in r.json()['detail']
@@ -199,9 +196,9 @@ def train_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         def get(self, _cid: int) -> Any:
             return None
 
-    monkeypatch.setattr('src.routers.curation_train.preflight.get_class_registry', lambda: _Reg())
+    monkeypatch.setattr('src.routers.curation_train.preflight.get_class_registry', _Reg)
 
-    monkeypatch.setattr('src.services.training.preflight_checks.get_class_registry', lambda: _Reg())
+    monkeypatch.setattr('src.services.training.preflight_checks.get_class_registry', _Reg)
     fake = AsyncMock()
     fake.search = AsyncMock(return_value={'hits': {'hits': [], 'total': {'value': 0}}})
     fake.count = AsyncMock(return_value={'count': 0})

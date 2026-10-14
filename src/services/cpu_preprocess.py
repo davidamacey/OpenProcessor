@@ -157,8 +157,8 @@ def letterbox_cpu(
 
     # Create affine transformation matrix for inverse transform
     # Maps from letterboxed coords to original image coords
-    # Forward: x_letterbox = x_orig * scale + pad_x  # noqa: ERA001
-    # Inverse: x_orig = (x_letterbox - pad_x) / scale  # noqa: ERA001
+    # Forward: x_letterbox = x_orig * scale + pad_x  # noqa: ERA001  # comment shows a formula or option, not code
+    # Inverse: x_orig = (x_letterbox - pad_x) / scale  # noqa: ERA001  # comment shows a formula or option, not code
     affine_matrix = np.array(
         [
             [scale, 0, left],

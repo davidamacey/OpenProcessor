@@ -5,6 +5,7 @@ See ``docs/design/curation_design_rationale.md`` §2.1.
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 
 import pytest
@@ -49,12 +50,8 @@ def test_bakeoff_eval_root_default_is_relative_not_a_private_path(
 
 def test_is_frozen() -> None:
     cfg = CurationConfig()
-    try:
+    with pytest.raises(dataclasses.FrozenInstanceError):
         cfg.images_index = 'mutated'  # type: ignore[misc]
-    except Exception:
-        pass
-    else:
-        raise AssertionError('CurationConfig must be immutable (frozen dataclass)')
 
 
 def test_index_name_resolves_each_role() -> None:

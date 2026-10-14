@@ -277,7 +277,7 @@ class BulkMixin:
                 self.client, actions, refresh=refresh, raise_on_error=False
             )
             error_msgs = []
-            if errors:
+            if errors and isinstance(errors, list):
                 error_msgs = [str(e) for e in errors[:10]]  # Limit error messages
                 logger.warning(f'Bulk face index had {len(errors)} errors')
 

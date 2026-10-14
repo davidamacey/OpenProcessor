@@ -16,7 +16,7 @@ endpoint is a new revision and needs a new ack.
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
@@ -51,7 +51,7 @@ _MAX_ACKED_REFS = 200
 
 
 def _now() -> str:
-    return datetime.datetime.now(datetime.UTC).isoformat()
+    return dt.datetime.now(dt.UTC).isoformat()
 
 
 def expected_active_for(ref: AxisRef) -> dict[str, Any] | None:
@@ -65,7 +65,7 @@ def expected_active_for(ref: AxisRef) -> dict[str, Any] | None:
     return None
 
 
-def _carry(endpoint: VlmEndpoint | None, *, ack_now: bool):  # type: ignore[no-untyped-def]
+def _carry(endpoint: VlmEndpoint | None, *, ack_now: bool):
     """The activation doc's extras, computed from the CURRENT doc inside the
     same OCC step so a concurrent activation's acknowledgements are never
     lost."""

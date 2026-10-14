@@ -60,7 +60,7 @@ from src.services.detection.segmenter_http import DEFAULT_MAX_CANDIDATES
 logger = get_logger('curation_worker')
 
 
-class SegmenterUnavailable(RuntimeError):  # noqa: N818
+class SegmenterUnavailable(RuntimeError):  # noqa: N818  # named for the state, not as an error class
     """The segmenter could not answer. Never a "found nothing" result: a crop
     that hit this stays in ``pending_detection`` for a later pass."""
 

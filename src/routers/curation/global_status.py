@@ -17,7 +17,7 @@ from fastapi.responses import StreamingResponse  # noqa: TC002 - resolved at run
 from pydantic import BaseModel, Field
 
 from src.config import get_settings
-from src.core.dependencies import AsyncTritonDep  # noqa: TC001
+from src.core.dependencies import AsyncTritonDep  # noqa: TC001  # FastAPI resolves the annotation at runtime
 from src.routers.curation.events import sse_response
 from src.routers.curation.health import triton_status, vlm_status
 from src.routers.curation.projects import global_router

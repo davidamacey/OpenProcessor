@@ -144,8 +144,8 @@ class IngestSingleMixin:
             # Prepare box data (only if detection is enabled)
             box_embeddings = None
             normalized_boxes = None
-            det_classes = None
-            det_scores = None
+            det_classes: list[int] | None = None
+            det_scores: list[float] | None = None
 
             if enable_detection and result['num_dets'] > 0:
                 box_embeddings = np.array(result.get('box_embeddings', []))
@@ -172,11 +172,11 @@ class IngestSingleMixin:
             # Index faces if detected and enabled
             num_faces_indexed = 0
             if enable_faces and face_result.get('num_faces', 0) > 0:
-                face_embeddings: list = face_result.get('face_embeddings', [])  # type: ignore[assignment]
-                face_boxes: list = face_result.get('face_boxes', [])  # type: ignore[assignment]
-                face_scores: list = face_result.get('face_scores', [])  # type: ignore[assignment]
-                face_quality: list = face_result.get('face_quality', [])  # type: ignore[assignment]
-                face_landmarks: list = face_result.get('face_landmarks', [])  # type: ignore[assignment]
+                face_embeddings: list = face_result.get('face_embeddings', [])
+                face_boxes: list = face_result.get('face_boxes', [])
+                face_scores: list = face_result.get('face_scores', [])
+                face_quality: list = face_result.get('face_quality', [])
+                face_landmarks: list = face_result.get('face_landmarks', [])
 
                 for i in range(min(len(face_embeddings), len(face_boxes))):
                     if len(face_embeddings[i]) > 0:

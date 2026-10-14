@@ -75,7 +75,7 @@ RUN pip install --no-cache-dir \
     && python3 -c "import torchvision; print(f'TorchVision {torchvision.__version__} installed')"
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
-    CMD curl -f http://localhost:8000/v2/health/ready || exit 1
+    CMD ["sh", "-c", "curl -f http://localhost:8000/v2/health/ready || exit 1"]
 
 # Run as the unprivileged user shipped with the NGC image (uid 1000).
 # Triton's ports (8000-8002) are unprivileged and /models is a bind mount,

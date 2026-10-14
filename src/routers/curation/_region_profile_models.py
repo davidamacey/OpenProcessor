@@ -8,9 +8,7 @@ from pydantic import BaseModel, Field
 
 from src.config.settings import TritonModelConfig
 from src.routers.curation._config_common_models import ActivateResponse, ActiveRef, ValidationReport
-from src.services.curation.region_impact import (
-    ActivationImpact,  # noqa: TC001  # pydantic field type
-)
+from src.services.curation.region_impact import ActivationImpact  # noqa: TC001  # pydantic field type
 
 
 ProfileSourceWire = Literal['env', 'registered', 'stored', 'template']

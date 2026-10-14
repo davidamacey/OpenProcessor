@@ -20,7 +20,8 @@ from src.services.detection.pe_preprocess import resize_crop_rgb, whole_frame_rg
 
 _PATH = Path(__file__).resolve().parents[2] / 'models' / 'gpu_image_prep' / '1' / 'prep_geometry.py'
 _spec = importlib.util.spec_from_file_location('prep_geometry', _PATH)
-assert _spec is not None and _spec.loader is not None
+assert _spec is not None
+assert _spec.loader is not None
 fg = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(fg)
 
@@ -81,7 +82,9 @@ class TestRoute:
 
         data = _jpeg(64, 32, orientation=orientation)
         _, header = fg.route(data, 0, 100)
-        assert fg.oriented_size(header) == ImageOps.exif_transpose(Image.open(io.BytesIO(data))).size
+        assert (
+            fg.oriented_size(header) == ImageOps.exif_transpose(Image.open(io.BytesIO(data))).size
+        )
 
 
 class TestGeometry:
@@ -95,8 +98,12 @@ class TestGeometry:
         x1, y1, x2, y2 = (v * 640 for v in box)
         assert fg.undo_letterbox(box, 640, lb) == undo_letterbox((x1, y1, x2, y2), scale, pad)
 
-    @pytest.mark.parametrize('box', [(10.4, 20.6, 50.5, 70.49), (-5.0, -3.2, 30.0, 400.7), (1.0, 1.0, 1.2, 1.3)])
-    def test_crop_and_blur_rectangles_match_the_cpu_path(self, box: tuple[float, float, float, float]) -> None:
+    @pytest.mark.parametrize(
+        'box', [(10.4, 20.6, 50.5, 70.49), (-5.0, -3.2, 30.0, 400.7), (1.0, 1.0, 1.2, 1.3)]
+    )
+    def test_crop_and_blur_rectangles_match_the_cpu_path(
+        self, box: tuple[float, float, float, float]
+    ) -> None:
         img = Image.new('RGB', (120, 90))
         x1, y1, x2, y2 = fg.crop_rect(box)
         assert crop_pil(img, box).size == (x2 - x1, y2 - y1)
@@ -117,7 +124,9 @@ class TestGeometry:
 
 class TestWeights:
     @pytest.mark.parametrize('size', [(900, 600), (400, 640), (500, 500)])
-    def test_the_whole_square_matches_pillow_within_a_grey_level(self, size: tuple[int, int]) -> None:
+    def test_the_whole_square_matches_pillow_within_a_grey_level(
+        self, size: tuple[int, int]
+    ) -> None:
         rgb = np.random.default_rng(size[0]).integers(0, 256, (size[1], size[0], 3), dtype=np.uint8)
         g = fg.whole_square_geometry(*size, 336)
         full = _resample(rgb, g.new_w, g.new_h, antialias=True)
@@ -126,7 +135,9 @@ class TestWeights:
         assert np.abs(ours.astype(int) - ref).max() <= 1
 
     @pytest.mark.parametrize('size', [(700, 500), (120, 90), (40, 300)])
-    def test_crop_squares_match_opencv_linear_within_a_grey_level(self, size: tuple[int, int]) -> None:
+    def test_crop_squares_match_opencv_linear_within_a_grey_level(
+        self, size: tuple[int, int]
+    ) -> None:
         rgb = np.random.default_rng(size[1]).integers(0, 256, (size[1], size[0], 3), dtype=np.uint8)
         g = fg.whole_square_geometry(*size, 336)
         full = _resample(rgb, g.new_w, g.new_h, antialias=False)

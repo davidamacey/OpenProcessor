@@ -40,7 +40,7 @@ from src.services.clustering import ClusterIndex, get_clustering_service
 logger = logging.getLogger(__name__)
 
 
-class IngestionPattern(str, Enum):
+class IngestionPattern(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and format() as Class.MEMBER; StrEnum would change both
     """Ingestion pattern for determining rebalance frequency."""
 
     LOW_VOLUME = 'low_volume'  # < 1K images/day

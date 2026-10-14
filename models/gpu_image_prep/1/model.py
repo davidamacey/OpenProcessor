@@ -34,6 +34,7 @@ import cupy as cp
 import cv2
 import numpy as np
 import triton_python_backend_utils as pb_utils
+from nvjpeg_lanes import NvJpegLanes
 from prep_geometry import (
     blur_rect,
     crop_rect,
@@ -44,7 +45,6 @@ from prep_geometry import (
     whole_square_geometry,
 )
 from prep_kernels import PrepKernels
-from nvjpeg_lanes import NvJpegLanes
 
 
 DET_OUTPUTS = ('num_dets', 'det_boxes', 'det_scores', 'det_classes')
@@ -67,7 +67,18 @@ def _tensor(name: str, arr: Any) -> Any:
 
 
 class _Image:
-    __slots__ = ('boxes', 'classes', 'embed', 'frame', 'lb', 'num', 'reason', 'rects', 'scores', 'size')
+    __slots__ = (
+        'boxes',
+        'classes',
+        'embed',
+        'frame',
+        'lb',
+        'num',
+        'reason',
+        'rects',
+        'scores',
+        'size',
+    )
 
     def __init__(self, reason: str, embed: bool) -> None:
         self.reason = reason
@@ -97,8 +108,12 @@ class TritonPythonModel:
         cp.get_default_memory_pool().set_limit(size=int(p.get('POOL_MIB', '4096')) * 1024 * 1024)
         self.lanes = NvJpegLanes(lanes=int(p.get('LANES', '16')))
         self.kernels = PrepKernels()
-        self.encode_pool = ThreadPoolExecutor(int(p.get('ENCODE_THREADS', '8')), thread_name_prefix='fe-jpeg')
-        self.workers = ThreadPoolExecutor(int(p.get('WORKERS', '32')), thread_name_prefix='fe-image')
+        self.encode_pool = ThreadPoolExecutor(
+            int(p.get('ENCODE_THREADS', '8')), thread_name_prefix='fe-jpeg'
+        )
+        self.workers = ThreadPoolExecutor(
+            int(p.get('WORKERS', '32')), thread_name_prefix='fe-image'
+        )
         self.in_flight = threading.BoundedSemaphore(int(p.get('MAX_IN_FLIGHT', '96')))
         self.device = device
         self.local = threading.local()
@@ -120,7 +135,9 @@ class TritonPythonModel:
             err = pb_utils.TritonError(f'gpu_image_prep: {exc}')
             response = pb_utils.InferenceResponse(output_tensors=[], error=err)
         try:
-            request.get_response_sender().send(response, flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL)
+            request.get_response_sender().send(
+                response, flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL
+            )
         finally:
             self.in_flight.release()
 
@@ -181,14 +198,25 @@ class TritonPythonModel:
         sq = cp.empty((1 + len(rects), 3, t, t), cp.uint8)
         w, h = im.size
         g = whole_square_geometry(w, h, t)
-        self.kernels.resample_into(im.frame, (0, 0, w, h), (g.new_w, g.new_h), sq[0], (g.left, g.top, t, t))
+        self.kernels.resample_into(
+            im.frame, (0, 0, w, h), (g.new_w, g.new_h), sq[0], (g.left, g.top, t, t)
+        )
         for k, (x1, y1, x2, y2) in enumerate(rects, start=1):
             g = whole_square_geometry(x2 - x1, y2 - y1, t)
             self.kernels.resample_into(
-                im.frame, (x1, y1, x2 - x1, y2 - y1), (g.new_w, g.new_h), sq[k], (g.left, g.top, t, t), antialias=False
+                im.frame,
+                (x1, y1, x2 - x1, y2 - y1),
+                (g.new_w, g.new_h),
+                sq[k],
+                (g.left, g.top, t, t),
+                antialias=False,
             )
         rows = [
-            self._bls(self.pe_model, cp.ascontiguousarray(sq[s : s + self.pe_batch]), ('image_embeddings',))[0]
+            self._bls(
+                self.pe_model,
+                cp.ascontiguousarray(sq[s : s + self.pe_batch]),
+                ('image_embeddings',),
+            )[0]
             for s in range(0, int(sq.shape[0]), self.pe_batch)
         ]
         return np.concatenate(rows, axis=0).astype(np.float32)
@@ -200,8 +228,10 @@ class TritonPythonModel:
         rects = [(0, 0, w, h)] + [r for r in clamped if r is not None]
         sums = iter(cp.asnumpy(self.kernels.lap_sums(im.frame, rects)))
         rows = [(w * h, *next(sums))]
-        for r in clamped:
-            rows.append((0, 0, 0) if r is None else ((r[2] - r[0]) * (r[3] - r[1]), *next(sums)))
+        rows.extend(
+            (0, 0, 0) if r is None else ((r[2] - r[0]) * (r[3] - r[1]), *next(sums))
+            for r in clamped
+        )
         return np.array(rows, np.int64).reshape(-1, 3)
 
     def _crop_pixels(self, im: _Image) -> list[np.ndarray]:
@@ -212,7 +242,9 @@ class TritonPythonModel:
             sx2, sy2 = min(x2, w), min(y2, h)
             host = np.zeros((y2 - y1, x2 - x1, 3), np.uint8)
             if sx2 > x1 and sy2 > y1:
-                host[: sy2 - y1, : sx2 - x1] = cp.ascontiguousarray(im.frame[y1:sy2, x1:sx2, ::-1]).get()
+                host[: sy2 - y1, : sx2 - x1] = cp.ascontiguousarray(
+                    im.frame[y1:sy2, x1:sx2, ::-1]
+                ).get()
             out.append(host)
         return out
 
@@ -227,7 +259,9 @@ class TritonPythonModel:
         flag = pb_utils.get_input_tensor_by_name(request, 'embed_crops')
         im = self._decode(data, True if flag is None else bool(flag.as_numpy().reshape(-1)[0]))
         if im.reason != 'ok':
-            return pb_utils.InferenceResponse(output_tensors=[_tensor('status', np.array([im.reason], np.object_))])
+            return pb_utils.InferenceResponse(
+                output_tensors=[_tensor('status', np.array([im.reason], np.object_))]
+            )
         self._detect(im)
         jpegs = [self.encode_pool.submit(self._encode, px) for px in self._crop_pixels(im)]
         vectors = self._embed(im)

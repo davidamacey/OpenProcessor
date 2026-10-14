@@ -78,7 +78,7 @@ def _public_images(cache: Path, n: int) -> list[tuple[str, bytes]]:
     for row in rows[:: max(1, len(rows) // n)][:n]:
         path = cache / row['file_name']
         if not path.exists():
-            urllib.request.urlretrieve(f'{COCO_HOST}/{row["split"]}/{row["file_name"]}', path)
+            urllib.request.urlretrieve(f'{COCO_HOST}/{row["split"]}/{row["file_name"]}', path)  # nosec B310  URL is the local API or the public COCO host
         out.append((row['file_name'], path.read_bytes()))
     return out
 
@@ -86,7 +86,7 @@ def _public_images(cache: Path, n: int) -> list[tuple[str, bytes]]:
 def _post(url: str, body: bytes, ctype: str) -> int:
     req = urllib.request.Request(url, data=body, method='POST', headers={'Content-Type': ctype})
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=120) as resp:  # nosec B310  URL is the local API or the public COCO host
             resp.read()
             return resp.status
     except urllib.error.HTTPError as exc:
@@ -129,7 +129,7 @@ def _get_json(url: str, headers: dict | None = None, body: dict | None = None) -
     data = json.dumps(body).encode() if body is not None else None
     hdrs = {'Content-Type': 'application/json', **(headers or {})}
     req = urllib.request.Request(url, data=data, headers=hdrs, method='POST' if data else 'GET')
-    with urllib.request.urlopen(req, timeout=60) as resp:
+    with urllib.request.urlopen(req, timeout=60) as resp:  # nosec B310  URL is the local API or the public COCO host
         return json.loads(resp.read())
 
 

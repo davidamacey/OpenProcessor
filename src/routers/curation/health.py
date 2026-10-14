@@ -21,7 +21,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 from src.config import get_curation_config
-from src.core.dependencies import AsyncTritonDep  # noqa: TC001
+from src.core.dependencies import AsyncTritonDep  # noqa: TC001  # FastAPI resolves the annotation at runtime
 from src.routers.curation._common import (
     HealthResponse,
     OpenSearchDep,

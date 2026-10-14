@@ -430,7 +430,7 @@ async def test_write_job_stamps_trainer_image_id_from_docker_client(
         'get_gpu_arbiter_config',
         lambda: GpuArbiterConfig(trainer_container='curation-trainer'),
     )
-    monkeypatch.setattr(lineage, '_docker_client', lambda: _FakeDockerClient())
+    monkeypatch.setattr(lineage, '_docker_client', _FakeDockerClient)
 
     spec = TrainJobSpec(job_id='stamp_trainer', dataset_export_dir=str(tmp_path / 'missing'))
     await train_jobs.write_job(spec)
@@ -476,7 +476,7 @@ async def test_write_job_pins_registry_snapshot(
             return _FakeRegistrySnapshot()
 
     monkeypatch.setattr(
-        'src.clients.curation_opensearch.registry.get_class_registry', lambda: _FakeRegistry()
+        'src.clients.curation_opensearch.registry.get_class_registry', _FakeRegistry
     )
 
     spec = TrainJobSpec(job_id='pin_test', dataset_export_dir='/data/exports/x')

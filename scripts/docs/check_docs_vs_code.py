@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Check the documentation against the code.
 
-Three checks, each reporting every miss (not just the first):
+Four checks, each reporting every miss (not just the first):
 
 * routes  - every ``METHOD /path`` written in a doc exists in the generated
   OpenAPI (``contracts/openapi/*.json``) or, for non-curation routes, in the
   assembled FastAPI app.
 * env     - every ``OP_*`` token written in a doc exists in code, ``env.template``,
   compose files or the installer scripts.
+* compose - every ``${VAR}`` a root compose file reads appears in ``env.template``
+  (commented counts), so an operator can find every knob.
 * links   - every relative link resolves to a file, and every ``#anchor`` that
   points into a markdown file matches a heading in that file.
 
@@ -145,7 +147,12 @@ def known_routes() -> set[tuple[str, str]]:
     from src.main import app
 
     for route in iter_route_contexts(app.routes):
-        if isinstance(route.original_route, APIRoute) and not route.path.startswith('/curation'):
+        if (
+            isinstance(route.original_route, APIRoute)
+            and route.path is not None
+            and route.methods is not None
+            and not route.path.startswith('/curation')
+        ):
             for method in route.methods & set(_METHODS):
                 routes.add((method, _norm(route.path)))
     return routes
@@ -207,7 +214,23 @@ def check_env() -> list[str]:
         text = doc.read_text(encoding='utf-8', errors='replace')
         for var in sorted(set(_ENV_RE.findall(text))):
             if var not in corpus:
-                errors.append(f'{_rel(doc)}: {var} is not read by any code')  # noqa: PERF401
+                errors.append(f'{_rel(doc)}: {var} is not read by any code')  # noqa: PERF401  # the append carries a formatted message built next to its check
+    return errors
+
+
+_COMPOSE_VAR_RE = re.compile(r'(?<!\$)\$\{([A-Za-z_][A-Za-z0-9_]*)')
+
+
+def check_compose_vars() -> list[str]:
+    template = (REPO_ROOT / 'env.template').read_text(encoding='utf-8', errors='replace')
+    errors = []
+    for compose in sorted(REPO_ROOT.glob('docker-compose*.yml')):
+        text = compose.read_text(encoding='utf-8', errors='replace')
+        for var in sorted(set(_COMPOSE_VAR_RE.findall(text))):
+            if not re.search(rf'\b{re.escape(var)}\b', template):
+                errors.append(  # noqa: PERF401  # the append carries a formatted message built next to its check
+                    f'{_rel(compose)}: ${{{var}}} is not in env.template (commented is fine)'
+                )
     return errors
 
 
@@ -269,19 +292,25 @@ def check_links() -> list[str]:
             if path_part.startswith('/') and 'docs-site' in rel.parts:
                 continue  # site-absolute routes are validated by the site build
             if not path_part:
-                dest: Path | None = doc
+                dest: Path = doc
             else:
-                dest = _resolve_link(doc, path_part)
-                if dest is None:
+                resolved = _resolve_link(doc, path_part)
+                if resolved is None:
                     errors.append(f'{rel}: link target missing: {target}')
                     continue
+                dest = resolved
             is_doc = dest.is_file() and dest.suffix in _DOC_SUFFIXES
             if frag and is_doc and frag not in anchors_of(dest):
                 errors.append(f'{rel}: anchor not found: {target}')
     return errors
 
 
-CHECKS = {'routes': check_routes, 'env': check_env, 'links': check_links}
+CHECKS = {
+    'routes': check_routes,
+    'env': check_env,
+    'compose': check_compose_vars,
+    'links': check_links,
+}
 
 
 def set_only(paths: list[Path] | None) -> None:

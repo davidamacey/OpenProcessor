@@ -197,7 +197,7 @@ async def get_model_class_mapping(model_name: str) -> ModelClassMappingResponse:
                 model_name=e.model_name,
                 class_id=e.class_id,
                 class_name=e.class_name,
-                match=e.match,  # type: ignore[arg-type]
+                match=e.match,
             )
             for e in mapping.entries
         ],

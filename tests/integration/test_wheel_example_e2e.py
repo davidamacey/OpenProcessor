@@ -170,7 +170,7 @@ def synthetic_coco() -> tuple[dict[str, Any], dict[str, Any]]:
 def write_jpeg(name: str, dest: Path, width: int, height: int) -> None:
     """A decodable JPEG whose bytes differ per image (identical bytes would be
     deduplicated into one image by the importer)."""
-    n = int(name.split('.')[0])
+    n = int(name.split('.', maxsplit=1)[0])
     dest.parent.mkdir(parents=True, exist_ok=True)
     Image.new('RGB', (width, height), (n * 37 % 256, n * 91 % 256, n * 13 % 256)).save(
         dest, format='JPEG'

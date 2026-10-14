@@ -48,8 +48,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from scripts.bench import gpu_decode_lib as lib  # noqa: E402
-from src.config.settings import TritonModelConfig  # noqa: E402
+from scripts.bench import gpu_decode_lib as lib  # noqa: E402  # import follows the sys.path setup above
+from src.config.settings import TritonModelConfig  # noqa: E402  # import follows the sys.path setup above
 
 
 def load_images(dirs: list[str], limit: int) -> list[tuple[str, bytes]]:
@@ -79,7 +79,7 @@ def image_meta(data: bytes) -> dict[str, Any]:
 def _pil(data: bytes, scale: int = 1) -> np.ndarray:
     from PIL import Image, ImageOps
 
-    img = Image.open(io.BytesIO(data))
+    img: Image.Image = Image.open(io.BytesIO(data))
     if scale > 1:
         img.draft('RGB', (img.width // scale, img.height // scale))
     img = ImageOps.exif_transpose(img)
@@ -99,6 +99,9 @@ def _cv2(data: bytes, reduced: int = 1) -> np.ndarray:
         8: cv2.IMREAD_REDUCED_COLOR_8,
     }[reduced]
     bgr = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), flag)
+    if bgr is None:
+        msg = 'cv2 could not decode the image'
+        raise ValueError(msg)
     return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
 
@@ -201,7 +204,7 @@ class GpuSampler:
                 self.samples.append((time.time(), int(parts[0]), int(parts[1])))
 
     def __enter__(self) -> GpuSampler:
-        self._proc = subprocess.Popen(self._cmd, stdout=subprocess.PIPE, text=True)
+        self._proc = subprocess.Popen(self._cmd, stdout=subprocess.PIPE, text=True)  # nosec B603  fixed argv list, no shell
         self._t.start()
         return self
 

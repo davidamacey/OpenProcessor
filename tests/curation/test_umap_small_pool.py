@@ -53,7 +53,7 @@ def test_rebuild_route_returns_typed_422(monkeypatch):
     monkeypatch.setattr(er, 'fetch_residual_embeddings', _fetch)
     app = FastAPI()
     app.include_router(curation_umap.router)
-    app.dependency_overrides[get_curation_opensearch] = lambda: object()
+    app.dependency_overrides[get_curation_opensearch] = lambda: object()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
     resp = TestClient(app).post('/cluster/umap/rebuild')
     assert resp.status_code == 422
     assert resp.json()['detail']['error'] == 'too_few_items'

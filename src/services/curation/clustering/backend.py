@@ -54,8 +54,8 @@ class BackendInfo:
 
 def _try_import_cuml() -> tuple[Any, Any]:
     try:
-        import cuml  # type: ignore[import-not-found]
-        import cupy  # type: ignore[import-not-found]
+        import cuml
+        import cupy
     except ImportError:
         return None, None
     return cuml, cupy

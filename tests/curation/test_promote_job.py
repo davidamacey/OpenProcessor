@@ -39,7 +39,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     app = FastAPI()
     mount_curation_routers(app, router)
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
 
     jobs_dir = default_train_jobs_dir(tmp_path)
     snapshot = jobs_dir / f'{RUN}.registry_snapshot.json'

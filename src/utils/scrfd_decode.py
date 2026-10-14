@@ -40,7 +40,8 @@ def _generate_anchors(height: int, width: int, stride: int) -> np.ndarray:
         Anchor centers [N*NUM_ANCHORS, 2] in pixel coordinates
     """
     # Grid of (x, y) anchor centers
-    anchor_centers = np.stack(np.mgrid[:height, :width][::-1], axis=-1).astype(np.float32)
+    grid_y, grid_x = np.mgrid[:height, :width]
+    anchor_centers = np.stack((grid_x, grid_y), axis=-1).astype(np.float32)
     # Scale to pixel coordinates
     anchor_centers = (anchor_centers * stride).reshape(-1, 2)
     # Duplicate for NUM_ANCHORS per position

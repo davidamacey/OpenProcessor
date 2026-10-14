@@ -183,7 +183,7 @@ def region_profile_from_env() -> DetectionProfile | None:
 def ensure_env_region_profile() -> None:
     """Resolve the env-configured region profile once per process and
     register it as the default. Idempotent; a no-op when unconfigured."""
-    global _ENV_RESOLVED  # noqa: PLW0603
+    global _ENV_RESOLVED  # noqa: PLW0603  # module-level cache set lazily
     if _ENV_RESOLVED:
         return
     # Sync routes run in a thread pool: without the lock (and with the flag
@@ -318,7 +318,7 @@ def region_profile_or_neutral() -> DetectionProfile:
 def _reset_registry_for_tests() -> None:
     """Test-only escape hatch — the module-level registry otherwise leaks
     across test cases. The next accessor call re-resolves the env."""
-    global _DEFAULT_NAME, _ENV_RESOLVED  # noqa: PLW0603
+    global _DEFAULT_NAME, _ENV_RESOLVED  # noqa: PLW0603  # module-level cache set lazily
     _REGISTRY.clear()
     _DEFAULT_NAME = None
     _ENV_RESOLVED = False

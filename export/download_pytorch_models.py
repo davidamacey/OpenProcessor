@@ -19,7 +19,7 @@ try:
 
     ULTRALYTICS_AVAILABLE = True
 except ImportError:
-    attempt_download_asset = None
+    attempt_download_asset = None  # type: ignore[assignment]  # sentinel when ultralytics is not installed
     ULTRALYTICS_AVAILABLE = False
 
 # Configure logging
@@ -101,8 +101,8 @@ def download_model(model_size: str, output_dir: Path) -> bool:
         )
 
         # Move to target directory if downloaded elsewhere
-        downloaded_path = Path(downloaded_path)
-        if downloaded_path.exists() and downloaded_path != target_path:
+        downloaded_file = Path(downloaded_path)
+        if downloaded_file.exists() and downloaded_file != target_path:
             # If downloaded to different location, move it
             output_dir.mkdir(parents=True, exist_ok=True)
             shutil.move(str(downloaded_path), str(target_path))

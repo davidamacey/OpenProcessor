@@ -168,7 +168,7 @@ def test_requested_name_with_reserved_separator_is_rejected(
     from src.routers.curation_train import router as curation_train_router
 
     app = curation_test_app(curation_train_router)
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
 
     with TestClient(app) as client:
         resp = client.post(

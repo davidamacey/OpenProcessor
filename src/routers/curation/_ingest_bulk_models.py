@@ -6,9 +6,7 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from src.routers.curation._ingest_sources_models import (
-    S3Location,  # noqa: TC001 - pydantic field type
-)
+from src.routers.curation._ingest_sources_models import S3Location
 from src.services.curation.bulk_ingest.limits import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_CONCURRENCY,

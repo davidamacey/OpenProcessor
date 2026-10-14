@@ -29,7 +29,7 @@ async def benchmark_endpoint(
         nonlocal errors
         async with semaphore:
             try:
-                with open(image_path, 'rb') as f:
+                with Path(image_path).open('rb') as f:
                     files = {'image': ('test.jpg', f, 'image/jpeg')}
                     start = time.perf_counter()
                     response = await client.post(url, files=files)

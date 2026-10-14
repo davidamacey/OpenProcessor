@@ -68,7 +68,7 @@ def main() -> None:
     onnx_path = onnx_dir / 'model.onnx'
     torch.onnx.export(
         model,
-        dummy,
+        (dummy,),
         onnx_path.as_posix(),
         input_names=['input'],
         output_names=['output'],

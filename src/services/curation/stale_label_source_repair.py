@@ -120,7 +120,7 @@ async def apply_repairs(client: Any, plans: list[RepairPlan], *, index: str) -> 
         # plan=plan default binds this loop iteration's plan by value (the
         # closure is invoked later, inside occ_update_one, after the loop
         # variable would otherwise have moved on).
-        def _merge(current: dict[str, Any], plan: RepairPlan = plan) -> dict[str, Any]:  # noqa: ARG001
+        def _merge(current: dict[str, Any], plan: RepairPlan = plan) -> dict[str, Any]:  # noqa: ARG001  # default argument binds the loop variable
             if not is_candidate(current):
                 raise _StaleError
             return {

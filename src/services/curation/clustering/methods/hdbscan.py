@@ -126,9 +126,7 @@ class HDBSCANMethod:
         # condensation, stability selection). metric='euclidean' is the
         # only supported option; equivalent to cosine on L2-normalized
         # input (see module docstring).
-        from cuml.cluster import (
-            HDBSCAN as cuHDBSCAN,  # type: ignore[import-not-found]  # noqa: N811
-        )
+        from cuml.cluster import HDBSCAN as cuHDBSCAN  # noqa: N811  # matches the cuML class name
 
         # Ensure contiguous float32; cuML copies anyway but skipping the
         # internal conversion avoids a transient double-buffer in VRAM.
@@ -162,7 +160,7 @@ class HDBSCANMethod:
 
     def _fit_cpu(self, embeddings: np.ndarray) -> tuple[np.ndarray, dict[str, Any]]:
         try:
-            import hdbscan  # type: ignore[import-not-found]
+            import hdbscan
         except ImportError as exc:
             raise RuntimeError(
                 "CPU HDBSCAN fallback requires the 'hdbscan' package; "

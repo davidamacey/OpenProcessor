@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from src.services.curation.stats_embedding import EmbeddingBreakdown  # noqa: TC001 - pydantic
+from src.services.curation.stats_embedding import EmbeddingBreakdown
 
 
 class SourceBucket(BaseModel):

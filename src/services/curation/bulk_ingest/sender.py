@@ -51,7 +51,7 @@ class HttpBatchSender:
             'ingest_run_id': run_id,
         }
 
-    def _answer(self, body: dict[str, Any], paths: list[str]) -> dict[str, Any]:  # noqa: ARG002
+    def _answer(self, body: dict[str, Any], paths: list[str]) -> dict[str, Any]:  # noqa: ARG002  # interface method; this implementation does not need the argument
         return body
 
     async def post_batch(self, paths: list[str], *, source: str, run_id: str) -> dict[str, Any]:

@@ -140,7 +140,7 @@ def _make_reader(base_cls: type, images: list[Path], input_name: str, imgsz: int
     """
     import cv2
 
-    class _YoloCalibrationReader(base_cls):  # type: ignore[misc, valid-type]
+    class _YoloCalibrationReader(base_cls):
         def __init__(self) -> None:
             self._iter = iter(images)
 

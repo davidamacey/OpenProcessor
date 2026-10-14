@@ -49,7 +49,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from scripts.datasets._common import require_basename  # noqa: E402
+from scripts.datasets._common import require_basename  # noqa: E402  # import follows the sys.path setup above
 
 
 TARGETS = ('car', 'truck', 'bus')
@@ -72,14 +72,14 @@ STANDALONE_SLOTS = (
 
 
 def split_of(image_id: int) -> str:
-    bucket = int(hashlib.sha1(str(image_id).encode()).hexdigest(), 16) % 100
+    bucket = int(hashlib.sha1(str(image_id).encode(), usedforsecurity=False).hexdigest(), 16) % 100
     return (
         SPLITS[0] if bucket < SPLIT_CUTS[0] else SPLITS[1] if bucket < SPLIT_CUTS[1] else SPLITS[2]
     )
 
 
 def _order_key(image_id: int) -> str:
-    return hashlib.sha1(f'inject:{image_id}'.encode()).hexdigest()
+    return hashlib.sha1(f'inject:{image_id}'.encode(), usedforsecurity=False).hexdigest()
 
 
 def _row(cls: int, x: float, y: float, w: float, h: float) -> str:

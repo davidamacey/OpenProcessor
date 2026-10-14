@@ -103,6 +103,6 @@ EXPOSE 8000
 # processor pool. /health answers 200 with loaded=false while that runs,
 # so probe the flag, not just the socket.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=600s --retries=3 \
-    CMD wget -qO- http://127.0.0.1:8000/health | grep -q '"loaded":true' || exit 1
+    CMD ["sh", "-c", "wget -qO- http://127.0.0.1:8000/health | grep -q '\"loaded\":true' || exit 1"]
 
 CMD ["python", "main.py"]

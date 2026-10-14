@@ -1379,7 +1379,7 @@ def test_normal_run_manifest_has_no_null_lineage(
         'get_gpu_arbiter_config',
         lambda: GpuArbiterConfig(trainer_container='curation-trainer'),
     )
-    monkeypatch.setattr(lineage, '_docker_client', lambda: _FakeDockerClient())
+    monkeypatch.setattr(lineage, '_docker_client', _FakeDockerClient)
 
     job_id = _write_job(
         dataset_export_dir=str(export_dir),

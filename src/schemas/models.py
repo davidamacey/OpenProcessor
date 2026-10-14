@@ -13,7 +13,7 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 
-class ExportFormat(str, Enum):
+class ExportFormat(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and format() as Class.MEMBER; StrEnum would change both
     """Available export formats."""
 
     TRT = 'trt'
@@ -23,7 +23,7 @@ class ExportFormat(str, Enum):
     ALL = 'all'
 
 
-class ExportStatus(str, Enum):
+class ExportStatus(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and format() as Class.MEMBER; StrEnum would change both
     """Export task status."""
 
     PENDING = 'pending'
@@ -138,7 +138,7 @@ class ModelListResponse(BaseModel):
     total: int
     triton_status: str = Field(description='Triton server status')
     usage_instructions: ModelUsageInstructions = Field(
-        default_factory=lambda: ModelUsageInstructions(),
+        default_factory=ModelUsageInstructions,
         description='Instructions for using models in API requests',
     )
     notes: list[str] = Field(

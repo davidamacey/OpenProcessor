@@ -732,7 +732,10 @@ def test_lock_line_with_the_wrong_repo_for_its_key_is_refused(
     shimmed.release = build_fake_release(tmp_path / 'r', lock_override=_lock_with(key, ref))
     result = dry(shimmed)
     assert result.returncode == 7, result.stderr[-2000:]
-    assert f"images.lock '{key}' names {ref.split(':')[0]}, not {expected}" in result.stderr
+    assert (
+        f"images.lock '{key}' names {ref.split(':', maxsplit=1)[0]}, not {expected}"
+        in result.stderr
+    )
     assert 'integrity check' in result.stderr
     assert shimmed.mutating_docker_calls() == []
     assert [ln for ln in shimmed.log_lines('docker') if ' pull ' in f' {ln} '] == []

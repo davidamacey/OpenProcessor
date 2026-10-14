@@ -98,7 +98,7 @@ def _pe_embedder() -> Callable[[list[str]], np.ndarray]:
 
 
 def _st_embedder(model_name: str) -> Callable[[list[str]], np.ndarray]:
-    from sentence_transformers import SentenceTransformer  # type: ignore[import-not-found]
+    from sentence_transformers import SentenceTransformer
 
     model = SentenceTransformer(model_name)
 

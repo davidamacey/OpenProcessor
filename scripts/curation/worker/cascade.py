@@ -34,9 +34,7 @@ from src.services.detection.profile_registry import get_active_region_profile
 logger = get_logger('curation_worker')
 
 
-from scripts.curation.worker.client import (
-    SegmenterClient,  # noqa: TC001  # runtime re-export for shim + tests
-)
+from scripts.curation.worker.client import SegmenterClient  # noqa: TC001  # runtime re-export for shim + tests
 from scripts.curation.worker.state import JPEG_QUALITY, _ItemTask, items_index
 
 
@@ -182,7 +180,7 @@ async def _fetch_pending(
 
 def _crop_region_jpeg(crop_jpeg: bytes, region_in_crop: tuple[float, float, float, float]) -> bytes:
     """Extract just the region of interest from a crop's JPEG bytes for VLM verify."""
-    img = Image.open(io.BytesIO(crop_jpeg))
+    img: Image.Image = Image.open(io.BytesIO(crop_jpeg))
     img.load()
     if img.mode != 'RGB':
         img = img.convert('RGB')

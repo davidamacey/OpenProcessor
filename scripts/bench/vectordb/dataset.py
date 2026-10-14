@@ -8,7 +8,7 @@ images together in a seeded image order, so the 2k set is contained in the 10k s
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -103,14 +103,14 @@ def build(export_dirs: list[Path], out_dir: Path, seed: int = 20261011) -> None:
     stream_fields['cluster_id'] = rng.integers(0, CLUSTER_COUNT, len(stream)).astype(np.int64)
     stream_fields['class_name'] = held_meta['class_name'].to_numpy().astype(str)
     out_dir.mkdir(parents=True, exist_ok=True)
-    np.savez(out_dir / 'base.npz', vectors=base_vecs, **fields)
+    np.savez(out_dir / 'base.npz', vectors=base_vecs, **fields)  # type: ignore[arg-type]  # mypy reads **dict as the allow_pickle flag
     np.savez(
         out_dir / 'queries.npz',
         held=vectors[held_q],
         held_kind=meta.iloc[held_q]['kind'].to_numpy().astype(str),
         in_rows=in_rows,
         stream_vectors=vectors[stream],
-        **{f'stream_{k}': v for k, v in stream_fields.items()},
+        **{f'stream_{k}': v for k, v in stream_fields.items()},  # type: ignore[arg-type]  # mypy reads **dict as the allow_pickle flag
     )
 
 
@@ -145,6 +145,6 @@ def load(root: Path, size: int) -> Dataset:
     )
 
 
-def _most_common(values: np.ndarray) -> object:
+def _most_common(values: np.ndarray) -> Any:
     uniq, counts = np.unique(values, return_counts=True)
     return uniq[np.argmax(counts)]

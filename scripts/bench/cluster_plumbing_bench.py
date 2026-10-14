@@ -194,7 +194,7 @@ class StageClock:
                     clock.t['fit_s'] = time.perf_counter() - t0
                     clock.t['fit_s_end'] = time.perf_counter()
 
-            setattr(m, 'fit_predict', fit_predict)  # noqa: B010 - instance-level wrap of a method
+            m.fit_predict = fit_predict  # type: ignore[method-assign]  # instruments the instance to time the fit
             return m
 
         self._orig.append((methods, 'get_method', real_get))

@@ -72,7 +72,7 @@ class PgvectorAdapter(Adapter):
             host=self.host,
             port=self.port,
             user='postgres',
-            password='bench',
+            password='bench',  # nosec B106  credential of the throwaway benchmark container
             dbname='bench',
             autocommit=autocommit,
         )
@@ -140,7 +140,7 @@ class PgvectorAdapter(Adapter):
             self.local.ef = ef
         where, args = where_clause(flt)
         cast = 'halfvec' if self.vtype == 'halfvec' else 'vector'
-        sql = f'SELECT id FROM {TABLE}{where} ORDER BY embedding <=> %s::{cast} LIMIT {int(k)}'
+        sql = f'SELECT id FROM {TABLE}{where} ORDER BY embedding <=> %s::{cast} LIMIT {int(k)}'  # nosec B608  table name is a module constant, k is cast to int, values are bound
         rows = c.execute(sql, [*args, vector]).fetchall()
         return [int(r[0]) for r in rows]
 
@@ -148,7 +148,7 @@ class PgvectorAdapter(Adapter):
         def work(a: int, b: int) -> None:
             with self.connect() as c:
                 c.execute(
-                    f'UPDATE {TABLE} t SET {field} = v.val FROM (SELECT unnest(%s::bigint[]) AS id, '
+                    f'UPDATE {TABLE} t SET {field} = v.val FROM (SELECT unnest(%s::bigint[]) AS id, '  # nosec B608  table name is a module constant, values are bound
                     f'unnest(%s::int[]) AS val) v WHERE t.id = v.id',
                     [[int(x) for x in ids[a:b]], [int(x) for x in values[a:b]]],
                 )
@@ -158,7 +158,7 @@ class PgvectorAdapter(Adapter):
     def delete_where(self, flt: FilterSpec) -> None:
         where, args = where_clause(flt)
         with self.connect() as c:
-            c.execute(f'DELETE FROM {TABLE}{where}', args)
+            c.execute(f'DELETE FROM {TABLE}{where}', args)  # nosec B608  table name is a module constant, values are bound
 
     def settle(self) -> None:
         with self.connect() as c:
@@ -172,7 +172,7 @@ class PgvectorAdapter(Adapter):
 
     def count(self) -> int:
         with self.connect() as c:
-            return int(c.execute(f'SELECT count(*) FROM {TABLE}').fetchone()[0])
+            return int(c.execute(f'SELECT count(*) FROM {TABLE}').fetchone()[0])  # nosec B608  table name is a module constant, values are bound
 
     def drop(self) -> None:
         with self.connect() as c:

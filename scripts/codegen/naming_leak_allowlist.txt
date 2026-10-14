@@ -24,11 +24,6 @@ setup-openprocessor.sh:attevon-llc/cropwright # sanctioned exception (project co
 # Scan B (domain vocabulary: gemma/lpr/sam_worker/v6/plate_/hdd_source/license_plate)
 # ---------------------------------------------------------------------------
 
-# The `check_no_literal_region_fields.py` guard's own module: its entire
-# purpose is matching `'plate_...'` literals, so it necessarily spells the
-# pattern throughout (docstring, regexes, PORTED_PATHS comments).
-scripts/codegen/check_no_literal_region_fields.py # the plate_* literal guard itself; spells the pattern by definition
-
 # installer plan section 2.2: gemma-4-e4b (google/gemma-4-E4B-it,
 # Apache-2.0, ungated) is the shipped default local VLM catalog entry, not
 # a private codename -- images.lock's vlm_gemma4 image key names the vLLM
@@ -55,10 +50,6 @@ tests/config/test_retired_env.py # exercises every retired env-var name in src/c
 # Dockerfile/README hits left are the already-corrected OP_SEGMENTER_URL
 # lines matching scan B's SAM3_* pattern only via the surrounding comment
 # text -- none remain as of this commit.
-
-# The `check_no_literal_region_fields.py` guard's own tests feed `plate_*`
-# fixtures into it on purpose (that is the guard's entire test surface).
-tests/test_region_field_guard.py # feeds plate_* literal fixtures into the guard under test, on purpose
 
 # Guard-test vendor regexes (built as literal regexes rather than by string
 # concatenation -- either is permitted) and other negative/guard assertions
@@ -95,8 +86,7 @@ tests/integration/test_labeler_route_parity.py:plate|lpr|LPR # KNOWN_GAPS docume
 # guard's purpose itself (the hook exists to ban that literal, so it has
 # to spell it to say so). All other file-size-split rationale text was
 # reworded off vendor/reference-file names.
-.pre-commit-config.yaml:plate # the check-no-literal-region-fields hook's own name/purpose
-CONTRIBUTING.md:plate # describes the plate_* literal guard and its roi_* illustrative example; guard description, kept deliberately
+.pre-commit-config.yaml:rev: v6\.0\.0 # the pre-commit-hooks release tag, not a vendor model name
 
 # ---------------------------------------------------------------------------
 # The public `license_plate` reference region profile: domain content is

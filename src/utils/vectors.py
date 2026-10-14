@@ -8,8 +8,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    import numpy as np
 
-def float_list(vector: Sequence[float]) -> list[float]:
+
+def float_list(vector: Sequence[float] | np.ndarray) -> list[float]:
     """``vector`` as a list of Python floats, converted in one C call.
 
     ``list(ndarray)`` makes a list of numpy scalars that the JSON encoder then

@@ -324,8 +324,10 @@ def test_purge_of_container_owned_files_runs_in_a_container(
         [
             'bash',
             '-c',
-            f'OP_SOURCE_ONLY=1 source "{SCRIPT}"; OP_DRY_RUN=0; ENV_FILE="{env_path}"; '
-            '_tree_has_foreign_files() { return 0; }; safe_rm_tree "$1"',
+            (
+                f'OP_SOURCE_ONLY=1 source "{SCRIPT}"; OP_DRY_RUN=0; ENV_FILE="{env_path}"; '
+                '_tree_has_foreign_files() { return 0; }; safe_rm_tree "$1"'
+            ),
             '_',
             str(target),
         ],
@@ -337,8 +339,10 @@ def test_purge_of_container_owned_files_runs_in_a_container(
     assert result.returncode == 0, result.stderr
     runs = [ln for ln in shimmed.mutating_docker_calls() if ln.startswith('docker run')]
     assert runs == [
-        f'docker run --rm --user 0 --entrypoint rm -v {target.parent}:/purge '
-        f'davidamacey/openprocessor@sha256:{"a" * 64} -rf --one-file-system -- /purge/models'
+        (
+            f'docker run --rm --user 0 --entrypoint rm -v {target.parent}:/purge '
+            f'davidamacey/openprocessor@sha256:{"a" * 64} -rf --one-file-system -- /purge/models'
+        )
     ]
 
 
@@ -448,8 +452,10 @@ def test_gpu_subtract_own_removes_the_installs_own_vram() -> None:
         [
             'bash',
             '-c',
-            f'OP_SOURCE_ONLY=1 source "{SCRIPT}"; '
-            'gpu_subtract_own "$(printf "0 49140 1000\\n2 49140 22528\\n")" "$(printf "2 22000\\n")"',
+            (
+                f'OP_SOURCE_ONLY=1 source "{SCRIPT}"; '
+                'gpu_subtract_own "$(printf "0 49140 1000\\n2 49140 22528\\n")" "$(printf "2 22000\\n")"'
+            ),
         ],
         check=False,
         capture_output=True,

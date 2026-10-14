@@ -17,9 +17,7 @@ from src.routers.curation_train.preflight import (
 from src.services.training import jobs as train_jobs
 from src.services.training.gpu_arbiter import GpuArbiterStopFailedError
 from src.services.training.job_models import TrainCampaignSpec, TrainJobSpec
-from src.services.training.preflight_checks import (
-    PreflightReport,  # noqa: TC001 - pydantic field type
-)
+from src.services.training.preflight_checks import PreflightReport
 from src.services.training.profiles import PROFILES_YOLO26
 
 
@@ -132,7 +130,7 @@ async def start_campaign(
         single_cls=campaign.single_cls,
         cuda_visible_devices=campaign.cuda_visible_devices,
         model_size=first.model_size or 'm',
-        profile=first.profile if first.profile in PROFILES_YOLO26 else 'custom',  # type: ignore[arg-type]
+        profile=first.profile if first.profile in PROFILES_YOLO26 else 'custom',
         hyperparameters=first.hyperparameters,
         augmentation=campaign.augmentation,
     )

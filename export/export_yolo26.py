@@ -219,7 +219,7 @@ def build_engine(onnx_path: Path, plan_path: Path, max_batch: int) -> bool:
         return False
 
     plan_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(plan_path, 'wb') as f:
+    with Path(plan_path).open('wb') as f:
         f.write(serialized)
     logger.info(f'Engine saved: {plan_path} ({plan_path.stat().st_size / 1e6:.1f} MB)')
     return True

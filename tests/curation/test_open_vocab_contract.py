@@ -61,7 +61,7 @@ def client(monkeypatch: pytest.MonkeyPatch, segmenter: dict[str, Any]) -> TestCl
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
     monkeypatch.setattr(
         'src.config.ingest_profiles.ingest_primary_profile',
-        lambda: type('P', (), {'detector_model': ''})(),
+        type('P', (), {'detector_model': ''}),
     )
     app = FastAPI()
     mount_curation_routers(app, curation_router)

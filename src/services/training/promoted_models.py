@@ -88,8 +88,10 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
             (
                 region.segmenter_name,
                 'Segmenter',
-                'Refines or re-detects the region of interest on crops the '
-                'primary detector missed.',
+                (
+                    'Refines or re-detects the region of interest on crops the '
+                    'primary detector missed.'
+                ),
                 'Promptable segmentation',
             )
         )

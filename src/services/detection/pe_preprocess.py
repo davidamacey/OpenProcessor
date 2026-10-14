@@ -70,7 +70,9 @@ def whole_frame_rgb_from_image(img: Image.Image, target: int = PE_SIZE) -> np.nd
     scale = target / min(w, h)
     nw, nh = max(target, round(w * scale)), max(target, round(h * scale))
     left, top = (nw - target) // 2, (nh - target) // 2
-    square = rgb.resize((nw, nh), Image.BILINEAR).crop((left, top, left + target, top + target))
+    square = rgb.resize((nw, nh), Image.Resampling.BILINEAR).crop(
+        (left, top, left + target, top + target)
+    )
     return np.asarray(square)
 
 

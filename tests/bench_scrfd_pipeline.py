@@ -70,7 +70,7 @@ def collect_face_images(max_images: int = 100) -> list[Path]:
 
 def load_image_bytes(image_path: Path) -> bytes:
     """Load image as bytes."""
-    with open(image_path, 'rb') as f:
+    with Path(image_path).open('rb') as f:
         return f.read()
 
 

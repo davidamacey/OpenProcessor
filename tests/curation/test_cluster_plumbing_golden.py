@@ -64,7 +64,7 @@ def ivf_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     class _Config:
         project_state_dir = tmp_path
 
-    monkeypatch.setattr(ivf_store_mod, 'get_curation_config', lambda: _Config())
+    monkeypatch.setattr(ivf_store_mod, 'get_curation_config', _Config)
 
 
 def _stored(client: FakeItemsClient) -> dict[str, list[Any]]:

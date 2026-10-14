@@ -22,7 +22,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
 
@@ -36,8 +36,6 @@ if TYPE_CHECKING:
 
 
 logger = get_logger(__name__)
-
-_T = TypeVar('_T')
 
 
 @dataclass
@@ -85,9 +83,9 @@ def hash_split(key: str, seed: int, train_ratio: float, val_ratio: float) -> str
     return 'test'
 
 
-def even_stratified_sample(
-    rows: list[_T], n: int | None, key_fn: Callable[[_T], str], rng: random.Random
-) -> list[_T]:
+def even_stratified_sample[T](
+    rows: list[T], n: int | None, key_fn: Callable[[T], str], rng: random.Random
+) -> list[T]:
     """Round-robin cap ``rows`` to ~``n`` with EVEN per-stratum representation.
 
     A *sampler*, not a splitter — the counterpart to :func:`stratified_split`,
@@ -112,14 +110,14 @@ def even_stratified_sample(
         return list(rows)
     if n <= 0:
         return []
-    buckets: dict[str, list[_T]] = defaultdict(list)
+    buckets: dict[str, list[T]] = defaultdict(list)
     for row in rows:
         buckets[key_fn(row)].append(row)
     for bucket in buckets.values():
         rng.shuffle(bucket)
     order = list(buckets)
     rng.shuffle(order)  # no key-order bias on the final, partial pass
-    picked: list[_T] = []
+    picked: list[T] = []
     while len(picked) < n:
         progressed = False
         for key in order:
@@ -354,7 +352,7 @@ def _letterbox_pil(img: Any, target: int) -> Any:
     w, h = img.size
     scale = min(target / w, target / h) if w and h else 1.0
     new_w, new_h = max(1, round(w * scale)), max(1, round(h * scale))
-    resized = img.resize((new_w, new_h), _Image.LANCZOS)
+    resized = img.resize((new_w, new_h), _Image.Resampling.LANCZOS)
     canvas = _Image.new('RGB', (target, target), (114, 114, 114))
     canvas.paste(resized, ((target - new_w) // 2, (target - new_h) // 2))
     return canvas
@@ -412,7 +410,7 @@ def _copy_or_resize_one(
             if resize_mode == 'letterbox':
                 rgb = _letterbox_pil(rgb, target_size)
             elif resize_mode == 'aspect':
-                rgb.thumbnail((target_size, target_size), Image.LANCZOS)
+                rgb.thumbnail((target_size, target_size), Image.Resampling.LANCZOS)
             elif resize_mode is not None:
                 msg = f'unknown resize_mode: {resize_mode!r}'
                 raise ValueError(msg)

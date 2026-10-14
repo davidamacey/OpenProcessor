@@ -74,7 +74,7 @@ USER triton-server
 
 EXPOSE 8000 8001 8002
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD curl -fsS http://localhost:8000/v2/health/ready || exit 1
+    CMD ["sh", "-c", "curl -fsS http://localhost:8000/v2/health/ready || exit 1"]
 
 ENTRYPOINT ["tritonserver"]
 CMD ["--model-repository=/models", "--model-control-mode=explicit", "--strict-readiness=true"]

@@ -94,8 +94,8 @@ def _patch(monkeypatch: pytest.MonkeyPatch, client: _OS, *, root: Path | None) -
     monkeypatch.setattr(backfill_script, 'make_script_opensearch', MagicMock(return_value=client))
     monkeypatch.setattr(backfill_script, 'AsyncTritonPool', _FakeTritonPool)
     monkeypatch.setattr(backfill_script, 'PEEncoder', lambda **_kw: fake_pe)
-    monkeypatch.setattr(backfill_script, 'get_curation_config', lambda: _Cfg())
-    monkeypatch.setattr(reprocess_embed, 'get_curation_config', lambda: _Cfg())
+    monkeypatch.setattr(backfill_script, 'get_curation_config', _Cfg)
+    monkeypatch.setattr(reprocess_embed, 'get_curation_config', _Cfg)
     return fake_pe
 
 

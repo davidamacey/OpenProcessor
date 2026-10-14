@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI  # noqa: TC002
+from fastapi import FastAPI  # noqa: TC002  # FastAPI resolves the annotation at runtime
 from fastapi.openapi.docs import (
     get_redoc_html,
     get_swagger_ui_html,

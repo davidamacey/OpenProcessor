@@ -25,7 +25,7 @@ def _decode_jpeg(jpeg_bytes: bytes) -> Image.Image:
         msg = 'empty crop bytes'
         raise ValueError(msg)
     try:
-        img = Image.open(io.BytesIO(jpeg_bytes))
+        img: Image.Image = Image.open(io.BytesIO(jpeg_bytes))
         img = ImageOps.exif_transpose(img)
         if img.mode != 'RGB':
             img = img.convert('RGB')

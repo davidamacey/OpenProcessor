@@ -189,9 +189,11 @@ def to_markdown(report: dict[str, Any]) -> str:
     lines = ['## Baseline report', '']
     manifest = report.get('manifest', {})
     lines += [
-        f'Manifest `{manifest.get("name")}` sha256 `{manifest.get("sha256")}`, '
-        f'{manifest.get("count")} images, {manifest.get("bytes")} bytes. '
-        f'Config: {report.get("config")}',
+        (
+            f'Manifest `{manifest.get("name")}` sha256 `{manifest.get("sha256")}`, '
+            f'{manifest.get("count")} images, {manifest.get("bytes")} bytes. '
+            f'Config: {report.get("config")}'
+        ),
         '',
     ]
     lines += _table(

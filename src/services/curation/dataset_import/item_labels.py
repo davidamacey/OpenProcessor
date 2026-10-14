@@ -73,7 +73,7 @@ def match_existing(
                 if other_id in claimed:
                     continue
                 other_box = by_id[other_id].get('bbox_norm') or (0.0, 0.0, 0.0, 0.0)
-                score = iou(tuple(other_box), box.bbox_norm)  # type: ignore[arg-type]
+                score = iou(tuple(other_box), box.bbox_norm)
                 if score >= LABEL_IOU_MATCH and score > best:
                     best, match = score, by_id[other_id]
         if match is not None:

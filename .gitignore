@@ -421,3 +421,4 @@ benchmarks/ingest_benchmark_batch
 
 # Local, uncommitted working artifacts (exported engines, prototype scratch, gated weights)
 artifacts_local/
+.install/

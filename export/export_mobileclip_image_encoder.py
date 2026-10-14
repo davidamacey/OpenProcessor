@@ -162,7 +162,7 @@ def export_to_onnx(model, output_path):
     print('  Exporting with dynamic batch support...')
     torch.onnx.export(
         encoder,
-        dummy_input,
+        (dummy_input,),
         str(output_path),
         export_params=True,
         opset_version=ONNX_OPSET_VERSION,
@@ -302,7 +302,7 @@ def _build_engine(onnx_path, plan_path, fp16, max_batch_size):
         onnx_path = bake_fp16_onnx(onnx_path)
 
     print('  Parsing ONNX model...')
-    with open(onnx_path, 'rb') as f:
+    with Path(onnx_path).open('rb') as f:
         if not parser.parse(f.read()):
             for i in range(parser.num_errors):
                 print(f'    Error {i}: {parser.get_error(i)}')
@@ -339,7 +339,7 @@ def _build_engine(onnx_path, plan_path, fp16, max_batch_size):
     plan_path = Path(plan_path)
     plan_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(plan_path, 'wb') as f:
+    with Path(plan_path).open('wb') as f:
         f.write(serialized_engine)
 
     print('\n  ✓ TensorRT engine saved!')
@@ -378,7 +378,7 @@ def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=128):
     print(f'  Max batch size: {max_batch_size}')
 
     try:
-        import tensorrt as trt
+        import tensorrt as trt  # noqa: F401  # availability probe: absence selects the trtexec fallback below
     except ImportError as e:
         print('\n  ⚠ TensorRT not available in this container')
         print('  To convert to TensorRT, use the Triton container:')

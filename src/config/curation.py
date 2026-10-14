@@ -47,7 +47,7 @@ ITEM_EMBEDDING_FIELD = 'pe_embedding'
 PROBE_ENTROPY_REVIEW_MIN = 1.0
 
 
-class IndexRole(str, Enum):
+class IndexRole(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and format() as Class.MEMBER; StrEnum would change both
     """Logical role of a curation OpenSearch index.
 
     Unlike the reference private string enum, member *values* are

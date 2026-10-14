@@ -181,6 +181,6 @@ def _run_throughput_sweep(
         if backend == 'ultralytics':
             argv += ['--device', '0']
         try:
-            subprocess.run(argv, check=True)
+            subprocess.run(argv, check=True)  # nosec B603  fixed argv list, no shell
         except subprocess.CalledProcessError as exc:
             print(f'[bakeoff] throughput {label} failed: {exc}', flush=True)

@@ -71,7 +71,7 @@ def _box(source_item: dict[str, Any], box_id: str, job_id: str, now: str) -> Reg
     validated = bool(source_item.get('class_validated'))
     return RegionBox(
         box_id=box_id,
-        bbox_norm=tuple(source_item['bbox_norm']),  # type: ignore[arg-type]
+        bbox_norm=tuple(source_item['bbox_norm']),
         state='accepted' if validated else 'proposed',
         score=1.0,
         detector=DETECTOR,
@@ -105,9 +105,9 @@ def attach_regions(
     standalone: list[dict[str, Any]] = []
     for item in region_items:
         bbox = tuple(item['bbox_norm'])
-        parent = parent_of(bbox, parents, containment)  # type: ignore[arg-type]
+        parent = parent_of(bbox, parents, containment)
         stored = read_boxes(parent, fields) if parent is not None else []
-        if any(iou(b.bbox_norm, bbox) >= iou_min for b in stored):  # type: ignore[arg-type]
+        if any(iou(b.bbox_norm, bbox) >= iou_min for b in stored):
             merged += 1
             continue
         if parent is None or region_set_locked(parent, fields):

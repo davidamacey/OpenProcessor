@@ -44,7 +44,7 @@ from typing import TYPE_CHECKING, Any
 # still boots (and unit-tests still import) without the wheel present.
 # Lower-case alias 'A' is the upstream project's documented convention; ruff
 # N812 is silenced.
-import albumentations as A  # noqa: N812
+import albumentations as A  # noqa: N812  # conventional alias
 import cv2
 from augmentation_presets import (
     AUGMENTATION_PRESETS,

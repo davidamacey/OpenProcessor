@@ -32,8 +32,13 @@ jobs:
       - name: Import sanity
         run: python -c "import src.main"
 
-      - name: Run offline test suite
-        run: python -m pytest tests/ -q --no-cov -m 'not live'
+      # Line coverage of src/ and scripts/ measured 84.95 percent in the full local environment;
+      # the floor sits below it because this runner installs fewer packages and so skips more
+      # tests. Raise it to the measured value minus one whenever a change raises coverage.
+      - name: Run offline test suite with the coverage floor
+        run: >-
+          python -m pytest tests/ -q -m 'not live'
+          --cov=src --cov=scripts --cov-report=term --cov-fail-under=80
 
   pre-commit:
     name: pre-commit (all hooks)
@@ -59,13 +64,13 @@ jobs:
       - name: "Install golangci-lint (benchmarks/*.go hooks are `language: system`)"
         run: |
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
-            sh -s -- -b "$(go env GOPATH)/bin" v1.62.2
+            sh -s -- -b "$(go env GOPATH)/bin" v1.64.8
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: "Install hadolint (hadolint-docker hook is `language: system`)"
         run: |
           sudo curl -sSfL -o /usr/local/bin/hadolint \
-            https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
+            https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-linux-x86_64
           sudo chmod +x /usr/local/bin/hadolint
 
       - name: Cache pre-commit environments
@@ -85,5 +90,60 @@ jobs:
       - name: Install pre-commit
         run: pip install pre-commit
 
+      # Cold mypy over the whole tree takes minutes; the cache makes it seconds.
+      - name: Cache mypy
+        uses: actions/cache@v6
+        with:
+          path: .mypy_cache
+          key: mypy-${{ runner.os }}-${{ hashFiles('requirements-test.txt', 'pyproject.toml') }}-${{ github.sha }}
+          restore-keys: |
+            mypy-${{ runner.os }}-${{ hashFiles('requirements-test.txt', 'pyproject.toml') }}-
+
       - name: Run all hooks
         run: pre-commit run --all-files --show-diff-on-failure
+
+  changelog:
+    name: CHANGELOG entry for backend changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Require a CHANGELOG.md entry when src/, scripts/, docker/, export/ or models/ change
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            RANGE="$BASE_SHA...$HEAD_SHA"
+          elif git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
+            RANGE="$BEFORE_SHA...$AFTER_SHA"
+          else
+            # First push of a new branch, or before-SHA not reachable
+            # (force-push, shallow history): nothing safe to diff against.
+            echo "No usable base SHA to diff against; skipping."
+            exit 0
+          fi
+
+          CHANGED="$(git diff --name-only $RANGE)"
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          # On pull_request, github.sha is the synthetic merge commit, never the author's
+          # last commit; read the PR head instead.
+          MSG_SHA="${HEAD_SHA:-$AFTER_SHA}"
+          LAST_MSG="$(git log -1 --format=%B "$MSG_SHA")"
+          if echo "$LAST_MSG" | grep -qF '[skip-changelog]'; then
+            echo "Last commit message contains [skip-changelog]; skipping."
+            exit 0
+          fi
+
+          if echo "$CHANGED" | grep -qE '^(src|scripts|docker|export|models)/' \
+             && ! echo "$CHANGED" | grep -qx 'CHANGELOG.md'; then
+            echo "::error::This push/PR changes src/, scripts/, docker/, export/ or models/ but does not update CHANGELOG.md. Add an entry under ## [Unreleased], or add [skip-changelog] to the last commit message if this truly has no user-facing or architectural effect."
+            exit 1
+          fi

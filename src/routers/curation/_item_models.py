@@ -12,8 +12,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 # Runtime import: pydantic resolves the annotation from module globals.
-from src.services.curation.embedding_state import EmbeddingState  # noqa: TC001
-from src.services.curation.reprocess_models import ReprocessRequest  # noqa: TC001
+from src.services.curation.embedding_state import EmbeddingState
+from src.services.curation.reprocess_models import ReprocessRequest
 
 
 class ItemTextLine(BaseModel):

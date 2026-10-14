@@ -40,6 +40,7 @@ import logging
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -111,7 +112,7 @@ def download_onnx(output_path: Path, force: bool = False) -> bool:
         logger.info(f'  URL: {url[:80]}...')
         try:
             start = time.time()
-            urlretrieve(url, output_path)
+            urlretrieve(url, output_path)  # nosec B310  URL comes from the hardcoded DOWNLOAD_URLS list
             elapsed = time.time() - start
             size_mb = output_path.stat().st_size / (1024 * 1024)
             logger.info(f'  Downloaded: {size_mb:.1f} MB in {elapsed:.1f}s')
@@ -139,7 +140,7 @@ def analyze_onnx(onnx_path: Path) -> dict:
 
     logger.info(f'  Nodes: {len(model.graph.node)}, Opset: {model.opset_import[0].version}')
 
-    info = {'inputs': {}, 'outputs': {}}
+    info: dict[str, dict[str, Any]] = {'inputs': {}, 'outputs': {}}
 
     for inp in model.graph.input:
         shape = []
@@ -454,7 +455,7 @@ def convert_to_tensorrt(
         logger.info('  Baking FP16 (ModelOpt AutoCast, TRT 11 typed builds)...')
         onnx_path = bake_fp16_onnx(onnx_path)
         logger.info('  Parsing ONNX...')
-        with open(onnx_path, 'rb') as f:
+        with Path(onnx_path).open('rb') as f:
             if not parser.parse(f.read()):
                 for i in range(parser.num_errors):
                     logger.error(f'  Parse error {i}: {parser.get_error(i)}')
@@ -501,7 +502,7 @@ def convert_to_tensorrt(
 
         # Save
         plan_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(plan_path, 'wb') as f:
+        with Path(plan_path).open('wb') as f:
             f.write(serialized_engine)
 
         size_mb = plan_path.stat().st_size / (1024 * 1024)

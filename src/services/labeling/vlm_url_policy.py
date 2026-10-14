@@ -31,6 +31,7 @@ import socket
 import time
 import unicodedata
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit, urlunsplit
 
@@ -243,7 +244,7 @@ def _denied_service_addresses() -> frozenset[str]:
 
 def reset_policy_caches() -> None:
     """Test-only."""
-    global _DENIED_IP_CACHE, _GATEWAY_CACHE  # noqa: PLW0603
+    global _DENIED_IP_CACHE, _GATEWAY_CACHE  # noqa: PLW0603  # module-level cache set lazily
     _DENIED_IP_CACHE = None
     _GATEWAY_CACHE = None
     _LOCALITY_CACHE.clear()
@@ -260,7 +261,7 @@ def _docker_gateway_addresses() -> frozenset[str]:
         return _GATEWAY_CACHE
     found: set[str] = set()
     try:
-        with open('/proc/net/route', encoding='ascii') as fh:
+        with Path('/proc/net/route').open(encoding='ascii') as fh:
             next(fh, None)
             for line in fh:
                 cols = line.split()

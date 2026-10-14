@@ -7,9 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.services.curation.dataset_import.mapping import (
-    ClassMappingEntry,  # noqa: TC001 - pydantic field type, resolved at runtime
-)
+from src.services.curation.dataset_import.mapping import ClassMappingEntry
 
 
 Processing = Literal['none', 'propose']

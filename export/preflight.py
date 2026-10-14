@@ -21,7 +21,7 @@ MODEL_REPO_SEED = Path('/opt/openprocessor/model_repo_seed')
 
 def check_core_import() -> str | None:
     try:
-        import core
+        import core  # noqa: F401  # availability probe only
     except ImportError as exc:
         return f'import core (perception_models) failed: {exc}'
     return None
@@ -29,7 +29,7 @@ def check_core_import() -> str | None:
 
 def check_tensorrt_import() -> str | None:
     try:
-        import tensorrt
+        import tensorrt  # noqa: F401  # availability probe only
     except ImportError as exc:
         return f'import tensorrt failed: {exc}'
     return None

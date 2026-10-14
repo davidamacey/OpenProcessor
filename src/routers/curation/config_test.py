@@ -382,8 +382,8 @@ async def _resolve_profile(
 
 def _leg_wire(leg: Leg) -> RegionTestLeg:
     return RegionTestLeg(
-        leg=leg.leg,  # type: ignore[arg-type]
-        status=leg.status,  # type: ignore[arg-type]
+        leg=leg.leg,
+        status=leg.status,
         reason=leg.reason,
         elapsed_ms=leg.elapsed_ms,
         candidates=[RegionTestCandidate(**c) for c in leg.candidates],
@@ -506,7 +506,7 @@ async def test_region_profile(
         reason=reason,
         legs=[_leg_wire(leg) for leg in run.legs],
         verify=verify_block,
-        preview_basis=run.basis,  # type: ignore[arg-type]
-        preview_item=run.preview,  # type: ignore[arg-type]
+        preview_basis=run.basis,
+        preview_item=run.preview,
         validation=report,
     )

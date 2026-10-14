@@ -530,7 +530,7 @@ def _build_gpu_reducer(build_algo: str, n_items: int) -> Any:
     Detection picks based on the free-VRAM probe in
     :mod:`cluster_backend`; this function just consumes the choice.
     """
-    import cuml  # type: ignore[import-not-found]
+    import cuml
 
     shape = umap_shape(n_items)
     kwargs: dict[str, Any] = {

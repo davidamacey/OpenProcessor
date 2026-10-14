@@ -685,7 +685,7 @@ def create_app() -> FastAPI:
     # import time; import it here so its module-level side effects run even
     # if no curation route has been hit yet — the existing /metrics endpoint
     # (src.routers.health) picks them up automatically via generate_latest().
-    import src.services.curation.metrics  # noqa: F401
+    import src.services.curation.metrics  # noqa: F401  # import registers the metrics on the default registry
 
     return application
 

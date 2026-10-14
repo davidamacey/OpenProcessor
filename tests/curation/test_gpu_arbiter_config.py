@@ -143,7 +143,7 @@ def test_probe_trainer_reachable_blocks_when_docker_confirms_container_gone(
     only consulted once the heartbeat is missing/stale, and only then may
     it upgrade the warn to a definitive block."""
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
-    monkeypatch.setattr(trainer_reachability, '_docker_client', lambda: object())
+    monkeypatch.setattr(trainer_reachability, '_docker_client', object)
     monkeypatch.setattr(trainer_reachability, '_container_status_sync', lambda _client, _name: None)
 
     severity, detail = asyncio.run(
@@ -186,7 +186,7 @@ def test_docker_client_unavailable_warns_once_not_per_call(
         def ping(self) -> None:
             return None
 
-    monkeypatch.setattr('docker.from_env', lambda: _Ok())
+    monkeypatch.setattr('docker.from_env', _Ok)
     assert gpu_arbiter._docker_client() is not None
 
     monkeypatch.setattr('docker.from_env', _Boom().from_env)
@@ -411,7 +411,7 @@ def test_bakeoff_active_scans_every_projects_own_queue(
         def snapshot(self) -> dict[str, object]:
             return {'alpha': alpha}
 
-    clean_arbiter_env.setattr(registry_mod, 'get_project_registry', lambda: _Snap())
+    clean_arbiter_env.setattr(registry_mod, 'get_project_registry', _Snap)
     dirs = gpu_arbiter.all_bakeoff_jobs_dirs()
     assert tmp_path / 'alpha' / 'bakeoff_jobs' in dirs
 

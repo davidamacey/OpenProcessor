@@ -309,8 +309,10 @@ def render(result: EvalResult, *, worst: int) -> str:
         ('background_fp_regions', 'bg FP regions'),
     ]
     out = [
-        f'accepted statuses: {", ".join(s["accepted_statuses"])}   '
-        f'IoU threshold: {s["iou_threshold"]}   dedup IoU: {s["dedup_iou"]}',
+        (
+            f'accepted statuses: {", ".join(s["accepted_statuses"])}   '
+            f'IoU threshold: {s["iou_threshold"]}   dedup IoU: {s["dedup_iou"]}'
+        ),
         '',
     ]
     for label, m in rows:

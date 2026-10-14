@@ -139,6 +139,22 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Changed
 
+- Repo guards, the first step of the repo cleanup (`docs/design/repo_cleanup_plan.md`). Hooks:
+  pre-commit-hooks 6, gitleaks 8.30, bandit 1.9, shellcheck 0.11, hadolint 2.15 and ruff 0.17
+  (the hook id is now `ruff-check`; Dockerfile health checks use the JSON form hadolint wants).
+  mypy runs from the project interpreter with the pydantic plugin and `warn_unused_ignores` over
+  `src`, `scripts`, `docker` and `export` (the isolated hook environment had no numpy, fastapi or
+  pydantic types and missed real errors); bandit now covers `scripts/` and `export/`; ruff
+  lints `models/`, enables `PTH123`, `S110` and `S112`, and each `# noqa: CODE` needs a reason.
+  New ratchets with shrink-only baselines in `scripts/codegen/baselines/`: file size over all
+  first-party code and `CLAUDE.md` (700 and 400 lines), import layering, per-function complexity,
+  per-file broad excepts, work-package ids in comments and file names, and unused code (vulture).
+  Commit messages are checked as Conventional Commits. The offline suite no longer measures
+  coverage by default; CI enforces a coverage floor, a per-test timeout and a CHANGELOG entry for
+  backend changes. The version check reads releases that end a sentence and covers
+  `SECURITY.md`, `CONTRIBUTING.md` and the docs site; the naming scan no longer lets a directory
+  exemption hide a private name; every `${VAR}` in a root compose file is in `env.template`.
+
 - `scripts/curation/ingest_walker.py` is replaced by `scripts/curation/bulk_ingest.py` (`--folder` instead of
   `--root`, no progress file: the run resumes from the server). The parallel directory walk moved to
   `src/services/curation/bulk_ingest/walk.py`.
@@ -271,7 +287,15 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   inside the container). Screenshots are refreshed and added for the new pages, and
   `make docs-screenshots` regenerates them.
 
+### Removed
+
+- The `check-no-literal-region-fields` hook and `scripts/codegen/check_no_literal_region_fields.py`: the
+  naming-leak scan and `tests/test_no_legacy_region_scalars.py` cover the same ground.
+
 ### Fixed
+
+- `scripts/bench/gpu_decode_parity.py` unpacked the decoded frame as a tuple, which the decoder has not
+  returned since it became `DecodedImage`; the script now reads `.pil`.
 
 - An oversize upload answers `413` with `{"detail": "File too large. Maximum: <N>MB", "max_file_size_mb": <N>,
   "request_id": ...}` instead of a 500 and a traceback (the exception was raised inside a middleware

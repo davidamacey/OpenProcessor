@@ -80,7 +80,7 @@ class Wave0Gauges(Gauges):
     """
 
     def __init__(self, project: str, gpu: str) -> None:
-        super().__init__(project, gpu.split(',')[0])
+        super().__init__(project, gpu.split(',', maxsplit=1)[0])
         self.all_gpus = gpu.split(',')
         self.pmons = {g: PmonSampler(g) for g in self.all_gpus}
         self.clocks = ClockSampler()
@@ -289,7 +289,7 @@ def thread_cpu_census(container: str, seconds: float) -> dict[str, Any]:
     ``processes`` holds the process-level totals, which also count threads that came and went
     inside the window, and the CPU of processes that started during it.
     """
-    proc = subprocess.run(
+    proc = subprocess.run(  # nosec B603 B607  fixed argv list, no shell; docker from PATH
         ['docker', 'exec', '-i', container, 'python3', '-', str(seconds)],
         input=THREAD_CENSUS,
         capture_output=True,

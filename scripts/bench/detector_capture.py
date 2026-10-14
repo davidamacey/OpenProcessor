@@ -30,7 +30,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from src.services.detection.geometry import letterbox_to_square, undo_letterbox  # noqa: E402
+from src.services.detection.geometry import letterbox_to_square, undo_letterbox  # noqa: E402  # import follows the sys.path setup above
 
 
 OUTPUTS = ('num_dets', 'det_boxes', 'det_scores', 'det_classes')

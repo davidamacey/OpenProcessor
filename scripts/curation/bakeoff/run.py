@@ -180,7 +180,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--op-conf', type=float, default=None, help='Operating-point confidence')
     p.add_argument('--op-iou', type=float, default=None, help='Operating-point match IoU')
     p.add_argument('--warmup', type=int, default=3, help='Frames excluded from latency stats')
-    p.add_argument('--out-dir', type=Path, default=Path('/tmp/bakeoff'))
+    p.add_argument('--out-dir', type=Path, default=Path('/tmp/bakeoff'))  # nosec B108  operator-overridable scratch output directory
     p.add_argument('--training-data', help="Note on this model's training data (for the report)")
     # MLflow logging on by default (the MLflow tracking service on :5000); the
     # logger fails soft if the server/package is unavailable. Use --no-mlflow

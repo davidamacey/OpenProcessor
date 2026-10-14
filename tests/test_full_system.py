@@ -243,7 +243,7 @@ def test_detection() -> bool:
         print_test('Detection', 'SKIP', f'Test image not found: {TEST_IMAGE}')
         return False
 
-    with open(TEST_IMAGE, 'rb') as f:
+    with Path(TEST_IMAGE).open('rb') as f:
         files = {'image': f}
         data = test_endpoint('Single Detection', 'POST', f'{API_BASE}/detect', files=files)
 
@@ -266,7 +266,7 @@ def test_faces() -> bool:
         return False
 
     # Face detection
-    with open(TEST_IMAGE, 'rb') as f:
+    with Path(TEST_IMAGE).open('rb') as f:
         files = {'image': f}
         data = test_endpoint('Face Detection', 'POST', f'{API_BASE}/faces/detect', files=files)
 
@@ -276,7 +276,7 @@ def test_faces() -> bool:
         return False
 
     # Face recognition (detection + embeddings)
-    with open(TEST_IMAGE, 'rb') as f:
+    with Path(TEST_IMAGE).open('rb') as f:
         files = {'image': f}
         data = test_endpoint('Face Recognition', 'POST', f'{API_BASE}/faces/recognize', files=files)
 
@@ -297,7 +297,7 @@ def test_embeddings() -> bool:
         return False
 
     # Image embedding
-    with open(TEST_IMAGE, 'rb') as f:
+    with Path(TEST_IMAGE).open('rb') as f:
         files = {'image': f}
         data = test_endpoint('Image Embedding', 'POST', f'{API_BASE}/embed/image', files=files)
 
@@ -334,7 +334,7 @@ def test_ocr() -> bool:
         print_test('OCR', 'SKIP', 'No test image found')
         return False
 
-    with open(test_img, 'rb') as f:
+    with Path(test_img).open('rb') as f:
         files = {'image': f}
         data = test_endpoint('OCR Prediction', 'POST', f'{API_BASE}/ocr/predict', files=files)
 
@@ -356,7 +356,7 @@ def test_analyze() -> bool:
         print_test('Analyze', 'SKIP', f'Test image not found: {TEST_IMAGE}')
         return False
 
-    with open(TEST_IMAGE, 'rb') as f:
+    with Path(TEST_IMAGE).open('rb') as f:
         files = {'image': f}
         data = test_endpoint('Full Analyze', 'POST', f'{API_BASE}/analyze', files=files)
 
@@ -390,7 +390,7 @@ def test_ingest_single() -> bool:
         print_test('Ingest', 'SKIP', f'Test image not found: {TEST_IMAGE}')
         return False
 
-    with open(TEST_IMAGE, 'rb') as f:
+    with Path(TEST_IMAGE).open('rb') as f:
         files = {'image': f}
         params = {'image_id': 'test_ingest_001'}
         data = test_endpoint(
@@ -500,7 +500,7 @@ def test_image_search() -> bool:
         print_test('Image Search', 'SKIP', f'Test image not found: {TEST_IMAGE}')
         return False
 
-    with open(TEST_IMAGE, 'rb') as f:
+    with Path(TEST_IMAGE).open('rb') as f:
         files = {'image': f}
         data = test_endpoint(
             'Image Search', 'POST', f'{API_BASE}/search/image?top_k=5', files=files

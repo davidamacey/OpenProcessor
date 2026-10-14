@@ -78,7 +78,7 @@ def running_jobs_for(slug: str) -> list[tuple[str, str | None]]:
     for store in iter_jobs():
         state = store.job.read()
         if involves(state, slug) and store.job.is_live(ACTIVE_STATUSES):
-            out.append((store.import_id, state.get('started_at')))  # type: ignore[arg-type]
+            out.append((store.import_id, state.get('started_at')))
     return out
 
 

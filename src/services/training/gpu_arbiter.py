@@ -317,7 +317,7 @@ def _docker_client() -> Any:
     per outage, not per call -- G-15). Imported lazily so the module stays
     importable without the ``docker`` package or socket (unit tests)."""
     try:
-        import docker  # type: ignore[import-untyped]
+        import docker
 
         client = docker.from_env()  # type: ignore[attr-defined]
         client.ping()
@@ -638,7 +638,7 @@ async def reconcile_on_startup(
 # 700-LOC ratchet (see the comment above _container_status_sync). Imported
 # at the bottom, after _container_status_sync/_docker_client are already
 # bound in this module's namespace, so the circular import resolves.
-from src.services.training.trainer_reachability import (  # noqa: E402
+from src.services.training.trainer_reachability import (  # noqa: E402  # bottom-of-module import breaks a circular import
     TRAINER_CAPABILITIES_FILENAME,
     TRAINER_HEARTBEAT_STALE_SECONDS,
     probe_trainer_reachable,
