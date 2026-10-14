@@ -135,13 +135,7 @@ def _embedding_clause(state: str) -> dict[str, Any]:
     return state_clause(state)
 
 
-def item_filter_clauses(f: ItemFilter) -> list[dict[str, Any]]:
-    """The filter as AND-ed (filter-context) clauses.
-
-    Raises ``ValueError`` for a malformed band (``conf_min`` above
-    ``conf_max``, ``min_area`` above ``max_area``) or an ``item_text`` with no
-    letter or digit, which the routes map to a 400.
-    """
+def _name_clauses(f: ItemFilter) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     names = name_clause(f.class_names)
     if names is not None:
@@ -149,6 +143,11 @@ def item_filter_clauses(f: ItemFilter) -> list[dict[str, Any]]:
     excluded = name_clause(f.exclude_class_names)
     if excluded is not None:
         out.append({'bool': {'must_not': [excluded]}})
+    return out
+
+
+def _size_clauses(f: ItemFilter) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
     band = confidence_band(f.conf_min, f.conf_max)
     if band is not None:
         out.append(band)
@@ -160,12 +159,22 @@ def item_filter_clauses(f: ItemFilter) -> list[dict[str, Any]]:
         out.append({'range': {'crop_area_norm': bounds}})
     if f.max_rank is not None:
         out.append({'range': {'crop_rank_in_image': {'lte': f.max_rank}}})
+    return out
+
+
+def _state_clauses(f: ItemFilter) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
     if f.origin:
         out.append(_any_of([_origin_clause(o) for o in f.origin]))
     if f.embedding_state:
         out.append(_any_of([_embedding_clause(s) for s in f.embedding_state]))
     if f.review_status:
         out.append(_any_of([_review_clause(s) for s in f.review_status]))
+    return out
+
+
+def _term_clauses(f: ItemFilter) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
     for field, value in (
         ('source', f.source),
         ('class_id', f.class_id),
@@ -189,6 +198,11 @@ def item_filter_clauses(f: ItemFilter) -> list[dict[str, Any]]:
         )
     if f.label_validated is not None:
         out.append({'term': {'class_validated': f.label_validated}})
+    return out
+
+
+def _flag_clauses(f: ItemFilter) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
     if f.proposed_by_import is not None:
         out.append(_present('proposed_by_import', f.proposed_by_import))
     if f.on_negative_frame is not None:
@@ -203,6 +217,11 @@ def item_filter_clauses(f: ItemFilter) -> list[dict[str, Any]]:
         out.append(_flag('needs_new_class', f.needs_new_class))
     if f.review_dismissed is not None:
         out.append(_present('review_dismissed_at', f.review_dismissed))
+    return out
+
+
+def _quality_clauses(f: ItemFilter) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
     if f.min_blur_ratio is not None:
         # An item with no blur score is not hidden by the clarity slider.
         out.append(
@@ -225,6 +244,23 @@ def item_filter_clauses(f: ItemFilter) -> list[dict[str, Any]]:
             raise ValueError(msg)
         out.append(text)
     return out
+
+
+def item_filter_clauses(f: ItemFilter) -> list[dict[str, Any]]:
+    """The filter as AND-ed (filter-context) clauses.
+
+    Raises ``ValueError`` for a malformed band (``conf_min`` above
+    ``conf_max``, ``min_area`` above ``max_area``) or an ``item_text`` with no
+    letter or digit, which the routes map to a 400.
+    """
+    return [
+        *_name_clauses(f),
+        *_size_clauses(f),
+        *_state_clauses(f),
+        *_term_clauses(f),
+        *_flag_clauses(f),
+        *_quality_clauses(f),
+    ]
 
 
 def item_filter_query(f: ItemFilter) -> dict[str, Any]:
