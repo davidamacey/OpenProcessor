@@ -37,8 +37,6 @@ tests/curation/test_bakeoff_harness.py	1043	split in PR 7
 tests/curation/test_bakeoff_router.py	1382	split in PR 7
 tests/curation/test_cascade_detect.py	710	split in PR 7
 tests/curation/test_cross_project_leak.py	2515	split in PR 7
-tests/curation/test_export_service.py	797	split in PR 7
-tests/curation/test_export_single_class.py	748	split in PR 7
 tests/curation/test_ingest_service.py	1235	split in PR 7
 tests/curation/test_region_cascade_integrity.py	789	split in PR 7
 tests/curation/test_region_worker.py	1085	split in PR 7

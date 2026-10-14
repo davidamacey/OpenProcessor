@@ -1,30 +1,21 @@
-"""Tests for the generic single-class / class-subset dataset export (G2).
-
-Fake OpenSearch (scroll + clear_scroll) over a tmp export root — no real
-cluster, and ``copy_images=False`` everywhere except the one test that
-deliberately exercises the crop+resize stage against real tiny JPEGs.
-
-The acceptance test for this capability is
-``test_manifest_shape_matches_reference_single_class_export`` at the
-bottom: an earlier internal version's single-class export must be
-reproducible through this generic exporter with a byte-comparable
-manifest, so that test pins that manifest's exact key set and asserts
-this exporter's manifest carries every one of them with the same
-semantics.
-"""
+"""Single-class and class-subset dataset export (G2): primitives, layout, sampling, determinism and the manifest shape."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 import pytest
-from PIL import Image
 
-from src.clients.curation_opensearch.registry import ClassRegistry
+from curation.export_fakes import (
+    FIELDS,
+    FakeOpenSearch,
+    make_item,
+    make_region_item,
+    make_registry,
+    single_class_service,
+)
 from src.config import CurationConfig
-from src.config.region_fields import RegionFields
 from src.config.region_state import RegionStatus
 from src.services.curation.export_single_class import (
     SingleClassExportProfile,
@@ -37,135 +28,6 @@ from src.services.curation.export_single_class_rows import (
     xyxy_to_yolo,
 )
 from src.services.curation.export_support import frozen_test_sha_of, label_content_sha
-
-
-# ---------------------------------------------------------------------------
-# Fixtures / helpers
-# ---------------------------------------------------------------------------
-
-
-class _FakeOpenSearch:
-    """Returns one page of hits per distinct query, then exhausts the scroll.
-
-    ``queries`` records every query body it was asked for, so a test can
-    assert the exporter pushed the right filter into OpenSearch rather
-    than scrolling everything and filtering in Python.
-    """
-
-    def __init__(self, docs: list[dict[str, Any]], *, by_status: bool = False) -> None:
-        self._docs = docs
-        self._by_status = by_status
-        self.queries: list[dict[str, Any]] = []
-        self._served: set[str] = set()
-
-    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:  # noqa: ARG002
-        self.queries.append(body['query'])
-        docs = self._docs if not self._by_status else self._match(body['query'])
-        scroll_id = f'scroll-{len(self.queries)}'
-        self._served.add(scroll_id)
-        hits = [{'_id': d.get('crop_id', ''), '_source': d} for d in docs]
-        return {'_scroll_id': scroll_id, 'hits': {'hits': hits}}
-
-    def _match(self, query: dict[str, Any]) -> list[dict[str, Any]]:
-        """Crude status-terms matcher, enough to split the three region pools.
-
-        The empty-frame sample query is wrapped in ``function_score``
-        (random_score) rather than a bare bool — unwrap it first.
-        """
-        if 'function_score' in query:
-            query = query['function_score']['query']
-        # status/class_id predicates now live in filter context.
-        clauses = query.get('bool', {}).get('filter', [])
-        wanted: set[str] = set()
-        for clause in clauses:
-            for field_name, values in clause.get('terms', {}).items():
-                if field_name == _F.status:
-                    wanted.update(values)
-        if not wanted:
-            return self._docs
-        return [d for d in self._docs if d.get(_F.status) in wanted]
-
-    async def scroll(self, scroll_id: str, scroll: str) -> dict:  # noqa: ARG002
-        return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
-
-    async def clear_scroll(self, scroll_id: str) -> None:  # noqa: ARG002
-        return None
-
-
-_F = RegionFields()
-
-
-def _registry(base: Path, names: list[str]) -> ClassRegistry:
-    reg = ClassRegistry(path=base / 'class_registry.json')
-    for name in names:
-        reg.add_class(name)
-    return reg
-
-
-def _service(
-    tmp_path: Path,
-    opensearch: _FakeOpenSearch,
-    profile: SingleClassExportProfile,
-    *,
-    names: list[str] | None = None,
-    source_root: Path | None = None,
-) -> SingleClassExportService:
-    cfg = CurationConfig(
-        export_root=tmp_path / 'exports',
-        source_root=source_root or (tmp_path / 'images'),
-    )
-    return SingleClassExportService(
-        opensearch,
-        profile=profile,
-        config=cfg,
-        registry=_registry(tmp_path / 'registry', names or ['car', 'truck', 'bus']),
-        region_fields=_F,
-    )
-
-
-def _item(
-    idx: int,
-    class_id: int,
-    *,
-    bbox: list[float] | None = None,
-    test_holdout: bool = False,
-    cluster_id: int | None = None,
-) -> dict[str, Any]:
-    return {
-        'crop_id': f'crop-{idx}',
-        'image_id': f'img-{idx}',
-        'image_path': f'{idx}.jpg',
-        'bbox_norm': bbox or [0.1, 0.1, 0.5, 0.5],
-        'class_id': class_id,
-        'test_holdout': test_holdout,
-        'cluster_id': cluster_id,
-    }
-
-
-def _region_item(
-    idx: int,
-    status: RegionStatus,
-    *,
-    region_bbox: list[float] | None = None,
-    class_id: int = 0,
-    test_holdout: bool = False,
-    region_cluster_id: int | None = None,
-) -> dict[str, Any]:
-    doc = _item(idx, class_id, test_holdout=test_holdout)
-    doc[_F.status] = status.value
-    doc[_F.boxes] = (
-        [
-            {
-                'box_id': 'b1',
-                'bbox_norm': list(region_bbox),
-                'state': 'accepted',
-                'cluster_id': region_cluster_id,
-            }
-        ]
-        if region_bbox is not None
-        else []
-    )
-    return doc
 
 
 # ---------------------------------------------------------------------------
@@ -222,27 +84,27 @@ async def test_single_class_dataset_sha_differs_for_a_class_rename_with_byte_ide
     class_id, same class_ids tuple) leaves the label bytes unchanged but
     must still change dataset_sha, because the ordered class_names are
     folded into the digest."""
-    docs = [_item(1, 0)]
-    registry = _registry(tmp_path / 'registry', ['car'])
+    docs = [make_item(1, 0)]
+    registry = make_registry(tmp_path / 'registry', ['car'])
     profile = SingleClassExportProfile(class_ids=(0,))
 
     service_a = SingleClassExportService(
-        _FakeOpenSearch(docs),
+        FakeOpenSearch(docs),
         profile=profile,
         config=CurationConfig(export_root=tmp_path / 'a', source_root=tmp_path / 'images'),
         registry=registry,
-        region_fields=_F,
+        region_fields=FIELDS,
     )
     result_a = await service_a.export(seed=1, copy_images=False)
 
     registry.rename_class(0, 'automobile')
 
     service_b = SingleClassExportService(
-        _FakeOpenSearch(docs),
+        FakeOpenSearch(docs),
         profile=profile,
         config=CurationConfig(export_root=tmp_path / 'b', source_root=tmp_path / 'images'),
         registry=registry,
-        region_fields=_F,
+        region_fields=FIELDS,
     )
     result_b = await service_b.export(seed=1, copy_images=False)
 
@@ -279,7 +141,7 @@ def test_frozen_test_sha_empty_without_a_test_split(tmp_path):
 
 @pytest.mark.asyncio
 async def test_item_mode_requires_class_ids(tmp_path):
-    service = _service(tmp_path, _FakeOpenSearch([]), SingleClassExportProfile())
+    service = single_class_service(tmp_path, FakeOpenSearch([]), SingleClassExportProfile())
     with pytest.raises(ValueError, match='class_ids'):
         await service.export()
 
@@ -287,7 +149,7 @@ async def test_item_mode_requires_class_ids(tmp_path):
 @pytest.mark.asyncio
 async def test_item_crop_mode_rejected_for_item_box_source(tmp_path):
     profile = SingleClassExportProfile(class_ids=(0,))
-    service = _service(tmp_path, _FakeOpenSearch([]), profile)
+    service = single_class_service(tmp_path, FakeOpenSearch([]), profile)
     with pytest.raises(ValueError, match='item_crop'):
         await service.export(image_mode='item_crop')
 
@@ -295,7 +157,7 @@ async def test_item_crop_mode_rejected_for_item_box_source(tmp_path):
 @pytest.mark.asyncio
 async def test_unknown_image_mode_rejected(tmp_path):
     profile = SingleClassExportProfile(class_ids=(0,))
-    service = _service(tmp_path, _FakeOpenSearch([]), profile)
+    service = single_class_service(tmp_path, FakeOpenSearch([]), profile)
     with pytest.raises(ValueError, match='image_mode'):
         await service.export(image_mode='sideways')  # type: ignore[arg-type]
 
@@ -307,9 +169,9 @@ async def test_unknown_image_mode_rejected(tmp_path):
 
 @pytest.mark.asyncio
 async def test_single_class_export_writes_labels_yaml_and_symlink(tmp_path):
-    docs = [_item(i, 0) for i in range(6)] + [_item(100 + i, 1) for i in range(4)]
+    docs = [make_item(i, 0) for i in range(6)] + [make_item(100 + i, 1) for i in range(4)]
     profile = SingleClassExportProfile(class_ids=(0,), name='regions')
-    service = _service(tmp_path, _FakeOpenSearch(docs), profile)
+    service = single_class_service(tmp_path, FakeOpenSearch(docs), profile)
 
     result = await service.export(version_tag='v1', seed=11, copy_images=False)
 
@@ -340,10 +202,10 @@ async def test_single_class_export_writes_labels_yaml_and_symlink(tmp_path):
 async def test_class_subset_export_uses_dense_ids_in_profile_order(tmp_path):
     """Dense label ids are the index into ``class_ids``, not the registry id,
     so a subset export's label files are self-consistent with its data.yaml."""
-    docs = [_item(0, 2), _item(1, 0), _item(2, 1)]
+    docs = [make_item(0, 2), make_item(1, 0), make_item(2, 1)]
     # Deliberately non-ascending: the profile's order IS the dataset order.
     profile = SingleClassExportProfile(class_ids=(2, 0))
-    service = _service(tmp_path, _FakeOpenSearch(docs), profile)
+    service = single_class_service(tmp_path, FakeOpenSearch(docs), profile)
 
     result = await service.export(copy_images=False)
     export_dir = Path(result.export_dir)
@@ -372,9 +234,9 @@ async def test_class_subset_export_uses_dense_ids_in_profile_order(tmp_path):
 async def test_non_target_frames_become_background_images(tmp_path):
     """A narrowed detector must learn to NOT fire on the classes it dropped,
     so frames holding only non-target items are emitted as empty labels."""
-    docs = [_item(i, 0) for i in range(10)] + [_item(100 + i, 1) for i in range(10)]
+    docs = [make_item(i, 0) for i in range(10)] + [make_item(100 + i, 1) for i in range(10)]
     profile = SingleClassExportProfile(class_ids=(0,))
-    service = _service(tmp_path, _FakeOpenSearch(docs), profile)
+    service = single_class_service(tmp_path, FakeOpenSearch(docs), profile)
 
     result = await service.export(empty_bg_ratio=0.5, seed=3, copy_images=False)
 
@@ -389,9 +251,9 @@ async def test_non_target_frames_become_background_images(tmp_path):
 async def test_max_positive_images_caps_evenly_across_strata(tmp_path):
     """The cap runs through the shared ``even_stratified_sample``, so the
     rare class survives instead of being crowded out by the dominant one."""
-    docs = [_item(i, 0) for i in range(50)] + [_item(100 + i, 1) for i in range(2)]
+    docs = [make_item(i, 0) for i in range(50)] + [make_item(100 + i, 1) for i in range(2)]
     profile = SingleClassExportProfile(class_ids=(0, 1))
-    service = _service(tmp_path, _FakeOpenSearch(docs), profile)
+    service = single_class_service(tmp_path, FakeOpenSearch(docs), profile)
 
     result = await service.export(max_positive_images=6, seed=5, copy_images=False)
 
@@ -404,10 +266,10 @@ async def test_max_positive_images_caps_evenly_across_strata(tmp_path):
 
 @pytest.mark.asyncio
 async def test_test_holdout_frames_are_pinned_to_the_test_split(tmp_path):
-    docs = [_item(i, 0) for i in range(9)]
-    docs.append(_item(99, 0, test_holdout=True))
+    docs = [make_item(i, 0) for i in range(9)]
+    docs.append(make_item(99, 0, test_holdout=True))
     profile = SingleClassExportProfile(class_ids=(0,))
-    service = _service(tmp_path, _FakeOpenSearch(docs), profile)
+    service = single_class_service(tmp_path, FakeOpenSearch(docs), profile)
 
     result = await service.export(seed=1, copy_images=False)
 
@@ -416,10 +278,10 @@ async def test_test_holdout_frames_are_pinned_to_the_test_split(tmp_path):
 
 @pytest.mark.asyncio
 async def test_skip_test_split_emits_only_train_and_val(tmp_path):
-    docs = [_item(i, 0) for i in range(20)]
-    docs.append(_item(99, 0, test_holdout=True))
+    docs = [make_item(i, 0) for i in range(20)]
+    docs.append(make_item(99, 0, test_holdout=True))
     profile = SingleClassExportProfile(class_ids=(0,))
-    service = _service(tmp_path, _FakeOpenSearch(docs), profile)
+    service = single_class_service(tmp_path, FakeOpenSearch(docs), profile)
 
     result = await service.export(seed=1, skip_test_split=True, copy_images=False)
 
@@ -430,12 +292,12 @@ async def test_skip_test_split_emits_only_train_and_val(tmp_path):
 
 @pytest.mark.asyncio
 async def test_export_is_reproducible_for_the_same_seed(tmp_path):
-    docs = [_item(i, 0) for i in range(12)] + [_item(100 + i, 1) for i in range(6)]
+    docs = [make_item(i, 0) for i in range(12)] + [make_item(100 + i, 1) for i in range(6)]
     profile = SingleClassExportProfile(class_ids=(0,))
 
     shas = []
     for run in range(2):
-        service = _service(tmp_path / f'run{run}', _FakeOpenSearch(docs), profile)
+        service = single_class_service(tmp_path / f'run{run}', FakeOpenSearch(docs), profile)
         result = await service.export(seed=42, empty_bg_ratio=0.5, copy_images=False)
         shas.append((result.dataset_sha, result.frozen_test_sha))
 
@@ -447,9 +309,9 @@ async def test_export_is_reproducible_for_the_same_seed(tmp_path):
 async def test_zero_positive_export_is_flagged_not_silent(tmp_path):
     """A background-only dataset can't train a detector; the manifest has to
     say so rather than looking like an ordinary small export."""
-    docs = [_item(i, 1) for i in range(4)]
+    docs = [make_item(i, 1) for i in range(4)]
     profile = SingleClassExportProfile(class_ids=(0,))
-    service = _service(tmp_path, _FakeOpenSearch(docs), profile)
+    service = single_class_service(tmp_path, FakeOpenSearch(docs), profile)
 
     result = await service.export(copy_images=False)
 
@@ -460,9 +322,9 @@ async def test_zero_positive_export_is_flagged_not_silent(tmp_path):
 
 @pytest.mark.asyncio
 async def test_symlink_flip_retargets_a_previous_export(tmp_path):
-    docs = [_item(i, 0) for i in range(4)]
+    docs = [make_item(i, 0) for i in range(4)]
     profile = SingleClassExportProfile(class_ids=(0,))
-    service = _service(tmp_path, _FakeOpenSearch(docs), profile)
+    service = single_class_service(tmp_path, FakeOpenSearch(docs), profile)
 
     first = await service.export(export_dir=tmp_path / 'e1', copy_images=False)
     second = await service.export(export_dir=tmp_path / 'e2', copy_images=False)
@@ -470,144 +332,6 @@ async def test_symlink_flip_retargets_a_previous_export(tmp_path):
     link = tmp_path / 'exports' / 'single_class' / 'current'
     assert link.resolve() == Path(second.export_dir).resolve()
     assert link.resolve() != Path(first.export_dir).resolve()
-
-
-# ---------------------------------------------------------------------------
-# Region box source (an earlier internal version's export shape)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_region_mode_splits_positives_hard_negatives_and_empties(tmp_path):
-    docs = [
-        *[
-            _region_item(i, RegionStatus.DETECTED, region_bbox=[0.4, 0.4, 0.5, 0.45])
-            for i in range(10)
-        ],
-        *[_region_item(100 + i, RegionStatus.FALSE_POSITIVE) for i in range(3)],
-        *[_region_item(200 + i, RegionStatus.NO_REGION_VISIBLE) for i in range(20)],
-    ]
-    profile = SingleClassExportProfile(box_source='region', region_class_name='region')
-    service = _service(tmp_path, _FakeOpenSearch(docs, by_status=True), profile)
-
-    result = await service.export(empty_bg_ratio=0.2, seed=2, copy_images=False)
-
-    assert result.positive_images == 10
-    # Every human false-positive is kept in full; the empty pool is sampled
-    # to empty_bg_ratio * positives on top of that.
-    assert result.background_images == 3 + 2
-    manifest = json.loads(Path(result.manifest_path).read_text())
-    assert manifest['false_positive_background_images'] == 3
-    assert manifest['class_name'] == 'region'
-    assert '  0: region\n' in (Path(result.export_dir) / 'data.yaml').read_text()
-
-
-@pytest.mark.asyncio
-async def test_region_mode_empty_frame_sample_uses_random_score_with_fixed_seed(tmp_path):
-    """The empty-frame sample must not be index-order-biased (the
-    same leading docs every export) — it's a function_score/random_score
-    query with a fixed seed instead."""
-    from src.services.curation.export_single_class_rows import EMPTY_FRAME_SAMPLE_SEED
-
-    docs = [
-        _region_item(i, RegionStatus.DETECTED, region_bbox=[0.4, 0.4, 0.5, 0.45]) for i in range(4)
-    ]
-    profile = SingleClassExportProfile(box_source='region', region_class_name='region')
-    fake_os = _FakeOpenSearch(docs, by_status=True)
-    service = _service(tmp_path, fake_os, profile)
-
-    await service.export(empty_bg_ratio=0.5, seed=1, copy_images=False)
-
-    empty_queries = [
-        q
-        for q in fake_os.queries
-        if 'function_score' in q and 'random_score' in q['function_score']
-    ]
-    assert empty_queries, 'expected at least one random_score-wrapped empty-frame query'
-    rs = empty_queries[0]['function_score']['random_score']
-    assert rs['seed'] == EMPTY_FRAME_SAMPLE_SEED
-
-
-@pytest.mark.asyncio
-async def test_region_mode_ignores_verify_rejected(tmp_path):
-    """A model-rejected region is an unverified non-detection — training on
-    it teaches the next detector the current one's mistakes."""
-    docs = [
-        _region_item(0, RegionStatus.DETECTED, region_bbox=[0.4, 0.4, 0.5, 0.45]),
-        _region_item(1, RegionStatus.VERIFY_REJECTED),
-    ]
-    profile = SingleClassExportProfile(box_source='region')
-    service = _service(tmp_path, _FakeOpenSearch(docs, by_status=True), profile)
-
-    result = await service.export(empty_bg_ratio=1.0, copy_images=False)
-
-    assert result.image_count == 1
-    assert result.positive_images == 1
-
-
-@pytest.mark.asyncio
-async def test_region_mode_filters_by_parent_class_ids(tmp_path):
-    docs = [_region_item(0, RegionStatus.DETECTED, region_bbox=[0.4, 0.4, 0.5, 0.45])]
-    fake = _FakeOpenSearch(docs, by_status=True)
-    profile = SingleClassExportProfile(box_source='region', class_ids=(0, 2))
-    service = _service(tmp_path, fake, profile)
-
-    await service.export(empty_bg_ratio=0.0, copy_images=False)
-
-    # The parent-class narrowing is pushed into OpenSearch, not applied
-    # after scrolling the whole index.
-    filt = fake.queries[0]['bool']['filter']
-    assert {'terms': {'class_id': [0, 2]}} in filt
-
-
-@pytest.mark.asyncio
-async def test_item_crop_mode_reprojects_the_region_into_the_parent_crop(tmp_path):
-    parent = [0.25, 0.25, 0.75, 0.75]
-    docs = [
-        {
-            **_region_item(0, RegionStatus.DETECTED, region_bbox=[0.5, 0.25, 0.75, 0.75]),
-            'bbox_norm': parent,
-        }
-    ]
-    profile = SingleClassExportProfile(box_source='region')
-    service = _service(tmp_path, _FakeOpenSearch(docs, by_status=True), profile)
-
-    result = await service.export(image_mode='item_crop', empty_bg_ratio=0.0, copy_images=False)
-
-    # One row per ITEM in crop mode, keyed on crop_id rather than image_id.
-    label = next((Path(result.export_dir) / 'labels').rglob('crop-0.txt'))
-    cid, cx, cy, w, h = label.read_text().split()
-    assert cid == '0'
-    assert (float(cx), float(cy), float(w), float(h)) == pytest.approx((0.75, 0.5, 0.5, 1.0))
-
-
-@pytest.mark.asyncio
-async def test_item_crop_mode_crops_the_written_image(tmp_path):
-    source_root = tmp_path / 'images'
-    source_root.mkdir()
-    Image.new('RGB', (400, 400), (10, 20, 30)).save(source_root / '0.jpg')
-
-    parent = [0.0, 0.0, 0.5, 0.25]  # 200x100 px of the 400x400 source
-    docs = [
-        {
-            **_region_item(0, RegionStatus.DETECTED, region_bbox=[0.1, 0.05, 0.2, 0.1]),
-            'bbox_norm': parent,
-        }
-    ]
-    profile = SingleClassExportProfile(box_source='region')
-    service = _service(
-        tmp_path, _FakeOpenSearch(docs, by_status=True), profile, source_root=source_root
-    )
-
-    result = await service.export(
-        image_mode='item_crop', empty_bg_ratio=0.0, img_max_side=640, copy_images=True
-    )
-
-    manifest = json.loads(Path(result.manifest_path).read_text())
-    assert manifest['image_copy'] == {'attempted': 1, 'copied': 1, 'failed': 0, 'errors': []}
-    written = next((Path(result.export_dir) / 'images').rglob('crop-0.jpg'))
-    # Cropped to the parent region, and not upscaled past the source size.
-    assert Image.open(written).size == (200, 100)
 
 
 # ---------------------------------------------------------------------------
@@ -671,7 +395,7 @@ async def test_manifest_shape_matches_reference_single_class_export(tmp_path):
     """
     docs = [
         *[
-            _region_item(
+            make_region_item(
                 i,
                 RegionStatus.DETECTED,
                 region_bbox=[0.4, 0.4, 0.5, 0.45],
@@ -679,8 +403,8 @@ async def test_manifest_shape_matches_reference_single_class_export(tmp_path):
             )
             for i in range(30)
         ],
-        *[_region_item(100 + i, RegionStatus.FALSE_POSITIVE) for i in range(4)],
-        *[_region_item(200 + i, RegionStatus.NO_REGION_VISIBLE) for i in range(10)],
+        *[make_region_item(100 + i, RegionStatus.FALSE_POSITIVE) for i in range(4)],
+        *[make_region_item(200 + i, RegionStatus.NO_REGION_VISIBLE) for i in range(10)],
     ]
     profile = SingleClassExportProfile(
         name='regions',
@@ -688,7 +412,7 @@ async def test_manifest_shape_matches_reference_single_class_export(tmp_path):
         region_class_name='region',
         dataset_kind='region_single_class',
     )
-    service = _service(tmp_path, _FakeOpenSearch(docs, by_status=True), profile)
+    service = single_class_service(tmp_path, FakeOpenSearch(docs, by_status=True), profile)
 
     result = await service.export(
         version_tag='region-v1',
