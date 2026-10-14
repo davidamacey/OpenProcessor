@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   seconds per stage), cancel, resume, and read the failed images with their reasons. Everything shown and every
   allowed action (`can_cancel`, `can_resume`) comes from the backend's `/ingest/bulk*` routes.
 
+### Changed
+
+- `scripts/capture_docs_screenshots.py` gains states for the bulk-ingest panel (idle, running, failures), the ingest
+  policy page, a project with its VLM off, the audit page, a cluster page, the dataset imports list and the prompt-pack,
+  region-profile and open-vocabulary lists. `scripts/docs_screenshot_fixtures.py` gains `bulk` and `vlm-off` to set up
+  throwaway `cwlife-*` projects for them.
+
 ## [0.5.0] - 2026-10-09
 
 Cropwright joins the OpenProcessor repository as `frontend/` and from here on is versioned with
@@ -73,6 +80,8 @@ repository's release flow and pinned in `images.lock`.
 - The VLM scope panel's "Uncertain only" copy says what the selector does: crops whose detector confidence is below the limit or was not recorded (OpenProcessor #195).
 - No page overflows horizontally at 430px (#184). The project top bar wraps to two rows below 768px (logo, project switcher, Resources and the API chip on the first, the scrolling nav strip on the second; the wordmark and breadcrumb are hidden below 640px). `/review`'s tab strip and queue counter wrap the same way, so the tabs are no longer squeezed. On `/projects` an `sr-only` table header escaped its scroll container and widened the page; the container is now positioned so it clips it. New stubbed e2e `test_narrow_viewport_430.py` asserts no horizontal overflow at 430px on every project route and `/projects`.
 - nginx uses `absolute_redirect off`, so redirects no longer point at container port 8080.
+- A long project display name no longer widens `/projects` at 430px (the "Open <name>" header link truncates) and the project switcher is capped at `min(16rem, 55vw)`; the 430px e2e now uses a long display name and slug (#274).
+- `scripts/capture_docs_screenshots.py` no longer aborts after the first image when `--out` is outside `frontend/` (it printed the path with `relative_to`, which raised `ValueError`).
 
 ## [0.1.1] - TBD
 

@@ -15,25 +15,115 @@ cluster cards (`GET /curation/projects/{project}/clusters`), review queues
 (`GET /curation/projects/{project}/review/{tab}`), region review, training
 (the `train` routes) and model comparison (the `bakeoff` routes).
 
-The project, config-store, VLM-selection, import, reprocess and multi-box
-pages carry captures too. The states that need a running job or a
-destructive confirmation (project archive and delete dialogs, reprocess job
-progress, import undo) are not captured; their pages describe them in text.
-A page that still needs a capture carries a placeholder of the form
-`> Screenshot pending: Cropwright (<what it will show>)`; replace it with a
-`<Screenshot />` once the PNG exists.
-
-**Public data only.** Every screenshot must come from an instance holding
-public sample data (`make sample-coco`, `make sample-plates`). Never
-capture from, or commit an image sourced from, a real deployment: its
-imagery, class names and counts are not public data.
-
 The files live under `docs-site/static/img/screenshots/`. The landing-page
-showcase list is `docs-site/src/data/screenshots.json`, and the frontend
-routes they were captured from are recorded in
-`docs-site/src/data/screenshot_routes.json`. Cropwright's own capture
-script drives a browser against those routes; review every PNG for
-leaked hostnames, paths or unexpected text before committing it.
+showcase list is `docs-site/src/data/screenshots.json`. Pages embed a
+capture with `<Screenshot name="cropwright/<file>.png" />`; a slot whose file
+does not exist yet renders a "pending" placeholder. See
+[Cropwright screenshots](#cropwright-screenshots) for how they are made.
+
+## Cropwright screenshots
+
+`frontend/scripts/capture_docs_screenshots.py` drives a real browser against
+a running Cropwright instance and writes full-page PNGs into
+`docs-site/static/img/screenshots/cropwright/`. Route captures come in two
+widths (1600 and 800 px); only the 1600 px files are committed. States
+(a dialog opened, a crop selected, a bulk run in progress) are captured at
+1600 px only. The capture is read-only: every request except GET and HEAD
+and a short allow-list of side-effect-free report calls is aborted (the
+list is `READ_ONLY_CALLS` in the script).
+
+### Data rule
+
+Public data only. Capture projects that hold COCO (`coco-bench-2k`,
+`make sample-coco`) or Open Images plates (`openimages-plates`,
+`make sample-plates`).
+
+The script does not enforce this. A shared development stack can also hold
+non-public projects, and some pages list every project slug. On such a
+stack:
+
+- pass `--project <public-slug>` and capture project-scoped pages only;
+- never capture `projects`, `projects/combine`, the project switcher,
+  `clone-from-project`, `models-sharing*`, or the endpoint table on Settings, Models (its "Used by" column lists
+  every project);
+- refresh global pages only from an isolated stack seeded with the sample
+  tooling.
+
+Open every PNG before you commit it and look for project slugs, host
+names, file paths and class names that are not sample data.
+
+### Capture
+
+```bash
+# Once: creates frontend/e2e/.venv with Playwright.
+cd frontend && npm run test:e2e
+
+# From the repository root. CROPWRIGHT_URL has no default.
+make docs-screenshots CROPWRIGHT_URL=http://localhost:<cropwright-port>
+```
+
+`make docs-screenshots` runs the script with `--project $(DOCS_PROJECT)`,
+which defaults to `coco-bench-2k`. It captures every route in
+`frontend/scripts/screenshot_routes.json` (including `projects` and
+`combine-wizard`) and every state. On a shared stack that holds non-public
+projects, do not use it: call the script directly with `--only`.
+
+```bash
+cd frontend
+e2e/.venv/bin/python scripts/capture_docs_screenshots.py \
+  --base-url http://localhost:<cropwright-port> --project coco-bench-2k \
+  --only audit ingest-policy --out ../artifacts_local/screens_check
+```
+
+`--out` defaults to the committed directory. Capture into a scratch
+directory first, look at the result, then copy the files you want to keep.
+
+### States that need data you write first
+
+The browser never writes. A state that needs a run in progress, a failed
+run or a project with its VLM off reads throwaway projects named
+`cwlife-*`, which `frontend/scripts/docs_screenshot_fixtures.py` creates
+with plain API calls (every write asserts the `cwlife-` prefix).
+
+```bash
+cd frontend
+# VLM switched off for a throwaway project (state vlm-endpoint-off).
+python3 scripts/docs_screenshot_fixtures.py vlm-off --base-url http://localhost:<api-port>
+
+# Two throwaway projects: a bulk run in progress and a finished run with two
+# missing paths. <api-container> is the API container name; the folder is a
+# container path with public images. The run takes about half a minute, so
+# capture right after, with the two variables the command prints.
+python3 scripts/docs_screenshot_fixtures.py bulk --base-url http://localhost:<api-port> \
+  --folder /data/source/valid/images --container <api-container>
+BULK_RUN_PROJECT=<printed> BULK_FAIL_PROJECT=<printed> \
+  e2e/.venv/bin/python scripts/capture_docs_screenshots.py --base-url http://localhost:<cropwright-port> \
+  --project coco-bench-2k --only ingest-bulk-run ingest-bulk-failures
+```
+
+The `bulk` command starts the run with 8 images per batch and 2 batches in
+flight, so it is slow enough to catch mid-run. The speed shown in that
+screenshot is therefore not a throughput figure; quote only
+[`docs/PERFORMANCE.md`](https://github.com/davidamacey/OpenProcessor/blob/main/docs/PERFORMANCE.md).
+A deleted project slug is retired for good, so each `bulk` call uses fresh
+slugs. `teardown` deletes every `cwlife-*` project.
+
+### Slots added for the ingest, pipeline and audit pages
+
+| File under `cropwright/` | Page and state |
+| --- | --- |
+| `ingest-bulk-panel-1600.png` | Ingest page, bulk panel with the source roots and no run |
+| `ingest-bulk-run-1600.png` | Bulk run in progress with the stage table open |
+| `ingest-bulk-failures-1600.png` | Finished run with two failed images |
+| `ingest-policy-1600.png` | Ingest policy page with the cost preview |
+| `vlm-endpoint-off-1600.png` | Models page, "VLM for this project: off" card only |
+| `audit-1600.png` | Audit page |
+| `cluster-detail-1600.png` | One cluster's grid and toolbar |
+| `dataset-imports-1600.png` | Dataset imports list (empty on the sample project) |
+| `prompt-packs-list-1600.png`, `region-profiles-list-1600.png`, `open-vocab-list-1600.png` | The three settings list pages |
+
+The older state slots are listed in
+[Cropwright screenshots, UI states](../cropwright/developer-guide/screenshots.md).
 
 ## Backend screenshots
 

@@ -20,7 +20,7 @@ that filled theirs), caps each project's in-flight items so no project
 starves the others, and backs idle projects off from 5 s to 60 s.
 
 ```bash
-docker compose --profile curation up -d        # or: make curation-up
+./openprocessor curation up                    # or: make curation-up
 make curation-status                           # which worker containers are up
 make curation-logs                             # follow all worker logs
 make curation-down
@@ -33,13 +33,36 @@ make curation-down
 | `curation-detection-worker` | `python -m scripts.curation.worker --continuous` | Pulls `pending_detection` / `pending_verification` items and runs each project's active region profile's cascade: detector, optional segmenter leg, VLM verification, per-box text reading. Idles for a project with no active profile. Follows a project's config at quiesce points: a newly activated profile, prompt pack or VLM endpoint takes effect once the queues drain. |
 | `curation-vlm-worker` | `python -m scripts.curation.vlm_worker --continuous` | Continuously asks each project's active VLM for class suggestions on unvalidated items that have a `pe_embedding`, on its own schedule. |
 | `curation-auto-label-worker` | `scripts.curation.auto_label_worker` | Claims jobs queued by `POST /curation/projects/{project}/pipeline/auto_label/start` from the shared `/jobs` volume and runs them one at a time across projects, oldest first: clustering, and VLM labeling only when the job says `run_vlm=true`. Can also trigger a centroid retrain when a project's pool has grown. |
-| `curation-cluster-refresh` | `scripts/curation/cluster_refresh_daemon.py` | Polls each project's items index (every 2 minutes by default) and calls that project's `POST /curation/projects/{project}/clusters/auto_promote` once it has grown by the threshold (1000 new items by default); optional incremental auto-label. |
-| `curation-evaluator` | its own image | Watches each project's `bakeoff_jobs` directory and runs model comparisons. Long-lived: start with `up -d`, not `run --rm`. |
+| `curation-cluster-refresh` | `scripts/curation/cluster_refresh_daemon.py` | Polls each project's items index (every 120 s by default). Once a project has grown by 200 items it calls that project's `POST /curation/projects/{project}/clusters/auto_promote`, then queues the auto-label job (no VLM stage) as the centroid retrain. The retrain is on by default (`--no-auto-label` turns it off). The flags are command-line only; see [Pipeline modes](../guides/pipeline-modes.mdx#3-what-the-cluster-refresh-daemon-does). |
+| `curation-evaluator` | its own image | Watches each project's `bakeoff_jobs` directory and runs model comparisons. It has no restart policy, and the compose file documents it as run on demand: `docker compose --profile curation run --rm curation-evaluator`. `--profile curation up -d` (and `./openprocessor curation up`) also starts it. It needs the NVIDIA runtime and the card named by `EVALUATOR_GPU_ID`. |
 
-The detection worker and `api` must mount the **same** source
-directory at the same container path (`OP_SOURCE_ROOT_HOST` →
-`/data/source`). If only the API has it, ingest succeeds but every worker
-read fails with `detection_failed` / `image_unavailable`.
+`api`, `curation-detection-worker` and `curation-auto-label-worker` must
+mount the **same** source directory at the same container path
+(`OP_SOURCE_ROOT_HOST` → `/data/source`, read-only). If a worker lacks it,
+ingest succeeds but that worker's reads fail with `detection_failed` /
+`image_unavailable`. After changing `OP_SOURCE_ROOT_HOST`, recreate all
+three with `./openprocessor start`. See
+[Ingest a large folder](../guides/ingest-large-folder.mdx).
+
+## Which worker needs what
+
+| Worker | Needs Triton | Needs a VLM | Needs a GPU of its own |
+|---|---|---|---|
+| `curation-detection-worker` | Yes (`depends_on: triton-server`), for the region detector | Only if the region profile uses VLM verification | No |
+| `curation-vlm-worker` | No | Yes. It idles when the project has no VLM. | No |
+| `curation-auto-label-worker` | Only for `embed_missing=true` jobs, which call the PE encoder on `triton-server` (no compose dependency) | Only for jobs with `run_vlm=true` | No |
+| `curation-cluster-refresh` | No | No | No |
+| `curation-evaluator` | No | No | Yes (`EVALUATOR_GPU_ID`) |
+
+The detection worker verifies **regions** (it sends numbered overlays to the VLM). The
+VLM worker labels **classes** (it suggests a class for each unvalidated item). A project
+whose VLM is off does neither VLM step.
+
+## Which workers to run
+
+Not every mode needs every worker. [Pipeline modes](../guides/pipeline-modes.mdx) says
+which to start, and how to stop the two clustering triggers (the cluster-refresh daemon
+and the auto-label worker's idle centroid retrain, `OP_IVF_RETRAIN_CHECK_S=0`).
 
 ## Heartbeats instead of `pgrep`
 

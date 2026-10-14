@@ -34,7 +34,7 @@ measurement.
 - OpenProcessor: strongest for "confirm many near-identical items at once" (cluster grid, bulk
   actions, configurable keymaps); not designed for drawing precise polygons.
 - Cropwright is documented as having no login; multi-annotator coordination is out of scope in
-  v0.4.0.
+  the release current at the snapshot date (2026-10-04).
 
 ## Honest assessment against the leaders
 

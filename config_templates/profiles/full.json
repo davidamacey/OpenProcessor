@@ -7,6 +7,7 @@
   "shm_size": "8g",
   "workers": 32,
   "ocr_pipeline_instances": 4,
+  "ingest_gpu_decode": true,
   "python_backend_budget_mib": 2048,
   "models": "all",
   "notes": "Maximum parallelism for high-throughput production workloads."

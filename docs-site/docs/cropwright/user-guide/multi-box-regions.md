@@ -5,12 +5,11 @@ title: Multi-box regions
 
 # Multi-box regions
 
-An item can carry **any number of region boxes**, not just one: a part with
-several tags, a vehicle with a front and a rear plate, a surface with several
-defects. Every box has its own state, score, detector, verdict and (when the
-profile reads text) text. There is no client-side limit on how many boxes an
-item has; the only cap is the backend's per-write limit on how many boxes one
-save may carry, which is shown as "N / max" next to **Add box**.
+An item can carry any number of region boxes, each with its own state. The data
+model and the API are in the
+[Multi-box regions guide](../../guides/multi-box-regions.mdx). Cropwright sets no
+limit of its own; the only cap is the backend's per-write limit, shown as
+"N / max" next to **Add box**.
 
 ## Box states
 

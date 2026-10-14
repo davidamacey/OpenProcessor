@@ -61,3 +61,10 @@ def test_request_defaults_are_the_served_defaults() -> None:
         limits.DEFAULT_BATCH_SIZE,
         limits.DEFAULT_CONCURRENCY,
     )
+
+
+def test_default_concurrency_reaches_the_gpu_bound_plateau() -> None:
+    # One A6000 reached its plateau (~29 images/s) at 16 batches in flight and lost 5 % at 8
+    # and 24 % at 4 (docs/PERFORMANCE.md, "Stage 2 tuning").
+    assert limits.DEFAULT_CONCURRENCY == 16
+    assert limits.DEFAULT_CONCURRENCY <= limits.MAX_CONCURRENCY

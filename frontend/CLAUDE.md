@@ -12,7 +12,7 @@ profiles (license plate, aircraft tail number, defect code) live under
 `examples/` as tier-2 JSON, never bundled. A new domain is a backend
 region profile plus, optionally, a tier-2 profile, not an app-code edit.
 
-Design notes under `docs/design/` from before the public 0.1.0 release
+Design notes under `docs/design/` from before the public release
 are not published; source comments that cite them (and the "internal
 design note" references below) are historical.
 
@@ -222,7 +222,7 @@ record.
     asked for "this run's own counts after a reload" this pass;
     `ingestUpload()` doesn't send the optional `run_id` form field.
 
-## Detector, ingest policy and embedding state (OpenProcessor v0.4.0, 2026-10-03)
+## Detector, ingest policy and embedding state (2026-10-03)
 
 The generic detector and selective embedding: what an ingest keeps, which
 detections get a vector, and where the operator sees and repairs the
@@ -661,7 +661,7 @@ body}`; "Check the draft for activation" posts it with
   "Selection (not verified)" (`selection_accepted`) or "VLM verdicts"
   (`vlm_verdicts`), and the verify block when served. Nothing is projected
   or judged client-side.
-- **Gating (v0.4.0).** The profile schema serves a `gating` group (the
+- **Gating.** The profile schema serves a `gating` group (the
   `gate_hit_*` fields that decide when the open-vocabulary pass is gated); the
   schema-driven editor renders it with no code (`profileFields.test.ts` and
   `ProfileFieldEditor.test.ts` cover the group and its rows). The region stage's own pause, resume and
@@ -791,10 +791,9 @@ acknowledgeExternal})`). Run refusals show the served words
   e2e `test_vlm_models.py` and `test_vlm_run_selection.py`; conftest serves
   `GET /vlm/endpoints` 404 by default.
 
-## Open-vocabulary sets (`/settings/open-vocab`, OpenProcessor v0.4.0 SAM 3, 2026-10-03)
+## Open-vocabulary sets (`/settings/open-vocab`, SAM 3, 2026-10-03)
 
-Describe things to find in words and have SAM 3 find them (OpenProcessor
-v0.4.0; plan: `docs/design/v040-backend-deltas-ui-plan-2026-10-03.md` §6 and
+Describe things to find in words and have SAM 3 find them (plan: `docs/design/v040-backend-deltas-ui-plan-2026-10-03.md` §6 and
 `docs/design/v040-contract-completeness-addendum-2026-10-03.md`; contract
 e817e4f4). A set is a named, revisioned list of **targets** (a `prompt`, and
 optionally the `class_name` its hits are stored as; an empty class name is
@@ -1038,7 +1037,7 @@ diverse-selection hydration, semantic-search results and undo-restore
 paths that used to hardcode `proposed_class_id: null` (or, for undo,
 `crop.class_id`) were deleted for the same reason.
 
-The Class/Source/Conf filter bar sends `class_name` (by name, repeatable; `class_id` was removed from the query in v0.4.0)/`source`/`conf_min`/
+The Class/Source/Conf filter bar sends `class_name` (by name, repeatable; `class_id` was removed from the query)/`source`/`conf_min`/
 `conf_max` to `GET {API_PREFIX}/review/{tab}` — re-enabled unconditionally
 once the backend started honoring them (verified live: each changes the
 queue total). The control that used to read/write `Crop.hdd_source` (a
@@ -1055,7 +1054,7 @@ served `probe_disagreement` is `true` (`probeOpinion`,
 item with `probe_in_scope: false` reads "no opinion (outside the probe's
 classes)" instead of showing the probe's out-of-vocabulary prediction.
 
-## Shared item filter and run on selection (OpenProcessor v0.4.0, 2026-10-03)
+## Shared item filter and run on selection (2026-10-03)
 
 One filter, three pages (`docs/design/v040-backend-deltas-ui-plan-2026-10-03.md`
 section 8, with `v040-contract-completeness-addendum-2026-10-03.md`, which
@@ -1379,7 +1378,7 @@ message, class_name?}], force_allowed, override?, thresholds?}`
   builds" only when the response serves
   `cold_start_expected_on_first_inference: true` (OpenProcessor ffb88b8;
   `promoteSuccessMessage`, `$lib/promote.ts`).
-  Since OpenProcessor 0.4.1 (#87) the promote is a background job: `POST
+  Since #87 the promote is a background job: `POST
 /train/promote/{job_id}` answers `202` with a `PromoteJobStatus`
   (`promote_id`, `status` queued/exporting/loading/building/warming/done/failed,
   `error`/`error_status`, `result` on done, `poll_after_s`). `PromoteJobController`
@@ -2411,20 +2410,21 @@ audit are done; its status section records the deviations.
   direction), and a bare-word scan would flag those fixtures for no real
   signal; the audit doc's §8 entry has the full reasoning.
 
-## Documentation site (`docs-site/`)
+## Documentation site (`docs-site/` at the repository root)
 
-A standalone Docusaurus 3 site with its own `package.json` and build,
-excluded from the root `npm run lint`/`check`/`test`. Build it from
-inside that directory (`npm install`, `npm start` for
-http://localhost:3000/cropwright/, `npm run build`, which fails on any
-broken link or anchor).
+Cropwright has no docs site of its own. Its documentation is the Cropwright
+section of the one OpenProcessor Docusaurus 3 site: pages in
+`docs-site/docs/cropwright/`, sidebar `cropwrightSidebar` in
+`docs-site/sidebars.ts`, screenshots in
+`docs-site/static/img/screenshots/cropwright/`. Build it from `docs-site/`
+(`npm ci`, `npm run build`, which fails on any broken link or anchor), or
+serve it with `docker-compose.docs.yml` at http://localhost:4613/OpenProcessor/.
 
-- `docs-site/site.config.ts` holds every project-specific value (title,
-  repo, URLs, nav/footer links); `docs-site/TEMPLATE.md` is the checklist
-  for cloning the site for a sibling project.
+- `docs-site/site.config.ts` holds every site-identity value (title, URLs,
+  nav and footer links).
 - Content lives in `docs-site/docs/**` and `docs-site/src/data/*.json`
-  (features, workflow, screenshots, roadmap, and `architecture-diagrams.json`
-  — the `/architecture` page's tab/group metadata).
+  (features, workflow, screenshots, roadmap, and `architecture-diagrams.json`,
+  the `/architecture` page's tab and group metadata).
 - Architecture diagrams are hand-authored Archify specs under
   `docs-site/architecture-diagrams/specs/*.json`, rendered by
   `scripts/generate-architecture-diagrams.sh` into `docs-site/static/
@@ -2432,13 +2432,15 @@ architecture/*.html` and embedded by `docs-site/src/pages/architecture.tsx`.
   Not Mermaid. See `docs-site/architecture-diagrams/README.md`.
 - Screenshots come only from a Cropwright instance pointed at a
   public-sample-data OpenProcessor backend (COCO val2017 / Open Images
-  plates). `scripts/capture_docs_screenshots.py` requires an explicit
-  `--base-url`, reads `docs-site/src/data/screenshot_routes.json`, and
+  plates). `frontend/scripts/capture_docs_screenshots.py` requires an explicit
+  `--base-url`, reads `frontend/scripts/screenshot_routes.json`, and
   aborts every request except GET/HEAD and `/train/preflight`. Only the
   1600px captures are committed; image credits are on the screenshots
-  page.
-- `docs-site/Dockerfile` serves the build under `/cropwright/`, the same
-  base path GitHub Pages uses; `.github/workflows/docs.yml` deploys it.
+  page. The capture procedure is in
+  `docs-site/docs/developer-guide/screenshots.mdx`.
+- Do not re-explain a core concept (prompt packs, region profiles, ingest
+  policy, import, combine) on a Cropwright page: write the UI steps and link
+  the matching `docs-site/docs/guides/` page.
 
 ## Development
 
@@ -2761,10 +2763,10 @@ for in-flight cancellation.
 
 ### Resources and docs on the app origin
 
-Cropwright is the one front door: `docker-compose.yml` runs a `docs` service
-(`davidamacey/cropwright-docs`, no published port, private compose network)
-beside `cropwright`, and nginx proxies, from the app origin: `/cropwright/` to
-`DOCS_UPSTREAM` (default `http://docs:8080`, variable-form `proxy_pass` with the
+Cropwright is the one front door: nginx proxies, from the app origin,
+`/OpenProcessor/` (the OpenProcessor docs site, which holds the Cropwright
+section) to `DOCS_UPSTREAM` (default `http://docs:8080`, the `docs` service of
+the root `docker-compose.docs.yml` overlay, variable-form `proxy_pass` with the
 resolver, so a missing/restarted docs container only 502s that path), and the
 backend's own `/docs`, `/docs/oauth2-redirect`, `/redoc`, `/openapi.json`
 (exact-match locations at the API root, to `API_UPSTREAM`; no SPA route lives
@@ -2774,7 +2776,8 @@ on `/train` and `/bakeoff`, service entries only, both through
 `ResourceLinkItem`) renders EXACTLY the served `GET /settings` `resource_links`
 in the served order (ids: swagger, redoc, openapi_json, grafana, prometheus,
 opensearch_dashboards, mlflow, triton_metrics, dcgm_metrics). The one
-client-owned entry is Documentation (`/cropwright/`, `DOCS_ENTRY` in
+client-owned entry is Documentation
+(`/OpenProcessor/docs/cropwright/getting-started/introduction`, `DOCS_ENTRY` in
 `src/lib/resourceLinks.ts`), first, because the backend does not know the docs
 container. A `docs` entry's url is path-relative and resolves against our own
 origin; a `service` entry's is an absolute http(s) URL the backend built from
@@ -2888,7 +2891,7 @@ owner decision) — reconstructable from the URL, so nothing is persisted.
   `message` already states both facts, so there is no extra copy), and
   `DeleteDryRunResponse` is pinned too. Only its `referenced_by` rows are
   served as bare objects; `project` and `profile` are the keys read.
-  OpenProcessor v0.4.0 (fce17771) additions: an "Embedded" column
+  Additions (fce17771): an "Embedded" column
   (`counts.items_embedded`, via `formatCount`, "—" when null) and, in
   `DeleteProjectDialog`, the dry run's `referenced_by` listed ("`<project>`
   uses a shared model (profile `<profile>`)"; blocking is still decided by
@@ -2976,7 +2979,7 @@ typed as the backend builds them, every field optional.
   `CropMetaPanel`): origin project/item/image/split, an amber "Conflict
   between sources" chip with `combine_conflict_origins`, and
   `combine_merged_origins`, only when `origin_project` is non-null.
-- **v0.4.0 preview warnings.** `embedding_model_mismatch` and
+- **Preview warnings.** `embedding_model_mismatch` and
   `region_profiles_differ` are served as ordinary preview `warnings` and
   render verbatim through `CombineIssueList` (served message and code; no
   client wording, no code change); the preview stays startable.

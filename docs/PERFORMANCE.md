@@ -125,7 +125,7 @@ async def performance_middleware(request: Request, call_next):
 Automatic request timing and slow request detection:
 
 ```python
-SLOW_REQUEST_THRESHOLD_MS = 100  # Log requests slower than this
+slow_request_threshold_ms = 100  # settings value; log requests slower than this
 
 @app.middleware("http")
 async def performance_middleware(request: Request, call_next):
@@ -137,7 +137,7 @@ async def performance_middleware(request: Request, call_next):
     response.headers["X-Process-Time"] = f"{duration_ms:.2f}ms"
 
     # Log slow requests
-    if duration_ms > SLOW_REQUEST_THRESHOLD_MS:
+    if duration_ms > settings.slow_request_threshold_ms:
         logger.warning(f"Slow request: {request.url.path} took {duration_ms:.2f}ms")
 
     return response
@@ -2926,9 +2926,9 @@ GPU decoders (batch 32, 8 decoder threads): images/s and host CPU ms per image:
 | photos, set B | 35.4, 134 ms | 31.8, 132 ms | 4.5, 221 ms |
 
 One nvImageCodec decoder saturates at about 35 photos/s whatever its thread count; its `GPU_ONLY`
-backend returns no image on this card. Decoding beside the PE engine at saturation: a DALI front end
+backend returns no image on this card. Decoding beside the PE engine at saturation: a DALI GPU decode
 (decode, letterbox, whole-frame resize) takes 4.5-5.8 percent of PE (about 2 ms of PE time per photo);
-the float32 torch front end with the blur takes 22 percent (about 15 ms).
+the float32 torch GPU decode with the blur takes 22 percent (about 15 ms).
 
 Through the stack (`/ingest/batch`, 3 repetitions):
 
@@ -2936,10 +2936,10 @@ Through the stack (`/ingest/batch`, 3 repetitions):
 |---|---:|---:|---:|---:|---:|---:|
 | CPU path, 32 workers | 24.32 (21.72-26.26) | 1.06-1.13 | 76-79 | 36-43 | 23.51 (23.39-23.54) | 0.069 |
 | CPU path, 16 workers | 26.78 (24.59-28.10) | 1.07-1.15 | 80-82 | 36-41 | | |
-| GPU front end in the API process, float32 kernels, 16 workers | 23.39 (23.00-24.38) | 0.36-0.41 | 28-33 | 70-80 | 20.23 (20.00-20.70) | 0.164 |
+| GPU decode in the API process, float32 kernels, 16 workers | 23.39 (23.00-24.38) | 0.36-0.41 | 28-33 | 70-80 | 20.23 (20.00-20.70) | 0.164 |
 | same, half-precision resize input and convolution blur | 25.48 (24.45-26.48) | 0.35-0.36 | 34-38 | 79-83 | not run | |
 
-With 32 workers the API-side front end ran the 48 GB card out of memory (each worker held 2-5 GB).
+With 32 workers the API-side GPU decode ran the 48 GB card out of memory (each worker held 2-5 GB).
 
 Parity of that run through the stack against `ref-u8fp16` (profile `precision`): P-box 0.869, P-item
 0.942, P-pe p01 0.974, P-pew p01 0.991, kNN overlap 0.911, label vote 0.961 fail; near-duplicate
@@ -2952,17 +2952,179 @@ arms. Decoder coverage: nvImageCodec applies all eight EXIF orientations and, wi
 DALI's default ignore EXIF orientation, and every GPU decoder returns an image for truncated or
 corrupted files that Pillow rejects (the plan routes those to the CPU).
 
-Not measured: the Triton-resident front end the plan recommends, two cards and the 12 GB card with GPU
+Not measured: the Triton-resident GPU decode the plan recommends, two cards and the 12 GB card with GPU
 decode, kernels that meet the plan's budget, the region stage and VLM on GPU-encoded crop JPEGs.
 
 
-### Decode once and the GPU ingest front end (#217)
+### Stage 2 tuning: detector engine and the concurrency sweep (#226, #259)
+
+Question: after the uint8 inputs, the half-split PE engine and the two-card encoder, is there a
+detector engine variant or a Triton, client or API setting that raises images/s? **Result: no engine
+variant and no Triton or API setting beats the shipped one by 3 percent or more; the one default that
+changes is the bulk-ingest concurrency (8 to 16).** One RTX A6000 now ingests 28.8 to 29.4 images/s on
+set A (23.4 before the half-split engine), with the encoder 95 to 97 percent busy: the card is the limit.
+Medians with the range of 3 repetitions in brackets. Only repetitions with 0.0 percent foreign GPU
+share count. Raw JSON stays in the scratch directory of the run.
+
+| Item | Value |
+|---|---|
+| Cards | one RTX A6000 (GPU 0) for the sweep; two A6000 (GPUs 0 and 2, 0.0 percent foreign utilisation in every counted repetition) for the confirmation runs |
+| Stack | project `stage2`, the checkout's `src/` over the published image, 32 API workers, OpenSearch 8 GB heap; uint8 FP16 detector plan and the half-split PE plan (`models/` as in the previous section) |
+| Load | set A (2,000 COCO images), `POST /ingest/batch`, policy `all`, 100-image warm-up, 3 repetitions per point |
+| Host | 48 logical cores shared with other projects; 1-minute load 7-37, host 13-47 percent busy; SM clock 1,480 MHz mean |
+| Design | one factor at a time around the shipped point (16 images x 16 clients), plus a 15-point client screen on 1,000 images with 2 repetitions (it ran while the host was loaded and only the direction is used); a full factorial of every factor was not run, see the end |
+
+#### Detector layer cost (`trtexec --dumpLayerInfo --dumpProfile`, detailed profiling, batch 16)
+
+Total 10.1 ms per batch of 16 (1,583 images/s engine only); the profiled run sums to 10.8 ms.
+
+| Part | ms | share |
+|---|---:|---:|
+| Conv + SiLU (backbone, neck, head), 85 fused layers | 6.58 | 61 % |
+| Generated fused kernels (box decode, Tanh/Mul/Add, softmax) | 1.19 | 11 % |
+| Concat, split, pool | 0.93 | 9 % |
+| Other (shuffles, constants) | 0.73 | 7 % |
+| Upsample (Resize) and its casts | 0.66 | 6 % |
+| Input and output reformat copies | 0.36 | 3 % |
+| End2end head glue (transpose, slice, cast, concat) | 0.25 | 2 % |
+| `EfficientNMS_TRT` plugin | 0.09 | 1 % |
+
+The compiled NMS and the end2end head are 3 percent of the engine and the engine is about 2 percent of
+the GPU time of an ingest (the encoder is the rest), so nothing in the head is worth a variant by
+itself. The casts that the FP32 NMS input needs cost 0.1 ms.
+
+#### Detector engine variants (images/s, `trtexec --loadEngine`, 5 s, median [range] of 3, GPU 0)
+
+| Plan | Batch 1 | Batch 8 | Batch 16 | Batch 32 | Batch 64 |
+|---|---:|---:|---:|---:|---:|
+| Shipped plan (opt 32, max 64, level 3) | 640 [638-642] | 1,464 [1,452-1,464] | 1,595 [1,585-1,600] | 1,685 [1,674-1,692] | 1,712 [1,702-1,720] |
+| Rebuilt, same flags (two builds) | 611-634 | 1,450-1,460 | 1,592-1,594 | 1,682-1,691 | 1,712-1,722 |
+| Profile opt 16 | 504 | 1,412 | 1,611 | 1,647 | 1,659 |
+| Profile opt 8 | 600 | 1,485 | 1,514 | 1,579 | 1,594 |
+| Max batch 32 | 640 | 1,466 | 1,596 | 1,689 | n/a |
+| Builder optimization level 5 | 639 | 1,441 | 1,564 | 1,649 | 1,670 |
+| NMS input in FP16 (plugin not blocked in the FP16 bake) | 638 | 1,463 | 1,597 | 1,684 | 1,713 |
+
+The build-to-build spread (about 1 percent) is as large as every difference except the profile `opt`
+shapes, which win 1 percent at their own batch and lose 4 to 7 percent elsewhere. FP16 for the NMS input
+changes nothing, so it was not taken to a parity capture. CUDA graphs on the detector were not
+measured separately: the encoder measurement (previous section) was 2 percent slower with graphs and the
+detector is 2 percent of the GPU. Nothing shipped.
+
+#### Client concurrency x images per request (ingest images/s, set A, one card)
+
+| Point | images/s | request p50 s | encoder busy |
+|---|---:|---:|---:|
+| 16 x 4 | 21.97 [21.6-22.4] | 2.9 | 0.74 |
+| 16 x 8 | 27.56 [26.9-27.7] | 4.9 | 0.92 |
+| 8 x 16 | 28.58 [28.5-28.9] | 4.5 | 0.95 |
+| **16 x 16** | **29.07 [28.3-29.2]** | 9.2 | 0.96 |
+| 32 x 16 | 28.45 [28.3-29.0] | 17.6 | 0.95 |
+| 16 x 32 | 28.19 [28.1-28.5] | 17.3 | 0.94 |
+| 16 x 64 | 26.86 [26.7-27.9] | 32.3 | 0.89 |
+
+The plateau starts at 16 clients; 4 clients lose 24 percent, 8 lose 5 percent, 64 lose 8 percent. Images
+per request (8, 16, 32) is inside the noise. The bulk-ingest default concurrency was 8 and is now 16
+(maximum 32 unchanged).
+
+#### Triton arms (16 x 16, set A, one card)
+
+| Arm | images/s | vs shipped |
+|---|---:|---:|
+| Shipped | 28.81 [28.6-28.8] | |
+| Encoder 2 instances | 28.83 [28.4-29.5] | +0.1 % |
+| Detector 1 instance | 28.67 [28.7-29.1] | -0.5 % |
+| Detector 4 instances | 28.78 [28.7-28.9] | -0.1 % |
+| Encoder queue delay 2 ms (15 ms) | 29.02 [28.9-29.2] | +0.7 % |
+| Encoder without `preferred_batch_size` | 29.01 [28.7-29.1] | +0.7 % |
+| Detector queue delay 5 ms (25 ms) | 29.37 [29.1-29.5] | +1.9 % |
+| Detector without `preferred_batch_size` | 29.07 [28.4-29.3] | +0.9 % |
+
+#### API workers (16 x 16, set A, one card)
+
+| Workers | images/s | API CPU s/image |
+|---|---:|---:|
+| 16 | 28.58 [27.4-29.4] | 0.059 |
+| 24 | 29.14 [28.6-29.7] | 0.063 |
+| 32 (shipped) | 28.92 [27.7-29.1] | 0.064 |
+| 48 | 29.35 [29.2-29.7] | 0.072 |
+
+#### Recommended defaults per installer profile
+
+| Profile | Instances, delays, preferred sizes, workers | Client |
+|---|---|---|
+| minimal, standard, full | unchanged: no setting moved images/s by 3 percent or more on a GPU-bound card; `full` (48 GB+) is the profile measured | 16 batches of 16 images in flight (the bulk-ingest default) |
+
+The `minimal` and `standard` profiles (6 to 24 GB cards) were not measured; their instance counts are set by
+memory, not speed, and a GPU-bound card ignores them.
+
+#### Embed pass (#259): what holds it at 15 images/s
+
+`reprocess` scope `embed` (rewrite of every crop and frame vector) runs at 14.4 to 15.9 images/s on 500 and
+800 images against 29 for ingest on the same card. It runs as one asyncio task in one API worker (0.7
+cores). py-spy on that worker for 30 s at 50 Hz: the event-loop thread was non-idle in 810 of 1,500
+samples (54 percent), and 205 more samples were in the pool threads. The loop thread does the work
+itself because both preprocess calls declare under 4 MiB (`OFFLOAD_MIN_BYTES`) and run in place: crop
+resize 21 percent of all samples, whole-frame decode and resize 15 percent, tensor packing 6 percent, gRPC
+serialization 9 percent, bulk-update JSON 3 percent. The encoder is 57 to 60 percent busy, so the pass is
+latency-bound on one loop thread and the 64-image chunk boundary (read, process, write in sequence), not
+on the engine. A fix that overlaps chunks or moves the preprocess to the pool is output-preserving but was
+**not measured** (the confirmation runs were cut); follow-up issue.
+
+Re-embedded crop vectors against the ingest vectors (same project, 3,166 and 5,133 crops): median cosine
+0.999997 (identical), first percentile 0.9981 and 0.99992, minimum 0.9728 and 0.9337; 35 and 44 crops are
+below 0.999. Crops whose box touches the right or bottom edge are 5 percent of the crops and 57 percent
+of those below 0.999 (20 of 35 and 25 of 44; 20 of 153 edge crops, 13 percent, against 15 of 3,013 others, 0.5 percent). Cause:
+ingest crops the detector's pixel box, which can extend past the frame, and Pillow pads the outside with
+black; the stored `bbox_norm` is clamped to the frame, so the re-embed crops less. The padding cannot be
+recovered from the stored box, so matching ingest would change stored vectors: reported, not changed.
+
+#### Parity (final configuration against `ref-u8fp16` and `ref-u8fp16-repeat`, `precision` profile)
+
+One capture of the final configuration (shipped engines and Triton settings, one card, set A, policy `all`,
+200 probe images for the CLIP, face and OCR gates); summaries in `docs/benchmarks/parity/stage2_tuning_vs_u8fp16/`
+and `stage2_tuning_vs_u8fp16-repeat/`. All gates pass; `P-vlm` is skipped (no VLM in the stack).
+
+| Gate (rule) | Against `ref-u8fp16` | Against `ref-u8fp16-repeat` |
+|---|---:|---:|
+| P-box images identical (>= 0.98) | 0.99242 | 0.99343 |
+| P-item (>= 0.99) | 0.99899 | 0.99899 |
+| P-pe crop cosine p01 (>= 0.995) | 0.99977 | 0.99971 |
+| P-pew frame cosine p01 (>= 0.995) | 0.99944 | 0.99945 |
+| P-knn overlap@10 (>= 0.95) | 0.98210 | 0.98280 |
+| P-cluster-assign (>= 0.98) | 0.99898 | 0.99836 |
+| P-cluster-purity drop in points (<= 0.5) | 0.24 | -0.21 |
+| P-label-vote (>= 0.97) | 0.992 | 0.992 |
+| P-clip, P-face, P-ocr | 1.0000 | 1.0000 |
+
+#### End to end, before and after (set A, 16 x 16, one card)
+
+| | images/s | encoder busy |
+|---|---:|---:|
+| Before (multi-GPU section, one A6000, uint8 + interleaved PE engine) | 23.39 [22.96-23.41] | 0.95-0.98 |
+| After (this checkout: half-split engine, default settings) | 28.81-29.07 (three series of 3 repetitions, 0.0 percent foreign load) | 0.95-0.96 |
+| Two cards before (multi-GPU section) | 44.60 [44.29-45.47] | 0.87-0.93 per card |
+| Two cards after, 16 x 16 | 55.08 [55.04-55.11] (1.89x one card) | 1.79-1.82 of 2 |
+| Two cards after, 32 x 16 | 56.37 [55.24-56.97] | 1.82-1.88 of 2 |
+| Two cards after, 16 x 32 | 50.17 [48.98-51.68] | 1.62-1.71 of 2 |
+
+#### Not measured in the stage 2 pass
+
+- Two-card sweep: only the confirmation points above were run (16 x 16, 32 x 16, 16 x 32 at shipped settings);
+  instance counts, delays and worker counts were swept on one card only. 2-card API CPU stays 0.06 s/image.
+- Set B (photos): the pinned images were removed from the scratch store by another process and the
+  re-download was rate limited (HTTP 429); no photo numbers.
+- The `minimal` and `standard` profiles, the RTX 3080 Ti, detector CUDA graphs in Triton, a full
+  factorial of client x instances x delays x workers (one factor at a time was run), `priority_levels`.
+- The embed-pass fix (above).
+
+### Decode once and the GPU decode (#217)
 
 Built after the owner decisions on the GPU decode plan (`docs/design/gpu_decode_plan.md`, section
 13 has the full A/B and the go / no-go). One isolated stack on GPU 2, `/ingest/batch`, 3 repetitions,
 median images/s; host CPU is the API plus Triton containers.
 
-| Set B photos (12-24 MP) | CPU path | CPU single decode + libjpeg-turbo | GPU front end (`OP_INGEST_GPU_FRONTEND=1`) |
+| Set B photos (12-24 MP) | CPU path | CPU single decode + libjpeg-turbo | GPU decode (`OP_INGEST_GPU_DECODE`, on by default) |
 |---|---:|---:|---:|
 | detect + embed, batch 8 x 16 clients | 27.0 | 23.5 (26.8 without libjpeg-turbo) | **35.0** |
 | detect only, batch 8 x 16 | 28.3 | 31.0 | **44.0** |
@@ -2970,10 +3132,20 @@ median images/s; host CPU is the API plus Triton containers.
 | four clients, batch 1 | 3.45 | 4.48 | **8.30** |
 | host CPU-s per photo at bulk | 1.12 | 1.00 | **0.34** |
 
-COCO frames (0.3 MP) are faster on the CPU (forced onto the GPU front end: 22.7 against 29.0
-images/s with embedding, 63.6 against 124.5 detection only), so the front end takes only images at
+COCO frames (0.3 MP) are faster on the CPU (forced onto the GPU decode: 22.7 against 29.0
+images/s with embedding, 63.6 against 124.5 detection only), so the GPU decode takes only images at
 or above `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0). The CPU single decode alone does not speed up bulk
-ingest (the next binders are elsewhere); it is the CPU path the front end falls back to.
+ingest (the next binders are elsewhere); it is the CPU path the GPU decode falls back to.
+
+The GPU decode is the default, sized by hardware. It adds about 8.5 GB (8,704 MiB, loaded on first use)
+to the Triton card, on top of the profile's own models (about 8, 12 and 17 GB for `minimal`,
+`standard` and `full`). Only `full` (48 GB+) has room, so the installer writes
+`OP_INGEST_GPU_DECODE=1` for it and `0` for `minimal` and `standard`; a 12 GB card does not hold
+the full model set beside other projects' resident processes, let alone the GPU decode. A checkout
+whose `.env` has no such line gets the code default (on), and an explicit value always wins.
+`openprocessor gpu plan` prints whether it is on and why, and warns (never refuses) when it is on
+for a card without room. If the model cannot load, Triton leaves the other models serving and
+every photo is ingested on the CPU path, as with a declined file.
 
 ### Stage 4: coalesced ingest writes, Lucene engine, write ceiling on the final mapping (#248, #254, #230)
 
@@ -3347,9 +3519,10 @@ Current: **100ms** (logs requests slower than this)
 
 **To adjust**:
 
-Edit `src/main.py`:
-```python
-SLOW_REQUEST_THRESHOLD_MS = 50  # More aggressive logging
+Set it in `.env` (the setting is `slow_request_threshold_ms` in `src/config/settings.py`;
+environment names are case-insensitive):
+```bash
+slow_request_threshold_ms=50  # More aggressive logging
 ```
 
 **Useful for**:

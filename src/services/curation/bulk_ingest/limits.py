@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 DEFAULT_BATCH_SIZE = 16
-DEFAULT_CONCURRENCY = 8
+DEFAULT_CONCURRENCY = 16
 MAX_BATCH_SIZE = 64
 MAX_CONCURRENCY = 32
 DEFAULT_EXTENSIONS: tuple[str, ...] = ('.jpg', '.jpeg', '.png')

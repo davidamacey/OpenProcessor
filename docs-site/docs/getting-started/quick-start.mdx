@@ -1,23 +1,24 @@
 ---
-sidebar_position: 2
+sidebar_position: 3
 title: Quick start
 ---
 
 # Quick start
 
-Two paths: the **core inference API** (one command), then, optionally, the
-**curation subsystem** seeded with public sample data.
+Two parts. Part 1 gets the **inference API** answering. Part 2 gets a first
+**curation result** from a public sample. Not sure which you need? Read
+[Choose your path](./choose-your-path.mdx) first.
 
 ## 1. Core inference API
 
-### One-line install
+### Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/setup-openprocessor.sh | bash
 ```
 
-This installs the latest published release into `./openprocessor/` with no
-git clone, no image build and no host Python. It asks which **tiers** you want,
+This installs the latest published release into `./openprocessor/`: no git
+clone, no image build, no host Python. It asks which **tiers** you want,
 picks GPUs, pulls digest-pinned images, exports the TensorRT engines inside
 the containers, starts everything and runs a health check. First install
 takes 30-60 minutes, mostly image pulls and TensorRT export.
@@ -39,28 +40,54 @@ curl -fsSL https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/setu
 ```
 
 The installer checks every file against the release's `SHA256SUMS` (integrity,
-not authenticity) and sizes the OpenSearch heap from your RAM (RAM/8, 1-8 GB).
-Cropwright is reachable on your LAN by default, for homelab or small-business
-use. The API itself stays bound to 127.0.0.1. There is no login on
-Cropwright — a warning is shown. Pass `--local-only` to opt out and keep
+not authenticity) and sizes the OpenSearch heap from your RAM (half of it, 2 to
+30 GB). Cropwright is reachable on your LAN by default, for homelab or
+small-business use. The API itself stays bound to 127.0.0.1. There is no login
+on Cropwright — a warning is shown. Pass `--local-only` to opt out and keep
 everything on 127.0.0.1.
 
 Tier sizes, every flag, verifying the download by hand, network access, heap
 sizing, upgrade, rollback and troubleshooting: [One-line installer](./installer.mdx).
 
-Verify and manage:
+### Check that it works
 
 ```bash
 cd openprocessor
-curl http://127.0.0.1:4603/health          # readiness: Triton + OpenSearch reachable
-curl -X POST http://127.0.0.1:4603/detect -F "image=@your-image.jpg"
-./openprocessor status                     # service health
-./openprocessor logs api -f           # live logs
-./openprocessor sample coco                # public COCO sample (200 images)
+./openprocessor health
 ```
 
-Detection coordinates are normalized to `0.0-1.0`; multiply by the image
-width/height for pixels.
+Expected: the pretty-printed API `/health` JSON. `status` is `ready` and
+both `triton` and `opensearch` report `"ok": true`:
+
+```json
+{
+    "status": "ready",
+    "version": "0.5.0",
+    "api_version": "v1",
+    "services": {
+        "triton": {"ok": true, "detail": "is_server_live OK", ...},
+        "opensearch": {"ok": true, "detail": "HTTP 200", ...}
+    },
+    ...
+}
+```
+
+Then detect objects in any image:
+
+```bash
+curl -X POST http://127.0.0.1:4603/detect -F "image=@your-image.jpg"
+```
+
+Expected: JSON with a `detections` list. Coordinates are normalized to
+`0.0-1.0`; multiply by the image width and height for pixels.
+
+Day-to-day commands, all run from the install directory:
+
+```bash
+./openprocessor status            # containers, health, GPU memory
+./openprocessor logs api -f       # live logs
+./openprocessor sample coco       # public COCO sample (200 images), used in part 2
+```
 
 ### Install from source
 
@@ -72,11 +99,10 @@ git clone https://github.com/davidamacey/OpenProcessor.git && cd OpenProcessor
 ```
 
 `scripts/setup.sh` pulls the pre-built images, detects your GPU and picks a
-profile (`minimal`, `standard`, `full`), writes `.env` from `env.template`
-(it never overwrites an existing `.env` unless you pass `--force`, and a
-forced rewrite keeps your `OPENSEARCH_HEAP`), downloads the base weights,
-runs the one-time TensorRT export, starts the core services and runs smoke
-tests.
+profile (`minimal`, `standard`, `full`), writes `.env` (it never overwrites an
+existing `.env` unless you pass `--force`, and a forced rewrite keeps your
+`OPENSEARCH_HEAP`), downloads the base weights, runs the one-time TensorRT
+export, starts the core services and runs smoke tests.
 
 Useful flags (all from `./scripts/setup.sh --help`):
 
@@ -89,14 +115,23 @@ Useful flags (all from `./scripts/setup.sh --help`):
 | `--force` | Overwrite an existing `.env` |
 | `--curation` | Print the curation next steps at the end |
 
-Day-to-day management of a checkout:
+Manage a checkout with `make`:
 
 ```bash
-./scripts/openprocessor.sh status     # service health
-./scripts/openprocessor.sh logs -f    # live logs
-make up / make down                   # core stack (Triton + API + OpenSearch)
-make up-monitoring                    # core stack + Prometheus/Grafana/Loki/DCGM
+make up                # core stack (Triton + API + OpenSearch)
+make curation-up       # the curation workers (compose profile "curation")
+make status            # health of all services
+make down
 ```
+
+:::note[`./openprocessor` in a checkout]
+The `openprocessor` CLI refuses to run until `.env` names its compose project
+(exit code 3). The `.env` that `scripts/setup.sh` writes does not, so add
+`COMPOSE_PROJECT_NAME=openprocessor` to `.env` before using
+`./openprocessor` or `./scripts/openprocessor.sh` in a checkout. The `make`
+targets do not need it. When you run `docker compose` by hand, always pass
+`-p <project>` so you never act on another stack that uses the default name.
+:::
 
 Prefer to do it by hand? See [Model export](./model-export.mdx) and
 [Compose profiles](./compose-profiles.mdx).
@@ -129,46 +164,131 @@ workspaces with their own classes, items, settings and jobs. A fresh stack
 has one project, `default`. The walkthrough makes its own so nothing is
 shared.
 
+Docker commands below use `-p openprocessor`, the default compose project
+name. If you set another `COMPOSE_PROJECT_NAME` in `.env`, use that name.
+
+#### Step 1: make sure the encoders and workers exist
+
+Curation needs the PE-Core encoders and the `curation` compose profile.
+
+- **Installed directory.** Nothing to do if you installed the `curation` tier.
+  Otherwise re-run the installer with `--tiers core,curation`.
+- **Source checkout.** `scripts/setup.sh` does not build the PE-Core encoders:
+
+  ```bash
+  make export-pe
+  ```
+
+  Expected: `pe_image_encoder` and `pe_text_encoder` are READY in
+  `make models-list`.
+
+#### Step 2: fetch a sample
+
 ```bash
-# 0. Curation needs the PE-Core encoders (not built by setup.sh)
-make export-pe
+make sample-coco-readme            # source checkout
+# or, from an installed directory:
+./openprocessor sample coco
+```
 
-# 1. Fetch a sample
-make sample-coco-readme
+Expected: 200 images and an `ATTRIBUTION.csv` under
+`data/samples/coco_va_readme/`. Both commands write there.
 
-# 2. Configure the ingest detector and point the source mount at the
-#    samples directory. The detector keeps its whole 80-class vocabulary.
-cat >> .env <<'EOF'
-OP_INGEST_PRIMARY_DETECTOR_MODEL=yolov11_small_trt_end2end
-OP_SOURCE_ROOT_HOST=./data/samples
-EOF
-docker compose up -d --force-recreate api
+#### Step 3: let the containers see the sample
 
-# 3. Create a project, then its classes (the registry starts empty)
-API=http://localhost:4603
+The API and the workers read images from one **source root**, mounted
+read-only at `/data/source`. The host side is `OP_SOURCE_ROOT_HOST` in `.env`.
+Three services mount it: `api`, `curation-detection-worker` and
+`curation-auto-label-worker`. If one of them lacks the mount, thumbnails 404
+and the VLM stage labels nothing.
+
+- **Installed directory.** The installer already set
+  `OP_SOURCE_ROOT_HOST=./data`, so the sample is at
+  `/data/source/samples/coco_va_readme/images`. Skip to step 4.
+- **Source checkout.** The default root is `./data/source`. Point it at the
+  samples directory, set the ingest detector, and recreate the services:
+
+  ```bash
+  cat >> .env <<'EOF'
+  OP_INGEST_PRIMARY_DETECTOR_MODEL=yolov11_small_trt_end2end
+  OP_SOURCE_ROOT_HOST=./data/samples
+  EOF
+  make up && make curation-up
+  ```
+
+  Expected: `docker compose -p openprocessor ps` lists `api`,
+  `curation-detection-worker` and `curation-auto-label-worker` as recently
+  created. The sample is at `/data/source/coco_va_readme/images`.
+
+`restart` does not re-read `.env`, so a plain restart keeps the old mount.
+`./openprocessor start` and `make up` / `make curation-up` recreate the services
+whose configuration changed.
+
+#### Step 4: create a project and its classes
+
+```bash
+API=http://127.0.0.1:4603
 P=coco-sample
 curl -s -X POST "$API/curation/projects" \
   -H 'content-type: application/json' \
   -d "{\"slug\": \"$P\", \"display_name\": \"COCO sample\"}"
-# Seed the classes from the detector's own labels (dry run is the default;
-# "dry_run": false writes). Or create your own with POST .../classes.
+
+# Seed the classes from the detector's own labels. The default is a dry run;
+# "dry_run": false writes. Or create your own with POST .../classes.
 curl -s -X POST "$API/curation/projects/$P/classes/seed_from_detector" \
   -H 'content-type: application/json' \
   -d '{"dry_run": false}'
+```
 
-# 4. Ingest into the project. --root is a container path under the
-#    /data/source mount
-docker compose exec api python scripts/curation/bulk_ingest.py \
-  --project $P --folder /data/source/coco_va_readme/images \
-  --api-base http://localhost:8000/curation
+Expected: the project record, then a `created` list with one entry per
+detector label (`person`, `bicycle`, `car`, and so on for all 80 COCO
+classes).
 
-# 5. Optional: start the async workers and cluster (+ VLM-label) the pool
-docker compose --profile curation up -d
+#### Step 5: ingest
+
+`--folder` is a path **inside the API container**, under `/data/source`. Use
+the path from step 3.
+
+```bash
+SRC=/data/source/samples/coco_va_readme/images   # installed directory
+# SRC=/data/source/coco_va_readme/images         # source checkout
+
+docker compose -p openprocessor exec api python scripts/curation/bulk_ingest.py \
+  --project $P --folder $SRC --api-base http://localhost:8000/curation
+```
+
+Inside the `api` container the API listens on port 8000, so `--api-base` is
+required there; the script's default targets host port 4603. The script shows
+live progress and exits 0 when the run completes, 1 when some images failed, 2
+when the run failed.
+
+Check the counts:
+
+```bash
+curl -s "$API/curation/projects/$P/stats"
+```
+
+Expected: `counts.images` reaches 200 and `counts.items` is higher (one item
+per detection). `counts.pending_detection` drops to 0 once the detection
+worker has finished.
+
+To ingest a large folder from a NAS, see
+[Ingest a large folder](../guides/ingest-large-folder.mdx).
+
+#### Step 6 (optional): cluster and label
+
+The `curation` profile is already up. Start an auto-label run:
+
+```bash
 curl -s -X POST "$API/curation/projects/$P/pipeline/auto_label/start?run_vlm=true&train_clusters=true"
 curl -s "$API/curation/projects/$P/pipeline/auto_label/status"
 ```
 
-Things that trip people up:
+Expected: a job id, then `status` moving to `completed`. `auto_label`
+clusters only by default (`run_vlm=false`). The VLM labels nothing unless you
+pass `run_vlm=true` **and** a VLM endpoint is configured (see
+[VLM selection](../guides/vlm-selection.mdx)).
+
+### Things that trip people up
 
 - **Every curation data route is under `/curation/projects/{project}/`.**
   An unscoped path such as `/curation/classes` is a `404`.
@@ -177,7 +297,8 @@ Things that trip people up:
   the detector's own label (person, dog, pizza and so on, not only vehicles).
   To store or embed less, set the per-project ingest policy
   (`PUT /curation/projects/{project}/ingest/policy`) before a big ingest; the
-  old `OP_INGEST_PRIMARY_CLASS_IDS` env var is retired and ignored.
+  old `OP_INGEST_PRIMARY_CLASS_IDS` env var is retired and ignored. See
+  [Ingest policy](../guides/ingest-policy.mdx).
 - **Cost of the full vocabulary.** Each stored detection also gets an
   embedding by default, so the full COCO vocabulary stores about 3.6x the
   data of a vehicle-only run (the "Ingest cost per image" section of
@@ -187,16 +308,14 @@ Things that trip people up:
   in `.env`, then recreate `api`. The model must be loaded in Triton and
   serve the end2end four-tensor output. The detector is deployment-wide.
 - **Ingest returns `503`** until `OP_INGEST_PRIMARY_DETECTOR_MODEL` is set
-  and that model is loaded in Triton.
+  and that model is loaded in Triton. The installer sets it; a checkout does
+  not.
 - **`OP_SOURCE_ROOT_HOST`** is the host side of a fixed `/data/source`
-  mount. The walker's `--root` must be a *container* path under it,
+  mount. The walker's `--folder` must be a *container* path under it,
   otherwise every image fails as `unservable_path`.
-- **`OP_*` variables are read at process start**: recreate `api`
-  after changing them.
-- **`auto_label` clusters only by default** (`run_vlm=false`); the VLM
-  labels nothing unless you pass `run_vlm=true` and a VLM is configured
-  (see [VLM configuration](../configuration/advanced.mdx#vlm-and-segmenter)
-  and [VLM selection](../guides/vlm-selection.mdx)).
+- **`OP_*` variables are read at process start.** Recreate the services after
+  changing them (`./openprocessor start` or `make up`); a restart is not
+  enough.
 - `GET /curation/projects/{project}/health` reports `degraded` until at
   least one class exists and Triton and OpenSearch are reachable.
 
@@ -220,11 +339,13 @@ import can be resumed or undone:
 
 ```bash
 make sample-coco-import        # public COCO fixture, four layouts under data/samples/import_fixture
-docker compose exec api python scripts/curation/import_labeled_dataset.py \
+docker compose -p openprocessor exec api python scripts/curation/import_labeled_dataset.py \
   --project $P --dataset /data/source/import_fixture/yolo \
   --accept-suggestions --dry-run
 ```
 
+The dataset path is a container path under the source root, as in step 3
+(`/data/source/samples/import_fixture/yolo` for an installed directory).
 Drop `--dry-run` to import. See [Dataset import](../guides/dataset-import.mdx).
 
 ### Regions: the car-to-wheel example

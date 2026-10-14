@@ -351,6 +351,15 @@ _models_precision_section() {
     local degraded model precision reason
     # shellcheck source=scripts/lib/model_setup.sh
     source "${SCRIPT_DIR}/lib/model_setup.sh"
+    local stamps trt cc sha
+    stamps="$(OP_DIR="$PROJECT_DIR" model_setup_stamp_report)"
+    if [[ -n "$stamps" ]]; then
+        echo -e "${BOLD}Engine build stamps:${NC}"
+        while IFS=$'\t' read -r model precision trt cc sha; do
+            echo "  ${model}: ${precision}, TensorRT ${trt}, compute capability ${cc}, ONNX ${sha}"
+        done <<< "$stamps"
+        echo ""
+    fi
     degraded="$(OP_DIR="$PROJECT_DIR" model_setup_precision_report)"
     [[ -n "$degraded" ]] || return 0
     echo -e "${BOLD}Degraded precision:${NC}"
@@ -396,7 +405,12 @@ cmd_models_install() {
     OP_DIR="$PROJECT_DIR"
     OP_HEALTH_HOST=127.0.0.1
     GPU_PROFILE="$(_env_value GPU_PROFILE)"
-    MODEL_SETUP_TRITON_DIGEST="$(sed -n -E 's/^  "triton_image_digest": "([^"]*)",?$/\1/p' "$PROJECT_DIR/.install/state.json" 2>/dev/null | head -n1)"
+    MODEL_SETUP_TRITON_DIGEST=""
+    if [[ -f "$PROJECT_DIR/.install/state.json" ]]; then
+        MODEL_SETUP_TRITON_DIGEST="$(sed -n -E 's/^  "triton_image_digest": "([^"]*)",?$/\1/p' "$PROJECT_DIR/.install/state.json" | head -n1)"
+    else
+        log_info "no .install/state.json (a checkout, not an installed directory): every model group is built"
+    fi
     export OP_DIR OP_HEALTH_HOST GPU_PROFILE MODEL_SETUP_TRITON_DIGEST
     dc up -d triton-server
     if model_setup_run_groups "$tiers" "$only"; then
@@ -832,7 +846,43 @@ _gpu_plan_placement() {
         esac
     done <<< "$out"
     echo "  every other Triton model runs on the primary card (the lowest id in TRITON_GPU_ID)"
+    _gpu_plan_decode "$ids" "$table" "$running" "$primary_mib"
     return "$rc"
+}
+
+# Say whether the GPU decode is on and why. Refuses nothing: the GPU decode loads on first
+# use and falls back to the CPU path per image, so a forced-on card without room only warns.
+_gpu_plan_decode() {
+    local ids="$1" table="$2" running="$3" primary_mib="$4" setting profile source primary
+    local decode_mib=8704
+    setting="$(_env_value OP_INGEST_GPU_DECODE)"
+    profile="$(_env_value GPU_PROFILE)"
+    profile="${profile:-standard}"
+    if [[ -n "$setting" ]]; then
+        source="OP_INGEST_GPU_DECODE=${setting} in .env"
+    else
+        setting=1
+        source="code default (on); the installer writes 0 for profiles without room"
+    fi
+    case "${setting,,}" in
+        1|true|yes|on) setting=1 ;;
+        *) setting=0 ;;
+    esac
+    if (( setting == 0 )); then
+        echo "  GPU decode (ingest): off (${source}); photos decode on the CPU. Needs about ${decode_mib} MiB more on the primary card"
+        return 0
+    fi
+    echo "  GPU decode (ingest): on (${source}); about ${decode_mib} MiB more on the primary card, loaded on first use"
+    primary="$(tr ',' '\n' <<< "$ids" | sort -n | head -1)"
+    local idx name total used cc need=$(( primary_mib + decode_mib )) have
+    while IFS='|' read -r idx name total used cc; do
+        [[ "$idx" == "$primary" ]] || continue
+        # A running Triton already holds its models, so only the card's total can be judged then.
+        if [[ "$running" == 1 ]]; then have=$total; else have=$(( total - used )); fi
+        if (( have < need )); then
+            log_warn "GPU ${idx} has ${have} MiB $([[ "$running" == 1 ]] && echo total || echo free); the ${profile} profile's models (${primary_mib} MiB) plus the GPU decode (${decode_mib} MiB) need about ${need} MiB. Without room the GPU decode fails to load and ingest stays on the CPU path; set OP_INGEST_GPU_DECODE=0 to silence this"
+        fi
+    done <<< "$table"
 }
 
 cmd_gpu() {

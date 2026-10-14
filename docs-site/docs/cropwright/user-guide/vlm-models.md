@@ -12,6 +12,12 @@ project**; the choice of active endpoint is **per project**. The pages appear
 only when the backend serves the registry; without it there is no Models card
 on Settings and no link from Models.
 
+A project that has never activated an endpoint uses the backend's built-in `env`
+endpoint when the backend has one, and shows it as the active endpoint. **Turn off**
+switches the project's VLM off explicitly. Which pipeline settings to use, and why, is
+in [Pipeline modes](../../guides/pipeline-modes.mdx); the endpoint, activation and
+policy routes are in [VLM selection](../../guides/vlm-selection.mdx).
+
 ## Secrets stay on the host
 
 An endpoint that needs an API key stores only a **reference** to a secret

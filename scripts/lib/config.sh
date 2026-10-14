@@ -704,6 +704,11 @@ generate_env_file() {
         heap="$(opensearch_heap_for_host)" || { log_error "could not read host memory to size the OpenSearch heap"; return 1; }
     fi
 
+    # An explicit GPU decode choice survives a forced regeneration too.
+    local gpu_decode="$PROFILE_INGEST_GPU_DECODE" kept_gpu_decode=""
+    [[ -f "$env_file" ]] && kept_gpu_decode="$(sed -n 's/^OP_INGEST_GPU_DECODE=//p' "$env_file" | tail -n1)"
+    [[ -n "$kept_gpu_decode" ]] && gpu_decode="$kept_gpu_decode"
+
     log_step "Generating .env file..."
 
     cat > "$env_file" << EOF
@@ -716,6 +721,9 @@ generate_env_file() {
 # Options: minimal (6-8GB), standard (12-24GB), full (48GB+)
 GPU_PROFILE=$profile
 GPU_ID=$gpu_id
+
+# GPU decode: 1 only where the profile's card has ~8.5 GB of room beyond its models
+OP_INGEST_GPU_DECODE=$gpu_decode
 
 # Performance (auto-configured based on GPU_PROFILE)
 TRITON_WORKERS=$PROFILE_WORKERS

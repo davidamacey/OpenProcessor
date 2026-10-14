@@ -1,0 +1,133 @@
+---
+sidebar_position: 2
+title: Choose your path
+---
+
+# Choose your path
+
+OpenProcessor does two jobs. Pick the one you came for, run the commands under
+it, and skip the rest.
+
+| I want to... | Path | Install tiers |
+|---|---|---|
+| Call detection, faces, embeddings, OCR or search from my own code | [A. Inference API only](#a-inference-api-only) | `core` |
+| Build, label and train on a dataset with the Cropwright web UI | [B. Curation with Cropwright](#b-curation-with-cropwright) | `core,curation,cropwright` |
+| Move an existing install to a new release | [C. Upgrade an existing install](#c-upgrade-an-existing-install) | none |
+
+Every path starts from the same one-line installer. It asks which tiers you
+want, so you can also answer its prompt instead of passing `--tiers`.
+
+## A. Inference API only
+
+You need Triton, the API and OpenSearch. Nothing else.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/setup-openprocessor.sh \
+  | bash -s -- --tiers core --unattended
+cd openprocessor
+./openprocessor health
+```
+
+Expected: the `/health` JSON with `"status": "ready"`. The API listens on
+`127.0.0.1:4603`.
+
+```bash
+curl -X POST http://127.0.0.1:4603/detect -F "image=@your-image.jpg"
+```
+
+Expected: a `detections` list with normalized `0.0-1.0` boxes.
+
+Next:
+
+- The interactive API docs are at `http://127.0.0.1:4603/docs`. Every core
+  route is also under `/v1`. See the [Core API](../api-reference/core.mdx).
+- Swap the detector or add YOLO26 in [Model export](./model-export.mdx).
+- Size the card and the host in [GPU sizing](../deployment/gpu-sizing.mdx).
+- The API has no authentication. Read [Security](../deployment/security.mdx)
+  before you bind it beyond loopback.
+
+## B. Curation with Cropwright
+
+You need the `curation` tier (workers and the PE-Core embedding encoder) and
+the `cropwright` tier (the web UI). Add `segmenter` for text-prompted region
+proposals and `vlm` for a local vision-language model; both are optional.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/davidamacey/OpenProcessor/main/setup-openprocessor.sh \
+  | bash -s -- --tiers core,curation,cropwright --unattended
+cd openprocessor
+./openprocessor status
+```
+
+Expected: the installer summary prints the Cropwright URL. The default port is
+`5184`. Cropwright is reachable on your LAN unless you pass `--local-only`, and
+it has no login; read the warning on [One-line installer](./installer.mdx#network-access).
+
+Then, in this order:
+
+1. [Quick start, part 2](./quick-start.mdx#2-curation-with-public-sample-data)
+   makes a project from a public COCO sample and ingests it.
+2. Open Cropwright and follow its
+   [quick start](../cropwright/getting-started/quick-start.md) and
+   [review guide](../cropwright/user-guide/review.md).
+3. Choose how much of the pipeline you want to run: detection only, with
+   clustering, or with VLM labeling. The [curation workflow](../operations/curation-workflow.mdx)
+   shows every stage.
+4. Have a labeled dataset already? Use [Dataset import](../guides/dataset-import.mdx).
+5. Have a lot of images? Set the [ingest policy](../guides/ingest-policy.mdx)
+   first, then follow [Ingest a large folder](../guides/ingest-large-folder.mdx).
+
+Everything Cropwright does is a `curl`-able route under
+`/curation/projects/{project}/...`, so you can script any step. The full list
+is in `contracts/openapi/curation.json`.
+
+## C. Upgrade an existing install
+
+Which command you run depends on how you installed.
+
+### Installed with the one-line installer
+
+Run these from the install directory.
+
+```bash
+./openprocessor upgrade                   # latest release; backs up first
+./openprocessor upgrade --version vX.Y.Z  # a specific release
+```
+
+Expected: the installer backs up the release files, `.env` and state to
+`backups/<UTC timestamp>/`, adds any new `.env` keys without changing yours,
+updates the image pins, re-runs model groups that need it, restarts the stack
+and checks health. If a step fails, `./setup-openprocessor.sh --repair`
+re-verifies and retries, and `./setup-openprocessor.sh --rollback` restores the
+newest backup of a different version. If the Triton image changed after a
+rollback, rebuild the engines with `./openprocessor models install`.
+
+### Source checkout
+
+```bash
+git pull
+./openprocessor update      # pulls images and rebuilds
+make up                     # recreates what changed
+make dev-restart            # restarts the API and workers that mount the source
+```
+
+The API and workers import their Python source once at start, so restart them
+after every pull. See [Restart after pulling or updating](../developer-guide/restart-after-update.md).
+`make dev-restart` does not re-read `.env`; recreate services after you change
+it.
+
+### Check before you start
+
+- **Retired variables stop the app.** A renamed `OP_*` or older-prefix
+  variable left in `.env` is not ignored. The API and the workers refuse to
+  start and name the replacement in the error. The full rename table is
+  `RETIRED_ENV` in `src/config/retired_env.py`. Fix the name in `.env`, then
+  recreate the services.
+- **`OP_INGEST_PRIMARY_CLASS_IDS` is the exception.** It is retired and ignored
+  with a warning. Narrow what ingest stores with the per-project
+  [ingest policy](../guides/ingest-policy.mdx) instead.
+- **Read the release notes** for your target version under `docs/releases/` in
+  the repository, and `CHANGELOG.md` for anything between versions.
+- **Back up** `data/` and the OpenSearch volume before a major step. The
+  installer's own backup covers release files, `.env` and state, not your
+  datasets.

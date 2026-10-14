@@ -19,7 +19,7 @@ const defaultCredits = (
 /**
  * Data-driven showcase. By default it shows the frontend gallery from
  * `src/data/screenshots.json` (the capture script's route list is
- * `src/data/screenshot_routes.json`); pass `items` for another gallery,
+ * `frontend/scripts/screenshot_routes.json`); pass `items` for another gallery,
  * such as the backend tools in `src/data/backend_screenshots.json`.
  * Each slot degrades to the `<Screenshot>` pending placeholder until the
  * file exists under `static/img/screenshots/`. One shared `Lightbox` pages

@@ -88,21 +88,27 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   embeddings of the same crops per card (#228).
 - GPU decode measured and planned (`docs/design/gpu_decode_plan.md`, numbers in
   `docs/PERFORMANCE.md`): on 12-24 MP photos the CPU JPEG decode caps ingest at about 26 photos/s on
-  this host; GPU decode cuts the decode's host cost 3.7x and a GPU front end cut API CPU per photo by
+  this host; GPU decode cuts the decode's host cost 3.7x and a GPU decode cut API CPU per photo by
   65 percent through the stack, at unchanged images/s until faster GPU kernels land; COCO frames gain
   nothing. GPU decode changes the decoded pixels and fails the parity gates against today's
   references while AP and kNN precision are unchanged, so it waits for an owner decision. New probe
   tools `scripts/bench/gpu_decode_bench.py` and `scripts/bench/gpu_decode_parity.py` with tested
   kernels and helpers (#217). No product code changed.
-- GPU ingest front end for photos, opt-in with `OP_INGEST_GPU_FRONTEND` and gated by
-  `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0): the `image_frontend` Triton model decodes each JPEG once on the
+- GPU decode for photos, opt-in with `OP_INGEST_GPU_DECODE` and gated by
+  `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0): the `gpu_image_prep` Triton model decodes each JPEG once on the
   GPU (nvJPEG with GPU Huffman decoding), builds the detector letterbox and the PE squares with fused
   uint8 kernels, runs the detector and PE, computes the blur sums and encodes the crop JPEGs. On 12-24
   MP photos: 1.3x the images/s with detection and embedding, 1.55x detection only, 2.5x for one client,
-  a third of the host CPU. Smaller images and any file the front end declines (progressive, truncated,
+  a third of the host CPU. Smaller images and any file the GPU decode declines (progressive, truncated,
   not a baseline JPEG) take the CPU path, counted in the new `op_ingest_decode_total{route}`. It changes
-  the decoder's numerics once, AP-neutral on COCO (0.4378 against 0.4376); `scripts/bench/detector_capture.py` gains a front-end mode and the
+  the decoder's numerics once, AP-neutral on COCO (0.4378 against 0.4376); `scripts/bench/detector_capture.py` gains a gpu_decode mode and the
   benchmark suites an `--embedding-mode` (#217).
+
+- The installer stamps the PE engine it builds (precision actually built, TensorRT version, GPU compute
+  capability, ONNX sha256, builder flags) in `.install/precision.tsv` and rebuilds it when the stamp is
+  missing, built as a fallback precision, or no longer matches the GPU architecture or the exported ONNX,
+  instead of skipping it as up to date. `openprocessor models status` lists the stamps. Only the PE group
+  is stamped; the other groups are a follow-up (#209).
 
 - `scripts/bench/ingest_write_path.py` (the ingest write path alone at offered rates, with k-NN queries
   running next to it), `scripts/bench/store_parity.py` (ANN overlap against exact search, cluster
@@ -185,6 +191,12 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   put the `gpus: [ 0 ]` models on a faster card with a higher host index instead of the lowest listed
   one (#228).
 
+- The bulk-ingest default concurrency is 16 batches in flight (was 8). One RTX A6000 plateaus at 16 clients
+  (29.1 images/s against 27.6 at 8 and 22.0 at 4; two A6000 reach 55.1, against 44.6 before the half-split
+  encoder engine); no detector engine variant, Triton instance count,
+  queue delay, preferred batch size or API worker count moved images per second by 3 percent or more on a
+  GPU-bound card, so those defaults stay (#226, `docs/PERFORMANCE.md`).
+
 - Cluster pass plumbing, output-preserving (#218): the write-back sends its guarded updates 8 requests at
   a time (1,000 documents each, 429 retried with backoff) instead of one 2,000-document request after
   another, the fetch decodes responses with `orjson` and converts a page to a matrix in one call, and
@@ -217,6 +229,27 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   migration, re-ingest to move one (#254). Write ceiling at 100,000 real vectors on this mapping: 1,980
   documents/s with 4 writers, 4,426 with 8 (#230).
 
+- The GPU decode (`gpu_image_prep`, #217) is now on by default (`OP_INGEST_GPU_DECODE`),
+  with the 3.0 MP size gate unchanged. It follows the hardware: each installer profile carries an
+  `ingest_gpu_decode` flag (`full` true, `minimal` and `standard` false, since the GPU decode adds
+  about 8.5 GB to the Triton card) that `setup.sh` and the installer write to `.env`, an explicit
+  `.env` value wins, and `openprocessor gpu plan` prints whether it is on and why, warning when it
+  is on for a card without room. A GPU decode that cannot load leaves the other models and CPU
+  ingest working.
+
+- The GPU decode stage of ingest was called the "front end"; it is renamed and nothing else changes:
+  `OP_INGEST_GPU_FRONTEND` is now `OP_INGEST_GPU_DECODE` (profile key `ingest_gpu_frontend` is now
+  `ingest_gpu_decode`), and the Triton model `image_frontend` is now `gpu_image_prep`. There is no alias:
+  an existing deployment renames its `.env` key and its `models/image_frontend` directory.
+
+- Documentation overhaul. `docs-site/docs/` is the single source of truth for user and operator
+  docs and `docs/CURATION.md` is a short map into it. New guides cover choosing a path, ingesting
+  a large folder, pipeline modes, upgrade and backup, and the Cropwright audit page. The README
+  is an overview with a first result. Wrong or stale statements are corrected (source-root
+  mounts, GPU profile keys, worker defaults, OpenSearch heap sizing, `bulk_ingest.py` usage
+  inside the container). Screenshots are refreshed and added for the new pages, and
+  `make docs-screenshots` regenerates them.
+
 ### Fixed
 
 - An oversize upload answers `413` with `{"detail": "File too large. Maximum: <N>MB", "max_file_size_mb": <N>,
@@ -247,6 +280,26 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   the model, the FP16 failure reason and the consequence, is recorded in `.install/precision.tsv`,
   marks the model group `degraded` (a re-run retries FP16) and shows under "Degraded precision" in
   `./openprocessor models status` and in the install summary.
+- `frontend/scripts/capture_docs_screenshots.py` no longer aborts after the first image when `--out` is
+  outside `frontend/` (it printed the path with `relative_to`, which raised `ValueError`).
+
+- The installer's PE image encoder build now puts the uint8 input prefix in front of the FP16-baked
+  (and the FP32 fallback) ONNX, as `export/build_pe_trt.sh` does, so a fresh install, repair or
+  upgrade no longer leaves `pe_image_encoder` UNAVAILABLE with "unexpected datatype TYPE_FP32 ...
+  expecting TYPE_UINT8". `export/check_input_dtype.py` compares the built input datatype to
+  `config.pbtxt` and fails the install on a mismatch; the build stamp records `input=uint8`, so an
+  engine built before this fix is rebuilt on the next `models install`.
+- `./openprocessor models install|repair` in a checkout without `.install/state.json` no longer exits
+  silently: it logs that every model group will be built and goes on (#270).
+- The committed `yolov11_small_trt_end2end` config declares the FP16 build's `det_scores` datatype, so a
+  default export leaves the tree clean; a test compares each committed exporter-written config with its
+  renderer. The installer no longer builds the unused standard `yolov11_small_trt` engine, and that
+  directory is git-ignored for `make export-models`.
+
+- Cropwright's top bar and `/projects` header no longer widen the page past a 430 px viewport when the
+  project has a long display name: the project switcher is capped at 55 percent of the viewport and the
+  "Open <project>" link on `/projects` truncates (#274). The 430 px e2e sweep now serves a long display
+  name and a long slug, so it fails on that header without the fix.
 
 ## [0.5.0] - 2026-10-09
 

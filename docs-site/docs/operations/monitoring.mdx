@@ -68,12 +68,22 @@ host without the NVIDIA container toolkit).
 
 `monitoring/alerts/triton-alerts.yml` defines the rules Prometheus
 evaluates: `HighInferenceLatency` and `CriticalInferenceLatency`,
-`HighInferenceFailureRate`, `ModelNotReady` (`nv_model_ready_state == 0`),
-`HighGPUUtilization` (above 95% for 5 minutes), `HighGPUMemoryUsage`
-(above 90%), `HighQueueDepth` (more than 50 pending requests) and
-`TritonServerDown`. They show on Prometheus's Alerts page; no notifier is
-configured, so wire Alertmanager or Grafana alerting to your own channel
-if you need notifications.
+`HighInferenceFailureRate`, `HighGPUUtilization` (above 95% for 5 minutes),
+`HighGPUMemoryUsage` (above 90%), `HighQueueDepth` (more than 50 pending
+requests) and `TritonServerDown`. They show on Prometheus's Alerts page
+(`http://localhost:4604/alerts`).
+
+`monitoring/grafana-alerting.yml` is provisioned into Grafana as a second,
+separate rule set: API error rate and slow responses, Triton down, latency
+and queue, GPU utilization, memory and temperature, host memory, CPU and
+load, and OpenSearch cluster status. They show at
+`http://localhost:4605/alerting/list`.
+
+Neither set notifies anyone out of the box. Prometheus has no Alertmanager.
+Grafana's two contact points are webhooks to `http://localhost:9999/...`,
+which is the Grafana container itself, so nothing receives them. Point the
+contact points in `grafana-alerting.yml` at your own webhook, Slack or email
+and restart Grafana.
 
 ## Grafana dashboards
 
@@ -115,33 +125,31 @@ Panels only move while the API is serving requests; an idle stack shows
 flat lines. To add a dashboard, drop its JSON into
 `monitoring/dashboards/` and restart Grafana.
 
-:::caution[Two panels and one alert have no data]
-The Triton dashboard's **Model Ready** and **GPU Temperature** panels
-query `nv_model_ready_state` and `nv_gpu_temperature`, which the shipped
-Triton version does not export, so both show "No data". The
-`ModelNotReady` alert uses the same metric and can never fire. Use
-`GET /models/` (below) for model readiness and the GPU Metrics dashboard
-(DCGM) for temperature.
+:::caution[Two Grafana alert rules can never fire]
+The shipped Triton does not export `nv_model_ready_state` or
+`nv_gpu_temperature`. The Prometheus `ModelNotReady` rule and the Triton
+dashboard's Model Ready panel were removed for that reason, and the
+dashboard's GPU Temperature panel reads DCGM (`DCGM_FI_DEV_GPU_TEMP`). The
+provisioned Grafana rules **Triton Model Not Ready** and **High GPU
+Temperature** still query the missing metrics, so they stay silent. Use
+`GET /models/` (below) for model readiness and the GPUs dashboard (DCGM)
+for temperature.
 :::
 
 ## Logs with Loki
 
 Alloy (`monitoring/alloy-config.alloy`) discovers containers through the
-Docker socket, keeps this project's Triton and API containers plus the
-detection, VLM and auto-label workers and the segmenter, labels each stream
+Docker socket, keeps this project's `triton-server` and `api` services plus
+the detection, VLM and auto-label workers and the segmenter, labels each stream
 with `container`, `stream` and `job` (`triton`, `fastapi` or `worker`), and pushes
 it to Loki. In Grafana's **Explore** view, pick the Loki data source and
 filter on those labels. Loki keeps its data in the `loki_data` volume.
 
-:::caution[Check the container filter]
-Alloy's keep rules match container names that start with `triton-server`
-or `api`, while the compose file names containers
-`<project>-triton` and `<project>-api`. Because Alloy reads the host's
-Docker socket, it also sees containers from other compose projects on
-the same host. Run `curl -s localhost:4606/loki/api/v1/label/container/values`
-to see which containers are actually shipping logs, and adjust the
-`regex` rules in `alloy-config.alloy` to match your container names
-before relying on Loki.
+:::note[Which containers ship logs]
+Alloy keeps only containers whose compose project label equals
+`OP_LOG_PROJECT` (set from `COMPOSE_PROJECT_NAME`), so a second stack on the
+same host does not leak into this Loki. To list the container names that are
+shipping, run `curl -s localhost:4606/loki/api/v1/label/container/values`.
 :::
 
 ## Operator metrics reference

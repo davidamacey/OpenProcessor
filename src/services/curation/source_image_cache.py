@@ -145,7 +145,7 @@ def write_crop_cache(
     Args:
         crop_id: The item's stable id; the cache key is ``<crop_id>.jpg``.
         crop: A decoded PIL crop, already in the desired orientation, or that crop already
-            encoded as JPEG (the GPU ingest front end's), written as is.
+            encoded as JPEG (the GPU decode's), written as is.
         cache_dir: Root cache directory (``CurationConfig.crop_cache_dir``).
             A falsy value disables the cache entirely (no-op).
         quality: JPEG encode quality.

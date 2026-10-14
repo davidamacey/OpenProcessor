@@ -9,6 +9,11 @@ on real embeddings, and add retention and index-partitioning guidance.
 Measured on OpenSearch 3.6 with the k-NN plugin (faiss HNSW, cosine), a 1024-dimension
 float32 embedding per vector, derived source on (the OpenSearch 3.x default), no replicas.
 
+> **Note, 2026-10-13.** The per-vector faiss figures below are the old sizing rule. New projects
+> use Lucene vector fields, about 4.5 KiB per item against 8.6 KiB on faiss (measured in
+> [PERFORMANCE.md](../PERFORMANCE.md), "Stage 4: coalesced ingest writes, Lucene engine"). Existing projects keep their
+> faiss fields. Use the faiss numbers for an existing project and the Lucene figure for a new one.
+
 ## 1. Headline numbers
 
 - One 1024-d float32 vector costs **8.4 KB** on disk (2.0x its raw 4 KB): about 4.2 KB for the

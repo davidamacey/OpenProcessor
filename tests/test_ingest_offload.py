@@ -38,7 +38,7 @@ class _Service:
         self.detector = SimpleNamespace(
             secondary_profile=None, run_primary_batch=self._run_primary_batch
         )
-        self.config = SimpleNamespace(ingest_gpu_frontend=False)
+        self.config = SimpleNamespace(ingest_gpu_decode=False)
 
     async def _run_primary_batch(self, imgs: list[Image.Image]) -> list[list]:
         self.in_detector += len(imgs)

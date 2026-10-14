@@ -50,7 +50,7 @@ OP_INGEST_IMAGES_TOTAL = Counter(
 )
 OP_INGEST_DECODE_TOTAL = Counter(
     'op_ingest_decode_total',
-    'Images decoded by ingest, by route: gpu (the GPU front end) or cpu_<reason> (the CPU path: '
+    'Images decoded by ingest, by route: gpu (the GPU decode) or cpu_<reason> (the CPU path: '
     'off, small, not_jpeg, progressive, truncated, decoder, call_failed, ...).',
     labelnames=('route',),
 )

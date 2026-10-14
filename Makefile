@@ -1124,6 +1124,13 @@ info: ## Show service URLs and ports
 docs-build: ## Build docs-site (npm ci + docusaurus build; broken links and anchors fail the build)
 	cd docs-site && npm ci && npm run build
 
+DOCS_PROJECT ?= coco-bench-2k
+
+.PHONY: docs-screenshots
+docs-screenshots: ## Capture the Cropwright docs screenshots (CROPWRIGHT_URL=... required; public sample project only)
+	@test -n "$(CROPWRIGHT_URL)" || { echo "Set CROPWRIGHT_URL to a Cropwright instance that holds only public sample data."; exit 2; }
+	cd frontend && e2e/.venv/bin/python scripts/capture_docs_screenshots.py --base-url $(CROPWRIGHT_URL) --project $(DOCS_PROJECT)
+
 .PHONY: docs
 docs: info ## Alias for info
 
@@ -1232,9 +1239,11 @@ sample-clean: ## Remove fetched public sample datasets (data/samples/, gitignore
 .PHONY: curation-seed
 curation-seed: sample-coco ## Seed a demo curation dataset from the public COCO sample (alias for sample-coco)
 	@echo "curation-seed: fetched the public COCO sample into data/samples/coco_va."
-	@echo "Next: create classes (see docs/CURATION.md 'Create classes from zero'),"
-	@echo "set OP_INGEST_PRIMARY_DETECTOR_MODEL, then ingest with scripts/curation/bulk_ingest.py"
-	@echo "--root data/samples/coco_va/images (or the container-mounted equivalent path)."
+	@echo "Next: follow the curation walkthrough in the docs-site quick start"
+	@echo "(docs-site/docs/getting-started/quick-start.mdx): seed the classes from the"
+	@echo "detector's labels, set OP_INGEST_PRIMARY_DETECTOR_MODEL, then ingest with"
+	@echo "scripts/curation/bulk_ingest.py --folder data/samples/coco_va/images"
+	@echo "(or the container-mounted equivalent path)."
 
 # ==================================================================================
 # Phony targets (targets that don't create files)
