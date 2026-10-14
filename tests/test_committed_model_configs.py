@@ -56,7 +56,9 @@ def function_from(path: Path, name: str, **namespace: Any):
 
 
 def test_yolo11_end2end_config_matches_the_default_build() -> None:
-    render = function_from(EXPORT_DIR / 'export_models.py', 'generate_triton_config', IMG_SIZE=640)
+    render = function_from(
+        EXPORT_DIR / 'yolo_triton_config.py', 'generate_triton_config', IMG_SIZE=640
+    )
     rendered = signature(
         render(
             'yolov11_small_trt_end2end',

@@ -202,7 +202,7 @@ def test_check_input_dtype_accepts_the_prefixed_onnx(tmp_path: Path) -> None:
 # config directory -> the sources that build its engine
 UINT8_BUILDERS = {
     'pe_image_encoder': ['export/build_pe_trt.sh', 'scripts/lib/model_setup.sh'],
-    'yolov11_small_trt_end2end': ['export/export_models.py'],
+    'yolov11_small_trt_end2end': ['export/yolo_trt_build.py'],
     'yolo26_small_trt': ['export/export_yolo26.py'],
 }
 
