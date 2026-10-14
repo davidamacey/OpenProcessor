@@ -87,6 +87,8 @@ class TestNoStrayHardcodedPorts:
 
     def test_root_openprocessor_cli_has_no_bare_localhost_ports(self) -> None:
         offenders = self._bare_literal_port_lines(REPO_ROOT / 'openprocessor')
+        for lib in ('cli_core.sh', 'cli_dev.sh', 'cli_gpu.sh'):
+            offenders += self._bare_literal_port_lines(REPO_ROOT / 'scripts' / 'lib' / lib)
         assert offenders == []
 
     def test_export_paddleocr_sh_has_no_bare_localhost_ports(self) -> None:
