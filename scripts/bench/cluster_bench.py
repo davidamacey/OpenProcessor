@@ -104,7 +104,7 @@ async def timed_pass(
 
 def git_commit() -> str:
     try:
-        return subprocess.run(
+        return subprocess.run(  # nosec B603 B607  fixed argv list, no shell, git from PATH
             ['git', 'rev-parse', '--short', 'HEAD'],
             cwd=_REPO_ROOT,
             capture_output=True,
