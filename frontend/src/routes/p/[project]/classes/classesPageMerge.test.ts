@@ -12,7 +12,16 @@ import { describe, expect, it } from 'vitest';
  * @testing-library/svelte in this repo — see exportPageCleanup.test.ts).
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
+const LIB = path.resolve(here, '../../../../lib');
 const classesSrc = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const mergeSrc = readFileSync(
+  path.join(LIB, 'classes/mergeClassesController.svelte.ts'),
+  'utf-8',
+);
+const mergeModalSrc = readFileSync(
+  path.join(LIB, 'components/classes/MergeClassesModal.svelte'),
+  'utf-8',
+);
 const addClassModalSrc = readFileSync(
   path.resolve(here, '..', '..', '..', '..', 'lib', 'components', 'AddClassModal.svelte'),
   'utf-8',
@@ -20,37 +29,37 @@ const addClassModalSrc = readFileSync(
 
 describe('/classes: merge dry-run preview gates the real merge', () => {
   it('calls previewClassMerge (dry_run=true) rather than merging blind', () => {
-    expect(classesSrc).toMatch(/previewClassMerge\(/);
+    expect(mergeSrc).toMatch(/previewClassMerge\(/);
   });
 
   it('disables the Confirm/Merge button when the dry-run reports blocked', () => {
     // The Merge button's `disabled` expression must reference
     // `mergePreview?.blocked` — this is what stops a real merge from
     // firing into a 409 the operator already knew was coming.
-    const disabledBlock = classesSrc.slice(
-      classesSrc.indexOf('void submitMerge()'),
-      classesSrc.indexOf('void submitMerge()') + 400,
+    const disabledBlock = mergeModalSrc.slice(
+      mergeModalSrc.indexOf('void m.submitMerge()'),
+      mergeModalSrc.indexOf('void m.submitMerge()') + 400,
     );
     expect(disabledBlock).toMatch(/mergePreview\?\.blocked/);
   });
 
   it('submitMerge itself also refuses a blocked merge (defense in depth vs. a stale disabled state)', () => {
-    const fn = classesSrc.slice(
-      classesSrc.indexOf('async function submitMerge'),
-      classesSrc.indexOf('async function syncToOpensearch'),
+    const fn = mergeSrc.slice(
+      mergeSrc.indexOf('async function submitMerge'),
+      mergeSrc.indexOf('\n  return {'),
     );
     expect(fn).toMatch(/mergePreview\?\.blocked/);
   });
 
   it('cannot be confirmed without a served dry run (no client-substituted count)', () => {
-    const disabledBlock = classesSrc.slice(
-      classesSrc.indexOf('void submitMerge()'),
-      classesSrc.indexOf('void submitMerge()') + 400,
+    const disabledBlock = mergeModalSrc.slice(
+      mergeModalSrc.indexOf('void m.submitMerge()'),
+      mergeModalSrc.indexOf('void m.submitMerge()') + 400,
     );
     expect(disabledBlock).toMatch(/mergePreview == null/);
-    const fn = classesSrc.slice(
-      classesSrc.indexOf('async function submitMerge'),
-      classesSrc.indexOf('async function syncToOpensearch'),
+    const fn = mergeSrc.slice(
+      mergeSrc.indexOf('async function submitMerge'),
+      mergeSrc.indexOf('\n  return {'),
     );
     expect(fn).toMatch(/if \(mergePreview == null\) return;/);
     expect(fn).not.toMatch(/validated_count/);
@@ -59,8 +68,10 @@ describe('/classes: merge dry-run preview gates the real merge', () => {
 
 describe('/classes + AddClassModal: no client-side class-name slug regex', () => {
   it('the classes page no longer defines SLUG_RE/isSlug', () => {
-    expect(classesSrc).not.toMatch(/SLUG_RE/);
-    expect(classesSrc).not.toMatch(/function isSlug/);
+    for (const s of [classesSrc, mergeSrc]) {
+      expect(s).not.toMatch(/SLUG_RE/);
+      expect(s).not.toMatch(/function isSlug/);
+    }
   });
 
   it('AddClassModal no longer defines or tests against SLUG_RE', () => {
