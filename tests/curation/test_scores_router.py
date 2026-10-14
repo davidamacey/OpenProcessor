@@ -11,7 +11,7 @@ docstring documents the monkeypatch seam.
 
 Every test redirects ``OP_SCORES_STATE_DIR`` to a per-test ``tmp_path`` so
 nothing touches the real ``/jobs/scores`` volume (mirrors
-``test_train_jobs.py``'s ``OP_TRAIN_JOBS_DIR`` convention).
+the ``train_jobs`` tests' ``OP_TRAIN_JOBS_DIR`` convention).
 """
 
 from __future__ import annotations
