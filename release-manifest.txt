@@ -10,6 +10,7 @@ scripts/lib/ports.sh
 scripts/lib/bind_dirs.sh
 scripts/lib/gpu.sh
 scripts/lib/config.sh
+scripts/lib/config_models.sh
 scripts/lib/cli_core.sh
 scripts/lib/cli_dev.sh
 scripts/lib/cli_gpu.sh
