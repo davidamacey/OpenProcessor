@@ -13,6 +13,16 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Added
 
+- Ingest from S3 and S3-compatible stores (#264): `--s3` and `--source-id` on
+  `scripts/curation/bulk_ingest.py`, an `s3` or `source_id` start on
+  `POST /curation/projects/{project}/ingest/bulk`, and registered ingest sources under
+  `/curation/projects/{project}/ingest/sources` with a poll watcher, a cron schedule and an
+  S3 event webhook (`.../events`), all feeding one durable per-source queue drained by the
+  bulk runner. Objects are fetched and staged through `/ingest/objects`, referenced as
+  `s3://bucket/key#etag=...`, bounded in flight (`OP_S3_*`), and skipped before download when
+  already stored. S3 is off until `OP_S3_ALLOWED` is set; credentials come only from the `api`
+  container's environment, a mounted file or a role. A dispatcher in the API acts on due
+  triggers (`OP_INGEST_DISPATCH_S`). Guide: Ingest from S3 and watched sources.
 - `scripts/bench/ingest_transport_bench.py` and the "Ingest transports (#263)" measurement in
   `docs/PERFORMANCE.md`: HTTP/1.1 multipart against `grpc.aio` streaming and unary, transport only, on
   public images. A gRPC ingest channel saves under 1.2 percent of the pipeline's API CPU per image and the
@@ -305,6 +315,15 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   project has a long display name: the project switcher is capped at 55 percent of the viewport and the
   "Open <project>" link on `/projects` truncates (#274). The 430 px e2e sweep now serves a long display
   name and a long slug, so it fails on that header without the fix.
+
+- Deleting a project now also removes its bulk-ingest runs, ingest sources (definitions and queues) and
+  reprocess jobs on the shared jobs volume, which it used to leave behind (found by the live S3 check, #264);
+  the dry run lists those directories too.
+
+- An S3 source's queue could hold two rows for one key after a `retry-dead` and a scan (the replaced
+  object's old and new etag); the run answered once and recorded one row as `no result returned`.
+  The batch sender now matches answers by key and version and settles every row of the object (found by
+  the second live S3 check, #264).
 
 ## [0.5.0] - 2026-10-09
 

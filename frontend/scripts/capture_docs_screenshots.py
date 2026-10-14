@@ -68,7 +68,7 @@ STATE_HEIGHT = {"region-profile-test": 1600, "import-wizard": 2250, "import-job"
     "resources-menu": 560, "import-job-actions": 560, "region-profile-testable": 1400,
     "ingest-policy-preview": 1300, "open-vocab-editor": 1300, "open-vocab-test": 1500,
     "run-results-confusion": 1300, "clone-from-project": 800, "reprocess-served-scopes": 1000,
-    "region-stage-panel": 1500}
+    "region-stage-panel": 1500, "ingest-sources-panel": 1500}
 
 
 def load_routes() -> list[dict]:
@@ -703,6 +703,27 @@ def state_region_stage_panel(page, ctx: Ctx) -> None:
     return panel.locator("xpath=..")  # the worklog card: no server paths in the crop
 
 
+def state_ingest_sources_panel(page, ctx: Ctx) -> None:
+    """The Sources panel with the create form open. Opening the form saves nothing."""
+    page.goto(f"{ctx.base}/p/{_life()}/ingest", wait_until="domcontentloaded", timeout=30_000)
+    page.wait_for_selector("[data-testid='ingest-sources']", timeout=30_000)
+    page.get_by_test_id("source-add").click()
+    page.get_by_test_id("source-form").wait_for(timeout=10_000)
+    panel = page.locator("[data-testid='ingest-sources']")
+    panel.scroll_into_view_if_needed()
+    _settle(page, 1000)
+    return panel.locator("xpath=..")
+
+
+def state_ingest_source_card(page, ctx: Ctx) -> None:
+    """One source card with its served status (counts, triggers, webhook path, last run)."""
+    page.goto(f"{ctx.base}/p/{_life()}/ingest", wait_until="domcontentloaded", timeout=30_000)
+    card = page.locator("[data-testid='source-card']").first
+    card.wait_for(timeout=30_000)
+    _settle(page, 2500)
+    return card
+
+
 def state_dashboard_embedding(page, ctx: Ctx) -> None:
     page.goto(f"{ctx.base}/p/{_life()}/dashboard", wait_until="domcontentloaded", timeout=30_000)
     page.wait_for_selector("text=Embedding", timeout=30_000)
@@ -861,6 +882,8 @@ STATES = {
     "open-vocab-editor": state_open_vocab_editor,
     "open-vocab-test": state_open_vocab_test,
     "region-stage-panel": state_region_stage_panel,
+    "ingest-sources-panel": state_ingest_sources_panel,
+    "ingest-source-card": state_ingest_source_card,
     "dashboard-embedding": state_dashboard_embedding,
     "crop-embedding-row": state_crop_embedding_row,
     "run-results-confusion": state_run_results_confusion,

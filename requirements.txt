@@ -38,6 +38,10 @@ requests
 aiohttp
 httpx
 
+# src/services/curation/bulk_ingest/object_store.py (S3 and S3-compatible ingest sources)
+boto3
+botocore
+
 # Benchmarking and Visualization
 matplotlib
 seaborn

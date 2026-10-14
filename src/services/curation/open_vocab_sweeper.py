@@ -14,7 +14,6 @@ left (an old drain still running past the grace period) only costs segmenter tim
 from __future__ import annotations
 
 import asyncio
-import contextlib
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -126,17 +125,8 @@ def start_open_vocab_sweeper(
     return asyncio.create_task(_loop(interval, service_factory))
 
 
-async def stop_open_vocab_sweeper(task: asyncio.Task[None] | None) -> None:
-    if task is None:
-        return
-    task.cancel()
-    with contextlib.suppress(asyncio.CancelledError, Exception):
-        await task
-
-
 __all__ = [
     'default_service',
     'start_open_vocab_sweeper',
-    'stop_open_vocab_sweeper',
     'sweep_pending_open_vocab',
 ]

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Bulk ingest of a folder or manifest, driven through the API.
+"""Bulk ingest of a folder, a manifest, an S3 bucket/prefix or a registered source,
+driven through the API.
 
 Starts a run on ``POST /curation/projects/{project}/ingest/bulk``, shows live
 progress and exits with the run's outcome. The run itself (bounded concurrent
@@ -13,6 +14,10 @@ Like every curation script it binds ``--project`` through the project registry
 The API reads the files, so ``--folder`` / ``--manifest`` are paths inside the API
 container, under a configured source root (``OP_SOURCE_ROOT``). A manifest is a
 text file with one image path per line (or JSON Lines with a ``path`` field).
+``--s3 s3://bucket/prefix`` ingests objects the API fetches itself; the bucket and
+prefix must lie inside the deployment's ``OP_S3_ALLOWED`` and the credentials come from
+the API's environment, never from this command. ``--source-id`` runs a source registered
+in Cropwright (or ``POST .../ingest/sources``) with its own options.
 
 Re-running a source is idempotent: images already ingested are recognised by
 content hash. Starting a source whose earlier run was interrupted, cancelled or
@@ -29,6 +34,9 @@ Usage (inside the ``api`` container the API listens on port 8000, so pass
     docker compose exec api python scripts/curation/bulk_ingest.py \\
         --manifest /data/source/list.txt --batch-size 16 --concurrency 8 \\
         --source census --project cars --api-base http://localhost:8000/curation
+
+    docker compose exec api python scripts/curation/bulk_ingest.py \\
+        --s3 s3://my-bucket/incoming/ --project cars --api-base http://localhost:8000/curation
 
     docker compose exec api python scripts/curation/bulk_ingest.py --project cars \\
         --status bulk_20261011T120000_ab12cd34 --api-base http://localhost:8000/curation
@@ -75,6 +83,8 @@ def build_parser() -> argparse.ArgumentParser:
     what = parser.add_mutually_exclusive_group(required=True)
     what.add_argument('--folder', help='Directory to walk (a path inside the API container)')
     what.add_argument('--manifest', help='Text file of image paths (inside the API container)')
+    what.add_argument('--s3', metavar='S3_URI', help='s3://bucket[/prefix] to list and fetch')
+    what.add_argument('--source-id', help='Run a registered ingest source')
     what.add_argument('--status', metavar='RUN_ID', help='Show a run once and exit')
     what.add_argument('--cancel', metavar='RUN_ID', help='Ask a live run to stop and exit')
     parser.add_argument(
@@ -125,8 +135,15 @@ def _start_body(args: argparse.Namespace) -> dict[str, Any]:
     body: dict[str, Any] = {'source': args.source}
     if args.folder:
         body['folder'] = args.folder
-    else:
+    elif args.manifest:
         body['manifest'] = args.manifest
+    elif args.s3:
+        if not args.s3.startswith('s3://'):
+            raise ApiError(f'--s3 takes s3://bucket[/prefix], got {args.s3!r}')
+        bucket, _, prefix = args.s3.removeprefix('s3://').partition('/')
+        body['s3'] = {'bucket': bucket, 'prefix': prefix}
+    else:
+        body['source_id'] = args.source_id
     if args.extensions:
         body['extensions'] = [e for e in args.extensions.split(',') if e.strip()]
     if args.batch_size:

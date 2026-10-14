@@ -4,6 +4,8 @@
  * `contract/bulkIngestContract.test.ts`.
  */
 
+import type { S3Location } from '$lib/types_ingestSources';
+
 export type BulkIngestStatus =
   | 'queued'
   | 'running'
@@ -13,7 +15,7 @@ export type BulkIngestStatus =
   | 'cancelled'
   | 'interrupted';
 
-export type BulkSourceKind = 'folder' | 'manifest';
+export type BulkSourceKind = 'folder' | 'manifest' | 'queue';
 
 /** `GET /ingest/bulk/config`: where a source may live and the run bounds. */
 export interface BulkIngestConfig {
@@ -25,10 +27,12 @@ export interface BulkIngestConfig {
   max_concurrency: number;
 }
 
-/** `POST /ingest/bulk`: exactly one of `folder` and `manifest`. */
+/** `POST /ingest/bulk`: exactly one of `folder`, `manifest`, `s3` and `source_id`. */
 export interface BulkIngestRequest {
   folder?: string | null;
   manifest?: string | null;
+  s3?: S3Location | null;
+  source_id?: string | null;
   source?: string;
   extensions?: string[] | null;
   batch_size?: number;
@@ -37,8 +41,11 @@ export interface BulkIngestRequest {
 
 export interface BulkSource {
   kind: BulkSourceKind;
+  /** A folder or manifest path; for a `queue` source the id of the registered source. */
   path: string;
   extensions: string[];
+  /** What to show for a registered source (its name and location). */
+  label?: string | null;
 }
 
 export interface BulkOptions {

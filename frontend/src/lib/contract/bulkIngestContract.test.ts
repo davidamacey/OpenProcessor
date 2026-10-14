@@ -35,7 +35,16 @@ function pin<T>(keys: (keyof T)[], schema: string): void {
 describe('bulk ingest contract', () => {
   it('request, config and source types', () => {
     pin<BulkIngestRequest>(
-      ['folder', 'manifest', 'source', 'extensions', 'batch_size', 'concurrency'],
+      [
+        'folder',
+        'manifest',
+        's3',
+        'source_id',
+        'source',
+        'extensions',
+        'batch_size',
+        'concurrency',
+      ],
       'BulkIngestRequest',
     );
     pin<BulkIngestConfig>(
@@ -49,7 +58,7 @@ describe('bulk ingest contract', () => {
       ],
       'BulkIngestConfig',
     );
-    pin<BulkSource>(['kind', 'path', 'extensions'], 'BulkSourceWire');
+    pin<BulkSource>(['kind', 'path', 'extensions', 'label'], 'BulkSourceWire');
     pin<BulkOptions>(['source_tag', 'batch_size', 'concurrency'], 'BulkOptionsWire');
   });
 

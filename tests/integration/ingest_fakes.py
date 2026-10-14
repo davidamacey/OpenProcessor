@@ -176,6 +176,16 @@ class FakeOpenSearch:
                 if d.get('image_path') in wanted
             ]
             return {'hits': {'hits': hits}}
+        # /ingest/objects: exact object references already stored.
+        sid_terms = (query.get('terms') or {}).get('source_identifier')
+        if sid_terms is not None:
+            wanted_ids = set(sid_terms)
+            hits = [
+                {'_id': d.get('image_id', k), '_source': d}
+                for k, d in self._view('images').items()
+                if d.get('source_identifier') in wanted_ids
+            ]
+            return {'hits': {'hits': hits}}
         # BA-1: /ingest/path_lookup matches on image_path OR
         # source_identifier -- {'bool': {'should': [{'terms':
         # {'image_path': [...]}}, {'terms': {'source_identifier': [...]}}]}}.
@@ -388,12 +398,9 @@ def route_bulk_ingest_through_the_app(monkeypatch: pytest.MonkeyPatch) -> None:
     import src.main as main_module
     from src.services.curation.bulk_ingest import sender as bulk_sender
 
-    def in_process_sender(
-        _address: tuple[str, int], *, api_prefix: str, project: str
-    ) -> bulk_sender.HttpBatchSender:
-        client = httpx.AsyncClient(
+    def in_process_client(_base_url: str) -> httpx.AsyncClient:
+        return httpx.AsyncClient(
             transport=httpx.ASGITransport(app=main_module.app), base_url='http://testserver'
         )
-        return bulk_sender.HttpBatchSender(client, api_prefix=api_prefix, project=project)
 
-    monkeypatch.setattr(bulk_sender, 'loopback_sender', in_process_sender)
+    monkeypatch.setattr(bulk_sender, 'make_client', in_process_client)

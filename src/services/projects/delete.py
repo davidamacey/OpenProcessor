@@ -140,14 +140,7 @@ async def dry_run_delete(client: Any, *, slug: str) -> dict[str, Any]:
         indexes.append({'name': name, 'docs': docs, 'store_bytes': None})
 
     dirs: list[dict[str, Any]] = []
-    for path in (
-        record.resources.export_root,
-        record.resources.upload_root,
-        record.resources.project_state_dir,
-        record.resources.bakeoff_jobs_dir,
-        record.resources.train_jobs_dir,
-        record.resources.autolabel_dir,
-    ):
+    for path, _shared_root in _project_scoped_dirs(record):
         size = 0
         try:
             if path.exists():
@@ -233,7 +226,7 @@ def _require_project_scoped_path(path: Path, shared_root: Path, slug: str) -> No
 
 
 def _project_scoped_dirs(record: ProjectRecord) -> list[tuple[Path, Path]]:
-    """Every one of the project's 8 own dirs, paired with the shared
+    """Every one of the project's own dirs, paired with the shared
     root each must resolve strictly inside (§4 step 6: "a path outside
     refuses"). A new project's dirs are siblings under
     ``OP_PROJECTS_DATA_ROOT`` (exports, class registry, bakeoff eval) or
@@ -249,6 +242,12 @@ def _project_scoped_dirs(record: ProjectRecord) -> list[tuple[Path, Path]]:
     autolabel_projects_root = (
         Path(os.environ.get('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label')) / 'projects'
     )
+    from src.services.curation.bulk_ingest.limits import bulk_ingest_base_dir
+
+    bulk_ingest_projects_root = bulk_ingest_base_dir() / 'projects'
+    reprocess_projects_root = (
+        Path(os.environ.get('OP_REPROCESS_JOBS_DIR', '/jobs/reprocess')) / 'projects'
+    )
     return [
         (record.resources.export_root, data_root),
         (record.resources.class_registry_path.parent, data_root),
@@ -258,6 +257,10 @@ def _project_scoped_dirs(record: ProjectRecord) -> list[tuple[Path, Path]]:
         (record.resources.bakeoff_jobs_dir, state_projects_root),
         (record.resources.train_jobs_dir, trainer_jobs_root() / 'projects'),
         (record.resources.autolabel_dir, autolabel_projects_root),
+        # Bulk-ingest runs, ingest sources (definitions and queues) and reprocess jobs sit
+        # under the shared jobs volume, keyed by slug, not in the project's own resources.
+        (bulk_ingest_projects_root / record.slug, bulk_ingest_projects_root),
+        (reprocess_projects_root / record.slug, reprocess_projects_root),
     ]
 
 

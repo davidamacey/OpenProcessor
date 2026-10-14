@@ -120,6 +120,8 @@ these layouts is narrow-sensitive). Two environment variables pick the projects:
 | `open-vocab-editor` | throwaway | The open-vocabulary editor with three targets |
 | `open-vocab-test` | throwaway | "Test a target": hits, scores and dropped reasons |
 | `region-stage-panel` | throwaway | The Region stage panel (cropped to its card) |
+| `ingest-sources-panel` | throwaway | The Sources panel on the ingest page with the create form open (cropped to its card) |
+| `ingest-source-card` | throwaway | One source card with its served counts, triggers, webhook path and last run (cropped to the card) |
 | `dashboard-embedding` | throwaway | The dashboard Embedding card with a `not_selected` count |
 | `crop-embedding-row` | throwaway | A crop's detail panel with the Embedding row |
 | `run-results-confusion` | `model-demo-owner` | A finished run's Results with the confusion matrix image |

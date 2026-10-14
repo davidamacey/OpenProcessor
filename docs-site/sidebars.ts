@@ -23,7 +23,12 @@ const sidebars: SidebarsConfig = {
         {
           type: 'category',
           label: 'Bring in data',
-          items: ['guides/ingest-large-folder', 'guides/ingest-policy', 'guides/dataset-import'],
+          items: [
+            'guides/ingest-large-folder',
+            'guides/ingest-sources',
+            'guides/ingest-policy',
+            'guides/dataset-import',
+          ],
         },
         {
           type: 'category',

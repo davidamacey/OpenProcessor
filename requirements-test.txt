@@ -69,6 +69,10 @@ prometheus-client>=0.20
 tenacity>=8.2
 httpx
 
+# src/services/curation/bulk_ingest/object_store.py (S3 and S3-compatible ingest sources)
+boto3
+botocore
+
 # tests/curation/test_mistakenness.py imports sklearn.metrics directly (not
 # marked live) -- this is the one non-lazy scikit-learn use in the base suite
 scikit-learn

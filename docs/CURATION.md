@@ -170,6 +170,14 @@ The ways an item gets a vector after ingest (moved box, failed embed, policy ski
 import, new embedding model) are covered by the same reprocess scope:
 [Reprocess](../docs-site/docs/guides/reprocess.mdx).
 
+### Ingest sources and S3
+
+Bring images in from an S3 or S3-compatible bucket, and keep a project fed by a poll
+watcher, a cron schedule or an S3 event webhook. Covers the allow-list
+(`OP_S3_ALLOWED`), credentials, the source routes under
+`/curation/projects/{project}/ingest/sources`, resume and troubleshooting:
+[Ingest from S3 and watched sources](../docs-site/docs/guides/ingest-sources.mdx).
+
 ## Dataset import
 
 Bring a labeled YOLO or COCO dataset, or an OpenProcessor export, into a project.

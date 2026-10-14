@@ -112,6 +112,26 @@ default of on, and the installer writes `1` for the `full` profile and `0` for
 size gate: smaller images stay on the CPU path, and so does any image the GPU
 path cannot decode.
 
+## Ingest sources (S3 and triggers)
+
+How to use them: [Ingest from S3 and watched sources](../guides/ingest-sources.mdx).
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `OP_S3_ALLOWED` | empty (S3 off) | Comma list of `bucket` or `bucket/prefix` entries a source may read; checked at create, run and per object |
+| `OP_S3_ENDPOINT_URL` | AWS | S3-compatible endpoint, for example MinIO |
+| `OP_S3_REGION` | boto3 default | Region |
+| `OP_S3_PATH_STYLE` | `0` | `1` for path-style addressing (MinIO) |
+| `OP_S3_INFLIGHT_MB` | `256` | Encoded MiB one API process holds while fetching |
+| `OP_S3_MAX_OBJECT_MB` | `256` | Largest object accepted |
+| `OP_S3_FETCH_WORKERS` | `8` | Download threads per API process |
+| `OP_S3_LIST_WORKERS` | `8` | Sub-prefixes listed in parallel |
+| `OP_INGEST_DISPATCH_S` | `5` | Seconds between dispatcher ticks (poll, cron, webhook drains); `0` turns every trigger off |
+| `OP_API_LOOPBACK_URL` | `http://127.0.0.1:8000` | Where the dispatcher's runs send their batches: the API's listen address inside its container |
+
+Credentials are not an `OP_` setting: the `api` container's `AWS_ACCESS_KEY_ID` and
+`AWS_SECRET_ACCESS_KEY`, `AWS_SHARED_CREDENTIALS_FILE` or an instance role.
+
 ## Ingest item detectors
 
 `OP_INGEST_PRIMARY_<FIELD>` configures the required primary (an end2end,

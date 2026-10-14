@@ -336,3 +336,27 @@ def test_delete_finish_reports_mlflow_cleanup_outcome(monkeypatch) -> None:
     asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
     finished = asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
     assert finished.mlflow_cleanup.outcome == 'skipped_not_configured'
+
+
+def test_delete_removes_bulk_ingest_and_reprocess_job_dirs(tmp_path, monkeypatch) -> None:
+    """Run state, source definitions and queues live under the shared jobs volume; a
+    deleted project must not leave them behind, and a sibling's must stay."""
+    bulk, reprocess = tmp_path / 'bulk_ingest', tmp_path / 'reprocess'
+    monkeypatch.setenv('OP_BULK_INGEST_DIR', str(bulk))
+    monkeypatch.setenv('OP_REPROCESS_JOBS_DIR', str(reprocess))
+    for root in (bulk, reprocess):
+        for slug in ('alpha', 'beta'):
+            (root / 'projects' / slug / 'sources').mkdir(parents=True)
+            (root / 'projects' / slug / 'sources' / 'queue.sqlite').write_bytes(b'x')
+
+    client = FakeLifecycleOpenSearch()
+    registry = _registry_for(client)
+    asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
+    asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
+    asyncio.run(registry.ensure_fresh())
+    asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
+
+    for root in (bulk, reprocess):
+        assert not (root / 'projects' / 'alpha').exists()
+        assert (root / 'projects' / 'beta' / 'sources' / 'queue.sqlite').exists()

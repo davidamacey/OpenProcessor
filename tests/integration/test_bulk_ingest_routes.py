@@ -112,6 +112,7 @@ def test_folder_run_ingests_every_image_and_reports_the_run(
         'kind': 'folder',
         'path': str(served_root / 'a'),
         'extensions': ['.jpg', '.jpeg', '.png'],
+        'label': None,
     }
     assert len(fake_os.images) == 8
     assert {d['source'] for d in fake_os.images.values()} == {'census'}

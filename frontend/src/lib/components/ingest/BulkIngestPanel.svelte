@@ -180,7 +180,7 @@
       >
         <div class="flex flex-wrap items-baseline justify-between gap-2">
           <p class="min-w-0 text-xs text-zinc-400">
-            <span class="font-mono break-all">{run.source.path}</span>
+            <span class="font-mono break-all">{run.source.label ?? run.source.path}</span>
           </p>
           <span
             class="text-sm font-semibold {STATUS_TONE[run.status]}"
@@ -360,7 +360,7 @@
         <ul class="mt-2 space-y-1">
           {#each controller.recent as r (r.run_id)}
             <li class="flex flex-wrap items-baseline gap-2">
-              <span class="font-mono break-all">{r.source.path}</span>
+              <span class="font-mono break-all">{r.source.label ?? r.source.path}</span>
               <span class={STATUS_TONE[r.status]}>{r.status.replaceAll('_', ' ')}</span>
               <span>{r.progress.ingested} ingested · {r.progress.failed} failed</span>
               <button
