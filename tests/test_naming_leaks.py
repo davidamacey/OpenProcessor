@@ -89,13 +89,33 @@ def test_whole_path_allowlist_entry_exempts_every_hit_in_that_file(tmp_path: Pat
     assert entries[0].used is True
 
 
-def test_directory_prefix_allowlist_entry_exempts_files_under_it(tmp_path: Path) -> None:
+def test_directory_prefix_entry_exempts_domain_vocabulary_under_it(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
-    _write_and_track(repo, 'examples/thing.py', f"NAME = '{LEAK}stuff'\n")
+    _write_and_track(repo, 'examples/thing.yaml', 'name: ' + 'license' + '_plate\n')
     allowlist = _allowlist(repo, 'examples/ # domain examples directory\n')
-    hits, entries = leaks.run_scans(repo, allowlist, scans={'A': leaks.SCAN_A})
-    assert hits['A'] == []
+    hits, entries = leaks.run_scans(repo, allowlist, scans={'B': leaks.SCAN_B})
+    assert hits['B'] == []
     assert entries[0].used is True
+
+
+def test_directory_prefix_entry_never_exempts_a_scan_a_leak(tmp_path: Path) -> None:
+    """Scan A is the zero-tolerance scan: a blanket directory entry (the ``examples/``
+    one exists for scan B) must not let a private name through."""
+    repo = _init_repo(tmp_path)
+    _write_and_track(repo, 'examples/thing.yaml', f"name: '{LEAK}stuff'\n")
+    allowlist = _allowlist(repo, 'examples/ # domain examples directory\n')
+    hits, _ = leaks.run_scans(repo, allowlist, scans={'A': leaks.SCAN_A})
+    assert any(f'{LEAK}stuff' in h for h in hits['A'])
+
+
+def test_directory_prefix_entry_with_a_line_regex_still_exempts_scan_a_lines(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _write_and_track(repo, 'docs-site/page.md', f'see {LEAK}ok/page and {LEAK}bad\n')
+    allowlist = _allowlist(repo, f'docs-site/:{LEAK}ok # one reviewed URL shape\n')
+    hits, _ = leaks.run_scans(repo, allowlist, scans={'A': leaks.SCAN_A})
+    assert hits['A'] == []
 
 
 def test_path_regex_entry_exempts_only_matching_lines(tmp_path: Path) -> None:
