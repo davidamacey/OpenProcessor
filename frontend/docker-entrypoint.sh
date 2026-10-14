@@ -15,6 +15,17 @@
 # path prefix, in both the bundled JS/HTML and nginx.conf's proxy
 # `location`, so the two stay in lockstep. See API_PREFIX below.
 set -eu
+
+# These names were renamed to OP_CROPWRIGHT_*. A leftover one would be ignored and the
+# service would quietly run on defaults, so refuse to start instead.
+for retired in IMAGE BIND_ADDRESS PORT INGEST_MAX_REQUEST_MB DATASET_UPLOAD_MAX_MB; do
+  eval "value=\${CROPWRIGHT_${retired}-}"
+  if [ -n "$value" ]; then
+    echo "[entrypoint] CROPWRIGHT_${retired} was renamed to OP_CROPWRIGHT_${retired}: update .env" >&2
+    exit 2
+  fi
+done
+
 TARGET_URL="${PUBLIC_TRITON_API_URL-}"
 # Empty is the default (relative URLs). Anything else is substituted into a
 # JS string literal through sed, so it is restricted to characters that are
@@ -69,10 +80,10 @@ fi
 # (src/app.html) so the client-side chunk planner and the proxy's actual
 # limit can never drift apart. Must be a bare positive integer (MB) —
 # it's interpolated directly into nginx config.
-INGEST_MAX_REQUEST_MB="${CROPWRIGHT_INGEST_MAX_REQUEST_MB:-256}"
+INGEST_MAX_REQUEST_MB="${OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB:-256}"
 case "$INGEST_MAX_REQUEST_MB" in
   ''|*[!0-9]*)
-    echo "[entrypoint] CROPWRIGHT_INGEST_MAX_REQUEST_MB must be a positive integer, got: $INGEST_MAX_REQUEST_MB" >&2
+    echo "[entrypoint] OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB must be a positive integer, got: $INGEST_MAX_REQUEST_MB" >&2
     exit 1
     ;;
 esac
@@ -80,10 +91,10 @@ esac
 # The dataset-archive upload cap (W10 `POST .../datasets/uploads`):
 # nginx's client_max_body_size for that one location, and
 # window.__CROPWRIGHT_DATASET_UPLOAD_MAX_MB__ for the client's pre-check.
-DATASET_UPLOAD_MAX_MB="${CROPWRIGHT_DATASET_UPLOAD_MAX_MB:-2048}"
+DATASET_UPLOAD_MAX_MB="${OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB:-2048}"
 case "$DATASET_UPLOAD_MAX_MB" in
   ''|*[!0-9]*)
-    echo "[entrypoint] CROPWRIGHT_DATASET_UPLOAD_MAX_MB must be a positive integer, got: $DATASET_UPLOAD_MAX_MB" >&2
+    echo "[entrypoint] OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB must be a positive integer, got: $DATASET_UPLOAD_MAX_MB" >&2
     exit 1
     ;;
 esac
@@ -144,6 +155,6 @@ echo "[entrypoint] PUBLIC_TRITON_API_URL=${TARGET_URL:-<empty - relative URLs vi
 echo "[entrypoint] PUBLIC_API_PREFIX=${API_PREFIX}"
 echo "[entrypoint] API_UPSTREAM=${API_UPSTREAM}"
 echo "[entrypoint] DOCS_UPSTREAM=${DOCS_UPSTREAM}"
-echo "[entrypoint] CROPWRIGHT_INGEST_MAX_REQUEST_MB=${INGEST_MAX_REQUEST_MB}"
-echo "[entrypoint] CROPWRIGHT_DATASET_UPLOAD_MAX_MB=${DATASET_UPLOAD_MAX_MB}"
+echo "[entrypoint] OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB=${INGEST_MAX_REQUEST_MB}"
+echo "[entrypoint] OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB=${DATASET_UPLOAD_MAX_MB}"
 echo "[entrypoint] OP_GATEWAY_SUBPATHS=${GATEWAY_ON} (1 = monitoring UIs proxied under /grafana/, /prometheus/, /dashboards/, /mlflow/)"

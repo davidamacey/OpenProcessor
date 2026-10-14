@@ -77,8 +77,8 @@ Edit `.env` and set, at minimum:
 - `OP_DOCKER_NETWORK` — the OpenProcessor backend's docker network name
   (`docker network ls`; defaults to OpenProcessor's own default network
   name).
-- `CROPWRIGHT_PORT` — host port to publish (default `5184`).
-- `CROPWRIGHT_BIND_ADDRESS` — host address the port is published on
+- `OP_CROPWRIGHT_PORT` — host port to publish (default `5184`).
+- `OP_CROPWRIGHT_BIND_ADDRESS` — host address the port is published on
   (default `0.0.0.0`: this machine and the local network). Set `127.0.0.1`
   for this machine only. The API has no authentication, so keep it on a
   trusted network.
@@ -89,12 +89,12 @@ Then:
 docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
-Open `http://localhost:5184` (or whatever `CROPWRIGHT_PORT` you set).
+Open `http://localhost:5184` (or whatever `OP_CROPWRIGHT_PORT` you set).
 The app origin also serves the API's own Swagger UI at `/docs` (ReDoc at
 `/redoc`); the top bar's **Resources** menu links to them, to the
 documentation when it is running, and to any dashboards the backend serves.
 The image runs nginx as a non-root user (uid 101) listening on port 8080
-inside the container; compose maps `CROPWRIGHT_PORT` to it.
+inside the container; compose maps `OP_CROPWRIGHT_PORT` to it.
 
 **Verify it's connected:**
 
@@ -105,12 +105,11 @@ inside the container; compose maps `CROPWRIGHT_PORT` to it.
 
 ### Running a second, independent instance
 
-Give it its own compose project name, container name and host port so
+Give it its own compose project name and host port so
 it never collides with a running instance:
 
 ```bash
-CROPWRIGHT_PORT=5190 CROPWRIGHT_CONTAINER_NAME=cw-second \
-  CROPWRIGHT_DOCS_CONTAINER_NAME=cw-second-docs \
+OP_CROPWRIGHT_PORT=5190 \
   OP_DOCKER_NETWORK=some_other_openprocessor_net \
   docker compose -p cw-second up -d
 ```
@@ -204,11 +203,10 @@ key a registered region slot's own keymap declares.
 | `PUBLIC_TRITON_API_URL`                | _(empty)_                  | `npm run dev` | Legacy name (predates the OpenProcessor rename). Points the dev server straight at a backend origin, bypassing the nginx proxy Docker gets for free. Leave empty in Docker. |
 | `API_UPSTREAM`                         | `http://op-api:8000`       | Docker        | Where nginx proxies `PUBLIC_API_PREFIX/*` to, by container name over the shared docker network.                                                                             |
 | `OP_DOCKER_NETWORK`                    | `openprocessor_triton_net` | Docker        | The OpenProcessor backend's docker network name (must already exist).                                                                                                       |
-| `CROPWRIGHT_PORT`                      | `5184`                     | Docker        | Host port nginx is published on.                                                                                                                                            |
-| `CROPWRIGHT_BIND_ADDRESS`              | `0.0.0.0`                  | Docker        | Host address the port is published on: this machine and the local network. `127.0.0.1` limits it to this machine. Keep it on a trusted network.                             |
-| `CROPWRIGHT_CONTAINER_NAME`            | `cropwright`               | Docker        | Container name — set uniquely for a second instance (see above).                                                                                                            |
-| `CROPWRIGHT_INGEST_MAX_REQUEST_MB`     | `256`                      | Docker        | Upload cap for `/ingest` (nginx `client_max_body_size`); kept in lockstep with the client-side chunk planner.                                                               |
-| `CROPWRIGHT_DATASET_UPLOAD_MAX_MB`     | `2048`                     | Docker        | Upload cap for a dataset archive on `/datasets/import` (nginx `client_max_body_size`); the client refuses a larger file before sending.                                     |
+| `OP_CROPWRIGHT_PORT`                      | `5184`                     | Docker        | Host port nginx is published on.                                                                                                                                            |
+| `OP_CROPWRIGHT_BIND_ADDRESS`              | `0.0.0.0`                  | Docker        | Host address the port is published on: this machine and the local network. `127.0.0.1` limits it to this machine. Keep it on a trusted network.                             |
+| `OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB`     | `256`                      | Docker        | Upload cap for `/ingest` (nginx `client_max_body_size`); kept in lockstep with the client-side chunk planner.                                                               |
+| `OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB`     | `2048`                     | Docker        | Upload cap for a dataset archive on `/datasets/import` (nginx `client_max_body_size`); the client refuses a larger file before sending.                                     |
 | `PUBLIC_APP_NAME` / `PUBLIC_APP_BADGE` | `Cropwright` / `CW`        | build time    | Top-bar wordmark/badge, for a white-labeled deployment.                                                                                                                     |
 
 The app is a pure SPA consumer of the OpenProcessor API — there is
@@ -246,7 +244,7 @@ npm run test:e2e # Playwright against an in-browser stub backend (own venv, auto
 ```
 
 **Live, read-only tests** against a real deployed backend:
-`CROPWRIGHT_LIVE_URL=http://localhost:5184 npm run test:live` — skipped
+`OP_CROPWRIGHT_LIVE_URL=http://localhost:5184 npm run test:live` — skipped
 entirely unless that env var is set; structurally read-only (aborts any
 non-GET/HEAD request to the API and fails the test if one was even
 attempted).
@@ -303,8 +301,8 @@ them.
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Top-bar status chip red / "API unavailable"           | Backend not reachable at `API_UPSTREAM` (Docker) or `PUBLIC_TRITON_API_URL` (dev); or `{API_PREFIX}/health` returns 5xx              |
 | A write returns 409 "no region profile is configured" | The backend has no region profile set — region-specific actions (confirm/reject a sub-box, etc.) are unavailable until it does       |
-| Upload to `/ingest` fails with 413                    | File(s) exceed `CROPWRIGHT_INGEST_MAX_REQUEST_MB` (nginx) or the backend's own configured upload cap — raise the env var, rebuild    |
-| Port already in use                                   | Another service already publishes that host port — set `CROPWRIGHT_PORT` (and give the instance its own `CROPWRIGHT_CONTAINER_NAME`) |
+| Upload to `/ingest` fails with 413                    | File(s) exceed `OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB` (nginx) or the backend's own configured upload cap — raise the env var, rebuild    |
+| Port already in use                                   | Another service already publishes that host port — set `OP_CROPWRIGHT_PORT` (and give the instance its own `CROPWRIGHT_CONTAINER_NAME`) |
 | Empty cluster grid / review queues                    | The backend's index isn't populated yet — ingest some images first                                                                   |
 | Build fails: `Cannot find module 'svelte-dnd-action'` | `npm install` wasn't run, or `node_modules` is stale — `rm -rf node_modules && npm install`                                          |
 

@@ -62,7 +62,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    image: ${CROPWRIGHT_IMAGE:-openprocessor-cropwright:dev}
+    image: ${OP_CROPWRIGHT_IMAGE:-openprocessor-cropwright:dev}
 
   curation-detection-worker:
     build:

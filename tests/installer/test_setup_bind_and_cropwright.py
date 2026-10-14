@@ -92,8 +92,8 @@ def test_cropwright_is_reachable_from_the_lan_by_default_with_a_warning(shimmed:
     result = configure(shimmed, tiers='cropwright')
     assert result.returncode == 0, result.stderr
     cw_env = _cw_env(shimmed)
-    assert 'CROPWRIGHT_BIND_ADDRESS=0.0.0.0' in cw_env
-    assert f'CROPWRIGHT_IMAGE=davidamacey/cropwright@{fake_digest("cropwright")}' in cw_env
+    assert 'OP_CROPWRIGHT_BIND_ADDRESS=0.0.0.0' in cw_env
+    assert f'OP_CROPWRIGHT_IMAGE=davidamacey/cropwright@{fake_digest("cropwright")}' in cw_env
     assert 'cropwright' in env_file(shimmed)['COMPOSE_PROFILES'].split(',')
     assert stat.S_IMODE((shimmed.root / 'inst' / '.env').stat().st_mode) == 0o600
     assert not (shimmed.root / 'inst' / 'cropwright').exists()
@@ -109,23 +109,23 @@ def test_cropwright_is_reachable_from_the_lan_by_default_with_a_warning(shimmed:
 def test_local_only_keeps_cropwright_on_this_computer(shimmed: Shimmed) -> None:
     result = configure(shimmed, '--local-only', tiers='cropwright')
     assert result.returncode == 0, result.stderr
-    assert 'CROPWRIGHT_BIND_ADDRESS=127.0.0.1' in _cw_env(shimmed)
+    assert 'OP_CROPWRIGHT_BIND_ADDRESS=127.0.0.1' in _cw_env(shimmed)
     assert 'reachable from your LAN' not in result.stderr
 
 
 def test_a_shell_bind_cannot_override_the_chosen_cropwright_bind(shimmed: Shimmed) -> None:
     result = configure(
-        shimmed, '--local-only', tiers='cropwright', CROPWRIGHT_BIND_ADDRESS='0.0.0.0'
+        shimmed, '--local-only', tiers='cropwright', OP_CROPWRIGHT_BIND_ADDRESS='0.0.0.0'
     )
     assert result.returncode == 0, result.stderr
-    assert 'CROPWRIGHT_BIND_ADDRESS=127.0.0.1' in _cw_env(shimmed)
+    assert 'OP_CROPWRIGHT_BIND_ADDRESS=127.0.0.1' in _cw_env(shimmed)
 
 
 def test_cropwright_compose_that_ignores_the_bind_is_refused(shimmed: Shimmed) -> None:
     shimmed.flag('cw_ignores_bind')
     result = configure(shimmed, '--local-only', tiers='cropwright')
     assert result.returncode == 7
-    assert 'must honour CROPWRIGHT_BIND_ADDRESS' in result.stderr
+    assert 'must honour OP_CROPWRIGHT_BIND_ADDRESS' in result.stderr
 
 
 def test_summary_security_line_excepts_a_lan_cropwright(shimmed: Shimmed) -> None:
@@ -152,7 +152,7 @@ def test_specific_bind_address_also_applies_to_cropwright(shimmed: Shimmed) -> N
         shimmed, '--bind', '10.10.10.20', tiers='cropwright', OP_ALLOW_PUBLIC_BIND='1'
     )
     assert result.returncode == 0, result.stderr
-    assert 'CROPWRIGHT_BIND_ADDRESS=10.10.10.20' in _cw_env(shimmed)
+    assert 'OP_CROPWRIGHT_BIND_ADDRESS=10.10.10.20' in _cw_env(shimmed)
     assert 'Cropwright on your LAN: http://10.10.10.20:' in result.stdout
     assert 'reachable from your LAN and has NO login' in result.stderr
 
@@ -164,7 +164,7 @@ def test_rerun_without_bind_keeps_a_specific_cropwright_bind(shimmed: Shimmed) -
     assert first.returncode == 0, first.stderr
     again = configure(shimmed, tiers='cropwright')
     assert again.returncode == 0, again.stderr
-    assert 'CROPWRIGHT_BIND_ADDRESS=10.10.10.20' in _cw_env(shimmed)
+    assert 'OP_CROPWRIGHT_BIND_ADDRESS=10.10.10.20' in _cw_env(shimmed)
 
 
 def test_local_only_wins_over_a_specific_bind_for_cropwright(shimmed: Shimmed) -> None:
@@ -177,10 +177,10 @@ def test_local_only_wins_over_a_specific_bind_for_cropwright(shimmed: Shimmed) -
         OP_ALLOW_PUBLIC_BIND='1',
     )
     assert result.returncode == 0, result.stderr
-    assert 'CROPWRIGHT_BIND_ADDRESS=127.0.0.1' in _cw_env(shimmed)
+    assert 'OP_CROPWRIGHT_BIND_ADDRESS=127.0.0.1' in _cw_env(shimmed)
 
 
 def test_wildcard_bind_keeps_cropwright_on_every_interface(shimmed: Shimmed) -> None:
     result = configure(shimmed, '--bind', '0.0.0.0', tiers='cropwright', OP_ALLOW_PUBLIC_BIND='1')
     assert result.returncode == 0, result.stderr
-    assert 'CROPWRIGHT_BIND_ADDRESS=0.0.0.0' in _cw_env(shimmed)
+    assert 'OP_CROPWRIGHT_BIND_ADDRESS=0.0.0.0' in _cw_env(shimmed)

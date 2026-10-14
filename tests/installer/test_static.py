@@ -177,6 +177,7 @@ def test_installer_sources_only_verified_install_files() -> None:
         'source "${OP_DIR}/scripts/lib/model_setup.sh"',
         'source "${OP_DIR}/scripts/lib/image_keys.sh"',
         'source "${OP_DIR}/scripts/lib/opensearch_heap.sh"',
+        'source "${OP_DIR}/scripts/lib/retired_env.sh"',
     }
     body = text[text.index('\ndo_install() {') :]
     assert body.index('install_staged "${OP_DIR}/.install/staging"') < body.index(

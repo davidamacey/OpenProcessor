@@ -27,7 +27,7 @@ silent `200 {}`). Never touches a live backend.
 `e2e/live/` — drives the real deployed build against a **real**
 OpenProcessor backend, structurally read-only (every non-GET/HEAD request
 is aborted and any attempt fails the test). Skipped entirely unless
-`CROPWRIGHT_LIVE_URL` is set — never runs in CI. Also saves full-page
+`OP_CROPWRIGHT_LIVE_URL` is set — never runs in CI. Also saves full-page
 screenshots per route at two viewports; **a human must actually look at
 them** after a run — the assertions catch what's mechanically checkable,
 not a layout regression.

@@ -10,7 +10,7 @@ under "End-to-end tests (e2e/)".
 
 Two hard safety properties, both enforced here, not by test discipline:
 
-  1. **The whole tier is skipped unless `CROPWRIGHT_LIVE_URL` is set.**
+  1. **The whole tier is skipped unless `OP_CROPWRIGHT_LIVE_URL` is set.**
      `npm run test:e2e` (CI, and the default local command) never points
      at `e2e/live` at all, but a human could still run
      `e2e/.venv/bin/pytest e2e/live` directly — the session-scoped
@@ -75,14 +75,14 @@ _READ_ONLY_POST_SUFFIXES = ("/train/preflight",)
 
 
 def _env_live_url() -> str | None:
-    url = os.environ.get("CROPWRIGHT_LIVE_URL")
+    url = os.environ.get("OP_CROPWRIGHT_LIVE_URL")
     return url.rstrip("/") if url else None
 
 
 @pytest.fixture(scope="session", autouse=True)
 def _require_live_url() -> None:
     """Skip the entire tier, before any fixture that could touch a
-    browser or network runs, unless CROPWRIGHT_LIVE_URL is set.
+    browser or network runs, unless OP_CROPWRIGHT_LIVE_URL is set.
 
     Session-scoped + autouse: pytest instantiates session-scoped
     fixtures before function-scoped ones (`page`, `browser`, …)
@@ -91,7 +91,7 @@ def _require_live_url() -> None:
     """
     if _env_live_url() is None:
         pytest.skip(
-            "live tier skipped: set CROPWRIGHT_LIVE_URL (e.g. "
+            "live tier skipped: set OP_CROPWRIGHT_LIVE_URL (e.g. "
             "http://localhost:5184) to run it against a real deployment — "
             "see CLAUDE.md's 'Live read-only tier' section. Never set in "
             "CI or by `npm run test:e2e`."
@@ -133,9 +133,9 @@ def live_project(live_url: str) -> dict[str, Any]:
     backend, but this tier fails closed rather than guessing a prefix).
     """
     payload = global_api_get(live_url, "/projects")
-    # CROPWRIGHT_LIVE_PROJECT points the (read-only) tier at a project that
+    # OP_CROPWRIGHT_LIVE_PROJECT points the (read-only) tier at a project that
     # holds data when the served default is empty; it must still be a served slug.
-    default_slug = os.environ.get("CROPWRIGHT_LIVE_PROJECT") or payload["default_slug"]
+    default_slug = os.environ.get("OP_CROPWRIGHT_LIVE_PROJECT") or payload["default_slug"]
     match = next((p for p in payload["projects"] if p["slug"] == default_slug), None)
     if match is None:
         pytest.skip(

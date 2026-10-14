@@ -9,7 +9,7 @@
  * `npm run test:live` reuses this exact venv/browser setup, just pointed
  * at `e2e/live` instead — pass the target directory as argv[2] (see
  * package.json). The live tier never builds/serves anything itself; it
- * talks to whatever `CROPWRIGHT_LIVE_URL` points at (its own conftest.py
+ * talks to whatever `OP_CROPWRIGHT_LIVE_URL` points at (its own conftest.py
  * skips the whole tier when that's unset), and gets `--screenshot=
  * only-on-failure` so a failure leaves a screenshot in
  * artifacts_local/cw-live/live-tier/ instead of nothing.

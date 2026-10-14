@@ -237,7 +237,7 @@ def test_nginx_style_413_html_stops_run(stub, page, app_url):
     page.wait_for_selector("text=3 files selected")
     page.get_by_role("button", name="Start", exact=True).click()
 
-    page.wait_for_selector("text=CROPWRIGHT_INGEST_MAX_REQUEST_MB")
+    page.wait_for_selector("text=OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB")
 
 
 def test_drain_gate(stub, page, app_url):

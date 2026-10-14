@@ -182,7 +182,7 @@ record.
   to invent independently, and the operator reads the served "Worklog
   drained as of HH:MM:SS" note. `RegionDrainPanel.svelte` shows the
   verdict and how long it's held (`stable for Ns`).
-- **Deployment-owned upload cap.** `CROPWRIGHT_INGEST_MAX_REQUEST_MB`
+- **Deployment-owned upload cap.** `OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB`
   (default 256, `docker-entrypoint.sh`) is substituted into both
   `nginx.conf`'s `client_max_body_size` and
   `window.__CROPWRIGHT_INGEST_MAX_REQUEST_MB__` (`src/app.html`), so
@@ -405,7 +405,7 @@ Built against the frozen W10 spec before the backend ships it.
 - **Wizard** (`ImportWizard`, `importWizardController.svelte.ts`): a server
   path (the served `ingest/config` `batch.source_roots` listed) or an
   archive upload (`POST /datasets/uploads`, refused client-side above
-  `min(served upload.max_bytes, CROPWRIGHT_DATASET_UPLOAD_MAX_MB)`), a
+  `min(served upload.max_bytes, OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB)`), a
   400 ms-debounced `POST /datasets/preview` of exactly what the operator
   chose (no `project` in any body), the served splits/totals/estimate/
   OP-export facts/issues (`DatasetIssueList`, grouped by served severity
@@ -459,7 +459,7 @@ false`; the served post-write crop is adopted by `CropDetailModal` and
   embed options (sent only once touched), and `ReprocessCounts` shows each
   scope's served `detail`; see "Detector, ingest policy and embedding state".
 - **Proxy.** `nginx.conf` has a `…/projects/*/datasets/uploads` location
-  with `client_max_body_size` from `CROPWRIGHT_DATASET_UPLOAD_MAX_MB`
+  with `client_max_body_size` from `OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB`
   (default 2048) and a one-hour timeout.
 - **Contract.** Types in `src/lib/types_import.ts`, pinned key-for-key to
   the vendored OpenAPI (OpenProcessor f582aa05) by
@@ -2566,7 +2566,7 @@ deployed** build against a **real** OpenProcessor backend instead of the
 stubbed in-browser fixtures — the one class of bug `e2e/stubbed/`
 structurally cannot see: the frontend and the live backend's own wire
 shape/data actually disagreeing. Point it at the deployment with
-`CROPWRIGHT_LIVE_URL=http://localhost:5184 npm run test:live` (or any
+`OP_CROPWRIGHT_LIVE_URL=http://localhost:5184 npm run test:live` (or any
 other reachable Cropwright nginx origin) — unset, `_require_live_url`
 (`e2e/live/conftest.py`, session-scoped + autouse) skips every test in
 the tier before a browser is ever launched, so this never runs in CI or
@@ -2736,7 +2736,7 @@ Measured 2026-10-03: sourceBadge 72.7%, uploadPlanner 87.5%, classPicker
 
 The production build runs in a non-root
 `nginxinc/nginx-unprivileged:1.31.2-alpine3.23` container (uid 101, nginx on
-container port 8080), host port 5184 (`CROPWRIGHT_PORT`, mapped to
+container port 8080), host port 5184 (`OP_CROPWRIGHT_PORT`, mapped to
 8080). `docker-compose.yml` is pull-only (`docker compose pull && docker
 compose up -d`, no repo checkout needed — see README's "Quick start");
 building from source uses the `docker-compose.build.yml` overlay

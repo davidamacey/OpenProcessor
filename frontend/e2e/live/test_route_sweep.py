@@ -2,7 +2,7 @@
 deployment without erroring.
 
 Each route in ROUTES is opened in a real browser pointed at
-`CROPWRIGHT_LIVE_URL` (nginx on :5184 by default, proxying `/curation` to
+`OP_CROPWRIGHT_LIVE_URL` (nginx on :5184 by default, proxying `/curation` to
 a live OpenProcessor backend). For each we assert:
 
   * no `pageerror` (guaranteed by `guarded_page`'s teardown — see

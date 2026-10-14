@@ -43,7 +43,7 @@ everything on 127.0.0.1.**
 
 `setup-openprocessor.sh` targets one computer **and** its local network
 (homelab, small office). With the `cropwright` tier, the Cropwright web UI
-is published on all interfaces (`CROPWRIGHT_BIND_ADDRESS=0.0.0.0`) so other
+is published on all interfaces (`OP_CROPWRIGHT_BIND_ADDRESS=0.0.0.0`) so other
 computers on the LAN can open it; its nginx proxies to the API over the
 Docker network. Every backend port (API, Triton, OpenSearch, ...) stays
 bound to `127.0.0.1` unless you pass `--bind` and confirm it. A specific
