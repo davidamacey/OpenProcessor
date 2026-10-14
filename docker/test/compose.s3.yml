@@ -1,0 +1,57 @@
+# =============================================================================
+# Throwaway MinIO for trying S3 and watched-source ingest (#264). An OVERLAY:
+# add it to the compose files of a stack you may write to, never to a live
+# deployment's default project name.
+#
+#   docker compose -p <name> -f docker-compose.yml [-f docker-compose.dev.yml] \
+#     -f docker/test/compose.s3.yml --profile s3test up -d minio
+#   ... run the checks ...
+#   docker compose -p <name> -f docker-compose.yml [-f docker-compose.dev.yml] \
+#     -f docker/test/compose.s3.yml --profile s3test rm -sfv minio
+#   docker volume rm <name>_s3test_data
+#
+# S3TEST_PORT (default 5392) and S3TEST_BUCKET (default op-s3-test, the api
+# allow-list) are read by compose only. Teardown steps: the ingest sources guide.
+#
+# * MinIO joins the stack network (triton_net), so the api reaches it as
+#   http://minio:9000 and MinIO reaches the webhook at http://api:8000.
+# * The only published port is on 127.0.0.1.
+# * Credentials are NOT in this file: both services read
+#   artifacts_local/minio-live.env (gitignored; keys MINIO_ROOT_USER,
+#   MINIO_ROOT_PASSWORD, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY). Create it
+#   with random values before the first start.
+# * The data lives in the named volume s3test_data (removed by the line above).
+# * Only the api container learns the endpoint and the allow-list, as
+#   OP_S3_* literals here (no .env edit). The allow-list is the one test bucket.
+# =============================================================================
+services:
+  minio:
+    profiles: ['s3test']
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-minio
+    command: server /data
+    env_file:
+      - artifacts_local/minio-live.env
+    ports:
+      - '127.0.0.1:${S3TEST_PORT:-5392}:9000'
+    volumes:
+      - s3test_data:/data
+    networks:
+      - triton_net
+    healthcheck:
+      test: ['CMD', 'curl', '-fs', 'http://localhost:9000/minio/health/live']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  api:
+    env_file:
+      - artifacts_local/minio-live.env
+    environment:
+      - OP_S3_ALLOWED=${S3TEST_BUCKET:-op-s3-test}
+      - OP_S3_ENDPOINT_URL=http://minio:9000
+      - OP_S3_REGION=us-east-1
+      - OP_S3_PATH_STYLE=1
+
+volumes:
+  s3test_data:

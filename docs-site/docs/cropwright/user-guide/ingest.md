@@ -93,6 +93,22 @@ and only **Server folder** is offered.
 
 The panel refreshes on the interval the backend serves.
 
+<Screenshot name="cropwright/ingest-sources-panel-1600.png" alt="The Sources panel with one S3 source card and the Add a source form open" caption="The Sources panel: a source card and the create form (S3 bucket, triggers, options)" />
+
+<Screenshot name="cropwright/ingest-source-card-1600.png" alt="A source card with counts, watch and schedule times, the webhook path and event counts, and the last run" caption="A source card as the backend serves it" />
+
+**Verified live.** On the dev stack with a real MinIO and public COCO images: adding an S3
+source (bucket `op-s3-test`, prefix `ui/`), **Save** and **Run now** ended with
+"Last run completed · ingested 5 · duplicates 0 · failed 0" and counts `pending 0,
+ingested 5, retrying 0, gave up 0`. **Remove** asked for confirmation and the 5 images
+stayed in the project. With the allow-list narrowed to another bucket the card showed
+**Run now** disabled with "This bucket or prefix is outside OP_S3_ALLOWED" and the watch
+error with its retry time. The Ingest page at 430 px wide had no horizontal overflow
+(`scrollWidth` 430, `clientWidth` 430; 1600/1600 at desktop width). The server-side
+checks (idempotent re-run, webhook, poll, cron, a rejected credential, project isolation)
+are in [Verified on a live stack](../../guides/ingest-sources.mdx#verified-on-a-live-stack).
+Not run: a **Server folder** source from the UI, and **Retry the N that gave up**.
+
 ## Server-path batch ingest
 
 Points at a folder the backend already has mounted (for example,

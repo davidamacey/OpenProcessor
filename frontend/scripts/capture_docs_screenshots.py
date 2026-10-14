@@ -715,6 +715,15 @@ def state_ingest_sources_panel(page, ctx: Ctx) -> None:
     return panel.locator("xpath=..")
 
 
+def state_ingest_source_card(page, ctx: Ctx) -> None:
+    """One source card with its served status (counts, triggers, webhook path, last run)."""
+    page.goto(f"{ctx.base}/p/{_life()}/ingest", wait_until="domcontentloaded", timeout=30_000)
+    card = page.locator("[data-testid='source-card']").first
+    card.wait_for(timeout=30_000)
+    _settle(page, 2500)
+    return card
+
+
 def state_dashboard_embedding(page, ctx: Ctx) -> None:
     page.goto(f"{ctx.base}/p/{_life()}/dashboard", wait_until="domcontentloaded", timeout=30_000)
     page.wait_for_selector("text=Embedding", timeout=30_000)
@@ -874,6 +883,7 @@ STATES = {
     "open-vocab-test": state_open_vocab_test,
     "region-stage-panel": state_region_stage_panel,
     "ingest-sources-panel": state_ingest_sources_panel,
+    "ingest-source-card": state_ingest_source_card,
     "dashboard-embedding": state_dashboard_embedding,
     "crop-embedding-row": state_crop_embedding_row,
     "run-results-confusion": state_run_results_confusion,

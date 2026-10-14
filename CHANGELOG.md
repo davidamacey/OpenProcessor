@@ -312,6 +312,10 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   "Open <project>" link on `/projects` truncates (#274). The 430 px e2e sweep now serves a long display
   name and a long slug, so it fails on that header without the fix.
 
+- Deleting a project now also removes its bulk-ingest runs, ingest sources (definitions and queues) and
+  reprocess jobs on the shared jobs volume, which it used to leave behind (found by the live S3 check, #264);
+  the dry run lists those directories too.
+
 ## [0.5.0] - 2026-10-09
 
 The monorepo release. The backend and the Cropwright frontend (`frontend/`, formerly a separate
