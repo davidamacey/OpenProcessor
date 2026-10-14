@@ -13,6 +13,12 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Added
 
+- `scripts/bench/cluster_bench.py` (#218): times the production cluster pass at a chosen pool size
+  (`--sizes`, `--methods`, `--reps`) on real public COCO embeddings in a throw-away project and
+  records method, wall time and counts; a pass that did not cluster the whole pool is refused.
+  `docs/PERFORMANCE.md` gains a summary table of the optimization milestone's results, the k-NN
+  native-memory formula checked against the stored 100k data (#56) and the go / no-go of the
+  write ceiling against 100 images/s (#230).
 - Ingest from S3 and S3-compatible stores (#264): `--s3` and `--source-id` on
   `scripts/curation/bulk_ingest.py`, an `s3` or `source_id` start on
   `POST /curation/projects/{project}/ingest/bulk`, and registered ingest sources under
