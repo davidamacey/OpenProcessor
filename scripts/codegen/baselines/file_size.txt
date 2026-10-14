@@ -50,4 +50,3 @@ tests/curation/test_triton_promote.py	939	split in PR 7
 tests/curation/test_worker_hot_reload.py	803	split in PR 7
 tests/installer/test_setup_dry_run.py	884	split in PR 7
 tests/test_compose_contract.py	1178	split in PR 7
-tests/test_validate_models.py	736	split in PR 7
