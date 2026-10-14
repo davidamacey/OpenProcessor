@@ -37,6 +37,7 @@ if str(EXPORT_DIR) not in sys.path:
 # SystemExit would abort the whole session, so turn it into a module skip.
 try:
     import export_models
+    import yolo_export_report
     import yolo_triton_config
     import yolo_trt_build
 except SystemExit as exc:
@@ -68,7 +69,7 @@ class TestMissingPtFileSurfacesARealError:
         ]
         # This is the exact crash from the finding: print_summary used to
         # raise KeyError('triton_name') here instead of printing the error.
-        export_models.print_summary(results)
+        yolo_export_report.print_summary(results)
         assert 'Model file not found' in caplog.text
 
     def test_print_summary_still_handles_a_successful_result(self, caplog) -> None:
@@ -80,7 +81,7 @@ class TestMissingPtFileSurfacesARealError:
                 'trt': {'status': 'success', 'host_path': '/app/models/yolov11_small_trt'},
             }
         ]
-        export_models.print_summary(results)
+        yolo_export_report.print_summary(results)
         assert 'yolov11_small' in caplog.text
 
 
@@ -91,7 +92,7 @@ class TestAnyExportFailed:
 
     def test_a_top_level_error_result_is_a_failure(self) -> None:
         results: list[dict[str, Any]] = [{'model': 'small', 'status': 'error', 'error': 'boom'}]
-        assert export_models._any_export_failed(results) is True
+        assert yolo_export_report._any_export_failed(results) is True
 
     def test_a_per_format_error_is_a_failure(self) -> None:
         """The realistic shape: export_model() succeeds overall but
@@ -104,7 +105,7 @@ class TestAnyExportFailed:
                 'trt_end2end': {'status': 'error', 'error': 'Failed to build engine'},
             }
         ]
-        assert export_models._any_export_failed(results) is True
+        assert yolo_export_report._any_export_failed(results) is True
 
     def test_all_successful_formats_is_not_a_failure(self) -> None:
         results: list[dict[str, Any]] = [
@@ -114,10 +115,10 @@ class TestAnyExportFailed:
                 'trt': {'status': 'success', 'host_path': '/app/models/yolov11_small_trt'},
             }
         ]
-        assert export_models._any_export_failed(results) is False
+        assert yolo_export_report._any_export_failed(results) is False
 
     def test_empty_results_is_not_a_failure(self) -> None:
-        assert export_models._any_export_failed([]) is False
+        assert yolo_export_report._any_export_failed([]) is False
 
 
 class TestCudaVisibleDevicesRepairBeforeTrtBuild:

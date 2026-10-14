@@ -68,7 +68,6 @@ if not _ultralytics_is_pre_84():
     )
 
 import argparse  # noqa: E402  # imports follow the interpreter re-exec guard above
-import json  # noqa: E402  # imports follow the interpreter re-exec guard above
 import logging  # noqa: E402  # imports follow the interpreter re-exec guard above
 from typing import Any  # noqa: E402  # imports follow the interpreter re-exec guard above
 
@@ -81,6 +80,13 @@ apply_end2end_patch()
 # Import after patch (REQUIRED - patch must be applied before importing ultralytics)
 from trt_utils import engine_output_dtypes  # noqa: E402  # imports follow the interpreter re-exec guard above
 from ultralytics import YOLO  # noqa: E402  # imports follow the interpreter re-exec guard above
+from yolo_export_cli import build_parser  # noqa: E402  # imports follow the interpreter re-exec guard above
+from yolo_export_report import (  # noqa: E402  # imports follow the interpreter re-exec guard above
+    _any_export_failed,
+    log_model_repository,
+    print_summary,
+    save_results_file,
+)
 from yolo_export_settings import CONF_THRESHOLD, DEVICE, HALF, IMG_SIZE, IOU_THRESHOLD, WORKSPACE_GB  # noqa: E402  # imports follow the interpreter re-exec guard above
 from yolo_formats import (  # noqa: E402  # imports follow the interpreter re-exec guard above
     check_gpu_memory,
@@ -358,199 +364,19 @@ def export_model(
     return results
 
 
-def print_summary(results: list[dict[str, Any]]) -> None:
-    """Print export summary to logger."""
-    logger.info('=' * 70)
-    logger.info('EXPORT SUMMARY')
-    logger.info('=' * 70)
-
-    for result in results:
-        logger.info(f'{result["model"]} ({result.get("triton_name", "?")}):')
-
-        if result.get('status') == 'error':
-            logger.info(f'  [FAIL] {result.get("error", "unknown error")}')
-            continue
-
-        if 'onnx' in result:
-            status = '[OK]' if result['onnx']['status'] == 'success' else '[FAIL]'
-            logger.info(f'  {status} ONNX Standard: {result["onnx"]["status"]}')
-            if result['onnx']['status'] == 'success':
-                logger.info(f'       Host: {result["onnx"]["host_path"]}')
-
-        if 'trt' in result:
-            status = '[OK]' if result['trt']['status'] == 'success' else '[FAIL]'
-            logger.info(f'  {status} TRT Standard: {result["trt"]["status"]}')
-            if result['trt']['status'] == 'success':
-                logger.info(f'       Host: {result["trt"]["host_path"]}')
-
-        if 'onnx_end2end' in result:
-            status = '[OK]' if result['onnx_end2end']['status'] == 'success' else '[FAIL]'
-            logger.info(f'  {status} ONNX End2End: {result["onnx_end2end"]["status"]}')
-            if result['onnx_end2end']['status'] == 'success':
-                logger.info(f'       Host: {result["onnx_end2end"]["host_path"]}')
-                logger.info('       NMS: GPU (TRT operators)')
-
-        if 'trt_end2end' in result:
-            status = '[OK]' if result['trt_end2end']['status'] == 'success' else '[FAIL]'
-            logger.info(f'  {status} TRT End2End: {result["trt_end2end"]["status"]}')
-            if result['trt_end2end']['status'] == 'success':
-                logger.info(f'       Host: {result["trt_end2end"]["host_path"]}')
-                logger.info('       NMS: Compiled (maximum performance!)')
-
-    logger.info('-' * 70)
-    logger.info('FORMAT COMPARISON')
-    logger.info('-' * 70)
-    logger.info('1. ONNX Standard: [84, 8400] -> CPU NMS, baseline speed')
-    logger.info('2. TRT Standard:  [84, 8400] -> CPU NMS, 1.5x faster')
-    logger.info('3. ONNX End2End:  NMS outputs -> GPU NMS via TRT EP, 2-3x faster')
-    logger.info('4. TRT End2End:   NMS outputs -> compiled GPU NMS, 3-5x faster')
-    logger.info('=' * 70)
+def _print_model_list() -> None:
+    """Print the built-in models and usage hints (``--list-models``)."""
+    print('Available built-in YOLO11 models:')
+    print('-' * 50)
+    for model_id, cfg in DEFAULT_MODELS.items():
+        print(f'  {model_id:10} -> {cfg["triton_name"]:25} (batch={cfg["max_batch"]})')
+    print('-' * 50)
+    print('\nUsage: --models nano small medium large xlarge')
+    print('Custom: --custom-model /path/to/model.pt[:name][:batch]')
 
 
-def _any_export_failed(results: list[dict[str, Any]]) -> bool:
-    """Whether any model/format in ``results`` reports an error.
-
-    ``main()`` used to always exit 0 regardless of what ``results``
-    said -- a total, silent failure (e.g. every format's TensorRT build
-    rejected by a poisoned CUDA_VISIBLE_DEVICES, see setup_trt_builder)
-    looked identical to a clean run to anything checking the exit code
-    (CI, ``make``, an operator's shell).
-    """
-    for result in results:
-        if result.get('status') == 'error':
-            return True
-        for value in result.values():
-            if isinstance(value, dict) and value.get('status') == 'error':
-                return True
-    return False
-
-
-def main() -> int:
-    """Main entry point for export script. Returns a process exit code."""
-    parser = argparse.ArgumentParser(
-        description='Export YOLO models in multiple formats for Triton',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Export all formats for default models
-  python export_models.py
-
-  # Export only end2end models
-  python export_models.py --formats onnx_end2end trt_end2end
-
-  # Export specific built-in models (nano, small, medium, large, xlarge)
-  python export_models.py --models nano small large
-
-  # Export a custom trained model
-  python export_models.py --custom-model /path/to/my_model.pt
-
-  # Export custom model with specific name and batch size
-  python export_models.py --custom-model /path/to/my_model.pt:custom_name:64
-
-  # Export using a YAML configuration file
-  python export_models.py --config-file /path/to/models.yaml
-
-  # Generate Triton configs and labels for exported models
-  python export_models.py --models small --generate-config --save-labels
-        """,
-    )
-
-    parser.add_argument(
-        '--formats',
-        nargs='+',
-        choices=['onnx', 'trt', 'onnx_end2end', 'trt_end2end', 'all'],
-        default=['all'],
-        help='Formats to export (default: all)',
-    )
-
-    parser.add_argument(
-        '--models',
-        nargs='+',
-        default=None,
-        help=(
-            'Built-in models to export: nano, small, medium, large, xlarge. '
-            'If not specified and no --custom-model or --config-file, exports small only.'
-        ),
-    )
-
-    parser.add_argument(
-        '--custom-model',
-        nargs='+',
-        dest='custom_models',
-        metavar='PATH[:NAME][:BATCH]',
-        help=(
-            'Custom model(s) to export. Format: path/to/model.pt[:triton_name][:max_batch]. '
-            'Examples: my_model.pt, my_model.pt:custom_name, my_model.pt:custom_name:64'
-        ),
-    )
-
-    parser.add_argument(
-        '--config-file',
-        dest='config_file',
-        metavar='PATH',
-        help='YAML configuration file with model definitions (overrides --models)',
-    )
-
-    parser.add_argument(
-        '--normalize-boxes',
-        action='store_true',
-        default=False,
-        help='Output boxes in [0, 1] normalized range instead of pixel coords (recommended)',
-    )
-
-    parser.add_argument(
-        '--generate-config',
-        action='store_true',
-        default=False,
-        help='Auto-generate Triton config.pbtxt files for exported models',
-    )
-
-    parser.add_argument(
-        '--overwrite-config',
-        action='store_true',
-        default=False,
-        help='With --generate-config: replace an existing config.pbtxt that differs '
-        '(default: write config.pbtxt.generated beside it)',
-    )
-
-    parser.add_argument(
-        '--save-labels',
-        action='store_true',
-        default=False,
-        help='Save class names to labels.txt in each model directory',
-    )
-
-    parser.add_argument(
-        '--list-models',
-        action='store_true',
-        help='List available built-in models and exit',
-    )
-
-    parser.add_argument(
-        '--verbose',
-        '-v',
-        action='store_true',
-        help='Enable verbose (DEBUG) logging',
-    )
-
-    args = parser.parse_args()
-
-    # Handle --list-models
-    if args.list_models:
-        print('Available built-in YOLO11 models:')
-        print('-' * 50)
-        for model_id, cfg in DEFAULT_MODELS.items():
-            print(f'  {model_id:10} -> {cfg["triton_name"]:25} (batch={cfg["max_batch"]})')
-        print('-' * 50)
-        print('\nUsage: --models nano small medium large xlarge')
-        print('Custom: --custom-model /path/to/model.pt[:name][:batch]')
-        sys.exit(0)
-
-    # Set log level based on verbosity
-    if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
-
-    # Build model configurations from various sources
+def _select_models(args: argparse.Namespace) -> dict[str, dict[str, Any]]:
+    """Resolve the models to export from the config file, --models and --custom-model."""
     models_to_export: dict[str, dict[str, Any]] = {}
 
     # 1. Load from config file if specified
@@ -588,7 +414,10 @@ Examples:
     if not models_to_export:
         logger.info('No models specified, defaulting to small')
         models_to_export['small'] = DEFAULT_MODELS['small'].copy()
+    return models_to_export
 
+
+def _log_run_banner(args: argparse.Namespace, models_to_export: dict[str, dict[str, Any]]) -> None:
     logger.info('=' * 70)
     logger.info('YOLO11 Unified Export Script')
     logger.info('=' * 70)
@@ -609,6 +438,22 @@ Examples:
         logger.info('Save labels.txt: enabled')
     logger.info('=' * 70)
 
+
+def main() -> int:
+    """Main entry point for export script. Returns a process exit code."""
+    args = build_parser().parse_args()
+
+    if args.list_models:
+        _print_model_list()
+        sys.exit(0)
+
+    # Set log level based on verbosity
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    models_to_export = _select_models(args)
+    _log_run_banner(args, models_to_export)
+
     # Check GPU availability
     if not check_gpu_memory():
         logger.error('GPU check failed. Aborting.')
@@ -628,47 +473,9 @@ Examples:
         )
         results.append(result)
 
-    # Print summary
     print_summary(results)
-
-    # Save results
-    results_file = Path('/app/scripts/export_results.json')
-    results_file.parent.mkdir(parents=True, exist_ok=True)
-    with Path(results_file).open('w') as f:
-        json.dump(
-            {
-                'formats': args.formats,
-                'models': list(models_to_export.keys()),
-                'results': results,
-            },
-            f,
-            indent=2,
-        )
-        f.write('\n')
-    logger.info(f'Results saved to: {results_file}')
-
-    # Show current model structure
-    logger.info('=' * 70)
-    logger.info('CURRENT MODEL REPOSITORY')
-    logger.info('=' * 70)
-    models_dir = Path('/app/models')
-    if models_dir.exists():
-        for model_dir in sorted(models_dir.iterdir()):
-            if model_dir.is_dir() and (
-                model_dir.name.startswith('yolov11') or model_dir.name.startswith('yolo11')
-            ):
-                has_model = (model_dir / '1' / 'model.onnx').exists() or (
-                    model_dir / '1' / 'model.plan'
-                ).exists()
-                has_config = (model_dir / 'config.pbtxt').exists()
-                has_labels = (model_dir / 'labels.txt').exists()
-                status = '[OK]' if has_model else '[--]'
-                config_status = '[OK]' if has_config else '[!!]'
-                labels_status = '[OK]' if has_labels else '[--]'
-                logger.info(
-                    f'{status} {model_dir.name:35} config: {config_status} labels: {labels_status}'
-                )
-    logger.info('=' * 70)
+    save_results_file(args.formats, models_to_export, results)
+    log_model_repository()
 
     if _any_export_failed(results):
         logger.error('One or more exports failed -- see EXPORT SUMMARY above')
