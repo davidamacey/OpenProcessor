@@ -34,7 +34,8 @@ services:
       dockerfile: Dockerfile.triton
 
   api:
-    build:
+    # The root Dockerfile build, shared by the curation workers below.
+    build: &root-build
       context: .
       dockerfile: Dockerfile
       args:
@@ -65,43 +66,27 @@ services:
     image: ${OP_CROPWRIGHT_IMAGE:-openprocessor-cropwright:dev}
 
   curation-detection-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
+    build: *root-build
     volumes:
       - ./src:/app/src:ro
       - ./scripts:/app/scripts:ro
       - ./examples:/app/examples:ro
 
   curation-vlm-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
+    build: *root-build
     volumes:
       - ./src:/app/src:ro
       - ./scripts:/app/scripts:ro
 
   curation-auto-label-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
+    build: *root-build
     volumes:
       - ./src:/app/src:ro
       - ./scripts:/app/scripts:ro
       - ./examples:/app/examples:ro
 
   curation-cluster-refresh:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
+    build: *root-build
     volumes:
       - ./src:/app/src:ro
       - ./scripts:/app/scripts:ro
