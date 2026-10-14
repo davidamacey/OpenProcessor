@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -27,7 +26,7 @@ from src.utils.cpu_pool import InflightGate, mib
 
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Callable
 
     from src.services.curation.bulk_ingest.object_store import ObjectStore
 
@@ -42,7 +41,7 @@ class FetchOutcome:
 
 
 _gates: dict[int, InflightGate] = {}
-_pools: dict[int, ThreadPoolExecutor] = {}
+_limits: dict[tuple[int, int], asyncio.Semaphore] = {}
 
 
 def fetch_gate(config: S3Config) -> InflightGate:
@@ -52,29 +51,27 @@ def fetch_gate(config: S3Config) -> InflightGate:
     return _gates[pid]
 
 
-def _pool(config: S3Config) -> ThreadPoolExecutor:
-    pid = os.getpid()
-    if pid not in _pools:
-        _pools[pid] = ThreadPoolExecutor(
-            max_workers=config.fetch_workers, thread_name_prefix='op-s3-'
-        )
-    return _pools[pid]
+async def _call_store[T](config: S3Config, fn: Callable[[ObjectRef], T], ref: ObjectRef) -> T:
+    """Run a blocking store call in a thread (context kept, so the bound project follows),
+    at most ``OP_S3_FETCH_WORKERS`` at a time in this process."""
+    key = (os.getpid(), id(asyncio.get_running_loop()))
+    limit = _limits.setdefault(key, asyncio.Semaphore(config.fetch_workers))
+    async with limit:
+        return await asyncio.to_thread(fn, ref)
 
 
 async def _size(store: ObjectStore, ref: ObjectRef, config: S3Config) -> ObjectRef | FetchOutcome:
     if ref.size is not None:
         return ref
-    loop = asyncio.get_running_loop()
     try:
-        return await loop.run_in_executor(_pool(config), store.head, ref)
+        return await _call_store(config, store.head, ref)
     except ObjectStoreError as exc:
         return FetchOutcome(ref, error=str(exc), error_kind=exc.error_kind)
 
 
 async def _get(store: ObjectStore, ref: ObjectRef, config: S3Config) -> FetchOutcome:
-    loop = asyncio.get_running_loop()
     try:
-        actual, data = await loop.run_in_executor(_pool(config), store.get, ref)
+        actual, data = await _call_store(config, store.get, ref)
     except ObjectStoreError as exc:
         return FetchOutcome(ref, error=str(exc), error_kind=exc.error_kind)
     if len(data) > config.max_object_bytes:

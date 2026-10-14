@@ -20,7 +20,7 @@ class _CountingStore(FakeObjectStore):
         self.live = 0
         self.peak = 0
 
-    def get(self, ref: ObjectRef):  # noqa: ANN201
+    def get(self, ref: ObjectRef):
         with self.lock:
             self.live += 1
             self.peak = max(self.peak, self.live)
@@ -34,7 +34,7 @@ class _CountingStore(FakeObjectStore):
 
 def test_two_batches_that_each_fill_the_capacity_never_download_together(monkeypatch) -> None:
     monkeypatch.setattr(object_fetch, '_gates', {})
-    monkeypatch.setattr(object_fetch, '_pools', {})
+    monkeypatch.setattr(object_fetch, '_limits', {})
     store = _CountingStore()
     batches = []
     for b in range(2):

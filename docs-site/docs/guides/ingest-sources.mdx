@@ -184,7 +184,7 @@ With `webhook_enabled`, the source's status gives `webhook.path`, the route that
 receives S3 event notifications:
 
 ```
-POST /curation/projects/my-project/ingest/sources/<source_id>/events
+POST /curation/projects/{project}/ingest/sources/{source_id}/events
 ```
 
 Point the store's notification target at that URL on the API's published address. For
