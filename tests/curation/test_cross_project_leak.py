@@ -388,6 +388,7 @@ NO_WRITE: dict[tuple[str, str], str] = {
     ('DELETE', '/ingest/sources/{source_id}'): 'the sweep has no such source (404)',
     ('POST', '/ingest/sources/{source_id}/run'): 'the sweep has no such source (404)',
     ('POST', '/ingest/sources/{source_id}/retry-dead'): 'the sweep has no such source (404)',
+    ('POST', '/ingest/sources/{source_id}/events'): 'the sweep has no such source (404)',
     (
         'POST',
         '/ingest/objects',
