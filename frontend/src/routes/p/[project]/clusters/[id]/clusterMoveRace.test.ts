@@ -293,7 +293,7 @@ describe('wiring: /clusters/[id] +page.svelte derives the grid instead of snapsh
 // (second pass): that logic — and the exclusion set itself, now
 // `ExclusionGuard` — moved into `$lib/clusters/clusterController.svelte.ts`
 // (commit history: "refactor(clusters): extract action logic into
-// clusterController"). `clusterController.test.ts` exercises the same
+// clusterController"). The `clusterController.*.test.ts` files exercise the same
 // guarantees behaviorally instead of by regex:
 //   - 'claims dropped ids in the exclusion guard before the request
 //     settles, and resets the grid' / 'releases conflicted ids ...' /
