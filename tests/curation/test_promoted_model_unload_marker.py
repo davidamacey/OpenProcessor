@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 
-from src.services.training import triton_promote
+from src.services.training import triton_http
 from src.services.training.triton_promote import TritonPromoter
 from src.services.training.triton_reload import reload_promoted_models
 from src.services.training.triton_repo import UNLOADED_MARKER, set_explicitly_unloaded
@@ -41,7 +41,7 @@ def loads(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
     real = httpx.AsyncClient
     monkeypatch.setattr(
-        triton_promote.httpx,
+        triton_http.httpx,
         'AsyncClient',
         lambda **kw: real(transport=httpx.MockTransport(handler), **kw),
     )
