@@ -44,12 +44,12 @@ def test_lifespan_reloads_promoted_models_at_startup_and_on_every_tick(
 ) -> None:
     import src.app.lifespan as lifespan_module
     import src.main as main_module
-    from src.services.training import gpu_arbiter, triton_reload
+    from src.services.training import gpu_arbiter, gpu_arbiter_policy, triton_reload
 
     calls: list[str] = []
 
     async def _fake_reconcile(**_kwargs):
-        return gpu_arbiter.ArbiterAction(action='noop', detail='stubbed')
+        return gpu_arbiter_policy.ArbiterAction(action='noop', detail='stubbed')
 
     async def _fake_reload(*_args, **_kwargs):
         calls.append('tick')
@@ -75,13 +75,13 @@ def test_a_failing_reload_does_not_kill_the_reconcile_loop(
     attempt) still has to run."""
     import src.app.lifespan as lifespan_module
     import src.main as main_module
-    from src.services.training import gpu_arbiter, triton_reload
+    from src.services.training import gpu_arbiter, gpu_arbiter_policy, triton_reload
 
     arbiter_calls: list[str] = []
 
     async def _fake_reconcile(**_kwargs):
         arbiter_calls.append('tick')
-        return gpu_arbiter.ArbiterAction(action='noop', detail='stubbed')
+        return gpu_arbiter_policy.ArbiterAction(action='noop', detail='stubbed')
 
     async def _boom(*_args, **_kwargs):
         raise RuntimeError('simulated reload failure')

@@ -284,7 +284,7 @@ async def test_gateway_mode_still_probes_enabled_services_only(
 
 
 def test_mlflow_run_url_follows_the_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
-    from src.services.training.jobs import _public_mlflow_url
+    from src.services.training.job_wire import _public_mlflow_url
 
     _cfg(monkeypatch, gateway_subpaths=True)
     assert _public_mlflow_url('run1', '7') == '/mlflow/#/experiments/7/runs/run1'

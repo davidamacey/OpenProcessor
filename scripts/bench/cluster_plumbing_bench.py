@@ -51,11 +51,8 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from src.config.curation import items_index
-from src.services.projects.guard import (
-    bind_registry_admin,
-    make_curation_opensearch,
-    make_script_opensearch,
-)
+from src.services.projects.guard import make_curation_opensearch, make_script_opensearch
+from src.services.projects.guard_policy import bind_registry_admin
 from src.services.projects.script_binding import abind_script_project
 
 

@@ -117,7 +117,7 @@ async def project_stats(client: Any) -> dict[str, Any]:
     for role, name in bound.record.resources.indexes.items():
         indexes.append({'role': role.value, 'name': name})
 
-    from src.services.projects.lifecycle import running_jobs as _running_jobs
+    from src.services.projects.lifecycle_checks import running_jobs as _running_jobs
 
     jobs = await _running_jobs(bound.record)
 

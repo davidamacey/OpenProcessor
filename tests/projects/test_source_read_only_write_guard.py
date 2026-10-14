@@ -31,7 +31,8 @@ import pytest
 
 from src.config.project_context import try_current_project
 from src.services.projects import lifecycle
-from src.services.projects.guard import ProjectReadOnly, check_request
+from src.services.projects.guard_errors import ProjectReadOnly
+from src.services.projects.guard_policy import check_request
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
 from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes

@@ -26,7 +26,7 @@ from src.config.env import env_path
 from src.core.logging import get_logger
 from src.schemas.bakeoff.models import BaselineModel
 from src.services.curation import eval_datasets as evd
-from src.services.training import jobs as train_jobs
+from src.services.training import job_manifest, jobs as train_jobs
 from src.services.training.class_remap import resolve_class_remap
 from src.services.training.promote_errors import ClassRemapUnreadableError
 
@@ -186,11 +186,11 @@ async def resolve_run_model(run_id: str) -> RunModel:
     ckpt = host_checkpoint(status.checkpoint_path)
     if not ckpt.is_file():
         raise BakeoffRequestError(400, f'training run {run_id!r} checkpoint is missing: {ckpt}')
-    manifest = await train_jobs.read_manifest(run_id) or {}
+    manifest = await job_manifest.read_manifest(run_id) or {}
     lineage = manifest.get('lineage') or {}
     spec = manifest.get('spec') or {}
     if not lineage.get('export_dir'):
-        job = await train_jobs.read_job_spec(run_id) or {}
+        job = await job_manifest.read_job_spec(run_id) or {}
         lineage = {
             'export_dir': job.get('dataset_export_dir'),
             'single_cls': job.get('single_cls'),

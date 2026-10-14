@@ -40,7 +40,8 @@ from src.config.projects import ProjectRecord, resources_for_new
 from src.domain.region_boxes import boxes_write_fields
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_models import VlmCombinedReply
-from src.services.projects.guard import cross_project_access_count, install_project_guard
+from src.services.projects.guard import install_project_guard
+from src.services.projects.guard_errors import cross_project_access_count
 
 
 if TYPE_CHECKING:
@@ -371,7 +372,7 @@ async def test_guard_rejects_a_cross_project_write(
 ) -> None:
     """Control: the harness really is guarded -- beta's binding cannot
     write alpha's index."""
-    from src.services.projects.guard import CrossProjectAccess
+    from src.services.projects.guard_errors import CrossProjectAccess
 
     client, transport = world
     with bind_project(projects['beta']), pytest.raises(CrossProjectAccess):

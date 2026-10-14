@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from src.clients.curation_opensearch.registry import get_class_registry
 from src.core.logging import get_logger
-from src.services.training import jobs as train_jobs
+from src.services.training import job_manifest
 
 
 logger = get_logger(__name__)
@@ -153,7 +153,7 @@ async def resolve_full_registry_for_promote(job_id: str) -> dict[int, str]:
     available (older runs, or a pin/read failure), and always logs loudly
     when it does so the gap is visible in the API logs.
     """
-    job_raw = await train_jobs.read_job_spec(job_id)
+    job_raw = await job_manifest.read_job_spec(job_id)
     snapshot_path = (job_raw or {}).get('registry_snapshot_path')
     if snapshot_path:
         try:

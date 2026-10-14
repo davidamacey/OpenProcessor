@@ -89,7 +89,7 @@ def install_project_exception_handlers(app: FastAPI) -> None:
     from src.config.project_context import ProjectNotBound
     from src.core.error_handlers import request_rejected_response
     from src.core.exceptions import RequestRejectedError
-    from src.services.projects.guard import CrossProjectAccess, ProjectReadOnly
+    from src.services.projects.guard_errors import CrossProjectAccess, ProjectReadOnly
 
     async def _isolation_error(_request: Request, exc: Exception) -> JSONResponse:
         logger.error('internal_isolation_error', error_type=type(exc).__name__, error=str(exc))

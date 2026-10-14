@@ -11,7 +11,7 @@ import asyncio
 import pytest
 
 from src.core.exceptions import RequestRejectedError
-from src.services.projects import lifecycle
+from src.services.projects import lifecycle, lifecycle_checks
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
 from .conftest import FakeLifecycleOpenSearch, seed_default_project
@@ -34,7 +34,7 @@ def _env(tmp_path, monkeypatch):
 
 
 def test_running_jobs_delegates_to_busy_module() -> None:
-    """lifecycle.running_jobs must call busy.running_jobs, not re-scan
+    """lifecycle_checks.running_jobs must call busy.running_jobs, not re-scan
     job dirs itself -- proven by faking busy.running_jobs and asserting
     its fake JobRef surfaces through."""
     from src.services.projects import busy
@@ -57,7 +57,7 @@ def test_running_jobs_delegates_to_busy_module() -> None:
         real = busy.running_jobs
         busy.running_jobs = _fake_running_jobs
         try:
-            jobs = await lifecycle.running_jobs(record)
+            jobs = await lifecycle_checks.running_jobs(record)
         finally:
             busy.running_jobs = real
 
@@ -103,7 +103,7 @@ def test_archive_busy_409_carries_typed_job_refs(monkeypatch) -> None:
 
 
 def test_running_jobs_uses_the_real_label_when_the_source_provides_one(monkeypatch) -> None:
-    """P3F pass-3 m-b: lifecycle.running_jobs must use busy.JobRef.label
+    """P3F pass-3 m-b: lifecycle_checks.running_jobs must use busy.JobRef.label
     when the source set a real one, falling back to job_id ONLY when it
     didn't (test_delete_busy_409_carries_typed_job_refs below covers the
     fallback case with no label set)."""
@@ -121,7 +121,7 @@ def test_running_jobs_uses_the_real_label_when_the_source_provides_one(monkeypat
             lambda _rec: [busy.JobRef(kind='train', job_id='run-7', label='Nightly YOLO run')],
         )
 
-        jobs = await lifecycle.running_jobs(record)
+        jobs = await lifecycle_checks.running_jobs(record)
         assert jobs[0].id == 'run-7'
         assert jobs[0].label == 'Nightly YOLO run'
 

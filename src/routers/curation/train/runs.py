@@ -7,7 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Path as PathParam, Query
 from pydantic import BaseModel
 
-from src.services.training import jobs as train_jobs, promote_job
+from src.services.training import job_campaigns, jobs as train_jobs, promote_job
 from src.services.training.job_models import TrainJobStatus
 
 
@@ -108,7 +108,7 @@ async def cancel_campaign_endpoint(
 ) -> CancelCampaignResponse:
     """Cancel every non-terminal job in a campaign."""
     try:
-        n = await train_jobs.cancel_campaign(campaign_id)
+        n = await job_campaigns.cancel_campaign(campaign_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return CancelCampaignResponse(cancelled=n, campaign_id=campaign_id)

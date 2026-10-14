@@ -1,8 +1,8 @@
 """Trainer container reachability probe used by ``/train/preflight``.
 
 Split out of :mod:`src.services.training.gpu_arbiter` (the 700-LOC ratchet)
--- this stays a satellite of that module: it borrows ``_docker_client``/
-``_container_status_sync`` from there for the optional docker-confirmation
+-- this stays a satellite of the arbiter: it borrows ``_docker_client``/
+``_container_status_sync`` from :mod:`src.services.training.gpu_arbiter_docker` for the optional docker-confirmation
 path, but its primary signal (the trainer's heartbeat file) never touches
 docker at all.
 
@@ -31,7 +31,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from src.config import get_gpu_arbiter_config
-from src.services.training.gpu_arbiter import _container_status_sync, _docker_client
+from src.services.training.gpu_arbiter_docker import _container_status_sync, _docker_client
 
 
 # Filename the trainer's watch loop refreshes every HEARTBEAT_INTERVAL_S

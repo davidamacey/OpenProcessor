@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Path as PathParam
 from fastapi.responses import FileResponse
 
 from src.core.wire_json import WireJSONResponse
-from src.services.training import jobs as train_jobs
+from src.services.training import job_manifest
 from src.services.training.job_wire import artifact_media_type
 
 
@@ -24,7 +24,7 @@ async def get_manifest(
     404 if the manifest doesn't exist yet — older runs that finished
     before the manifest writer landed simply lack one.
     """
-    manifest = await train_jobs.read_manifest(job_id)
+    manifest = await job_manifest.read_manifest(job_id)
     if manifest is None:
         raise HTTPException(status_code=404, detail=f'no manifest for job {job_id!r}')
     return WireJSONResponse(content=manifest)
@@ -59,7 +59,7 @@ async def get_run_artifact(
     distinguishes those cases to a caller.
     """
     try:
-        path = await train_jobs.read_artifact(job_id, name)
+        path = await job_manifest.read_artifact(job_id, name)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if path is None:

@@ -3,7 +3,6 @@
 Covers:
 
 * parse_cuda_visible_devices edge cases
-* needs_multi_gpu_stop dispatch (single vs multi GPU)
 * sentinel set / clear idempotence
 * multi-GPU stop path falls back to sentinel when docker is missing
 * reconcile leaves an active job intact, but cleans up when no jobs are active
@@ -22,7 +21,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from src.config import GpuArbiterConfig, gpu_arbiter as gpu_arbiter_config_module
-from src.services.training import gpu_arbiter as ga
+from src.services.training import gpu_arbiter as ga, gpu_arbiter_docker, gpu_arbiter_policy
 
 
 if TYPE_CHECKING:
@@ -39,44 +38,27 @@ def _set_config(monkeypatch: pytest.MonkeyPatch, cfg: GpuArbiterConfig) -> None:
 
 
 def test_parse_none_returns_empty():
-    assert ga.parse_cuda_visible_devices(None) == []
+    assert gpu_arbiter_policy.parse_cuda_visible_devices(None) == []
 
 
 def test_parse_empty_string_returns_empty():
-    assert ga.parse_cuda_visible_devices('') == []
+    assert gpu_arbiter_policy.parse_cuda_visible_devices('') == []
 
 
 def test_parse_single_device():
-    assert ga.parse_cuda_visible_devices('0') == [0]
+    assert gpu_arbiter_policy.parse_cuda_visible_devices('0') == [0]
 
 
 def test_parse_dual_device_with_whitespace():
-    assert ga.parse_cuda_visible_devices('  0 ,  2 ') == [0, 2]
+    assert gpu_arbiter_policy.parse_cuda_visible_devices('  0 ,  2 ') == [0, 2]
 
 
 def test_parse_invalid_token_skipped(caplog):
     # 'a' is unparseable; the integer survives.
-    assert ga.parse_cuda_visible_devices('0,a,2') == [0, 2]
+    assert gpu_arbiter_policy.parse_cuda_visible_devices('0,a,2') == [0, 2]
 
 
-# ---------------------------------------------------------------------------
-# needs_multi_gpu_stop
-# ---------------------------------------------------------------------------
-
-
-def test_needs_multi_gpu_stop_single_gpu_false():
-    assert ga.needs_multi_gpu_stop('0') is False
-
-
-def test_needs_multi_gpu_stop_dual_gpu_true():
-    assert ga.needs_multi_gpu_stop('0,2') is True
-
-
-def test_needs_multi_gpu_stop_none_false():
-    assert ga.needs_multi_gpu_stop(None) is False
-
-
-def test_needs_multi_gpu_stop_alias_removed():
+def test_needs_gemma_stop_alias_removed():
     """The ``needs_gemma_stop`` alias is gone entirely --
     stop decisions are GPU-scope-driven now, not a "gemma" special case."""
     assert not hasattr(ga, 'needs_gemma_stop')
@@ -98,26 +80,26 @@ def test_needs_multi_gpu_stop_alias_removed():
 def test_containers_to_stop_scoped_hit(monkeypatch):
     cfg = GpuArbiterConfig(container_gpus=(('vllm-server', frozenset({2})),))
     _set_config(monkeypatch, cfg)
-    assert ga.containers_to_stop('2') == ('vllm-server',)
-    assert ga.containers_to_stop('0,2') == ('vllm-server',)
+    assert gpu_arbiter_policy.containers_to_stop('2') == ('vllm-server',)
+    assert gpu_arbiter_policy.containers_to_stop('0,2') == ('vllm-server',)
 
 
 def test_containers_to_stop_scoped_miss(monkeypatch):
     cfg = GpuArbiterConfig(container_gpus=(('vllm-server', frozenset({2})),))
     _set_config(monkeypatch, cfg)
-    assert ga.containers_to_stop('0') == ()
+    assert gpu_arbiter_policy.containers_to_stop('0') == ()
 
 
 def test_containers_to_stop_unscoped_single_gpu_untouched(monkeypatch):
     cfg = GpuArbiterConfig(container_gpus=(('region-worker', None),))
     _set_config(monkeypatch, cfg)
-    assert ga.containers_to_stop('0') == ()
+    assert gpu_arbiter_policy.containers_to_stop('0') == ()
 
 
 def test_containers_to_stop_unscoped_multi_gpu_stopped(monkeypatch):
     cfg = GpuArbiterConfig(container_gpus=(('region-worker', None),))
     _set_config(monkeypatch, cfg)
-    assert ga.containers_to_stop('0,2') == ('region-worker',)
+    assert gpu_arbiter_policy.containers_to_stop('0,2') == ('region-worker',)
 
 
 def test_containers_to_stop_mixed_scoped_and_unscoped(monkeypatch):
@@ -126,21 +108,21 @@ def test_containers_to_stop_mixed_scoped_and_unscoped(monkeypatch):
     )
     _set_config(monkeypatch, cfg)
     # Single-GPU claim on GPU 2: scoped container stops, unscoped doesn't.
-    assert ga.containers_to_stop('2') == ('vllm-server',)
+    assert gpu_arbiter_policy.containers_to_stop('2') == ('vllm-server',)
     # Multi-GPU claim spanning both: both stop, in configured order.
-    assert ga.containers_to_stop('0,2') == ('vllm-server', 'region-worker')
+    assert gpu_arbiter_policy.containers_to_stop('0,2') == ('vllm-server', 'region-worker')
 
 
 def test_containers_to_stop_none_configured(monkeypatch):
     _set_config(monkeypatch, GpuArbiterConfig())
-    assert ga.containers_to_stop('0,2') == ()
+    assert gpu_arbiter_policy.containers_to_stop('0,2') == ()
 
 
 def test_needs_service_stop_matches_containers_to_stop(monkeypatch):
     cfg = GpuArbiterConfig(container_gpus=(('vllm-server', frozenset({2})),))
     _set_config(monkeypatch, cfg)
-    assert ga.needs_service_stop('2') is True
-    assert ga.needs_service_stop('0') is False
+    assert gpu_arbiter_policy.needs_service_stop('2') is True
+    assert gpu_arbiter_policy.needs_service_stop('0') is False
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +133,7 @@ def test_needs_service_stop_matches_containers_to_stop(monkeypatch):
 @pytest.mark.asyncio
 async def test_pause_creates_sentinel(tmp_path: Path):
     sentinel = tmp_path / 'pause.sentinel'
-    res = await ga.pause_gpu_worker(sentinel=sentinel)
+    res = await gpu_arbiter_policy.pause_gpu_worker(sentinel=sentinel)
     assert sentinel.exists()
     assert res.action == 'sentinel_set'
 
@@ -159,8 +141,8 @@ async def test_pause_creates_sentinel(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_pause_is_idempotent(tmp_path: Path):
     sentinel = tmp_path / 'pause.sentinel'
-    await ga.pause_gpu_worker(sentinel=sentinel)
-    res = await ga.pause_gpu_worker(sentinel=sentinel)
+    await gpu_arbiter_policy.pause_gpu_worker(sentinel=sentinel)
+    res = await gpu_arbiter_policy.pause_gpu_worker(sentinel=sentinel)
     assert res.action == 'noop'
     assert sentinel.exists()
 
@@ -170,7 +152,7 @@ async def test_resume_removes_sentinel(tmp_path: Path):
     sentinel = tmp_path / 'pause.sentinel'
     sentinel.parent.mkdir(parents=True, exist_ok=True)
     sentinel.touch()
-    res = await ga.resume_gpu_worker(sentinel=sentinel)
+    res = await gpu_arbiter_policy.resume_gpu_worker(sentinel=sentinel)
     assert not sentinel.exists()
     assert res.action == 'sentinel_cleared'
 
@@ -178,7 +160,7 @@ async def test_resume_removes_sentinel(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_resume_when_absent_is_noop(tmp_path: Path):
     sentinel = tmp_path / 'pause.sentinel'
-    res = await ga.resume_gpu_worker(sentinel=sentinel)
+    res = await gpu_arbiter_policy.resume_gpu_worker(sentinel=sentinel)
     assert res.action == 'noop'
 
 
@@ -189,10 +171,10 @@ async def test_resume_when_absent_is_noop(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_claim_single_gpu_uses_sentinel(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr(ga, '_state_dir', lambda: tmp_path)
+    monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
     res = await ga.claim_gpus_for_training('0')
     assert res.action == 'sentinel_set'
-    assert ga.sentinel_path().exists()
+    assert gpu_arbiter_policy.sentinel_path().exists()
 
 
 @pytest.mark.asyncio
@@ -208,8 +190,8 @@ async def test_claim_dual_gpu_fails_closed_without_docker(tmp_path: Path, monkey
     this call wrote must also be cleared on the way out, so a refused
     claim never leaves stale lock state behind.
     """
-    monkeypatch.setattr(ga, '_state_dir', lambda: tmp_path)
-    monkeypatch.setattr(ga, '_docker_client', lambda: None)
+    monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: None)
 
     fake_cfg = GpuArbiterConfig(
         containers=('fake-gpu-service',),
@@ -217,10 +199,10 @@ async def test_claim_dual_gpu_fails_closed_without_docker(tmp_path: Path, monkey
     )
     _set_config(monkeypatch, fake_cfg)
 
-    with pytest.raises(ga.GpuArbiterStopFailedError):
+    with pytest.raises(gpu_arbiter_policy.GpuArbiterStopFailedError):
         await ga.claim_gpus_for_training('0,2')
-    assert not ga.sentinel_path().exists()
-    assert ga.read_training_lock() is None
+    assert not gpu_arbiter_policy.sentinel_path().exists()
+    assert gpu_arbiter_policy.read_training_lock() is None
 
 
 class _FakeContainer:
@@ -261,9 +243,9 @@ async def test_claim_single_gpu_scoped_container_stops_it(tmp_path: Path, monkey
     """A single-GPU claim that intersects a *scoped* container's GPU set
     stops that container even though it's not a multi-GPU claim -- this is
     the whole point of GPU-scoped containers."""
-    monkeypatch.setattr(ga, '_state_dir', lambda: tmp_path)
+    monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
     registry = {'vllm-server': _FakeContainer('vllm-server')}
-    monkeypatch.setattr(ga, '_docker_client', lambda: _FakeDockerClient(registry))
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: _FakeDockerClient(registry))
 
     fake_cfg = GpuArbiterConfig(
         containers=('vllm-server',),
@@ -276,14 +258,14 @@ async def test_claim_single_gpu_scoped_container_stops_it(tmp_path: Path, monkey
     assert registry['vllm-server'].status == 'exited'
     # Sentinel is also set (belt-and-suspenders) so a paired worker that
     # comes back up mid-run still pauses.
-    assert ga.sentinel_path().exists()
+    assert gpu_arbiter_policy.sentinel_path().exists()
 
 
 @pytest.mark.asyncio
 async def test_release_single_gpu_scoped_container_restarts_it(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr(ga, '_state_dir', lambda: tmp_path)
+    monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
     registry = {'vllm-server': _FakeContainer('vllm-server', status='exited')}
-    monkeypatch.setattr(ga, '_docker_client', lambda: _FakeDockerClient(registry))
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: _FakeDockerClient(registry))
 
     fake_cfg = GpuArbiterConfig(
         containers=('vllm-server',),
@@ -294,19 +276,19 @@ async def test_release_single_gpu_scoped_container_restarts_it(tmp_path: Path, m
     res = await ga.release_gpus_after_training('2')
     assert res.action == 'gpu_services_started'
     assert registry['vllm-server'].status == 'running'
-    assert not ga.sentinel_path().exists()
+    assert not gpu_arbiter_policy.sentinel_path().exists()
 
 
 @pytest.mark.asyncio
 async def test_claim_single_gpu_unscoped_container_untouched(tmp_path: Path, monkeypatch):
     """A single-GPU claim must not stop a container scoped to a *different*
     GPU, nor an unscoped container (unscoped only stops on multi-GPU)."""
-    monkeypatch.setattr(ga, '_state_dir', lambda: tmp_path)
+    monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
     registry = {
         'vllm-server': _FakeContainer('vllm-server'),
         'region-worker': _FakeContainer('region-worker'),
     }
-    monkeypatch.setattr(ga, '_docker_client', lambda: _FakeDockerClient(registry))
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: _FakeDockerClient(registry))
 
     fake_cfg = GpuArbiterConfig(
         containers=('vllm-server', 'region-worker'),
@@ -322,12 +304,12 @@ async def test_claim_single_gpu_unscoped_container_untouched(tmp_path: Path, mon
 
 @pytest.mark.asyncio
 async def test_release_single_gpu_clears_sentinel(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr(ga, '_state_dir', lambda: tmp_path)
-    ga.sentinel_path().parent.mkdir(parents=True, exist_ok=True)
-    ga.sentinel_path().touch()
+    monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
+    gpu_arbiter_policy.sentinel_path().parent.mkdir(parents=True, exist_ok=True)
+    gpu_arbiter_policy.sentinel_path().touch()
     res = await ga.release_gpus_after_training('0')
     assert res.action == 'sentinel_cleared'
-    assert not ga.sentinel_path().exists()
+    assert not gpu_arbiter_policy.sentinel_path().exists()
 
 
 # ---------------------------------------------------------------------------
@@ -386,7 +368,7 @@ async def test_reconcile_clears_sentinel_when_no_active_jobs(tmp_path: Path, mon
     _write_status(jobs_dir, 'job-a', 'failed')
     _write_status(jobs_dir, 'job-b', 'finished')
 
-    monkeypatch.setattr(ga, '_docker_client', lambda: None)
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: None)
 
     res = await ga.reconcile_on_startup(train_jobs_dir=jobs_dir, sentinel=sentinel)
     assert res.action == 'noop'
@@ -398,7 +380,7 @@ async def test_reconcile_handles_missing_jobs_dir(tmp_path: Path, monkeypatch):
     jobs_dir = tmp_path / 'no-such-dir'
     sentinel = tmp_path / 'pause.sentinel'
 
-    monkeypatch.setattr(ga, '_docker_client', lambda: None)
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: None)
 
     res = await ga.reconcile_on_startup(train_jobs_dir=jobs_dir, sentinel=sentinel)
     # No active jobs found -> reconcile falls through to the "nothing
@@ -416,7 +398,7 @@ async def test_reconcile_skips_corrupt_status_file(tmp_path: Path, monkeypatch):
     (jobs_dir / 'busted.status.json').write_text('not json')
     sentinel = tmp_path / 'pause.sentinel'
 
-    monkeypatch.setattr(ga, '_docker_client', lambda: None)
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: None)
 
     res = await ga.reconcile_on_startup(train_jobs_dir=jobs_dir, sentinel=sentinel)
     # Corrupt files are skipped, so no 'active' job is detected -> same
@@ -434,14 +416,14 @@ async def test_reconcile_keeps_scoped_container_stopped_while_active(tmp_path: P
     """A single-GPU run on the scoped container's GPU keeps it stopped, and
     starts every OTHER configured container that isn't in the claim's
     GPU-intersecting set."""
-    monkeypatch.setattr(ga, '_state_dir', lambda: tmp_path)
+    monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
     jobs_dir = tmp_path / 'jobs'
     jobs_dir.mkdir()
     registry = {
         'vllm-server': _FakeContainer('vllm-server', status='exited'),
         'other-service': _FakeContainer('other-service', status='exited'),
     }
-    monkeypatch.setattr(ga, '_docker_client', lambda: _FakeDockerClient(registry))
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: _FakeDockerClient(registry))
     fake_cfg = GpuArbiterConfig(
         containers=('vllm-server', 'other-service'),
         container_gpus=(('vllm-server', frozenset({2})), ('other-service', None)),
@@ -465,7 +447,7 @@ async def test_reconcile_starts_scoped_container_when_idle(tmp_path: Path, monke
     jobs_dir = tmp_path / 'jobs'
     jobs_dir.mkdir()
     registry = {'vllm-server': _FakeContainer('vllm-server', status='exited')}
-    monkeypatch.setattr(ga, '_docker_client', lambda: _FakeDockerClient(registry))
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: _FakeDockerClient(registry))
     fake_cfg = GpuArbiterConfig(
         containers=('vllm-server',),
         container_gpus=(('vllm-server', frozenset({2})),),

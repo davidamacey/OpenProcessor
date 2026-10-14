@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 from src.config.curation import CurationConfig, get_curation_config
-from src.services.training import gpu_arbiter as ga
+from src.services.training import gpu_arbiter_policy
 
 
 def test_pause_sentinel_path_is_vlm_worker_prefixed() -> None:
@@ -31,9 +31,9 @@ def test_gpu_arbiter_default_sentinel_matches_curation_config(
     its own independent 'training_worker/pause.sentinel' literal.
     """
     custom_state_dir = Path('/tmp/custom_state')
-    monkeypatch.setattr(ga, '_state_dir', lambda: custom_state_dir)
+    monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: custom_state_dir)
 
-    resolved = ga._default_sentinel_path()
+    resolved = gpu_arbiter_policy._default_sentinel_path()
 
     assert resolved == CurationConfig(state_dir=custom_state_dir).pause_sentinel_path
     assert 'training_worker' not in str(resolved)

@@ -117,7 +117,7 @@ async def test_promote_warm_up_runs_batch_1_and_max_batch_after_the_load_and_cle
 ) -> None:
     import httpx
 
-    from src.services.training import triton_promote
+    from src.services.training import triton_http
 
     calls: list[str] = []
     batches: list[int] = []
@@ -132,7 +132,7 @@ async def test_promote_warm_up_runs_batch_1_and_max_batch_after_the_load_and_cle
 
     real = httpx.AsyncClient
     monkeypatch.setattr(
-        triton_promote.httpx,
+        triton_http.httpx,
         'AsyncClient',
         lambda **kw: real(transport=httpx.MockTransport(handler), **kw),
     )
@@ -157,14 +157,14 @@ async def test_promote_warm_up_failure_keeps_the_cold_flag_and_does_not_fail_the
 ) -> None:
     import httpx
 
-    from src.services.training import triton_promote
+    from src.services.training import triton_http
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(500 if request.url.path.endswith('/infer') else 200)
 
     real = httpx.AsyncClient
     monkeypatch.setattr(
-        triton_promote.httpx,
+        triton_http.httpx,
         'AsyncClient',
         lambda **kw: real(transport=httpx.MockTransport(handler), **kw),
     )

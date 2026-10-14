@@ -122,7 +122,8 @@ def test_clone_source_stays_byte_identical() -> None:
     )
 
     from src.config.project_context import bind_project
-    from src.services.projects.guard import ProjectReadOnly, check_request
+    from src.services.projects.guard_errors import ProjectReadOnly
+    from src.services.projects.guard_policy import check_request
 
     with bind_project(source, read_only=True), pytest.raises(ProjectReadOnly):
         check_request(

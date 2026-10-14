@@ -4,7 +4,7 @@ every job-producing subsystem.
 
 Each source is its own small function so a unit test can fake one at a
 time. :func:`running_jobs` is the single entry point P3's delete/archive
-busy checks consume (``lifecycle.running_jobs`` adapts this module's
+busy checks consume (``lifecycle_checks.running_jobs`` adapts this module's
 ``JobRef`` into the wire-shaped one; see that function).
 
 Every source reads *file-based* state scoped to the given project's own
@@ -70,7 +70,7 @@ class JobRef:
     started_at: str | None = None
     # P3F pass-3 m-b: a genuine human-readable label when the job
     # source actually records one (e.g. a train run's own submitted
-    # ``mlflow_run_name``), else None. ``lifecycle.running_jobs`` falls
+    # ``mlflow_run_name``), else None. ``lifecycle_checks.running_jobs`` falls
     # back to ``job_id`` ONLY when this is None/empty -- never silently
     # pretends the internal job id IS a human label.
     label: str | None = None
@@ -343,7 +343,7 @@ def running_jobs(record: ProjectRecord) -> list[JobRef]:
     """Every busy job for ``record``'s project, across every source.
 
     Consumed by P3's delete/archive busy checks
-    (``lifecycle.running_jobs`` adapts these into the wire-shaped
+    (``lifecycle_checks.running_jobs`` adapts these into the wire-shaped
     ``JobRef``). Each source function above can be faked independently
     in a test.
     """

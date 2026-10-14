@@ -17,9 +17,9 @@ if TYPE_CHECKING:
 @pytest.fixture
 def env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Path]:
     """Point every bake-off / training dir at tmp_path and stub the GPU arbiter."""
-    import src.services.training.gpu_arbiter as arbiter
     from src.routers.curation import bakeoff
     from src.services.curation import bakeoff_resolve, eval_datasets
+    from src.services.training import gpu_arbiter_docker
 
     dirs = {
         'exports': tmp_path / 'exports',
@@ -52,7 +52,7 @@ def env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Path]:
     async def _stop(**_kw: Any) -> _Action:
         return _Action()
 
-    monkeypatch.setattr(arbiter, 'stop_gpu_services', _stop)
+    monkeypatch.setattr(gpu_arbiter_docker, 'stop_gpu_services', _stop)
     return dirs
 
 

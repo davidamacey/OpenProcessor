@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from src.services.training import jobs as train_jobs
+from src.services.training import job_manifest, jobs as train_jobs
 from src.services.training.job_models import TrainJobSpec
 
 
@@ -151,7 +151,7 @@ def test_a_real_training_run_completes_end_to_end(
     assert status.eval is not None
     assert 'map50' in status.eval
 
-    manifest = asyncio.run(train_jobs.read_manifest(job_id))
+    manifest = asyncio.run(job_manifest.read_manifest(job_id))
     assert manifest is not None
     assert manifest['results']['final_state'] == 'finished'
     assert manifest['results']['checkpoint_sha256']

@@ -44,7 +44,7 @@ from src.services.curation.ops_metrics import (
     OTHER_PROJECT,
     allowed_project_slugs,
 )
-from src.services.projects.guard import bind_registry_admin
+from src.services.projects.guard_policy import bind_registry_admin
 
 
 if TYPE_CHECKING:

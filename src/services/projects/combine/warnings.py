@@ -80,7 +80,7 @@ async def region_profiles_differ(
     """A warning when the sources' active region profiles differ by name or
     content. The target gets the ``settings_from`` source's activations, or
     none when that is unset."""
-    from src.services.projects.clone import read_activated_config
+    from src.services.projects.clone_activation import read_activated_config
 
     profiles: list[dict[str, Any]] = []
     for record in records:

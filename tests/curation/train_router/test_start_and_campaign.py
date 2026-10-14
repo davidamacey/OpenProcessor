@@ -118,9 +118,9 @@ def test_start_refuses_with_409_when_gpu_stop_required_and_docker_unavailable(
             container_gpus=(('vlm-inference-container', frozenset({0})),),
         ),
     )
-    from src.services.training import gpu_arbiter as _gpu_arbiter
+    from src.services.training import gpu_arbiter_docker
 
-    monkeypatch.setattr(_gpu_arbiter, '_docker_client', lambda: None)
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: None)
 
     body = {
         'dataset_export_dir': str(project_export_root / 'x'),
@@ -159,9 +159,10 @@ def test_preflight_reports_blocking_gpu_arbiter_check_when_docker_unavailable(
             container_gpus=(('vlm-inference-container', frozenset({0})),),
         ),
     )
-    from src.services.training import gpu_arbiter as _gpu_arbiter
 
-    monkeypatch.setattr(_gpu_arbiter, '_docker_client', lambda: None)
+    from src.services.training import gpu_arbiter_docker
+
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: None)
 
     body = {
         'dataset_export_dir': str(project_export_root / 'x'),
@@ -197,9 +198,10 @@ def test_start_campaign_refuses_with_409_when_gpu_stop_required_and_docker_unava
             container_gpus=(('vlm-inference-container', frozenset({0})),),
         ),
     )
-    from src.services.training import gpu_arbiter as _gpu_arbiter
 
-    monkeypatch.setattr(_gpu_arbiter, '_docker_client', lambda: None)
+    from src.services.training import gpu_arbiter_docker
+
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: None)
 
     body = {
         'dataset_export_dir': str(project_export_root / 'x'),

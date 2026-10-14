@@ -10,17 +10,21 @@ working unchanged.
 from __future__ import annotations
 
 import asyncio
-import shutil
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
-from src.config.env import env_path
 from src.config.project_context import bind_project
 from src.config.projects import DEFAULT_SLUG, ProjectStatus
 from src.core.logging import get_logger
 from src.schemas.curation.config_common import ModelSharingUser
 from src.services.config_store.project_usage import model_dependents
+from src.services.projects.delete_models import _shared_model_users, _unload_owned_models
+from src.services.projects.delete_paths import (
+    _delete_dirs,
+    _project_scoped_dirs,
+    _validate_delete_paths,
+)
 from src.services.projects.mlflow_cleanup import MlflowCleanup, delete_experiment
 from src.services.projects.registry import get_project_registry, get_record_with_seq
 from src.services.rejections import rejection
@@ -29,8 +33,6 @@ from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from src.config.projects import ProjectRecord
 
 
@@ -104,11 +106,10 @@ def _is_stale_building(record: ProjectRecord) -> bool:
 
 async def dry_run_delete(client: Any, *, slug: str) -> dict[str, Any]:
     """§4 ``DELETE ?dry_run=true``: report only, writes nothing."""
-    from src.services.projects.lifecycle import (
+    from src.services.projects.lifecycle import _require_found, _resolve_existing
+    from src.services.projects.lifecycle_checks import (
         _LAST_ACTIVE_MESSAGE,
         _other_active_slugs,
-        _require_found,
-        _resolve_existing,
         running_jobs,
     )
 
@@ -205,89 +206,6 @@ async def _delete_indexes(client: Any, record: ProjectRecord) -> list[str]:
     return failed
 
 
-def _require_project_scoped_path(path: Path, shared_root: Path, slug: str) -> None:
-    """m1 / P3F pass-3 m-a: require ``path`` to resolve to
-    ``<shared_root>/<slug>`` itself, or a proper descendant of it --
-    never ``shared_root`` itself (a corrupted/hand-edited registry
-    ``resources`` record pointing straight at the multi-project root
-    would otherwise let a delete wipe every sibling project's dir), and
-    never a sibling project's own ``<shared_root>/<other_slug>`` tree.
-
-    The prior guard (``_rm_dir_guarded``, ``_path_within``) accepted
-    ``path == shared_root`` for 6 of the project's 8 dirs -- only
-    ``train_jobs_dir``/``autolabel_dir`` got a real per-slug check. This
-    is the one guard every dir now goes through, each with its own
-    independently-computed ``shared_root`` (never derived from the path
-    being checked), and it always raises the plan's ``path_escape``
-    code, never ``internal_isolation_error``."""
-    project_root = (shared_root / slug).resolve()
-    try:
-        path.resolve().relative_to(project_root)
-    except ValueError:
-        logger.error('project_delete_path_escape', path=str(path), expected_root=str(project_root))
-        raise rejection(500, 'path_escape', f'refusing to delete outside {project_root}') from None
-
-
-def _project_scoped_dirs(record: ProjectRecord) -> list[tuple[Path, Path]]:
-    """Every one of the project's own dirs, paired with the shared
-    root each must resolve strictly inside (§4 step 6: "a path outside
-    refuses"). A new project's dirs are siblings under
-    ``OP_PROJECTS_DATA_ROOT`` (exports, class registry, bakeoff eval) or
-    under the deployment ``state_dir``/jobs roots (uploads, job dirs,
-    autolabel state) -- never under ``default``'s own dirs, which
-    :func:`resources_for_new` never nests anything into."""
-    from src.config.curation import base_curation_config
-    from src.config.projects import projects_data_root, trainer_jobs_root
-
-    base = base_curation_config()
-    data_root = projects_data_root()
-    state_projects_root = base.state_dir / 'projects'
-    autolabel_projects_root = env_path('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label') / 'projects'
-    from src.services.curation.bulk_ingest.limits import bulk_ingest_base_dir
-
-    bulk_ingest_projects_root = bulk_ingest_base_dir() / 'projects'
-    reprocess_projects_root = env_path('OP_REPROCESS_JOBS_DIR', '/jobs/reprocess') / 'projects'
-    return [
-        (record.resources.export_root, data_root),
-        (record.resources.class_registry_path.parent, data_root),
-        (record.resources.bakeoff_eval_root, data_root),
-        (record.resources.project_state_dir, state_projects_root),
-        (record.resources.upload_root, state_projects_root),
-        (record.resources.bakeoff_jobs_dir, state_projects_root),
-        (record.resources.train_jobs_dir, trainer_jobs_root() / 'projects'),
-        (record.resources.autolabel_dir, autolabel_projects_root),
-        # Bulk-ingest runs, ingest sources (definitions and queues) and reprocess jobs sit
-        # under the shared jobs volume, keyed by slug, not in the project's own resources.
-        (bulk_ingest_projects_root / record.slug, bulk_ingest_projects_root),
-        (reprocess_projects_root / record.slug, reprocess_projects_root),
-    ]
-
-
-def _validate_delete_paths(record: ProjectRecord) -> None:
-    """P3F pass-3 m-a: validate every one of the project's 8 dirs BEFORE
-    any irreversible step runs. The prior ordering ran this check (for
-    the 2 dirs it covered) only from inside ``_delete_dirs``, itself
-    called AFTER ``_delete_indexes`` had already irreversibly deleted
-    the project's OpenSearch indexes -- a ``path_escape`` raised there
-    left the record wedged ``deleting`` forever (every retry hits the
-    same escape again) with the indexes already gone. Called as a
-    preflight in :func:`delete_project_finish`, before the drain wait,
-    model unload or index delete."""
-    for path, shared_root in _project_scoped_dirs(record):
-        _require_project_scoped_path(path, shared_root, record.slug)
-
-
-async def _delete_dirs(record: ProjectRecord) -> None:
-    """Remove every per-project dir. Paths are already validated by
-    :func:`_validate_delete_paths` earlier in
-    :func:`delete_project_finish`; re-validate here too (cheap, and this
-    function has its own unit-test callers) rather than trusting that
-    nothing mutated ``record.resources`` in between."""
-    _validate_delete_paths(record)
-    for path, _shared_root in _project_scoped_dirs(record):
-        shutil.rmtree(path, ignore_errors=True)
-
-
 async def _wait_for_drain(record: ProjectRecord) -> bool:
     """Drain wait (plan §4 step 3, M3): poll the detection worker's
     per-project inflight liveness (``busy._detection_worker_inflight``,
@@ -321,12 +239,11 @@ async def delete_project(
     a background task so a slow delete never blocks past a proxy
     timeout. Call :func:`delete_project_finish` to run steps 3-9; this
     function only validates and flips the status."""
-    from src.services.projects.lifecycle import (
-        _get_mutable_record,
+    from src.services.projects.lifecycle import _get_mutable_record, write_record
+    from src.services.projects.lifecycle_checks import (
         _last_active_check,
         _require_transition,
         running_jobs,
-        write_record,
     )
 
     # MA1: read the record ONCE, fresh (bypassing the registry's
@@ -443,63 +360,6 @@ async def delete_project(
     await write_record(client, deleting, if_seq_no=seq, if_primary_term=term)
     await get_project_registry().ensure_fresh()
     return deleting
-
-
-async def _shared_model_users(record: ProjectRecord) -> list[str]:
-    """§5.5 in_use guard: which of this project's own promoted models
-    have opted into cross-project sharing (``PUT /models/{name}/sharing``,
-    ``promote.json.shared``)? A strict subset of :func:`owned_model_names` --
-    used ONLY to decide the ``in_use`` refusal (bypassable with
-    ``force=True``), never to decide whether unload runs (see
-    :func:`_unload_owned_models`, which unloads every owned model,
-    shared or not).
-
-    A project with any shared model is refused unless ``force=True``:
-    "opted into sharing" is itself evidence someone may depend on it.
-    :func:`~src.services.config_store.project_usage.model_dependents` names the projects that actually depend on
-    one today (their ACTIVE detection profile names the model).
-    """
-    from src.services.training.model_classes import is_model_shared
-
-    return [name for name in owned_model_names(record.slug) if is_model_shared(name)]
-
-
-async def _unload_owned_models(record: ProjectRecord) -> list[str]:
-    """M5 step 4 / P3F pass-3 MA2: unload every one of this project's
-    own promoted models -- private and shared alike (:func:`owned_model_names`,
-    the full ownership enumeration; NOT :func:`_shared_model_users`,
-    which only narrows the ``in_use`` refusal) -- from Triton and remove
-    their model repo directories, reusing P2's own unload primitive
-    (``src.services.training.triton_promote.unload_triton_model``, the
-    same one ``DELETE /models/{name}`` calls) rather than reimplementing
-    Triton model removal here. A project's own models are ALWAYS cleaned
-    up on delete; ``force`` only bypasses the upfront ``in_use`` 409 for
-    the shared subset, never whether this step runs.
-
-    Mirrors :func:`_delete_indexes`: collects (never swallows) failures
-    so the caller can leave the record retryable instead of tombstoning
-    a project some of whose models are still live in Triton."""
-    from src.services.training.promote_errors import ModelNotPromotedError
-    from src.services.training.triton_promote import unload_triton_model
-
-    failed: list[str] = []
-    for name in owned_model_names(record.slug):
-        try:
-            await unload_triton_model(name)
-        except ModelNotPromotedError:
-            # Already gone (e.g. a prior finish attempt's unload
-            # succeeded before a later step in that same run failed) --
-            # idempotent no-op, not a failure to retry.
-            continue
-        except Exception as exc:
-            logger.warning(
-                'project_delete_model_unload_failed',
-                project=record.slug,
-                model=name,
-                error=str(exc),
-            )
-            failed.append(name)
-    return failed
 
 
 @dataclass(frozen=True)

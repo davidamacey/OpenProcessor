@@ -71,7 +71,7 @@ async def fetch_revision(client: Any, name: str, revision: int) -> StoredConfig 
     (never fail-open, §3.6)."""
     from src.services.config_store.global_store import global_configs_index
     from src.services.config_store.index import config_doc_id
-    from src.services.projects.guard import global_configs_read
+    from src.services.projects.guard_policy import global_configs_read
 
     key = (name, revision)
     cached = _REVISION_CACHE.get(key)
@@ -94,7 +94,7 @@ async def fetch_revision(client: Any, name: str, revision: int) -> StoredConfig 
 async def load_global_fields(client: Any, index: str) -> dict[str, Any]:
     """Probes and the desired local model (endpoint docs arrive with the
     generic ``doc_type: config`` search in ``ConfigStore._load_snapshot``)."""
-    from src.services.projects.guard import global_configs_read
+    from src.services.projects.guard_policy import global_configs_read
 
     with global_configs_read():
         probes: dict[str, dict[str, Any]] = {}
