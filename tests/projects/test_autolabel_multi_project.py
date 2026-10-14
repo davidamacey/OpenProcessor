@@ -166,7 +166,7 @@ def test_worker_loop_runs_triggers_fifo_one_at_a_time(
     monkeypatch.setattr(
         auto_label_worker, 'script_project_registry', lambda *_a: _Registry([beta, alpha])
     )
-    monkeypatch.setattr(auto_label_worker, '_build_opensearch', lambda: _NullOpenSearch())
+    monkeypatch.setattr(auto_label_worker, '_build_opensearch', _NullOpenSearch)
     monkeypatch.setattr(auto_label_worker, '_write_container_heartbeat', lambda *_a: None)
     monkeypatch.setattr(auto_label_worker, 'AUTO_RETRAIN_CHECK_INTERVAL_S', 0.0)
     monkeypatch.setattr(auto_label_worker, 'POLL_INTERVAL_S', 0.01)

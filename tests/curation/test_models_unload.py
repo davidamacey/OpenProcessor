@@ -43,7 +43,7 @@ def app_client():
 
     from src.routers.curation._common import _raw_opensearch_dep
 
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: object()
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: object()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
     mount_curation_routers(app, models_mod.router)
     with TestClient(app) as client:
         yield client

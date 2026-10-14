@@ -649,8 +649,10 @@ def test_real_onnx_matches_pytorch_eager() -> None:
         'red sedan',
         'close-up of a license plate',
         'café storefront with a neon sign',
-        'two dogs playing in the snow on a sunny winter afternoon near a frozen lake '
-        'with pine trees and mountains in the background under a clear blue sky',
+        (
+            'two dogs playing in the snow on a sunny winter afternoon near a frozen lake '
+            'with pine trees and mountains in the background under a clear blue sky'
+        ),
     ]
     onnx_enc = PEEncoder(text_backend='onnx', text_onnx_path=onnx_path)
     onnx_enc.warm_text_encoder()

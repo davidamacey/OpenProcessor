@@ -41,9 +41,7 @@ def _by_score(os_fake: Any) -> dict[float, dict[str, Any]]:
 async def test_selected_mode_embeds_only_chosen_classes_and_stores_the_rest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        'src.services.curation.ingest_index.get_ivf_ingest_store', lambda: _IvfStore()
-    )
+    monkeypatch.setattr('src.services.curation.ingest_index.get_ivf_ingest_store', _IvfStore)
     svc, os_fake = _service(
         IngestPolicy(embedding=EmbeddingPolicy(mode='selected', classes=['widget']))
     )
@@ -73,9 +71,7 @@ async def test_selected_mode_embeds_only_chosen_classes_and_stores_the_rest(
 async def test_selected_mode_still_places_an_embedded_unclassed_item(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        'src.services.curation.ingest_index.get_ivf_ingest_store', lambda: _IvfStore()
-    )
+    monkeypatch.setattr('src.services.curation.ingest_index.get_ivf_ingest_store', _IvfStore)
     svc, os_fake = _service(
         IngestPolicy(
             embedding=EmbeddingPolicy(mode='selected', min_confidence=0.2, max_per_image=3)

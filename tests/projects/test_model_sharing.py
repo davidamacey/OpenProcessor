@@ -33,7 +33,7 @@ def app_client():
     from _curation_app import mount_curation_routers
 
     mount_curation_routers(app, models_mod.router)
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: FakeConfigOpenSearch()
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: FakeConfigOpenSearch()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
     with TestClient(app) as client:
         yield client
 
@@ -159,7 +159,7 @@ def test_concurrent_puts_on_the_same_revision_one_wins_one_409s(
 
     app = FastAPI()
     mount_curation_routers(app, models_mod.router)
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: FakeConfigOpenSearch()
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: FakeConfigOpenSearch()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
     client = TestClient(app)
     barrier = threading.Barrier(2)
     codes: list[int] = []

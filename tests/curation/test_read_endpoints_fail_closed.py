@@ -62,7 +62,7 @@ def test_stats_classes_registry_failure_is_503(monkeypatch: pytest.MonkeyPatch) 
         def load(self) -> Any:
             raise OSError('registry unreadable')
 
-    monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: _BrokenRegistry())
+    monkeypatch.setattr('src.routers.curation.get_class_registry', _BrokenRegistry)
     fake = AsyncMock()
     fake.search = AsyncMock(return_value={'aggregations': {'by_class': {'buckets': []}}})
     r = _client(fake).get('/curation/projects/default/stats/classes')

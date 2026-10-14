@@ -5,14 +5,14 @@ permanently lagging host."""
 from __future__ import annotations
 
 import asyncio
-import datetime
+import datetime as dt
 from unittest.mock import AsyncMock
 
 from src.services.config_store.index import RUNTIME_DOC_MAX_AGE_S, get_runtime_docs
 
 
 def _hit(host: str, age_s: float) -> dict[str, object]:
-    at = datetime.datetime.now(datetime.UTC) - datetime.timedelta(seconds=age_s)
+    at = dt.datetime.now(dt.UTC) - dt.timedelta(seconds=age_s)
     return {
         '_id': f'runtime:detection_worker:{host}',
         '_source': {'host': host, 'applied_at': at.isoformat()},

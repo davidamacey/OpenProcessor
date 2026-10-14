@@ -203,7 +203,7 @@ def _published_ports(spec: dict[str, Any]) -> list[str]:
             published.append(','.join(v for v in host_vars if v not in _NON_HOST_PORT_VARS))
         else:
             # Short syntax with no vars at all: "HOST:CONTAINER" or a bare port.
-            published.append(text.split(':')[0] if ':' in text else text)
+            published.append(text.split(':', maxsplit=1)[0] if ':' in text else text)
     return published
 
 
@@ -517,7 +517,7 @@ def test_no_hardcoded_published_host_ports() -> None:
                     bad.append(f'{name}: {entry!r}')
                 continue
             text = str(entry)
-            host_part = text.split(':')[0] if ':' in text else text
+            host_part = text.split(':', maxsplit=1)[0] if ':' in text else text
             if host_part and '${' not in host_part:
                 bad.append(f'{name}: {text!r}')
     assert not bad, 'published host ports not driven by an env var:\n' + '\n'.join(bad)

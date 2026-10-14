@@ -31,7 +31,7 @@ def _dns(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         'api.example.com': ['93.184.216.34'],
     }
     monkeypatch.setattr(policy, '_resolve', lambda host: list(table.get(host, [])))
-    monkeypatch.setattr(policy, '_docker_gateway_addresses', lambda: frozenset())
+    monkeypatch.setattr(policy, '_docker_gateway_addresses', frozenset)
     policy.reset_policy_caches()
     monkeypatch.setenv('OP_VLM_SECRETS_DIR', str(tmp_path / 'secrets'))
     monkeypatch.delenv('OP_VLM_EXTERNAL_POLICY', raising=False)

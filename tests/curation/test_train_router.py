@@ -83,8 +83,8 @@ def app_client(
         def get(self, _cid: int) -> Any:
             return None
 
-    monkeypatch.setattr('src.routers.curation_train.preflight.get_class_registry', lambda: _Reg())
-    monkeypatch.setattr('src.services.training.preflight_checks.get_class_registry', lambda: _Reg())
+    monkeypatch.setattr('src.routers.curation_train.preflight.get_class_registry', _Reg)
+    monkeypatch.setattr('src.services.training.preflight_checks.get_class_registry', _Reg)
 
     from src.routers.curation._common import _raw_opensearch_dep
     from src.routers.curation_train import router as curation_train_router

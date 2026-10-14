@@ -9,9 +9,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
-from src.services.curation.dataset_import.issues import (
-    DatasetIssueCode,  # noqa: TC001 - pydantic field type, resolved at runtime
-)
+from src.services.curation.dataset_import.issues import DatasetIssueCode  # noqa: TC001 - pydantic field type, resolved at runtime
 from src.services.issue_ids import stamp_issue_ids
 
 

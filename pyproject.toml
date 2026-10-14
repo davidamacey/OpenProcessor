@@ -184,6 +184,7 @@ ignore = [
     "E501",    # Line too long (handled by formatter)
     "PLC0415", # Import should be at top-level (lazy imports for heavy deps)
     "PLR0913", # Too many arguments (common in ML code)
+    "PLR0917", # Too many positional arguments (FastAPI endpoints take Query/Form parameters; same reason as PLR0913)
     "PLR0912", # Too many branches (common in validation logic)
     "PLR0915", # Too many statements (common in setup functions)
     "PLR2004", # Magic value comparison (common with thresholds)

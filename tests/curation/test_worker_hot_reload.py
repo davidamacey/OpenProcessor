@@ -294,7 +294,7 @@ async def test_quiesce_and_swap_pins_before_resolving_active_profile() -> None:
             args=_fake_args(),
             want=current_want(store, get_global_config_store(mode='pinned')),
             get_active_profile=_get_active_profile,
-            get_active_pack=lambda: profile_registry_pack(),
+            get_active_pack=profile_registry_pack,
             **_swap_kw(),
         )
         # By the time get_active_profile() ran, the store had already

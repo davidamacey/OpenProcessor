@@ -60,7 +60,7 @@ def service(monkeypatch: pytest.MonkeyPatch) -> tuple[VisualSearchService, _Fake
         'src.clients.fast_face_client.get_fast_face_client',
         lambda url: object(),  # noqa: ARG005
     )
-    monkeypatch.setattr('src.services.ocr_service.get_ocr_service', lambda: _FakeOcrService())
+    monkeypatch.setattr('src.services.ocr_service.get_ocr_service', _FakeOcrService)
     return svc, fake_opensearch
 
 

@@ -533,8 +533,10 @@ async def run_preflight(
     class_split_result = (
         (
             'ok',
-            'not applicable for this dataset kind (single-class: covered by '
-            'export_splits_nonempty)',
+            (
+                'not applicable for this dataset kind (single-class: covered by '
+                'export_splits_nonempty)'
+            ),
             {},
         )
         if _is_single_class

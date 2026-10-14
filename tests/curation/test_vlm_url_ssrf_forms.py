@@ -12,7 +12,7 @@ from src.services.labeling.vlm_url_policy import parse_endpoint_url, url_denial
 @pytest.fixture(autouse=True)
 def _dns(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(policy, '_resolve', lambda _host: [])
-    monkeypatch.setattr(policy, '_docker_gateway_addresses', lambda: frozenset())
+    monkeypatch.setattr(policy, '_docker_gateway_addresses', frozenset)
     policy.reset_policy_caches()
 
 

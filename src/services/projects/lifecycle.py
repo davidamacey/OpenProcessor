@@ -632,8 +632,4 @@ from src.services.projects.clone import clone_settings, clone_settings_into  # n
 # dry_run_delete / delete_project / delete_project_finish live in
 # delete.py (700-LOC ratchet); re-exported here so
 # `lifecycle.delete_project(...)` keeps working for every existing caller.
-from src.services.projects.delete import (  # noqa: E402,F401
-    delete_project,
-    delete_project_finish,
-    dry_run_delete,
-)
+from src.services.projects.delete import delete_project, delete_project_finish, dry_run_delete  # noqa: E402,F401

@@ -160,7 +160,7 @@ class TestPipelineClassIdScoping:
         and every class's items are in scope (pre-existing behavior)."""
         from src.routers.curation import pipeline
 
-        monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: self._registry())
+        monkeypatch.setattr('src.routers.curation.get_class_registry', self._registry)
         fake_os = _FakeOpenSearch({3: ['pallet-1', 'pallet-2'], 7: ['forklift-1']})
 
         summary = await pipeline.pipeline_auto_label(
@@ -200,7 +200,7 @@ class TestPipelineClassIdScoping:
         the other class's item never appears."""
         from src.routers.curation import pipeline
 
-        monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: self._registry())
+        monkeypatch.setattr('src.routers.curation.get_class_registry', self._registry)
         fake_os = _FakeOpenSearch({3: ['pallet-1', 'pallet-2'], 7: ['forklift-1']})
 
         summary = await pipeline.pipeline_auto_label(

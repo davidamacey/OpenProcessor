@@ -78,8 +78,10 @@ def image_key_refs() -> list[tuple[str, str]]:
         [
             'bash',
             '-c',
-            f'source "{REPO_ROOT}/scripts/lib/image_keys.sh"; for k in $(image_keys); do '
-            'echo "$k $(image_key_field "$k" kind) $(image_key_field "$k" image)$(image_key_field "$k" source)"; done',
+            (
+                f'source "{REPO_ROOT}/scripts/lib/image_keys.sh"; for k in $(image_keys); do '
+                'echo "$k $(image_key_field "$k" kind) $(image_key_field "$k" image)$(image_key_field "$k" source)"; done'
+            ),
         ],
         check=True,
         capture_output=True,

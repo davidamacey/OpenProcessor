@@ -48,7 +48,7 @@ def client(monkeypatch: pytest.MonkeyPatch, segmenter: dict[str, Any]) -> TestCl
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
     monkeypatch.setattr(
         'src.config.ingest_profiles.ingest_primary_profile',
-        lambda: type('P', (), {'detector_model': ''})(),
+        type('P', (), {'detector_model': ''}),
     )
     app = FastAPI()
     mount_curation_routers(app, curation_router)
@@ -220,7 +220,7 @@ def test_target_named_like_a_detector_class_is_a_warning(
 ) -> None:
     monkeypatch.setattr(
         'src.config.ingest_profiles.ingest_primary_profile',
-        lambda: type('P', (), {'detector_model': 'det'})(),
+        type('P', (), {'detector_model': 'det'}),
     )
     monkeypatch.setattr('src.utils.class_names.get_class_names', lambda _m: {0: 'Cup', 1: 'person'})
     r = client.post(

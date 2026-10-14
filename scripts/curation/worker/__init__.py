@@ -55,7 +55,5 @@ from scripts.curation.worker.state import (  # noqa: F401
     items_index,
 )
 from src.clients.triton_pool import AsyncTritonPool  # noqa: F401
-from src.services.labeling.vlm_factory import (  # noqa: F401
-    build_uncached_labeler as build_vlm_labeler,
-)
+from src.services.labeling.vlm_factory import build_uncached_labeler as build_vlm_labeler  # noqa: F401
 from src.services.projects.guard import make_script_opensearch  # noqa: F401

@@ -192,7 +192,7 @@ async def _run_cluster_residuals(
 
     monkeypatch.setattr(
         'src.services.curation.clustering.backend.detect_cluster_backend',
-        lambda: _FakeBackendInfo(),
+        _FakeBackendInfo,
     )
     monkeypatch.setattr(
         'src.services.curation.clustering.embedding_reduce.fetch_residual_embeddings_parallel',

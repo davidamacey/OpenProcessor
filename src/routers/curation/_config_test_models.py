@@ -10,19 +10,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.routers.curation._config_common_models import (
-    ValidationReport,  # noqa: TC001 - pydantic field type
-)
+from src.routers.curation._config_common_models import ValidationReport  # noqa: TC001 - pydantic field type
 from src.routers.curation._item_models import ItemDoc  # noqa: TC001 - pydantic field type
-from src.routers.curation._prompt_pack_models import (
-    PromptPackBody,  # noqa: TC001 - pydantic field type
-)
-from src.routers.curation._region_profile_models import (
-    RegionProfileBody,  # noqa: TC001 - pydantic field type
-)
-from src.services.labeling.vlm_endpoint_body import (
-    VlmEndpointBody,  # noqa: TC001 - pydantic field type
-)
+from src.routers.curation._prompt_pack_models import PromptPackBody  # noqa: TC001 - pydantic field type
+from src.routers.curation._region_profile_models import RegionProfileBody  # noqa: TC001 - pydantic field type
+from src.services.labeling.vlm_endpoint_body import VlmEndpointBody  # noqa: TC001 - pydantic field type
 from src.services.labeling.vlm_probe import ProbeCall  # noqa: TC001 - pydantic field type
 
 

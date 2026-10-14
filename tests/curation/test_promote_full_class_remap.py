@@ -236,7 +236,7 @@ def test_full_class_promote_without_remap_allowed_when_registry_is_contiguous(
         def load(self) -> _Snapshot:
             return _Snapshot()
 
-    monkeypatch.setattr('src.services.training.promote_gate.get_class_registry', lambda: _Reg())
+    monkeypatch.setattr('src.services.training.promote_gate.get_class_registry', _Reg)
 
     from src.services.training.job_models import TrainJobStatus
 

@@ -207,8 +207,10 @@ def export_splits_check(manifest: dict[str, Any]) -> CheckResult:
         names = ' and '.join(repr(s) for s in empty)
         return (
             'block',
-            f'export has 0 images in {names} ({summary}); training needs both train and val. '
-            'Re-export once there are enough non-holdout validated items.',
+            (
+                f'export has 0 images in {names} ({summary}); training needs both train and val. '
+                'Re-export once there are enough non-holdout validated items.'
+            ),
             detail,
         )
     return 'ok', f'export has train and val images ({summary})', detail
@@ -230,8 +232,10 @@ def export_class_split_check(
     if not isinstance(rows, list):
         return (
             'unknown',
-            'export manifest records no per-class split counts (exported before they were '
-            'recorded); re-export to check per-class train/val coverage',
+            (
+                'export manifest records no per-class split counts (exported before they were '
+                'recorded); re-export to check per-class train/val coverage'
+            ),
             {},
         )
     wanted = set(include_classes) if include_classes else None
@@ -267,10 +271,12 @@ def export_class_split_check(
         )
         return (
             'block',
-            f'{len(gaps)} class(es) this run trains on are below the per-class minimum of '
-            f'{MIN_TRAIN_INSTANCES_PER_CLASS} train / {MIN_VAL_INSTANCES_PER_CLASS} val '
-            f'instance(s): {listed}. Validate more items for them, or leave them out via '
-            'include_classes, then re-export.',
+            (
+                f'{len(gaps)} class(es) this run trains on are below the per-class minimum of '
+                f'{MIN_TRAIN_INSTANCES_PER_CLASS} train / {MIN_VAL_INSTANCES_PER_CLASS} val '
+                f'instance(s): {listed}. Validate more items for them, or leave them out via '
+                'include_classes, then re-export.'
+            ),
             detail,
         )
     return (
@@ -301,8 +307,10 @@ def export_unlabeled_objects_check(manifest: dict[str, Any]) -> CheckResult:
     if not isinstance(unlabeled, int) or not isinstance(images_with, int):
         return (
             'unknown',
-            'export manifest records no unlabeled-object counts (exported before per-image '
-            'labels); re-export to check for partially labeled images',
+            (
+                'export manifest records no unlabeled-object counts (exported before per-image '
+                'labels); re-export to check for partially labeled images'
+            ),
             detail,
         )
     if unlabeled == 0:
@@ -311,10 +319,12 @@ def export_unlabeled_objects_check(manifest: dict[str, Any]) -> CheckResult:
     of_total = f'/{total:,}' if isinstance(total, int) else ''
     return (
         'warn',
-        f'{images_with:,}{of_total} exported image(s) hold {unlabeled:,} unlabeled object(s) '
-        '(unreviewed, or on a class this export leaves out). Training learns an unlabeled '
-        'object in a training image as background. Review them, or re-export with '
-        'require_fully_labeled_images=true to leave those images out.',
+        (
+            f'{images_with:,}{of_total} exported image(s) hold {unlabeled:,} unlabeled object(s) '
+            '(unreviewed, or on a class this export leaves out). Training learns an unlabeled '
+            'object in a training image as background. Review them, or re-export with '
+            'require_fully_labeled_images=true to leave those images out.'
+        ),
         detail,
     )
 

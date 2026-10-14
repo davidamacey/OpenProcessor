@@ -80,7 +80,7 @@ class Wave0Gauges(Gauges):
     """
 
     def __init__(self, project: str, gpu: str) -> None:
-        super().__init__(project, gpu.split(',')[0])
+        super().__init__(project, gpu.split(',', maxsplit=1)[0])
         self.all_gpus = gpu.split(',')
         self.pmons = {g: PmonSampler(g) for g in self.all_gpus}
         self.clocks = ClockSampler()

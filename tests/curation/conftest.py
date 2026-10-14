@@ -107,7 +107,7 @@ def vlm_api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> VlmApi:
     fake_os = FakeConfigOpenSearch()
     dns = dict(DEFAULT_DNS)
     monkeypatch.setattr(policy, '_resolve', lambda host: list(dns.get(host, [])))
-    monkeypatch.setattr(policy, '_docker_gateway_addresses', lambda: frozenset())
+    monkeypatch.setattr(policy, '_docker_gateway_addresses', frozenset)
     policy.reset_policy_caches()
     monkeypatch.setenv('OP_VLM_SECRETS_DIR', str(tmp_path / 'secrets'))
     monkeypatch.delenv('OP_VLM_URL', raising=False)

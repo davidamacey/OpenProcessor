@@ -530,7 +530,7 @@ def _ocr_pipeline_mock_result(
         'rec_scores': np.asarray(rec_full, dtype=np.float32),
     }
     m = MagicMock()
-    m.as_numpy = lambda name: table.get(name)
+    m.as_numpy = table.get
     return m
 
 

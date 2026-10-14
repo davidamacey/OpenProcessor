@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 # =============================================================================
 
 
-class IndexName(str, Enum):
+class IndexName(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and format() as Class.MEMBER; StrEnum would change both
     """OpenSearch index names for visual search."""
 
     GLOBAL = 'visual_search_global'
@@ -40,7 +40,7 @@ class IndexMappingError(RuntimeError):
     """
 
 
-class DetectionCategory(str, Enum):
+class DetectionCategory(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and format() as Class.MEMBER; StrEnum would change both
     """Detection categories for routing."""
 
     VEHICLE = 'vehicle'

@@ -140,9 +140,11 @@ PARITY_PROMPTS: tuple[str, ...] = (
     'a person riding a bicycle at night',
     'close-up of a license plate',
     'blurry image',
-    'two dogs playing in the snow on a sunny winter afternoon near a frozen lake '
-    'with pine trees and mountains in the background under a clear blue sky while '
-    'children build a snowman and skate across the ice at dusk',
+    (
+        'two dogs playing in the snow on a sunny winter afternoon near a frozen lake '
+        'with pine trees and mountains in the background under a clear blue sky while '
+        'children build a snowman and skate across the ice at dusk'
+    ),
     'Stop sign!',
     'motorcycle, side view, black',
     'a crowded street market with colorful umbrellas',

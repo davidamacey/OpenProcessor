@@ -89,12 +89,7 @@ apply_end2end_patch()
 import onnx  # noqa: E402
 import tensorrt as trt  # noqa: E402
 import torch  # noqa: E402
-from trt_utils import (  # noqa: E402
-    bake_fp16_onnx,
-    create_explicit_network,
-    enable_fp16,
-    engine_output_dtypes,
-)
+from trt_utils import bake_fp16_onnx, create_explicit_network, enable_fp16, engine_output_dtypes  # noqa: E402
 from uint8_input import add_uint8_input  # noqa: E402
 from ultralytics import YOLO  # noqa: E402
 from ultralytics.cfg import get_cfg  # noqa: E402

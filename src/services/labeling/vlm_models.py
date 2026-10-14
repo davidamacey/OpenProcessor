@@ -9,9 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.services.labeling.region_overlay import (  # noqa: TC001 - pydantic resolves it at runtime
-    VlmBoxVerdict,
-)
+from src.services.labeling.region_overlay import VlmBoxVerdict  # noqa: TC001 - pydantic resolves it at runtime
 
 
 ConfidenceLevel = Literal['high', 'medium', 'low']

@@ -145,8 +145,8 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Any:
         return None
 
     monkeypatch.setattr(registry_mod.ProjectRegistry, 'ensure_fresh', _fresh)
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: _NoOpenSearch()
-    app.dependency_overrides[get_async_triton] = lambda: object()
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: _NoOpenSearch()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
+    app.dependency_overrides[get_async_triton] = lambda: object()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
     try:
         yield TestClient(app)
     finally:

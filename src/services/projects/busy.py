@@ -48,10 +48,10 @@ def _iso_or_none(value: object) -> str | None:
     # not a real 1970 start time -- surface it as unknown, not a
     # misleadingly precise fake timestamp.
     if isinstance(value, int | float) and value > 0:
-        import datetime as _dt
+        import datetime as dt
 
         try:
-            return _dt.datetime.fromtimestamp(value, _dt.UTC).isoformat()
+            return dt.datetime.fromtimestamp(value, dt.UTC).isoformat()
         except (OverflowError, OSError, ValueError):
             return None
     return None

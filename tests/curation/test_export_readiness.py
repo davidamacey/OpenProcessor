@@ -133,7 +133,7 @@ def test_export_router_maps_nothing_to_export_to_422(monkeypatch: pytest.MonkeyP
     from _curation_app import mount_curation_routers
 
     mount_curation_routers(app, curation_router)
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
     r = TestClient(app).post('/curation/projects/default/export/yolo', json={})
     assert r.status_code == 422
     assert '0 items are class_validated' in r.json()['detail']
@@ -199,9 +199,9 @@ def train_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         def get(self, _cid: int) -> Any:
             return None
 
-    monkeypatch.setattr('src.routers.curation_train.preflight.get_class_registry', lambda: _Reg())
+    monkeypatch.setattr('src.routers.curation_train.preflight.get_class_registry', _Reg)
 
-    monkeypatch.setattr('src.services.training.preflight_checks.get_class_registry', lambda: _Reg())
+    monkeypatch.setattr('src.services.training.preflight_checks.get_class_registry', _Reg)
     fake = AsyncMock()
     fake.search = AsyncMock(return_value={'hits': {'hits': [], 'total': {'value': 0}}})
     fake.count = AsyncMock(return_value={'count': 0})

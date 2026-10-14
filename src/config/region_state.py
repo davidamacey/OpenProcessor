@@ -45,7 +45,7 @@ from enum import Enum
 from typing import Any
 
 
-class RegionStatus(str, Enum):
+class RegionStatus(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and format() as Class.MEMBER; StrEnum would change both
     """Canonical region-status values written by the curation pipeline."""
 
     PENDING_DETECTION = 'pending_detection'

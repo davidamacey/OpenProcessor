@@ -84,7 +84,7 @@ def test_delete_retry_after_failed_index_delete_succeeds(leak_env: LeakEnv) -> N
     async def _flaky_perform(
         method: str, url: str, params: Any = None, body: Any = None, **kw: Any
     ) -> Any:
-        target = url.split('?')[0].strip('/')
+        target = url.split('?', maxsplit=1)[0].strip('/')
         if method == 'DELETE' and target == failing_index and not state['failed_once']:
             state['failed_once'] = True
             raise RuntimeError('simulated transient cluster hiccup')

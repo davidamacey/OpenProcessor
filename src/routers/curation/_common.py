@@ -42,12 +42,7 @@ from src.clients.curation_opensearch.items_extra import (
 from src.clients.curation_opensearch.lifecycle import create_curation_indexes
 from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import get_curation_config
-from src.config.curation import (  # noqa: F401 - re-exported for the router modules
-    classes_index,
-    images_index,
-    items_index,
-    labels_confirmed_index,
-)
+from src.config.curation import classes_index, images_index, items_index, labels_confirmed_index  # noqa: F401 - re-exported for the router modules
 from src.core.dependencies import get_curation_opensearch
 from src.core.logging import get_logger
 from src.core.wire_json import WireRoute

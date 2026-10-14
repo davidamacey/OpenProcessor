@@ -347,13 +347,15 @@ def test_release_lock_round_trips_through_the_installer_parser(
         [
             'bash',
             '-c',
-            f'OP_SOURCE_ONLY=1 source "{REPO_ROOT}/setup-openprocessor.sh"; '
-            f'source "{REPO_ROOT}/scripts/lib/image_keys.sh"; '
-            'validate_images_lock "$1" || exit 10; '
-            'for k in $(image_keys); do '
-            '  ref="$(lock_value "$1" "$k")"; _lock_line_valid "$k=$ref" || { echo "bad $k"; exit 11; }; '
-            '  echo "$k $(image_key_field "$k" env) $ref"; '
-            'done',
+            (
+                f'OP_SOURCE_ONLY=1 source "{REPO_ROOT}/setup-openprocessor.sh"; '
+                f'source "{REPO_ROOT}/scripts/lib/image_keys.sh"; '
+                'validate_images_lock "$1" || exit 10; '
+                'for k in $(image_keys); do '
+                '  ref="$(lock_value "$1" "$k")"; _lock_line_valid "$k=$ref" || { echo "bad $k"; exit 11; }; '
+                '  echo "$k $(image_key_field "$k" env) $ref"; '
+                'done'
+            ),
             '_',
             str(lock),
         ],

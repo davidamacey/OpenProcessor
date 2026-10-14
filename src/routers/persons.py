@@ -42,7 +42,7 @@ def get_face_identity() -> FaceIdentityService:
     return get_face_identity_service()
 
 
-FaceIdentityDep = Annotated[FaceIdentityService, lambda: get_face_identity()]
+FaceIdentityDep = Annotated[FaceIdentityService, get_face_identity]
 
 
 # =============================================================================

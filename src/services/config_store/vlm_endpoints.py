@@ -15,7 +15,7 @@ project guard refuses a bound write to this index.
 from __future__ import annotations
 
 import contextlib
-import datetime
+import datetime as dt
 from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import NotFoundError
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
 
 def _now() -> str:
-    return datetime.datetime.now(datetime.UTC).isoformat()
+    return dt.datetime.now(dt.UTC).isoformat()
 
 
 async def _reload(client: Any, axis: str = 'registry') -> Any:

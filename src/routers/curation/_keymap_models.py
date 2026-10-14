@@ -8,9 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from src.routers.curation._config_common_models import (
-    ValidationIssue,  # noqa: TC001 - pydantic field type, needed at runtime
-)
+from src.routers.curation._config_common_models import ValidationIssue  # noqa: TC001 - pydantic field type, needed at runtime
 
 
 class KeymapGrammarWire(BaseModel):

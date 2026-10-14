@@ -130,8 +130,10 @@ def terminal_steps(api: str, image: bytes) -> list[tuple[str, dict]]:
     }
     steps.append(
         (
-            "curl -s -X POST $API/embed/text -H 'content-type: application/json' "
-            '-d \'{"text": "a person riding a bicycle"}\' | jq',
+            (
+                "curl -s -X POST $API/embed/text -H 'content-type: application/json' "
+                '-d \'{"text": "a person riding a bicycle"}\' | jq'
+            ),
             emb_view,
         )
     )

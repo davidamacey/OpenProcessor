@@ -19,7 +19,7 @@ Doc ids (see any_domain_plan.md §3.1):
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import os
 import time
 import uuid
@@ -80,7 +80,7 @@ def runtime_doc_id(process: str, hostname: str) -> str:
 
 
 def _now_iso() -> str:
-    return datetime.datetime.now(datetime.UTC).isoformat()
+    return dt.datetime.now(dt.UTC).isoformat()
 
 
 class RevisionConflictError(Exception):
@@ -405,7 +405,7 @@ async def upsert_runtime_doc(
         'doc_type': 'runtime',
         'process': process,
         'host': hostname,
-        'applied_at': datetime.datetime.now(datetime.UTC).isoformat(),
+        'applied_at': dt.datetime.now(dt.UTC).isoformat(),
         **fields,
     }
     await client.index(index=index, id=doc_id, body=body)
@@ -417,16 +417,16 @@ async def upsert_runtime_doc(
 RUNTIME_DOC_MAX_AGE_S = 300.0
 
 
-def _runtime_doc_is_live(source: dict[str, Any], now: datetime.datetime) -> bool:
+def _runtime_doc_is_live(source: dict[str, Any], now: dt.datetime) -> bool:
     raw = source.get('applied_at')
     if not raw:
         return True
     try:
-        applied = datetime.datetime.fromisoformat(str(raw))
+        applied = dt.datetime.fromisoformat(str(raw))
     except ValueError:
         return True
     if applied.tzinfo is None:
-        applied = applied.replace(tzinfo=datetime.UTC)
+        applied = applied.replace(tzinfo=dt.UTC)
     return (now - applied).total_seconds() <= RUNTIME_DOC_MAX_AGE_S
 
 
@@ -441,7 +441,7 @@ async def get_runtime_docs(client: Any, index: str, *, process: str) -> list[dic
             'query': {'bool': {'filter': [{'term': {'doc_type': 'runtime'}}]}},
         },
     )
-    now = datetime.datetime.now(datetime.UTC)
+    now = dt.datetime.now(dt.UTC)
     return [
         hit['_source']
         for hit in resp['hits']['hits']

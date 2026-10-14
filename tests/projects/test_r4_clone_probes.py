@@ -7,13 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException
 
-from projects.test_r3_clone_probes import (  # noqa: F401 - reuse fixtures/helpers
-    Fake,
-    _activate,
-    _env,
-    _record,
-    _save,
-)
+from projects.test_r3_clone_probes import Fake, _activate, _env, _record, _save  # noqa: F401 - reuse fixtures/helpers
 from src.config.project_context import bind_project
 
 

@@ -78,7 +78,7 @@ def _client(monkeypatch: pytest.MonkeyPatch, search_resp: dict[str, Any]) -> Tes
     fake = AsyncMock()
     fake.search = AsyncMock(return_value=search_resp)
     fake.count = AsyncMock(return_value={'count': 0})
-    monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: _Reg())
+    monkeypatch.setattr('src.routers.curation.get_class_registry', _Reg)
     app = FastAPI()
     from _curation_app import mount_curation_routers
 
@@ -97,7 +97,7 @@ def _client_with_fake(
     fake = AsyncMock()
     fake.search = AsyncMock(return_value=search_resp)
     fake.count = AsyncMock(return_value={'count': 0})
-    monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: _Reg())
+    monkeypatch.setattr('src.routers.curation.get_class_registry', _Reg)
     app = FastAPI()
     from _curation_app import mount_curation_routers
 

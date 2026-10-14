@@ -311,8 +311,10 @@ def resolve_for_loaded_model(
         eval_names=eval_names,
         scored_class_ids=scored,
         warnings=[
-            'model exposes no class names and the eval split scores '
-            f'{len(scored)} classes; give it an explicit class_map'
+            (
+                'model exposes no class names and the eval split scores '
+                f'{len(scored)} classes; give it an explicit class_map'
+            )
         ],
     )
 

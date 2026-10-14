@@ -1013,7 +1013,7 @@ def _body_lines(body: Any) -> list[Any]:
 def touched_indexes(url: str, body: Any) -> set[str]:
     """Every index a request reaches, independent of the guard's parser.
     A search-shaped request with no index at all is recorded as ``*``."""
-    parts = [unquote(p) for p in url.split('?')[0].split('/') if p]
+    parts = [unquote(p) for p in url.split('?', maxsplit=1)[0].split('/') if p]
     out: set[str] = set()
     if parts and not parts[0].startswith('_'):
         out |= set(parts[0].split(','))
@@ -1173,7 +1173,7 @@ class _FakeTransport:
         **_kwargs: Any,
     ) -> Any:
         self.received.append(touched_indexes(url, body))
-        parts = [unquote(p) for p in url.split('?')[0].split('/') if p]
+        parts = [unquote(p) for p in url.split('?', maxsplit=1)[0].split('/') if p]
         indices = parts[0].split(',') if parts and not parts[0].startswith('_') else []
         action = next((p for p in parts[1:] if p.startswith('_')), parts[0] if parts else '')
         if method == 'HEAD':
@@ -1683,10 +1683,10 @@ def leak_env(
     from src.main import app
 
     env.app = app
-    app.dependency_overrides[get_async_triton] = lambda: _DeadTriton()
+    app.dependency_overrides[get_async_triton] = lambda: _DeadTriton()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
     # Ingest runs end to end: a fake detector pool and PE encoder at the
     # service boundary (the same fakes the ingest integration tests use).
-    monkeypatch.setattr(main_module, 'get_async_triton_pool', lambda: FakeTritonPool())
+    monkeypatch.setattr(main_module, 'get_async_triton_pool', FakeTritonPool)
     had_encoder = hasattr(app.state, 'pe_encoder')
     previous_encoder = getattr(app.state, 'pe_encoder', None)
     app.state.pe_encoder = _LeakPEEncoder()

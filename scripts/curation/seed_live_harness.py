@@ -56,10 +56,7 @@ if str(REPO_ROOT) not in sys.path:
 from src.config.region_state import RegionStatus  # noqa: E402 - needs the sys.path fix above
 from src.services.curation.region_class import ensure_region_class  # noqa: E402
 from src.services.projects.guard import make_script_opensearch  # noqa: E402
-from src.services.projects.script_binding import (  # noqa: E402 - needs the sys.path fix above
-    add_project_argument,
-    bind_script_project,
-)
+from src.services.projects.script_binding import add_project_argument, bind_script_project  # noqa: E402 - needs the sys.path fix above
 
 
 RANDOM_SEED = 1337

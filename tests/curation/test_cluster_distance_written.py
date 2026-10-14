@@ -81,7 +81,7 @@ def residuals(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> np.ndarray:
     class _FakeCurationConfig:
         project_state_dir = tmp_path
 
-    monkeypatch.setattr(ivf_store, 'get_curation_config', lambda: _FakeCurationConfig())
+    monkeypatch.setattr(ivf_store, 'get_curation_config', _FakeCurationConfig)
     return emb
 
 

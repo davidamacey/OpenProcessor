@@ -177,6 +177,6 @@ def test_ingest_tools_default_api_base_follows_prefix(
     monkeypatch: pytest.MonkeyPatch, module: str, argv: list[str]
 ) -> None:
     mod = importlib.import_module(module)
-    monkeypatch.setattr(mod, 'get_curation_config', lambda: _Cfg())
+    monkeypatch.setattr(mod, 'get_curation_config', _Cfg)
     args = mod.build_parser().parse_args(argv)
     assert args.api_base == 'http://localhost:4603/custom-mount'

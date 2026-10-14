@@ -8,15 +8,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.routers.curation._dataset_issue_models import (
-    DatasetIssueWire,  # noqa: TC001 - pydantic field type, resolved at runtime
-)
-from src.services.curation.dataset_import.actions import (  # noqa: TC001 - pydantic field type
-    ImportActions,
-)
-from src.services.curation.dataset_import.options import (  # noqa: TC001 - runtime for pydantic
-    DatasetImportOptions,
-)
+from src.routers.curation._dataset_issue_models import DatasetIssueWire  # noqa: TC001 - pydantic field type, resolved at runtime
+from src.services.curation.dataset_import.actions import ImportActions  # noqa: TC001 - pydantic field type
+from src.services.curation.dataset_import.options import DatasetImportOptions  # noqa: TC001 - runtime for pydantic
 
 
 ImportStatus = Literal[

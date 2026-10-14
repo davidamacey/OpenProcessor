@@ -5,13 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from projects.test_r3_clone_probes import (  # noqa: F401 - reuse fixtures/helpers
-    Fake,
-    _activate,
-    _env,
-    _record,
-    _save,
-)
+from projects.test_r3_clone_probes import Fake, _activate, _env, _record, _save  # noqa: F401 - reuse fixtures/helpers
 from projects.test_r4_clone_probes import _into, _patch_lifecycle
 from src.config.project_context import bind_project
 
@@ -28,8 +22,8 @@ async def test_r5_clone_activates_source_private_detector_in_target(tmp_path, mo
     from src.services.config_store.profile_validation import validate_profile
 
     owner = {'alpha__wheel_det': 'alpha'}
-    monkeypatch.setattr(mc, 'model_owner_project', lambda n: owner.get(n))
-    monkeypatch.setattr(pm, 'model_owner_project', lambda n: owner.get(n))
+    monkeypatch.setattr(mc, 'model_owner_project', owner.get)
+    monkeypatch.setattr(pm, 'model_owner_project', owner.get)
     monkeypatch.setattr(mc, 'is_model_shared', lambda _n: False)
     monkeypatch.setattr(pm, 'is_model_shared', lambda _n: False)
 

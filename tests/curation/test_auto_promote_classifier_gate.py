@@ -43,7 +43,7 @@ def _empty_scroll_response() -> dict[str, Any]:
 async def test_promote_query_omits_empty_terms_clause_and_warns_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(auto_promote, 'classifier_class_sources', lambda: set())
+    monkeypatch.setattr(auto_promote, 'classifier_class_sources', set)
     monkeypatch.setattr(auto_promote, '_classifier_sources_empty_warned', False)
 
     client = AsyncMock()

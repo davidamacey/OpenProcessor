@@ -29,8 +29,10 @@ def plan(
         [
             'bash',
             '-c',
-            f'OP_SOURCE_ONLY=1 source "{SCRIPT}"; source "{LIB}"; '
-            f'recommend_plan "$1" "$2" {quoted}',
+            (
+                f'OP_SOURCE_ONLY=1 source "{SCRIPT}"; source "{LIB}"; '
+                f'recommend_plan "$1" "$2" {quoted}'
+            ),
             '_',
             lines,
             tiers,

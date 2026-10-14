@@ -32,7 +32,7 @@ def client() -> Any:
     from _curation_app import mount_curation_routers
 
     mount_curation_routers(app, curation_router)
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: object()
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: object()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
     with TestClient(app) as c:
         yield c
 
@@ -82,9 +82,7 @@ def test_region_cohorts_only_with_a_region_profile(
     )
     assert not set(_by_id(client)) & set(TRAINING_CANDIDATE_MODES)
 
-    monkeypatch.setattr(
-        'src.services.curation.training_cohorts.get_active_region_profile', lambda: object()
-    )
+    monkeypatch.setattr('src.services.curation.training_cohorts.get_active_region_profile', object)
     cohorts = _by_id(client)
     for mode in TRAINING_CANDIDATE_MODES:
         assert cohorts[mode]['endpoint'] == '/regions/training_candidates'

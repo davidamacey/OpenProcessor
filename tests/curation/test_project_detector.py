@@ -157,7 +157,7 @@ async def test_the_ingest_service_runs_the_project_detector_and_its_policy(
     from src.services.curation.ingest_policy_store import put_ingest_policy
 
     monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'env_model')
-    monkeypatch.setattr(main_module, 'get_async_triton_pool', lambda: object())
+    monkeypatch.setattr(main_module, 'get_async_triton_pool', object)
     monkeypatch.setattr(main_module.app.state, 'pe_encoder', object(), raising=False)
     fake = SettingsFakeOpenSearch()
 

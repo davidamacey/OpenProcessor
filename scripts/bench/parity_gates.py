@@ -274,8 +274,10 @@ def render_markdown(
         '|---|---|---|',
         f'| tag | {ref_meta["tag"]} | {cand_meta["tag"]} |',
         f'| engine | {ref_meta["engine"].get("label", "")} | {cand_meta["engine"].get("label", "")} |',
-        f'| git sha | {ref_meta["environment"].get("git_sha", "")[:12]} | '
-        f'{cand_meta["environment"].get("git_sha", "")[:12]} |',
+        (
+            f'| git sha | {ref_meta["environment"].get("git_sha", "")[:12]} | '
+            f'{cand_meta["environment"].get("git_sha", "")[:12]} |'
+        ),
         f'| manifest sha256 | {ref_meta["manifest"]["sha256"][:16]} | {cand_meta["manifest"]["sha256"][:16]} |',
         '',
         '| Gate | Metric | Observed | Rule | Status |',
@@ -290,8 +292,10 @@ def render_markdown(
         lines += [f'| `{k}` | {_fmt(v)} |' for k, v in result['recorded'].items()]
     lines += [
         '',
-        f'Items: {metrics["boxes"]["items_ref"]} reference, {metrics["boxes"]["items_cand"]} candidate, '
-        f'{metrics["boxes"]["matched"]} matched.',
+        (
+            f'Items: {metrics["boxes"]["items_ref"]} reference, {metrics["boxes"]["items_cand"]} candidate, '
+            f'{metrics["boxes"]["matched"]} matched.'
+        ),
         '',
     ]
     return '\n'.join(lines)

@@ -361,7 +361,7 @@ def test_eval_datasets_registry_class_name_resolved_by_id_with_gaps(
                 ]
             )
 
-    monkeypatch.setattr(eval_datasets, 'get_class_registry', lambda: _FakeRegistry())
+    monkeypatch.setattr(eval_datasets, 'get_class_registry', _FakeRegistry)
 
     _live_export(env, background=('bg_0',))
     body = client.get(
@@ -1127,7 +1127,7 @@ def test_profiles_context_class_names_resolved_by_registry_id(
         def load(self) -> _Loaded:
             return _Loaded([_Cls(4, 'guardrail'), _Cls(7, 'cone')])
 
-    monkeypatch.setattr(bakeoff, 'get_class_registry', lambda: _FakeRegistry())
+    monkeypatch.setattr(bakeoff, 'get_class_registry', _FakeRegistry)
     monkeypatch.setenv('OP_BAKEOFF_PROFILE_CONTEXT_CLASS_IDS', '4,7,99')
     body = client.get('/curation/projects/default/bakeoff/profiles').json()
     [row] = [p for p in body['profiles'] if p['default']]
@@ -1284,8 +1284,10 @@ def test_run_warns_about_train_test_overlap(env: dict[str, Path], client: TestCl
         'export:20260924T233203Z': {'n_images': 2, 'fraction': 2 / 25}
     }
     assert body['warnings'] == [
-        'run:run5: 2 of the test images of export:20260924T233203Z are in its '
-        'training/validation splits'
+        (
+            'run:run5: 2 of the test images of export:20260924T233203Z are in its '
+            'training/validation splits'
+        )
     ]
 
 

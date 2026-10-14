@@ -120,9 +120,7 @@ def _has_terms_clause_with_empty_list(query: Any) -> bool:
 def test_build_pending_query_omits_classifier_gate_when_sources_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        'src.services.curation.ingest_class_sources.classifier_class_sources', lambda: set()
-    )
+    monkeypatch.setattr('src.services.curation.ingest_class_sources.classifier_class_sources', set)
     query = vlm_worker._build_pending_query(0.8)
     assert not _has_terms_clause_with_empty_list(query)
     # No "classifier already confident" bool clause at all when the
@@ -153,9 +151,7 @@ def test_build_pending_query_keeps_classifier_gate_when_sources_present(
 def test_build_pending_query_warns_once_when_sources_empty(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr(
-        'src.services.curation.ingest_class_sources.classifier_class_sources', lambda: set()
-    )
+    monkeypatch.setattr('src.services.curation.ingest_class_sources.classifier_class_sources', set)
     monkeypatch.setattr(vlm_worker, '_classifier_sources_empty_warned', False)
     vlm_worker._build_pending_query(0.8)
     vlm_worker._build_pending_query(0.8)
