@@ -1,7 +1,7 @@
 """Tests for the self-contained TensorRT build in
 ``export/export_paddleocr_rec.py``.
 
-F-17 (fresh-start E2E findings 2026-09-25): this script runs inside
+this script runs inside
 ``api``, which has no docker CLI or docker.sock, and the old
 ``convert_to_tensorrt_via_trtexec`` shelled out to
 ``docker exec <TRITON_CONTAINER> trtexec ...`` -- always failing with
@@ -113,7 +113,7 @@ def _install_fake_tensorrt(
 
 
 class TestExplicitBatchAcrossTrtVersions:
-    """Regression coverage for the F-17 round-2 crash: a bare
+    """Regression coverage for the F-17 crash: a bare
     ``trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH`` lookup raises
     ``AttributeError`` on TRT 11, where the flag was removed entirely."""
 

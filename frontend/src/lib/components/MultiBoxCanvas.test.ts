@@ -1,5 +1,5 @@
 /**
- * MultiBoxCanvas lock glyph (W10): a box whose served `locked` is true
+ * MultiBoxCanvas lock glyph: a box whose served `locked` is true
  * carries a lock glyph; the rest do not. Presentation only.
  */
 import { afterEach, describe, expect, it } from 'vitest';

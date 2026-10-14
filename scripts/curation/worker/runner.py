@@ -197,7 +197,7 @@ async def run(args: argparse.Namespace) -> int:
     # would make the pinned design inert -- the store is created here,
     # pinned, before this project's first item is ever fetched).
     project_stores: dict[str, Any] = {}
-    # W9: the deployment-wide VLM registry. ONE pinned store shared by every
+    # the deployment-wide VLM registry. ONE pinned store shared by every
     # project's sync, created here (before anything can create a live one) so
     # its snapshot only moves at a quiesce point like a project's own.
     registry_store = get_global_config_store(mode='pinned')

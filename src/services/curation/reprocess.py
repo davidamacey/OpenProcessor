@@ -1,4 +1,4 @@
-"""Unified reprocess (W10.13): one function, one lock rule.
+"""Unified reprocess: one function, one lock rule.
 
 Re-running something on an item or image used to be three tools (a region
 requeue, a ``clear_detection`` wipe, a retry of ``detection_failed``). This

@@ -84,7 +84,7 @@ def test_classes_flagged_terms_are_listed_with_no_create_action(stub, page, app_
 
     page.goto(f"{app_url}/p/default/classes")
 
-    # F-53: the proposals list sits below the registry in a collapsed
+    # the proposals list sits below the registry in a collapsed
     # <details>; open it first.
     section = page.get_by_test_id("proposals-section")
     section.wait_for(timeout=ACTION_TIMEOUT_MS)
@@ -175,7 +175,7 @@ def test_class_table_keeps_its_height_under_a_long_proposals_list(stub, page, ap
     section.wait_for(timeout=ACTION_TIMEOUT_MS)
     section.locator("summary").click()
     page.get_by_test_id("proposal-row").nth(59).wait_for(timeout=10000)
-    # F-53: the registry renders first and is never squeezed by the list
+    # the registry renders first and is never squeezed by the list
     # (no inner scroll pane: its section shows the whole table).
     dims = table.evaluate(
         "t => ({top: t.getBoundingClientRect().top,"

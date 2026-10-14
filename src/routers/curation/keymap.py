@@ -1,6 +1,6 @@
 """``GET/PUT {prefix}/keymap``, ``POST {prefix}/keymap/validate``,
 ``POST {prefix}/keymap/reset`` -- the per-project configurable keymap
-(W2b). Every route is project-scoped through the shared ``router`` --
+. Every route is project-scoped through the shared ``router`` --
 there is no unscoped/global keymap route (owner, 2026-09-26).
 """
 

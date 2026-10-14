@@ -1,5 +1,5 @@
 """``/curation/vlm/catalog`` and ``/vlm/local*``: the local model catalog and
-the in-compose vLLM's desired model (W9.7). Registered on the projects
+the in-compose vLLM's desired model. Registered on the projects
 ``global_router`` (deployment-wide, no project bound).
 
 The API never restarts vLLM: it serves one model per process and changing it

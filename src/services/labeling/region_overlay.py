@@ -5,7 +5,7 @@ module's growth doesn't add to it.
 Self-contained: no import of ``vlm_labeler`` (or vice versa this pass --
 see the W8 handback report for what remains to wire the two together).
 
-Regions are always a list (W8.0) -- N=1 draws a single numbered tag "1",
+Regions are always a list -- N=1 draws a single numbered tag "1",
 not a separate code path. Every box on the crop sent to the VLM is
 numbered so the reply can address "box 3" without ambiguity; the reply's
 per-box verdicts are threaded back onto the same numbers by
@@ -50,7 +50,7 @@ _TAG_FONT_MIN_PX = 12
 
 @dataclass(frozen=True)
 class VlmBoxVerdict:
-    """One numbered box's verdict from a combined VLM reply (W8.6).
+    """One numbered box's verdict from a combined VLM reply.
 
     ``box`` is the 1-based number the overlay drew. ``bbox_correct`` is
     ``None`` for "no verdict" (never answered, or an unparseable answer)
@@ -188,7 +188,7 @@ def _normalize_confidence(value: Any) -> ConfidenceLevel | None:
     return None
 
 
-# M5 fix (W8 pipeline-wiring review, 2026-09-27): the pre-W8 flat parser's
+# the pre-W8 flat parser's
 # full sentinel set (vlm_reply_parse._TEXT_SENTINELS) -- the W8 rewrite's
 # ``_clean_text_reply`` only dropped 4 of these 7, silently storing
 # "unreadable"/"-" as if they were real region text.
@@ -255,7 +255,7 @@ def box_verdicts(
     *,
     echoes: tuple[str, ...] = (),
 ) -> list[VlmBoxVerdict]:
-    """The reply's per-box verdicts, always length ``n`` (W8.6).
+    """The reply's per-box verdicts, always length ``n``.
 
     ``entry[fields.boxes]`` must be a list (D-B: no flat-shape fallback)
     -- each element's ``box`` (1-based; accepts ``1``, ``"1"``, ``"box

@@ -134,7 +134,7 @@ def _umap_viz_state_body() -> dict[str, Any]:
 
 
 def _configs_body() -> dict[str, Any]:
-    """The config store (W2, any_domain_plan.md §3.1): prompt packs,
+    """The config store: prompt packs,
     region profiles, activations, activation history and the
     cross-process revision counter -- one doc per row, ``doc_type``
     discriminates the shape (``config`` | ``revision`` | ``activation``

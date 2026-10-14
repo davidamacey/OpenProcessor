@@ -1,4 +1,4 @@
-"""W5 (§5.1, W9): which VLM endpoint a pack test sends a real crop to.
+"""which VLM endpoint a pack test sends a real crop to.
 
 A draft endpoint is tested exactly as it would run (through the one
 factory), and every way of naming an endpoint goes through the one gate

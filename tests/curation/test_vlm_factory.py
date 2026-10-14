@@ -1,4 +1,4 @@
-"""``labeler_for`` / ``build_uncached_labeler`` (W9.0): the one place a
+"""``labeler_for`` / ``build_uncached_labeler``: the one place a
 labeler is built. What it applies from the endpoint, when it rebuilds, and
 that it re-checks the SSRF policy at construction."""
 

@@ -1,4 +1,4 @@
-"""Reconcile a newer dataset version over an earlier import (W10.11).
+"""Reconcile a newer dataset version over an earlier import.
 
 An image never carries two versions' labels: an item an earlier import wrote
 and this version no longer has is removed, unless a human (or a holdout

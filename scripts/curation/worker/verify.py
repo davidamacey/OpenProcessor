@@ -245,7 +245,7 @@ async def _auto_confirm_or_pending(
 
 
 # =============================================================================
-# W8.5: verdict -> box-list storage (verdicts_to_boxes)
+# verdict -> box-list storage (verdicts_to_boxes)
 # =============================================================================
 #
 # Wired into the streaming runner's stage_b_combined (stage_b.py): the
@@ -344,7 +344,7 @@ def verdicts_to_boxes(
     now: str | None = None,
     force_resolve: bool = False,
 ) -> tuple[list[RegionBox], RegionStatus | None, dict[str, Any]]:
-    """Map a combined VLM reply's per-box verdicts onto stored boxes (W8.5).
+    """Map a combined VLM reply's per-box verdicts onto stored boxes.
 
     ``candidates`` and ``verdicts`` are aligned by position (both length
     N; ``verdicts[i].box == i + 1``). Every entry in the returned list
@@ -449,7 +449,7 @@ def item_verification_fields(
     now: str | None = None,
 ) -> dict[str, Any]:
     """Item-level ``verified``/``verifier*``/``validated``/``auto_confirmed``
-    fields for a box-list write (W8 M2).
+    fields for a box-list write.
 
     ``validated`` is always ``False`` here -- the worker never validates a
     region, only a human does (``RegionFields.validated`` semantics,

@@ -78,7 +78,7 @@
   async function start(): Promise<void> {
     pageOffset = { ingested: 0, duplicate: 0, failed: 0, skipped: 0, not_sent: 0 };
     await run.start(files, { source, identifierPrefix, skipLookup });
-    // F-59: land on a tab that actually has rows (a duplicate-only
+    // land on a tab that actually has rows (a duplicate-only
     // re-upload otherwise opened on an empty Failed tab).
     if (run.results.countOf(activeTab) === 0) {
       activeTab = TABS.find((t) => run.results.countOf(t.kind) > 0)?.kind ?? activeTab;

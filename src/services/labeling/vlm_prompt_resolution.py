@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 from src.core.logging import get_logger
 
 
-# N6 fix (W3/W4 round-3 review): a module-level `from
+# a module-level `from
 # src.services.labeling.vlm_prompts import PromptPack, ...` here is a
 # circular import in a cold interpreter -- `vlm_prompts.py` imports this
 # module back (for its re-export block) AFTER defining `PromptPack`/
@@ -183,7 +183,7 @@ def active_prompt_pack(cfg: Any | None = None) -> PromptPack:
             return PromptPack.from_dict({**pinned.body, 'name': name})
         except Exception as exc:
             logger.warning('active_prompt_pack_pinned_body_invalid', name=name, error=str(exc))
-            # N5 fix (W3/W4 round-3 review): a decode failure on the
+            # a decode failure on the
             # pinned body must not fail open to the unvalidated current
             # doc below either -- same reasoning as the missing-copy
             # case right after this block.
@@ -221,7 +221,7 @@ def get_prompt_pack(
     the still-active-but-superseded revision, §3.7) -- ``None`` (honest)
     for any other revision this process hasn't cached. ``revision=None``:
     the *pinned* body when ``name`` is the store's active pack (B1
-    round-2 -- every "active pack by name" caller must see
+    -- every "active pack by name" caller must see
     :func:`active_prompt_pack`'s body, never an un-activated current
     doc); any other name resolves to its current doc, unchanged.
     """
@@ -243,7 +243,7 @@ def get_prompt_pack(
         except Exception as exc:
             logger.warning('get_prompt_pack_stored_body_invalid', name=name, error=str(exc))
             return None
-        # N2 fix (W3/W4 round-3 review): tag the EXACT revision this call
+        # tag the EXACT revision this call
         # resolved -- explicitly pinned per-run (`name@rev`), which can
         # be a still-active-but-superseded revision or, per N7, the
         # current/latest one -- onto the returned instance so
@@ -269,12 +269,12 @@ def get_prompt_pack(
 
 def prompt_pack_stamp(pack: PromptPack, *, revision: int | None = None) -> str:
     """``"<name>@<revision|sha12>"`` provenance stamp for ``vlm_prompt_pack``
-    (any_domain_plan.md §3.7/§9 W2) -- every VLM write site stamps this
+ -- every VLM write site stamps this
     onto the item it wrote so a later audit can tell which pack produced
     the write.
 
     ``revision``, when given, is the revision that was ACTUALLY resolved
-    and served for this call (N2 fix, W3/W4 round-3 review): a caller
+    and served for this call: a caller
     that pinned a per-run ``name@<revision>`` (including a draft revision
     that was never activated -- exactly §3.7's motivating per-run-pin
     workflow) must pass that resolved revision through here, or every

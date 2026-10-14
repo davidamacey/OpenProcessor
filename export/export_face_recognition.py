@@ -52,7 +52,7 @@ WORKSPACE_GB = 4
 # =============================================================================
 
 
-# F-18 (fresh-start E2E findings 2026-09-25): Triton's config.pbtxt and the
+# Triton's config.pbtxt and the
 # clients (src/clients/triton_client.py, fast_face_client.py) hardcode this
 # tensor contract. Keep the export the one place that reconciles it against
 # whatever names the buffalo_l checkpoint's raw graph happens to use (its

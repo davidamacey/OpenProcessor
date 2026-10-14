@@ -1,4 +1,4 @@
-"""The VLM rows of ``GET /models/status`` (W9.1 M8): one row per registered
+"""The VLM rows of ``GET /models/status``: one row per registered
 endpoint, the bound project's active one first. Split out of ``models.py``
 (700-LOC ratchet)."""
 

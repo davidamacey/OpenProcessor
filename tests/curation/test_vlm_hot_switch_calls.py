@@ -1,5 +1,5 @@
 """Switching a project's VLM takes effect on the next call, with no restart,
-and what an item records is the endpoint that answered it (W9.3). Two fake
+and what an item records is the endpoint that answered it. Two fake
 upstreams stand behind real ``httpx`` transports; the label route is the
 real one, over an in-memory item store."""
 

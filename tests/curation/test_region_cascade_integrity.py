@@ -82,7 +82,7 @@ def _jpeg() -> bytes:
 def _combined(**over: Any) -> dict[str, Any]:
     """A realistic combined reply, as the deployment pack asks for it.
 
-    W8: the box-verdict fields (``region_bbox_correct`` / ``region_text``
+    the box-verdict fields (``region_bbox_correct`` / ``region_text``
     / ``region_confidence``) are nested one level down, under
     ``region_boxes: [{"box": 1, ...}]`` -- pass them as flat kwargs here
     (unchanged call sites) and they land on box 1.
@@ -147,7 +147,7 @@ class TestCombinedSingle:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         'sentinel',
-        # 'unreadable' / '-' restored (W8 M5 fix): the W8 rewrite's
+        # 'unreadable' / '-' restored: the W8 rewrite's
         # region_overlay._clean_text_reply only dropped 4 of the pre-W8
         # flat parser's 7 sentinels.
         [None, '', 'unknown', 'N/A', 'null', 'unreadable', '-'],
@@ -509,7 +509,7 @@ async def _drive_worker(
     dataclass fields replaced (e.g. ``secondary_shape_groups``).
 
     ``primary`` / ``segmenter`` each take a single :class:`RegionCandidate`,
-    ``None``, OR a ``list[RegionCandidate]`` (W8 M8) -- a list feeds N raw
+    ``None``, OR a ``list[RegionCandidate]`` -- a list feeds N raw
     candidates through that leg's ``detect_batch_multi`` / ``segment_multi``
     in one pass, exercising the real multi-box selection/verify/write path
     instead of the single-candidate shape every pre-M8 test used.

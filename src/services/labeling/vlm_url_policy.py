@@ -1,4 +1,4 @@
-"""URL policy for VLM endpoints: syntax, SSRF denials and locality (W9.4, W9.9).
+"""URL policy for VLM endpoints: syntax, SSRF denials and locality.
 
 The API has no auth (SECURITY.md), so a caller can make it issue requests
 through a registered endpoint. This module is the ONE place that decides
@@ -14,7 +14,7 @@ whether a ``base_url`` may be used and where it points:
   for the literal host AND for every address the name resolves to.
 - :func:`compute_locality` -- ``compose`` / ``host`` / ``private`` /
   ``external`` / ``unknown`` (unresolvable is treated as external, fail
-  closed) for the external-images acknowledgement (W9.9).
+  closed) for the external-images acknowledgement.
 
 Everything that touches DNS goes through the module-level ``_resolve`` so
 tests can pin it. Blocking DNS: async callers use :func:`acompute_locality`

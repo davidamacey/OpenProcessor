@@ -169,7 +169,7 @@ def finalize_box_ids(
     boxes: Sequence[RegionBox], *, existing: Iterable[_HasBoxId], seq: int
 ) -> list[RegionBox]:
     """Replace every placeholder id in ``boxes`` with a real one minted
-    against the CURRENT ``seq`` high-water mark (W8 M1).
+    against the CURRENT ``seq`` high-water mark.
 
     ``existing`` is the live stored box list (read fresh, immediately
     before this call) so a real id already spoken for -- by a box this
@@ -219,7 +219,7 @@ def merge_boxes_for_write(
     baseline: Sequence[RegionBox] | None = None,
 ) -> list[RegionBox]:
     """Merge this pass's resolved ``new`` boxes back into the item's full
-    ``stored`` list, in stored order (W8 B1).
+    ``stored`` list, in stored order.
 
     A stored box this pass touched (its id appears in ``new``) is
     replaced in place; any stored box this pass never sent to the VLM --
@@ -266,7 +266,7 @@ def has_human_text(box: RegionBox | None) -> bool:
 
 
 def is_human_owned(box: RegionBox) -> bool:
-    """True if a human created this box OR explicitly acted on it (W8c M3).
+    """True if a human created this box OR explicitly acted on it.
 
     ``source == 'human'`` alone only covers a box a human CREATED (``PUT
     .../regions`` with ``box_id: null``). A human's per-box verdict on a

@@ -220,7 +220,7 @@ async def test_r3_existing_target_previously_deactivated(tmp_path, monkeypatch):
         outcome = f'{exc.status_code} {exc.detail}'
     after = set(client._docs.get(tidx, {}))
     print('deactivated-target clone ->', outcome, '| new target docs:', sorted(after - before))
-    # m5 fix (W3/W4 round-4 review): a target that once deactivated this
+    # a target that once deactivated this
     # axis is genuinely EMPTY (no stored pack of its own on this axis) --
     # a clone into it is not just "must not partially write", it must
     # actually SUCCEED. The old `outcome == 'ok' or not (after - before)`

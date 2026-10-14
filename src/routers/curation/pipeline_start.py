@@ -88,7 +88,7 @@ async def pipeline_auto_label_start(
 
     # Resolved here (422 before queueing) so the job args echo what runs.
     reject_detection_profile(detection_profile)
-    # R6-1b fix (Blocker, W3/W4 round-6 review): captured BEFORE
+    # captured BEFORE
     # `resolve_run_prompt_pack` overwrites `prompt_pack` below -- the raw
     # query param tells us whether this request omitted `prompt_pack`
     # entirely (the Cropwright default path), independent of what name it
@@ -98,12 +98,12 @@ async def pipeline_auto_label_start(
     prompt_pack_was_omitted = not isinstance(prompt_pack, str)
     prompt_pack, prompt_pack_revision = await resolve_run_prompt_pack(opensearch, prompt_pack)
     if prompt_pack_was_omitted:
-        # R7-2 fix (Major, W3/W4 round-7 review): only the store-active
+        # only the store-active
         # case has TOCTOU draft risk -- a legacy-settings-doc/env/file
         # default has nothing to go stale against, so it must keep
         # running the exact pack it echoes.
         prompt_pack_was_omitted = omitted_pack_is_store_active(prompt_pack)
-    # W9: resolved, gated (SSRF, external-images ack, pack pairing) and PINNED
+    # resolved, gated (SSRF, external-images ack, pack pairing) and PINNED
     # to a concrete `(name, revision)` here, before queueing -- the job then
     # resolves exactly that by id, in whichever process runs it, so an
     # activation or an endpoint edit made mid-job changes nothing for it.
@@ -151,7 +151,7 @@ async def pipeline_auto_label_start(
                 'vlm_scope': vlm_scope,
                 'prompt_pack': prompt_pack,
                 'prompt_pack_revision': prompt_pack_revision,
-                # R5-2 fix: always set, even for the omitted-pack default
+                # always set, even for the omitted-pack default
                 # case -- `/start` already ran `resolve_run_prompt_pack`
                 # above for every shape of this request, so the job must
                 # never re-run it.

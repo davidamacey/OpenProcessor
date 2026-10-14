@@ -76,7 +76,7 @@ export function hasCurrentMulticlassExport(datasets: ExportDataset[]): boolean {
 }
 
 /**
- * F-61: the registry/data.yaml/manifest downloads serve the current
+ * the registry/data.yaml/manifest downloads serve the current
  * multi-class export. The served datasets list flags it `is_current`;
  * `GET /export/status` reporting a finished (`success`) export with an
  * `export_dir` is the same fact from the other endpoint, so either one

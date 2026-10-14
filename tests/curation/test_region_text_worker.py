@@ -169,7 +169,7 @@ class TestNoVlmDeployment:
         doc = fake_os.live['c1']
         det = _profile().detector_model
         assert doc[F.status] == 'detected'
-        # W8: no-VLM-configured accept writes the box-list shape.
+        # no-VLM-configured accept writes the box-list shape.
         # RegionBox has no verified/validated/verifier concept (those
         # legacy item-level scalars are Item 2 scope) -- the box's own
         # state='accepted' is the acceptance signal.

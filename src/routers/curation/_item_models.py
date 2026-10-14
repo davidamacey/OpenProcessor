@@ -176,7 +176,7 @@ class ItemDoc(BaseModel):
     region_visible: bool | None = None
     region_detector_chain: list[str] | None = None
     region_detected_at: str | None = None
-    # Config-store provenance (W2): the activated region profile
+    # Config-store provenance: the activated region profile
     # name/revision that produced this item's region write. Null for an
     # item never touched by a config-store-hot-reloadable worker write.
     region_profile: str | None = None
@@ -192,7 +192,7 @@ class ItemDoc(BaseModel):
     # The per-item box list plus its item-level summary fields. A box's own
     # data (state, geometry in both frames, score, detector, text, cluster
     # placement, thumbnail_url) is an element; element keys are fixed
-    # strings, not RegionFields-indirected (W8.2).
+    # strings, not RegionFields-indirected.
     region_boxes: list[dict[str, Any]] = Field(default_factory=list)
     region_count: int = 0
     region_rejected_count: int = 0
@@ -201,7 +201,7 @@ class ItemDoc(BaseModel):
     region_revision: int = 0
     # The lock rule, server-computed: a human- or import-owned label/box/verdict.
     label_locked: bool = False
-    # Dataset-import provenance and split (W10.10).
+    # Dataset-import provenance and split.
     import_ids: list[str] = Field(default_factory=list)
     dataset_split: str | None = None
     imported_at: str | None = None

@@ -141,7 +141,7 @@ def _combined_reply_from_entry(
     class_conf_raw = entry.get('class_confidence')
     make = str(entry.get('make') or '').strip()[:48]
     model_name = str(entry.get('model') or '').strip()[:48]
-    # M5 fix (W8 pipeline-wiring review, 2026-09-27): suppress a per-box
+    # suppress a per-box
     # text reply that's really the item's own class/make/model echoed
     # back into the text slot -- ported from the pre-W8 flat parser's
     # ``_clean_combined_region_text`` echo check, dropped (not ported)

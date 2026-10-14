@@ -394,7 +394,7 @@ def test_batch_box_state_unknown_box_id_is_invalid_not_updated(
 
 
 # ---------------------------------------------------------------------------
-# W8c: per-route `state` validation against BOX_STATE_ROUTES
+# per-route `state` validation against BOX_STATE_ROUTES
 # ---------------------------------------------------------------------------
 
 

@@ -1,4 +1,4 @@
-"""Pack <-> region profile <-> VLM endpoint pairing (W9.5): the checks
+"""Pack <-> region profile <-> VLM endpoint pairing: the checks
 themselves, and that EVERY entry point that changes one side of the triple
 runs them (the R5-1 lesson: a combined change is paired with what it will
 become, not with what it replaces)."""

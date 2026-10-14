@@ -37,7 +37,7 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
     deployment that hasn't wired a detection profile yet just sees the
     always-present CLIP + PE encoder entries.
 
-    Moved here (W3/W4 review 2026-09-28, Minor 6) from
+    Moved here from
     ``src.routers.curation.models`` -- :func:`discover_promoted_models`
     below needed it and previously imported it back from that router,
     the exact "service depends on the router it was moved out of" the

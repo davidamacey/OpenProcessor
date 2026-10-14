@@ -219,7 +219,7 @@ def normalize_status(raw: Any) -> str:
     return str(raw.value if isinstance(raw, RegionStatus) else raw)
 
 
-# Per-box ``state`` (W8) -> the RegionStatus-shaped vocabulary this
+# Per-box ``state`` -> the RegionStatus-shaped vocabulary this
 # evaluator has always scored against. ``proposed`` (awaiting verification)
 # is treated as a pending value, same as the item-level pending statuses.
 _BOX_STATE_TO_STATUS: dict[str, str] = {

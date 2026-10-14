@@ -250,7 +250,7 @@ export interface MethodsResponse {
   detection_profiles: DetectionProfileInfo[];
   /** `axis: 'prompt_pack'` entries. */
   prompt_packs: PromptPackInfo[];
-  /** `axis: 'vlm'` entries (W9): the registered endpoints plus `off`. */
+  /** `axis: 'vlm'` entries: the registered endpoints plus `off`. */
   vlm: VlmMethodInfo[];
   /** Served per-axis copy; empty when the backend serves none. */
   axes: MethodAxisCopy[];
@@ -577,7 +577,7 @@ export function isPromptPackAvailable(packs: PromptPackInfo[]): boolean {
  * at all — the single gate `AutoLabelPanel` uses to decide whether the
  * scope bar exists (absent, not disabled).
  *
- * Gated on the `prompt_pack` axis or (W9) the `vlm` axis: the pack arrived in the same backend
+ * Gated on the `prompt_pack` axis or the `vlm` axis: the pack arrived in the same backend
  * change that made `class_id` on `POST {API_PREFIX}/pipeline/auto_label/start`
  * real, and `class_id` has no capability signal of its own. Without a
  * usable pack the scope has nothing to steer, so the control stays

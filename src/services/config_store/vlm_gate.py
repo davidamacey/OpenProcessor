@@ -1,4 +1,4 @@
-"""The ONE gate every VLM selection path calls (W9.3, W9.5, W9.9).
+"""The ONE gate every VLM selection path calls.
 
 Anything that picks or switches the endpoint a project's VLM calls go
 through -- ``POST /vlm/endpoints/{name}/activate``, rollback, ``PUT

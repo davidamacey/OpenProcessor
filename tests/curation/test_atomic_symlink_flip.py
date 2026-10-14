@@ -8,7 +8,7 @@ target resolves relative to the link's own directory, not the process
 cwd, so ``data/exports/current`` pointed at
 ``data/exports/data/exports/<timestamp>``, which doesn't exist. Every
 ``GET /export/registry/{artifact}`` 404'd, and the UI's export status /
-download buttons broke (F-61).
+download buttons broke.
 """
 
 from __future__ import annotations

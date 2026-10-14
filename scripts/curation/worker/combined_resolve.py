@@ -194,7 +194,7 @@ async def resolve_combined_reply(
 
     # Per-box text (VLM + OCR fallback) for every accepted box, using that
     # box's own crop-frame bbox. A non-accepted box never carries a raw,
-    # unvalidated VLM text reply (W8 M6).
+    # unvalidated VLM text reply.
     resolved: list[RegionBox] = []
     for box, cand in zip(boxes, candidates, strict=True):
         if box.state != 'accepted':

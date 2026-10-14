@@ -60,7 +60,7 @@ class _ExportRow:
     # 'test'.
     has_test_crop: bool = False
     export_class_id: int = -1
-    # Dataset-import provenance (W10.9): the split the frame was filed under
+    # Dataset-import provenance: the split the frame was filed under
     # and the stem its label file had in the export it was imported from.
     dataset_split: str | None = None
     import_source_stem: str | None = None
@@ -463,7 +463,7 @@ def atomic_symlink_flip(symlink_path: Path, target: Path) -> None:
     carries the pid so two processes flipping the same link concurrently
     can't clobber each other's staging entry.
 
-    F-38 (fresh-start E2E findings 2026-09-25): a relative, non-absolute
+    a relative, non-absolute
     ``target`` (e.g. ``data/exports/20260925T143527Z``, from the default
     relative export root such as ``./data/projects/default/exports``) used to be passed straight
     to ``symlink_to`` verbatim. Symlink targets resolve relative to the

@@ -140,7 +140,7 @@ async def compute_activation_impact(
         index=index,
         body={
             'size': 0,
-            # M-4 fix (W3/W4 review 2026-09-28): without this, OpenSearch's
+            # without this, OpenSearch's
             # default 10,000-hit tracking cap silently truncates
             # `items_total` for any project past that size -- see
             # `src/routers/curation/stats.py`'s own note on the same trap

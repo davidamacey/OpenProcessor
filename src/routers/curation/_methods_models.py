@@ -34,7 +34,7 @@ class StrategyEntry(BaseModel):
     requires_field: str | None = None
     field_coverage: int | None = None
     field_coverage_total: int | None = None
-    # W9: set on ``vlm`` entries only (null everywhere else). ``status`` stays
+    # set on ``vlm`` entries only (null everywhere else). ``status`` stays
     # inside its Literal; the endpoint's own health is served here.
     endpoint_status: Literal['ready', 'unprobed', 'probe_failed', 'unreachable'] | None = None
     endpoint_status_label: str | None = None
@@ -55,7 +55,7 @@ class StrategyEntry(BaseModel):
 
 
 class MethodAxis(BaseModel):
-    """One axis's served copy (W2, any_domain_plan.md §7.6 item 7):
+    """One axis's served copy:
     Cropwright's dropdown/blurb text for an axis, instead of a
     client-side hardcoded string per axis id."""
 

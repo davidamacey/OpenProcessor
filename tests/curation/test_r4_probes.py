@@ -228,7 +228,7 @@ def test_r4_start_job_args_accepted_by_pipeline_fn():
     """The worker calls pipeline_fn(opensearch=, progress=, **trigger_args);
     /pipeline/auto_label/start puts 'prompt_pack_revision' in those args.
 
-    R6-m1 fix (W3/W4 round-6 review): the worker's target is
+    R6-m1 fix: the worker's target is
     ``_run_auto_label`` now, not the public ``pipeline_auto_label`` route
     wrapper -- the route no longer accepts these params at all (they
     would otherwise be reachable from an HTTP request)."""
@@ -244,7 +244,7 @@ def test_r4_job_reresolution_keeps_request_pin(app_client, monkeypatch):
     """R4-3, rewritten from the original probe: the original assertion
     (calling ``resolve_run_prompt_pack`` a SECOND time on the bare name
     ``at_request[0]`` and expecting the same result) can never hold --
-    N7 (confirmed correct by the round-4 reviewer) makes a bare per-run
+    N7 (confirmed correct by the reviewer) makes a bare per-run
     name resolve to the LATEST saved revision by design, so re-running
     the resolver on a bare name is *supposed* to move forward. The real
     bug was that ``pipeline_auto_label`` (the job body) called the
@@ -299,7 +299,7 @@ def test_r4_job_reresolution_keeps_request_pin(app_client, monkeypatch):
             cluster_id=None,
             prompt_pack=name,
             prompt_pack_revision=revision,
-            # R5-2 fix (W3/W4 round-5 review): "already resolved" is now
+            # "already resolved" is now
             # its own explicit flag, not inferred from `prompt_pack_
             # revision is not None` -- `/start` sets it unconditionally
             # (pinned, bare-name, AND omitted alike), matching what a

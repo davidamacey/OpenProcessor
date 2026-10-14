@@ -152,7 +152,7 @@ def test_label_import_functions_have_no_importers(symbol: str) -> None:
 
 
 def test_is_human_owned_class_symbol_removed() -> None:
-    """``is_human_owned_class`` is renamed to ``is_locked_class`` (W10.10)
+    """``is_human_owned_class`` is renamed to ``is_locked_class``
     — no symbol of that name remains anywhere (docstrings/comments only
     reference it as history)."""
     for path in _iter_py_files():

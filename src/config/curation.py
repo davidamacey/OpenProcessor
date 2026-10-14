@@ -128,7 +128,7 @@ class CurationConfig:
     # UMAP_VIZ_STATE folds onto CONFIGS's name (shard folding, owner D4).
     umap_state_index: str = _FROM_DEFAULT_PROJECT
     umap_viz_state_index: str = _FROM_DEFAULT_PROJECT
-    # Prompt packs, region profiles, activations, revision counter (W2).
+    # Prompt packs, region profiles, activations, revision counter.
     configs_index: str = _FROM_DEFAULT_PROJECT
 
     class_registry_path: Path = _FROM_DEFAULT_PROJECT_PATH
@@ -247,7 +247,7 @@ class CurationConfig:
     # a deployment-tunable bar, not a magic number.
     probe_actionable_min_confidence: float = 0.5
 
-    # W8: served abuse guard on human region-box writes. Human box lists
+    # served abuse guard on human region-box writes. Human box lists
     # are unbounded per the owner's rule -- this caps the ELEMENT COUNT of
     # one write request (PUT .../regions, batch PUT, batch_box_state
     # targets), not a labeling rule. Served on /health and

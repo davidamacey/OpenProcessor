@@ -1,4 +1,4 @@
-"""Preview helpers for the test-on-crop routes (W5, any_domain_plan.md §5).
+"""Preview helpers for the test-on-crop routes.
 
 Pure: no I/O. A leg's raw candidates become complete ``RegionBox`` wire
 elements (so one renderer draws candidates and stored boxes alike) and an

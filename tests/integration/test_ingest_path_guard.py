@@ -79,7 +79,7 @@ def test_batch_rejects_the_removed_label_txt_path_field(
     (no back-compat) -- ``IngestBatchItem`` is ``extra='forbid'``, so a
     caller still sending it 422s instead of the field silently being
     ignored. Its BA-5 path-guard coverage lives on for the
-    ``POST /datasets/imports`` (W10) path instead (not yet exercised at
+    ``POST /datasets/imports`` path instead (not yet exercised at
     the HTTP-route level -- see the dataset-import package's own tests)."""
     inside_image = _jpeg(served_root, 'labeled.jpg')
     outside_label = tmp_path / 'evil.txt'

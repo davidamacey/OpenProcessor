@@ -1,5 +1,5 @@
 /**
- * F-64 (fresh-start findings 2026-09-25): the promote modal showed only
+ * the promote modal showed only
  * "API 422 …". It now renders the served gate detail and offers force
  * only when the server says `force_allowed`.
  */

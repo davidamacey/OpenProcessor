@@ -1,4 +1,4 @@
-"""The lock rule (W10): a human- or import-set label/box is never touched
+"""The lock rule: a human- or import-set label/box is never touched
 by an automated writer.
 
 Split out of ``src/clients/occ.py`` (which owns the OCC read/merge/write
@@ -30,7 +30,7 @@ def is_human_marker(value: Any) -> bool:
 
 def _is_locked_marker(value: Any) -> bool:
     """``is_human_marker`` plus the two import-provenance string values
-    (W10). Used wherever a re-ingest/automated writer must never clobber
+. Used wherever a re-ingest/automated writer must never clobber
     an imported label the same way it must never clobber a human one."""
     from src.services.curation.ingest_class_sources import (
         LABEL_IMPORT_CLASS_SOURCE,

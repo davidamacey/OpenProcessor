@@ -1,4 +1,4 @@
-"""The endpoint registry in ``op_global_configs`` (W9.2): revisions are
+"""The endpoint registry in ``op_global_configs``: revisions are
 immutable and never reused, a probe belongs to the body it tested, every
 write is announced, and nothing about it is stored per project."""
 

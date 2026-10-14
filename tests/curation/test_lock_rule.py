@@ -35,7 +35,7 @@ class TestIsLockedClass:
 
     def test_suggestion_trust_import_unlocked(self) -> None:
         """``label_trust: suggestion`` imports are NOT locked — the
-        machine pipeline may still relabel them (W10.10)."""
+        machine pipeline may still relabel them."""
         assert (
             is_locked_class({'class_source': 'external_label', 'class_validated': False}) is False
         )

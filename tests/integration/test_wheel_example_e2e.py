@@ -1,4 +1,4 @@
-"""The wheel example, offline, inside a REAL project (W6).
+"""The wheel example, offline, inside a REAL project.
 
 create project (lifecycle route) -> import the fixture (``/datasets/imports``)
 -> the primary detector finds vehicles -> the ``vehicle_wheel`` region

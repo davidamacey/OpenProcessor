@@ -18,7 +18,7 @@
  *   operator is typically still working through sibling boxes.
  * - Geometry edits (add/move/delete) stay purely local until the next
  *   confirm or explicit flush — sent as one `PUT /crops/{id}/regions` so
- *   an add+move+delete session becomes one write, one undo step (W8.8).
+ *   an add+move+delete session becomes one write, one undo step.
  * - Enter (`confirmAndAdvance`) is the owner-decided semantic: flips only
  *   `proposed` boxes to `accepted` (siblings' states are never touched),
  *   sends the accumulated geometry diff in the SAME PUT with

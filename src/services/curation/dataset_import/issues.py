@@ -1,4 +1,4 @@
-"""Dataset-import issue vocabulary (W10.4): a stable, served catalog of
+"""Dataset-import issue vocabulary: a stable, served catalog of
 codes, so ``GET /datasets/formats`` never needs a hardcoded copy on the
 client.
 

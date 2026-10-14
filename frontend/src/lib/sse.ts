@@ -119,7 +119,7 @@ function knownEventTypes(): string[] {
     'crop.created',
     'crop.classified',
     'config.changed',
-    // W10.11: advisory import progress; the job view re-reads the job.
+    // advisory import progress; the job view re-reads the job.
     'dataset_import.progress',
     'dataset_import.finished',
     ...slotVerifiedEventTypes(),
@@ -292,7 +292,7 @@ const GLOBAL_EVENT_TYPES = [
   'project.paused',
   'project.resumed',
   'combine.progress',
-  // W9: the VLM registry / local-model catalog changed (`axis`:
+  // the VLM registry / local-model catalog changed (`axis`:
   // `registry` | `local_vlm`); the models page re-reads on it.
   'vlm.changed',
 ];

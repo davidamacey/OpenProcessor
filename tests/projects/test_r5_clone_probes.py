@@ -27,7 +27,7 @@ async def test_r5_clone_activates_source_private_detector_in_target(tmp_path, mo
     monkeypatch.setattr(mc, 'is_model_shared', lambda _n: False)
     monkeypatch.setattr(pm, 'is_model_shared', lambda _n: False)
 
-    # R6-m3 fix (W3/W4 round-6 review): the real clone call below
+    # R6-m3 fix: the real clone call below
     # (`_into`) goes through `check_activation_pair_in_target_context` ->
     # `run_activation_gate` -> `validate_profile`'s OWN, unpatched
     # `TritonControlService.get_repository_index` -- unreachable in a

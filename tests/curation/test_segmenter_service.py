@@ -106,7 +106,7 @@ class _FakeProcessor:
         self.image_sizes: list[tuple[int, int]] = []
         self.device = 'cpu'
         self.model = _FakeModel(self.prompt_calls)
-        # W8c: mirrors the real Sam3Processor's plain instance attribute
+        # mirrors the real Sam3Processor's plain instance attribute
         # that ProcessorPool.acquire(min_score=...) sets/restores.
         self.confidence_threshold: float | None = None
 
@@ -435,7 +435,7 @@ class TestCascadeWithTheShippedSegmenter:
         primary detector missed comes back with a segmenter-sourced box
         -- where ``test_segmenter_optional`` sees ``no_region_box``.
 
-        W8: ported off the deleted per-crop ``_process_crop`` (which
+        ported off the deleted per-crop ``_process_crop`` (which
         wrapped this in the full class+region cascade); the concern this
         test actually guards -- ``SegmenterClient`` against a real
         HTTP-shaped SAM3 server, source-projected via
@@ -465,7 +465,7 @@ class TestCascadeWithTheShippedSegmenter:
 
 
 # =============================================================================
-# W8c: min_score + the raised max_candidates ceiling
+# min_score + the raised max_candidates ceiling
 # =============================================================================
 
 
@@ -629,7 +629,7 @@ class TestProcessorPool:
 
 
 # =============================================================================
-# W5: opt-in mask polygons
+# opt-in mask polygons
 # =============================================================================
 
 

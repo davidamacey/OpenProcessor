@@ -1,4 +1,4 @@
-"""A running curation app for the test-on-crop routes (W5).
+"""A running curation app for the test-on-crop routes.
 
 The real app (scoped + global routers) over an in-memory config store and an
 in-memory item store, with a fake VLM and a fake segmenter behind real

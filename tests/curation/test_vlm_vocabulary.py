@@ -57,7 +57,7 @@ def test_class_source_rollup_buckets(monkeypatch: pytest.MonkeyPatch) -> None:
         {'key': 'unlabeled_proposal', 'doc_count': 8},
         {'key': 'something_else', 'doc_count': 9},
     ]
-    # F-23: proposal sources never carry a class_id (they're the
+    # proposal sources never carry a class_id (they're the
     # detector's "no class assigned yet" marker), so this function --
     # which callers only ever feed class_id-scoped buckets -- no longer
     # special-cases them; they fall into 'other' here. The real count is

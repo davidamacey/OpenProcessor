@@ -146,7 +146,7 @@ class _ItemTask:
     # recognized text rides along so writers can persist it even when
     # the downstream VLM verify returns an empty read.
     candidate_text: str | None = None
-    # W8: every selected candidate for this item (select_region_candidates
+    # every selected candidate for this item (select_region_candidates
     # output, wrapped as TaskBoxInput -- box_id set only when read back
     # from an existing pending_verification box). Drives the multi-box
     # VLM overlay + verdicts_to_boxes write path. The singular
@@ -254,7 +254,7 @@ class _ItemTask:
     # happens to be processing. The producer always stamps it; a task
     # without one is a bug and :func:`bind_task_project` refuses it.
     project: Any = None
-    # Minor 5 (W2 review, 2026-09-27): True once a VLM call actually ran
+    # True once a VLM call actually ran
     # for this task this pass (visibility gate or combined class+region
     # -- see runner.py's call sites; W8 deleted the separate per-crop
     # verify_region cascade in cascade.py/combined.py). The bulk writer
@@ -263,7 +263,7 @@ class _ItemTask:
     # skipped the VLM, e.g. the high-confidence segmenter auto-skip) never
     # gets a stamp implying a VLM ran.
     vlm_called: bool = False
-    # Who answered (W9.3): the identity of the runtime whose VLM this task's
+    # Who answered: the identity of the runtime whose VLM this task's
     # call went to, stamped as `vlm_endpoint` / `vlm_model` on the write.
     # Per TASK, not read from the store at write time: a swap between the
     # call and the flush must not relabel an answer.

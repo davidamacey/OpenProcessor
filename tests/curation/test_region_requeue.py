@@ -2,7 +2,7 @@
 (:mod:`src.services.curation.region_requeue` and
 ``scripts/curation/requeue_regions.py``).
 
-W8c: the corpus is ``region_boxes``-shaped (the worker's only write
+the corpus is ``region_boxes``-shaped (the worker's only write
 target since W8b) rather than the deleted single-scalar fields
 (``bbox_norm`` / item-level ``detector`` / ``rejection_reason`` /
 ``embedding`` / ``cluster_id``) the pre-W8c version of this test used --

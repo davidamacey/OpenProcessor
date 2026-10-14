@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# Shared port resolution (F-66)
+# Shared port resolution
 # =============================================================================
 # scripts/openprocessor.sh and scripts/setup.sh used to hardcode
 # localhost:4603/4600/4607/4605 directly in curl calls. On a shared host

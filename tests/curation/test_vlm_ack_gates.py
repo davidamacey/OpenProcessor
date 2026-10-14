@@ -1,5 +1,5 @@
 """Two external-images acknowledgement gates that only an ``allow_external``
-endpoint reaches (W9 review m1): the per-run ack and the clone refusal.
+endpoint reaches: the per-run ack and the clone refusal.
 Every other walk of the gate uses a DNS-denied endpoint, which a reverted
 ack rule would still refuse."""
 

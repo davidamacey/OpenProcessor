@@ -131,7 +131,7 @@ async def stage_b_combined(ctx: PipelineContext, consumer_id: int) -> None:
                         combined_crops,
                         class_names=class_names or None,
                     )
-                    # Minor 5 (W2 review): only a write this call actually
+                    # only a write this call actually
                     # informed gets stamped `vlm_prompt_pack` downstream.
                     for _t in chunk:
                         if _t.crop_jpeg is not None:

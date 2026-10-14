@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * The class-mapping step (any_domain_plan.md §7.12 item 1, W10.5): one
+   * The class-mapping step: one
    * row per served `DatasetPreview.classes[]` entry. Mapping is by NAME:
    * the dataset's own class id and an OP export's source registry id are
    * shown as plain labels and never compared with anything. What the

@@ -1,4 +1,4 @@
-"""COCO-format dataset reading (W10.2.1).
+"""COCO-format dataset reading.
 
 The annotation JSON is untrusted input: its structure is validated before
 use, ``file_name`` values resolve through

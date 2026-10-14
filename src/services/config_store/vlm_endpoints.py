@@ -1,4 +1,4 @@
-"""The VLM endpoint registry's storage operations (W9.6).
+"""The VLM endpoint registry's storage operations.
 
 Endpoints are global (deployment-wide): docs live in ``op_global_configs``
 (``vlm:<name>`` current, ``vlm:<name>@<rev>`` immutable copies,

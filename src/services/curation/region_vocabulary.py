@@ -133,7 +133,7 @@ def region_profile_summary(profile: Any) -> dict[str, Any]:
     whether region-scoped UI/routes are available; ``reads_text`` is the
     one to key text UI on (``text_reader`` is ``'none'`` when false).
 
-    ``limits.max_boxes_per_write`` (W8) is the served abuse guard on one
+    ``limits.max_boxes_per_write`` is the served abuse guard on one
     human region-box write request -- an element count, not a labeling
     rule. It comes from the bound project's ``CurationConfig``, never a
     hardcoded number, so Cropwright never duplicates it.

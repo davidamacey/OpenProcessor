@@ -1,7 +1,7 @@
 /**
  * The import job view's controller: follows the served job by its
  * `poll_after_s` until terminal, wakes on a matching SSE event, and runs
- * cancel / resume / undo (dry run first) as served (W10.11, W10.12).
+ * cancel / resume / undo (dry run first) as served.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '$lib/api';

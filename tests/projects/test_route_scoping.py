@@ -46,7 +46,7 @@ GLOBAL_ROUTES = frozenset(
         ('POST', f'{API}/projects/combine/{{job_id}}/resume'),
         ('GET', f'{API}/health'),
         ('GET', f'{API}/events'),
-        # W9: the VLM endpoint registry and local model catalog are
+        # the VLM endpoint registry and local model catalog are
         # deployment-wide; only the per-project activation is scoped.
         ('GET', f'{API}/vlm/catalog'),
         ('GET', f'{API}/vlm/local'),

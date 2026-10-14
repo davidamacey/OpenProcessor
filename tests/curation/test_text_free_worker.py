@@ -151,7 +151,7 @@ class TestTextFreeWrites:
         assert doc[F.status] == 'detected'
         box = doc[F.boxes][0]
         assert box['bbox_norm']
-        # W8: no verified/validated concept per box (RegionBox carries
+        # no verified/validated concept per box (RegionBox carries
         # none) -- state='accepted' is the machine-acceptance signal.
         assert box['state'] == 'accepted'
         assert _text_keys(doc) == []

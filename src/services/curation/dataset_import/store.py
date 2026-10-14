@@ -1,4 +1,4 @@
-"""The on-disk record of dataset imports (W10.11).
+"""The on-disk record of dataset imports.
 
 One directory per import under the bound project's imports dir
 (``OP_DATASET_IMPORTS_DIR/projects/<slug>/<import_id>/``, on the shared

@@ -1,5 +1,5 @@
 """Resolve OpenProcessor-export stems to docs the project already holds
-(W10.2.2), so a re-import into the project that exported the dataset
+, so a re-import into the project that exported the dataset
 attaches labels to the original image/item instead of ingesting the
 exporter's resized copy.
 

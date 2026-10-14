@@ -471,7 +471,7 @@ def prompt_text_examples(pack: PromptPack) -> frozenset[str]:
 
 
 # ---------------------------------------------------------------------------
-# Reply-key contract (W3, any_domain_plan.md §3.3) -- the wire keys each
+# Reply-key contract -- the wire keys each
 # pack "call" (a system+user template pair) must ask the VLM to return,
 # so ``pack_validation.py`` can check a draft pack names every key its
 # matching parser reads. Keys named here are the RegionFields *default*
@@ -504,7 +504,7 @@ REPLY_KEY_CONTRACT: dict[str, dict[str, list[str]]] = {
             REPLY_CONFIDENCE_KEY,
         ],
         'optional': [REPLY_TEXT_KEY],
-        # W8: the list-shaped per-box verdict keys -- required whenever the
+        # the list-shaped per-box verdict keys -- required whenever the
         # active/given profile's max_regions_per_item > 1 (D-B, list shape
         # only; see pack_validation.pack_multi_region_keys_missing).
         'multi_region': ['region_boxes', 'box', REPLY_BBOX_CORRECT_KEY, REPLY_CONFIDENCE_KEY],

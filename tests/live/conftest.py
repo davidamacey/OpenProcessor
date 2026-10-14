@@ -156,7 +156,7 @@ _INTERNAL_INDEX_PREFIXES = (
     'security-auditlog',
     'ism-',
     'opensearch_dashboards',
-    # The API bootstraps the core visual_search_* indexes at startup (F-25);
+    # The API bootstraps the core visual_search_* indexes at startup;
     # their names are fixed, not configurable, so they cannot carry verify_.
     'visual_search_',
 )

@@ -2,7 +2,7 @@
 
 Reproduces the review's exact scenario (docs/design/openprocessor_internal/
 w8_pipeline_review_2026-09-27.md, finding B1): a human proposes a box via
-the real ``PUT /crops/{crop_id}/regions`` route (W8a), which -- with no
+the real ``PUT /crops/{crop_id}/regions`` route, which -- with no
 ``region_status`` in the request -- derives ``pending_verification``. The
 streaming worker's Path 1 must read that stored ``proposed`` box (never a
 single-box scalar, which this item never had), re-verify it through the VLM,

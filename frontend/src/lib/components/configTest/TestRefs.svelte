@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * The served refs of a test run: which pack/profile and which VLM
-   * answered, and how long it took (W5). Rendered as served; the VLM's
+   * answered, and how long it took. Rendered as served; the VLM's
    * `endpoint` is its own `name@revision`.
    */
   import { formatLatencyMs } from '$lib/formatLatency';

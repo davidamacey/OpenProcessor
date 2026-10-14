@@ -21,7 +21,7 @@
    *                      ranking /review's picker uses. Limits only the
    *                      VLM sweep; clustering still covers the pool.
    *   2. prompt pack   — only when the `prompt_pack` axis is advertised.
-   *   3. VLM endpoint  — only when the `vlm` axis is advertised (W9):
+   *   3. VLM endpoint  — only when the `vlm` axis is advertised:
    *                      `VlmRunPicker`, with the served per-run
    *                      acknowledgement for an external endpoint.
    * No detection-profile control: region detection runs in the backend's

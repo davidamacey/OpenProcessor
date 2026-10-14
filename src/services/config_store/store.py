@@ -453,7 +453,7 @@ async def activate_axis(
     """Activate (or deactivate, ``name=None``) ``axis`` on ``store``'s
     project: writes through :func:`~src.services.config_store.index.activate`,
     applies the result to ``store`` immediately (read-after-write in this
-    process), and publishes the ``config.changed`` SSE event (§9 W2) --
+    process), and publishes the ``config.changed`` SSE event --
     the one place both effects happen together, so every caller (the
     ``PUT /settings`` bridge now; W3/W4's activate routes later) gets
     both for free.
@@ -506,7 +506,7 @@ async def _poll_all_active_projects(client: Any, interval: float) -> None:
     registry = ProjectRegistry(lambda: client)
     while True:
         try:
-            # W9: the deployment-wide VLM registry, refreshed unbound (its
+            # the deployment-wide VLM registry, refreshed unbound (its
             # index belongs to no project) so a probe or an endpoint edit
             # made through another uvicorn worker shows up here within a tick.
             await get_global_config_store(mode='live').refresh(client)

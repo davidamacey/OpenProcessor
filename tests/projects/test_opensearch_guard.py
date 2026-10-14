@@ -77,7 +77,7 @@ def test_global_configs_index_is_a_legitimate_unowned_index(snapshot) -> None:
     """M3: ``op_global_configs`` (the one config-store index scoped to no
     project -- sibling to ``op_projects``, ``visual_search_*``) is
     readable and writable unbound, same as any other unowned index -- the
-    shape its future global-router routes (W9) will use. A request
+    shape its future global-router routes will use. A request
     already bound to a project has no business touching it, so it is
     refused there exactly like any other unowned index (fail-closed).
 

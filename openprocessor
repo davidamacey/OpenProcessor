@@ -167,7 +167,7 @@ require_checkout() {
     fi
 }
 
-# F-66: resolve every port from THIS deployment's .env (falling back to the
+# resolve every port from THIS deployment's .env (falling back to the
 # stock defaults) instead of hardcoding localhost:4603/4600/4607/4605. On a
 # shared host running a second isolated stack (remapped ports via .env),
 # the hardcoded literals used to report ANOTHER stack's /health as this

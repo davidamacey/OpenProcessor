@@ -20,7 +20,7 @@ import type {
  * `choice` entries. Where each list lives is the spec's own table (§7.3
  * `CHOICE_SOURCES`): the vocabulary's top-level keys, or `ocr.*`.
  * `vlm_catalog` and `secret_refs` live on W9 routes, not the vocabulary:
- * `null`, and the row falls back to a text input (W4-Q8).
+ * `null`, and the row falls back to a text input.
  */
 export function choiceList(
   vocab: ConfigVocabulary | null,
@@ -136,7 +136,7 @@ export function valueText(v: unknown): string {
   return String(v);
 }
 
-/** A number input's value: an empty input is `null` (W4-Q9). */
+/** A number input's value: an empty input is `null`. */
 export function numberFromInput(raw: string): number | null {
   if (raw.trim() === '') return null;
   const n = Number(raw);

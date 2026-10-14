@@ -1,4 +1,4 @@
-"""Wire models for the per-project keymap surface (W2b). See
+"""Wire models for the per-project keymap surface. See
 ``docs/design/openprocessor_internal/any_domain_plan.md`` W2b and CW-K
 §4."""
 

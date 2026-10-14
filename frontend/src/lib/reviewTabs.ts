@@ -77,7 +77,7 @@ export const CORE_REVIEW_TABS: ReviewTabDef[] = [
     urlId: 'new_class_proposals',
     endpointId: 'new_class_proposals',
   },
-  // W10: items whose labels came from a labeled-dataset import. Not in the
+  // items whose labels came from a labeled-dataset import. Not in the
   // tab bar unless the backend serves an `imported` entry in
   // `GET /review/tabs` (see `visibleReviewTabs`): absent, never disabled.
   {

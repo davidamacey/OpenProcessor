@@ -1,4 +1,4 @@
-"""A project as a dataset source (W10.19): another project's validated items,
+"""A project as a dataset source: another project's validated items,
 region boxes, negatives and splits, read page by page under a read-only
 binding and projected onto W10's :class:`ScanEntry` stream so the mapping,
 completeness and provenance rules stay W10's.

@@ -43,7 +43,7 @@ describe('/clusters/[id] header shows purity with basis/n and label_purity/label
     const idx = detailSrc.indexOf('{#if cluster.purity != null}');
     expect(idx).toBeGreaterThan(-1);
     const block = detailSrc.slice(idx, idx + 700);
-    // F-37: rendered as cohesion (cohesionText reads purity/purity_n).
+    // rendered as cohesion (cohesionText reads purity/purity_n).
     expect(block).toMatch(/cohesionText\(cluster\)/);
     expect(block).toMatch(/COHESION_TOOLTIP/);
   });

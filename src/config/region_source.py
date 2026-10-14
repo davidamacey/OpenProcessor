@@ -15,7 +15,7 @@ CANDIDATE_SEGMENTER = 'segmenter'
 CANDIDATE_SEGMENTER_TEXT_HINT = 'segmenter_text_hint'
 CANDIDATE_DETECTOR = 'detector'
 CANDIDATE_DETECTOR_EXISTING = 'detector_existing'
-# A region box written by dataset import (W10) -- stored on RegionBox.source,
+# A region box written by dataset import -- stored on RegionBox.source,
 # distinct from region_source's worker-candidate values above (which never
 # reach a stored box's ``source`` field; that field's only other value is
 # the human-created-box marker ``'human'``). Locked like a human box

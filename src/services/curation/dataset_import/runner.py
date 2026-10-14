@@ -1,4 +1,4 @@
-"""The import job: claim, run in chunks, resume, cancel (W10.11).
+"""The import job: claim, run in chunks, resume, cancel.
 
 Runs in-process as an ``asyncio.Task`` in one ``api`` worker; every
 fact another process needs lives on disk (:mod:`.store`), so status, cancel

@@ -24,7 +24,7 @@ PROMOTE_GATE_PER_CLASS_SUPPORT_MIN = 5
 class PromoteGateFailure(BaseModel):
     """One machine-readable promote-gate failure.
 
-    F-64 (fresh-start E2E findings 2026-09-25): the 422 used to carry only
+    the 422 used to carry only
     free-text strings in ``failures``; a UI-only user saw just "API 422"
     because there was nothing structured to render. ``code`` is a stable
     identifier a frontend can switch on without string-parsing;

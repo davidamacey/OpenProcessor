@@ -341,7 +341,7 @@ async def dataset_stats(opensearch: Any, item_filter: ItemFilter) -> dict[str, A
         {str(b.get('key', '')): int(b.get('doc_count', 0)) for b in no_class_buckets},
         VLM_CLASS_SOURCE,
     )
-    # F-23: was miscounted as (always-zero) labeled.by_proposal; these
+    # was miscounted as (always-zero) labeled.by_proposal; these
     # sources never carry a class_id, so the real count only exists among
     # the class-less buckets.
     by_proposal = _count_by_proposal(no_class_buckets)
@@ -474,7 +474,7 @@ async def dataset_stats(opensearch: Any, item_filter: ItemFilter) -> dict[str, A
             # a dashboard can tell "no class_source at all" apart from
             # "the VLM tried but didn't land on a registry class".
             'vlm_no_class': vlm_no_class,
-            # F-23: the detector proposed this crop as an object of
+            # the detector proposed this crop as an object of
             # interest but nothing has classified it yet -- moved here
             # from labeled.by_proposal, which was structurally always 0
             # (these class_source values never carry a class_id, so they

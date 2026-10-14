@@ -1,4 +1,4 @@
-"""Resolve a reprocess request's targets to documents (W10.13).
+"""Resolve a reprocess request's targets to documents.
 
 Three target forms: explicit ``crop_ids``, explicit ``image_ids`` or a
 ``filter``. This module validates the shape (exactly one form, a filter

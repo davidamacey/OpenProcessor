@@ -170,7 +170,7 @@ export interface LegendEntry {
 }
 
 /**
- * F-68 (fresh-start findings 2026-09-25): the plot had no legend, so its
+ * the plot had no legend, so its
  * colors meant nothing without hovering. The biggest clusters in the
  * served points, each with its color and the class name its points carry
  * most often. Display only: nothing here assigns anything.

@@ -1,4 +1,4 @@
-"""One axis id per axis (any_domain_plan.md §7.1, §9 W2): the axis ids
+"""One axis id per axis: the axis ids
 served by ``GET /methods`` ``axes[]`` agree with
 ``ActiveConfigResponse.axis`` and ``config.changed.axis`` -- no served
 payload ever carries ``"axis": "region_profile"``."""

@@ -1,4 +1,4 @@
-"""Wire models for ``/region_profiles*`` (W4, any_domain_plan.md §7.3)."""
+"""Wire models for ``/region_profiles*``."""
 
 from __future__ import annotations
 

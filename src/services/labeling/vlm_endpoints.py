@@ -1,4 +1,4 @@
-"""VLM endpoints: the one abstraction every VLM call site resolves (W9.0).
+"""VLM endpoints: the one abstraction every VLM call site resolves.
 
 A VLM is always a *registered endpoint*: the ``env`` built-in
 (``OP_VLM_URL`` / ``OP_VLM_MODEL``, read-only) or a stored endpoint in the
@@ -363,7 +363,7 @@ def external_ack_state(
     active_ack_at: str | None,
     acked_refs: frozenset[str],
 ) -> ExternalAckState:
-    """The ONE statement of the ack rule (W9.9 / §7.8.2): ``/methods``
+    """The ONE statement of the ack rule: ``/methods``
     serves these flags and every run enforces them from this function, so
     the served flag and the enforced rule cannot drift.
 

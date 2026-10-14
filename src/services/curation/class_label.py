@@ -47,7 +47,7 @@ def human_class_provenance() -> dict[str, Any]:
 
 
 def import_class_provenance(import_id: str, *, now: str | None = None) -> dict[str, Any]:
-    """Class provenance for a dataset-import class write (W10.10)."""
+    """Class provenance for a dataset-import class write."""
     return class_provenance(
         detector='import', detector_version=import_id, labeler='import', labeled_at=now
     )

@@ -1,6 +1,6 @@
 """Tests for src/utils/class_names.py.
 
-F-42 (fresh-start E2E findings 2026-09-25, round 2): a promoted model's
+a promoted model's
 detections used to always come back labeled from the stock 80-class COCO
 vocabulary regardless of which model actually produced the class ids
 (src/utils/affine.py:344's bare ``COCO_CLASSES.get(...)``). These tests

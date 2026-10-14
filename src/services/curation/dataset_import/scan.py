@@ -1,8 +1,8 @@
-"""Dataset scanning (W10.2, W10.4): read a directory (YOLO or COCO
+"""Dataset scanning: read a directory (YOLO or COCO
 format) into an ordered, format-neutral :class:`DatasetScan` — no writes,
 no OpenSearch, no Triton. ``POST /datasets/preview`` and the import job
 both call :func:`scan_dataset`; the job re-runs the same scan so preview
-stays advisory and the job authoritative (W10.4).
+stays advisory and the job authoritative.
 
 ``scan_dataset`` is the one entry point: it applies the path policy to the
 root, detects the format, and dispatches to the reader.
@@ -43,7 +43,7 @@ class LabelBox:
 @dataclass
 class ScanEntry:
     """One dataset image, format-neutral. Consumed by
-    ``dataset_import/job.py``'s per-image import flow and (W10.19) by
+    ``dataset_import/job.py``'s per-image import flow and by
     P4's project-source reader."""
 
     rel_path: str
@@ -96,7 +96,7 @@ def exif_transposed_size(path: Path) -> tuple[int, int] | None:
 
 
 def detect_format(root: Path) -> DatasetFormat:
-    """First match wins (W10.2.1)."""
+    """First match wins."""
     from src.services.curation.dataset_import.op_export import is_op_export
 
     if is_op_export(root):

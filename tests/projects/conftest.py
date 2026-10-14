@@ -202,7 +202,7 @@ class FakeLifecycleOpenSearch(FakeRegistryOpenSearch):
         self.transport = _FakeTransport()
 
     async def get(self, *, index: str, id: str, **_kw: Any) -> dict[str, Any]:  # noqa: A002
-        # Minor 3 (W2 review): a real ``client.get()`` with no ``id`` raises
+        # a real ``client.get()`` with no ``id`` raises
         # ``NotFoundError`` -- it never returns a ``found: False`` body.
         # Every production caller (``registry.get_record_with_seq``,
         # ``bootstrap._get_or_none``/``bump_revision``) already handles
@@ -254,7 +254,7 @@ class FakeLifecycleOpenSearch(FakeRegistryOpenSearch):
         retry_on_conflict: int = 0,  # noqa: ARG002
         refresh: str | bool | None = None,  # noqa: ARG002
     ) -> dict[str, Any]:
-        # M6 (W2b Opus review): teach this fake W2's atomic
+        # teach this fake W2's atomic
         # ``bump_config_revision`` (painless script + ``upsert``), the
         # same real create-vs-bump distinction
         # ``tests/curation/_fake_config_opensearch.py``'s

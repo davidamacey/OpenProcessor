@@ -1,4 +1,4 @@
-"""Per-project VLM activation (W9.3).
+"""Per-project VLM activation.
 
 Which endpoint a project's VLM calls is that project's ``activation:vlm``
 doc; the endpoints themselves are global

@@ -1,4 +1,4 @@
-"""M-4 fix (W3/W4 review 2026-09-28): pin the actual computed
+"""pin the actual computed
 ``ActivationImpact`` numbers against a known-buckets fake search response.
 
 Before this file, no test asserted any number `compute_activation_impact`

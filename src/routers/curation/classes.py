@@ -423,7 +423,7 @@ async def _merge_dry_run(payload: ClassMergeRequest, opensearch: Any) -> dict[st
 
     holdout = await _count({'bool': {'filter': [of_source, not_holdout]}})
     relabel = await _count({'bool': {'filter': [of_source], 'must_not': [not_holdout]}})
-    # F-56 follow-up: a merge no longer clears class_validated — a
+    # a merge no longer clears class_validated — a
     # human-validated crop of the source class stays validated under the
     # target. This count is who that carry-over applies to, not
     # (as the old 'would_unvalidate' name implied) who loses validation.
@@ -572,7 +572,7 @@ async def merge_class(
         update['cluster_id'] = payload.target_id
         update['cluster_subid'] = None
         update['label_source'] = 'class_merge'
-        # F-56 follow-up: a human-validated crop of the source class stays
+        # a human-validated crop of the source class stays
         # validated under the target — only the class assignment changes,
         # not the fact a human already confirmed it. class_id_history
         # (record_class_history below) separately snapshots the pre-merge

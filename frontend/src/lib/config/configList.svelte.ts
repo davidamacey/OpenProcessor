@@ -1,6 +1,6 @@
 /**
- * A config resource's list page state, shared by the prompt-pack (W3) and
- * region-profile (W4) lists (any_domain_plan.md §7.2, §7.3, §7.6 items 1,
+ * A config resource's list page state, shared by the prompt-pack and
+ * region-profile lists (any_domain_plan.md §7.2, §7.3, §7.6 items 1,
  * 2 and 4): the served list, the active ref (with its writes), Clone and
  * Delete.
  *

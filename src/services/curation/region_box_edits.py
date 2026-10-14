@@ -1,4 +1,4 @@
-"""Human edits over the per-item region-box list (W8.7 / W8.8).
+"""Human edits over the per-item region-box list.
 
 Pure (no I/O). Every human writer -- ``PUT /crops/{id}/regions`` and its
 batch form, ``PATCH /crops/{id}/regions/{box_id}``, ``POST
@@ -188,7 +188,7 @@ def apply_put_boxes(
     stored box (:func:`human_geometry`, :func:`with_state`,
     :func:`human_text_fields`); ``box_id: None`` (or omitted) is a new
     human box, assigned the next id (``bbox_norm`` required) and
-    defaulting to ``accepted`` when ``state`` is omitted (W8 pin 2).
+    defaulting to ``accepted`` when ``state`` is omitted.
     Omitting a stored box from ``requested`` deletes it. A duplicate
     ``box_id`` is an error.
 

@@ -405,7 +405,7 @@ def test_r5_start_job_runs_what_the_request_resolved(app_client, monkeypatch, qu
 # ---- 6. Walk EVERY real activation-writer, one gate-failing revision -------
 # (asked for in round 4, still missing per round 5's review). Enumerates the
 # real call sites -- direct activate x2, settings-bridge x2 axes + the
-# combined-request case (Blocker R5-1), rollback x2, and clone (Major R5-3)
+# combined-request case, rollback x2, and clone
 # -- against the SAME never-bypassable failure (a multi-box-stripped pack
 # paired with a multi-region profile), so a future caller that skips the
 # gate on ANY of these paths turns this test red.
@@ -468,7 +468,7 @@ def test_r5_walk_every_activation_writer_rejects_gate_failing_pair(
     results['settings_profile'] = r.status_code
     assert c.put(SETTINGS, json={'defaults': {'prompt_pack': 'good'}}).status_code == 200
 
-    # (e) settings bridge, BOTH axes in one request (Blocker R5-1).
+    # (e) settings bridge, BOTH axes in one request.
     r = c.put(
         SETTINGS,
         json={'defaults': {'prompt_pack': 'single', 'detection_profile': 'multi'}},
@@ -482,10 +482,10 @@ def test_r5_walk_every_activation_writer_rejects_gate_failing_pair(
         and served_prof is not None
         and served_prof.max_regions_per_item > 1
     )
-    # R6-m2 fix (W3/W4 round-6 review): the old `409 if combined_pair_live
+    # R6-m2 fix: the old `409 if combined_pair_live
     # else 422` bucketed BOTH outcomes into the shared `(409, 422)` loop
     # assertion below, so this entry passed even when the gate was
-    # disabled entirely -- the round-5 mutation proved it stays green
+    # disabled entirely -- the mutation proved it stays green
     # while `test_r5_two_axis_put...` (the dedicated R5-1 test) correctly
     # goes red. Assert directly on what actually matters: the request was
     # rejected (422 specifically -- this route's own gate-failure code,

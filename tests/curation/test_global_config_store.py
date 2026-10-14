@@ -1,4 +1,4 @@
-"""M3 (W2 review): ``op_global_configs`` -- the one ``ConfigStore`` that
+"""``op_global_configs`` -- the one ``ConfigStore`` that
 is NOT scoped to any project (sibling to ``op_projects``), built as the
 foundation for W9's VLM endpoint registry / any future
 ``local_vlm:desired``-style global config axis.

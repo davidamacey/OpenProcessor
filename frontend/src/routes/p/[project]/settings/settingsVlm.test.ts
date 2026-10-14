@@ -1,5 +1,5 @@
 /**
- * `/settings` VLM axis (W9), mounted against stubbed `/methods`,
+ * `/settings` VLM axis, mounted against stubbed `/methods`,
  * `/settings` and registry reads: the dropdown lists the served `vlm`
  * entries with their served status label and warning; an external entry
  * with no recorded acknowledgement is disabled and points at Settings →

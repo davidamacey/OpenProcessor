@@ -1,4 +1,4 @@
-"""Round-7 confirmation-review fixes (W3/W4 review, round 7).
+"""Round-7 confirmation-review fixes.
 
 - R7-1 (Blocker): the worker's IVF self-trigger pointed
   ``_IVF_PIPELINE_PATH`` at the public route wrapper (no ``progress``
@@ -39,7 +39,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 
 # =============================================================================
-# R7-1: worker's IVF self-trigger must resolve to a pipeline fn that accepts
+# worker's IVF self-trigger must resolve to a pipeline fn that accepts
 # the worker's actual call shape (opensearch=, progress=, **trigger_args).
 # =============================================================================
 
@@ -97,7 +97,7 @@ def test_r7_start_job_pipeline_path_also_binds_worker_call_shape() -> None:
 
 
 # =============================================================================
-# R7-2: with prompt_pack omitted and a legacy settings-doc default, the job
+# with prompt_pack omitted and a legacy settings-doc default, the job
 # must run the SAME pack it echoes in summary/args.
 # =============================================================================
 
@@ -204,7 +204,7 @@ async def test_r7_start_omitted_stale_settings_doc_pack_is_ignored_not_flagged_o
 
 
 # =============================================================================
-# R7-3: the production R6-1b call site (labeler_resolution_args inside
+# the production R6-1b call site (labeler_resolution_args inside
 # _run_auto_label) must be driven through the REAL job execution path, not
 # re-implemented inline in the test.
 # =============================================================================
@@ -217,7 +217,7 @@ async def test_r7_start_then_active_switch_real_job_serves_pinned_or_new(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Job-level regression guard for R6-1b's production call site
-    (R7-3): build the trigger args exactly as ``/start`` does (pack
+build the trigger args exactly as ``/start`` does (pack
     omitted), then activate a different pack, then run
     ``_run_auto_label(**args, run_vlm=True)`` for real -- not a
     re-implementation of the selection logic -- and assert the ACTUAL
@@ -235,7 +235,7 @@ async def test_r7_start_then_active_switch_real_job_serves_pinned_or_new(
     assert c.post(PREFIX, json={'name': 'my_pack', 'body': _body('A')}).status_code == 201
     assert c.post(f'{PREFIX}/my_pack/activate', json={'expected_active': None}).status_code == 200
     # An un-activated draft on my_pack (r2) -- the labeler must never
-    # silently serve this once 'other' becomes active (round-1 B1 /
+    # silently serve this once 'other' becomes active (B1 /
     # R6-1b). Without this, the R7-3 mutation is a no-op: the pinned
     # revision-1 body is byte-identical whichever code path resolves it.
     assert (

@@ -503,7 +503,7 @@ async def test_bulk_write_stamps_region_profile_and_pack() -> None:
     F = get_region_fields()
     a = _make_task(crop_id='a')
     a.update_doc = {F.status: 'detected', F.max_score: 0.9}
-    # Minor 5 (W2 review): the pack stamp is per-TASK, gated on whether a
+    # the pack stamp is per-TASK, gated on whether a
     # VLM call actually contributed to this task's write this pass.
     a.vlm_called = True
 
@@ -537,7 +537,7 @@ async def test_bulk_write_stamps_region_profile_and_pack() -> None:
 
 @pytest.mark.asyncio
 async def test_bulk_write_does_not_stamp_pack_when_no_vlm_call_happened() -> None:
-    """Minor 5 (W2 review): a write whose task never actually involved a
+    """a write whose task never actually involved a
     VLM call (no VLM configured, or a write path that skipped it, e.g.
     the high-confidence secondary-segmenter auto-skip) must not carry
     ``vlm_prompt_pack`` -- that would claim a VLM ran when it didn't."""

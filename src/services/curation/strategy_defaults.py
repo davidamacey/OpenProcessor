@@ -112,7 +112,7 @@ def _advertised_ids_for_axis(axis: str) -> frozenset[str]:
 # 7, §9 W2): the detection worker now hot-reloads its active profile via
 # the config store's quiesce-and-swap (§4.5) instead of only reading
 # OP_REGION_PROFILE at startup, so a PUT here actually changes what runs.
-# 'vlm' (W9) is the third config-store axis: an endpoint activation per
+# 'vlm' is the third config-store axis: an endpoint activation per
 # project (``src.services.config_store.vlm_activation``).
 # 'prompt_pack', 'detection_profile' and 'vlm' are special-cased in
 # ``src.routers.curation.settings`` -- their PUT delegates to the config

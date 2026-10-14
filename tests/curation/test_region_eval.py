@@ -564,7 +564,7 @@ def test_cli_state_dir_cohort_uses_recorded_ids(monkeypatch, tmp_path: Path) -> 
 
 
 # =============================================================================
-# --import-id cohort (W10)
+# --import-id cohort
 # =============================================================================
 
 SERVER = '/server/ds/images/test'

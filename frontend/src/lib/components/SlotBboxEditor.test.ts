@@ -1,5 +1,5 @@
 /**
- * SlotBboxEditor lock glyph (W10): the editor's canvas marks a box whose
+ * SlotBboxEditor lock glyph: the editor's canvas marks a box whose
  * served `locked` is true (matched by box id off the crop's slot data) and
  * no other. Mounts the real editor.
  */

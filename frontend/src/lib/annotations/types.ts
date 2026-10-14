@@ -409,7 +409,7 @@ export interface SlotData {
  *  the row). */
 export function slotIsPresent(d: SlotData | undefined | null): boolean {
   if (!d) return false;
-  // W8: a genuinely populated multi-box list is evidence; an empty list
+  // a genuinely populated multi-box list is evidence; an empty list
   // ([] — "no boxes on this item yet") is not, same as the legacy
   // single-box null case below.
   if (d.subBoxes && d.subBoxes.length > 0) return true;

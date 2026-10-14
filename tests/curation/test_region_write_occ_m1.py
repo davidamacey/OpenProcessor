@@ -91,7 +91,7 @@ class TestConcurrentRevisionBumpDuringVlmCall:
         # M1: revision advances from the CURRENT (5) value -- 6, never
         # reset back to 1 against the task's stale fetch-time snapshot.
         assert doc[F.revision] == 6
-        # W8c: the concurrently-added box (b7) is a sibling this pass
+        # the concurrently-added box (b7) is a sibling this pass
         # never touched -- merged back in, not silently discarded.
         by_id = {b['box_id']: b for b in doc[F.boxes]}
         assert by_id['b7']['bbox_norm'] == [0.2, 0.2, 0.3, 0.3]

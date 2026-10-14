@@ -1,4 +1,4 @@
-"""YOLO-format dataset reading (W10.2.1).
+"""YOLO-format dataset reading.
 
 Discovery (``data.yaml`` / ``images/<split>`` tree) is a fresh
 implementation here rather than a straight move of
@@ -254,7 +254,7 @@ def read_yolo_labels(
 ) -> tuple[list[LabelBox], bool]:
     """Parse one YOLO ``.txt`` -> ``(boxes, label_file_exists)``.
 
-    Row rules (W10.2.1): 5 fields is a plain box; ``1 + 2k`` fields
+    Row rules: 5 fields is a plain box; ``1 + 2k`` fields
     (``k >= 3``) is a YOLO-seg polygon / YOLO-OBB row, imported as its
     axis-aligned bounding box (``yolo_polygon_to_box``, info). Any other
     field count is ``label_row_malformed`` (row skipped). A coordinate

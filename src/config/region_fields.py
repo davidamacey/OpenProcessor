@@ -71,7 +71,7 @@ class RegionFields:
     detector_chain: str = 'region_detector_chain'
     detected_at: str = 'region_detected_at'
 
-    # Config-store provenance (W2): which activated region profile
+    # Config-store provenance: which activated region profile
     # (name) + revision produced this write. Item-level fields, in
     # ``_items_body()`` from the start -- not folded into ``kind ==
     # 'config'`` docs.

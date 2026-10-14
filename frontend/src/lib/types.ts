@@ -463,7 +463,7 @@ export interface Crop {
    *  `slotOf(crop, spec)` (annotations/cropSlots.ts), never `?.[...]`
    *  by hand, so the accessor can be tightened later. */
   slots?: Record<SlotKey, SlotData>;
-  // -- Class provenance (Wave 1) -----------------------------------------
+  // -- Class provenance -----------------------------------------
   class_detector?: string | null;
   class_detector_version?: string | null;
   class_labeled_at?: string | null;
@@ -540,14 +540,14 @@ export interface Crop {
    * scored at all.
    */
   probe_actionable?: boolean | null;
-  /** W9: the VLM endpoint (`name@revision`), model and prompt pack that
+  /** the VLM endpoint (`name@revision`), model and prompt pack that
    *  produced this item's VLM answer. Null when none ran. */
   vlm_endpoint?: string | null;
   vlm_model?: string | null;
   vlm_prompt_pack?: string | null;
-  /** W10: a human-locked label the pipeline must not overwrite. */
+  /** a human-locked label the pipeline must not overwrite. */
   label_locked?: boolean;
-  /** W10: ids of the dataset imports that carried this item. */
+  /** ids of the dataset imports that carried this item. */
   import_ids?: string[];
   dataset_split?: string | null;
   imported_at?: string | null;
@@ -591,11 +591,11 @@ export interface Cluster {
   id: number;
   /** Backend-derived: "class" | "candidate" | "unassigned". */
   cluster_kind: ClusterKind;
-  /** Items with >=1 box in the cluster. For a region cluster (W8), this
+  /** Items with >=1 box in the cluster. For a region cluster, this
    *  is DISTINCT from `box_count` below — an item can have more than one
    *  box in the same cluster. */
   size: number;
-  /** W8 (docs/design/w8-multibox-frontend-plan-2026-09-26.md): boxes
+  /** boxes
    *  (rows) in the cluster, region clusters only. Absent on an item
    *  cluster or a pre-W8 backend. */
   box_count?: number | null;

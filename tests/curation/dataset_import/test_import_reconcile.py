@@ -1,4 +1,4 @@
-"""A newer dataset version over an earlier import (W10.11): items it no
+"""A newer dataset version over an earlier import: items it no
 longer has go, unless a human or a holdout freeze touched them, and undoing
 the newer import puts them back."""
 

@@ -1,4 +1,4 @@
-"""``/prompt_packs*`` -- prompt-pack CRUD (W3, any_domain_plan.md §3/§7.2).
+"""``/prompt_packs*`` -- prompt-pack CRUD.
 
 Route-order note (§3.2): ``schema``, ``validate``, ``test``, ``active``
 and ``active/rollback`` are declared before ``/{name}`` and its children,
@@ -254,7 +254,7 @@ async def rollback_active_prompt_pack(
     try:
         await rollback_pack(opensearch, expected_active=expected)
     except LookupError as exc:
-        # m-b fix (W3/W4 round-5 review): `previous_deleted` is distinct
+        # m-b fix: `previous_deleted` is distinct
         # from `no_previous` -- the pack was deleted while it was the
         # rollback target, not "there is no target."
         if exc.args and exc.args[0] == 'previous_deleted':
@@ -580,7 +580,7 @@ async def activate_prompt_pack_route(
     if record is None:
         raise api_error(404, 'not_found', f'{name!r} is not a known pack')
 
-    # R4-1 fix (W3/W4 round-4 review): the ONE shared `for_activation` gate
+    # the ONE shared `for_activation` gate
     # every activation writer calls -- activate, settings-bridge, rollback.
     report = await run_activation_gate(
         'prompt_pack', name, record.revision, force=body.force, client=opensearch

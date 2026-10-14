@@ -157,12 +157,12 @@ def app_client_config_store(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     ``FakeSettingsOpenSearch``, this fake also serves the config store's
     ``get``/``index``/``search`` calls, needed now that
     ``detection_profile``/``prompt_pack`` PUTs delegate to
-    ``store.activate_axis`` (W2)."""
+    ``store.activate_axis``."""
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     fake_os = FakeConfigOpenSearch()
 
-    # N1 fix (W3/W4 round-3 review): `PUT /settings` now runs the same
+    # `PUT /settings` now runs the same
     # `for_activation` validation `POST /{name}/activate` runs, so a
     # `detection_profile` PUT needs its models reported READY the same
     # way `test_region_profiles_router.py`'s `app_client` fixture already

@@ -581,7 +581,7 @@
       // answered by the server with the already-active job.
     }
     promoteJobId = r.job_id;
-    // F-64: the run's own id, Triton-safe. No version suffix — nothing
+    // the run's own id, Triton-safe. No version suffix — nothing
     // client-side knows this deployment's versioning.
     promoteDefaultName = defaultTritonName(r.job_id);
     promoteOpen = true;

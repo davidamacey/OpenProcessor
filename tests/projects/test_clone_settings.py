@@ -136,7 +136,7 @@ def test_clone_source_stays_byte_identical() -> None:
 def test_clone_keymap_axis_all_or_nothing_reports_class_conflicts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """B2 (W2b Opus review): ``clone_settings`` with ``axes=['keymap']``
+    """``clone_settings`` with ``axes=['keymap']``
     validates the source's stored overrides against the *target's* class
     registry, and is all-or-nothing -- any class conflict (or validation
     error) leaves the target's keymap completely unchanged (not even the

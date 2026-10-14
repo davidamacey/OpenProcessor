@@ -1,4 +1,4 @@
-"""VLM endpoint validation (W9.4): field checks, SSRF and external-images
+"""VLM endpoint validation: field checks, SSRF and external-images
 policy, secret references, and the activation-only escalations.
 
 One function, :func:`validate_vlm_endpoint`, runs on validate, create,

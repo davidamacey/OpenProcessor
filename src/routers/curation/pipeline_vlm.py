@@ -1,4 +1,4 @@
-"""Per-run VLM selection (``?vlm=``) for the auto-label and VLM routes (W9.3).
+"""Per-run VLM selection (``?vlm=``) for the auto-label and VLM routes.
 
 :func:`resolve_run_vlm` is the request-time resolver, the sibling of
 ``resolve_run_prompt_pack``: it resolves the endpoint, runs the ONE shared
@@ -121,7 +121,7 @@ async def resolve_test_vlm(
     pack: Any,
     profile: Any,
 ) -> VlmEndpoint:
-    """The endpoint a test-on-crop run (W5) sends a real crop to: a draft
+    """The endpoint a test-on-crop run sends a real crop to: a draft
     body, ``name`` (+ ``revision``), or the project's active endpoint, through
     the ONE gate (mode ``test``: validity / SSRF, the external-images
     acknowledgement, secrets by reference, the pack pairing). 409

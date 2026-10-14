@@ -1,4 +1,4 @@
-"""The ``detect`` scope (W10.13): re-run the ingest detectors on a stored
+"""The ``detect`` scope: re-run the ingest detectors on a stored
 image and merge the output into the image's items.
 
 The merge is :func:`~src.services.curation.proposal_merge.merge_item_proposals`

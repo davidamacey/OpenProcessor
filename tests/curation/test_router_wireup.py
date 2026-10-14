@@ -223,7 +223,7 @@ def test_classes_merge_resets_stale_human_provenance_on_crops_only(
     class_validated field and whose label_source means something else
     (original label provenance).
 
-    F-56 follow-up (owner-aligned semantics, 2026-09-25): class_validated
+    class_validated
     is carried over, not cleared -- a human-validated crop of the source
     class stays validated under the target. See
     test_merge_class_carries_over_validation_to_the_target in
@@ -302,7 +302,7 @@ def test_classes_merge_resets_stale_human_provenance_on_crops_only(
     bulk_body = bulk_calls[0]
     assert bulk_body[0]['update']['_index'] == 'op_prj_default__items'
     crop_doc = bulk_body[1]['doc']
-    # F-56 follow-up: merge_source above is class_validated=True -- that
+    # merge_source above is class_validated=True -- that
     # carries over to the target, it is not cleared.
     assert crop_doc['class_validated'] is True
     assert crop_doc['label_source'] == 'class_merge'

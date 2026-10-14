@@ -276,7 +276,7 @@ async def accept_without_vlm(
 ) -> None:
     """No VLM configured: write every candidate region unverified.
 
-    W8: writes the box-list shape. With no VLM to adjudicate, each candidate
+    writes the box-list shape. With no VLM to adjudicate, each candidate
     (a re-verified stored ``proposed`` box keeps its id, so none stays
     ``proposed`` forever) is accepted if it passes the same geometry gate the
     verified path uses, else rejected with the sanity reason. The item lands

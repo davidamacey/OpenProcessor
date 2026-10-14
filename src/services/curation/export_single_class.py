@@ -155,7 +155,7 @@ class SingleClassExportProfile:
     dataset_kind: str = 'single_class'
 
     # 'keep_imported' honours the split a dataset import filed each frame
-    # under (``dataset_split``); 'recompute' ignores it (W10.9).
+    # under (``dataset_split``); 'recompute' ignores it.
     split_mode: SplitMode = 'keep_imported'
 
 

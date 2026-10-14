@@ -88,7 +88,7 @@ describe('review page: rank-scope + blur controls are tab-agnostic (no PRIMARY_T
 });
 
 /**
- * W5 (2026-09-24 logic-moves): GET /review/{tab} accepts class_id/source/
+ * GET /review/{tab} accepts class_id/source/
  * conf_min/conf_max now — re-enabled unconditionally, not behind the old
  * REVIEW_SERVER_FILTERS_ENABLED flag (deleted). Static source-scan, same
  * pattern as the block above.

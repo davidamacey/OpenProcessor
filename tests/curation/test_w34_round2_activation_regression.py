@@ -1,4 +1,4 @@
-"""W3/W4 review round-2 (2026-09-28) regression tests: the API's VLM write
+"""W3/W4 review (2026-09-28) regression tests: the API's VLM write
 routes and the pipeline's omitted-``prompt_pack`` default must both resolve
 through the config store's activation-pinned body (B1, closing the
 remaining bypass after round 1 only fixed

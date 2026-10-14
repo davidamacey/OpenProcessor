@@ -1,6 +1,6 @@
 /**
  * Wire types shared by every editable config resource OpenProcessor serves
- * from its config store (W2): prompt packs (W3) and region profiles (W4).
+ * from its config store: prompt packs and region profiles.
  * `any_domain_plan.md` §7.1 (the shared models), §7.2 and §7.3 (the common
  * envelopes: revisions, clone, update, activate).
  *
@@ -45,7 +45,7 @@ export interface ActiveRef {
   revision: number | null;
 }
 
-/** Where a config doc comes from. No served labels (W3-Q4). */
+/** Where a config doc comes from. No served labels. */
 export type ConfigSource =
   'builtin' | 'file' | 'stored' | 'template' | 'env' | 'registered' | (string & {});
 

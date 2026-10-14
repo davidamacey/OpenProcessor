@@ -85,7 +85,7 @@ def test_put_prompt_pack_null_deactivates(app_client: TestClient) -> None:
         '/curation/projects/default/settings', json={'defaults': {'prompt_pack': None}}
     )
     assert r.status_code == 200, r.text
-    # Minor 4 (W2 review): `null` deactivates through the store exactly
+    # `null` deactivates through the store exactly
     # like `'off'` does (`_activate_config_store_axis` maps both to
     # `name=None`) -- GET must report that real 'off' state, not omit it
     # as if the axis had never been touched.
@@ -100,7 +100,7 @@ def test_put_detection_profile_off_and_on(
     from src.config import DetectionProfile
     from src.services.detection import profile_registry
 
-    # N1 fix (W3/W4 round-3 review): `PUT /settings` now runs the same
+    # `PUT /settings` now runs the same
     # `for_activation` validation `POST /{name}/activate` runs -- a bare
     # `DetectionProfile(name='wheel')` (no detector, no segmenter) can
     # never produce a box and genuinely fails that gate now, same as it
@@ -133,7 +133,7 @@ def test_put_detection_profile_off_and_on(
             '/curation/projects/default/settings', json={'defaults': {'detection_profile': 'off'}}
         )
         assert r_off.status_code == 200, r_off.text
-        # Minor 4 (W2 review): an explicit deactivation is reported as
+        # an explicit deactivation is reported as
         # 'off', not omitted -- the store's own docstring says those two
         # states (never activated vs. explicitly turned off) are
         # deliberately distinct, and GET must not collapse them.

@@ -1,7 +1,7 @@
 """The streaming worker's Stage B (combined VLM call) bounds no-verdict
 retries.
 
-W8: the pre-W8 per-crop cascade (``_process_crop``) and its
+the pre-W8 per-crop cascade (``_process_crop``) and its
 ``combined.py`` cohort helper are deleted -- ``runner.py``'s
 ``stage_b_combined`` is the only production no-verdict-cap consumer now,
 via :func:`scripts.curation.worker.verify.verdicts_to_boxes`'s

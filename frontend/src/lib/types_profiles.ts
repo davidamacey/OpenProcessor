@@ -215,7 +215,7 @@ export interface VocabSegmenter {
   endpoint: string | null;
   status: string;
   masks: boolean;
-  /** W8.4: the server's candidate cap and SAM 3's own score floor. */
+  /** the server's candidate cap and SAM 3's own score floor. */
   max_candidates: number | null;
   default_min_score: number | null;
 }
@@ -234,7 +234,7 @@ export interface VocabVlmEndpoint {
   warning?: string | null;
 }
 
-/** One row of the "every model choice" table (W9.8, §7.8.4). */
+/** One row of the "every model choice" table. */
 export interface ModelChoice {
   role: string;
   label: string;

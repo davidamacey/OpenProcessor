@@ -275,7 +275,7 @@ def test_detection_profile_axis_advertises_the_selected_profile(
     assert r.status_code == 200
     body = r.json()
     profile_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'detection_profile'}
-    # W2: an explicit 'off' choice is offered once there is a profile to turn off.
+    # an explicit 'off' choice is offered once there is a profile to turn off.
     assert set(profile_entries) == {REFERENCE_LICENSE_PLATE_PROFILE.name, 'off'}
     entry = profile_entries[REFERENCE_LICENSE_PLATE_PROFILE.name]
     assert entry['status'] == 'stable'
@@ -307,7 +307,7 @@ def test_detection_profile_registry_supports_more_than_one_profile() -> None:
             e['id']: e
             for e in detection_profile_strategies(profile_registry.get_default_profile_name())
         }
-        # W2: an explicit 'off' choice is offered once there is a profile to turn off.
+        # an explicit 'off' choice is offered once there is a profile to turn off.
         assert set(entries) == {'license_plate', 'shipping_label', 'off'}
         assert entries['license_plate']['default'] is True
         assert entries['shipping_label']['default'] is False

@@ -11,7 +11,7 @@ Covers:
 (b) every curation worker service carries ``profiles: [curation]``, so
     the default ``docker compose up`` experience never starts it;
 (c) no two services share a ``container_name`` or a host port;
-(d) the ``vlm`` service's command (W9.7): one compose file serves every
+(d) the ``vlm`` service's command: one compose file serves every
     catalog entry and its defaults are the command this stack was tested
     with, checked by a hermetic evaluation of the shell command and, when a
     Docker CLI is present, by ``docker compose config``.
@@ -45,7 +45,7 @@ _CURATION_WORKER_SERVICES = (
     'curation-cluster-refresh',
 )
 
-# F-3 (fresh-start E2E findings 2026-09-25): the monitoring stack used to
+# the monitoring stack used to
 # start on a bare `docker compose up -d` alongside the core services --
 # a surprise on a shared host (alloy mounts /var/run/docker.sock and tails
 # EVERY container on the host; dcgm-exporter reserves `count: all` GPUs).
@@ -841,7 +841,7 @@ def test_api_default_trainer_container_matches_the_trainer_service_name() -> Non
 
 
 # =============================================================================
-# F-75: a container must never read a *host*-port env var (the left side of
+# a container must never read a *host*-port env var (the left side of
 # a `ports:` mapping, e.g. SEGMENTER_PORT) as its own in-container config.
 # `env_file: .env` loads the whole file into the container, so a same-named
 # Dockerfile ENV default silently gets overridden by the host-port value --

@@ -1,4 +1,4 @@
-"""Region-class labels (W10.7): write a dataset's region boxes onto their
+"""Region-class labels: write a dataset's region boxes onto their
 parent items, make standalone items for boxes with no parent, and record the
 reviewed-negative "no region here" verdict.
 
@@ -74,7 +74,7 @@ def region_state_fields(
     status = derive_status(boxes, empty_status=RegionStatus.NO_REGION_VISIBLE)
     if ctx.options.processing == 'propose' and boxes:
         # The region worker proposes what the dataset missed around the
-        # locked boxes (W10.7); the set stays validated until it adds one.
+        # locked boxes; the set stays validated until it adds one.
         status = RegionStatus.PENDING_DETECTION
     fields[F.status] = status.value
     fields[F.validated] = _validated(ctx)
@@ -162,7 +162,7 @@ def standalone_item(
     now: str,
 ) -> DetectedItem:
     """An item for a region box with no parent: its own bbox, no class, one
-    accepted region box equal to itself (W10.7)."""
+    accepted region box equal to itself."""
     bbox = box.bbox_norm
     region_box = new_import_box(ctx, bbox, 'b1', now)
     extra: dict[str, Any] = import_stamp(ctx, entry, {}, now)

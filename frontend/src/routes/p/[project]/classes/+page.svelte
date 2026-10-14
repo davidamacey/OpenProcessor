@@ -211,7 +211,7 @@
       toastStore.success(`Restored ${cls.name}.`);
       await classesStore.clearAndRefetch();
     } catch (e) {
-      // F-56: a merged class 409s with a structured `class_merged` detail
+      // a merged class 409s with a structured `class_merged` detail
       // (its crops already live on the merge target); say where they went
       // and that un-merge isn't supported, using the served text.
       const merged = classMergedDetail(e);

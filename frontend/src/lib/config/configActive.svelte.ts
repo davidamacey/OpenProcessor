@@ -2,7 +2,7 @@
  * What is active on one config axis (`GET /{resource}/active`) and the
  * writes that move it: activate, rollback and, where the resource has one,
  * deactivate (any_domain_plan.md §4.4, §7.2, §7.3, §7.6 item 4). Shared by
- * the prompt-pack (W3) and region-profile (W4) editors.
+ * the prompt-pack and region-profile editors.
  *
  * Every write sends `expected_active` = the `active` ref of the last read,
  * exactly as served. A 409 `active_conflict` re-reads, so the next attempt

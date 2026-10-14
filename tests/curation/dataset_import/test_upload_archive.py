@@ -1,5 +1,5 @@
 """Archive upload is the widest attack surface of the import: every member
-name, type and size is attacker-controlled (W10.3)."""
+name, type and size is attacker-controlled."""
 
 from __future__ import annotations
 

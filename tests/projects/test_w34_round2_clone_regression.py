@@ -1,12 +1,12 @@
-"""W3/W4 review round-2 (2026-09-28) regression tests for B2: a clone must
+"""W3/W4 review (2026-09-28) regression tests for B2: a clone must
 succeed through the REAL ``clone_settings``/``_validate_clone`` ->
 ``_apply_clone`` sequence (not just ``_apply_clone`` called directly,
-which the round-1 fix's own test did -- dodging the target store's 1s
+which the fix's own test did -- dodging the target store's 1s
 cache TTL that raced with ``_clone_prompt_packs``'s write in the real
 flow), with no artificial sleep needed once the sequencing bug is
 actually fixed. Also pins that the target's activated pack body is always
 the source's ACTIVATED (validated) body, never a merely-current,
-never-activated draft (W2 Minor 2) -- even when a sibling ``prompt_packs``
+never-activated draft -- even when a sibling ``prompt_packs``
 axis already wrote that name's current doc into the target first. Landed
 here as permanent tests (moved from the reviewer's throwaway probe file)
 rather than left as scratch fixtures."""

@@ -1,10 +1,10 @@
 <script lang="ts">
   /**
    * The deployment's segmenters as served by `GET /config/vocabulary`
-   * `segmenters[]` (§7.4, W8.4): status, endpoint, masks, the server's
+   * `segmenters[]`: status, endpoint, masks, the server's
    * candidate cap and the segmenter's own score floor. Shown next to the
    * profile's segmenter fields so the author sees the served limits; no
-   * client cap or floor exists. Status ids have no served labels (W4-Q11).
+   * client cap or floor exists. Status ids have no served labels.
    */
   import type { VocabSegmenter } from '$lib/types_profiles';
 

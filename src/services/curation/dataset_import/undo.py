@@ -1,4 +1,4 @@
-"""Undo one import batch (W10.12): remove only what the import wrote, never
+"""Undo one import batch: remove only what the import wrote, never
 a later human edit.
 
 Every decision is a pure function of the document as the OCC write reads it

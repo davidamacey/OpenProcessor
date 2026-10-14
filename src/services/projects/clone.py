@@ -105,7 +105,7 @@ async def _validate_clone(
             )
 
     if 'prompt_packs' in resolved_axes:
-        # W3: every STORED pack (not just the active one -- 'activations'
+        # every STORED pack (not just the active one -- 'activations'
         # already covers that), so refuse up front if the target already
         # has any of its own, same "clone is a byte-identical starting
         # point, never a merge" rule as 'classes'.
@@ -133,7 +133,7 @@ async def _validate_clone(
         # only after `settings_defaults`/`classes` had already been
         # written. Refuse up front instead, same as `classes`.
         #
-        # N3 fix (W3/W4 round-3 review): two more target-not-empty shapes
+        # two more target-not-empty shapes
         # `existing and existing.get('name')` alone missed, both proven by
         # the reviewer to half-write before a 409 through
         # `clone_settings_into` (the real revision the old B2 fix was
@@ -175,7 +175,7 @@ async def _validate_clone(
 
             source_index = _get_src_cfg().configs_index
             source_active_names: dict[ConfigAxis, str | None] = {}
-            # R5-3 fix (Major, W3/W4 round-5 review): the revision goes
+            # the revision goes
             # with the name below, both needed to re-resolve the
             # SOURCE's exact activated body for the target-context gate
             # check.
@@ -195,7 +195,7 @@ async def _validate_clone(
             target_store = get_config_store()
             await target_store.ensure_fresh(client)
             for axis in activation_axes:
-                # Minor 3 (W2 review): `get_activation` already maps a
+                # `get_activation` already maps a
                 # real (or fake -- tests/projects/conftest.py's
                 # ``FakeLifecycleOpenSearch.get`` now raises like the real
                 # client) 404 to `None` itself; nothing here can still
@@ -222,7 +222,7 @@ async def _validate_clone(
 
                 source_name = source_active_names.get(axis)
                 if source_name:
-                    # m2 fix (W3/W4 round-4 review): `target_store.current`
+                    # `target_store.current`
                     # is a snapshot refreshed at most once per
                     # `ensure_fresh`'s 1s TTL -- a genuinely concurrent
                     # write from another worker landing in that window
@@ -251,7 +251,7 @@ async def _validate_clone(
                             project=target_record.slug,
                         )
 
-            # R5-3 fix (Major, W3/W4 round-5 review): every check above is
+            # every check above is
             # SOURCE-shaped (does the target already have something in
             # the way). None of them ask whether the source's activated
             # pair is even VALID in the TARGET's own context -- see
@@ -299,7 +299,7 @@ async def _apply_clone(
     axis's dropped-action conflicts (``[]`` for every other axis/outcome)
     -- a structured report, never a silent unbind.
 
-    m5 fix (W3/W4 round-4 review): ``target_activations`` has no default
+    ``target_activations`` has no default
     -- every caller must say explicitly whether the target's per-axis
     activation state is empty (``None``) or the real
     ``_validate_clone``-captured doc (N3a). A silent ``None`` default
@@ -518,7 +518,7 @@ async def _clone_activations(
             from src.services.config_store.index import ActiveConflictError, RevisionConflictError
 
             target_index = _get_cfg().configs_index
-            # B2 fix (round 2, W3/W4 review 2026-09-28): the round-1 fix
+            # the fix
             # re-read the target store's cache here to detect a sibling
             # `prompt_packs` axis write, but that cache has a 1s TTL
             # (`ensure_fresh`) -- a clone that finishes inside that window

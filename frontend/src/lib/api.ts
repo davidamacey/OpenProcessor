@@ -1743,7 +1743,7 @@ export interface DatasetStats {
     /** Subset of `no_label_source` the VLM looked at but couldn't (or
      *  didn't) resolve to a class (#36 item 2). */
     vlm_no_class: number;
-    /** F-23 (OpenProcessor d72cc63): crops a detector proposed but
+    /** crops a detector proposed but
      *  nothing has classified yet — a subset of `no_label_source`, like
      *  `vlm_no_class`. */
     by_proposal: number;
@@ -2889,7 +2889,7 @@ export interface RegionItemWrite {
   vectorRefresh: VectorRefresh | null;
 }
 
-/** `PUT /crops/{crop_id}/regions` (W8.8) — replaces the box list on one
+/** `PUT /crops/{crop_id}/regions` — replaces the box list on one
  *  crop. `regionStatus` optionally applies a whole-set status to the
  *  built list in the same write (Enter-after-edit: `'detected'`). */
 export async function putRegionBoxes(
@@ -2915,7 +2915,7 @@ export async function putRegionBoxes(
   return { crop: mapRawCrop(raw.item), vectorRefresh: raw.vector_refresh ?? null };
 }
 
-/** `PUT /crops/batch_regions` (W8.8) — replaces every listed crop's box
+/** `PUT /crops/batch_regions` — replaces every listed crop's box
  *  list with the SAME new boxes (every element must be `box_id: null`;
  *  typically `boxes: []`, "none visible"). */
 export async function putBatchRegions(
@@ -2935,7 +2935,7 @@ export async function putBatchRegions(
   return { vectorRefresh: raw.vector_refresh ?? null };
 }
 
-/** `PATCH /crops/{crop_id}/regions/{box_id}` (W8.8) — per-box state/text
+/** `PATCH /crops/{crop_id}/regions/{box_id}` — per-box state/text
  *  flip. Used by the selected-box accept/reject keymap actions. */
 export async function patchRegionBox(
   cropId: string,
@@ -3001,7 +3001,7 @@ export interface RegionBatchBoxStateResult {
   vectorRefresh: VectorRefresh | null;
 }
 
-/** `POST /regions/batch_box_state` (W8.8) — one state on many boxes
+/** `POST /regions/batch_box_state` — one state on many boxes
  *  across items (region-gallery triage / a region cluster = a set of
  *  boxes). Never flips a whole item's other boxes — use `batchRegionStatus`
  *  for that. */
@@ -3050,7 +3050,7 @@ export interface RegionStatusEntry {
   wants_reason: boolean;
 }
 
-/** W8.7: per-box state styling/labels, distinct from the item-level
+/** per-box state styling/labels, distinct from the item-level
  *  `RegionStatusEntry` vocabulary above — a box's `state` is
  *  `proposed`/`accepted`/`rejected`/`false_positive`, never one of the
  *  item's `region_status` values. */
@@ -3086,7 +3086,7 @@ export interface RegionStatusesResponse {
   confirm_status: string;
   reject_status: string;
   false_positive_status: string;
-  /** W8.7: served box-state vocabulary (`GET /regions/statuses`), absent
+  /** served box-state vocabulary (`GET /regions/statuses`), absent
    *  on a pre-W8 backend. */
   box_states?: BoxStateEntry[];
 }
@@ -3250,7 +3250,7 @@ export interface ReviewFilterSpec {
   allows_unset: boolean;
 }
 
-/** One entry of `GET {API_PREFIX}/review/tabs` (W0 finding m9) — the served
+/** One entry of `GET {API_PREFIX}/review/tabs` — the served
  *  label/description for a review tab or preset id. */
 export interface ReviewTabVocabularyEntry {
   id: string;
@@ -3275,7 +3275,7 @@ export interface ReviewTabVocabularyEntry {
 export interface ReviewEmptyState {
   has_probe_predictions: boolean;
   has_item_scores: boolean;
-  /** Whether any labeled-dataset import has written labels (W10). */
+  /** Whether any labeled-dataset import has written labels. */
   has_imported_labels: boolean;
   /** v0.4.0: whether any item has no vector, and the request that would
    *  embed them (served only then). */
@@ -3437,7 +3437,7 @@ export function runVlmOnCluster(
   clusterId: number,
   opts: {
     promptPack?: string | null;
-    /** W9: a registry endpoint name (or `off`) for this run only. */
+    /** a registry endpoint name (or `off`) for this run only. */
     vlm?: string | null;
     /** Sent only when `true`. */
     acknowledgeExternal?: boolean;
@@ -4972,14 +4972,14 @@ export interface AutoLabelStartParams {
    */
   prompt_pack?: string | null;
   /**
-   * W9: per-run VLM endpoint (a registry name, or `off`) for this job
+   * per-run VLM endpoint (a registry name, or `off`) for this job
    * only; omitted/null = the project's active endpoint. An unknown id is
    * a 422 `unknown_vlm`. Produced in exactly one place
    * (`createAssistScope().toStartParams()`).
    */
   vlm?: string | null;
   /**
-   * W9: acknowledges that this run's crops go to an external endpoint.
+   * acknowledges that this run's crops go to an external endpoint.
    * Sent only when `true` (`startAutoLabel` drops `false`).
    */
   acknowledge_external?: boolean;

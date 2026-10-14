@@ -1,5 +1,5 @@
 """Activation, rollback and deactivation of a project's VLM endpoint through
-the real routes (W9.3, W9.6, W9.9), over an in-memory config store."""
+the real routes, over an in-memory config store."""
 
 from __future__ import annotations
 

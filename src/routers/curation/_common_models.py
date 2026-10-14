@@ -31,7 +31,7 @@ from src.services.resource_links import ResourceLink, resource_links_from_config
 
 
 class IngestImageRequest(BaseModel):
-    # F-22: extra='forbid' so a wrong-key body (e.g. {'paths': [...]} instead
+    # extra='forbid' so a wrong-key body (e.g. {'paths': [...]} instead
     # of the real field) 422s instead of silently validating to defaults and
     # ingesting nothing. Subclasses (IngestBatchItem) inherit this.
     model_config = ConfigDict(extra='forbid')
@@ -66,7 +66,7 @@ class IngestImageResponse(BaseModel):
     # image_path is now the server-persisted path. Null for a server-path
     # ingest (image_path already IS the client-meaningful identifier).
     source_identifier: str | None = None
-    # F-43: set when a configured secondary detector call failed for this
+    # set when a configured secondary detector call failed for this
     # image (e.g. a Triton DEADLINE_EXCEEDED) -- the image still ingests
     # successfully on the primary detector's output alone, but a caller
     # asking for a secondary classifier needs to know it never ran.
@@ -78,7 +78,7 @@ class BatchIngestSummaryResponse(BaseModel):
     duplicates: int = 0
     failed: int = 0
     crops_indexed: int = 0
-    # F-43: count of images (among 'successful') where the configured
+    # count of images (among 'successful') where the configured
     # secondary detector call failed and was silently skipped before this
     # fix. Previously only a per-image 'warning' log line, invisible here.
     secondary_detector_failures: int = 0

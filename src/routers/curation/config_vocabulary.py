@@ -1,4 +1,4 @@
-"""``GET /config/vocabulary`` (W4, any_domain_plan.md §7.4): the enum
+"""``GET /config/vocabulary``: the enum
 choice lists both the prompt-pack and region-profile editors render.
 
 The final §7.4 shape from this wave: ``ocr`` as lists (the configured
@@ -96,7 +96,7 @@ class VlmBlock(BaseModel):
 
 
 class ModelChoice(BaseModel):
-    """One row of the "every model choice" table (W9.8, §7.8.4)."""
+    """One row of the "every model choice" table."""
 
     role: str
     label: str

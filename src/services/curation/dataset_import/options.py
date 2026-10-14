@@ -48,7 +48,7 @@ class DatasetImportOptions(BaseModel):
     force: bool = False
 
     def key_fields(self) -> dict[str, object]:
-        """The options that change what an import writes (W10.11), hence
+        """The options that change what an import writes, hence
         part of ``import_key``. ``name``, ``source_tag`` and ``force`` label
         or gate an import without changing its writes."""
         return {

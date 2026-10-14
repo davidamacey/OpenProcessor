@@ -1,4 +1,4 @@
-"""The local VLM catalog (W9.7): one TSV, two readers. Bash picks (installer
+"""The local VLM catalog: one TSV, two readers. Bash picks (installer
 and CLI), Python only displays and computes ``fits``; this pins that both see
 the same rows and that the catalog contains what the docs promise."""
 

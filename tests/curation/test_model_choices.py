@@ -1,4 +1,4 @@
-"""``build_model_choices`` (W9.8, §7.8.4): every model a user can or cannot
+"""``build_model_choices``: every model a user can or cannot
 choose, one uniform row each, built from the live source it describes."""
 
 from __future__ import annotations

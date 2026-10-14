@@ -1,4 +1,4 @@
-"""The import job end to end (W10.6): class mapping by name, ledger,
+"""The import job end to end: class mapping by name, ledger,
 locks, regions, negatives, splits. Ports every assertion of the retired
 ``test_job_import.py``."""
 

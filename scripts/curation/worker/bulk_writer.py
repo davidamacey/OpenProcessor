@@ -134,7 +134,7 @@ async def _bulk_update_one_project(
         # `t.pending_boxes is not None` is also a real write even when
         # `t.update_doc` itself is empty -- the box-list fields (status,
         # region_boxes, revision, ...) are computed below, inside
-        # `_merge`, against the live doc (W8 B1/M1), not stashed onto
+        # `_merge`, against the live doc, not stashed onto
         # `update_doc` at task-processing time.
         if not t.update_doc and t.pending_boxes is None:
             n_skipped_empty += 1

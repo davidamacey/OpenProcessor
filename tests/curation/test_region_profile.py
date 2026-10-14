@@ -169,8 +169,8 @@ def test_methods_axis_empty_when_unconfigured(region_env: pytest.MonkeyPatch) ->
 def test_methods_axis_advertises_env_configured_profile(region_env: pytest.MonkeyPatch) -> None:
     region_env.setenv(f'{_ENV_PREFIX}NAME', 'shipping_label')
     entries = _advertised(profile_registry.get_default_profile_name())
-    # W2: an explicit 'off' choice is offered once there is at least one
-    # profile to turn off (any_domain_plan.md §9 W2).
+    # an explicit 'off' choice is offered once there is at least one
+    # profile to turn off.
     assert set(entries) == {'shipping_label', 'off'}
     assert entries['shipping_label']['default'] is True
     assert entries['off']['default'] is False

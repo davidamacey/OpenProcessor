@@ -1,4 +1,4 @@
-"""``/datasets/*``: import an already-labeled dataset (W10).
+"""``/datasets/*``: import an already-labeled dataset.
 
 Thin routes over :mod:`src.services.curation.dataset_import`: every
 decision (scan, mapping, identity, claiming, chunking, undo) lives there;

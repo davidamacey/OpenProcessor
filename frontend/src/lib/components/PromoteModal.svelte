@@ -6,7 +6,7 @@
    * is intentionally minimal — Triton model name + max_batch_size +
    * fp16 + overwrite. The backend handles ONNX → JIT TensorRT compile.
    *
-   * F-64: a promote-gate 422 renders the served message and every served
+   * a promote-gate 422 renders the served message and every served
    * failure, and a "force" checkbox appears only when the server says
    * `force_allowed`.
    *

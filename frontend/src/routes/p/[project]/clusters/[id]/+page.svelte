@@ -481,7 +481,7 @@
   // pollAutoLabelJob — rendered as a compact inline stage/progress string
   // next to the Run VLM button (2026-09-24 logic-moves W3).
   let vlmJob = $state<AutoLabelJobState | null>(null);
-  // W9: the endpoint this one run uses (`null` = the project default) and
+  // the endpoint this one run uses (`null` = the project default) and
   // the acknowledgement for an external one.
   let vlmChoice = $state<string | null>(null);
   let vlmAck = $state<boolean>(false);

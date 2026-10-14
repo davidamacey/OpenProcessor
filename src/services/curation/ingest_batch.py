@@ -319,7 +319,7 @@ async def run_ingest_batch(
             summary.n_filtered += res.n_filtered
         else:
             summary.failed += 1
-        # F-43: an otherwise-'successful' ingest that silently skipped a
+        # an otherwise-'successful' ingest that silently skipped a
         # configured secondary detector call must still be visible in the
         # batch summary, not just a per-item field a caller has to notice.
         if res.secondary_detector_error:

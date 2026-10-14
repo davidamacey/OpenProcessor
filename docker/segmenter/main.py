@@ -253,7 +253,7 @@ async def _run(
 ) -> list[list[Candidate]]:
     """Acquire a processor and run the batch on it, off the event loop.
 
-    ``min_score`` (W8c) sets the leased processor's score floor for just
+    ``min_score`` sets the leased processor's score floor for just
     this call (``ProcessorPool.acquire``); ``None`` leaves the processor's
     own default (``GET /health``'s ``default_min_score``) untouched.
     """

@@ -1,4 +1,4 @@
-"""Prompt-pack validation (W3, any_domain_plan.md §3.3).
+"""Prompt-pack validation.
 
 One function, :func:`validate_pack`, runs on ``POST /prompt_packs/validate``,
 create, clone (on the resulting body), ``PUT``, ``POST /prompt_packs/test``

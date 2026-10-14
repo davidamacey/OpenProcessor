@@ -148,7 +148,7 @@ def test_r3_r1_far_past_revision(app_client):
         c.put(f'{PREFIX}/my_pack', json={'expected_revision': 2, 'body': _body('R3')}).status_code
         == 200
     )
-    # m5 fix (W3/W4 round-4 review): this test used to be "record-only"
+    # this test used to be "record-only"
     # (no assertion -- it just printed the outcome for a human to read).
     # By now `my_pack` is at CURRENT revision 3, and the currently
     # ACTIVE revision is 2 (rev 1 was superseded by activating rev 2
@@ -264,7 +264,7 @@ def test_r3_rollback_transient_error_status(app_client, monkeypatch):
     )
     monkeypatch.setattr(fake, 'get', orig_get)
     act = c.get(f'{PREFIX}/active').json()
-    # m3 fix (W3/W4 round-4 review): the OLD assertion here read
+    # the OLD assertion here read
     # `GET /active`, which is served from the in-process `ConfigStore`
     # snapshot -- stale in BOTH the pre-fix and post-fix worlds (this
     # process never applied the failed write locally either way), so it

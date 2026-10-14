@@ -479,7 +479,7 @@ class Stub:
         # for every selectable row. Default: not paused.
         # `test_projects_pause.py` overrides it with a stateful stub.
         self.on("GET", r"/pause$", self._pause_state)
-        # W10 (dataset import + Reprocess): /ingest, the item-detail panel
+        # /ingest, the item-detail panel
         # and the cluster toolbar probe `GET {prefix}/datasets/formats`
         # once per project. Defaults to a 404 — a backend without W10,
         # where every W10 surface is absent — so existing tests stay
@@ -489,18 +489,18 @@ class Stub:
         # `reprocess` block of `GET {prefix}/config/vocabulary` (only once
         # W10 is served); tests that need the full vocabulary override it.
         self.on("GET", r"/config/vocabulary(\?|$)", (200, {"reprocess": REPROCESS_VOCABULARY}))
-        # W3 (prompt-pack CRUD): /settings and the pack pages probe
+        # /settings and the pack pages probe
         # `GET {prefix}/prompt_packs` once per project. Defaults to a 404 —
         # a backend without W3, where every pack surface is absent — so
         # existing tests stay green; test_prompt_packs.py overrides it.
         self.on("GET", r"/prompt_packs(\?|$)", (404, {"detail": "Not Found"}))
-        # W4 (region-profile CRUD): /settings and the profile pages probe
+        # /settings and the profile pages probe
         # `GET {prefix}/region_profiles` once per project. Defaults to a
         # 404 — a backend without W4, where every profile surface is
         # absent — so existing tests stay green; test_region_profiles.py
         # overrides it.
         self.on("GET", r"/region_profiles(\?|$)", (404, {"detail": "Not Found"}))
-        # W9 (VLM endpoint registry): the Settings card and /models probe the
+        # the Settings card and /models probe the
         # GLOBAL `GET {prefix}/vlm/endpoints` once. Defaults to a 404 — a
         # backend without W9 — so existing tests stay green; the Track A
         # specs override it.

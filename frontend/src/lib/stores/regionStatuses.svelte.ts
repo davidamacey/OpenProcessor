@@ -73,7 +73,7 @@ class RegionStatusesStore {
   confirmStatus = $state<string | null>(null);
   rejectStatus = $state<string | null>(null);
   falsePositiveStatus = $state<string | null>(null);
-  /** W8.7: served per-box state vocabulary — distinct from `list` above
+  /** served per-box state vocabulary — distinct from `list` above
    *  (item-level `region_status`). Empty on a pre-W8 backend; every
    *  caller falls back to a hardcoded palette (see `multiBoxRingColor`/
    *  `multiBoxStateLabel` in `/review`, `SourceImageOverlay.svelte`,

@@ -68,7 +68,7 @@ export function addBox(
   return { boxes: next, selected: next.length - 1 };
 }
 
-/** One element of `PUT /crops/{crop_id}/regions` `boxes` (W8.8). */
+/** One element of `PUT /crops/{crop_id}/regions` `boxes`. */
 export type RegionBoxInput =
   | { box_id: string }
   | { box_id: string; bbox_norm: XYXY }
@@ -124,7 +124,7 @@ export function buildRegionsPutBoxes(
 /**
  * Owner decision (binding): Enter confirms only `proposed` boxes.
  * `rejected`/`false_positive` boxes are left exactly as they are — a
- * whole-set confirm never overrides a per-box decision (W8.7).
+ * whole-set confirm never overrides a per-box decision.
  * Returns the edited set with every `proposed` box flipped to `accepted`,
  * for building the confirm-write's boxes; does NOT itself decide whether
  * the result has an accepted box (see `hasAcceptedBox`) — the server is

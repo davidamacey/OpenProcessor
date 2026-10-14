@@ -1,4 +1,4 @@
-"""R7-4 fix (Major, pre-existing, W3/W4 round-7 review): mirror of R6-2.
+"""R7-4 fix (Major, pre-existing, W3/W4 review): mirror of R6-2.
 
 R6-2 fixed clone skipping PROFILE validation when the source has no real
 stored profile (falls back to the target's own default profile, unchecked
@@ -181,7 +181,7 @@ def test_r7_clone_rejects_profile_with_targets_own_stripped_pack(
                 lm._resolve_existing, lm._get_mutable_record, lm.write_record = saved
                 rm.get_project_registry = saved_reg
 
-            # R7-4 fix: the gate must reject this clone -- pairing 'mp'
+            # the gate must reject this clone -- pairing 'mp'
             # (3 regions) with the TARGET's own stripped pack
             # (`envsingle`, no multi-box support) fails
             # `check_multi_region_keys`. Before the fix, `pending_

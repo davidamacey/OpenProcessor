@@ -87,7 +87,7 @@ class _FrameRow:
     # The stratum an import recorded for this frame (preferred over the
     # computed one, so a re-export keeps the source's strings).
     import_stratum: str | None = None
-    # Dataset-import provenance (W10.9): the split the frame was filed under
+    # Dataset-import provenance: the split the frame was filed under
     # and the stem its label file had in the export it was imported from.
     dataset_split: str | None = None
     import_source_stem: str | None = None
@@ -167,7 +167,7 @@ class RowCollector:
 
     async def _merge_imported_negatives(self, rows: list[_FrameRow]) -> list[_FrameRow]:
         """Add (or annotate) the frames a dataset import marked as reviewed
-        negatives for this export's classes (W10.8).
+        negatives for this export's classes.
 
         A frame that already has a row (it carries other items) keeps its row
         and takes the import's stem/split/stratum/hard-negative marker; one

@@ -219,12 +219,12 @@ async def lifespan(app: FastAPI):
 
     AppResources.ops_metrics_task = asyncio.create_task(ops_metrics_refresh_loop())
 
-    # Best-effort: create each project's curation indexes (F-25) + kNN-warmup.
+    # Best-effort: create each project's curation indexes + kNN-warmup.
     from src.core.dependencies import bootstrap_opensearch_indexes
 
     AppResources.curation_knn_warmup_task = await bootstrap_opensearch_indexes()
 
-    # Config store poll task (W2): fans out per active project, not `default`.
+    # Config store poll task: fans out per active project, not `default`.
     from src.services.config_store import startup_bootstrap_config_store_safe
 
     AppResources.config_store_poll_task = await startup_bootstrap_config_store_safe()

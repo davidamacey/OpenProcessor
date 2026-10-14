@@ -38,7 +38,7 @@
   import type { IngestRunState } from '$lib/ingest/ingestRunController.svelte';
   import type { IngestConfig, RegionDrain } from '$lib/types';
 
-  // W10: the labeled-dataset import lives under /datasets; the link shows
+  // the labeled-dataset import lives under /datasets; the link shows
   // only when the backend serves it (a one-shot probe per project).
   $effect(() => {
     void datasetsAvailability.init();

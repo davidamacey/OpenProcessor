@@ -4,7 +4,7 @@
    * only: the models, segmenters, OCR models, text-reading modes and VLM
    * endpoints a region profile can name. The vocabulary has no write
    * route; a profile picks from it. Ids without a served label print raw
-   * (W4-Q11).
+   *.
    */
   import type { ConfigVocabulary, VocabModel } from '$lib/types_profiles';
   import SegmenterStatus from './SegmenterStatus.svelte';

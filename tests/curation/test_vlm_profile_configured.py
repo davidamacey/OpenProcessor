@@ -1,5 +1,5 @@
 """``text_reader=vlm`` validation asks the endpoint registry whether a VLM is
-configured (W9 review M6), not ``OP_VLM_URL``."""
+configured, not ``OP_VLM_URL``."""
 
 from __future__ import annotations
 

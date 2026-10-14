@@ -276,7 +276,7 @@ def test_apply_put_boxes_patching_existing_box_to_rejected_stamps_human_reason()
 
 
 # ---------------------------------------------------------------------------
-# is_human_owned (W8c M3)
+# is_human_owned
 # ---------------------------------------------------------------------------
 
 

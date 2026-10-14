@@ -6,7 +6,7 @@ image's ingest into ``ingest_image`` (decode, dedup, image identity) and
 :func:`index_items` (this module): per-crop and whole-frame PE embeddings,
 rank/blur quality, cluster placement, the crop cache, item docs and the
 bulk index. ``ingest_one`` runs ``ingest_image`` -> detector ->
-``index_items``; a dataset import (W10) runs ``ingest_image`` -> its own
+``index_items``; a dataset import runs ``ingest_image`` -> its own
 label boxes -> the same ``index_items``, so an imported item is built by
 exactly the code a detected one is.
 """

@@ -67,7 +67,7 @@ class IngestBatchItem(IngestImageRequest):
 
 
 class IngestBatchRequest(BaseModel):
-    # F-22: extra='forbid' + a required, non-empty items list. Previously a
+    # extra='forbid' + a required, non-empty items list. Previously a
     # body with a wrong key (e.g. {'paths': [...]}) validated fine with
     # items defaulting to [] and the endpoint returned 200 status=success
     # with all-zero counts -- a silent no-op indistinguishable from "ingested

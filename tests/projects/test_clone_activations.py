@@ -126,7 +126,7 @@ async def test_clone_activations_copies_active_pack_and_profile() -> None:
 
 @pytest.mark.asyncio
 async def test_clone_activations_copies_the_activated_revision_not_the_current_body() -> None:
-    """Minor 2 (W2 review): a pack saved again after being activated
+    """a pack saved again after being activated
     diverges ``pack:<name>`` (current) from ``pack:<name>@<rev>`` (the
     activated revision's immutable copy) -- the clone must copy the body
     that was actually ACTIVE, not whatever the source has saved since."""

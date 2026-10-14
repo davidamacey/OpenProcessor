@@ -2,7 +2,7 @@
 
 Split out of :mod:`src.services.curation.export_support` along a real seam:
 this module answers "which split does each source image land in", including
-the stored splits a dataset import filed frames under (W10.9), and knows
+the stored splits a dataset import filed frames under, and knows
 nothing about label files, checksums or pixels.
 """
 
@@ -148,7 +148,7 @@ def stratified_split_with_stats(
     * ``n >= 3`` — at least one train and one val; with no holdout, also
       at least one test.
 
-    **Pinned splits (W10.9).** ``pinned`` maps ``item_id`` to a stored
+    **Pinned splits.** ``pinned`` maps ``item_id`` to a stored
     split (``train``/``val``/``test``; anything else is ignored), the split
     a dataset import filed the frame under. A group with pinned members
     takes the most common pinned split (ties ``test`` > ``val`` > ``train``;

@@ -1,4 +1,4 @@
-"""Wire models of the reprocess routes (W10.14). The request/response
+"""Wire models of the reprocess routes. The request/response
 shapes live in the service layer
 (:mod:`src.services.curation.reprocess_models`) because the same models are
 the persisted job request and ``ActivationImpact.suggested_reprocess``;

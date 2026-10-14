@@ -16,7 +16,7 @@ Schema produced by ``stats._rollup_class_sources`` + ``stats_dataset``:
   (a majority-agreement rule) lives in ``by_classifier``, deliberately
   separate from ``by_human`` so the dashboard can distinguish
   "human applied this label" from "any validator approved it".
-  F-23: ``by_proposal`` moved to ``unlabeled`` -- it counts
+  ``by_proposal`` moved to ``unlabeled`` -- it counts
   detector-proposed-but-not-yet-classified crops, which never carry a
   class_id, so it was always 0 here.
 - ``regions.{total_detected, by_detector, by_segmenter, by_human_drew}`` —
@@ -163,7 +163,7 @@ def test_stats_dataset_endpoint_responds_with_full_schema(app_client: TestClient
         assert k in unlabeled, f'unlabeled.{k} missing'
         assert isinstance(unlabeled[k], int)
         assert unlabeled[k] >= 0
-    # F-23: by_proposal + vlm_no_class are both subsets of no_label_source
+    # by_proposal + vlm_no_class are both subsets of no_label_source
     # (every proposal/vlm_unmatched source is class-less by construction),
     # never a superset.
     assert unlabeled['by_proposal'] <= unlabeled['no_label_source']

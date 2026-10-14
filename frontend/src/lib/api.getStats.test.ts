@@ -82,7 +82,7 @@ describe('getStats', () => {
     expect(result.total_crops).toBe(5);
   });
 
-  // W4 (docs/design/logic-moves-adoption-plan-2026-09-24.md §1.7): thresholds
+  // thresholds
   // are served on `/stats/classes` too, and each class row carries
   // server-computed adequacy/aug_target/aug_gap — `/export` and the
   // dashboard read these directly rather than clamping or deriving a tier.

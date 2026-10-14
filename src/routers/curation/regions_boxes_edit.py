@@ -176,7 +176,7 @@ def _too_many_boxes_check(n_boxes: int) -> None:
 
 
 def _check_put_status(payload: ItemRegionsRequest | ItemBatchRegionsRequest) -> None:
-    """``region_status: no_region_visible`` with boxes is contradictory (W8.8)."""
+    """``region_status: no_region_visible`` with boxes is contradictory."""
     if payload.region_status == RegionStatus.NO_REGION_VISIBLE.value and payload.boxes:
         raise HTTPException(
             status_code=422,
@@ -289,8 +289,8 @@ async def set_crop_regions(
     ``{box_id, bbox_norm, state}`` to change state too, and ``{box_id:
     null, bbox_norm, state?}`` for a new box (default ``accepted``, W8
     pin 2). ``frame: "parent"`` projects into the source frame
-    server-side (W8 pin 1). Optional ``region_status`` applies a
-    whole-set status to the built list in the same write (W8 pin 3);
+    server-side. Optional ``region_status`` applies a
+    whole-set status to the built list in the same write;
     an empty list is the human "no region visible".
     A stale ``expected_region_revision`` is 409 ``region_conflict``.
     Over ``region_profile.limits.max_boxes_per_write`` is 422

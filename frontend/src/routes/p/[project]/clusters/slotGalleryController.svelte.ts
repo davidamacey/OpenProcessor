@@ -55,7 +55,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
     regionStatusesStore.falsePositiveStatus ??
     slot.capabilities.lifecycle?.falsePositiveState;
 
-  // W8.7: per-box `state` triage, a different vocabulary from the
+  // per-box `state` triage, a different vocabulary from the
   // item-level region_status above (`accepted`/`rejected`/
   // `false_positive`/`proposed`, keyed here by the served `box_states`
   // entry's `role`). Falls back to the literal role string — the fixed
@@ -552,7 +552,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
       const conflictCount = res.conflicts?.length ?? 0;
       const invalid = res.invalid ?? [];
       if (conflictCount > 0 || invalid.length > 0) {
-        // W8: a conflict now carries a served `message` (RegionBatchConflict)
+        // a conflict now carries a served `message` (RegionBatchConflict)
         // on a W8 backend — show it verbatim instead of just a count when
         // present, since it names the real reason ("The item changed
         // since it was loaded."). A pre-W8 backend has no `message`, so
@@ -582,7 +582,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
   }
 
   /**
-   * W8: per-box triage over the selected rows (region gallery triage — a
+   * per-box triage over the selected rows (region gallery triage — a
    * cluster is a set of boxes, W8.8/§7.7). Unlike `applyStatus` above
    * (whole-item `region_status`, `PATCH region_meta` / `POST
    * batch_status`), this goes through `POST /regions/batch_box_state`,

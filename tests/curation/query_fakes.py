@@ -8,7 +8,7 @@ evaluates the subset of the query DSL those paths use:
 
 - ``term`` / ``terms`` / ``exists`` / ``match_all`` / ``match_none`` and ``bool`` with
   ``must`` / ``filter`` / ``must_not`` / ``should`` (``should`` = any-of);
-- ``nested`` (W8c): matches the parent doc when any element of the nested
+- ``nested``: matches the parent doc when any element of the nested
   list field satisfies the inner query. Elements are re-keyed with the
   ``<path>.`` prefix (e.g. ``region_boxes.detector``) before evaluation, so
   a nested clause's field names — always the full dotted path, matching

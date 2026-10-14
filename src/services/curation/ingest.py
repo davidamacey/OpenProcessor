@@ -446,7 +446,7 @@ class CurationIngestService:
         else:
             items = await self.detector.run_primary(img)
 
-        # F-43: surfaced on the response (IngestResult.secondary_detector_error)
+        # surfaced on the response (IngestResult.secondary_detector_error)
         # and rolled into IngestSummary.secondary_detector_failures instead of
         # only ever reaching a 'warning' log line.
         secondary_detector_error: str | None = None

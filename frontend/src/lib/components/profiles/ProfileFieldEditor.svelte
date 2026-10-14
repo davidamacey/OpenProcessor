@@ -5,7 +5,7 @@
    * `type` calls for, the served choices its `choices_from` names (with the
    * served `empty_choice`), and the served issues on it. A row whose
    * `applies_when` is off in the saved revision is dimmed, never disabled
-   * (W4-Q2). No client rule checks the value; HTML `min`/`max` only hint.
+   *. No client rule checks the value; HTML `min`/`max` only hint.
    */
   import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
   import { numberFromInput, selectOptions, valueText } from '$lib/profiles/profileFields';

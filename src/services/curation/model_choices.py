@@ -1,5 +1,5 @@
 """Every model a user can (or cannot yet) choose, served uniformly in
-``GET /config/vocabulary`` ``model_choices`` (W9.8, §7.8.4).
+``GET /config/vocabulary`` ``model_choices``.
 
 Each row is built from the live source it describes (the Triton index, the
 promoted list, the active profile, the ingest env, the endpoint registry,

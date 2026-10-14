@@ -1,4 +1,4 @@
-"""Region-profile CRUD service functions (W4, any_domain_plan.md §4).
+"""Region-profile CRUD service functions.
 
 Mirrors ``src.services.config_store.packs`` for the ``region_profile``
 kind / ``detection_profile`` axis -- see that module's docstring for the
@@ -299,7 +299,7 @@ async def activate_profile(
 async def rollback_profile(
     client: Any, *, expected_active: dict[str, Any] | None
 ) -> dict[str, Any]:
-    # N4 fix (W3/W4 round-3 review): `rollback_axis` resolves the pinned
+    # `rollback_axis` resolves the pinned
     # body BEFORE writing the new activation doc, so a transient error
     # aborts cleanly instead of surfacing a 500 after the write already
     # committed. Replaces the old write-then-resolve call into

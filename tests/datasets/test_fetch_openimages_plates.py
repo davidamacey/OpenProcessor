@@ -148,7 +148,7 @@ def test_yolo_label_lines_center_and_size() -> None:
     assert lines == ['0 0.300000 0.200000 0.200000 0.200000']
 
 
-# --- data.yaml split mapping (F-76) ----------------------------------------
+# --- data.yaml split mapping ----------------------------------------
 
 
 def test_write_labels_and_data_yaml_train_and_val_point_at_different_splits(

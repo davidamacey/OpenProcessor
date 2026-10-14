@@ -1,5 +1,5 @@
 /**
- * Reprocess (§7.12 item 6, W10.13), mounted against the contract shapes:
+ * Reprocess, mounted against the contract shapes:
  * present whenever W10 is served (the backend serves no `reprocess`
  * vocabulary block, so nothing is gated on one); the scope and region-mode
  * ids are the contract's enums; one crop or one image applies from the

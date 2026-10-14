@@ -74,7 +74,7 @@ export interface DatasetSource {
   coco_annotations?: CocoAnnotationFile[];
 }
 
-/** One explicit mapping row (W10.5). Names only — never an index. */
+/** One explicit mapping row. Names only — never an index. */
 export interface ClassMappingEntry {
   dataset_class: string;
   action: MappingAction | string;
@@ -84,7 +84,7 @@ export interface ClassMappingEntry {
 }
 
 /**
- * `DatasetImportOptions` (W10.14). Every field is optional on the wire:
+ * `DatasetImportOptions`. Every field is optional on the wire:
  * the client sends only what the operator set, so the server's default
  * applies to the rest (question 6).
  */
@@ -360,7 +360,7 @@ export type DatasetImportList = Page<DatasetImportJob>;
  *  the served rows are `DatasetIssue`-shaped. */
 export type DatasetIssuePage = Page<DatasetIssue>;
 
-/** Question 4: one ledger line (W10.11). */
+/** Question 4: one ledger line. */
 export interface DatasetImportEntry {
   source_stem: string;
   rel_path: string;
@@ -384,7 +384,7 @@ export interface DatasetUploadResponse {
   files: number;
 }
 
-/** `ConfigErrorDetail` (§7.1) with the W10 optional fields (W10.14). */
+/** `ConfigErrorDetail` (§7.1) with the W10 optional fields. */
 export interface DatasetErrorDetail {
   error: string;
   message: string;
@@ -394,7 +394,7 @@ export interface DatasetErrorDetail {
   limit?: number | null;
 }
 
-// -- Reprocess (W10.13) --------------------------------------------------
+// -- Reprocess --------------------------------------------------
 
 /** The ids the contract enumerates (`ReprocessOneRequest.scopes`), in
  *  served order. */

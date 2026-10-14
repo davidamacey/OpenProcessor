@@ -1,4 +1,4 @@
-"""Read an OpenProcessor export back as a dataset (W10.2.2).
+"""Read an OpenProcessor export back as a dataset.
 
 An export directory (``data.yaml``, ``images/``, ``labels/``,
 ``manifest.json``, ``class_registry.json``, optionally ``stratum_map.json``

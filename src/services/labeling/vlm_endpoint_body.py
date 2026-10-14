@@ -28,7 +28,7 @@ FIELD_RANGES: dict[str, tuple[float, float]] = {
 
 class VlmEndpointBody(BaseModel):
     """What is stored for an endpoint. The API key itself is never part of
-    it: ``api_key_ref`` only names where to find it (W9.9)."""
+    it: ``api_key_ref`` only names where to find it."""
 
     model_config = ConfigDict(extra='forbid')
 

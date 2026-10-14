@@ -1,4 +1,4 @@
-"""Unified reprocess (W10.13): targets, the region / vlm / embed scopes and
+"""Unified reprocess: targets, the region / vlm / embed scopes and
 the lock rule. ``detect`` is in ``test_reprocess_detect.py``; the routes,
 job, CLI and busy wiring in ``test_reprocess_entrypoints.py``."""
 

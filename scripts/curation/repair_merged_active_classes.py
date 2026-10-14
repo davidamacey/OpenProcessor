@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Re-deprecate registry classes left active after a merge (F-56).
+"""Re-deprecate registry classes left active after a merge.
 
 ``POST /classes/merge`` always sets ``deprecated=True`` alongside
 ``merged_into`` on the source class (see ``ClassRegistry.merge_class``).

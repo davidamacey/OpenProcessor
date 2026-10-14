@@ -1,5 +1,5 @@
 """Shared cross-project clone-source resolution for the prompt-pack and
-region-profile CRUD routers (W3/W4 review 2026-09-28, Minor 1).
+region-profile CRUD routers.
 
 Both routers' ``POST /{name}/clone`` routes accept an optional
 ``from_project`` and need the exact same isolation-sensitive dance: resolve
@@ -32,7 +32,7 @@ def reject_invalid_clone_name(
     name_codes: tuple[str, str],
     what: str,
 ) -> None:
-    """M-2 fix (W3/W4 review 2026-09-28): both clone routes must reject a
+    """both clone routes must reject a
     ``new_name`` that fails the same slug/reserved-word rules create
     already enforces (the ``pack_name_*`` / ``profile_name_*`` codes),
     then the plain uniqueness check -- shared so both nearly-identical

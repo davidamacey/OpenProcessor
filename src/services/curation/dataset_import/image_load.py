@@ -1,4 +1,4 @@
-"""Getting one dataset image's bytes into the project (W10.3).
+"""Getting one dataset image's bytes into the project.
 
 An image under a configured source root (or the upload root) is ingested at
 its own path. One that is only readable because it sits under the project's

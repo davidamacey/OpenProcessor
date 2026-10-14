@@ -88,7 +88,7 @@ async def rollback_axis(
     ``previous``."""
     from src.services.config_store.index import get_activation
 
-    # m-a fix (W3/W4 round-5 review): refresh the in-memory snapshot
+    # m-a fix: refresh the in-memory snapshot
     # BEFORE gating -- the gate's cross-axis inputs
     # (`get_active_region_profile()` / `active_prompt_pack()`) and the
     # deleted-target check just below both read `store.current`, which
@@ -103,7 +103,7 @@ async def rollback_axis(
         msg = 'no_previous'
         raise LookupError(msg)
 
-    # R4-1 fix (W3/W4 round-4 review): rollback re-activates `previous`,
+    # rollback re-activates `previous`,
     # which must run the exact same never-bypassable `for_activation` gate
     # `activate` and the settings bridge run. A revision that was validly
     # active once is not necessarily valid NOW -- the gate is cross-axis
@@ -114,7 +114,7 @@ async def rollback_axis(
     previous_name = previous.get('name')
     previous_revision = previous.get('revision')
     if previous_name is not None:
-        # m-b fix (W3/W4 round-5 review): the gate validates the
+        # m-b fix: the gate validates the
         # immutable `<kind>:<name>@<rev>` revision-copy doc, which
         # survives a `DELETE` of the CURRENT doc -- so without this
         # check, rolling back to a target deleted while it was

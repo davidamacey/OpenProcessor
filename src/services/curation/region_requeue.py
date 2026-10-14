@@ -32,14 +32,14 @@ The pieces:
   ``region_boxes`` so the cascade starts fresh; the worker's own
   fresh-detection write later replaces whatever machine-sourced boxes
   this leaves behind with its new candidates, keeping any human-owned
-  ones (W8c M1 fix).
+  ones.
   For ``target=pending_verification`` (re-verify only), each selected
   item's own non-human ``rejected`` box(es) are first rewritten to
   ``proposed`` (reason cleared) so the worker's Path 1 has something to
   re-verify — an item that ends up with nothing to re-propose (e.g. its
   only box is human-owned, or it has none at all) is left untouched
   instead of moving to ``pending_verification`` with no re-verifiable
-  box (W8c M2 fix).
+  box.
 
 The same tool also backfills items that carry **no** region status at all
 (``RequeueSelection(status=None)``): items ingested before ingest seeded
@@ -284,7 +284,7 @@ async def requeue_breakdown(
         'track_total_hits': True,
         'query': requeue_query(sel, F, include_locked=include_locked),
         'aggs': {
-            # W8c: detector/rejection_reason moved onto the per-box
+            # detector/rejection_reason moved onto the per-box
             # `region_boxes` list -- a nested agg over the box path. See
             # this function's docstring for why these buckets count BOXES,
             # not items, and don't reconcile with `total`.
@@ -419,7 +419,7 @@ class _Merger:
             # Drop every box that is not locked (human-owned or imported)
             # so the cascade starts fresh. The worker's own fresh-detection
             # write later replaces whatever machine-sourced boxes this
-            # leaves behind and keeps the locked ones (W8c M1); wiping the
+            # leaves behind and keeps the locked ones; wiping the
             # whole list here would re-introduce that bug one write earlier.
             stored = read_boxes(current, F)
             kept = [b for b in stored if is_locked_box(b)]
@@ -505,7 +505,7 @@ async def apply_requeue(
         concurrent writer changed first (their write wins) plus items the
         merge left untouched: a validated set, a status that moved since
         the selection, or a ``pending_verification`` target with no
-        re-proposable box (W8c M2). ``updated + skipped + errors`` is the
+        re-proposable box. ``updated + skipped + errors`` is the
         number of items the selection reached.
     """
     _check_target(sel.target, clear_detection)

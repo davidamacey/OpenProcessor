@@ -99,7 +99,7 @@ async def _run(fake, registry, **kw):
 async def test_default_pack_resolves_through_the_store_not_the_env_file_default(
     monkeypatch: pytest.MonkeyPatch, registry
 ) -> None:
-    """Minor 6 (W2 review): the docstring says a caller who passes no
+    """the docstring says a caller who passes no
     ``pack`` gets "the active pack" -- that must mean the config-store-
     aware :func:`active_prompt_pack`, not the env/file-only
     :func:`resolve_prompt_pack` `reclassify_unmatched` actually called."""

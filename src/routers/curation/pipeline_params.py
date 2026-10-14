@@ -142,7 +142,7 @@ async def resolve_run_prompt_pack(
             },
         ) from exc
     if revision is not None and opensearch is not None:
-        # R1 fix (W3/W4 review 2026-09-28): validate + pin the exact
+        # validate + pin the exact
         # revision at REQUEST time, not job-start time -- an unresolvable
         # `name@rev` (including the currently-*activated*-but-superseded
         # revision right after a PUT moves "current" forward, §3.7's own
@@ -150,7 +150,7 @@ async def resolve_run_prompt_pack(
         # once the background job called `_get_vlm_labeler`. §3.7 requires
         # a 422 here instead. `get_prompt_pack` resolves `name@rev` against
         # both the current doc and the store's pinned-active-revision copy
-        # (B1 round-2 fix), so this covers exactly the revision the job
+        #, so this covers exactly the revision the job
         # will resolve later. `opensearch=None` (no client -- unit tests
         # exercising this resolver in isolation, same contract as
         # `resolve_effective_default`) skips the store lookup entirely,
@@ -165,7 +165,7 @@ async def resolve_run_prompt_pack(
         # always returns that same non-`None` name.
         assert resolved is not None
         if get_prompt_pack(resolved, revision=revision) is None:
-            # Nit (W3/W4 round-3 review): reworded off "unknown revision"
+            # Nit: reworded off "unknown revision"
             # -- revision `1` of `resolved` can genuinely EXIST (it may
             # even be an earlier activation's `previous`), so that wording
             # is misleading. This process only ever resolves a per-run
@@ -182,7 +182,7 @@ async def resolve_run_prompt_pack(
                 },
             )
     elif requested is not None and opensearch is not None:
-        # N7 fix (W3/W4 round-3 review): an explicit per-run bare `name`
+        # an explicit per-run bare `name`
         # (no `@rev`) means "latest saved revision" per any_domain_plan.md
         # §3.7 ("Per-run `?prompt_pack=` ... accepts `name` (latest saved
         # revision)"), NOT the config-store's *active* revision --
@@ -202,7 +202,7 @@ async def resolve_run_prompt_pack(
         stored = get_config_store().current.packs.get(resolved)
         if stored is not None:
             revision = stored.revision
-    # NOTE (R6-1b, W3/W4 round-6 review): `resolved` here still echoes the
+    # NOTE (R6-1b, W3/W4 review): `resolved` here still echoes the
     # active pack's NAME for the omitted-param case (`requested is None`)
     # -- several callers (job summaries, `/start`'s own response) read
     # this purely for display and must keep seeing it. The job/labeler
@@ -216,7 +216,7 @@ async def resolve_run_prompt_pack(
 def omitted_pack_is_store_active(resolved_name: str | None) -> bool:
     """True when ``resolved_name`` (the echo for an omitted per-run
     ``prompt_pack``) came from the config store's own activation, not a
-    legacy settings-doc/env/file default (R7-2 fix, W3/W4 round-7 review,
+    legacy settings-doc/env/file default (R7-2 fix, W3/W4 review,
     Major).
 
     ``labeler_resolution_args``'s ``(None, None)`` re-resolution exists
@@ -244,7 +244,7 @@ def labeler_resolution_args(
     prompt_pack: str | None, prompt_pack_revision: int | None, *, prompt_pack_omitted: bool
 ) -> tuple[str | None, int | None]:
     """What ``_get_vlm_labeler`` must be called with for the VLM stage
-    (R6-1b fix, W3/W4 round-6 review, Blocker).
+    (R6-1b fix, W3/W4 review, Blocker).
 
     ``(prompt_pack, prompt_pack_revision)`` are the RESOLVED echo values
     (kept for ``summary``/job-status display -- existing callers read
@@ -256,7 +256,7 @@ def labeler_resolution_args(
     race): once a different pack is activated, ``get_prompt_pack(name,
     revision=None)`` no longer redirects that OLD name to its pinned
     body and instead silently serves its un-activated CURRENT draft
-    (round-1 B1, reachable again once a separate process's config-store
+    (B1, reachable again once a separate process's config-store
     snapshot is warm, R6-1a). Split out as its own function so it is
     directly unit-testable without driving the whole pipeline.
     """

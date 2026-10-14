@@ -186,7 +186,7 @@ def unload_models_for_memory():
 def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path | None:
     """Build the TensorRT engine in-process with the TensorRT Python API.
 
-    F-17 (fresh-start E2E findings 2026-09-25): this script runs inside
+    this script runs inside
     ``api`` (see the module docstring's ``Usage``), which has no
     docker CLI or docker.sock, and shelling out to
     ``docker exec <TRITON_CONTAINER> trtexec ...`` also hardcoded the

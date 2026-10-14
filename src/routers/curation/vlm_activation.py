@@ -1,5 +1,5 @@
 """``/vlm/endpoints/active``, ``/{name}/activate``, ``/active/rollback`` and
-``/deactivate``: which endpoint the BOUND project's VLM runs (W9.3).
+``/deactivate``: which endpoint the BOUND project's VLM runs.
 
 The registry is global (:mod:`vlm_endpoints`); activation is per project.
 Every route here writes through

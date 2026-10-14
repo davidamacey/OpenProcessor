@@ -1,5 +1,5 @@
 """No private-domain leakage in the generic config-editor surfaces
-(any_domain_plan.md §3.4/§7.2, W3): ``/prompt_packs/schema`` must read as
+``/prompt_packs/schema`` must read as
 neutral copy, excluding template bodies (templates intentionally carry
 domain examples like "wheel"/"plate", not leaked *default* vocabulary).
 

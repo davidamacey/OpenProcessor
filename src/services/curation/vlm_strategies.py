@@ -1,4 +1,4 @@
-"""The ``vlm`` axis of ``GET /methods`` (W9.3, §7.8.2): one entry per
+"""The ``vlm`` axis of ``GET /methods``: one entry per
 registered VLM endpoint plus ``off``, each carrying the external-images
 facts so neither the settings dropdown nor the run dialog infers them.
 

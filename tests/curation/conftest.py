@@ -1,4 +1,4 @@
-"""Fixtures shared by the VLM endpoint API tests (W9)."""
+"""Fixtures shared by the VLM endpoint API tests."""
 
 from __future__ import annotations
 
@@ -194,7 +194,7 @@ class HybridOpenSearch:
 
 @pytest.fixture
 def stack(vlm_api: VlmApi, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
-    """The test-on-crop stack (W5): the app, an item store, a fake VLM and
+    """The test-on-crop stack: the app, an item store, a fake VLM and
     a fake segmenter. See ``curation.config_test_stack``."""
     from curation.config_test_stack import build_stack
 

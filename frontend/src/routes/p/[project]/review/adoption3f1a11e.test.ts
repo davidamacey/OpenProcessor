@@ -86,7 +86,7 @@ describe("3f1a11e: a box's bbox_correct verdict folded into the Status row", () 
 describe('3f1a11e: per-item reason wording — region_rejection_reason wins over the generic reason string', () => {
   it('currentSlotRejectionReason reads the first rejected box (W8 multi-box) or the item-level field (tier-2 single-box)', () => {
     expect(src).toMatch(/const currentSlotRejectionReason = \$derived<string \| null>\(/);
-    // W8 (docs/design/w8-multibox-frontend-plan-2026-09-26.md): the
+    // the
     // machine reason moved off the item onto each rejected SlotBox.
     expect(src).toMatch(
       /slotOf\(current, activeSlot\)\?\.subBoxes\?\.find\(\(b\) => b\.state === 'rejected'\)\s*\?\.rejectionReason \?\? null/,
@@ -120,7 +120,7 @@ describe('3f1a11e: per-item reason wording — region_rejection_reason wins over
 
 describe('3f1a11e/W8: rejected-box badges style by the served rejection kind (never "rejected" for needs_human)', () => {
   it('the W8 multi-box panel badges each rejected box, branching on rejectionReasonKind, not just presence of a reason', () => {
-    // W8 (docs/design/w8-multibox-frontend-plan-2026-09-26.md): no
+    // no
     // separate "candidate" concept — one badge per rejected SlotBox.
     expect(src).toMatch(/<RejectedBoxChips\s+boxes=\{multiBox\.boxes\}/);
     const chips = readFileSync(

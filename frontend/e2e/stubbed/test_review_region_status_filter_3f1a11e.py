@@ -113,7 +113,7 @@ _CANDIDATE_BBOX = [0.15, 0.25, 0.55, 0.75]
 
 
 def needs_human_item() -> dict:
-    # W8 (docs/design/w8-multibox-frontend-plan-2026-09-26.md): a rejected
+    # a rejected
     # box the verifier never actually judged — no separate "candidate"
     # shape, just a SlotBox with state: 'rejected' and its own
     # rejection_reason. The live backend fact this adoption is pinned

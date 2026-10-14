@@ -120,7 +120,7 @@ async def patch_crop_region_meta(
 
     Box edits (geometry, per-box text) go through ``PUT
     /crops/{crop_id}/regions`` / ``PATCH /crops/{crop_id}/regions/{box_id}``
-    (W8.8) -- ``region_text`` is no longer accepted here (D decision,
+ -- ``region_text`` is no longer accepted here (D decision,
     2026-09-26). Only the fields present in the payload are written; a
     status write applies the lifecycle invariants (see
     :mod:`src.services.curation.region_writes`). Returns

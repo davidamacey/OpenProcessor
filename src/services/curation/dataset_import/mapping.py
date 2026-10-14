@@ -1,4 +1,4 @@
-"""Class-name mapping (W10.5): a dataset's integer class ids are NEVER
+"""Class-name mapping: a dataset's integer class ids are NEVER
 compared with the project registry's ids. Every dataset class is mapped
 to a target by NAME, through an explicit ``map`` / ``create`` / ``skip``
 / ``region`` action — the class identity invariant
@@ -27,7 +27,7 @@ MatchKind = Literal[
 ]
 
 # accept_suggestions only auto-fills a mapping from these match kinds
-# (W10.5): synonym/merged/create always need an explicit human choice.
+#synonym/merged/create always need an explicit human choice.
 _AUTO_ACCEPTABLE_MATCHES = frozenset({'same_registry', 'exact', 'case_insensitive', 'region'})
 
 
@@ -116,7 +116,7 @@ def suggest_mapping(
     is_single_class_region_export: bool = False,
     source_class_id: int | None = None,
 ) -> MappingSuggestion:
-    """The suggestion ladder (W10.5), first hit wins."""
+    """The suggestion ladder, first hit wins."""
     norm = norm_class_name(dataset_class)
 
     if source_class_id is not None:

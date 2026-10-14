@@ -1,5 +1,5 @@
 /**
- * ReprocessFlow (W10.13): a single image applies from the dialog with dry_run false;
+ * ReprocessFlow: a single image applies from the dialog with dry_run false;
  * the batch apply needs a served dry run for the
  * current choices; a changed scope invalidates it; `region_mode` is sent
  * only with the region scope; a served job is followed until its

@@ -436,7 +436,7 @@
       </span>
     </header>
 
-    <!-- Content. Keyed on the region profile's seedVersion (F-78): the
+    <!-- Content. Keyed on the region profile's seedVersion: the
        slot registry is a plain module binding, so when a slow boot left
        the profile unknown and a later /health poll seeds it, re-mounting
        the page is what makes the region tab and other region surfaces

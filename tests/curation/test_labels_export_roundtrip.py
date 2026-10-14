@@ -178,7 +178,7 @@ async def test_every_label_path_reaches_the_export(fake, registry, tmp_path, mon
     validated = {i for i, d in items.items() if d.get('class_validated') is True}
     assert validated == {'h1', 'b1', 'b2', 'm1', 'ap0', 'ap1', 'ap2', 'ap3'} | imported_ids
     assert 'never' not in validated
-    # W10 (any_domain_plan.md I13): dataset import no longer writes the
+    # dataset import no longer writes the
     # labels_confirmed ledger at all -- the import's own ledger (not
     # built this pass; see the wave report) is the record now.
     assert fake.docs(CONFIRMED) == {}

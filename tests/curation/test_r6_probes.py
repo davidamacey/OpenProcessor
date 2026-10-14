@@ -477,7 +477,7 @@ def test_r6_clone_pack_only_gap(ready_state, multi_default_registry, variant):  
 
 
 # ---- R6-m4 (3rd item): GET /active source label survives a deleted-but- ----
-# still-activated name (m-b, W3/W4 round-5 review) -- no landed guard
+# still-activated name (m-b, W3/W4 review) -- no landed guard
 # before this (mutation stayed green).
 def test_r6_active_label_stored_for_deleted_but_still_activated_pack(
     app_client,  # noqa: F811 - pytest fixture param shadows the cross-module import
@@ -518,7 +518,7 @@ def test_r6_labeler_resolution_args_uses_none_when_omitted():
     """Direct unit test of `labeler_resolution_args` (R6-1b fix) -- the
     inline version of this check in `_run_auto_label` is otherwise only
     ever exercised indirectly (through `run_vlm=True` driving the full
-    pipeline), which the round-6 probes above don't do. This is the
+    pipeline), which the probes above don't do. This is the
     guard that actually fails if the fix is reverted to always using the
     echoed `(prompt_pack, prompt_pack_revision)`."""
     from src.routers.curation.pipeline_params import labeler_resolution_args

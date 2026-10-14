@@ -425,7 +425,7 @@ export class CombineWizard {
         if (this.#labelsFor === first) this.actionChoices = f.mapping_actions ?? null;
       })
       .catch(() => {
-        /* 404 (no W10) or a failed read: the raw ids render. */
+        /* 404 or a failed read: the raw ids render. */
       });
   }
 

@@ -16,7 +16,7 @@ from src.services.curation.open_vocab_fields import (
 from src.services.curation.vlm_class_attempt import VLM_CLASS_ATTEMPT_MAPPING
 
 
-# Dataset-import provenance (W10.10), on both indexes: the split a frame
+# Dataset-import provenance, on both indexes: the split a frame
 # was filed under, the exporter's stem, its stratum string, the hard-negative
 # marker, and every import that wrote a label on the doc.
 _IMPORT_COMMON_MAPPING: dict[str, Any] = {
@@ -45,7 +45,7 @@ _COMBINE_ITEMS_MAPPING: dict[str, Any] = {
 _IMAGES_IMPORT_MAPPING: dict[str, Any] = {
     **_IMPORT_COMMON_MAPPING,
     **_COMBINE_IMAGES_MAPPING,
-    # A reviewed negative says "none of THESE classes" (W10.8).
+    # A reviewed negative says "none of THESE classes".
     'import_label_state': {'type': 'keyword'},
     'negative_for': {'type': 'keyword'},
 }
@@ -168,7 +168,7 @@ def _region_boxes_mapping() -> dict[str, Any]:
         # query like "a box with detector=sam3 AND state=accepted"
         # means the same box (region_boxes.box_query, the only
         # place that builds this nested clause). Element keys are
-        # FIXED strings, not RegionFields-indirected (W8.2): the
+        # FIXED strings, not RegionFields-indirected: the
         # list is new, so no deployment has legacy names for them.
         F.boxes: {
             'type': 'nested',
@@ -200,7 +200,7 @@ def _region_boxes_mapping() -> dict[str, Any]:
             },
         },
         # Per-box vectors live in a SIBLING nested field, not
-        # inside F.boxes (W8.2): every item read that feeds
+        # inside F.boxes: every item read that feeds
         # serialize_item / every OCC read excludes vectors, and a
         # human edit that read region_boxes with vectors excluded
         # and wrote the list back would silently delete every
@@ -242,7 +242,7 @@ def _items_body() -> dict[str, Any]:
                 'class_id': {'type': 'integer'},
                 'class_name': {'type': 'keyword'},
                 'class_source': {'type': 'keyword'},
-                # Config-store stamps (W2): which activated region profile /
+                # Config-store stamps: which activated region profile /
                 # revision produced this item's region write, and which
                 # prompt pack / revision the VLM used for its most recent
                 # write. Null for an item never touched by either. No
@@ -252,7 +252,7 @@ def _items_body() -> dict[str, Any]:
                 'region_profile_revision': {'type': 'integer'},
                 'vlm_prompt_pack': {'type': 'keyword'},
                 # Which VLM endpoint / model answered the item's most recent
-                # VLM write (W9.3): `name@revision` (or `env@<sha12>`) and the
+                # VLM write: `name@revision` (or `env@<sha12>`) and the
                 # resolved model (the probe's `root` when known). Stamped from
                 # the answering runtime's identity, so a hot switch never
                 # relabels an earlier answer.

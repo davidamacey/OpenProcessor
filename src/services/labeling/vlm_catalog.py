@@ -1,4 +1,4 @@
-"""The local VLM catalog: what the in-compose vLLM *can serve* (W9.7).
+"""The local VLM catalog: what the in-compose vLLM *can serve*.
 
 One file, two readers. ``examples/vlm/catalog.tsv`` is read by the
 installer/CLI's bash (``scripts/lib/vlm_catalog.sh``, which PICKS) and by

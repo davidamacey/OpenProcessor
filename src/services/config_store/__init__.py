@@ -1,6 +1,6 @@
-"""The config store (W2): OpenSearch-backed prompt packs and region
+"""The config store: OpenSearch-backed prompt packs and region
 profiles with a global revision counter, per-process snapshot and hot
-reload -- no CRUD routes live here yet (W3/W4). See
+reload -- no CRUD routes live here yet. See
 ``docs/design/openprocessor_internal/any_domain_plan.md`` §3/§4/§9 W2.
 """
 

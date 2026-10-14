@@ -1,6 +1,6 @@
 /**
  * Wire types for OpenProcessor W3 (prompt-pack CRUD) and the pack half of
- * W5 (test-on-crop): `any_domain_plan.md` §3, §5.1, §7.1, §7.2, §7.5.
+ * `any_domain_plan.md` §3, §5.1, §7.1, §7.2, §7.5.
  * Every route is project-scoped (`{prefix}/prompt_packs...`).
  *
  * Built against the frozen spec before the backend lands W3, so nothing
@@ -83,7 +83,7 @@ export interface PackSchemaPlaceholder {
 }
 
 /** A pack call (`combined`, `classify`, ...). `testable` gates the
- *  test-on-crop panel for that call (W3-Q2). */
+ *  test-on-crop panel for that call. */
 export interface PackSchemaCall {
   id: string;
   label: string;

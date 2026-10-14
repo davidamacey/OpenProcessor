@@ -42,7 +42,7 @@ class DetectionProfile:
     # above doubles as the selection floor (``min_score``) -- one
     # per-detector-leg threshold, not a second one.
     #
-    # M4 (W8 pipeline-wiring review, 2026-09-27): default is 1, matching
+    # default is 1, matching
     # any_domain_plan.md W8.4/W8.9 -- multi-box is opt-in per profile,
     # never silently on. The spec's field name is ``max_regions_per_item``
     # (a deployment sets it > 1 explicitly to enable multi-box).

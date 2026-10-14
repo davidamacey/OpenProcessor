@@ -958,7 +958,7 @@
   // first rejected box's reason; a tier-2 single-box slot still reads
   // the item-level field. Only falls back to `current.reason` when
   // neither is present (core tabs, e.g. the mismatches preset).
-  // W10: the served per-box `locked` flag, by box id, for the canvas's
+  // the served per-box `locked` flag, by box id, for the canvas's
   // lock glyph (the editable working set carries no `locked`).
   const lockedBoxIds = $derived<Set<string>>(
     new Set(

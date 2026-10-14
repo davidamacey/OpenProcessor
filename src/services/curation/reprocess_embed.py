@@ -1,4 +1,4 @@
-"""The ``embed`` scope (W10.13): recompute derived vectors.
+"""The ``embed`` scope: recompute derived vectors.
 
 Embeddings are derived data, not labels, so locked items are included. Per
 item: the PE crop embedding (``pe_embedding``) and one region embedding per

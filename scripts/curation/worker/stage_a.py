@@ -167,7 +167,7 @@ async def stage_a_consumer(ctx: PipelineContext, consumer_id: int) -> None:
                 in_q.task_done()
                 continue
 
-            # W8c (r1 fix, corrected 2026-09-28 re-review -- M2): every
+            # every
             # fresh-detection path below (Path 2 and Path 3, plus the
             # text-hint re-pass they can fall into) keeps this item's
             # human-owned stored boxes and replaces its machine-sourced
@@ -349,7 +349,7 @@ async def stage_a_vlm_visible(ctx: PipelineContext, consumer_id: int) -> None:
                         msg = 'visibility stage fed without a VLM'
                         raise RuntimeError(msg)
                     verdicts = await rt.vlm.region_visible_batch(region_crops)
-                    # Minor 5 (W2 review): only a write this call actually
+                    # only a write this call actually
                     # informed gets stamped `vlm_prompt_pack` downstream.
                     for _t in chunk:
                         if _t.crop_jpeg is not None:

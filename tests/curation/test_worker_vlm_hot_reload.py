@@ -1,4 +1,4 @@
-"""The detection worker follows a project's VLM at quiesce points (W9.3).
+"""The detection worker follows a project's VLM at quiesce points.
 
 The worker is a separate process: its stores start cold, are pinned (a
 change is applied only at a quiesce point, after the queues drained), and ONE
@@ -524,7 +524,7 @@ async def test_an_item_that_never_called_the_vlm_is_stamped_with_no_endpoint() -
 @pytest.mark.asyncio
 async def test_probing_a_newer_revision_does_not_change_the_running_revisions_marker() -> None:
     """The probe of ``one@2`` is not the probe of the ``one@1`` this project
-    runs, so it must not make the worker rebuild (W9 review M3)."""
+    runs, so it must not make the worker rebuild."""
     client = FakeConfigOpenSearch()
     alpha = _record('alpha')
     await _endpoint(client, 'one', root='org/one')

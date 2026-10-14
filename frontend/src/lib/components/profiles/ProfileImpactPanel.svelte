@@ -1,6 +1,6 @@
 <script lang="ts" module>
   /** One-line meanings of the six documented `ActivationImpact` counts
-   *  (§4.6). No labels are served for them yet (W4-Q7). */
+   *  (§4.6). No labels are served for them yet. */
   export const IMPACT_ROWS = [
     { key: 'items_total', label: 'Items in the project' },
     { key: 'validated_items', label: 'Human-validated (never re-run)' },

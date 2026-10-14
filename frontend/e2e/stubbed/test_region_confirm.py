@@ -3,7 +3,7 @@ Supersedes the pre-W8 B2 test this file originally covered: confirming an
 UNCHANGED box must never rewrite the detector's own provenance
 (`region_detector`/`region_score`). Under W8 this is no longer a
 "status-only PATCH region_meta instead of PUT" split — it is the PUT
-element-addressing rule itself (W8.8): a box included with `state` but NO
+element-addressing rule itself: a box included with `state` but NO
 `bbox_norm` keeps its stored geometry AND provenance server-side, only its
 state changes. So Enter on an untouched `proposed` box sends exactly one
 `PUT {API_PREFIX}/crops/{id}/regions` with `boxes: [{box_id, state:

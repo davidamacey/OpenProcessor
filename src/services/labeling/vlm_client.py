@@ -53,7 +53,7 @@ DEFAULT_API_KEY = os.environ.get('OP_VLM_API_KEY', 'EMPTY')
 
 @dataclass(frozen=True)
 class VlmIdentity:
-    """Who answered: stamped on every VLM-derived write (W9.3).
+    """Who answered: stamped on every VLM-derived write.
 
     ``endpoint_ref`` is ``name@revision`` (or ``env@<sha12>``); ``model`` is
     the resolved model (the probe's ``root`` when known, else the served

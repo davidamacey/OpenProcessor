@@ -1125,7 +1125,7 @@ class TestBackboneEmbedding:
 
 
 # =============================================================================
-# F-43 — a failing secondary detector call must be visible, not swallowed
+# a failing secondary detector call must be visible, not swallowed
 # =============================================================================
 
 

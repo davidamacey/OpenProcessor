@@ -55,7 +55,7 @@ ErrorCode = Literal[
     'unknown_revision',
     'active_conflict',
     'no_previous',
-    # m-b fix (W3/W4 round-5 review): rollback's `previous` target was
+    # m-b fix: rollback's `previous` target was
     # deleted since it was activated -- distinct from `no_previous`
     # (there was never a target at all).
     'previous_deleted',
@@ -83,7 +83,7 @@ ErrorCode = Literal[
     # was refused because a first finish for it is still in flight --
     # distinct from project_busy (a step *inside* one finish failed).
     'finish_in_progress',
-    # W10: dataset import and reprocess.
+    # dataset import and reprocess.
     'dataset_not_found',
     'import_not_found',
     'upload_not_found',
@@ -121,7 +121,7 @@ ErrorCode = Literal[
     # P4: combine projects.
     'combine_not_found',
     'combine_not_resumable',
-    # W9: VLM endpoint registry / selection
+    # VLM endpoint registry / selection
     'unknown_vlm',
     'vlm_external_not_acknowledged',
     'vlm_not_configured',
@@ -130,7 +130,7 @@ ErrorCode = Literal[
     'unknown_catalog_id',
     'vlm_catalog_does_not_fit',
     'probe_busy',
-    # W5: the test-on-crop routes
+    # the test-on-crop routes
     'crop_not_found',
     'test_busy',
     'test_timeout',
@@ -168,7 +168,7 @@ ValidationCode = Literal[
     'keymap_class_hotkey_shadowed',
     'keymap_focus_key',
     'keymap_context_no_confirm',
-    # W3: prompt-pack validation (any_domain_plan.md §3.3/§7.1)
+    # prompt-pack validation (any_domain_plan.md §3.3/§7.1)
     'pack_name_invalid',
     'pack_name_reserved',
     'pack_field_missing',
@@ -186,7 +186,7 @@ ValidationCode = Literal[
     'pack_description_class_unknown',
     'pack_example_values',
     'pack_multi_region_keys_missing',
-    # W4: region-profile validation (any_domain_plan.md §4.3/§7.1)
+    # region-profile validation (any_domain_plan.md §4.3/§7.1)
     'profile_name_invalid',
     'profile_name_reserved',
     'profile_field_unknown',
@@ -246,7 +246,7 @@ ValidationCode = Literal[
     'embedding_model_mismatch',
     'region_profiles_differ',
     'class_mapping_invalid',
-    # W9: VLM endpoint validation (any_domain_plan.md W9.4/W9.5)
+    # VLM endpoint validation
     'vlm_name_invalid',
     'vlm_name_reserved',
     'vlm_field_range',
@@ -367,14 +367,14 @@ class ConfigErrorDetail(BaseModel):
     # invalid_transition: the status the project is in, and the action refused.
     project_status: str | None = None
     action: str | None = None
-    # W2b: 409 class_hotkey_conflict / the unbind-and-save response, and
+    # 409 class_hotkey_conflict / the unbind-and-save response, and
     # 422 hotkey_reserved / 409 hotkey_taken on PUT /classes/{id}.
     class_conflicts: list[dict[str, Any]] | None = None
     unbound_class_hotkeys: list[dict[str, Any]] | None = None
     actions: list[dict[str, Any]] | None = None
     class_id: int | None = None
     class_name: str | None = None
-    # W10: 422 import_blocked / dataset_path_not_allowed carry the issues,
+    # 422 import_blocked / dataset_path_not_allowed carry the issues,
     # 422 class_mapping_incomplete the unmapped dataset classes, a 409 or a
     # 413 the import id / byte limit it concerns.
     issues: list[DatasetIssueWire] | None = None
@@ -385,7 +385,7 @@ class ConfigErrorDetail(BaseModel):
     limit: int | None = None
     # 422 too_few_items: the smallest pool the clustering route accepts.
     min_items: int | None = None
-    # W9: unknown_vlm carries `requested`; a refused external endpoint names
+    # unknown_vlm carries `requested`; a refused external endpoint names
     # itself and where its acknowledgement is given.
     requested: str | None = None
     endpoint: str | None = None
@@ -394,7 +394,7 @@ class ConfigErrorDetail(BaseModel):
     unknown_names: list[str] | None = None
     # 422 detector_not_servable: every problem found with the override.
     reasons: list[str] | None = None
-    # W5: 404 crop_not_found names every crop id the project does not have.
+    # 404 crop_not_found names every crop id the project does not have.
     crop_ids: list[str] | None = None
     # 409 in_use on PUT /models/{name}/sharing: who still runs the model.
     used_by: list[ModelSharingUser] | None = None
@@ -500,7 +500,7 @@ class AppliedRuntime(BaseModel):
     applied_config_revision: int
     profile: ActiveRef
     pack: ActiveRef
-    # W9: the VLM endpoint this worker's runtime was built from. ``null``
+    # the VLM endpoint this worker's runtime was built from. ``null``
     # = the worker never reported a VLM axis (older worker); an ActiveRef
     # with ``name=None`` = it reported "no VLM configured".
     vlm: ActiveRef | None
@@ -531,7 +531,7 @@ class AppliedRuntime(BaseModel):
 
 
 class ActiveConfigResponse(BaseModel):
-    """``GET /prompt_packs/active`` / ``GET /region_profiles/active`` (W3/W4);
+    """``GET /prompt_packs/active`` / ``GET /region_profiles/active``;
     also the activation-mutation response shape used by W2's settings
     bridge and by ``store.activate``'s callers.
 

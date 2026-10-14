@@ -1,4 +1,4 @@
-"""Pack <-> region profile <-> VLM endpoint compatibility (W9.5).
+"""Pack <-> region profile <-> VLM endpoint compatibility.
 
 :func:`vlm_pairing_issues` runs whenever one side of the triple changes:
 a pack activation (against the active VLM and profile), a profile

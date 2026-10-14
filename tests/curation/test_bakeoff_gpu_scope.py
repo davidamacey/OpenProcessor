@@ -1,4 +1,4 @@
-"""Tests for OP_BAKEOFF_HOST_GPUS scoping (W5.1).
+"""Tests for OP_BAKEOFF_HOST_GPUS scoping.
 
 A bake-off enqueue historically stopped *every* configured GPU-resident
 container (``gpu_arbiter.stop_gpu_services()`` with no ``containers=``

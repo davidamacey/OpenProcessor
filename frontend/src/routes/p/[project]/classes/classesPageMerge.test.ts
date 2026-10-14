@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * W4 (docs/design/logic-moves-adoption-plan-2026-09-24.md §2 W4) — the
+ * the
  * merge dialog must call `POST {API_PREFIX}/classes/merge?dry_run=true`
  * before every real merge and disable Confirm when the server reports
  * `blocked`, and the class-name/hotkey rules must no longer be

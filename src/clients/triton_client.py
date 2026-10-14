@@ -318,7 +318,7 @@ class TritonClient:
         orig_h, orig_w = img_array.shape[:2]
         target_size = 256
 
-        # F-28: round() + a max(target_size, ...) floor -- see the matching
+        # round() + a max(target_size, ...) floor -- see the matching
         # fix/comment in src.services.cpu_preprocess.center_crop_cpu. Without
         # it, float truncation via int() could undershoot target_size by one
         # px and produce a smaller-than-256 crop instead of erroring.
@@ -530,7 +530,7 @@ class TritonClient:
     def format_detections(result: dict[str, Any], model_name: str | None = None) -> list:
         """Format detections with coordinates normalized to original image dimensions.
 
-        F-42 (fresh-start E2E findings 2026-09-25, round 2): ``model_name``
+        ``model_name``
         resolves ``class_name`` from that model's own labels instead of
         always assuming the stock COCO vocabulary -- pass the same
         ``model_name`` the detection came from (see

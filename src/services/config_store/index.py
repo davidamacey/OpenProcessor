@@ -1,5 +1,5 @@
 """Low-level OpenSearch doc-id, OCC and revision-counter primitives for
-the config store (W2, any_domain_plan.md §3.1/§3.6).
+the config store.
 
 This module is deliberately dependency-light: it knows about doc shapes
 and OCC, nothing about prompt packs, region profiles or FastAPI. W3/W4's
