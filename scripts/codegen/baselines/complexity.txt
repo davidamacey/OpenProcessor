@@ -11,7 +11,6 @@ scripts/curation/worker/stage_sam.py::stage_a_sam_consumer	24	top 15: decompose 
 scripts/datasets/build_import_fixture.py::build_variants	27	top 15: decompose in PR 6
 scripts/datasets/fetch_coco_subset.py::run	16	ratchet: may only go down
 src/clients/opensearch/bulk.py::bulk_ingest	19	ratchet: may only go down
-src/clients/opensearch/ingest.py::ingest_image	27	top 15: decompose in PR 6
 src/main.py::lifespan	19	ratchet: may only go down
 src/routers/analyze.py::analyze_batch	22	ratchet: may only go down
 src/routers/analyze.py::analyze_image	26	top 15: decompose in PR 6
