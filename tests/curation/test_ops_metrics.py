@@ -336,8 +336,8 @@ class TestWorkerPipelineMetrics:
     async def test_segmenter_hit_and_detection_ok_increment(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from curation.test_region_cascade_integrity import _accept, _drive_worker, _FakeOpenSearch
-        from curation.test_region_worker import _item_with
+        from curation.region_cascade_helpers import _accept, _drive_worker, _FakeOpenSearch
+        from curation.region_worker_helpers import _item_with
         from src.services.detection.cascade_detect.candidate import RegionCandidate
 
         hit = _sample('op_region_segmenter_requests_total', outcome='hit')
@@ -367,8 +367,8 @@ class TestWorkerPipelineMetrics:
     async def test_segmenter_miss_increments(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from curation.test_region_cascade_integrity import _accept, _drive_worker, _FakeOpenSearch
-        from curation.test_region_worker import _item_with
+        from curation.region_cascade_helpers import _accept, _drive_worker, _FakeOpenSearch
+        from curation.region_worker_helpers import _item_with
 
         miss = _sample('op_region_segmenter_requests_total', outcome='miss')
         fake_os = _FakeOpenSearch(

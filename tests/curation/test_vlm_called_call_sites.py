@@ -30,16 +30,15 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from src.config import get_region_fields
-from src.config.region_state import RegionStatus
-from src.services.detection.cascade_detect.candidate import RegionCandidate
-
-from .test_region_cascade_integrity import (
+from curation.region_cascade_helpers import (
     _accept as _combined_accept,
     _drive_worker,
     _FakeOpenSearch,
     _item,
 )
+from src.config import get_region_fields
+from src.config.region_state import RegionStatus
+from src.services.detection.cascade_detect.candidate import RegionCandidate
 
 
 if TYPE_CHECKING:

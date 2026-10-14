@@ -1,7 +1,7 @@
 """Unit tests for scripts.curation.worker.region_embed_stage (LG-1).
 
 Every task is a full `_ItemTask` (mirrors `_make_task` in
-test_region_worker.py); the crop JPEG is real so `_crop_region_jpeg` runs
+region_worker_helpers.py); the crop JPEG is real so `_crop_region_jpeg` runs
 for real, and the PE encoder is a stub returning fixed unit vectors. The
 stage embeds each ACCEPTED box of ``pending_boxes`` and keys the vector by
 the box's pre-merge id.

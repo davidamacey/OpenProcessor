@@ -103,7 +103,8 @@ docs/ARCHITECTURE.md # example prose illustrating a region sub-annotation
 docs/CURATION.md # user guide; references the public license_plate example profile/export/OCR wiring throughout
 docs/design/curation_api_contract.md # API contract; documents the public license_plate example profile's wire values (detector chain, OCR text-reject sequences, cluster card example)
 docs/design/curation_design_rationale.md # design rationale; documents the subsystem's license-plate origin and the license_plate bake-off example
-tests/curation/test_region_worker.py # uses the example profile's real detector_model id ('license_plate_detector') as a realistic detector-source literal
+tests/curation/test_region_worker_routing.py # uses the example profile's real detector_model id ('license_plate_detector') as a realistic detector-source literal
+tests/curation/test_region_worker_verdicts_and_provenance.py # uses the example profile's real detector_model id ('license_plate_detector') as a realistic detector-source literal
 tests/curation/test_models_status_optional_detector.py # uses the example profile's real detector_model id ('license_plate_detector', never-shipped) to exercise the optional/not_installed GET /models/status fields
 tests/test_example_region_profiles.py # loads the public license_plate example profile by name to pin its parent_classes
 CLAUDE.md # names the public license_plate example profile in the curation-subsystem summary
