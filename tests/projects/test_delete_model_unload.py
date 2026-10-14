@@ -96,7 +96,7 @@ def test_real_delete_unloads_owned_promoted_model(tmp_path, monkeypatch) -> None
     # _unload_owned_models does `from ...triton_promote import
     # unload_triton_model` inside its own function body (a local import,
     # re-resolved on every call), so the fake must replace the name in
-    # its DEFINING module, not delete.py's (which never binds it at
+    # its DEFINING module, not delete_models.py's (which never binds it at
     # module scope).
     monkeypatch.setattr(triton_promote, 'unload_triton_model', AsyncMock(side_effect=_fake_unload))
 
