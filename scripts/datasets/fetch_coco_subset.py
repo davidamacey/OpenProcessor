@@ -221,6 +221,57 @@ def run_verify(args: argparse.Namespace) -> int:
     return 1 if problems else 0
 
 
+def _ground_truth(
+    val_data: dict[str, Any],
+    train_data: dict[str, Any],
+    classes: list[str],
+    category_name_to_id: dict[str, int],
+    negatives: list[dict[str, Any]],
+) -> tuple[dict[int, list[dict[str, Any]]], list[dict[str, Any]]]:
+    """Annotations per selected image and the category list of ``coco_gt.json``."""
+    target_class_ids = {category_name_to_id[c] for c in classes}
+    annotations_by_image: dict[int, list[dict[str, Any]]] = {}
+    for split_data in (val_data, train_data):
+        for ann in split_data['annotations']:
+            # Crowd boxes stay (flagged ``iscrowd``): the file is COCO-faithful, and
+            # the import fixture exercises ``coco_crowd_skipped`` from them.
+            if ann['category_id'] in target_class_ids:
+                annotations_by_image.setdefault(ann['image_id'], []).append(ann)
+    categories = [{'id': category_name_to_id[c], 'name': c} for c in classes]
+    if negatives:
+        # A negative keeps every annotation it has (other categories), so the
+        # ground truth stays COCO-faithful; it is negative only for ``classes``.
+        negative_ids = {r['image_id'] for r in negatives}
+        for ann in val_data['annotations']:
+            if ann['image_id'] in negative_ids:
+                annotations_by_image.setdefault(ann['image_id'], []).append(ann)
+        used_cat_ids = {
+            a['category_id'] for i in negative_ids for a in annotations_by_image.get(i, [])
+        }
+        categories = [
+            {'id': c['id'], 'name': c['name']}
+            for c in val_data['categories']
+            if c['name'] in classes or c['id'] in used_cat_ids
+        ]
+    return annotations_by_image, categories
+
+
+def _write_attribution(path: Path, rows: list[dict[str, Any]]) -> None:
+    write_csv(
+        path,
+        (
+            {
+                'image_id': r['image_id'],
+                'file_name': r['file_name'],
+                'license_name': r['license_name'],
+                'flickr_url': r['flickr_url'],
+            }
+            for r in rows
+        ),
+        ('image_id', 'file_name', 'license_name', 'flickr_url'),
+    )
+
+
 def run(args: argparse.Namespace) -> dict[str, Any]:
     if args.bench_set is not None:
         return run_bench_set(args)
@@ -290,60 +341,16 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         for name, rows in side_selected.items():
             download_images(rows, args.out / name)
 
-    annotations_by_image: dict[int, list[dict[str, Any]]] = {}
-    for split_data in (val_data, train_data):
-        for ann in split_data['annotations']:
-            # Crowd boxes stay (flagged ``iscrowd``): the file is COCO-faithful, and
-            # the import fixture exercises ``coco_crowd_skipped`` from them.
-            if ann['category_id'] in target_class_ids:
-                annotations_by_image.setdefault(ann['image_id'], []).append(ann)
-    categories = [{'id': category_name_to_id[c], 'name': c} for c in classes]
-    if negatives:
-        # A negative keeps every annotation it has (other categories), so the
-        # ground truth stays COCO-faithful; it is negative only for ``classes``.
-        negative_ids = {r['image_id'] for r in negatives}
-        for ann in val_data['annotations']:
-            if ann['image_id'] in negative_ids:
-                annotations_by_image.setdefault(ann['image_id'], []).append(ann)
-        used_cat_ids = {
-            a['category_id'] for i in negative_ids for a in annotations_by_image.get(i, [])
-        }
-        categories = [
-            {'id': c['id'], 'name': c['name']}
-            for c in val_data['categories']
-            if c['name'] in classes or c['id'] in used_cat_ids
-        ]
+    annotations_by_image, categories = _ground_truth(
+        val_data, train_data, classes, category_name_to_id, negatives
+    )
     write_coco_gt(
         args.out / 'coco_gt.json', [*selected, *negatives], annotations_by_image, categories
     )
 
-    write_csv(
-        args.out / 'ATTRIBUTION.csv',
-        (
-            {
-                'image_id': r['image_id'],
-                'file_name': r['file_name'],
-                'license_name': r['license_name'],
-                'flickr_url': r['flickr_url'],
-            }
-            for r in [*selected, *negatives]
-        ),
-        ('image_id', 'file_name', 'license_name', 'flickr_url'),
-    )
+    _write_attribution(args.out / 'ATTRIBUTION.csv', [*selected, *negatives])
     for name, rows in side_selected.items():
-        write_csv(
-            args.out / name / 'ATTRIBUTION.csv',
-            (
-                {
-                    'image_id': r['image_id'],
-                    'file_name': r['file_name'],
-                    'license_name': r['license_name'],
-                    'flickr_url': r['flickr_url'],
-                }
-                for r in rows
-            ),
-            ('image_id', 'file_name', 'license_name', 'flickr_url'),
-        )
+        _write_attribution(args.out / name / 'ATTRIBUTION.csv', rows)
 
     summary = {
         'seed': args.seed,

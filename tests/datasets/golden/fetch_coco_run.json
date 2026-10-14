@@ -1,0 +1,279 @@
+{
+ "full": {
+  "downloaded": [
+   "train2017/000000001002.jpg",
+   "train2017/000000001004.jpg",
+   "train2017/000000001006.jpg",
+   "train2017/000000001007.jpg",
+   "train2017/000000001010.jpg",
+   "val2017/000000000101.jpg",
+   "val2017/000000000103.jpg",
+   "val2017/000000000104.jpg",
+   "val2017/000000000105.jpg",
+   "val2017/000000000107.jpg",
+   "val2017/000000000109.jpg",
+   "val2017/000000000110.jpg",
+   "val2017/000000000111.jpg",
+   "val2017/000000000115.jpg",
+   "val2017/000000000117.jpg"
+  ],
+  "pin": [
+   {
+    "file_name": "000000000101.jpg",
+    "flickr_url": "http://example.invalid/101",
+    "image_id": 101,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+   },
+   {
+    "file_name": "000000000103.jpg",
+    "flickr_url": "http://example.invalid/103",
+    "image_id": 103,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+   },
+   {
+    "file_name": "000000000104.jpg",
+    "flickr_url": "http://example.invalid/104",
+    "image_id": 104,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "car",
+    "split": "val2017"
+   },
+   {
+    "file_name": "000000000105.jpg",
+    "flickr_url": "http://example.invalid/105",
+    "image_id": 105,
+    "license_name": "Attribution License",
+    "primary_class": "car",
+    "split": "val2017"
+   },
+   {
+    "file_name": "000000000107.jpg",
+    "flickr_url": "http://example.invalid/107",
+    "image_id": 107,
+    "license_name": "Attribution License",
+    "primary_class": "dog",
+    "split": "val2017"
+   },
+   {
+    "file_name": "000000000109.jpg",
+    "flickr_url": "http://example.invalid/109",
+    "image_id": 109,
+    "license_name": "Attribution License",
+    "primary_class": "dog",
+    "split": "val2017"
+   },
+   {
+    "file_name": "000000000110.jpg",
+    "flickr_url": "http://example.invalid/110",
+    "image_id": 110,
+    "license_name": "Attribution-ShareAlike License",
+    "primary_class": "dog",
+    "split": "val2017"
+   },
+   {
+    "file_name": "000000000111.jpg",
+    "flickr_url": "http://example.invalid/111",
+    "image_id": 111,
+    "license_name": "Attribution License",
+    "primary_class": "dog",
+    "split": "val2017"
+   },
+   {
+    "file_name": "000000000115.jpg",
+    "flickr_url": "http://example.invalid/115",
+    "image_id": 115,
+    "license_name": "Attribution License",
+    "primary_class": "",
+    "split": "val2017"
+   },
+   {
+    "file_name": "000000000117.jpg",
+    "flickr_url": "http://example.invalid/117",
+    "image_id": 117,
+    "license_name": "Attribution License",
+    "primary_class": "",
+    "split": "val2017"
+   }
+  ],
+  "summary": {
+   "class_counts": {
+    "car": 4,
+    "dog": 4
+   },
+   "classes": [
+    "car",
+    "dog"
+   ],
+   "licenses": [
+    "Attribution License",
+    "Attribution-ShareAlike License"
+   ],
+   "n_negatives": 2,
+   "n_selected": 8,
+   "negative_image_ids": [
+    115,
+    117
+   ],
+   "per_class": 4,
+   "seed": 11,
+   "side_sets": {
+    "later": 3,
+    "upload": 2
+   },
+   "val_only": false
+  },
+  "tree": {
+   "ATTRIBUTION.csv": "image_id,file_name,license_name,flickr_url\n101,000000000101.jpg,Attribution License,http://example.invalid/101\n103,000000000103.jpg,Attribution License,http://example.invalid/103\n104,000000000104.jpg,Attribution-ShareAlike License,http://example.invalid/104\n105,000000000105.jpg,Attribution License,http://example.invalid/105\n107,000000000107.jpg,Attribution License,http://example.invalid/107\n109,000000000109.jpg,Attribution License,http://example.invalid/109\n110,000000000110.jpg,Attribution-ShareAlike License,http://example.invalid/110\n111,000000000111.jpg,Attribution License,http://example.invalid/111\n115,000000000115.jpg,Attribution License,http://example.invalid/115\n117,000000000117.jpg,Attribution License,http://example.invalid/117\n",
+   "SELECTION.json": "{\n  \"class_counts\": {\n    \"car\": 4,\n    \"dog\": 4\n  },\n  \"classes\": [\n    \"car\",\n    \"dog\"\n  ],\n  \"licenses\": [\n    \"Attribution License\",\n    \"Attribution-ShareAlike License\"\n  ],\n  \"n_negatives\": 2,\n  \"n_selected\": 8,\n  \"negative_image_ids\": [\n    115,\n    117\n  ],\n  \"per_class\": 4,\n  \"seed\": 11,\n  \"side_sets\": {\n    \"later\": 3,\n    \"upload\": 2\n  },\n  \"val_only\": false\n}\n",
+   "coco_gt.json": "{\n  \"annotations\": [\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 3,\n      \"id\": 1001,\n      \"image_id\": 101,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 3,\n      \"id\": 1003,\n      \"image_id\": 103,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 3,\n      \"id\": 1004,\n      \"image_id\": 104,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 3,\n      \"id\": 1005,\n      \"image_id\": 105,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 18,\n      \"id\": 1007,\n      \"image_id\": 107,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 18,\n      \"id\": 1009,\n      \"image_id\": 109,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 18,\n      \"id\": 1010,\n      \"image_id\": 110,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 18,\n      \"id\": 1011,\n      \"image_id\": 111,\n      \"iscrowd\": 0\n    }\n  ],\n  \"categories\": [\n    {\n      \"id\": 3,\n      \"name\": \"car\"\n    },\n    {\n      \"id\": 18,\n      \"name\": \"dog\"\n    }\n  ],\n  \"images\": [\n    {\n      \"file_name\": \"000000000101.jpg\",\n      \"height\": 480,\n      \"id\": 101,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000103.jpg\",\n      \"height\": 480,\n      \"id\": 103,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000104.jpg\",\n      \"height\": 480,\n      \"id\": 104,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000105.jpg\",\n      \"height\": 480,\n      \"id\": 105,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000107.jpg\",\n      \"height\": 480,\n      \"id\": 107,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000109.jpg\",\n      \"height\": 480,\n      \"id\": 109,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000110.jpg\",\n      \"height\": 480,\n      \"id\": 110,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000111.jpg\",\n      \"height\": 480,\n      \"id\": 111,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000115.jpg\",\n      \"height\": 480,\n      \"id\": 115,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000117.jpg\",\n      \"height\": 480,\n      \"id\": 117,\n      \"width\": 640\n    }\n  ]\n}\n",
+   "images/000000000101.jpg": "<bytes>",
+   "images/000000000103.jpg": "<bytes>",
+   "images/000000000104.jpg": "<bytes>",
+   "images/000000000105.jpg": "<bytes>",
+   "images/000000000107.jpg": "<bytes>",
+   "images/000000000109.jpg": "<bytes>",
+   "images/000000000110.jpg": "<bytes>",
+   "images/000000000111.jpg": "<bytes>",
+   "images/000000000115.jpg": "<bytes>",
+   "images/000000000117.jpg": "<bytes>",
+   "later/000000001004.jpg": "<bytes>",
+   "later/000000001006.jpg": "<bytes>",
+   "later/000000001007.jpg": "<bytes>",
+   "later/ATTRIBUTION.csv": "image_id,file_name,license_name,flickr_url\n1004,000000001004.jpg,Attribution-ShareAlike License,http://example.invalid/1004\n1006,000000001006.jpg,Attribution-ShareAlike License,http://example.invalid/1006\n1007,000000001007.jpg,Attribution License,http://example.invalid/1007\n",
+   "upload/000000001002.jpg": "<bytes>",
+   "upload/000000001010.jpg": "<bytes>",
+   "upload/ATTRIBUTION.csv": "image_id,file_name,license_name,flickr_url\n1002,000000001002.jpg,Attribution-ShareAlike License,http://example.invalid/1002\n1010,000000001010.jpg,Attribution-ShareAlike License,http://example.invalid/1010\n"
+  }
+ },
+ "negatives_keep_other_annotations": {
+  "downloaded": [
+   "val2017/000000000102.jpg",
+   "val2017/000000000104.jpg",
+   "val2017/000000000107.jpg",
+   "val2017/000000000109.jpg",
+   "val2017/000000000111.jpg",
+   "val2017/000000000112.jpg",
+   "val2017/000000000113.jpg",
+   "val2017/000000000115.jpg",
+   "val2017/000000000116.jpg",
+   "val2017/000000000117.jpg"
+  ],
+  "pin": null,
+  "summary": {
+   "class_counts": {
+    "car": 2
+   },
+   "classes": [
+    "car"
+   ],
+   "licenses": [
+    "Attribution License",
+    "Attribution-ShareAlike License"
+   ],
+   "n_negatives": 8,
+   "n_selected": 2,
+   "negative_image_ids": [
+    107,
+    109,
+    111,
+    112,
+    113,
+    115,
+    116,
+    117
+   ],
+   "per_class": 2,
+   "seed": 5,
+   "side_sets": {},
+   "val_only": true
+  },
+  "tree": {
+   "ATTRIBUTION.csv": "image_id,file_name,license_name,flickr_url\n102,000000000102.jpg,Attribution-ShareAlike License,http://example.invalid/102\n104,000000000104.jpg,Attribution-ShareAlike License,http://example.invalid/104\n107,000000000107.jpg,Attribution License,http://example.invalid/107\n109,000000000109.jpg,Attribution License,http://example.invalid/109\n111,000000000111.jpg,Attribution License,http://example.invalid/111\n112,000000000112.jpg,Attribution-ShareAlike License,http://example.invalid/112\n113,000000000113.jpg,Attribution License,http://example.invalid/113\n115,000000000115.jpg,Attribution License,http://example.invalid/115\n116,000000000116.jpg,Attribution License,http://example.invalid/116\n117,000000000117.jpg,Attribution License,http://example.invalid/117\n",
+   "SELECTION.json": "{\n  \"class_counts\": {\n    \"car\": 2\n  },\n  \"classes\": [\n    \"car\"\n  ],\n  \"licenses\": [\n    \"Attribution License\",\n    \"Attribution-ShareAlike License\"\n  ],\n  \"n_negatives\": 8,\n  \"n_selected\": 2,\n  \"negative_image_ids\": [\n    107,\n    109,\n    111,\n    112,\n    113,\n    115,\n    116,\n    117\n  ],\n  \"per_class\": 2,\n  \"seed\": 5,\n  \"side_sets\": {},\n  \"val_only\": true\n}\n",
+   "coco_gt.json": "{\n  \"annotations\": [\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 3,\n      \"id\": 1002,\n      \"image_id\": 102,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 3,\n      \"id\": 1004,\n      \"image_id\": 104,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 18,\n      \"id\": 1007,\n      \"image_id\": 107,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 18,\n      \"id\": 1009,\n      \"image_id\": 109,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 18,\n      \"id\": 1011,\n      \"image_id\": 111,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 1,\n      \"id\": 1012,\n      \"image_id\": 112,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 1,\n      \"id\": 1013,\n      \"image_id\": 113,\n      \"iscrowd\": 0\n    }\n  ],\n  \"categories\": [\n    {\n      \"id\": 1,\n      \"name\": \"person\"\n    },\n    {\n      \"id\": 3,\n      \"name\": \"car\"\n    },\n    {\n      \"id\": 18,\n      \"name\": \"dog\"\n    }\n  ],\n  \"images\": [\n    {\n      \"file_name\": \"000000000102.jpg\",\n      \"height\": 480,\n      \"id\": 102,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000104.jpg\",\n      \"height\": 480,\n      \"id\": 104,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000107.jpg\",\n      \"height\": 480,\n      \"id\": 107,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000109.jpg\",\n      \"height\": 480,\n      \"id\": 109,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000111.jpg\",\n      \"height\": 480,\n      \"id\": 111,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000112.jpg\",\n      \"height\": 480,\n      \"id\": 112,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000113.jpg\",\n      \"height\": 480,\n      \"id\": 113,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000115.jpg\",\n      \"height\": 480,\n      \"id\": 115,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000116.jpg\",\n      \"height\": 480,\n      \"id\": 116,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000117.jpg\",\n      \"height\": 480,\n      \"id\": 117,\n      \"width\": 640\n    }\n  ]\n}\n",
+   "images/000000000102.jpg": "<bytes>",
+   "images/000000000104.jpg": "<bytes>",
+   "images/000000000107.jpg": "<bytes>",
+   "images/000000000109.jpg": "<bytes>",
+   "images/000000000111.jpg": "<bytes>",
+   "images/000000000112.jpg": "<bytes>",
+   "images/000000000113.jpg": "<bytes>",
+   "images/000000000115.jpg": "<bytes>",
+   "images/000000000116.jpg": "<bytes>",
+   "images/000000000117.jpg": "<bytes>"
+  }
+ },
+ "skip_download": {
+  "downloaded": [],
+  "pin": null,
+  "summary": {
+   "class_counts": {
+    "dog": 3
+   },
+   "classes": [
+    "dog"
+   ],
+   "licenses": [
+    "Attribution License"
+   ],
+   "n_negatives": 0,
+   "n_selected": 3,
+   "negative_image_ids": [],
+   "per_class": 3,
+   "seed": 20260925,
+   "side_sets": {},
+   "val_only": false
+  },
+  "tree": {
+   "ATTRIBUTION.csv": "image_id,file_name,license_name,flickr_url\n107,000000000107.jpg,Attribution License,http://example.invalid/107\n109,000000000109.jpg,Attribution License,http://example.invalid/109\n111,000000000111.jpg,Attribution License,http://example.invalid/111\n",
+   "SELECTION.json": "{\n  \"class_counts\": {\n    \"dog\": 3\n  },\n  \"classes\": [\n    \"dog\"\n  ],\n  \"licenses\": [\n    \"Attribution License\"\n  ],\n  \"n_negatives\": 0,\n  \"n_selected\": 3,\n  \"negative_image_ids\": [],\n  \"per_class\": 3,\n  \"seed\": 20260925,\n  \"side_sets\": {},\n  \"val_only\": false\n}\n",
+   "coco_gt.json": "{\n  \"annotations\": [\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 18,\n      \"id\": 1007,\n      \"image_id\": 107,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 18,\n      \"id\": 1009,\n      \"image_id\": 109,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 18,\n      \"id\": 1011,\n      \"image_id\": 111,\n      \"iscrowd\": 0\n    }\n  ],\n  \"categories\": [\n    {\n      \"id\": 18,\n      \"name\": \"dog\"\n    }\n  ],\n  \"images\": [\n    {\n      \"file_name\": \"000000000107.jpg\",\n      \"height\": 480,\n      \"id\": 107,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000109.jpg\",\n      \"height\": 480,\n      \"id\": 109,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000111.jpg\",\n      \"height\": 480,\n      \"id\": 111,\n      \"width\": 640\n    }\n  ]\n}\n"
+  }
+ },
+ "val_only_n": {
+  "downloaded": [
+   "val2017/000000000101.jpg",
+   "val2017/000000000103.jpg",
+   "val2017/000000000105.jpg",
+   "val2017/000000000107.jpg",
+   "val2017/000000000109.jpg",
+   "val2017/000000000111.jpg"
+  ],
+  "pin": null,
+  "summary": {
+   "class_counts": {
+    "car": 3,
+    "dog": 3
+   },
+   "classes": [
+    "car",
+    "dog"
+   ],
+   "licenses": [
+    "Attribution License"
+   ],
+   "n_negatives": 0,
+   "n_selected": 6,
+   "negative_image_ids": [],
+   "per_class": 3,
+   "seed": 3,
+   "side_sets": {},
+   "val_only": true
+  },
+  "tree": {
+   "ATTRIBUTION.csv": "image_id,file_name,license_name,flickr_url\n101,000000000101.jpg,Attribution License,http://example.invalid/101\n103,000000000103.jpg,Attribution License,http://example.invalid/103\n105,000000000105.jpg,Attribution License,http://example.invalid/105\n107,000000000107.jpg,Attribution License,http://example.invalid/107\n109,000000000109.jpg,Attribution License,http://example.invalid/109\n111,000000000111.jpg,Attribution License,http://example.invalid/111\n",
+   "SELECTION.json": "{\n  \"class_counts\": {\n    \"car\": 3,\n    \"dog\": 3\n  },\n  \"classes\": [\n    \"car\",\n    \"dog\"\n  ],\n  \"licenses\": [\n    \"Attribution License\"\n  ],\n  \"n_negatives\": 0,\n  \"n_selected\": 6,\n  \"negative_image_ids\": [],\n  \"per_class\": 3,\n  \"seed\": 3,\n  \"side_sets\": {},\n  \"val_only\": true\n}\n",
+   "coco_gt.json": "{\n  \"annotations\": [\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 3,\n      \"id\": 1001,\n      \"image_id\": 101,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 3,\n      \"id\": 1003,\n      \"image_id\": 103,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 3,\n      \"id\": 1005,\n      \"image_id\": 105,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 18,\n      \"id\": 1007,\n      \"image_id\": 107,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 18,\n      \"id\": 1009,\n      \"image_id\": 109,\n      \"iscrowd\": 0\n    },\n    {\n      \"bbox\": [\n        10,\n        10,\n        300,\n        300\n      ],\n      \"category_id\": 18,\n      \"id\": 1011,\n      \"image_id\": 111,\n      \"iscrowd\": 0\n    }\n  ],\n  \"categories\": [\n    {\n      \"id\": 3,\n      \"name\": \"car\"\n    },\n    {\n      \"id\": 18,\n      \"name\": \"dog\"\n    }\n  ],\n  \"images\": [\n    {\n      \"file_name\": \"000000000101.jpg\",\n      \"height\": 480,\n      \"id\": 101,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000103.jpg\",\n      \"height\": 480,\n      \"id\": 103,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000105.jpg\",\n      \"height\": 480,\n      \"id\": 105,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000107.jpg\",\n      \"height\": 480,\n      \"id\": 107,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000109.jpg\",\n      \"height\": 480,\n      \"id\": 109,\n      \"width\": 640\n    },\n    {\n      \"file_name\": \"000000000111.jpg\",\n      \"height\": 480,\n      \"id\": 111,\n      \"width\": 640\n    }\n  ]\n}\n",
+   "images/000000000101.jpg": "<bytes>",
+   "images/000000000103.jpg": "<bytes>",
+   "images/000000000105.jpg": "<bytes>",
+   "images/000000000107.jpg": "<bytes>",
+   "images/000000000109.jpg": "<bytes>",
+   "images/000000000111.jpg": "<bytes>"
+  }
+ }
+}
