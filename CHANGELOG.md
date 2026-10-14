@@ -316,6 +316,11 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   reprocess jobs on the shared jobs volume, which it used to leave behind (found by the live S3 check, #264);
   the dry run lists those directories too.
 
+- An S3 source's queue could hold two rows for one key after a `retry-dead` and a scan (the replaced
+  object's old and new etag); the run answered once and recorded one row as `no result returned`.
+  The batch sender now matches answers by key and version and settles every row of the object (found by
+  the second live S3 check, #264).
+
 ## [0.5.0] - 2026-10-09
 
 The monorepo release. The backend and the Cropwright frontend (`frontend/`, formerly a separate

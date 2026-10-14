@@ -107,7 +107,21 @@ error with its retry time. The Ingest page at 430 px wide had no horizontal over
 (`scrollWidth` 430, `clientWidth` 430; 1600/1600 at desktop width). The server-side
 checks (idempotent re-run, webhook, poll, cron, a rejected credential, project isolation)
 are in [Verified on a live stack](../../guides/ingest-sources.mdx#verified-on-a-live-stack).
-Not run: a **Server folder** source from the UI, and **Retry the N that gave up**.
+On a second pass: a **Server folder** source (path under a source root, watch every 10 s)
+ingested its files, picked up a file added later without a click and ingested 0 on **Run now**
+again. For objects that gave up (a text file named `.jpg`, an empty file), the card showed **Retry the 2
+that gave up**; after the click it read `pending 2, gave up 0` and the button disappeared (the
+button only queues them, so a source with no trigger needs **Run now**), and **Run now** ended with
+`ingested 2`. The button is not shown when nothing gave up. With S3 off on the deployment the S3
+sources show **Run now** disabled with "S3 is off on this deployment: OP_S3_ALLOWED is empty" and
+the form offers only **Server folder**; if the list cannot be loaded the panel shows "Could not load
+sources: ..." and no cards, and recovers by itself.
+
+<Screenshot name="cropwright/ingest-source-gave-up-1300.png" alt="A source card with gave up 2 and the Retry the 2 that gave up button" caption="A source with objects that gave up: the Retry button" />
+
+<Screenshot name="cropwright/ingest-source-folder-1300.png" alt="A Server folder source card watching every 10 seconds" caption="A Server folder source" />
+
+<Screenshot name="cropwright/ingest-source-s3-off-1300.png" alt="The add source form with S3 off: only Server folder is offered" caption="S3 off on the deployment: the form offers only Server folder" />
 
 ## Server-path batch ingest
 

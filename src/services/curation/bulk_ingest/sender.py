@@ -105,17 +105,36 @@ class ObjectBatchSender(HttpBatchSender):
         return {'items': items, 'source': source, 'ingest_run_id': run_id}
 
     def _answer(self, body: dict[str, Any], paths: list[str]) -> dict[str, Any]:
-        sent = {}
+        sent: dict[tuple[str, str], list[ObjectRef]] = {}
         for uri in paths:
             ref = ObjectRef.parse(uri)
-            sent[(ref.bucket, ref.key)] = uri
+            sent.setdefault((ref.bucket, ref.key), []).append(ref)
+        answered: set[str] = set()
+        extra: list[dict[str, Any]] = []
         for result in body.get('results', []):
             identifier = result.get('source_identifier') or result.get('image_path') or ''
             try:
-                ref = ObjectRef.parse(identifier)
+                got = ObjectRef.parse(identifier)
             except ValueError:
                 continue
-            result['image_path'] = sent.get((ref.bucket, ref.key), result.get('image_path'))
+            rows = sent.get((got.bucket, got.key), [])
+            same = [r for r in rows if r.version_id == got.version_id]
+            match = next((r for r in same if r.etag == got.etag), None) or (
+                same[0] if same else None
+            )
+            if match is None:
+                continue
+            result['image_path'] = match.to_uri()
+            answered.add(match.to_uri())
+            # Another row of the same object (a stale etag of a replaced key) was
+            # fetched as this same current object, so it settles the same way.
+            extra.extend(
+                {**result, 'image_path': r.to_uri()}
+                for r in same
+                if r is not match and r.to_uri() not in answered
+            )
+            answered.update(r.to_uri() for r in same)
+        body['results'] = [*body.get('results', []), *extra]
         return body
 
 

@@ -286,8 +286,61 @@ of the test remained, and no path named after the project was left in the `api` 
 The first run of it found that a project delete left the bulk-ingest, source and reprocess
 directories on the jobs volume; that is fixed in the same change.
 
-Not run live: the S3 event from real AWS S3, a folder source, `retry-dead` and a bucket
-larger than one listing page (1000 keys).
+### Second live pass: the items the first one skipped
+
+Run on the same stack, MinIO and image set, with a second throwaway project
+(`cwlife-s3-live2`). The test objects are tiny crops of public COCO images (96 px, 1100
+distinct byte contents, keys such as `big/img 0007+x.jpg`) so the cost of a run stays small.
+
+| # | Check | Result |
+|---|---|---|
+| i | A bucket of 1100 keys under one prefix (two listing pages) | scan `pages 2, listed 1100, queued 1100`; run `completed`, `ingested 1100, duplicates 0, failed 0` in 17 s; counts `done 1100`; the project holds exactly 1100 images; the queue's `last_scan` records `pages 2, listed 1100`; the second run: `listed 1100, queued 0`, `ingested 0` |
+| j | Objects that fail for good: three text files named `.jpg`, a zero-byte `.jpg`, an object that does not exist when its event is drained | rows `dead` with the served reason (`empty upload`; a 404 `HeadObject ... Not Found`; the text files are `decode_failed`, see the note below); `counts: dead 5`, `can_retry_dead: true`; a `retry-dead` before the cause is fixed fails them again with the same reason (nothing is lost) |
+| k | Fix the cause (valid images uploaded under the same keys), then `POST .../retry-dead` | `{"retried": 5}`; the source has a webhook, so the dispatcher drained them within a tick: `done 8, dead 0`, run `completed` |
+| l | The same through Cropwright (headless Chromium) on a source with no trigger | the card shows `gave up 2` and **Retry the 2 that gave up**; after the click `pending 2, gave up 0` and the Retry button is gone (**Retry only queues; a source with no trigger needs Run now**); **Run now**: `ingested 2`, `retrying 0, gave up 0`. The button is absent on every card whose `gave up` is 0 |
+| m | Folder source through the API (`"backend": "folder"`, `/data/pubwatch/set1`, poll every 10 s) | create 201; **Run now** `ingested 10`, `done 10`; a new file added was picked up by the poll (`listed 11, queued 1`, run `ingested 1`, `done 11`) with no click; the next scans `queued 0`; Run now again `ingested 0 duplicates 0`. A folder outside every source root (`/etc`) is refused: 422 `ingest_source_invalid` |
+| n | Folder source through Cropwright's **Server folder** option | name, **Server folder**, path `/data/pubwatch/set2`, watch every 10 s, **Save**: card shows `ingested 5` then, after a new file was added, `ingested 6` from the poll; **Run now** again: `ingested 0` |
+| o | S3 off (the `api` recreated without `OP_S3_*`) | list answers `s3_configured: false`; every S3 source `can_run: false`, `blocked_reason: s3_not_configured`, message "S3 is off on this deployment: OP_S3_ALLOWED is empty"; run answers 503 `s3_not_configured`; creating an S3 source is refused with the same error; the folder sources stayed runnable. In the UI: **Run now** disabled with that message, and the form shows the S3 radio disabled, **Server folder** selected and the note |
+| p | Load error in the UI (the sources list answered 503) | "Could not load sources: opensearch unavailable" and no cards; the next refresh after the backend answered again showed the cards and cleared the message |
+| q | S3 event replay (below) | passed |
+
+**S3 events: a replay, not real AWS.** Real AWS S3 delivery was **not** run: it needs an AWS
+account, a bucket, a public endpoint and costs money. Instead the documented AWS notification
+shape (event version 2.1, `Records[]` with `eventSource`, `awsRegion`, `s3.bucket.arn`,
+`object.sequencer` and the rest) was posted to the route of a webhook source on prefix `aws/`:
+
+| Body | Answer |
+|---|---|
+| `s3:TestEvent` (`{"Service":"Amazon S3","Event":"s3:TestEvent",...}`, no `Records`) | 202 `{"received":0,"queued":0,"duplicates":0,"ignored":0}`: acknowledged, nothing queued |
+| 8 records: `ObjectCreated:Put` for `aws/my+photo+1.jpg`, `aws/a%2Bb.jpg`; `ObjectCreated:CompleteMultipartUpload` for `aws/%E6%97%A5%E6%9C%AC.jpg`; `ObjectRemoved:Delete` and `ObjectRemoved:DeleteMarkerCreated` for `aws/removed.jpg`; a key outside the prefix; a `.txt`; a record for another bucket | 202 `{"received":8,"queued":3,"duplicates":0,"ignored":5}`. The queue holds the keys `aws/my photo 1.jpg`, `aws/a+b.jpg` and `aws/日本.jpg` (decoded once: `+` is a space, `%2B` is a plus); the delete events, the other prefix, the text file and the other bucket were ignored |
+| The first record again | 202 `{"received":1,"queued":0,"duplicates":1,"ignored":0}` |
+| `{"hello":"world"}` | 422 `invalid_s3_event`, `Records: expected a list` |
+| `{"Records":[{"eventName":"ObjectCreated:Put"}]}` | 422 `invalid_s3_event`, `Records[0].s3: expected an object` |
+
+AWS prefixes the event name without `s3:` (`ObjectCreated:Put`); the route accepts both forms.
+**There is no signature or shared-secret check**: S3 notifications to a plain HTTP endpoint carry
+none (SNS messages are signed, S3 direct ones are not), and the API has no authentication, so
+the route is protected only by where it is reachable (see the warning above). One of the keys
+was queued before its object existed (404, row `dead`); after the object was uploaded,
+`retry-dead` ingested it (`done 3, dead 0`).
+
+**Found and fixed by this pass.** After a `retry-dead` followed by a scan, the queue could
+hold two rows for one key (the old etag of a replaced object and its new etag). Both were
+fetched as the same current object, the route answered once, and the sender matched answers by
+bucket and key only, so one row was recorded `no result returned` and stayed failed. The sender
+now matches by key and version and settles every row of that object with the same answer
+(`tests/curation/test_object_batch_sender_answer.py`); the Cropwright Run now after Retry then
+ended with `retrying 0`.
+
+Note: a text file named `.jpg` is reported as `No module named 'pi_heif'`: the decoder's
+Pillow wrapper (an Ultralytics patch) hides the real "cannot identify image file" error. The kind
+is right (`decode_failed`, row `dead`), only the message misleads; it is not specific to S3.
+
+Still **not run live**: delivery from real AWS S3 (see above); an interruption in the middle of
+a scan (the checkpoint after each page is written, see `queue.sqlite` `meta`, and is covered by a
+unit test, but a 1100-key scan finishes in well under a second so a restart could not be timed
+into it); an object deleted in the window between the listing and its fetch (the same code path
+was exercised through an event for a missing key, since the window is milliseconds on a local MinIO).
 
 ## Teardown
 
