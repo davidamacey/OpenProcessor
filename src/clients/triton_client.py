@@ -36,7 +36,8 @@ from tritonclient.grpc import InferInput, InferRequestedOutput
 from ultralytics.data.augment import LetterBox
 
 from src.clients.model_adapters import DetectionAdapter, resolve_adapter
-from src.clients.triton_pool import TritonClientManager, uint8_images_input
+from src.clients.triton_client_manager import TritonClientManager
+from src.clients.triton_pool_core import uint8_images_input
 from src.config.settings import TritonModelConfig
 from src.utils.affine import format_detections_from_triton, inverse_letterbox_coords
 from src.utils.retry import retry_sync

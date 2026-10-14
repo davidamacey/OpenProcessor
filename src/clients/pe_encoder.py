@@ -85,7 +85,7 @@ from src.utils.stage_timing import stage_timer
 if TYPE_CHECKING:
     from PIL import Image
 
-    from src.clients.triton_pool import AsyncTritonPool
+    from src.clients.triton_pool_core import AsyncTritonPool
 
 # Chunk size for embed_crops -- respects the PE Triton model's configured
 # max_batch_size on typical deployments.
@@ -368,7 +368,7 @@ class PEEncoder:
 
         from tritonclient.grpc import InferRequestedOutput
 
-        from src.clients.triton_pool import uint8_images_input
+        from src.clients.triton_pool_core import uint8_images_input
 
         inp = await run_cpu(uint8_images_input, chws, nbytes=chws.nbytes)
         outs = [InferRequestedOutput('image_embeddings')]
@@ -559,7 +559,7 @@ class PEEncoder:
     def _make_triton_client(self) -> Any:
         if self._triton_client_factory is not None:
             return self._triton_client_factory()
-        from src.clients.triton_pool import TritonClientManager
+        from src.clients.triton_client_manager import TritonClientManager
         from src.config import get_settings
 
         return TritonClientManager.get_sync_client(get_settings().triton_url)

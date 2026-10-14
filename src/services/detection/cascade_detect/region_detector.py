@@ -14,7 +14,7 @@ from src.services.detection.geometry import undo_letterbox
 
 
 if TYPE_CHECKING:
-    from src.clients.triton_pool import AsyncTritonPool
+    from src.clients.triton_pool_core import AsyncTritonPool
     from src.config import DetectionProfile
 
 

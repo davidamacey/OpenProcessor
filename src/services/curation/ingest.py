@@ -108,7 +108,7 @@ if TYPE_CHECKING:
 
     from src.clients.curation_opensearch.registry import ClassRegistry
     from src.clients.pe_encoder import PEEncoder
-    from src.clients.triton_pool import AsyncTritonPool
+    from src.clients.triton_pool_core import AsyncTritonPool
     from src.config import CurationConfig, DetectionProfile
     from src.services.curation.ingest_gpu_decode import GpuDecodeFrame
 

@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from src.clients.triton_pool import uint8_images_input
+from src.clients.triton_pool_core import uint8_images_input
 from src.services.curation.ingest_detect import WholeImageDetector
 
 

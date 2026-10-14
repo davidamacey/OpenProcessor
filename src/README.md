@@ -59,7 +59,8 @@ src/
 ├── clients/                     # External service clients
 │   ├── __init__.py              # Client exports
 │   ├── triton_client.py         # Triton gRPC client wrapper
-│   ├── triton_pool.py           # Connection pooling for Triton
+│   ├── triton_pool_core.py      # Async Triton connection pool
+│   ├── triton_client_manager.py # Shared Triton client singletons
 │   └── opensearch/              # OpenSearch async client (client.py entry point)
 │
 ├── schemas/                     # Pydantic models for validation

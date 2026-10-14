@@ -112,7 +112,7 @@ host; read its header before using it.
   (CPU). Dynamic batching is on; preferred sizes and instance counts are in each
   `config.pbtxt`. The API reads a detector's output format from Triton
   metadata, so YOLO11 and YOLO26 are interchangeable at `/detect`.
-- **One shared gRPC client pool** (`src/clients/triton_pool.py`) per process.
+- **One shared gRPC client pool** (`src/clients/triton_pool_core.py`) per process.
   Opening a connection per request defeats Triton's dynamic batching, so route
   code takes the shared client, never builds its own.
 - **Preprocessing** (letterbox, normalization) runs in the API on CPU before
