@@ -16,7 +16,11 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const LIB = path.resolve(here, '../../../../lib');
+const src = readFileSync(
+  path.join(LIB, 'clusters/clusterListController.svelte.ts'),
+  'utf-8',
+);
 
 function fn(name: string): string {
   const m = src.match(new RegExp(`async function ${name}\\([\\s\\S]*?\\n {2}\\}`));

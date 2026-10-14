@@ -13,7 +13,11 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const LIB = path.resolve(here, '../../../../lib');
+const src = readFileSync(
+  path.join(LIB, 'components/classes/ClassRegistryTable.svelte'),
+  'utf-8',
+);
 
 describe('the /classes Total column is labeled as the cluster bucket size', () => {
   it('the column header says "Total (in cluster)", not a bare "Total"', () => {

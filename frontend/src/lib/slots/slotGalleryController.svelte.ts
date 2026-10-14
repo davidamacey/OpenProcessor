@@ -16,17 +16,10 @@
 
 import { untrack } from 'svelte';
 import {
-  batchRegionStatus,
-  buildRegionFpCentroids,
-  clusterRegions,
   getCrop,
   getRegionClusters,
-  getRegionClusterStatus,
-  getRegionFpCentroidStatus,
   getRegions,
   getSuspectedFalsePositives,
-  postBatchBoxState,
-  refineRegionCluster,
   type RegionBrowseItem,
   type SuspectedFpItem,
   apiErrorText,
@@ -35,10 +28,11 @@ import { createPager } from '$lib/pager.svelte';
 import { createSelection } from '$lib/selection.svelte';
 import type { Cluster, Crop } from '$lib/types';
 import { toastStore } from '$stores/toast.svelte';
-import { undoStore } from '$stores/undo.svelte';
 import type { SlotSpec } from '$lib/annotations/types';
 import { rowBoxOf } from '$lib/annotations/rowBox';
 import { regionStatusesStore } from '$stores/regionStatuses.svelte';
+import { createSlotGalleryJobs } from '$lib/slots/slotGalleryJobs';
+import { createSlotGalleryWrites } from '$lib/slots/slotGalleryWrites';
 
 const GALLERY_PAGE_SIZE = 60;
 
@@ -339,117 +333,39 @@ export function createSlotGalleryController(slot: SlotSpec) {
   // Set by the owning page's teardown: the clustering polls below stop, and
   // finish silently, once nobody is looking at this controller any more.
   let disposed = false;
-  const JOB_POLL_MS = 3000;
-  const MAX_CONSECUTIVE_POLL_ERRORS = 3;
 
-  /** Poll `read` until the job stops running. Resolves `null` when disposed.
-   *  A failed read is transient (apiFetch already retried a 5xx) and only
-   *  ends the poll after several in a row. */
-  async function pollUntilDone<T extends { running: boolean }>(
-    read: () => Promise<T>,
-  ): Promise<T | null> {
-    let failures = 0;
-    while (true) {
-      await new Promise((r) => setTimeout(r, JOB_POLL_MS));
-      if (disposed) return null;
-      try {
-        const job = await read();
-        if (disposed) return null;
-        failures = 0;
-        if (!job.running) return job;
-      } catch (e) {
-        if (disposed) return null;
-        if (++failures >= MAX_CONSECUTIVE_POLL_ERRORS) throw e;
-      }
-    }
-  }
-
-  async function runBuildFpCentroids(): Promise<void> {
-    if (clusterBusy) return;
-    clusterBusy = true;
-    try {
-      await buildRegionFpCentroids();
-      toastStore.info('Building FP centroids… sub-typing the false-positive bucket.');
-      const job = await pollUntilDone(() => getRegionFpCentroidStatus());
-      if (job === null) return;
-      if (job.error) {
-        toastStore.error(`Build FP centroids failed: ${job.error}`);
-      } else if (job.result) {
-        toastStore.success(
-          `FP centroids built: ${job.result.n_members} members → ${job.result.k} sub-types.`,
-        );
-        await loadClusters();
-      }
-    } catch (e) {
-      toastStore.error(`Build FP centroids failed: ${apiErrorText(e)}`);
-    } finally {
-      clusterBusy = false;
-    }
-  }
-
-  async function runClustering(): Promise<void> {
-    if (clusterBusy) return;
-    clusterBusy = true;
-    try {
-      // One-click pipeline (rebuild FP centroids → auto-pull tight FPs →
-      // re-partition good regions) is a multi-minute background job, so we kick
-      // it off and poll for completion instead of holding one request open.
-      await clusterRegions(maxRank ?? undefined);
-      toastStore.info(
-        `Clustering ${slot.label.plural}… rebuilding FP centroids, pulling FPs, re-bucketing.`,
-      );
-      const job = await pollUntilDone(() => getRegionClusterStatus());
-      if (job === null) return;
-      if (job.error) {
-        toastStore.error(`Cluster ${slot.label.plural} failed: ${job.error}`);
-      } else if (job.result) {
-        const r = job.result;
-        const moved = r.auto_fp?.n_moved ?? 0;
-        if (r.status === 'skipped_repartition_ttl') {
-          toastStore.success(
-            `Auto-moved ${moved} crop(s) to false positives. Good-${slot.label.singular} re-partition skipped to preserve a refine from the last few minutes — re-run shortly to include it.`,
-          );
-        } else {
-          toastStore.success(
-            `Clustered ${r.n_regions ?? 0} ${slot.label.plural} into ${r.n_clusters ?? 0} buckets; auto-moved ${moved} to false positives.`,
-          );
-        }
-        await loadClusters();
-      }
-    } catch (e) {
-      toastStore.error(`Cluster ${slot.label.plural} failed: ${apiErrorText(e)}`);
-    } finally {
-      clusterBusy = false;
-    }
-  }
-
-  async function runRefineCluster(): Promise<void> {
-    if (selectedCluster == null || clusterBusy) return;
-    clusterBusy = true;
-    refineMsg = `Refining bucket #${selectedCluster}…`;
-    try {
-      const res = await refineRegionCluster(selectedCluster);
-      const n = res.n_subclusters ?? 0;
-      if (n > 0) {
-        refineMsg = `Split into ${n} sub-clusters — grouped below.`;
-        toastStore.success(`Refine produced ${n} sub-clusters.`);
-      } else {
-        // Backend skipped it (too small / too large). Surface why.
-        const reason = (res as { reason?: string }).reason ?? 'no sub-clusters found';
-        refineMsg = `Not refined: ${reason}.`;
-        toastStore.info(`Bucket not refined: ${reason}.`);
-      }
-      // Drop back to the "all" tab so the freshly grouped view shows, then
-      // reload (server returns regions ordered by sub-cluster).
-      subTab = null;
-      await loadFirst();
-    } catch (e) {
-      refineMsg = `Refine failed: ${apiErrorText(e)}`;
-      toastStore.error(`Refine failed: ${apiErrorText(e)}`);
-    } finally {
-      clusterBusy = false;
-    }
-  }
+  const jobs = createSlotGalleryJobs({
+    slot,
+    get disposed() {
+      return disposed;
+    },
+    get maxRank() {
+      return maxRank;
+    },
+    get selectedCluster() {
+      return selectedCluster;
+    },
+    get clusterBusy() {
+      return clusterBusy;
+    },
+    set clusterBusy(v: boolean) {
+      clusterBusy = v;
+    },
+    get refineMsg() {
+      return refineMsg;
+    },
+    set refineMsg(v: string | null) {
+      refineMsg = v;
+    },
+    get subTab() {
+      return subTab;
+    },
+    set subTab(v: string | null) {
+      subTab = v;
+    },
+    loadClusters,
+    loadFirst,
+  });
 
   function openCluster(id: number): void {
     suspectedFpView = false;
@@ -517,214 +433,26 @@ export function createSlotGalleryController(slot: SlotSpec) {
     }
   }
 
-  /** The distinct item ids behind a set of selected rows (the selection is
-   *  per row; an item-level status write is per item). */
-  function cropIdsOfRows(rowKeys: string[]): string[] {
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, built and consumed synchronously
-    const keySet = new Set(rowKeys);
-    const ids = pager.items.filter((p) => keySet.has(p.row_key)).map((p) => p.crop_id);
-    return ids.filter((id, i) => ids.indexOf(id) === i);
-  }
-
-  async function applyStatus(
-    cropIds: string[],
-    status: string | undefined,
-  ): Promise<void> {
-    if (cropIds.length === 0 || busy || !status) return;
-    busy = true;
-    sel.clear();
-    try {
-      // The server validates `status` against its own /regions/statuses.
-      // `region_verified` is not sent — the server derives it from
-      // `region_status` and ignores the field when present.
-      const res = await batchRegionStatus(slot, cropIds, status);
-      // Render exactly what the server wrote. `items` covers every crop
-      // actually updated; conflicted/invalid ids are left untouched here
-      // and reported in the toast below.
-      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, built and consumed synchronously within this computation, never stored in reactive state
-      const byId = new Map(res.items.map((p) => [p.crop_id, p]));
-      pager.items = pager.items.map((p) => byId.get(p.crop_id) ?? p);
-      // M6: Z reverses this bulk status write server-side — the server's
-      // own `items` list (not the request's `cropIds`) is what actually
-      // got written, same "server's ids, not the request's" rule as
-      // every other undoStore.record* call.
-      undoStore.recordRegionWrites(res.items.map((p) => p.crop_id));
-      const conflictCount = res.conflicts?.length ?? 0;
-      const invalid = res.invalid ?? [];
-      if (conflictCount > 0 || invalid.length > 0) {
-        // a conflict now carries a served `message` (RegionBatchConflict)
-        // on a current backend — show it verbatim instead of just a count when
-        // present, since it names the real reason ("The item changed
-        // since it was loaded."). An older backend has no `message`, so
-        // this falls back to the bare count exactly as before.
-        const conflictDetail = res.conflicts?.find((c) => c.message)?.message;
-        const parts = [
-          conflictCount > 0
-            ? `${conflictCount} conflicted${conflictDetail ? ` (${conflictDetail})` : ''}`
-            : null,
-          invalid.length > 0
-            ? `${invalid.length} invalid (${invalid.map((i) => i.detail).join('; ')})`
-            : null,
-        ].filter((s): s is string => s != null);
-        toastStore.error(
-          `${status.replace('_', ' ')}: ${res.updated} updated, ${parts.join(', ')}`,
-        );
-      } else {
-        toastStore.success(
-          `${status.replace('_', ' ')}: ${res.updated} ${slot.label.singular}(s)`,
-        );
-      }
-    } catch (err) {
-      toastStore.error(`Bulk update failed: ${apiErrorText(err)}`);
-    } finally {
-      busy = false;
-    }
-  }
-
-  /**
-   * per-box triage over the selected rows (region gallery triage — a
-   * cluster is a set of boxes). Unlike `applyStatus` above
-   * (whole-item `region_status`, `PATCH region_meta` / `POST
-   * batch_status`), this goes through `POST /regions/batch_box_state`,
-   * which flips only the targeted box on each item, never its siblings —
-   * exactly the spec's rule for triage from a cluster ("never the
-   * item-level batch_status, which would flip every sibling box").
-   * Targets are built from the row's own served `region_box_id`
-   * (`RegionBrowseItem`) — a row without one is skipped
-   * rather than silently flipping a whole item.
-   */
-  async function applyBoxState(rowKeys: string[], state: string): Promise<void> {
-    if (rowKeys.length === 0 || busy) return;
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, built and consumed synchronously within this computation, never stored in reactive state
-    const keySet = new Set(rowKeys);
-    const targets = pager.items
-      .filter((p) => keySet.has(p.row_key) && p.region_box_id != null)
-      .map((p) => ({ cropId: p.crop_id, boxId: p.region_box_id! }));
-    const skipped = rowKeys.length - targets.length;
-    if (targets.length === 0) {
-      toastStore.error(
-        `Cannot triage by box: this row has no served box id (pre-W8 backend?).`,
-      );
-      return;
-    }
-    busy = true;
-    sel.clear();
-    try {
-      const res = await postBatchBoxState(targets, state);
-      // A box-state write returns full items (Crop), not gallery rows —
-      // the row grid re-fetches its own page rather than patching rows
-      // in place from a shape the gallery doesn't render (RegionBrowseItem
-      // vs Crop): the triaged boxes typically leave the current bucket
-      // anyway (their state changed), so a refetch is the correct result,
-      // not a shortcut.
-      undoStore.recordRegionWrites(res.items.map((c) => c.id));
-      const invalid = res.invalid ?? [];
-      const conflicts = res.conflicts ?? [];
-      if (invalid.length > 0 || conflicts.length > 0) {
-        const conflictDetail = conflicts.find((c) => c.message)?.message;
-        const parts = [
-          conflicts.length > 0
-            ? `${conflicts.length} conflicted${conflictDetail ? ` (${conflictDetail})` : ''}`
-            : null,
-          invalid.length > 0
-            ? `${invalid.length} invalid (${invalid.map((i) => i.message).join('; ')})`
-            : null,
-          skipped > 0 ? `${skipped} skipped (no box id)` : null,
-        ].filter((s): s is string => s != null);
-        toastStore.error(
-          `${state.replace('_', ' ')}: ${res.updated} updated, ${parts.join(', ')}`,
-        );
-      } else {
-        toastStore.success(
-          `${state.replace('_', ' ')}: ${res.updated} box(es)${skipped > 0 ? `, ${skipped} skipped (no box id)` : ''}`,
-        );
-      }
-      await pager.loadPage(pager.firstPage);
-    } catch (err) {
-      toastStore.error(`Bulk box triage failed: ${apiErrorText(err)}`);
-    } finally {
-      busy = false;
-    }
-  }
-
-  /**
-   * `onsave` for `SlotBboxEditor` — the editor has ALREADY performed the
-   * write (`PUT /crops/{id}/regions`) by the time this fires, and passes back the
-   * server's own returned item. This function only patches the matching
-   * card from that item; it must NOT re-PUT the box (a pre-C8 bug — this
-   * used to write the box a second time here, redundantly re-sending a
-   * box the editor had just saved), and must NOT re-derive
-   * confirmed-vs-rejected status client-side — it renders what the
-   * server wrote.
-   */
-  function saveBox(item: Crop): void {
-    if (!editCrop) return;
-    const cropId = item.id;
-    toastStore.success(`${slot.label.title} saved`);
-    editCrop = null;
-    const slotData = item.slots?.[slot.key];
-    // Patch just this card in place rather than reloading page 1 (which
-    // would wipe the list and reset scroll). The returned item's slot data
-    // carries the new boxes and revision, which is also what re-crops the
-    // card's thumbnail.
-    pager.items = pager.items.map((p) =>
-      p.crop_id === cropId
-        ? {
-            ...p,
-            region_status: slotData?.lifecycle?.status ?? p.region_status,
-            region_verified: slotData?.lifecycle?.verified ?? p.region_verified,
-            slots: { ...p.slots, ...item.slots },
-          }
-        : p,
-    );
-    // M6: the editor's write (already completed by the time this fires —
-    // see the doc comment above) is undoable via Z too.
-    undoStore.recordRegionWrites([cropId]);
-  }
-
-  /**
-   * M6: Z on the region gallery reverses the most recent region write
-   * (single-item bbox edit or bulk status change), the same way Z
-   * reverses a label write on the card-grid `/clusters` view — see
-   * `undo.svelte.ts`'s header comment for why this shares the ONE
-   * `undoStore` stack (kind: `'region'`) with every other undo entry
-   * rather than its own gallery-local stack.
-   */
-  function mergeUndoneItems(crops: Crop[]): void {
-    if (crops.length === 0) return;
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, built and consumed synchronously within this computation, never stored in reactive state
-    const byId = new Map(crops.map((c) => [c.id, c]));
-    pager.items = pager.items.map((p) => {
-      const restored = byId.get(p.crop_id);
-      if (!restored) return p;
-      const slotData = restored.slots?.[slot.key];
-      return {
-        ...p,
-        region_status: slotData?.lifecycle?.status ?? p.region_status,
-        region_verified: slotData?.lifecycle?.verified ?? p.region_verified,
-        slots: { ...p.slots, ...restored.slots },
-      };
-    });
-  }
-
-  /**
-   * `onreprocessed` for a card's image Reprocess: the served items are
-   * merged into the cards already loaded (later pages included), then the
-   * first page is re-fetched, since re-detection can add, move or drop the
-   * regions an image contributes.
-   */
-  async function adoptReprocessed(items: Crop[]): Promise<void> {
-    mergeUndoneItems(items);
-    await pager.loadPage(pager.firstPage);
-  }
-
-  async function undoLastAction(): Promise<void> {
-    const crops = await undoStore.undoLast();
-    mergeUndoneItems(crops);
-  }
+  const writes = createSlotGalleryWrites({
+    slot,
+    pager,
+    sel,
+    get busy() {
+      return busy;
+    },
+    set busy(v: boolean) {
+      busy = v;
+    },
+    get editCrop() {
+      return editCrop;
+    },
+    set editCrop(v: Crop | null) {
+      editCrop = v;
+    },
+  });
 
   return {
-    adoptReprocessed,
+    adoptReprocessed: writes.adoptReprocessed,
     get slot() {
       return slot;
     },
@@ -841,15 +569,15 @@ export function createSlotGalleryController(slot: SlotSpec) {
     loadMore,
     loadClusters,
     loadSuspectedFp,
-    runBuildFpCentroids,
-    runClustering,
+    runBuildFpCentroids: jobs.runBuildFpCentroids,
+    runClustering: jobs.runClustering,
     reloadOnFilterChange,
     dispose(): void {
       disposed = true;
       if (typedDebounce) clearTimeout(typedDebounce);
       typedDebounce = null;
     },
-    runRefineCluster,
+    runRefineCluster: jobs.runRefineCluster,
     openCluster,
     openAll,
     selectSubTab,
@@ -857,11 +585,11 @@ export function createSlotGalleryController(slot: SlotSpec) {
     toggleSelect,
     selectAll,
     openEditor,
-    applyStatus,
-    cropIdsOfRows,
-    applyBoxState,
-    saveBox,
-    undoLastAction,
+    applyStatus: writes.applyStatus,
+    cropIdsOfRows: writes.cropIdsOfRows,
+    applyBoxState: writes.applyBoxState,
+    saveBox: writes.saveBox,
+    undoLastAction: writes.undoLastAction,
   };
 }
 
