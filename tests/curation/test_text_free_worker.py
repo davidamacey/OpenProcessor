@@ -13,13 +13,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from curation.region_cascade_helpers import _FakeOpenSearch, _item, _jpeg, _profile
 from src.config import get_region_fields
 from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.cascade_detect.region_detector import RegionDetector
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_models import VlmCombinedReply
 
-from .test_region_cascade_integrity import _FakeOpenSearch, _item, _jpeg, _profile
 from .test_region_text_worker import _drive
 
 

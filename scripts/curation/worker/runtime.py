@@ -163,7 +163,7 @@ async def build_runtime(
     than imported fresh here: ``runner.py`` resolves them through its
     own module globals (``SegmenterClient``, ``build_vlm_labeler``, module-level
     ``RegionDetector``/``PaddleOcrTextRecognizer``) specifically so that
-    ``tests/curation/test_region_worker.py`` /
+    ``tests/curation/test_region_worker_*.py`` /
     ``test_region_text_worker.py``'s ``monkeypatch.setattr(...)`` calls
     on those names are honoured on every rebuild, not just the first.
     Importing them fresh from ``src.services.detection.cascade_detect``

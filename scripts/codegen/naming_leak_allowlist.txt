@@ -57,13 +57,15 @@ tests/config/test_retired_env.py # exercises every retired env-var name in src/c
 tests/curation/test_vlm_vocabulary.py # guard test: pins gemma_*->vlm_* / v6_*->classifier_* renames via a literal vendor regex
 tests/curation/test_wire_contract.py:plate|gemma # negative assertions that these retired-name literals are absent / rejected on the wire
 tests/integration/test_stats_router.py:by_lpr|by_sam3|gemma # negative test: asserts these retired stats-key literals are absent
-tests/curation/test_bakeoff_harness.py # guard test + its own DOMAIN_WORDS regex scanning bakeoff harness files for domain words
-tests/curation/test_bakeoff_router.py # negative test: asserts the retired lpr_nanov11_640 id is absent from served baselines
+tests/curation/bakeoff_harness/test_domain_neutral_core_guard.py # guard test + its own DOMAIN_WORDS regex scanning bakeoff harness files for domain words
+tests/curation/bakeoff_harness/test_datasets_and_converters.py # negative assertion that the generic datasets module hardcodes no domain class constant
+tests/curation/bakeoff_router/test_profiles_and_baselines.py # negative test: asserts the retired lpr_nanov11_640 id is absent from served baselines
+tests/curation/bakeoff_router/test_contract_and_evaluator.py # asserts the harness file listing includes the example profile backend path
 tests/curation/test_models_unload.py # guard tests: prove there is no hardcoded 'lpr_' prefix special-case
 tests/curation/test_candidate_source_values.py # negative test: asserts retired sam3/sam3_text_hint/lpr/lpr_existing values never resolve specially
 tests/curation/test_methods_router.py # negative test: asserts the retired 'lpr' export id is omitted from served entries
 tests/curation/test_curation_opensearch.py # negative tests: assert v6_embedding / hardcoded plate_* literals are absent from the mapping
-tests/curation/test_train_router.py:lpr # negative test: the retired lpr_single_class alias must be rejected, by name
+tests/curation/train_router/test_preflight_class_and_label_checks.py:lpr # negative test: the retired lpr_single_class alias must be rejected, by name
 src/services/training/preflight_checks.py:lpr_single_class # comment explaining the retired alias by name, for the reader's benefit
 
 # Historical/provenance docstrings describing what a field or alias used to
@@ -102,7 +104,8 @@ docs/ARCHITECTURE.md # example prose illustrating a region sub-annotation
 docs/CURATION.md # user guide; references the public license_plate example profile/export/OCR wiring throughout
 docs/design/curation_api_contract.md # API contract; documents the public license_plate example profile's wire values (detector chain, OCR text-reject sequences, cluster card example)
 docs/design/curation_design_rationale.md # design rationale; documents the subsystem's license-plate origin and the license_plate bake-off example
-tests/curation/test_region_worker.py # uses the example profile's real detector_model id ('license_plate_detector') as a realistic detector-source literal
+tests/curation/test_region_worker_routing.py # uses the example profile's real detector_model id ('license_plate_detector') as a realistic detector-source literal
+tests/curation/test_region_worker_verdicts_and_provenance.py # uses the example profile's real detector_model id ('license_plate_detector') as a realistic detector-source literal
 tests/curation/test_models_status_optional_detector.py # uses the example profile's real detector_model id ('license_plate_detector', never-shipped) to exercise the optional/not_installed GET /models/status fields
 tests/test_example_region_profiles.py # loads the public license_plate example profile by name to pin its parent_classes
 CLAUDE.md # names the public license_plate example profile in the curation-subsystem summary
@@ -135,9 +138,9 @@ tests/curation/test_region_profile.py # exercises the example profile via EXAMPL
 tests/curation/test_region_vocabulary.py # exercises the example profile's detector id + historical vendor-id docstring
 tests/curation/test_router_wireup.py # exercises the example profile's name/region_class_name
 tests/curation/test_train_preflight_scan.py # exercises the example profile
-tests/curation/test_train_router.py # negative assertion that 'license_plate' is NOT hardcoded into the class-balance message
+tests/curation/train_router/test_preflight_class_and_label_checks.py # negative assertion that 'license_plate' is NOT hardcoded into the class-balance message
 tests/curation/test_training_class_subset_presets.py # exercises the example profile's region_class_name in preset tests; docstring also names the hardcoded presets it replaces
-tests/curation/test_triton_promote.py # exercises the example profile
+tests/curation/triton_promote/test_promote_rollback_lineage_and_class_remap.py # exercises the example profile
 tests/curation/test_yolo26_triton_config.py # exercises the example profile
 tests/examples/test_bakeoff_license_plate_example.py # exercises the opt-in license_plate bake-off example under examples/bakeoff/ (loads it by path)
 scripts/datasets/fetch_openimages_plates.py # G-05 public sample fetcher: fetches Open Images V7's own "Vehicle registration plate" class by that exact public display name; same public license_plate example domain this allowlist section already covers throughout

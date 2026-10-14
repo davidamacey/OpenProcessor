@@ -505,7 +505,7 @@ Tests (red-first): `tests/curation/test_detector_vocabulary.py` (slugify:
 idempotent second run creates 0; existing hand-made `car` is skipped; names
 subset; 422 on unknown name; append-only ids from `max(id)+1`),
 `tests/curation/test_ingest_config_detector.py`. Leak sweep: register the new
-route in `tests/curation/test_cross_project_leak.py` (`route_params` L113,
+route in `tests/curation/cross_project_leak/` (`route_params` L113,
 `route_bodies` L135 with a valid body, `NO_WRITE` L317 only for the dry-run
 form if the sweep body is dry-run) and confirm `tests/projects/test_route_scoping.py`
 classifies it as scoped. Run `make contracts`.
@@ -575,7 +575,7 @@ Tests (red-first):
   inputs), others stored with `not_selected` and no vector, class-labeled
   cluster ids intact, IVF placement only for embedded.
 - `tests/projects/test_clone_settings.py`: policy cloned; combine does not merge.
-- Leak sweep: `tests/curation/test_cross_project_leak.py` entries; alpha policy
+- Leak sweep: `tests/curation/cross_project_leak/` entries; alpha policy
   never visible from beta (read and write).
 Mutation: apply the filter when the policy is default; embed all in `selected`;
 read the policy from the default project instead of the bound one.
@@ -830,7 +830,7 @@ embedding policy to those items.
 - `make contracts` then commit generated files in the same commit (hooks
   `region-status-ts-drift`, `api-contracts-drift`); contract tests in
   `tests/test_codegen_api_contracts.py`.
-- Leak sweep registration in `tests/curation/test_cross_project_leak.py`:
+- Leak sweep registration in `tests/curation/cross_project_leak/`:
   `route_params` (L113), `route_bodies` (L135, valid body so no 422),
   `NO_WRITE` (L317, with a reason, only for routes that really do not write),
   `EXPECTED_5XX` untouched; `tests/projects/test_route_scoping.py` classifies

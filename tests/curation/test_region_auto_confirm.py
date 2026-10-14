@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from curation.region_cascade_helpers import _drive_worker, _FakeOpenSearch, _item
 from src.config import get_region_fields
 from src.config.curation import base_curation_config
 from src.services.curation.review_queries import build_tab_query
@@ -22,7 +23,6 @@ from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_models import VlmCombinedReply
 
-from .test_region_cascade_integrity import _drive_worker, _FakeOpenSearch, _item
 from .test_region_text_worker import _drive
 
 

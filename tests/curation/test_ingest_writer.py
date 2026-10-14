@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
+from curation.ingest_fakes import _jpeg_bytes, _make_service
 from curation.occ_fakes import FakeIngestOpenSearch
-from curation.test_ingest_service import _jpeg_bytes, _make_service
 from src.config import get_curation_config
 from src.services.curation.ingest_writer import IngestWriter
 

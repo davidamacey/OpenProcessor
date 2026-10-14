@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
+from curation.ingest_fakes import FakePEEncoder, FakeTritonPool, _jpeg_bytes
 from curation.occ_fakes import FakeIngestOpenSearch
-from curation.test_ingest_service import FakePEEncoder, FakeTritonPool, _jpeg_bytes
 from src.config import CurationConfig, DetectionProfile
 from src.services.curation.autolabel.selection import vlm_selection_query
 from src.services.curation.ingest import CurationIngestService

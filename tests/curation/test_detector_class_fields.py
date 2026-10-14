@@ -13,9 +13,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from curation.ingest_fakes import FakePEEncoder, FakeTritonPool, _jpeg_bytes
 from curation.occ_fakes import FakeIngestOpenSearch
 from curation.test_class_resolution_by_name import _Entry, _Registry
-from curation.test_ingest_service import FakePEEncoder, FakeTritonPool, _jpeg_bytes
 from src.config import CurationConfig, DetectionProfile
 from src.services.curation.class_label import ItemLabel, class_label_update
 from src.services.curation.ingest import CurationIngestService

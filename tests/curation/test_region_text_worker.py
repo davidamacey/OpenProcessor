@@ -17,6 +17,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from _fake_project_registry import install_static_project_registry
 
+from curation.region_cascade_helpers import (
+    _capture_signal_handler,
+    _FakeOpenSearch,
+    _item,
+    _jpeg,
+    _profile,
+)
 from scripts.curation.worker import runner as runner_mod, stage_a as stage_a_mod
 from scripts.curation.worker.__main__ import parse_args
 from src.config import get_region_fields
@@ -25,14 +32,6 @@ from src.services.detection.profile_registry import register_profile
 from src.services.detection.region_text import OcrLine
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_models import VlmCombinedReply
-
-from .test_region_cascade_integrity import (
-    _capture_signal_handler,
-    _FakeOpenSearch,
-    _item,
-    _jpeg,
-    _profile,
-)
 
 
 if TYPE_CHECKING:

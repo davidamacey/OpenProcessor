@@ -24,13 +24,12 @@ from _curation_app import mount_curation_routers
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from curation.region_cascade_helpers import _drive_worker, _FakeOpenSearch
 from curation.test_regions_router import _FakeRegionOS
 from src.config import get_region_fields
 from src.routers.curation import _raw_opensearch_dep, router as curation_router
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_models import VlmCombinedReply
-
-from .test_region_cascade_integrity import _drive_worker, _FakeOpenSearch
 
 
 if TYPE_CHECKING:
