@@ -17,14 +17,24 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const LIB = path.resolve(here, '../../../../../lib');
+const src = readFileSync(
+  path.join(LIB, 'clusters/clusterDetailController.svelte.ts'),
+  'utf-8',
+);
+const gridSrc = readFileSync(
+  path.join(LIB, 'components/clusters/ClusterDetailGrid.svelte'),
+  'utf-8',
+);
 
 describe('the <CutLine> render is gated on the computed visible flag', () => {
   it('the template checks cutLineVisible, not just an index-bounds guess', () => {
-    expect(src).toMatch(
-      /\{#if !groupBySubcluster && cutLineVisible && i === cutLineIndex\}/,
+    expect(gridSrc).toMatch(
+      /\{#if !view\.groupBySubcluster && view\.cutLineVisible && i === view\.cutLineIndex\}/,
     );
-    expect(src).not.toMatch(/cutLineIndex > 0 && cutLineIndex < group\.items\.length/);
+    expect(gridSrc).not.toMatch(
+      /cutLineIndex > 0 && (view\.)?cutLineIndex < group\.items\.length/,
+    );
   });
 
   it('cutLineVisible is derived from computeCutLine, not hardcoded true', () => {

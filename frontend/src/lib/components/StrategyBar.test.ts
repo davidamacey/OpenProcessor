@@ -26,6 +26,19 @@ function read(rel: string): string {
   return readFileSync(path.resolve(here, rel), 'utf-8');
 }
 
+// /clusters/[id] and the modules it was split into.
+const CLUSTER_DETAIL_FILES = [
+  '../../routes/p/[project]/clusters/[id]/+page.svelte',
+  '../clusters/clusterDetailController.svelte.ts',
+  '../clusters/clusterDetailActions.svelte.ts',
+  '../clusters/clusterDetailLive.svelte.ts',
+  './clusters/ClusterDetailToolbar.svelte',
+  './clusters/ClusterDetailFilters.svelte',
+  './clusters/SubClusterTabs.svelte',
+  './clusters/ClusterDetailGrid.svelte',
+  './clusters/MoveClusterPicker.svelte',
+];
+
 describe('StrategyBar.svelte', () => {
   it('never calls addEventListener — pointer-only, zero global listeners', () => {
     const src = read('./StrategyBar.svelte');
@@ -47,8 +60,11 @@ describe('routes wired to <StrategyBar> keep their keydown listener count unchan
   it('clusters/[id]/+page.svelte registers zero direct window/document keydown listeners', () => {
     // All of this route's shortcuts go through keyboardStore.register(),
     // not a direct addEventListener call in the component itself.
-    const src = read('../../routes/p/[project]/clusters/[id]/+page.svelte');
-    expect(src).not.toMatch(/(window|document)\.addEventListener\(['"]keydown['"]/);
+    for (const rel of CLUSTER_DETAIL_FILES) {
+      expect(read(rel), rel).not.toMatch(
+        /(window|document)\.addEventListener\(['"]keydown['"]/,
+      );
+    }
   });
 });
 
@@ -92,8 +108,13 @@ describe('Phase 4 (diverse overlay + k stepper) adds no new listeners', () => {
   });
 
   it('clusters/[id]/+page.svelte still registers zero direct keydown listeners with diverse wiring present', () => {
-    const src = read('../../routes/p/[project]/clusters/[id]/+page.svelte');
-    expect(src).not.toMatch(/(window|document)\.addEventListener\(['"]keydown['"]/);
-    expect(src).toMatch(/diverseAvailable/);
+    for (const rel of CLUSTER_DETAIL_FILES) {
+      expect(read(rel), rel).not.toMatch(
+        /(window|document)\.addEventListener\(['"]keydown['"]/,
+      );
+    }
+    expect(read('../clusters/clusterDetailController.svelte.ts')).toMatch(
+      /diverseAvailable/,
+    );
   });
 });
