@@ -105,7 +105,15 @@ def test_profile_field_unknown() -> None:
 
 
 @pytest.mark.parametrize(
-    'key', ['ocr_det_model', 'ocr_det_version', 'ocr_det_input_size', 'ocr_det_prob_floor']
+    'key',
+    [
+        'ocr_det_model',
+        'ocr_det_version',
+        'ocr_det_input_size',
+        'ocr_det_prob_floor',
+        'aspect_min',
+        'aspect_max',
+    ],
 )
 def test_retired_ocr_det_field_is_rejected_with_a_clear_message(key: str) -> None:
     body = _body()
@@ -117,7 +125,7 @@ def test_retired_ocr_det_field_is_rejected_with_a_clear_message(key: str) -> Non
     assert 'retired' in errors[0].message
 
 
-@pytest.mark.parametrize('key', ['ocr_det_model', 'ocr_det_input_size'])
+@pytest.mark.parametrize('key', ['ocr_det_model', 'ocr_det_input_size', 'aspect_min', 'aspect_max'])
 def test_stored_profile_with_retired_field_fails_to_load(key: str) -> None:
     from src.services.detection.profile_registry import region_profile_from_dict
 
@@ -372,3 +380,26 @@ def test_activating_n4_profile_against_flat_active_pack_is_never_bypassable() ->
     )
     issue = next(e for e in report.errors if e.code == 'pack_multi_region_keys_missing')
     assert issue.bypassable is False
+
+
+def test_old_stored_profile_with_removed_aspect_keys_is_skipped_not_fatal(monkeypatch) -> None:
+    """A dev-index profile saved before ``aspect_min``/``aspect_max`` were dropped
+    must not break the registry: it is skipped with a warning and the others load."""
+    from dataclasses import replace
+
+    from src.services.config_store.store import StoredConfig, get_config_store
+    from src.services.detection.profile_registry import _stored_profiles
+
+    store = get_config_store()
+    old = StoredConfig(
+        kind='profile',
+        name='old',
+        revision=1,
+        body={**_body(), 'aspect_min': 1.2, 'aspect_max': 8.0},
+    )
+    fine = StoredConfig(kind='profile', name='fine', revision=1, body=_body())
+    monkeypatch.setattr(
+        store, 'current', replace(store.current, profiles={'old': old, 'fine': fine})
+    )
+
+    assert set(_stored_profiles()) == {'fine'}

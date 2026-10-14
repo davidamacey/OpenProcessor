@@ -27,8 +27,6 @@ def test_defaults_match_reference_constants() -> None:
     assert profile.segmenter_name == 'sam3'
     assert profile.segmenter_version == '1'
     assert profile.ocr_pipeline_model == 'ocr_pipeline'
-    assert profile.aspect_min == 1.2
-    assert profile.aspect_max == 8.0
 
 
 def test_max_regions_per_item_defaults_to_1() -> None:
@@ -82,8 +80,6 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
         'BATCH_LIMIT': '32',
         'LETTERBOX_FILL': '10,20,30',
         'FEATURE_OUTPUT': 'env_feature',
-        'ASPECT_MIN': '0.9',
-        'ASPECT_MAX': '3.3',
         'TEXT_HINT_ASPECT_MIN': '1.1',
         'TEXT_HINT_ASPECT_MAX': '5.5',
         'TEXT_HINT_REC_FLOOR': '0.65',
@@ -151,8 +147,6 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
     assert profile.batch_limit == 32
     assert profile.letterbox_fill == (10, 20, 30)
     assert profile.feature_output == 'env_feature'
-    assert profile.aspect_min == 0.9
-    assert profile.aspect_max == 3.3
     assert profile.text_hint_aspect_min == 1.1
     assert profile.text_hint_aspect_max == 5.5
     assert profile.text_hint_rec_floor == 0.65
@@ -205,9 +199,9 @@ def test_region_class_name_and_display_name_default_empty() -> None:
 
 
 def test_from_env_overrides_only_set_vars_others_default(monkeypatch) -> None:
-    monkeypatch.setenv('OP_TEST_DETECTION_ASPECT_MIN', '0.1')
+    monkeypatch.setenv('OP_TEST_DETECTION_TEXT_HINT_ASPECT_MIN', '0.1')
     profile = DetectionProfile.from_env('OP_TEST_DETECTION_')
-    assert profile.aspect_min == 0.1
+    assert profile.text_hint_aspect_min == 0.1
     # Unset vars fall back to the dataclass default.
     assert profile.name == 'region'
     assert profile.ocr_rec_model == 'paddleocr_rec_trt'
@@ -226,11 +220,11 @@ def test_two_distinct_profiles_are_independent() -> None:
     box = DetectionProfile(
         name='box',
         detector_model='box_detector_v1',
-        aspect_min=0.5,
-        aspect_max=2.0,
+        text_hint_aspect_min=0.5,
+        text_hint_aspect_max=2.0,
         secondary_shape_groups=frozenset({'small_box', 'large_box'}),
     )
     assert region_a.detector_model != box.detector_model
-    assert region_a.aspect_min != box.aspect_min
+    assert region_a.text_hint_aspect_min != box.text_hint_aspect_min
     assert box.secondary_shape_groups == frozenset({'small_box', 'large_box'})
     assert region_a.secondary_shape_groups == frozenset()

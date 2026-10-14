@@ -44,8 +44,6 @@ class RegionProfileBody(BaseModel):
     max_regions_per_item: int = 1
     letterbox_fill: list[int] = Field(default_factory=lambda: [114, 114, 114])
     feature_output: str = 'sppf_feat'
-    aspect_min: float = 1.2
-    aspect_max: float = 8.0
     text_hint_aspect_min: float = 1.5
     text_hint_aspect_max: float = 7.0
     text_hint_rec_floor: float = 0.70

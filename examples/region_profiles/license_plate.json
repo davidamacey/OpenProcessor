@@ -10,8 +10,6 @@
   "confidence_floor": 0.4,
   "batch_limit": 16,
   "letterbox_fill": [114, 114, 114],
-  "aspect_min": 1.2,
-  "aspect_max": 8.0,
   "text_hint_aspect_min": 1.5,
   "text_hint_aspect_max": 7.0,
   "text_hint_rec_floor": 0.70,

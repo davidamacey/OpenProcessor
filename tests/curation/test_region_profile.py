@@ -123,7 +123,7 @@ def test_env_overrides_layer_on_selected_profile(region_env: pytest.MonkeyPatch)
     assert active.segmenter_text_prompt == 'a custom prompt'
     # Everything not overridden comes from the selected base.
     assert active.detector_model == REFERENCE_LICENSE_PLATE_PROFILE.detector_model
-    assert active.aspect_min == REFERENCE_LICENSE_PLATE_PROFILE.aspect_min
+    assert active.text_hint_aspect_min == REFERENCE_LICENSE_PLATE_PROFILE.text_hint_aspect_min
 
 
 def test_env_only_profile_without_a_base(region_env: pytest.MonkeyPatch) -> None:
