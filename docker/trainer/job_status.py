@@ -45,7 +45,7 @@ class StatusState:
     # distinct from best_checkpoint_metric because Ultralytics'
     # final_eval() fires the same on_fit_epoch_end callback once more
     # after training, re-validating best.pt, and that call does not
-    # advance trainer.epoch -- see docker/trainer/trainer.py's
+    # advance trainer.epoch -- see docker/trainer/trainer_callbacks.py's
     # on_fit_epoch_end for how the two are told apart.
     last_epoch_metric: dict[str, Any] | None = None
     # The best checkpoint's (best.pt) own re-validation metrics, as one

@@ -736,7 +736,7 @@ services:
       - OP_TRAIN_RUNS_ROOT=/var/lib/openprocessor/training_runs
       # G-14: MUST match `device_ids` below, in the same order: the job spec
       # names HOST gpu ids, which appear inside the container as positional
-      # local indices. See docker/trainer/trainer.py::resolve_local_device.
+      # local indices. See docker/trainer/gpu_select.py::resolve_local_device.
       - OP_TRAIN_GPU_ORDER=${OP_TRAIN_GPU_ORDER:-0}
       - OP_API_BASE_URL=http://api:8000
       - OP_API_PREFIX=${OP_API_PREFIX:-/curation}

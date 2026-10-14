@@ -12,6 +12,8 @@ import job_spec
 import job_status
 import pytest
 import trainer
+import trainer_callbacks
+import trainer_kwargs
 
 from curation.trainer_protocol._helpers import _write_job
 from src.services.training import jobs as train_jobs
@@ -68,7 +70,7 @@ def stub_ultralytics(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> type[_S
     module = types.ModuleType('ultralytics')
     module.YOLO = _StubYOLO  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, 'ultralytics', module)
-    monkeypatch.setattr(trainer, 'RUNS_ROOT', str(tmp_path / 'runs'))
+    monkeypatch.setattr(trainer_kwargs, 'RUNS_ROOT', str(tmp_path / 'runs'))
     monkeypatch.setattr(job_spec, 'TMP_ROOT', tmp_path / 'tmp')
     # A local file-backed tracking store, so the real MLflow code path runs
     # (and is therefore covered) without reaching for a network service that
@@ -381,7 +383,7 @@ def test_run_job_honors_the_cancel_sentinel(
     spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
     asyncio.run(train_jobs.write_cancel(job_id))
     # The real cancel path raises out of the on_train_epoch_end callback.
-    stub_ultralytics.raise_on_train = trainer.CancelRequestedError('cancelled')
+    stub_ultralytics.raise_on_train = trainer_callbacks.CancelRequestedError('cancelled')
 
     trainer.run_job(spec)
 

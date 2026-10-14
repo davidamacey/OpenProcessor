@@ -5,7 +5,11 @@ docker/trainer/incumbent_compare.py	2	ratchet: may only go down
 docker/trainer/job_manifest.py	2	ratchet: may only go down
 docker/trainer/job_status.py	3	ratchet: may only go down
 docker/trainer/mlflow_callbacks.py	9	ratchet: may only go down
-docker/trainer/trainer.py	10	ratchet: may only go down
+docker/trainer/trainer.py	3	ratchet: may only go down
+docker/trainer/trainer_callbacks.py	3	ratchet: may only go down
+docker/trainer/trainer_eval.py	1	ratchet: may only go down
+docker/trainer/trainer_fit.py	2	ratchet: may only go down
+docker/trainer/trainer_kwargs.py	1	ratchet: may only go down
 export/download_face_models.py	2	ratchet: may only go down
 export/download_paddleocr.py	2	ratchet: may only go down
 export/download_pytorch_models.py	1	ratchet: may only go down

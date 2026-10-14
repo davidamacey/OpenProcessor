@@ -6,9 +6,9 @@ import json
 import sys
 from typing import TYPE_CHECKING, Any
 
+import gpu_select
 import job_status
 import pytest
-import trainer
 
 
 if TYPE_CHECKING:
@@ -19,10 +19,10 @@ def test_gpu_ids_pass_through_when_no_order_is_configured(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv('OP_TRAIN_GPU_ORDER', raising=False)
-    assert trainer.resolve_local_device('2') == '2'
-    assert trainer.resolve_local_device('0,2') == '0,2'
-    assert trainer.resolve_local_device(None) is None
-    assert trainer.resolve_local_device('') is None
+    assert gpu_select.resolve_local_device('2') == '2'
+    assert gpu_select.resolve_local_device('0,2') == '0,2'
+    assert gpu_select.resolve_local_device(None) is None
+    assert gpu_select.resolve_local_device('') is None
 
 
 def test_host_gpu_ids_map_to_positional_local_indices(
@@ -34,9 +34,9 @@ def test_host_gpu_ids_map_to_positional_local_indices(
     host-GPU-2-only request on host GPU 0 instead.
     """
     monkeypatch.setenv('OP_TRAIN_GPU_ORDER', '0,2')
-    assert trainer.resolve_local_device('0') == '0'
-    assert trainer.resolve_local_device('2') == '1'
-    assert trainer.resolve_local_device('0,2') == '0,1'
+    assert gpu_select.resolve_local_device('0') == '0'
+    assert gpu_select.resolve_local_device('2') == '1'
+    assert gpu_select.resolve_local_device('0,2') == '0,1'
 
 
 def test_unattached_gpu_request_fails_instead_of_mis_scheduling(
@@ -44,7 +44,7 @@ def test_unattached_gpu_request_fails_instead_of_mis_scheduling(
 ) -> None:
     monkeypatch.setenv('OP_TRAIN_GPU_ORDER', '0,2')
     with pytest.raises(ValueError, match='not attached to this container'):
-        trainer.resolve_local_device('1')
+        gpu_select.resolve_local_device('1')
 
 
 # =============================================================================
@@ -59,9 +59,9 @@ def test_write_trainer_capabilities_publishes_env_gpu_order(
     monkeypatch.setenv('OP_BUILD_SHA', 'abc1234')
     jobs_dir = tmp_path / 'jobs'
 
-    trainer.write_trainer_capabilities(jobs_dir)
+    gpu_select.write_trainer_capabilities(jobs_dir)
 
-    payload = json.loads((jobs_dir / trainer.TRAINER_CAPABILITIES_FILENAME).read_text())
+    payload = json.loads((jobs_dir / gpu_select.TRAINER_CAPABILITIES_FILENAME).read_text())
     assert payload['gpu_order'] == [0, 2]
     assert payload['build_sha'] == 'abc1234'
     assert 'written_at' in payload
@@ -74,9 +74,9 @@ def test_write_trainer_capabilities_empty_order_is_unrestricted(
     monkeypatch.delenv('OP_TRAIN_GPU_ORDER', raising=False)
     jobs_dir = tmp_path / 'jobs'
 
-    trainer.write_trainer_capabilities(jobs_dir)
+    gpu_select.write_trainer_capabilities(jobs_dir)
 
-    payload = json.loads((jobs_dir / trainer.TRAINER_CAPABILITIES_FILENAME).read_text())
+    payload = json.loads((jobs_dir / gpu_select.TRAINER_CAPABILITIES_FILENAME).read_text())
     assert payload['gpu_order'] == []
 
 
@@ -94,9 +94,9 @@ def test_write_trainer_capabilities_survives_cuda_probe_failure(
     monkeypatch.setattr(subprocess, 'run', _boom)
     jobs_dir = tmp_path / 'jobs'
 
-    trainer.write_trainer_capabilities(jobs_dir)
+    gpu_select.write_trainer_capabilities(jobs_dir)
 
-    payload = json.loads((jobs_dir / trainer.TRAINER_CAPABILITIES_FILENAME).read_text())
+    payload = json.loads((jobs_dir / gpu_select.TRAINER_CAPABILITIES_FILENAME).read_text())
     assert payload['visible_count'] is None
 
 
@@ -125,7 +125,7 @@ class TestCudaProbeIsolation:
         # The real subprocess (a fresh interpreter) is unaffected by the
         # patch above; if this venv has torch installed the probe returns
         # a real int, otherwise None -- either way, no AssertionError.
-        result = trainer._probe_cuda_device_count()
+        result = gpu_select._probe_cuda_device_count()
         assert result is None or isinstance(result, int)
 
     def test_probe_uses_a_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -140,7 +140,7 @@ class TestCudaProbeIsolation:
 
         monkeypatch.setattr(subprocess, 'run', _fake_run)
 
-        result = trainer._probe_cuda_device_count()
+        result = gpu_select._probe_cuda_device_count()
 
         assert result is None
         assert captured.get('timeout') is not None

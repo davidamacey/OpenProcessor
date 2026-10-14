@@ -92,11 +92,12 @@ def test_a_real_training_run_completes_end_to_end(
 
     import job_spec
     import trainer
+    import trainer_kwargs
 
     jobs_dir = tmp_path / 'jobs'
     jobs_dir.mkdir()
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(jobs_dir))
-    monkeypatch.setattr(trainer, 'RUNS_ROOT', str(tmp_path / 'runs'))
+    monkeypatch.setattr(trainer_kwargs, 'RUNS_ROOT', str(tmp_path / 'runs'))
     monkeypatch.setattr(job_spec, 'TMP_ROOT', tmp_path / 'scratch')
     # Keep Ultralytics' settings/cache inside tmp_path.
     monkeypatch.setenv('YOLO_CONFIG_DIR', str(tmp_path / 'ultralytics'))
