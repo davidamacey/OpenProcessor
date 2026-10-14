@@ -63,9 +63,9 @@ def test_pipeline_class_catalog_uses_resolved_pack(monkeypatch: pytest.MonkeyPat
     ``resolve_pack`` instead (source-level check: the hardcoded import must be gone)."""
     from pathlib import Path as _Path
 
-    from src.services.curation import auto_label_run
+    from src.services.curation.autolabel import vlm_stage
 
-    src = _Path(auto_label_run.__file__).read_text()
+    src = _Path(vlm_stage.__file__).read_text()
     assert 'from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK' not in src
     assert 'resolve_pack(' in src
 
