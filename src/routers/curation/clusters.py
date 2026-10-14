@@ -6,9 +6,10 @@ from typing import Any, Literal
 
 from fastapi import HTTPException, Query
 
+from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, items_index, router
-from src.routers.curation._config_common_models import ApiErrorResponse, api_error
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
+from src.schemas.curation.config_common import ApiErrorResponse
 from src.services.curation.cluster_ids import (
     CORE_SIMILARITY_MIN,
     RESIDUAL_CLUSTER_ID_OFFSET,

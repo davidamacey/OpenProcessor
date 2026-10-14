@@ -116,7 +116,7 @@ class FakeRegistryOpenSearch:
 
 @pytest.fixture(autouse=True)
 def _reset_ensure_indexes_bootstrap_cache() -> Any:
-    """``_common._INDEXES_BOOTSTRAPPED`` is a process-wide cache keyed
+    """``index_bootstrap._INDEXES_BOOTSTRAPPED`` is a process-wide cache keyed
     only by slug. Two test functions in this package that happen to
     reuse the same slug (``cars``, ``zeta``, ...) in the same
     pytest-xdist worker would otherwise have the second call skip real
@@ -125,11 +125,11 @@ def _reset_ensure_indexes_bootstrap_cache() -> Any:
     post-create existence check made it observable. Reset it around
     every test here, the same way ``tests/curation``'s ``leak_env``
     already does."""
-    from src.routers.curation import _common
+    from src.services.curation import index_bootstrap
 
-    _common._INDEXES_BOOTSTRAPPED.clear()
+    index_bootstrap._INDEXES_BOOTSTRAPPED.clear()
     yield
-    _common._INDEXES_BOOTSTRAPPED.clear()
+    index_bootstrap._INDEXES_BOOTSTRAPPED.clear()
 
 
 @pytest.fixture

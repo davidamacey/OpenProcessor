@@ -50,7 +50,7 @@ import httpx
 from scripts.curation._project_worker_utils import curation_api_prefix, rotated, scoped_url
 from scripts.curation._vlm_activity import idle_backoff_s, projects_with_active_vlm
 from src.config.project_context import bind_project
-from src.services.curation.embedding_state import embedded_clause
+from src.domain.embedding_state import embedded_clause
 from src.services.curation.ops_metrics import start_worker_metrics_server
 from src.services.curation.vlm_policy import VlmPolicy
 from src.services.curation.vlm_scope import ScopeCache, daily_budget_remaining, vlm_scope_clauses
@@ -121,14 +121,12 @@ def _build_pending_query(
     in Python.
     """
     # Lazy: keeps the module import light; src.config is all this pulls in.
-    from src.services.curation.ingest_class_sources import (
+    from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPTED_AT_FIELD
+    from src.domain.ingest_class_sources import (
         OPEN_VOCAB_TARGET_CLASS_SOURCE,
         classifier_class_sources,
     )
-    from src.services.curation.vlm_class_attempt import (
-        VLM_CLASS_ATTEMPTED_AT_FIELD,
-        recent_empty_answer_clause,
-    )
+    from src.services.curation.vlm_class_attempt import recent_empty_answer_clause
 
     must_not: list[dict] = [
         {'term': {'class_validated': True}},

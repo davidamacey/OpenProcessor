@@ -13,7 +13,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.routers.curation._common import images_index, items_index, warm_knn_indexes
+from src.routers.curation._common import images_index, items_index
+from src.services.curation.index_bootstrap import warm_knn_indexes
 
 
 @pytest.mark.asyncio

@@ -66,7 +66,7 @@ def test_preflight_blocks_when_trainer_unreachable(
     all, so submitting a job when the trainer container was never started queued
     it forever with no error. Simulate "container not running"."""
     monkeypatch.setattr(
-        'src.routers.curation_train.preflight.probe_trainer_reachable',
+        'src.services.training.preflight_run.probe_trainer_reachable',
         AsyncMock(return_value=('block', "'trainer' container does not exist")),
     )
     body = {'dataset_export_dir': str(project_export_root / 'x'), 'profile': 'medium'}
@@ -82,7 +82,7 @@ def test_preflight_ok_when_trainer_reachable(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch, project_export_root: Path
 ) -> None:
     monkeypatch.setattr(
-        'src.routers.curation_train.preflight.probe_trainer_reachable',
+        'src.services.training.preflight_run.probe_trainer_reachable',
         AsyncMock(return_value=('ok', "'trainer' is running")),
     )
     body = {'dataset_export_dir': str(project_export_root / 'x'), 'profile': 'medium'}
@@ -195,7 +195,7 @@ def test_start_returns_422_when_trainer_unreachable(
 ) -> None:
     """/start must refuse (not silently queue) when the trainer is down."""
     monkeypatch.setattr(
-        'src.routers.curation_train.preflight.probe_trainer_reachable',
+        'src.services.training.preflight_run.probe_trainer_reachable',
         AsyncMock(return_value=('block', "'trainer' container does not exist")),
     )
     body = {'dataset_export_dir': str(project_export_root / 'x'), 'profile': 'medium'}

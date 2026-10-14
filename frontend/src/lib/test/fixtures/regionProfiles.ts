@@ -13,7 +13,7 @@ import type {
 } from '$lib/types_profiles';
 import { cleanReport } from './promptPacks';
 
-export const PROFILE_BODY = {
+const PROFILE_BODY = {
   display_name: 'Tags',
   display_name_singular: 'Tag',
   region_class_name: 'tag',

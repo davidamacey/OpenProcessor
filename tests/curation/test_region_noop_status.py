@@ -21,8 +21,8 @@ from fastapi.testclient import TestClient
 from curation.test_regions_router import _FakeRegionOS
 from src.config import get_region_fields
 from src.config.region_state import RegionStatus
+from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
-from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 from src.services.curation.region_writes import human_status_box_write
 
 
@@ -156,7 +156,7 @@ def test_confirm_same_status_sets_verified_when_unverified() -> None:
 
 
 def test_a_whole_set_reject_by_an_automated_source_does_not_take_the_human_lock() -> None:
-    from src.services.curation.region_boxes import is_human_owned, read_boxes
+    from src.domain.region_boxes import is_human_owned, read_boxes
 
     current = _item('x', RegionStatus.DETECTED, _accepted_box(), verified=True)
     machine = human_status_box_write('verify_rejected', current, label_source='vlm_relabel')

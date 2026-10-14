@@ -63,7 +63,7 @@ function render(): HTMLDivElement {
 describe('CropDetailModal narrow-viewport layout (visual-audit follow-up)', () => {
   it('splits into two columns at lg, not md — 800px (below lg) stays single-column', () => {
     const el = render();
-    const grid = el.querySelector('[role="dialog"] > div');
+    const grid = el.querySelector('[role="dialog"] > div:not([data-modal-backdrop])');
     expect(grid?.className).toContain('lg:grid-cols-[1fr_320px]');
     expect(grid?.className).not.toContain('md:grid-cols-[1fr_320px]');
     expect(grid?.className).toContain('grid-cols-1');

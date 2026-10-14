@@ -10,12 +10,8 @@
     BulkIngest,
     FAILURES_PAGE_SIZE,
   } from '$lib/ingest/bulkIngestController.svelte';
-  import {
-    formatDuration,
-    headlineRate,
-    progressPercent,
-    stageRows,
-  } from '$lib/ingest/bulkIngestFormat';
+  import { formatDuration } from '$lib/format/duration';
+  import { headlineRate, progressPercent, stageRows } from '$lib/ingest/bulkIngestFormat';
   import type { BulkIngestStatus } from '$lib/types_bulkIngest';
 
   interface Props {
@@ -240,12 +236,12 @@
           <div>
             <dt class="text-zinc-500">Time left</dt>
             <dd class="text-zinc-200" data-testid="bulk-eta">
-              {formatDuration(progress.eta_s)}
+              {formatDuration(progress.eta_s, '--')}
             </dd>
           </div>
           <div>
             <dt class="text-zinc-500">Elapsed</dt>
-            <dd class="text-zinc-200">{formatDuration(progress.elapsed_s)}</dd>
+            <dd class="text-zinc-200">{formatDuration(progress.elapsed_s, '--')}</dd>
           </div>
           <div>
             <dt class="text-zinc-500">In flight</dt>

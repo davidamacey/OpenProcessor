@@ -15,7 +15,7 @@ Two :class:`~src.config.DetectionProfile` instances drive ingest:
 
 Lives in config (not the router) so services and workers can derive the
 ``class_source`` vocabulary from the same resolution
-(:mod:`src.services.curation.ingest_class_sources`).
+(:mod:`src.domain.ingest_class_sources`).
 """
 
 from __future__ import annotations

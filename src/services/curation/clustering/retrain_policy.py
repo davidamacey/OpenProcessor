@@ -7,9 +7,9 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from src.config.curation import items_index
+from src.domain.embedding_state import embedded_clause
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.clustering.pool_size import MIN_RESIDUALS_FOR_CLUSTERING
-from src.services.curation.embedding_state import embedded_clause
 
 
 if TYPE_CHECKING:

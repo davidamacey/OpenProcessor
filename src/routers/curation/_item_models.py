@@ -12,7 +12,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 # Runtime import: pydantic resolves the annotation from module globals.
-from src.services.curation.embedding_state import EmbeddingState
+from src.domain.embedding_state import EmbeddingState
 from src.services.curation.reprocess_models import ReprocessRequest
 
 

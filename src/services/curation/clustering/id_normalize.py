@@ -108,7 +108,7 @@ def class_cluster_placement(update: dict[str, Any], current: dict[str, Any]) -> 
     ``update`` sets a class from a confident source and ``current`` (the
     freshly read doc) is elsewhere and not excluded; ``{}`` otherwise.
     """
-    from src.services.curation.ingest_class_sources import confident_class_sources
+    from src.domain.ingest_class_sources import confident_class_sources
 
     class_id = update.get('class_id')
     if not isinstance(class_id, int) or isinstance(class_id, bool):

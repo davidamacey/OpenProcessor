@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from src.config.project_context import bind_project
-from src.routers.curation._config_common_models import api_error
+from src.services.rejections import rejection
 
 
 if TYPE_CHECKING:
@@ -36,7 +36,7 @@ async def check_activation_pair_in_target_context(
     activation_axes: tuple[ConfigAxis, ...],
 ) -> None:
     """Re-resolve each axis's SOURCE body, then run the shared gate bound
-    to the TARGET, before any write. Raises ``api_error(422, ...)`` when
+    to the TARGET, before any write. Raises ``rejection(422, ...)`` when
     the source's active pair does not pass ``for_activation`` validation
     in the target's own context.
 
@@ -116,8 +116,7 @@ async def check_activation_pair_in_target_context(
     # which `_clone_activations` skips exactly like an unstored profile.
     pack_will_be_cloned = pack_ref is not None and pack_ref[1] is not None and pack_body is not None
 
-    from fastapi import HTTPException
-
+    from src.core.exceptions import RequestRejectedError
     from src.services.config_store.activation_gate import run_activation_gate
     from src.services.labeling.vlm_prompts import PromptPack
 
@@ -151,8 +150,8 @@ async def check_activation_pair_in_target_context(
                 body=profile_body,
                 **pending_kwargs,
             )
-        except HTTPException as exc:
-            raise api_error(
+        except RequestRejectedError as exc:
+            raise rejection(
                 422,
                 'validation_failed',
                 f"'{target_record.slug}' cannot clone active detection_profile "
@@ -177,7 +176,7 @@ async def check_activation_pair_in_target_context(
     # the profile axis is NOT
     # going to be copied (source is 'off', or a registry profile with no
     # stored revision), so the target keeps its OWN existing/fallback
-    # profile after the clone -- `_resolve_profile(None)` resolves
+    # profile after the clone -- `resolve_region_profile(None)` resolves
     # exactly that, bound to the target project context this function
     # already runs in. Validating the cloned pack against the SOURCE's
     # (off/unstored) profile, or skipping this axis entirely, both let a
@@ -194,11 +193,11 @@ async def check_activation_pair_in_target_context(
     # see the module docstring). The confirmed gap is specifically the
     # CROSS-AXIS pack/profile pairing (multi-box reply keys, text-mode
     # mismatch), so only those two checks run here.
-    from src.routers.curation.prompt_packs import _resolve_profile
     from src.services.config_store.pack_validation import _check_text_mode, check_multi_region_keys
+    from src.services.detection.profile_registry import resolve_region_profile
 
     pk_name, _pk_rev = pack_ref
-    target_profile = _resolve_profile(None)
+    target_profile = resolve_region_profile(None)
     max_regions = target_profile.max_regions_per_item if target_profile is not None else 1
     cross_axis_issues = [
         *(
@@ -214,7 +213,7 @@ async def check_activation_pair_in_target_context(
     ]
     blocking = [i for i in cross_axis_issues if i is not None and i.severity == 'error']
     if blocking:
-        raise api_error(
+        raise rejection(
             422,
             'validation_failed',
             f"'{target_record.slug}' cannot clone active prompt_pack "

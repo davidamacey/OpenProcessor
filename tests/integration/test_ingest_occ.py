@@ -187,7 +187,7 @@ async def test_existing_crop_with_human_label_preserved_on_reingest() -> None:
     preserved-label counter.
     """
     from src.clients.occ_upsert import occ_upsert_bulk
-    from src.services.curation.metrics import OP_INGEST_PRESERVED_HUMAN_LABEL
+    from src.core.metrics import OP_INGEST_PRESERVED_HUMAN_LABEL
 
     client = FakeUpsertOpenSearch()
     index = 'op_items_test'
@@ -307,7 +307,7 @@ async def test_non_human_doc_overwritten_normally() -> None:
     preserved-label counter should increment.
     """
     from src.clients.occ_upsert import occ_upsert_bulk
-    from src.services.curation.metrics import OP_INGEST_PRESERVED_HUMAN_LABEL
+    from src.core.metrics import OP_INGEST_PRESERVED_HUMAN_LABEL
 
     client = FakeUpsertOpenSearch()
     index = 'op_items_test'

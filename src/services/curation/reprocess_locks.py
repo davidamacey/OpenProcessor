@@ -24,7 +24,7 @@ from typing import Any
 
 from src.clients.occ_locks import is_locked_class, is_locked_item
 from src.config.region_fields import RegionFields, get_region_fields
-from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
+from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 
 
 def region_set_locked(src: dict[str, Any], F: RegionFields | None = None) -> bool:

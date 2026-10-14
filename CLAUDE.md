@@ -55,6 +55,8 @@ at port 4603.
 | `src/services/` | Logic with no FastAPI dependency: `curation/`, `config_store/`, `projects/`, `labeling/` (VLM), `detection/`, `training/` |
 | `src/clients/` | Triton, OpenSearch (`curation_opensearch/` has the index bodies, class registry and mapping migrations), OCC helpers (`occ*.py`, the lock rule in `occ_locks.py`), PE encoder |
 | `src/config/` | `CurationConfig`, `RegionFields`, `DetectionProfile`, `RegionStatus`, project records and context, retired-env guard |
+| `src/domain/` | Pure rules and field vocabularies shared by clients and services (`region_boxes`, `history`, `embedding_state`, `item_text`, `audit_math`, `ingest_class_sources`); imports only `config` and `utils` |
+| `src/schemas/` | Wire models (`curation/`, `bakeoff/`, `embed`, `ingest`, ...); routers and services import them, they import neither |
 | `scripts/curation/` | Worker entry points, ingest walkers, import client, backfills, `bakeoff/` |
 | `scripts/` | `setup.sh`, `lib/` (shell libraries, VLM catalog reader), `release/`, `codegen/`, `datasets/`, `docs/`, `examples/` |
 | `openprocessor`, `setup-openprocessor.sh` | Management CLI and the one-line installer (both bash) |
@@ -161,7 +163,7 @@ body. The core route list is in [README.md](README.md#api-endpoints).
 - **Regions are lists.** `region_boxes` is a nested list per item; one region
   is a list of one. Box elements have fixed keys (`box_id`, `bbox_norm`, `state`,
   `score`, `detector`, `text*`, `cluster_*`). Writes go through
-  `src/services/curation/region_boxes.py` and the OCC helpers. Per-box vectors
+  `src/domain/region_boxes.py` and the OCC helpers. Per-box vectors
   live in the sibling `region_box_embeddings`. `tests/test_no_legacy_region_scalars.py`
   guards against single-box scalar fields.
 - **Lock rule.** Automated writers never overwrite a human- or

@@ -13,6 +13,7 @@
    * used to have to invent independently.
    */
   import AutoLabelPanel from '$components/AutoLabelPanel.svelte';
+  import { formatTime } from '$lib/format/time';
   import type { IngestRunState } from '$lib/ingest/ingestRunController.svelte';
   import type { RegionDrain } from '$lib/types';
 
@@ -23,11 +24,6 @@
     drainObservedAt: number | null;
   }
   let { runState, drain, drainError, drainObservedAt }: Props = $props();
-
-  function formatTime(t: number | null): string {
-    if (t === null) return '';
-    return new Date(t).toLocaleTimeString();
-  }
 
   const gate = $derived.by(() => {
     if (
@@ -54,7 +50,7 @@
 
   const note = $derived(
     !gate && drainObservedAt !== null
-      ? `Worklog drained as of ${formatTime(drainObservedAt)}`
+      ? `Worklog drained as of ${formatTime(drainObservedAt, '')}`
       : null,
   );
 </script>

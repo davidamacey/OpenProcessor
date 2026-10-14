@@ -8,8 +8,8 @@ backend serves clean data, no overlay.
 
 from __future__ import annotations
 
+from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, images_index, router
-from src.routers.curation._config_common_models import api_error
 from src.routers.curation._open_vocab_models import (
     OpenVocabTestGate,
     OpenVocabTestHit,
@@ -17,7 +17,7 @@ from src.routers.curation._open_vocab_models import (
     OpenVocabTestRequest,
     OpenVocabTestResponse,
 )
-from src.routers.curation.open_vocab import validation_inputs
+from src.services.config_store.open_vocab_inputs import validation_inputs
 from src.services.config_store.open_vocab_validation import validate_open_vocab
 from src.services.curation.open_vocab_gate import active_vlm_visible
 from src.services.curation.open_vocab_test_run import (

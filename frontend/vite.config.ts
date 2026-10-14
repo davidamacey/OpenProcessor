@@ -1,9 +1,13 @@
+import { fileURLToPath } from 'node:url';
+
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 // vitest/config re-exports vite's defineConfig with the `test` block typed.
 import { defineConfig } from 'vitest/config';
 
 import svelteKitOptions from './sveltekit.options.js';
+
+const fromHere = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
 export default defineConfig({
   plugins: [tailwindcss(), sveltekit(svelteKitOptions)],
@@ -20,7 +24,16 @@ export default defineConfig({
   // mount tests need the browser build under jsdom instead (test-audit
   // -2026-09-24.md §2.4). Scoped to `process.env.VITEST` so `vite build`
   // and `vite dev` still resolve the server/client builds normally.
-  resolve: process.env.VITEST ? { conditions: ['browser'] } : undefined,
+  resolve: {
+    alias: {
+      $lib: fromHere('./src/lib'),
+      $components: fromHere('./src/lib/components'),
+      $stores: fromHere('./src/lib/stores'),
+      // The API contract the backend generates; one copy, in this repository.
+      $contracts: fromHere('../contracts'),
+    },
+    ...(process.env.VITEST ? { conditions: ['browser'] } : {}),
+  },
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.ts'],

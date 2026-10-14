@@ -9,8 +9,8 @@ import pytest
 
 from scripts.curation.seed_live_harness import _region_fields
 from src.config import get_region_fields
+from src.domain.region_boxes import read_boxes
 from src.services.curation.region_box_embeddings import join_box_vectors
-from src.services.curation.region_boxes import read_boxes
 
 
 F = get_region_fields()

@@ -10,7 +10,7 @@ from typing import Any, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.services.curation.dataset_import.mapping import ClassMappingEntry
-from src.services.issue_ids import stamp_issue_ids
+from src.utils.issue_ids import stamp_issue_ids
 
 
 MAX_SOURCES = 8

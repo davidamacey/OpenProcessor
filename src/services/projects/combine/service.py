@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.config.curation import get_curation_config
 from src.core.logging import get_logger
-from src.routers.curation._config_common_models import ValidationIssue, ValidationReport, api_error
+from src.schemas.curation.config_common import ValidationIssue, ValidationReport
 from src.services.curation.dataset_import.store import now_iso
 from src.services.curation.job_lock import exclusive_start_lock
 from src.services.projects import lifecycle
@@ -31,6 +31,7 @@ from src.services.projects.combine.plan import (
     source_state,
 )
 from src.services.projects.registry import get_record_with_seq
+from src.services.rejections import rejection
 
 
 if TYPE_CHECKING:
@@ -115,14 +116,14 @@ async def start(client: Any, request: CombineStartRequest) -> dict[str, str]:
     plain = CombineRequest.model_validate(request.model_dump(exclude={'expected_preview_sha'}))
     result, analysis = await preview(client, plain)
     if not result.ok or analysis is None:
-        raise api_error(
+        raise rejection(
             422,
             'combine_invalid',
             'the combine request has errors',
             report=report_of(result.errors),
         )
     if result.preview_sha != request.expected_preview_sha:
-        raise api_error(
+        raise rejection(
             409,
             'preview_stale',
             'a source changed since the preview; preview again',
@@ -200,7 +201,7 @@ async def _run(
 def job_state(job_id: str) -> dict[str, Any]:
     store = job_store.open_job(job_id)
     if store is None:
-        raise api_error(404, 'combine_not_found', f"no combine job '{job_id}'")
+        raise rejection(404, 'combine_not_found', f"no combine job '{job_id}'")
     state = store.job.repair_if_stale(job_store.ACTIVE_STATUSES, error_prefix='combine')
     return {'job_id': job_id, **state}
 
@@ -208,9 +209,9 @@ def job_state(job_id: str) -> dict[str, Any]:
 def cancel(job_id: str) -> dict[str, Any]:
     store = job_store.open_job(job_id)
     if store is None:
-        raise api_error(404, 'combine_not_found', f"no combine job '{job_id}'")
+        raise rejection(404, 'combine_not_found', f"no combine job '{job_id}'")
     if store.job.read().get('status') not in job_store.ACTIVE_STATUSES:
-        raise api_error(409, 'combine_not_resumable', 'the job is not running')
+        raise rejection(409, 'combine_not_resumable', 'the job is not running')
     store.job.request_cancel()
     return job_state(job_id)
 
@@ -225,16 +226,16 @@ async def resume(client: Any, job_id: str) -> dict[str, Any]:
     ensure_owner`)."""
     store = job_store.open_job(job_id)
     if store is None:
-        raise api_error(404, 'combine_not_found', f"no combine job '{job_id}'")
+        raise rejection(404, 'combine_not_found', f"no combine job '{job_id}'")
     with exclusive_start_lock(store.directory / 'start.lock') as acquired:
         if not acquired:
-            raise api_error(409, 'combine_not_resumable', 'the job is already being resumed')
+            raise rejection(409, 'combine_not_resumable', 'the job is already being resumed')
         running = _TASKS.get(job_id)
         if running is not None and not running.done():
-            raise api_error(409, 'combine_not_resumable', 'a worker for this job is still running')
+            raise rejection(409, 'combine_not_resumable', 'a worker for this job is still running')
         state = job_state(job_id)
         if state.get('status') not in job_store.RESUMABLE_STATUSES:
-            raise api_error(
+            raise rejection(
                 409,
                 'combine_not_resumable',
                 f'the job is {state.get("status")}; only an interrupted or cancelled combine '
@@ -243,7 +244,7 @@ async def resume(client: Any, job_id: str) -> dict[str, Any]:
         plan = load_plan(store)
         sources, errors = await resolve_sources(plan.request, ignore_job=job_id)
         if errors:
-            raise api_error(
+            raise rejection(
                 409,
                 'combine_not_resumable',
                 'a source can no longer be combined',
@@ -251,7 +252,7 @@ async def resume(client: Any, job_id: str) -> dict[str, Any]:
             )
         states = [await source_state(client, r) for r in sources]
         if compute_preview_sha(plan.request, states) != store.read_request().get('preview_sha'):
-            raise api_error(
+            raise rejection(
                 409,
                 'preview_stale',
                 'a source changed since the preview this combine was started from; '
@@ -259,7 +260,7 @@ async def resume(client: Any, job_id: str) -> dict[str, Any]:
             )
         target, _seq, _term = await get_record_with_seq(client, state['target'])
         if target is None or target.status != 'building':
-            raise api_error(
+            raise rejection(
                 409, 'combine_not_resumable', 'the target project is no longer building'
             )
         store.job.clear_signals()

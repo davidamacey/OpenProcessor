@@ -1,4 +1,4 @@
-"""Tests for src.services.detection.pe_preprocess.
+"""Tests for src.utils.pe_preprocess.
 
 The PE engine takes uint8 pixels and normalizes in its graph (``export/uint8_input.py``), so
 preprocessing here is resize, center-crop and a layout change, with no arithmetic.
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from src.services.detection.pe_preprocess import PE_SIZE, resize_crop_rgb, to_chw, to_chw_into
+from src.utils.pe_preprocess import PE_SIZE, resize_crop_rgb, to_chw, to_chw_into
 
 
 class TestToChw:
@@ -77,7 +77,7 @@ class TestWholeFrameFromBytes:
 
         from PIL import Image
 
-        from src.services.detection.pe_preprocess import whole_frame_chw, whole_frame_chw_from_bytes
+        from src.utils.pe_preprocess import whole_frame_chw, whole_frame_chw_from_bytes
 
         arr = np.random.default_rng(3).integers(0, 256, size=(480, 640, 3), dtype=np.uint8)
         buf = io.BytesIO()
@@ -94,7 +94,7 @@ class TestWholeFrameFromBytes:
         np.testing.assert_array_equal(from_bytes, from_disk)
 
     def test_undecodable_and_empty_bytes_return_none(self) -> None:
-        from src.services.detection.pe_preprocess import whole_frame_chw_from_bytes
+        from src.utils.pe_preprocess import whole_frame_chw_from_bytes
 
         assert whole_frame_chw_from_bytes(b'') is None
         assert whole_frame_chw_from_bytes(b'not an image') is None

@@ -13,7 +13,7 @@
   import OpenVocabRerunPanel from '$components/openVocab/OpenVocabRerunPanel.svelte';
   import SegmenterNotice from '$components/openVocab/SegmenterNotice.svelte';
   import type { CloneSource } from '$lib/config/configList.svelte';
-  import { formatTimestamp } from '$lib/formatDate';
+  import { formatTimestamp } from '$lib/format/date';
   import { openVocabAvailability } from '$lib/openVocab/openVocabAvailability.svelte';
   import { OPEN_VOCAB_ACTIVE_COPY } from '$lib/openVocab/openVocabCopy';
   import { createOpenVocabList } from '$lib/openVocab/openVocabListController.svelte';

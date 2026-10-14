@@ -21,7 +21,7 @@ async def test_methods_axes_ids_are_the_config_axis_ids() -> None:
 
 
 def test_active_config_response_axis_literal_matches() -> None:
-    from src.routers.curation._config_common_models import ActiveConfigResponse
+    from src.schemas.curation.config_common import ActiveConfigResponse
 
     literal_values = set(get_args(ActiveConfigResponse.model_fields['axis'].annotation))
     assert literal_values == {'prompt_pack', 'detection_profile', 'vlm', 'open_vocab'}

@@ -396,7 +396,7 @@ class TestVlmLabelBatchHumanGuard:
         fake_labeler.identity = VlmIdentity('env@None', 'test-vlm')
         fake_labeler._pack = GENERIC_ITEM_PACK
         fake_labeler.label_or_propose_batch = AsyncMock(return_value=[])
-        monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: fake_labeler)
+        monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: fake_labeler)
 
         fake_reg = MagicMock()
         # One class, so the route gets past its no-classes refusal and the

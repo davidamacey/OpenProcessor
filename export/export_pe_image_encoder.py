@@ -30,7 +30,7 @@ visualization. Without this export a fresh deployment has no way to build
 the model its own curation code requires.
 
 The input tensor must be preprocessed exactly the way
-``src/services/detection/pe_preprocess.py`` does it: resize shorter edge to
+``src/utils/pe_preprocess.py`` does it: resize shorter edge to
 336, center-crop 336x336, CHW uint8 RGB pixels. The exported ONNX takes float
 input already scaled to [0, 1] and PE-Core 0.5/0.5 normalized; the two build
 scripts put that arithmetic in the graph (``export/uint8_input.py``) so the

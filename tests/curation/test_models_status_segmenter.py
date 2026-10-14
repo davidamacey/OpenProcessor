@@ -9,7 +9,7 @@ Triton's ``/v2/repository/index``), so a healthy segmenter always
 reported ``not_ready`` since it never appears in that index.
 
 These tests exercise ``build_segmenter_entry``/``_segmenter_health``
-(``src/routers/curation/_models_segmenter.py``, re-exported through
+(``src/services/detection/segmenter_health.py``, imported by
 ``models.py``) directly (unit) and the full ``models_status()`` roster
 assembly (wiring), with all HTTP mocked via ``httpx.MockTransport`` — no
 live services.

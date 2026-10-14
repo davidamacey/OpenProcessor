@@ -20,13 +20,13 @@ from typing import TYPE_CHECKING, Any
 from src.config import get_region_fields
 from src.config.region_source import CANDIDATE_DETECTOR, CANDIDATE_SEGMENTER
 from src.config.region_state import RegionStatus
+from src.domain.region_boxes import read_boxes
 from src.services.curation.class_write_guard import class_state_token
 from src.services.curation.region_box_pass import (
     box_pass_update,
     finalize_region_write,
     worker_stamps,
 )
-from src.services.curation.region_boxes import read_boxes
 from src.services.curation.region_preview import (
     LegCandidate,
     LegSelection,

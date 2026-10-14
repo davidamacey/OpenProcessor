@@ -13,7 +13,7 @@ import pytest
 
 from curation.occ_fakes import make_bulk_update_item, make_mget_response
 from src.clients.occ_upsert import occ_upsert_bulk
-from src.services.curation.embedding_state import keep_stored_vector_state
+from src.domain.embedding_state import keep_stored_vector_state
 
 
 def test_failed_rerun_keeps_embedded_state() -> None:

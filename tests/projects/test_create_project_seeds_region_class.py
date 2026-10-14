@@ -39,7 +39,7 @@ def _env(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def _noop_ensure_indexes():
     with patch(
-        'src.routers.curation._common._ensure_indexes',
+        'src.services.curation.index_bootstrap.ensure_indexes',
         new=AsyncMock(side_effect=fake_ensure_indexes),
     ):
         yield

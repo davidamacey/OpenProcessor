@@ -30,7 +30,7 @@ const encode = encodeURIComponent;
  * and no per-box scalar item key exists. `readSlot` never runs the
  * scalar-box path for a capability that declares `listField`.
  */
-export const REGION_SUB_BOX: SubBoxCapability = {
+const REGION_SUB_BOX: SubBoxCapability = {
   listField: 'region_boxes',
   countField: 'region_count',
   rejectedCountField: 'region_rejected_count',
@@ -57,7 +57,7 @@ export const REGION_SUB_BOX: SubBoxCapability = {
  *  generic; the served profile carries no text noun. The placeholder is an
  *  instruction, never a sample reading (visual audit R9: a sample value in
  *  an empty field read as a VLM reading). */
-export const REGION_TEXT: TextCapability = {
+const REGION_TEXT: TextCapability = {
   label: 'Text',
   placeholder: 'type the text…',
   transform: 'none',
@@ -71,7 +71,7 @@ export const REGION_TEXT: TextCapability = {
  * (`$lib/review/slotPanel.ts`); this list is the synchronous fallback
  * `readSlot` uses for a status's role/dim/badge.
  */
-export const REGION_STATES: SlotState[] = [
+const REGION_STATES: SlotState[] = [
   {
     value: 'pending_detection',
     label: 'pending detection',

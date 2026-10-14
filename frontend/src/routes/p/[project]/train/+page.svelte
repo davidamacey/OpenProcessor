@@ -46,7 +46,7 @@
     type ServedTrainingCohort,
     type TrainingCohortMode,
   } from '$lib/api';
-  import { formatCount } from '$lib/formatCount';
+  import { formatCount } from '$lib/format/count';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import ResourceLinksRow from '$lib/components/ResourceLinksRow.svelte';
   import CampaignCard from '$components/CampaignCard.svelte';

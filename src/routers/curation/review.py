@@ -15,7 +15,6 @@ from fastapi import HTTPException, Path as PathParam, Query
 from src.config import get_region_fields
 from src.routers.curation._common import (
     OpenSearchDep,
-    _ensure_indexes,
     _now_iso,
     get_class_registry,
     guard_page_depth,
@@ -52,6 +51,7 @@ from src.services.curation.holdout import (
     persist_freeze_record,
     select_test_holdout,
 )
+from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.raw_label_clusters import (
     CLUSTER_ID_FIELD,
     CLUSTER_NAME_FIELD,
@@ -95,7 +95,7 @@ async def review_unmatched_terms(
     Returns:
         ``{"total_unmatched": <int>, "top_terms": [{"label": str, "count": int}, ...]}``
     """
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     body = {
         'size': 0,
         'query': {'term': {'class_source': 'vlm_unmatched'}},
@@ -162,7 +162,7 @@ async def review_raw_label_clusters(
         ``{"status": "ok|empty", "clusters": [{cluster_id, cluster_name,
         n_crops, n_unmatched, sample_terms, parent_class_suggestion}, ...]}``
     """
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     body = {
         'size': 0,
         'query': {'exists': {'field': CLUSTER_ID_FIELD}},
@@ -334,7 +334,7 @@ async def review_queue(
     class validation. Order: the applied sort (``sort_applied``), then
     ``crop_id``.
     """
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     guard_page_depth(page, page_size)
     if review_empty_reason.region_queue_is_off(tab):
         return {
@@ -454,7 +454,7 @@ async def review_locate(
     ``reason`` ``not_found`` (no such item) or ``filtered_out``. Counts the
     items sorting before it, so any depth costs the same.
     """
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     filters = _filters(
         include_test,
         text,
@@ -546,7 +546,7 @@ async def freeze_test_holdout(
     durable freeze record under ``OP_STATE_DIR/test_holdout/`` so a bad
     freeze can be diagnosed and reverted from the recorded crop-id list.
     """
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     # Refuse re-run if an existing holdout exists.
     if not force:
         try:

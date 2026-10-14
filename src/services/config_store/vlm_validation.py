@@ -35,7 +35,7 @@ from src.services.labeling.vlm_url_policy import (
 if TYPE_CHECKING:
     from collections.abc import Collection
 
-    from src.routers.curation._config_common_models import ValidationIssue, ValidationReport
+    from src.schemas.curation.config_common import ValidationIssue, ValidationReport
 
 #: Activation errors ``force: true`` may bypass. ``vlm_max_images_exceeds_server``
 #: is deliberately absent (every multi-image call would fail), as is every
@@ -60,7 +60,7 @@ def issue(
     field: str | None = None,
     detail: dict[str, Any] | None = None,
 ) -> ValidationIssue:
-    from src.routers.curation._config_common_models import ValidationIssue
+    from src.schemas.curation.config_common import ValidationIssue
 
     return ValidationIssue(
         code=code,
@@ -73,7 +73,7 @@ def issue(
 
 
 def build_report(issues: list[ValidationIssue]) -> ValidationReport:
-    from src.routers.curation._config_common_models import ValidationReport
+    from src.schemas.curation.config_common import ValidationReport
 
     errors = [i for i in issues if i.severity == 'error']
     warnings = [i for i in issues if i.severity != 'error']

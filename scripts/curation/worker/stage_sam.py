@@ -33,9 +33,9 @@ from src.config import get_region_fields
 from src.config.region_source import CANDIDATE_SEGMENTER, CANDIDATE_SEGMENTER_TEXT_HINT
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
+from src.domain.region_boxes import RegionBox, new_box_placeholder
 from src.services.curation.metrics import OP_STAGE_A_SEGMENTER_DURATION_SECONDS
 from src.services.curation.ops_metrics import record_segmenter_request
-from src.services.curation.region_boxes import RegionBox, new_box_placeholder
 from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
 from src.services.detection.segmenter_gate import RUN
 

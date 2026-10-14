@@ -7,13 +7,13 @@ from typing import Any
 
 from src.clients.curation_opensearch.base import F, _knn_field, _knn_settings, config
 from src.clients.curation_opensearch.items_extra import ITEMS_EXTRA_MAPPING
-from src.config import BACKBONE_EMBEDDING_FIELD
-from src.services.curation.item_text import ITEM_TEXT_MAPPING
-from src.services.curation.open_vocab_fields import (
+from src.clients.curation_opensearch.open_vocab_fields import (
     OPEN_VOCAB_IMAGE_MAPPING,
     OPEN_VOCAB_ITEM_MAPPING,
 )
-from src.services.curation.vlm_class_attempt import VLM_CLASS_ATTEMPT_MAPPING
+from src.config import BACKBONE_EMBEDDING_FIELD
+from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPT_MAPPING
+from src.domain.item_text import ITEM_TEXT_MAPPING
 
 
 # Dataset-import provenance, on both indexes: the split a frame
@@ -102,7 +102,7 @@ def _images_body() -> dict[str, Any]:
     }
 
 
-# One entry per class write (src/services/curation/history.py). Human label
+# One entry per class write (src/domain/history.py). Human label
 # writes record the full pre-write class state (class_detector* through
 # cluster_subid, restorable=true) so the labeler's Undo restores it exactly.
 #
@@ -277,7 +277,7 @@ def _items_body() -> dict[str, Any]:
                 # (src/services/curation/autolabel/selection.py).
                 'vlm_verify_completed_at': {'type': 'date'},
                 # Last VLM class attempt + why it gave no class
-                # (src/services/curation/vlm_class_attempt.py).
+                # (src/config/vlm_class_attempt.py).
                 **VLM_CLASS_ATTEMPT_MAPPING,
                 # VLM-extracted make/model hint. Field names kept as-is for
                 # the same reason as above (no region-of-interest concept
@@ -344,7 +344,7 @@ def _items_body() -> dict[str, Any]:
                 F.status: {'type': 'keyword'},
                 **_region_auto_confirm_mapping(),
                 # Every OCR line read on the item crop + normalized search
-                # tokens (src/services/curation/item_text.py).
+                # tokens (src/domain/item_text.py).
                 **ITEM_TEXT_MAPPING,
                 F.class_id: {'type': 'integer'},
                 F.label_source: {'type': 'keyword'},
@@ -412,7 +412,7 @@ def _items_body() -> dict[str, Any]:
                 # History: nested array recording every class write so
                 # operators can answer "who labeled this and when" after a
                 # model drift investigation. Cap at MAX_HISTORY_ENTRIES (32,
-                # see src/services/curation/history.py).
+                # see src/domain/history.py).
                 'class_id_history': _CLASS_HISTORY_MAPPING,
                 **_ITEMS_IMPORT_MAPPING,
                 # Label Ignore/Undo: exclusion flag + provenance, and the

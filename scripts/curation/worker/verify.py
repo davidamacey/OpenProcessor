@@ -21,7 +21,7 @@ from src.config.region_rejection import (
 )
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
-from src.services.curation.region_boxes import (
+from src.domain.region_boxes import (
     RegionBox,
     derive_status,
     has_human_text,
@@ -351,7 +351,7 @@ def verdicts_to_boxes(
     carries its own ``box_id`` (Cropwright C3/Q15) -- a candidate read
     back from storage (``cand.box_id`` set) keeps that real id;
     a fresh candidate (``cand.box_id is None``) gets a PLACEHOLDER id
-    (:func:`~src.services.curation.region_boxes.new_box_placeholder`),
+    (:func:`~src.domain.region_boxes.new_box_placeholder`),
     not a real ``b<N>`` one. A real id is only safe to mint
     against the CURRENT ``region_box_seq`` high-water mark, which this
     function -- called at task-processing time, potentially long before

@@ -17,8 +17,8 @@ from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import get_region_fields
 from src.config.curation import base_curation_config
+from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.services.curation import image_serving
-from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_models import VlmClassPrediction
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, prompt_pack_stamp
@@ -86,7 +86,7 @@ async def test_label_batch_stamps_vlm_prompt_pack(
         return None
 
     monkeypatch.setattr(vlm_mod, '_default_pack_name', _no_pack)
-    monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: _Labeler())
+    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: _Labeler())
     fake = QueryFakeOpenSearch({ITEMS: {'cand': _item('cand')}})
 
     await vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=['cand']), fake)
@@ -104,7 +104,7 @@ async def test_verify_regions_stamps_vlm_prompt_pack(monkeypatch: pytest.MonkeyP
         return None
 
     monkeypatch.setattr(vlm_mod, '_default_pack_name', _no_pack)
-    monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: _Labeler())
+    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: _Labeler())
     monkeypatch.setattr(image_serving, 'resolve_crop_root', lambda _p: '/data')
     monkeypatch.setattr(image_serving, 'resolve_safe_path', lambda p, _r: p)
     monkeypatch.setattr(

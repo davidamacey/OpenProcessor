@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from src.routers.curation._project_models import ProjectCounts, ProjectStatsCounts
+from src.schemas.curation.projects import ProjectCounts, ProjectStatsCounts
 from src.services.projects.stats import _term_count, index_count
 from tests.projects.test_project_counts import _record
 

@@ -99,13 +99,13 @@ def _model_state_map(repo_index: list[dict[str, Any]]) -> dict[str, str]:
 async def _default_check_segmenter_health() -> tuple[bool, str]:
     """``GET {OP_SEGMENTER_URL}/health`` -- delegates to the same probe
     ``GET /curation/models/status`` already uses for the segmenter roster
-    entry (:func:`src.routers.curation._models_segmenter._segmenter_health`),
+    entry (:func:`src.services.detection.segmenter_health._segmenter_health`),
     rather than re-implementing an HTTP health check here. That probe
     hits the segmenter's own HTTP service directly and requires
     ``loaded: true`` -- unlike the Triton repository index, which SAM 3 (or
     whatever's configured) never appears in, since it isn't a Triton-served
     model (V-1 follow-up)."""
-    from src.routers.curation._models_segmenter import _segmenter_health
+    from src.services.detection.segmenter_health import _segmenter_health
 
     url = os.environ.get('OP_SEGMENTER_URL', '').strip()
     if not url:

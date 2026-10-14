@@ -25,10 +25,10 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
-from fastapi import HTTPException
 from PIL import Image
 
 from src.config import CurationConfig, get_curation_config, get_region_fields
+from src.core.exceptions import RequestRejectedError
 
 
 _spec = _ilu.spec_from_file_location(
@@ -100,19 +100,19 @@ def fresh_cache() -> svc.ThumbnailCache:
     ],
 )
 def test_resolve_safe_path_rejects_traversal(tmp_path: Path, bad_path: str) -> None:
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(RequestRejectedError) as exc:
         svc.resolve_safe_path(bad_path, tmp_path)
     assert exc.value.status_code == 400
 
 
 def test_resolve_safe_path_rejects_empty(tmp_path: Path) -> None:
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(RequestRejectedError) as exc:
         svc.resolve_safe_path('', tmp_path)
     assert exc.value.status_code == 400
 
 
 def test_resolve_safe_path_404_for_missing(tmp_path: Path) -> None:
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(RequestRejectedError) as exc:
         svc.resolve_safe_path('does_not_exist.jpg', tmp_path)
     assert exc.value.status_code == 404
 
@@ -153,7 +153,7 @@ def test_resolve_safe_path_absolute_allowed_under_configured_root(
 
 def test_resolve_safe_path_absolute_outside_configured_roots_rejected(tmp_path: Path) -> None:
     cfg = CurationConfig(source_root=tmp_path / 'root')
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(RequestRejectedError) as exc:
         svc.resolve_safe_path(
             '/etc/passwd', tmp_path / 'unused', allowed_roots=svc._configured_roots(cfg)
         )
@@ -382,14 +382,14 @@ def test_fetch_crop_returns_source() -> None:
 
 def test_fetch_crop_404_when_missing() -> None:
     client = _FakeOSClient(raise_not_found=True)
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(RequestRejectedError) as exc:
         asyncio.run(svc._fetch_crop('crop_404', client))
     assert exc.value.status_code == 404
 
 
 def test_fetch_crop_500_when_no_source() -> None:
     client = _FakeOSClient(source=None)
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(RequestRejectedError) as exc:
         asyncio.run(svc._fetch_crop('crop_x', client))
     assert exc.value.status_code == 404
 

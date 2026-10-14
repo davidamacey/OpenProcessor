@@ -20,6 +20,7 @@ from fastapi import HTTPException
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.config import get_region_fields
+from src.domain.region_boxes import RegionBoxWriteError
 from src.routers.curation._common import (
     OpenSearchDep,
     RegionProfileDep,
@@ -40,7 +41,6 @@ from src.routers.curation._region_write_models import (
 )
 from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
 from src.services.curation.region_box_refresh import refresh_box_embeddings
-from src.services.curation.region_boxes import RegionBoxWriteError
 from src.services.curation.region_rows import as_row
 from src.services.curation.region_writes import (
     human_status_box_write,

@@ -30,11 +30,11 @@ from scripts.curation.worker.verify import _combined_class_update
 from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation import base_curation_config
 from src.config.project_context import current_project
-from src.services.curation.history import CLASS_STATE_FIELDS
-from src.services.curation.vlm_class_attempt import (
+from src.config.vlm_class_attempt import (
     VLM_CLASS_ATTEMPTED_AT_FIELD as ATTEMPTED,
     VLM_CLASS_EMPTY_REASON_FIELD as REASON,
 )
+from src.domain.history import CLASS_STATE_FIELDS
 from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_models import VlmClassPrediction, VlmCombinedReply
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
@@ -230,7 +230,7 @@ async def _run_label_batch(
         ) -> list[Any]:
             return [preds[c.img_id] for c in crops]
 
-    monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: _Labeler())
+    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: _Labeler())
     await vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=list(preds)), fake)
     return fake.docs(ITEMS)
 
@@ -317,9 +317,9 @@ async def test_pipeline_vlm_stage_empty_answer_keeps_class(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from curation.test_pipeline import _FakeClassEntry, _FakeRegistry
-    from src.routers.curation import pipeline, pipeline_health
-    from src.services.curation import image_serving
-    from src.services.curation.autolabel import selection
+    from src.routers.curation.pipeline_public import pipeline_auto_label
+    from src.services.curation import auto_label_run, image_serving
+    from src.services.curation.autolabel import selection, vlm_stage
 
     fake = QueryFakeOpenSearch({ITEMS: {'e': _item('e'), 'g': _item('g'), 'x': _item('x')}})
     answers = {
@@ -339,11 +339,13 @@ async def test_pipeline_vlm_stage_empty_answer_keeps_class(
             return [answers[c.img_id] for c in crops]
 
     monkeypatch.setattr(selection, 'classifier_class_sources', lambda: frozenset({'det_model'}))
-    monkeypatch.setattr(pipeline, '_get_vlm_labeler', lambda *_a, **_k: _Labeler())
-    monkeypatch.setattr(pipeline, 'resolve_run_prompt_pack', AsyncMock(return_value=(None, None)))
-    monkeypatch.setattr(pipeline_health, 'pipeline_health_snapshot', AsyncMock(return_value={}))
+    monkeypatch.setattr(vlm_stage, 'get_vlm_labeler', lambda *_a, **_k: _Labeler())
     monkeypatch.setattr(
-        'src.routers.curation.get_class_registry',
+        auto_label_run, 'resolve_run_prompt_pack', AsyncMock(return_value=(None, None))
+    )
+    monkeypatch.setattr(auto_label_run, 'pipeline_health_snapshot', AsyncMock(return_value={}))
+    monkeypatch.setattr(
+        'src.clients.curation_opensearch.registry.get_class_registry',
         lambda: _FakeRegistry([_FakeClassEntry(7, 'sportscar')]),
     )
     monkeypatch.setattr(
@@ -355,7 +357,7 @@ async def test_pipeline_vlm_stage_empty_answer_keeps_class(
         image_serving, 'THUMBNAIL_CACHE', SimpleNamespace(get_or_compute=lambda *_a, **_k: b'jpeg')
     )
 
-    await pipeline.pipeline_auto_label(opensearch=fake, train_clusters=False, run_vlm=True)
+    await pipeline_auto_label(opensearch=fake, train_clusters=False, run_vlm=True)
 
     docs = fake.docs(ITEMS)
     for cid, reason in (('e', 'unparseable'), ('x', 'no_answer')):

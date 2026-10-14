@@ -5,7 +5,7 @@
  * link. Paths are project-relative; the caller wraps them in
  * `projectHref`.
  */
-export const MODEL_CHOICE_LINKS: Record<string, `/settings${string}`> = {
+const MODEL_CHOICE_LINKS: Record<string, `/settings${string}`> = {
   vlm: '/settings/models#endpoints',
   local_vlm_model: '/settings/models#local-model',
   region_detector: '/settings/region-profiles',

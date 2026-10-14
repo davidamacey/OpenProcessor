@@ -42,11 +42,16 @@ jobs:
       - name: Lint (prettier + eslint)
         run: npm run lint
 
+      - name: Unused files, exports and dependencies (knip)
+        run: npx knip
+
       - name: Unit and contract tests
         run: npm test
 
-      - name: Build
-        run: npm run build
+      - name: Build (fails on a SvelteKit deprecation warning)
+        run: |
+          npm run build 2>&1 | tee build.log
+          ! grep -qi 'deprecated' build.log
 
       - name: py_compile scripts/ and e2e/
         run: python3 -m py_compile scripts/*.py e2e/*.py e2e/stubbed/*.py e2e/fixtures/*.py e2e/live/*.py

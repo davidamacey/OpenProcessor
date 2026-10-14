@@ -20,7 +20,9 @@ from src.services.curation.export_readiness import (
 def client_factory(monkeypatch: pytest.MonkeyPatch):
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     monkeypatch.setattr(
         'src.routers.curation.export._resolve_current_export_dir',
         lambda: (_ for _ in ()).throw(FileNotFoundError()),

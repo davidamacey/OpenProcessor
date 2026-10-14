@@ -48,7 +48,7 @@ def client(fake: SettingsFakeOpenSearch, tmp_path: Any, monkeypatch: pytest.Monk
     async def _no_bootstrap(_: Any) -> None:
         return None
 
-    monkeypatch.setattr('src.routers.curation.ingest_policy._ensure_indexes', _no_bootstrap)
+    monkeypatch.setattr('src.routers.curation.ingest_policy.ensure_indexes', _no_bootstrap)
     from _curation_app import mount_curation_routers
 
     from src.routers.curation import _raw_opensearch_dep, router as curation_router

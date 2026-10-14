@@ -9,14 +9,14 @@ from typing import Any
 
 import pytest
 from curation.query_fakes import QueryFakeOpenSearch
-from fastapi import HTTPException
 from pydantic import ValidationError
 
-from src.routers.curation._config_common_models import api_error
+from src.core.exceptions import RequestRejectedError
 from src.services.projects import lifecycle
 from src.services.projects.combine import service
 from src.services.projects.combine.models import CombineRequest, CombineStartRequest
 from src.services.projects.combine.store import combine_base_dir
+from src.services.rejections import rejection
 
 from .world import World, snapshot_indexes
 
@@ -134,7 +134,7 @@ async def test_capacity_warn_and_blocked(world: World, monkeypatch: pytest.Monke
     assert [w.code for w in result.warnings] == ['shard_budget_high']
 
     async def blocked(_client: Any) -> list[dict[str, str]]:
-        raise api_error(409, 'shard_budget_exceeded', 'no room for another project')
+        raise rejection(409, 'shard_budget_exceeded', 'no room for another project')
 
     monkeypatch.setattr(lifecycle, '_capacity_error_or_warning', blocked)
     result = await _preview(world, request)
@@ -197,7 +197,7 @@ async def test_a_stale_sha_is_a_409_on_start(world: World) -> None:
     _two_sources(world)
     request = world.request(['cars-a', 'cars-b'], FULL_MAPPING)
     stale = CombineStartRequest(**request.model_dump(), expected_preview_sha='0' * 64)
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(RequestRejectedError) as exc:
         await service.start(world.fake, stale)
     assert exc.value.status_code == 409
     assert exc.value.detail['error'] == 'preview_stale'
@@ -209,7 +209,7 @@ async def test_start_refuses_an_invalid_request_as_422(world: World) -> None:
     _two_sources(world)
     request = world.request(['cars-a', 'cars-b'], {})
     body = CombineStartRequest(**request.model_dump(), expected_preview_sha='x')
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(RequestRejectedError) as exc:
         await service.start(world.fake, body)
     assert exc.value.status_code == 422
     assert exc.value.detail['error'] == 'combine_invalid'

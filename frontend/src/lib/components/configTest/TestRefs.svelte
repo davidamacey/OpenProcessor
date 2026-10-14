@@ -4,7 +4,7 @@
    * answered, and how long it took. Rendered as served; the VLM's
    * `endpoint` is its own `name@revision`.
    */
-  import { formatLatencyMs } from '$lib/formatLatency';
+  import { formatLatencyMs } from '$lib/format/latency';
   import { refText } from '$lib/configTest/refText';
   import type { PackTestPackRef, PackTestVlmRef } from '$lib/types_configTest';
 

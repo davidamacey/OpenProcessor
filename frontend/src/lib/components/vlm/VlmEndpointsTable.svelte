@@ -11,7 +11,7 @@
    * project.
    */
   import { resolve } from '$app/paths';
-  import { formatTimestamp } from '$lib/formatDate';
+  import { formatTimestamp } from '$lib/format/date';
   import { projectHref } from '$lib/projectPaths';
   import type {
     VlmEndpointList,

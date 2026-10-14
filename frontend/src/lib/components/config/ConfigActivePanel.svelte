@@ -34,7 +34,7 @@
   import type { Snippet } from 'svelte';
   import ConfirmDialog from '$components/ConfirmDialog.svelte';
   import type { ConfigActive } from '$lib/config/configActive.svelte';
-  import { formatTimestamp } from '$lib/formatDate';
+  import { formatTimestamp } from '$lib/format/date';
   import type { ActiveConfigResponse, ActiveRef } from '$lib/types_config';
 
   interface Props {

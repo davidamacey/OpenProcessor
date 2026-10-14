@@ -3,7 +3,7 @@ auto-label select the item again.
 
 An unlocked item whose ``class_source`` came from a VLM reply is put back to
 the class state recorded by the VLM writer's own pre-write snapshot
-(:func:`~src.services.curation.history.restore_class_state`), and its
+(:func:`~src.domain.history.restore_class_state`), and its
 attempt markers are reset. An item with no VLM snapshot is left alone
 (nothing is invented), and a locked class (human, validated import,
 holdout) is never touched.
@@ -16,13 +16,10 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import get_curation_config
+from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPTED_AT_FIELD, VLM_CLASS_EMPTY_REASON_FIELD
+from src.domain.history import record_class_snapshot, restore_class_state
 from src.services.curation.class_sources import VLM_CLASS_SOURCES
-from src.services.curation.history import record_class_snapshot, restore_class_state
 from src.services.curation.reprocess_locks import class_locked, class_locked_clause
-from src.services.curation.vlm_class_attempt import (
-    VLM_CLASS_ATTEMPTED_AT_FIELD,
-    VLM_CLASS_EMPTY_REASON_FIELD,
-)
 
 
 if TYPE_CHECKING:

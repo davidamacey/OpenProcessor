@@ -18,7 +18,7 @@ const TONE = {
 
 /** The confirmation wording (#119): what a class label is worth as ground
  *  truth, keyed off the served catalog role and the validated flag only. */
-export const CONFIRMATION = {
+const CONFIRMATION = {
   human: 'Human-confirmed',
   vlm: 'VLM suggestion',
   cluster: 'Auto-validated',

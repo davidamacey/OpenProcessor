@@ -23,7 +23,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from src.services.cpu_preprocess import center_crop_cpu
+from src.utils.cpu_preprocess import center_crop_cpu
 
 
 # Exact (h, w) crop sizes that reproduced a non-(256, 256) output under the

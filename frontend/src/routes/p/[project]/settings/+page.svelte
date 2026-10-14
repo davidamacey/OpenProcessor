@@ -17,9 +17,7 @@
    */
 
   import { ApiError, configErrorDetail, unknownStrategyDetail } from '$lib/api';
-  import { focusOnMount } from '$lib/actions/focusOnMount';
-  import { trapFocus } from '$lib/actions/trapFocus';
-  import { formatTimestamp } from '$lib/formatDate';
+  import { formatTimestamp } from '$lib/format/date';
   import {
     advisoryAxes,
     axisCopy,
@@ -56,6 +54,7 @@
   }
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
+  import Modal from '$components/Modal.svelte';
 
   $effect(() => {
     keyboardStore.setScope('settings');
@@ -456,63 +455,41 @@
 </div>
 
 {#if confirmSpec}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <div
-    class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Confirm shared default"
-    tabindex="-1"
-    use:focusOnMount
-    use:trapFocus={{ onEscape: closeConfirm }}
-    onclick={(e) => {
-      if (e.target === e.currentTarget) closeConfirm();
-    }}
-  >
-    <div
-      class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
-    >
-      <h3 class="mb-3 text-base font-semibold">
-        {confirmMode === 'clear' ? 'Clear shared default' : 'Set shared default'}: {axisCopy(
-          strategiesStore.methods,
-          confirmSpec,
-        ).label}
-      </h3>
-      <p class="mb-3 text-sm text-zinc-300">
-        {effectiveDefaultId(
-          curationSettingsStore.settings,
-          strategiesStore.methods,
-          confirmSpec,
-        ) ?? '(none)'} →
-        <strong
-          >{confirmMode === 'clear' ? "each caller's own default" : pendingId}</strong
-        >
-      </p>
+  <Modal label="Confirm shared default" onclose={closeConfirm}>
+    <h3 class="mb-3 text-base font-semibold">
+      {confirmMode === 'clear' ? 'Clear shared default' : 'Set shared default'}: {axisCopy(
+        strategiesStore.methods,
+        confirmSpec,
+      ).label}
+    </h3>
+    <p class="mb-3 text-sm text-zinc-300">
+      {effectiveDefaultId(
+        curationSettingsStore.settings,
+        strategiesStore.methods,
+        confirmSpec,
+      ) ?? '(none)'} →
+      <strong>{confirmMode === 'clear' ? "each caller's own default" : pendingId}</strong>
+    </p>
+    <p class="mb-3 text-xs text-zinc-400">
+      {axisCopy(strategiesStore.methods, confirmSpec).blurb}
+    </p>
+    {#if confirmMode === 'clear'}
       <p class="mb-3 text-xs text-zinc-400">
-        {axisCopy(strategiesStore.methods, confirmSpec).blurb}
+        Removes this axis's pinned override entirely — every caller that reads it falls
+        back to its own built-in default instead of the shared one.
       </p>
-      {#if confirmMode === 'clear'}
-        <p class="mb-3 text-xs text-zinc-400">
-          Removes this axis's pinned override entirely — every caller that reads it falls
-          back to its own built-in default instead of the shared one.
-        </p>
-      {:else if confirmSpec.irreversibleWarning}
-        <div
-          class="mb-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
-        >
-          {confirmSpec.irreversibleWarning}
-        </div>
-      {/if}
-      <div class="flex justify-end gap-2">
-        <button type="button" class="btn" onclick={closeConfirm}>Cancel</button>
-        <button
-          type="button"
-          class="btn btn-primary"
-          onclick={() => void confirmAction()}
-        >
-          Confirm
-        </button>
+    {:else if confirmSpec.irreversibleWarning}
+      <div
+        class="mb-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+      >
+        {confirmSpec.irreversibleWarning}
       </div>
+    {/if}
+    <div class="flex justify-end gap-2">
+      <button type="button" class="btn" onclick={closeConfirm}>Cancel</button>
+      <button type="button" class="btn btn-primary" onclick={() => void confirmAction()}>
+        Confirm
+      </button>
     </div>
-  </div>
+  </Modal>
 {/if}

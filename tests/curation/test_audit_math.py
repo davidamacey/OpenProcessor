@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.services.curation.audit_math import (
+from src.domain.audit_math import (
     AuditRow,
     allocate_sample,
     audit_outcome,

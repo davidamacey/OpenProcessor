@@ -106,7 +106,7 @@ def render_config(cfg: PETritonConfig) -> str:
 # visualization. The tensor names below are a contract with that client.
 #
 # Input:  {cfg.input_name} [B, 3, {cfg.image_size}, {cfg.image_size}] UINT8 RGB pixels,
-#         resized and center-cropped (see src/services/detection/pe_preprocess.py);
+#         resized and center-cropped (see src/utils/pe_preprocess.py);
 #         the engine scales them and applies PE-Core's 0.5/0.5 mean/std itself
 #         (export/uint8_input.py)
 # Output: {cfg.output_name} [B, {cfg.embedding_dim}] FP32, L2-normalized

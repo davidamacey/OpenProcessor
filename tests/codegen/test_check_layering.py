@@ -1,4 +1,4 @@
-"""check_layering.py: import-direction contracts, with a shrink-only baseline of today's findings."""
+"""check_layering.py: import-direction contracts, one permanent reasoned exception, no baseline."""
 
 from __future__ import annotations
 
@@ -9,24 +9,28 @@ import pytest
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-    from pathlib import Path
-
     from conftest import ScratchRepo
 
 
-def run(repo: ScratchRepo, baseline: Path, *extra: str) -> int:
-    return guard.main(['--root', str(repo.root), '--baseline', str(baseline), *extra])
+_FACTORY = 'src/clients/opensearch/client.py'
+_FACTORY_SOURCE = (
+    'from src.services.projects.guard import g\nfrom src.services.projects.registry import r\n'
+)
 
 
-def test_a_function_level_router_import_in_a_service_fails(
-    scratch_repo: ScratchRepo, baseline_file: Callable[[str], Path]
-) -> None:
+def run(repo: ScratchRepo) -> int:
+    # The permanent exception must still have its import, or the guard reports it stale.
+    if not (repo.root / _FACTORY).exists():
+        repo.write(_FACTORY, _FACTORY_SOURCE)
+    return guard.main(['--root', str(repo.root)])
+
+
+def test_a_function_level_router_import_in_a_service_fails(scratch_repo: ScratchRepo) -> None:
     scratch_repo.write(
         'src/services/_probe.py',
         'def f():\n    from src.routers.curation import _common\n    return _common\n',
     )
-    assert run(scratch_repo, baseline_file('')) == 1
+    assert run(scratch_repo) == 1
 
 
 @pytest.mark.parametrize(
@@ -49,13 +53,15 @@ def test_a_function_level_router_import_in_a_service_fails(
         ('src/config/e.py', 'from src.services.x import y\n'),
         ('src/utils/e.py', 'from src.clients.x import y\n'),
         ('src/schemas/e.py', 'from src.clients import x\n'),
+        ('src/domain/a.py', 'from src.routers.x import y\n'),
+        ('src/domain/b.py', 'from fastapi import HTTPException\n'),
+        ('src/domain/c.py', 'from src.services.x import y\n'),
+        ('src/domain/d.py', 'import src.clients.x\n'),
     ],
 )
-def test_each_contract_is_enforced(
-    scratch_repo: ScratchRepo, baseline_file: Callable[[str], Path], path: str, source: str
-) -> None:
+def test_each_contract_is_enforced(scratch_repo: ScratchRepo, path: str, source: str) -> None:
     scratch_repo.write(path, source)
-    assert run(scratch_repo, baseline_file('')) == 1
+    assert run(scratch_repo) == 1
 
 
 @pytest.mark.parametrize(
@@ -70,49 +76,46 @@ def test_each_contract_is_enforced(
         ('scripts/curation/a.py', 'from src.services.x import y\nfrom src.clients.z import w\n'),
         ('tests/a.py', 'from src.routers.a import router\nfrom fastapi import FastAPI\n'),
         ('src/services/b.py', 'import fastapi_utils_not_fastapi\n'),
+        ('src/domain/ok.py', 'from src.config import z\nfrom src.utils.q import r\n'),
+        ('src/clients/ok.py', 'from src.domain.x import y\n'),
+        ('src/services/ok.py', 'from src.domain.x import y\n'),
     ],
 )
-def test_allowed_directions_pass(
-    scratch_repo: ScratchRepo, baseline_file: Callable[[str], Path], path: str, source: str
-) -> None:
+def test_allowed_directions_pass(scratch_repo: ScratchRepo, path: str, source: str) -> None:
     scratch_repo.write(path, source)
-    assert run(scratch_repo, baseline_file('')) == 0
+    assert run(scratch_repo) == 0
 
 
-def test_relative_imports_are_resolved(
-    scratch_repo: ScratchRepo, baseline_file: Callable[[str], Path]
-) -> None:
+def test_relative_imports_are_resolved(scratch_repo: ScratchRepo) -> None:
     scratch_repo.write('src/services/pkg/a.py', 'from ...routers import models\n')
-    assert run(scratch_repo, baseline_file('')) == 1
+    assert run(scratch_repo) == 1
 
 
-def test_a_baselined_import_may_stay_but_a_second_one_fails(
-    scratch_repo: ScratchRepo, baseline_file: Callable[[str], Path]
+def test_the_permanent_exception_passes_and_a_second_one_in_the_same_file_fails(
+    scratch_repo: ScratchRepo,
 ) -> None:
-    scratch_repo.write('src/services/a.py', 'from src.routers.x import y\n')
-    base = baseline_file('src/services/a.py -> src.routers.x\t1\tmoves in PR 4\n')
-    assert run(scratch_repo, base) == 0
+    scratch_repo.write(_FACTORY, _FACTORY_SOURCE)
+    assert run(scratch_repo) == 0
+    scratch_repo.write(_FACTORY, _FACTORY_SOURCE + 'from src.services.projects.other import o\n')
+    assert run(scratch_repo) == 1
+
+
+def test_the_exception_does_not_cover_another_file(scratch_repo: ScratchRepo) -> None:
+    scratch_repo.write(_FACTORY, _FACTORY_SOURCE)
     scratch_repo.write(
-        'src/services/a.py', 'from src.routers.x import y\nfrom src.routers.x import z\n'
+        'src/clients/opensearch/other.py', 'from src.services.projects.guard import g\n'
     )
-    assert run(scratch_repo, base) == 1
+    assert run(scratch_repo) == 1
 
 
-def test_a_stale_entry_fails(
-    scratch_repo: ScratchRepo, baseline_file: Callable[[str], Path]
-) -> None:
-    scratch_repo.write('src/services/a.py', 'x = 1\n')
-    assert (
-        run(scratch_repo, baseline_file('src/services/a.py -> src.routers.x\t1\tmoves in PR 4\n'))
-        == 1
-    )
+def test_a_stale_exception_fails(scratch_repo: ScratchRepo) -> None:
+    scratch_repo.write(_FACTORY, 'from src.services.projects.guard import g\n')
+    assert run(scratch_repo) == 1
 
 
-def test_a_syntax_error_in_a_scanned_file_fails_closed(
-    scratch_repo: ScratchRepo, baseline_file: Callable[[str], Path]
-) -> None:
+def test_a_syntax_error_in_a_scanned_file_fails_closed(scratch_repo: ScratchRepo) -> None:
     scratch_repo.write('src/services/a.py', 'def broken(:\n')
-    assert run(scratch_repo, baseline_file('')) == 1
+    assert run(scratch_repo) == 1
 
 
 def test_the_real_repo_passes() -> None:

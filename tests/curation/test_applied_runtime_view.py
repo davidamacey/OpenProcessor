@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from src.routers.curation._config_common_models import AppliedRuntime
+from src.schemas.curation.config_common import AppliedRuntime
 from src.services.config_store.index import upsert_runtime_doc
 
 

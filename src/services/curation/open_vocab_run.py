@@ -29,11 +29,8 @@ from typing import TYPE_CHECKING, Any, Protocol
 from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config
 from src.core.logging import get_logger
+from src.domain.ingest_class_sources import OPEN_VOCAB_CLASS_SOURCE, OPEN_VOCAB_TARGET_CLASS_SOURCE
 from src.services.curation.class_ensure import ResolvedClass, ensure_class_by_name
-from src.services.curation.ingest_class_sources import (
-    OPEN_VOCAB_CLASS_SOURCE,
-    OPEN_VOCAB_TARGET_CLASS_SOURCE,
-)
 from src.services.curation.ingest_index import index_items
 from src.services.curation.item_delete import delete_items
 from src.services.curation.item_doc import DetectedItem
@@ -63,8 +60,8 @@ if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
     from PIL import Image
 
+    from src.clients.curation_opensearch.open_vocab_fields import OpenVocabStatus
     from src.services.curation.ingest import CurationIngestService
-    from src.services.curation.open_vocab_fields import OpenVocabStatus
     from src.services.detection.cascade_detect.candidate import RegionCandidate
     from src.services.detection.open_vocab_set import OpenVocabSet, OpenVocabTarget
 

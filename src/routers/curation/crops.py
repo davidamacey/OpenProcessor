@@ -13,7 +13,6 @@ from src.routers.curation._common import (
     ItemDoc,
     OpenSearchDep,
     RegistryDep,
-    _ensure_indexes,
     _now_iso,
     get_class_registry,
     guard_page_depth,
@@ -48,6 +47,7 @@ from src.services.curation.cluster_ids import cluster_kind
 from src.services.curation.crop_browse import crops_page, parse_crop_sort
 from src.services.curation.crop_orders import ordered_crops_page
 from src.services.curation.diverse_limits import DIVERSE_BROWSE_MAX_K
+from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses, visibility_clauses
 from src.services.curation.wire import (
     item_list_source_excludes,
@@ -221,7 +221,7 @@ async def list_crops(
     crops a classifier scored below the value (``confidence``) OR that have no classifier
     prediction at all (blind spots).
     """
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     if ids is not None:
         wanted = list(dict.fromkeys(i for i in (x.strip() for x in ids.split(',')) if i))
         if len(wanted) > _MAX_IDS:

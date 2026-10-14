@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config import get_region_fields
 from src.config.curation import base_curation_config
-from src.services.curation.region_boxes import RegionBox, boxes_write_fields
+from src.domain.region_boxes import RegionBox, boxes_write_fields
 
 
 # No-profile gating contract: this file exercises region routes, which

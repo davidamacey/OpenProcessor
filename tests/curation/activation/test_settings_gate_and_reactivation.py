@@ -137,7 +137,8 @@ def test_legacy_settings_doc_prompt_pack_does_not_override_activation(app_client
     """A settings doc still carrying defaults.prompt_pack (no startup
     migration strips it) vs. a pack activated through the store."""
     from src.clients.curation_opensearch.settings_doc import update_curation_settings
-    from src.routers.curation.vlm import _default_pack_name, _get_vlm_labeler
+    from src.routers.curation.vlm import _default_pack_name
+    from src.services.labeling.run_labeler import get_vlm_labeler
 
     c = app_client
     assert c.post(PREFIX, json={'name': 'legacy', 'body': pack_body('LEGACY')}).status_code == 201
@@ -146,6 +147,6 @@ def test_legacy_settings_doc_prompt_pack_does_not_override_activation(app_client
     asyncio.run(update_curation_settings(c.fake_os, {'prompt_pack': 'legacy'}))
     shown = c.get(SETTINGS).json()['defaults'].get('prompt_pack')
     name = asyncio.run(_default_pack_name(c.fake_os))
-    served = _get_vlm_labeler(name)._pack.class_system
+    served = get_vlm_labeler(name)._pack.class_system
     print('GET /settings shows', shown, '| VLM routes default name', name, '| serves', served)
     assert served == 'GOOD'

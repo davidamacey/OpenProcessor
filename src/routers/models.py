@@ -24,7 +24,7 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
-from src.routers.curation._config_common_models import api_error
+from src.routers.curation._api_error import api_error
 from src.schemas.models import (
     ExportFormat,
     ExportStatus,

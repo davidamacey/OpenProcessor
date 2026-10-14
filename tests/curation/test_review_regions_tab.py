@@ -10,11 +10,11 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from fastapi import HTTPException
 
 from curation.query_fakes import matches
 from src.config.region_fields import get_region_fields
 from src.config.region_state import RegionStatus
+from src.core.exceptions import RequestRejectedError
 from src.services.curation.review_queries import build_tab_query
 
 
@@ -42,7 +42,7 @@ def _region_item(*, text: str | None = None, **extra: Any) -> dict[str, Any]:
 def _rejected_candidate_item(**extra: Any) -> dict[str, Any]:
     """A realistic ``verify_rejected`` item (DQ-B2): no accepted box, only
     the candidate box the verifier rejected (kept, ``state='rejected'``)."""
-    from src.services.curation.region_boxes import RegionBox, boxes_write_fields
+    from src.domain.region_boxes import RegionBox, boxes_write_fields
 
     doc = _region_item(**extra)
     doc[F.status] = RegionStatus.VERIFY_REJECTED.value
@@ -108,7 +108,7 @@ def test_detected_item_is_reachable_in_every_mode_except_verify_rejected_only() 
 
 
 def test_unknown_region_status_filter_raises_400() -> None:
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(RequestRejectedError) as exc:
         build_tab_query(
             'regions', include_test=False, text=None, max_rank=None, region_status='bogus'
         )
@@ -128,7 +128,7 @@ def test_text_search_treats_wildcard_characters_literally() -> None:
 
 
 def _boxed_item(*states: str, status: RegionStatus) -> dict[str, Any]:
-    from src.services.curation.region_boxes import RegionBox, boxes_write_fields
+    from src.domain.region_boxes import RegionBox, boxes_write_fields
 
     boxes = [
         RegionBox(box_id=f'b{i + 1}', bbox_norm=(0.1, 0.1, 0.2, 0.2), state=state)

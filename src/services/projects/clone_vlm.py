@@ -17,7 +17,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from src.config.project_context import bind_project
-from src.routers.curation._config_common_models import api_error
 from src.services.config_store.index import config_doc_id, get_activation
 from src.services.config_store.vlm_activation import (
     UNSET,
@@ -26,6 +25,7 @@ from src.services.config_store.vlm_activation import (
     write_vlm_activation,
 )
 from src.services.config_store.vlm_gate import ProjectVlmState
+from src.services.rejections import rejection
 
 
 if TYPE_CHECKING:
@@ -83,7 +83,7 @@ async def _prepare(
     with_activations: bool,
 ) -> tuple[dict[str, Any] | None, PreparedVlmActivation | None]:
     """``(source activation doc or None, gated target or None for "off")``.
-    Raises the gate's ``api_error`` when the target may not run it."""
+    Raises the gate's rejection when the target may not run it."""
     doc = await _source_activation(client, source)
     if doc is None or not doc.get('name'):
         return doc, None
@@ -118,7 +118,7 @@ async def validate_vlm_activation_clone(
 
         existing = await get_activation(client, get_curation_config().configs_index, 'vlm')
     if existing and existing.get('name'):
-        raise api_error(
+        raise rejection(
             409,
             'target_not_empty',
             f"'{target_record.slug}' already has an active VLM; vlm_activation cannot be cloned",

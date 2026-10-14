@@ -90,7 +90,9 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     # C3: a zero-result tab computes empty_reason via a couple of `count`
     # calls; default to "nothing scored yet" for every field they check.
     fake_os.count = AsyncMock(return_value={'count': 0})
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     monkeypatch.delenv('OP_SCORES_ENABLED', raising=False)
     monkeypatch.delenv('OP_SCORES_SHADOW', raising=False)
 
@@ -260,7 +262,9 @@ def test_response_item_whitelist_includes_new_score_fields(
             }
         }
     )
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     app = FastAPI()
     from _curation_app import mount_curation_routers
 

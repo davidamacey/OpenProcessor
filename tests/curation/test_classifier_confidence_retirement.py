@@ -18,11 +18,11 @@ from fastapi.testclient import TestClient
 
 from curation.query_fakes import matches
 from src.config.curation import PROBE_ENTROPY_REVIEW_MIN
-from src.services.curation.crop_browse import CROP_SORT_FIELDS
-from src.services.curation.ingest_class_sources import (
+from src.domain.ingest_class_sources import (
     classifier_class_sources,
     unlabeled_proposal_class_sources,
 )
+from src.services.curation.crop_browse import CROP_SORT_FIELDS
 from src.services.curation.review_queries import build_tab_query
 from src.services.curation.wire import ITEM_WIRE_KEYS
 

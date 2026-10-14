@@ -10,7 +10,7 @@ import { createPager, type Pager } from '$lib/pager.svelte';
 import type { Crop } from '$lib/types';
 import type { ItemFilterQuery } from '$lib/types_itemFilter';
 
-export const MATCHING_PAGE_SIZE = 48;
+const MATCHING_PAGE_SIZE = 48;
 
 export interface MatchingItems {
   readonly pager: Pager<Crop>;

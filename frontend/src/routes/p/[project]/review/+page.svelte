@@ -22,7 +22,6 @@
     selectDiverse,
     patchSlotMeta,
   } from '$lib/api';
-  import { trapFocus } from '$lib/actions/trapFocus';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import BlurSlider from '$lib/components/BlurSlider.svelte';
   import CropMetaPanel from '$lib/components/CropMetaPanel.svelte';
@@ -111,6 +110,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
+  import Modal from '$components/Modal.svelte';
 
   // Unified review by default — one continuous queue of every crop that
   // needs a human, sorted most-uncertain first. Down to 5 top-level tabs
@@ -3099,52 +3099,48 @@
   <!-- Minimal un-dismiss surface: crops discard() has permanently
        dismissed from every review queue, each restorable via
        reviewUndismissCrop. Backdrop click and Esc both close. -->
-  <div
-    class="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-24"
-    onclick={() => (dismissedPanelOpen = false)}
-    onkeydown={(e) => e.key === 'Escape' && (dismissedPanelOpen = false)}
-    role="presentation"
+  <Modal
+    label="Dismissed crops"
+    onclose={() => (dismissedPanelOpen = false)}
+    layer="top"
+    align="top"
+    scrim="bg-black/50"
+    panelClass="w-full max-w-lg overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl"
   >
-    <div
-      class="w-full max-w-lg overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl"
-      onclick={(e) => e.stopPropagation()}
-      role="presentation"
-    >
-      <div class="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
-        <span class="text-sm font-medium text-zinc-200">Dismissed crops</span>
-        <button
-          type="button"
-          class="text-xs text-zinc-500 hover:text-zinc-300"
-          onclick={() => (dismissedPanelOpen = false)}
-        >
-          close
-        </button>
-      </div>
-      <ul class="max-h-96 overflow-y-auto py-1 text-sm">
-        {#if dismissedLoading}
-          <li class="px-3 py-2 text-zinc-500">Loading…</li>
-        {:else if dismissedError}
-          <li class="px-3 py-2 text-red-300">
-            Failed to load dismissed crops: {dismissedError}
-          </li>
-        {:else if dismissedItems.length === 0}
-          <li class="px-3 py-2 text-zinc-500">No dismissed crops.</li>
-        {/if}
-        {#each dismissedItems as crop (crop.id)}
-          <li class="flex items-center justify-between gap-2 px-3 py-1.5">
-            <span class="truncate text-zinc-300">{crop.class_name ?? crop.id}</span>
-            <button
-              type="button"
-              class="shrink-0 rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-300 hover:border-blue-500 hover:text-blue-300"
-              onclick={() => undismiss(crop)}
-            >
-              Restore
-            </button>
-          </li>
-        {/each}
-      </ul>
+    <div class="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
+      <span class="text-sm font-medium text-zinc-200">Dismissed crops</span>
+      <button
+        type="button"
+        class="text-xs text-zinc-500 hover:text-zinc-300"
+        onclick={() => (dismissedPanelOpen = false)}
+      >
+        close
+      </button>
     </div>
-  </div>
+    <ul class="max-h-96 overflow-y-auto py-1 text-sm">
+      {#if dismissedLoading}
+        <li class="px-3 py-2 text-zinc-500">Loading…</li>
+      {:else if dismissedError}
+        <li class="px-3 py-2 text-red-300">
+          Failed to load dismissed crops: {dismissedError}
+        </li>
+      {:else if dismissedItems.length === 0}
+        <li class="px-3 py-2 text-zinc-500">No dismissed crops.</li>
+      {/if}
+      {#each dismissedItems as crop (crop.id)}
+        <li class="flex items-center justify-between gap-2 px-3 py-1.5">
+          <span class="truncate text-zinc-300">{crop.class_name ?? crop.id}</span>
+          <button
+            type="button"
+            class="shrink-0 rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-300 hover:border-blue-500 hover:text-blue-300"
+            onclick={() => undismiss(crop)}
+          >
+            Restore
+          </button>
+        </li>
+      {/each}
+    </ul>
+  </Modal>
 {/if}
 
 {#if rejectReasonPromptOpen}
@@ -3152,109 +3148,96 @@
        promptForRejectionReason()'s doc comment for why. Backdrop click
        and Esc both cancel (reason stays null, matching the old
        "Cancel" prompt() behavior); Enter submits. -->
-  <div
-    class="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-24"
-    onclick={cancelRejectReasonPrompt}
-    role="presentation"
+  <Modal
+    label="Reject reason"
+    onclose={cancelRejectReasonPrompt}
+    layer="top"
+    align="top"
+    scrim="bg-black/50"
+    panelClass="w-full max-w-sm overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 p-3 shadow-xl"
   >
-    <div
-      class="w-full max-w-sm overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 p-3 shadow-xl"
-      onclick={(e) => e.stopPropagation()}
-      role="presentation"
-      use:trapFocus={{ onEscape: cancelRejectReasonPrompt }}
-    >
-      <label class="mb-2 block text-sm text-zinc-300" for="reject-reason-input">
-        Reason for rejecting this {activeSlot?.label.singular ?? 'item'} (optional):
-      </label>
-      <input
-        id="reject-reason-input"
-        type="text"
-        use:focusOnMount
-        bind:value={rejectReasonPromptValue}
-        onkeydown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            submitRejectReasonPrompt();
-          } else if (e.key === 'Escape') {
-            e.preventDefault();
-            cancelRejectReasonPrompt();
-          }
-        }}
-        class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-        placeholder={`e.g. blurry, wrong angle, not a ${activeSlot?.label.singular ?? 'match'}…`}
-      />
-      <div class="mt-3 flex justify-end gap-2">
-        <button type="button" class="btn" onclick={cancelRejectReasonPrompt}>
-          Cancel
-        </button>
-        <button type="button" class="btn btn-primary" onclick={submitRejectReasonPrompt}>
-          Reject
-        </button>
-      </div>
+    <label class="mb-2 block text-sm text-zinc-300" for="reject-reason-input">
+      Reason for rejecting this {activeSlot?.label.singular ?? 'item'} (optional):
+    </label>
+    <input
+      id="reject-reason-input"
+      type="text"
+      use:focusOnMount
+      bind:value={rejectReasonPromptValue}
+      onkeydown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          submitRejectReasonPrompt();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          cancelRejectReasonPrompt();
+        }
+      }}
+      class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+      placeholder={`e.g. blurry, wrong angle, not a ${activeSlot?.label.singular ?? 'match'}…`}
+    />
+    <div class="mt-3 flex justify-end gap-2">
+      <button type="button" class="btn" onclick={cancelRejectReasonPrompt}>
+        Cancel
+      </button>
+      <button type="button" class="btn btn-primary" onclick={submitRejectReasonPrompt}>
+        Reject
+      </button>
     </div>
-  </div>
+  </Modal>
 {/if}
 
 {#if pickerOpen}
   <!-- Class picker (P1-4) — fuzzy-search over every non-deprecated class,
        opened with / or the "search all classes…" button. Backdrop click
        and Esc both close without assigning. -->
-  <div
-    class="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-24"
-    onclick={closePicker}
-    role="presentation"
+  <Modal
+    label="Search classes"
+    onclose={closePicker}
+    layer="top"
+    align="top"
+    scrim="bg-black/50"
+    panelClass="w-full max-w-md overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl"
   >
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div
-      class="w-full max-w-md overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Search classes"
-      tabindex="-1"
-      use:trapFocus={{ onEscape: closePicker }}
-      onclick={(e) => e.stopPropagation()}
-    >
-      <input
-        bind:this={pickerInputEl}
-        bind:value={pickerQuery}
-        type="text"
-        placeholder="Search all {pickerClasses.length} classes…"
-        class="w-full border-b border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:outline-none"
-        onkeydown={onPickerKeydown}
-      />
-      <ul class="max-h-72 overflow-y-auto py-1 text-sm">
-        {#if pickerResults.length === 0}
-          <li class="px-3 py-2 text-zinc-500">No matching class.</li>
-        {/if}
-        {#each pickerResults as cls, i (cls.id)}
-          <li>
-            <button
-              type="button"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left {i ===
-              pickerIndex
-                ? 'bg-blue-500/20 text-white'
-                : 'text-zinc-200 hover:bg-zinc-800'}"
-              onclick={() => pickClass(cls)}
-              onmouseenter={() => (pickerIndex = i)}
-            >
-              {#if cls.hotkey_letter}
-                <kbd
-                  class="rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] uppercase text-blue-300"
-                >
-                  {cls.hotkey_letter}
-                </kbd>
-              {/if}
-              <span class="grow truncate">{cls.name}</span>
-              <span class="shrink-0 text-[10px] text-zinc-500"
-                >{cls.validated_count} validated</span
+    <input
+      bind:this={pickerInputEl}
+      bind:value={pickerQuery}
+      type="text"
+      placeholder="Search all {pickerClasses.length} classes…"
+      class="w-full border-b border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:outline-none"
+      onkeydown={onPickerKeydown}
+    />
+    <ul class="max-h-72 overflow-y-auto py-1 text-sm">
+      {#if pickerResults.length === 0}
+        <li class="px-3 py-2 text-zinc-500">No matching class.</li>
+      {/if}
+      {#each pickerResults as cls, i (cls.id)}
+        <li>
+          <button
+            type="button"
+            class="flex w-full items-center gap-2 px-3 py-1.5 text-left {i === pickerIndex
+              ? 'bg-blue-500/20 text-white'
+              : 'text-zinc-200 hover:bg-zinc-800'}"
+            onclick={() => pickClass(cls)}
+            onmouseenter={() => (pickerIndex = i)}
+          >
+            {#if cls.hotkey_letter}
+              <kbd
+                class="rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] uppercase text-blue-300"
               >
-            </button>
-          </li>
-        {/each}
-      </ul>
-      <p class="border-t border-zinc-800 px-3 py-1.5 text-[10px] text-zinc-500">
-        <kbd>↑↓</kbd> navigate · <kbd>Enter</kbd> assign · <kbd>Esc</kbd> close
-      </p>
-    </div>
-  </div>
+                {cls.hotkey_letter}
+              </kbd>
+            {/if}
+            <span class="grow truncate">{cls.name}</span>
+            <span class="shrink-0 text-[10px] text-zinc-500"
+              >{cls.validated_count} validated</span
+            >
+          </button>
+        </li>
+      {/each}
+    </ul>
+    <p class="border-t border-zinc-800 px-3 py-1.5 text-[10px] text-zinc-500">
+      <kbd>↑↓</kbd> navigate · <kbd>Enter</kbd> assign · <kbd>Esc</kbd> close
+    </p>
+  </Modal>
 {/if}

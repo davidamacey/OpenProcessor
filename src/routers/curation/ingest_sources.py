@@ -16,8 +16,8 @@ from typing import TYPE_CHECKING
 from fastapi import Request  # noqa: TC002 - FastAPI resolves route annotations at runtime
 
 from src.config import get_curation_config
-from src.routers.curation._common import OpenSearchDep, RegistryDep, _ensure_indexes, router
-from src.routers.curation._config_common_models import api_error
+from src.routers.curation._api_error import api_error
+from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._ingest_bulk_models import BulkIngestRequest, BulkIngestRun
 from src.routers.curation._ingest_bulk_wire import own_address, run_wire, slug
 from src.routers.curation._ingest_sources_models import (
@@ -39,7 +39,6 @@ from src.routers.curation._ingest_sources_models import (
     TriggersWire,
     WatchTriggerWire,
 )
-from src.routers.curation.ingest import _get_ingest_service
 from src.services.curation.bulk_ingest import limits, runner
 from src.services.curation.bulk_ingest.object_queue import QueueEntry
 from src.services.curation.bulk_ingest.object_store import (
@@ -76,6 +75,8 @@ from src.services.curation.bulk_ingest.sources import (
     validate_source_definition,
 )
 from src.services.curation.bulk_ingest.store import active_run
+from src.services.curation.index_bootstrap import ensure_indexes
+from src.services.curation.ingest_service_factory import get_ingest_service
 
 
 if TYPE_CHECKING:
@@ -270,9 +271,9 @@ async def start_run_now(
 ) -> BulkIngestRun:
     """Scan the source, then drain its queue, as a run (409 while the project has one live)."""
     check_definition(source)
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
     # Refuse up front (503) what the first batch would refuse: no detector, no encoder.
-    await _get_ingest_service(opensearch, registry)
+    await get_ingest_service(opensearch, registry)
     host, port = own_address(request)
     netloc = f'[{host}]' if ':' in host else host
     try:

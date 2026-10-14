@@ -1,10 +1,9 @@
 <script lang="ts">
   import { apiErrorText } from '$lib/api';
-  import { focusOnMount } from '$lib/actions/focusOnMount';
-  import { trapFocus } from '$lib/actions/trapFocus';
   import { addClass } from '$lib/api';
   import { classesStore } from '$stores/classes.svelte';
   import { toastStore } from '$stores/toast.svelte';
+  import Modal from '$components/Modal.svelte';
 
   interface Props {
     open: boolean;
@@ -81,101 +80,82 @@
 </script>
 
 {#if open}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <div
-    class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Add class"
-    use:focusOnMount
-    use:trapFocus={{ onEscape: onclose }}
-    tabindex="-1"
-    onclick={(e) => {
-      // Backdrop only: a click that bubbled up from the panel is not a
-      // dismiss gesture.
-      if (e.target === e.currentTarget) onclose();
-    }}
-  >
-    <div
-      class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
+  <Modal label="Add class" {onclose}>
+    <h3 class="mb-3 text-base font-semibold">Add Class</h3>
+    <form
+      onsubmit={async (e) => {
+        e.preventDefault();
+        await submit();
+      }}
     >
-      <h3 class="mb-3 text-base font-semibold">Add Class</h3>
-      <form
-        onsubmit={async (e) => {
-          e.preventDefault();
-          await submit();
-        }}
-      >
-        <label class="mb-3 block text-sm">
-          <span class="mb-1 block text-xs text-zinc-400">Class name (lowercase slug)</span
-          >
+      <label class="mb-3 block text-sm">
+        <span class="mb-1 block text-xs text-zinc-400">Class name (lowercase slug)</span>
+        <input
+          type="text"
+          bind:value={name}
+          required
+          placeholder="e.g. delivery_van"
+          class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+        />
+        <span class="mt-1 block text-[11px] text-zinc-500">
+          Lowercase a–z, 0–9, _ only. No spaces — the server rejects anything else.
+        </span>
+      </label>
+
+      <label class="mb-1 block text-sm">
+        <span class="mb-1 block text-xs text-zinc-400">Group</span>
+        {#if createNewGroup}
           <input
             type="text"
-            bind:value={name}
-            required
-            placeholder="e.g. delivery_van"
+            bind:value={groupNew}
+            placeholder="e.g. animals / tools / furniture"
             class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
           />
-          <span class="mt-1 block text-[11px] text-zinc-500">
-            Lowercase a–z, 0–9, _ only. No spaces — the server rejects anything else.
-          </span>
-        </label>
-
-        <label class="mb-1 block text-sm">
-          <span class="mb-1 block text-xs text-zinc-400">Group</span>
-          {#if createNewGroup}
-            <input
-              type="text"
-              bind:value={groupNew}
-              placeholder="e.g. animals / tools / furniture"
-              class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-            />
-          {:else}
-            <select
-              bind:value={groupExisting}
-              class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-            >
-              {#each groups as g (g)}
-                <option value={g}>{g}</option>
-              {/each}
-            </select>
-          {/if}
-        </label>
-        <button
-          type="button"
-          class="mb-3 text-[11px] text-blue-400 hover:underline"
-          onclick={() => (createNewGroup = !createNewGroup)}
-          disabled={groups.length === 0}
-        >
-          {createNewGroup ? 'pick existing group' : 'create new group'}
-        </button>
-
-        <label class="mb-3 block text-sm">
-          <span class="mb-1 block text-xs text-zinc-400">Notes (optional)</span>
-          <textarea
-            bind:value={notes}
-            rows="2"
+        {:else}
+          <select
+            bind:value={groupExisting}
             class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-          ></textarea>
-        </label>
-
-        {#if errorText}
-          <p class="mb-3 text-xs text-red-300">{errorText}</p>
-        {/if}
-
-        <div class="flex items-center justify-end gap-2">
-          <button type="button" class="btn" onclick={onclose} disabled={busy}>
-            Cancel
-          </button>
-          <button
-            type="submit"
-            class="btn btn-primary"
-            disabled={busy || name.trim() === ''}
           >
-            {busy ? 'Creating…' : 'Create'}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
+            {#each groups as g (g)}
+              <option value={g}>{g}</option>
+            {/each}
+          </select>
+        {/if}
+      </label>
+      <button
+        type="button"
+        class="mb-3 text-[11px] text-blue-400 hover:underline"
+        onclick={() => (createNewGroup = !createNewGroup)}
+        disabled={groups.length === 0}
+      >
+        {createNewGroup ? 'pick existing group' : 'create new group'}
+      </button>
+
+      <label class="mb-3 block text-sm">
+        <span class="mb-1 block text-xs text-zinc-400">Notes (optional)</span>
+        <textarea
+          bind:value={notes}
+          rows="2"
+          class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+        ></textarea>
+      </label>
+
+      {#if errorText}
+        <p class="mb-3 text-xs text-red-300">{errorText}</p>
+      {/if}
+
+      <div class="flex items-center justify-end gap-2">
+        <button type="button" class="btn" onclick={onclose} disabled={busy}>
+          Cancel
+        </button>
+        <button
+          type="submit"
+          class="btn btn-primary"
+          disabled={busy || name.trim() === ''}
+        >
+          {busy ? 'Creating…' : 'Create'}
+        </button>
+      </div>
+    </form>
+  </Modal>
 {/if}

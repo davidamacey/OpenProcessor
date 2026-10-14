@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config import get_curation_config
 from src.routers.curation import _common
+from src.services.curation import index_bootstrap
 
 
 P = f'{_common.config.api_prefix}/projects/default'
@@ -55,7 +56,7 @@ def fake() -> QueryFakeOpenSearch:
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch, fake: QueryFakeOpenSearch) -> Any:
-    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', {'default'})
+    monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', {'default'})
     monkeypatch.setattr('src.routers.curation.crops.get_class_registry', _Registry)
     from _curation_app import mount_curation_routers
 

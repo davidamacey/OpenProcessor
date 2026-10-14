@@ -435,7 +435,7 @@ def test_health_reports_degraded_when_vlm_down(
         return_value=MagicMock(reachable=False, model='vlm-x', last_error='timeout')
     )
 
-    with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
+    with patch('src.routers.curation.vlm.get_vlm_labeler', return_value=fake_vlm):
         r = app_client.get('/curation/projects/default/health')
 
     assert r.status_code == 200, r.text
@@ -453,7 +453,7 @@ def test_health_reports_down_when_opensearch_unreachable(
     fake_vlm = MagicMock()
     fake_vlm.identity = VlmIdentity('env@None', 'test-vlm')
     fake_vlm.health = AsyncMock(return_value=MagicMock(reachable=False, model='x'))
-    with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
+    with patch('src.routers.curation.vlm.get_vlm_labeler', return_value=fake_vlm):
         r = app_client.get('/curation/projects/default/health')
     assert r.status_code == 200
     body = r.json()
@@ -479,7 +479,7 @@ def test_health_mlflow_public_url_is_null_when_unset(
     fake_vlm = MagicMock()
     fake_vlm.identity = VlmIdentity('env@None', 'test-vlm')
     fake_vlm.health = AsyncMock(return_value=MagicMock(reachable=True, model='x'))
-    with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
+    with patch('src.routers.curation.vlm.get_vlm_labeler', return_value=fake_vlm):
         r = app_client.get('/curation/projects/default/health')
     assert r.status_code == 200, r.text
     assert r.json()['mlflow_public_url'] is None
@@ -502,7 +502,7 @@ def test_health_mlflow_public_url_reflects_config(
     fake_vlm = MagicMock()
     fake_vlm.identity = VlmIdentity('env@None', 'test-vlm')
     fake_vlm.health = AsyncMock(return_value=MagicMock(reachable=True, model='x'))
-    with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
+    with patch('src.routers.curation.vlm.get_vlm_labeler', return_value=fake_vlm):
         r = app_client.get('/curation/projects/default/health')
     assert r.status_code == 200, r.text
     assert r.json()['mlflow_public_url'] == 'http://mlflow.example.com:4731'
@@ -515,7 +515,7 @@ def test_health_region_profile_is_null_without_an_active_profile(
     fake_vlm = MagicMock()
     fake_vlm.identity = VlmIdentity('env@None', 'test-vlm')
     fake_vlm.health = AsyncMock(return_value=MagicMock(reachable=True, model='x'))
-    with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
+    with patch('src.routers.curation.vlm.get_vlm_labeler', return_value=fake_vlm):
         r = app_client.get('/curation/projects/default/health')
     assert r.status_code == 200, r.text
     assert r.json()['region_profile'] is None
@@ -531,7 +531,7 @@ def test_health_region_profile_reflects_the_active_profile(
     fake_vlm = MagicMock()
     fake_vlm.identity = VlmIdentity('env@None', 'test-vlm')
     fake_vlm.health = AsyncMock(return_value=MagicMock(reachable=True, model='x'))
-    with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
+    with patch('src.routers.curation.vlm.get_vlm_labeler', return_value=fake_vlm):
         r = app_client.get('/curation/projects/default/health')
     assert r.status_code == 200, r.text
     region_profile = r.json()['region_profile']

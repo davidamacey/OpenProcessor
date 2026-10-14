@@ -5,8 +5,8 @@ Two independent guards, per the review's own fix suggestion:
 1. ``registry.refresh_strict()`` (raises) replaces the old ``ensure_fresh()``
    (swallows) right after the 'building' write, so a registry that can't
    see the new project yet aborts the create cleanly.
-2. A post-``_ensure_indexes`` existence check for every index the record
-   claims to own -- ``_ensure_indexes`` is itself fail-open, so #1 alone
+2. A post-``ensure_indexes`` existence check for every index the record
+   claims to own -- ``ensure_indexes`` is itself fail-open, so #1 alone
    does not close the gap.
 """
 
@@ -66,7 +66,7 @@ def test_transient_registry_refresh_failure_after_building_write_ends_failed(mon
 
     with (
         patch(
-            'src.routers.curation._common._ensure_indexes',
+            'src.services.curation.index_bootstrap.ensure_indexes',
             new=AsyncMock(side_effect=fake_ensure_indexes),
         ),
         pytest.raises(RuntimeError, match='simulated transient registry refresh failure'),
@@ -82,7 +82,7 @@ def test_transient_registry_refresh_failure_after_building_write_ends_failed(mon
 
 
 def test_one_missing_index_after_ensure_indexes_ends_failed_not_active() -> None:
-    """_ensure_indexes is itself fail-open (every create/migration
+    """ensure_indexes is itself fail-open (every create/migration
     failure inside it is logged and swallowed) -- simulate it silently
     creating only 5 of 6 distinct indexes, and assert create still ends
     'failed', never 'active' with a missing index.
@@ -110,7 +110,7 @@ def test_one_missing_index_after_ensure_indexes_ends_failed_not_active() -> None
 
     with (
         patch(
-            'src.routers.curation._common._ensure_indexes',
+            'src.services.curation.index_bootstrap.ensure_indexes',
             new=AsyncMock(side_effect=_ensure_indexes_missing_one),
         ),
         pytest.raises(RuntimeError, match='missing indexes'),
@@ -126,7 +126,7 @@ def test_real_ensure_indexes_index_create_failure_ends_create_failed() -> None:
     """P3F item 5 (B2(b)): "create fails when index creation fails; fix
     the fakes, not the check." Proves the fake CAN genuinely simulate one
     index's ``indices.create`` raising, through the REAL (unmocked)
-    ``_ensure_indexes``/``_create_one`` -- which itself swallows the
+    ``ensure_indexes``/``_create_one`` -- which itself swallows the
     failure and logs it (by design; it never raises) -- and that
     create_project's own post-check (item 3) still catches the missing
     index and ends 'failed', never a partial 'active'."""

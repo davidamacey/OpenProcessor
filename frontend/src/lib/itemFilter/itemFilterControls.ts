@@ -21,7 +21,7 @@ const base = {
   allows_unset: true,
 };
 
-export const ITEM_FILTER_CONTROLS: ReviewFilterSpec[] = [
+const ITEM_FILTER_CONTROLS: ReviewFilterSpec[] = [
   { ...base, param: 'class_name', kind: 'class_names', label: 'Class' },
   { ...base, param: 'exclude_class_name', kind: 'class_names', label: 'Not class' },
   {
@@ -73,7 +73,7 @@ export const ITEM_FILTER_CONTROLS: ReviewFilterSpec[] = [
   },
 ];
 
-export const OPEN_VOCAB_CONTROLS: ReviewFilterSpec[] = [
+const OPEN_VOCAB_CONTROLS: ReviewFilterSpec[] = [
   { ...base, param: 'open_vocab_set', kind: 'text', label: 'Open-vocabulary set' },
   { ...base, param: 'source_prompt', kind: 'text', label: 'Prompt' },
 ];

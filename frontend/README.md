@@ -42,7 +42,7 @@ train — there is no login and no token, by design (the backend owns
 that decision; see its own docs). **Never expose Cropwright or the
 OpenProcessor API it proxies to the public internet.** Run it only on a
 trusted LAN/VPN, or put it behind an authenticating reverse proxy
-(`oauth2-proxy`, nginx basic auth). See [SECURITY.md](SECURITY.md).
+(`oauth2-proxy`, nginx basic auth). See [SECURITY.md](../SECURITY.md).
 
 ## Requirements
 
@@ -57,66 +57,22 @@ it has no data of its own to show.
 
 ## Quick start (Docker)
 
-In the OpenProcessor repository, Cropwright is the `cropwright` compose profile
-(`docker compose --profile cropwright up -d` from the repository root, see the
-[quick start](../docs-site/docs/cropwright/getting-started/quick-start.md)). The
-rest of this section runs the `frontend/` compose file on its own, against an
-existing backend. From a source checkout, build the app:
+Cropwright is the `cropwright` compose profile of the OpenProcessor stack. From the
+repository root:
 
 ```bash
-cp .env.example .env
+docker compose --profile cropwright up -d
 ```
 
-Edit `.env` and set, at minimum:
+See the [quick start](../docs-site/docs/cropwright/getting-started/quick-start.md) for the
+settings (`API_UPSTREAM`, `PUBLIC_API_PREFIX`, `OP_CROPWRIGHT_PORT`, `OP_CROPWRIGHT_BIND_ADDRESS`).
+Open `http://localhost:5184` (or the `OP_CROPWRIGHT_PORT` you set). The app origin also serves
+the API's own Swagger UI at `/docs` (ReDoc at `/redoc`); the top bar's **Resources** menu
+links to them, to the documentation when it is running, and to any dashboards the backend
+serves. The image runs nginx as a non-root user (uid 101) on port 8080 inside the container.
 
-- `API_UPSTREAM` — where nginx proxies API calls, by container name over
-  the shared docker network (default `http://op-api:8000`, matching
-  OpenProcessor's own default Compose service name/port).
-- `PUBLIC_API_PREFIX` — must equal the backend's own `OP_API_PREFIX`
-  (default `/curation`).
-- `OP_DOCKER_NETWORK` — the OpenProcessor backend's docker network name
-  (`docker network ls`; defaults to OpenProcessor's own default network
-  name).
-- `OP_CROPWRIGHT_PORT` — host port to publish (default `5184`).
-- `OP_CROPWRIGHT_BIND_ADDRESS` — host address the port is published on
-  (default `0.0.0.0`: this machine and the local network). Set `127.0.0.1`
-  for this machine only. The API has no authentication, so keep it on a
-  trusted network.
-
-Then:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
-```
-
-Open `http://localhost:5184` (or whatever `OP_CROPWRIGHT_PORT` you set).
-The app origin also serves the API's own Swagger UI at `/docs` (ReDoc at
-`/redoc`); the top bar's **Resources** menu links to them, to the
-documentation when it is running, and to any dashboards the backend serves.
-The image runs nginx as a non-root user (uid 101) listening on port 8080
-inside the container; compose maps `OP_CROPWRIGHT_PORT` to it.
-
-**Verify it's connected:**
-
-- Look at the top-bar status chip — it polls `{PUBLIC_API_PREFIX}/health`
-  and shows green when the backend answers.
-- Or from the shell: `curl http://localhost:5184/curation/health`
-  (swap in your own port/prefix).
-
-### Running a second, independent instance
-
-Give it its own compose project name and host port so
-it never collides with a running instance:
-
-```bash
-OP_CROPWRIGHT_PORT=5190 \
-  OP_DOCKER_NETWORK=some_other_openprocessor_net \
-  docker compose -p cw-second up -d
-```
-
-This is the same image and compose file, pointed at a different
-backend (or a different network) with a different host port — useful
-for running two datasets/deployments side by side on one host.
+**Verify it's connected:** the top-bar status chip polls `{PUBLIC_API_PREFIX}/health` and is
+green when the backend answers, or `curl http://localhost:5184/curation/health`.
 
 ## What each feature needs from the backend
 
@@ -197,17 +153,16 @@ key a registered region slot's own keymap declares.
 
 ## Configuration
 
-| Var                                    | Default                    | Used by       | Purpose                                                                                                                                                                     |
-| -------------------------------------- | -------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PUBLIC_API_PREFIX`                    | `/curation`                | both          | Path prefix the backend serves its curation endpoints under. Must equal the backend's own `OP_API_PREFIX`.                                                                  |
-| `PUBLIC_TRITON_API_URL`                | _(empty)_                  | `npm run dev` | Legacy name (predates the OpenProcessor rename). Points the dev server straight at a backend origin, bypassing the nginx proxy Docker gets for free. Leave empty in Docker. |
-| `API_UPSTREAM`                         | `http://op-api:8000`       | Docker        | Where nginx proxies `PUBLIC_API_PREFIX/*` to, by container name over the shared docker network.                                                                             |
-| `OP_DOCKER_NETWORK`                    | `openprocessor_triton_net` | Docker        | The OpenProcessor backend's docker network name (must already exist).                                                                                                       |
-| `OP_CROPWRIGHT_PORT`                      | `5184`                     | Docker        | Host port nginx is published on.                                                                                                                                            |
-| `OP_CROPWRIGHT_BIND_ADDRESS`              | `0.0.0.0`                  | Docker        | Host address the port is published on: this machine and the local network. `127.0.0.1` limits it to this machine. Keep it on a trusted network.                             |
-| `OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB`     | `256`                      | Docker        | Upload cap for `/ingest` (nginx `client_max_body_size`); kept in lockstep with the client-side chunk planner.                                                               |
-| `OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB`     | `2048`                     | Docker        | Upload cap for a dataset archive on `/datasets/import` (nginx `client_max_body_size`); the client refuses a larger file before sending.                                     |
-| `PUBLIC_APP_NAME` / `PUBLIC_APP_BADGE` | `Cropwright` / `CW`        | build time    | Top-bar wordmark/badge, for a white-labeled deployment.                                                                                                                     |
+| Var                                    | Default              | Used by       | Purpose                                                                                                                                                                     |
+| -------------------------------------- | -------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PUBLIC_API_PREFIX`                    | `/curation`          | both          | Path prefix the backend serves its curation endpoints under. Must equal the backend's own `OP_API_PREFIX`.                                                                  |
+| `PUBLIC_TRITON_API_URL`                | _(empty)_            | `npm run dev` | Legacy name (predates the OpenProcessor rename). Points the dev server straight at a backend origin, bypassing the nginx proxy Docker gets for free. Leave empty in Docker. |
+| `API_UPSTREAM`                         | `http://op-api:8000` | Docker        | Where nginx proxies `PUBLIC_API_PREFIX/*` to, by container name over the shared docker network.                                                                             |
+| `OP_CROPWRIGHT_PORT`                      | `5184`               | Docker        | Host port nginx is published on.                                                                                                                                            |
+| `OP_CROPWRIGHT_BIND_ADDRESS`              | `0.0.0.0`            | Docker        | Host address the port is published on: this machine and the local network. `127.0.0.1` limits it to this machine. Keep it on a trusted network.                             |
+| `OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB`     | `256`                | Docker        | Upload cap for `/ingest` (nginx `client_max_body_size`); kept in lockstep with the client-side chunk planner.                                                               |
+| `OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB`     | `2048`               | Docker        | Upload cap for a dataset archive on `/datasets/import` (nginx `client_max_body_size`); the client refuses a larger file before sending.                                     |
+| `PUBLIC_APP_NAME` / `PUBLIC_APP_BADGE` | `Cropwright` / `CW`  | build time    | Top-bar wordmark/badge, for a white-labeled deployment.                                                                                                                     |
 
 The app is a pure SPA consumer of the OpenProcessor API — there is
 **no** local database. State is reconstructed from API calls;
@@ -217,19 +172,8 @@ chunk load).
 
 ## Development
 
-**Build the Docker image from source** with a repo checkout and the
-`docker-compose.build.yml` overlay (deliberately not an auto-loading
-`docker-compose.override.yml`, which would make a plain `docker compose up`
-build instead of pull once the images are published):
-
-```bash
-cp .env.example .env   # edit as in "Quick start" above
-docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
-```
-
-This tags the built image `cropwright-dev:local` rather than reusing
-`davidamacey/cropwright:latest`, so a local dev build never gets
-confused with — or overwrites — a pulled release image.
+**Build the Docker image from source** with the dev overlay at the repository root:
+`docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile cropwright up -d --build cropwright`.
 
 **Run the SvelteKit dev server** directly (no Docker):
 
@@ -244,7 +188,7 @@ npm run test:e2e # Playwright against an in-browser stub backend (own venv, auto
 ```
 
 **Live, read-only tests** against a real deployed backend:
-`OP_CROPWRIGHT_LIVE_URL=http://localhost:5184 npm run test:live` — skipped
+`CROPWRIGHT_LIVE_URL=http://localhost:5184 npm run test:live` — skipped
 entirely unless that env var is set; structurally read-only (aborts any
 non-GET/HEAD request to the API and fails the test if one was even
 attempted).
@@ -260,40 +204,8 @@ There is no copy to sync: regenerate with `make contracts` at the repository roo
 
 ## Releasing
 
-Releases are cut locally rather than in CI, so the arm64 image is built
-and smoke-tested natively. `./scripts/release.sh` is a small
-orchestrator over `scripts/release/NN-*.sh` stages: `preflight verify
-build scan smoke tag publish finish`. Each is independently runnable
-and resumable via a local ledger under `.release/<version>/`
-(gitignored); `tag`/`publish`/`finish` are the only stages that leave
-this machine, and each requires an explicit `--yes` or an interactive
-confirmation.
-
-```bash
-./scripts/release.sh status 0.2.0
-./scripts/release.sh run 0.2.0 --skip scan          # skip a stage
-./scripts/release.sh run 0.2.0 --from build --yes   # resume after verify
-```
-
-`build`/`scan`/`smoke` cover both `linux/amd64` and `linux/arm64`, using
-a multi-arch buildx builder with a remote node that builds arm64
-natively (no QEMU). The arm64 image can't run on an amd64 CI/dev host,
-so `smoke` loads it into a remote docker context
-(`docker save | docker --context <ctx> load`) and re-runs
-`scripts/release-smoke.sh` there — every check in that script goes
-through `docker exec`, not a published host port, so it works
-identically over a remote context. `publish` pushes a single multi-arch
-manifest to `davidamacey/cropwright` as `X.Y.Z`, `X.Y` and `latest` with
-an SBOM attestation; `finish` creates the GitHub release (immediate, no
-draft) from the matching `CHANGELOG.md` section via the `gh` CLI.
-
-Requires a Docker Hub login (`docker login`) and a multi-arch buildx
-builder plus its remote arm64 docker context already set up on the host
-(`docker buildx ls` / `docker context ls`) — shared infrastructure, not
-something this repo provisions. `CROPWRIGHT_BUILDER` (default
-`cropwright-multiarch`) and `CROPWRIGHT_REMOTE_ARM64_CONTEXT` (default
-`remote-arm64`) point the stages at whatever your host actually names
-them.
+The image ships with the OpenProcessor release: `scripts/release/build_and_publish.sh` at the
+repository root builds and publishes it (see `docs/releases/RELEASE_CHECKLIST.md`).
 
 ## Troubleshooting
 
@@ -302,7 +214,6 @@ them.
 | Top-bar status chip red / "API unavailable"           | Backend not reachable at `API_UPSTREAM` (Docker) or `PUBLIC_TRITON_API_URL` (dev); or `{API_PREFIX}/health` returns 5xx              |
 | A write returns 409 "no region profile is configured" | The backend has no region profile set — region-specific actions (confirm/reject a sub-box, etc.) are unavailable until it does       |
 | Upload to `/ingest` fails with 413                    | File(s) exceed `OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB` (nginx) or the backend's own configured upload cap — raise the env var, rebuild    |
-| Port already in use                                   | Another service already publishes that host port — set `OP_CROPWRIGHT_PORT` (and give the instance its own `CROPWRIGHT_CONTAINER_NAME`) |
 | Empty cluster grid / review queues                    | The backend's index isn't populated yet — ingest some images first                                                                   |
 | Build fails: `Cannot find module 'svelte-dnd-action'` | `npm install` wasn't run, or `node_modules` is stale — `rm -rf node_modules && npm install`                                          |
 
@@ -322,5 +233,5 @@ OpenProcessor Contributors. See [LICENSE](../LICENSE). Cropwright is the fronten
 Macey, also AGPL-3.0), which handles inference, search and clustering
 server-side.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev workflow and
-[SECURITY.md](SECURITY.md) for reporting vulnerabilities.
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for the dev workflow and
+[SECURITY.md](../SECURITY.md) for reporting vulnerabilities.

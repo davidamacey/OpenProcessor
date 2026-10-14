@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.routers.curation import projects_combine
+from src.routers.curation._project_deps import install_project_exception_handlers
 from src.routers.curation.projects import global_router
 from src.services.projects import lifecycle
 
@@ -52,6 +53,7 @@ def api(world: World, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(lifecycle, 'finish_building', finish_building)
     app = FastAPI()
     app.include_router(global_router, prefix='/curation')
+    install_project_exception_handlers(app)
     with TestClient(app) as client:
         client.calls = calls  # type: ignore[attr-defined]
         yield client

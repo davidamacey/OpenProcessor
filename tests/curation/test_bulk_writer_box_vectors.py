@@ -8,7 +8,7 @@ import dataclasses
 
 from scripts.curation.worker.bulk_writer import _vector_entries
 from scripts.curation.worker.state import _ItemTask
-from src.services.curation.region_boxes import RegionBox, finalize_box_ids, new_box_placeholder
+from src.domain.region_boxes import RegionBox, finalize_box_ids, new_box_placeholder
 
 
 def _task(pending: list[RegionBox], vectors: dict[str, list[float]]) -> _ItemTask:

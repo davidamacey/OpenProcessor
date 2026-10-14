@@ -8,7 +8,7 @@
    */
   import type { BakeoffComparison, ComparisonRow, PerClassRow } from '$lib/types_bakeoff';
   import ScrollX from '$lib/components/ScrollX.svelte';
-  import { formatCount } from '$lib/formatCount';
+  import { formatCount } from '$lib/format/count';
   import {
     formatMetric,
     formatOverlap,

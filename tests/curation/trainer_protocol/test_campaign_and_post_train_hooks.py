@@ -132,7 +132,7 @@ def test_auto_quantize_posts_the_bakeoff_run_request(
     ]
     assert list(bakeoff_jobs.iterdir()) == []
     # The request body is accepted by the API's own request model.
-    from src.routers.curation._bakeoff_models import BakeoffRunRequest
+    from src.schemas.bakeoff.run import BakeoffRunRequest
 
     BakeoffRunRequest.model_validate(calls[0][1])
 

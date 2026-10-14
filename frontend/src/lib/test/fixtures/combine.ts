@@ -8,7 +8,7 @@ import type {
   CombinePreviewSource,
 } from '$lib/types_combine';
 
-export function previewSource(
+function previewSource(
   project: string,
   classes: [string, number, string | null][],
 ): CombinePreviewSource {

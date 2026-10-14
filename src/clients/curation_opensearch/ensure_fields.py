@@ -21,8 +21,8 @@ from src.clients.curation_opensearch.bodies_core import (
 )
 from src.clients.curation_opensearch.bodies_other import LABELS_CONFIRMED_EXTRA_MAPPING
 from src.config import BACKBONE_EMBEDDING_FIELD
-from src.services.curation.item_text import ITEM_TEXT_MAPPING
-from src.services.curation.vlm_class_attempt import VLM_CLASS_ATTEMPT_MAPPING
+from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPT_MAPPING
+from src.domain.item_text import ITEM_TEXT_MAPPING
 
 
 if TYPE_CHECKING:
@@ -268,7 +268,7 @@ async def ensure_items_history_fields(
     mapping.
 
     Additive ``PUT <index>/_mapping`` — idempotent. Writers land in
-    ``src/services/curation/history.py``; this helper exists so a
+    ``src/domain/history.py``; this helper exists so a
     re-ingested or migrated index has the field ready when the writers go
     live.
 

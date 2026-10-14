@@ -8,8 +8,8 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import HTTPException
 
+from src.core.exceptions import RequestRejectedError
 from src.services.projects import lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
@@ -35,7 +35,7 @@ def _env(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def _noop_ensure_indexes():
     with patch(
-        'src.routers.curation._common._ensure_indexes',
+        'src.services.curation.index_bootstrap.ensure_indexes',
         new=AsyncMock(side_effect=fake_ensure_indexes),
     ):
         yield
@@ -93,7 +93,7 @@ def test_clone_classes_refused_on_non_empty_target() -> None:
     with bind_project(target):
         client.indexes[items_index()] = [{'item_id': 'x'}]  # non-empty target
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(
             lifecycle.clone_settings(
                 client, target_record=target, from_slug='source', axes=['classes']

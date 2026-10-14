@@ -18,8 +18,8 @@ import time
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from fastapi import HTTPException
 
+from src.core.exceptions import RequestRejectedError
 from src.services.projects import busy, delete as delete_mod, lifecycle
 from src.services.projects.registry import ProjectRegistry, doc_to_record, set_project_registry
 
@@ -49,7 +49,7 @@ def _registry_for(client: FakeLifecycleOpenSearch) -> ProjectRegistry:
 
 
 def test_slow_create_cannot_resurrect_a_stale_building_delete(monkeypatch) -> None:
-    """Probe 1: block a create inside ``_ensure_indexes`` (standing in
+    """Probe 1: block a create inside ``ensure_indexes`` (standing in
     for a create that has genuinely run past 120s on a degraded
     cluster, not a dead one), let a stale-building DELETE tombstone the
     same slug while it's blocked, then release the create. Before the
@@ -68,9 +68,9 @@ def test_slow_create_cannot_resurrect_a_stale_building_delete(monkeypatch) -> No
         await release_create.wait()
         await fake_ensure_indexes(opensearch)
 
-    import src.routers.curation._common as common_mod
+    import src.services.curation.index_bootstrap as bootstrap_mod
 
-    monkeypatch.setattr(common_mod, '_ensure_indexes', _blocking_ensure_indexes)
+    monkeypatch.setattr(bootstrap_mod, 'ensure_indexes', _blocking_ensure_indexes)
 
     async def _run() -> None:
         create_task = asyncio.create_task(
@@ -100,7 +100,7 @@ def test_slow_create_cannot_resurrect_a_stale_building_delete(monkeypatch) -> No
         assert tombstoned.status == 'deleted'
 
         release_create.set()
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(RequestRejectedError) as exc_info:
             await create_task
         assert exc_info.value.detail['error'] == 'invalid_transition'
 
@@ -141,13 +141,13 @@ def test_second_finish_cannot_delete_a_project_the_first_finish_rolled_back(monk
     )
 
     async def _finish_a():
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(RequestRejectedError) as exc_info:
             await lifecycle.delete_project_finish(client, slug='alpha')
         assert exc_info.value.detail['error'] == 'project_busy'
 
     async def _finish_b_mid_drain():
         await asyncio.sleep(0.1)  # after A started draining, before A's 0.2s timeout
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(RequestRejectedError) as exc_info:
             await lifecycle.delete_project_finish(client, slug='alpha')
         assert exc_info.value.detail['error'] == 'finish_in_progress'
 
@@ -217,7 +217,7 @@ def test_second_finish_on_a_different_worker_cannot_destroy_a_project_a_first_fi
     monkeypatch.setattr(busy, '_detection_worker_inflight', _inflight)
 
     async def _finish_a() -> None:
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(RequestRejectedError) as exc_info:
             await lifecycle.delete_project_finish(client, slug='alpha')
         assert exc_info.value.detail['error'] == 'project_busy'
 
@@ -235,7 +235,7 @@ def test_second_finish_on_a_different_worker_cannot_destroy_a_project_a_first_fi
         # done (no leaked 'alpha' entry poisoning a later, unrelated
         # test).
         delete_mod._FINISH_IN_PROGRESS.discard('alpha')
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(RequestRejectedError) as exc_info:
             await lifecycle.delete_project_finish(client, slug='alpha')
         assert exc_info.value.detail['error'] == 'invalid_transition', (
             'F1: the claim write must be what stops B, once A has already rolled the '
@@ -267,7 +267,7 @@ def test_create_best_effort_cleans_up_indexes_orphaned_by_a_stale_building_delet
     race as ``test_slow_create_cannot_resurrect_a_stale_building_delete``
     (probe 1) -- a stale-``building`` delete tombstones ``gamma`` while
     its own (still genuinely running, just slow) create is blocked inside
-    ``_ensure_indexes``. When the create resumes, it creates gamma's
+    ``ensure_indexes``. When the create resumes, it creates gamma's
     indexes, then loses the MA1 ``expect_status='building'`` race on its
     final ``active`` write (the fresh status is now ``'deleted'``) and
     correctly refuses to resurrect the slug -- but by then the indexes it
@@ -289,9 +289,9 @@ def test_create_best_effort_cleans_up_indexes_orphaned_by_a_stale_building_delet
         await release_create.wait()
         await fake_ensure_indexes(opensearch)
 
-    import src.routers.curation._common as common_mod
+    import src.services.curation.index_bootstrap as bootstrap_mod
 
-    monkeypatch.setattr(common_mod, '_ensure_indexes', _blocking_ensure_indexes)
+    monkeypatch.setattr(bootstrap_mod, 'ensure_indexes', _blocking_ensure_indexes)
 
     async def _run() -> None:
         create_task = asyncio.create_task(
@@ -311,7 +311,7 @@ def test_create_best_effort_cleans_up_indexes_orphaned_by_a_stale_building_delet
         assert tombstoned.status == 'deleted'
 
         release_create.set()
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(RequestRejectedError) as exc_info:
             await create_task
         assert exc_info.value.detail['error'] == 'invalid_transition'
 

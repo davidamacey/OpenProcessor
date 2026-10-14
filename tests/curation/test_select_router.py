@@ -1,6 +1,6 @@
 """Tests for the diversity/core-set selection overlay:
 ``GET /curation/crops?order=diverse``'s helper
-(``select.compute_diverse_order``) and ``POST /curation/select/diverse`` +
+(``diverse_order.compute_diverse_order``) and ``POST /curation/select/diverse`` +
 its ``status``/``cancel`` lifecycle.
 
 Mirrors ``test_scores_router.py``'s conventions: mount the real
@@ -55,7 +55,7 @@ def _clear_diverse_order_cache() -> Iterator[None]:
     tests often reuse the same trivial query across differently-mocked
     OpenSearch clients without it, so clear the module-level cache
     between tests to avoid one test's result leaking into the next."""
-    from src.routers.curation import select as select_mod
+    from src.services.curation import diverse_order as select_mod
 
     select_mod._ORDER_CACHE.clear()
     yield
@@ -111,11 +111,10 @@ def test_scope_query_review_tab_reuses_review_queries() -> None:
 
 
 def test_scope_query_unknown_review_tab_raises_http_400() -> None:
-    from fastapi import HTTPException
-
+    from src.core.exceptions import RequestRejectedError
     from src.routers.curation.select import SelectDiverseScope, _build_scope_query
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RequestRejectedError) as exc_info:
         _build_scope_query(SelectDiverseScope(review_tab='not_a_real_tab'))
     assert exc_info.value.status_code == 400
 
@@ -129,7 +128,7 @@ def test_scope_query_unknown_review_tab_raises_http_400() -> None:
 async def test_compute_diverse_order_disabled_returns_none_without_any_os_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from src.routers.curation.select import compute_diverse_order
+    from src.services.curation.diverse_order import compute_diverse_order
 
     monkeypatch.delenv('OP_SELECT_DIVERSE_ENABLED', raising=False)
     fake_os = _fake_scroll_client(_orthonormal_pool(5))
@@ -142,7 +141,7 @@ async def test_compute_diverse_order_disabled_returns_none_without_any_os_call(
 async def test_compute_diverse_order_returns_full_ranking_when_enabled_and_small(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from src.routers.curation.select import compute_diverse_order
+    from src.services.curation.diverse_order import compute_diverse_order
 
     monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
     pool = _orthonormal_pool(6)
@@ -161,7 +160,7 @@ async def test_compute_diverse_order_falls_back_above_inline_cap(
     back to default sort' contract, just with the stricter (sqrt-of-ops-
     budget) inline cap this module documents for the O(n^2*d) full-pool
     ranking case."""
-    from src.routers.curation.select import compute_diverse_order
+    from src.services.curation.diverse_order import compute_diverse_order
 
     monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
     # sync_max_ops=4 -> isqrt(4) == 2 -> inline cap is 2 rows; our pool of
@@ -176,7 +175,7 @@ async def test_compute_diverse_order_falls_back_above_inline_cap(
 async def test_compute_diverse_order_empty_pool_returns_empty_list(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from src.routers.curation.select import compute_diverse_order
+    from src.services.curation.diverse_order import compute_diverse_order
 
     monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
     fake_os = _fake_scroll_client([])
@@ -192,7 +191,7 @@ async def test_compute_diverse_order_cache_hits_when_k_caps_the_order(
     (which is capped at k) — otherwise a second call with the same
     current_count=pool_size could never hit the cache when k < pool_size,
     since len(order) < pool_size would never equal the fresh current_count."""
-    from src.routers.curation.select import compute_diverse_order
+    from src.services.curation.diverse_order import compute_diverse_order
 
     monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
     pool = _orthonormal_pool(6)
@@ -222,7 +221,9 @@ async def test_compute_diverse_order_cache_hits_when_k_caps_the_order(
 def crops_app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     fake_os = AsyncMock()
     fake_os.search = AsyncMock(
         return_value={
@@ -282,7 +283,7 @@ def test_get_crops_order_diverse_uses_the_computed_order_when_enabled(
     crops_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        'src.routers.curation.select.compute_diverse_order',
+        'src.services.curation.diverse_order.compute_diverse_order',
         AsyncMock(return_value=['crop-b', 'crop-a']),
     )
     r = crops_app_client.get(
@@ -298,7 +299,7 @@ def test_get_crops_order_diverse_falls_back_when_helper_returns_none(
     crops_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        'src.routers.curation.select.compute_diverse_order',
+        'src.services.curation.diverse_order.compute_diverse_order',
         AsyncMock(return_value=None),
     )
     r_default = crops_app_client.get(
@@ -321,7 +322,9 @@ def select_app_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
 
     monkeypatch.setenv('OP_SELECT_JOBS_DIR', str(tmp_path / 'select'))
     monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
 
     fake_os = AsyncMock()
     app = FastAPI()
@@ -444,6 +447,7 @@ _SELECTION_SOURCE_FILES = (
     'src/services/curation/selection/kcenter_greedy.py',
     'src/services/curation/selection/pool_fetch.py',
     'src/services/curation/selection/job.py',
+    'src/services/curation/diverse_order.py',
     'src/routers/curation/select.py',
 )
 

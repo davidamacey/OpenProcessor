@@ -164,6 +164,11 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   smaller modules and libraries. No behavior change; `tests/test_validate_models.py` (a live CLI,
   not a test) moved to `scripts/validation/validate_models.py`.
 
+- Frontend hygiene (`frontend/CHANGELOG.md` has the detail): one accessible `Modal` for all dialogs, one
+  home for duration, byte and time formatters, one SSE reconnect helper, the deprecated SvelteKit `alias`
+  option replaced, dead exports removed with `knip` in CI, the standalone-repository release scripts, compose
+  files and hooks under `frontend/` deleted, and `frontend/CLAUDE.md` cut to current rules.
+
 - Tests and scripts are named by behavior, not by the pass that wrote them: the activation probes are
   `tests/curation/activation/` (nine files), the clone probes `tests/projects/test_clone_settings_real_flow.py`
   and friends, `scripts/bench/wave0_*.py` are `scripts/bench/ingest_sweep_*.py` (the published
@@ -320,6 +325,19 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   mounts, GPU profile keys, worker defaults, OpenSearch heap sizing, `bulk_ingest.py` usage
   inside the container). Screenshots are refreshed and added for the new pages, and
   `make docs-screenshots` regenerates them.
+
+- Layering cleanup, the fourth step of the repo cleanup (`docs/design/repo_cleanup_plan.md`): services
+  and clients no longer import routers, services no longer import FastAPI, and clients no longer
+  import services. The import-direction guard has no baseline now; the one permanent exception, the
+  guarded OpenSearch client factory, is listed with its reason in `scripts/codegen/check_layering.py`.
+  Wire models moved to `src/schemas` (`curation/`, `bakeoff/`, `embed`, `ingest`, `train_promote`),
+  pure rules and field vocabularies to the new `src/domain`, and the auto-label run, the training
+  preflight and the promote gates to services (`src/services/curation/auto_label_run.py`,
+  `src/services/training/preflight_run.py`, `src/services/training/promote_run.py`), each split
+  below complexity 15. A service that refuses a request raises `RequestRejectedError`, answered with
+  the status and body the old `HTTPException` carried. No route, status code or response body
+  changed. An auto-label job queued before the upgrade names the old function path and fails to
+  resolve it: requeue it.
 
 ### Removed
 

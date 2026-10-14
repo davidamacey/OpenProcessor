@@ -45,7 +45,7 @@ class RegionFields:
     Item-level fields only. A region's per-box data (geometry, score,
     detector, state, text, cluster placement, ...) is an element of the
     ``boxes`` list and is addressed by the fixed element keys of
-    :class:`~src.services.curation.region_boxes.RegionBox`, never through
+    :class:`~src.domain.region_boxes.RegionBox`, never through
     this indirection.
     """
 

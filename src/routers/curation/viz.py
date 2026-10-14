@@ -35,7 +35,8 @@ from fastapi import HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.routers.curation._common import OpenSearchDep, _ensure_indexes, router
+from src.routers.curation._common import OpenSearchDep, router
+from src.services.curation.index_bootstrap import ensure_indexes
 
 
 DEFAULT_MAX_N = 20_000
@@ -76,7 +77,7 @@ async def viz_projection_rebuild(
         )
     if scope == 'cluster' and cluster_id is None:
         raise HTTPException(status_code=400, detail='cluster_id is required when scope=cluster')
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
 
     from src.services.curation import embedding_viz
 
@@ -153,7 +154,7 @@ async def viz_projection(
             status_code=400,
             detail='UMAP viz projection is disabled (set OP_VIZ_PROJECTION_ENABLED=1 to enable)',
         )
-    await _ensure_indexes(opensearch)
+    await ensure_indexes(opensearch)
 
     from src.services.curation import embedding_viz_read
 

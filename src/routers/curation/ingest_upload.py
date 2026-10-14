@@ -2,7 +2,7 @@
 
 Split out of ``ingest.py`` to stay under the 700-LOC ratchet: this route's
 body (extension sniffing, per-item size/type accounting, content-addressed
-persistence) is self-contained and only needs ``_get_ingest_service`` /
+persistence) is self-contained and only needs ``get_ingest_service`` /
 ``_batch_response`` from the sibling module.
 """
 
@@ -14,12 +14,14 @@ from typing import Annotated
 
 from fastapi import File, Form, HTTPException, UploadFile
 
-from src.routers.curation._common import OpenSearchDep, RegistryDep, _ensure_indexes, router
+from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._common_models import (
     BatchIngestResponse as _BatchIngestResponse,
     IngestImageResponse,
 )
-from src.routers.curation.ingest import _batch_response, _get_ingest_service
+from src.routers.curation.ingest import _batch_response
+from src.services.curation.index_bootstrap import ensure_indexes
+from src.services.curation.ingest_service_factory import get_ingest_service
 from src.services.curation.upload_ingest import (
     EarlyFailure,
     PayloadTooLargeError,
@@ -130,8 +132,8 @@ async def curation_ingest_upload(
             ),
         )
     paths = _parse_upload_paths(image_paths, images)
-    await _ensure_indexes(opensearch)
-    service = await _get_ingest_service(opensearch, registry)
+    await ensure_indexes(opensearch)
+    service = await get_ingest_service(opensearch, registry)
 
     entries = [
         StagedEntry(path, await upload.read(), _upload_extension(path, upload))

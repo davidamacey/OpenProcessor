@@ -283,29 +283,8 @@ OP_SEGMENTER_REQUEST_RESPONSE_SECONDS = Histogram(
     buckets=_SEGMENTER_LATENCY_BUCKETS,
 )
 
-# ---------------------------------------------------------------------------
-# Ingest OCC upsert. A blind bulk upsert can silently clobber
-# human-applied labels whenever a deterministic ``crop_id`` already
-# exists. The OCC-aware upsert helper preserves human-set guard fields
-# and surfaces these two counters so Grafana can show the fix firing in
-# production.
-# ---------------------------------------------------------------------------
-
-OP_INGEST_OCC_FINAL_CONFLICT = Counter(
-    'op_ingest_occ_final_conflict',
-    'Ingest upsert OCC writes that exhausted retries (skipped without clobber).',
-)
-
-OP_INGEST_PRESERVED_HUMAN_LABEL = Counter(
-    'op_ingest_preserved_human_label',
-    'Ingest upserts that preserved a pre-existing human-applied label field.',
-    labelnames=('field',),
-)
-
 __all__ = [
     'HTTP_REQUEST_DURATION_SECONDS',
-    'OP_INGEST_OCC_FINAL_CONFLICT',
-    'OP_INGEST_PRESERVED_HUMAN_LABEL',
     'OP_OCC_FINAL_CONFLICT',
     'OP_OCC_RETRY_COUNT',
     'OP_OPEN_VOCAB_CALL_SECONDS',

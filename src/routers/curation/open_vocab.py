@@ -14,15 +14,8 @@ from typing import Any
 from fastapi import Query
 
 from src.core.wire_json import WireJSONResponse
-from src.routers.curation._common import OpenSearchDep, get_class_registry, router
-from src.routers.curation._config_common_models import (
-    ActiveConfigResponse,
-    ActiveRef,
-    ValidationReport,
-    active_conflict_error,
-    api_error,
-)
-from src.routers.curation._models_segmenter import segmenter_availability
+from src.routers.curation._api_error import active_conflict_error, api_error
+from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._open_vocab_models import (
     OpenVocabActivateRequest,
     OpenVocabActivateResponse,
@@ -42,6 +35,7 @@ from src.routers.curation._open_vocab_models import (
     SegmenterAvailability,
 )
 from src.routers.curation._open_vocab_schema import build_open_vocab_schema
+from src.schemas.curation.config_common import ActiveConfigResponse, ActiveRef, ValidationReport
 from src.services.config_store import ActiveConflictError, RevisionConflictError, get_config_store
 from src.services.config_store.activation_view import build_active_config_response
 from src.services.config_store.open_vocab import (
@@ -56,29 +50,9 @@ from src.services.config_store.open_vocab import (
     save_set,
     template_names,
 )
+from src.services.config_store.open_vocab_inputs import validation_inputs
 from src.services.config_store.open_vocab_validation import taken_message, validate_open_vocab
-
-
-def validation_inputs() -> dict[str, Any]:
-    """The project-bound inputs every open-vocabulary validation needs (the
-    registry's class names, the primary detector's class names, the
-    segmenter probe): the one place they are assembled, so create, save,
-    validate, clone and the activation gate cannot disagree."""
-    from src.config.ingest_profiles import ingest_primary_profile
-    from src.routers.curation._models_segmenter import configured_segmenter_health
-    from src.services.labeling.vlm_endpoints import vlm_configured
-    from src.utils.class_names import get_class_names
-
-    registry = get_class_registry().load()
-    detector = ingest_primary_profile().detector_model
-    return {
-        'class_names': frozenset(c.class_name for c in registry.classes if not c.deprecated),
-        'detector_class_names': frozenset(get_class_names(detector).values())
-        if detector
-        else frozenset(),
-        'segmenter_health': configured_segmenter_health,
-        'vlm_configured': vlm_configured(),
-    }
+from src.services.detection.segmenter_health import segmenter_availability
 
 
 def _to_doc(record: OpenVocabRecord, *, validation: Any = None) -> OpenVocabDoc:

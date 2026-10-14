@@ -32,7 +32,9 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     fake_os = AsyncMock()
     fake_os.count = AsyncMock(return_value={'count': 0})
-    monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
     monkeypatch.delenv('OP_SCORES_ENABLED', raising=False)
     monkeypatch.delenv('OP_SCORES_SHADOW', raising=False)
     monkeypatch.delenv('OP_SELECT_DIVERSE_ENABLED', raising=False)

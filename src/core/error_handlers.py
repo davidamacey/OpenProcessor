@@ -19,6 +19,7 @@ from src.core.logging import get_logger, get_request_id
 if TYPE_CHECKING:
     from fastapi import Request
 
+    from src.core.exceptions import RequestRejectedError
     from src.utils.retry import RetryExhaustedError
     from src.utils.upstream_errors import UpstreamError
 
@@ -85,3 +86,9 @@ async def upstream_unavailable_response(request: Request, exc: UpstreamError) ->
             'Retry-After': str(TRITON_UNAVAILABLE_RETRY_AFTER_SECONDS),
         },
     )
+
+
+async def request_rejected_response(_request: Request, exc: RequestRejectedError) -> JSONResponse:
+    """A service refused the request -> the status and ``{"detail": ...}`` body it
+    carries, the same response an ``HTTPException`` with that status and detail gives."""
+    return JSONResponse(status_code=exc.status_code, content={'detail': exc.detail})

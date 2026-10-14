@@ -11,7 +11,8 @@
    */
   import { onMount, onDestroy } from 'svelte';
   import { createBakeoffController } from '$lib/bakeoff/bakeoffController.svelte';
-  import { formatTime, metricLabel } from '$lib/bakeoff/view';
+  import { formatTimestamp } from '$lib/format/date';
+  import { metricLabel } from '$lib/bakeoff/view';
   import ResourceLinksRow from '$lib/components/ResourceLinksRow.svelte';
   import DatasetPicker from '$components/bakeoff/DatasetPicker.svelte';
   import ModelPicker from '$components/bakeoff/ModelPicker.svelte';
@@ -214,7 +215,7 @@
                   ? ` · ${r.profile}`
                   : ''}
               </div>
-              <div class="text-[10px] text-zinc-600">{formatTime(r.started_at)}</div>
+              <div class="text-[10px] text-zinc-600">{formatTimestamp(r.started_at)}</div>
             </button>
           </li>
         {:else}

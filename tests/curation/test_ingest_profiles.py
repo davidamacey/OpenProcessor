@@ -17,8 +17,9 @@ import pytest
 import structlog.testing
 
 from src.config import DetectionProfile
-from src.routers.curation import ingest as ingest_router
+from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.services.curation.ingest_detect import WholeImageDetector
+from src.services.curation.ingest_service_factory import get_ingest_service
 from src.services.detection import profile_registry
 
 
@@ -40,7 +41,7 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[pytest.MonkeyPatch]:
 def test_primary_profile_reads_ingest_primary_namespace(clean_env: pytest.MonkeyPatch) -> None:
     clean_env.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'item_proposer')
     clean_env.setenv('OP_INGEST_PRIMARY_INPUT_SIZE', '640')
-    profile = ingest_router._get_detection_profile()
+    profile = ingest_primary_profile()
     assert profile.name == 'item'
     assert profile.detector_model == 'item_proposer'
     assert profile.input_size == 640
@@ -48,7 +49,7 @@ def test_primary_profile_reads_ingest_primary_namespace(clean_env: pytest.Monkey
 
 def test_secondary_profile_off_unless_model_set(clean_env: pytest.MonkeyPatch) -> None:
     clean_env.setenv('OP_INGEST_SECONDARY_INPUT_SIZE', '640')
-    assert ingest_router._get_secondary_profile() is None
+    assert ingest_secondary_profile() is None
 
 
 def test_secondary_profile_from_ingest_secondary_namespace(clean_env: pytest.MonkeyPatch) -> None:
@@ -57,7 +58,7 @@ def test_secondary_profile_from_ingest_secondary_namespace(clean_env: pytest.Mon
     clean_env.setenv('OP_INGEST_SECONDARY_INPUT_SIZE', '1280')
     clean_env.setenv('OP_INGEST_SECONDARY_CONFIDENCE_FLOOR', '0.6')
     clean_env.setenv('OP_INGEST_SECONDARY_NAME', 'v2')
-    profile = ingest_router._get_secondary_profile()
+    profile = ingest_secondary_profile()
     assert profile is not None
     assert profile.detector_model == 'ensemble_classifier'
     assert profile.detector_version == '3'
@@ -72,13 +73,13 @@ def test_ingest_and_region_profiles_are_independent(clean_env: pytest.MonkeyPatc
     region = profile_registry.get_active_region_profile()
     assert region is not None
     assert region.detector_model != 'item_proposer'
-    assert ingest_router._get_detection_profile().detector_model == 'item_proposer'
+    assert ingest_primary_profile().detector_model == 'item_proposer'
 
 
 def test_retired_detection_prefix_fails_loudly(clean_env: pytest.MonkeyPatch) -> None:
     clean_env.setenv('OP_DETECTION_DETECTOR_MODEL', 'item_proposer')
     with pytest.raises(ValueError, match='OP_INGEST_PRIMARY_'):
-        ingest_router._get_detection_profile()
+        ingest_primary_profile()
     with pytest.raises(ValueError, match='OP_REGION_DETECTION_'):
         profile_registry.region_profile_from_env()
 
@@ -101,7 +102,7 @@ async def test_ingest_service_receives_the_secondary_profile(
     clean_env.setattr(main_module, 'get_async_triton_pool', object)
     clean_env.setattr(main_module.app.state, 'pe_encoder', object(), raising=False)
 
-    service = await ingest_router._get_ingest_service(_NoSettingsDoc(), object())
+    service = await get_ingest_service(_NoSettingsDoc(), object())
     assert service.profile.detector_model == 'item_proposer'
     assert service.secondary_profile is not None
     assert service.secondary_profile.detector_model == 'ensemble_classifier'
@@ -110,14 +111,13 @@ async def test_ingest_service_receives_the_secondary_profile(
 
 @pytest.mark.asyncio
 async def test_ingest_service_503s_on_retired_prefix(clean_env: pytest.MonkeyPatch) -> None:
-    from fastapi import HTTPException
-
     import src.main as main_module
+    from src.core.exceptions import RequestRejectedError
 
     clean_env.setenv('OP_DETECTION_DETECTOR_MODEL', 'item_proposer')
     clean_env.setattr(main_module.app.state, 'pe_encoder', object(), raising=False)
-    with pytest.raises(HTTPException) as info:
-        await ingest_router._get_ingest_service(object(), object())
+    with pytest.raises(RequestRejectedError) as info:
+        await get_ingest_service(object(), object())
     assert info.value.status_code == 503
     assert 'OP_INGEST_PRIMARY_' in str(info.value.detail)
 
@@ -152,7 +152,7 @@ def test_retired_class_ids_env_is_ignored_and_warned(
     clean_env.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'item_proposer')
     clean_env.setenv('OP_INGEST_PRIMARY_CLASS_IDS', '2,3')
     with structlog.testing.capture_logs() as logs:
-        profile = ingest_router._get_detection_profile()
+        profile = ingest_primary_profile()
     assert not hasattr(profile, 'class_ids')
     assert any(entry['event'] == 'retired_env_ignored' for entry in logs)
     assert len(_decode(profile, [0, 2, 7, 15])) == 4
@@ -216,11 +216,11 @@ def test_assigning_primary_keeps_registry_labelling() -> None:
 def test_assigns_class_and_labels_path_from_env(clean_env: pytest.MonkeyPatch) -> None:
     clean_env.setenv('OP_INGEST_PRIMARY_ASSIGNS_CLASS', 'true')
     clean_env.setenv('OP_INGEST_PRIMARY_LABELS_PATH', '/models/proposer/labels.txt')
-    profile = ingest_router._get_detection_profile()
+    profile = ingest_primary_profile()
     assert profile.assigns_class is True
     assert profile.labels_path == '/models/proposer/labels.txt'
     clean_env.delenv('OP_INGEST_PRIMARY_ASSIGNS_CLASS')
-    assert ingest_router._get_detection_profile().assigns_class is False
+    assert ingest_primary_profile().assigns_class is False
 
 
 # =============================================================================
@@ -229,7 +229,7 @@ def test_assigns_class_and_labels_path_from_env(clean_env: pytest.MonkeyPatch) -
 
 
 def test_class_sources_follow_profile_names(clean_env: pytest.MonkeyPatch) -> None:
-    from src.services.curation import ingest_class_sources as cs
+    from src.domain import ingest_class_sources as cs
 
     clean_env.setenv('OP_INGEST_PRIMARY_NAME', 'proposer')
     assert cs.unlabeled_proposal_class_sources() == {

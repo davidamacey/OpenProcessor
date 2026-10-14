@@ -548,7 +548,7 @@ async def merge_class(
     # class_validated=true/label_source='human' once class_source now says
     # 'class_merge'.
     from src.clients.occ import occ_skip_on_conflict_bulk
-    from src.services.curation.history import record_class_history
+    from src.domain.history import record_class_history
 
     async def _scroll_merge_ids() -> list[str]:
         ids: list[str] = []

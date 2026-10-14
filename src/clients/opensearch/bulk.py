@@ -21,7 +21,7 @@ from src.clients.opensearch.names import (
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
-    from src.services.clustering import ClusteringService
+    from src.clients.opensearch.cluster_assigner import ClusterAssigner
 
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ class BulkMixin:
         embeddings: list[list[float]] | np.ndarray,
         person_name: str | None = None,
         metadata: dict[str, Any] | None = None,
-        clustering_service: ClusteringService | None = None,
+        clustering_service: ClusterAssigner | None = None,
     ) -> dict[str, Any]:
         """
         Ingest face detections with ArcFace embeddings.
@@ -53,7 +53,7 @@ class BulkMixin:
             embeddings: [N, 512] ArcFace embeddings
             person_name: Optional name/label for all faces in image
             metadata: Optional metadata dictionary
-            clustering_service: Optional ClusteringService for cluster assignment
+            clustering_service: Optional cluster assigner (the clustering service) for cluster assignment
 
         Returns:
             Dict with face ingestion results

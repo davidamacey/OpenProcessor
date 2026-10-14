@@ -39,7 +39,7 @@ ultralytics>=8.4.82,<8.5
 transformers>=4.30.0
 
 # cv2 import sites: src/clients/triton_client.py, fast_face_client.py,
-# src/utils/face_align.py, image_processing.py, src/services/cpu_preprocess.py,
+# src/utils/face_align.py, image_processing.py, src/utils/cpu_preprocess.py,
 # src/services/detection/{pe_preprocess,crop_quality}.py
 opencv-python
 # src/services/curation/image_decode.py

@@ -9,7 +9,7 @@ import pytest
 
 from src.clients.curation_opensearch.ensure_fields import ensure_items_region_boxes_fields
 from src.config import get_region_fields
-from src.services.curation.region_boxes import RegionBox, boxes_write_fields
+from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.services.curation.region_verify import BoxVerdict, verify_regions_update
 
 

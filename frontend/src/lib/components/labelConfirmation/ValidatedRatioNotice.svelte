@@ -6,7 +6,7 @@
   validated < total, not a threshold: the backend serves no total floor.
 -->
 <script lang="ts">
-  import { formatCount } from '$lib/formatCount';
+  import { formatCount } from '$lib/format/count';
 
   interface Props {
     validated: number;

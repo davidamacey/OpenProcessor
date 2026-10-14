@@ -281,11 +281,7 @@ def test_active_config_response_serves_source_activated_at_and_applied() -> None
     """ActiveConfigResponse (the Cropwright UI reads it)
     must carry `source`, `activated_at` and `applied[]` -- not just
     `axis`/`active`/`previous`/`config_revision`/`stale`."""
-    from src.routers.curation._config_common_models import (
-        ActiveConfigResponse,
-        ActiveRef,
-        AppliedRuntime,
-    )
+    from src.schemas.curation.config_common import ActiveConfigResponse, ActiveRef, AppliedRuntime
 
     resp = ActiveConfigResponse(
         axis='detection_profile',

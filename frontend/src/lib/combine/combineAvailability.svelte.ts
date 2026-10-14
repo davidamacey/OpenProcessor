@@ -20,7 +20,7 @@ import { ConfigAvailability } from '$lib/config/configAvailability.svelte';
 /** The id of a job that cannot exist. */
 export const COMBINE_PROBE_JOB_ID = '__probe__';
 
-export async function probeCombine(): Promise<void> {
+async function probeCombine(): Promise<void> {
   try {
     await getCombineJob(COMBINE_PROBE_JOB_ID);
   } catch (e) {

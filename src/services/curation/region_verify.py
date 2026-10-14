@@ -17,13 +17,8 @@ from src.clients.occ_locks import is_locked_box
 from src.config.region_fields import RegionFields, get_region_fields
 from src.config.region_rejection import REJECT_REASON_VERIFIER
 from src.config.region_state import RegionStatus
+from src.domain.region_boxes import RegionBox, boxes_write_fields, derive_status, read_boxes
 from src.services.curation.region_box_edits import same_box
-from src.services.curation.region_boxes import (
-    RegionBox,
-    boxes_write_fields,
-    derive_status,
-    read_boxes,
-)
 
 
 if TYPE_CHECKING:

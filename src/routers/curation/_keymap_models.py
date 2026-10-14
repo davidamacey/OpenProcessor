@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from src.routers.curation._config_common_models import ValidationIssue
+from src.schemas.curation.config_common import ValidationIssue
 
 
 class KeymapGrammarWire(BaseModel):

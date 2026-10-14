@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.routers.curation._dataset_issue_models import DatasetIssueWire
+from src.schemas.curation.dataset_issue import DatasetIssueWire
 from src.services.curation.dataset_import.actions import ImportActions
 from src.services.curation.dataset_import.options import DatasetImportOptions
 

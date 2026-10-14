@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from src.config.project_context import current_project
-from src.services.curation.history import (
+from src.domain.history import (
     MAX_HISTORY_ENTRIES,
     MAX_REGION_CHAIN_ENTRIES,
     merge_region_chain,

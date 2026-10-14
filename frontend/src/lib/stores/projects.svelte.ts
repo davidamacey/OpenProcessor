@@ -17,7 +17,7 @@
  */
 
 import { ApiError, getProject, getProjects, setScopedPrefix } from '$lib/api';
-import { onProjectChange, resetForProjectChange } from '$lib/projectChange';
+import { resetForProjectChange } from '$lib/projectChange';
 import type {
   ProjectCapacity,
   ProjectLabels,
@@ -25,8 +25,6 @@ import type {
   ProjectSummary,
   ProjectsResponse,
 } from '$lib/types_projects';
-
-export { onProjectChange, resetForProjectChange };
 
 const LOAD_TIMEOUT_MS = 2000;
 const RETRY_DELAYS_MS = [250, 750];

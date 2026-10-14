@@ -17,10 +17,8 @@ from typing import TYPE_CHECKING, Any, cast
 from src.clients.occ import CLASS_WRITE_FIELDS, strip_class_write_fields
 from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
-from src.services.curation.class_sources import VLM_UNMATCHED_CLASS_SOURCE, unmatched_class_clear
-from src.services.curation.class_write_guard import class_write_allowed
-from src.services.curation.history import merge_region_chain, record_class_snapshot
-from src.services.curation.region_boxes import (
+from src.domain.history import merge_region_chain, record_class_snapshot
+from src.domain.region_boxes import (
     RegionBox,
     boxes_write_fields,
     derive_status,
@@ -30,6 +28,8 @@ from src.services.curation.region_boxes import (
     read_boxes,
     stale_verdict_ids,
 )
+from src.services.curation.class_sources import VLM_UNMATCHED_CLASS_SOURCE, unmatched_class_clear
+from src.services.curation.class_write_guard import class_write_allowed
 
 
 if TYPE_CHECKING:

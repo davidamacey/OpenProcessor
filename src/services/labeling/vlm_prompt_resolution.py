@@ -253,7 +253,7 @@ def get_prompt_pack(
         # field; `object.__setattr__` bypasses the frozen check for this
         # untracked, non-dataclass attribute (ignored by `__eq__`/
         # `__repr__`, so `inst._pack != pack` cache comparisons in
-        # `_get_vlm_labeler` are unaffected).
+        # `get_vlm_labeler` are unaffected).
         object.__setattr__(pack, '_resolved_revision', stored.revision)
         return pack
     try:

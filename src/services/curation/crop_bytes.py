@@ -118,7 +118,7 @@ VLM_CROP_SIZE = 224
 def resolved_image_path(image_path: str) -> Path:
     """``image_path`` resolved (and traversal-checked) under its crop root.
 
-    Raises ``HTTPException`` (400/404) when the stored path is not servable.
+    Raises ``RequestRejectedError`` (400/404) when the stored path is not servable.
     """
     from src.services.curation.image_serving import resolve_crop_root, resolve_safe_path
 

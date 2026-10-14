@@ -26,7 +26,7 @@ export const PATH_LOOKUP_MAX = 10_000;
  * unset (local dev, or the literal unresolved placeholder) falls back
  * to nginx.conf's default.
  */
-export const DEFAULT_INGEST_MAX_REQUEST_MB = 256;
+const DEFAULT_INGEST_MAX_REQUEST_MB = 256;
 
 /** UX hint threshold only — never blocks a selection. */
 export const LARGE_SELECTION_HINT = 50_000;

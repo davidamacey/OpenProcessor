@@ -14,8 +14,9 @@ from fastapi import Query
 from pydantic import BaseModel
 
 from src.config.curation import get_curation_config
+from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, logger, router
-from src.routers.curation._config_common_models import ModelSharingUser, api_error
+from src.schemas.curation.config_common import ModelSharingUser
 from src.services.config_store.project_usage import active_detector_users
 from src.services.training.promote_json import SharingRevisionConflictError, update_sharing
 

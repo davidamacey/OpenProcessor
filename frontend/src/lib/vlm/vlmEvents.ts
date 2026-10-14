@@ -10,7 +10,7 @@ import { subscribeCurationEvents, subscribeGlobalEvents } from '$lib/sse';
 import type { CurationEvent, ProjectEvent } from '$lib/sse';
 import { isConfigAxisEvent } from '$lib/config/validationIssues';
 
-export const VLM_AXIS = 'vlm';
+const VLM_AXIS = 'vlm';
 
 export type VlmEvent = CurationEvent | ProjectEvent;
 

@@ -19,9 +19,9 @@ from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch, matches
 from src.config import get_region_fields
+from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.services.curation import image_serving, reprocess_embed
 from src.services.curation.region_box_embeddings import current_vectors, entry_for
-from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[2] / 'scripts' / 'curation'

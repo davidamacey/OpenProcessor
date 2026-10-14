@@ -18,8 +18,8 @@
   import CombineSourcesStep from '$components/combine/CombineSourcesStep.svelte';
   import { combineAvailability } from '$lib/combine/combineAvailability.svelte';
   import { createCombineWizard } from '$lib/combine/combineWizardController.svelte';
-  import { formatBytes } from '$lib/combine/combineText';
-  import { formatCount } from '$lib/formatCount';
+  import { formatBytes } from '$lib/format/bytes';
+  import { formatCount } from '$lib/format/count';
   import { projectsStore } from '$stores/projects.svelte';
   import { toastStore } from '$stores/toast.svelte';
 
