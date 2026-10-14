@@ -90,7 +90,7 @@ describe('/settings deployment-defaults page', () => {
   // m10 (2026-09-24 interactive pass): the select used to offer every
   // axis option with no signal a 0-coverage sort is offered unmarked.
   // `hasFieldCoverage()` itself is behaviorally covered (mutation-tested)
-  // in strategies.test.ts — this checks the page actually calls it rather
+  // in strategies.availability.test.ts — this checks the page actually calls it rather
   // than re-deriving the predicate inline.
   it('marks zero-coverage options via the shared hasFieldCoverage predicate, not an inline check', () => {
     expect(src).toMatch(/hasFieldCoverage/);
