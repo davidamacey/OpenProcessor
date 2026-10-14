@@ -2,16 +2,45 @@
 
 Complete guide for optimizing FastAPI and Triton Inference Server performance.
 
-> **Status (v0.5.0):** this guide covers the API-layer tuning and benchmarks that are in
-> `main`. The GPU and Triton pipeline optimization (decode once, stay on the GPU) is
-> open work, tracked in #40 and planned in
-> [`design/triton_pipeline_optimization_plan.md`](design/triton_pipeline_optimization_plan.md);
-> the numbers here are measured before it.
+> **Status (v0.5.0):** this guide covers the API-layer tuning, the measured results of the GPU and
+> Triton pipeline optimization milestone (summary table below; plan in
+> [`design/triton_pipeline_optimization_plan.md`](design/triton_pipeline_optimization_plan.md)),
+> and the benchmark protocol. The scale ladder (10k, 100k, 1M images) is not in this guide yet.
+
+---
+
+## Summary of the optimization milestone
+
+Every headline result of the milestone, with the section that holds the method, the raw numbers and
+the caveats. Nothing here is new: each figure is copied from the section in the last column (raw
+JSON under `docs/benchmarks/`). Public data only: set A is the pinned 2,000-image COCO set, set B
+the pinned Commons photos (12 to 24 MP). Ranges and the host conditions are in the sections.
+
+| Result | Before | After | Source |
+|---|---|---|---|
+| PE image encoder engine, per embedding (FP16 engine) | 13.7 ms | 5.5 ms | [FP16 PE engine](#060-wave-1-fp16-pe-engine-set-a-public-coco-2000-images) |
+| Ingest through `/ingest/upload`, set A, one card (FP16 engine) | 8.9 images/s | 17.4 images/s | [FP16 PE engine](#060-wave-1-fp16-pe-engine-set-a-public-coco-2000-images) |
+| Request bytes to Triton per image, set A (uint8 inputs) | 14.94 MB per image | 3.73 MB per image | [uint8 inputs](#wp-21-uint8-inputs-for-the-detector-and-the-pe-image-encoder-214) |
+| API CPU per image, set A, `/ingest/upload` (uint8 inputs) | 0.118 CPU-s | 0.062 CPU-s | [uint8 inputs](#wp-21-uint8-inputs-for-the-detector-and-the-pe-image-encoder-214) |
+| Photo ingest, `/ingest/upload`, 8 / 16 / 32 / 64 clients (pixel work off the event loop) | photos 5.2 / 8.7 / 10.8 / 4.9 images/s | 21.5 / 27.3 / 23.6 / 24.1 images/s | [API CPU attribution and fixes](#060-wp-12-and-wp-13-api-cpu-attribution-and-fixes-210-211-239-241) |
+| Ingest, set A, 1 x A6000, tuned detector engine and concurrency | 23.39 images/s | 28.81 to 29.07 images/s | [Stage 2 tuning](#stage-2-tuning-detector-engine-and-the-concurrency-sweep-226-259) |
+| Ingest, set A, 2 x A6000 (data-parallel PE) | 1 card 23.39 images/s | 44.60 images/s (1.91x); A6000 + 3080 Ti 43.72 (1.87x); tuned 2 cards 55.08 to 56.37 | [Multi-GPU PE encoding](#multi-gpu-pe-encoding-228), [Stage 2 tuning](#stage-2-tuning-detector-engine-and-the-concurrency-sweep-226-259) |
+| Photos (set B, 12 to 24 MP) ingest, detect + embed (GPU decode) | 27.0 images/s | 35.0 images/s | [Decode once and the GPU decode](#decode-once-and-the-gpu-decode-217) |
+| Host CPU per photo at bulk (GPU decode) | 1.12 CPU-s | 0.34 CPU-s | [Decode once and the GPU decode](#decode-once-and-the-gpu-decode-217) |
+| Cluster pass plus geometry stage, 10,000 crop vectors (IVF) | 176.4 s | 24.9 s | [Cluster pass plumbing](#cluster-pass-plumbing-fetch-and-write-back-218) |
+| Cluster pass, 100,000 vectors (IVF, fetch + fit + write-back) | 310.6 s | 138.0 s | [Cluster pass plumbing](#cluster-pass-plumbing-fetch-and-write-back-218) |
+| OpenSearch write ceiling, 100,000 real vectors, final mapping | 1 writer 473 documents/s | 4 writers 1,980; 8 writers 4,426 documents/s (target needs about 740) | [Stage 4](#stage-4-coalesced-ingest-writes-lucene-engine-write-ceiling-on-the-final-mapping-248-254-230) |
+| Index build CPU, `ef_construction` 512 to 128 | 2.39 node CPU-s per 1,000 documents | 1.49 | [Stage 4](#stage-4-coalesced-ingest-writes-lucene-engine-write-ceiling-on-the-final-mapping-248-254-230) |
+| Vector index size per item, faiss to Lucene engine | 8.6 KiB | 4.5 KiB | [Stage 4](#stage-4-coalesced-ingest-writes-lucene-engine-write-ceiling-on-the-final-mapping-248-254-230), [Vector store evaluation](#vector-store-evaluation-tuned-opensearch-against-milvus-qdrant-pgvector-and-lancedb-221-230) |
+| PE engine: INT8 | | rejected: faster but fails the accuracy gates; FP16 stays the only precision | [INT8 evaluation](#int8-evaluation-of-the-pe-image-encoder-on-ampere-213) |
+| System shared memory between the API and Triton | | not adopted: under 5 percent of API CPU | [shared memory](#wp-22-system-shared-memory-between-the-api-and-triton-215-measured-and-not-adopted) |
+| gRPC ingest channel | | skipped: the decision rule said no, nothing built | [Ingest transports](#ingest-transports-263) |
 
 ---
 
 ## Table of Contents
 
+0. [Summary of the optimization milestone](#summary-of-the-optimization-milestone)
 1. [Overview](#overview)
 2. [FastAPI Optimizations](#fastapi-optimizations)
 3. [gRPC Connection Management](#grpc-connection-management)
@@ -2377,6 +2406,23 @@ clients: 2,124, 2,226, 5,080, 513, 6,448 and 168,286.
    (215 MB against 415 MB per 100k) but disk falls only 24 percent. No other engine is below the
    OpenSearch Lucene or `on_disk` figures: Qdrant int8 11.0 KiB disk (it keeps the raw vectors),
    pgvector `halfvec` 5.6 KiB, Milvus 16 to 23 KiB (directory), LanceDB IVF_PQ 8.5 KiB.
+
+   **Native-memory formula, checked against the stored data (#56).** For a faiss HNSW vector field
+   the k-NN plugin's estimate is `1.1 x (4 x d + 8 x m)` bytes per vector (float32 vectors plus
+   `m` neighbours of 8 bytes; the 1.1 is its overhead factor). At `d` 1,024 and `m` 16 that is
+   4,646 bytes, 4.54 KiB; without the factor, 4,224 bytes, 4.125 KiB. The measured value is the
+   node's `knn_graph_memory_kb` after the 100,000-vector load
+   (`docs/benchmarks/vectordb/100000/os_shipped_r1.json`, field `footprint.engine_stats`): 414,845
+   KB, which is 4.15 KiB per vector. The raw formula without the overhead factor predicts it to
+   within 1 percent and the 1.1 factor over-estimates by 9 percent, so size the native memory of a
+   faiss index at 4.5 KiB per vector (4.5 GiB per million) and expect 4.1 KiB. The same division
+   gives the quantized and Lucene rows: fp16 (`os_fp16_r1.json`) 214,876 KB, 2.15 KiB per vector (the
+   formula with 2-byte components is 2,176 bytes, 2.125 KiB); `on_disk` 8x (`os_disk8x_r1.json`)
+   64,876 KB, 0.63 KiB; `on_disk` 16x (`os_disk16x_r1.json`) 39,876 KB, 0.39 KiB; Lucene
+   (`os_lucene_r3.json`) 0 KB, because the Lucene graph is memory mapped and is paged by the
+   operating system instead of counted in native memory. The table in "Write throughput, storage and
+   memory" has the container-level RAM growth, which is larger (it includes heap, page cache and
+   buffers).
 6. **Build cost.** `ef_construction` 128 cuts the OpenSearch merge from 264 s to 67 s (searchable
    after 102 s against 386 s) for a recall@10 loss of 0.01 at `ef_search` 100 (0.957 against 0.967 on
    300 queries, inside the sampling error). The Lucene engine merges slower (387 to 485 s) and loads
@@ -2886,6 +2932,42 @@ with the default (not faster, and it adds 1-2 s to the closing refresh).
 - Tool: `scripts/bench/cluster_plumbing_bench.py` (stage split, `--fetch-profile`, `--write-grid`,
   `--fetch-grid`, `--assign-only`, `--geometry`).
 
+#### Cluster pass at a chosen size: `cluster_bench.py` (#218)
+
+`scripts/bench/cluster_bench.py` times the production `cluster_residuals` at each size of a ladder
+(`--sizes`), per method (`--methods`, default `ivf`), `--reps` times, in a throw-away project
+(real mapping, items index deleted at the end) loaded with the first N rows of a dump of real
+public COCO embeddings. It records method, size, wall seconds, residual and cluster counts and the
+host load, and refuses a pass that did not cluster the whole pool (status not `success`, or fewer
+residuals than rows loaded): a cluster-refresh daemon on the same node assigns the items of a new
+project between the reset and the fetch, so such passes are discarded and repeated (`--attempts`).
+The wall time is "fit and write-back as `cluster_residuals` does them": it excludes the geometry
+stage (`cluster_plumbing_bench.py --geometry`) and the load. It calls the methods and changes none.
+
+Run on the live development stack, 12,792 real crop vectors of the pinned COCO set A (the parity
+capture `ref-u8fp16`), IVF and AHC, median (min-max) of 3, seconds:
+
+| Method | 2,000 vectors | 10,000 vectors | Clusters (2,000 / 10,000) |
+|---|---|---|---|
+| IVF | 8.5 (6.7-10.9) | 72.2 (71.7-112.2) | 333 / 512 |
+| AHC | 30.4 (21.3-42.5) | 231.8 (165.4-356.9) | 627 / 1,769 |
+
+**These are not comparable with the tables above.** The host was saturated by other projects (1-minute
+load 44 to 138 on 48 logical cores, against 13 to 48 during the plumbing series) and the cluster-refresh
+daemon of the stack was working on the same node; the IVF pass at 10,000 vectors, 14.4 s for the whole
+pass in the plumbing table, took 72 s here. Treat the run as a check that the harness works and as an
+upper bound, not as a result: no number in this guide changes because of it. The 100,000-vector run
+needs a dump of at least that size (the parity capture has 12,792 rows) and a quiet host, and is open (#218):
+
+```bash
+.venv/bin/python scripts/bench/cluster_bench.py --opensearch-url http://127.0.0.1:<opensearch port> \
+    --data <vectors dump>.npz --source vecdb --sizes 2000,10000,100000 --methods ivf --reps 3 \
+    --out <results dir>
+```
+
+`--source vecdb` reads `vectors` (float32 rows) and `class_name` arrays from the npz; AHC did not
+finish at 100,000 and HDBSCAN was not run there (see above), so only `ivf` belongs on that rung.
+
 ### GPU decode measurements (#217)
 
 Question: does decoding JPEGs on the GPU, and building each model's input there, speed up ingest?
@@ -3257,6 +3339,17 @@ one shard, no replica, 1 s refresh). Medians of 2 repetitions on a loaded host.
 - Lucene is slower per writer than the faiss rows of probe 5 (473 against 1,011 documents/s with one
   writer; the host was also busier), so one writer no longer carries 100 images/s: four do (268
   images/s equivalent). That is what the coalescer's 4 writers per process provide. 429 retries: none.
+- **Go / no-go against the 100 images/s target (#230): go.** An ingested image writes about 7.4
+  documents and 7.4 embeddings (6.4 items and one image document, the proportions of this
+  table), so 100 images/s asks the datastore for about 740 documents/s. The measured ceiling on the
+  final mapping is 1,980 documents/s with 4 writers (268 images/s, 2.7 times the target) and 4,426
+  with 8 (598 images/s), both with no 429 retries and `ef_construction` 128, which cuts node CPU
+  per 1,000 documents from 2.39 to 1.49 CPU-s at equal throughput (probe 5, 3,365 against 3,206
+  documents/s). One writer (473 documents/s, 64 images/s) does not carry 100 images/s on the Lucene
+  engine; the coalescer's 4 writers per process do. So the datastore is not what holds ingest
+  below 100 images/s: the measured ingest rates are bound by the GPU stages, and the write path
+  has headroom of 2.7 to 6 times at the target. The conditions are one node, one shard, an 8 GB heap
+  and a loaded host; the 1M point and the cluster pass at that size stay with #232.
 - Stored size of the source project's items index: 448.5 MiB for 102,677 items (4.5 KiB each); heap in
   use 4.4 of 8 GB after the runs.
 - **Extrapolation, not run (1M):** a linear extrapolation of the sizes above gives about 4.4 GiB of
