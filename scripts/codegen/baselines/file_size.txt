@@ -1,7 +1,5 @@
 frontend/e2e/conftest.py	825	split in PR 8
 frontend/scripts/capture_docs_screenshots.py	1008	split in PR 8
-frontend/src/lib/annotations/config/parseSlotConfig.test.ts	717	split in PR 8
-frontend/src/lib/annotations/config/parseSlotConfig.ts	1530	split in PR 8
 frontend/src/lib/api.test.ts	2755	split in PR 8
 frontend/src/lib/api.ts	5766	split in PR 8
 frontend/src/lib/clusters/clusterController.test.ts	1343	split in PR 8
