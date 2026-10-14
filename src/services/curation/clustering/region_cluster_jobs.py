@@ -66,7 +66,7 @@ _job_tasks: set[asyncio.Task[None]] = set()
 def _read_region_cluster_job() -> dict[str, Any]:
     try:
         state: dict[str, Any] = json.loads(_job_file().read_text())
-    except Exception:
+    except (OSError, ValueError):  # no job file yet, or an unreadable one: start from idle
         return dict(_DEFAULT_JOB)
     # Stale-guard: a worker that died mid-run would otherwise leave the flag
     # stuck on 'running' forever, wedging the button.
@@ -87,7 +87,7 @@ def _write_region_cluster_job(state: dict[str, Any]) -> None:
         tmp = _job_file().with_suffix('.tmp')
         tmp.write_text(json.dumps(state))
         tmp.replace(_job_file())  # atomic rename
-    except Exception as exc:
+    except OSError as exc:
         logger.warning('curation_region_cluster_job_write_failed', error=str(exc))
 
 
@@ -123,7 +123,7 @@ def mark_region_refine(cluster_id: int) -> None:
             json.dumps({'last_refine_at': datetime.now(UTC).isoformat(), 'cluster_id': cluster_id})
         )
         tmp.replace(_refine_marker())
-    except Exception as exc:
+    except OSError as exc:
         logger.warning('curation_region_refine_marker_write_failed', error=str(exc))
 
 
@@ -131,7 +131,7 @@ def _read_region_refine_marker() -> dict[str, Any]:
     try:
         data: dict[str, Any] = json.loads(_refine_marker().read_text())
         return data
-    except Exception:
+    except (OSError, ValueError):  # no marker yet, or an unreadable one
         return {}
 
 
@@ -143,7 +143,7 @@ def _write_region_partition_marker(fp_count: int) -> None:
             json.dumps({'last_partition_at': datetime.now(UTC).isoformat(), 'fp_count': fp_count})
         )
         tmp.replace(_partition_marker())
-    except Exception as exc:
+    except OSError as exc:
         logger.warning('curation_region_partition_marker_write_failed', error=str(exc))
 
 
@@ -151,7 +151,7 @@ def _read_region_partition_marker() -> dict[str, Any]:
     try:
         data: dict[str, Any] = json.loads(_partition_marker().read_text())
         return data
-    except Exception:
+    except (OSError, ValueError):  # no marker yet, or an unreadable one
         return {}
 
 
@@ -269,7 +269,7 @@ def _fp_job_file() -> Path:
 def _read_region_fp_job() -> dict[str, Any]:
     try:
         state: dict[str, Any] = json.loads(_fp_job_file().read_text())
-    except Exception:
+    except (OSError, ValueError):  # no job file yet, or an unreadable one: start from idle
         return dict(_DEFAULT_JOB)
     if state.get('running') and state.get('started_at'):
         try:
@@ -288,7 +288,7 @@ def _write_region_fp_job(state: dict[str, Any]) -> None:
         tmp = _fp_job_file().with_suffix('.tmp')
         tmp.write_text(json.dumps(state))
         tmp.replace(_fp_job_file())
-    except Exception as exc:
+    except OSError as exc:
         logger.warning('curation_region_fp_job_write_failed', error=str(exc))
 
 

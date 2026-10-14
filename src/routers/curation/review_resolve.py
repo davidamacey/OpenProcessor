@@ -13,6 +13,7 @@ import asyncio
 from typing import Any
 
 from fastapi import HTTPException, Query
+from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.curation_opensearch.registry import ClassRegistryError
 from src.clients.occ import OCCFinalConflictError, occ_update_one
@@ -237,7 +238,7 @@ async def resolve_new_class_proposal(
     if updated_ids:
         try:
             await opensearch.indices.refresh(index=items_index())
-        except Exception as exc:
+        except OpenSearchException as exc:
             logger.warning('resolve_new_class_refresh_failed', error=str(exc))
 
     return ResolveNewClassResponse(

@@ -24,6 +24,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.core.logging import get_logger
 
 
@@ -174,7 +176,7 @@ async def scroll_hits(
         if scroll_id:
             try:
                 await opensearch.clear_scroll(scroll_id=scroll_id)
-            except Exception as exc:
+            except OpenSearchException as exc:
                 logger.warning('export_clear_scroll_failed', err=str(exc))
     return out
 

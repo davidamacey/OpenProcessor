@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import Query
+from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.curation_opensearch.crops import mget_crops
 from src.config import get_region_fields
@@ -324,7 +325,7 @@ async def _run_auto_label(
     else:
         try:
             await opensearch.indices.refresh(index=items_index())
-        except Exception as exc:
+        except OpenSearchException as exc:
             logger.warning('pipeline_pre_promote_refresh_failed', error=str(exc))
         promote = await with_elapsed_tick(
             progress,
@@ -614,7 +615,7 @@ async def _run_auto_label(
     # Force a refresh so subsequent reads see the updates.
     try:
         await opensearch.indices.refresh(index=items_index())
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('pipeline_refresh_failed', error=str(exc))
 
     # Final cluster_id normalization — the VLM may have changed class_id

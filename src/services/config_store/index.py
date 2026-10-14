@@ -25,7 +25,7 @@ import time
 import uuid
 from typing import TYPE_CHECKING, Any, Literal
 
-from opensearchpy.exceptions import ConflictError, NotFoundError
+from opensearchpy.exceptions import ConflictError, NotFoundError, OpenSearchException
 
 from src.clients.optional_doc import get_doc_or_none
 from src.core.logging import get_logger
@@ -158,7 +158,7 @@ async def _next_revision(
     # force the index current before searching for past revisions.
     try:
         await client.indices.refresh(index=index)
-    except Exception as exc:  # pragma: no cover - defensive; search below still runs
+    except OpenSearchException as exc:  # pragma: no cover - defensive; search below still runs
         logger.warning('config_store_index_refresh_failed', index=index, error=str(exc))
     resp = await client.search(
         index=index,

@@ -27,6 +27,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
+from opensearchpy.exceptions import OpenSearchException
 
 from src.config.curation import items_index
 from src.core.logging import get_logger
@@ -120,7 +121,7 @@ async def _fetch_cluster_members(
     if scroll_id:
         try:
             await client.clear_scroll(scroll_id=scroll_id)
-        except Exception as e:
+        except OpenSearchException as e:
             logger.warning('curation_clear_scroll_failed', error=str(e))
     return members
 
@@ -182,7 +183,7 @@ async def _bulk_update_subids(
             _log_bulk_write_errors('bulk_update_subids', resp)
     try:
         await client.indices.refresh(index=index)
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('bulk_update_subids_refresh_failed', error=str(exc))
     return len(updates)
 

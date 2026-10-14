@@ -23,6 +23,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from opensearchpy.exceptions import OpenSearchException
 
 from src.core.logging import get_logger
 
@@ -107,7 +108,7 @@ async def compute_centroid_distances(
     if scroll_id:
         try:
             await client.clear_scroll(scroll_id=scroll_id)
-        except Exception as exc:
+        except OpenSearchException as exc:
             logger.warning('curation_outlier_clear_scroll_failed', error=str(exc))
 
     if too_large:

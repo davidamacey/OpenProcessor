@@ -15,6 +15,8 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.core.logging import get_logger
 
 
@@ -51,7 +53,7 @@ async def _scroll_pages(
         if scroll_id:
             try:
                 await client.clear_scroll(scroll_id=scroll_id)
-            except Exception as exc:
+            except OpenSearchException as exc:
                 logger.debug('curation_pit_pages_clear_scroll_failed', error=str(exc))
 
 
@@ -117,5 +119,5 @@ async def iter_pages(
         await asyncio.gather(task, return_exceptions=True)
         try:
             await client.delete_pit(body={'pit_id': [pit_id]})
-        except Exception as exc:
+        except OpenSearchException as exc:
             logger.debug('curation_pit_pages_delete_failed', error=str(exc))
