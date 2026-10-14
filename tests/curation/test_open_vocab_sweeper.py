@@ -9,6 +9,7 @@ import pytest
 
 from curation.open_vocab_fixtures import FakeSegmenter, StatefulRegistry, cand, ingested_world
 from curation.reprocess_fixtures import docs, images_index
+from src.config.env import EnvError
 from src.services.config_store.store import StoredConfig, get_config_store, reset_config_stores
 from src.services.curation.dataset_import.limits import open_vocab_stale_after_s
 from src.services.curation.open_vocab_sweeper import (
@@ -129,7 +130,8 @@ def test_stale_window_default_is_short_and_overridable(monkeypatch: pytest.Monke
     monkeypatch.setenv('OP_OPEN_VOCAB_STALE_S', '1')
     assert open_vocab_stale_after_s() == 30  # floor: never reclaim a live drain's stamp
     monkeypatch.setenv('OP_OPEN_VOCAB_STALE_S', 'x')
-    assert open_vocab_stale_after_s() == 240
+    with pytest.raises(EnvError, match='OP_OPEN_VOCAB_STALE_S'):
+        open_vocab_stale_after_s()
 
 
 @pytest.mark.asyncio

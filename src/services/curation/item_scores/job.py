@@ -52,22 +52,23 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import os
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from src.config.curation import get_curation_config
+from src.config.env import env_path
 from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
 from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob
 
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from opensearchpy import AsyncOpenSearch
 
     from src.services.curation.item_scores.base import ScoreResult
@@ -87,7 +88,7 @@ _active_tasks: dict[str, asyncio.Task[None]] = {}  # per project slug
 
 def _state_dir() -> Path:
     """Resolved fresh each call so tests can override via monkeypatch."""
-    return project_jobs_dir(Path(os.environ.get('OP_SCORES_STATE_DIR', '/jobs/scores')))
+    return project_jobs_dir(env_path('OP_SCORES_STATE_DIR', '/jobs/scores'))
 
 
 def _job() -> FileJob:

@@ -14,9 +14,10 @@ workers forever.
 from __future__ import annotations
 
 import json
-import os
 import time
 from typing import TYPE_CHECKING
+
+from src.config.env import env_float
 
 
 if TYPE_CHECKING:
@@ -28,12 +29,7 @@ DEFAULT_FOREIGN_TTL_SECONDS = 1800.0
 
 
 def foreign_ttl_seconds() -> float:
-    try:
-        return max(
-            1.0, float(os.environ.get('OP_PAUSE_SENTINEL_TTL_S', DEFAULT_FOREIGN_TTL_SECONDS))
-        )
-    except ValueError:
-        return DEFAULT_FOREIGN_TTL_SECONDS
+    return env_float('OP_PAUSE_SENTINEL_TTL_S', DEFAULT_FOREIGN_TTL_SECONDS, minimum=1.0)
 
 
 def arbiter_body() -> str:

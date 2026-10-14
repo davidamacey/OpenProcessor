@@ -20,7 +20,6 @@ Doc ids:
 from __future__ import annotations
 
 import datetime as dt
-import os
 import time
 import uuid
 from typing import TYPE_CHECKING, Any, Literal
@@ -28,6 +27,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from opensearchpy.exceptions import ConflictError, NotFoundError, OpenSearchException
 
 from src.clients.optional_doc import get_doc_or_none
+from src.config.env import env_float
 from src.core.logging import get_logger
 from src.utils.timeutil import now_iso
 
@@ -122,7 +122,7 @@ async def bump_config_revision(client: Any, index: str) -> int:
 def config_poll_interval_s() -> float:
     """The config-store poll interval; also how long an absent revision doc
     is remembered before it is looked up again."""
-    return float(os.environ.get('OP_CONFIG_POLL_S', str(OP_CONFIG_POLL_S_DEFAULT)))
+    return env_float('OP_CONFIG_POLL_S', OP_CONFIG_POLL_S_DEFAULT)
 
 
 async def get_config_revision(client: Any, index: str) -> int:

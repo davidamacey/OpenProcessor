@@ -59,11 +59,11 @@ from __future__ import annotations
 
 import hashlib
 import io
-import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config, get_region_fields
+from src.config.env import env_int
 from src.core.logging import get_logger
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.event_hub import publish_crop_created
@@ -120,7 +120,7 @@ logger = get_logger(__name__)
 # coalesces the actual GPU work; this cap just keeps the request
 # pipeline from swamping Triton's queue. Override with
 # OP_MAX_INGEST_CONCURRENCY (no rebuild required).
-MAX_INGEST_CONCURRENCY = int(os.getenv('OP_MAX_INGEST_CONCURRENCY', '16'))
+MAX_INGEST_CONCURRENCY = env_int('OP_MAX_INGEST_CONCURRENCY', 16)
 
 
 # =============================================================================

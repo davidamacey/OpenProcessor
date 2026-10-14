@@ -44,10 +44,10 @@ static cluster-method registry.
 
 from __future__ import annotations
 
-import os
 import time
 from typing import Any, Literal
 
+from src.config.env import env_bool, env_float
 from src.core.logging import get_logger
 from src.services.curation.axis_copy import axis_copy, detection_profile_strategies
 from src.services.curation.diverse_limits import DIVERSE_BROWSE_MAX_K, DIVERSE_SELECT_MAX_K
@@ -71,47 +71,32 @@ def _scores_enabled() -> bool:
     """Read fresh each call (not a module constant) so tests can
     ``monkeypatch.setenv`` without reimporting — matches the
     ``train_jobs._resolve_jobs_dir`` convention in this repo."""
-    return os.environ.get('OP_SCORES_ENABLED', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+    return env_bool('OP_SCORES_ENABLED')
 
 
 def _scores_shadow() -> bool:
-    return os.environ.get('OP_SCORES_SHADOW', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+    return env_bool('OP_SCORES_SHADOW')
 
 
 def _select_diverse_enabled() -> bool:
     """Mirrors the select router's own flag check — kept independent (not
     imported from there) so this dependency-light module never needs to
     import a router module just to read one env var."""
-    return os.environ.get('OP_SELECT_DIVERSE_ENABLED', '').strip().lower() in {
-        '1',
-        'true',
-        'yes',
-        'on',
-    }
+    return env_bool('OP_SELECT_DIVERSE_ENABLED')
 
 
 def _semantic_search_enabled() -> bool:
     """Mirrors the semantic-search module's own flag check — same "don't import a
     router module just to read one env var" reasoning as
     ``_select_diverse_enabled``/``_viz_projection_enabled``."""
-    return os.environ.get('OP_SEMANTIC_SEARCH_ENABLED', '').strip().lower() in {
-        '1',
-        'true',
-        'yes',
-        'on',
-    }
+    return env_bool('OP_SEMANTIC_SEARCH_ENABLED')
 
 
 def _viz_projection_enabled() -> bool:
     """Mirrors the embedding-viz module's own flag check — same "don't import a
     router module just to read one env var" reasoning as
     ``_select_diverse_enabled``."""
-    return os.environ.get('OP_VIZ_PROJECTION_ENABLED', '').strip().lower() in {
-        '1',
-        'true',
-        'yes',
-        'on',
-    }
+    return env_bool('OP_VIZ_PROJECTION_ENABLED')
 
 
 # The UMAP row is the one validation check the earlier validation pass
@@ -480,7 +465,7 @@ def _prompt_pack_strategies(default_id: str | None) -> list[dict[str, Any]]:
 # never answer another project's ``/methods`` (projects_plan.md §2.1).
 # Value: (fetched_at monotonic, counts).
 _COVERAGE_CACHE: dict[str, tuple[float, dict[str, int | None]]] = {}
-_COVERAGE_TTL_S = float(os.environ.get('OP_FIELD_COVERAGE_TTL_S', '60'))
+_COVERAGE_TTL_S = env_float('OP_FIELD_COVERAGE_TTL_S', 60)
 _COVERAGE_TOTAL_KEY = '__total__'
 """Sentinel key the pool-size count is cached under, alongside the
 per-field exists counts, in the same dict -- avoids a second cache

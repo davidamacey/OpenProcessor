@@ -12,8 +12,6 @@ aggregates across processes via files in that directory (it must exist
 and be writable before workers start).
 """
 
-import os
-
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     CollectorRegistry,
@@ -21,6 +19,8 @@ from prometheus_client import (
     Histogram,
     generate_latest,
 )
+
+from src.config.env import env_optional_str
 
 
 # Request latency by route template. Buckets skew low because most
@@ -61,7 +61,7 @@ def render_metrics() -> tuple[bytes, str]:
     when ``PROMETHEUS_MULTIPROC_DIR`` is configured, otherwise the
     default per-process registry.
     """
-    if os.environ.get('PROMETHEUS_MULTIPROC_DIR'):
+    if env_optional_str('PROMETHEUS_MULTIPROC_DIR'):
         from prometheus_client import multiprocess
 
         registry = CollectorRegistry()

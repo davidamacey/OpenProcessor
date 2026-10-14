@@ -8,11 +8,11 @@ See ``docs/design/openprocessor_internal/projects_plan.md`` §4.
 from __future__ import annotations
 
 import asyncio
-import os
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from src.config.env import env_str
 from src.config.projects import ProjectRecord, ProjectResources
 from src.core.logging import get_logger
 
@@ -26,7 +26,7 @@ REVISION_DOC_ID = 'meta:projects_revision'
 
 
 def projects_index() -> str:
-    return os.environ.get('OP_PROJECTS_INDEX', 'op_projects')
+    return env_str('OP_PROJECTS_INDEX', 'op_projects')
 
 
 def _project_doc_id(slug: str) -> str:

@@ -20,11 +20,11 @@ Lives in config (not the router) so services and workers can derive the
 
 from __future__ import annotations
 
-import os
 from functools import lru_cache
 from pathlib import Path
 
 from src.config.detection_profile import DetectionProfile, reject_legacy_detection_env
+from src.config.env import env_is_set
 from src.core.logging import get_logger
 from src.utils.class_names import get_class_names
 
@@ -43,7 +43,7 @@ RETIRED_CLASS_IDS_ENV = 'OP_INGEST_PRIMARY_CLASS_IDS'
 def ingest_primary_profile() -> DetectionProfile:
     """The primary item-proposer profile (``OP_INGEST_PRIMARY_*``)."""
     reject_legacy_detection_env()
-    if RETIRED_CLASS_IDS_ENV in os.environ:
+    if env_is_set(RETIRED_CLASS_IDS_ENV):
         logger.warning(
             'retired_env_ignored',
             name=RETIRED_CLASS_IDS_ENV,

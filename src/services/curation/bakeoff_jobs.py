@@ -17,7 +17,6 @@ status the router should answer.
 from __future__ import annotations
 
 import json
-import os
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -26,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 from scripts.curation.bakeoff import class_map as cmap
 from src.config import get_curation_config
+from src.config.env import env_path
 from src.core.logging import get_logger
 from src.schemas.bakeoff.job_spec import BakeoffJobSpec, JobDataset, JobModel, JobQuantize
 from src.schemas.bakeoff.models import (
@@ -63,15 +63,13 @@ _config = get_curation_config()
 
 # Runs record checkpoint_path as the trainer saw it. Older runs used a /runs/...
 # container path; the API sees the same files under this root.
-RUNS_HOST_ROOT = Path(
-    os.environ.get('OP_TRAIN_RUNS_ROOT', str(_config.state_dir / 'training_runs'))
-)
+RUNS_HOST_ROOT = env_path('OP_TRAIN_RUNS_ROOT', _config.state_dir / 'training_runs')
 # Baseline registry (external models). Empty by default; a profile may name
 # its own via baselines_path, OP_BAKEOFF_BASELINES_PATH replaces the default.
 _DEFAULT_BASELINES_PATH = (
     Path(__file__).resolve().parents[3] / 'scripts/curation/bakeoff/baselines.json'
 )
-BASELINES_PATH = Path(os.environ.get('OP_BAKEOFF_BASELINES_PATH') or _DEFAULT_BASELINES_PATH)
+BASELINES_PATH = env_path('OP_BAKEOFF_BASELINES_PATH', _DEFAULT_BASELINES_PATH)
 
 JOB_ID_RE = re.compile(r'[A-Za-z0-9_.:-]{1,64}')
 NAME_MATCH_WARNING = 'resolved by name inside the evaluator'

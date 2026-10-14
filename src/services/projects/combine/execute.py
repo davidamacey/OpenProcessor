@@ -14,13 +14,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import os
 import uuid
 from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.registry import ClassRegistry
+from src.config.env import env_int
 from src.config.project_context import bind_project
 from src.config.region_fields import get_region_fields
 from src.core.logging import get_logger
@@ -146,8 +146,7 @@ def build_target_registry(target: ProjectRecord, names: list[str]) -> dict[str, 
 
 def page_size() -> int:
     """Images per chunk (``OP_COMBINE_PAGE_SIZE``): the unit a resume redoes."""
-    raw = os.environ.get('OP_COMBINE_PAGE_SIZE', '')
-    return int(raw) if raw.isdigit() and int(raw) > 0 else 200
+    return env_int('OP_COMBINE_PAGE_SIZE', 200, minimum=1)
 
 
 def _resume_points(done: dict[int, dict[str, Any]]) -> dict[int, str]:

@@ -4,11 +4,12 @@ speaks HTTP (``MLFLOW_TRACKING_URI``) instead of importing it."""
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Any, Literal
 
 import httpx
+
+from src.config.env import env_str
 
 
 _TIMEOUT_S = 10.0
@@ -31,7 +32,7 @@ async def delete_experiment(
     """Soft-delete ``experiment_name`` (restorable on the server). Never
     raises: an unconfigured or unreachable server is an outcome, not a
     delete failure. A missing experiment counts as done."""
-    base = (os.environ.get('MLFLOW_TRACKING_URI') or '').strip().rstrip('/')
+    base = env_str('MLFLOW_TRACKING_URI').rstrip('/')
     if not base:
         return MlflowCleanup('skipped_not_configured', 'MLFLOW_TRACKING_URI is not set')
     owned = http is None

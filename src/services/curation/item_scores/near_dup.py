@@ -29,11 +29,11 @@ pools — e.g. tests) it degrades to one global pass.
 
 from __future__ import annotations
 
-import os
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
+from src.config.env import env_float
 from src.services.curation.item_scores.base import ScoreResult
 from src.services.detection.frame_dedup import (
     DEFAULT_FRAME_DEDUP_THRESHOLD,
@@ -52,7 +52,7 @@ NEAR_DUP_VERSION = 'v1'
 
 def _threshold() -> float:
     try:
-        return float(os.environ.get('OP_CROP_DUP_THRESHOLD', str(DEFAULT_FRAME_DEDUP_THRESHOLD)))
+        return env_float('OP_CROP_DUP_THRESHOLD', DEFAULT_FRAME_DEDUP_THRESHOLD)
     except ValueError:
         return DEFAULT_FRAME_DEDUP_THRESHOLD
 

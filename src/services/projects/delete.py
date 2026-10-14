@@ -10,13 +10,12 @@ working unchanged.
 from __future__ import annotations
 
 import asyncio
-import os
 import shutil
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from src.config.env import env_path
 from src.config.project_context import bind_project
 from src.config.projects import DEFAULT_SLUG, ProjectStatus
 from src.core.logging import get_logger
@@ -30,6 +29,8 @@ from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from src.config.projects import ProjectRecord
 
 
@@ -241,15 +242,11 @@ def _project_scoped_dirs(record: ProjectRecord) -> list[tuple[Path, Path]]:
     base = base_curation_config()
     data_root = projects_data_root()
     state_projects_root = base.state_dir / 'projects'
-    autolabel_projects_root = (
-        Path(os.environ.get('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label')) / 'projects'
-    )
+    autolabel_projects_root = env_path('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label') / 'projects'
     from src.services.curation.bulk_ingest.limits import bulk_ingest_base_dir
 
     bulk_ingest_projects_root = bulk_ingest_base_dir() / 'projects'
-    reprocess_projects_root = (
-        Path(os.environ.get('OP_REPROCESS_JOBS_DIR', '/jobs/reprocess')) / 'projects'
-    )
+    reprocess_projects_root = env_path('OP_REPROCESS_JOBS_DIR', '/jobs/reprocess') / 'projects'
     return [
         (record.resources.export_root, data_root),
         (record.resources.class_registry_path.parent, data_root),

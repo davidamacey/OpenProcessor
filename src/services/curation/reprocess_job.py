@@ -18,13 +18,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-import os
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
+from src.config.env import env_path
 from src.config.project_context import (
     current_project,
     ensure_marked_dir,
@@ -41,6 +40,8 @@ from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from opensearchpy import AsyncOpenSearch
 
     from src.services.curation.ingest import CurationIngestService
@@ -63,9 +64,7 @@ class ReprocessBusyError(Exception):
 def jobs_root() -> Path:
     """The bound project's reprocess jobs dir (resolved per call so tests
     can ``monkeypatch.setenv``)."""
-    return mark_project_dir(
-        project_jobs_dir(Path(os.environ.get('OP_REPROCESS_JOBS_DIR', '/jobs/reprocess')))
-    )
+    return mark_project_dir(project_jobs_dir(env_path('OP_REPROCESS_JOBS_DIR', '/jobs/reprocess')))
 
 
 def _job(job_id: str) -> FileJob:

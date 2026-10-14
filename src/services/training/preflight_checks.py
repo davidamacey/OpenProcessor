@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -13,6 +12,7 @@ from pydantic import BaseModel, Field
 from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config, get_region_fields
 from src.config.curation import items_index
+from src.config.env import env_str
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.curation.dataset_thresholds import (
@@ -259,7 +259,7 @@ def resolve_disk_check_path(spec: TrainJobSpec) -> str:
     # P1-deferred: nested under the bound project's own state dir (rather
     # than the global state_dir) so a fallback disk-space check never
     # points at another project's volume.
-    return os.environ.get('OP_TRAIN_STAGING', str(config.project_state_dir / 'training_staging'))
+    return env_str('OP_TRAIN_STAGING', str(config.project_state_dir / 'training_staging'))
 
 
 def training_volume_mount_sane(path: str) -> bool:

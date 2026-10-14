@@ -52,16 +52,19 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import os
 from dataclasses import asdict, dataclass
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.config.curation import get_curation_config
+from src.config.env import env_path
 from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
 from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob, heartbeat_ticker
 from src.utils.timeutil import now_iso
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 logger = get_logger(__name__)
@@ -84,7 +87,7 @@ def _jobs_dir() -> Path:
     """Resolved fresh each call so tests can override via monkeypatch
     (same convention as ``item_scores.job._state_dir`` /
     ``embedding_viz._jobs_dir``)."""
-    return project_jobs_dir(Path(os.environ.get('OP_PROBE_JOBS_DIR', '/jobs/probe')))
+    return project_jobs_dir(env_path('OP_PROBE_JOBS_DIR', '/jobs/probe'))
 
 
 def _job() -> FileJob:

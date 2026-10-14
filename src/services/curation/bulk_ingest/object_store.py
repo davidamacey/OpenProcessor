@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 from urllib.parse import parse_qs, quote, unquote
 
+from src.config.env import env_bool, env_int, env_str
+
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -160,7 +162,7 @@ class S3Config:
     @classmethod
     def from_env(cls) -> S3Config:
         entries: list[tuple[str, str]] = []
-        for item in os.environ.get('OP_S3_ALLOWED', '').split(','):
+        for item in env_str('OP_S3_ALLOWED', '').split(','):
             text = item.strip().removeprefix('s3://')
             if not text:
                 continue
@@ -168,19 +170,14 @@ class S3Config:
             entries.append((bucket, prefix.lstrip('/')))
         return cls(
             allowed=tuple(entries),
-            endpoint_url=os.environ.get('OP_S3_ENDPOINT_URL', '').strip() or None,
-            region=os.environ.get('OP_S3_REGION', '').strip() or None,
-            path_style=os.environ.get('OP_S3_PATH_STYLE', '').strip().lower()
-            in {'1', 'true', 'yes', 'on'},
-            inflight_mb=_number(os.environ.get('OP_S3_INFLIGHT_MB', ''), DEFAULT_INFLIGHT_MB),
-            max_object_mb=_number(os.environ.get('OP_S3_MAX_OBJECT_MB', ''), DEFAULT_MAX_OBJECT_MB),
-            fetch_workers=_number(os.environ.get('OP_S3_FETCH_WORKERS', ''), DEFAULT_FETCH_WORKERS),
-            list_workers=_number(os.environ.get('OP_S3_LIST_WORKERS', ''), DEFAULT_LIST_WORKERS),
+            endpoint_url=env_str('OP_S3_ENDPOINT_URL') or None,
+            region=env_str('OP_S3_REGION') or None,
+            path_style=env_bool('OP_S3_PATH_STYLE'),
+            inflight_mb=env_int('OP_S3_INFLIGHT_MB', DEFAULT_INFLIGHT_MB, minimum=1),
+            max_object_mb=env_int('OP_S3_MAX_OBJECT_MB', DEFAULT_MAX_OBJECT_MB, minimum=1),
+            fetch_workers=env_int('OP_S3_FETCH_WORKERS', DEFAULT_FETCH_WORKERS, minimum=1),
+            list_workers=env_int('OP_S3_LIST_WORKERS', DEFAULT_LIST_WORKERS, minimum=1),
         )
-
-
-def _number(raw: str, default: int) -> int:
-    return max(1, int(raw)) if raw.strip() else default
 
 
 def classify_client_error(exc: Exception) -> ObjectStoreError:

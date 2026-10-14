@@ -16,8 +16,8 @@ non-negotiable-rules list (own state slot, never fits on a request path,
 color decorates from the real ``cluster_id`` rather than inventing a
 second one, additive-only fields).
 
-Gated end-to-end by ``OP_VIZ_PROJECTION_ENABLED`` (default off, inline
-``os.getenv`` per house convention). Both endpoints 400 when the flag is
+Gated end-to-end by ``OP_VIZ_PROJECTION_ENABLED`` (default off, read with
+``env_bool``). Both endpoints 400 when the flag is
 off, same convention this codebase uses for other disabled-by-default
 feature flags.
 
@@ -28,13 +28,13 @@ entry for how the measured purity maps to this entry's
 
 from __future__ import annotations
 
-import os
 from typing import Any, Literal
 
 from fastapi import HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from src.config.env import env_bool, env_int
 from src.routers.curation._common import OpenSearchDep, router
 from src.services.curation.index_bootstrap import ensure_indexes
 
@@ -46,17 +46,12 @@ def _viz_enabled() -> bool:
     """Read fresh each call (not a module constant) — same reasoning as
     every other feature flag in this codebase: tests
     ``monkeypatch.setenv`` without reimporting."""
-    return os.environ.get('OP_VIZ_PROJECTION_ENABLED', '').strip().lower() in {
-        '1',
-        'true',
-        'yes',
-        'on',
-    }
+    return env_bool('OP_VIZ_PROJECTION_ENABLED')
 
 
 def _max_n() -> int:
     try:
-        return max(1, int(os.environ.get('OP_VIZ_MAX_N', str(DEFAULT_MAX_N))))
+        return env_int('OP_VIZ_MAX_N', DEFAULT_MAX_N, minimum=1)
     except ValueError:
         return DEFAULT_MAX_N
 

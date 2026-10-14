@@ -20,11 +20,11 @@ sparse neighbourhood); lower = redundant (near-duplicate cluster core).
 
 from __future__ import annotations
 
-import os
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
+from src.config.env import env_int
 from src.services.curation.item_scores.base import ScoreResult
 from src.utils.timeutil import now_iso
 
@@ -40,14 +40,14 @@ DEFAULT_NPROBE = 12
 
 def _knn_k() -> int:
     try:
-        return max(1, int(os.environ.get('OP_SCORES_KNN_K', str(DEFAULT_KNN_K))))
+        return env_int('OP_SCORES_KNN_K', DEFAULT_KNN_K, minimum=1)
     except ValueError:
         return DEFAULT_KNN_K
 
 
 def _nprobe() -> int:
     try:
-        return max(1, int(os.environ.get('OP_SCORES_NPROBE', str(DEFAULT_NPROBE))))
+        return env_int('OP_SCORES_NPROBE', DEFAULT_NPROBE, minimum=1)
     except ValueError:
         return DEFAULT_NPROBE
 

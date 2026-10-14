@@ -39,10 +39,10 @@ profile is advertised and selectable by name.
 
 from __future__ import annotations
 
-import os
 import threading
 from typing import TYPE_CHECKING, Any
 
+from src.config.env import env_str
 from src.core.logging import get_logger
 
 
@@ -169,8 +169,8 @@ def region_profile_from_env() -> DetectionProfile | None:
     from src.config.detection_profile import reject_legacy_detection_env
 
     reject_legacy_detection_env()
-    path = os.environ.get('OP_REGION_PROFILE_PATH', '').strip()
-    name = os.environ.get('OP_REGION_PROFILE', '').strip()
+    path = env_str('OP_REGION_PROFILE_PATH')
+    name = env_str('OP_REGION_PROFILE')
     has_overrides = DetectionProfile.env_overrides_present(REGION_DETECTION_ENV_PREFIX)
     if not path and not name and not has_overrides:
         return None

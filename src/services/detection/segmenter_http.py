@@ -13,12 +13,12 @@ prompt found nothing".
 from __future__ import annotations
 
 import base64
-import os
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
+from src.config.env import env_str
 from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.utils.upstream_errors import describe_upstream_error
 
@@ -49,7 +49,7 @@ class SegmentCandidateData:
 def first_segmenter_url() -> str | None:
     """The first URL of ``OP_SEGMENTER_URL`` (it may list several), or
     ``None`` when no segmenter is configured."""
-    raw = os.environ.get('OP_SEGMENTER_URL', '').strip()
+    raw = env_str('OP_SEGMENTER_URL')
     first = raw.split(',')[0].strip().rstrip('/')
     return first or None
 

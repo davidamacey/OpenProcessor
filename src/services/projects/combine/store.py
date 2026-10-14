@@ -10,18 +10,18 @@ nested under a project, and its job id names the way back to the target.
 
 from __future__ import annotations
 
-import os
 import re
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING
 
+from src.config.env import env_path
 from src.services.curation.dataset_import.store import ImportStore
 
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from pathlib import Path
 
 JOB_ID_RE = re.compile(r'^cmb_\d{8}T\d{6}_[0-9a-f]{8}$')
 
@@ -31,7 +31,7 @@ RESUMABLE_STATUSES = frozenset({'interrupted', 'cancelled'})
 
 
 def combine_base_dir() -> Path:
-    return Path(os.environ.get('OP_COMBINE_JOBS_DIR', '/jobs/combine'))
+    return env_path('OP_COMBINE_JOBS_DIR', '/jobs/combine')
 
 
 def valid_job_id(value: str) -> bool:

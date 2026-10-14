@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import os
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -32,12 +31,14 @@ from typing import TYPE_CHECKING, Any
 
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     import numpy as np
     from opensearchpy import AsyncOpenSearch
 
-from pathlib import Path
 
 from src.config.curation import get_curation_config
+from src.config.env import env_path
 from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
 from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob
@@ -55,7 +56,7 @@ _active_tasks: dict[str, asyncio.Task[None]] = {}  # per project slug
 
 
 def _jobs_dir() -> Path:
-    return project_jobs_dir(Path(os.environ.get('OP_SELECT_JOBS_DIR', '/jobs/select')))
+    return project_jobs_dir(env_path('OP_SELECT_JOBS_DIR', '/jobs/select'))
 
 
 def _job() -> FileJob:

@@ -13,10 +13,11 @@ never lists it at all.
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 import httpx
+
+from src.config.env import env_str
 
 
 _SEGMENTER_HEALTH_TIMEOUT_S = 3.0
@@ -94,7 +95,7 @@ async def build_segmenter_entry(
     Mirrors the VLM entry's shape (``kind: 'external'``, ``unloadable:
     False``) rather than ``_build_triton_entry``'s.
     """
-    url = os.environ.get('OP_SEGMENTER_URL', '').strip()
+    url = env_str('OP_SEGMENTER_URL')
     if not url:
         return {
             'name': name,

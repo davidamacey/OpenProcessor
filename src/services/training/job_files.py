@@ -12,10 +12,14 @@ import json
 import os
 import re
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
+from src.config.env import env_path
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 # =============================================================================
@@ -36,7 +40,7 @@ def trainer_root_dir() -> Path:
     One trainer serves every project: it globs each project's dir under
     this root, but writes its process-wide files (``.trainer_capabilities.json``)
     here, not under any project's dir."""
-    return Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs'))
+    return env_path('OP_TRAIN_JOBS_DIR', '/jobs')
 
 
 # Heartbeat older than this -> flip status to ``lost`` in the API view.

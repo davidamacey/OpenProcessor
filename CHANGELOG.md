@@ -139,6 +139,27 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Changed
 
+- Repo cleanup, PR 5b (duplicates): one `now_iso()` (`src/utils/timeutil.py`, UTC, microsecond
+  precision) replaces 21 private timestamp helpers with three different bodies; the class-history
+  and edit-history entries used `timespec='seconds'` and now carry microseconds like every other
+  stored `*_at` string (old entries keep their shorter form; both sort the same lexically). The
+  paged read-merge-conditional-bulk retry loop exists once (`occ_bulk_rounds` in
+  `src/clients/occ_bulk.py`): `occ_update_bulk`, the region batch writer and the box-embedding
+  writer are callbacks over it, and the region batch writer now backs off with jitter between
+  retry rounds like the others. `clients.triton_client.get_triton_client` is
+  `get_sync_triton_client`. `src/routers/curation_train/`, `curation_images.py` and
+  `curation_umap.py` moved under `src/routers/curation/` (`train/`, `images.py`, `umap.py`),
+  `src/services/clustering.py` to `src/services/visual_search/clustering.py`; routes and the
+  OpenAPI contract are unchanged. `requirements-dev.txt` is gone (no consumer).
+- Environment variables are read through one typed module, `src/config/env.py`
+  (`env_str`/`env_int`/`env_float`/`env_bool`/`env_path`), and ruff `TID251` bans
+  `os.environ`/`os.getenv` in `src/`. Behavior change: a variable that is set but malformed or
+  out of range (`OP_DATASET_IMPORT_CHUNK=abc`, `OP_SELECT_MAX_N=0`, a boolean that is not one of
+  `1/true/yes/on/0/false/no/off`) now refuses startup, or the request that reads it, with an error
+  naming the variable; before, most of these silently fell back to the default and a mistyped
+  boolean read as false. A blank value still means "use the default" (so a blank
+  `OP_PROJECT_INDEX_PREFIX` is now the default prefix, not an empty one).
+
 - Repo cleanup, PR 7: the oversize export scripts, the trainer and OCR model modules, the
   shell programs (`openprocessor`, `scripts/setup.sh`, `scripts/lib/config.sh`, `export.sh`,
   `export_paddleocr.sh`, `acceptance_run.sh`) and 19 oversize test files are split by concern into
@@ -317,6 +338,11 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Removed
 
+- The region-profile fields `aspect_min` and `aspect_max` (and `OcrRegion.is_region_shaped`, which was
+  their only reader and had no caller): from the profile dataclass, the profile editor schema, the
+  license plate example, the docs and the OpenAPI contract. A stored profile that still carries
+  either key is rejected by name and skipped with a logged warning when the registry loads, so
+  re-save it without them. `OP_REGION_DETECTION_ASPECT_MIN` and `_MAX` no longer exist.
 - Dead code, found by the new vulture guard (`scripts/codegen/check_vulture.py`) and the plan's
   list: `src/services/cluster_maintenance.py`, the unused `ImageService`, the unused
   `region_lean` module (and the `paddleocr` requirement only it imported), the unused

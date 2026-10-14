@@ -31,7 +31,6 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import json
-import os
 import time
 from collections import OrderedDict
 from contextlib import contextmanager
@@ -40,6 +39,7 @@ from urllib.parse import quote, unquote
 
 from prometheus_client import Counter
 
+from src.config.env import env_str
 from src.config.project_context import current_project, try_current_project
 from src.config.projects import project_index_prefix
 from src.core.logging import get_logger
@@ -117,11 +117,11 @@ def global_configs_read() -> Generator[None, None, None]:
 
 
 def _projects_index() -> str:
-    return os.environ.get('OP_PROJECTS_INDEX', 'op_projects')
+    return env_str('OP_PROJECTS_INDEX', 'op_projects')
 
 
 def _global_configs_index() -> str:
-    return os.environ.get('OP_GLOBAL_CONFIGS_INDEX', 'op_global_configs')
+    return env_str('OP_GLOBAL_CONFIGS_INDEX', 'op_global_configs')
 
 
 # --- The allowlist -----------------------------------------------------------

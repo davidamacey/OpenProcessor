@@ -17,7 +17,6 @@ Design notes
 from __future__ import annotations
 
 import asyncio
-import os
 import time
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -33,6 +32,7 @@ from tenacity import (
     wait_exponential,
 )
 
+from src.config.env import env_int, env_str
 from src.core.logging import get_logger
 
 
@@ -46,9 +46,9 @@ logger = get_logger(__name__)
 # deployment that sets OP_VLM_URL without OP_VLM_MODEL must fail loudly at
 # VlmLabeler construction (see its __init__) rather than silently talking
 # to some other deployment's model name.
-DEFAULT_BASE_URL = os.environ.get('OP_VLM_URL', '')
-DEFAULT_MODEL = os.environ.get('OP_VLM_MODEL', '')
-DEFAULT_API_KEY = os.environ.get('OP_VLM_API_KEY', 'EMPTY')
+DEFAULT_BASE_URL = env_str('OP_VLM_URL', '')
+DEFAULT_MODEL = env_str('OP_VLM_MODEL', '')
+DEFAULT_API_KEY = env_str('OP_VLM_API_KEY', 'EMPTY')
 
 
 @dataclass(frozen=True)
@@ -74,18 +74,7 @@ def _env_max_images_per_call(default: int = 8) -> int:
     ``max_images_per_call``. A malformed value raises rather than falling
     back, since a silently-too-high cap turns into upstream 400s.
     """
-    raw = os.environ.get('OP_VLM_MAX_IMAGES_PER_CALL', '').strip()
-    if not raw:
-        return default
-    try:
-        value = int(raw)
-    except ValueError as exc:
-        msg = f'OP_VLM_MAX_IMAGES_PER_CALL must be a positive integer, got {raw!r}'
-        raise ValueError(msg) from exc
-    if value < 1:
-        msg = f'OP_VLM_MAX_IMAGES_PER_CALL must be >= 1, got {value}'
-        raise ValueError(msg)
-    return value
+    return env_int('OP_VLM_MAX_IMAGES_PER_CALL', default, minimum=1)
 
 
 DEFAULT_MAX_IMAGES_PER_CALL = _env_max_images_per_call()
@@ -98,11 +87,7 @@ DEFAULT_MAX_IMAGES_PER_CALL = _env_max_images_per_call()
 # labeler's max_images_per_call, i.e. OP_VLM_MAX_IMAGES_PER_CALL).
 # Governs ONLY the open-vocab chunk size.
 def _env_open_images_per_call(default: int = 3) -> int:
-    try:
-        v = int(os.environ.get('OP_VLM_OPEN_IMAGES_PER_CALL') or str(default))
-    except (TypeError, ValueError):
-        return default
-    return max(1, v)
+    return env_int('OP_VLM_OPEN_IMAGES_PER_CALL', default, minimum=1)
 
 
 DEFAULT_OPEN_IMAGES_PER_CALL = _env_open_images_per_call()
@@ -172,8 +157,8 @@ def build_http_client(
     ``OP_VLM_HTTPX_KEEPALIVE``) or pass explicit values.
     """
 
-    max_conn = max_connections or int(os.environ.get('OP_VLM_HTTPX_MAX_CONNECTIONS') or '512')
-    keepalive = max_keepalive_connections or int(os.environ.get('OP_VLM_HTTPX_KEEPALIVE') or '128')
+    max_conn = max_connections or env_int('OP_VLM_HTTPX_MAX_CONNECTIONS', 512, minimum=1)
+    keepalive = max_keepalive_connections or env_int('OP_VLM_HTTPX_KEEPALIVE', 128, minimum=1)
     limits = httpx.Limits(max_connections=max_conn, max_keepalive_connections=keepalive)
     # Never follow a redirect: an endpoint answering 3xx must not be able to
     # steer this client (and its bearer token) to another host (SSRF).

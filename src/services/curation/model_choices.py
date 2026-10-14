@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.config import get_curation_config
+from src.config.env import env_optional_str, env_str
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.config.settings import TritonModelConfig
 
@@ -47,7 +48,6 @@ def _row(
 
 
 def _vlm_rows() -> list[dict[str, Any]]:
-    import os
 
     from src.services.config_store import get_global_config_store
     from src.services.labeling.vlm_catalog import (
@@ -67,7 +67,7 @@ def _vlm_rows() -> list[dict[str, Any]]:
     except VlmEndpointUnavailableError:
         active = None
     endpoints = [e.name for e in available_vlm_endpoints()]
-    local_name = os.environ.get('OP_LOCAL_VLM_ENDPOINT', '').strip()
+    local_name = env_str('OP_LOCAL_VLM_ENDPOINT')
     local_endpoint = get_vlm_endpoint(local_name) if local_name else None
     probe = local_endpoint.last_probe if local_endpoint else None
     status = local_vlm_status(
@@ -76,7 +76,7 @@ def _vlm_rows() -> list[dict[str, Any]]:
         served_root=probe.root if probe else None,
         served_max_model_len=probe.max_model_len if probe else None,
         desired=get_global_config_store().current.local_vlm_desired,
-        gpu_total_gb=gpu_total_gb_from_env(os.environ.get('OP_LOCAL_VLM_GPU_TOTAL_MIB')),
+        gpu_total_gb=gpu_total_gb_from_env(env_optional_str('OP_LOCAL_VLM_GPU_TOTAL_MIB')),
     )
     served = status['served'] or {}
     return [

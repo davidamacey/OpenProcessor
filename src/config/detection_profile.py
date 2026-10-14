@@ -14,9 +14,18 @@ profile configured, region detection stays off.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field, fields, replace
 from typing import Any
+
+from src.config.env import (
+    EnvError,
+    env_bool,
+    env_float,
+    env_int,
+    env_is_set,
+    env_names_with_prefix,
+    env_raw,
+)
 
 
 @dataclass(frozen=True)
@@ -213,26 +222,25 @@ class DetectionProfile:
         defaults = base if base is not None else cls(name=name)
         overrides: dict[str, Any] = {'name': defaults.name}
         for f in fields(defaults):
-            raw = os.environ.get(f'{prefix}{f.name.upper()}')
+            var = f'{prefix}{f.name.upper()}'
+            raw = env_raw(var)
             if raw is None:
                 continue
             current = getattr(defaults, f.name)
             if isinstance(current, bool):
-                overrides[f.name] = raw.strip().lower() in {'1', 'true', 'yes', 'on'}
+                overrides[f.name] = env_bool(var, current)
             elif isinstance(current, int):
-                overrides[f.name] = int(raw)
+                overrides[f.name] = env_int(var, current)
             elif isinstance(current, float):
-                overrides[f.name] = float(raw)
+                overrides[f.name] = env_float(var, current)
             elif isinstance(current, tuple):
                 item_type = type(current[0]) if current else str
-                overrides[f.name] = tuple(item_type(part.strip()) for part in raw.split(','))
+                overrides[f.name] = tuple(_list_items(var, raw, item_type, keep_empty=True))
             elif isinstance(current, frozenset):
                 # Element type from the annotation (an empty default carries
                 # none): ``frozenset[int]`` fields parse ints.
                 elem = int if 'int' in str(f.type) else str
-                overrides[f.name] = frozenset(
-                    elem(part.strip()) for part in raw.split(',') if part.strip()
-                )
+                overrides[f.name] = frozenset(_list_items(var, raw, elem, keep_empty=False))
             else:
                 overrides[f.name] = raw
         return replace(defaults, **overrides)
@@ -240,7 +248,17 @@ class DetectionProfile:
     @classmethod
     def env_overrides_present(cls, prefix: str) -> bool:
         """``True`` if any ``{prefix}<FIELD>`` env var is set."""
-        return any(f'{prefix}{f.name.upper()}' in os.environ for f in fields(cls))
+        return any(env_is_set(f'{prefix}{f.name.upper()}') for f in fields(cls))
+
+
+def _list_items(var: str, raw: str, item_type: type, *, keep_empty: bool) -> list[Any]:
+    """The comma-separated ``raw`` as ``item_type`` items; a bad item raises
+    :class:`EnvError` naming ``var``."""
+    parts = [part.strip() for part in raw.split(',')]
+    try:
+        return [item_type(part) for part in parts if keep_empty or part]
+    except ValueError as exc:
+        raise EnvError(var, raw, f'items must be {item_type.__name__}') from exc
 
 
 LEGACY_DETECTION_ENV_PREFIX = 'OP_DETECTION_'
@@ -256,7 +274,7 @@ def reject_legacy_detection_env() -> None:
     ``OP_REGION_DETECTION_*`` (region cascade). Leftover vars raise rather
     than being silently ignored or reinterpreted.
     """
-    stale = sorted(k for k in os.environ if k.startswith(LEGACY_DETECTION_ENV_PREFIX))
+    stale = env_names_with_prefix(LEGACY_DETECTION_ENV_PREFIX)
     if stale:
         msg = (
             f'retired env var(s) {stale}: OP_DETECTION_* was split into '

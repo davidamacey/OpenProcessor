@@ -36,7 +36,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import io
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -45,6 +44,7 @@ from opensearchpy.exceptions import OpenSearchException
 
 from src.config import get_curation_config
 from src.config.curation import items_index, umap_state_index
+from src.config.env import env_str
 from src.core.logging import get_logger
 from src.domain.embedding_state import embedded_clause
 from src.domain.ingest_class_sources import confident_class_sources
@@ -94,7 +94,7 @@ UMAP_RANDOM_STATE = 42
 # than ``backbone_embedding`` (the secondary classifier's penultimate layer, which
 # clusters by framing/lighting outside its confident range). A visual
 # audit picked pe_embedding as the residual default.
-RESIDUAL_EMBEDDING_FIELD = os.environ.get('OP_RESIDUAL_EMBEDDING_FIELD', 'pe_embedding')
+RESIDUAL_EMBEDDING_FIELD = env_str('OP_RESIDUAL_EMBEDDING_FIELD', 'pe_embedding')
 
 # Crops with these class_source values are *confidently* labeled and
 # must NEVER be pulled into the residual pool — clustering would

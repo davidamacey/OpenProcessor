@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import os
 import random
 import time
 from collections import defaultdict
@@ -29,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.config import get_region_fields
 from src.config.curation import IndexRole
+from src.config.env import env_float, env_optional_str
 from src.config.project_context import bind_project
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
@@ -223,16 +223,13 @@ async def refresh_once(client: Any, records: Iterable[ProjectRecord]) -> None:
 
 
 def refresh_interval_s() -> float:
-    try:
-        return float(os.environ.get('OP_METRICS_REFRESH_INTERVAL_S', DEFAULT_INTERVAL_S))
-    except ValueError:
-        return DEFAULT_INTERVAL_S
+    return env_float('OP_METRICS_REFRESH_INTERVAL_S', DEFAULT_INTERVAL_S, minimum=0.0)
 
 
 def _claim_turn(interval_s: float) -> bool:
     """True when this process should refresh now: no other API worker did within
     the interval. Best effort -- a race only means two refreshes, never none."""
-    directory = os.environ.get('PROMETHEUS_MULTIPROC_DIR')
+    directory = env_optional_str('PROMETHEUS_MULTIPROC_DIR')
     if not directory:
         return True
     stamp = Path(directory) / 'ops_metrics_refresh.stamp'
