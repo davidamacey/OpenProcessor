@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from curation.test_ingest_service import FakePEEncoder, _jpeg_bytes, _make_service
+from curation.ingest_fakes import FakePEEncoder, _jpeg_bytes, _make_service
 from src.routers.curation.ingest import _batch_response
 
 

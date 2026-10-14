@@ -27,7 +27,7 @@ from logutil import get_logger
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from job_protocol import JobSpec
+    from job_spec import JobSpec
 
 
 logger = get_logger('trainer.dataset_prep')

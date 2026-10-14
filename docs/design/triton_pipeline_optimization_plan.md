@@ -499,7 +499,7 @@ Goal: remove the redundant full-size copies without changing any output.
   pinned pool once Wave 6 inputs are uint8 (do not change the pool before that).
   Verify burst behavior with C5 before shortening delays on models fed by
   independent single-image callers.
-- Tests: compose contract test updated (`tests/test_compose_contract.py`);
+- Tests: compose contract test updated (`tests/compose/`);
   a config lint test that no model's delay exceeds a cap without a comment.
 - Acceptance: on Triton stats the average queue time of the PE and detector
   models falls below 3 ms at the target concurrency; throughput not lower; p99

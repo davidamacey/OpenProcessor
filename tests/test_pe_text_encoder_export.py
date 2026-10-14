@@ -29,6 +29,10 @@ if str(EXPORT_DIR) not in sys.path:
     sys.path.insert(0, str(EXPORT_DIR))
 
 import export_pe_text_encoder as text_export  # noqa: E402
+import pe_text_constants  # noqa: E402
+import pe_text_parity  # noqa: E402
+import pe_text_triton_config  # noqa: E402
+import pe_text_validate  # noqa: E402
 
 
 # =============================================================================
@@ -38,29 +42,29 @@ import export_pe_text_encoder as text_export  # noqa: E402
 
 class TestClientContract:
     def test_exporter_constants_match_the_client(self) -> None:
-        assert text_export.TRITON_MODEL_NAME == client.PE_TEXT_TRITON_MODEL
-        assert text_export.INPUT_TENSOR == client.PE_TEXT_INPUT
-        assert text_export.OUTPUT_TENSOR == client.PE_TEXT_OUTPUT
-        assert text_export.CONTEXT_LENGTH == client.PE_TEXT_CONTEXT_LENGTH
-        assert text_export.EMBEDDING_DIM == client.PE_EMBEDDING_DIM
-        assert text_export.PE_VARIANT == client.PE_TEXT_CHECKPOINT
+        assert pe_text_constants.TRITON_MODEL_NAME == client.PE_TEXT_TRITON_MODEL
+        assert pe_text_constants.INPUT_TENSOR == client.PE_TEXT_INPUT
+        assert pe_text_constants.OUTPUT_TENSOR == client.PE_TEXT_OUTPUT
+        assert pe_text_constants.CONTEXT_LENGTH == client.PE_TEXT_CONTEXT_LENGTH
+        assert pe_text_constants.EMBEDDING_DIM == client.PE_EMBEDDING_DIM
+        assert pe_text_constants.PE_VARIANT == client.PE_TEXT_CHECKPOINT
 
     def test_trim_to_eot_matches_the_client(self) -> None:
         tokens = np.zeros((3, 32), dtype=np.int64)
         tokens[0, :3] = [49406, 320, 49407]
         tokens[1, :6] = [49406, 320, 1125, 539, 320, 49407]
         np.testing.assert_array_equal(
-            text_export.trim_to_eot(tokens), client.trim_text_tokens(tokens)
+            pe_text_parity.trim_to_eot(tokens), client.trim_text_tokens(tokens)
         )
-        assert text_export.trim_to_eot(tokens).shape == (3, 6)
-        assert text_export.EOT_TOKEN_ID == 49407
+        assert pe_text_parity.trim_to_eot(tokens).shape == (3, 6)
+        assert pe_text_constants.EOT_TOKEN_ID == 49407
 
     def test_default_onnx_destination_is_the_client_default(self) -> None:
         args = text_export.build_parser().parse_args([])
         assert str(args.onnx_out) == client.DEFAULT_PE_TEXT_ONNX_PATH
 
     def test_rendered_config_declares_the_client_tensors(self) -> None:
-        out = text_export.render_config(text_export.PETextTritonConfig())
+        out = pe_text_triton_config.render_config(pe_text_triton_config.PETextTritonConfig())
         assert f'name: "{client.PE_TEXT_TRITON_MODEL}"' in out
         assert 'platform: "onnxruntime_onnx"' in out
         assert f'name: "{client.PE_TEXT_INPUT}"' in out
@@ -73,7 +77,9 @@ class TestClientContract:
     def test_committed_template_matches_the_renderer(self) -> None:
         committed = Path(__file__).resolve().parents[1] / 'models' / 'pe_text_encoder'
         body = (committed / 'config.pbtxt').read_text()
-        assert body == text_export.render_config(text_export.PETextTritonConfig())
+        assert body == pe_text_triton_config.render_config(
+            pe_text_triton_config.PETextTritonConfig()
+        )
 
 
 # =============================================================================
@@ -83,23 +89,27 @@ class TestClientContract:
 
 class TestRenderConfig:
     def test_cpu_instances_by_default(self) -> None:
-        out = text_export.render_config(text_export.PETextTritonConfig())
+        out = pe_text_triton_config.render_config(pe_text_triton_config.PETextTritonConfig())
         assert 'kind: KIND_CPU' in out
         assert 'gpus:' not in out
 
     def test_gpu_instances(self) -> None:
-        out = text_export.render_config(
-            text_export.PETextTritonConfig(kind='KIND_GPU', gpu_ids=(0, 2), instance_count=2)
+        out = pe_text_triton_config.render_config(
+            pe_text_triton_config.PETextTritonConfig(
+                kind='KIND_GPU', gpu_ids=(0, 2), instance_count=2
+            )
         )
         assert 'kind: KIND_GPU' in out
         assert 'gpus: [ 0, 2 ]' in out
         assert 'count: 2' in out
 
     def test_preferred_ladder_is_bounded(self) -> None:
-        out = text_export.render_config(text_export.PETextTritonConfig(max_batch_size=8))
+        out = pe_text_triton_config.render_config(
+            pe_text_triton_config.PETextTritonConfig(max_batch_size=8)
+        )
         assert 'max_batch_size: 8' in out
         assert 'preferred_batch_size: [ 4, 8 ]' in out
-        assert text_export.preferred_batch_sizes(2) == [2]
+        assert pe_text_triton_config.preferred_batch_sizes(2) == [2]
 
     @pytest.mark.parametrize(
         ('field', 'value'),
@@ -116,11 +126,11 @@ class TestRenderConfig:
     )
     def test_rejects_invalid_field(self, field: str, value: object) -> None:
         with pytest.raises(ValueError, match=field.split('_', maxsplit=1)[0]):
-            text_export.PETextTritonConfig(**{field: value})
+            pe_text_triton_config.PETextTritonConfig(**{field: value})
 
     def test_gpu_kind_requires_gpu_ids(self) -> None:
         with pytest.raises(ValueError, match='gpu_ids'):
-            text_export.PETextTritonConfig(kind='KIND_GPU', gpu_ids=())
+            pe_text_triton_config.PETextTritonConfig(kind='KIND_GPU', gpu_ids=())
 
 
 # =============================================================================
@@ -136,7 +146,7 @@ class TestCli:
         assert args.kind == 'cpu'
         assert args.verify_checkpoint is True
         assert args.checkpoint_path is None
-        assert args.parity_threshold == text_export.PARITY_MIN_COSINE == 0.9999
+        assert args.parity_threshold == pe_text_constants.PARITY_MIN_COSINE == 0.9999
 
     def test_config_from_args(self) -> None:
         args = text_export.build_parser().parse_args(
@@ -173,8 +183,8 @@ class TestCli:
     def test_install_triton_copies_the_graph(self, tmp_path: Path) -> None:
         onnx_file = tmp_path / 'text.onnx'
         onnx_file.write_bytes(b'graph-bytes')
-        target = text_export.install_triton_model(
-            onnx_file, tmp_path / 'models', text_export.PETextTritonConfig()
+        target = pe_text_triton_config.install_triton_model(
+            onnx_file, tmp_path / 'models', pe_text_triton_config.PETextTritonConfig()
         )
         assert target == tmp_path / 'models' / client.PE_TEXT_TRITON_MODEL / '1' / 'model.onnx'
         assert target.read_bytes() == b'graph-bytes'
@@ -226,7 +236,7 @@ def _stub_graph(path: Path, *, batch: str | int = 'batch', tokens: str | int = '
 
 class TestValidateOnnx:
     def test_fully_dynamic_graph_satisfies_the_contract(self, tmp_path: Path) -> None:
-        report = text_export.validate_onnx(_stub_graph(tmp_path / 'ok.onnx'))
+        report = pe_text_validate.validate_onnx(_stub_graph(tmp_path / 'ok.onnx'))
         assert report.skipped is False
         assert report.input_name == 'text_tokens'
         assert report.input_dtype == 'tensor(int64)'
@@ -234,27 +244,36 @@ class TestValidateOnnx:
         assert report.embedding_dim == client.PE_EMBEDDING_DIM
         assert report.dynamic_batch is True
         assert report.dynamic_tokens is True
-        assert text_export.check_client_contract(report, text_export.PETextTritonConfig()) == []
+        assert (
+            pe_text_validate.check_client_contract(
+                report, pe_text_triton_config.PETextTritonConfig()
+            )
+            == []
+        )
 
     def test_static_token_axis_is_flagged(self, tmp_path: Path) -> None:
         """What the legacy TorchScript tracer produces: works only at 32 tokens."""
-        report = text_export.validate_onnx(_stub_graph(tmp_path / 's.onnx', tokens=32))
+        report = pe_text_validate.validate_onnx(_stub_graph(tmp_path / 's.onnx', tokens=32))
         assert report.dynamic_batch is True
         assert report.dynamic_tokens is False
-        problems = text_export.check_client_contract(report, text_export.PETextTritonConfig())
+        problems = pe_text_validate.check_client_contract(
+            report, pe_text_triton_config.PETextTritonConfig()
+        )
         assert any('token axis is static' in p for p in problems)
 
     def test_static_batch_axis_is_flagged(self, tmp_path: Path) -> None:
-        report = text_export.validate_onnx(_stub_graph(tmp_path / 'b.onnx', batch=1))
+        report = pe_text_validate.validate_onnx(_stub_graph(tmp_path / 'b.onnx', batch=1))
         assert report.dynamic_batch is False
-        problems = text_export.check_client_contract(report, text_export.PETextTritonConfig())
+        problems = pe_text_validate.check_client_contract(
+            report, pe_text_triton_config.PETextTritonConfig()
+        )
         assert any('leading axis is static' in p for p in problems)
 
 
 class TestCheckClientContract:
     @staticmethod
-    def _good() -> text_export.OnnxReport:
-        return text_export.OnnxReport(
+    def _good() -> pe_text_validate.OnnxReport:
+        return pe_text_validate.OnnxReport(
             input_name='text_tokens',
             input_dtype='tensor(int64)',
             input_shape=['batch', 'tokens'],
@@ -267,7 +286,10 @@ class TestCheckClientContract:
 
     def test_good_report(self) -> None:
         assert (
-            text_export.check_client_contract(self._good(), text_export.PETextTritonConfig()) == []
+            pe_text_validate.check_client_contract(
+                self._good(), pe_text_triton_config.PETextTritonConfig()
+            )
+            == []
         )
 
     def test_hf_style_names_and_dtype_are_flagged(self) -> None:
@@ -275,20 +297,29 @@ class TestCheckClientContract:
         report.input_name = 'input_ids'
         report.input_dtype = 'tensor(int32)'
         report.embedding_name = 'text_embeds'
-        problems = text_export.check_client_contract(report, text_export.PETextTritonConfig())
+        problems = pe_text_validate.check_client_contract(
+            report, pe_text_triton_config.PETextTritonConfig()
+        )
         assert len(problems) == 3
 
     def test_wrong_static_context_and_width_are_flagged(self) -> None:
         report = self._good()
         report.input_shape = ['batch', 77]
         report.embedding_dim = 512
-        problems = text_export.check_client_contract(report, text_export.PETextTritonConfig())
+        problems = pe_text_validate.check_client_contract(
+            report, pe_text_triton_config.PETextTritonConfig()
+        )
         assert any('77' in p for p in problems)
         assert any('512' in p for p in problems)
 
     def test_skipped_probe_asserts_nothing(self) -> None:
-        report = text_export.OnnxReport(skipped=True)
-        assert text_export.check_client_contract(report, text_export.PETextTritonConfig()) == []
+        report = pe_text_validate.OnnxReport(skipped=True)
+        assert (
+            pe_text_validate.check_client_contract(
+                report, pe_text_triton_config.PETextTritonConfig()
+            )
+            == []
+        )
 
 
 # =============================================================================
@@ -305,7 +336,7 @@ class TestParity:
             return table[tokens].sum(axis=1)
 
         batches = [np.array([[1, 2, 3]]), np.array([[4, 5, 6], [7, 8, 9]])]
-        report = text_export.run_parity(fn, fn, batches)
+        report = pe_text_parity.run_parity(fn, fn, batches)
         assert report.n == 3
         assert report.batch_sizes == (1, 2)
         assert report.min_cosine == pytest.approx(1.0)
@@ -320,24 +351,24 @@ class TestParity:
             out[-1, 0] = 1.1  # cosine ~0.9989
             return out
 
-        report = text_export.run_parity(ref, cand, [np.zeros((3, 5), dtype=np.int64)])
+        report = pe_text_parity.run_parity(ref, cand, [np.zeros((3, 5), dtype=np.int64)])
         assert report.min_cosine < 0.9999
         assert report.max_abs_diff == pytest.approx(0.1)
         assert not report.passes()
 
     def test_empty_run_never_passes(self) -> None:
-        assert not text_export.ParityReport().passes()
+        assert not pe_text_parity.ParityReport().passes()
 
     def test_shape_mismatch_raises(self) -> None:
         with pytest.raises(ValueError, match='shape mismatch'):
-            text_export.compare_embeddings(np.ones((2, 4)), np.ones((2, 5)))
+            pe_text_parity.compare_embeddings(np.ones((2, 4)), np.ones((2, 5)))
 
     def test_parity_batches_cover_batch_1_and_8(self) -> None:
         def tok(prompts: list[str]) -> np.ndarray:
             return np.arange(len(prompts) * 4).reshape(len(prompts), 4)
 
-        batches = text_export.parity_token_batches(tok)
-        n = len(text_export.PARITY_PROMPTS)
+        batches = pe_text_parity.parity_token_batches(tok)
+        n = len(pe_text_constants.PARITY_PROMPTS)
         sizes = [b.shape[0] for b in batches]
         assert sizes[:n] == [1] * n
         assert sum(sizes[n:]) == n
@@ -345,4 +376,7 @@ class TestParity:
 
     def test_prompts_include_one_longer_than_the_context(self) -> None:
         """Exercises the tokenizer's truncation path in the parity gate."""
-        assert max(len(p.split()) for p in text_export.PARITY_PROMPTS) > text_export.CONTEXT_LENGTH
+        assert (
+            max(len(p.split()) for p in pe_text_constants.PARITY_PROMPTS)
+            > pe_text_constants.CONTEXT_LENGTH
+        )

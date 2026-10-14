@@ -106,10 +106,10 @@ def test_trainer_glob_finds_default_and_project_jobs_fifo(tmp_path) -> None:
 
 
 def test_trainer_refuses_export_outside_project(tmp_path) -> None:
-    import job_protocol
+    import job_spec
 
-    ExportOutsideProjectError = job_protocol.ExportOutsideProjectError
-    parse_and_validate_job = job_protocol.parse_and_validate_job
+    ExportOutsideProjectError = job_spec.ExportOutsideProjectError
+    parse_and_validate_job = job_spec.parse_and_validate_job
 
     project_root = tmp_path / 'exports' / 'alpha'
     other_export = tmp_path / 'exports' / 'beta' / 'current'
@@ -137,8 +137,9 @@ def test_trainer_refuses_export_outside_project(tmp_path) -> None:
 
 def test_reject_job_writes_error_code(tmp_path) -> None:
     import job_protocol
+    import job_spec
 
-    ExportOutsideProjectError = job_protocol.ExportOutsideProjectError
+    ExportOutsideProjectError = job_spec.ExportOutsideProjectError
     reject_job = job_protocol.reject_job
 
     job_path = tmp_path / 'x.job.json'
@@ -151,9 +152,9 @@ def test_reject_job_writes_error_code(tmp_path) -> None:
 
 
 def test_mlflow_experiment_read_from_spec(tmp_path) -> None:
-    import job_protocol
+    import job_spec
 
-    parse_and_validate_job = job_protocol.parse_and_validate_job
+    parse_and_validate_job = job_spec.parse_and_validate_job
 
     export_dir = tmp_path / 'export'
     export_dir.mkdir()

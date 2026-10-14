@@ -304,7 +304,7 @@ async def run_preflight(
     # forgot to redeploy the trainer) writes job.json and sits in
     # `queued`/`starting` forever with no error (the original TR-2 failure
     # mode). The trainer publishes its attachment at startup
-    # (write_trainer_capabilities in docker/trainer/trainer.py); an absent
+    # (write_trainer_capabilities in docker/trainer/gpu_select.py); an absent
     # file (older image) only downgrades this to a warning.
     trainer_gpu_order = read_trainer_gpu_order()
     requested_ids = parse_cuda_visible_devices(spec.cuda_visible_devices)

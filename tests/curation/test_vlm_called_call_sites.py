@@ -2,7 +2,7 @@
 that flag write were removed or set wrong.
 
 Before this file, only the bulk-writer *gate* was tested
-(``test_worker_hot_reload.py::test_bulk_write_does_not_stamp_pack_when_no_vlm_call_happened``)
+(``worker_hot_reload/test_worker_bulk_write_stamps.py::test_bulk_write_does_not_stamp_pack_when_no_vlm_call_happened``)
 -- proving the writer reads ``task.vlm_called`` correctly, never that any
 of the four production call sites (the reviewer's mutation removed all
 four ``vlm_called = True`` assignments and the full-suite pass/fail
@@ -30,16 +30,15 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from src.config import get_region_fields
-from src.config.region_state import RegionStatus
-from src.services.detection.cascade_detect.candidate import RegionCandidate
-
-from .test_region_cascade_integrity import (
+from curation.region_cascade_helpers import (
     _accept as _combined_accept,
     _drive_worker,
     _FakeOpenSearch,
     _item,
 )
+from src.config import get_region_fields
+from src.config.region_state import RegionStatus
+from src.services.detection.cascade_detect.candidate import RegionCandidate
 
 
 if TYPE_CHECKING:

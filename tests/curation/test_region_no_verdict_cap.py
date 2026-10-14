@@ -24,6 +24,7 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
+from curation.region_cascade_helpers import _drive_worker, _FakeOpenSearch, _item, _profile
 from scripts.curation.worker.no_verdict import (
     DEFAULT_MAX_NO_VERDICT_ATTEMPTS,
     NoVerdictCounter,
@@ -45,8 +46,6 @@ from src.services.labeling.vlm_models import (
     CombinedTransportError,
     VlmCombinedReply,
 )
-
-from .test_region_cascade_integrity import _drive_worker, _FakeOpenSearch, _item, _profile
 
 
 if TYPE_CHECKING:

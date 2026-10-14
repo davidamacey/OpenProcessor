@@ -18,6 +18,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
+from curation.region_cascade_helpers import _drive_worker, _FakeOpenSearch, _item, _profile
 from src.config import get_region_fields
 from src.config.curation import base_curation_config
 from src.config.region_rejection import REJECT_REASON_HUMAN, REJECT_REASON_SANITY_PREFIX
@@ -27,8 +28,6 @@ from src.services.curation.region_boxes import RegionBox, boxes_write_fields
 from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_models import VlmCombinedReply
-
-from .test_region_cascade_integrity import _drive_worker, _FakeOpenSearch, _item, _profile
 
 
 # No-profile gating contract: this file exercises region routes, which

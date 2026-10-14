@@ -115,7 +115,7 @@ class TestIngestSeeding:
     async def test_ingest_seeds_only_in_scope_items(
         self, profile_env: Any, parent_classes: str, seeded: bool
     ) -> None:
-        from .test_ingest_service import _jpeg_bytes, _make_service
+        from .ingest_fakes import _jpeg_bytes, _make_service
 
         profile_env(parent_classes)
         svc, os_fake, _ = _make_service()

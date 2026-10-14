@@ -195,7 +195,7 @@ of the download win and changes no behaviour.
      Dockerfile`, `target: evaluator`), `scripts/release/build_and_publish.sh`
      (`IMAGE_SPECS` gains a 4th `target` field, passed as `--target`; build
      `api` before `evaluator`), `tests/test_release_build_and_publish.py`
-     fixture, `tests/test_compose_contract.py`
+     fixture, `tests/compose/`
      (`_BUILD_SHA_DOCKERFILES` → check the `evaluator` and final stages of
      `Dockerfile`), and delete `docker/evaluator/Dockerfile`. Fix the comment
      references in `docker-compose.yml`, `docker/trainer/Dockerfile` and

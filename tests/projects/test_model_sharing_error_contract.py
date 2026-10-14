@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from curation import test_cross_project_leak as _sweep
-from curation.test_cross_project_leak import LeakEnv, _promoted_model
+from curation.cross_project_leak import _env as _sweep
+from curation.cross_project_leak._seeders import _promoted_model
 from fastapi.testclient import TestClient
 
 from src.routers.curation import _models_sharing as sharing
@@ -14,6 +14,7 @@ from src.routers.curation import _models_sharing as sharing
 
 if TYPE_CHECKING:
     import pytest
+    from curation.cross_project_leak._transport import LeakEnv
 
 
 leak_env = _sweep.leak_env

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from _region_profile_fixture import NEUTRAL_REGION_PROFILE
 
+from curation.region_cascade_helpers import _FakeOpenSearch, _item
 from src.config import DetectionProfile, get_region_fields
 from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.region_text import (
@@ -28,7 +29,6 @@ from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_models import VlmCombinedReply
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack, prompt_text_examples
 
-from .test_region_cascade_integrity import _FakeOpenSearch, _item
 from .test_region_text_worker import _drive
 
 

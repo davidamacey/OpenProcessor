@@ -21,12 +21,11 @@ from typing import TYPE_CHECKING
 import pytest
 
 from curation.query_fakes import QueryFakeOpenSearch
+from curation.region_cascade_helpers import _drive_worker, _FakeOpenSearch
 from src.config import CurationConfig, RegionStatus, get_region_fields
 from src.services.curation.region_requeue import RequeueSelection, apply_requeue
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_models import VlmCombinedReply
-
-from .test_region_cascade_integrity import _drive_worker, _FakeOpenSearch
 
 
 if TYPE_CHECKING:

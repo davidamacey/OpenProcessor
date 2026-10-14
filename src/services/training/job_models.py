@@ -257,7 +257,7 @@ class TrainJobStatus(BaseModel):
     # 'map50_95': ...}``) -- distinct from best_checkpoint_metric because
     # Ultralytics re-validates best.pt once more after training and that
     # call does not advance the epoch counter (see docker/trainer/
-    # trainer.py's on_fit_epoch_end for how the two are told apart).
+    # trainer_callbacks.py's on_fit_epoch_end for how the two are told apart).
     last_epoch_metric: dict[str, Any] | None = None
     # The best checkpoint's (best.pt) own re-validation metrics, as one
     # coherent row -- not a per-key running max across every epoch, which

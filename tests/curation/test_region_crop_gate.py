@@ -8,10 +8,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from curation.region_cascade_helpers import _accept, _drive_worker, _FakeOpenSearch, _item
 from scripts.curation._project_worker_utils import REGION_STAGE_PAUSED_FLAG_NAME
 from src.config import get_region_fields
-
-from .test_region_cascade_integrity import _accept, _drive_worker, _FakeOpenSearch, _item
 
 
 if TYPE_CHECKING:

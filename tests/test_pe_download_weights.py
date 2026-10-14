@@ -68,11 +68,11 @@ class TestPins:
         assert pin.sha256 is None
 
     def test_default_variant_matches_both_exporters(self) -> None:
-        import export_pe_image_encoder
-        import export_pe_text_encoder
+        import pe_image_constants
+        import pe_text_constants
 
-        assert dl.DEFAULT_VARIANT == export_pe_image_encoder.PE_VARIANT
-        assert dl.DEFAULT_VARIANT == export_pe_text_encoder.PE_VARIANT
+        assert dl.DEFAULT_VARIANT == pe_image_constants.PE_VARIANT
+        assert dl.DEFAULT_VARIANT == pe_text_constants.PE_VARIANT
 
 
 class TestVerify:

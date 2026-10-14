@@ -1,7 +1,7 @@
 """Unit tests for the YOLO26 Triton config writer (Phase 4).
 
 Pure rendering tests — no file I/O, no Triton, no docker. The file
-system + HTTP behaviors are covered in test_triton_promote.py.
+system + HTTP behaviors are covered in tests/curation/triton_promote/.
 """
 
 from __future__ import annotations
