@@ -5,7 +5,7 @@ import: registers the ``@router`` handler on the shared ``_common.router``.
 
 Thin wrapper over :mod:`src.services.curation.strategy_registry`, which
 adds a real, TTL-cached ``field_coverage`` OpenSearch lookup per entry
-(:func:`strategy_registry._compute_field_coverage`) — this endpoint is no
+(:func:`field_coverage._compute_field_coverage`) — this endpoint is no
 longer pure/I/O-free, but the frontend's 404-fallback design still means it
 must never itself be the reason a request fails, so a failure anywhere in
 the coverage lookup degrades to ``field_coverage: None`` (or, in the

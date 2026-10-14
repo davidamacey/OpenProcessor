@@ -131,7 +131,7 @@ async def test_uniqueness_is_disabled_by_default_and_not_selectable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """D2: uniqueness's status now delegates to
-    strategy_registry.effective_scorer_status (like mistakenness) instead
+    strategy_flags.effective_scorer_status (like mistakenness) instead
     of a hardcoded 'shadow' literal, so with no OP_SCORES_ENABLED it reads
     'disabled' — same master-switch behavior every other scorer has."""
     monkeypatch.delenv('OP_SCORES_ENABLED', raising=False)
@@ -146,7 +146,7 @@ async def test_uniqueness_is_disabled_by_default_and_not_selectable(
 async def test_uniqueness_promoted_to_experimental_and_selectable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """D2: uniqueness is in strategy_registry.VALIDATED_SCORERS alongside
+    """D2: uniqueness is in strategy_flags.VALIDATED_SCORERS alongside
     mistakenness, so enabling scores (even shadow) promotes it one notch
     to 'experimental' and ?sort=uniqueness is honored."""
     monkeypatch.setenv('OP_SCORES_ENABLED', '1')
@@ -179,7 +179,7 @@ async def test_mistakenness_disabled_by_default(monkeypatch: pytest.MonkeyPatch)
 async def test_mistakenness_promoted_to_experimental_when_enabled_and_shadow(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Mirrors strategy_registry.VALIDATED_SCORERS's live promotion — this
+    """Mirrors strategy_flags.VALIDATED_SCORERS's live promotion — this
     status must NEVER be hardcoded in review_sorts.py, only computed."""
     monkeypatch.setenv('OP_SCORES_ENABLED', '1')
     monkeypatch.setenv('OP_SCORES_SHADOW', '1')

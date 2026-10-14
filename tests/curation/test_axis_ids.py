@@ -33,7 +33,8 @@ def test_no_strategy_entry_uses_region_profile_as_its_axis() -> None:
     item stamp) must never leak onto the axis field itself."""
     import inspect
 
+    import src.services.curation.strategy_builders as builders_mod
     import src.services.curation.strategy_registry as registry_mod
 
-    source = inspect.getsource(registry_mod)
+    source = inspect.getsource(registry_mod) + inspect.getsource(builders_mod)
     assert "'axis': 'region_profile'" not in source

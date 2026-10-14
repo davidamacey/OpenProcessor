@@ -8,7 +8,7 @@ import pytest
 
 from src.config import CurationConfig, DetectionProfile
 from src.config.env import EnvError
-from src.services.curation import strategy_registry
+from src.services.curation import strategy_flags
 from src.services.curation.dataset_import import limits
 
 
@@ -18,7 +18,7 @@ from src.services.curation.dataset_import import limits
         ('OP_DATASET_IMPORT_CHUNK', 'abc', limits.import_chunk_size),
         ('OP_DATASET_IMPORT_CHUNK', '0', limits.import_chunk_size),
         ('OP_OPEN_VOCAB_SWEEP_S', '-1', limits.open_vocab_sweep_interval_s),
-        ('OP_SCORES_ENABLED', 'ture', strategy_registry._scores_enabled),
+        ('OP_SCORES_ENABLED', 'ture', strategy_flags._scores_enabled),
     ],
 )
 def test_runtime_reader_refuses_a_bad_value(monkeypatch, var, value, read):
@@ -33,7 +33,7 @@ def test_good_and_blank_values_still_read(monkeypatch):
     monkeypatch.setenv('OP_DATASET_IMPORT_CHUNK', '')
     assert limits.import_chunk_size() == 64
     monkeypatch.setenv('OP_SCORES_ENABLED', 'Yes')
-    assert strategy_registry._scores_enabled() is True
+    assert strategy_flags._scores_enabled() is True
 
 
 def test_curation_config_refuses_a_malformed_number(monkeypatch):

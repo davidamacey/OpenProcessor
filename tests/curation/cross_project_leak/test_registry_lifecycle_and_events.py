@@ -182,20 +182,20 @@ def test_a_planted_unkeyed_cache_behind_a_shared_helper_is_caught(
     leak_env: LeakEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Re-review R3: an unkeyed cache around the review-sort coverage helper
-    (``strategy_registry.field_coverage``) serves the second project the
+    (``field_coverage.field_coverage``) serves the second project the
     first one's coverage while the route still searches its own items
     index. The per-role request parity must catch it."""
-    from src.services.curation import strategy_registry
+    from src.services.curation import field_coverage as field_coverage_mod
 
     planted: dict[str, Any] = {}
-    real = strategy_registry.field_coverage
+    real = field_coverage_mod.field_coverage
 
     async def _unkeyed(opensearch: Any, fields: frozenset[str]) -> Any:
         if 'hit' not in planted:
             planted['hit'] = await real(opensearch, fields)
         return planted['hit']
 
-    monkeypatch.setattr(strategy_registry, 'field_coverage', _unkeyed)
+    monkeypatch.setattr(field_coverage_mod, 'field_coverage', _unkeyed)
 
     def only(key: tuple[str, str]) -> bool:
         return key[0] == 'GET' and key[1].startswith('/review/')

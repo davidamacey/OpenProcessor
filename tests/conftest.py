@@ -177,7 +177,7 @@ def _requests_start_unbound(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 # project, but every unit test binds the same ``default`` record, so a cache
 # one test fills would answer the next test's first request.
 _PROCESS_CACHES = (
-    ('src.services.curation.strategy_registry', '_COVERAGE_CACHE'),
+    ('src.services.curation.field_coverage', '_COVERAGE_CACHE'),
     ('src.services.curation.diverse_order', '_ORDER_CACHE'),
     ('src.services.curation.clustering.outliers', '_CACHE'),
     ('src.clients.curation_opensearch.settings_doc', '_settings_cache'),
