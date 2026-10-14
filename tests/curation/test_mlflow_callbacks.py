@@ -2,8 +2,8 @@
 
 MLflow tags (``on_train_start``) and registry metadata (``on_train_end``)
 must be byte-identical to the run manifest's ``lineage``/``code_versions``
-block -- both this module and ``job_protocol.write_manifest`` read the same
-``job_protocol.build_lineage(spec)`` dict, so a drift here would mean the
+block -- both this module and ``job_manifest.write_manifest`` read the same
+``job_manifest.build_lineage(spec)`` dict, so a drift here would mean the
 tracked run and its manifest disagree about which dataset/build produced it.
 
 Exercised with a fake ``mlflow`` module (no tracking server needed) and the

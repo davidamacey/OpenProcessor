@@ -9,6 +9,8 @@ import json
 from typing import TYPE_CHECKING, Any
 
 import job_protocol
+import job_spec
+import job_status
 import pytest
 import trainer
 
@@ -32,7 +34,7 @@ def test_api_written_job_json_parses_in_trainer(jobs_dir: Path, export_dir: Path
         hyperparameters={'epochs': 3, 'batch': 4, 'optimizer': 'MuSGD'},
     )
 
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
 
     assert spec.job_id == job_id
     assert spec.dataset_export_dir == export_dir
@@ -48,7 +50,7 @@ def test_api_written_job_json_parses_in_trainer(jobs_dir: Path, export_dir: Path
 def test_trainer_sibling_paths_match_the_api_side(jobs_dir: Path, export_dir: Path) -> None:
     """status / cancel / log / manifest paths are a shared naming contract."""
     job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
 
     assert spec.status_path == job_files._status_path(job_id)
     assert spec.cancel_path == job_files._cancel_path(job_id)
@@ -70,7 +72,7 @@ def test_concurrent_status_writes_do_not_collide_on_the_tmp_file(tmp_path: Path)
         start.wait()
         for i in range(200):
             try:
-                job_protocol._atomic_write_json(path, {'n': i})
+                job_status._atomic_write_json(path, {'n': i})
             except OSError as exc:
                 errors.append(exc)
 
@@ -87,7 +89,7 @@ def test_concurrent_status_writes_do_not_collide_on_the_tmp_file(tmp_path: Path)
 
 def test_api_cancel_sentinel_is_seen_by_the_trainer(jobs_dir: Path, export_dir: Path) -> None:
     job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
     assert not spec.cancel_path.exists()
 
     asyncio.run(train_jobs.write_cancel(job_id))
@@ -125,7 +127,7 @@ def test_broken_job_json_is_rejected(
     path.write_text(json.dumps(payload))
 
     with pytest.raises(ValueError, match=expected):
-        job_protocol.parse_and_validate_job(path)
+        job_spec.parse_and_validate_job(path)
 
 
 def test_invalid_job_gets_a_terminal_failed_status(jobs_dir: Path) -> None:
@@ -144,14 +146,14 @@ def test_invalid_job_gets_a_terminal_failed_status(jobs_dir: Path) -> None:
 
 def test_trainer_status_payload_parses_in_the_api_reader(jobs_dir: Path, export_dir: Path) -> None:
     job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
 
-    state = job_protocol.StatusState(job_id=job_id, state='running')
+    state = job_status.StatusState(job_id=job_id, state='running')
     state.current_epoch = 2
     state.total_epochs = 3
     state.eval = {'map50': 0.71, 'map50_95': 0.42}
     state.checkpoint_path = '/runs/x/weights/best.pt'
-    job_protocol.write_status_now(spec.status_path, state)
+    job_status.write_status_now(spec.status_path, state)
 
     status = asyncio.run(train_jobs.read_status(job_id))
     assert status is not None
@@ -168,17 +170,17 @@ def test_trainer_status_payload_parses_in_the_api_reader(jobs_dir: Path, export_
 
 
 @pytest.mark.parametrize(
-    'state_name', sorted(job_protocol.TERMINAL_STATES | job_protocol.ACTIVE_STATES)
+    'state_name', sorted(job_status.TERMINAL_STATES | job_status.ACTIVE_STATES)
 )
 def test_every_trainer_state_is_accepted_by_the_api_model(
     jobs_dir: Path, export_dir: Path, state_name: str
 ) -> None:
     """A state the trainer can write that the API rejects would blank the UI."""
     job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
 
-    job_protocol.write_status_now(
-        spec.status_path, job_protocol.StatusState(job_id=job_id, state=state_name)
+    job_status.write_status_now(
+        spec.status_path, job_status.StatusState(job_id=job_id, state=state_name)
     )
 
     status = asyncio.run(train_jobs.read_status(job_id))
@@ -188,7 +190,7 @@ def test_every_trainer_state_is_accepted_by_the_api_model(
 
 def test_run_log_is_tailable_by_the_api(jobs_dir: Path, export_dir: Path) -> None:
     job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
 
     with job_protocol.tee_to_run_log(spec.run_log_path):
         print('[trainer] epoch 1/3')
@@ -206,7 +208,7 @@ def test_pending_list_skips_terminal_jobs_and_is_fifo(jobs_dir: Path, export_dir
         f'{second}.job.json',
     ]
 
-    job_protocol.write_status_now(
-        job_files._status_path(first), job_protocol.StatusState(job_id=first, state='finished')
+    job_status.write_status_now(
+        job_files._status_path(first), job_status.StatusState(job_id=first, state='finished')
     )
     assert [p.name for p in job_protocol.list_pending_jobs(jobs_dir)] == [f'{second}.job.json']

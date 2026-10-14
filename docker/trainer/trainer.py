@@ -4,9 +4,9 @@ Polls the shared jobs directory for ``*.job.json`` files and runs each through
 Ultralytics: GPU selection, dataset preparation, the training call (with
 cooperative cancel and CUDA-OOM batch backoff), checkpoint + ONNX export, and
 metric capture. The file protocol it speaks lives in :mod:`job_protocol`,
-dataset preparation in :mod:`dataset_prep`, cross-job campaign policy in
-:mod:`campaign`, and the optional comparison against a served model in
-:mod:`incumbent_compare`.
+:mod:`job_spec`, :mod:`job_status` and :mod:`job_manifest`, dataset preparation in
+:mod:`dataset_prep`, cross-job campaign policy in :mod:`campaign`, and the optional comparison
+against a served model in :mod:`incumbent_compare`.
 
 Nothing domain-specific is hardcoded. Everything that varies per deployment --
 dataset location, class subset, hyperparameters, augmentation, which classes
@@ -37,22 +37,21 @@ from typing import Any
 import incumbent_compare
 from campaign import maybe_handle_campaign, write_quant_bakeoff_job
 from dataset_prep import copy_class_remap_to_weights_dir, prepare_dataset, read_class_remap
-from job_protocol import (
+from job_manifest import build_lineage, write_manifest
+from job_protocol import list_pending_jobs, reject_job, tee_to_run_log
+from job_spec import (
     DEFAULT_EXPORT_BATCH,
     DEFAULT_INPUT_SIZE,
     DEFAULT_JOBS_DIR,
     JobSpec,
+    _utcnow_iso,
+    parse_and_validate_job,
+)
+from job_status import (
     StatusState,
     _atomic_write_json,
     _capture_mlflow_run_id,
     _heartbeat_loop,
-    _utcnow_iso,
-    build_lineage,
-    list_pending_jobs,
-    parse_and_validate_job,
-    reject_job,
-    tee_to_run_log,
-    write_manifest,
     write_status_now,
 )
 from logutil import get_logger

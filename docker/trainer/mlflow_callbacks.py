@@ -160,7 +160,7 @@ def register_callbacks(  # four closures + wiring, cohesive by design
     """Wire all four hook handlers into the Ultralytics model.
 
     The closure captures the run metadata so handlers are pure-functional with
-    respect to the training loop. ``lineage`` (``job_protocol.build_lineage``)
+    respect to the training loop. ``lineage`` (``job_manifest.build_lineage``)
     is the single source of dataset/build identity -- MLflow tags, params and
     registry metadata read from it so they are byte-identical to the run
     manifest's own ``lineage``/``code_versions`` blocks.

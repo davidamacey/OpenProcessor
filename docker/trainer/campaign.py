@@ -19,24 +19,23 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Any
 
-from job_protocol import (
-    ACTIVE_STATES,
+from job_spec import (
     DEFAULT_EXPORT_BATCH,
     DEFAULT_INPUT_SIZE,
-    TERMINAL_STATES,
-    _atomic_write_json,
     _job_id_from_path,
     _read_json,
     _status_path_for,
     _utcnow_iso,
 )
+from job_status import ACTIVE_STATES, TERMINAL_STATES, _atomic_write_json
 from logutil import get_logger
 
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from job_protocol import JobSpec, StatusState
+    from job_spec import JobSpec
+    from job_status import StatusState
 
 
 logger = get_logger('trainer.campaign')

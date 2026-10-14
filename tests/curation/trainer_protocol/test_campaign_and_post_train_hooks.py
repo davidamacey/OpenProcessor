@@ -7,7 +7,8 @@ import json
 from typing import TYPE_CHECKING, Any
 
 import campaign
-import job_protocol
+import job_spec
+import job_status
 import pytest
 
 from curation.trainer_protocol._helpers import _write_job
@@ -52,8 +53,8 @@ def test_campaign_auto_skip_marks_queued_siblings_skipped(jobs_dir: Path, export
         dataset_export_dir=str(export_dir),
         stop_when={'map50_at_least': 0.5},
     )
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{winner}.job.json')
-    state = job_protocol.StatusState(job_id=winner, campaign_id=campaign_id, state='finished')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{winner}.job.json')
+    state = job_status.StatusState(job_id=winner, campaign_id=campaign_id, state='finished')
     state.eval = {'map50': 0.8}
 
     campaign.maybe_handle_campaign(spec, state)
@@ -66,8 +67,8 @@ def test_campaign_auto_skip_marks_queued_siblings_skipped(jobs_dir: Path, export
 
 def test_campaign_hook_is_a_no_op_for_a_standalone_job(jobs_dir: Path, export_dir: Path) -> None:
     job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
-    state = job_protocol.StatusState(job_id=job_id, state='finished')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    state = job_status.StatusState(job_id=job_id, state='finished')
     state.eval = {'map50': 0.9}
 
     campaign.maybe_handle_campaign(spec, state)  # must not raise or write
@@ -107,8 +108,8 @@ def test_auto_quantize_posts_the_bakeoff_run_request(
 
     monkeypatch.setattr(requests, 'post', _post)
     job_id = _write_job(dataset_export_dir=str(export_dir), auto_quantize_bakeoff=True)
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
-    state = job_protocol.StatusState(job_id=job_id, state='finished')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    state = job_status.StatusState(job_id=job_id, state='finished')
     state.checkpoint_path = str(tmp_path / 'best.pt')
 
     campaign.write_quant_bakeoff_job(spec, state)
@@ -166,7 +167,7 @@ def test_trainer_calls_back_under_the_project_that_wrote_the_job(
     job_id = _write_job(dataset_export_dir=str(export_dir))
     raw = json.loads((jobs_dir / f'{job_id}.job.json').read_text())
     assert raw['project'] == 'default'
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
     assert spec.project == 'default'
 
     assert campaign._post_promote(spec.project, job_id, 'best')

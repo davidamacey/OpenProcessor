@@ -7,7 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import incumbent_compare
-import job_protocol
+import job_status
 import pytest
 import trainer
 
@@ -34,7 +34,7 @@ def test_on_fit_epoch_end_tells_the_best_checkpoint_revalidation_apart_from_a_re
     last epoch's) -- live evidence: last_metric mAP50-95 0.857 vs
     results.csv's actual last-epoch row of 0.855. It must instead land in
     a distinct, single coherent best_checkpoint_metric row."""
-    state = job_protocol.StatusState(job_id='x', state='running')
+    state = job_status.StatusState(job_id='x', state='running')
     _, _, on_fit_epoch_end = trainer._make_ultralytics_callbacks(_SpecStub(), state, total_epochs=2)
 
     # Epoch 1 (Ultralytics reports epoch=0).
@@ -166,7 +166,7 @@ def test_populate_eval_block_prefers_the_test_split_over_the_training_time_val_s
     # Deliberately distinct from the test numbers so a conflation is
     # unmistakable rather than a lucky coincidence.
     _write_results_csv(save_dir, map50=0.9191, map50_95=0.85096)
-    state = job_protocol.StatusState(job_id='j-test-split', state='running')
+    state = job_status.StatusState(job_id='j-test-split', state='running')
 
     trainer.populate_eval_block(
         state, save_dir, val_results=_fake_test_val_results(), data_yaml_path=None
@@ -191,7 +191,7 @@ def test_populate_eval_block_falls_back_to_val_when_the_test_pass_is_missing(
 ) -> None:
     save_dir = tmp_path / 'run'
     _write_results_csv(save_dir, map50=0.9191, map50_95=0.85096)
-    state = job_protocol.StatusState(job_id='j-no-test', state='running')
+    state = job_status.StatusState(job_id='j-no-test', state='running')
 
     trainer.populate_eval_block(state, save_dir, val_results=None, data_yaml_path=None)
 
@@ -216,7 +216,7 @@ def test_populate_eval_block_falls_back_to_val_when_per_class_is_unavailable(
         map50=0.7, map_=0.5, mp=0.6, mr=0.4, ap_class_index=[], p=[], r=[], f1=[], ap50=[]
     )
     val_results = _FakeDetMetrics(empty_box, names={}, nt_per_class=[])
-    state = job_protocol.StatusState(job_id='j-no-per-class', state='running')
+    state = job_status.StatusState(job_id='j-no-per-class', state='running')
 
     trainer.populate_eval_block(state, save_dir, val_results=val_results, data_yaml_path=None)
 

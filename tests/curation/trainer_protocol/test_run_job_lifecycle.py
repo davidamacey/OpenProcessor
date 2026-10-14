@@ -8,7 +8,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import job_protocol
+import job_spec
+import job_status
 import pytest
 import trainer
 
@@ -68,7 +69,7 @@ def stub_ultralytics(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> type[_S
     module.YOLO = _StubYOLO  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, 'ultralytics', module)
     monkeypatch.setattr(trainer, 'RUNS_ROOT', str(tmp_path / 'runs'))
-    monkeypatch.setattr(job_protocol, 'TMP_ROOT', tmp_path / 'tmp')
+    monkeypatch.setattr(job_spec, 'TMP_ROOT', tmp_path / 'tmp')
     # A local file-backed tracking store, so the real MLflow code path runs
     # (and is therefore covered) without reaching for a network service that
     # isn't there.
@@ -86,8 +87,8 @@ def test_finalize_run_forces_the_end2end_head_for_yolo26_test_split_eval(
     ``.val()`` has no ``end2end=`` kwarg; the real toggle is the loaded
     model's own ``.end2end`` property."""
     job_id = _write_job(dataset_export_dir=str(export_dir), model_size='n', profile='probe')
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
-    state = job_protocol.StatusState(
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    state = job_status.StatusState(
         job_id=spec.job_id, campaign_id=spec.campaign_id, state='running'
     )
 
@@ -154,8 +155,8 @@ def test_finalize_run_does_not_force_end2end_on_a_non_dual_head_model(
     alone -- forcing end2end=True on it would break inference, since it
     has no one-to-one head to switch to."""
     job_id = _write_job(dataset_export_dir=str(export_dir), model_size='n', profile='probe')
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
-    state = job_protocol.StatusState(
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    state = job_status.StatusState(
         job_id=spec.job_id, campaign_id=spec.campaign_id, state='running'
     )
 
@@ -206,7 +207,7 @@ def test_run_job_drives_a_whole_export_run_to_finished(
         profile='probe',
         hyperparameters={'epochs': 1, 'batch': 2, 'optimizer': 'MuSGD', 'seed': 7},
     )
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
 
     trainer.run_job(spec)
 
@@ -322,7 +323,7 @@ def test_normal_run_manifest_has_no_null_lineage(
         profile='probe',
         hyperparameters={'epochs': 1, 'batch': 2, 'optimizer': 'MuSGD', 'seed': 3},
     )
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
 
     trainer.run_job(spec)
 
@@ -345,7 +346,7 @@ def test_run_job_propagates_class_remap_for_a_subset_run(
         include_classes=[12, 5],
         hyperparameters={'epochs': 1, 'optimizer': 'MuSGD'},
     )
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
 
     trainer.run_job(spec)
 
@@ -377,7 +378,7 @@ def test_run_job_honors_the_cancel_sentinel(
     job_id = _write_job(
         dataset_export_dir=str(export_dir), hyperparameters={'epochs': 5, 'optimizer': 'MuSGD'}
     )
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
     asyncio.run(train_jobs.write_cancel(job_id))
     # The real cancel path raises out of the on_train_epoch_end callback.
     stub_ultralytics.raise_on_train = trainer.CancelRequestedError('cancelled')
@@ -399,7 +400,7 @@ def test_run_job_records_a_training_failure_in_status_and_log(
     job_id = _write_job(
         dataset_export_dir=str(export_dir), hyperparameters={'epochs': 1, 'optimizer': 'MuSGD'}
     )
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
     stub_ultralytics.raise_on_train = RuntimeError('dataset is corrupt')
 
     trainer.run_job(spec)

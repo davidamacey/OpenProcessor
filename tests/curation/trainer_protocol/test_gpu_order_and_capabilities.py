@@ -6,7 +6,7 @@ import json
 import sys
 from typing import TYPE_CHECKING, Any
 
-import job_protocol
+import job_status
 import pytest
 import trainer
 
@@ -167,6 +167,6 @@ def test_gpu_telemetry_reports_host_index_through_gpu_order(
     )
     monkeypatch.setitem(sys.modules, 'pynvml', nvml)
     monkeypatch.setenv('OP_TRAIN_GPU_ORDER', '2')
-    assert [g['index'] for g in job_protocol._gpu_telemetry()] == [2]
+    assert [g['index'] for g in job_status._gpu_telemetry()] == [2]
     monkeypatch.delenv('OP_TRAIN_GPU_ORDER')
-    assert [g['index'] for g in job_protocol._gpu_telemetry()] == [0]
+    assert [g['index'] for g in job_status._gpu_telemetry()] == [0]

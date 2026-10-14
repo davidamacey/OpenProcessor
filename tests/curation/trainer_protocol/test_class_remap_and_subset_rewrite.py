@@ -6,7 +6,7 @@ import json
 from typing import TYPE_CHECKING
 
 import dataset_prep
-import job_protocol
+import job_spec
 import pytest
 import subset_dataset
 
@@ -101,9 +101,9 @@ def test_class_remap_copy_reports_failure_loudly_for_a_subset_run(
     promote would fall back to the full registry and ship a labels.txt that
     doesn't describe the model it is serving.
     """
-    monkeypatch.setattr(job_protocol, 'TMP_ROOT', tmp_path / 'tmp')
+    monkeypatch.setattr(job_spec, 'TMP_ROOT', tmp_path / 'tmp')
     job_id = _write_job(dataset_export_dir=str(export_dir), include_classes=[5], single_cls=False)
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
     save_dir = tmp_path / 'run'
     save_dir.mkdir()
 
@@ -126,9 +126,9 @@ def test_class_remap_copy_is_a_no_op_for_a_whole_export_run_missing_the_remap(
     spec directly, skipping ``prepare_dataset``), a full-class run has no
     ``full_class_remap_path`` file yet -- that alone is not a failure; an
     export that predates the dense-id remap hits this same path for real."""
-    monkeypatch.setattr(job_protocol, 'TMP_ROOT', tmp_path / 'tmp')
+    monkeypatch.setattr(job_spec, 'TMP_ROOT', tmp_path / 'tmp')
     job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
     save_dir = tmp_path / 'run'
     save_dir.mkdir()
 
@@ -150,9 +150,9 @@ def test_write_full_class_remap_for_a_whole_export_run_with_a_registry_gap(
     then wrote ``labels.txt`` line 0 as registry class 0's name (nothing,
     here) instead of dense id 0's real class (``widget``, registry id 5).
     """
-    monkeypatch.setattr(job_protocol, 'TMP_ROOT', tmp_path / 'tmp')
+    monkeypatch.setattr(job_spec, 'TMP_ROOT', tmp_path / 'tmp')
     job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
 
     written = dataset_prep.write_full_class_remap(spec)
     assert written == spec.full_class_remap_path
@@ -188,7 +188,7 @@ def test_text_classes_resolve_by_name_against_the_training_data_yaml(
         dataset_export_dir=str(export_dir),
         augmentation={'enabled': True, 'text_class_names': ['Serial_Plate']},
     )
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
 
     # Matching is case-insensitive and lands in the data.yaml's id space.
     assert dataset_prep.resolve_text_classes(spec, export_dir / 'data.yaml') == {1}
@@ -207,7 +207,7 @@ def test_text_classes_follow_the_subset_renumbering(
         include_classes=[12, 9],
         augmentation={'enabled': True, 'text_class_names': ['serial_plate']},
     )
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
 
     assert dataset_prep.resolve_text_classes(spec, out / 'data.yaml') == {1}
 
@@ -217,7 +217,7 @@ def test_text_classes_fall_back_to_the_deployment_default(
 ) -> None:
     monkeypatch.setenv('OP_TRAIN_TEXT_CLASS_NAMES', 'serial_plate,absent_class')
     job_id = _write_job(dataset_export_dir=str(export_dir))
-    spec = job_protocol.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
 
     # Unknown names are ignored rather than raising -- a subset run drops
     # classes legitimately.
