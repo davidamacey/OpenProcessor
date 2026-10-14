@@ -25,35 +25,8 @@ logger = get_logger(__name__)
 ARBITER_RECONCILE_INTERVAL_SECONDS = 15.0
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """
-    Application lifecycle manager.
-
-    Args:
-        app: FastAPI application instance (required by API contract, not used in implementation)
-
-    Startup:
-    - Create shared ThreadPoolExecutor for CPU-bound tasks
-    - Create AsyncTritonPool for high-throughput inference
-    - Shared Triton gRPC client auto-created on first use
-    - Reconcile orphaned job state left behind by a killed process
-    - Reconcile the GPU arbiter and start its periodic reconcile loop
-
-    Shutdown:
-    - Cancel the GPU-arbiter reconcile loop
-    - Close AsyncTritonPool
-    - Shutdown shared ThreadPoolExecutor
-    - Close all Triton gRPC connections
-    - Close OpenSearch connections
-    """
-    settings = get_settings()
-
-    # =========================================================================
-    # STARTUP
-    # =========================================================================
-    logger.info('startup_begin', phase='initialization')
-
+def _preflight() -> None:
+    """Refuse to start on a misconfiguration that would otherwise serve a broken store."""
     # Fail loudly on any retired env-var name before anything else initializes.
     from src.config.retired_env import reject_retired_env
 
@@ -72,6 +45,9 @@ async def lifespan(app: FastAPI):
 
     ensure_env_region_profile()
 
+
+async def _start_pools(settings) -> None:
+    """The shared CPU executor and the high-throughput async Triton pool."""
     # Shared ThreadPoolExecutor for CPU-bound tasks (JPEG decode, resize).
     AppResources.shared_executor = ThreadPoolExecutor(
         max_workers=64,
@@ -89,6 +65,9 @@ async def lifespan(app: FastAPI):
     await AppResources.async_triton_pool.initialize()
     logger.info('triton_pool_initialized', channels=4, max_concurrent=64)
 
+
+async def _start_background_tasks() -> None:
+    """Project registry, ops gauges, curation indexes and the config store poll."""
     # Projects foundation (P1): default record + poll loop, best-effort.
     from src.services.projects.bootstrap import startup_bootstrap_project_registry_safe
 
@@ -109,6 +88,8 @@ async def lifespan(app: FastAPI):
 
     AppResources.config_store_poll_task = await startup_bootstrap_config_store_safe()
 
+
+async def _start_event_bus_tail() -> None:
     # S-3: tail the shared cross-process event log so this uvicorn
     # worker's SSE clients see events from any other worker/job. Best-effort.
     try:
@@ -120,6 +101,9 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning('event_bus_tail_start_skipped', error=str(exc))
 
+
+def _reconcile_orphaned_state() -> None:
+    """Fix up job and export state left behind by a killed process."""
     # Reconcile job state.json files left at status='running' by a killed
     # process; best-effort and isolated per module (see each module's
     # reconcile_orphaned_jobs() docstring).
@@ -138,6 +122,30 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning('orphaned_export_tasks_reconcile_skipped', error=str(exc))
 
+
+async def _arbiter_reconcile_loop(reconcile_on_startup, reload_promoted_models_best_effort) -> None:
+    """Re-assert the desired GPU-service state on a fixed interval.
+
+    Also re-loads any promoted Triton model that's dropped out of
+    READY (see ``reload_promoted_models_best_effort``) -- this is
+    the only periodic tick in the process, so a Triton restart
+    between startups still gets picked up without an API bounce.
+    Idempotent by construction (stop/start only act on containers
+    not already in the target state; reloading an already-READY
+    model is a no-op), so running this in every uvicorn worker is
+    safe re-enforcement rather than a race. One failing tick must
+    never kill the loop — the next one retries.
+    """
+    while True:
+        await asyncio.sleep(ARBITER_RECONCILE_INTERVAL_SECONDS)
+        try:
+            await reconcile_on_startup()
+        except Exception as exc:
+            logger.warning('gpu_arbiter_reconcile_loop_error', error=str(exc))
+        await reload_promoted_models_best_effort(log_event='promoted_models_reload_tick')
+
+
+async def _start_gpu_arbiter() -> None:
     # GPU arbiter. A training run claims the deployment's GPU-resident
     # containers by writing a lock + pause sentinel and stopping them
     # (src.services.training.gpu_arbiter). Nothing in the trainer releases
@@ -175,32 +183,15 @@ async def lifespan(app: FastAPI):
 
         from src.services.training.triton_reload import reload_promoted_models_best_effort
 
-        async def _arbiter_reconcile_loop() -> None:
-            """Re-assert the desired GPU-service state on a fixed interval.
-
-            Also re-loads any promoted Triton model that's dropped out of
-            READY (see ``reload_promoted_models_best_effort``) -- this is
-            the only periodic tick in the process, so a Triton restart
-            between startups still gets picked up without an API bounce.
-            Idempotent by construction (stop/start only act on containers
-            not already in the target state; reloading an already-READY
-            model is a no-op), so running this in every uvicorn worker is
-            safe re-enforcement rather than a race. One failing tick must
-            never kill the loop — the next one retries.
-            """
-            while True:
-                await asyncio.sleep(ARBITER_RECONCILE_INTERVAL_SECONDS)
-                try:
-                    await reconcile_on_startup()
-                except Exception as exc:
-                    logger.warning('gpu_arbiter_reconcile_loop_error', error=str(exc))
-                await reload_promoted_models_best_effort(log_event='promoted_models_reload_tick')
-
-        AppResources.arbiter_task = asyncio.create_task(_arbiter_reconcile_loop())
+        AppResources.arbiter_task = asyncio.create_task(
+            _arbiter_reconcile_loop(reconcile_on_startup, reload_promoted_models_best_effort)
+        )
         logger.info('gpu_arbiter_loop_started', interval_s=ARBITER_RECONCILE_INTERVAL_SECONDS)
     except Exception as exc:
         logger.warning('gpu_arbiter_reconcile_skipped', error=str(exc))
 
+
+async def _reload_promoted_models() -> None:
     # Triton in explicit-control mode only loads its --load-model
     # list at startup. A model promoted through POST
     # {api_prefix}/train/promote/{job_id} stays on disk (with a
@@ -214,6 +205,8 @@ async def lifespan(app: FastAPI):
 
     await reload_promoted_models_best_effort(log_event='promoted_models_reload_on_startup')
 
+
+def _warm_pe_encoder(app: FastAPI) -> None:
     # Best-effort: warm the PE-Core text encoder for GET /curation/search/text
     # (ONNX Runtime when OP_PE_TEXT_ONNX_PATH exists, else Triton's
     # pe_text_encoder if ready, else PyTorch — see src/clients/pe_encoder.py).
@@ -228,23 +221,8 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning('pe_text_encoder_warm_skipped', error=str(exc))
 
-    from src.services.curation.background_jobs import start_background_jobs, stop_background_jobs
 
-    AppResources.curation_background_jobs = start_background_jobs()
-
-    logger.info(
-        'service_ready',
-        triton_url=settings.triton_url,
-        opensearch_url=settings.opensearch_url,
-    )
-
-    yield
-
-    # =========================================================================
-    # SHUTDOWN
-    # =========================================================================
-    logger.info('shutdown_begin', phase='cleanup')
-
+async def _stop_ops_metrics_and_arbiter() -> None:
     if AppResources.ops_metrics_task is not None:
         AppResources.ops_metrics_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
@@ -260,6 +238,10 @@ async def lifespan(app: FastAPI):
             await AppResources.arbiter_task
         AppResources.arbiter_task = None
         logger.info('gpu_arbiter_loop_stopped')
+
+
+async def _stop_background_tasks() -> None:
+    from src.services.curation.background_jobs import stop_background_jobs
 
     await stop_background_jobs(AppResources.curation_background_jobs)
     AppResources.curation_background_jobs = []
@@ -285,6 +267,8 @@ async def lifespan(app: FastAPI):
             logger.warning('event_bus_tail_stop_error', error=str(exc))
         AppResources.event_bus_started = False
 
+
+async def _close_pools() -> None:
     # Close AsyncTritonPool
     if AppResources.async_triton_pool is not None:
         try:
@@ -304,6 +288,8 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning('executor_shutdown_error', error=str(e))
 
+
+async def _close_clients() -> None:
     # Close Triton connections
     try:
         await TritonClientFactory.close_all()
@@ -315,5 +301,66 @@ async def lifespan(app: FastAPI):
         await OpenSearchClientFactory.close()
     except Exception as e:
         logger.warning('opensearch_close_error', error=str(e))
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifecycle manager.
+
+    Args:
+        app: FastAPI application instance (required by API contract, not used in implementation)
+
+    Startup:
+    - Create shared ThreadPoolExecutor for CPU-bound tasks
+    - Create AsyncTritonPool for high-throughput inference
+    - Shared Triton gRPC client auto-created on first use
+    - Reconcile orphaned job state left behind by a killed process
+    - Reconcile the GPU arbiter and start its periodic reconcile loop
+
+    Shutdown:
+    - Cancel the GPU-arbiter reconcile loop
+    - Close AsyncTritonPool
+    - Shutdown shared ThreadPoolExecutor
+    - Close all Triton gRPC connections
+    - Close OpenSearch connections
+    """
+    settings = get_settings()
+
+    # =========================================================================
+    # STARTUP
+    # =========================================================================
+    logger.info('startup_begin', phase='initialization')
+
+    _preflight()
+    await _start_pools(settings)
+    await _start_background_tasks()
+    await _start_event_bus_tail()
+    _reconcile_orphaned_state()
+    await _start_gpu_arbiter()
+    await _reload_promoted_models()
+    _warm_pe_encoder(app)
+
+    from src.services.curation.background_jobs import start_background_jobs
+
+    AppResources.curation_background_jobs = start_background_jobs()
+
+    logger.info(
+        'service_ready',
+        triton_url=settings.triton_url,
+        opensearch_url=settings.opensearch_url,
+    )
+
+    yield
+
+    # =========================================================================
+    # SHUTDOWN
+    # =========================================================================
+    logger.info('shutdown_begin', phase='cleanup')
+
+    await _stop_ops_metrics_and_arbiter()
+    await _stop_background_tasks()
+    await _close_pools()
+    await _close_clients()
 
     logger.info('shutdown_complete')
