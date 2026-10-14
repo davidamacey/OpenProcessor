@@ -19,11 +19,3 @@ frontend/src/routes/p/[project]/export/+page.svelte	1047	split in PR 8
 frontend/src/routes/p/[project]/review/+page.svelte	3260	split in PR 8
 frontend/src/routes/p/[project]/train/+page.svelte	1641	split in PR 8
 setup-openprocessor.sh	3214	cohesive: one __op_define function so a truncated curl-to-bash download is a syntax error; pre-install code cannot source libraries
-tests/curation/test_cascade_detect.py	710	split in PR 7
-tests/curation/test_export_service.py	797	split in PR 7
-tests/curation/test_export_single_class.py	748	split in PR 7
-tests/curation/test_segmenter_service.py	737	split in PR 7
-tests/curation/test_worker_hot_reload.py	803	split in PR 7
-tests/installer/test_setup_dry_run.py	884	split in PR 7
-tests/test_compose_contract.py	1178	split in PR 7
-tests/test_validate_models.py	736	split in PR 7
