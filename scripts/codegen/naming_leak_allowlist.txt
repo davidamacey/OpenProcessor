@@ -95,6 +95,7 @@ tests/integration/test_labeler_route_parity.py:plate|lpr|LPR # KNOWN_GAPS docume
 # guard's purpose itself (the hook exists to ban that literal, so it has
 # to spell it to say so). All other file-size-split rationale text was
 # reworded off vendor/reference-file names.
+.pre-commit-config.yaml:rev: v6\.0\.0 # the pre-commit-hooks release tag, not a vendor model name
 .pre-commit-config.yaml:plate # the check-no-literal-region-fields hook's own name/purpose
 CONTRIBUTING.md:plate # describes the plate_* literal guard and its roi_* illustrative example; guard description, kept deliberately
 

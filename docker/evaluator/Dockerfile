@@ -96,7 +96,7 @@ USER appuser
 # dirs the API enqueues into.
 ENV OP_BAKEOFF_JOBS_DIR=/var/lib/openprocessor/bakeoff_jobs
 HEALTHCHECK --interval=60s --timeout=10s --start-period=20s --retries=3 \
-    CMD test -d "$OP_BAKEOFF_JOBS_DIR" || exit 1
+    CMD ["sh", "-c", "test -d \"$OP_BAKEOFF_JOBS_DIR\" || exit 1"]
 
 ENTRYPOINT ["python", "-m", "scripts.curation.bakeoff.bakeoff_runner"]
 CMD ["--watch", "/var/lib/openprocessor/bakeoff_jobs"]

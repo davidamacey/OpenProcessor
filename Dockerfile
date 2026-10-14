@@ -166,7 +166,7 @@ EXPOSE 8000
 # health on it would mark api unhealthy (and cascade via
 # depends_on: service_healthy) whenever a *downstream* dep degrades.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8000/live || exit 1
+    CMD ["sh", "-c", "curl -f http://localhost:8000/live || exit 1"]
 
 # Production defaults (docker-compose.yml overrides workers, backlog, etc.)
 CMD ["uvicorn", "src.main:app", \
