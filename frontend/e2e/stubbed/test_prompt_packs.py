@@ -16,7 +16,7 @@ fails the test.
      last read.
   4. `test_test_on_crop_sends_the_draft_and_shows_the_reply`.
   5. `test_clone_a_template_opens_the_new_pack`.
-  6. `test_absent_when_prompt_packs_404` — conftest's default 404: no
+  6. `test_absent_when_prompt_packs_404` — the harness stub's default 404: no
      /settings card, the route says so, no other pack request fires.
 """
 
@@ -25,7 +25,8 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from conftest import ACTION_TIMEOUT_MS, expect_handled
+from harness.constants import ACTION_TIMEOUT_MS
+from harness.waits import expect_handled
 from playwright.sync_api import expect
 
 CLEAN = {"ok": True, "errors": [], "warnings": [], "force_allowed": False}

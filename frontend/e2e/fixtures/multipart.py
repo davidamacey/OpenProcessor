@@ -1,5 +1,5 @@
 """Parses a multipart/form-data request body captured by the stubbed
-Playwright ``Stub`` fixture (``e2e/conftest.py``), for
+Playwright ``Stub`` fixture (``e2e/harness/stub.py``), for
 ``e2e/stubbed/test_ingest.py``'s multipart assertions.
 
 ``Stub._dispatch`` json-decodes ``request.post_data`` when possible and

@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import os
 
-from conftest import ACTION_TIMEOUT_MS, expect_handled
+from harness.constants import ACTION_TIMEOUT_MS
+from harness.waits import expect_handled
 
 from fixtures.wire import make_item, review_tab, review_tabs
 

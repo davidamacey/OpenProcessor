@@ -14,7 +14,7 @@ makes that a test did not expect fails the test.
   3. `test_failed_job_shows_its_served_error`.
   4. `test_reprocess_confirm_on_cluster_selection` — a served dry run
      precedes the apply; both bodies asserted.
-  5. `test_feature_absent_when_formats_404` — conftest's default 404:
+  5. `test_feature_absent_when_formats_404` — the harness stub's default 404:
      no ingest link, no Reprocess button, the wizard route says so, and no
      other import request fires.
 """
@@ -24,7 +24,8 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from conftest import ACTION_TIMEOUT_MS, expect_handled
+from harness.constants import ACTION_TIMEOUT_MS
+from harness.waits import expect_handled
 from playwright.sync_api import expect
 
 from fixtures.wire import make_item
@@ -554,7 +555,7 @@ def test_reprocess_confirm_on_cluster_selection(stub, page, app_url):
 
 
 def test_feature_absent_when_formats_404(stub, page, app_url):
-    # conftest's default: GET {prefix}/datasets/formats -> 404.
+    # the harness stub's default: GET {prefix}/datasets/formats -> 404.
     serve_ingest_page(stub)
     serve_cluster(stub)
 

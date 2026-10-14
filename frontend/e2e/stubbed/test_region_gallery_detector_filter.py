@@ -8,7 +8,7 @@ this test controls, not a hardcoded list baked into the build.
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS
 
 from playwright.sync_api import expect
 
