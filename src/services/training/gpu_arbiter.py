@@ -164,6 +164,88 @@ async def release_gpus_after_training(
 # ---- recovery on API startup -------------------------------------------
 
 
+def _containers_claimed_by(cvd: str | None, all_configured: tuple[str, ...]) -> set[str]:
+    """Containers a run with ``cuda_visible_devices=cvd`` keeps stopped; an
+    unknown device list (``None``) claims every configured container."""
+    if cvd is None:
+        return set(all_configured)
+    return set(containers_to_stop(cvd))
+
+
+def _scan_active_runs(
+    jobs_dirs: dict[str, Path], all_configured: tuple[str, ...]
+) -> tuple[set[str], set[str], str | None]:
+    """Runs whose ``job.json`` has no terminal ``status.json``.
+
+    Returns ``(active_stems, containers_to_keep_stopped, holder_project)``; the
+    holder is the first project (in ``jobs_dirs`` order) with an active run.
+    """
+    status_states: dict[str, str | None] = {}
+    active_stems: set[str] = set()
+    stop_names: set[str] = set()
+    holder_project: str | None = None
+    for project_slug, jobs_dir in jobs_dirs.items():
+        if not jobs_dir.exists():
+            continue
+        for status_file in jobs_dir.glob('*.status.json'):
+            try:
+                payload = json.loads(status_file.read_text(encoding='utf-8'))
+            except (OSError, ValueError):
+                continue
+            stem = status_file.name[: -len('.status.json')]
+            status_states[stem] = payload.get('state')
+
+        for job_file in jobs_dir.glob('*.job.json'):
+            stem = job_file.name[: -len('.job.json')]
+            state = status_states.get(stem)
+            # Active unless the status has reached a terminal state. No status
+            # yet means just-claimed (still active); any non-terminal or
+            # unrecognized state keeps the run live so an hours/days run can
+            # never be misread as idle.
+            if state is not None and state in TRAINER_TERMINAL_STATES:
+                continue
+            active_stems.add(stem)
+            cvd: str | None = None
+            try:
+                cvd = json.loads(job_file.read_text(encoding='utf-8')).get('cuda_visible_devices')
+            except (OSError, ValueError):
+                cvd = None
+            stop_names.update(_containers_claimed_by(cvd, all_configured))
+            if holder_project is None and project_slug:
+                holder_project = project_slug
+    return active_stems, stop_names, holder_project
+
+
+async def _enforce_active_state(
+    active_stems: set[str],
+    stop_names: set[str],
+    all_configured: tuple[str, ...],
+    sentinel_target: Path,
+    holder_project: str | None,
+) -> ArbiterAction:
+    ordered_stop = tuple(name for name in all_configured if name in stop_names)
+    to_start = tuple(name for name in all_configured if name not in stop_names)
+    start_result: ArbiterAction | None = None
+    if to_start:
+        start_result = await start_gpu_services(containers=to_start)
+    stop_result: ArbiterAction | None = None
+    if ordered_stop:
+        stop_result = await stop_gpu_services(containers=ordered_stop)
+    # Reassert the sentinel last -- a run is active regardless of which
+    # containers moved, so the paired worker must stay paused.
+    pause_result = await pause_gpu_worker(sentinel=sentinel_target)
+    logger.info(
+        'arbiter_enforce_active',
+        active_jobs=len(active_stems),
+        stopped=list(ordered_stop),
+        started=list(to_start),
+    )
+    result = start_result if start_result is not None else stop_result
+    if result is None:
+        result = pause_result
+    return dataclasses.replace(result, holder_project=holder_project)
+
+
 async def reconcile_on_startup(
     *,
     train_jobs_dir: Path | None = None,
@@ -191,47 +273,8 @@ async def reconcile_on_startup(
         jobs_dirs: dict[str, Path] = {'': train_jobs_dir}
     else:
         jobs_dirs = all_train_jobs_dirs()
-    status_states: dict[str, str | None] = {}
-    active_stems: set[str] = set()
     all_configured = tuple(name for name, _ in get_gpu_arbiter_config().container_gpus)
-    stop_names: set[str] = set()
-    holder_project: str | None = None
-
-    def _accumulate(cvd: str | None) -> None:
-        if cvd is None:
-            stop_names.update(all_configured)
-        else:
-            stop_names.update(containers_to_stop(cvd))
-
-    for project_slug, jobs_dir in jobs_dirs.items():
-        if not jobs_dir.exists():
-            continue
-        for status_file in jobs_dir.glob('*.status.json'):
-            try:
-                payload = json.loads(status_file.read_text(encoding='utf-8'))
-            except (OSError, ValueError):
-                continue
-            stem = status_file.name[: -len('.status.json')]
-            status_states[stem] = payload.get('state')
-
-        for job_file in jobs_dir.glob('*.job.json'):
-            stem = job_file.name[: -len('.job.json')]
-            state = status_states.get(stem)
-            # Active unless the status has reached a terminal state. No status
-            # yet means just-claimed (still active); any non-terminal or
-            # unrecognized state keeps the run live so an hours/days run can
-            # never be misread as idle.
-            if state is not None and state in TRAINER_TERMINAL_STATES:
-                continue
-            active_stems.add(stem)
-            cvd: str | None = None
-            try:
-                cvd = json.loads(job_file.read_text(encoding='utf-8')).get('cuda_visible_devices')
-            except (OSError, ValueError):
-                cvd = None
-            _accumulate(cvd)
-            if holder_project is None and project_slug:
-                holder_project = project_slug
+    active_stems, stop_names, holder_project = _scan_active_runs(jobs_dirs, all_configured)
 
     # The lock closes the window before job.json is visible, and ages out so
     # a crashed claim can't reserve the GPUs forever.
@@ -240,7 +283,9 @@ async def reconcile_on_startup(
         claimed_at = float(lock.get('claimed_at', 0.0) or 0.0)
         if (time.time() - claimed_at) < LOCK_GRACE_SECONDS:
             active_stems.add('__lock__')
-            _accumulate(lock.get('cuda_visible_devices'))
+            stop_names.update(
+                _containers_claimed_by(lock.get('cuda_visible_devices'), all_configured)
+            )
 
     # A queued bake-off claims every configured container unless
     # OP_BAKEOFF_HOST_GPUS scopes it to the evaluator's host GPUs (then
@@ -251,27 +296,9 @@ async def reconcile_on_startup(
         stop_names.update(containers_to_stop(scope) if scope else all_configured)
 
     if active_stems:
-        ordered_stop = tuple(name for name in all_configured if name in stop_names)
-        to_start = tuple(name for name in all_configured if name not in stop_names)
-        start_result: ArbiterAction | None = None
-        if to_start:
-            start_result = await start_gpu_services(containers=to_start)
-        stop_result: ArbiterAction | None = None
-        if ordered_stop:
-            stop_result = await stop_gpu_services(containers=ordered_stop)
-        # Reassert the sentinel last -- a run is active regardless of which
-        # containers moved, so the paired worker must stay paused.
-        pause_result = await pause_gpu_worker(sentinel=sentinel_target)
-        logger.info(
-            'arbiter_enforce_active',
-            active_jobs=len(active_stems),
-            stopped=list(ordered_stop),
-            started=list(to_start),
+        return await _enforce_active_state(
+            active_stems, stop_names, all_configured, sentinel_target, holder_project
         )
-        result = start_result if start_result is not None else stop_result
-        if result is None:
-            result = pause_result
-        return dataclasses.replace(result, holder_project=holder_project)
 
     # Nothing active -- release everything: clear the (stale) lock +
     # sentinel and bring the configured containers back up. This is the
