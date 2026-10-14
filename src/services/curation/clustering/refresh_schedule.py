@@ -58,6 +58,23 @@ class ProjectSchedule:
     pending_since: float | None = None
     retry_not_before: float = 0.0
     job_id: str | None = None
+    # Persistence bookkeeping (see ``refresh_state_store``): whether the stored state was
+    # restored yet, the revision it carried and what was last written.
+    restored: bool = False
+    stored_revision: int = 0
+    stored: tuple[int, int | None, int | None, str | None] | None = None
+
+    def persistent(self) -> tuple[int, int | None, int | None, str | None]:
+        """The fields a restart must not lose."""
+        return (self.last_trained_count, self.trained_before, self.prev_count, self.job_id)
+
+    def restore(
+        self, revision: int, persisted: tuple[int, int | None, int | None, str | None]
+    ) -> None:
+        self.last_trained_count, self.trained_before, self.prev_count, self.job_id = persisted
+        self.stored_revision = revision
+        self.stored = persisted
+        self.restored = True
 
     def on_started(self, count: int, job_id: str | None, *, previous_trained: int) -> None:
         self.trained_before = previous_trained

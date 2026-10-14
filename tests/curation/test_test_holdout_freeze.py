@@ -549,3 +549,16 @@ def test_freeze_contract_has_no_seed(app_client: Any) -> None:
     response = schemas['TestHoldoutFreezeResponse']
     selection = response['properties']['selection']
     assert selection.get('const') == 'sha1_per_class' or selection.get('enum') == ['sha1_per_class']
+
+
+def test_freeze_refuses_when_the_existing_holdout_cannot_be_counted(
+    app_client: TestClient, fake_opensearch: AsyncMock
+) -> None:
+    """The "a holdout already exists" guard cannot be skipped by an outage: a freeze
+    that cannot tell is refused (503), not run as if there were no holdout."""
+    fake_opensearch.count = AsyncMock(side_effect=RuntimeError('opensearch is down'))
+
+    r = app_client.post('/curation/projects/default/test_holdout/freeze', json={'percent': 20})
+
+    assert r.status_code == 503, r.text
+    fake_opensearch.search.assert_not_called()

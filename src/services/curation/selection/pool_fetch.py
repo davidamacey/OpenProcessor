@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from opensearchpy.exceptions import OpenSearchException
 
 from src.core.logging import get_logger
 
@@ -90,7 +91,7 @@ async def fetch_pool_embeddings(
     if scroll_id:
         try:
             await client.clear_scroll(scroll_id=scroll_id)
-        except Exception as exc:
+        except OpenSearchException as exc:
             logger.warning('curation_select_clear_scroll_failed', error=str(exc))
 
     if truncated:

@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from fastapi import Request
 
     from src.utils.retry import RetryExhaustedError
+    from src.utils.upstream_errors import UpstreamError
 
 
 logger = get_logger(__name__)
@@ -52,6 +53,32 @@ async def triton_unavailable_response(request: Request, exc: RetryExhaustedError
             'detail': 'Inference backend (Triton) is temporarily unavailable; retry shortly',
             'request_id': req_id,
             'error_type': type(exc).__name__,
+        },
+        headers={
+            'X-Request-ID': req_id,
+            'Retry-After': str(TRITON_UNAVAILABLE_RETRY_AFTER_SECONDS),
+        },
+    )
+
+
+async def upstream_unavailable_response(request: Request, exc: UpstreamError) -> JSONResponse:
+    """A backing service (OpenSearch) failed -> 503 with the stable ``reason``,
+    not a bare 500 and never an empty success."""
+    req_id = get_request_id()
+    logger.warning(
+        'upstream_unavailable',
+        request_id=req_id,
+        method=request.method,
+        path=request.url.path,
+        service=exc.service,
+        reason=exc.reason,
+    )
+    return JSONResponse(
+        status_code=503,
+        content={
+            'detail': f'{exc.service} is temporarily unavailable; retry shortly',
+            'reason': exc.reason,
+            'request_id': req_id,
         },
         headers={
             'X-Request-ID': req_id,

@@ -24,6 +24,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from opensearchpy.exceptions import OpenSearchException
 
 from src.config.curation import items_index
 from src.core.logging import get_logger
@@ -256,7 +257,7 @@ async def cluster_residuals(
     if rows:
         try:
             await client.indices.refresh(index=items_index())
-        except Exception as exc:
+        except OpenSearchException as exc:
             logger.debug('curation_cluster_refresh_failed', error=str(exc))
     write_back_s = time.perf_counter() - t_write
 
@@ -414,7 +415,7 @@ async def assign_only_residuals(
     if n_written - n_unchanged:
         try:
             await client.indices.refresh(index=items_index())
-        except Exception as exc:
+        except OpenSearchException as exc:
             logger.debug('curation_ivf_assign_refresh_failed', error=str(exc))
 
     # Park the gate complement so newly-gated crops don't linger in stale

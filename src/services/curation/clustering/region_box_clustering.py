@@ -24,6 +24,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from opensearchpy.exceptions import OpenSearchException
 
 from src.config import get_region_fields
 from src.config.curation import items_index
@@ -154,7 +155,7 @@ async def cluster_region_residuals(
 async def _refresh(client: AsyncOpenSearch) -> None:
     try:
         await client.indices.refresh(index=items_index())
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.debug('curation_region_cluster_refresh_failed', error=str(exc))
 
 
@@ -217,12 +218,9 @@ def _subid_edit(cluster_id: int, subid: str) -> BoxEdit:
 
 
 async def count_false_positive_boxes(client: AsyncOpenSearch) -> int:
-    """Current count of false-positive boxes (the FP bucket population)."""
-    try:
-        return await count_boxes(client, index=items_index(), states=(_FALSE_POSITIVE,))
-    except Exception as exc:
-        logger.warning('curation_count_fp_failed', error=str(exc))
-        return 0
+    """Current count of false-positive boxes (the FP bucket population); a count
+    that fails raises rather than read as "none"."""
+    return await count_boxes(client, index=items_index(), states=(_FALSE_POSITIVE,))
 
 
 async def build_region_fp_centroids(client: AsyncOpenSearch) -> dict[str, Any]:

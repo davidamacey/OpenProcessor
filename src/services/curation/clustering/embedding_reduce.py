@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
+from opensearchpy.exceptions import OpenSearchException
 
 from src.config import get_curation_config
 from src.config.curation import items_index, umap_state_index
@@ -252,7 +253,7 @@ async def fetch_residual_embeddings(
         if scroll_id:
             try:
                 await client.clear_scroll(scroll_id=scroll_id)
-            except Exception as exc:
+            except OpenSearchException as exc:
                 logger.debug('curation_embedding_clear_scroll_failed', error=str(exc))
 
     if not pages:
@@ -413,7 +414,7 @@ async def fetch_residual_embeddings_parallel(
     finally:
         try:
             await client.delete_pit(body={'pit_id': [pit_id]})
-        except Exception as exc:
+        except OpenSearchException as exc:
             logger.debug('curation_embedding_pit_delete_failed', error=str(exc))
 
     ids: list[str] = []

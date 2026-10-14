@@ -10,6 +10,7 @@ import numpy as np
 from opensearchpy.helpers import async_bulk
 
 from src.clients.opensearch.names import IndexName
+from src.utils.upstream_errors import UpstreamError
 
 
 if TYPE_CHECKING:
@@ -95,7 +96,7 @@ class ClustersMixin:
 
         except Exception as e:
             logger.error(f'Failed to extract embeddings from {index_name.value}: {e}')
-            return np.array([]), []
+            raise UpstreamError('opensearch', 'opensearch_unavailable') from e
 
     async def get_unclustered_embeddings(
         self,
@@ -148,7 +149,7 @@ class ClustersMixin:
 
         except Exception as e:
             logger.error(f'Failed to get unclustered embeddings from {index_name.value}: {e}')
-            return np.array([]), []
+            raise UpstreamError('opensearch', 'opensearch_unavailable') from e
 
     async def update_cluster_assignments(
         self,
@@ -199,7 +200,7 @@ class ClustersMixin:
             return success
         except Exception as e:
             logger.error(f'Bulk cluster update failed: {e}')
-            return 0
+            raise UpstreamError('opensearch', 'opensearch_unavailable') from e
 
     # =========================================================================
     # Cluster Album Queries
@@ -258,7 +259,7 @@ class ClustersMixin:
 
         except Exception as e:
             logger.error(f'Failed to get cluster members: {e}')
-            return []
+            raise UpstreamError('opensearch', 'opensearch_unavailable') from e
 
     async def get_cluster_stats(
         self,
@@ -302,4 +303,4 @@ class ClustersMixin:
 
         except Exception as e:
             logger.error(f'Failed to get cluster stats: {e}')
-            return []
+            raise UpstreamError('opensearch', 'opensearch_unavailable') from e

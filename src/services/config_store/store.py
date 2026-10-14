@@ -25,7 +25,7 @@ import time
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal
 
-from opensearchpy.exceptions import NotFoundError
+from opensearchpy.exceptions import NotFoundError, OpenSearchException
 
 from src.core.logging import get_logger
 from src.services.config_store.index import (
@@ -256,7 +256,7 @@ class ConfigStore:
         # revision N" while missing docs that made revision N happen.
         try:
             await client.indices.refresh(index=self.index)
-        except Exception as exc:  # pragma: no cover - defensive; search below still runs
+        except OpenSearchException as exc:  # pragma: no cover - defensive; search below still runs
             logger.warning('config_store_index_refresh_failed', index=self.index, error=str(exc))
         resp = await client.search(
             index=self.index,
@@ -509,7 +509,7 @@ async def _poll_all_active_projects(client: Any, interval: float) -> None:
             # index belongs to no project) so a probe or an endpoint edit
             # made through another uvicorn worker shows up here within a tick.
             await get_global_config_store(mode='live').refresh(client)
-        except Exception as exc:
+        except OpenSearchException as exc:
             logger.warning('config_store_poll_global_failed', error=str(exc))
         try:
             await registry.ensure_fresh()

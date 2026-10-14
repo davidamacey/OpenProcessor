@@ -22,12 +22,15 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from src.core.logging import get_logger
 from src.services.curation.job_reconcile import reconcile_stale_running
 
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
+
+logger = get_logger(__name__)
 
 HEARTBEAT_STALE_S = 30.0
 HEARTBEAT_TICK_S = 10.0
@@ -53,12 +56,25 @@ class FileJob:
 
     def read(self) -> dict[str, Any]:
         """The current state; ``{}`` when the file is missing or unreadable
-        (a half-written file is impossible: writes are atomic renames)."""
+        (a half-written file is impossible: writes are atomic renames). A busy
+        check must not trust that ``{}``: see :meth:`state_problem`."""
         try:
             raw = json.loads(self.state_file.read_text(encoding='utf-8'))
         except (OSError, ValueError):
             return {}
         return raw if isinstance(raw, dict) else {}
+
+    def state_problem(self) -> str | None:
+        """Why the state file cannot be read, or ``None`` when it is missing (a job
+        that never ran) or readable. An unreadable state says nothing about whether
+        a job is running."""
+        try:
+            raw = json.loads(self.state_file.read_text(encoding='utf-8'))
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError) as exc:
+            return f'{type(exc).__name__}: {exc}'
+        return None if isinstance(raw, dict) else 'the state is not a JSON object'
 
     def write(self, state: dict[str, Any]) -> None:
         self.directory.mkdir(parents=True, exist_ok=True)
@@ -98,7 +114,13 @@ class FileJob:
     def is_live(self, active_statuses: frozenset[str]) -> bool:
         """An active status with a heartbeat no older than
         :data:`HEARTBEAT_STALE_S`. No heartbeat yet means the task has not
-        ticked once: still live."""
+        ticked once: still live. A state file that exists but cannot be read
+        counts as live: the busy check fails closed rather than start a second
+        job beside one it cannot see."""
+        problem = self.state_problem()
+        if problem is not None:
+            logger.warning('job_state_unreadable', path=str(self.state_file), problem=problem)
+            return True
         state = self.read()
         return state.get('status') in active_statuses and not self._is_stale(state, active_statuses)
 

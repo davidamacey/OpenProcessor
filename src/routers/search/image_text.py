@@ -8,6 +8,7 @@ from fastapi import File, HTTPException, Query, UploadFile, status
 from src.core.dependencies import VisualSearchDep
 from src.routers.search._router import router
 from src.routers.search.models import SearchResponse, SearchResult
+from src.utils.upstream_errors import UpstreamError
 
 
 logger = logging.getLogger(__name__)
@@ -101,7 +102,7 @@ async def search_by_image(
             search_time_ms=round(search_time_ms, 2),
         )
 
-    except HTTPException:
+    except (HTTPException, UpstreamError):
         raise
     except Exception as e:
         logger.error(f'Image search failed: {e}')
@@ -212,7 +213,7 @@ async def search_by_text(
             search_time_ms=round(search_time_ms, 2),
         )
 
-    except HTTPException:
+    except (HTTPException, UpstreamError):
         raise
     except Exception as e:
         logger.error(f'Text search failed: {e}')

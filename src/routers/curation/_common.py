@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -61,6 +61,10 @@ def get_class_registry() -> ClassRegistry:
     from src.routers import curation as _pkg
 
     return _pkg.get_class_registry()
+
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 
 logger = get_logger(__name__)
@@ -219,108 +223,73 @@ async def _ensure_indexes(opensearch: Any) -> None:
         await _ensure_indexes_locked(opensearch)
 
 
+def _migrations() -> tuple[tuple[str, Callable[[Any], Awaitable[Any]]], ...]:
+    """The ordered mapping migrations of the bootstrap, looked up at call time."""
+    return (
+        ('vlm_raw_label', ensure_items_vlm_raw_label_fields),
+        ('label_cluster', ensure_items_label_cluster_fields),
+        ('provenance', ensure_items_provenance_fields),
+        ('request_id', ensure_items_request_id_field),
+        ('images_upload_fields', ensure_images_upload_fields),
+        ('quality_fields', ensure_items_quality_fields),
+        ('region_boxes', ensure_items_region_boxes_fields),
+        ('inner_window', ensure_items_inner_result_window),
+        ('score_fields', ensure_items_score_fields),
+        ('probe_fields', ensure_items_probe_fields),
+        ('viz_fields', ensure_items_viz_fields),
+        ('history_fields', ensure_items_history_fields),
+        ('exclusion_fields', ensure_items_exclusion_fields),
+        ('cluster_geometry_fields', ensure_items_cluster_geometry_fields),
+        ('audit_fields', ensure_items_audit_fields),
+        ('detector_fields', ensure_items_detector_fields),
+        ('text_reader_fields', ensure_items_text_fields),
+        ('validation_split_fields', ensure_items_validation_split_fields),
+        ('embedding_fields', ensure_items_embedding_fields),
+        ('open_vocab_fields', ensure_open_vocab_fields),
+        ('labels_confirmed_fields', ensure_labels_confirmed_fields),
+    )
+
+
+async def _autosync_classes(opensearch: Any) -> None:
+    """Self-heal the classes index: if a clean OS wipe left it empty,
+    repopulate from the on-disk class registry so labeling works
+    out of the box. Without this, labeler PUTs fail with
+    "unknown class_id <id>" until an operator manually calls
+    the classes sync endpoint."""
+    count_resp = await opensearch.count(index=classes_index())
+    if (count_resp.get('count') or 0) == 0:
+        synced = await get_class_registry().sync_to_opensearch(opensearch)
+        logger.info('curation_classes_autosynced', upserted=synced.get('upserted'))
+
+
 async def _ensure_indexes_locked(opensearch: Any) -> None:
     """The actual bootstrap sequence — only ever called while holding
-    :data:`_ensure_indexes_lock`. Split out so :func:`_ensure_indexes`'s
-    fast path / lock / re-check logic stays readable."""
+    :data:`_ensure_indexes_lock`. A project is recorded as bootstrapped only
+    when every step succeeded (an exception, or a migration that reports
+    ``acknowledged: false``); otherwise each failure is logged once and the
+    next request retries the whole sequence."""
     try:
         await create_curation_indexes(opensearch, force_recreate=False)
-        try:
-            await ensure_items_vlm_raw_label_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_vlm_raw_label_migration_failed', error=str(exc))
-        try:
-            await ensure_items_label_cluster_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_label_cluster_migration_failed', error=str(exc))
-        try:
-            await ensure_items_provenance_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_provenance_migration_failed', error=str(exc))
-        try:
-            await ensure_items_request_id_field(opensearch)
-        except Exception as exc:
-            logger.warning('curation_request_id_migration_failed', error=str(exc))
-        try:
-            await ensure_images_upload_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_images_upload_fields_migration_failed', error=str(exc))
-        try:
-            await ensure_items_quality_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_quality_fields_migration_failed', error=str(exc))
-        try:
-            await ensure_items_region_boxes_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_region_embedding_migration_failed', error=str(exc))
-        try:
-            await ensure_items_inner_result_window(opensearch)
-        except Exception as exc:
-            logger.warning('curation_inner_window_migration_failed', error=str(exc))
-        try:
-            await ensure_items_score_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_score_fields_migration_failed', error=str(exc))
-        try:
-            await ensure_items_probe_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_probe_fields_migration_failed', error=str(exc))
-        try:
-            await ensure_items_viz_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_viz_fields_migration_failed', error=str(exc))
-        try:
-            await ensure_items_history_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_history_fields_migration_failed', error=str(exc))
-        try:
-            await ensure_items_exclusion_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_exclusion_fields_migration_failed', error=str(exc))
-        try:
-            await ensure_items_cluster_geometry_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_cluster_geometry_fields_migration_failed', error=str(exc))
-        try:
-            await ensure_items_audit_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_audit_fields_migration_failed', error=str(exc))
-        try:
-            await ensure_items_detector_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_detector_fields_migration_failed', error=str(exc))
-        try:
-            await ensure_items_text_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_text_reader_fields_migration_failed', error=str(exc))
-        try:
-            await ensure_items_validation_split_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_validation_split_fields_migration_failed', error=str(exc))
-        try:
-            await ensure_items_embedding_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_embedding_fields_migration_failed', error=str(exc))
-        try:
-            await ensure_open_vocab_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_open_vocab_fields_migration_failed', error=str(exc))
-        try:
-            await ensure_labels_confirmed_fields(opensearch)
-        except Exception as exc:
-            logger.warning('curation_labels_confirmed_fields_migration_failed', error=str(exc))
-        # Self-heal the classes index: if a clean OS wipe left it empty,
-        # repopulate from the on-disk class registry so labeling works
-        # out of the box. Without this, labeler PUTs fail with
-        # "unknown class_id <id>" until an operator manually calls
-        # the classes sync endpoint.
-        try:
-            count_resp = await opensearch.count(index=classes_index())
-            if (count_resp.get('count') or 0) == 0:
-                synced = await get_class_registry().sync_to_opensearch(opensearch)
-                logger.info('curation_classes_autosynced', upserted=synced.get('upserted'))
-        except Exception as exc:
-            logger.warning('curation_classes_autosync_failed', error=str(exc))
-        _INDEXES_BOOTSTRAPPED.add(config.project_slug)
     except Exception as exc:
         logger.warning('curation_index_bootstrap_failed', error=str(exc))
+        return
+    failures: list[str] = []
+    for name, migrate in _migrations():
+        try:
+            result = await migrate(opensearch)
+        except Exception as exc:
+            logger.warning('curation_migration_failed', migration=name, error=str(exc))
+            failures.append(name)
+            continue
+        if isinstance(result, dict) and result.get('acknowledged') is False:
+            logger.warning('curation_migration_failed', migration=name, error=result.get('error'))
+            failures.append(name)
+    try:
+        await _autosync_classes(opensearch)
+    except Exception as exc:
+        logger.warning('curation_classes_autosync_failed', error=str(exc))
+        failures.append('classes_autosync')
+    if failures:
+        logger.warning('curation_index_bootstrap_incomplete', failed=failures)
+        return
+    _INDEXES_BOOTSTRAPPED.add(config.project_slug)

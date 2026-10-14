@@ -13,8 +13,9 @@
 import type { ModelSharingUser } from '$lib/types_models';
 
 export interface ProjectCounts {
-  images: number;
-  items: number;
+  /** `null` when the count could not be read (an outage), never a faked 0. */
+  images: number | null;
+  items: number | null;
   /** `null` when the backend hasn't computed it (served, not faked as 0). */
   validated: number | null;
   /** v0.4.0: items with a vector; `null` when not computed. */

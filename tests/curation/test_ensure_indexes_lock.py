@@ -45,27 +45,11 @@ async def test_concurrent_callers_run_the_bootstrap_sequence_exactly_once(
         await asyncio.sleep(0.02)
 
     monkeypatch.setattr(_common, 'create_curation_indexes', _fake_create_curation_indexes)
-    for name in (
-        'ensure_items_vlm_raw_label_fields',
-        'ensure_items_label_cluster_fields',
-        'ensure_items_provenance_fields',
-        'ensure_items_request_id_field',
-        'ensure_items_quality_fields',
-        'ensure_items_region_boxes_fields',
-        'ensure_items_inner_result_window',
-        'ensure_items_score_fields',
-        'ensure_items_probe_fields',
-        'ensure_items_viz_fields',
-        'ensure_items_history_fields',
-        'ensure_items_exclusion_fields',
-        'ensure_items_text_fields',
-        'ensure_items_validation_split_fields',
-        'ensure_items_embedding_fields',
-        'ensure_labels_confirmed_fields',
-    ):
+    # Every migration succeeds; one that fails leaves the project unbootstrapped (retried).
+    for name in (n for n in vars(_common) if n.startswith('ensure_')):
 
-        async def _noop(_opensearch: object) -> None:
-            return None
+        async def _noop(_opensearch: object) -> dict[str, bool]:
+            return {'acknowledged': True}
 
         monkeypatch.setattr(_common, name, _noop)
 

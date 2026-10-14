@@ -38,6 +38,7 @@ from src.services.training.job_models import TrainJobSpec  # noqa: TC001 - FastA
 from src.services.training.preflight_checks import (
     MIN_FREE_DISK_GB,
     SINGLE_CLASS_DATASET_KINDS,
+    ExportManifestUnreadableError,
     PreflightCheck,
     PreflightReport,
     append_label_scan_checks,
@@ -46,6 +47,7 @@ from src.services.training.preflight_checks import (
     count_pending_ingest,
     count_validated_and_test_per_class,
     free_gb,
+    ingest_idle_check,
     read_export_manifest,
     read_trainer_gpu_order,
     resolve_disk_check_path,
@@ -385,7 +387,11 @@ async def run_preflight(
     # ---- 4 & 5. data sufficiency (single-class-aware) ---------------------------------
     # A single-class export validates from its own manifest (disk dataset),
     # not the multi-class registry's class_validated counts.
-    _single_class_manifest = read_export_manifest(spec.dataset_export_dir)
+    try:
+        _single_class_manifest = read_export_manifest(spec.dataset_export_dir)
+    except ExportManifestUnreadableError as exc:
+        _single_class_manifest = {}
+        checks.append(PreflightCheck(name='export_manifest', severity='block', message=str(exc)))
     _is_single_class = _single_class_manifest.get('dataset_kind') in SINGLE_CLASS_DATASET_KINDS
     target_classes = [] if _is_single_class else resolve_target_classes(spec)
 
@@ -529,7 +535,7 @@ async def run_preflight(
     # single-class export has one target class, which the overall
     # train/val check already covers. So are the unlabeled-object counts
     # (export_unlabeled_objects): only the multi-class exporter records them.
-    export_manifest = read_export_manifest(spec.dataset_export_dir)
+    export_manifest = _single_class_manifest
     class_split_result = (
         (
             'ok',
@@ -586,31 +592,7 @@ async def run_preflight(
     # ---- active-ingest warning (claim stops GPU-scoped ingest containers) -
     if needs_service_stop(spec.cuda_visible_devices):
         stopped = containers_to_stop(spec.cuda_visible_devices)
-        pending = await count_pending_ingest(opensearch)
-        stopped_names = ', '.join(stopped)
-        if pending > 0:
-            checks.append(
-                PreflightCheck(
-                    name='ingest_idle',
-                    severity='warn',
-                    message=(
-                        f'{pending:,} crops are still pending region '
-                        f'detection/verification. This run stops {stopped_names}, '
-                        'pausing that ingest until the run finishes (it auto-resumes '
-                        'afterward).'
-                    ),
-                    detail={'pending_ingest': pending, 'stops_containers': list(stopped)},
-                )
-            )
-        else:
-            checks.append(
-                PreflightCheck(
-                    name='ingest_idle',
-                    severity='ok',
-                    message=f'No ingest backlog — safe to stop {stopped_names} for training',
-                    detail={'stops_containers': list(stopped)},
-                )
-            )
+        checks.append(ingest_idle_check(await count_pending_ingest(opensearch), stopped))
 
     blocked = any(c.severity == 'block' for c in checks)
     summary = (

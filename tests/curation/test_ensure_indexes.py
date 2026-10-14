@@ -3,14 +3,11 @@ wired into `_ensure_indexes`.
 
 This test enumerates every `ensure_items_*` function defined in
 `curation_opensearch.ensure_fields` and `.ensure_overlay_fields` and asserts each one is actually invoked inside
-`_common._ensure_indexes` — so the next unwired migration fails CI
+`_common._migrations` — so the next unwired migration fails CI
 instead of silently doing nothing.
 """
 
 from __future__ import annotations
-
-import inspect
-import re
 
 from src.clients.curation_opensearch import ensure_fields, ensure_overlay_fields
 from src.routers.curation import _common
@@ -25,14 +22,9 @@ def test_every_ensure_migration_is_wired():
     )
     assert migration_names, 'expected at least one ensure_items_* export'
 
-    # The actual bootstrap sequence moved into
-    # _ensure_indexes_locked (called by _ensure_indexes while holding
-    # _ensure_indexes_lock) so the lock/fast-path wiring stays readable
-    # -- inspect that one for the migration calls.
-    source = inspect.getsource(_common._ensure_indexes_locked)
-    called_names = set(re.findall(r'\bensure_items_\w+(?=\()', source))
+    wired = {migrate.__name__ for _, migrate in _common._migrations()}
 
-    unwired = [name for name in migration_names if name not in called_names]
+    unwired = [name for name in migration_names if name not in wired]
     assert not unwired, (
         f'ensure_items_* migrations exist but are never called from _ensure_indexes: {unwired}'
     )

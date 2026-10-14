@@ -20,7 +20,6 @@ src/clients/opensearch/ingest.py::ingest_image	27	top 15: decompose in PR 6
 src/main.py::lifespan	19	ratchet: may only go down
 src/routers/analyze.py::analyze_batch	22	ratchet: may only go down
 src/routers/analyze.py::analyze_image	26	top 15: decompose in PR 6
-src/routers/curation/_common.py::_ensure_indexes_locked	25	top 15: decompose in PR 6
 src/routers/curation/models.py::models_status	17	ratchet: may only go down
 src/routers/curation/pipeline.py::_run_auto_label	54	top 15: decompose in PR 6
 src/routers/curation/pipeline.py::_run_chunk	19	ratchet: may only go down

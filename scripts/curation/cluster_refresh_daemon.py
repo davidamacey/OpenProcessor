@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from opensearchpy.exceptions import OpenSearchException
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -66,6 +67,12 @@ from src.services.curation.clustering.refresh_schedule import (
     ScheduleBook,
     step,
 )
+from src.services.curation.clustering.refresh_state_store import (
+    RefreshState,
+    load_refresh_state,
+    save_refresh_state,
+)
+from src.services.curation.policy_doc_store import PolicyConflictError
 from src.services.curation.worker_liveness import write_heartbeat
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import (
@@ -177,6 +184,10 @@ async def _trigger_auto_promote(
         # 600s wasn't enough, causing a perpetual timeout/retry loop.
         timeout=900.0,
     )
+    if r.status_code == httpx.codes.CONFLICT:
+        # The audit gate refused the promotion: nothing was promoted, which does not
+        # stop the retrain (it re-clusters whatever is labelled).
+        return {'promoted': 0, 'blocked': r.text}
     r.raise_for_status()
     return r.json()
 
@@ -240,6 +251,47 @@ async def _release_inactive(
             book.forget(slug)
 
 
+async def _restore_state(opensearch: Any, sched: ProjectSchedule) -> None:
+    """Load the bound project's persisted growth state on the first poll. A project
+    whose state cannot be read is not polled: acting on a guess could retrain twice."""
+    stored = await load_refresh_state(opensearch)
+    sched.restore(
+        stored.revision,
+        (stored.last_trained_count, stored.trained_before, stored.prev_count, stored.job_id),
+    )
+
+
+async def _persist_state(opensearch: Any, record: Any, sched: ProjectSchedule) -> None:
+    """Write the schedule's persistent fields when they changed. A failed write is
+    retried by the next poll (``sched.stored`` still differs)."""
+    current = sched.persistent()
+    if current == sched.stored:
+        return
+    last, before, prev, job_id = current
+    state = RefreshState(
+        revision=sched.stored_revision,
+        last_trained_count=last,
+        trained_before=before,
+        prev_count=prev,
+        job_id=job_id,
+    )
+    try:
+        with bind_project(record):
+            saved = await save_refresh_state(opensearch, state)
+    except PolicyConflictError:
+        with bind_project(record, read_only=True):
+            sched.stored_revision = (await load_refresh_state(opensearch)).revision
+        print(
+            f'[cluster-refresh] project={record.slug} state save conflicted; retrying', flush=True
+        )
+        return
+    except OpenSearchException as exc:
+        print(f'[cluster-refresh] project={record.slug} state save failed: {exc}', flush=True)
+        return
+    sched.stored_revision = saved.revision
+    sched.stored = current
+
+
 async def _iteration(
     client: httpx.AsyncClient,
     *,
@@ -256,6 +308,8 @@ async def _iteration(
     slug = record.slug
     try:
         with bind_project(record):
+            if not sched.restored:
+                await _restore_state(opensearch, sched)
             count = await _crop_count(opensearch)
             unfinished = await _unfinished_region_count(opensearch)
         busy = False
@@ -277,6 +331,7 @@ async def _iteration(
         now,
         policy,
     )
+    await _persist_state(opensearch, record, sched)
     print(
         f'[cluster-refresh] project={slug} crops={count} unfinished_regions={unfinished} '
         f'trained_at={sched.last_trained_count} threshold={policy.threshold} action={action.value}',
@@ -294,6 +349,7 @@ async def _iteration(
     previous = sched.last_trained_count
     if not auto_label:
         sched.on_started(count, None, previous_trained=previous)
+        await _persist_state(opensearch, record, sched)
         return
     try:
         job_id = await _start_auto_label_job(client, api, api_prefix, slug)
@@ -306,6 +362,7 @@ async def _iteration(
         )
         return
     sched.on_started(count, job_id, previous_trained=previous)
+    await _persist_state(opensearch, record, sched)
     print(f'[cluster-refresh] project={slug} auto_label job {job_id} queued', flush=True)
 
 

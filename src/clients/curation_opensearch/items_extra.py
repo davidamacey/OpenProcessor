@@ -38,6 +38,7 @@ POLICY_DOC_MAPPING: dict[str, Any] = {
     'ingest_policy': {'type': 'object', 'enabled': False},
     'vlm_policy': {'type': 'object', 'enabled': False},
     'vlm_scope_reps': {'type': 'object', 'enabled': False},
+    'cluster_refresh': {'type': 'object', 'enabled': False},
 }
 
 

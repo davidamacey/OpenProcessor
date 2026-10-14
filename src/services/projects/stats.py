@@ -23,12 +23,9 @@ _DISK_CACHE_TTL_SECONDS = 300.0
 _disk_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
 
-async def _term_count(client: Any, index: str, field: str, value: Any) -> int:
-    try:
-        resp = await client.count(index=index, body={'query': {'term': {field: value}}})
-        return int(resp.get('count') or 0)
-    except Exception:
-        return 0
+async def _term_count(client: Any, index: str, field: str, value: Any) -> int | None:
+    """Items in ``index`` with ``field == value``, or ``None`` when uncountable."""
+    return await _count(client, index, {'query': {'term': {field: value}}}, field)
 
 
 # "Validated" everywhere a project's counts are served: a human-confirmed
@@ -36,15 +33,22 @@ async def _term_count(client: Any, index: str, field: str, value: Any) -> int:
 VALIDATED_ITEMS_QUERY: dict[str, Any] = {'term': {'class_validated': True}}
 
 
+async def _count(client: Any, index: str, body: dict[str, Any] | None, what: str) -> int | None:
+    # Any failure is an outage the caller must show as unknown, not as an empty project.
+    try:
+        resp = (
+            await client.count(index=index, body=body) if body else await client.count(index=index)
+        )
+        return int(resp.get('count') or 0)
+    except Exception as exc:
+        logger.warning('project_count_unavailable', what=what, index=index, error=str(exc))
+        return None
+
+
 async def _query_count(
     client: Any, items_index: str, query: dict[str, Any], what: str
 ) -> int | None:
-    try:
-        resp = await client.count(index=items_index, body={'query': query})
-        return int(resp.get('count') or 0)
-    except Exception as exc:
-        logger.warning('project_count_unavailable', what=what, index=items_index, error=str(exc))
-        return None
+    return await _count(client, items_index, {'query': query}, what)
 
 
 async def validated_count(client: Any, items_index: str) -> int | None:
@@ -58,12 +62,9 @@ async def embedded_count(client: Any, items_index: str) -> int | None:
     return await _query_count(client, items_index, embedded_clause(), 'embedded')
 
 
-async def index_count(client: Any, index: str) -> int:
-    try:
-        resp = await client.count(index=index)
-        return int(resp.get('count') or 0)
-    except Exception:
-        return 0
+async def index_count(client: Any, index: str) -> int | None:
+    """Top-level documents in ``index``, or ``None`` when it could not be counted."""
+    return await _count(client, index, None, 'index')
 
 
 def _dir_bytes(path: Any) -> int:

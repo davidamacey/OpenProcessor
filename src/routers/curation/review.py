@@ -562,7 +562,11 @@ async def freeze_test_holdout(
         except HTTPException:
             raise
         except Exception as exc:
+            # Without the count the "a holdout already exists" guard cannot hold: refuse.
             logger.warning('curation_test_holdout_count_failed', error=str(exc))
+            raise HTTPException(
+                status_code=503, detail='could not check for an existing test holdout'
+            ) from exc
 
     cohort_query = build_cohort_query()
     try:

@@ -30,7 +30,7 @@ from src.clients.triton_pool import AsyncTritonPool
 from src.config import get_settings
 from src.core.cors import add_lan_cors
 from src.core.dependencies import OpenSearchClientFactory, TritonClientFactory
-from src.core.error_handlers import triton_unavailable_response
+from src.core.error_handlers import triton_unavailable_response, upstream_unavailable_response
 from src.core.logging import (
     bind_request_id,
     configure_logging,
@@ -65,6 +65,7 @@ from src.routers.api_docs import install_api_docs
 from src.routers.curation._mounting import mount_all_curation_routers
 from src.utils.cpu_pool import shutdown_cpu_executor
 from src.utils.retry import RetryExhaustedError
+from src.utils.upstream_errors import UpstreamError
 
 
 # Request correlation IDs (request_id_ctx / get_request_id) live in
@@ -593,6 +594,7 @@ def create_app() -> FastAPI:
         )
 
     application.exception_handler(RetryExhaustedError)(triton_unavailable_response)
+    application.exception_handler(UpstreamError)(upstream_unavailable_response)
 
     # Global Exception Handler - include request ID for debugging
     @application.exception_handler(Exception)

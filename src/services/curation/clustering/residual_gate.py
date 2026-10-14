@@ -135,21 +135,18 @@ async def _park_gated_residuals(
             'params': {'parked': PARKED_CLUSTER_ID},
         },
     }
-    try:
-        # Polled, not blocking — see run_update_by_query_polled's
-        # docstring (cluster_id_normalize.py): wait_for_completion=True
-        # on a large items-index query can fail client-side response
-        # parsing ("Too many headers received") even when the operation
-        # completes successfully server-side, causing the transport to
-        # silently retry the whole multi-minute operation from scratch.
-        resp = await run_update_by_query_polled(
-            client,
-            index=items_index(),
-            body=body,
-            conflicts='proceed',
-            refresh=True,
-        )
-        return int(resp.get('updated', 0))
-    except Exception as exc:
-        logger.warning('curation_park_gated_residuals_failed', error=str(exc))
-        return 0
+    # Polled, not blocking — see run_update_by_query_polled's
+    # docstring (cluster_id_normalize.py): wait_for_completion=True
+    # on a large items-index query can fail client-side response
+    # parsing ("Too many headers received") even when the operation
+    # completes successfully server-side, causing the transport to
+    # silently retry the whole multi-minute operation from scratch.
+    # A failure propagates: "nothing parked" must not be the answer to an outage.
+    resp = await run_update_by_query_polled(
+        client,
+        index=items_index(),
+        body=body,
+        conflicts='proceed',
+        refresh=True,
+    )
+    return int(resp.get('updated', 0))

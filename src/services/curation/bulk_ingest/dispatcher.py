@@ -222,8 +222,8 @@ async def run_tick() -> None:
 
     for slug in for_each_project():
         try:
-            run_project_tick()
-        except Exception as exc:
+            await asyncio.to_thread(run_project_tick)
+        except Exception as exc:  # one project's failure must not stop the others' ticks
             logger.warning('ingest_dispatch_failed', project=slug, error=str(exc))
 
 

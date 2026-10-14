@@ -55,8 +55,10 @@ UNARCHIVABLE_STATUSES = frozenset({'archived'})
 
 
 class ProjectCounts(BaseModel):
-    images: int = 0
-    items: int = 0
+    # ``null`` for images, items, validated and items_embedded when the count
+    # could not be read (an outage), never a made-up 0.
+    images: int | None = 0
+    items: int | None = 0
     # Items with a human-validated class (the same count on every route,
     # ``src.services.projects.stats.validated_count``); ``null`` when it
     # could not be counted, never a made-up 0.
@@ -281,13 +283,13 @@ class DeleteDryRunResponse(BaseModel):
 
 
 class ProjectStatsCounts(BaseModel):
-    images: int
-    items: int
-    # Same count and same null-when-uncountable rule as ProjectCounts.validated.
+    # Every OpenSearch count is ``null`` when it could not be read.
+    images: int | None
+    items: int | None
     validated: int | None
     items_embedded: int | None
-    pending_detection: int
-    holdout_items: int
+    pending_detection: int | None
+    holdout_items: int | None
     classes: int
     promoted_models: int
 

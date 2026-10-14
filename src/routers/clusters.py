@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 
 from src.core.dependencies import VisualSearchDep
+from src.utils.upstream_errors import UpstreamError
 
 
 logger = logging.getLogger(__name__)
@@ -229,6 +230,8 @@ async def train_clusters(
             training_time_s=result.get('training_time_s', 0),
         )
 
+    except UpstreamError:
+        raise
     except Exception as e:
         logger.error(f'Cluster training failed for {index_name}: {e}')
         raise HTTPException(status_code=500, detail=f'Training failed: {e!s}') from e
@@ -274,6 +277,8 @@ async def assign_unclustered(
             message=result.get('message'),
         )
 
+    except UpstreamError:
+        raise
     except Exception as e:
         logger.error(f'Cluster assignment failed for {index_name}: {e}')
         raise HTTPException(status_code=500, detail=f'Assignment failed: {e!s}') from e
@@ -332,6 +337,8 @@ async def get_cluster_stats(
             total_clusters_in_opensearch=result.get('total_clusters_in_opensearch', 0),
         )
 
+    except UpstreamError:
+        raise
     except Exception as e:
         logger.error(f'Get cluster stats failed for {index_name}: {e}')
         raise HTTPException(status_code=500, detail=f'Stats retrieval failed: {e!s}') from e
@@ -389,6 +396,8 @@ async def rebalance_clusters(
             training_time_s=result.get('training_time_s', 0),
         )
 
+    except UpstreamError:
+        raise
     except Exception as e:
         logger.error(f'Cluster rebalancing failed for {index_name}: {e}')
         raise HTTPException(status_code=500, detail=f'Rebalancing failed: {e!s}') from e
@@ -441,6 +450,8 @@ async def check_cluster_balance(
             reason=result.get('reason'),
         )
 
+    except UpstreamError:
+        raise
     except Exception as e:
         logger.error(f'Balance check failed for {index_name}: {e}')
         raise HTTPException(status_code=500, detail=f'Balance check failed: {e!s}') from e
@@ -480,6 +491,8 @@ async def list_albums(
             albums=result.get('albums', []),
         )
 
+    except UpstreamError:
+        raise
     except Exception as e:
         logger.error(f'List albums failed: {e}')
         raise HTTPException(status_code=500, detail=f'List albums failed: {e!s}') from e
@@ -553,6 +566,8 @@ async def get_cluster_members(
             members=members,
         )
 
+    except UpstreamError:
+        raise
     except Exception as e:
         logger.error(f'Get cluster members failed for {index_name}/{cluster_id}: {e}')
         raise HTTPException(status_code=500, detail=f'Members retrieval failed: {e!s}') from e

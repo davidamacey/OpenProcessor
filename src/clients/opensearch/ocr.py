@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from opensearchpy.helpers import async_bulk
 
 from src.clients.opensearch.names import IndexName
+from src.utils.upstream_errors import UpstreamError
 
 
 if TYPE_CHECKING:
@@ -173,7 +174,7 @@ class OcrMixin:
 
         except Exception as e:
             logger.error(f'OCR text search failed: {e}')
-            return []
+            raise UpstreamError('opensearch', 'opensearch_unavailable') from e
 
     async def search_ocr(
         self, query_text: str, top_k: int = 10, min_score: float = 0.3
@@ -229,7 +230,7 @@ class OcrMixin:
             response = await self.client.search(index=IndexName.OCR.value, body=body)
         except Exception as e:
             logger.error(f'OCR search failed: {e}')
-            return [], 0
+            raise UpstreamError('opensearch', 'opensearch_unavailable') from e
 
         results = [
             {

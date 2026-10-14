@@ -16,10 +16,12 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path, Query
+from opensearchpy.exceptions import NotFoundError
 from pydantic import BaseModel, Field
 
 from src.clients.opensearch.names import IndexName
 from src.core.dependencies import VisualSearchDep
+from src.utils.upstream_errors import UpstreamError
 
 
 logger = logging.getLogger(__name__)
@@ -286,7 +288,7 @@ async def get_image_data(
                 _source_excludes=['global_embedding'] if not include_embedding else [],
             )
             source = global_doc['_source']
-        except Exception:
+        except NotFoundError:
             # Image not found in global index
             return ImageQueryResponse(
                 status='not_found',
@@ -322,7 +324,7 @@ async def get_image_data(
             vehicles_count = vehicles_resp.get('count', 0)
             if vehicles_count > 0:
                 indexed_in.append('vehicles')
-        except Exception as e:
+        except NotFoundError as e:
             # Index may not exist - continue checking other indexes
             logger.debug('Could not check vehicles index: %s', e)
 
@@ -336,7 +338,7 @@ async def get_image_data(
             people_count = people_resp.get('count', 0)
             if people_count > 0:
                 indexed_in.append('people')
-        except Exception as e:
+        except NotFoundError as e:
             # Index may not exist - continue checking other indexes
             logger.debug('Could not check people index: %s', e)
 
@@ -350,7 +352,7 @@ async def get_image_data(
             faces_count = faces_resp.get('count', 0)
             if faces_count > 0:
                 indexed_in.append('faces')
-        except Exception as e:
+        except NotFoundError as e:
             # Index may not exist - continue checking other indexes
             logger.debug('Could not check faces index: %s', e)
 
@@ -364,7 +366,7 @@ async def get_image_data(
             has_ocr = ocr_resp.get('count', 0) > 0
             if has_ocr:
                 indexed_in.append('ocr')
-        except Exception as e:
+        except NotFoundError as e:
             # Index may not exist - continue checking other indexes
             logger.debug('Could not check OCR index: %s', e)
 
@@ -386,7 +388,7 @@ async def get_image_data(
             global_embedding=global_embedding,
         )
 
-    except HTTPException:
+    except (HTTPException, UpstreamError):
         raise
     except Exception as e:
         logger.error(f'Get image data failed for {image_id}: {e}')
@@ -426,7 +428,7 @@ async def delete_image(
             await client.delete(index=IndexName.GLOBAL.value, id=image_id)
             deleted_from.append('global')
             total_deleted += 1
-        except Exception as e:
+        except NotFoundError as e:
             # Not found is OK - document may not exist in this index
             logger.debug('Could not delete from global index: %s', e)
 
@@ -440,7 +442,7 @@ async def delete_image(
             if count > 0:
                 deleted_from.append('vehicles')
                 total_deleted += count
-        except Exception as e:
+        except NotFoundError as e:
             # Index may not exist or document may not be in this index - continue with other indexes
             logger.debug('Could not delete from vehicles index: %s', e)
 
@@ -454,7 +456,7 @@ async def delete_image(
             if count > 0:
                 deleted_from.append('people')
                 total_deleted += count
-        except Exception as e:
+        except NotFoundError as e:
             # Index may not exist or document may not be in this index - continue with other indexes
             logger.debug('Could not delete from people index: %s', e)
 
@@ -468,7 +470,7 @@ async def delete_image(
             if count > 0:
                 deleted_from.append('faces')
                 total_deleted += count
-        except Exception as e:
+        except NotFoundError as e:
             # Index may not exist or document may not be in this index - continue with other indexes
             logger.debug('Could not delete from faces index: %s', e)
 
@@ -477,7 +479,7 @@ async def delete_image(
             await client.delete(index=IndexName.OCR.value, id=image_id)
             deleted_from.append('ocr')
             total_deleted += 1
-        except Exception as e:
+        except NotFoundError as e:
             # Index may not exist or document may not be in OCR index - continue
             logger.debug('Could not delete from OCR index: %s', e)
 

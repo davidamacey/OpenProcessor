@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import HTTPException, Query, status
+from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.curation_opensearch import RegistryClassEntry
 from src.clients.curation_opensearch.registry import ClassRegistry, ClassRegistryError
@@ -563,7 +564,7 @@ async def merge_class(
         if scroll_id:
             try:
                 await opensearch.clear_scroll(scroll_id=scroll_id)
-            except Exception as exc:  # nosec B110 — advisory cleanup only
+            except OpenSearchException as exc:  # nosec B110 — advisory cleanup only
                 logger.debug('merge_clear_scroll_failed', error=str(exc))
         return ids
 
@@ -604,7 +605,7 @@ async def merge_class(
                 )
             try:
                 await opensearch.indices.refresh(index=items_index())
-            except Exception as exc:
+            except OpenSearchException as exc:
                 logger.debug('merge_relabel_final_refresh_failed', error=str(exc))
     except Exception as exc:
         logger.warning('merge_relabel_failed', index=items_index(), error=str(exc))

@@ -291,8 +291,13 @@ async def test_an_item_with_150_matching_boxes_returns_150_rows_once_the_window_
     assert body['rows_truncated'] is False
 
 
-def test_an_item_with_more_matching_boxes_than_the_window_reports_truncation() -> None:
-    # No ensure step ran: the window is OpenSearch's default 100.
+def test_an_item_with_more_matching_boxes_than_the_window_reports_truncation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # No ensure step ran (the project counts as bootstrapped): the window is OpenSearch's default 100.
+    from src.routers.curation import _common
+
+    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', {'default'})
     client = _client(QueryFakeOpenSearch({ITEMS: _many_boxes_doc(150)}))
 
     resp = client.get(f'{PREFIX}/regions', params={'page_size': 10})

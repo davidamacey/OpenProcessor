@@ -17,10 +17,30 @@ import io
 from dataclasses import dataclass
 
 import numpy as np
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 
 EXIF_ORIENTATION = 0x0112
+
+NOT_DECODABLE = 'not a decodable image'
+
+
+class ImageDecodeError(ValueError):
+    """The bytes do not decode as an image; ``str(exc)`` is the stable reason and the
+    original error stays chained as ``__cause__``."""
+
+
+def _decode_reason(exc: BaseException) -> str:
+    """Ultralytics replaces ``PIL.Image.open`` with a wrapper that, when Pillow fails,
+    imports ``pi_heif`` and raises that import error instead (Pillow's own error is
+    only its ``__context__``). A Pillow "cannot identify image file" anywhere in the
+    chain is the real failure: report it as :data:`NOT_DECODABLE`, not the import error."""
+    link: BaseException | None = exc
+    while link is not None:
+        if isinstance(link, UnidentifiedImageError):
+            return NOT_DECODABLE
+        link = link.__context__
+    return str(exc) or type(exc).__name__
 
 
 @dataclass(frozen=True)
@@ -45,8 +65,15 @@ def orient_array(rgb: np.ndarray, orientation: int) -> np.ndarray:
 
 
 def decode_image(data: bytes) -> DecodedImage:
-    """Decode ``data`` (any format Pillow reads) into an upright RGB frame; raises on a file
-    that does not decode."""
+    """Decode ``data`` (any format Pillow reads) into an upright RGB frame; raises
+    :class:`ImageDecodeError` on a file that does not decode."""
+    try:
+        return _decode(data)
+    except Exception as exc:
+        raise ImageDecodeError(_decode_reason(exc)) from exc
+
+
+def _decode(data: bytes) -> DecodedImage:
     header = Image.open(io.BytesIO(data))
     orientation = header.getexif().get(EXIF_ORIENTATION, 1)
     if header.format == 'JPEG' and header.mode in ('RGB', 'L'):
