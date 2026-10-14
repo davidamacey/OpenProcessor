@@ -46,7 +46,7 @@ if str(_REPO_ROOT) not in sys.path:
 # ruff: noqa: E402
 
 from src.clients.pe_encoder import PEEncoder
-from src.clients.triton_pool import AsyncTritonPool
+from src.clients.triton_pool_core import AsyncTritonPool
 from src.config import get_curation_config, get_region_fields
 from src.domain.region_boxes import box_query
 from src.services.curation.region_box_embeddings import EMBEDDED_BOX_STATES, missing_boxes

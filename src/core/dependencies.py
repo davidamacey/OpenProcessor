@@ -12,7 +12,7 @@ from typing import Annotated, Any
 from fastapi import Depends
 
 from src.clients.opensearch.client import OpenSearchClient
-from src.clients.triton_pool import TritonClientManager
+from src.clients.triton_client_manager import TritonClientManager
 from src.config.settings import get_settings
 
 

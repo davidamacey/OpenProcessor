@@ -26,7 +26,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
 from src.clients.occ import OCCFinalConflictError
-from src.clients.triton_pool import AsyncTritonPool
+from src.clients.triton_pool_core import AsyncTritonPool
 from src.config import get_settings
 from src.core.cors import add_lan_cors
 from src.core.dependencies import OpenSearchClientFactory, TritonClientFactory

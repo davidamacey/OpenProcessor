@@ -184,7 +184,7 @@ docker compose exec api python /app/export/export_mobileclip_text_encoder.py
 **Required by the curation subsystem.** PE-Core-L14-336 (Meta's Perception
 Encoder) provides both towers of one shared 1024-d embedding space:
 
-| Tower | Consumer | Serving | Contract (hardcoded in `src/clients/pe_encoder.py`) |
+| Tower | Consumer | Serving | Contract (hardcoded in `src/clients/pe_encoder.py`, `src/clients/pe_text_backends.py`) |
 |-------|----------|---------|-----------------------------------------------------|
 | Image | `PEEncoder.encode_images` → `pe_embedding` field (semantic search, near-dup, clustering, embedding viz) | Triton `pe_image_encoder`, **required** | `images` UINT8 `[B, 3, 336, 336]` → `image_embeddings` FP32 `[B, 1024]` |
 | Text  | `PEEncoder.encode_text` → `GET /curation/projects/{project}/search/text` queries | **Triton `pe_text_encoder`** (preferred: one shared CPU instance for every uvicorn worker), lazily-loaded in-process PyTorch fallback; in-process ONNX Runtime is an explicit opt-in only | `text_tokens` INT64 `[B, T≤32]` → `text_embeddings` FP32 `[B, 1024]` |

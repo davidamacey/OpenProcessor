@@ -620,7 +620,7 @@ scripts/
 
 src/
 ├── services/ocr_service.py       # OCR service wrapper
-└── clients/triton_client.py      # Triton gRPC client (infer_ocr method)
+└── clients/triton_client.py      # Triton gRPC client (infer_ocr delegates to clients/triton_ocr.py)
 ```
 
 ---
