@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING**: the container reads `OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB` and
+  `OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB` (were `CROPWRIGHT_*`), and `docker-entrypoint.sh` exits 2 at
+  start while a retired `CROPWRIGHT_*` name is still set. The browser-side `window.__CROPWRIGHT_*__`
+  globals are unchanged. `.env.example` and the README drop the container-name variables only the
+  removed standalone compose used.
+
 - `ProjectCounts.images` and `.items` are `number | null` (the API serves `null` when OpenSearch could not be counted); the project list already renders `null` as an em dash.
 
 - Work-package ids and history names are gone from comments, JSDoc and test titles in `src/` and `e2e/`,

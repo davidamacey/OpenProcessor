@@ -139,6 +139,25 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Changed
 
+- **BREAKING**: the Cropwright variables are now `OP_CROPWRIGHT_*`: `CROPWRIGHT_IMAGE`,
+  `CROPWRIGHT_BIND_ADDRESS`, `CROPWRIGHT_PORT`, `CROPWRIGHT_INGEST_MAX_REQUEST_MB` and
+  `CROPWRIGHT_DATASET_UPLOAD_MAX_MB` became `OP_CROPWRIGHT_IMAGE`, `OP_CROPWRIGHT_BIND_ADDRESS`,
+  `OP_CROPWRIGHT_PORT`, `OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB` and
+  `OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB` (the live-test and docs-screenshot helpers moved the same
+  way). A `.env` that still sets an old name is refused: `./openprocessor` and
+  `setup-openprocessor.sh` exit 2 and print the new name, and the cropwright container exits
+  at start. Rename the keys in `.env` and run `./openprocessor restart`.
+- Every Dockerfile base image is pinned by digest (`image:tag@sha256:...`); the bump procedure is
+  in `docs/releases/RELEASE_CHECKLIST.md`. The evaluator and segmenter images build their Python
+  environment in a separate stage (no compilers or pip cache in the evaluator runtime; the
+  segmenter keeps gcc for `torch.compile`), the fake VLM test image runs as `nobody`, and the
+  api image copies only the `scripts/` it runs (`scripts/curation`, `scripts/datasets`, six shell
+  libraries) instead of the whole tree. The root `.dockerignore` also excludes `artifacts_local/`,
+  `docs-site/`, `frontend/`, `.claude/`, `.install/` and `export_*/`.
+- `check_docs_vs_code.py` requires an assignment line in `env.template` for every compose
+  `${VAR}` (a prose mention no longer counts) and gains a `template` check: a non-`OP_` setting
+  that no compose file, script or code reads is rejected. The unread `LOG_LEVEL` and the unread
+  `OP_CROPWRIGHT_TAG` documentation are removed.
 - Repo cleanup, PR 7: the oversize export scripts, the trainer and OCR model modules, the
   shell programs (`openprocessor`, `scripts/setup.sh`, `scripts/lib/config.sh`, `export.sh`,
   `export_paddleocr.sh`, `acceptance_run.sh`) and 19 oversize test files are split by concern into
