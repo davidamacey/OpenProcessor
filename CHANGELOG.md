@@ -13,6 +13,11 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Added
 
+- `scripts/bench/ingest_transport_bench.py` and the "Ingest transports (#263)" measurement in
+  `docs/PERFORMANCE.md`: HTTP/1.1 multipart against `grpc.aio` streaming and unary, transport only, on
+  public images. A gRPC ingest channel saves under 1.2 percent of the pipeline's API CPU per image and the
+  ingest rate is GPU bound, so none is built (#263).
+
 - `scripts/bench/vectordb/` and `docker/bench/vectordb/compose.yml`: a vector store benchmark on real
   PE embeddings of pinned public COCO images (exact filtered ground truth, recall-gated operating
   points, write, streaming, rewrite and delete phases) with adapters for OpenSearch, Milvus, Qdrant,
