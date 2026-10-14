@@ -108,7 +108,8 @@ def test_compose_check_skips_retired_names_the_installer_refuses(
         'services:\n  a:\n    environment:\n      - OLD_NAME=${OLD_NAME:-}\n', encoding='utf-8'
     )
     (tmp_path / 'env.template').write_text('# NEW_NAME=1\n', encoding='utf-8')
-    (tmp_path / 'setup-openprocessor.sh').write_text(
+    (tmp_path / 'scripts' / 'lib').mkdir(parents=True)
+    (tmp_path / 'scripts' / 'lib' / 'retired_env.sh').write_text(
         'RETIRED_ENV_NAMES=(\n    OLD_NAME\n)\n', encoding='utf-8'
     )
     monkeypatch.setattr(checker, 'REPO_ROOT', tmp_path)

@@ -10,7 +10,7 @@ Five checks, each reporting every miss (not just the first):
   compose files or the installer scripts.
 * compose - every ``${VAR}`` a root compose file reads is assigned in ``env.template``
   (commented counts, a prose mention does not), so an operator can find every knob.
-  Names the installer refuses (``RETIRED_ENV_NAMES``) are exempt.
+  Names the installer and CLI refuse (``RETIRED_ENV_NAMES``) are exempt.
 * template - every non-``OP_`` setting ``env.template`` assigns is read by a compose file,
   script or code, so nothing advertised does nothing.
 * links   - every relative link resolves to a file, and every ``#anchor`` that
@@ -241,8 +241,8 @@ def _template_names() -> set[str]:
 
 
 def _retired_env_names() -> set[str]:
-    """Names the installer refuses in a .env (renamed); compose may still pass them through."""
-    script = REPO_ROOT / 'setup-openprocessor.sh'
+    """Names the installer and CLI refuse in a .env (renamed); compose may still pass them through."""
+    script = REPO_ROOT / 'scripts' / 'lib' / 'retired_env.sh'
     if not script.is_file():
         return set()
     block = _RETIRED_BLOCK_RE.search(script.read_text(encoding='utf-8', errors='replace'))
