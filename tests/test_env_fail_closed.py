@@ -17,7 +17,7 @@ from src.services.curation.dataset_import import limits
     [
         ('OP_DATASET_IMPORT_CHUNK', 'abc', limits.import_chunk_size),
         ('OP_DATASET_IMPORT_CHUNK', '0', limits.import_chunk_size),
-        ('OP_OPEN_VOCAB_STALE_S', '5', limits.open_vocab_stale_after_s),
+        ('OP_OPEN_VOCAB_SWEEP_S', '-1', limits.open_vocab_sweep_interval_s),
         ('OP_SCORES_ENABLED', 'ture', strategy_registry._scores_enabled),
     ],
 )
