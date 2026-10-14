@@ -12,7 +12,8 @@ import pytest
 from integration.ingest_fakes import FakePEEncoder, FakeTritonPool
 from opensearchpy import AsyncOpenSearch
 
-from curation.cross_project_leak._seeders import _docs, _seed_files, _seed_vlm, _vec
+from curation.cross_project_leak._seeded_files import _docs, _seed_files, _vec
+from curation.cross_project_leak._seeders import _seed_vlm
 from curation.cross_project_leak._transport import (
     _FAKE_VLM_HOST,
     LeakEnv,

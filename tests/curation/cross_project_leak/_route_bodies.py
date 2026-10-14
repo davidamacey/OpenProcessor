@@ -7,12 +7,12 @@ from typing import TYPE_CHECKING, Any
 
 from integration.ingest_fakes import jpeg_bytes
 
+from curation.cross_project_leak._seeded_files import _source_root
 from curation.cross_project_leak._seeders import (
     _VLM_ACTIVE,
     _open_vocab_body,
     _prompt_pack_body,
     _region_profile_body,
-    _source_root,
 )
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
