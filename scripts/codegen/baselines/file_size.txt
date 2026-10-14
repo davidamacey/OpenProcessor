@@ -26,7 +26,6 @@ frontend/src/routes/p/[project]/export/+page.svelte	1047	split in PR 8
 frontend/src/routes/p/[project]/review/+page.svelte	3260	split in PR 8
 frontend/src/routes/p/[project]/train/+page.svelte	1641	split in PR 8
 models/ocr_pipeline/1/model.py	706	split in PR 7
-scripts/export_paddleocr.sh	702	split in PR 7
 setup-openprocessor.sh	3214	cohesive: one __op_define function so a truncated curl-to-bash download is a syntax error; pre-install code cannot source libraries
 tests/curation/test_bakeoff_harness.py	1043	split in PR 7
 tests/curation/test_bakeoff_router.py	1382	split in PR 7

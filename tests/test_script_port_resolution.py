@@ -93,6 +93,8 @@ class TestNoStrayHardcodedPorts:
 
     def test_export_paddleocr_sh_has_no_bare_localhost_ports(self) -> None:
         offenders = self._bare_literal_port_lines(REPO_ROOT / 'scripts' / 'export_paddleocr.sh')
+        for lib in ('paddleocr_export.sh', 'paddleocr_config.sh', 'paddleocr_ops.sh'):
+            offenders += self._bare_literal_port_lines(REPO_ROOT / 'scripts' / 'lib' / lib)
         assert offenders == []
 
     def test_ports_lib_exists_and_is_sourced_by_both_scripts(self) -> None:
