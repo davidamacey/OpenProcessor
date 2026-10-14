@@ -29,10 +29,9 @@
   import ValidatedRatioNotice from '$lib/components/labelConfirmation/ValidatedRatioNotice.svelte';
   import ExportItemFilter from '$lib/components/itemFilter/ExportItemFilter.svelte';
   import { ItemFilterState } from '$lib/itemFilter/itemFilterState.svelte';
-  import { focusOnMount } from '$lib/actions/focusOnMount';
-  import { trapFocus } from '$lib/actions/trapFocus';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
+  import Modal from '$components/Modal.svelte';
 
   $effect(() => {
     keyboardStore.setScope('export');
@@ -907,141 +906,107 @@
 
 <!-- Export progress modal -->
 {#if exportModalOpen}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <div
-    class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Export progress"
-    tabindex="-1"
-    use:focusOnMount
-    use:trapFocus={{ onEscape: closeExportModal }}
-    onclick={(e) => {
-      if (e.target === e.currentTarget) closeExportModal();
-    }}
-  >
-    <div
-      class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
-    >
-      <h3 class="mb-3 text-base font-semibold">YOLO export</h3>
-      {#if exportState?.status === 'running' || exportRunning}
-        <p class="mb-3 text-xs text-zinc-400">
-          Running… polling every 5s. Safe to leave the page open.
-        </p>
-        {#if exportState?.progress != null}
-          <div class="mb-2 h-2 w-full overflow-hidden rounded bg-zinc-900">
-            <div
-              class="h-full bg-blue-500"
-              style:width="{Math.round((exportState.progress ?? 0) * 100)}%"
-            ></div>
-          </div>
-        {/if}
-        <p class="text-xs font-mono text-zinc-300">{exportState?.message ?? '…'}</p>
-      {:else if exportState?.status === 'success'}
-        <p class="mb-2 text-sm text-green-300">Export complete.</p>
-        {#if exportState.export_dir}
-          <p class="mb-3 break-all font-mono text-xs text-zinc-300">
-            {exportState.export_dir}
-          </p>
-        {/if}
-        {#if exportState.split_counts || exportState.image_count != null || exportState.object_count != null}
-          <p class="mb-3 font-mono text-xs text-zinc-300">
-            {formatCount(exportState.object_count)} objects in {formatCount(
-              exportState.image_count,
-            )} images
-            {exportState.class_count != null
-              ? `· ${exportState.class_count} classes`
-              : ''}
-            {#if exportState.split_counts}
-              · images train {exportState.split_counts.train.toLocaleString()} · val {exportState.split_counts.val.toLocaleString()}
-              · test {exportState.split_counts.test.toLocaleString()}
-            {/if}
-          </p>
-        {/if}
-        {#if exportState.images_dropped_not_fully_labeled}
-          <p class="mb-3 text-xs text-orange-300">
-            {formatCount(exportState.images_dropped_not_fully_labeled)} image(s) dropped — not
-            fully labeled.
-          </p>
-        {/if}
-        <div class="flex flex-wrap gap-2">
-          <button
-            type="button"
-            class="btn"
-            onclick={() => downloadUrl(getManifestUrl(), 'manifest.json')}
-          >
-            Download manifest.json
-          </button>
+  <Modal label="Export progress" onclose={closeExportModal}>
+    <h3 class="mb-3 text-base font-semibold">YOLO export</h3>
+    {#if exportState?.status === 'running' || exportRunning}
+      <p class="mb-3 text-xs text-zinc-400">
+        Running… polling every 5s. Safe to leave the page open.
+      </p>
+      {#if exportState?.progress != null}
+        <div class="mb-2 h-2 w-full overflow-hidden rounded bg-zinc-900">
+          <div
+            class="h-full bg-blue-500"
+            style:width="{Math.round((exportState.progress ?? 0) * 100)}%"
+          ></div>
         </div>
-      {:else if exportState?.status === 'failed'}
-        <p class="mb-2 text-sm text-red-300">Export failed.</p>
-        <p class="font-mono text-xs text-red-200">
-          {exportState.error ?? 'unknown error'}
-        </p>
-      {:else}
-        <p class="text-xs text-zinc-400">No active export.</p>
       {/if}
-      <div class="mt-4 flex justify-end">
+      <p class="text-xs font-mono text-zinc-300">{exportState?.message ?? '…'}</p>
+    {:else if exportState?.status === 'success'}
+      <p class="mb-2 text-sm text-green-300">Export complete.</p>
+      {#if exportState.export_dir}
+        <p class="mb-3 break-all font-mono text-xs text-zinc-300">
+          {exportState.export_dir}
+        </p>
+      {/if}
+      {#if exportState.split_counts || exportState.image_count != null || exportState.object_count != null}
+        <p class="mb-3 font-mono text-xs text-zinc-300">
+          {formatCount(exportState.object_count)} objects in {formatCount(
+            exportState.image_count,
+          )} images
+          {exportState.class_count != null ? `· ${exportState.class_count} classes` : ''}
+          {#if exportState.split_counts}
+            · images train {exportState.split_counts.train.toLocaleString()} · val {exportState.split_counts.val.toLocaleString()}
+            · test {exportState.split_counts.test.toLocaleString()}
+          {/if}
+        </p>
+      {/if}
+      {#if exportState.images_dropped_not_fully_labeled}
+        <p class="mb-3 text-xs text-orange-300">
+          {formatCount(exportState.images_dropped_not_fully_labeled)} image(s) dropped — not
+          fully labeled.
+        </p>
+      {/if}
+      <div class="flex flex-wrap gap-2">
         <button
           type="button"
           class="btn"
-          onclick={closeExportModal}
-          disabled={exportRunning}>Close</button
+          onclick={() => downloadUrl(getManifestUrl(), 'manifest.json')}
         >
+          Download manifest.json
+        </button>
       </div>
+    {:else if exportState?.status === 'failed'}
+      <p class="mb-2 text-sm text-red-300">Export failed.</p>
+      <p class="font-mono text-xs text-red-200">
+        {exportState.error ?? 'unknown error'}
+      </p>
+    {:else}
+      <p class="text-xs text-zinc-400">No active export.</p>
+    {/if}
+    <div class="mt-4 flex justify-end">
+      <button
+        type="button"
+        class="btn"
+        onclick={closeExportModal}
+        disabled={exportRunning}>Close</button
+      >
     </div>
-  </div>
+  </Modal>
 {/if}
 
 <!-- Freeze test holdout modal -->
 {#if freezeOpen}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <div
-    class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Freeze test holdout"
-    tabindex="-1"
-    use:focusOnMount
-    use:trapFocus={{ onEscape: closeFreeze }}
-    onclick={(e) => {
-      if (e.target === e.currentTarget) closeFreeze();
-    }}
-  >
+  <Modal label="Freeze test holdout" onclose={closeFreeze}>
+    <h3 class="mb-2 text-base font-semibold">Freeze test holdout</h3>
     <div
-      class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
+      class="mb-3 rounded border border-orange-500/40 bg-orange-500/10 px-3 py-2 text-xs text-orange-200"
     >
-      <h3 class="mb-2 text-base font-semibold">Freeze test holdout</h3>
-      <div
-        class="mb-3 rounded border border-orange-500/40 bg-orange-500/10 px-3 py-2 text-xs text-orange-200"
-      >
-        One-shot per dataset version. Deterministic per-class selection (SHA1 of each crop
-        id) — the same cohort always freezes the same set, so there's no seed to pick
-        (Plan §B4).
-      </div>
-      <label class="mb-3 block text-sm">
-        <span class="mb-1 block text-zinc-400">Percent of validated crops</span>
-        <input
-          type="number"
-          min="1"
-          max="50"
-          bind:value={freezePercent}
-          class="input w-full"
-        />
-      </label>
-      <div class="flex justify-end gap-2">
-        <button type="button" class="btn" onclick={closeFreeze} disabled={freezeBusy}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          class="btn btn-primary"
-          onclick={() => void submitFreeze()}
-          disabled={freezeBusy}
-        >
-          {freezeBusy ? 'Freezing…' : 'Freeze'}
-        </button>
-      </div>
+      One-shot per dataset version. Deterministic per-class selection (SHA1 of each crop
+      id) — the same cohort always freezes the same set, so there's no seed to pick (Plan
+      §B4).
     </div>
-  </div>
+    <label class="mb-3 block text-sm">
+      <span class="mb-1 block text-zinc-400">Percent of validated crops</span>
+      <input
+        type="number"
+        min="1"
+        max="50"
+        bind:value={freezePercent}
+        class="input w-full"
+      />
+    </label>
+    <div class="flex justify-end gap-2">
+      <button type="button" class="btn" onclick={closeFreeze} disabled={freezeBusy}>
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="btn btn-primary"
+        onclick={() => void submitFreeze()}
+        disabled={freezeBusy}
+      >
+        {freezeBusy ? 'Freezing…' : 'Freeze'}
+      </button>
+    </div>
+  </Modal>
 {/if}

@@ -24,7 +24,6 @@
   import { proposalRows, termRulesText } from '$lib/classes/proposalRows';
   import { formatDateOnly } from '$lib/format/date';
   import { focusOnMount } from '$lib/actions/focusOnMount';
-  import { trapFocus } from '$lib/actions/trapFocus';
   import { reservedHotkeyLetters, setClassHotkey } from '$lib/classHotkey';
   import type {
     ClassMergeDryRun,
@@ -37,6 +36,7 @@
   import { toastStore } from '$stores/toast.svelte';
   import { undoStore } from '$stores/undo.svelte';
   import { onMount } from 'svelte';
+  import Modal from '$components/Modal.svelte';
 
   $effect(() => {
     keyboardStore.setScope('classes');
@@ -964,108 +964,91 @@
 
 <!-- Merge modal -->
 {#if mergeOpen}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <div
-    class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Merge classes"
-    tabindex="-1"
-    use:focusOnMount
-    use:trapFocus={{ onEscape: closeMerge }}
-    onclick={(e) => {
-      if (e.target === e.currentTarget) closeMerge();
-    }}
-  >
-    <div
-      class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
-    >
-      <h3 class="mb-3 text-base font-semibold">Merge classes</h3>
-      <p class="mb-3 text-xs text-zinc-400">
-        Source class is marked deprecated; all crops + label rows are relabeled to the
-        target.
-      </p>
+  <Modal label="Merge classes" onclose={closeMerge}>
+    <h3 class="mb-3 text-base font-semibold">Merge classes</h3>
+    <p class="mb-3 text-xs text-zinc-400">
+      Source class is marked deprecated; all crops + label rows are relabeled to the
+      target.
+    </p>
 
-      <label class="mb-3 block text-sm">
-        <span class="mb-1 block text-zinc-400">Source (will be merged away)</span>
-        <select
-          bind:value={mergeSourceId}
-          class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+    <label class="mb-3 block text-sm">
+      <span class="mb-1 block text-zinc-400">Source (will be merged away)</span>
+      <select
+        bind:value={mergeSourceId}
+        class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+      >
+        <option value={null}>— pick source —</option>
+        {#each allClasses.filter((c) => !c.deprecated) as c (c.id)}
+          <option value={c.id}>{c.name} ({c.validated_count ?? 0})</option>
+        {/each}
+      </select>
+    </label>
+
+    <label class="mb-3 block text-sm">
+      <span class="mb-1 block text-zinc-400">Target (kept)</span>
+      <select
+        bind:value={mergeTargetId}
+        class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+      >
+        <option value={null}>— pick target —</option>
+        {#each allClasses.filter((c) => !c.deprecated && c.id !== mergeSourceId) as c (c.id)}
+          <option value={c.id}>{c.name} ({c.validated_count ?? 0})</option>
+        {/each}
+      </select>
+    </label>
+
+    {#if mergeSource && mergeTarget}
+      {#if mergePreviewBusy}
+        <div class="mb-3 text-xs text-zinc-500">Checking impact…</div>
+      {:else if mergePreviewError}
+        <div
+          class="mb-3 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200"
         >
-          <option value={null}>— pick source —</option>
-          {#each allClasses.filter((c) => !c.deprecated) as c (c.id)}
-            <option value={c.id}>{c.name} ({c.validated_count ?? 0})</option>
-          {/each}
-        </select>
-      </label>
-
-      <label class="mb-3 block text-sm">
-        <span class="mb-1 block text-zinc-400">Target (kept)</span>
-        <select
-          bind:value={mergeTargetId}
-          class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          Preview failed: {mergePreviewError}
+        </div>
+      {:else if mergePreview}
+        <div
+          class="mb-3 rounded border px-3 py-2 text-xs {mergePreview.blocked
+            ? 'border-red-500/40 bg-red-500/10 text-red-200'
+            : 'border-orange-500/40 bg-orange-500/10 text-orange-200'}"
         >
-          <option value={null}>— pick target —</option>
-          {#each allClasses.filter((c) => !c.deprecated && c.id !== mergeSourceId) as c (c.id)}
-            <option value={c.id}>{c.name} ({c.validated_count ?? 0})</option>
-          {/each}
-        </select>
-      </label>
-
-      {#if mergeSource && mergeTarget}
-        {#if mergePreviewBusy}
-          <div class="mb-3 text-xs text-zinc-500">Checking impact…</div>
-        {:else if mergePreviewError}
-          <div
-            class="mb-3 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200"
-          >
-            Preview failed: {mergePreviewError}
-          </div>
-        {:else if mergePreview}
-          <div
-            class="mb-3 rounded border px-3 py-2 text-xs {mergePreview.blocked
-              ? 'border-red-500/40 bg-red-500/10 text-red-200'
-              : 'border-orange-500/40 bg-orange-500/10 text-orange-200'}"
-          >
-            Will relabel <strong>{mergePreview.would_relabel}</strong> crops from
-            <strong>{mergeSource.name}</strong> to <strong>{mergeTarget.name}</strong>
-            {#if mergePreview.validations_carried_over > 0}
-              <!-- 51b05d7: a merge keeps human validations. -->
-              &middot; <strong>{mergePreview.validations_carried_over}</strong> human
-              validation{mergePreview.validations_carried_over === 1 ? '' : 's'} will carry
-              over
-            {/if}
-            {#if mergePreview.holdout_blocking > 0}
-              &middot; <strong>{mergePreview.holdout_blocking}</strong> test-holdout crops block
-              this merge
-            {/if}
-            {#if mergePreview.blocked}
-              <div class="mt-1 font-semibold">
-                Blocked — a real merge will 409 until the holdout conflict is resolved.
-              </div>
-            {/if}
-          </div>
-        {/if}
+          Will relabel <strong>{mergePreview.would_relabel}</strong> crops from
+          <strong>{mergeSource.name}</strong> to <strong>{mergeTarget.name}</strong>
+          {#if mergePreview.validations_carried_over > 0}
+            <!-- 51b05d7: a merge keeps human validations. -->
+            &middot; <strong>{mergePreview.validations_carried_over}</strong> human
+            validation{mergePreview.validations_carried_over === 1 ? '' : 's'} will carry over
+          {/if}
+          {#if mergePreview.holdout_blocking > 0}
+            &middot; <strong>{mergePreview.holdout_blocking}</strong> test-holdout crops block
+            this merge
+          {/if}
+          {#if mergePreview.blocked}
+            <div class="mt-1 font-semibold">
+              Blocked — a real merge will 409 until the holdout conflict is resolved.
+            </div>
+          {/if}
+        </div>
       {/if}
+    {/if}
 
-      <div class="flex justify-end gap-2">
-        <button type="button" class="btn" onclick={closeMerge} disabled={busy}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          class="btn btn-primary"
-          onclick={() => void submitMerge()}
-          disabled={busy ||
-            mergeSourceId == null ||
-            mergeTargetId == null ||
-            mergePreviewBusy ||
-            mergePreview == null ||
-            mergePreview?.blocked}
-        >
-          {busy ? 'Merging…' : 'Merge'}
-        </button>
-      </div>
+    <div class="flex justify-end gap-2">
+      <button type="button" class="btn" onclick={closeMerge} disabled={busy}>
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="btn btn-primary"
+        onclick={() => void submitMerge()}
+        disabled={busy ||
+          mergeSourceId == null ||
+          mergeTargetId == null ||
+          mergePreviewBusy ||
+          mergePreview == null ||
+          mergePreview?.blocked}
+      >
+        {busy ? 'Merging…' : 'Merge'}
+      </button>
     </div>
-  </div>
+  </Modal>
 {/if}

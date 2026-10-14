@@ -54,6 +54,7 @@
   import type { ScreenPoint } from '$lib/embeddingPlot';
   import { classesStore } from '$stores/classes.svelte';
   import { toastStore } from '$stores/toast.svelte';
+  import Modal from '$components/Modal.svelte';
 
   interface Props {
     /** Scope the projection to one cluster. `null` = pool-wide (today's
@@ -613,37 +614,36 @@
 
 {#if expandedPreviewId}
   {@const expandedPoint = points.find((p) => p.crop_id === expandedPreviewId)}
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Selected crop preview"
+  <Modal
+    label="Selected crop preview"
+    onclose={() => (expandedPreviewId = null)}
+    layer="top"
+    scrim="bg-black/80"
+    panelClass="max-h-full max-w-2xl"
   >
-    <div class="relative max-h-full max-w-2xl">
-      <img
-        src={getThumbUrl(expandedPreviewId, 512)}
-        alt="crop {expandedPreviewId}"
-        draggable="false"
-        class="max-h-[80vh] max-w-full rounded-md border border-zinc-700 [-webkit-user-drag:none]"
-      />
-      {#if expandedPoint?.class_name}
-        <p
-          class="absolute inset-x-0 bottom-0 bg-black/70 px-2 py-1 text-center text-sm text-zinc-200"
-        >
-          {expandedPoint.class_name}
-        </p>
-      {/if}
-      <button
-        type="button"
-        class="absolute -top-3 -right-3 rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-white"
-        onclick={(e) => {
-          e.stopPropagation();
-          expandedPreviewId = null;
-        }}
-        aria-label="Close"
+    <img
+      src={getThumbUrl(expandedPreviewId, 512)}
+      alt="crop {expandedPreviewId}"
+      draggable="false"
+      class="max-h-[80vh] max-w-full rounded-md border border-zinc-700 [-webkit-user-drag:none]"
+    />
+    {#if expandedPoint?.class_name}
+      <p
+        class="absolute inset-x-0 bottom-0 bg-black/70 px-2 py-1 text-center text-sm text-zinc-200"
       >
-        ×
-      </button>
-    </div>
-  </div>
+        {expandedPoint.class_name}
+      </p>
+    {/if}
+    <button
+      type="button"
+      class="absolute -top-3 -right-3 rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-white"
+      onclick={(e) => {
+        e.stopPropagation();
+        expandedPreviewId = null;
+      }}
+      aria-label="Close"
+    >
+      ×
+    </button>
+  </Modal>
 {/if}

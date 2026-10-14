@@ -3,7 +3,6 @@
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
   import { page } from '$app/state';
-  import { trapFocus } from '$lib/actions/trapFocus';
   import { cohesionText, COHESION_TOOLTIP } from '$lib/clusters/clusterCardText';
   import { dndzone, SOURCES, TRIGGERS } from 'svelte-dnd-action';
   import {
@@ -57,6 +56,7 @@
   import { toastStore } from '$stores/toast.svelte';
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { subscribeCurationEvents, type CurationEventSubscription } from '$lib/sse';
+  import Modal from '$components/Modal.svelte';
 
   const clusterIdParam = $derived(page.params.id);
   const clusterId = $derived(Number(clusterIdParam));
@@ -1404,68 +1404,57 @@
 </div>
 
 {#if movePickerOpen}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <div
-    class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Move crops to cluster"
-    tabindex="-1"
-    use:trapFocus={{ onEscape: cancelMovePicker }}
-    onclick={(e) => {
-      if (e.target === e.currentTarget) cancelMovePicker();
-    }}
+  <Modal
+    label="Move crops to cluster"
+    onclose={cancelMovePicker}
+    panelClass="w-full max-w-sm rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
   >
-    <div
-      class="w-full max-w-sm rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
-    >
-      <h3 class="mb-2 text-base font-semibold">
-        Move {sel.size} crop{sel.size === 1 ? '' : 's'}
-      </h3>
-      <p class="mb-3 text-xs text-zinc-400">
-        Move these from cluster #{clusterId} to another cluster, by its id (the #N on each
-        <a class="text-blue-400 underline" href={resolve(projectHref('/clusters'))}
-          >/clusters</a
-        >
-        card). Reversible with {kg('cluster.undo')}.
-      </p>
-      <p class="mb-3 text-xs text-zinc-400" data-testid="move-relabel-hint">
-        To change their <strong>class</strong> instead, close this and pick a class, then
-        "Assign class to selected" ({kg('cluster.confirm')}), or press the class's hotkey.
-      </p>
-      <label class="mb-3 block text-sm">
-        <span class="mb-1 block text-zinc-400">Target cluster id</span>
-        <input
-          type="number"
-          min="0"
-          step="1"
-          bind:this={movePickerInput}
-          bind:value={movePickerValue}
-          onkeydown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              void confirmMovePicker();
-            } else if (e.key === 'Escape') {
-              e.preventDefault();
-              cancelMovePicker();
-            }
-          }}
-          class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-          placeholder="e.g. 42"
-        />
-      </label>
-      <div class="flex justify-end gap-2">
-        <button type="button" class="btn" onclick={cancelMovePicker}>Cancel</button>
-        <button
-          type="button"
-          class="btn btn-primary"
-          onclick={() => void confirmMovePicker()}
-        >
-          Move
-        </button>
-      </div>
+    <h3 class="mb-2 text-base font-semibold">
+      Move {sel.size} crop{sel.size === 1 ? '' : 's'}
+    </h3>
+    <p class="mb-3 text-xs text-zinc-400">
+      Move these from cluster #{clusterId} to another cluster, by its id (the #N on each
+      <a class="text-blue-400 underline" href={resolve(projectHref('/clusters'))}
+        >/clusters</a
+      >
+      card). Reversible with {kg('cluster.undo')}.
+    </p>
+    <p class="mb-3 text-xs text-zinc-400" data-testid="move-relabel-hint">
+      To change their <strong>class</strong> instead, close this and pick a class, then
+      "Assign class to selected" ({kg('cluster.confirm')}), or press the class's hotkey.
+    </p>
+    <label class="mb-3 block text-sm">
+      <span class="mb-1 block text-zinc-400">Target cluster id</span>
+      <input
+        type="number"
+        min="0"
+        step="1"
+        bind:this={movePickerInput}
+        bind:value={movePickerValue}
+        onkeydown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            void confirmMovePicker();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelMovePicker();
+          }
+        }}
+        class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+        placeholder="e.g. 42"
+      />
+    </label>
+    <div class="flex justify-end gap-2">
+      <button type="button" class="btn" onclick={cancelMovePicker}>Cancel</button>
+      <button
+        type="button"
+        class="btn btn-primary"
+        onclick={() => void confirmMovePicker()}
+      >
+        Move
+      </button>
     </div>
-  </div>
+  </Modal>
 {/if}
 
 {#if detailCrop}

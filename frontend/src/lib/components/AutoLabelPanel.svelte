@@ -26,8 +26,6 @@
    * always been.
    */
   import { onMount, onDestroy } from 'svelte';
-  import { focusOnMount } from '$lib/actions/focusOnMount';
-  import { trapFocus } from '$lib/actions/trapFocus';
   import AssistScopeBar from './AssistScopeBar.svelte';
   import {
     cancelAutoLabel,
@@ -45,6 +43,7 @@
   import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import { summarizeRunStages } from '$lib/autoLabelRunSummary';
+  import Modal from '$components/Modal.svelte';
 
   // Additive, optional (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md
   // §A.5): `/ingest`'s ClusteringHandoff passes a gate computed from the
@@ -443,43 +442,27 @@
   </div>
 
   {#if confirmOpen}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div
-      class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Confirm recluster"
-      tabindex="-1"
-      use:focusOnMount
-      use:trapFocus={{ onEscape: closeConfirmStart }}
-      onclick={(e) => {
-        if (e.target === e.currentTarget) closeConfirmStart();
-      }}
-    >
-      <div
-        class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
-      >
-        <h3 class="mb-3 text-base font-semibold">
-          {scopeClassName ? `Recluster · VLM: ${scopeClassName}` : 'Recluster now'}
-        </h3>
-        <p class="mb-4 text-xs text-zinc-400">
-          Starts the deployment's clustering pipeline{resolveAutoLabelRunVlm(
-            scope.toStartParams(),
-            runVlm,
-          )
-            ? ' and runs the VLM labeling stage'
-            : ''}. This can run for a while.
-        </p>
-        <div class="flex justify-end gap-2">
-          <button type="button" class="btn" onclick={closeConfirmStart} disabled={busy}>
-            Cancel
-          </button>
-          <button type="button" class="btn btn-primary" onclick={start} disabled={busy}>
-            {busy ? 'Starting…' : 'Start'}
-          </button>
-        </div>
+    <Modal label="Confirm recluster" onclose={closeConfirmStart}>
+      <h3 class="mb-3 text-base font-semibold">
+        {scopeClassName ? `Recluster · VLM: ${scopeClassName}` : 'Recluster now'}
+      </h3>
+      <p class="mb-4 text-xs text-zinc-400">
+        Starts the deployment's clustering pipeline{resolveAutoLabelRunVlm(
+          scope.toStartParams(),
+          runVlm,
+        )
+          ? ' and runs the VLM labeling stage'
+          : ''}. This can run for a while.
+      </p>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn" onclick={closeConfirmStart} disabled={busy}>
+          Cancel
+        </button>
+        <button type="button" class="btn btn-primary" onclick={start} disabled={busy}>
+          {busy ? 'Starting…' : 'Start'}
+        </button>
       </div>
-    </div>
+    </Modal>
   {/if}
 
   {#if job}
