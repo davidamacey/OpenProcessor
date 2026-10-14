@@ -9,7 +9,7 @@ the served model's ``labels.txt`` silently picked up the new name even
 though the checkpoint was trained against the old one.
 
 We don't exercise the real Triton handoff — ``promote_yolo26_to_triton`` is
-mocked (same pattern as ``test_train_router.py``'s existing promote tests)
+mocked (same pattern as ``tests/curation/train_router/``'s existing promote tests)
 so the test is about which ``class_id_to_name`` map the router computes and
 hands to it, not the filesystem/network side effects.
 """
