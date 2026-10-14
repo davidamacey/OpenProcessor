@@ -1,4 +1,3 @@
-docker/trainer/mlflow_callbacks.py::register_callbacks	30	top 15: decompose in PR 7
 docker/trainer/subset_dataset.py::build_subset_view	17	ratchet: may only go down
 export/download_paddleocr.py::download_model	16	ratchet: may only go down
 export/export_models.py::export_model	20	ratchet: may only go down

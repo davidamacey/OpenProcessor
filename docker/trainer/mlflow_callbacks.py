@@ -146,33 +146,44 @@ def _get_class_names(trainer: Any) -> dict[int, str]:
 # ---------------------------------------------------------------------------
 
 
-def register_callbacks(  # four closures + wiring, cohesive by design
-    model: Any,
-    *,
-    run_name: str,
-    profile: str,
-    seed: int,
-    lineage: dict[str, Any],
-    data_cfg: dict[str, Any],
-    data_yaml_path: Path,
-    model_registry_name: str = DEFAULT_MODEL_REGISTRY_NAME,
-) -> None:
-    """Wire all four hook handlers into the Ultralytics model.
+def _safe_name(cname: str) -> str:
+    return cname.replace('/', '_').replace(' ', '_')[:240]
 
-    The closure captures the run metadata so handlers are pure-functional with
-    respect to the training loop. ``lineage`` (``job_manifest.build_lineage``)
-    is the single source of dataset/build identity -- MLflow tags, params and
-    registry metadata read from it so they are byte-identical to the run
-    manifest's own ``lineage``/``code_versions`` blocks.
-    """
-    state: dict[str, Any] = {
-        'class_dist': None,
-        'names_by_id': None,
-        'registry_name': model_registry_name,
-        'every_n_epochs_for_cm': CONFUSION_MATRIX_EVERY_N_EPOCHS,
-    }
 
-    def _tag_run(mlflow: Any) -> None:
+def _per_class_box(trainer: Any) -> Any:
+    validator = getattr(trainer, 'validator', None)
+    if validator is None or not getattr(validator, 'metrics', None):
+        return None
+    return getattr(validator.metrics, 'box', None)
+
+
+class _RunHooks:
+    """The four hook handlers plus the run metadata they close over."""
+
+    def __init__(
+        self,
+        *,
+        run_name: str,
+        profile: str,
+        seed: int,
+        lineage: dict[str, Any],
+        data_cfg: dict[str, Any],
+        data_yaml_path: Path,
+        model_registry_name: str,
+    ) -> None:
+        self.run_name = run_name
+        self.profile = profile
+        self.seed = seed
+        self.lineage = lineage
+        self.data_cfg = data_cfg
+        self.data_yaml_path = data_yaml_path
+        self.class_dist: dict[str, int] | None = None
+        self.names_by_id: dict[int, str] | None = None
+        self.registry_name = model_registry_name
+        self.every_n_epochs_for_cm = CONFUSION_MATRIX_EVERY_N_EPOCHS
+
+    def _tag_run(self, mlflow: Any) -> None:
+        lineage = self.lineage
         try:
             tags = {
                 'git_sha': lineage.get('trainer_sha') or 'unknown',
@@ -182,38 +193,34 @@ def register_callbacks(  # four closures + wiring, cohesive by design
                 'test_label_sha': str(lineage.get('test_label_sha') or ''),
                 'api_sha': str(lineage.get('api_sha') or ''),
                 'docker_digest_trainer': str(lineage.get('trainer_image_id') or ''),
-                'profile': profile,
-                'seed': str(seed),
-                'run_name': run_name,
+                'profile': self.profile,
+                'seed': str(self.seed),
+                'run_name': self.run_name,
             }
             mlflow.set_tags(tags)
-            mlflow.log_param('profile', profile)
-            mlflow.log_param('seed', seed)
+            mlflow.log_param('profile', self.profile)
+            mlflow.log_param('seed', self.seed)
             mlflow.log_param('dataset_sha', tags['dataset_sha'])
             mlflow.log_param('dataset_version', tags['dataset_version'])
         except Exception as exc:  # tracking hiccup must not kill the run
             log.warning('tag run failed: %s', exc)
 
-    # -----------------------------------------------------------------
-    # on_train_start
-    # -----------------------------------------------------------------
-    def on_train_start(trainer: Any) -> None:
+    def on_train_start(self, trainer: Any) -> None:
         mlflow = _safe_mlflow()
         if mlflow is None:
             return
         try:
-            _tag_run(mlflow)
-            class_dist = _count_labels(data_cfg, data_yaml_path)
-            state['class_dist'] = class_dist
-            state['names_by_id'] = _get_class_names(trainer)
+            self._tag_run(mlflow)
+            class_dist = _count_labels(self.data_cfg, self.data_yaml_path)
+            self.class_dist = class_dist
+            self.names_by_id = _get_class_names(trainer)
             mlflow.log_param('class_count', len(class_dist))
             mlflow.log_dict(class_dist, 'class_distribution.json')
             for cname, count in class_dist.items():
                 # Param names must be safe -- Ultralytics may also log params.
-                safe = 'count_' + cname.replace('/', '_').replace(' ', '_')[:240]
                 # Params can't be re-logged with different values; suppress.
                 with contextlib.suppress(Exception):
-                    mlflow.log_param(safe, count)
+                    mlflow.log_param('count_' + _safe_name(cname), count)
             montage = _augment_preview_montage(trainer)
             if montage:
                 tmp = Path(trainer.save_dir) / 'augment_preview.jpg'
@@ -222,28 +229,19 @@ def register_callbacks(  # four closures + wiring, cohesive by design
         except Exception:  # never break the training loop
             log.warning('on_train_start failed:\n%s', traceback.format_exc())
 
-    # -----------------------------------------------------------------
-    # on_fit_epoch_end -- per-class mAP
-    # -----------------------------------------------------------------
-    def on_fit_epoch_end(trainer: Any) -> None:
+    def on_fit_epoch_end(self, trainer: Any) -> None:
+        """Per-class mAP@0.5 and mAP@0.5:0.95."""
         mlflow = _safe_mlflow()
         if mlflow is None:
             return
         try:
-            box = None
-            validator = getattr(trainer, 'validator', None)
-            if validator is not None:
-                box = (
-                    getattr(validator.metrics, 'box', None)
-                    if getattr(validator, 'metrics', None)
-                    else None
-                )
+            box = _per_class_box(trainer)
             if box is None:
                 # ultralytics >=8.3 exposes a .box.maps array indexed by class
                 return
             maps_50_95 = getattr(box, 'maps', None)  # array, mAP50-95 per class
             ap50 = getattr(box, 'ap50', None)  # array, mAP50 per class
-            names_by_id = state['names_by_id'] or _get_class_names(trainer)
+            names_by_id = self.names_by_id or _get_class_names(trainer)
             epoch = int(getattr(trainer, 'epoch', 0))
             for arr, metric_suffix in ((maps_50_95, 'map50_95'), (ap50, 'map50')):
                 if arr is None:
@@ -251,17 +249,14 @@ def register_callbacks(  # four closures + wiring, cohesive by design
                 for idx, val in enumerate(arr):
                     if val is None or (isinstance(val, float) and math.isnan(val)):
                         continue
-                    cname = names_by_id.get(idx, f'class_{idx}')
-                    safe = cname.replace('/', '_').replace(' ', '_')[:240]
+                    safe = _safe_name(names_by_id.get(idx, f'class_{idx}'))
                     with contextlib.suppress(Exception):
                         mlflow.log_metric(f'class_{safe}_{metric_suffix}', float(val), step=epoch)
         except Exception:  # never break the training loop
             log.warning('on_fit_epoch_end failed:\n%s', traceback.format_exc())
 
-    # -----------------------------------------------------------------
-    # on_val_end -- confusion matrix every N epochs
-    # -----------------------------------------------------------------
-    def on_val_end(validator: Any) -> None:
+    def on_val_end(self, validator: Any) -> None:
+        """Confusion-matrix artifact every N epochs."""
         mlflow = _safe_mlflow()
         if mlflow is None:
             return
@@ -270,7 +265,7 @@ def register_callbacks(  # four closures + wiring, cohesive by design
             if trainer is None:
                 return
             epoch = int(getattr(trainer, 'epoch', 0))
-            if epoch % state['every_n_epochs_for_cm'] != 0 or epoch == 0:
+            if epoch % self.every_n_epochs_for_cm != 0 or epoch == 0:
                 return
             cm_path = Path(validator.save_dir) / 'confusion_matrix.png'
             if cm_path.exists():
@@ -281,10 +276,55 @@ def register_callbacks(  # four closures + wiring, cohesive by design
         except Exception:  # never break the training loop
             log.warning('on_val_end failed:\n%s', traceback.format_exc())
 
-    # -----------------------------------------------------------------
-    # on_train_end -- register best.pt in MLflow Model Registry
-    # -----------------------------------------------------------------
-    def on_train_end(trainer: Any) -> None:
+    def _run_metadata(self) -> dict[str, Any]:
+        lineage = self.lineage
+        names_by_id = self.names_by_id or {}
+        return {
+            'dataset_sha': str(lineage.get('dataset_sha') or ''),
+            'dataset_version': str(lineage.get('dataset_version_tag') or ''),
+            'class_count': len(names_by_id),
+            'class_names': json.dumps([names_by_id[i] for i in sorted(names_by_id)]),
+            'frozen_test_sha': str(lineage.get('frozen_test_sha') or ''),
+            'test_label_sha': str(lineage.get('test_label_sha') or ''),
+            'api_sha': str(lineage.get('api_sha') or ''),
+            'git_sha': str(lineage.get('trainer_sha') or ''),
+            'docker_digest_trainer': str(lineage.get('trainer_image_id') or ''),
+            'profile': self.profile,
+            'seed': self.seed,
+            'run_name': self.run_name,
+            'class_distribution': self.class_dist or {},
+        }
+
+    def _register_model(self, run_id: str, metadata: dict[str, Any]) -> None:
+        model_uri = f'runs:/{run_id}/weights/best.pt'
+        try:
+            from mlflow.tracking import MlflowClient
+
+            client = MlflowClient()
+            # Ensure the registered model exists.
+            try:
+                client.get_registered_model(self.registry_name)
+            except Exception:  # "not found" has no stable type here
+                client.create_registered_model(self.registry_name)
+            mv = client.create_model_version(
+                name=self.registry_name,
+                source=model_uri,
+                run_id=run_id,
+                tags={k: str(v) for k, v in metadata.items() if not isinstance(v, dict)},
+            )
+            # Auto-promote to Staging only. Production is a manual step.
+            client.transition_model_version_stage(
+                name=self.registry_name,
+                version=mv.version,
+                stage='Staging',
+                archive_existing_versions=False,
+            )
+            log.info('registered %s v%s in stage Staging', self.registry_name, mv.version)
+        except Exception as exc:  # registry push is best-effort
+            log.warning('model registry push failed: %s', exc)
+
+    def on_train_end(self, trainer: Any) -> None:
+        """Register best.pt in the MLflow Model Registry."""
         mlflow = _safe_mlflow()
         if mlflow is None:
             return
@@ -293,23 +333,7 @@ def register_callbacks(  # four closures + wiring, cohesive by design
             if not best.exists():
                 log.warning('best.pt missing at %s; skipping registry push', best)
                 return
-            class_dist = state['class_dist'] or {}
-            names_by_id = state['names_by_id'] or {}
-            metadata = {
-                'dataset_sha': str(lineage.get('dataset_sha') or ''),
-                'dataset_version': str(lineage.get('dataset_version_tag') or ''),
-                'class_count': len(names_by_id),
-                'class_names': json.dumps([names_by_id[i] for i in sorted(names_by_id)]),
-                'frozen_test_sha': str(lineage.get('frozen_test_sha') or ''),
-                'test_label_sha': str(lineage.get('test_label_sha') or ''),
-                'api_sha': str(lineage.get('api_sha') or ''),
-                'git_sha': str(lineage.get('trainer_sha') or ''),
-                'docker_digest_trainer': str(lineage.get('trainer_image_id') or ''),
-                'profile': profile,
-                'seed': seed,
-                'run_name': run_name,
-                'class_distribution': class_dist,
-            }
+            metadata = self._run_metadata()
             meta_path = Path(trainer.save_dir) / 'run_metadata.json'
             meta_path.write_text(json.dumps(metadata, indent=2))
             mlflow.log_artifact(str(meta_path))
@@ -322,42 +346,41 @@ def register_callbacks(  # four closures + wiring, cohesive by design
             if run_id is None:
                 log.warning('no active MLflow run; cannot register model')
                 return
-            model_uri = f'runs:/{run_id}/weights/best.pt'
-            try:
-                from mlflow.tracking import MlflowClient
-
-                client = MlflowClient()
-                # Ensure the registered model exists.
-                try:
-                    client.get_registered_model(state['registry_name'])
-                except Exception:  # "not found" has no stable type here
-                    client.create_registered_model(state['registry_name'])
-                mv = client.create_model_version(
-                    name=state['registry_name'],
-                    source=model_uri,
-                    run_id=run_id,
-                    tags={k: str(v) for k, v in metadata.items() if not isinstance(v, dict)},
-                )
-                # Auto-promote to Staging only. Production is a manual step.
-                client.transition_model_version_stage(
-                    name=state['registry_name'],
-                    version=mv.version,
-                    stage='Staging',
-                    archive_existing_versions=False,
-                )
-                log.info(
-                    'registered %s v%s in stage Staging',
-                    state['registry_name'],
-                    mv.version,
-                )
-            except Exception as exc:  # registry push is best-effort
-                log.warning('model registry push failed: %s', exc)
+            self._register_model(run_id, metadata)
         except Exception:  # never break the training loop
             log.warning('on_train_end failed:\n%s', traceback.format_exc())
 
-    # Wire up
-    model.add_callback('on_train_start', on_train_start)
-    model.add_callback('on_fit_epoch_end', on_fit_epoch_end)
-    model.add_callback('on_val_end', on_val_end)
-    model.add_callback('on_train_end', on_train_end)
+
+def register_callbacks(
+    model: Any,
+    *,
+    run_name: str,
+    profile: str,
+    seed: int,
+    lineage: dict[str, Any],
+    data_cfg: dict[str, Any],
+    data_yaml_path: Path,
+    model_registry_name: str = DEFAULT_MODEL_REGISTRY_NAME,
+) -> None:
+    """Wire all four hook handlers into the Ultralytics model.
+
+    The handlers capture the run metadata so they are pure-functional with
+    respect to the training loop. ``lineage`` (``job_manifest.build_lineage``)
+    is the single source of dataset/build identity -- MLflow tags, params and
+    registry metadata read from it so they are byte-identical to the run
+    manifest's own ``lineage``/``code_versions`` blocks.
+    """
+    hooks = _RunHooks(
+        run_name=run_name,
+        profile=profile,
+        seed=seed,
+        lineage=lineage,
+        data_cfg=data_cfg,
+        data_yaml_path=data_yaml_path,
+        model_registry_name=model_registry_name,
+    )
+    model.add_callback('on_train_start', hooks.on_train_start)
+    model.add_callback('on_fit_epoch_end', hooks.on_fit_epoch_end)
+    model.add_callback('on_val_end', hooks.on_val_end)
+    model.add_callback('on_train_end', hooks.on_train_end)
     log.info('registered MLflow callbacks for run=%s', run_name)
