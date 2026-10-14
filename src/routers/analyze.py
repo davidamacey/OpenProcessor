@@ -10,7 +10,6 @@ Endpoints:
 """
 
 import logging
-from concurrent.futures import ThreadPoolExecutor
 from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
@@ -25,7 +24,7 @@ from src.schemas.analyze import (
     OcrResult,
 )
 from src.schemas.detection import ImageMetadata
-from src.services.analyze_pipeline import get_inference_service, ocr_failure
+from src.services.analyze_pipeline import analyze_single_image, get_inference_service, ocr_failure
 from src.services.ocr_service import get_ocr_service
 from src.utils.affine import format_detections_from_triton
 from src.utils.retry import RetryExhaustedError
@@ -83,10 +82,7 @@ def analyze_image(
     Returns:
         Combined analysis results with detections, faces, embedding, and OCR.
     """
-    import time
-
     filename = image.filename or 'uploaded_image'
-    timing = {}
 
     try:
         image_bytes = image.file.read()
@@ -94,192 +90,13 @@ def analyze_image(
         if not image_bytes:
             raise HTTPException(status_code=400, detail='Empty image file')
 
-        service = get_inference_service()
-        ocr_service = get_ocr_service()
-
-        # Run all pipelines in parallel using ThreadPoolExecutor
-        # Architecture: YOLO+CLIP, faces, OCR start in parallel.
-        # As soon as YOLO returns detections, crop embedding tasks are
-        # submitted to the same pool — overlapping with faces/OCR.
-        import io
-
-        import numpy as np
-        from PIL import Image
-
-        def run_yolo_and_clip():
-            t0 = time.perf_counter()
-            from src.clients.triton_client import get_sync_triton_client
-            from src.config import get_settings
-
-            settings = get_settings()
-            client = get_sync_triton_client(settings.triton_url)
-            result = client.infer_yolo_clip_cpu(image_bytes)
-            timing['yolo_clip_ms'] = (time.perf_counter() - t0) * 1000
-            return result
-
-        def run_faces():
-            t0 = time.perf_counter()
-            result = service.detect_faces(image_bytes, confidence=face_confidence)
-            timing['faces_ms'] = (time.perf_counter() - t0) * 1000
-            return result
-
-        def run_ocr():
-            if not enable_ocr:
-                return None
-            t0 = time.perf_counter()
-            result = ocr_service.extract_text(image_bytes, filter_by_score=True)
-            timing['ocr_ms'] = (time.perf_counter() - t0) * 1000
-            return result
-
-        def run_crop_embeddings(
-            det_list: list[DetectionResult],
-            img_w: int,
-            img_h: int,
-        ) -> np.ndarray | None:
-            """Batch-encode all detection crops via single Triton call."""
-            if not det_list or img_w <= 0 or img_h <= 0:
-                return None
-            t0 = time.perf_counter()
-            from src.clients.triton_client import get_sync_triton_client
-            from src.config import get_settings
-            from src.utils.cpu_preprocess import center_crop_cpu
-
-            pil_img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
-            np_img = np.array(pil_img)
-
-            # CPU crop + preprocess all detections into a single [N, 3, 256, 256] batch
-            preprocessed = []
-            for det in det_list:
-                x1, y1, x2, y2 = det.box
-                px1, py1 = int(x1 * img_w), int(y1 * img_h)
-                px2, py2 = int(x2 * img_w), int(y2 * img_h)
-                if px2 > px1 and py2 > py1:
-                    crop_rgb = np_img[py1:py2, px1:px2]
-                    preprocessed.append(center_crop_cpu(crop_rgb, target_size=256))
-                else:
-                    # Placeholder for invalid boxes (zero tensor)
-                    preprocessed.append(np.zeros((3, 256, 256), dtype=np.float32))
-
-            batch_tensor = np.stack(preprocessed)  # [N, 3, 256, 256]
-
-            # Single batched Triton inference call
-            settings = get_settings()
-            client = get_sync_triton_client(settings.triton_url)
-            embeddings = client.infer_mobileclip_batch(batch_tensor)
-            timing['crop_embeddings_ms'] = (time.perf_counter() - t0) * 1000
-            return embeddings  # [N, 512]
-
-        # Phase 1: Submit YOLO+CLIP, faces, OCR in parallel
-        # Phase 2: As soon as YOLO returns boxes, submit batched crop embeddings
-        #          (overlaps with faces/OCR still running)
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            yolo_clip_future = executor.submit(run_yolo_and_clip)
-            faces_future = executor.submit(run_faces)
-            ocr_future = executor.submit(run_ocr)
-
-            # Wait for YOLO+CLIP first (needed for detection boxes)
-            yolo_clip_result = yolo_clip_future.result()
-
-            # Parse detections immediately
-            detections: list[DetectionResult] = []
-            if yolo_clip_result.get('num_dets', 0) > 0:
-                formatted = format_detections_from_triton(
-                    yolo_clip_result,
-                    input_size=yolo_clip_result['input_size'],
-                    model_name=TritonModelConfig.YOLO_MODEL,
-                )
-                detections.extend(
-                    DetectionResult(
-                        box=[det['x1'], det['y1'], det['x2'], det['y2']],
-                        confidence=det['confidence'],
-                        class_id=det['class'],
-                        class_name=det.get('class_name'),
-                    )
-                    for det in formatted
-                    if det['confidence'] >= confidence
-                )
-
-            orig_shape = yolo_clip_result.get('orig_shape', (0, 0))
-            img_height = orig_shape[0] if orig_shape else 0
-            img_width = orig_shape[1] if orig_shape else 0
-
-            # Submit batched crop embeddings (runs in parallel with faces/OCR)
-            crop_future = None
-            if include_embedding and detections:
-                crop_future = executor.submit(
-                    run_crop_embeddings, detections, img_width, img_height
-                )
-
-            # Wait for faces and OCR (may already be done)
-            faces_result = faces_future.result()
-            ocr_result = ocr_future.result()
-
-            # Collect batched crop embeddings
-            if crop_future is not None:
-                try:
-                    crop_embeddings = crop_future.result()
-                    if crop_embeddings is not None:
-                        for i, det in enumerate(detections):
-                            det.embedding = crop_embeddings[i].tolist()
-                except Exception:
-                    logger.warning('Failed to generate batched crop embeddings')
-
-        # Parse global embedding
-        global_embedding = None
-        embedding_norm = None
-        if include_embedding:
-            emb = yolo_clip_result.get('image_embedding')
-            if emb is not None:
-                emb_array = np.array(emb)
-                global_embedding = emb_array.tolist()
-                embedding_norm = float(np.linalg.norm(emb_array))
-
-        # Parse face results
-        faces = []
-        if faces_result.get('status') != 'error' and faces_result.get('num_faces', 0) > 0:
-            for i, face in enumerate(faces_result.get('faces', [])):
-                face_emb = None
-                if include_face_embeddings and i < len(faces_result.get('embeddings', [])):
-                    face_emb = faces_result['embeddings'][i]
-                    if hasattr(face_emb, 'tolist'):
-                        face_emb = face_emb.tolist()
-
-                faces.append(
-                    FaceResult(
-                        box=face['box'],
-                        landmarks=face['landmarks'],
-                        score=face['score'],
-                        quality=face.get('quality'),
-                        embedding=face_emb,
-                    )
-                )
-
-        # Parse OCR results
-        ocr = None
-        if ocr_result and ocr_result.get('status') == 'success':
-            ocr = OcrResult(
-                texts=ocr_result.get('texts', []),
-                boxes=ocr_result.get('boxes', []),
-                boxes_normalized=ocr_result.get('boxes_normalized', []),
-                det_scores=ocr_result.get('det_scores', []),
-                rec_scores=ocr_result.get('rec_scores', []),
-                rec_errors=ocr_result.get('rec_errors', []),
-                full_text=' '.join(ocr_result.get('texts', [])),
-                num_texts=ocr_result.get('num_texts', 0),
-            )
-
-        return AnalyzeResponse(
-            status='success',
-            image=ImageMetadata(width=img_width, height=img_height) if img_width > 0 else None,
-            detections=detections,
-            num_detections=len(detections),
-            faces=faces,
-            num_faces=len(faces),
-            global_embedding=global_embedding,
-            embedding_norm=embedding_norm,
-            ocr=ocr,
-            ocr_error=ocr_failure(ocr_result),
-            timing=timing if timing else None,
+        return analyze_single_image(
+            image_bytes,
+            include_embedding=include_embedding,
+            include_face_embeddings=include_face_embeddings,
+            enable_ocr=enable_ocr,
+            confidence=confidence,
+            face_confidence=face_confidence,
         )
 
     except HTTPException:
