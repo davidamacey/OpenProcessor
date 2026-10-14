@@ -29,7 +29,11 @@
 
 ```
 src/
-├── main.py                      # Application entry point with lifespan management
+├── main.py                      # Builds the `app` that uvicorn serves
+├── app/                         # Application assembly
+│   ├── factory.py               # create_app: middleware, handlers, router mounting
+│   ├── lifespan.py              # Startup and shutdown steps
+│   └── resources.py             # Shared executor and Triton pool
 │
 ├── routers/                     # FastAPI route handlers (one per capability)
 │   ├── __init__.py              # Router exports

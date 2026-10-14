@@ -10,7 +10,7 @@ import pytest
 from _route_helpers import api_routes
 from fastapi.testclient import TestClient
 
-from src.main import create_app
+from src.app.factory import create_app
 from src.routers.curation._common import _raw_opensearch_dep
 
 

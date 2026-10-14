@@ -431,7 +431,7 @@ async def test_region_profile(
     jpeg = load_item_crop_jpeg(crop.crop_id, str(crop.image_path), crop.bbox)
     if jpeg is None:
         raise api_error(404, 'image_not_found', f"crop {crop.crop_id!r}'s image could not be read")
-    from src.main import get_async_triton_pool
+    from src.app.resources import get_async_triton_pool
 
     prompt = (
         body.segmenter_text_prompt

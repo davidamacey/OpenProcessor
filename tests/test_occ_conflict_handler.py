@@ -17,8 +17,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from src.app.factory import create_app
 from src.clients.occ import OCCFinalConflictError
-from src.main import create_app
 
 
 def test_occ_final_conflict_error_maps_to_409() -> None:

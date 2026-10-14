@@ -51,7 +51,9 @@ def test_lifespan_reconciles_at_startup_and_keeps_reconciling(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Startup calls the arbiter once, then a background task re-calls it."""
+    import src.app.lifespan as lifespan_module
     import src.main as main_module
+    from src.app.resources import AppResources
     from src.services.training import gpu_arbiter
 
     calls: list[dict] = []
@@ -61,13 +63,13 @@ def test_lifespan_reconciles_at_startup_and_keeps_reconciling(
         return gpu_arbiter.ArbiterAction(action='noop', detail='stubbed')
 
     monkeypatch.setattr(gpu_arbiter, 'reconcile_on_startup', _fake_reconcile)
-    monkeypatch.setattr(main_module, 'ARBITER_RECONCILE_INTERVAL_SECONDS', _TEST_INTERVAL_S)
+    monkeypatch.setattr(lifespan_module, 'ARBITER_RECONCILE_INTERVAL_SECONDS', _TEST_INTERVAL_S)
 
     with TestClient(main_module.app):
         # Reconciled once during startup, before the app served anything.
         assert len(calls) >= 1
 
-        task = main_module.AppResources.arbiter_task
+        task = AppResources.arbiter_task
         assert task is not None, 'lifespan did not schedule the arbiter reconcile loop'
         assert not task.done(), 'arbiter reconcile loop exited immediately'
 
@@ -78,7 +80,7 @@ def test_lifespan_reconciles_at_startup_and_keeps_reconciling(
     # Shutdown cancels the task and clears the slot, so a second app
     # lifecycle in the same process starts clean.
     assert task.done()
-    assert main_module.AppResources.arbiter_task is None
+    assert AppResources.arbiter_task is None
 
 
 def test_periodic_tick_clears_a_stale_pause_sentinel(
@@ -91,7 +93,9 @@ def test_periodic_tick_clears_a_stale_pause_sentinel(
     *after* the app has started, so only a genuinely periodic reconcile
     can clear it.
     """
+    import src.app.lifespan as lifespan_module
     import src.main as main_module
+    from src.app.resources import AppResources
     from src.services.training import gpu_arbiter
 
     jobs_dir = tmp_path / 'jobs'
@@ -103,10 +107,10 @@ def test_periodic_tick_clears_a_stale_pause_sentinel(
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(jobs_dir))
     monkeypatch.setattr(gpu_arbiter, '_default_sentinel_path', lambda: sentinel)
     monkeypatch.setattr(gpu_arbiter, '_default_lock_path', lambda: lock)
-    monkeypatch.setattr(main_module, 'ARBITER_RECONCILE_INTERVAL_SECONDS', _TEST_INTERVAL_S)
+    monkeypatch.setattr(lifespan_module, 'ARBITER_RECONCILE_INTERVAL_SECONDS', _TEST_INTERVAL_S)
 
     with TestClient(main_module.app):
-        assert main_module.AppResources.arbiter_task is not None
+        assert AppResources.arbiter_task is not None
 
         # Orphaned claim appears after startup: no job.json, no lock, but
         # the worker is still paused.
@@ -122,6 +126,7 @@ def test_periodic_tick_clears_a_stale_pause_sentinel(
 def test_lifespan_survives_a_failing_arbiter(monkeypatch: pytest.MonkeyPatch) -> None:
     """An arbiter that blows up must not take the whole service down."""
     import src.main as main_module
+    from src.app.resources import AppResources
     from src.services.training import gpu_arbiter
 
     async def _boom(**_kwargs):
@@ -132,4 +137,4 @@ def test_lifespan_survives_a_failing_arbiter(monkeypatch: pytest.MonkeyPatch) ->
     with TestClient(main_module.app) as client:
         assert client.get('/live').status_code == 200
 
-    assert main_module.AppResources.arbiter_task is None
+    assert AppResources.arbiter_task is None

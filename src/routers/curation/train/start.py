@@ -143,7 +143,7 @@ async def start_campaign(
         )
 
     # GPU arbiter — claim once for the entire campaign. The reconcile loop
-    # in src/main.py releases when no run is left in a non-terminal state.
+    # in src/app/lifespan.py releases when no run is left in a non-terminal state.
     # Fails closed -- see the matching comment in start_train above.
     from src.services.training.gpu_arbiter import claim_gpus_for_training
 

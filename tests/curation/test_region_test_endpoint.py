@@ -292,7 +292,7 @@ class _DetectorPool:
 @pytest.fixture
 def detector(stack: Any, car: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> Any:
     """``wheel_det`` is READY in Triton and in the profile."""
-    import src.main as main_module
+    import src.app.resources as resources_module
     from src.services.triton_control import TritonControlService
 
     async def repo_index(_self: Any) -> list[dict[str, Any]]:
@@ -300,7 +300,7 @@ def detector(stack: Any, car: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -
 
     monkeypatch.setattr(TritonControlService, 'get_repository_index', repo_index)
     pool = _DetectorPool([[160, 320, 128, 128, 0.9], [480, 320, 128, 128, 0.8]])
-    monkeypatch.setattr(main_module, 'get_async_triton_pool', lambda: pool)
+    monkeypatch.setattr(resources_module, 'get_async_triton_pool', lambda: pool)
     return pool
 
 
@@ -343,13 +343,13 @@ def test_a_detector_miss_falls_through_to_the_segmenter(stack, detector) -> None
 
 @pytest.fixture
 def unreachable_triton(detector: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    import src.main as main_module
+    import src.app.resources as resources_module
 
     def no_pool() -> Any:
         msg = 'triton pool unavailable'
         raise RuntimeError(msg)
 
-    monkeypatch.setattr(main_module, 'get_async_triton_pool', no_pool)
+    monkeypatch.setattr(resources_module, 'get_async_triton_pool', no_pool)
 
 
 def test_a_detector_failure_is_reported_on_its_leg_and_the_segmenter_still_runs(

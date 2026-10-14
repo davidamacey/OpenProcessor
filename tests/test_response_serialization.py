@@ -29,9 +29,10 @@ from fastapi.responses import Response
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, TypeAdapter
 
+from src.app.factory import create_app
 from src.clients.occ import OCCFinalConflictError
 from src.core.wire_json import WireJSONResponse, WireRoute
-from src.main import app as main_app, create_app
+from src.main import app as main_app
 from src.schemas.detection import InferenceResult
 from src.schemas.embed import BoxEmbeddingsResponse
 from src.schemas.ingest import IngestResponse

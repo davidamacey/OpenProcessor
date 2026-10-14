@@ -77,7 +77,7 @@ def _known_slugs(policy: IngestPolicyBody) -> set[str]:
 async def _require_servable(override: DetectorOverride) -> None:
     """``422`` unless the project's own detector is loaded on Triton and serves
     the end2end outputs ingest reads (``503`` when Triton cannot be asked)."""
-    from src.main import get_async_triton_pool
+    from src.app.resources import get_async_triton_pool
 
     try:
         pool = get_async_triton_pool()

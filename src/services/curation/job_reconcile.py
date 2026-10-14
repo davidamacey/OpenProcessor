@@ -12,7 +12,7 @@ rewrites it.
 Each of those modules' own ``get_state()`` already repairs a stale
 heartbeat *lazily*, the next time anything polls status, by rewriting
 ``status='failed'``. This helper performs the same detection
-*proactively*, once, at process startup (see ``src.main``'s lifespan),
+*proactively*, once, at process startup (see ``src.app.lifespan``),
 so an orphaned run is visible immediately rather than only on next poll.
 It deliberately writes a distinct terminal status, ``'interrupted'``,
 so a caller can tell "this run was cut off by a restart" apart from

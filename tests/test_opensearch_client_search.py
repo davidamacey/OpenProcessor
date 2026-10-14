@@ -16,7 +16,7 @@ Two things are tested here without a real OpenSearch:
    error class and ``UpstreamError`` for any other search failure.
 2. ``OpenSearchClient.create_all_indexes()`` is idempotent (a no-op
    against an index that already exists), so calling it on every startup
-   -- the actual fix in ``src/main.py`` -- is safe.
+   -- the actual fix in ``src/app/factory.py`` -- is safe.
 """
 
 from __future__ import annotations

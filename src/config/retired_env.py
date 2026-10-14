@@ -4,7 +4,7 @@ Every rename below is a **clean break** -- no aliases are read. A leftover
 retired name is not silently ignored (that would look like a working config
 that quietly does nothing, e.g. a stale ``SAM3_URL`` turning the segmenter
 off with no error): :func:`reject_retired_env`, called at every process entry
-point (``src/main.py``'s lifespan, ``scripts/curation/worker/__main__.py``,
+point (``src/app/lifespan.py``'s lifespan, ``scripts/curation/worker/__main__.py``,
 ``scripts/curation/vlm_worker.py``'s ``main()``, the bake-off evaluator's
 ``scripts/curation/bakeoff/bakeoff_runner.py`` ``main()``), raises
 ``RuntimeError`` naming the replacement for every retired name still set.

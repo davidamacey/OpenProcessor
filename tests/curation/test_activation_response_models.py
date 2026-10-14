@@ -8,7 +8,7 @@ from typing import Any
 
 from _route_helpers import api_routes
 
-from src.main import create_app
+from src.app.factory import create_app
 
 
 def test_activate_and_impact_routes_declare_a_response_model() -> None:
