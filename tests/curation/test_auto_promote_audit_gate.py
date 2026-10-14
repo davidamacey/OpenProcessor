@@ -191,8 +191,8 @@ async def test_the_auto_label_pipeline_stage_goes_through_the_gate(
 ) -> None:
     import inspect
 
-    from src.routers.curation import pipeline
+    from src.services.curation import auto_label_run
 
-    source = inspect.getsource(pipeline._run_auto_label)
+    source = inspect.getsource(auto_label_run)
     assert 'gated_auto_promote(' in source
     assert 'auto_promote_clusters(' not in source

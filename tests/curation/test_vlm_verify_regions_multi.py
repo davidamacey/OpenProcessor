@@ -84,7 +84,7 @@ def _setup(monkeypatch: pytest.MonkeyPatch, labeler: Any, seen_boxes: list[Any])
         return b'jpeg-bytes'
 
     monkeypatch.setattr(vlm_mod, '_default_pack_name', _no_pack)
-    monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: labeler)
+    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: labeler)
     monkeypatch.setattr(image_serving, 'resolve_crop_root', lambda _path: SimpleNamespace())
     monkeypatch.setattr(image_serving, 'resolve_safe_path', lambda path, _root: path)
     monkeypatch.setattr(image_serving.THUMBNAIL_CACHE, 'get_or_compute', _thumb)

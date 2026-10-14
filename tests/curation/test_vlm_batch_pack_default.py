@@ -58,7 +58,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient,
         requested.append(pack_name)
         return _Labeler()
 
-    monkeypatch.setattr(vlm, '_get_vlm_labeler', _fake_get)
+    monkeypatch.setattr(vlm, 'get_vlm_labeler', _fake_get)
     app = FastAPI()
     from _curation_app import mount_curation_routers
 

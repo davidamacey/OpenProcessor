@@ -16,8 +16,11 @@ from __future__ import annotations
 import src.routers.curation._project_pause
 import src.routers.curation.audit
 import src.routers.curation.bakeoff
+
+
+import src.routers.curation.classes  # isort: skip
+import src.routers.curation.ingest  # isort: skip
 import src.routers.curation.class_seed
-import src.routers.curation.classes
 import src.routers.curation.clusters
 import src.routers.curation.cohorts
 import src.routers.curation.config_test
@@ -30,8 +33,10 @@ import src.routers.curation.edit_undo
 import src.routers.curation.events
 import src.routers.curation.export
 import src.routers.curation.export_single_class
+
+
+import src.routers.curation.vlm  # isort: skip
 import src.routers.curation.health
-import src.routers.curation.ingest
 import src.routers.curation.ingest_bulk
 import src.routers.curation.ingest_objects
 import src.routers.curation.ingest_policy
@@ -43,10 +48,12 @@ import src.routers.curation.methods
 import src.routers.curation.models
 import src.routers.curation.open_vocab
 import src.routers.curation.open_vocab_test
-import src.routers.curation.pipeline
+
+
+import src.routers.curation.pipeline_start  # isort: skip
+import src.routers.curation.pipeline_public  # isort: skip
 import src.routers.curation.pipeline_control
 import src.routers.curation.pipeline_events
-import src.routers.curation.pipeline_health
 import src.routers.curation.probe
 import src.routers.curation.prompt_packs
 import src.routers.curation.region_profiles
@@ -65,12 +72,10 @@ import src.routers.curation.select
 import src.routers.curation.settings
 import src.routers.curation.stats
 import src.routers.curation.viz
-import src.routers.curation.vlm
 import src.routers.curation.vlm_activation
 import src.routers.curation.vlm_policy  # noqa: F401 - side-effect import
 from src.clients.curation_opensearch.registry import get_class_registry
 from src.routers.curation._common import _raw_opensearch_dep, router
-from src.routers.curation.vlm import _get_vlm_labeler
 from src.routers.curation_images import crops_router as images_crops_router, router as images_router
 
 
@@ -78,13 +83,11 @@ from src.routers.curation_images import crops_router as images_crops_router, rou
 # `curation_images` (two routers: `router`, `crops_router`), the
 # UMAP-rebuild operator router (`src/routers/curation_umap.py`), and the
 # training router (`src/routers/curation_train/`) all live outside this
-# package and are registered directly in src/main.py. `vlm` re-exports
-# `_get_vlm_labeler` because tests patch it by string. `regions_fp`
+# package and are registered directly in src/main.py. `regions_fp`
 # imports helpers from `regions` directly (not through this package's
 # `__init__`), so there is no import-order requirement between those two
 # side-effect imports. `classes` imports `list_crops` from `crops`
-# directly (not through this package's `__init__`); `models` imports
-# `_get_vlm_labeler` from `vlm` directly; `pipeline_events` lazily
+# directly (not through this package's `__init__`); `pipeline_events` lazily
 # imports `stats.stats_dataset` and `autolabel.job` inside its generator
 # function body (not at module load time) to avoid a load-order
 # dependency. `settings` registers `GET,PUT /curation/settings` on this
@@ -92,7 +95,6 @@ from src.routers.curation_images import crops_router as images_crops_router, rou
 
 
 __all__ = [
-    '_get_vlm_labeler',
     '_raw_opensearch_dep',
     'get_class_registry',
     'images_crops_router',

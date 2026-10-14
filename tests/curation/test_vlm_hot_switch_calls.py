@@ -178,8 +178,8 @@ async def test_a_started_job_keeps_the_endpoint_it_was_accepted_against(stack, m
     """``/pipeline/auto_label/start`` pins ``(name, revision)`` into the job;
     later activations and edits change nothing for it, and the job resolves
     that immutable revision by id (in whatever process runs it)."""
-    from src.routers.curation.pipeline_vlm import job_endpoint
     from src.services.curation.autolabel import job as auto_label_job
+    from src.services.curation.autolabel.run_vlm import job_endpoint
 
     api = stack.api
     captured: dict[str, Any] = {}

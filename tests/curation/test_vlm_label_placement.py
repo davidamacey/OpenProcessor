@@ -92,7 +92,7 @@ async def test_label_batch_moves_labelled_items_into_their_class_cluster(
                 for c in crops
             ]
 
-    monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: _Labeler())
+    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: _Labeler())
     await vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=list(answers)), fake)
 
     docs = fake.docs(ITEMS)
@@ -140,7 +140,7 @@ async def test_label_batch_with_no_classes_is_a_409_not_a_500(
         async def label_or_propose_batch(self, *_a: Any, **_k: Any) -> Any:
             raise AssertionError('the VLM must not be called with no classes')
 
-    monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: _NeverCalled())
+    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: _NeverCalled())
     fake = QueryFakeOpenSearch({ITEMS: {'a': _item('a')}})
 
     with pytest.raises(HTTPException) as exc_info:

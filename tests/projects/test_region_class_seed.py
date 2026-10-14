@@ -121,7 +121,7 @@ def test_label_batch_with_only_the_region_class_is_no_classes(
         async def label_or_propose_batch(self, *_a: object, **_k: object) -> None:
             raise AssertionError('the VLM must not be called with only the region class')
 
-    monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: _NeverCalled())
+    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: _NeverCalled())
     monkeypatch.setenv('OP_VLM_URL', 'http://vlm.invalid:8000/v1')
 
     with pytest.raises(HTTPException) as exc_info:

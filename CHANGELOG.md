@@ -296,6 +296,19 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   inside the container). Screenshots are refreshed and added for the new pages, and
   `make docs-screenshots` regenerates them.
 
+- Layering cleanup, the fourth step of the repo cleanup (`docs/design/repo_cleanup_plan.md`): services
+  and clients no longer import routers, services no longer import FastAPI, and clients no longer
+  import services. The import-direction guard has no baseline now; the one permanent exception, the
+  guarded OpenSearch client factory, is listed with its reason in `scripts/codegen/check_layering.py`.
+  Wire models moved to `src/schemas` (`curation/`, `bakeoff/`, `embed`, `ingest`, `train_promote`),
+  pure rules and field vocabularies to the new `src/domain`, and the auto-label run, the training
+  preflight and the promote gates to services (`src/services/curation/auto_label_run.py`,
+  `src/services/training/preflight_run.py`, `src/services/training/promote_run.py`), each split
+  below complexity 15. A service that refuses a request raises `RequestRejectedError`, answered with
+  the status and body the old `HTTPException` carried. No route, status code or response body
+  changed. An auto-label job queued before the upgrade names the old function path and fails to
+  resolve it: requeue it.
+
 ### Removed
 
 - Dead code, found by the new vulture guard (`scripts/codegen/check_vulture.py`) and the plan's

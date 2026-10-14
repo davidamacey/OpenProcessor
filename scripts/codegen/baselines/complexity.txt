@@ -21,13 +21,9 @@ src/main.py::lifespan	19	ratchet: may only go down
 src/routers/analyze.py::analyze_batch	22	ratchet: may only go down
 src/routers/analyze.py::analyze_image	26	top 15: decompose in PR 6
 src/routers/curation/models.py::models_status	17	ratchet: may only go down
-src/routers/curation/pipeline.py::_run_auto_label	54	top 15: decompose in PR 6
-src/routers/curation/pipeline.py::_run_chunk	19	ratchet: may only go down
 src/routers/curation/regions.py::list_regions	20	ratchet: may only go down
 src/routers/curation/review_resolve.py::resolve_new_class_proposal	16	ratchet: may only go down
 src/routers/curation/vlm.py::vlm_label_batch	23	ratchet: may only go down
-src/routers/curation_train/preflight.py::run_preflight	33	top 15: decompose in PR 6
-src/routers/curation_train/promote.py::promote_run	30	top 15: decompose in PR 6
 src/routers/ingest/batch.py::ingest_batch	21	ratchet: may only go down
 src/routers/ingest/directory.py::ingest_directory	18	ratchet: may only go down
 src/services/curation/bulk_ingest/walk.py::iter_image_paths	16	ratchet: may only go down

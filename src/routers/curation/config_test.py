@@ -34,7 +34,6 @@ from src.routers.curation._config_test_models import (
     RegionTestResponse,
     RegionTestVerify,
 )
-from src.routers.curation.pipeline_vlm import labeler_unavailable, resolve_test_vlm
 from src.services.config_store import (
     get_config_store,
     packs as pack_store,
@@ -42,6 +41,7 @@ from src.services.config_store import (
 )
 from src.services.config_store.pack_validation import validate_pack
 from src.services.config_store.profile_validation import validate_profile
+from src.services.curation.autolabel.run_vlm import labeler_unavailable, resolve_test_vlm
 from src.services.curation.config_test_limits import (
     MAX_TEST_CROP_IDS,
     ConfigTestBusyError,

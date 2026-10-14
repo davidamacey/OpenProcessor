@@ -5,7 +5,7 @@ importing ``GENERIC_ITEM_PACK`` as a hardcoded module constant.
 
 ``src/routers/curation/models.py`` -- another call site -- is
 intentionally NOT re-tested here: it never imported
-``GENERIC_ITEM_PACK`` directly, it only calls ``_get_vlm_labeler()``, so it
+``GENERIC_ITEM_PACK`` directly, it only calls ``get_vlm_labeler()``, so it
 already inherits whatever pack that singleton resolves. Fixing ``vlm.py``'s
 singleton construction (below) fixes ``models.py`` for free.
 """
@@ -31,7 +31,7 @@ pytestmark = pytest.mark.usefixtures('vlm_env')
 def test_get_vlm_labeler_uses_generic_pack_by_default() -> None:
     from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
-    labeler = vlm_mod._get_vlm_labeler()
+    labeler = vlm_mod.get_vlm_labeler()
     assert labeler._pack is GENERIC_ITEM_PACK
 
 
@@ -52,23 +52,22 @@ def test_get_vlm_labeler_resolves_a_configured_pack(tmp_path: Path) -> None:
     with patch(
         'src.services.labeling.vlm_prompt_resolution.resolve_prompt_pack', return_value=custom
     ) as mock_resolve:
-        labeler = vlm_mod._get_vlm_labeler()
+        labeler = vlm_mod.get_vlm_labeler()
     mock_resolve.assert_called_once()
     assert labeler._pack.name == 'pallet_v1'
 
 
 def test_pipeline_class_catalog_uses_resolved_pack(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``pipeline.py`` used to import ``GENERIC_ITEM_PACK`` directly at its
+    """The auto-label run used to import ``GENERIC_ITEM_PACK`` directly at its
     ``format_class_catalog`` call site -- pin that it now goes through
-    ``resolve_prompt_pack`` instead (source-level check: the hardcoded
-    import must be gone)."""
+    ``resolve_pack`` instead (source-level check: the hardcoded import must be gone)."""
     from pathlib import Path as _Path
 
-    from src.routers.curation import pipeline
+    from src.services.curation import auto_label_run
 
-    src = _Path(pipeline.__file__).read_text()
+    src = _Path(auto_label_run.__file__).read_text()
     assert 'from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK' not in src
-    assert 'resolve_prompt_pack' in src
+    assert 'resolve_pack(' in src
 
 
 def test_get_vlm_labeler_selects_and_caches_per_pack_name(
@@ -88,10 +87,10 @@ def test_get_vlm_labeler_selects_and_caches_per_pack_name(
     cfg = CurationConfig(prompt_pack_path=default_path, prompt_pack_paths=(extra_path,))
     monkeypatch.setattr('src.config.curation.get_curation_config', lambda: cfg)
 
-    assert vlm_mod._get_vlm_labeler()._pack.name == 'pallet_v1'
-    food = vlm_mod._get_vlm_labeler('food_v2')
+    assert vlm_mod.get_vlm_labeler()._pack.name == 'pallet_v1'
+    food = vlm_mod.get_vlm_labeler('food_v2')
     assert food._pack.name == 'food_v2'
-    assert vlm_mod._get_vlm_labeler('food_v2') is food
-    assert vlm_mod._get_vlm_labeler(GENERIC_ITEM_PACK.name)._pack is GENERIC_ITEM_PACK
+    assert vlm_mod.get_vlm_labeler('food_v2') is food
+    assert vlm_mod.get_vlm_labeler(GENERIC_ITEM_PACK.name)._pack is GENERIC_ITEM_PACK
     with pytest.raises(ValueError, match='unknown prompt pack'):
-        vlm_mod._get_vlm_labeler('nope')
+        vlm_mod.get_vlm_labeler('nope')

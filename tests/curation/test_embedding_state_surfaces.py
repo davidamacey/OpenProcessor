@@ -174,7 +174,7 @@ def test_combine_marks_a_dropped_vector_deferred() -> None:
 
 @pytest.mark.asyncio
 async def test_pipeline_snapshot_counts_items_waiting_for_a_vector() -> None:
-    from src.routers.curation.pipeline_health import pipeline_health_snapshot
+    from src.services.curation.autolabel.health_snapshot import pipeline_health_snapshot
 
     os_fake = AsyncMock()
     os_fake.search = AsyncMock(
