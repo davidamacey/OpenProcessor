@@ -14,8 +14,9 @@ fit, write-back) is ``cluster_plumbing_bench.py``; this tool is the size ladder:
 ``--data`` is the ``arrays.npz`` of a parity capture (``--source parity``, 12.8k crop
 vectors of the pinned COCO set) or an ``export_embeddings`` dump converted to
 ``vectors``/``class_name`` arrays (``--source vecdb``, 100k and more). The result is one
-JSON file in ``--out``. The project is created per size, named ``<--project-prefix>-<size>-<id>``,
-and its items index is deleted at the end unless ``--keep``. Methods are only called.
+JSON file in ``--out``. One project per size, named
+``<--project-prefix>-<size>-<id>`` (its directories go under ``--state-dir``), is created and
+deleted through the product's lifecycle at the end unless ``--keep``. Methods are only called.
 """
 
 from __future__ import annotations
@@ -50,7 +51,6 @@ from scripts.bench.cluster_plumbing_bench import (
     load_vectors,
     reset_clusters,
 )
-from src.config.curation import items_index
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import abind_script_project
 
@@ -115,6 +115,21 @@ def git_commit() -> str:
         return 'unknown'
 
 
+async def delete_throwaway(slug: str) -> None:
+    """Delete the project through the product's own lifecycle: its indexes, directories and
+    registry record. Needs the same OP_STATE_DIR the project was created under."""
+    from src.services.projects import lifecycle
+    from src.services.projects.delete import delete_project_finish
+    from src.services.projects.guard import bind_registry_admin, make_curation_opensearch
+    from src.services.projects.registry import get_project_registry
+
+    client = await make_curation_opensearch()
+    await get_project_registry().refresh_strict()
+    with bind_registry_admin():
+        await lifecycle.delete_project(client, slug=slug, confirm=slug)
+        await delete_project_finish(client, slug=slug)
+
+
 async def bench_size(args: argparse.Namespace, size: int, pool: np.ndarray) -> list[dict[str, Any]]:
     from src.services.curation.clustering.backend import detect_cluster_backend
     from src.services.curation.clustering.orchestrator import cluster_residuals
@@ -154,9 +169,9 @@ async def bench_size(args: argparse.Namespace, size: int, pool: np.ndarray) -> l
                 )
                 print(json.dumps(rows[-1]), flush=True)
     finally:
-        if bound and not args.keep:
-            await client.indices.delete(index=items_index(), ignore=[404])
         await client.close()
+        if bound and not args.keep:
+            await delete_throwaway(slug)
     return rows
 
 
@@ -181,7 +196,7 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help='project directories of the throw-away projects (default: <out>/state)',
     )
-    ap.add_argument('--keep', action='store_true', help='keep the loaded items index')
+    ap.add_argument('--keep', action='store_true', help='keep the throw-away projects')
     args = ap.parse_args(argv)
 
     # Project creation goes through the process client, which reads these two settings.

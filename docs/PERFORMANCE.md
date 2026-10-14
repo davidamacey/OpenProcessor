@@ -2936,7 +2936,7 @@ with the default (not faster, and it adds 1-2 s to the closing refresh).
 
 `scripts/bench/cluster_bench.py` times the production `cluster_residuals` at each size of a ladder
 (`--sizes`), per method (`--methods`, default `ivf`), `--reps` times, in a throw-away project
-(real mapping, items index deleted at the end) loaded with the first N rows of a dump of real
+(real mapping, deleted through the project lifecycle at the end) loaded with the first N rows of a dump of real
 public COCO embeddings. It records method, size, wall seconds, residual and cluster counts and the
 host load, and refuses a pass that did not cluster the whole pool (status not `success`, or fewer
 residuals than rows loaded): a cluster-refresh daemon on the same node assigns the items of a new
