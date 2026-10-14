@@ -50,17 +50,22 @@ import asyncio
 import json
 import random
 from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any
 
 from src.clients.curation_opensearch.registry import ClassRegistry, get_class_registry
 from src.config import CurationConfig, get_curation_config
-from src.config.project_context import run_in_executor_bound
 from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
+from src.services.curation.export_models import (
+    DATA_YAML_FILENAME,
+    MANIFEST_FILENAME,
+    STRATUM_MAP_FILENAME,
+    SingleClassExportProfile,
+    SingleClassExportResult,
+    SplitCounts,
+)
 from src.services.curation.export_readiness import (
     MANIFEST_GENERATION_KEY,
     NothingToExportError,
@@ -68,14 +73,12 @@ from src.services.curation.export_readiness import (
 )
 from src.services.curation.export_single_class_rows import ImageMode, RowCollector, _FrameRow
 from src.services.curation.export_split import (
-    SplitMode,
     SplitStats,
     pins_from_rows,
     stratified_split_with_stats,
 )
 from src.services.curation.export_support import (
     _code_sha,
-    _copy_or_resize_one,
     _resolve_source_path,
     allocate_export_dir,
     atomic_symlink_flip,
@@ -85,106 +88,17 @@ from src.services.curation.export_support import (
     label_content_sha,
     source_frozen_test_sha,
 )
+from src.services.curation.export_writers import (
+    copy_single_class_images,
+    render_data_yaml,
+    render_label,
+    write_class_registry,
+    write_label_stats_from_disk,
+)
 from src.services.detection.frame_dedup import dedup_rows_by_embedding
 
 
-if TYPE_CHECKING:
-    from collections.abc import Iterable
-
-
 logger = get_logger(__name__)
-
-BoxSource = Literal['item', 'region']
-
-# Artifacts written next to the dataset. Same filenames as the
-# multi-class exporter, so `GET /curation/export/registry/{artifact}`'s
-# whitelist and any consumer reading an export directory work unchanged.
-MANIFEST_FILENAME = 'manifest.json'
-DATA_YAML_FILENAME = 'data.yaml'
-CLASS_REGISTRY_FILENAME = 'class_registry.json'
-LABEL_STATS_FILENAME = 'label_stats.json'
-STRATUM_MAP_FILENAME = 'stratum_map.json'
-
-
-@dataclass(frozen=True)
-class SingleClassExportProfile:
-    """Deployment-supplied configuration for one narrowed export.
-
-    This is the whole reason the exporter is generic: a deployment names
-    its own target classes, its own region vocabulary and its own output
-    location here, instead of the exporter hardcoding any of them.
-    """
-
-    # Directory name under the export root, and the default dataset
-    # identity recorded in the manifest. Keeps a narrowed export's
-    # artifacts (and its own `current` symlink) out of the multi-class
-    # export root, so the two can never clobber each other.
-    name: str = 'single_class'
-
-    # Ordered registry class ids forming this export's vocabulary. One id
-    # is the single-class case; several is a class-subset export. The
-    # dense label id written into the .txt files is the INDEX INTO THIS
-    # TUPLE, so the ordering here is the dataset's class order and is
-    # frozen into class_registry.json's export_id_map.
-    #
-    # Required for box_source='item'. For box_source='region' it is
-    # instead an optional filter on which parent items' regions are
-    # collected (empty = every item's region).
-    class_ids: tuple[int, ...] = ()
-
-    # Where each label box comes from: the item's own `bbox_norm`, or the
-    # item's region-of-interest sub-annotation (`RegionFields.bbox_norm`).
-    box_source: BoxSource = 'item'
-
-    # Class name for the region vocabulary in region mode, where the
-    # single exported class is the region itself rather than a registry
-    # entry. Purely a label in data.yaml.
-    region_class_name: str = 'region'
-
-    train_ratio: float = 0.8
-    val_ratio: float = 0.1
-    # test_ratio is whatever remains: 1 - train_ratio - val_ratio.
-
-    # Absolute output root override. None = `CurationConfig.export_root / name`.
-    output_root: Path | None = None
-    current_link_name: str = 'current'
-
-    # Recorded in the manifest so a consumer can tell a narrowed export
-    # from a full multi-class one without inspecting data.yaml. Read by
-    # `src/services/training/preflight_checks.py`'s single-class preflight branch.
-    dataset_kind: str = 'single_class'
-
-    # 'keep_imported' honours the split a dataset import filed each frame
-    # under (``dataset_split``); 'recompute' ignores it.
-    split_mode: SplitMode = 'keep_imported'
-
-
-@dataclass
-class SingleClassSplitCounts:
-    train: int = 0
-    val: int = 0
-    test: int = 0
-
-    def to_dict(self) -> dict[str, int]:
-        return {'train': self.train, 'val': self.val, 'test': self.test}
-
-
-@dataclass
-class SingleClassExportResult:
-    export_dir: str
-    version_tag: str
-    manifest_path: str
-    data_yaml_path: str
-    dataset_sha: str
-    frozen_test_sha: str
-    split_counts: SingleClassSplitCounts
-    image_count: int
-    class_count: int
-    positive_images: int
-    background_images: int
-    started_at: str
-    finished_at: str
-    current_symlink: str
 
 
 class SingleClassExportService:
@@ -313,8 +227,11 @@ class SingleClassExportService:
         counts, stratum_distribution, image_jobs = self._write_labels(
             rows, splits, resolved_dir, copy_images=copy_images
         )
-        image_copy_stats = await self._copy_images(
-            image_jobs, img_max_side=img_max_side, copy_images=copy_images
+        image_copy_stats = await copy_single_class_images(
+            image_jobs,
+            max_workers=self.max_image_workers,
+            img_max_side=img_max_side,
+            copy_images=copy_images,
         )
 
         atomic_write_text(
@@ -322,9 +239,9 @@ class SingleClassExportService:
             json.dumps({r.item_id: r.stratum for r in rows}, indent=2, sort_keys=True),
         )
         data_yaml_path = resolved_dir / DATA_YAML_FILENAME
-        data_yaml_path.write_text(_render_data_yaml(resolved_dir, names))
-        self._write_class_registry(resolved_dir, names)
-        self._write_label_stats(resolved_dir, names)
+        data_yaml_path.write_text(render_data_yaml(resolved_dir, names))
+        write_class_registry(resolved_dir, names, profile=self.profile, registry=self.registry)
+        write_label_stats_from_disk(resolved_dir, names)
 
         dataset_sha = await asyncio.to_thread(label_content_sha, resolved_dir, names)
         frozen_test_sha = await asyncio.to_thread(frozen_test_sha_of, resolved_dir)
@@ -513,8 +430,8 @@ class SingleClassExportService:
         export_dir: Path,
         *,
         copy_images: bool,
-    ) -> tuple[SingleClassSplitCounts, dict[str, dict[str, int]], list[tuple[str, str, Any]]]:
-        counts = SingleClassSplitCounts()
+    ) -> tuple[SplitCounts, dict[str, dict[str, int]], list[tuple[str, str, Any]]]:
+        counts = SplitCounts()
         distribution: dict[str, dict[str, int]] = defaultdict(
             lambda: {'train': 0, 'val': 0, 'test': 0}
         )
@@ -522,7 +439,7 @@ class SingleClassExportService:
         for row in rows:
             split = splits[row.item_id]
             label_path = export_dir / 'labels' / split / f'{row.item_id}.txt'
-            label_path.write_text(_render_label(row.boxes), encoding='utf-8')
+            label_path.write_text(render_label(row.boxes), encoding='utf-8')
             setattr(counts, split, getattr(counts, split) + 1)
             distribution[row.stratum][split] += 1
             if not copy_images:
@@ -538,118 +455,6 @@ class SingleClassExportService:
             dest = export_dir / 'images' / split / f'{row.item_id}.jpg'
             image_jobs.append((str(src_path), str(dest), row.crop_norm))
         return counts, dict(distribution), image_jobs
-
-    async def _copy_images(
-        self,
-        jobs: list[tuple[str, str, Any]],
-        *,
-        img_max_side: int,
-        copy_images: bool,
-    ) -> dict[str, Any]:
-        if not copy_images or not jobs:
-            return {'attempted': 0, 'copied': 0, 'failed': 0, 'errors': []}
-        loop = asyncio.get_running_loop()
-        copied = failed = 0
-        errors: list[str] = []
-        with ProcessPoolExecutor(max_workers=self.max_image_workers) as pool:
-            futures = [
-                # 'aspect' resizes the longest side down without padding, so
-                # the normalized labels stay valid -- a letterbox offset here
-                # would silently shift every box in the dataset.
-                run_in_executor_bound(
-                    loop, pool, _copy_or_resize_one, src, dest, 'aspect', img_max_side, crop
-                )
-                for src, dest, crop in jobs
-            ]
-            for fut in asyncio.as_completed(futures):
-                _dest, ok, err = await fut
-                if ok:
-                    copied += 1
-                else:
-                    failed += 1
-                    if err:
-                        errors.append(err)
-        return {'attempted': len(jobs), 'copied': copied, 'failed': failed, 'errors': errors[:20]}
-
-    def _write_class_registry(self, export_dir: Path, names: list[str]) -> None:
-        """Freeze the vocabulary + dense-id map next to the dataset.
-
-        A promote step needs to know which REGISTRY class each dense label
-        id means; reading the live registry instead would silently describe
-        a different dataset once the registry moves on.
-        """
-        export_id_map = {str(cid): i for i, cid in enumerate(self.profile.class_ids)}
-        payload = {
-            'version': 1,
-            'exported_at': datetime.now(UTC).isoformat(),
-            'dataset_kind': self.profile.dataset_kind,
-            'box_source': self.profile.box_source,
-            'classes': self._class_entries(names),
-            'export_id_map': export_id_map,
-            'names': names,
-        }
-        atomic_write_text(
-            export_dir / CLASS_REGISTRY_FILENAME, json.dumps(payload, indent=2, sort_keys=True)
-        )
-
-    def _class_entries(self, names: list[str]) -> list[dict[str, Any]]:
-        """``class_registry.json``'s ``classes``: the dataset's classes, or --
-        in region mode, where the one dataset class is the region itself -- the
-        parent-class filter, named by the live registry (never by the region
-        class name, which a positional zip with ``names`` would give them)."""
-        if self.profile.box_source != 'region':
-            return [
-                {'class_id': cid, 'class_name': name}
-                for cid, name in zip(self.profile.class_ids, names, strict=False)
-            ]
-        by_id = {c.class_id: c.class_name for c in self.registry.load().classes}
-        return [
-            {'class_id': cid, 'class_name': by_id.get(cid, str(cid))}
-            for cid in self.profile.class_ids
-        ]
-
-    @staticmethod
-    def _write_label_stats(export_dir: Path, names: list[str]) -> None:
-        stats: dict[str, int] = dict.fromkeys(names, 0)
-        for split in ('train', 'val', 'test'):
-            for label_file in sorted((export_dir / 'labels' / split).glob('*.txt')):
-                for line in label_file.read_text(encoding='utf-8').splitlines():
-                    if not line.strip():
-                        continue
-                    dense = int(line.split()[0])
-                    if 0 <= dense < len(names):
-                        stats[names[dense]] += 1
-        atomic_write_text(
-            export_dir / LABEL_STATS_FILENAME, json.dumps(stats, indent=2, sort_keys=True)
-        )
-
-
-# =============================================================================
-# Integrity + rendering helpers
-# =============================================================================
-
-
-def _render_label(boxes: Iterable[tuple[int, float, float, float, float]]) -> str:
-    """YOLO label text. An empty string (empty file) means a background frame."""
-    lines = [f'{cid} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}' for cid, cx, cy, w, h in boxes]
-    return '\n'.join(lines) + '\n' if lines else ''
-
-
-def _render_data_yaml(export_dir: Path, names: list[str]) -> str:
-    """``data.yaml`` for the YOLO trainer, with an absolute ``path``.
-
-    Absolute so ``yolo train data=<dir>/data.yaml`` resolves the splits
-    regardless of the working directory the trainer happens to start in.
-    """
-    name_lines = ''.join(f'  {i}: {name}\n' for i, name in enumerate(names))
-    return (
-        f'path: {export_dir}\n'
-        'train: images/train\n'
-        'val: images/val\n'
-        'test: images/test\n'
-        f'nc: {len(names)}\n'
-        'names:\n' + name_lines
-    )
 
 
 def resolve_current_single_class_dir(
@@ -671,17 +476,3 @@ def resolve_current_single_class_dir(
         msg = f'no current export symlink for profile {profile.name!r}'
         raise FileNotFoundError(msg)
     return current.resolve()
-
-
-__all__ = [
-    'CLASS_REGISTRY_FILENAME',
-    'DATA_YAML_FILENAME',
-    'LABEL_STATS_FILENAME',
-    'MANIFEST_FILENAME',
-    'STRATUM_MAP_FILENAME',
-    'SingleClassExportProfile',
-    'SingleClassExportResult',
-    'SingleClassExportService',
-    'SingleClassSplitCounts',
-    'resolve_current_single_class_dir',
-]

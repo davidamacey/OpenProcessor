@@ -91,7 +91,7 @@ def _settings_body() -> dict[str, Any]:
 
 def _umap_state_body() -> dict[str, Any]:
     """The retired clustering reducer's fitted-manifold cache
-    (``clustering/embedding_reduce.py``). ``reducer_b64`` is a pickled
+    (``clustering/umap_state.py``). ``reducer_b64`` is a pickled
     UMAP reducer, base64-encoded, up to ~60 MB (see
     ``_OPENSEARCH_PERSIST_MAX_BYTES``) -- mapped ``binary`` (stored,
     never analyzed/indexed) rather than left to dynamic mapping, which

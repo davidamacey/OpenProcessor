@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 from curation.export_fakes import generic_service
-from src.services.curation.export import even_stratified_sample
+from src.services.curation.export_support import even_stratified_sample
 
 
 @pytest.mark.asyncio

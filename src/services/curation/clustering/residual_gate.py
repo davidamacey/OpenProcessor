@@ -50,7 +50,7 @@ def gate_must_clauses(
 
 def _residual_pool_filter() -> dict[str, Any]:
     """The base residual-cohort bool (same gate as the fetchers)."""
-    from src.services.curation.clustering import embedding_reduce as _ker
+    from src.services.curation.clustering import residual_fetch as _ker
 
     return {
         'filter': [embedded_clause(_ker.RESIDUAL_EMBEDDING_FIELD)],

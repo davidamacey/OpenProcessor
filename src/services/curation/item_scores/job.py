@@ -18,7 +18,7 @@ and this module builds each *needed* pool exactly ONCE per job — never
 unconditionally, and never once per scorer — then hands each scorer the
 pool it asked for:
 
-* ``'residual'`` — :func:`clustering.embedding_reduce.fetch_residual_embeddings_parallel`,
+* ``'residual'`` — :func:`clustering.residual_fetch.fetch_residual_embeddings_parallel`,
   unchanged from the original single-pool design. The OpenSearch read (with
   embeddings) is the dominant cost here (350k crops x 1024-d f32 = 1.43 GB),
   not the math, so scorers sharing this pool (``uniqueness``, ``near_dup``)
@@ -284,7 +284,7 @@ async def _build_pools(
     """Fetch each needed pool exactly once. ``needed`` is the set of
     ``pool`` values actually declared by the requested scorers — a pool
     nothing asked for is never fetched."""
-    from src.services.curation.clustering.embedding_reduce import fetch_residual_embeddings_parallel
+    from src.services.curation.clustering.residual_fetch import fetch_residual_embeddings_parallel
 
     pools: dict[str, tuple[list[str], np.ndarray]] = {}
     if 'residual' in needed:

@@ -18,16 +18,13 @@ import pytest
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config import CurationConfig, RegionStatus
 from src.config.region_fields import RegionFields, get_region_fields
-from src.services.curation.region_eval import (
-    NO_DETECTOR,
-    CohortImage,
+from src.services.curation.region_eval import evaluate, run_eval
+from src.services.curation.region_eval_data import NO_DETECTOR, CohortImage, region_records
+from src.services.curation.region_eval_geometry import (
     RegionFrameError,
-    evaluate,
     greedy_match,
     iou,
     parse_yolo_labels,
-    region_records,
-    run_eval,
     to_source_frame,
     yolo_to_xyxy,
 )

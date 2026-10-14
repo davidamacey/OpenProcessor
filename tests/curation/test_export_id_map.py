@@ -16,8 +16,8 @@ import pytest
 
 from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import CurationConfig
-from src.services.curation.export import (
-    GenericYoloExportService,
+from src.services.curation.export import GenericYoloExportService
+from src.services.curation.export_support import (
     _build_export_id_map,
     _ExportRow,
     _remap_rows_to_export_ids,

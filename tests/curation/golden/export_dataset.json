@@ -1,0 +1,306 @@
+{
+  "capped_fully_labeled_recompute": {
+    "current_link_target": "<TMP>/dataset",
+    "files": {
+      "class_registry.json": {
+        "classes": [
+          {
+            "class_id": 0,
+            "class_name": "car",
+            "deprecated": false
+          },
+          {
+            "class_id": 1,
+            "class_name": "truck",
+            "deprecated": false
+          }
+        ],
+        "export_id_map": {
+          "0": 0,
+          "1": 1
+        },
+        "exported_at": "<time>",
+        "version": 1
+      },
+      "data.yaml": "path: <TMP>/dataset\ntrain: images/train\nval: images/val\ntest: images/test\nnc: 2\nnames: [\"car\", \"truck\"]\n",
+      "label_stats.json": "{\n  \"car\": 4,\n  \"truck\": 5\n}",
+      "labels/test/img-20.txt": "0 0.310000 0.350000 0.280000 0.500000\n",
+      "labels/test/img-25.txt": "1 0.290000 0.350000 0.320000 0.500000\n",
+      "labels/train/img-11.txt": "1 0.300000 0.350000 0.340000 0.500000\n",
+      "labels/train/img-13.txt": "1 0.340000 0.350000 0.340000 0.500000\n",
+      "labels/train/img-18.txt": "0 0.320000 0.350000 0.380000 0.500000\n",
+      "labels/train/img-8.txt": "0 0.290000 0.350000 0.440000 0.500000\n",
+      "labels/train/img-9.txt": "1 0.310000 0.350000 0.440000 0.500000\n",
+      "labels/val/img-15.txt": "1 0.260000 0.350000 0.380000 0.500000\n",
+      "labels/val/img-22.txt": "0 0.280000 0.350000 0.420000 0.500000\n",
+      "manifest.json": {
+        "class_count": 2,
+        "class_split_counts": [
+          {
+            "class_id": 0,
+            "class_name": "car",
+            "export_id": 0,
+            "test": 1,
+            "train": 2,
+            "val": 1
+          },
+          {
+            "class_id": 1,
+            "class_name": "truck",
+            "export_id": 1,
+            "test": 1,
+            "train": 3,
+            "val": 1
+          }
+        ],
+        "classes_with_objects": 2,
+        "code_sha": "golden-sha",
+        "computed_groups": 9,
+        "dataset_sha": "0350b6e07e5282b79e05323c2155f0495869e62c6dafdebf2fc0d7c0254ee04b",
+        "dedup": {
+          "enabled": false
+        },
+        "dropped_unregistered_class_ids": {
+          "2": 2
+        },
+        "exported_at": "<time>",
+        "finished_at": "<time>",
+        "frozen_holdout_sha": null,
+        "frozen_test_sha": "2be48818cd07c8c7",
+        "group_key": "image_id",
+        "image_copy": {
+          "attempted": 0,
+          "copied": 0,
+          "errors": [],
+          "failed": 0
+        },
+        "image_count": 9,
+        "images_dropped_not_fully_labeled": 1,
+        "images_with_unlabeled_items": 0,
+        "item_filter": null,
+        "items_index": null,
+        "max_images": 9,
+        "negative_frames_skipped_partial": 0,
+        "negative_images": 0,
+        "object_count": 9,
+        "pinned_groups": 0,
+        "pinned_overridden_by_holdout": 0,
+        "pinned_split_conflicts": 0,
+        "require_fully_labeled_images": true,
+        "resize_mode": null,
+        "sampling_mode": "stratified_even",
+        "seed": 5,
+        "skipped_items": {
+          "no_image_id": 1,
+          "no_usable_box_or_class": 1
+        },
+        "split_counts": {
+          "test": 2,
+          "train": 5,
+          "val": 2
+        },
+        "split_mode": "recompute",
+        "split_object_counts": {
+          "test": 2,
+          "train": 5,
+          "val": 2
+        },
+        "started_at": "<time>",
+        "test_label_sha": "117ec7b20bfa4edf",
+        "unlabeled_items_on_exported_images": 0,
+        "version_tag": "golden-2"
+      }
+    },
+    "result": {
+      "class_count": 2,
+      "classes_with_objects": 2,
+      "current_symlink": "<TMP>/exports/current",
+      "data_yaml_path": "<TMP>/dataset/data.yaml",
+      "dataset_sha": "0350b6e07e5282b79e05323c2155f0495869e62c6dafdebf2fc0d7c0254ee04b",
+      "export_dir": "<TMP>/dataset",
+      "finished_at": "<time>",
+      "image_count": 9,
+      "images_dropped_not_fully_labeled": 1,
+      "images_with_unlabeled_items": 0,
+      "manifest_path": "<TMP>/dataset/manifest.json",
+      "object_count": 9,
+      "skipped_items": {
+        "no_image_id": 1,
+        "no_usable_box_or_class": 1
+      },
+      "split_counts": {
+        "test": 2,
+        "train": 5,
+        "val": 2
+      },
+      "split_object_counts": {
+        "test": 2,
+        "train": 5,
+        "val": 2
+      },
+      "started_at": "<time>",
+      "unlabeled_items_on_exported_images": 0,
+      "version_tag": "golden-2"
+    }
+  },
+  "defaults": {
+    "current_link_target": "<TMP>/dataset",
+    "files": {
+      "class_registry.json": {
+        "classes": [
+          {
+            "class_id": 0,
+            "class_name": "car",
+            "deprecated": false
+          },
+          {
+            "class_id": 1,
+            "class_name": "truck",
+            "deprecated": false
+          }
+        ],
+        "export_id_map": {
+          "0": 0,
+          "1": 1
+        },
+        "exported_at": "<time>",
+        "version": 1
+      },
+      "data.yaml": "path: <TMP>/dataset\ntrain: images/train\nval: images/val\ntest: images/test\nnc: 2\nnames: [\"car\", \"truck\"]\n",
+      "label_stats.json": "{\n  \"car\": 11,\n  \"truck\": 12\n}",
+      "labels/test/img-1.txt": "0 0.270000 0.350000 0.400000 0.500000\n",
+      "labels/test/img-7.txt": "1 0.270000 0.350000 0.440000 0.500000\n",
+      "labels/train/img-10.txt": "0 0.280000 0.350000 0.340000 0.500000\n",
+      "labels/train/img-12.txt": "0 0.320000 0.350000 0.340000 0.500000\n1 0.270000 0.350000 0.360000 0.500000\n",
+      "labels/train/img-13.txt": "1 0.340000 0.350000 0.340000 0.500000\n",
+      "labels/train/img-14.txt": "0 0.290000 0.350000 0.480000 0.500000\n",
+      "labels/train/img-15.txt": "1 0.260000 0.350000 0.380000 0.500000\n",
+      "labels/train/img-16.txt": "0 0.280000 0.350000 0.380000 0.500000\n",
+      "labels/train/img-17.txt": "1 0.300000 0.350000 0.380000 0.500000\n",
+      "labels/train/img-18.txt": "0 0.320000 0.350000 0.380000 0.500000\n",
+      "labels/train/img-19.txt": "1 0.340000 0.350000 0.380000 0.500000\n",
+      "labels/train/img-20.txt": "0 0.310000 0.350000 0.280000 0.500000\n",
+      "labels/train/img-21.txt": "1 0.260000 0.350000 0.420000 0.500000\n",
+      "labels/train/img-22.txt": "0 0.280000 0.350000 0.420000 0.500000\n",
+      "labels/train/img-23.txt": "1 0.300000 0.350000 0.420000 0.500000\n",
+      "labels/train/img-24.txt": "0 0.320000 0.350000 0.420000 0.500000\n",
+      "labels/train/img-25.txt": "1 0.290000 0.350000 0.320000 0.500000\n",
+      "labels/train/img-8.txt": "0 0.290000 0.350000 0.440000 0.500000\n",
+      "labels/train/img-9.txt": "1 0.310000 0.350000 0.440000 0.500000\n",
+      "labels/train/neg-3.txt": "",
+      "labels/val/img-11.txt": "1 0.300000 0.350000 0.340000 0.500000\n",
+      "labels/val/img-2.txt": "1 0.310000 0.350000 0.400000 0.500000\n",
+      "labels/val/img-26.txt": "0 0.310000 0.350000 0.320000 0.500000\n",
+      "labels/val/neg-1.txt": "",
+      "manifest.json": {
+        "class_count": 2,
+        "class_split_counts": [
+          {
+            "class_id": 0,
+            "class_name": "car",
+            "export_id": 0,
+            "test": 1,
+            "train": 9,
+            "val": 1
+          },
+          {
+            "class_id": 1,
+            "class_name": "truck",
+            "export_id": 1,
+            "test": 1,
+            "train": 9,
+            "val": 2
+          }
+        ],
+        "classes_with_objects": 2,
+        "code_sha": "golden-sha",
+        "computed_groups": 17,
+        "dataset_sha": "81644210355adff4f811a31eac5990b9a94a633dc90bd8cbb8c4982d9c5f9ec5",
+        "dedup": {
+          "enabled": false
+        },
+        "dropped_unregistered_class_ids": {
+          "2": 2
+        },
+        "exported_at": "<time>",
+        "finished_at": "<time>",
+        "frozen_holdout_sha": "49fda4a821d84436e76f96df2e7cf14a27da2010dd9c78b9f26729b99a326905",
+        "frozen_test_sha": "38cd9a513b26b070",
+        "group_key": "image_id",
+        "image_copy": {
+          "attempted": 0,
+          "copied": 0,
+          "errors": [],
+          "failed": 0
+        },
+        "image_count": 24,
+        "images_dropped_not_fully_labeled": 0,
+        "images_with_unlabeled_items": 1,
+        "item_filter": null,
+        "items_index": null,
+        "max_images": null,
+        "negative_frames_skipped_partial": 1,
+        "negative_images": 2,
+        "object_count": 23,
+        "pinned_groups": 5,
+        "pinned_overridden_by_holdout": 0,
+        "pinned_split_conflicts": 0,
+        "require_fully_labeled_images": false,
+        "resize_mode": null,
+        "sampling_mode": "all",
+        "seed": 11,
+        "skipped_items": {
+          "no_image_id": 1,
+          "no_usable_box_or_class": 1
+        },
+        "source_frozen_test_sha": "9d53eb3b49364821",
+        "split_counts": {
+          "test": 2,
+          "train": 18,
+          "val": 4
+        },
+        "split_mode": "keep_imported",
+        "split_object_counts": {
+          "test": 2,
+          "train": 18,
+          "val": 3
+        },
+        "started_at": "<time>",
+        "test_label_sha": "d67f48231f176406",
+        "unlabeled_items_on_exported_images": 1,
+        "version_tag": "golden"
+      }
+    },
+    "result": {
+      "class_count": 2,
+      "classes_with_objects": 2,
+      "current_symlink": "<TMP>/exports/current",
+      "data_yaml_path": "<TMP>/dataset/data.yaml",
+      "dataset_sha": "81644210355adff4f811a31eac5990b9a94a633dc90bd8cbb8c4982d9c5f9ec5",
+      "export_dir": "<TMP>/dataset",
+      "finished_at": "<time>",
+      "image_count": 24,
+      "images_dropped_not_fully_labeled": 0,
+      "images_with_unlabeled_items": 1,
+      "manifest_path": "<TMP>/dataset/manifest.json",
+      "object_count": 23,
+      "skipped_items": {
+        "no_image_id": 1,
+        "no_usable_box_or_class": 1
+      },
+      "split_counts": {
+        "test": 2,
+        "train": 18,
+        "val": 4
+      },
+      "split_object_counts": {
+        "test": 2,
+        "train": 18,
+        "val": 3
+      },
+      "started_at": "<time>",
+      "unlabeled_items_on_exported_images": 1,
+      "version_tag": "golden"
+    }
+  }
+}

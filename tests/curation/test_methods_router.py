@@ -88,7 +88,7 @@ def test_score_entries_shadow_when_enabled_and_shadow(
     ``near_dup`` only cleared its cheap pre-screen on real data; its full
     gate still needs a step this pass couldn't run (manually-judged
     near-dup pairs), so it stays ``shadow`` here."""
-    from src.services.curation.strategy_registry import VALIDATED_SCORERS
+    from src.services.curation.strategy_flags import VALIDATED_SCORERS
 
     monkeypatch.setenv('OP_SCORES_ENABLED', '1')
     monkeypatch.setenv('OP_SCORES_SHADOW', '1')

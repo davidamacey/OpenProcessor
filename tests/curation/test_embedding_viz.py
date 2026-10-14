@@ -25,13 +25,14 @@ from src.services.curation import embedding_viz_read
 
 
 def test_viz_state_paths_are_distinct_from_retired_clustering_reducer() -> None:
+    from src.config.curation import umap_state_index
     from src.services.curation import embedding_viz
-    from src.services.curation.clustering import embedding_reduce
+    from src.services.curation.clustering import umap_state
 
     viz_path = embedding_viz.viz_state_joblib_path()
-    assert viz_path != embedding_reduce.umap_state_joblib_path()
-    assert viz_path != embedding_reduce.umap_state_joblib_path_cuml()
-    assert embedding_viz.umap_viz_state_index() != embedding_reduce.umap_state_index()
+    assert viz_path != umap_state.umap_state_joblib_path()
+    assert viz_path != umap_state.umap_state_joblib_path_cuml()
+    assert embedding_viz.umap_viz_state_index() != umap_state_index()
 
 
 # =============================================================================
@@ -123,7 +124,7 @@ async def test_run_projection_job_writes_only_viz_fields_and_metadata(
 
     pool = [(f'crop-{i}', [float(i), float(i + 1)]) for i in range(6)]
     monkeypatch.setattr(
-        'src.services.curation.clustering.embedding_reduce.fetch_residual_embeddings_parallel',
+        'src.services.curation.clustering.residual_fetch.fetch_residual_embeddings_parallel',
         _fake_residual_fetch(pool),
     )
 
@@ -181,7 +182,7 @@ async def test_run_projection_job_empty_pool_completes_with_zero_written(
 
     monkeypatch.setenv('OP_VIZ_JOBS_DIR', str(tmp_path / 'viz'))
     monkeypatch.setattr(
-        'src.services.curation.clustering.embedding_reduce.fetch_residual_embeddings_parallel',
+        'src.services.curation.clustering.residual_fetch.fetch_residual_embeddings_parallel',
         _fake_residual_fetch([]),
     )
 

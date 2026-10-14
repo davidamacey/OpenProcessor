@@ -21,8 +21,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.services.curation.clustering.embedding_reduce import CONFIDENT_CLASS_SOURCES
 from src.services.curation.clustering.id_normalize import force_cluster_id_equals_class_id
+from src.services.curation.clustering.residual_fetch import CONFIDENT_CLASS_SOURCES
 
 
 def _client() -> AsyncMock:

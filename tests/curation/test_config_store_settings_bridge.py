@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 def _reset_caches() -> Iterator[None]:
     from src.clients.curation_opensearch import settings_doc
     from src.services.config_store.store import reset_config_stores
-    from src.services.curation.strategy_registry import _reset_field_coverage_cache
+    from src.services.curation.field_coverage import _reset_field_coverage_cache
 
     settings_doc._settings_cache.clear()
     reset_config_stores()

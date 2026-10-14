@@ -275,7 +275,7 @@ def test_confident_sources_resolved_from_env_at_import(clean_env: pytest.MonkeyP
     from pathlib import Path
 
     snippet = (
-        'from src.services.curation.clustering import embedding_reduce as e\n'
+        'from src.services.curation.clustering import residual_fetch as e\n'
         'print(",".join(e.CONFIDENT_CLASS_SOURCES))\n'
     )
     env = {

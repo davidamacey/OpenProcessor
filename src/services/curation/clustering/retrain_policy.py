@@ -56,7 +56,7 @@ async def _count_residual_pool(client: AsyncOpenSearch, *, strict: bool = False)
     ``n_trained_on`` — see ``trained_mode`` in the centroid store
     metadata.
     """
-    from src.services.curation.clustering import embedding_reduce as _ker
+    from src.services.curation.clustering import residual_fetch as _ker
 
     filt: list[dict[str, Any]] = [embedded_clause(_ker.RESIDUAL_EMBEDDING_FIELD)]
     if strict:

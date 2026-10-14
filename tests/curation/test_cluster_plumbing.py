@@ -17,7 +17,7 @@ import pytest
 from opensearchpy.exceptions import TransportError
 
 from src.clients.opensearch.serializer import OrjsonSerializer
-from src.services.curation.clustering import embedding_reduce
+from src.services.curation.clustering import residual_fetch
 from src.services.curation.clustering.cluster_write_guard import _guarded_class_cluster_write
 from src.services.curation.clustering.orchestrator import assign_only_residuals, cluster_residuals
 from src.services.curation.clustering.page_rows import hits_to_rows
@@ -263,7 +263,7 @@ async def test_parallel_fetch_keeps_slice_then_shard_order(
 ) -> None:
     """The row order is part of the result (some methods sample by position)."""
     client = FakeItemsClient(*pool)
-    ids, matrix = await embedding_reduce.fetch_residual_embeddings_parallel(
+    ids, matrix = await residual_fetch.fetch_residual_embeddings_parallel(
         client, n_slices=4, page_size=700
     )
     expected = [i for s in range(4) for i in range(N_DOCS) if i % 4 == s]
