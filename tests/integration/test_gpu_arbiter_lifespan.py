@@ -52,13 +52,13 @@ def test_lifespan_reconciles_at_startup_and_keeps_reconciling(
 ) -> None:
     """Startup calls the arbiter once, then a background task re-calls it."""
     import src.main as main_module
-    from src.services.training import gpu_arbiter
+    from src.services.training import gpu_arbiter, gpu_arbiter_policy
 
     calls: list[dict] = []
 
     async def _fake_reconcile(**kwargs):
         calls.append(kwargs)
-        return gpu_arbiter.ArbiterAction(action='noop', detail='stubbed')
+        return gpu_arbiter_policy.ArbiterAction(action='noop', detail='stubbed')
 
     monkeypatch.setattr(gpu_arbiter, 'reconcile_on_startup', _fake_reconcile)
     monkeypatch.setattr(main_module, 'ARBITER_RECONCILE_INTERVAL_SECONDS', _TEST_INTERVAL_S)
@@ -92,7 +92,7 @@ def test_periodic_tick_clears_a_stale_pause_sentinel(
     can clear it.
     """
     import src.main as main_module
-    from src.services.training import gpu_arbiter
+    from src.services.training import gpu_arbiter_policy
 
     jobs_dir = tmp_path / 'jobs'
     jobs_dir.mkdir()
@@ -101,8 +101,8 @@ def test_periodic_tick_clears_a_stale_pause_sentinel(
 
     # Keep the real reconcile logic, but off any real /jobs mount or state dir.
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(jobs_dir))
-    monkeypatch.setattr(gpu_arbiter, '_default_sentinel_path', lambda: sentinel)
-    monkeypatch.setattr(gpu_arbiter, '_default_lock_path', lambda: lock)
+    monkeypatch.setattr(gpu_arbiter_policy, '_default_sentinel_path', lambda: sentinel)
+    monkeypatch.setattr(gpu_arbiter_policy, '_default_lock_path', lambda: lock)
     monkeypatch.setattr(main_module, 'ARBITER_RECONCILE_INTERVAL_SECONDS', _TEST_INTERVAL_S)
 
     with TestClient(main_module.app):

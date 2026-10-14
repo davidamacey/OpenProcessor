@@ -37,9 +37,9 @@ BAD = {'enabled': True, 'preset': 'no_such_preset'}
 @pytest.fixture
 def app_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
-    from src.services.training import gpu_arbiter
+    from src.services.training import gpu_arbiter_policy
 
-    monkeypatch.setattr(gpu_arbiter, '_state_dir', lambda: tmp_path)
+    monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
 
     class _Reg:
         def load(self) -> Any:

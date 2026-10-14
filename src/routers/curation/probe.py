@@ -98,7 +98,7 @@ async def probe_run(payload: ProbeRunRequest, opensearch: OpenSearchDep) -> dict
     silent -- see ``src.services.curation.probe_job``).
     """
     from src.services.curation.probe_job import ProbeJobBusyError, start_probe_job
-    from src.services.training.gpu_arbiter import GpuArbiterStopFailedError
+    from src.services.training.gpu_arbiter_policy import GpuArbiterStopFailedError
 
     weights = await _resolve_probe_weights(payload.job_id)
     try:

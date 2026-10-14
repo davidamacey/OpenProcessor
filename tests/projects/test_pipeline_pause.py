@@ -92,12 +92,12 @@ def test_pause_state_reports_global_gpu_training_claim(
     app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import src.config.curation as curation_config_mod
-    from src.services.training import gpu_arbiter
+    from src.services.training import gpu_arbiter_policy
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path))
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
     monkeypatch.setattr(
-        gpu_arbiter, 'read_training_lock', lambda **_: {'cuda_visible_devices': '0'}
+        gpu_arbiter_policy, 'read_training_lock', lambda **_: {'cuda_visible_devices': '0'}
     )
 
     r = app_client.get('/curation/projects/default/pause')

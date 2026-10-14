@@ -202,7 +202,7 @@ src/services/projects/lifecycle.py	1	triage every return-empty handler in PR 3; 
 src/services/projects/mlflow_cleanup.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/projects/registry.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/projects/stats.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/training/gpu_arbiter.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/training/gpu_arbiter_docker.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/training/jobs.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/training/lineage.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/training/preflight_checks.py	3	triage every return-empty handler in PR 3; ratchet: may only go down

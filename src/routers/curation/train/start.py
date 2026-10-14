@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from src.core.logging import get_logger
 from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - used at runtime by FastAPI
 from src.services.training import jobs as train_jobs
-from src.services.training.gpu_arbiter import GpuArbiterStopFailedError
+from src.services.training.gpu_arbiter_policy import GpuArbiterStopFailedError
 from src.services.training.job_models import TrainCampaignSpec, TrainJobSpec
 from src.services.training.preflight_checks import PreflightReport
 from src.services.training.preflight_run import (

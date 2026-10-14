@@ -43,7 +43,7 @@ def _global_gpu_training_reason() -> str | None:
     """Best-effort: is the trainer's single-GPU claim (§ gpu_arbiter) live
     right now? Never fatal -- an unreadable lock file just reports no
     global pause, same as no lock at all."""
-    from src.services.training.gpu_arbiter import read_training_lock
+    from src.services.training.gpu_arbiter_policy import read_training_lock
 
     lock = read_training_lock()
     if lock is None:

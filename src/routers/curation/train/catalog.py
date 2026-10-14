@@ -12,7 +12,7 @@ from src.services.training.augmentation_presets import (
     AUGMENTATION_PRESETS,
     DEFAULT_AUGMENTATION_PRESET,
 )
-from src.services.training.gpu_arbiter import containers_to_stop
+from src.services.training.gpu_arbiter_policy import containers_to_stop
 from src.services.training.job_models import Profile
 from src.services.training.preflight_checks import read_trainer_gpu_order
 from src.services.training.profiles import get_class_subset_presets, get_profiles

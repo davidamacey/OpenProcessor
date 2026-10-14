@@ -231,7 +231,11 @@ async def bakeoff_run(payload: BakeoffRunRequest) -> BakeoffRunAccepted:
     file (atomic) -> stop GPU-resident containers. If they cannot be stopped
     the job file is removed, the status set to ``error`` and the answer is 409.
     """
-    from src.services.training import gpu_arbiter
+    from src.services.training.gpu_arbiter_docker import stop_gpu_services
+    from src.services.training.gpu_arbiter_policy import (
+        GpuArbiterStopFailedError,
+        containers_to_stop,
+    )
 
     try:
         spec, accepted = await bakeoff_jobs.build_job_spec(payload, out_root=_out_dir())
@@ -261,10 +265,8 @@ async def bakeoff_run(payload: BakeoffRunRequest) -> BakeoffRunAccepted:
     _write_json(job_file, spec.model_dump(mode='json'))
     scope = get_gpu_arbiter_config().bakeoff_host_gpus
     try:
-        action = await gpu_arbiter.stop_gpu_services(
-            containers=gpu_arbiter.containers_to_stop(scope) if scope else None
-        )
-    except gpu_arbiter.GpuArbiterStopFailedError as exc:
+        action = await stop_gpu_services(containers=containers_to_stop(scope) if scope else None)
+    except GpuArbiterStopFailedError as exc:
         job_file.unlink(missing_ok=True)
         status.state, status.error = 'error', f'could not free the GPU: {exc}'
         status.finished_at = datetime.now(UTC).isoformat()
