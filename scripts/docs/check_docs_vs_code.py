@@ -212,7 +212,7 @@ def check_env() -> list[str]:
         text = doc.read_text(encoding='utf-8', errors='replace')
         for var in sorted(set(_ENV_RE.findall(text))):
             if var not in corpus:
-                errors.append(f'{_rel(doc)}: {var} is not read by any code')  # noqa: PERF401
+                errors.append(f'{_rel(doc)}: {var} is not read by any code')  # noqa: PERF401  # the append carries a formatted message built next to its check
     return errors
 
 

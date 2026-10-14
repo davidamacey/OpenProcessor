@@ -340,7 +340,7 @@ async def _ensure_indexes_locked(opensearch: Any) -> None:
 # is unaffected by the split.
 # =============================================================================
 
-from src.routers.curation._common_models import (  # noqa: E402
+from src.routers.curation._common_models import (  # noqa: E402  # bottom-of-module import breaks a circular import
     HUMAN_REGION_STATUS_VALUES,
     BatchIngestResponse,
     BatchIngestSummaryResponse,

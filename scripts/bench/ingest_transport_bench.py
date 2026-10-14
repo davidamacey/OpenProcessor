@@ -92,7 +92,7 @@ def serve_http(port: int) -> None:
     app = FastAPI()
 
     @app.post('/ingest')
-    async def ingest(images: list[UploadFile] = File(...)) -> Response:  # noqa: B008
+    async def ingest(images: list[UploadFile] = File(...)) -> Response:  # noqa: B008  # FastAPI File() default
         for upload in images:
             _imohash_bytes(await upload.read())
         return Response(_result_payload(len(images)), media_type='application/json')

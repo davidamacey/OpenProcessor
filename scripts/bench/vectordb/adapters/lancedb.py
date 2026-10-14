@@ -118,7 +118,7 @@ class LanceAdapter(Adapter):
         rows = q.select(['id']).limit(k).to_arrow()
         return [int(x) for x in rows['id'].to_pylist()]
 
-    def update_field(self, ids: np.ndarray, field: str, values: np.ndarray, threads: int) -> None:  # noqa: ARG002
+    def update_field(self, ids: np.ndarray, field: str, values: np.ndarray, threads: int) -> None:  # noqa: ARG002  # interface method; this implementation does not need the argument
         import pyarrow as pa
 
         data = pa.table(

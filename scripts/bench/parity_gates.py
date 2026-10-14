@@ -236,7 +236,7 @@ def evaluate(metrics: dict[str, Any], gates: dict[str, Any], profile: str) -> di
         else:
             status = 'PASS' if OPS[check['op']](observed, check['value']) else 'FAIL'
         checks.append({**check, 'observed': observed, 'status': status})
-    count = lambda s: sum(1 for c in checks if c['status'] == s)  # noqa: E731
+    count = lambda s: sum(1 for c in checks if c['status'] == s)  # noqa: E731  # one-use local helper
     return {
         'profile': profile,
         'description': spec['description'],

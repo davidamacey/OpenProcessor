@@ -21,9 +21,9 @@ Features:
 # import order, which fixes the route table order, so keep the order below
 # (isort would sort it alphabetically).
 from src.routers.ingest._router import router  # isort: skip
-from src.routers.ingest import single  # isort: skip  # noqa: F401
-from src.routers.ingest import batch  # isort: skip  # noqa: F401
-from src.routers.ingest import directory  # isort: skip  # noqa: F401
+from src.routers.ingest import single  # isort: skip  # noqa: F401  # importing the module registers its routes
+from src.routers.ingest import batch  # isort: skip  # noqa: F401  # importing the module registers its routes
+from src.routers.ingest import directory  # isort: skip  # noqa: F401  # importing the module registers its routes
 
 
 __all__ = ['router']

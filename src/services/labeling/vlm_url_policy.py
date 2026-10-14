@@ -244,7 +244,7 @@ def _denied_service_addresses() -> frozenset[str]:
 
 def reset_policy_caches() -> None:
     """Test-only."""
-    global _DENIED_IP_CACHE, _GATEWAY_CACHE  # noqa: PLW0603
+    global _DENIED_IP_CACHE, _GATEWAY_CACHE  # noqa: PLW0603  # module-level cache set lazily
     _DENIED_IP_CACHE = None
     _GATEWAY_CACHE = None
     _LOCALITY_CACHE.clear()

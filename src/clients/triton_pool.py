@@ -94,7 +94,7 @@ GRPC_CHANNEL_OPTIONS = [
     ('grpc.http2.bdp_probe', 0),  # Disable BDP probing to reduce automatic pings
     # TCP optimization for low latency
     # NOTE: grpc.tcp_nodelay is not supported in Python gRPC, using socket option
-    # ('grpc.so_reuseport', 1),  # Enable port reuse for multi-process  # noqa: ERA001
+    # ('grpc.so_reuseport', 1),  # Enable port reuse for multi-process  # noqa: ERA001  # comment shows a formula or option, not code
     # HTTP/2 window sizes for throughput (larger = more data in flight)
     ('grpc.http2.initial_stream_window_size', 1024 * 1024),  # 1MB per stream
     ('grpc.http2.initial_connection_window_size', 2 * 1024 * 1024),  # 2MB total

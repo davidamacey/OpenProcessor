@@ -84,7 +84,7 @@ def detection_profile_strategies(default_id: str | None) -> list[dict[str, Any]]
     ``get_default_profile_name()`` with no shared-settings override)."""
     # Import triggers cascade_detect's module-level env resolution if it
     # hasn't run yet in this process.
-    from src.services.detection import cascade_detect  # noqa: F401
+    from src.services.detection import cascade_detect  # noqa: F401  # import triggers the cascade detector env resolution
     from src.services.detection.profile_registry import get_profiles
 
     profiles = get_profiles()

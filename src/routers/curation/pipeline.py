@@ -62,7 +62,7 @@ VLM_SWEEP_SOURCE_FIELDS: tuple[str, ...] = (
 # pipeline_start.py (700-LOC ratchet split, same pattern as
 # _region_profile_clone.py). It imports `_run_auto_label` back from this
 # module at call time (not at import time, to dodge the circular import).
-from src.routers.curation import pipeline_start  # noqa: E402,F401
+from src.routers.curation import pipeline_start  # noqa: E402,F401  # bottom-of-module import breaks a circular import; imported for its side effect
 
 
 async def _run_auto_label(
@@ -691,4 +691,4 @@ async def _run_auto_label(
 # Re-exported as `pipeline.pipeline_auto_label` too (not just imported for
 # route-registration side effects) -- many existing tests call this name
 # directly as `pipeline.pipeline_auto_label(...)`, predating the split.
-from src.routers.curation.pipeline_public import pipeline_auto_label  # noqa: E402,F401
+from src.routers.curation.pipeline_public import pipeline_auto_label  # noqa: E402,F401  # bottom-of-module import breaks a circular import; imported for its side effect

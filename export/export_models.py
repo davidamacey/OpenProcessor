@@ -67,33 +67,33 @@ if not _ultralytics_is_pre_84():
         'For YOLO26 models use export/export_yolo26.py instead.'
     )
 
-import argparse  # noqa: E402
-import gc  # noqa: E402
-import json  # noqa: E402
-import logging  # noqa: E402
-import re  # noqa: E402
-import shutil  # noqa: E402
-from typing import Any  # noqa: E402
+import argparse  # noqa: E402  # imports follow the interpreter re-exec guard above
+import gc  # noqa: E402  # imports follow the interpreter re-exec guard above
+import json  # noqa: E402  # imports follow the interpreter re-exec guard above
+import logging  # noqa: E402  # imports follow the interpreter re-exec guard above
+import re  # noqa: E402  # imports follow the interpreter re-exec guard above
+import shutil  # noqa: E402  # imports follow the interpreter re-exec guard above
+from typing import Any  # noqa: E402  # imports follow the interpreter re-exec guard above
 
-import yaml  # noqa: E402
+import yaml  # noqa: E402  # imports follow the interpreter re-exec guard above
 
 # Apply end2end patch for onnx_trt format
-from config_write import write_generated_config  # noqa: E402
+from config_write import write_generated_config  # noqa: E402  # imports follow the interpreter re-exec guard above
 
-from ultralytics_patches import apply_end2end_patch  # noqa: E402
+from ultralytics_patches import apply_end2end_patch  # noqa: E402  # imports follow the interpreter re-exec guard above
 
 
 apply_end2end_patch()
 
 # Import after patch (REQUIRED - patch must be applied before importing ultralytics)
-import onnx  # noqa: E402
-import tensorrt as trt  # noqa: E402
-import torch  # noqa: E402
-from trt_utils import bake_fp16_onnx, create_explicit_network, enable_fp16, engine_output_dtypes  # noqa: E402
-from uint8_input import add_uint8_input  # noqa: E402
-from ultralytics import YOLO  # noqa: E402
-from ultralytics.cfg import get_cfg  # noqa: E402
-from ultralytics.engine.exporter import Exporter  # noqa: E402
+import onnx  # noqa: E402  # imports follow the interpreter re-exec guard above
+import tensorrt as trt  # noqa: E402  # imports follow the interpreter re-exec guard above
+import torch  # noqa: E402  # imports follow the interpreter re-exec guard above
+from trt_utils import bake_fp16_onnx, create_explicit_network, enable_fp16, engine_output_dtypes  # noqa: E402  # imports follow the interpreter re-exec guard above
+from uint8_input import add_uint8_input  # noqa: E402  # imports follow the interpreter re-exec guard above
+from ultralytics import YOLO  # noqa: E402  # imports follow the interpreter re-exec guard above
+from ultralytics.cfg import get_cfg  # noqa: E402  # imports follow the interpreter re-exec guard above
+from ultralytics.engine.exporter import Exporter  # noqa: E402  # imports follow the interpreter re-exec guard above
 
 
 # ============================================================================

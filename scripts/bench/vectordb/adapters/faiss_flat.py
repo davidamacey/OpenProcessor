@@ -19,7 +19,7 @@ class FaissFlatAdapter(Adapter):
         self.vectors = np.zeros((0, dim), np.float32)
         self.meta: Meta = {}
 
-    def encode(self, vectors: np.ndarray, meta: Meta, ids: np.ndarray) -> Any:  # noqa: ARG002
+    def encode(self, vectors: np.ndarray, meta: Meta, ids: np.ndarray) -> Any:  # noqa: ARG002  # interface method; this implementation does not need the argument
         return vectors, meta
 
     def send(self, payload: Any) -> None:
@@ -30,7 +30,7 @@ class FaissFlatAdapter(Adapter):
                 np.concatenate([self.meta[k], v]) if k in self.meta else np.asarray(v).copy()
             )
 
-    def load(self, threads: int) -> None:  # noqa: ARG002
+    def load(self, threads: int) -> None:  # noqa: ARG002  # interface method; this implementation does not need the argument
         for p in self.payloads:
             self.send(p)
         self.payloads = []
@@ -47,7 +47,7 @@ class FaissFlatAdapter(Adapter):
         vector: np.ndarray,
         k: int,
         flt: FilterSpec,
-        params: dict[str, Any],  # noqa: ARG002
+        params: dict[str, Any],  # noqa: ARG002  # interface method; this implementation does not need the argument
     ) -> list[int]:
         if flt.name == 'none':
             _, ids = self.index.search(vector[None, :], k)
@@ -58,7 +58,7 @@ class FaissFlatAdapter(Adapter):
         scores = self.vectors[rows] @ vector
         return [int(i) for i in rows[np.argsort(-scores)[:k]]]
 
-    def update_field(self, ids: np.ndarray, field: str, values: np.ndarray, threads: int) -> None:  # noqa: ARG002
+    def update_field(self, ids: np.ndarray, field: str, values: np.ndarray, threads: int) -> None:  # noqa: ARG002  # interface method; this implementation does not need the argument
         self.meta[field][ids] = values
         self.masks = {}
 

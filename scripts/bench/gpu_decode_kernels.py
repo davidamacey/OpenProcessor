@@ -24,7 +24,7 @@ from __future__ import annotations
 from typing import Any
 
 import torch
-import torch.nn.functional as F  # noqa: N812
+import torch.nn.functional as F  # noqa: N812  # conventional alias
 
 from scripts.bench import gpu_decode_lib as lib
 

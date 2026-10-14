@@ -293,7 +293,7 @@ async def models_status(
 # PUT /models/{model_name}/sharing lives in _models_sharing.py (kept
 # under the 700-LOC ratchet); imported for its route-registration side
 # effect.
-from src.routers.curation import _models_sharing  # noqa: E402,F401
+from src.routers.curation import _models_sharing  # noqa: E402,F401  # bottom-of-module import breaks a circular import; imported for its side effect
 
 
 class UnloadModelResponse(BaseModel):

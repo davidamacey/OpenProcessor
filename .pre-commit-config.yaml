@@ -50,6 +50,16 @@ repos:
         exclude: ^(src/ultralytics_patches/|export/|docker/segmenter/sam3_backend\.py)
       - id: python-use-type-annotations
 
+  # Every coded noqa says why. A bare `# noqa: CODE` is how a silenced rule is forgotten.
+  - repo: local
+    hooks:
+      - id: noqa-needs-reason
+        name: noqa carries a reason
+        language: pygrep
+        entry: '# noqa: ?[A-Z][A-Z0-9, ]*$'
+        types: [python]
+        files: ^(src|scripts|docker|export)/
+
   # Dockerfile linting with hadolint
   - repo: https://github.com/hadolint/hadolint
     rev: v2.15.1

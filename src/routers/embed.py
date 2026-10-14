@@ -294,7 +294,7 @@ def embed_batch(
 def embed_boxes(
     image: UploadFile = File(..., description='Image file (JPEG/PNG)'),
     boxes: str = Body(..., description='JSON array of boxes [[x1,y1,x2,y2], ...] normalized [0,1]'),
-    use_cache: bool = Query(True, description='Use embedding cache'),  # noqa: ARG001
+    use_cache: bool = Query(True, description='Use embedding cache'),  # noqa: ARG001  # parameter kept for the documented signature
 ):
     """
     Extract MobileCLIP embeddings for bounding box crops from an image.

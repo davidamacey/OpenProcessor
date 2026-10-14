@@ -562,7 +562,7 @@ _BUILT_IN_NAMES = frozenset(p.name for p in BUILT_IN_PACKS)
 # existing `from src.services.labeling.vlm_prompts import ...` caller is
 # unaffected. Import placed after BUILT_IN_PACKS/_BUILT_IN_NAMES: that
 # module imports them back from this one.
-from src.services.labeling.vlm_prompt_resolution import (  # noqa: E402
+from src.services.labeling.vlm_prompt_resolution import (  # noqa: E402  # bottom-of-module import breaks a circular import
     active_prompt_pack,
     available_prompt_packs,
     get_prompt_pack,

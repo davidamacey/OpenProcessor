@@ -234,7 +234,7 @@ OpenSearchDep = Annotated[Any, Depends(get_opensearch)]
 PyTorchModelsDep = Annotated[dict[str, Any], Depends(get_pytorch_models)]
 
 # Import VisualSearchService for type annotation
-from src.services.visual_search import VisualSearchService  # noqa: E402
+from src.services.visual_search import VisualSearchService  # noqa: E402  # bottom-of-module import breaks a circular import
 
 
 VisualSearchDep = Annotated[VisualSearchService, Depends(get_visual_search_service)]

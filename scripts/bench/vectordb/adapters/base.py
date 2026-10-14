@@ -116,8 +116,8 @@ class Adapter(ABC):
     def count(self) -> int:
         return -1
 
-    def drop(self) -> None:  # noqa: B027
+    def drop(self) -> None:  # noqa: B027  # optional hook, empty by design
         """Remove the collection (the container is torn down by compose)."""
 
-    def close(self) -> None:  # noqa: B027
+    def close(self) -> None:  # noqa: B027  # optional hook, empty by design
         """Release client resources."""

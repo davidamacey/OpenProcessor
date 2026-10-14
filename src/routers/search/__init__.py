@@ -19,10 +19,10 @@ InferenceService for embedding generation.
 # import order, which fixes the route table order, so keep the order below
 # (isort would sort it alphabetically).
 from src.routers.search._router import router  # isort: skip
-from src.routers.search import image_text  # isort: skip  # noqa: F401
-from src.routers.search import face  # isort: skip  # noqa: F401
-from src.routers.search import ocr  # isort: skip  # noqa: F401
-from src.routers.search import objects  # isort: skip  # noqa: F401
+from src.routers.search import image_text  # isort: skip  # noqa: F401  # importing the module registers its routes
+from src.routers.search import face  # isort: skip  # noqa: F401  # importing the module registers its routes
+from src.routers.search import ocr  # isort: skip  # noqa: F401  # importing the module registers its routes
+from src.routers.search import objects  # isort: skip  # noqa: F401  # importing the module registers its routes
 
 
 __all__ = ['router']

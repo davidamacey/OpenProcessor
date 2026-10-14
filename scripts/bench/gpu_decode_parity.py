@@ -42,8 +42,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from scripts.bench import gpu_decode_lib as lib, parity_metrics as pm  # noqa: E402
-from src.config.settings import TritonModelConfig  # noqa: E402
+from scripts.bench import gpu_decode_lib as lib, parity_metrics as pm  # noqa: E402  # import follows the sys.path setup above
+from src.config.settings import TritonModelConfig  # noqa: E402  # import follows the sys.path setup above
 
 
 DetRow = tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]

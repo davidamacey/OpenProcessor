@@ -373,4 +373,4 @@ async def activate_open_vocab(
 
 # POST /open_vocab/{name}/clone lives in _open_vocab_clone.py (imported for
 # its route-registration side effect).
-from src.routers.curation import _open_vocab_clone  # noqa: E402,F401
+from src.routers.curation import _open_vocab_clone  # noqa: E402,F401  # bottom-of-module import breaks a circular import; imported for its side effect

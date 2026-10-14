@@ -509,4 +509,4 @@ async def activate_region_profile_route(
 # POST /region_profiles/{name}/clone lives in _region_profile_clone.py
 # (kept under the 700-LOC ratchet); imported for its route-registration
 # side effect.
-from src.routers.curation import _region_profile_clone  # noqa: E402,F401
+from src.routers.curation import _region_profile_clone  # noqa: E402,F401  # bottom-of-module import breaks a circular import; imported for its side effect

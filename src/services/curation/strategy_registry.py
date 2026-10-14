@@ -194,7 +194,7 @@ before adding anything here."""
 # GET /methods payload." Re-exported here (see __all__ below) so every
 # existing import of ``strategy_registry.resolve_effective_default`` /
 # ``strategy_registry.SETTABLE_DEFAULT_AXES`` keeps working unchanged.
-from src.services.curation.strategy_defaults import SETTABLE_DEFAULT_AXES, resolve_effective_default  # noqa: E402
+from src.services.curation.strategy_defaults import SETTABLE_DEFAULT_AXES, resolve_effective_default  # noqa: E402  # bottom-of-module import breaks a circular import
 
 
 def _cluster_strategies(default_id: str | None) -> list[dict[str, Any]]:

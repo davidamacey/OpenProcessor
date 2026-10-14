@@ -30,7 +30,7 @@ _REGISTRY: dict[str, BackendFactory] = {}
 
 def _ensure_builtins() -> None:
     # Imported for its side effect: factory.py registers the built-in backends.
-    from . import factory  # noqa: F401
+    from . import factory  # noqa: F401  # import registers the built-in backends
 
 
 def register_backend(name: str, factory: BackendFactory, *, replace: bool = False) -> None:
