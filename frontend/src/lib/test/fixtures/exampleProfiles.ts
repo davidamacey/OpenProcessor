@@ -17,10 +17,7 @@ import { widgetTagServedSlot } from './regionSlot';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-export const EXAMPLES_DIR = path.resolve(
-  here,
-  '../../../../examples/annotation-profiles',
-);
+const EXAMPLES_DIR = path.resolve(here, '../../../../examples/annotation-profiles');
 
 export function exampleProfileFiles(): string[] {
   return readdirSync(EXAMPLES_DIR)

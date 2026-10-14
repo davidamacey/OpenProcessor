@@ -7,11 +7,10 @@
    * as `target_not_empty` (classes only copy into an empty project) or
    * `revision_conflict` render their served message.
    */
-  import { focusOnMount } from '$lib/actions/focusOnMount';
-  import { trapFocus } from '$lib/actions/trapFocus';
   import type { ProjectsAdmin } from '$lib/projects/projectsAdminController.svelte';
   import type { ProjectSummary } from '$lib/types_projects';
   import { toastStore } from '$stores/toast.svelte';
+  import Modal from '$components/Modal.svelte';
 
   interface Props {
     project: ProjectSummary | null;
@@ -67,78 +66,60 @@
 </script>
 
 {#if project}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <div
-    class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Copy settings"
-    use:focusOnMount
-    use:trapFocus={{ onEscape: onclose }}
-    tabindex="-1"
-    data-testid="clone-settings-dialog"
-    onclick={(e) => {
-      if (e.target === e.currentTarget) onclose();
-    }}
-  >
-    <div
-      class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
+  <Modal label="Copy settings" {onclose} data-testid="clone-settings-dialog">
+    <h3 class="mb-3 text-base font-semibold">
+      Copy settings into {project.display_name}
+    </h3>
+    <form
+      onsubmit={async (e) => {
+        e.preventDefault();
+        await submit();
+      }}
     >
-      <h3 class="mb-3 text-base font-semibold">
-        Copy settings into {project.display_name}
-      </h3>
-      <form
-        onsubmit={async (e) => {
-          e.preventDefault();
-          await submit();
-        }}
-      >
-        <label class="mb-3 block text-sm">
-          <span class="mb-1 block text-xs text-zinc-400">From project</span>
-          <select
-            bind:value={from}
-            data-testid="clone-settings-from"
-            class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
-          >
-            <option value="" disabled>Choose a project…</option>
-            {#each sources as s (s.slug)}
-              <option value={s.slug}>{s.display_name} ({s.slug})</option>
-            {/each}
-          </select>
-        </label>
-        <fieldset class="mb-3 text-sm">
-          <legend class="mb-1 text-xs text-zinc-400">What to copy</legend>
-          {#each axisOptions as a (a)}
-            <label class="flex items-center gap-2 text-zinc-300">
-              <input
-                type="checkbox"
-                checked={axes.includes(a)}
-                data-testid="clone-settings-axis-{a}"
-                onchange={(e) => toggle(a, (e.currentTarget as HTMLInputElement).checked)}
-              />
-              <span class="font-mono text-xs">{a}</span>
-            </label>
+      <label class="mb-3 block text-sm">
+        <span class="mb-1 block text-xs text-zinc-400">From project</span>
+        <select
+          bind:value={from}
+          data-testid="clone-settings-from"
+          class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+        >
+          <option value="" disabled>Choose a project…</option>
+          {#each sources as s (s.slug)}
+            <option value={s.slug}>{s.display_name} ({s.slug})</option>
           {/each}
-        </fieldset>
-        {#if errorText}
-          <p class="mb-3 text-xs text-red-300" data-testid="clone-settings-error">
-            {errorText}
-          </p>
-        {/if}
-        <div class="flex items-center justify-end gap-2">
-          <button type="button" class="btn" onclick={onclose} disabled={busy}
-            >Cancel</button
-          >
-          <button
-            type="submit"
-            class="btn btn-primary"
-            data-testid="clone-settings-submit"
-            disabled={busy || !from || axes.length === 0}
-          >
-            {busy ? 'Copying…' : 'Copy settings'}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
+        </select>
+      </label>
+      <fieldset class="mb-3 text-sm">
+        <legend class="mb-1 text-xs text-zinc-400">What to copy</legend>
+        {#each axisOptions as a (a)}
+          <label class="flex items-center gap-2 text-zinc-300">
+            <input
+              type="checkbox"
+              checked={axes.includes(a)}
+              data-testid="clone-settings-axis-{a}"
+              onchange={(e) => toggle(a, (e.currentTarget as HTMLInputElement).checked)}
+            />
+            <span class="font-mono text-xs">{a}</span>
+          </label>
+        {/each}
+      </fieldset>
+      {#if errorText}
+        <p class="mb-3 text-xs text-red-300" data-testid="clone-settings-error">
+          {errorText}
+        </p>
+      {/if}
+      <div class="flex items-center justify-end gap-2">
+        <button type="button" class="btn" onclick={onclose} disabled={busy}>Cancel</button
+        >
+        <button
+          type="submit"
+          class="btn btn-primary"
+          data-testid="clone-settings-submit"
+          disabled={busy || !from || axes.length === 0}
+        >
+          {busy ? 'Copying…' : 'Copy settings'}
+        </button>
+      </div>
+    </form>
+  </Modal>
 {/if}

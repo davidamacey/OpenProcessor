@@ -23,6 +23,7 @@
    *     residual_count, noise_count)
    */
   import { onDestroy } from 'svelte';
+  import { formatDuration } from '$lib/format/duration';
   import { type DatasetStats } from '$lib/api';
   import { subscribePipelineEvents, type CurationEventSubscription } from '$lib/sse';
   import { registeredSlots } from '$lib/annotations/registeredSlots';
@@ -225,19 +226,6 @@
     const remaining = stats?.in_progress?.region_drain_total_unfinished ?? 0;
     return remaining / drainRate;
   });
-
-  function formatDuration(seconds: number): string {
-    if (seconds < 60) return `${Math.round(seconds)}s`;
-    if (seconds < 3600) return `${Math.round(seconds / 60)} min`;
-    if (seconds < 86400) {
-      const h = Math.floor(seconds / 3600);
-      const m = Math.round((seconds % 3600) / 60);
-      return m === 0 ? `${h}h` : `${h}h ${m}m`;
-    }
-    const d = Math.floor(seconds / 86400);
-    const h = Math.round((seconds % 86400) / 3600);
-    return h === 0 ? `${d}d` : `${d}d ${h}h`;
-  }
 
   function formatRate(rate: number): string {
     if (rate >= 10) return `${rate.toFixed(0)} crops/s`;

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "entry": ["scripts/*.mjs"],
+  "ignoreDependencies": [],
+  "exclude": ["types"],
+  "ignoreIssues": {
+    "src/lib/annotations/registeredSlots.ts": ["duplicates"]
+  },
+  "ignoreBinaries": ["sha256sum", "pgrep"]
+}

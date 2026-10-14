@@ -23,10 +23,9 @@
     type ProbeStatusResponse,
   } from '$lib/api';
   import { canRunProbe, classifyProbePoll } from '$lib/probe';
-  import { focusOnMount } from '$lib/actions/focusOnMount';
-  import { trapFocus } from '$lib/actions/trapFocus';
   import { toastStore } from '$stores/toast.svelte';
   import type { TrainJobStatus } from '$lib/types_train';
+  import Modal from '$components/Modal.svelte';
 
   const JOB_POLL_MS = 3000;
 
@@ -231,38 +230,22 @@
 {/if}
 
 {#if confirmOpen}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <div
-    class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Confirm run probe predictions"
-    tabindex="-1"
-    use:focusOnMount
-    use:trapFocus={{ onEscape: closeConfirm }}
-    onclick={(e) => {
-      if (e.target === e.currentTarget) closeConfirm();
-    }}
-  >
-    <div
-      class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
-    >
-      <h3 class="mb-3 text-base font-semibold">Run probe predictions</h3>
-      <p class="mb-3 text-sm text-zinc-300">
-        Runs this run's exported checkpoint over the crop pool to populate
-        <code class="font-mono">probe_pred_*</code>. This is what the Uncertainty and
-        Model-disagreements review queues need — they stay empty until a probe has run at
-        least once.
-      </p>
-      <p class="mb-3 text-xs text-zinc-400">
-        Deployment-wide, potentially long-running. Only one probe job can run at a time.
-      </p>
-      <div class="flex justify-end gap-2">
-        <button type="button" class="btn" onclick={closeConfirm}>Cancel</button>
-        <button type="button" class="btn btn-primary" onclick={() => void confirmRun()}>
-          Confirm
-        </button>
-      </div>
+  <Modal label="Confirm run probe predictions" onclose={closeConfirm}>
+    <h3 class="mb-3 text-base font-semibold">Run probe predictions</h3>
+    <p class="mb-3 text-sm text-zinc-300">
+      Runs this run's exported checkpoint over the crop pool to populate
+      <code class="font-mono">probe_pred_*</code>. This is what the Uncertainty and
+      Model-disagreements review queues need — they stay empty until a probe has run at
+      least once.
+    </p>
+    <p class="mb-3 text-xs text-zinc-400">
+      Deployment-wide, potentially long-running. Only one probe job can run at a time.
+    </p>
+    <div class="flex justify-end gap-2">
+      <button type="button" class="btn" onclick={closeConfirm}>Cancel</button>
+      <button type="button" class="btn btn-primary" onclick={() => void confirmRun()}>
+        Confirm
+      </button>
     </div>
-  </div>
+  </Modal>
 {/if}

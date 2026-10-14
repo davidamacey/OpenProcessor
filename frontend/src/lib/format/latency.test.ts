@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
-import { formatLatencyMs } from './formatLatency';
+import { formatLatencyMs } from './latency';
 import TestRefs from '$lib/components/configTest/TestRefs.svelte';
 
 describe('formatLatencyMs', () => {

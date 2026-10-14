@@ -13,7 +13,7 @@
   import { combineAvailability } from '$lib/combine/combineAvailability.svelte';
   import { createCombineJob } from '$lib/combine/combineJobController.svelte';
   import { combineLabel, reportCell } from '$lib/combine/combineText';
-  import { formatCount } from '$lib/formatCount';
+  import { formatCount } from '$lib/format/count';
   import { projectHref } from '$lib/projectPaths';
   import { createProjectsAdmin } from '$lib/projects/projectsAdminController.svelte';
   import type { CombineNextStep } from '$lib/types_combine';

@@ -86,7 +86,7 @@ describe('BulkIngestPanel', () => {
     await vi.waitFor(() => expect(byId('bulk-run')).toBeTruthy());
     expect(byId('bulk-status')?.textContent).toContain('running');
     expect(byId('bulk-rate')?.textContent).toContain('21.2 img/s');
-    expect(byId('bulk-eta')?.textContent).toContain('2m05s');
+    expect(byId('bulk-eta')?.textContent).toContain('2m 05s');
     expect(byId('bulk-counts')?.textContent).toContain('100 of 400+ (still scanning)');
     expect(byId('bulk-stages')?.textContent).toContain('embed');
     expect(byId('bulk-cancel')).toBeTruthy();

@@ -10,13 +10,12 @@
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import type { SlotSpec } from '$lib/annotations/types';
   import { regionStatusesStore, toneBorderClass } from '$stores/regionStatuses.svelte';
-  import { focusOnMount } from '$lib/actions/focusOnMount';
-  import { trapFocus } from '$lib/actions/trapFocus';
   import SlotBboxEditor from './SlotBboxEditor.svelte';
   import SourceImageOverlay from './SourceImageOverlay.svelte';
   import ReprocessControl from './datasets/ReprocessControl.svelte';
   import EmbeddingStateBadge from './embedding/EmbeddingStateBadge.svelte';
   import DetectorClass from './labelConfirmation/DetectorClass.svelte';
+  import Modal from '$components/Modal.svelte';
 
   interface Props {
     crop: Crop;
@@ -501,40 +500,36 @@
   <!-- Escape closes it and is stopped here so a page-level Esc (clear selection
        on /clusters/[id]) does not also fire; focus moves in and returns to
        "view" on close (trapFocus). -->
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Source image"
-    tabindex="-1"
-    use:focusOnMount
-    use:trapFocus={{ onEscape: () => (expanded = false) }}
+  <Modal
+    label="Source image"
+    onclose={() => (expanded = false)}
     onkeydown={(e) => {
       if (e.key === 'Escape') e.stopPropagation();
     }}
+    layer="top"
+    scrim="bg-black/80"
+    panelClass="max-h-full max-w-6xl"
   >
-    <div class="relative max-h-full max-w-6xl">
-      <SourceImageOverlay
-        cropId={crop.id}
-        class="max-h-[85vh] max-w-full rounded-md border border-zinc-700"
-      />
-      {#if crop.image_id}
-        <div class="mt-2 flex justify-end" data-testid="card-reprocess-image">
-          <ReprocessControl
-            target={{ kind: 'image', imageId: crop.image_id }}
-            buttonLabel="Reprocess image…"
-            onadopt={(items) => onreprocessed?.(items)}
-          />
-        </div>
-      {/if}
-      <button
-        type="button"
-        class="absolute -top-3 -right-3 rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-white"
-        onclick={() => (expanded = false)}
-        aria-label="Close"
-      >
-        ×
-      </button>
-    </div>
-  </div>
+    <SourceImageOverlay
+      cropId={crop.id}
+      class="max-h-[85vh] max-w-full rounded-md border border-zinc-700"
+    />
+    {#if crop.image_id}
+      <div class="mt-2 flex justify-end" data-testid="card-reprocess-image">
+        <ReprocessControl
+          target={{ kind: 'image', imageId: crop.image_id }}
+          buttonLabel="Reprocess image…"
+          onadopt={(items) => onreprocessed?.(items)}
+        />
+      </div>
+    {/if}
+    <button
+      type="button"
+      class="absolute -top-3 -right-3 rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-white"
+      onclick={() => (expanded = false)}
+      aria-label="Close"
+    >
+      ×
+    </button>
+  </Modal>
 {/if}

@@ -219,19 +219,20 @@ describe('${apiBase} is always followed by ${scoped()}', () => {
         }
       }
     }
-    expect(bad).toEqual(['lib/api.ts  ${apiBase}${url}`;']);
+    expect(bad).toEqual([
+      'lib/api.ts  ${apiBase}${url}`;',
+      'lib/sse.ts  ${apiBase}${path}`);',
+    ]);
   });
 
-  it('sse.ts builds both scoped EventSource URLs from ${scoped()}', () => {
+  it('sse.ts builds every EventSource URL through streamUrl, from ${scoped()} or ${globalApi()}', () => {
     expect([
-      ...sseSrc.matchAll(/\$\{apiBase\}\$\{scoped\(\)\}\/(pipeline\/events|events)/g),
-    ]).toHaveLength(4);
-  });
-
-  it('sse.ts builds the global EventSource URL from ${globalApi()}', () => {
-    expect([
-      ...sseSrc.matchAll(/\$\{apiBase\}\$\{globalApi\(\)\}\/events/g),
+      ...sseSrc.matchAll(/streamUrl\(`\$\{scoped\(\)\}\/(pipeline\/events|events)`\)/g),
     ]).toHaveLength(2);
+    expect([
+      ...sseSrc.matchAll(/streamUrl\(`\$\{globalApi\(\)\}\/events`\)/g),
+    ]).toHaveLength(1);
+    expect([...sseSrc.matchAll(/new EventSource\(/g)]).toHaveLength(1);
   });
 });
 

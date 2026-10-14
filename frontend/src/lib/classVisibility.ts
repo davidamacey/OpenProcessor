@@ -43,7 +43,7 @@ export function isAssignableClass(cls: { name: string; deprecated?: boolean }): 
  * items, not items of their own) — the served `kind` from
  * `GET {API_PREFIX}/classes`, never re-derived client-side.
  */
-export function isSlotBoundClass(cls: { kind: 'item' | 'region' }): boolean {
+function isSlotBoundClass(cls: { kind: 'item' | 'region' }): boolean {
   return cls.kind === 'region';
 }
 

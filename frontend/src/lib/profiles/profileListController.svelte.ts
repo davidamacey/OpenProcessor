@@ -26,7 +26,7 @@ import type {
 import { ProfileActive, type ProfileActiveDeps } from './profileActive.svelte';
 
 /** §7.1: the region-profile axis id on every surface. */
-export const PROFILE_AXIS = 'detection_profile';
+const PROFILE_AXIS = 'detection_profile';
 
 export function isProfileConfigEvent(e: CurationEvent): boolean {
   return isConfigAxisEvent(e, PROFILE_AXIS);

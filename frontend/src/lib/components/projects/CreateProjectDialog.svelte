@@ -8,10 +8,9 @@
    * `capacity.status === 'blocked'` disables Create; `warn` shows the
    * served message and still allows it (the 201's `warnings` then toast).
    */
-  import { focusOnMount } from '$lib/actions/focusOnMount';
-  import { trapFocus } from '$lib/actions/trapFocus';
   import type { ProjectsAdmin } from '$lib/projects/projectsAdminController.svelte';
   import { toastStore } from '$stores/toast.svelte';
+  import Modal from '$components/Modal.svelte';
 
   interface Props {
     open: boolean;
@@ -76,107 +75,89 @@
 </script>
 
 {#if open}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <div
-    class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Create project"
-    use:focusOnMount
-    use:trapFocus={{ onEscape: onclose }}
-    tabindex="-1"
-    data-testid="create-project-dialog"
-    onclick={(e) => {
-      if (e.target === e.currentTarget) onclose();
-    }}
-  >
-    <div
-      class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
+  <Modal label="Create project" {onclose} data-testid="create-project-dialog">
+    <h3 class="mb-3 text-base font-semibold">Create project</h3>
+    <form
+      onsubmit={async (e) => {
+        e.preventDefault();
+        await submit();
+      }}
     >
-      <h3 class="mb-3 text-base font-semibold">Create project</h3>
-      <form
-        onsubmit={async (e) => {
-          e.preventDefault();
-          await submit();
-        }}
-      >
-        <label class="mb-3 block text-sm">
-          <span class="mb-1 block text-xs text-zinc-400"
-            >Slug (used in the URL, can't change)</span
+      <label class="mb-3 block text-sm">
+        <span class="mb-1 block text-xs text-zinc-400"
+          >Slug (used in the URL, can't change)</span
+        >
+        <input
+          type="text"
+          bind:value={slug}
+          required
+          autocomplete="off"
+          data-testid="create-project-slug"
+          class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 font-mono text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+        />
+        {#if slugHint}
+          <span
+            class="mt-1 block text-[11px] text-amber-300"
+            data-testid="create-project-slug-hint">{slugHint}</span
           >
-          <input
-            type="text"
-            bind:value={slug}
-            required
-            autocomplete="off"
-            data-testid="create-project-slug"
-            class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 font-mono text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-          />
-          {#if slugHint}
-            <span
-              class="mt-1 block text-[11px] text-amber-300"
-              data-testid="create-project-slug-hint">{slugHint}</span
-            >
-          {:else if limits}
-            <span class="mt-1 block text-[11px] text-zinc-500"
-              >{limits.slug_min}–{limits.slug_max} characters, {limits.slug_pattern}</span
-            >
-          {/if}
-        </label>
-        <label class="mb-3 block text-sm">
-          <span class="mb-1 block text-xs text-zinc-400">Display name</span>
-          <input
-            type="text"
-            bind:value={displayName}
-            required
-            data-testid="create-project-name"
-            class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-          />
-        </label>
-        <label class="mb-3 block text-sm">
-          <span class="mb-1 block text-xs text-zinc-400">Description (optional)</span>
-          <textarea
-            bind:value={description}
-            rows="2"
-            data-testid="create-project-description"
-            class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-          ></textarea>
-        </label>
-
-        {#if capacity && capacity.status !== 'ok'}
-          <p
-            class="mb-3 rounded border px-2 py-1.5 text-xs {blocked
-              ? 'border-red-900 bg-red-950/40 text-red-200'
-              : 'border-amber-900 bg-amber-950/40 text-amber-200'}"
-            data-testid="create-project-capacity"
+        {:else if limits}
+          <span class="mt-1 block text-[11px] text-zinc-500"
+            >{limits.slug_min}–{limits.slug_max} characters, {limits.slug_pattern}</span
           >
-            <span class="font-semibold"
-              >{capacity.labels[capacity.status] ?? capacity.status}.</span
-            >
-            {capacity.message}
-          </p>
         {/if}
+      </label>
+      <label class="mb-3 block text-sm">
+        <span class="mb-1 block text-xs text-zinc-400">Display name</span>
+        <input
+          type="text"
+          bind:value={displayName}
+          required
+          data-testid="create-project-name"
+          class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+        />
+      </label>
+      <label class="mb-3 block text-sm">
+        <span class="mb-1 block text-xs text-zinc-400">Description (optional)</span>
+        <textarea
+          bind:value={description}
+          rows="2"
+          data-testid="create-project-description"
+          class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+        ></textarea>
+      </label>
 
-        {#if errorText}
-          <p class="mb-3 text-xs text-red-300" data-testid="create-project-error">
-            {errorText}
-          </p>
-        {/if}
+      {#if capacity && capacity.status !== 'ok'}
+        <p
+          class="mb-3 rounded border px-2 py-1.5 text-xs {blocked
+            ? 'border-red-900 bg-red-950/40 text-red-200'
+            : 'border-amber-900 bg-amber-950/40 text-amber-200'}"
+          data-testid="create-project-capacity"
+        >
+          <span class="font-semibold"
+            >{capacity.labels[capacity.status] ?? capacity.status}.</span
+          >
+          {capacity.message}
+        </p>
+      {/if}
 
-        <div class="flex items-center justify-end gap-2">
-          <button type="button" class="btn" onclick={onclose} disabled={busy}
-            >Cancel</button
-          >
-          <button
-            type="submit"
-            class="btn btn-primary"
-            data-testid="create-project-submit"
-            disabled={busy || blocked || slug.trim() === '' || displayName.trim() === ''}
-          >
-            {busy ? 'Creating…' : 'Create'}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
+      {#if errorText}
+        <p class="mb-3 text-xs text-red-300" data-testid="create-project-error">
+          {errorText}
+        </p>
+      {/if}
+
+      <div class="flex items-center justify-end gap-2">
+        <button type="button" class="btn" onclick={onclose} disabled={busy}>Cancel</button
+        >
+        <button
+          type="submit"
+          class="btn btn-primary"
+          data-testid="create-project-submit"
+          disabled={busy || blocked || slug.trim() === '' || displayName.trim() === ''}
+        >
+          {busy ? 'Creating…' : 'Create'}
+        </button>
+      </div>
+    </form>
+  </Modal>
 {/if}

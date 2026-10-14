@@ -12,7 +12,7 @@
  */
 
 /** The `detail.error` code of a region route's 409 with no active profile. */
-export const NO_ACTIVE_PROFILE_ERROR = 'no_active_profile';
+const NO_ACTIVE_PROFILE_ERROR = 'no_active_profile';
 
 export const REGION_PROFILE_UNAVAILABLE_MESSAGE =
   'Region features are unavailable: the backend has no region profile configured';

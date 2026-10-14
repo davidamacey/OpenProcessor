@@ -5,6 +5,7 @@
    */
   import type { TrainJobStatus } from '$lib/types_train';
   import { externalHref } from '$lib/mlflowLink';
+  import { formatDuration } from '$lib/format/duration';
   import { formatMetric } from '$lib/trainResults';
 
   interface Props {
@@ -23,16 +24,6 @@
     if (!status.epoch_time_s || !tot || cur >= tot) return null;
     return Math.max(0, Math.round((tot - cur) * status.epoch_time_s));
   });
-
-  function fmtEta(sec: number | null): string {
-    if (sec == null) return '—';
-    if (sec < 60) return `${sec}s`;
-    const m = Math.round(sec / 60);
-    if (m < 60) return `${m}m`;
-    const h = Math.floor(m / 60);
-    const r = m % 60;
-    return r === 0 ? `${h}h` : `${h}h ${r}m`;
-  }
 
   // Live progress has no finished eval pass yet — the last completed
   // TRAINING epoch's own metrics (never best_checkpoint_metric, which
@@ -110,7 +101,7 @@
     </div>
     <div>
       <dt class="text-[11px] uppercase tracking-wide text-zinc-500">ETA</dt>
-      <dd class="font-mono text-zinc-100">{fmtEta(etaSec)}</dd>
+      <dd class="font-mono text-zinc-100">{formatDuration(etaSec)}</dd>
     </div>
     <div>
       <dt

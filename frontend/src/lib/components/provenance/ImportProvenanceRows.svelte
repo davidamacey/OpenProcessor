@@ -7,7 +7,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
-  import { formatTimestamp } from '$lib/formatDate';
+  import { formatTimestamp } from '$lib/format/date';
   import { projectHref } from '$lib/projectPaths';
   import type { Crop } from '$lib/types';
 

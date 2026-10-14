@@ -25,11 +25,10 @@
     metricEpochLabel,
   } from '$lib/trainResults';
   import { TRAINER_PROTOCOL_LABEL } from '$lib/bakeoff/view';
-  import { formatCount } from '$lib/formatCount';
-  import { focusOnMount } from '$lib/actions/focusOnMount';
-  import { trapFocus } from '$lib/actions/trapFocus';
+  import { formatCount } from '$lib/format/count';
   import ProbeControl from './ProbeControl.svelte';
   import type { TrainJobStatus, TrainManifest } from '$lib/types_train';
+  import Modal from '$components/Modal.svelte';
 
   interface Props {
     status: TrainJobStatus;
@@ -462,36 +461,28 @@
 </div>
 
 {#if matrixLightboxOpen && evalData?.confusion_matrix_url}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Confusion matrix"
-    use:focusOnMount
-    use:trapFocus={{ onEscape: () => (matrixLightboxOpen = false) }}
-    onclick={(e) => {
-      if (e.target === e.currentTarget) matrixLightboxOpen = false;
-    }}
-    tabindex="-1"
+  <Modal
+    label="Confusion matrix"
+    onclose={() => (matrixLightboxOpen = false)}
+    layer="top"
+    scrim="bg-black/80"
+    panelClass="relative max-h-full max-w-6xl"
   >
-    <div class="relative max-h-full max-w-6xl">
-      <img
-        src={resolveApiUrl(evalData.confusion_matrix_url)}
-        alt="Confusion matrix, full size"
-        class="max-h-[90vh] max-w-full rounded-md border border-zinc-700 object-contain"
-      />
-      <button
-        type="button"
-        class="absolute -top-3 -right-3 rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-white"
-        onclick={(e) => {
-          e.stopPropagation();
-          matrixLightboxOpen = false;
-        }}
-        aria-label="Close"
-      >
-        ×
-      </button>
-    </div>
-  </div>
+    <img
+      src={resolveApiUrl(evalData.confusion_matrix_url)}
+      alt="Confusion matrix, full size"
+      class="max-h-[90vh] max-w-full rounded-md border border-zinc-700 object-contain"
+    />
+    <button
+      type="button"
+      class="absolute -top-3 -right-3 rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-white"
+      onclick={(e) => {
+        e.stopPropagation();
+        matrixLightboxOpen = false;
+      }}
+      aria-label="Close"
+    >
+      ×
+    </button>
+  </Modal>
 {/if}

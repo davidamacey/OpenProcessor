@@ -11,7 +11,16 @@
     "strict": true,
     "moduleResolution": "bundler",
     "module": "ESNext",
-    "target": "ES2022"
+    "target": "ES2022",
+    "paths": {
+      "$lib": ["./src/lib"],
+      "$lib/*": ["./src/lib/*"],
+      "$components": ["./src/lib/components"],
+      "$components/*": ["./src/lib/components/*"],
+      "$stores": ["./src/lib/stores"],
+      "$stores/*": ["./src/lib/stores/*"],
+      "$contracts/*": ["../contracts/*"]
+    }
   },
   "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.svelte", "vite.config.ts"],
   "exclude": ["src/service-worker"]

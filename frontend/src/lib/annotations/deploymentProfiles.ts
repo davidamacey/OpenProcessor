@@ -25,7 +25,7 @@ import { LIMITS } from './config/allowLists';
 import { parseProfileDocument } from './config/parseSlotConfig';
 import { installDeploymentSlots } from './registeredSlots';
 
-export const DEPLOYMENT_PROFILE_URL = '/annotation-profiles.json';
+const DEPLOYMENT_PROFILE_URL = '/annotation-profiles.json';
 export const DEPLOYMENT_PROFILE_TIMEOUT_MS = 2000;
 
 export interface DeploymentProfileLoad {

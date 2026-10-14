@@ -1,21 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { progressFixture, runFixture } from '$lib/test/fixtures/bulkIngest';
-import {
-  formatDuration,
-  headlineRate,
-  progressPercent,
-  stageRows,
-} from './bulkIngestFormat';
+import { headlineRate, progressPercent, stageRows } from './bulkIngestFormat';
 
 describe('bulk ingest formatting', () => {
-  it('formats durations and the unknown estimate', () => {
-    expect(formatDuration(null)).toBe('--');
-    expect(formatDuration(undefined)).toBe('--');
-    expect(formatDuration(12.4)).toBe('12s');
-    expect(formatDuration(249)).toBe('4m09s');
-    expect(formatDuration(3900)).toBe('1h05m');
-  });
-
   it('bounds the bar and has none before anything is found', () => {
     expect(progressPercent(progressFixture())).toBe(0);
     expect(progressPercent(progressFixture({ discovered: 200, processed: 50 }))).toBe(25);

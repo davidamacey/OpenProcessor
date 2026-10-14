@@ -81,7 +81,7 @@ export interface ConfigEditorView {
 }
 
 /** A deep copy, so edits never touch the served doc. */
-export function cloneBody<B>(body: B): B {
+function cloneBody<B>(body: B): B {
   return JSON.parse(JSON.stringify(body)) as B;
 }
 

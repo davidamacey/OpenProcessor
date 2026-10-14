@@ -8,7 +8,7 @@ import type { PackFieldValue } from '$lib/types_packs';
 export const LIST_MAX_ENTRIES = 500;
 export const LIST_MAX_ENTRY_CHARS = 200;
 
-export function isStringList(v: unknown): v is string[] {
+function isStringList(v: unknown): v is string[] {
   return Array.isArray(v) && v.every((x) => typeof x === 'string');
 }
 

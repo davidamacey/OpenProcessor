@@ -166,6 +166,11 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   smaller modules and libraries. No behavior change; `tests/test_validate_models.py` (a live CLI,
   not a test) moved to `scripts/validation/validate_models.py`.
 
+- Frontend hygiene (`frontend/CHANGELOG.md` has the detail): one accessible `Modal` for all dialogs, one
+  home for duration, byte and time formatters, one SSE reconnect helper, the deprecated SvelteKit `alias`
+  option replaced, dead exports removed with `knip` in CI, the standalone-repository release scripts, compose
+  files and hooks under `frontend/` deleted, and `frontend/CLAUDE.md` cut to current rules.
+
 - Tests and scripts are named by behavior, not by the pass that wrote them: the activation probes are
   `tests/curation/activation/` (nine files), the clone probes `tests/projects/test_clone_settings_real_flow.py`
   and friends, `scripts/bench/wave0_*.py` are `scripts/bench/ingest_sweep_*.py` (the published

@@ -10,7 +10,7 @@
   import PackActivePanel from '$components/packs/PackActivePanel.svelte';
   import ConfigCloneDialog from '$components/config/ConfigCloneDialog.svelte';
   import ConfigGate from '$components/config/ConfigGate.svelte';
-  import { formatTimestamp } from '$lib/formatDate';
+  import { formatTimestamp } from '$lib/format/date';
   import { packsAvailability } from '$lib/packs/packsAvailability.svelte';
   import type { CloneSource } from '$lib/config/configList.svelte';
   import { createPackList } from '$lib/packs/packListController.svelte';
