@@ -15,7 +15,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from scripts.datasets import fetch_coco_subset as f
+from scripts.datasets import coco_fetch, coco_selection, fetch_coco_subset as f
+from scripts.datasets._common import FetchError
 
 
 if TYPE_CHECKING:
@@ -50,7 +51,7 @@ def _ann(image_id, category_id, bbox, *, iscrowd=0):
 
 
 def test_resolve_license_names_maps_all_aliases() -> None:
-    names = f.resolve_license_names(['by', 'by-sa', 'no-known', 'usgov'])
+    names = coco_selection.resolve_license_names(['by', 'by-sa', 'no-known', 'usgov'])
     assert names == {
         'Attribution License',
         'Attribution-ShareAlike License',
@@ -60,8 +61,8 @@ def test_resolve_license_names_maps_all_aliases() -> None:
 
 
 def test_resolve_license_names_rejects_unknown_token() -> None:
-    with pytest.raises(f.FetchError):
-        f.resolve_license_names(['not-a-real-license'])
+    with pytest.raises(FetchError):
+        coco_selection.resolve_license_names(['not-a-real-license'])
 
 
 # --- primary-class + area-threshold logic -------------------------------------
@@ -75,7 +76,7 @@ def test_primary_class_picks_largest_qualifying_box() -> None:
         _ann(1, 2, [50, 50, 7, 7]),  # bicycle: area 49 / 10000 = 0.49% -- excluded
     ]
     cat_names: dict[int, str] = {2: 'bicycle', 3: 'car', 17: 'cat'}
-    result = f.primary_class_per_image(images, annotations, cat_names, {2, 3, 17})
+    result = coco_selection.primary_class_per_image(images, annotations, cat_names, {2, 3, 17})
     assert result == {1: 'car'}
 
 
@@ -83,14 +84,14 @@ def test_primary_class_ignores_iscrowd_boxes() -> None:
     images = [_image(1, 'a.jpg', LIC_BY, w=100, h=100)]
     annotations = [_ann(1, 3, [0, 0, 50, 50], iscrowd=1)]
     cat_names: dict[int, str] = {2: 'bicycle', 3: 'car', 17: 'cat'}
-    assert f.primary_class_per_image(images, annotations, cat_names, {2, 3, 17}) == {}
+    assert coco_selection.primary_class_per_image(images, annotations, cat_names, {2, 3, 17}) == {}
 
 
 def test_primary_class_absent_when_no_qualifying_box() -> None:
     images = [_image(1, 'a.jpg', LIC_BY, w=1000, h=1000)]
     annotations = [_ann(1, 3, [0, 0, 5, 5])]  # 25/1e6 = 0.0025% -- too small
     cat_names: dict[int, str] = {2: 'bicycle', 3: 'car', 17: 'cat'}
-    assert f.primary_class_per_image(images, annotations, cat_names, {2, 3, 17}) == {}
+    assert coco_selection.primary_class_per_image(images, annotations, cat_names, {2, 3, 17}) == {}
 
 
 # --- license filtering on top of primary-class resolution --------------------
@@ -107,7 +108,7 @@ def test_eligible_images_filters_by_license_name() -> None:
         LIC_BY_NC_SA: 'Attribution-NonCommercial-ShareAlike License',
     }
     allowed = {'Attribution License'}
-    out = f.eligible_images(images, primary, lic_names, allowed, 'val2017')
+    out = coco_selection.eligible_images(images, primary, lic_names, allowed, 'val2017')
     assert [r['image_id'] for r in out] == [1]
 
 
@@ -115,7 +116,9 @@ def test_eligible_images_sorted_by_image_id() -> None:
     images = [_image(3, 'c.jpg', LIC_BY), _image(1, 'a.jpg', LIC_BY)]
     primary = {1: 'car', 3: 'car'}
     lic_names = {LIC_BY: 'Attribution License'}
-    out = f.eligible_images(images, primary, lic_names, {'Attribution License'}, 'val2017')
+    out = coco_selection.eligible_images(
+        images, primary, lic_names, {'Attribution License'}, 'val2017'
+    )
     assert [r['image_id'] for r in out] == [1, 3]
 
 
@@ -142,7 +145,7 @@ def _pool(image_ids, cls, split):
 def test_select_per_class_prefers_val_then_tops_up_from_train() -> None:
     val_pool = _pool([1, 2], 'car', 'val2017')
     train_pool = _pool([10, 11, 12], 'car', 'train2017')
-    out = f.select_per_class(val_pool, train_pool, ['car'], per_class=4, seed=1)
+    out = coco_selection.select_per_class(val_pool, train_pool, ['car'], per_class=4, seed=1)
     assert len(out) == 4
     assert sum(1 for r in out if r['split'] == 'val2017') == 2
     assert sum(1 for r in out if r['split'] == 'train2017') == 2
@@ -151,15 +154,15 @@ def test_select_per_class_prefers_val_then_tops_up_from_train() -> None:
 def test_select_per_class_is_deterministic() -> None:
     val_pool = _pool(range(100), 'car', 'val2017')
     train_pool = _pool(range(100, 200), 'car', 'train2017')
-    a = f.select_per_class(val_pool, train_pool, ['car'], per_class=10, seed=7)
-    b = f.select_per_class(val_pool, train_pool, ['car'], per_class=10, seed=7)
+    a = coco_selection.select_per_class(val_pool, train_pool, ['car'], per_class=10, seed=7)
+    b = coco_selection.select_per_class(val_pool, train_pool, ['car'], per_class=10, seed=7)
     assert a == b
 
 
 def test_select_per_class_warns_but_does_not_fail_when_pool_too_small(caplog) -> None:
     val_pool = _pool([1], 'car', 'val2017')
     train_pool = _pool([10], 'car', 'train2017')
-    out = f.select_per_class(val_pool, train_pool, ['car'], per_class=10, seed=1)
+    out = coco_selection.select_per_class(val_pool, train_pool, ['car'], per_class=10, seed=1)
     assert len(out) == 2  # takes everything available, no crash
 
 
@@ -169,9 +172,9 @@ def test_select_per_class_warns_but_does_not_fail_when_pool_too_small(caplog) ->
 def test_select_side_sets_disjoint_from_main() -> None:
     val_pool = _pool(range(50), 'car', 'val2017')
     train_pool = _pool(range(50, 100), 'car', 'train2017')
-    main = f.select_per_class(val_pool, train_pool, ['car'], per_class=20, seed=1)
+    main = coco_selection.select_per_class(val_pool, train_pool, ['car'], per_class=20, seed=1)
     main_ids = {r['image_id'] for r in main}
-    sides = f.select_side_sets(
+    sides = coco_selection.select_side_sets(
         val_pool, train_pool, main_ids, {'upload': 5, 'post_promote': 5}, seed=1
     )
     upload_ids = {r['image_id'] for r in sides['upload']}
@@ -189,7 +192,7 @@ def test_select_side_sets_disjoint_from_main() -> None:
 def test_verify_or_write_manifest_writes_pin_on_first_run(tmp_path: Path) -> None:
     manifest = tmp_path / 'pin.json'
     selected = _pool([1, 2], 'car', 'val2017')
-    f.verify_or_write_manifest(manifest, selected)
+    coco_selection.verify_or_write_manifest(manifest, selected)
     assert manifest.is_file()
     pinned = json.loads(manifest.read_text())
     assert [p['image_id'] for p in pinned] == [1, 2]
@@ -198,29 +201,32 @@ def test_verify_or_write_manifest_writes_pin_on_first_run(tmp_path: Path) -> Non
 def test_verify_or_write_manifest_passes_when_selection_matches_pin(tmp_path: Path) -> None:
     manifest = tmp_path / 'pin.json'
     selected = _pool([1, 2], 'car', 'val2017')
-    f.verify_or_write_manifest(manifest, selected)
+    coco_selection.verify_or_write_manifest(manifest, selected)
     # Re-running with the identical selection must not raise.
-    f.verify_or_write_manifest(manifest, selected)
+    coco_selection.verify_or_write_manifest(manifest, selected)
 
 
 def test_verify_or_write_manifest_raises_on_drift(tmp_path: Path) -> None:
     manifest = tmp_path / 'pin.json'
-    f.verify_or_write_manifest(manifest, _pool([1, 2], 'car', 'val2017'))
-    with pytest.raises(f.FetchError, match='selection drift'):
-        f.verify_or_write_manifest(manifest, _pool([1, 3], 'car', 'val2017'))
+    coco_selection.verify_or_write_manifest(manifest, _pool([1, 2], 'car', 'val2017'))
+    with pytest.raises(FetchError, match='selection drift'):
+        coco_selection.verify_or_write_manifest(manifest, _pool([1, 3], 'car', 'val2017'))
 
 
 # --- CLI parsing ---------------------------------------------------------
 
 
 def test_parse_side_sets() -> None:
-    assert f.parse_side_sets('upload=12,post_promote=24') == {'upload': 12, 'post_promote': 24}
-    assert f.parse_side_sets('') == {}
+    assert coco_selection.parse_side_sets('upload=12,post_promote=24') == {
+        'upload': 12,
+        'post_promote': 24,
+    }
+    assert coco_selection.parse_side_sets('') == {}
 
 
 def test_parse_side_sets_rejects_malformed_entry() -> None:
-    with pytest.raises(f.FetchError):
-        f.parse_side_sets('upload=notanumber')
+    with pytest.raises(FetchError):
+        coco_selection.parse_side_sets('upload=notanumber')
 
 
 # --- --negatives / --val-only --------------------------------------------------
@@ -253,7 +259,9 @@ def _annotation_split(first_id: int, *, with_cars: int, empty: int, person_only:
 def test_select_negatives_excludes_target_class_frames_and_bad_licenses() -> None:
     images, anns = _annotation_split(1, with_cars=2, empty=6, person_only=2)
     lic = {lic['id']: lic['name'] for lic in _LICENSES}
-    out = f.select_negatives(images, anns, {3}, lic, {'Attribution License'}, 'val2017', 10, 7)
+    out = coco_selection.select_negatives(
+        images, anns, {3}, lic, {'Attribution License'}, 'val2017', 10, 7
+    )
     ids = {r['image_id'] for r in out}
     # cars 1-2 carry the target class; person-only frames 3-4 do not, so they
     # are negatives for ``car`` (full annotations kept); of empties 5..10 only
@@ -270,9 +278,9 @@ def test_select_negatives_is_seeded_and_capped() -> None:
         'license_id_to_name': lic,
         'allowed_license_names': {'Attribution License'},
     }
-    a = f.select_negatives(images, anns, split='val2017', n=5, seed=3, **kw)
-    b = f.select_negatives(images, anns, split='val2017', n=5, seed=3, **kw)
-    c = f.select_negatives(images, anns, split='val2017', n=5, seed=4, **kw)
+    a = coco_selection.select_negatives(images, anns, split='val2017', n=5, seed=3, **kw)
+    b = coco_selection.select_negatives(images, anns, split='val2017', n=5, seed=3, **kw)
+    c = coco_selection.select_negatives(images, anns, split='val2017', n=5, seed=4, **kw)
     assert a == b
     assert len(a) == 5
     assert a != c
@@ -346,13 +354,11 @@ def test_run_negatives_written_with_attribution_and_pinned(
 def test_download_images_refuses_a_file_name_with_a_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from scripts.datasets._common import FetchError
-
     fetched: list[str] = []
-    monkeypatch.setattr(f, 'download', lambda url, _dest: fetched.append(url))
+    monkeypatch.setattr(coco_fetch, 'download', lambda url, _dest: fetched.append(url))
 
     with pytest.raises(FetchError, match='non-basename'):
-        f.download_images(
+        coco_fetch.download_images(
             [{'split': 'val2017', 'file_name': '../../evil.jpg', 'image_id': 1}], tmp_path
         )
     assert fetched == []
