@@ -1,6 +1,6 @@
 """Auto-split sub-module of the curation detection worker.
 
-See ``scripts/curation/region_worker_main.py`` for the entry point and
+See ``scripts/curation/worker/__main__.py`` for the entry point and
 the ``scripts/curation/worker/`` package for the rest of the split.
 """
 

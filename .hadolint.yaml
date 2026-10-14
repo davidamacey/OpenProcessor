@@ -1,4 +1,4 @@
-# Hadolint configuration for Triton-API Dockerfiles
+# Hadolint configuration for the OpenProcessor Dockerfiles
 # https://github.com/hadolint/hadolint
 
 # Ignore specific rules

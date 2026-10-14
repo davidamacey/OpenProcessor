@@ -1,6 +1,6 @@
 """Region-text OCR reader + item-text reader for the curation detection worker.
 
-See ``scripts/curation/region_worker_main.py`` for the entry point.
+See ``scripts/curation/worker/__main__.py`` for the entry point.
 
 Two OCR jobs ride on the region cascade:
 

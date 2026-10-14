@@ -2,8 +2,7 @@
 Unified Triton gRPC Client Pool.
 
 Provides both sync and async client management with connection pooling.
-This is the canonical implementation - use this instead of the legacy
-triton_async_client.py and triton_shared_client.py in utils/.
+This is the one Triton client implementation.
 
 Features:
 - Singleton pattern for connection reuse
@@ -15,7 +14,7 @@ Features:
 - Monitoring and statistics
 
 Usage:
-    # Sync client (for background tasks, legacy code)
+    # Sync client (for background tasks)
     client = TritonClientManager.get_sync_client("triton-server:8001")
 
     # Async client (for FastAPI endpoints - RECOMMENDED)
@@ -608,31 +607,27 @@ class TritonClientManager:
 
 
 # =============================================================================
-# Factory Functions (for backward compatibility)
+# Factory functions
 # =============================================================================
 def get_triton_client(triton_url: str = 'triton-server:8001', **kwargs):
     """
-    Get sync Triton client (backward compatible).
-
-    Prefer TritonClientManager.get_sync_client() for new code.
+    Get the sync Triton client (see TritonClientManager.get_sync_client()).
     """
     return TritonClientManager.get_sync_client(triton_url, **kwargs)
 
 
 async def get_async_triton_client(triton_url: str = 'triton-server:8001', **kwargs):
     """
-    Get async Triton client (backward compatible).
-
-    Prefer TritonClientManager.get_async_client() for new code.
+    Get the async Triton client (see TritonClientManager.get_async_client()).
     """
     return await TritonClientManager.get_async_client(triton_url, **kwargs)
 
 
 async def close_async_clients():
-    """Close async clients (backward compatible)."""
+    """Close the async clients."""
     await TritonClientManager.close_async_clients()
 
 
 def get_client_pool_stats() -> dict[str, Any]:
-    """Get sync pool stats (backward compatible)."""
+    """Get the sync pool statistics."""
     return TritonClientManager.get_sync_stats()

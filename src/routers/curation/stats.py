@@ -281,11 +281,11 @@ async def stats_dataset_route(
 async def dataset_stats(opensearch: Any, item_filter: ItemFilter) -> dict[str, Any]:
     """Overall dataset balance + label-source + pipeline breakdown.
 
-    Single ``_search?size=0`` with composite aggregations. Backwards-
-    compatible: legacy callers still see ``total_crops``, ``validated``,
-    ``test_holdout``, ``by_source``.
+    Single ``_search?size=0`` with composite aggregations. ``total_crops``,
+    ``validated``, ``test_holdout`` and ``by_source`` are fixed wire fields
+    that Cropwright reads.
 
-    New fields for the dashboard:
+    The dashboard fields:
 
     - ``as_of`` — ISO8601 timestamp of the query.
     - ``labeled.{by_human, by_vlm, by_classifier, other}`` — rolled-up counts
@@ -419,13 +419,13 @@ async def dataset_stats(opensearch: Any, item_filter: ItemFilter) -> dict[str, A
 
     return {
         'as_of': _now_iso(),
-        # --- legacy keys (do NOT remove — labeler getStats() reads these) -
+        # --- wire fields Cropwright's getStats() reads (do not remove) ----
         'total_crops': int(total),
         'validated': (aggs.get('validated') or {}).get('doc_count', 0),
         'validated_by_import': imp.count_in(aggs, 'validated_by_import'),
         'test_holdout': (aggs.get('test_holdout') or {}).get('doc_count', 0),
         'by_source': (aggs.get('by_source') or {}).get('buckets', []),
-        # --- new dashboard fields -----------------------------------------
+        # --- dashboard fields ---------------------------------------------
         'labeled': {
             # Class-label provenance (denominator = total_crops).
             # by_human counts class_source startswith 'human' — the actual
@@ -456,9 +456,6 @@ async def dataset_stats(opensearch: Any, item_filter: ItemFilter) -> dict[str, A
             'total_detected': region_total_detected,
             'by_detector': regions_by_detector,
             'by_segmenter': regions_by_segmenter,
-            # Kept under the legacy name so older labeler bundles keep
-            # rendering something; new label is ``by_human_drew``.
-            'by_human': regions_by_human_drew,
             'by_human_drew': regions_by_human_drew,
             'verified_by_human': regions_verified_by_human,
             'verified_by_vlm': regions_verified_by_vlm,

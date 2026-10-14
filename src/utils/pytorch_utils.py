@@ -11,7 +11,6 @@ from contextlib import asynccontextmanager
 import numpy as np
 import torch
 from ultralytics import YOLO
-from ultralytics.utils import ThreadingLocked
 
 
 logger = logging.getLogger(__name__)
@@ -26,64 +25,6 @@ logger = logging.getLogger(__name__)
 # Solution: Use @ThreadingLocked() decorator from ultralytics
 # https://docs.ultralytics.com/guides/yolo-thread-safe-inference/
 # ============================================================================
-
-
-@ThreadingLocked()
-def thread_safe_predict(model: YOLO, img: np.ndarray):
-    """
-    Thread-safe single image inference for PyTorch models.
-
-    The @ThreadingLocked decorator ensures that when multiple threads access
-    the same model instance (via FastAPI's thread pool), only one inference
-    runs at a time, preventing CUDA race conditions.
-
-    **Why needed:**
-    - PyTorch models load weights into GPU memory
-    - Multiple concurrent calls can corrupt GPU state
-    - @ThreadingLocked() serializes access to prevent this
-
-    **Performance:**
-    - Single-threaded inference (lock prevents parallelism)
-    - But necessary for correctness with shared model instances
-    - Alternative: Per-request model instances (not practical for PyTorch)
-
-    Args:
-        model: YOLO model instance (shared across requests)
-        img: Image array (numpy, HWC, BGR)
-
-    Returns:
-        Detection results from YOLO model
-
-    Example:
-        >>> model = YOLO('/app/pytorch_models/yolo11n.pt')
-        >>> results = thread_safe_predict(model, img)
-    """
-    # Use FP16 if GPU available (to match TensorRT models)
-    use_half = torch.cuda.is_available()
-    return model(img, verbose=False, half=use_half)
-
-
-@ThreadingLocked()
-def thread_safe_predict_batch(model: YOLO, images: list[np.ndarray]):
-    """
-    Thread-safe batch inference for PyTorch models.
-
-    Similar to thread_safe_predict but handles multiple images in one call.
-
-    Args:
-        model: YOLO model instance (shared across requests)
-        images: List of image arrays (numpy, HWC, BGR)
-
-    Returns:
-        Batch detection results from YOLO model
-
-    Example:
-        >>> model = YOLO('/app/pytorch_models/yolo11n.pt')
-        >>> results = thread_safe_predict_batch(model, [img1, img2, img3])
-    """
-    # Use FP16 if GPU available (to match TensorRT models)
-    use_half = torch.cuda.is_available()
-    return model(images, verbose=False, half=use_half)
 
 
 # ============================================================================

@@ -1,5 +1,5 @@
 # =============================================================================
-# Triton-API Docker Ignore File
+# OpenProcessor Docker Ignore File
 # Excludes files not needed in Docker build context
 # =============================================================================
 

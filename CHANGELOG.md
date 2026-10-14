@@ -133,6 +133,9 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Changed
 
+- The region field that keeps the status an item had before a region requeue is now
+  `region_status_before_requeue` (was `region_status_legacy`). Values already stored under the old
+  name are not read; they only recorded a past requeue.
 - Repo guards, the first step of the repo cleanup (`docs/design/repo_cleanup_plan.md`). Hooks:
   pre-commit-hooks 6, gitleaks 8.30, bandit 1.9, shellcheck 0.11, hadolint 2.15 and ruff 0.17
   (the hook id is now `ruff-check`; Dockerfile health checks use the JSON form hadolint wants).
@@ -283,6 +286,21 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Removed
 
+- Dead code, found by the new vulture guard (`scripts/codegen/check_vulture.py`) and the plan's
+  list: `src/services/cluster_maintenance.py`, the unused `ImageService`, the unused
+  `region_lean` module (and the `paddleocr` requirement only it imported), the unused
+  face-ingest, identity and person-assignment service methods and their schemas, unused
+  Triton client and pool methods, the `/clusters` `AlbumInfo` model, `crop_blur`/`is_blurry`
+  and other helpers only a test called, and the `src.utils` package re-exports (import from the
+  submodule). Reviewed dynamic-dispatch cases are in `scripts/codegen/vulture_whitelist.py`
+  with a reason each.
+- The `scripts/curation/region_worker_main.py` compatibility entry point: start the detection
+  worker with `python -m scripts.curation.worker` (the compose file already does).
+- `regions.by_human` in `GET /curation/projects/{project}/stats/dataset`: it was the old name of
+  `regions.by_human_drew`.
+- The retired region statuses `pending` and `pending_verify`: queries, the worker and the queue
+  gauges now match only the `RegionStatus` values, which is all any writer has emitted since the
+  rename.
 - The `check-no-literal-region-fields` hook and `scripts/codegen/check_no_literal_region_fields.py`: the
   naming-leak scan and `tests/test_no_legacy_region_scalars.py` cover the same ground.
 

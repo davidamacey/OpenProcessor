@@ -351,12 +351,6 @@ class ExportSingleClassRequest(BaseModel):
     split_mode: Literal['keep_imported', 'recompute'] = 'keep_imported'
 
 
-class StatusResponse(BaseModel):
-    status: str
-    detail: str | None = None
-    extra: dict[str, Any] = Field(default_factory=dict)
-
-
 class _PathLookupRequest(BaseModel):
     """Bulk path-existence check input. Capped client-side to 10k paths."""
 

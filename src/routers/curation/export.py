@@ -16,14 +16,8 @@ from fastapi import HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from src.routers.curation._common import (
-    ExportYoloRequest,
-    OpenSearchDep,
-    RegistryDep,
-    items_index,
-    logger,
-    router,
-)
+from src.routers.curation._common import OpenSearchDep, RegistryDep, items_index, logger, router
+from src.routers.curation._common_models import ExportYoloRequest
 from src.services.curation.export import (
     REGISTRY_ARTIFACT_CONTENT_TYPES,
     GenericYoloExportService,

@@ -15,8 +15,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 from _fake_project_registry import install_static_project_registry
 
-import scripts.curation.region_worker_main as worker
 from scripts.curation.worker import runner as runner_mod
+from scripts.curation.worker.__main__ import parse_args
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_models import VlmCombinedReply
@@ -85,13 +85,12 @@ async def run_region_worker(
     monkeypatch.setenv('OP_VLM_URL', 'http://vlm.invalid:8000')
 
     pool = MagicMock(initialize=AsyncMock(), close=AsyncMock())
-    monkeypatch.setattr(worker, 'AsyncTritonPool', MagicMock(return_value=pool))
-    monkeypatch.setattr(worker, 'make_script_opensearch', MagicMock(return_value=cluster))
+    monkeypatch.setattr(runner_mod, 'AsyncTritonPool', MagicMock(return_value=pool))
+    monkeypatch.setattr(runner_mod, 'make_script_opensearch', MagicMock(return_value=cluster))
     install_static_project_registry(monkeypatch, records)
 
     primary_det = MagicMock()
     primary_det.confidence_floor = 0.0
-    primary_det.detect_batch = AsyncMock(return_value=[None])
     primary_det.detect_batch_multi = AsyncMock(return_value=[[]])
     monkeypatch.setattr(runner_mod, 'RegionDetector', MagicMock(return_value=primary_det))
     ocr = MagicMock()
@@ -112,7 +111,7 @@ async def run_region_worker(
         return found[0] if found else None
 
     seg.segment = AsyncMock(side_effect=_segment)
-    monkeypatch.setattr(worker, 'SegmenterClient', MagicMock(return_value=seg))
+    monkeypatch.setattr(runner_mod, 'SegmenterClient', MagicMock(return_value=seg))
 
     labeler = MagicMock(aclose=AsyncMock())
     labeler.class_names = []
@@ -126,10 +125,10 @@ async def run_region_worker(
     labeler.region_visible_batch = AsyncMock(
         side_effect=lambda crops, **_kw: dict.fromkeys((c.crop_id for c in crops), True)
     )
-    monkeypatch.setattr(worker, 'build_vlm_labeler', MagicMock(return_value=labeler))
+    monkeypatch.setattr(runner_mod, 'build_vlm_labeler', MagicMock(return_value=labeler))
     monkeypatch.setattr('scripts.curation.worker.state._class_group', lambda _name: None)
 
-    args = worker.parse_args(
+    args = parse_args(
         [
             '--opensearch=http://os.invalid:9200',
             '--triton=triton.invalid:8001',

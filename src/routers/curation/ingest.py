@@ -29,6 +29,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.config import DetectionProfile, RegionStatus, get_region_fields
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.routers.curation._common import (
+    OpenSearchDep,
+    RegistryDep,
+    _ensure_indexes,
+    images_index,
+    items_index,
+    router,
+)
+from src.routers.curation._common_models import (
     BatchIngestResponse as _BatchIngestResponse,
     BatchIngestSummaryResponse as _BatchIngestSummaryResponse,
     IngestBatchConfig,
@@ -41,15 +49,9 @@ from src.routers.curation._common import (
     IngestRegionDrainResponse,
     IngestStatusResponse,
     IngestUploadConfig,
-    OpenSearchDep,
     RegionDependencyStatusResponse,
-    RegistryDep,
-    _ensure_indexes,
     _PathLookupRequest,
     _PathLookupResponse,
-    images_index,
-    items_index,
-    router,
 )
 from src.services.curation.detector_vocabulary import detector_labels
 from src.services.curation.image_serving import UNSERVABLE_PATH_ERROR, is_servable_image_path

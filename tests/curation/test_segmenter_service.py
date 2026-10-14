@@ -399,14 +399,6 @@ class TestWireSurface:
 # =============================================================================
 
 
-def _detector_mock(candidates):
-    from unittest.mock import AsyncMock, MagicMock
-
-    detector = MagicMock()
-    detector.detect_batch = AsyncMock(return_value=candidates)
-    return detector
-
-
 def _vlm_mock(*, is_region: bool):
     from unittest.mock import AsyncMock, MagicMock
 

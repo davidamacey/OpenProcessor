@@ -1,9 +1,8 @@
 """Region-cascade integrity regressions found on a live deployment.
 
-1. ``region_text`` must be the text transcribed off the region — never a
-   description of the region or the item's class — and every VLM reply
-   field that drives an accept is read strictly (fail-closed), with batch
-   replies aligned to the right crop.
+1. ``region_text`` is the text transcribed off the region — never a description
+   of it or the item's class — and every VLM reply field that drives an accept
+   is read strictly (fail-closed), with batch replies aligned to the right crop.
 2. ``region_detector_chain`` entries are exactly ``<actor>:<event>`` and
    the training-candidate readers' ``term`` filters match what the worker
    writes.
@@ -26,8 +25,10 @@ import pytest
 from _fake_project_registry import install_static_project_registry
 from PIL import Image
 
-import scripts.curation.region_worker_main as worker
 from scripts.curation.worker import runner as runner_mod, stage_a as stage_a_mod
+from scripts.curation.worker.__main__ import parse_args
+from scripts.curation.worker.bulk_writer import _bulk_update
+from scripts.curation.worker.state import _ItemTask
 from src.config import get_region_fields
 from src.config.project_context import current_project
 from src.services.detection.cascade_detect.candidate import RegionCandidate
@@ -532,8 +533,8 @@ async def _drive_worker(
     pool = MagicMock(initialize=AsyncMock(), close=AsyncMock())
     if region_embed_ready:
         pool.is_model_ready = AsyncMock(return_value=True)
-    monkeypatch.setattr(worker, 'AsyncTritonPool', MagicMock(return_value=pool))
-    monkeypatch.setattr(worker, 'make_script_opensearch', MagicMock(return_value=fake_os))
+    monkeypatch.setattr(runner_mod, 'AsyncTritonPool', MagicMock(return_value=pool))
+    monkeypatch.setattr(runner_mod, 'make_script_opensearch', MagicMock(return_value=fake_os))
     # The worker discovers its projects through the registry; keep that
     # read in-memory too, never against the unresolvable --opensearch host.
     install_static_project_registry(monkeypatch)
@@ -543,7 +544,6 @@ async def _drive_worker(
 
     primary_det = MagicMock()
     primary_det.confidence_floor = 0.0
-    primary_det.detect_batch = AsyncMock(return_value=[primary_list[0] if primary_list else None])
     primary_det.detect_batch_multi = AsyncMock(return_value=[primary_list])
     monkeypatch.setattr(runner_mod, 'RegionDetector', MagicMock(return_value=primary_det))
     ocr = MagicMock()
@@ -555,7 +555,7 @@ async def _drive_worker(
     seg = MagicMock(aclose=AsyncMock())
     seg.segment = AsyncMock(return_value=segmenter_list[0] if segmenter_list else None)
     seg.segment_multi = AsyncMock(return_value=segmenter_list)
-    monkeypatch.setattr(worker, 'SegmenterClient', MagicMock(return_value=seg))
+    monkeypatch.setattr(runner_mod, 'SegmenterClient', MagicMock(return_value=seg))
 
     vlm = MagicMock(aclose=AsyncMock())
     vlm.class_names = []
@@ -567,7 +567,7 @@ async def _drive_worker(
         or (lambda crops, **_kw: {} if visible is None else {c.crop_id: visible for c in crops})
     )
     vlm_cls = MagicMock(return_value=vlm)
-    monkeypatch.setattr(worker, 'build_vlm_labeler', vlm_cls)
+    monkeypatch.setattr(runner_mod, 'build_vlm_labeler', vlm_cls)
     # Registry load is best-effort; keep it out of the test.
     monkeypatch.setattr(
         'src.clients.curation_opensearch.registry.ClassRegistry',
@@ -581,7 +581,7 @@ async def _drive_worker(
     )
 
     monkeypatch.setenv('OP_VLM_URL', 'http://vlm.invalid:8000')
-    args = worker.parse_args(
+    args = parse_args(
         [
             '--opensearch=http://os.invalid:9200',
             '--triton=triton.invalid:8001',
@@ -725,7 +725,7 @@ class TestOnePassPerItem:
         fake_os = _FakeOpenSearch(
             {'c1': {**_item(), F.status: 'detected'}}, search_delay=0.0, lag_searches=0
         )
-        task = worker._ItemTask(
+        task = _ItemTask(
             project=current_project().record,
             crop_id='c1',
             image_path='',
@@ -736,7 +736,7 @@ class TestOnePassPerItem:
         )
         task.update_doc = {F.status: 'detected', F.reason: 'again'}
         task.detection_trace = ['det:hit']
-        n_written, _ = await worker._bulk_update(fake_os, [task])  # type: ignore[arg-type]
+        n_written, _ = await _bulk_update(fake_os, [task])  # type: ignore[arg-type]
         assert n_written == 0
         assert fake_os.writes == []
 

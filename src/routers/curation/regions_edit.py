@@ -21,15 +21,17 @@ from fastapi import HTTPException
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.config import get_region_fields
 from src.routers.curation._common import (
-    HUMAN_REGION_STATUS_VALUES,
-    CropBatchStatusRequest,
-    ItemRegionMetaRequest,
     OpenSearchDep,
     RegionProfileDep,
     _now_iso,
     items_index,
     logger,
     router,
+)
+from src.routers.curation._common_models import (
+    HUMAN_REGION_STATUS_VALUES,
+    CropBatchStatusRequest,
+    ItemRegionMetaRequest,
 )
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.routers.curation._region_write_models import (

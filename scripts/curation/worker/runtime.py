@@ -163,8 +163,7 @@ async def build_runtime(
 
     The heavy-IO constructors are passed in by the caller rather
     than imported fresh here: ``runner.py`` resolves them through its
-    own module globals / the ``region_worker_main`` shim
-    (``_wkr.SegmenterClient``, ``_wkr.build_vlm_labeler``, module-level
+    own module globals (``SegmenterClient``, ``build_vlm_labeler``, module-level
     ``RegionDetector``/``PaddleOcrTextRecognizer``) specifically so that
     ``tests/curation/test_region_worker.py`` /
     ``test_region_text_worker.py``'s ``monkeypatch.setattr(...)`` calls

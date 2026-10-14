@@ -14,7 +14,7 @@ from src.config.region_state import (
     TERMINAL_STATUSES,
     RegionStatus,
 )
-from src.routers.curation._common import HUMAN_REGION_STATUS_VALUES
+from src.routers.curation._common_models import HUMAN_REGION_STATUS_VALUES
 
 
 if TYPE_CHECKING:

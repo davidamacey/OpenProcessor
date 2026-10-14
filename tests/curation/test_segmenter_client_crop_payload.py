@@ -52,4 +52,4 @@ async def test_crop_path_ignores_polygons_the_server_sends() -> None:
 
 async def test_disabled_client_returns_empty_without_a_call() -> None:
     sam = SegmenterClient(base_url=None, source_name='sam3')
-    assert await sam.segment_image(_JPEG, 'cup') == []
+    assert await sam.segment_multi(_JPEG) == []

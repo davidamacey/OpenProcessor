@@ -19,7 +19,7 @@ Schema produced by ``stats._rollup_class_sources`` + ``stats_dataset``:
   F-23: ``by_proposal`` moved to ``unlabeled`` -- it counts
   detector-proposed-but-not-yet-classified crops, which never carry a
   class_id, so it was always 0 here.
-- ``regions.{total_detected, by_detector, by_segmenter, by_human}`` —
+- ``regions.{total_detected, by_detector, by_segmenter, by_human_drew}`` —
   *region-detector* provenance. ``by_detector`` is the primary region
   detector's count and intentionally lives here (not under ``labeled``)
   because it's a region detector, not a class labeler.
@@ -141,14 +141,14 @@ def test_stats_dataset_endpoint_responds_with_full_schema(app_client: TestClient
         'total_detected',
         'by_detector',
         'by_segmenter',
-        'by_human',
+        'by_human_drew',
         'verified_by_human',
         'verified_by_vlm',
     ):
         assert k in regions, f'regions.{k} missing'
         assert isinstance(regions[k], int)
         assert regions[k] >= 0
-    for old in ('by_lpr', 'by_sam3', 'verified_by_' + 'gemma'):
+    for old in ('by_human', 'by_lpr', 'by_sam3', 'verified_by_' + 'gemma'):
         assert old not in regions
 
     unlabeled = body.get('unlabeled')

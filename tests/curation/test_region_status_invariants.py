@@ -27,7 +27,7 @@ from fastapi.testclient import TestClient
 from curation.test_regions_router import _FakeRegionOS
 from src.config import get_region_fields
 from src.config.region_state import RegionStatus
-from src.routers.curation._common import HUMAN_REGION_STATUS_VALUES
+from src.routers.curation._common_models import HUMAN_REGION_STATUS_VALUES
 from src.services.curation.wire import ITEM_WIRE_KEYS, REGION_ROW_EXTRA_KEYS
 
 

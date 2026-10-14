@@ -20240,11 +20240,6 @@
             "title": "By Detector",
             "type": "integer"
           },
-          "by_human": {
-            "description": "Legacy name of by_human_drew.",
-            "title": "By Human",
-            "type": "integer"
-          },
           "by_human_drew": {
             "title": "By Human Drew",
             "type": "integer"
@@ -20295,7 +20290,6 @@
           "total_detected",
           "by_detector",
           "by_segmenter",
-          "by_human",
           "by_human_drew",
           "verified_by_human",
           "verified_by_vlm",
@@ -36716,7 +36710,7 @@
     },
     "/curation/projects/{project}/events/publish": {
       "post": {
-        "description": "Publish one event into the in-process hub.\n\nUsed by external publishers like ``scripts/curation/region_worker_main.py``\nthat don't share the API process. Events from in-process callers\n(ingest, VLM label_batch) skip this endpoint and call the hub directly.",
+        "description": "Publish one event into the in-process hub.\n\nUsed by external publishers like ``scripts/curation/worker/``\nthat don't share the API process. Events from in-process callers\n(ingest, VLM label_batch) skip this endpoint and call the hub directly.",
         "operationId": "curation_events_publish_curation_projects__project__events_publish_post",
         "parameters": [
           {

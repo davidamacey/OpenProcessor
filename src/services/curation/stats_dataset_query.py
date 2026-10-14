@@ -21,7 +21,7 @@ def build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
         # Exact total_crops, not the default 10000-hit cap (it would look like a stuck pipeline).
         'track_total_hits': True,
         'aggs': {
-            # --- legacy fields (preserved for back-compat) ----------------
+            # --- fields behind the fixed wire keys total_crops/validated/by_source ---
             # source/class_source/region-detector/region-verifier are
             # all mapped keyword directly on the live index — no .keyword
             # subfield exists (only the region-status field is text+.keyword).

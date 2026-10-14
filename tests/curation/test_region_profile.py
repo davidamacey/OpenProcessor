@@ -24,7 +24,10 @@ from _region_profile_fixture import (
     REFERENCE_REGION_DETECTOR_MODEL,
 )
 
-import scripts.curation.region_worker_main as worker
+from scripts.curation.worker import runner as runner_mod
+from scripts.curation.worker.__main__ import parse_args
+from scripts.curation.worker.runner import run
+from scripts.curation.worker.state import _is_secondary_shape, _ItemTask
 from src.config import DetectionProfile
 from src.services.detection import profile_registry
 
@@ -265,7 +268,7 @@ def _patch_worker_io(
         'build_vlm_labeler': MagicMock(return_value=vlm),
     }
     for name, mock in mocks.items():
-        monkeypatch.setattr(worker, name, mock)
+        monkeypatch.setattr(runner_mod, name, mock)
 
     def _noop_signal_handler(*_args: object, **_kwargs: object) -> None:
         return None
@@ -284,7 +287,7 @@ def _patch_worker_io(
 def _worker_args(
     tmp_path: Path, segmenter_url: str = 'http://segmenter.local:8000'
 ) -> argparse.Namespace:
-    return worker.parse_args(
+    return parse_args(
         [
             '--opensearch=http://os.local:9200',
             '--triton=triton:8001',
@@ -306,7 +309,7 @@ async def test_worker_is_a_noop_without_a_region_profile(
     anywhere is building a per-project runtime (SegmenterClient etc).
     """
     mocks = _patch_worker_io(region_env, seed_default_project=True)
-    rc = await worker.run(_worker_args(tmp_path))
+    rc = await run(_worker_args(tmp_path))
     assert rc == 0
     mocks['SegmenterClient'].assert_not_called()
 
@@ -319,7 +322,7 @@ async def test_worker_sends_the_profile_segmenter_prompt(
     region_env.setenv(f'{_ENV_PREFIX}SEGMENTER_TEXT_PROMPT', 'shipping label')
     region_env.setenv(f'{_ENV_PREFIX}SEGMENTER_NAME', 'my_segmenter')
     mocks = _patch_worker_io(region_env)
-    assert await worker.run(_worker_args(tmp_path)) == 0
+    assert await run(_worker_args(tmp_path)) == 0
     mocks['SegmenterClient'].assert_called_once_with(
         'http://segmenter.local:8000', text_prompt='shipping label', source_name='my_segmenter'
     )
@@ -331,7 +334,7 @@ async def test_worker_disables_segmenter_when_profile_has_no_prompt(
 ) -> None:
     region_env.setenv(f'{_ENV_PREFIX}NAME', 'shipping_label')
     mocks = _patch_worker_io(region_env)
-    assert await worker.run(_worker_args(tmp_path)) == 0
+    assert await run(_worker_args(tmp_path)) == 0
     mocks['SegmenterClient'].assert_called_once_with('', text_prompt='', source_name='sam3')
 
 
@@ -344,7 +347,7 @@ def test_secondary_shape_routing_follows_env_groups(
 
     region_env.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
     region_env.setenv(f'{_ENV_PREFIX}SECONDARY_SHAPE_GROUPS', 'tall_things')
-    task = worker._ItemTask(
+    task = _ItemTask(
         crop_id='c',
         image_path='/x',
         item_bbox_norm=(0.0, 0.0, 1.0, 1.0),
@@ -352,9 +355,9 @@ def test_secondary_shape_routing_follows_env_groups(
         class_name='audi',
     )
     monkeypatch.setattr(worker_state, '_class_group', lambda _name: 'tall_things')
-    assert worker._is_secondary_shape(task)
+    assert _is_secondary_shape(task)
     monkeypatch.setattr(worker_state, '_class_group', lambda _name: 'unrelated_group')
-    assert not worker._is_secondary_shape(task)
+    assert not _is_secondary_shape(task)
 
 
 def test_no_secondary_shape_routing_when_profile_has_no_groups(
@@ -363,7 +366,7 @@ def test_no_secondary_shape_routing_when_profile_has_no_groups(
     import scripts.curation.worker.state as worker_state
 
     region_env.setenv(f'{_ENV_PREFIX}NAME', 'shipping_label')
-    task = worker._ItemTask(
+    task = _ItemTask(
         crop_id='c',
         image_path='/x',
         item_bbox_norm=(0.0, 0.0, 1.0, 1.0),
@@ -371,7 +374,7 @@ def test_no_secondary_shape_routing_when_profile_has_no_groups(
         class_name='class_b',
     )
     monkeypatch.setattr(worker_state, '_class_group', lambda _name: None)
-    assert not worker._is_secondary_shape(task)
+    assert not _is_secondary_shape(task)
 
 
 def test_retired_empty_class_ids_is_dropped_on_read() -> None:

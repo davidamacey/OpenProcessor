@@ -20,15 +20,17 @@ from fastapi import HTTPException
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.routers.curation._common import (
-    CropDiscardBatchRequest,
-    CropDiscardRequest,
-    CropUndoBatchRequest,
     OpenSearchDep,
     _now_iso,
     is_not_found,
     items_index,
     logger,
     router,
+)
+from src.routers.curation._common_models import (
+    CropDiscardBatchRequest,
+    CropDiscardRequest,
+    CropUndoBatchRequest,
 )
 from src.services.curation.class_sources import vlm_suggestion
 from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit

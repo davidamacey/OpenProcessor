@@ -14,13 +14,10 @@ from typing import Annotated
 
 from fastapi import File, Form, HTTPException, UploadFile
 
-from src.routers.curation._common import (
+from src.routers.curation._common import OpenSearchDep, RegistryDep, _ensure_indexes, router
+from src.routers.curation._common_models import (
     BatchIngestResponse as _BatchIngestResponse,
     IngestImageResponse,
-    OpenSearchDep,
-    RegistryDep,
-    _ensure_indexes,
-    router,
 )
 from src.routers.curation.ingest import _batch_response, _get_ingest_service
 from src.services.curation.upload_ingest import (

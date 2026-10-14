@@ -142,7 +142,7 @@ before touching OpenSearch.
 
 | Path | Service | What it does |
 |---|---|---|
-| `region_worker_main.py`, `worker/` | `curation-detection-worker` | Region cascade over pending items, for every active project in turn |
+| `worker/` | `curation-detection-worker` | Region cascade over pending items, for every active project in turn |
 | `vlm_worker.py` | `curation-vlm-worker` | Long-lived VLM labeling and verification loop |
 | `auto_label_worker.py` | `curation-auto-label-worker` | Drives the `POST /curation/projects/{project}/pipeline/auto_label` job protocol |
 | `cluster_refresh_daemon.py` | `curation-cluster-refresh` | Triggers residual-clustering refresh as the item count grows |

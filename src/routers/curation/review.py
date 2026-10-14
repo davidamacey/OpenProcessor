@@ -15,8 +15,6 @@ from fastapi import HTTPException, Path as PathParam, Query
 from src.config import get_region_fields
 from src.routers.curation._common import (
     OpenSearchDep,
-    TestHoldoutFreezeRequest,
-    TestHoldoutFreezeResponse,
     _ensure_indexes,
     _now_iso,
     get_class_registry,
@@ -26,6 +24,7 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.routers.curation._common_models import TestHoldoutFreezeRequest, TestHoldoutFreezeResponse
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._page_models import ReviewLocateResponse, ReviewQueuePage
 from src.routers.curation._review_params import (  # noqa: TC001 - FastAPI resolves the aliases

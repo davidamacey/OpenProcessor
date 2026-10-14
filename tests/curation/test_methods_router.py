@@ -589,7 +589,7 @@ def test_export_entries_serve_dedup_default_and_range(app_client: TestClient) ->
 def test_export_requests_enforce_the_served_dedup_range() -> None:
     from pydantic import ValidationError
 
-    from src.routers.curation._common import ExportSingleClassRequest, ExportYoloRequest
+    from src.routers.curation._common_models import ExportSingleClassRequest, ExportYoloRequest
 
     ExportYoloRequest(dedup_threshold=1.0)
     for bad in (-0.1, 1.01):

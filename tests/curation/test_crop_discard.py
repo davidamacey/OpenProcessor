@@ -150,7 +150,7 @@ def test_label_source_must_be_a_human_source(client_for, ids) -> None:  # noqa: 
 
 @pytest.mark.asyncio
 async def test_class_source_is_always_human_on_a_human_write(crops, registry, ids) -> None:  # noqa: F811
-    from src.routers.curation._common import CropLabelRequest
+    from src.routers.curation._common_models import CropLabelRequest
 
     fake = QueryFakeOpenSearch({ITEMS: {'c1': _proposal_doc('c1')}})
     await crops.label_crop(
@@ -166,7 +166,7 @@ async def test_class_source_is_always_human_on_a_human_write(crops, registry, id
 
 @pytest.mark.asyncio
 async def test_batch_writes_return_updated_ids(crops, ids) -> None:  # noqa: F811
-    from src.routers.curation._common import CropBatchLabelRequest, CropMoveRequest
+    from src.routers.curation._common_models import CropBatchLabelRequest, CropMoveRequest
 
     fake = QueryFakeOpenSearch({ITEMS: {k: _proposal_doc(k) for k in ('a', 'b')}})
     out = await crops.batch_label_crops(

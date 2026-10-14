@@ -219,7 +219,6 @@ class TestNoDetectorLeg:
         pool.infer = AsyncMock()
         detector = RegionDetector(pool, _profile().__class__(name='p', detector_model=''))
         assert await detector.detect(_jpeg()) is None
-        assert await detector.detect_batch([_jpeg(), _jpeg()]) == [None, None]
         assert await detector.detect_multi(_jpeg()) == []
         assert await detector.detect_batch_multi([_jpeg(), _jpeg()]) == [[], []]
         pool.infer.assert_not_awaited()

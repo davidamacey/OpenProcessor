@@ -1,4 +1,4 @@
-"""Unit tests for ``scripts.curation.region_worker_main``.
+"""Unit tests for the curation detection worker (``scripts.curation.worker``).
 
 Curation worker tests. Every external system (RegionDetector, SAM 3
 HTTP, the VLM, OpenSearch, Triton, disk) is mocked — the tests run in
@@ -6,23 +6,19 @@ milliseconds without any GPU, network, or filesystem dependency.
 
 Coverage:
 
-* Routing rules — one test per row of the cascade's decision table,
-  driven end to end through the real streaming pipeline
-  (:func:`scripts.curation.worker.runner.run`) rather than the deleted
-  per-crop ``cascade._process_crop`` unit-call harness. W8: every
-  candidate is a ``region_boxes`` list element (N=1 is a list of one),
-  and the pipeline's single combined VLM call is the only verify path
-  — there is no separate ``verify_region`` two-call cascade to unit-test
-  anymore, and a combined-verify reject is terminal (``verify_rejected``)
-  for this pass, not an intra-pass fallback to the secondary segmenter.
+* Routing rules — one test per row of the cascade's decision table, driven end to
+  end through the real streaming pipeline (:func:`scripts.curation.worker.runner.run`).
+  Every candidate is a ``region_boxes`` list element (N=1 is a list of one), the
+  pipeline's single combined VLM call is the only verify path, and a combined-verify
+  reject is terminal (``verify_rejected``) for the pass, not a fallback to the
+  secondary segmenter.
 * SAM 3 candidates get re-projected via
   :func:`crop_norm_to_source_norm` before being written.
 * Bulk write: one ``opensearch.bulk(...)`` call per iteration with
   one ``{update}`` + ``{doc}`` pair per crop that produced an update.
-* Sentinel pause: ``_wait_for_sentinel_clear`` blocks while the file
-  exists and unblocks once it's removed.
-* SIGTERM cleanup: stop event flips on signal and the loop exits at
-  the next iteration boundary.
+* Sentinel pause: ``_wait_for_sentinel_clear`` blocks while the file exists.
+* SIGTERM cleanup: the stop event flips on signal and the loop exits at the
+  next iteration boundary.
 """
 
 from __future__ import annotations
@@ -34,10 +30,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from _fake_project_registry import install_static_project_registry
 
-import scripts.curation.region_worker_main as worker
 import scripts.curation.worker.state as worker_state
 from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_mget_response
 from scripts.curation.worker import runner as runner_mod, stage_a as stage_a_mod
+from scripts.curation.worker.__main__ import parse_args
+from scripts.curation.worker.bulk_writer import _bulk_update
 from scripts.curation.worker.client import SegmenterRequestFailed
 from src.config import get_region_fields
 from src.config.project_context import current_project
@@ -84,10 +81,10 @@ def _make_task(
     class_name: str = 'audi',
     item_bbox: tuple[float, float, float, float] = (0.1, 0.1, 0.5, 0.5),
     crop_jpeg: bytes | None = None,
-) -> worker._ItemTask:
+) -> worker_state._ItemTask:
     """Build a fully populated ``_ItemTask`` for the (non-cascade)
     bulk-write / secondary-shape tests below."""
-    return worker._ItemTask(
+    return worker_state._ItemTask(
         project=current_project().record,
         crop_id=crop_id,
         image_path='/dev/null/never-read',
@@ -155,13 +152,12 @@ async def _drive_text_hint_rescue(
     monkeypatch.setenv('OP_REGION_WORKER_METRICS_PORT', '0')
 
     pool = MagicMock(initialize=AsyncMock(), close=AsyncMock())
-    monkeypatch.setattr(worker, 'AsyncTritonPool', MagicMock(return_value=pool))
-    monkeypatch.setattr(worker, 'make_script_opensearch', MagicMock(return_value=fake_os))
+    monkeypatch.setattr(runner_mod, 'AsyncTritonPool', MagicMock(return_value=pool))
+    monkeypatch.setattr(runner_mod, 'make_script_opensearch', MagicMock(return_value=fake_os))
     install_static_project_registry(monkeypatch)
 
     primary_det = MagicMock()
     primary_det.confidence_floor = 0.0
-    primary_det.detect_batch = AsyncMock(return_value=[None])
     primary_det.detect_batch_multi = AsyncMock(return_value=[[]])
     monkeypatch.setattr(runner_mod, 'RegionDetector', MagicMock(return_value=primary_det))
 
@@ -178,7 +174,7 @@ async def _drive_text_hint_rescue(
         side_effect=sub_sam_cand if isinstance(sub_sam_cand, Exception) else None,
         return_value=None if isinstance(sub_sam_cand, Exception) else sub_sam_cand,
     )
-    monkeypatch.setattr(worker, 'SegmenterClient', MagicMock(return_value=seg))
+    monkeypatch.setattr(runner_mod, 'SegmenterClient', MagicMock(return_value=seg))
 
     vlm = MagicMock(aclose=AsyncMock())
     vlm.class_names = []
@@ -188,7 +184,7 @@ async def _drive_text_hint_rescue(
     vlm.region_visible_batch = AsyncMock(
         side_effect=lambda crops, **_kw: dict.fromkeys((c.crop_id for c in crops), True)
     )
-    monkeypatch.setattr(worker, 'build_vlm_labeler', MagicMock(return_value=vlm))
+    monkeypatch.setattr(runner_mod, 'build_vlm_labeler', MagicMock(return_value=vlm))
     monkeypatch.setattr(
         'src.clients.curation_opensearch.registry.ClassRegistry',
         MagicMock(side_effect=RuntimeError('no registry in test')),
@@ -196,7 +192,7 @@ async def _drive_text_hint_rescue(
     monkeypatch.setattr('scripts.curation.worker.state._class_group', lambda _name: None)
 
     monkeypatch.setenv('OP_VLM_URL', 'http://vlm.invalid:8000')
-    args = worker.parse_args(
+    args = parse_args(
         [
             '--opensearch=http://os.invalid:9200',
             '--triton=triton.invalid:8001',
@@ -752,7 +748,7 @@ class TestBulkWrite:
         opensearch.mget = AsyncMock(side_effect=_fake_mget)
         opensearch.bulk = AsyncMock(side_effect=_fake_bulk)
 
-        n_written, n_skipped = await worker._bulk_update(opensearch, [a, b, c])
+        n_written, n_skipped = await _bulk_update(opensearch, [a, b, c])
         assert n_written == 2
         assert n_skipped == 1
         # One batched mget + one batched bulk for the 2 crops with a
@@ -775,7 +771,7 @@ class TestBulkWrite:
         opensearch = MagicMock()
         opensearch.mget = AsyncMock()
         opensearch.bulk = AsyncMock()
-        n_written, n_skipped = await worker._bulk_update(opensearch, [_make_task()])
+        n_written, n_skipped = await _bulk_update(opensearch, [_make_task()])
         assert n_written == 0
         assert n_skipped == 1
         opensearch.mget.assert_not_awaited()
@@ -815,7 +811,7 @@ class TestBulkWrite:
         opensearch.mget = AsyncMock(side_effect=_fake_mget)
         opensearch.bulk = AsyncMock(side_effect=_fake_bulk)
 
-        n_written, n_skipped = await worker._bulk_update(opensearch, [a])
+        n_written, n_skipped = await _bulk_update(opensearch, [a])
         assert n_written == 1
         assert n_skipped == 0
         doc = captured['a']
@@ -858,7 +854,7 @@ class TestBulkWrite:
         opensearch.mget = AsyncMock(side_effect=_fake_mget)
         opensearch.bulk = AsyncMock(side_effect=_fake_bulk)
 
-        await worker._bulk_update(opensearch, [a])
+        await _bulk_update(opensearch, [a])
         doc = captured['a']
         assert doc['class_id'] is None
         assert 'cluster_id' not in doc
@@ -896,7 +892,7 @@ class TestBulkWrite:
         opensearch.mget = AsyncMock(side_effect=_fake_mget)
         opensearch.bulk = AsyncMock(side_effect=_fake_bulk)
 
-        n_written, n_skipped = await worker._bulk_update(opensearch, [a])
+        n_written, n_skipped = await _bulk_update(opensearch, [a])
         # class_write_allowed() strips every CLASS_WRITE_FIELDS key before
         # the vlm_unmatched clear even runs, leaving an empty merge result
         # -- a documented noop (neither updated nor skipped), and no bulk
@@ -917,7 +913,9 @@ class TestSentinel:
     async def test_wait_returns_immediately_when_sentinel_absent(self, tmp_path: Path) -> None:
         sentinel = tmp_path / 'pause.sentinel'  # does not exist
         # Should not block.
-        await asyncio.wait_for(worker._wait_for_sentinel_clear(sentinel, sleep_s=0.01), timeout=0.5)
+        await asyncio.wait_for(
+            worker_state._wait_for_sentinel_clear(sentinel, sleep_s=0.01), timeout=0.5
+        )
 
     @pytest.mark.asyncio
     async def test_wait_blocks_then_unblocks(self, tmp_path: Path) -> None:
@@ -930,7 +928,9 @@ class TestSentinel:
 
         # Kick off the deletion concurrently with the wait.
         deleter = asyncio.create_task(_delete_after(0.05))
-        await asyncio.wait_for(worker._wait_for_sentinel_clear(sentinel, sleep_s=0.01), timeout=1.0)
+        await asyncio.wait_for(
+            worker_state._wait_for_sentinel_clear(sentinel, sleep_s=0.01), timeout=1.0
+        )
         await deleter
         assert not sentinel.exists()
 
@@ -952,7 +952,7 @@ class TestSignalHandling:
         pool = MagicMock()
         pool.initialize = AsyncMock()
         pool.close = AsyncMock()
-        monkeypatch.setattr(worker, 'AsyncTritonPool', MagicMock(return_value=pool))
+        monkeypatch.setattr(runner_mod, 'AsyncTritonPool', MagicMock(return_value=pool))
 
         # B1: the producer loop now iterates the real ProjectRegistry's
         # active_projects() every cycle, so the registry needs a real
@@ -996,15 +996,15 @@ class TestSignalHandling:
         os_client.get = AsyncMock(side_effect=_get)
         os_client.bulk = AsyncMock()
         os_client.close = AsyncMock()
-        monkeypatch.setattr(worker, 'make_script_opensearch', MagicMock(return_value=os_client))
+        monkeypatch.setattr(runner_mod, 'make_script_opensearch', MagicMock(return_value=os_client))
 
         segmenter = MagicMock()
         segmenter.aclose = AsyncMock()
-        monkeypatch.setattr(worker, 'SegmenterClient', MagicMock(return_value=segmenter))
+        monkeypatch.setattr(runner_mod, 'SegmenterClient', MagicMock(return_value=segmenter))
 
         vlm = MagicMock()
         vlm.aclose = AsyncMock()
-        monkeypatch.setattr(worker, 'build_vlm_labeler', MagicMock(return_value=vlm))
+        monkeypatch.setattr(runner_mod, 'build_vlm_labeler', MagicMock(return_value=vlm))
 
         # Patch signal-handler installation away — adding signal handlers
         # in a non-main asyncio loop would raise here.
@@ -1025,7 +1025,7 @@ class TestSignalHandling:
 
         sentinel = tmp_path / 'pause.sentinel'  # absent
         monkeypatch.setenv('OP_VLM_URL', 'http://vlm.local:8000')
-        args = worker.parse_args(
+        args = parse_args(
             [
                 '--opensearch=http://os.local:9200',
                 '--triton=triton:8001',
@@ -1036,7 +1036,7 @@ class TestSignalHandling:
         )
         # No --continuous, so empty queue should make run() exit immediately
         # after one fetch.
-        rc = await worker.run(args)
+        rc = await runner_mod.run(args)
         assert rc == 0
         # Cleanup happened.
         os_client.close.assert_awaited()
@@ -1056,14 +1056,14 @@ class TestIsSecondaryShape:
     ever wrote or mapped on the item doc."""
 
     def test_explicit_groups(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        for grp in worker.region_profile().secondary_shape_groups:
+        for grp in worker_state.region_profile().secondary_shape_groups:
             monkeypatch.setattr(worker_state, '_class_group', lambda _name, grp=grp: grp)
-            assert worker._is_secondary_shape(_make_task(class_name='some-class'))
+            assert worker_state._is_secondary_shape(_make_task(class_name='some-class'))
 
     def test_non_secondary_groups(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for grp in ('cars', 'sportycars', 'exotics'):
             monkeypatch.setattr(worker_state, '_class_group', lambda _name, grp=grp: grp)
-            assert not worker._is_secondary_shape(_make_task(class_name='audi'))
+            assert not worker_state._is_secondary_shape(_make_task(class_name='audi'))
 
     def test_no_registry_group_is_never_secondary_shape(
         self, monkeypatch: pytest.MonkeyPatch
@@ -1073,7 +1073,7 @@ class TestIsSecondaryShape:
         # not routed to the secondary-shape path.
         monkeypatch.setattr(worker_state, '_class_group', lambda _name: None)
         t = _make_task(class_name='class_b')
-        assert not worker._is_secondary_shape(t)
+        assert not worker_state._is_secondary_shape(t)
 
     def test_registry_group_takes_priority_over_class_name(
         self, monkeypatch: pytest.MonkeyPatch
@@ -1082,4 +1082,4 @@ class TestIsSecondaryShape:
         the class name itself is never inspected."""
         monkeypatch.setattr(worker_state, '_class_group', lambda _name: 'cars')
         t = _make_task(class_name='class_b')
-        assert not worker._is_secondary_shape(t)
+        assert not worker_state._is_secondary_shape(t)

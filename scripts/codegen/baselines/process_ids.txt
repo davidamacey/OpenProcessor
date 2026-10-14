@@ -574,7 +574,7 @@ tests/curation/test_region_text_worker.py	1	stripped in PR 2
 tests/curation/test_region_undo.py	1	stripped in PR 2
 tests/curation/test_region_verdict_semantics.py	1	stripped in PR 2
 tests/curation/test_region_vocabulary.py	1	stripped in PR 2
-tests/curation/test_region_worker.py	5	stripped in PR 2
+tests/curation/test_region_worker.py	4	stripped in PR 2
 tests/curation/test_region_write_occ_m1.py	4	stripped in PR 2
 tests/curation/test_regions_boxes_edit.py	4	stripped in PR 2
 tests/curation/test_regions_paging.py	2	stripped in PR 2
@@ -628,7 +628,7 @@ tests/curation/test_vlm_vocabulary.py	2	stripped in PR 2
 tests/curation/test_w34_regression_probes.py (file name)	1	stripped in PR 2
 tests/curation/test_w34_round2_activation_regression.py	3	stripped in PR 2
 tests/curation/test_w34_round2_activation_regression.py (file name)	1	stripped in PR 2
-tests/curation/test_worker_hot_reload.py	3	stripped in PR 2
+tests/curation/test_worker_hot_reload.py	2	stripped in PR 2
 tests/curation/test_worker_vlm_hot_reload.py	2	stripped in PR 2
 tests/datasets/test_coco_car_manifest.py	1	stripped in PR 2
 tests/datasets/test_fetch_openimages_plates.py	1	stripped in PR 2

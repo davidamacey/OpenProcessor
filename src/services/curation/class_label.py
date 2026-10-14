@@ -144,8 +144,8 @@ def class_label_update(current: dict[str, Any], label: ItemLabel) -> dict[str, A
     """Merge body for a class-label write on an EXISTING item: a
     restorable pre-write snapshot plus :func:`class_label_fields`.
 
-    This is the single function every ``human_label_update``-shaped
-    human writer calls — the one class-label writer the AST gate
+    This is the single function every human writer calls — the one
+    class-label writer the AST gate
     (``tests/test_class_label_single_writer.py``) checks for.
 
     W10 fix-pass correction (Opus review 2026-09-28, minor m10): dataset
@@ -166,25 +166,6 @@ def class_label_update(current: dict[str, Any], label: ItemLabel) -> dict[str, A
     if label.source == 'human' and label.validated:
         fields.update(audit_outcome_fields(current, label.class_name))
     return fields
-
-
-def human_label_update(
-    current: dict[str, Any],
-    *,
-    class_id: int,
-    class_name: str,
-    label_source: str,
-    writer: str,
-) -> dict[str, Any]:
-    """Back-compat call shape for the existing human-write call sites
-    (``label_crop``, ``batch_label_crops``) — builds an :class:`ItemLabel`
-    and delegates to :func:`class_label_update`."""
-    return class_label_update(
-        current,
-        ItemLabel.human(
-            class_id=class_id, class_name=class_name, label_source=label_source, writer=writer
-        ),
-    )
 
 
 def human_move_class_update(
@@ -246,7 +227,6 @@ __all__ = [
     'class_label_fields',
     'class_label_update',
     'human_class_provenance',
-    'human_label_update',
     'human_move_class_update',
     'import_class_provenance',
 ]

@@ -32,12 +32,10 @@ if TYPE_CHECKING:
 from fastapi import HTTPException
 
 from src.core.logging import get_logger
-from src.routers.curation._common import (
+from src.routers.curation._common import OpenSearchDep, _ensure_indexes, router
+from src.routers.curation._common_models import (
     CurationSettingsResponse,
     CurationSettingsUpdateRequest,
-    OpenSearchDep,
-    _ensure_indexes,
-    router,
 )
 from src.services.resource_links import schedule_reachability_refresh
 
