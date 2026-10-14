@@ -292,6 +292,68 @@ def _list_job_files() -> list[Path]:
     )
 
 
+def _load_json_object(path: Path) -> dict[str, Any] | None:
+    """``path`` parsed as a JSON object, or ``None`` if unreadable, not JSON or not an object."""
+    try:
+        with path.open('r', encoding='utf-8') as fh:
+            raw = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return None
+    return raw if isinstance(raw, dict) else None
+
+
+def _gather_run_rows() -> list[tuple[Path, dict[str, Any], str]]:
+    out: list[tuple[Path, dict[str, Any], str]] = []
+    jobs_dir = _resolve_jobs_dir()
+    if not jobs_dir.exists():
+        return out
+    # status.json wins where both exist
+    seen: set[str] = set()
+    for sp in _list_status_files():
+        stem = sp.name[: -len('.status.json')]
+        raw = _load_json_object(sp)
+        if raw is None:
+            continue
+        seen.add(stem)
+        out.append((sp, raw, 'status'))
+    for jp in _list_job_files():
+        stem = jp.name[: -len('.job.json')]
+        if stem in seen:
+            continue
+        raw = _load_json_object(jp)
+        if raw is None:
+            continue
+        out.append((jp, raw, 'job'))
+    return out
+
+
+def _campaign_id_from_job_file(stem: str) -> str | None:
+    """The ``campaign_id`` recorded in ``<stem>.job.json``, if that file has one."""
+    spec_path = _resolve_jobs_dir() / f'{stem}.job.json'
+    if not spec_path.exists():
+        return None
+    spec_raw = _load_json_object(spec_path)
+    if spec_raw is not None and spec_raw.get('campaign_id'):
+        return spec_raw['campaign_id']
+    return None
+
+
+def _status_row_to_wire(path: Path, raw: dict[str, Any]) -> TrainJobStatus | None:
+    try:
+        status = TrainJobStatus.model_validate(raw)
+    except Exception as exc:
+        logger.warning('curation_train_status_invalid', error=str(exc))
+        return None
+    # If the trainer didn't carry through ``campaign_id`` in the
+    # status, re-hydrate it from the matching job.json so the
+    # campaign-cancel path can find sibling runs.
+    if status.campaign_id is None:
+        campaign_id = _campaign_id_from_job_file(path.name[: -len('.status.json')])
+        if campaign_id is not None:
+            status = status.model_copy(update={'campaign_id': campaign_id})
+    return _prepare_status_for_wire(_maybe_lost(status))
+
+
 async def list_runs(limit: int = 50, offset: int = 0) -> list[TrainJobStatus]:
     """Return up to ``limit`` past + active runs, newest first.
 
@@ -306,67 +368,16 @@ async def list_runs(limit: int = 50, offset: int = 0) -> list[TrainJobStatus]:
     if limit <= 0:
         return []
 
-    def _gather() -> list[tuple[Path, dict[str, Any], str]]:
-        out: list[tuple[Path, dict[str, Any], str]] = []
-        jobs_dir = _resolve_jobs_dir()
-        if not jobs_dir.exists():
-            return out
-        # status.json wins where both exist
-        seen: set[str] = set()
-        for sp in _list_status_files():
-            stem = sp.name[: -len('.status.json')]
-            try:
-                with sp.open('r', encoding='utf-8') as fh:
-                    raw = json.load(fh)
-            except (OSError, json.JSONDecodeError):
-                continue
-            if not isinstance(raw, dict):
-                continue
-            seen.add(stem)
-            out.append((sp, raw, 'status'))
-        for jp in _list_job_files():
-            stem = jp.name[: -len('.job.json')]
-            if stem in seen:
-                continue
-            try:
-                with jp.open('r', encoding='utf-8') as fh:
-                    raw = json.load(fh)
-            except (OSError, json.JSONDecodeError):
-                continue
-            if not isinstance(raw, dict):
-                continue
-            out.append((jp, raw, 'job'))
-        return out
-
-    rows = await asyncio.to_thread(_gather)
+    rows = await asyncio.to_thread(_gather_run_rows)
     rows.sort(key=lambda t: t[0].stat().st_mtime, reverse=True)
     rows = rows[offset : offset + limit]
 
     results: list[TrainJobStatus] = []
     for path, raw, kind in rows:
         if kind == 'status':
-            try:
-                status = TrainJobStatus.model_validate(raw)
-            except Exception as exc:
-                logger.warning('curation_train_status_invalid', error=str(exc))
-                continue
-            # If the trainer didn't carry through ``campaign_id`` in the
-            # status, re-hydrate it from the matching job.json so the
-            # campaign-cancel path can find sibling runs.
-            if status.campaign_id is None:
-                stem = path.name[: -len('.status.json')]
-                spec_path = _resolve_jobs_dir() / f'{stem}.job.json'
-                if spec_path.exists():
-                    try:
-                        with spec_path.open('r', encoding='utf-8') as fh:
-                            spec_raw = json.load(fh)
-                        if isinstance(spec_raw, dict) and spec_raw.get('campaign_id'):
-                            status = status.model_copy(
-                                update={'campaign_id': spec_raw['campaign_id']}
-                            )
-                    except (OSError, json.JSONDecodeError):
-                        pass
-            results.append(_prepare_status_for_wire(_maybe_lost(status)))
+            status = _status_row_to_wire(path, raw)
+            if status is not None:
+                results.append(status)
         else:
             results.append(
                 TrainJobStatus(
