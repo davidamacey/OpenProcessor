@@ -173,7 +173,7 @@ async def cluster_faces(
         int,
         Query(ge=1, le=10000, description='Maximum number of persons to create'),
     ] = 1000,
-):
+) -> ClusterResponse:
     """
     Auto-cluster all indexed faces into person groups.
 
@@ -239,7 +239,7 @@ async def list_persons(
         int,
         Query(ge=1, le=1000, description='Maximum number of persons to return'),
     ] = 100,
-):
+) -> ListPersonsResponse:
     """
     List all persons with face counts.
 
@@ -283,7 +283,7 @@ async def list_persons(
 @router.get('/{person_id}', response_model=PersonDetailResponse)
 async def get_person(
     person_id: Annotated[str, Path(description='Person identifier')],
-):
+) -> PersonDetailResponse:
     """
     Get a single person with all their faces.
 
@@ -343,7 +343,7 @@ async def get_person(
 async def rename_person(
     person_id: Annotated[str, Path(description='Person identifier')],
     request: RenameRequest,
-):
+) -> RenameResponse:
     """
     Assign or update a friendly name for a person.
 
@@ -385,7 +385,7 @@ async def rename_person(
 @router.post('/merge', response_model=MergeResponse)
 async def merge_persons(
     request: MergeRequest,
-):
+) -> MergeResponse:
     """
     Merge two persons into one.
 
@@ -447,7 +447,7 @@ async def delete_person(
             description='If true, delete all faces. If false, unassign faces (each becomes own person).'
         ),
     ] = False,
-):
+) -> DeleteResponse:
     """
     Delete a person.
 

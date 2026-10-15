@@ -18,7 +18,8 @@ def _imohash(image_bytes: bytes) -> str:
 
     import imohash
 
-    return imohash.hashfileobject(io.BytesIO(image_bytes)).hex()
+    typed: str = imohash.hashfileobject(io.BytesIO(image_bytes)).hex()
+    return typed
 
 
 def _run_pipelines(

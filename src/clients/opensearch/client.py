@@ -51,6 +51,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from opensearchpy import AsyncOpenSearch
 
@@ -99,16 +100,17 @@ class OpenSearchClient(IndexesMixin, IngestMixin, BulkMixin, SearchMixin, Cluste
         # Use OPENSEARCH_HOSTS env var if set (for Docker), otherwise localhost
         import json
 
-        default_hosts = env_optional_str('OPENSEARCH_HOSTS')
-        if default_hosts:
+        env_hosts = env_optional_str('OPENSEARCH_HOSTS')
+        default_hosts: list[str]
+        if env_hosts:
             try:
-                default_hosts = json.loads(default_hosts)
+                default_hosts = json.loads(env_hosts)
             except json.JSONDecodeError:
-                default_hosts = [default_hosts]
+                default_hosts = [env_hosts]
         else:
             default_hosts = ['http://localhost:9200']
         hosts = hosts or default_hosts
-        client_kwargs = {
+        client_kwargs: dict[str, Any] = {
             'hosts': hosts,
             'use_ssl': False,
             'verify_certs': verify_certs,
@@ -129,14 +131,15 @@ class OpenSearchClient(IndexesMixin, IngestMixin, BulkMixin, SearchMixin, Cluste
         install_project_guard(self.client, get_project_registry())
         self.embedding_dim = 512  # MobileCLIP2-S2
 
-    async def close(self):
+    async def close(self) -> None:
         """Close the OpenSearch client connection."""
         await self.client.close()
 
     async def ping(self) -> bool:
         """Check if OpenSearch is reachable."""
         try:
-            return await self.client.ping()
+            typed: bool = await self.client.ping()
+            return typed
         except Exception as e:
             logger.error(f'OpenSearch ping failed: {e}')
             return False

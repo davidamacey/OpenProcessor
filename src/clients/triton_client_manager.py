@@ -75,7 +75,7 @@ class TritonClientManager:
         root_certificates: str | None = None,
         private_key: str | None = None,
         certificate_chain: str | None = None,
-    ):
+    ) -> grpcclient.InferenceServerClient:
         """
         Get sync gRPC client with connection pooling.
 
@@ -116,7 +116,7 @@ class TritonClientManager:
             return cls._sync_clients[triton_url]
 
     @classmethod
-    def close_sync_clients(cls):
+    def close_sync_clients(cls) -> None:
         """Close all sync client connections."""
         with cls._sync_lock:
             for url, client in cls._sync_clients.items():
@@ -150,7 +150,7 @@ class TritonClientManager:
         root_certificates: str | None = None,
         private_key: str | None = None,
         certificate_chain: str | None = None,
-    ):
+    ) -> grpcclient_aio.InferenceServerClient:
         """
         Get async gRPC client with connection pooling.
 
@@ -195,7 +195,7 @@ class TritonClientManager:
             return cls._async_clients[triton_url]
 
     @classmethod
-    async def close_async_clients(cls):
+    async def close_async_clients(cls) -> None:
         """Close all async client connections."""
         async with cls._get_async_lock():
             for url, client in cls._async_clients.items():
@@ -211,7 +211,7 @@ class TritonClientManager:
     # Combined Operations
     # =========================================================================
     @classmethod
-    async def close_all(cls):
+    async def close_all(cls) -> None:
         """Close all clients (both sync and async)."""
         cls.close_sync_clients()
         await cls.close_async_clients()
@@ -221,14 +221,16 @@ class TritonClientManager:
 # =============================================================================
 # Factory functions
 # =============================================================================
-async def get_async_triton_client(triton_url: str = 'triton-server:8001', **kwargs):
+async def get_async_triton_client(
+    triton_url: str = 'triton-server:8001', **kwargs: Any
+) -> grpcclient_aio.InferenceServerClient:
     """
     Get the async Triton client (see TritonClientManager.get_async_client()).
     """
     return await TritonClientManager.get_async_client(triton_url, **kwargs)
 
 
-async def close_async_clients():
+async def close_async_clients() -> None:
     """Close the async clients."""
     await TritonClientManager.close_async_clients()
 

@@ -3,7 +3,7 @@
 import asyncio
 import contextlib
 import inspect
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
@@ -11,7 +11,7 @@ from fastapi import FastAPI
 
 from src.app.resources import AppResources
 from src.clients.triton_pool_core import AsyncTritonPool
-from src.config import get_settings
+from src.config import Settings, get_settings
 from src.core.dependencies import OpenSearchClientFactory, TritonClientFactory
 from src.core.logging import get_logger
 from src.utils.cpu_pool import shutdown_cpu_executor
@@ -48,7 +48,7 @@ def _preflight() -> None:
     ensure_env_region_profile()
 
 
-async def _start_pools(settings) -> None:
+async def _start_pools(settings: Settings) -> None:
     """The shared CPU executor and the high-throughput async Triton pool."""
     # Shared ThreadPoolExecutor for CPU-bound tasks (JPEG decode, resize).
     AppResources.shared_executor = ThreadPoolExecutor(
@@ -125,7 +125,10 @@ def _reconcile_orphaned_state() -> None:
         logger.warning('orphaned_export_tasks_reconcile_skipped', error=str(exc))
 
 
-async def _arbiter_reconcile_loop(reconcile_on_startup, reload_promoted_models_best_effort) -> None:
+async def _arbiter_reconcile_loop(
+    reconcile_on_startup: Callable[[], Awaitable[object]],
+    reload_promoted_models_best_effort: Callable[..., Awaitable[None]],
+) -> None:
     """Re-assert the desired GPU-service state on a fixed interval.
 
     Also re-loads any promoted Triton model that's dropped out of
@@ -320,7 +323,7 @@ async def _run_shutdown() -> None:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     Application lifecycle manager.
 

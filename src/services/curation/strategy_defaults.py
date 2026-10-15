@@ -182,7 +182,8 @@ async def resolve_effective_default(
     if not override:
         return hardcoded
     if override in _advertised_ids_for_axis(axis):
-        return override
+        typed: str | None = override
+        return typed
     return hardcoded
 
 

@@ -576,7 +576,8 @@ def build_compare_block(
     def _avg(key: str) -> float:
         if not incumbent_per_class:
             return 0.0
-        return sum(r[key] for r in incumbent_per_class) / len(incumbent_per_class)
+        result: float = sum(r[key] for r in incumbent_per_class) / len(incumbent_per_class)
+        return result
 
     inc_avg_ap50 = _avg('ap50')
     inc_summary = {

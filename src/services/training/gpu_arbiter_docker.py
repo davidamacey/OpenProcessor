@@ -91,7 +91,8 @@ def _container_status_sync(client: Any, name: str) -> str | None:
     except docker.errors.NotFound:
         return None
     container.reload()
-    return container.status
+    typed: str | None = container.status
+    return typed
 
 
 async def stop_gpu_services(

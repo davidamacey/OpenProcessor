@@ -58,7 +58,8 @@ def _read_trainer_capabilities_file() -> dict[str, Any] | None:
     # Trainer-global: written once at the volume root, not per project.
     path = trainer_root_dir() / TRAINER_CAPABILITIES_FILENAME
     try:
-        return json.loads(path.read_text(encoding='utf-8'))
+        typed: dict[str, Any] | None = json.loads(path.read_text(encoding='utf-8'))
+        return typed
     except (OSError, ValueError):
         return None
 

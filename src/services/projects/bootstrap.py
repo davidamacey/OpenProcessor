@@ -108,7 +108,8 @@ async def _get_or_none(client: Any, doc_id: str) -> dict[str, Any] | None:
         raise
     if not existing.get('found', True):
         return None
-    return existing['_source']
+    typed: dict[str, Any] | None = existing['_source']
+    return typed
 
 
 # ``dynamic: false``: the registry stores whole records, but only these

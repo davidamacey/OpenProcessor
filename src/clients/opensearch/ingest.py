@@ -262,7 +262,8 @@ class IngestMixin:
 
             hits = response['hits']['hits']
             if hits:
-                return hits[0]['_source']
+                typed: dict[str, Any] | None = hits[0]['_source']
+                return typed
             return None
 
         except Exception as e:
@@ -291,7 +292,7 @@ class IngestMixin:
 
         try:
             # Build msearch request body
-            body = []
+            body: list[dict[str, Any]] = []
             for imohash in imohashes:
                 # Header line (index)
                 body.append({'index': IndexName.GLOBAL.value})

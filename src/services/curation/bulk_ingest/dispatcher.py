@@ -124,7 +124,8 @@ def decide(
 
 
 def _backoff(failures: int) -> float:
-    return min(MAX_BACKOFF_S, 10.0 * 2 ** max(0, failures - 1))
+    typed: float = min(MAX_BACKOFF_S, 10.0 * 2 ** max(0, failures - 1))
+    return typed
 
 
 async def _poll(source: IngestSource, *, start_run: Callable[[IngestSource, bool], object]) -> None:

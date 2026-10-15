@@ -35,6 +35,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
+from typing import Any
 
 
 # Public COCO val2017 image from scripts/datasets/manifests/coco_va_200.json
@@ -57,14 +58,17 @@ def _guard_api(api: str) -> None:
         )
 
 
-def _http(method: str, url: str, body: bytes | None = None, headers: dict | None = None) -> dict:
+def _http(
+    method: str, url: str, body: bytes | None = None, headers: dict[str, str] | None = None
+) -> dict[str, Any]:
     # Every call here is read-only, so a transient 5xx (e.g. a cold Triton
     # gRPC channel) is safe to retry a few times.
     for attempt in range(5):
         req = urllib.request.Request(url, data=body, method=method, headers=headers or {})
         try:
             with urllib.request.urlopen(req, timeout=180) as resp:  # nosec B310  URL is the local API
-                return json.loads(resp.read())
+                result: dict[str, Any] = json.loads(resp.read())
+                return result
         except urllib.error.HTTPError as exc:
             if exc.code < 500 or attempt == 4:
                 raise
@@ -88,7 +92,7 @@ def _pick(d: dict, keys: list[str]) -> dict:
     return {k: d[k] for k in keys if k in d}
 
 
-def _round(obj):
+def _round(obj: Any) -> Any:
     if isinstance(obj, float):
         return round(obj, 3)
     if isinstance(obj, list):

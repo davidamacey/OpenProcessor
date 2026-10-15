@@ -7,7 +7,7 @@ index cache, the training metadata, ``index_dir`` and the lazily imported ``fais
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -17,12 +17,27 @@ from src.config.cluster_index import ClusterIndex
 logger = logging.getLogger(__name__)
 
 
+class FaissIvfIndex(Protocol):
+    """The slice of a FAISS ``IndexIVFFlat`` this package touches (faiss ships no stubs)."""
+
+    ntotal: int
+    nlist: int
+    is_trained: bool
+    verbose: bool
+    quantizer: Any
+    invlists: Any
+
+    def train(self, x: np.ndarray) -> None: ...
+
+    def add(self, x: np.ndarray) -> None: ...
+
+
 class IndexPersistenceMixin:
     """Save and load one index and its training metadata under ``index_dir``."""
 
     index_dir: Path
     faiss: Any
-    _indexes: dict[ClusterIndex, object]
+    _indexes: dict[ClusterIndex, FaissIvfIndex]
     _training_metadata: dict[ClusterIndex, dict]
 
     def _save_index(self, index_name: ClusterIndex) -> None:
@@ -36,7 +51,9 @@ class IndexPersistenceMixin:
 
         # Save metadata
         metadata_path = self.index_dir / f'{index_name.value}.meta.npy'
-        np.save(metadata_path, self._training_metadata.get(index_name, {}))
+        np.save(
+            metadata_path, np.asarray(self._training_metadata.get(index_name, {}), dtype=object)
+        )
 
         logger.info(f'Saved {index_name} index to {index_path}')
 

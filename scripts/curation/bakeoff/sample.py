@@ -93,7 +93,8 @@ def _cluster(emb: np.ndarray, distance_threshold: float) -> np.ndarray:
         metric='cosine',
         linkage='average',
     )
-    return model.fit_predict(emb)
+    result: np.ndarray = model.fit_predict(emb)
+    return result
 
 
 def _stratified_sample(labels: np.ndarray, n: int, seed: int) -> list[int]:

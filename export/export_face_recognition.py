@@ -29,6 +29,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+from onnx import ModelProto
 
 
 # =============================================================================
@@ -63,7 +64,7 @@ CANONICAL_INPUT_NAME = 'input'
 CANONICAL_OUTPUT_NAME = 'output'
 
 
-def _rename_tensor_everywhere(model, old_name: str, new_name: str) -> None:
+def _rename_tensor_everywhere(model: ModelProto, old_name: str, new_name: str) -> None:
     """Rename a graph-boundary tensor and every node reference to it."""
     if old_name == new_name:
         return
@@ -244,7 +245,7 @@ def test_onnx_inference(onnx_path: Path, batch_size: int = 1) -> dict:
     }
 
 
-def benchmark_onnx(onnx_path: Path, num_iterations: int = 100):
+def benchmark_onnx(onnx_path: Path, num_iterations: int = 100) -> None:
     """Benchmark ONNX inference speed."""
 
     print(f'\nBenchmarking ONNX inference ({num_iterations} iterations)...')
@@ -446,7 +447,7 @@ version_policy {{
 # =============================================================================
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description='Export ArcFace to TensorRT')
     parser.add_argument('--onnx', type=Path, default=ONNX_PATH, help='Input ONNX path')
     parser.add_argument('--plan', type=Path, default=PLAN_PATH, help='Output TensorRT plan path')

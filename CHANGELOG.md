@@ -139,6 +139,11 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Changed
 
+- Repo cleanup, PR 9a (typing): mypy now runs with `disallow_untyped_defs`, `disallow_incomplete_defs`
+  and `warn_return_any` over `src scripts docker export` (`tests/` is outside its scope), and the
+  nine-error-code relax override for the ML modules is gone. 328 errors were fixed with real types
+  (route return annotations that match each `response_model`, `Protocol`s for the FAISS index and the
+  ingest outcome, typed mixin attributes); the OpenAPI contracts are unchanged.
 - Repo cleanup, PR 6 (backend split by concern): every `src/` and `scripts/` file of 600 lines or more
   is split into cohesive modules (routers, `src/main.py` into `src/app/`, the Triton and PE clients,
   curation, projects, training and config-store services, `src/config/curation.py`, three scripts),

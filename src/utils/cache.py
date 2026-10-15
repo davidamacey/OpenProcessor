@@ -98,9 +98,10 @@ class EmbeddingCache:
             self.cache.move_to_end(key)
             self.hits += 1
 
-            return entry['embedding']
+            embedding: np.ndarray = entry['embedding']
+            return embedding
 
-    def set(self, key: str, embedding: np.ndarray):
+    def set(self, key: str, embedding: np.ndarray) -> None:
         """
         Store embedding in cache.
 
@@ -147,7 +148,7 @@ class EmbeddingCache:
 
         return embedding, False
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear all cached embeddings."""
         with self.lock:
             self.cache.clear()
@@ -174,7 +175,7 @@ class EmbeddingCache:
                 'ttl_seconds': self.ttl_seconds,
             }
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Return current cache size."""
         with self.lock:
             return len(self.cache)
@@ -236,11 +237,11 @@ def get_text_cache(max_size: int = 1000, ttl_seconds: int = 3600) -> EmbeddingCa
 # Justification: Tokenizer loading from HuggingFace is expensive (~500ms)
 # - Shared instance across all text embedding requests prevents repeated loading
 # - Thread-safe lock prevents concurrent initialization attempts
-_clip_tokenizer = None
+_clip_tokenizer: CLIPTokenizer | None = None
 _tokenizer_lock = threading.Lock()
 
 
-def get_clip_tokenizer():
+def get_clip_tokenizer() -> CLIPTokenizer:
     """
     Get cached CLIPTokenizer (singleton, thread-safe).
 

@@ -55,7 +55,8 @@ def cell(values: list[float], digits: int = 1) -> str:
 def detail_row(doc: dict[str, Any], name: str) -> dict[str, Any] | None:
     for row in doc.get('query', {}).get('detail', []):
         if row['filter'] == name:
-            return row
+            found: dict[str, Any] = row
+            return found
     return None
 
 

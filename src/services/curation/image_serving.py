@@ -368,7 +368,8 @@ class ThumbnailCache:
                 cached = self._cache[key]
             if cached is not None:
                 self._hits += 1
-                return cached
+                typed: bytes = cached
+                return typed
 
         # Miss — compute outside the lock so concurrent requests for
         # different keys can run in parallel.
@@ -556,7 +557,8 @@ async def _fetch_crop(
     source = result.get('_source') if isinstance(result, dict) else None
     if not source:
         raise RequestRejectedError(status_code=404, detail=f'crop has no source: {crop_id}')
-    return source
+    typed: dict[str, Any] = source
+    return typed
 
 
 def resolve_crop_root(image_path: str, config: CurationConfig | None = None) -> Path:

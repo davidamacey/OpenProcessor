@@ -27,7 +27,7 @@ GATE_SCHEMA = 1
 
 
 def load_gates(path: Path) -> dict[str, Any]:
-    doc = json.loads(path.read_text(encoding='utf-8'))
+    doc: dict[str, Any] = json.loads(path.read_text(encoding='utf-8'))
     if doc.get('schema') != GATE_SCHEMA:
         raise ValueError(f'{path}: gate schema {doc.get("schema")}, this tool reads {GATE_SCHEMA}')
     for name, profile in doc['profiles'].items():

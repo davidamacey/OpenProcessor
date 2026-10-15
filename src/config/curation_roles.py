@@ -64,4 +64,5 @@ def index_name(cfg: CurationConfig, role: IndexRole) -> str:
     those hardcoded a *value*; this looks the value up on ``cfg`` so it
     is deployment-overridable.
     """
-    return getattr(cfg, INDEX_ROLE_ATTR[role])
+    typed: str = getattr(cfg, INDEX_ROLE_ATTR[role])
+    return typed

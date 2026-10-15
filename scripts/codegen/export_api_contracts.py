@@ -42,6 +42,8 @@ import _contract_runtime
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from pydantic import BaseModel
+
 
 REPO_ROOT = _contract_runtime.REPO_ROOT
 DEFAULT_OUT_DIR = REPO_ROOT / 'contracts'
@@ -70,7 +72,7 @@ def _dump_json(data: Any) -> str:
 # --- item wire -------------------------------------------------------------
 
 
-def _item_doc_model():
+def _item_doc_model() -> type[BaseModel]:
     from src.routers.curation._item_models import ItemDoc
 
     return ItemDoc
@@ -429,7 +431,8 @@ def main(argv: list[str] | None = None) -> int:
         child_argv += ['--check'] if args.check else []
         for name in args.only or []:
             child_argv += ['--only', name]
-        return _contract_runtime.reexec(Path(__file__).resolve(), child_argv)
+        result: int = _contract_runtime.reexec(Path(__file__).resolve(), child_argv)
+        return result
     return run(args.out_dir, check_only=args.check, only=args.only)
 
 

@@ -16,6 +16,8 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 import numpy as np
 
@@ -26,7 +28,7 @@ from src.services.visual_search.clustering_models import (
     ClusterBalance,
     ClusterStats,
 )
-from src.services.visual_search.clustering_persist import IndexPersistenceMixin
+from src.services.visual_search.clustering_persist import FaissIvfIndex, IndexPersistenceMixin
 
 
 logger = logging.getLogger(__name__)
@@ -64,11 +66,11 @@ class ClusteringService(IndexPersistenceMixin):
         self.configs = DEFAULT_CONFIGS.copy()
 
         # Lazy-loaded FAISS
-        self._faiss = None
-        self._gpu_resources = None
+        self._faiss: ModuleType | None = None
+        self._gpu_resources: Any = None
 
         # In-memory index cache
-        self._indexes: dict[ClusterIndex, object] = {}
+        self._indexes: dict[ClusterIndex, FaissIvfIndex] = {}
         self._training_metadata: dict[ClusterIndex, dict] = {}
 
         # Ensure index directory exists
@@ -77,7 +79,7 @@ class ClusteringService(IndexPersistenceMixin):
         logger.info(f'ClusteringService initialized: index_dir={self.index_dir}, gpu={use_gpu}')
 
     @property
-    def faiss(self):
+    def faiss(self) -> ModuleType:
         """Lazy-load FAISS to avoid import errors if not installed."""
         if self._faiss is None:
             try:
@@ -92,7 +94,7 @@ class ClusteringService(IndexPersistenceMixin):
         return self._faiss
 
     @property
-    def gpu_resources(self):
+    def gpu_resources(self) -> Any:
         """Get GPU resources for FAISS (lazy-loaded)."""
         if self._gpu_resources is None and self.use_gpu:
             if self.faiss.get_num_gpus() > 0:
@@ -187,7 +189,7 @@ class ClusteringService(IndexPersistenceMixin):
         index_name: ClusterIndex,
         embeddings: np.ndarray,
         n_clusters: int,
-    ):
+    ) -> FaissIvfIndex:
         """Synchronous training (runs in executor)."""
         # Create IVF index with flat quantizer
         # IndexFlatIP = flat index using inner product (for normalized vectors = cosine)
@@ -220,7 +222,8 @@ class ClusteringService(IndexPersistenceMixin):
         if self.use_gpu and self.gpu_resources is not None:
             index = self.faiss.index_gpu_to_cpu(index)
 
-        return index
+        trained: FaissIvfIndex = index
+        return trained
 
     # =========================================================================
     # INCREMENTAL ASSIGNMENT
@@ -410,13 +413,13 @@ class ClusteringService(IndexPersistenceMixin):
     # HELPERS
     # =========================================================================
 
-    def _get_index(self, index_name: ClusterIndex):
+    def _get_index(self, index_name: ClusterIndex) -> FaissIvfIndex:
         """Get index, loading from disk if necessary."""
         if index_name not in self._indexes and not self.load_index(index_name):
             raise ValueError(f'Index {index_name} not found. Train it first with train_index().')
         return self._indexes[index_name]
 
-    def _get_cluster_sizes(self, index) -> list[int]:
+    def _get_cluster_sizes(self, index: FaissIvfIndex) -> list[int]:
         """Get the size of each cluster in the index."""
         # For IVF indexes, we can get list sizes
         return [index.invlists.list_size(i) for i in range(index.nlist)]

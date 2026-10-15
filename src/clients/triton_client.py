@@ -88,7 +88,7 @@ class TritonClient:
         self._model_info: dict[str, tuple[float, DetectionAdapter, int]] = {}
         logger.info(f'Unified Triton client initialized (sync, retries={max_retries})')
 
-    def _infer_with_retry(self, model_name: str, inputs: list, outputs: list):
+    def _infer_with_retry(self, model_name: str, inputs: list, outputs: list) -> Any:
         """Execute Triton inference with automatic retry on transient failures."""
         return retry_sync(
             self.client.infer,
@@ -141,7 +141,8 @@ class TritonClient:
         Returns:
             Dict with num_dets, boxes, scores, classes, orig_shape, scale, padding
         """
-        return self.infer_yolo_end2end_batch([image_array], model_name)[0]
+        typed: dict[str, Any] = self.infer_yolo_end2end_batch([image_array], model_name)[0]
+        return typed
 
     def infer_yolo_end2end_batch(self, images: list, model_name: str) -> list:
         """
@@ -311,7 +312,8 @@ class TritonClient:
         clip_image_model = TritonModelConfig.CLIP_IMAGE_MODEL
         response = self._infer_with_retry(clip_image_model, [input_tensor], [output])
 
-        return response.as_numpy('image_embeddings')[0]
+        typed: np.ndarray = response.as_numpy('image_embeddings')[0]
+        return typed
 
     def encode_text(self, tokens: np.ndarray) -> np.ndarray:
         """Encode tokenized text to 512-dim embedding via MobileCLIP."""
@@ -322,7 +324,8 @@ class TritonClient:
         clip_text_model = TritonModelConfig.CLIP_TEXT_MODEL
         response = self._infer_with_retry(clip_text_model, [input_tensor], [output])
 
-        return response.as_numpy('text_embeddings')[0]
+        typed: np.ndarray = response.as_numpy('text_embeddings')[0]
+        return typed
 
     def _preprocess_for_mobileclip(self, image_bytes: bytes) -> np.ndarray:
         """Preprocess image for MobileCLIP (256x256, BILINEAR, center crop)."""

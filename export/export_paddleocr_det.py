@@ -213,7 +213,7 @@ def convert_to_tensorrt(
         return None
 
 
-def create_triton_config(model_dir: Path, max_batch_size: int = 4):
+def create_triton_config(model_dir: Path, max_batch_size: int = 4) -> None:
     """Create Triton config.pbtxt for the detection model."""
     config_path = model_dir / 'config.pbtxt'
 
@@ -268,7 +268,7 @@ dynamic_batching {{
     print(f'\nTriton config created: {config_path}')
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description='Export PP-OCRv5 Detection to TensorRT')
     parser.add_argument(
@@ -298,7 +298,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def main():
+def main() -> int:
     """Main entry point."""
     args = parse_args()
 
