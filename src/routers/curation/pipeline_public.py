@@ -25,6 +25,7 @@ from src.routers.curation.pipeline_params import (
     CLUSTER_ID_DESC as _CLUSTER_ID_DESC,
     PROMPT_PACK_DESC as _PROMPT_PACK_DESC,
     REASSIGN_ONLY_DESC as _REASSIGN_ONLY_DESC,
+    VLM_ATTRIBUTES_DESC,
     VLM_DESC,
     VLM_SCOPE_DESC as _VLM_SCOPE_DESC,
 )
@@ -79,6 +80,7 @@ async def pipeline_auto_label(
     vlm: Annotated[str | None, Query(description=VLM_DESC)] = None,
     acknowledge_external: Annotated[bool, Query(description=ACKNOWLEDGE_EXTERNAL_DESC)] = False,
     vlm_scope: Annotated[VlmScope | None, Query(description=_VLM_SCOPE_DESC)] = None,
+    vlm_attributes: Annotated[bool, Query(description=VLM_ATTRIBUTES_DESC)] = False,
 ) -> dict[str, Any]:
     """Run the full auto-labeling chain end-to-end, synchronously (no job):
 
@@ -120,6 +122,7 @@ async def pipeline_auto_label(
         vlm=vlm,
         acknowledge_external=acknowledge_external,
         vlm_scope=vlm_scope,
+        vlm_attributes=vlm_attributes,
         vlm_resolved=False,
     )
 

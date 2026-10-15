@@ -384,6 +384,9 @@ stale. The worker re-reads the policy about every 30 seconds; the next
 `sample_frac` hashes the crop id, so the sample is only as uniform as the ids: hash-like ids
 give a proportional sample, sequential or patterned ids may not.
 
+`POST /pipeline/auto_label/start` takes `vlm_attributes=true` to store the pack's item
+attributes in the same run (see the pipeline modes guide, mode (c)).
+
 An explicit request is never limited by the policy: an assist run
 (`POST /assist/runs`) over a cluster, a sub-cluster or named crops, an
 `auto_label` run with `cluster_id`, and labelling named crops. A human-validated crop is never

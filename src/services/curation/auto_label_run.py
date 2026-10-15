@@ -246,6 +246,7 @@ async def run_auto_label(
     item_filter: dict[str, Any] | None = None,
     embed_missing: bool = False,
     vlm_scope: str | None = None,
+    vlm_attributes: bool = False,
     # Internal (never an HTTP param): ``/start`` resolves ``prompt_pack`` once at request
     # time and hands the resolved pin here.
     prompt_pack_revision: int | None = None,
@@ -363,6 +364,7 @@ async def run_auto_label(
         unvalidated_ids=unvalidated_ids,
         batch_size=vlm_batch_size,
         concurrency=vlm_concurrency,
+        attributes=vlm_attributes,
         context_args={
             'prompt_pack': prompt_pack,
             'prompt_pack_revision': prompt_pack_revision,

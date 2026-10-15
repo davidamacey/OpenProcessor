@@ -10,6 +10,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from src.services.labeling.region_overlay import box_verdicts
+from src.services.labeling.vlm_attributes import parse_attributes
 from src.services.labeling.vlm_models import (
     ConfidenceLevel,
     ItemCrop,
@@ -19,7 +20,10 @@ from src.services.labeling.vlm_models import (
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from src.config import RegionFields
+    from src.services.labeling.vlm_attributes import AttributeSpec
 
 
 _FENCE_RE = re.compile(r'^\s*```(?:json|JSON)?\s*\n?(.*?)\n?```\s*$', re.DOTALL)
@@ -115,6 +119,7 @@ def _combined_reply_from_entry(
     fields: RegionFields,
     class_names: list[str] | None,
     n_boxes: int,
+    attribute_specs: Sequence[AttributeSpec] = (),
 ) -> VlmCombinedReply:
     """Build a :class:`VlmCombinedReply` from one parsed reply object.
 
@@ -150,8 +155,13 @@ def _combined_reply_from_entry(
     )
     echoes = (picked_class,)
     region_boxes = box_verdicts(entry, n_boxes, fields, echoes=echoes) if n_boxes > 0 else []
+    attributes, invalid = (
+        parse_attributes(entry.get('attributes'), attribute_specs) if attribute_specs else ({}, 0)
+    )
     return VlmCombinedReply(
         img_id=img_id,
+        attributes=attributes,
+        invalid_attribute_values=invalid,
         class_id=class_id,
         class_confidence=(
             _normalize_confidence(class_conf_raw) if class_conf_raw is not None else None

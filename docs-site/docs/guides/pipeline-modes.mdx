@@ -360,6 +360,14 @@ request names an endpoint with `vlm=<name>` (see the recipe below).
 VLM labels stay unvalidated suggestions (`class_source: "vlm"`). Nothing reaches an
 export until a person validates it.
 
+To collect the pack's item attributes in the same run, add `vlm_attributes=true`. The
+VLM stage then uses the pack's combined `assist` call (class and attributes in one
+request) and stores the attributes in each item's `assist` slot, apart from the class.
+It needs `run_vlm=true` (`422 invalid_request` otherwise) and a pack that declares item
+attributes and fills the `assist` prompts (`422 pack_declares_no_attributes`). The
+region worker's combined call does the same for the items it classifies, when the
+active pack declares item attributes.
+
 ## Recipe: ingest without the VLM, cluster, name by hand, then run the VLM for one thing
 
 The goal: ingest images, detect cars and people, cluster, name clusters yourself (for

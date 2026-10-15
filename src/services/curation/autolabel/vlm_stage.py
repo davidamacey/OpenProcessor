@@ -4,6 +4,7 @@ answers with a concurrent human edit always winning."""
 from __future__ import annotations
 
 import asyncio
+import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -12,9 +13,11 @@ from opensearchpy.exceptions import OpenSearchException
 from src.clients.curation_opensearch.crops import mget_crops
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
+from src.services.curation.assist.chunk import suggested_name
+from src.services.curation.assist.slot_write import RunMeta, build_slot, write_slots
 from src.services.curation.autolabel.run_params import labeler_resolution_args
 from src.services.curation.autolabel.run_state import Run, start_stage
-from src.services.curation.autolabel.run_vlm import job_endpoint
+from src.services.curation.autolabel.run_vlm import job_endpoint, require_item_attributes
 from src.services.curation.autolabel.selection import unvalidated_count_query
 from src.services.curation.vlm_class_batch import (
     ChunkResult,
@@ -26,6 +29,7 @@ from src.services.curation.vlm_class_batch import (
 )
 from src.services.labeling.run_labeler import get_vlm_labeler, resolve_pack
 from src.services.labeling.vlm_factory import assert_may_connect
+from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
@@ -47,18 +51,22 @@ async def _build_vlm_context(
     vlm_endpoint: str | None,
     vlm_endpoint_revision: int | None,
     vlm_resolved: bool,
-) -> VlmContext:
+    attributes: bool = False,
+) -> tuple[VlmContext, RunMeta | None]:
     # When the request omitted ``prompt_pack`` the labeler resolves against ``None``/``None``
     # -- always "whatever is active right now" -- never the echoed name/revision, which can
     # go stale between request time and here.
     labeler_pack, labeler_revision = labeler_resolution_args(
         prompt_pack, prompt_pack_revision, prompt_pack_omitted=prompt_pack_omitted
     )
+    pack = resolve_pack(labeler_pack, labeler_revision)
+    if attributes:
+        require_item_attributes(pack)
     endpoint = await job_endpoint(
         run.opensearch,
         vlm=vlm,
         acknowledge_external=acknowledge_external,
-        pack=resolve_pack(labeler_pack, labeler_revision),
+        pack=pack,
         pinned_name=vlm_endpoint,
         pinned_revision=vlm_endpoint_revision,
         resolved=vlm_resolved,
@@ -66,10 +74,24 @@ async def _build_vlm_context(
     if endpoint is not None:
         await assert_may_connect(endpoint)
     labeler = get_vlm_labeler(labeler_pack, labeler_revision, endpoint=endpoint)
-    return class_context(labeler, guard, revision=labeler_revision)
+    ctx = class_context(labeler, guard, revision=labeler_revision)
+    if not attributes:
+        return ctx, None
+    identity = labeler.identity
+    meta = RunMeta(
+        run_id=f'al_{uuid.uuid4().hex[:12]}',
+        created_at=now_iso(),
+        vlm_endpoint=identity.endpoint_ref,
+        vlm_model=identity.model,
+        prompt_pack=pack.name,
+        prompt_pack_revision=labeler_revision,
+    )
+    return ctx, meta
 
 
-async def _label_chunk(run: Run, ctx: VlmContext, ids: list[str]) -> ChunkResult:
+async def _label_chunk(
+    run: Run, ctx: VlmContext, ids: list[str], meta: RunMeta | None
+) -> ChunkResult:
     from src.services.labeling.detector_hint import DETECTOR_HINT_FIELDS
 
     # A single mget_crops call per chunk instead of per-crop opensearch.get.
@@ -81,18 +103,43 @@ async def _label_chunk(run: Run, ctx: VlmContext, ids: list[str]) -> ChunkResult
     # No item classes yet (a fresh project, or only the region class): nothing to label as.
     if not crops or not ctx.class_names:
         return ChunkResult(0, 0, [], unreadable=unreadable)
-    preds = await ctx.labeler.label_or_propose_batch(
-        crops, ctx.class_names, class_catalog=ctx.class_catalog
-    )
+    if meta is None:
+        preds = await ctx.labeler.label_or_propose_batch(
+            crops, ctx.class_names, class_catalog=ctx.class_catalog
+        )
+    else:
+        preds = await ctx.labeler.assist_batch(
+            crops, ctx.class_names, class_catalog=ctx.class_catalog
+        )
     updates_by_id, proposals = updates_from_predictions(preds, ctx)
     if updates_by_id:
         await write_updates(run.opensearch, ctx, updates_by_id, writer_id='vlm_pipeline')
+    if meta is not None:
+        await write_slots(
+            run.opensearch,
+            {
+                p.img_id: build_slot(
+                    meta,
+                    class_name=suggested_name(updates_by_id.get(p.img_id), p),
+                    class_confidence=p.confidence,
+                    attributes=p.attributes,
+                )
+                for p in preds
+                if p.failure is None
+            },
+        )
     failed = sum(1 for p in preds if getattr(p, 'failure', None) == 'request_failed')
     return ChunkResult(len(preds), len(updates_by_id), proposals, failed, unreadable)
 
 
 async def _label_all(
-    run: Run, ctx: VlmContext, ids: list[str], *, batch_size: int, concurrency: int
+    run: Run,
+    ctx: VlmContext,
+    ids: list[str],
+    *,
+    batch_size: int,
+    concurrency: int,
+    meta: RunMeta | None,
 ) -> ChunkResult:
     """Label ``ids`` in chunks. The VLM is the dominant cost at scale (often hours), so
     progress is reported per chunk and an operator cancel is checked between chunks."""
@@ -104,7 +151,7 @@ async def _label_all(
         async with sem:
             if run.progress is not None:
                 run.progress.raise_if_cancelled()
-            out = await _label_chunk(run, ctx, chunk)
+            out = await _label_chunk(run, ctx, chunk, meta)
             if run.progress is not None:
                 run.progress.advance(len(chunk))
             return out
@@ -174,10 +221,11 @@ async def run_vlm_stage(
     batch_size: int,
     concurrency: int,
     context_args: dict[str, Any],
+    attributes: bool = False,
 ) -> VlmStageResult:
-    ctx = await _build_vlm_context(run, guard, **context_args)
+    ctx, meta = await _build_vlm_context(run, guard, attributes=attributes, **context_args)
     labeled = await _label_all(
-        run, ctx, unvalidated_ids, batch_size=batch_size, concurrency=concurrency
+        run, ctx, unvalidated_ids, batch_size=batch_size, concurrency=concurrency, meta=meta
     )
     if (
         unvalidated_ids

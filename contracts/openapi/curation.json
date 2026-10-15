@@ -42763,6 +42763,18 @@
               "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_id, an explicit request that no policy limits.",
               "title": "Vlm Scope"
             }
+          },
+          {
+            "description": "Ask the pack's combined `assist` call in the VLM stage and store the pack's item attributes in each item's `assist` slot, next to the class. Needs run_vlm=true and a pack that declares item attributes (422 pack_declares_no_attributes).",
+            "in": "query",
+            "name": "vlm_attributes",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Ask the pack's combined `assist` call in the VLM stage and store the pack's item attributes in each item's `assist` slot, next to the class. Needs run_vlm=true and a pack that declares item attributes (422 pack_declares_no_attributes).",
+              "title": "Vlm Attributes",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -43168,6 +43180,18 @@
               ],
               "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_id, an explicit request that no policy limits.",
               "title": "Vlm Scope"
+            }
+          },
+          {
+            "description": "Ask the pack's combined `assist` call in the VLM stage and store the pack's item attributes in each item's `assist` slot, next to the class. Needs run_vlm=true and a pack that declares item attributes (422 pack_declares_no_attributes).",
+            "in": "query",
+            "name": "vlm_attributes",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Ask the pack's combined `assist` call in the VLM stage and store the pack's item attributes in each item's `assist` slot, next to the class. Needs run_vlm=true and a pack that declares item attributes (422 pack_declares_no_attributes).",
+              "title": "Vlm Attributes",
+              "type": "boolean"
             }
           },
           {

@@ -1429,7 +1429,9 @@ can fuse. The default pool is fresh and class-bucketed unvalidated items.
   `clustering_method`, `run_vlm`, `recluster_unvalidated`, `reassign_only`,
   `run_auto_promote`, `gate_max_rank`, `gate_min_blur_ratio`, `n_clusters`,
   `class_id`, `cluster_id`, `prompt_pack` (`<name>` or `<name>@<revision>`),
-  `vlm` and `acknowledge_external`. A `detection_profile` parameter is `422`:
+  `vlm`, `acknowledge_external` and `vlm_attributes` (with `run_vlm`, store the pack's item
+  attributes in each item's `assist` slot through the combined `assist` call; `422
+  pack_declares_no_attributes` when the pack cannot serve it). A `detection_profile` parameter is `422`:
   no stage runs region detection. Region detection runs in the detection
   worker on the active profile.
 - Job state: `job_id`, `status` (`queued`, `running`, `completed`, `failed`,

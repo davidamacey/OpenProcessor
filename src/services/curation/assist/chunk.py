@@ -50,7 +50,7 @@ class ChunkOutcome:
     verify_locked: int = 0
 
 
-def _suggested_name(update: dict[str, Any] | None, pred: Any) -> str | None:
+def suggested_name(update: dict[str, Any] | None, pred: Any) -> str | None:
     """The class the VLM named: the registry name when it resolved, else its own
     words (an unmatched label, or the slug it proposed)."""
     if update is not None and update.get('class_source') == 'vlm':
@@ -107,7 +107,7 @@ async def _classify(
         if answered and p.img_id in locked:
             out.locked_suggest_only += 1
         classes[p.img_id] = (
-            _suggested_name(updates.get(p.img_id), p) if answered else None,
+            suggested_name(updates.get(p.img_id), p) if answered else None,
             p.confidence,
         )
         attributes[p.img_id] = p.attributes
@@ -180,4 +180,4 @@ async def process_chunk(
     return out
 
 
-__all__ = ['WRITER', 'ChunkOutcome', 'process_chunk']
+__all__ = ['WRITER', 'ChunkOutcome', 'process_chunk', 'suggested_name']

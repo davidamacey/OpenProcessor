@@ -202,6 +202,13 @@ class VlmCombinedReply(BaseModel):
         default_factory=list,
         description='One verdict per candidate box offered, aligned by position (box 1..N).',
     )
+    attributes: dict[str, AttributeValue] = Field(
+        default_factory=dict,
+        description="The pack's declared item attributes the reply answered (classify calls).",
+    )
+    invalid_attribute_values: int = Field(
+        default=0, description='Attribute answers dropped for a value outside the vocabulary.'
+    )
     class_raw: str = Field(
         default='',
         description=(

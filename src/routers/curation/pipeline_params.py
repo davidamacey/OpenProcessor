@@ -24,6 +24,12 @@ VLM_SCOPE_DESC = (
     'explicit request that no policy limits.'
 )
 
+VLM_ATTRIBUTES_DESC = (
+    "Ask the pack's combined `assist` call in the VLM stage and store the pack's item "
+    "attributes in each item's `assist` slot, next to the class. Needs run_vlm=true and a "
+    'pack that declares item attributes (422 pack_declares_no_attributes).'
+)
+
 REASSIGN_ONLY_DESC = 'IVF: stream-assign residuals vs persisted centroids; skip retrain.'
 
 # Labeling-assist item selection (task d): scope a run to one registry class.

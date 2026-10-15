@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.services.config_store.vlm_gate import current_pack_and_profile, enforce_vlm_gate
 from src.services.labeling.run_labeler import NO_VLM_MESSAGE
+from src.services.labeling.vlm_attributes import specs_for
 from src.services.labeling.vlm_endpoints import (
     VlmEndpoint,
     VlmEndpointUnavailableError,
@@ -141,6 +142,19 @@ def labeler_unavailable(exc: Exception) -> Any:
     return rejection(409, 'vlm_endpoint_unavailable', str(exc))
 
 
+def require_item_attributes(pack: Any) -> None:
+    """422 when ``pack`` cannot serve the combined `assist` call: no item attribute, or
+    no `assist` prompt."""
+    blank = [f for f in ('assist_system', 'assist_user_template') if not getattr(pack, f).strip()]
+    if not specs_for(pack.attributes, 'item') or blank:
+        raise rejection(
+            422,
+            'pack_declares_no_attributes',
+            f'prompt pack {pack.name!r} declares no item attributes'
+            + (f' or has no {", ".join(blank)}' if blank else ''),
+        )
+
+
 def require_run_vlm(run: RunVlm) -> None:
     """409 when a run needs the VLM and the project's is off."""
     if run.endpoint is None:
@@ -187,6 +201,7 @@ __all__ = [
     'RunVlm',
     'job_endpoint',
     'labeler_unavailable',
+    'require_item_attributes',
     'require_run_vlm',
     'resolve_run_vlm',
     'resolve_test_vlm',

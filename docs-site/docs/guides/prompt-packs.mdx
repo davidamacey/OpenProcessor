@@ -68,7 +68,9 @@ code. Packs are editable per project, versioned, and can be rolled back.
   attribute is a suggestion: it never changes a class or a box. Item attributes
   need all four prompt fields filled, box attributes the `attributes_*` pair.
   `examples/prompt_packs/vehicle_wheel.json` declares `make`, `model` and
-  `body_style` for the car and `rim_material` for the wheel box. Preview them on up
+  `body_style` for the car and `rim_material` for the wheel box. The region worker's combined
+  call also asks for the item attributes on the items it classifies, and a whole-project
+  auto-label run does with `vlm_attributes=true`; both store them in the item's `assist` slot. Preview them on up
   to 64 crops with `POST .../prompt_packs/test` and `call: "assist"` or
   `"attributes"`.
 - **Placeholders.** Only a few fields are formatted with `str.format`:
