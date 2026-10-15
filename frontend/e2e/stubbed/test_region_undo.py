@@ -91,7 +91,9 @@ def test_region_reject_then_z_calls_region_undo(stub, page, app_url):
     assert meta_calls[0].get("region_status"), f"reject must send a status: {meta_calls}"
     assert region_calls == [], f"reject must not also PUT region: {region_calls}"
 
-    # Z must now reverse that write server-side.
+    # Z must now reverse that write server-side. The undo entry is recorded
+    # after the response is processed; wait for the app to have done so.
+    wait_for_paint(page)
     with page.expect_response(
         lambda r: r.request.method == "POST" and r.url.endswith("/region/undo"), timeout=ACTION_TIMEOUT_MS
     ):

@@ -66,6 +66,14 @@ def test_a_connection_reset_on_an_app_file_is_retried():
     assert route.calls == 3
 
 
+def test_a_socket_hang_up_on_an_app_file_is_retried():
+    """Same closed keep-alive socket, other spelling: a slow runner got
+    `socket hang up` on a boot chunk and the page failed to import it."""
+    route = _FlakyRoute("Route.fetch: socket hang up", fail=2)
+    assert fetch_app_asset(route) == "response"
+    assert route.calls == 3
+
+
 def test_a_persistent_reset_and_other_errors_still_surface():
     import pytest
 

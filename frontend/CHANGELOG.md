@@ -73,6 +73,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Review, multi-box tabs: after Tab moved to the next box, the response of the previous accept or reject re-seeded the
+  controller and snapped the selection back to box 1, so a fast `R`, `Tab`, `Y` accepted the wrong box. A re-seed of
+  the same crop now keeps the selection (clamped to the boxes that remain).
+- Infinite-scroll grids (`createPager`) stop requesting pages after three in a row add nothing. A server whose
+  `total` outruns what it serves (it still counts a crop just moved out of `/clusters/[id]`) made the scroll
+  sentinel fetch pages without end.
+- Stubbed e2e suite: a key pressed right after a write's response met the app before it had recorded the undo entry
+  ("Nothing to undo", then a 45 s `expect_response` timeout), and a boot chunk fetched with `socket hang up` was not
+  retried. The tests now wait for the app's own signal (the success toast) and the harness retries both spellings
+  of a closed keep-alive socket.
+- Stubbed e2e suite: the project-switch test judged "requests to the previous project" by an index into the stub's
+  answered list, which counted requests sent before the switch; it now listens to the requests the page sends. The
+  harness gains `E2E_CPU_THROTTLE` to run the suite as a slow runner would, and its docstring states the stability
+  rules.
+
 - `/clusters` semantic search no longer throws `each_key_duplicate` (and re-requests `/search/text` in a loop)
   when the backend serves one crop id more than once: the first, best-ranked hit per id is kept.
 - At 430 px the ignore-reason menu on `/clusters/[id]` opens inside the viewport, the `/train` past-runs table keeps a

@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 
 from harness.constants import ACTION_TIMEOUT_MS
-from harness.waits import expect_handled
+from harness.waits import expect_handled, wait_for_paint
 
 from fixtures.wire import make_item, project, projects_response
 
@@ -99,18 +99,26 @@ def test_switching_moves_requests_to_the_other_prefix_and_resets_undo(stub, page
     page.get_by_test_id("queue-counter").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_test_id("project-switcher-current").inner_text() == "Default"
 
-    # One labelled write on `default` → one undo entry.
-    with expect_handled(page, lambda r: r.method == "PUT" and _path(r.url).endswith("/label")):
+    # One labelled write on `default` → one undo entry. Enter advances the
+    # queue; the next crop's context arrives, and rendering it requests its
+    # image again. Wait for that context and the render it triggers (not for
+    # network quiet, which a slow main thread satisfies before the next crop
+    # has even rendered) so those requests are not counted as post-switch.
+    with (
+        page.expect_response(lambda r: _path(r.url) == f"{DEFAULT_PREFIX}/crops/crop-1/context"),
+        expect_handled(page, lambda r: r.method == "PUT" and _path(r.url).endswith("/label")),
+    ):
         page.keyboard.press("Enter")
     assert len(label_calls) == 1 and label_calls[0].startswith(DEFAULT_PREFIX), label_calls
-
-    # Enter advanced the queue, which starts the next crop's image loads on
-    # `default`. Let them land before marking the switch, so only requests
-    # made after the switch are counted below.
-    page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
+    wait_for_paint(page)
 
     # Switch to `beta` from the top bar.
-    before_switch = len(stub.handled)
+    # Judged by what the page SENDS (the stub records a request only when it
+    # answers, which on a slow runner trails any index taken here), and only
+    # from the first `beta` request on: a poll already due on `default` fires
+    # between the click and the rebind, which is not a leak.
+    sent: list[str] = []
+    page.on("request", lambda r: sent.append(_path(r.url)))
     page.get_by_test_id("project-switcher-trigger").click()
     page.get_by_test_id("project-switcher-menu").wait_for(timeout=ACTION_TIMEOUT_MS)
     with (
@@ -129,7 +137,8 @@ def test_switching_moves_requests_to_the_other_prefix_and_resets_undo(stub, page
     page.get_by_text("Nothing to undo.").first.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert undo_calls == [], f"Z must not revert the previous project's write: {undo_calls}"
 
-    after = [p for _, p in stub.handled[before_switch:]]
+    first_beta = next(i for i, p in enumerate(sent) if p.startswith(BETA_PREFIX))
+    after = [p for p in sent[first_beta:] if p.startswith(API_PREFIX)]
     old = [p for p in after if p.startswith(f"{DEFAULT_PREFIX}/")]
     assert old == [], f"request(s) to the previous project after switching: {old}"
     stray = [p for p in after if p not in GLOBAL_EXACT_PATHS and not p.startswith(BETA_PREFIX)]

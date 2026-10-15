@@ -109,6 +109,10 @@ def test_cluster_bulk_label_then_single_undo_sends_one_batch_call(stub, page, ap
     ):
         page.keyboard.press("k")
 
+    # The undo entry is recorded after the response is processed, and the
+    # success toast follows it: pressing Z before that finds nothing to undo.
+    expect(page.get_by_text("Labeled 2").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+
     assert len(label_calls) == 1, f"bulk label should PUT exactly once: {label_calls}"
     _, _, label_body = label_calls[0]
     labeled_ids = label_body.get("crop_ids", [])

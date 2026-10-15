@@ -361,6 +361,8 @@ def test_z_undo_after_a_multibox_confirm_calls_the_single_region_undo_route(
     ):
         page.keyboard.press("Enter")
     assert len(puts) == 1, puts
+    # The undo entry is recorded after the response is processed.
+    wait_for_paint(page)
 
     with expect_handled(
         page,
