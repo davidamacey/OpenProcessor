@@ -422,16 +422,34 @@ def test_a_changed_image_cap_recreates_the_running_clients(shimmed: Shimmed, sta
     ]
 
 
+# A pytest started in the background (nohup, `&`, CI) has SIGINT ignored and the
+# child inherits that; bash cannot trap a signal ignored on entry, so reset it first.
+RESET_SIGINT_THEN_EXEC = (
+    'import os, signal, sys; signal.signal(signal.SIGINT, signal.SIG_DFL); '
+    'os.execv(sys.argv[1], sys.argv[1:])'
+)
+
+
 def test_an_interrupt_removes_the_pause_and_restores_env(shimmed: Shimmed, stack: Path) -> None:
     import os
     import signal
     import subprocess
+    import sys
     import time
 
     (shimmed.state / 'up_hangs').write_text('')
     before = (stack / '.env').read_text()
     proc = subprocess.Popen(
-        [str(stack / 'openprocessor'), 'vlm', 'use', QWEN, '--yes'],
+        [
+            sys.executable,
+            '-c',
+            RESET_SIGINT_THEN_EXEC,
+            str(stack / 'openprocessor'),
+            'vlm',
+            'use',
+            QWEN,
+            '--yes',
+        ],
         cwd=str(shimmed.root),
         env=shimmed.env(SHIM_VLM_ROOT=QWEN_REPO, **WAIT),
         stdout=subprocess.PIPE,
