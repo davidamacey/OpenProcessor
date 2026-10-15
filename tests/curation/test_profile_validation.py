@@ -16,7 +16,8 @@ import pytest
 from _region_profile_fixture import EXAMPLE_LICENSE_PLATE_PROFILE
 
 from src.config import DetectionProfile
-from src.services.config_store.profile_validation import PROFILE_FIELD_RANGES, validate_profile
+from src.services.config_store.profile_field_checks import PROFILE_FIELD_RANGES
+from src.services.config_store.profile_validation import validate_profile
 
 
 def _body(*, profile: DetectionProfile | None = None, **overrides: Any) -> dict[str, Any]:
@@ -387,7 +388,8 @@ def test_old_stored_profile_with_removed_aspect_keys_is_skipped_not_fatal(monkey
     must not break the registry: it is skipped with a warning and the others load."""
     from dataclasses import replace
 
-    from src.services.config_store.store import StoredConfig, get_config_store
+    from src.services.config_store.snapshot import StoredConfig
+    from src.services.config_store.store import get_config_store
     from src.services.detection.profile_registry import _stored_profiles
 
     store = get_config_store()

@@ -165,7 +165,7 @@ def _assert_clone_rejects_gate_failing_pair() -> None:
     import tempfile
     from datetime import UTC, datetime
 
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.project_context import bind_project
     from src.config.projects import ProjectRecord, resources_for_new
     from src.services.config_store.index import activate, get_activation, save_config
@@ -201,7 +201,7 @@ def _assert_clone_rejects_gate_failing_pair() -> None:
         )
         os.environ['OP_STATE_DIR'] = f'{tmp}/state'
         os.environ['OP_PROJECTS_DATA_ROOT'] = f'{tmp}/projects_data'
-        import src.config.curation as curation_mod
+        import src.config.curation_accessors as curation_mod
 
         curation_mod._default_curation_config = None
         reset_config_stores()

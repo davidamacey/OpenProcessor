@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from src.services.training import job_files, job_wire, jobs as train_jobs
+from src.services.training import job_files, job_manifest, job_wire, jobs as train_jobs
 
 
 class _FakeCurationConfig:
@@ -176,7 +176,7 @@ async def test_read_manifest_rewrites_eval_and_mlflow_url(
         )
     )
 
-    manifest = await train_jobs.read_manifest('manifjob')
+    manifest = await job_manifest.read_manifest('manifjob')
 
     assert manifest is not None
     results = manifest['results']

@@ -42,7 +42,7 @@ def test_registry_snapshot_refreshes_on_revision_change(fake_registry_client) ->
         # A second project appears only after ensure_fresh re-reads.
         from datetime import UTC, datetime
 
-        from src.config.curation import base_curation_config
+        from src.config.curation_accessors import base_curation_config
         from src.config.projects import ProjectRecord, resources_for_new
         from src.services.projects.registry import record_to_doc
 
@@ -107,7 +107,7 @@ def _new_record(slug: str, tmp_path: Any) -> Any:
     import dataclasses
     from datetime import UTC, datetime
 
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import ProjectRecord, resources_for_new
 
     now = datetime.now(UTC).isoformat()
@@ -232,7 +232,7 @@ def test_refresh_reads_every_project_past_one_page(fake_registry_client) -> None
     """No size cap: more projects than one search page are all loaded."""
     from datetime import UTC, datetime
 
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import ProjectRecord, resources_for_new
     from src.services.projects import registry as registry_mod
     from src.services.projects.registry import record_to_doc
@@ -282,7 +282,7 @@ def test_default_is_an_ordinary_bootstrapped_project(fake_registry_client) -> No
     # SETTINGS and UMAP_VIZ_STATE fold onto CONFIGS's name (shard folding,
     # owner D4) -- `default` is an ordinary project (D-A) and gets the
     # same folding as any other slug: 6 distinct names, not 8.
-    from src.config.curation import IndexRole
+    from src.config.curation_roles import IndexRole
 
     assert set(record.resources.indexes.values()) == {
         f'op_prj_default__{role.value}'

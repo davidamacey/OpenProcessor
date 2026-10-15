@@ -11,7 +11,8 @@ from src.clients.curation_opensearch.bodies_other import (
     _settings_body,
     _umap_viz_state_body,
 )
-from src.config.curation import IndexRole, base_curation_config
+from src.config.curation_accessors import base_curation_config
+from src.config.curation_roles import IndexRole
 from src.config.projects import resources_for_new
 
 

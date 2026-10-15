@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
 from curation.test_curation_settings_client import FakeSettingsOpenSearch
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.services.curation.review_sorts import REVIEW_SORTS
 
 

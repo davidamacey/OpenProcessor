@@ -87,8 +87,8 @@ request first, then runs the detector over the whole request, then indexes image
 
 | # | Stage (order) | Code | Reads | Produces | Size | CPU ms per image, frame / photo (WP-1.2 table) |
 |---|---|---|---|---|---|---|
-| 1 | Hash | `ingest._imohash_bytes` | JPEG bytes | imohash | n/a | under 0.5 / 28 |
-| 2 | Decode 1 | `ingest._decode_image` | JPEG bytes | Pillow RGB frame, EXIF applied (`ImageOps.exif_transpose`, which also copies the frame) | full | 4.9 / 304 |
+| 1 | Hash | `ingest_helpers._imohash_bytes` | JPEG bytes | imohash | n/a | under 0.5 / 28 |
+| 2 | Decode 1 | `ingest_helpers._decode_image` | JPEG bytes | Pillow RGB frame, EXIF applied (`ImageOps.exif_transpose`, which also copies the frame) | full | 4.9 / 304 |
 | 3 | Detector letterbox | `geometry.letterbox_to_square` via `ingest_detect.run_primary_batch` | frame (2) | uint8 `[1,3,640,640]`, Pillow `BILINEAR` (antialiased on downscale), fill 114, paste at `int(pad)` | 640 | 5.1 / 93 |
 | 3b | Secondary letterbox (only with a secondary profile) | same, `run_secondary_raw_batch` | frame (2) | `input_size` letterbox | profile | off in the generic stack |
 | 4 | Detector | Triton `yolov11_small_trt_end2end` | letterbox (3) | boxes in network pixels, un-mapped with `undo_letterbox` | | GPU 1-5 ms |
@@ -760,7 +760,7 @@ What was built (branch `perf/gpu-decode-impl`, on top of the CPU slices):
 
 | Slice | What | Where |
 |---|---|---|
-| CPU single decode | the whole-frame square is cut from the frame decoded for the detector (Pillow `BILINEAR`, shorter edge to 336, centre crop); `exif_transpose` only when the tag moves pixels | `pe_preprocess.whole_frame_rgb_from_image`, `ingest._decode_image` |
+| CPU single decode | the whole-frame square is cut from the frame decoded for the detector (Pillow `BILINEAR`, shorter edge to 336, centre crop); `exif_transpose` only when the tag moves pixels | `pe_preprocess.whole_frame_rgb_from_image`, `ingest_helpers._decode_image` |
 | libjpeg-turbo decode | JPEG through `simplejpeg` (the libjpeg-turbo Pillow runs, pixels identical) straight into the array the blur reads | `src/services/curation/image_decode.py` |
 | GPU decode | Triton Python model `gpu_image_prep`, decoupled, one process: nvJPEG decoupled API with the GPU-Huffman backend through ctypes (16 lanes), EXIF on the GPU, fused uint8 CuPy kernels (separable Pillow-`BILINEAR` resampler for the letterbox and whole frame, plain bilinear for crop squares, exact grey + Laplacian sums), detector and PE through BLS, crop JPEGs encoded on host threads; per-image worker pool, bounded in flight | `models/gpu_image_prep/`, `src/services/curation/ingest_gpu_decode.py` |
 | Routing | `OP_INGEST_GPU_DECODE` (on by default; the installer writes 0 for profiles without room), size gate `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0); the model is loaded on first use and used only when its detector input matches the ingest profile; declined files (progressive, no end-of-image marker, not a baseline JPEG, decoder error) take the CPU path, counted in `op_ingest_decode_total{route}` | `ingest_batch._prefill_gpu_decode` |

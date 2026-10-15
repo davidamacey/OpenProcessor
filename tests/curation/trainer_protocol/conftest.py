@@ -31,7 +31,7 @@ def jobs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     ordinary project (no special-casing), so that's where job files
     actually land.
     """
-    import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_config_mod
 
     d = tmp_path / 'jobs'
     d.mkdir()

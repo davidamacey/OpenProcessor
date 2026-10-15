@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel
 
 from src.config import PENDING_STATUSES, RegionStatus
-from src.config.curation import items_index
+from src.config.curation_accessors import items_index
 from src.config.region_fields import get_region_fields
 from src.services.curation.region_requeue import REQUEUEABLE_STATUSES
 from src.services.curation.region_scope import parent_classes_clause

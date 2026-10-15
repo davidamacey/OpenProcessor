@@ -43,7 +43,7 @@ from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
-    from src.services.config_store.store import AxisRef
+    from src.services.config_store.snapshot import AxisRef
 
 logger = get_logger(__name__)
 

@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 @pytest.fixture(autouse=True)
 def _bound_project() -> Iterator[None]:
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.project_context import bind_project
     from src.config.projects import new_project_record
 

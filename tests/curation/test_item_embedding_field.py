@@ -58,7 +58,7 @@ def test_fresh_unlabeled_item_is_in_review_all_tab() -> None:
 
 
 def test_fresh_unlabeled_item_is_in_vlm_worker_cohort() -> None:
-    from scripts.curation.vlm_worker import _build_pending_query
+    from scripts.curation.vlm_pending import _build_pending_query
 
     assert matches(_fresh_unlabeled_doc(), _build_pending_query(0.8))
 

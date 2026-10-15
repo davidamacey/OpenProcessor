@@ -120,7 +120,8 @@ async def delete_throwaway(slug: str) -> None:
     registry record. Needs the same OP_STATE_DIR the project was created under."""
     from src.services.projects import lifecycle
     from src.services.projects.delete import delete_project_finish
-    from src.services.projects.guard import bind_registry_admin, make_curation_opensearch
+    from src.services.projects.guard import make_curation_opensearch
+    from src.services.projects.guard_policy import bind_registry_admin
     from src.services.projects.registry import get_project_registry
 
     client = await make_curation_opensearch()

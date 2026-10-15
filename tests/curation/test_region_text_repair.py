@@ -10,7 +10,7 @@ from _region_profile_fixture import NEUTRAL_REGION_PROFILE
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config import get_region_fields
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.services.curation.region_text_repair import (
     apply_region_text_repair,

@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 def trim_to_eot(tokens: Any) -> Any:
     """Drop the all-padding tail after the batch's last EOT position.
 
-    Mirrors ``src.clients.pe_encoder.trim_text_tokens`` (the exporter is a
+    Mirrors ``src.clients.pe_text_backends.trim_text_tokens`` (the exporter is a
     standalone script and does not import ``src``).
     """
     import numpy as np

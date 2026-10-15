@@ -10,7 +10,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.services.curation.review_queries import tab_filters
+from src.services.curation.review_tabs import tab_filters
 
 
 @pytest.fixture

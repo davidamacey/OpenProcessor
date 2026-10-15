@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config
-from src.config.curation import items_index
+from src.config.curation_accessors import items_index
 from src.core.exceptions import RequestRejectedError
 from src.services.curation.dataset_thresholds import (
     HARD_MIN_CROPS_PER_CLASS,
@@ -30,12 +30,11 @@ from src.services.curation.export_readiness import (
 from src.services.rejections import rejection
 from src.services.training import jobs as train_jobs
 from src.services.training.augmentation_presets import PRESET_IDS
-from src.services.training.gpu_arbiter import (
+from src.services.training.gpu_arbiter_docker import docker_client_available
+from src.services.training.gpu_arbiter_policy import (
     containers_to_stop,
-    docker_client_available,
     needs_service_stop,
     parse_cuda_visible_devices,
-    probe_trainer_reachable,
 )
 from src.services.training.preflight_checks import (
     MIN_FREE_DISK_GB,
@@ -58,6 +57,7 @@ from src.services.training.preflight_checks import (
     unresolvable_include_classes,
 )
 from src.services.training.profiles import RESERVED_OPTIMIZERS_YOLO26
+from src.services.training.trainer_reachability import probe_trainer_reachable
 
 
 if TYPE_CHECKING:

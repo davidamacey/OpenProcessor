@@ -211,7 +211,7 @@ def test_probe_status_reports_the_actionable_threshold() -> None:
 
 
 def test_probe_status_threshold_reflects_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    from src.config import curation as curation_config_mod
+    import src.config.curation_accessors as curation_config_mod
 
     monkeypatch.setenv('OP_PROBE_ACTIONABLE_MIN_CONFIDENCE', '0.9')
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)

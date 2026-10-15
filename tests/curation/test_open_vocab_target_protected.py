@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from scripts.curation.vlm_worker import _build_pending_query
+from scripts.curation.vlm_pending import _build_pending_query
 from src.services.curation.class_sources import vlm_suggestion
 from src.services.curation.label_batch_write import label_batch_merge
 from src.services.curation.vlm_class_attempt import class_attempt_fields

@@ -16,7 +16,7 @@ import pytest
 
 from curation.region_cascade_helpers import _drive_worker, _FakeOpenSearch, _item
 from src.config import get_region_fields
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.services.curation.review_queries import build_tab_query
 from src.services.curation.wire import serialize_item
 from src.services.detection.cascade_detect.candidate import RegionCandidate

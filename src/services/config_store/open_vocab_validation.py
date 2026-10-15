@@ -16,7 +16,8 @@ from typing import TYPE_CHECKING, Any
 
 from src.config.env import env_str
 from src.services.config_store.pack_validation import NAME_RE, RESERVED_NAMES
-from src.services.config_store.profile_validation import _issue, check_segmenter_prompt_text
+from src.services.config_store.profile_dependency_checks import check_segmenter_prompt_text
+from src.services.config_store.profile_issues import _issue
 from src.services.detection.open_vocab_set import (
     MAX_ENABLED_TARGETS_CEILING,
     OpenVocabSet,

@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import DEFAULT_SLUG, new_project_record
 from src.routers.curation import pipeline_events as pe

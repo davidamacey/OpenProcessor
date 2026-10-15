@@ -286,7 +286,7 @@ def _args(manifest: Path, images: Path, out: Path, **extra: Any) -> Any:
 
 @pytest.fixture
 def no_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr('scripts.bench.baseline_suite.time.sleep', lambda _s: None)
+    monkeypatch.setattr('scripts.bench.suite_ingest.time.sleep', lambda _s: None)
     monkeypatch.setattr(
         parity, 'environment_record', lambda *_a, **_k: {'git_sha': 'abc', 'hardware': {}}
     )

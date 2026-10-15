@@ -406,7 +406,7 @@ def test_human_class_writers_replace_detector_provenance(
     reg.validate_id.return_value = True
     reg.get.return_value = MagicMock(class_name='gadget')
 
-    with patch('src.routers.curation.crops.get_class_registry', return_value=reg):
+    with patch('src.routers.curation.crops_write.get_class_registry', return_value=reg):
         r = getattr(app_client, method)(url, json=body)
     assert r.status_code == 200, r.text
 
@@ -469,9 +469,10 @@ def test_health_mlflow_public_url_is_null_when_unset(
     """T1: GET /curation/health serves the configured public MLflow base
     URL, null when unset -- a client must not guess a port."""
     import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_accessors_mod
 
     monkeypatch.setattr(
-        curation_config_mod,
+        curation_accessors_mod,
         '_default_curation_config',
         curation_config_mod.CurationConfig(mlflow_public_url=None),
     )
@@ -492,9 +493,10 @@ def test_health_mlflow_public_url_reflects_config(
     monkeypatch: Any,
 ) -> None:
     import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_accessors_mod
 
     monkeypatch.setattr(
-        curation_config_mod,
+        curation_accessors_mod,
         '_default_curation_config',
         curation_config_mod.CurationConfig(mlflow_public_url='http://mlflow.example.com:4731'),
     )

@@ -12,7 +12,8 @@ from __future__ import annotations
 import pytest
 
 from curation.query_fakes import matches
-from src.services.curation.review_queries import KNOWN_TABS, build_tab_query
+from src.services.curation.review_queries import build_tab_query
+from src.services.curation.review_tabs import KNOWN_TABS
 
 
 _CLASS_EXCLUDED_CLAUSE = {'term': {'class_excluded': True}}

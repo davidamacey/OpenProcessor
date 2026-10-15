@@ -50,7 +50,7 @@ def test_build_pending_query_resolves_src_import_under_module_invocation() -> No
     root. Run with `-m`, it succeeds. This test pins the `-m` behavior.
     """
     code = (
-        'from scripts.curation.vlm_worker import _build_pending_query;'
+        'from scripts.curation.vlm_pending import _build_pending_query;'
         'q = _build_pending_query(0.80);'
         'assert isinstance(q, dict) and "bool" in q, q'
     )

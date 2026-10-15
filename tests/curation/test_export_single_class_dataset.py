@@ -17,8 +17,8 @@ from curation.export_fakes import (
 )
 from src.config import CurationConfig
 from src.config.region_state import RegionStatus
+from src.services.curation.export_models import SingleClassExportProfile
 from src.services.curation.export_single_class import (
-    SingleClassExportProfile,
     SingleClassExportService,
     resolve_current_single_class_dir,
 )

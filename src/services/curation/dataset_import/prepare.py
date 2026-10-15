@@ -134,7 +134,7 @@ def _pack_synonyms() -> dict[str, str]:
 def pin_project_view(registry: ClassRegistry) -> ProjectView:
     """Read the bound project's classes, synonyms, region profile and export
     root once."""
-    from src.config.curation import get_curation_config
+    from src.config.curation_accessors import get_curation_config
 
     cfg = get_curation_config()
     return ProjectView(

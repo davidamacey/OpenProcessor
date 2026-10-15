@@ -12,8 +12,8 @@ from typing import Any
 import pytest
 
 from curation.query_fakes import QueryFakeOpenSearch, SettingsFakeOpenSearch
-from scripts.curation.vlm_worker import _build_pending_query
-from src.config.curation import base_curation_config
+from scripts.curation.vlm_pending import _build_pending_query
+from src.config.curation_accessors import base_curation_config
 from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPTED_AT_FIELD
 from src.services.curation.autolabel.selection import resolve_vlm_selection, vlm_selection_query
 from src.services.curation.vlm_policy import VlmPolicy, VlmPolicyBody
@@ -289,7 +289,7 @@ class _Clock:
 
 @pytest.mark.asyncio
 async def test_worker_fetch_applies_scope_budget_and_caches_the_policy_for_30s() -> None:
-    from scripts.curation.vlm_worker import fetch_pending_ids
+    from scripts.curation.vlm_pending import fetch_pending_ids
     from src.services.curation.vlm_scope import ScopeCache
 
     docs = _docs()

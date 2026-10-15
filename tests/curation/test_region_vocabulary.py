@@ -22,7 +22,7 @@ from fastapi.testclient import TestClient
 
 from curation._vlm_test_support import empty_registry_reads
 from src.config.region_source import CANDIDATE_SOURCES
-from src.services.curation.review_queries import KNOWN_TABS
+from src.services.curation.review_tabs import KNOWN_TABS
 
 
 @pytest.fixture
@@ -119,7 +119,7 @@ def test_region_profile_summary_serves_max_boxes_per_write_limit(
     """The served abuse guard (element count of one write request,
     not a labeling rule) travels on region_profile.limits so Cropwright
     never hardcodes it."""
-    import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_config_mod
     from src.services.detection import profile_registry
 
     monkeypatch.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)

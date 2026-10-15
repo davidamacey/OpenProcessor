@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from opensearchpy.exceptions import OpenSearchException
 
-from src.config.curation import items_index
+from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.clustering.assignment_writer import (
@@ -108,7 +108,7 @@ async def cluster_residuals(
        live data) rather than baked into the id itself.
     4. Bulk-write back to OpenSearch in chunks, several requests at a time.
     """
-    from src.services.curation.clustering import embedding_reduce
+    from src.services.curation.clustering import residual_fetch
     from src.services.curation.clustering.backend import detect_cluster_backend
     from src.services.curation.clustering.methods import DEFAULT_METHOD, get_method
     from src.services.curation.strategy_registry import resolve_effective_default
@@ -147,7 +147,7 @@ async def cluster_residuals(
                 ),
             }
 
-    # asyncio.to_thread — see embedding_reduce.py's matching call site:
+    # asyncio.to_thread — see residual_fetch.py's matching call site:
     # detect_cluster_backend()'s CUDA probe has been observed to block
     # 30+ seconds on a no-GPU-passthrough container (driver-mismatch
     # error path), long enough to starve the sibling heartbeat coroutine
@@ -164,7 +164,7 @@ async def cluster_residuals(
     # on n=347k). Falls back internally to the sequential scroll
     # variant if PIT isn't available on the cluster.
     t_fetch = time.perf_counter()
-    ids, embeddings = await embedding_reduce.fetch_residual_embeddings_parallel(
+    ids, embeddings = await residual_fetch.fetch_residual_embeddings_parallel(
         client,
         include_candidate_clusters=recluster_unvalidated,
         candidate_cluster_id_min=RESIDUAL_CLUSTER_ID_OFFSET,
@@ -341,7 +341,7 @@ async def assign_only_residuals(
     ``{'status': 'no_centroids'}`` — the caller should run a full
     :func:`cluster_residuals` first.
     """
-    from src.services.curation.clustering import embedding_reduce
+    from src.services.curation.clustering import residual_fetch
     from src.services.curation.clustering.methods.ivf_store import IVFCentroidStore
 
     store = IVFCentroidStore()
@@ -355,11 +355,11 @@ async def assign_only_residuals(
     gate_min_blur_ratio = gate.get('min_blur_ratio')
     gate_clauses = gate_must_clauses(gate_max_rank, gate_min_blur_ratio)
 
-    field = embedding_reduce.RESIDUAL_EMBEDDING_FIELD
+    field = residual_fetch.RESIDUAL_EMBEDDING_FIELD
     filt: list[dict[str, Any]] = [{'exists': {'field': field}}, *gate_clauses]
     must_not: list[dict[str, Any]] = [
         {'term': {'class_validated': True}},
-        {'terms': {'class_source': list(embedding_reduce.CONFIDENT_CLASS_SOURCES)}},
+        {'terms': {'class_source': list(residual_fetch.CONFIDENT_CLASS_SOURCES)}},
         {'term': {'class_excluded': True}},
     ]
     query = {'bool': {'filter': filt, 'must_not': must_not}}

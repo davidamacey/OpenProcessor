@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from src.clients.triton_pool import AsyncTritonPool
+from src.clients.triton_pool_core import AsyncTritonPool
 
 
 class _FakeGrpcClient:

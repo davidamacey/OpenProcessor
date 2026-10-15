@@ -7,6 +7,9 @@ from typing import Any
 
 UMAP_N_COMPONENTS = 50
 UMAP_N_NEIGHBORS = 15
+UMAP_MIN_DIST = 0.0
+UMAP_METRIC = 'cosine'
+UMAP_RANDOM_STATE = 42
 
 # Fewer residuals than this and no clusterer (UMAP, AHC, IVF) has enough
 # points to be meaningful; every clustering entry point refuses below it.

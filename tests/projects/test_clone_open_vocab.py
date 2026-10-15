@@ -11,7 +11,7 @@ import pytest
 from curation._fake_config_opensearch import FakeConfigOpenSearch
 
 from src.config import get_curation_config
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import CLONEABLE_AXES, ProjectRecord, resources_for_new
 from src.core.exceptions import RequestRejectedError

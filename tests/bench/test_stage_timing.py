@@ -62,7 +62,7 @@ def test_unknown_stage_is_rejected() -> None:
 
 
 def test_decode_output_is_unchanged_by_the_timer() -> None:
-    from src.services.curation.ingest import _decode_image
+    from src.services.curation.ingest_helpers import _decode_image
 
     buf = io.BytesIO()
     Image.fromarray(np.arange(48 * 64 * 3, dtype=np.uint8).reshape(48, 64, 3)).save(buf, 'PNG')

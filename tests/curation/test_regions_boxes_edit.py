@@ -216,7 +216,7 @@ def test_put_regions_over_max_boxes_per_write_is_422_too_many_boxes(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_REGION_MAX_BOXES_PER_WRITE', '1')
-    import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_config_mod
 
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
     try:

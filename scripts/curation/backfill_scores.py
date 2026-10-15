@@ -80,13 +80,14 @@ async def _async_main(args: argparse.Namespace) -> int:
 
     client = make_script_opensearch([args.opensearch_url], use_ssl=False, timeout=600)
     try:
-        from src.config.curation import IndexRole, get_curation_config, index_name
-        from src.services.curation.clustering import embedding_reduce
+        from src.config.curation_accessors import get_curation_config
+        from src.config.curation_roles import IndexRole, index_name
+        from src.services.curation.clustering import residual_fetch
         from src.services.curation.item_scores import get_scorer
         from src.services.curation.item_scores.job import bulk_write_result
 
         extra_must = [{'bool': {'must_not': [{'term': {'test_holdout': True}}]}}]
-        ids, embeddings = await embedding_reduce.fetch_residual_embeddings_parallel(
+        ids, embeddings = await residual_fetch.fetch_residual_embeddings_parallel(
             client, extra_must=extra_must
         )
         if args.limit is not None:

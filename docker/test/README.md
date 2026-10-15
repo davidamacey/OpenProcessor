@@ -104,7 +104,7 @@ day they are fixed:
    `reason='parse_failure'`. See
    `tests/live/test_live_vlm.py::test_vlm_verdict_key_matches_the_shipped_prompt`.
 2. **Every index is the bound project's** — including the two UMAP state
-   indexes (`embedding_viz.py`, `clustering/embedding_reduce.py`); the
+   indexes (`embedding_viz.py`, `clustering/umap_state.py`); the
    harness's `OP_PROJECT_INDEX_PREFIX=verify_prj_` moves all of them. See
    `tests/live/test_live_clusters.py::test_viz_state_index_honours_the_configured_index_prefix`.
 

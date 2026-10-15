@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.projects import ProjectRecord, resources_for_new
 from src.services.projects.busy import (
     JobRef,
@@ -120,7 +120,7 @@ def test_train_job_label_and_started_at_come_from_the_real_sources(tmp_path, mon
 
 def test_train_job_label_falls_back_to_job_id_with_no_run_name(tmp_path, monkeypatch) -> None:
     """No `job.json`, or one with no `mlflow_run_name` set -> label is
-    None, and `lifecycle.running_jobs` (tested separately) is the one
+    None, and `lifecycle_checks.running_jobs` (tested separately) is the one
     that falls back to the job id -- documented, not silent."""
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
     record = _record('alpha', tmp_path)

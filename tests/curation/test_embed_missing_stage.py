@@ -112,7 +112,7 @@ async def test_nothing_missing_is_skipped_without_building_an_encoder(
     def _no_pool(*_: Any, **__: Any) -> None:
         raise AssertionError('an encoder must not be built when nothing is missing')
 
-    monkeypatch.setattr('src.clients.triton_pool.AsyncTritonPool', _no_pool)
+    monkeypatch.setattr('src.clients.triton_pool_core.AsyncTritonPool', _no_pool)
     out = await run_embed_missing_stage(
         fake, class_id=None, cluster_id=None, item_filter={'class_names': ['bird']}
     )

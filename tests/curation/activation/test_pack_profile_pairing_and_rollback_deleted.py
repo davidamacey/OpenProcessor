@@ -232,9 +232,9 @@ def _clone_pair(profile_activation: tuple[str | None, int | None] | None, plant_
     from datetime import UTC, datetime
     from unittest.mock import AsyncMock, MagicMock
 
-    import src.config.curation as curation_mod
+    import src.config.curation_accessors as curation_mod
     from curation._fake_config_opensearch import FakeConfigOpenSearch
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.project_context import bind_project
     from src.config.projects import ProjectRecord, resources_for_new
     from src.services.config_store import get_config_store

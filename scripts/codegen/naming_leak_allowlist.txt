@@ -43,7 +43,7 @@ tests/installer/test_setup_env_and_flags.py:gemma # asserts VLM_IMAGE equals the
 # The retired-env guard and its test spell every retired name on purpose:
 # that IS the mechanism that makes a stale env var fail loudly instead
 # of silently doing nothing.
-src/config/retired_env.py # spells every retired env-var name on purpose (clean-break guard with no aliases); see src/main.py's lifespan for where it is invoked
+src/config/retired_env.py # spells every retired env-var name on purpose (clean-break guard with no aliases); see src/app/lifespan.py's lifespan for where it is invoked
 tests/config/test_retired_env.py # exercises every retired env-var name in src/config/retired_env.py
 
 # docker/segmenter run examples use the retired SAM3_URL name nowhere; the

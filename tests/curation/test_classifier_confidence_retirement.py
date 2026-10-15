@@ -118,7 +118,7 @@ def test_primary_low_conf_matches_a_low_confidence_classifier_item(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        'src.services.curation.review_queries.classifier_class_sources',
+        'src.services.curation.review_tab_clauses.classifier_class_sources',
         lambda: {'classifier_model'},
     )
     must, must_not, _reason = build_tab_query(

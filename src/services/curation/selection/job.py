@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
 
-from src.config.curation import get_curation_config
+from src.config.curation_accessors import get_curation_config
 from src.config.env import env_path
 from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger

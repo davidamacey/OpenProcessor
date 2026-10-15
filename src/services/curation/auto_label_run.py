@@ -21,7 +21,8 @@ from typing import Any
 
 from opensearchpy.exceptions import OpenSearchException
 
-from src.config.curation import ITEM_EMBEDDING_FIELD, items_index
+from src.config.curation import ITEM_EMBEDDING_FIELD
+from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.services.curation.autolabel.embed_stage import run_embed_missing_stage
 from src.services.curation.autolabel.health_snapshot import pipeline_health_snapshot

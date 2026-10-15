@@ -46,7 +46,7 @@ class _EnvDefaultProjectRecord:
 
     @property
     def resources(self) -> object:
-        from src.config.curation import base_curation_config
+        from src.config.curation_accessors import base_curation_config
         from src.config.projects import resources_for_new
 
         return resources_for_new('default', base_curation_config())
@@ -73,7 +73,7 @@ def project_export_root() -> Path:
     """The bound ``default`` project's ``export_root`` (created). Training
     routes refuse a ``dataset_export_dir`` outside it
     (``export_outside_project``), so fixture exports live here."""
-    from src.config.curation import get_curation_config
+    from src.config.curation_accessors import get_curation_config
 
     root = Path(get_curation_config().export_root)
     root.mkdir(parents=True, exist_ok=True)
@@ -177,7 +177,7 @@ def _requests_start_unbound(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 # project, but every unit test binds the same ``default`` record, so a cache
 # one test fills would answer the next test's first request.
 _PROCESS_CACHES = (
-    ('src.services.curation.strategy_registry', '_COVERAGE_CACHE'),
+    ('src.services.curation.field_coverage', '_COVERAGE_CACHE'),
     ('src.services.curation.diverse_order', '_ORDER_CACHE'),
     ('src.services.curation.clustering.outliers', '_CACHE'),
     ('src.clients.curation_opensearch.settings_doc', '_settings_cache'),

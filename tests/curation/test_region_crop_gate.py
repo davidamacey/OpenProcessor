@@ -102,7 +102,7 @@ async def test_a_paused_region_stage_runs_nothing_and_loses_nothing(
         monkeypatch.setattr(
             'scripts.curation.worker.fairness.is_region_stage_paused', lambda _record: False
         )
-    import src.config.curation as curation_config
+    import src.config.curation_accessors as curation_config
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
     monkeypatch.setattr(curation_config, '_default_curation_config', None)

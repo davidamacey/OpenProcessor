@@ -5,12 +5,12 @@ Provides unified interfaces for Triton Inference Server and OpenSearch.
 
 Triton Clients:
 - TritonClient: Unified client for all inference pipelines
-- TritonClientManager: Connection pool manager (from triton_pool)
+- TritonClientManager: Connection pool manager (from triton_client_manager)
 """
 
 from src.clients.opensearch.client import OpenSearchClient
 from src.clients.triton_client import TritonClient, get_sync_triton_client
-from src.clients.triton_pool import TritonClientManager
+from src.clients.triton_client_manager import TritonClientManager
 
 
 __all__ = [

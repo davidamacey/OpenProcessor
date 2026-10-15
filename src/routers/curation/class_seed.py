@@ -17,7 +17,7 @@ from src.routers.curation._error_models import (
     DetectorUnavailableResponse,
     UnknownDetectorNamesResponse,
 )
-from src.routers.curation.classes import create_registry_class
+from src.routers.curation.classes_write import create_registry_class
 from src.services.curation.detector_vocabulary import detector_labels, plan_seed
 from src.services.curation.ingest_detector import effective_profile
 from src.services.curation.ingest_policy_store import get_ingest_policy

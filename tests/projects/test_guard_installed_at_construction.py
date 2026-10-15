@@ -85,7 +85,7 @@ def test_the_lifespan_binds_no_project() -> None:
 def test_for_each_project_binds_each_active_project_in_turn() -> None:
     import dataclasses
 
-    from src.config.curation import base_curation_config, base_curation_config as _base
+    from src.config.curation_accessors import base_curation_config, base_curation_config as _base
     from src.config.project_context import current_project, try_current_project
     from src.config.projects import ProjectStatus, new_project_record, resources_for_new
     from src.services.projects import registry as registry_mod

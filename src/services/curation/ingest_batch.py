@@ -120,7 +120,7 @@ async def _prefill_detections(
     detection maps come back empty so every image falls back to the
     per-image path rather than running a half-batched hybrid.
     """
-    from src.services.curation.ingest import _decode_image
+    from src.services.curation.ingest_helpers import _decode_image
 
     prefilled_imgs: dict[int, DecodedImage] = {}
     prefilled_secondary: dict[int, SecondaryOutput] = {}
@@ -191,7 +191,7 @@ async def run_ingest_batch(
 
     See that method's docstring for the argument contract.
     """
-    from src.services.curation.ingest import MAX_INGEST_CONCURRENCY, _imohash_bytes
+    from src.services.curation.ingest_helpers import MAX_INGEST_CONCURRENCY, _imohash_bytes
 
     if len(images) != len(image_paths):
         raise ValueError('images and image_paths must be same length')

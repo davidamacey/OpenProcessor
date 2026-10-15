@@ -118,7 +118,7 @@ Bodies are byte-identical in every case.
 ### 3. Request Validation and Size Limits
 
 **Implementation**:
-Performance middleware in `src/main.py`:
+Performance middleware in `src/app/factory.py`:
 
 ```python
 MAX_FILE_SIZE_MB = 50  # Adjust based on requirements
@@ -3689,7 +3689,7 @@ Current: **50MB** maximum upload size
 
 **To adjust**:
 
-Edit `src/main.py`:
+Edit `src/app/factory.py`:
 ```python
 MAX_FILE_SIZE_MB = 100  # Increase to 100MB
 ```

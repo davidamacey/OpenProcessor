@@ -29,7 +29,7 @@ from src.routers.curation._common import (
     logger,
     router,
 )
-from src.routers.curation.classes import create_registry_class
+from src.routers.curation.classes_write import create_registry_class
 from src.services.curation.class_label import ItemLabel, class_label_update
 from src.services.curation.export_support import scroll_hits
 from src.services.curation.index_bootstrap import ensure_indexes

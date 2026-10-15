@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
     import pytest
 from src.config import IndexRole, index_name
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.services.curation.wire import ITEM_WIRE_KEYS
 
 
@@ -150,11 +150,12 @@ def test_crop_image_context_fills_missing_pixel_size_from_the_file_header(
     """Width/height must never be left null when the
     image is actually servable -- fall back to reading the file header."""
     import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_accessors_mod
 
     img_path = tmp_path / 'a.jpg'
     Image.new('RGB', (321, 233), color=(10, 20, 30)).save(img_path, format='JPEG')
     patched_cfg = curation_config_mod.CurationConfig(source_root=tmp_path)
-    monkeypatch.setattr(curation_config_mod, '_default_curation_config', patched_cfg)
+    monkeypatch.setattr(curation_accessors_mod, '_default_curation_config', patched_cfg)
 
     fake = QueryFakeOpenSearch(
         {

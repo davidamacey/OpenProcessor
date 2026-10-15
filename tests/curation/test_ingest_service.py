@@ -8,7 +8,7 @@ import pytest
 
 from curation.ingest_fakes import _jpeg_bytes, _make_service
 from curation.occ_fakes import FakeIngestOpenSearch
-from src.services.curation.ingest import MAX_INGEST_CONCURRENCY
+from src.services.curation.ingest_helpers import MAX_INGEST_CONCURRENCY
 
 
 del MAX_INGEST_CONCURRENCY  # imported only to confirm the module exports it
@@ -48,7 +48,7 @@ class TestDuplicateDetection:
     @pytest.mark.asyncio
     async def test_ingest_one_returns_duplicate_status(self) -> None:
         data = _jpeg_bytes()
-        from src.services.curation.ingest import _imohash_bytes
+        from src.services.curation.ingest_helpers import _imohash_bytes
 
         h = _imohash_bytes(data)
         os_fake = FakeIngestOpenSearch(images={'img1': {'image_id': 'img1', 'imohash': h}})
@@ -256,7 +256,7 @@ class TestBatchIngest:
     @pytest.mark.asyncio
     async def test_batch_reports_success_and_duplicate(self) -> None:
         data_a = _jpeg_bytes(seed=1)
-        from src.services.curation.ingest import _imohash_bytes
+        from src.services.curation.ingest_helpers import _imohash_bytes
 
         existing_hash = _imohash_bytes(data_a)
         os_fake = FakeIngestOpenSearch(
@@ -320,7 +320,7 @@ class TestBatchIngest:
         """Same requirement for the cross-batch dedup path (hash already
         committed to the index before this batch started)."""
         data = _jpeg_bytes(seed=9)
-        from src.services.curation.ingest import _imohash_bytes
+        from src.services.curation.ingest_helpers import _imohash_bytes
 
         existing_hash = _imohash_bytes(data)
         os_fake = FakeIngestOpenSearch(

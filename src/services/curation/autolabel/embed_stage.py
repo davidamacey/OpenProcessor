@@ -100,7 +100,7 @@ async def _embed_missing(
     owned_pool: Any = None
     if encoder is None:
         from src.clients.pe_encoder import PEEncoder
-        from src.clients.triton_pool import AsyncTritonPool
+        from src.clients.triton_pool_core import AsyncTritonPool
 
         owned_pool = AsyncTritonPool(url=triton_url(), pool_size=1, max_concurrent=8)
         await owned_pool.initialize()

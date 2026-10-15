@@ -110,7 +110,8 @@ async def test_omitted_store_active_pack_still_uses_none_none(
     activation (not a legacy settings doc / env / file default), the TOCTOU
     protection (resolve against ``(None, None)``, not the echoed name) must
     still apply."""
-    from src.services.config_store.store import ConfigSnapshot, get_config_store
+    from src.services.config_store.snapshot import ConfigSnapshot
+    from src.services.config_store.store import get_config_store
     from src.services.curation.autolabel.run_params import omitted_pack_is_store_active
 
     store = get_config_store()

@@ -58,7 +58,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from src.config.curation import get_curation_config
+from src.config.curation_accessors import get_curation_config
 from src.services.curation.raw_label_clusters import (
     CLUSTER_ID_FIELD,
     RAW_LABEL_FIELD,

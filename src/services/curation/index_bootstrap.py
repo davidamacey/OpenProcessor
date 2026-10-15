@@ -37,7 +37,7 @@ from src.clients.curation_opensearch.lifecycle import create_curation_indexes
 from src.clients.curation_opensearch.open_vocab_fields import ensure_open_vocab_fields
 from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config
-from src.config.curation import classes_index, images_index, items_index
+from src.config.curation_accessors import classes_index, images_index, items_index
 from src.core.logging import get_logger
 
 

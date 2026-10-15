@@ -16,7 +16,7 @@ from src.services.detection.region_text import OcrLine
 
 
 if TYPE_CHECKING:
-    from src.clients.triton_pool import AsyncTritonPool
+    from src.clients.triton_pool_core import AsyncTritonPool
     from src.config import DetectionProfile
 
 

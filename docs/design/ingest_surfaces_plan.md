@@ -216,7 +216,7 @@ of the API.
 ### D11. Where the dispatcher lives
 
 `bulk_ingest/dispatcher.py`: `start_ingest_dispatcher()` / `stop_ingest_dispatcher()` mirrored on
-`start_open_vocab_sweeper`, started from `src/main.py` lifespan. Each tick, per project (`for_each_project`),
+`start_open_vocab_sweeper`, started from the `src/app/lifespan.py` lifespan. Each tick, per project (`for_each_project`),
 under `exclusive_start_lock(<project dir>/dispatch.lock)` (non-blocking: one worker acts per project per tick):
 list sources, compute due actions with injected `now`, start scans/runs as `asyncio` tasks of this worker
 (a worker that dies leaves a stale heartbeat; `repaired_state` marks the run `interrupted` and the next tick

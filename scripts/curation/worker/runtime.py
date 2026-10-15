@@ -38,7 +38,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from src.config import DetectionProfile
-    from src.services.config_store.store import AxisRef, ConfigSnapshot, ConfigStore
+    from src.services.config_store.snapshot import AxisRef, ConfigSnapshot
+    from src.services.config_store.store import ConfigStore
     from src.services.labeling.vlm_client import VlmIdentity
     from src.services.labeling.vlm_endpoints import VlmEndpoint
     from src.services.labeling.vlm_prompts import PromptPack

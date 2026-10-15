@@ -233,7 +233,7 @@ def test_a_failed_project_does_not_bind(client: TestClient) -> None:
     (writable) binding."""
     import dataclasses
 
-    from src.config.curation import base_curation_config, base_curation_config as _base
+    from src.config.curation_accessors import base_curation_config, base_curation_config as _base
     from src.config.projects import new_project_record, resources_for_new
     from src.services.projects import registry as registry_mod
 

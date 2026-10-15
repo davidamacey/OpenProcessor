@@ -57,7 +57,7 @@ def fake() -> QueryFakeOpenSearch:
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch, fake: QueryFakeOpenSearch) -> Any:
     monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', {'default'})
-    monkeypatch.setattr('src.routers.curation.crops.get_class_registry', _Registry)
+    monkeypatch.setattr('src.routers.curation.crops_write.get_class_registry', _Registry)
     from _curation_app import mount_curation_routers
 
     from src.routers.curation import _raw_opensearch_dep, router as curation_router

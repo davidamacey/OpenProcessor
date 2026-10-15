@@ -1,7 +1,7 @@
 """The single writer of a validated class label on an item.
 
 Every human class-label write (``label_crop``, ``batch_label_crops``
-(``src/routers/curation/crops.py``), ``move_crops``, and
+(``src/routers/curation/crops_write.py``), ``move_crops``, and
 ``POST /review/new_class_proposals/resolve``
 (``src/routers/curation/review_resolve.py``)) and every dataset-import
 class-label write (``dataset_import/job.py``) go through this module.

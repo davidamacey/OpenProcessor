@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from curation.train_jobs._helpers import _write_status
-from src.services.training import jobs as train_jobs
+from src.services.training import job_campaigns, jobs as train_jobs
 from src.services.training.job_models import CampaignRunSpec, TrainCampaignSpec, TrainJobSpec
 
 
@@ -134,7 +134,7 @@ async def test_write_campaign_creates_n_files_with_shared_id(jobs_dir: Path) -> 
             CampaignRunSpec(profile='medium', model_size='m'),
         ],
     )
-    campaign_id, job_ids = await train_jobs.write_campaign(campaign)
+    campaign_id, job_ids = await job_campaigns.write_campaign(campaign)
     assert campaign_id == '2026-05-09_sweep'
     assert len(job_ids) == 3
     for jid in job_ids:
@@ -154,12 +154,12 @@ async def test_cancel_campaign_writes_sentinels(jobs_dir: Path) -> None:
             CampaignRunSpec(profile='small', model_size='s'),
         ],
     )
-    campaign_id, job_ids = await train_jobs.write_campaign(campaign)
+    campaign_id, job_ids = await job_campaigns.write_campaign(campaign)
     # Mark first as finished, second still queued.
     _write_status(jobs_dir, job_ids[0], state='finished')
     _write_status(jobs_dir, job_ids[1], state='running', heartbeat_at=datetime.now(UTC).isoformat())
 
-    n = await train_jobs.cancel_campaign(campaign_id)
+    n = await job_campaigns.cancel_campaign(campaign_id)
     assert n == 1, 'should only cancel the non-terminal run'
     assert (jobs_dir / f'{job_ids[1]}.cancel').exists()
     assert not (jobs_dir / f'{job_ids[0]}.cancel').exists()

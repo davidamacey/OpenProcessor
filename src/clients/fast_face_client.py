@@ -21,7 +21,7 @@ import cv2
 import numpy as np
 from tritonclient.grpc import InferInput, InferRequestedOutput
 
-from src.clients.triton_pool import TritonClientManager
+from src.clients.triton_client_manager import TritonClientManager
 from src.config.settings import TritonModelConfig
 from src.utils.face_align import align_faces_batch, preprocess_for_arcface
 from src.utils.retry import retry_sync

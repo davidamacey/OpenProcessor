@@ -53,7 +53,7 @@ class _FakeScrollBulkOS:
 
 
 def _member(doc_id: str, embedding: list[float], class_name: str | None = None) -> dict[str, Any]:
-    from src.services.curation.clustering.embedding_reduce import RESIDUAL_EMBEDDING_FIELD
+    from src.services.curation.clustering.residual_fetch import RESIDUAL_EMBEDDING_FIELD
 
     return {
         '_id': doc_id,
@@ -195,7 +195,7 @@ async def _run_cluster_residuals(
         _FakeBackendInfo,
     )
     monkeypatch.setattr(
-        'src.services.curation.clustering.embedding_reduce.fetch_residual_embeddings_parallel',
+        'src.services.curation.clustering.residual_fetch.fetch_residual_embeddings_parallel',
         _fake_fetch,
     )
     labels = np.array([i % 2 for i in range(len(pool_ids))])

@@ -10,7 +10,8 @@ import pytest
 from curation.open_vocab_fixtures import FakeSegmenter, StatefulRegistry, cand, ingested_world
 from curation.reprocess_fixtures import docs, images_index
 from src.config.env import EnvError
-from src.services.config_store.store import StoredConfig, get_config_store, reset_config_stores
+from src.services.config_store.snapshot import StoredConfig
+from src.services.config_store.store import get_config_store, reset_config_stores
 from src.services.curation.dataset_import.limits import open_vocab_stale_after_s
 from src.services.curation.open_vocab_sweeper import (
     start_open_vocab_sweeper,

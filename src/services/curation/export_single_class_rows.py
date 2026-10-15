@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
     from src.config import CurationConfig
     from src.config.region_fields import RegionFields
-    from src.services.curation.export_single_class import SingleClassExportProfile
+    from src.services.curation.export_models import SingleClassExportProfile
 
 
 ImageMode = Literal['whole_frame', 'item_crop']

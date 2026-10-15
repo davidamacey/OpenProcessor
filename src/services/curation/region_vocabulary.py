@@ -138,7 +138,7 @@ def region_profile_summary(profile: Any) -> dict[str, Any]:
     rule. It comes from the bound project's ``CurationConfig``, never a
     hardcoded number, so Cropwright never duplicates it.
     """
-    from src.config.curation import get_curation_config
+    from src.config.curation_accessors import get_curation_config
 
     config = get_curation_config()
     return {

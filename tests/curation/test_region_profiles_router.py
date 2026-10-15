@@ -237,7 +237,7 @@ def test_from_project_clone_is_read_only_and_never_writes_to_source(
     prompt-pack from_project pin): cloning a region profile out of
     another project must never write anything to that project's own
     config-store index."""
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.project_context import bind_project
     from src.config.projects import ProjectRecord, resources_for_new
     from src.services.projects.registry import ProjectRegistry

@@ -20,7 +20,8 @@ from projects.clone_flow_fakes import (  # noqa: F401 - isolated_state is an aut
 )
 from src.config.project_context import bind_project
 from src.core.exceptions import RequestRejectedError
-from src.services.projects.clone import _apply_clone, _validate_clone
+from src.services.projects.clone import _apply_clone
+from src.services.projects.clone_validate import _validate_clone
 
 
 pytestmark = pytest.mark.unbound

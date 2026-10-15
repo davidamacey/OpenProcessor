@@ -140,7 +140,7 @@ def test_default_baseline_registry_is_empty(env: dict[str, Path], client: TestCl
 def test_baseline_models_per_profile_and_run_lookup(
     env: dict[str, Path], client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from src.services.curation import bakeoff_jobs
+    from src.services.curation import bakeoff_resolve
 
     reg = tmp_path / 'baselines.json'
     reg.write_text(
@@ -159,7 +159,7 @@ def test_baseline_models_per_profile_and_run_lookup(
             }
         )
     )
-    monkeypatch.setattr(bakeoff_jobs, 'BASELINES_PATH', reg)
+    monkeypatch.setattr(bakeoff_resolve, 'BASELINES_PATH', reg)
     body = client.get('/curation/projects/default/bakeoff/baseline_models').json()
     assert body['count'] == 1
     [b] = body['baselines']

@@ -95,11 +95,12 @@ class _NoSettingsDoc:
 async def test_ingest_service_receives_the_secondary_profile(
     clean_env: pytest.MonkeyPatch,
 ) -> None:
+    import src.app.resources as resources_module
     import src.main as main_module
 
     clean_env.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'item_proposer')
     clean_env.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'ensemble_classifier')
-    clean_env.setattr(main_module, 'get_async_triton_pool', object)
+    clean_env.setattr(resources_module, 'get_async_triton_pool', object)
     clean_env.setattr(main_module.app.state, 'pe_encoder', object(), raising=False)
 
     service = await get_ingest_service(_NoSettingsDoc(), object())
@@ -274,7 +275,7 @@ def test_confident_sources_resolved_from_env_at_import(clean_env: pytest.MonkeyP
     from pathlib import Path
 
     snippet = (
-        'from src.services.curation.clustering import embedding_reduce as e\n'
+        'from src.services.curation.clustering import residual_fetch as e\n'
         'print(",".join(e.CONFIDENT_CLASS_SOURCES))\n'
     )
     env = {

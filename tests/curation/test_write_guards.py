@@ -229,7 +229,7 @@ class TestAutomatedClassWritersExcludeTestHoldout:
 
     @pytest.mark.asyncio
     async def test_classes_merge_query_has_holdout_must_not(self, tmp_path: Any) -> None:
-        import src.routers.curation.classes as classes_mod
+        import src.routers.curation.classes_merge as classes_mod
         from src.clients.curation_opensearch.registry import ClassRegistry
         from src.routers.curation._class_models import ClassMergeRequest
 
@@ -309,7 +309,7 @@ class TestAutomatedClassWritersExcludeTestHoldout:
 class TestMergeClassRefusesFrozenCrops:
     @pytest.mark.asyncio
     async def test_merge_refuses_with_409_when_holdout_members_exist(self) -> None:
-        import src.routers.curation.classes as classes_mod
+        import src.routers.curation.classes_merge as classes_mod
         from src.routers.curation._class_models import ClassMergeRequest
 
         fake_os = AsyncMock()
@@ -436,7 +436,7 @@ class TestPipelineVlmMergerHumanGuard:
         there pushed the file close to the 700-LOC pre-commit gate
         (``scripts/codegen/check_file_size.py``), and it would only guard
         a window that provably doesn't exist — every human write path in
-        this codebase (crops.py's ``_merge_label``/``_merge`` for
+        this codebase (crops_write.py's ``_merge_label``/``_merge`` for
         move_crops) sets ``class_validated=True`` in the SAME atomic doc
         as ``class_source='human'``/``'human_move'``, and pipeline.py's
         own ``unvalidated_query`` already excludes ``class_validated=True``

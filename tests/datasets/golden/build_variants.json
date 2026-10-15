@@ -1,0 +1,437 @@
+{
+ "files": {
+  "coco/annotations/instances_test.json": "c0da6bf041a091689127f963263454c2b2e7a5fd3f4a6ee05c9886e014a0b60f",
+  "coco/annotations/instances_train.json": "b570f1541ea1a2141de2ebc34a0e3748cf6189d103768c05250d7e001511763b",
+  "coco/annotations/instances_val.json": "f33da0fff6ac42b80bb77e70778b60dacf06af5b7d57a937c1615e6e46927010",
+  "coco/images/000000000001.jpg": "7d379c3536b5ecc1832be6697d928750435b1b86b3692e8545fb5d496447253d",
+  "coco/images/000000000002.jpg": "634b736f627aee3953afbc3c18a663df5a3b5d567bd1a3d7ce5c2832c50a81bd",
+  "coco/images/000000000003.jpg": "a06441e0713917a491c098eb9b65a1ca2188f98776ede9cb469b344b8b795314",
+  "coco/images/000000000004.jpg": "86a3e422effdbf934e03b3b55263be041eab929d853bc4f12759d7352a78949d",
+  "coco/images/000000000005.jpg": "82b6fc3ae4ef1b7e683d5db37fdf54ec17c812ca9a655f956ee4fad74e1c2c00",
+  "coco/images/000000000006.jpg": "a307e70f07236e80f0bd141e6fd7ef84431827c43ab8a22cd27eb6dcbb04eba9",
+  "coco/images/000000000007.jpg": "c4bcfcb4580459b999c1986e1f73c22112b7ee5eebe9864a06d57ec40076ec50",
+  "coco/images/000000000008.jpg": "d2c1d7245e42465dc55eea2e4bc3e5d5ad424d5f90e5c0d0686a5fc98ca53162",
+  "coco/images/000000000009.jpg": "3be2f93796e3327cc8119cc639e263796cdee212248212d8b5a2adad3bd1912e",
+  "coco/images/000000000010.jpg": "4c7e9d0d9c9498abccc2f175c0a38fabb75cfee73b27eacdc65aed9f1fa994cf",
+  "coco/images/000000000011.jpg": "aeabab6a4b969d1711afd5db4030cefdac0a23c6fbc6965adf76a7168a6dbdcc",
+  "coco/images/000000000012.jpg": "eedfd7887fe97f8443f0e270aa4049b5f20d41db3a0e9901c6b2de4ab81424a1",
+  "coco/images/000000000013.jpg": "8d5e98450999f0a0a00bc0bebfae4a912a43763692fc7b63f0b586a98dee4670",
+  "coco/images/000000000014.jpg": "8fefa8f88b58c35543752793423e0cfa52368814cd06d989c69315796eead7ed",
+  "coco/images/000000000015.jpg": "550ff7bf0f0f2ba4baf2b9dd16f63e5a8fb8b31272a3ab3886a14973b753f062",
+  "coco/images/000000000016.jpg": "c4123c6ee31a6d3377825edd3853e8b637a754b956be4184b6a325497156b85d",
+  "coco/images/000000000017.jpg": "a337e9bcece4be9ad4680a7a836ab79a127dd2ff132dada357e79a7d971fa16a",
+  "coco/images/000000000018.jpg": "afcc2497ac0a47b47fdac53cb90f7b89e13ea9d24d05ec1024d26c30f22299a8",
+  "coco/images/000000000019.jpg": "7c51d4294fa78908436d92ec042b86fc1fa4e1b1094d3ab4662db44a42e3ca21",
+  "coco/images/000000000020.jpg": "c7d179decdd6ed11292922e872285ca530a77b14bbbb312d98e01aeabe243918",
+  "coco/images/000000000021.jpg": "5cc6f581673a948f11118a65b64658b20ff7bbe1da89e1978b646bf33b3cf0ff",
+  "coco/images/000000000022.jpg": "a47ea2616a00c656637b7dd344362b5d540e0b12c5275b5a1a4295b292c3d80b",
+  "coco/images/000000000023.jpg": "b39811289e0a8631b27fcd0abae4a4b46e4ae5ea9d43e564850a6a61b45e2b6b",
+  "coco/images/000000000024.jpg": "bde8132cdc91dea1351f8c1bf6a4e2052e4598dd3ba5f22acf0c70c7c21a62cd",
+  "coco/images/000000000025.jpg": "645d5ddcddf4e4168a406e35f4c88cc9bbf9daf51fe0eb4b8c5261e45528fe5b",
+  "coco/images/000000000026.jpg": "651754656093f6fb3779f3dbbeb8ae8ca114bdd52cfebfb55cae9f3285f946b6",
+  "coco/images/000000000027.jpg": "5054e7e781f02cb647bc8bf5c68959200cb0e827921915e012094dd6d40852eb",
+  "coco/images/000000000028.jpg": "b39fd87161fee07bf18f608464eb6e5dba083afe8557d2bf26bb7a6e228f23be",
+  "coco/images/000000000029.jpg": "60db9ed9fb96d25b7fee2f03e7dd652d0b143c516e9e629b103891c123d9409e",
+  "coco/images/000000000030.jpg": "177b95b2376740696283884298d6be7ad65435b2927d865648dc6bc35de744af",
+  "coco/images/000000000031.jpg": "9f98cfe7536a2de5f0eb4a3e44d5b338b9ab63243214f7c5e7f0592fe8b84be7",
+  "coco/images/000000000032.jpg": "ebe45a1593354ce99617d7f5c6c518d9213f800f9fa5b8c94cf58ec6ffd3079c",
+  "coco/images/000000000033.jpg": "17337a2a88927a8eb6b0742a458c8208210690644715c0c30adf6dd50c3d8608",
+  "coco/images/000000000034.jpg": "f141ac571f0b727a2b159d924dcb3444504a3b876f07c63db255c9fad0b7e985",
+  "coco/images/000000000035.jpg": "b0925d0ac39b1b246ce6f3889ee7398b5b45e1b19a5d186a492c5cd13b3acc2c",
+  "coco/images/000000000036.jpg": "1c421188639ff0bf8e441e104197d50ba35481494d88afa2c50c4007abb13bc3",
+  "coco/images/000000000037.jpg": "3e8f26fa5c892521dfa5b17cd34e2df1bbb2123b8087768368de8ba6f980b6e7",
+  "coco/images/000000000038.jpg": "1730ada05583ee8534d1c5a5aee2955efca8bd263e45ea337411a03b4dd5f061",
+  "coco/images/000000000039.jpg": "58a99a4d627f86bd0b3ab9023cc0ba0e3d9d734b95bed2be961ed8e675cb7c65",
+  "coco/images/000000000040.jpg": "0a644a6f5c824df749c549969f8aa75c4b6b31d890de6d7b550f53f8156f67d9",
+  "coco/images/000000001000.jpg": "da4fd4587ec2a5ab2d808b870505b52f408fe2ff4ffdc0e86b33d3981589ea65",
+  "coco/images/000000001001.jpg": "fbc671425a1469f2a9f976f8b570dc811d35a8ef0c8519cd9b785376f47ea6b2",
+  "coco/images/000000001002.jpg": "491d5b55c920db22d9ece3ea32453dadee35f5ebc51a2370a5641d1ae475d2b0",
+  "coco/images/000000001003.jpg": "da7bf3a80af4e29ebccb7203f95c814f8e18b1482a60ccc296b6accfaefb886d",
+  "coco/images/000000001004.jpg": "1d473613614721ef92ae2d7492d5c89d5251d2016993605d6ae4bfe98acd7b97",
+  "coco/images/000000001005.jpg": "27f21964d37a76aefcb524a5ab6ae58d31362b8e55a29cdf133bfbc6d59c5a93",
+  "yolo/data.yaml": "f3ee8f35c80aedb637803bc1f39df37a7b7c8acf6ec9897237b9e2392e78d52c",
+  "yolo/images/test/000000000012.jpg": "eedfd7887fe97f8443f0e270aa4049b5f20d41db3a0e9901c6b2de4ab81424a1",
+  "yolo/images/test/000000000022.jpg": "a47ea2616a00c656637b7dd344362b5d540e0b12c5275b5a1a4295b292c3d80b",
+  "yolo/images/test/000000000031.jpg": "9f98cfe7536a2de5f0eb4a3e44d5b338b9ab63243214f7c5e7f0592fe8b84be7",
+  "yolo/images/test/000000000039.jpg": "58a99a4d627f86bd0b3ab9023cc0ba0e3d9d734b95bed2be961ed8e675cb7c65",
+  "yolo/images/test/000000000040.jpg": "0a644a6f5c824df749c549969f8aa75c4b6b31d890de6d7b550f53f8156f67d9",
+  "yolo/images/test/000000001000.jpg": "da4fd4587ec2a5ab2d808b870505b52f408fe2ff4ffdc0e86b33d3981589ea65",
+  "yolo/images/test/000000001002.jpg": "491d5b55c920db22d9ece3ea32453dadee35f5ebc51a2370a5641d1ae475d2b0",
+  "yolo/images/test/000000001005.jpg": "27f21964d37a76aefcb524a5ab6ae58d31362b8e55a29cdf133bfbc6d59c5a93",
+  "yolo/images/train/000000000002.jpg": "634b736f627aee3953afbc3c18a663df5a3b5d567bd1a3d7ce5c2832c50a81bd",
+  "yolo/images/train/000000000004.jpg": "86a3e422effdbf934e03b3b55263be041eab929d853bc4f12759d7352a78949d",
+  "yolo/images/train/000000000006.jpg": "a307e70f07236e80f0bd141e6fd7ef84431827c43ab8a22cd27eb6dcbb04eba9",
+  "yolo/images/train/000000000007.jpg": "c4bcfcb4580459b999c1986e1f73c22112b7ee5eebe9864a06d57ec40076ec50",
+  "yolo/images/train/000000000008.jpg": "d2c1d7245e42465dc55eea2e4bc3e5d5ad424d5f90e5c0d0686a5fc98ca53162",
+  "yolo/images/train/000000000009.jpg": "3be2f93796e3327cc8119cc639e263796cdee212248212d8b5a2adad3bd1912e",
+  "yolo/images/train/000000000011.jpg": "aeabab6a4b969d1711afd5db4030cefdac0a23c6fbc6965adf76a7168a6dbdcc",
+  "yolo/images/train/000000000013.jpg": "8d5e98450999f0a0a00bc0bebfae4a912a43763692fc7b63f0b586a98dee4670",
+  "yolo/images/train/000000000014.jpg": "8fefa8f88b58c35543752793423e0cfa52368814cd06d989c69315796eead7ed",
+  "yolo/images/train/000000000015.jpg": "550ff7bf0f0f2ba4baf2b9dd16f63e5a8fb8b31272a3ab3886a14973b753f062",
+  "yolo/images/train/000000000017.jpg": "a337e9bcece4be9ad4680a7a836ab79a127dd2ff132dada357e79a7d971fa16a",
+  "yolo/images/train/000000000019.jpg": "7c51d4294fa78908436d92ec042b86fc1fa4e1b1094d3ab4662db44a42e3ca21",
+  "yolo/images/train/000000000020.jpg": "c7d179decdd6ed11292922e872285ca530a77b14bbbb312d98e01aeabe243918",
+  "yolo/images/train/000000000021.jpg": "5cc6f581673a948f11118a65b64658b20ff7bbe1da89e1978b646bf33b3cf0ff",
+  "yolo/images/train/000000000023.jpg": "b39811289e0a8631b27fcd0abae4a4b46e4ae5ea9d43e564850a6a61b45e2b6b",
+  "yolo/images/train/000000000024.jpg": "bde8132cdc91dea1351f8c1bf6a4e2052e4598dd3ba5f22acf0c70c7c21a62cd",
+  "yolo/images/train/000000000025.jpg": "645d5ddcddf4e4168a406e35f4c88cc9bbf9daf51fe0eb4b8c5261e45528fe5b",
+  "yolo/images/train/000000000026.jpg": "651754656093f6fb3779f3dbbeb8ae8ca114bdd52cfebfb55cae9f3285f946b6",
+  "yolo/images/train/000000000027.jpg": "5054e7e781f02cb647bc8bf5c68959200cb0e827921915e012094dd6d40852eb",
+  "yolo/images/train/000000000029.jpg": "60db9ed9fb96d25b7fee2f03e7dd652d0b143c516e9e629b103891c123d9409e",
+  "yolo/images/train/000000000030.jpg": "177b95b2376740696283884298d6be7ad65435b2927d865648dc6bc35de744af",
+  "yolo/images/train/000000000033.jpg": "17337a2a88927a8eb6b0742a458c8208210690644715c0c30adf6dd50c3d8608",
+  "yolo/images/train/000000000034.jpg": "f141ac571f0b727a2b159d924dcb3444504a3b876f07c63db255c9fad0b7e985",
+  "yolo/images/train/000000000035.jpg": "b0925d0ac39b1b246ce6f3889ee7398b5b45e1b19a5d186a492c5cd13b3acc2c",
+  "yolo/images/train/000000000036.jpg": "1c421188639ff0bf8e441e104197d50ba35481494d88afa2c50c4007abb13bc3",
+  "yolo/images/train/000000000038.jpg": "1730ada05583ee8534d1c5a5aee2955efca8bd263e45ea337411a03b4dd5f061",
+  "yolo/images/train/000000001001.jpg": "fbc671425a1469f2a9f976f8b570dc811d35a8ef0c8519cd9b785376f47ea6b2",
+  "yolo/images/train/000000001003.jpg": "da7bf3a80af4e29ebccb7203f95c814f8e18b1482a60ccc296b6accfaefb886d",
+  "yolo/images/train/000000001004.jpg": "1d473613614721ef92ae2d7492d5c89d5251d2016993605d6ae4bfe98acd7b97",
+  "yolo/images/val/000000000001.jpg": "7d379c3536b5ecc1832be6697d928750435b1b86b3692e8545fb5d496447253d",
+  "yolo/images/val/000000000003.jpg": "a06441e0713917a491c098eb9b65a1ca2188f98776ede9cb469b344b8b795314",
+  "yolo/images/val/000000000005.jpg": "82b6fc3ae4ef1b7e683d5db37fdf54ec17c812ca9a655f956ee4fad74e1c2c00",
+  "yolo/images/val/000000000010.jpg": "4c7e9d0d9c9498abccc2f175c0a38fabb75cfee73b27eacdc65aed9f1fa994cf",
+  "yolo/images/val/000000000016.jpg": "c4123c6ee31a6d3377825edd3853e8b637a754b956be4184b6a325497156b85d",
+  "yolo/images/val/000000000018.jpg": "afcc2497ac0a47b47fdac53cb90f7b89e13ea9d24d05ec1024d26c30f22299a8",
+  "yolo/images/val/000000000028.jpg": "b39fd87161fee07bf18f608464eb6e5dba083afe8557d2bf26bb7a6e228f23be",
+  "yolo/images/val/000000000032.jpg": "ebe45a1593354ce99617d7f5c6c518d9213f800f9fa5b8c94cf58ec6ffd3079c",
+  "yolo/images/val/000000000037.jpg": "3e8f26fa5c892521dfa5b17cd34e2df1bbb2123b8087768368de8ba6f980b6e7",
+  "yolo/labels/test/000000000012.txt": "64900503da971c887f552a30d46e8ac3e52094b46d35d4b44ee4dd5880dbf4cd",
+  "yolo/labels/test/000000000022.txt": "99eafff5d409ebdf3b646a2d8f466ba0552a9d64ef04f80b56076017c44ad20e",
+  "yolo/labels/test/000000000031.txt": "6f17e7c9e6c573aa238e2c8a2a1fd4e7d33df0fc31ae61902c79a126f61ea582",
+  "yolo/labels/test/000000000039.txt": "6f17e7c9e6c573aa238e2c8a2a1fd4e7d33df0fc31ae61902c79a126f61ea582",
+  "yolo/labels/test/000000000040.txt": "64900503da971c887f552a30d46e8ac3e52094b46d35d4b44ee4dd5880dbf4cd",
+  "yolo/labels/test/000000001000.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "yolo/labels/test/000000001002.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "yolo/labels/test/000000001005.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "yolo/labels/train/000000000002.txt": "99eafff5d409ebdf3b646a2d8f466ba0552a9d64ef04f80b56076017c44ad20e",
+  "yolo/labels/train/000000000004.txt": "64900503da971c887f552a30d46e8ac3e52094b46d35d4b44ee4dd5880dbf4cd",
+  "yolo/labels/train/000000000006.txt": "99eafff5d409ebdf3b646a2d8f466ba0552a9d64ef04f80b56076017c44ad20e",
+  "yolo/labels/train/000000000007.txt": "6f17e7c9e6c573aa238e2c8a2a1fd4e7d33df0fc31ae61902c79a126f61ea582",
+  "yolo/labels/train/000000000008.txt": "64900503da971c887f552a30d46e8ac3e52094b46d35d4b44ee4dd5880dbf4cd",
+  "yolo/labels/train/000000000009.txt": "6419a0194c96172bba58e5110e8b4f01434a1d34ce55aad72f625a953004eaba",
+  "yolo/labels/train/000000000011.txt": "6f17e7c9e6c573aa238e2c8a2a1fd4e7d33df0fc31ae61902c79a126f61ea582",
+  "yolo/labels/train/000000000013.txt": "71abe538b33529c294435619d9d39603f6961c7d9c54bd8f6e33d086ec12eba7",
+  "yolo/labels/train/000000000014.txt": "99eafff5d409ebdf3b646a2d8f466ba0552a9d64ef04f80b56076017c44ad20e",
+  "yolo/labels/train/000000000015.txt": "6f17e7c9e6c573aa238e2c8a2a1fd4e7d33df0fc31ae61902c79a126f61ea582",
+  "yolo/labels/train/000000000017.txt": "b18eb2c72490d2a525c83e17bca44fdcc93f1c5b6b22a9d575c15d703f31e0c9",
+  "yolo/labels/train/000000000019.txt": "6f17e7c9e6c573aa238e2c8a2a1fd4e7d33df0fc31ae61902c79a126f61ea582",
+  "yolo/labels/train/000000000020.txt": "64900503da971c887f552a30d46e8ac3e52094b46d35d4b44ee4dd5880dbf4cd",
+  "yolo/labels/train/000000000021.txt": "71abe538b33529c294435619d9d39603f6961c7d9c54bd8f6e33d086ec12eba7",
+  "yolo/labels/train/000000000023.txt": "6f17e7c9e6c573aa238e2c8a2a1fd4e7d33df0fc31ae61902c79a126f61ea582",
+  "yolo/labels/train/000000000024.txt": "64900503da971c887f552a30d46e8ac3e52094b46d35d4b44ee4dd5880dbf4cd",
+  "yolo/labels/train/000000000025.txt": "71abe538b33529c294435619d9d39603f6961c7d9c54bd8f6e33d086ec12eba7",
+  "yolo/labels/train/000000000026.txt": "99eafff5d409ebdf3b646a2d8f466ba0552a9d64ef04f80b56076017c44ad20e",
+  "yolo/labels/train/000000000027.txt": "6f17e7c9e6c573aa238e2c8a2a1fd4e7d33df0fc31ae61902c79a126f61ea582",
+  "yolo/labels/train/000000000029.txt": "71abe538b33529c294435619d9d39603f6961c7d9c54bd8f6e33d086ec12eba7",
+  "yolo/labels/train/000000000033.txt": "71abe538b33529c294435619d9d39603f6961c7d9c54bd8f6e33d086ec12eba7",
+  "yolo/labels/train/000000000034.txt": "99eafff5d409ebdf3b646a2d8f466ba0552a9d64ef04f80b56076017c44ad20e",
+  "yolo/labels/train/000000000035.txt": "6f17e7c9e6c573aa238e2c8a2a1fd4e7d33df0fc31ae61902c79a126f61ea582",
+  "yolo/labels/train/000000000036.txt": "64900503da971c887f552a30d46e8ac3e52094b46d35d4b44ee4dd5880dbf4cd",
+  "yolo/labels/train/000000000038.txt": "99eafff5d409ebdf3b646a2d8f466ba0552a9d64ef04f80b56076017c44ad20e",
+  "yolo/labels/train/000000001001.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "yolo/labels/train/000000001003.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "yolo/labels/train/000000001004.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "yolo/labels/train/orphan_label.txt": "fe1d19931e4f3092800a55299efc6f6e0b806bed3838aa14aebbc94ba55aa549",
+  "yolo/labels/val/000000000001.txt": "71abe538b33529c294435619d9d39603f6961c7d9c54bd8f6e33d086ec12eba7",
+  "yolo/labels/val/000000000003.txt": "229cc0bd7fc63ca860fd0d05729b857501ae45f8343e1d6015e76ce8632f6471",
+  "yolo/labels/val/000000000005.txt": "71abe538b33529c294435619d9d39603f6961c7d9c54bd8f6e33d086ec12eba7",
+  "yolo/labels/val/000000000010.txt": "99eafff5d409ebdf3b646a2d8f466ba0552a9d64ef04f80b56076017c44ad20e",
+  "yolo/labels/val/000000000016.txt": "3b4095f34c414f1f393089ad7ac283d9d67aaa92d4118a217206e1d2dffa233a",
+  "yolo/labels/val/000000000018.txt": "99eafff5d409ebdf3b646a2d8f466ba0552a9d64ef04f80b56076017c44ad20e",
+  "yolo/labels/val/000000000028.txt": "64900503da971c887f552a30d46e8ac3e52094b46d35d4b44ee4dd5880dbf4cd",
+  "yolo/labels/val/000000000032.txt": "64900503da971c887f552a30d46e8ac3e52094b46d35d4b44ee4dd5880dbf4cd",
+  "yolo/labels/val/000000000037.txt": "71abe538b33529c294435619d9d39603f6961c7d9c54bd8f6e33d086ec12eba7",
+  "yolo_region/data.yaml": "00093f6e1cb368e9415b7b49bd7c6cb3dc6642817e3583035a4fc36fdcd91929",
+  "yolo_region/images/test/000000000012.jpg": "eedfd7887fe97f8443f0e270aa4049b5f20d41db3a0e9901c6b2de4ab81424a1",
+  "yolo_region/images/test/000000000031.jpg": "9f98cfe7536a2de5f0eb4a3e44d5b338b9ab63243214f7c5e7f0592fe8b84be7",
+  "yolo_region/images/test/000000000039.jpg": "58a99a4d627f86bd0b3ab9023cc0ba0e3d9d734b95bed2be961ed8e675cb7c65",
+  "yolo_region/images/test/000000000040.jpg": "0a644a6f5c824df749c549969f8aa75c4b6b31d890de6d7b550f53f8156f67d9",
+  "yolo_region/images/test/000000001000.jpg": "da4fd4587ec2a5ab2d808b870505b52f408fe2ff4ffdc0e86b33d3981589ea65",
+  "yolo_region/images/test/000000001002.jpg": "491d5b55c920db22d9ece3ea32453dadee35f5ebc51a2370a5641d1ae475d2b0",
+  "yolo_region/images/test/000000001005.jpg": "27f21964d37a76aefcb524a5ab6ae58d31362b8e55a29cdf133bfbc6d59c5a93",
+  "yolo_region/images/train/000000000004.jpg": "86a3e422effdbf934e03b3b55263be041eab929d853bc4f12759d7352a78949d",
+  "yolo_region/images/train/000000000007.jpg": "c4bcfcb4580459b999c1986e1f73c22112b7ee5eebe9864a06d57ec40076ec50",
+  "yolo_region/images/train/000000000008.jpg": "d2c1d7245e42465dc55eea2e4bc3e5d5ad424d5f90e5c0d0686a5fc98ca53162",
+  "yolo_region/images/train/000000000011.jpg": "aeabab6a4b969d1711afd5db4030cefdac0a23c6fbc6965adf76a7168a6dbdcc",
+  "yolo_region/images/train/000000000015.jpg": "550ff7bf0f0f2ba4baf2b9dd16f63e5a8fb8b31272a3ab3886a14973b753f062",
+  "yolo_region/images/train/000000000019.jpg": "7c51d4294fa78908436d92ec042b86fc1fa4e1b1094d3ab4662db44a42e3ca21",
+  "yolo_region/images/train/000000000020.jpg": "c7d179decdd6ed11292922e872285ca530a77b14bbbb312d98e01aeabe243918",
+  "yolo_region/images/train/000000000023.jpg": "b39811289e0a8631b27fcd0abae4a4b46e4ae5ea9d43e564850a6a61b45e2b6b",
+  "yolo_region/images/train/000000000024.jpg": "bde8132cdc91dea1351f8c1bf6a4e2052e4598dd3ba5f22acf0c70c7c21a62cd",
+  "yolo_region/images/train/000000000027.jpg": "5054e7e781f02cb647bc8bf5c68959200cb0e827921915e012094dd6d40852eb",
+  "yolo_region/images/train/000000000035.jpg": "b0925d0ac39b1b246ce6f3889ee7398b5b45e1b19a5d186a492c5cd13b3acc2c",
+  "yolo_region/images/train/000000000036.jpg": "1c421188639ff0bf8e441e104197d50ba35481494d88afa2c50c4007abb13bc3",
+  "yolo_region/images/train/000000001001.jpg": "fbc671425a1469f2a9f976f8b570dc811d35a8ef0c8519cd9b785376f47ea6b2",
+  "yolo_region/images/train/000000001003.jpg": "da7bf3a80af4e29ebccb7203f95c814f8e18b1482a60ccc296b6accfaefb886d",
+  "yolo_region/images/train/000000001004.jpg": "1d473613614721ef92ae2d7492d5c89d5251d2016993605d6ae4bfe98acd7b97",
+  "yolo_region/images/val/000000000003.jpg": "a06441e0713917a491c098eb9b65a1ca2188f98776ede9cb469b344b8b795314",
+  "yolo_region/images/val/000000000016.jpg": "c4123c6ee31a6d3377825edd3853e8b637a754b956be4184b6a325497156b85d",
+  "yolo_region/images/val/000000000028.jpg": "b39fd87161fee07bf18f608464eb6e5dba083afe8557d2bf26bb7a6e228f23be",
+  "yolo_region/images/val/000000000032.jpg": "ebe45a1593354ce99617d7f5c6c518d9213f800f9fa5b8c94cf58ec6ffd3079c",
+  "yolo_region/labels/test/000000000012.txt": "b519bf7de072dfa77b4fc98ee7bf4a9f75926e831660f6c38f13c6e7a30fca61",
+  "yolo_region/labels/test/000000000031.txt": "065468fd6b59be809e722434acb0ab018166306b6df435532b94c5ab37b622a0",
+  "yolo_region/labels/test/000000000039.txt": "065468fd6b59be809e722434acb0ab018166306b6df435532b94c5ab37b622a0",
+  "yolo_region/labels/test/000000000040.txt": "b519bf7de072dfa77b4fc98ee7bf4a9f75926e831660f6c38f13c6e7a30fca61",
+  "yolo_region/labels/test/000000001000.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "yolo_region/labels/test/000000001002.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "yolo_region/labels/test/000000001005.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "yolo_region/labels/train/000000000004.txt": "b519bf7de072dfa77b4fc98ee7bf4a9f75926e831660f6c38f13c6e7a30fca61",
+  "yolo_region/labels/train/000000000007.txt": "065468fd6b59be809e722434acb0ab018166306b6df435532b94c5ab37b622a0",
+  "yolo_region/labels/train/000000000008.txt": "b519bf7de072dfa77b4fc98ee7bf4a9f75926e831660f6c38f13c6e7a30fca61",
+  "yolo_region/labels/train/000000000011.txt": "065468fd6b59be809e722434acb0ab018166306b6df435532b94c5ab37b622a0",
+  "yolo_region/labels/train/000000000015.txt": "065468fd6b59be809e722434acb0ab018166306b6df435532b94c5ab37b622a0",
+  "yolo_region/labels/train/000000000019.txt": "065468fd6b59be809e722434acb0ab018166306b6df435532b94c5ab37b622a0",
+  "yolo_region/labels/train/000000000020.txt": "b519bf7de072dfa77b4fc98ee7bf4a9f75926e831660f6c38f13c6e7a30fca61",
+  "yolo_region/labels/train/000000000023.txt": "065468fd6b59be809e722434acb0ab018166306b6df435532b94c5ab37b622a0",
+  "yolo_region/labels/train/000000000024.txt": "b519bf7de072dfa77b4fc98ee7bf4a9f75926e831660f6c38f13c6e7a30fca61",
+  "yolo_region/labels/train/000000000027.txt": "065468fd6b59be809e722434acb0ab018166306b6df435532b94c5ab37b622a0",
+  "yolo_region/labels/train/000000000035.txt": "065468fd6b59be809e722434acb0ab018166306b6df435532b94c5ab37b622a0",
+  "yolo_region/labels/train/000000000036.txt": "b519bf7de072dfa77b4fc98ee7bf4a9f75926e831660f6c38f13c6e7a30fca61",
+  "yolo_region/labels/train/000000001001.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "yolo_region/labels/train/000000001003.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "yolo_region/labels/train/000000001004.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "yolo_region/labels/val/000000000003.txt": "d05bb817ca7e49d6cd0c601dfe20f1fad15994d8355d36c410b64e0963188e62",
+  "yolo_region/labels/val/000000000016.txt": "b519bf7de072dfa77b4fc98ee7bf4a9f75926e831660f6c38f13c6e7a30fca61",
+  "yolo_region/labels/val/000000000028.txt": "b519bf7de072dfa77b4fc98ee7bf4a9f75926e831660f6c38f13c6e7a30fca61",
+  "yolo_region/labels/val/000000000032.txt": "b519bf7de072dfa77b4fc98ee7bf4a9f75926e831660f6c38f13c6e7a30fca61",
+  "yolo_region_only/data.yaml": "00093f6e1cb368e9415b7b49bd7c6cb3dc6642817e3583035a4fc36fdcd91929",
+  "yolo_region_only/images/test/000000000012.jpg": "eedfd7887fe97f8443f0e270aa4049b5f20d41db3a0e9901c6b2de4ab81424a1",
+  "yolo_region_only/images/test/000000000031.jpg": "9f98cfe7536a2de5f0eb4a3e44d5b338b9ab63243214f7c5e7f0592fe8b84be7",
+  "yolo_region_only/images/test/000000000039.jpg": "58a99a4d627f86bd0b3ab9023cc0ba0e3d9d734b95bed2be961ed8e675cb7c65",
+  "yolo_region_only/images/test/000000000040.jpg": "0a644a6f5c824df749c549969f8aa75c4b6b31d890de6d7b550f53f8156f67d9",
+  "yolo_region_only/images/test/000000001000.jpg": "da4fd4587ec2a5ab2d808b870505b52f408fe2ff4ffdc0e86b33d3981589ea65",
+  "yolo_region_only/images/test/000000001002.jpg": "491d5b55c920db22d9ece3ea32453dadee35f5ebc51a2370a5641d1ae475d2b0",
+  "yolo_region_only/images/test/000000001005.jpg": "27f21964d37a76aefcb524a5ab6ae58d31362b8e55a29cdf133bfbc6d59c5a93",
+  "yolo_region_only/images/train/000000000004.jpg": "86a3e422effdbf934e03b3b55263be041eab929d853bc4f12759d7352a78949d",
+  "yolo_region_only/images/train/000000000007.jpg": "c4bcfcb4580459b999c1986e1f73c22112b7ee5eebe9864a06d57ec40076ec50",
+  "yolo_region_only/images/train/000000000008.jpg": "d2c1d7245e42465dc55eea2e4bc3e5d5ad424d5f90e5c0d0686a5fc98ca53162",
+  "yolo_region_only/images/train/000000000011.jpg": "aeabab6a4b969d1711afd5db4030cefdac0a23c6fbc6965adf76a7168a6dbdcc",
+  "yolo_region_only/images/train/000000000015.jpg": "550ff7bf0f0f2ba4baf2b9dd16f63e5a8fb8b31272a3ab3886a14973b753f062",
+  "yolo_region_only/images/train/000000000019.jpg": "7c51d4294fa78908436d92ec042b86fc1fa4e1b1094d3ab4662db44a42e3ca21",
+  "yolo_region_only/images/train/000000000020.jpg": "c7d179decdd6ed11292922e872285ca530a77b14bbbb312d98e01aeabe243918",
+  "yolo_region_only/images/train/000000000023.jpg": "b39811289e0a8631b27fcd0abae4a4b46e4ae5ea9d43e564850a6a61b45e2b6b",
+  "yolo_region_only/images/train/000000000024.jpg": "bde8132cdc91dea1351f8c1bf6a4e2052e4598dd3ba5f22acf0c70c7c21a62cd",
+  "yolo_region_only/images/train/000000000027.jpg": "5054e7e781f02cb647bc8bf5c68959200cb0e827921915e012094dd6d40852eb",
+  "yolo_region_only/images/train/000000000035.jpg": "b0925d0ac39b1b246ce6f3889ee7398b5b45e1b19a5d186a492c5cd13b3acc2c",
+  "yolo_region_only/images/train/000000000036.jpg": "1c421188639ff0bf8e441e104197d50ba35481494d88afa2c50c4007abb13bc3",
+  "yolo_region_only/images/train/000000001001.jpg": "fbc671425a1469f2a9f976f8b570dc811d35a8ef0c8519cd9b785376f47ea6b2",
+  "yolo_region_only/images/train/000000001003.jpg": "da7bf3a80af4e29ebccb7203f95c814f8e18b1482a60ccc296b6accfaefb886d",
+  "yolo_region_only/images/train/000000001004.jpg": "1d473613614721ef92ae2d7492d5c89d5251d2016993605d6ae4bfe98acd7b97",
+  "yolo_region_only/images/val/000000000003.jpg": "a06441e0713917a491c098eb9b65a1ca2188f98776ede9cb469b344b8b795314",
+  "yolo_region_only/images/val/000000000016.jpg": "c4123c6ee31a6d3377825edd3853e8b637a754b956be4184b6a325497156b85d",
+  "yolo_region_only/images/val/000000000028.jpg": "b39fd87161fee07bf18f608464eb6e5dba083afe8557d2bf26bb7a6e228f23be",
+  "yolo_region_only/images/val/000000000032.jpg": "ebe45a1593354ce99617d7f5c6c518d9213f800f9fa5b8c94cf58ec6ffd3079c",
+  "yolo_region_only/labels/test/000000000012.txt": "3f63daf6b4fb5aca09a0ac6b66a4f481760e67d836dc342a653934db259cc71a",
+  "yolo_region_only/labels/test/000000000031.txt": "3f63daf6b4fb5aca09a0ac6b66a4f481760e67d836dc342a653934db259cc71a",
+  "yolo_region_only/labels/test/000000000039.txt": "3f63daf6b4fb5aca09a0ac6b66a4f481760e67d836dc342a653934db259cc71a",
+  "yolo_region_only/labels/test/000000000040.txt": "3f63daf6b4fb5aca09a0ac6b66a4f481760e67d836dc342a653934db259cc71a",
+  "yolo_region_only/labels/test/000000001000.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "yolo_region_only/labels/test/000000001002.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "yolo_region_only/labels/test/000000001005.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "yolo_region_only/labels/train/000000000004.txt": "3f63daf6b4fb5aca09a0ac6b66a4f481760e67d836dc342a653934db259cc71a",
+  "yolo_region_only/labels/train/000000000007.txt": "3f63daf6b4fb5aca09a0ac6b66a4f481760e67d836dc342a653934db259cc71a",
+  "yolo_region_only/labels/train/000000000008.txt": "3f63daf6b4fb5aca09a0ac6b66a4f481760e67d836dc342a653934db259cc71a",
+  "yolo_region_only/labels/train/000000000011.txt": "3f63daf6b4fb5aca09a0ac6b66a4f481760e67d836dc342a653934db259cc71a",
+  "yolo_region_only/labels/train/000000000015.txt": "3f63daf6b4fb5aca09a0ac6b66a4f481760e67d836dc342a653934db259cc71a",
+  "yolo_region_only/labels/train/000000000019.txt": "3f63daf6b4fb5aca09a0ac6b66a4f481760e67d836dc342a653934db259cc71a",
+  "yolo_region_only/labels/train/000000000020.txt": "3f63daf6b4fb5aca09a0ac6b66a4f481760e67d836dc342a653934db259cc71a",
+  "yolo_region_only/labels/train/000000000023.txt": "3f63daf6b4fb5aca09a0ac6b66a4f481760e67d836dc342a653934db259cc71a",
+  "yolo_region_only/labels/train/000000000024.txt": "3f63daf6b4fb5aca09a0ac6b66a4f481760e67d836dc342a653934db259cc71a",
+  "yolo_region_only/labels/train/000000000027.txt": "3f63daf6b4fb5aca09a0ac6b66a4f481760e67d836dc342a653934db259cc71a",
+  "yolo_region_only/labels/train/000000000035.txt": "3f63daf6b4fb5aca09a0ac6b66a4f481760e67d836dc342a653934db259cc71a",
+  "yolo_region_only/labels/train/000000000036.txt": "3f63daf6b4fb5aca09a0ac6b66a4f481760e67d836dc342a653934db259cc71a",
+  "yolo_region_only/labels/train/000000001001.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "yolo_region_only/labels/train/000000001003.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "yolo_region_only/labels/train/000000001004.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "yolo_region_only/labels/val/000000000003.txt": "8ed07b4eac85a2186269e52069d39d6380aab5542eed22f0b2cf48889ba65a18",
+  "yolo_region_only/labels/val/000000000016.txt": "3f63daf6b4fb5aca09a0ac6b66a4f481760e67d836dc342a653934db259cc71a",
+  "yolo_region_only/labels/val/000000000028.txt": "3f63daf6b4fb5aca09a0ac6b66a4f481760e67d836dc342a653934db259cc71a",
+  "yolo_region_only/labels/val/000000000032.txt": "3f63daf6b4fb5aca09a0ac6b66a4f481760e67d836dc342a653934db259cc71a"
+ },
+ "fixture": {
+  "license_note": "COCO 2017 val2017 images (CC BY 2.0 via Flickr, per-image credit in ATTRIBUTION.csv); COCO annotations CC BY 4.0.",
+  "manifest": null,
+  "seed": 1,
+  "variants": {
+   "coco": {
+    "expected_issues": {
+     "coco_crowd_skipped": 5
+    },
+    "expected_report": {
+     "boxes_per_class": {
+      "bus": 10,
+      "car": 30,
+      "truck": 10
+     },
+     "images_per_split": {
+      "test": 8,
+      "train": 29,
+      "val": 9
+     },
+     "label_states": {
+      "labeled": 40,
+      "negative": 6,
+      "unlabeled": 0
+     },
+     "label_states_per_split": {
+      "test": {
+       "labeled": 5,
+       "negative": 3
+      },
+      "train": {
+       "labeled": 26,
+       "negative": 3
+      },
+      "val": {
+       "labeled": 9
+      }
+     }
+    },
+    "names": {
+     "3": "car",
+     "6": "bus",
+     "8": "truck"
+    },
+    "negatives": 6,
+    "source_format": "coco"
+   },
+   "yolo": {
+    "expected_issues": {
+     "label_class_out_of_range": 1,
+     "label_coords_out_of_range": 1,
+     "label_file_missing": 1,
+     "label_file_orphan": 1,
+     "label_row_malformed": 1,
+     "yolo_polygon_to_box": 1
+    },
+    "expected_report": {
+     "boxes_per_class": {
+      "Car": 10,
+      "automobile": 20,
+      "bus": 9,
+      "truck": 11
+     },
+     "images_per_split": {
+      "test": 8,
+      "train": 29,
+      "val": 9
+     },
+     "label_states": {
+      "labeled": 39,
+      "negative": 6,
+      "unlabeled": 1
+     },
+     "label_states_per_split": {
+      "test": {
+       "labeled": 5,
+       "negative": 3
+      },
+      "train": {
+       "labeled": 25,
+       "negative": 3,
+       "unlabeled": 1
+      },
+      "val": {
+       "labeled": 9
+      }
+     }
+    },
+    "injected": {
+     "class_out_of_range": "000000000016.jpg",
+     "coords_out_of_range": "000000000017.jpg",
+     "malformed_row": "000000000009.jpg",
+     "missing_label": "000000000030.jpg",
+     "orphan_label": "labels/train/orphan_label.txt",
+     "polygon_row": "000000000003.jpg"
+    },
+    "names": {
+     "0": "truck",
+     "1": "Car",
+     "2": "automobile",
+     "3": "bus"
+    },
+    "negatives": 6
+   },
+   "yolo_region": {
+    "attachments": 40,
+    "expected_issues": {},
+    "expected_report": {
+     "boxes_per_class": {
+      "car": 30,
+      "wheel": 41
+     },
+     "images_per_split": {
+      "test": 7,
+      "train": 15,
+      "val": 4
+     },
+     "label_states": {
+      "labeled": 20,
+      "negative": 6,
+      "unlabeled": 0
+     },
+     "label_states_per_split": {
+      "test": {
+       "labeled": 4,
+       "negative": 3
+      },
+      "train": {
+       "labeled": 12,
+       "negative": 3
+      },
+      "val": {
+       "labeled": 4
+      }
+     }
+    },
+    "names": {
+     "0": "car",
+     "1": "wheel"
+    },
+    "negatives": 6,
+    "standalone": 1,
+    "synthetic_geometry": "SYNTHETIC wheel boxes derived from COCO car boxes -- NOT wheel annotations. They exercise parent attachment, not model quality."
+   },
+   "yolo_region_only": {
+    "attachments": 40,
+    "expected_issues": {},
+    "expected_report": {
+     "boxes_per_class": {
+      "wheel": 41
+     },
+     "images_per_split": {
+      "test": 7,
+      "train": 15,
+      "val": 4
+     },
+     "label_states": {
+      "labeled": 20,
+      "negative": 6,
+      "unlabeled": 0
+     },
+     "label_states_per_split": {
+      "test": {
+       "labeled": 4,
+       "negative": 3
+      },
+      "train": {
+       "labeled": 12,
+       "negative": 3
+      },
+      "val": {
+       "labeled": 4
+      }
+     }
+    },
+    "names": {
+     "0": "car",
+     "1": "wheel"
+    },
+    "negatives": 6,
+    "standalone": 1,
+    "synthetic_geometry": "SYNTHETIC wheel boxes derived from COCO car boxes -- NOT wheel annotations. They exercise parent attachment, not model quality."
+   }
+  }
+ }
+}

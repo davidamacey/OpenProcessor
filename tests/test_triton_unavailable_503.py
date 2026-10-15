@@ -6,7 +6,7 @@ retries -- not a bare ``500`` indistinguishable from a code bug.
 ``TritonClient._infer_with_retry`` raises once ``max_retries`` gRPC
 ``UNAVAILABLE``/connection-refused attempts are exhausted. Each route's
 service layer is monkeypatched to raise it directly -- this pins the
-router -> centralized-handler wiring (``src/main.py``'s
+router -> centralized-handler wiring (``src/app/factory.py``'s
 ``triton_unavailable_handler``), not the retry backoff itself (covered by
 ``src/utils/retry.py``'s own tests).
 

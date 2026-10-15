@@ -18,10 +18,12 @@ from typing import Any
 import pytest
 from opensearchpy import AsyncOpenSearch
 
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
-from src.services.projects.guard import CrossProjectAccess, check_request, install_project_guard
+from src.services.projects.guard import install_project_guard
+from src.services.projects.guard_errors import CrossProjectAccess
+from src.services.projects.guard_policy import check_request
 
 
 pytestmark = pytest.mark.unbound
@@ -261,7 +263,7 @@ def test_handles_are_owned_by_the_project_that_opened_them(snapshot) -> None:
 
 
 def test_registry_index_is_writable_only_by_lifecycle_code(snapshot) -> None:
-    from src.services.projects.guard import bind_registry_admin
+    from src.services.projects.guard_policy import bind_registry_admin
 
     with bind_project(snapshot['beta']):
         check_request('GET', '/op_projects/_doc/project:beta', None, snapshot)

@@ -144,7 +144,7 @@ def get_region_fields() -> RegionFields:
     Callers that need a deployment-specific instance (e.g. a future
     overlay for an existing deployment) should construct and inject
     their own rather than relying on this default — mirrors
-    :func:`src.config.curation.get_curation_config`.
+    :func:`src.config.curation_accessors.get_curation_config`.
     """
     global _default_region_fields  # noqa: PLW0603 - lazily-built module singleton
     if _default_region_fields is None:

@@ -15,7 +15,7 @@ import pytest
 from scripts.curation.worker.cascade import _build_pending_query
 from src.config import get_region_fields
 from src.config.region_state import RegionStatus
-from src.services.curation import ops_metrics_refresh, region_eval
+from src.services.curation import ops_metrics_refresh, region_eval_data
 from src.services.training.preflight_checks import count_pending_ingest
 
 
@@ -59,4 +59,4 @@ async def test_the_preflight_backlog_count_names_only_current_statuses() -> None
 
 @pytest.mark.parametrize('value', sorted(RETIRED))
 def test_a_retired_status_is_not_rewritten_to_a_current_one(value: str) -> None:
-    assert region_eval.normalize_status(value) == value
+    assert region_eval_data.normalize_status(value) == value
