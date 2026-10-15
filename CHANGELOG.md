@@ -139,6 +139,13 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Changed
 
+- Repo cleanup, PR 6 (backend split by concern): every `src/` and `scripts/` file of 600 lines or more
+  is split into cohesive modules (routers, `src/main.py` into `src/app/`, the Triton and PE clients,
+  curation, projects, training and config-store services, `src/config/curation.py`, three scripts),
+  moved verbatim and imported from the new home with no re-exports; route order, the OpenAPI
+  contracts and behavior are unchanged. Twenty-three functions over complexity 15 are decomposed behind
+  characterization tests and leave the complexity baseline. `duplicate_detection/__init__.py` no
+  longer holds logic, and the two exporters share `export_models` and `export_writers`.
 - Repo cleanup, PR 5b (duplicates): one `now_iso()` (`src/utils/timeutil.py`, UTC, microsecond
   precision) replaces 21 private timestamp helpers with three different bodies; the class-history
   and edit-history entries used `timespec='seconds'` and now carry microseconds like every other
