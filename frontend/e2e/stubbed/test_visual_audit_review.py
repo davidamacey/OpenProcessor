@@ -202,10 +202,11 @@ def test_narrow_review_tabs_and_nav_show_hidden_items(stub, page, app_url):
     # ... and the tabs scrolled off to the left are signalled.
     assert page.get_by_test_id("review-tabs-more-left").is_visible()
 
-    # The primary nav signals its off-screen links too.
-    assert page.get_by_test_id("primary-nav-more-right").is_visible() or page.get_by_test_id(
-        "primary-nav-more-left"
-    ).is_visible()
+    # The primary nav wraps: every link is on screen, none behind a scroll.
+    vw = page.evaluate("window.innerWidth")
+    for link in page.get_by_test_id("primary-nav").get_by_role("link").all():
+        lbox = link.bounding_box()
+        assert lbox and lbox["x"] >= 0 and lbox["x"] + lbox["width"] <= vw + 1, lbox
 
     overflow = page.evaluate("document.documentElement.scrollWidth - window.innerWidth")
     assert overflow <= 1, overflow

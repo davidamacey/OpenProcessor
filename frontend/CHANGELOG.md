@@ -86,6 +86,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- At narrow widths the top navigation wraps onto a second row, so Export, Models, Train, Bake-off and Settings are reachable without scrolling a clipped strip.
+- The dashboard "Run VLM Labeling" action becomes a link to the Models settings ("activate a VLM first") when the backend serves the project's VLM source as `off`, instead of a ready primary button.
+- Model titles on the Models page wrap instead of truncating.
 - Ingest policy cost preview marks its figures as belonging to the previous policy while a new preview is computed (a large project takes seconds), instead of showing stale numbers as current.
 - A project with no classes says "No classes yet" on the Classes page and "No classes in this project yet" on Export instead of "No classes match this filter" and "ingest some data first".
 - Removed the internal "Plan §B4" reference from the test-holdout texts.
