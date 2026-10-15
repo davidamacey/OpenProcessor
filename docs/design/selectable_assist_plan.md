@@ -676,3 +676,41 @@ supplies its parts: the stratified sample, the proposal with agreement, the
 method-independent scope and the apply. #286 can then be a driver over assist runs.
 Rework of clustering methods (owner, later) does not touch the assist layer: it reads only
 `cluster_id`/`cluster_subid` fields and member ids.
+
+## Deviations
+
+Recorded after wave A (PR 0 to PR 5). Each is the smallest correct departure from the text above.
+
+- **PR 2 is folded into PR 4.** The unused-code ratchet flags `src/domain/assist_sampling.py`
+  until a caller exists, as 5 allowed. The sampling module and its test ship in the PR 4 commit.
+- **Models live in `src/services/curation/assist/models.py` and `proposal_models.py`, not in
+  `src/schemas/curation/assist.py`.** `src/schemas/` may not import services, and the request
+  embeds `ItemFilter`. The item's `assist` wire models are in `src/routers/curation/_item_models.py`
+  next to `ItemDoc`.
+- **Wave A takes only `classify` and `attributes`, and `crops`, `cluster` and `filter` targets.**
+  The request model forbids `boxes`, `segment`, `verify` and `segment.verify` (422) until PR 6 and
+  PR 7 add them; `waiting_region` is not a status yet.
+- **A live run killed by a restart ends `interrupted`, not `lost`.** That is the status every
+  file-backed job here already uses (`reconcile_orphaned_jobs`).
+- **An assist class suggestion does not move the item into its class cluster.** The shared writer
+  now takes `set_cluster` (auto-label keeps `True`); an assist run passes `False`. With the move,
+  the first chunk of a run empties the cluster it was asked about, so `scope_now`, the digest and
+  `apply` would all see a different scope.
+- **`members.json` holds the (sub-)cluster the proposal is about.** For a `crops` target with a
+  `context` that is the context's members at run start, not the selected ids, so `scope_now` and
+  `apply` act on the cluster the user was refining. A bare selection or a filter run keeps no list.
+- **`OP_ASSIST_JOBS_DIR`** (default `/jobs/assist`) is new, with the project-delete path, startup
+  reconcile, `env.template` and the advanced configuration page.
+- **`/prompt_packs/test` with `call: assist` or `attributes` returns the parsed answers only**
+  (`preview_item` is null): the answers are stored in the `assist` slot, not as an item write.
+- **PR 3b did not add attributes to the combined call or to the region worker.** `make` and `model`
+  are deleted everywhere (reply keys, models, `vlm_item_make` / `vlm_item_model`, the worker's
+  write). The combined prompts never asked for them and no pack asks for attributes in the combined
+  call yet, so the worker has nothing to write to `assist.attributes`; that belongs to the worker
+  wave (PR 7).
+- **Frontend parts of PR 1 and PR 4 are left for the frontend wave.** The sub-cluster tab still
+  filters the loaded page (the server filter exists: `GET /crops?cluster_subid=`), and Cropwright's
+  `runVlmOnCluster` still posts to the deleted `/vlm/label_cluster/{id}` route until PR 8 swaps it
+  to `createAssistRun`. Its vitest pins and the stubbed e2e `test_vlm_job_poll_by_id.py` still
+  describe the old route and must be rewritten there. `tests/fixtures/labeler_call_sites.txt` never
+  listed that route, so it is unchanged.
