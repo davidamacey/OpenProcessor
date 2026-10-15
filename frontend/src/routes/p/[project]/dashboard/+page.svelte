@@ -29,6 +29,7 @@
   import { healthStore } from '$stores/health.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import AutoLabelPanel from '$components/AutoLabelPanel.svelte';
+  import VlmQuickAction from '$components/vlm/VlmQuickAction.svelte';
   import VlmRunPicker from '$components/vlm/VlmRunPicker.svelte';
   import { vlmRunErrorText } from '$lib/vlm/runErrors';
   import DatasetStats from '$components/DatasetStats.svelte';
@@ -219,9 +220,7 @@
   <!-- Quick actions -->
   <section class="surface flex flex-wrap items-center gap-2 p-4">
     <h2 class="mr-3 text-sm font-semibold text-zinc-400">Quick actions</h2>
-    <button class="btn btn-primary" type="button" onclick={() => (vlmOpen = true)}>
-      Run VLM Labeling
-    </button>
+    <VlmQuickAction onrun={() => (vlmOpen = true)} />
     <button class="btn" type="button" onclick={openExportConfirm}>
       Export Dataset (YOLO)
     </button>

@@ -118,7 +118,10 @@ async def put_policy(
     runs only, never stored data."""
     await ensure_indexes(opensearch)
     policy_body = IngestPolicyBody(
-        detect=body.detect, embedding=body.embedding, detector=body.detector
+        detect=body.detect,
+        embedding=body.embedding,
+        clustering=body.clustering,
+        detector=body.detector,
     )
     if body.detector is not None:
         await _require_servable(body.detector)

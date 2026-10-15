@@ -58,7 +58,7 @@
     </div>
   {:else}
     <p class="text-xs text-zinc-500">
-      Test set is not yet frozen. Plan §B4: freezing is one-shot per dataset version.
+      Test set is not yet frozen. Freezing is one-shot per dataset version.
     </p>
   {/if}
 </section>

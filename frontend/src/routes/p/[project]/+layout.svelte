@@ -18,7 +18,6 @@
   import type { ProjectResolution } from '$stores/projects.svelte';
   import AboutModal from '$components/AboutModal.svelte';
   import ClassSidebar from '$components/ClassSidebar.svelte';
-  import ScrollStrip from '$components/ScrollStrip.svelte';
   import {
     slotForClassName,
     slotRegistryWarnings,
@@ -349,22 +348,13 @@
 
       <span class="grow"></span>
 
-      <!-- Narrow widths (~800px and below): this used to be a plain
-         `flex` row with no shrink/overflow control, so "Bake-off"
-         wrapped onto two lines and pushed the "API OK" chip past the
-         viewport edge (clipped, and forcing horizontal page overflow).
-         Scrolls horizontally within its own box instead of ever
-         wrapping link text or growing past its flex slot. -->
-      <!-- Visual audit 2026-09-24: the scrolling strip alone gave no hint
-         that links sat off-screen at 800px — ScrollStrip adds a chevron
-         on the side with hidden links and scrolls the current page's link
-         into view. -->
-      <ScrollStrip
-        navLabel="Primary"
-        navClass="order-last basis-full md:order-none md:basis-auto"
-        activeKey={path}
-        class="gap-3 text-sm text-zinc-300"
-        testId="primary-nav"
+      <!-- Narrow widths: the links wrap onto a second row so every one is
+         reachable without scrolling; from md up they sit in the one header
+         row. -->
+      <nav
+        aria-label="Primary"
+        class="order-last flex basis-full flex-wrap gap-x-3 gap-y-1 text-sm text-zinc-300 md:order-none md:basis-auto"
+        data-testid="primary-nav"
       >
         <a
           href={resolve(projectHref('/dashboard'))}
@@ -421,7 +411,7 @@
           class={navLinkClass('settings')}
           aria-current={navCurrent('settings')}>Settings</a
         >
-      </ScrollStrip>
+      </nav>
 
       <ResourcesMenu />
 

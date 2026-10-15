@@ -104,6 +104,15 @@ def test_put_validates_the_detector_against_triton(world: Any, labels: str) -> N
     assert client.get(URL).json()['detector']['model'] == 'birds'
 
 
+def test_put_stores_the_clustering_switch(world: Any) -> None:
+    client, *_ = world
+    body = {'expected_revision': 0, 'clustering': {'automatic': False}}
+    put = client.put(URL, json=body)
+    assert put.status_code == 200, put.text
+    assert put.json()['clustering'] == {'automatic': False}
+    assert client.get(URL).json()['clustering'] == {'automatic': False}
+
+
 def test_the_project_detector_drives_the_info_and_class_seeding(world: Any, labels: str) -> None:
     client, _, _, registry = world
     assert client.get('/curation/projects/default/ingest/config').json()['detector']['model'] == (

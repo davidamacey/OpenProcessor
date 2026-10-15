@@ -207,9 +207,9 @@
         <li class="rounded-md border border-zinc-800 bg-zinc-900 p-4">
           <div class="mb-2 flex items-start justify-between gap-3">
             <div class="min-w-0">
-              <div class="flex items-center gap-2">
+              <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <h2
-                  class="truncate text-base font-semibold text-white"
+                  class="min-w-0 break-words text-base font-semibold text-white"
                   title={m.friendly_name}
                 >
                   {m.friendly_name}

@@ -45,7 +45,7 @@
      which are several buttons. -->
 <svelte:element
   this={spec.kind === 'multi_enum' ? 'div' : 'label'}
-  class="flex shrink-0 items-center gap-1.5"
+  class="flex max-w-full flex-wrap items-center gap-1.5"
   data-testid="served-filter-{spec.param}"
   title={spec.description || undefined}
 >

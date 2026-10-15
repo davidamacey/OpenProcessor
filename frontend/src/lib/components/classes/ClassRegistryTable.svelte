@@ -43,6 +43,10 @@
     <div class="p-6 text-sm text-zinc-500">Loading classes…</div>
   {:else if classesStore.error}
     <div class="p-6 text-sm text-red-300">API unavailable: {classesStore.error}</div>
+  {:else if allClasses.length === 0}
+    <div class="p-6 text-sm text-zinc-500">
+      No classes yet. Add one, or create them from the detector below.
+    </div>
   {:else if activeRows.length === 0}
     <div class="p-6 text-sm text-zinc-500">No classes match this filter.</div>
   {:else}
