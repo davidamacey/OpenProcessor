@@ -87,7 +87,7 @@ class Fakes:
             return {'predicted': len(crop_ids), 'updated': len(crop_ids) - 1}
         return self.label_script(slug, crop_ids)
 
-    async def _heartbeat(self, name: str, status: Any, _stop: Any) -> None:
+    async def _heartbeat(self, name: str, status: Any, _stop: Any, **_kw: Any) -> None:
         self.heartbeats.append((name, status()))
         if self.fetch_gate is not None:
             self.fetch_gate.set()
@@ -213,7 +213,7 @@ async def test_consumer_errors_are_logged_and_the_chunk_is_released(
 
     def _script(_slug: str, ids: list[str]) -> dict[str, int]:
         if ids == ['c1', 'c2']:
-            raise httpx.ConnectError('refused')
+            raise httpx.DecodingError('refused')
         if ids == ['c3', 'c4']:
             msg = 'bad json'
             raise ValueError(msg)

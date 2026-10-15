@@ -66,6 +66,10 @@ if TYPE_CHECKING:
 # _RELEASED_AT_TTL_S.
 _RELEASED_AT_TTL_S = 300.0
 
+# Backoff after the VLM endpoint (or the API) stops answering: starts at the poll
+# interval, doubles per consecutive failed probe, capped here.
+_OUTAGE_BACKOFF_MAX_S = 60.0
+
 
 def _error_code(response: httpx.Response) -> str | None:
     try:
@@ -73,6 +77,14 @@ def _error_code(response: httpx.Response) -> str | None:
     except ValueError:
         return None
     return detail.get('error') if isinstance(detail, dict) else None
+
+
+def _error_message(response: httpx.Response) -> str:
+    try:
+        detail = response.json().get('detail')
+    except ValueError:
+        return ''
+    return str(detail.get('message', '')) if isinstance(detail, dict) else ''
 
 
 async def label_batch(
@@ -85,8 +97,9 @@ async def label_batch(
 ) -> dict:
     """Call the scoped /curation/projects/{slug}/vlm/label_batch for one chunk.
 
-    Returns ``{'no_classes': True}`` when the project has no classes yet,
-    so the caller backs off instead of logging a failure per chunk."""
+    Returns ``{'no_classes': True}`` when the project has no classes yet, and
+    ``{'vlm_unreachable': True, 'message': ...}`` when the VLM endpoint did not
+    answer, so the caller backs off instead of logging a failure per chunk."""
     r = await client.post(
         scoped_url(api, api_prefix, slug, '/vlm/label_batch'),
         json={'crop_ids': crop_ids},
@@ -94,6 +107,8 @@ async def label_batch(
     )
     if r.status_code == 409 and _error_code(r) == 'no_classes':
         return {'no_classes': True}
+    if r.status_code == 503 and _error_code(r) == 'vlm_unreachable':
+        return {'vlm_unreachable': True, 'message': _error_message(r)}
     r.raise_for_status()
     result: dict = r.json()
     return result
@@ -133,6 +148,13 @@ class _StreamWorker:
         # _RELEASED_AT_TTL_S, keyed by release time, and require a fetch to
         # have started after that release to treat the id as fresh again.
         self.released_at: dict[tuple[str, str], float] = {}
+        # Why the worker is making no progress (the VLM endpoint or the API does
+        # not answer), or None. While ``backing_off`` the producer sleeps and the
+        # consumers release their chunks untouched; when the sleep ends the next
+        # chunk is the probe. Crops are never written as failed for an outage.
+        self.stall_reason: str | None = None
+        self.backing_off = False
+        self.outage_backoff_s = 0.0
         # Queue depth: small buffer between producer and consumers. Just
         # big enough to absorb one OS fetch latency. Larger doesn't help
         # — vLLM's max-num-seqs caps real throughput downstream.
@@ -220,6 +242,29 @@ class _StreamWorker:
         )
         return False
 
+    def _enter_outage(self, reason: str) -> None:
+        """A chunk found the endpoint down: stall, and back off once for all consumers."""
+        if self.backing_off:
+            return
+        self.outage_backoff_s = min(
+            max(self.args.poll_interval, self.outage_backoff_s * 2), _OUTAGE_BACKOFF_MAX_S
+        )
+        self.backing_off = True
+        if reason != self.stall_reason:
+            print(f'[vlm-worker] {reason}; backing off, crops stay pending')
+        self.stall_reason = reason
+
+    def _leave_outage(self) -> None:
+        if self.stall_reason is not None:
+            print('[vlm-worker] VLM endpoint recovered; resuming')
+        self.stall_reason = None
+        self.backing_off = False
+        self.outage_backoff_s = 0.0
+
+    async def _outage_wait(self) -> None:
+        await asyncio.sleep(self.outage_backoff_s)
+        self.backing_off = False
+
     async def producer(self) -> None:
         """Continuously fetch eligible crops, project by project, and chunk
         them into the queue."""
@@ -228,6 +273,9 @@ class _StreamWorker:
             # Pause if the GPU arbiter says so (training claimed the GPU).
             if args.pause_sentinel and Path(args.pause_sentinel).exists():
                 await asyncio.sleep(args.pause_poll_interval)
+                continue
+            if self.backing_off:
+                await self._outage_wait()
                 continue
             # Backpressure: don't outpace the consumers.
             if self.queue.full():
@@ -272,6 +320,8 @@ class _StreamWorker:
     ) -> None:
         t0 = time.monotonic()
         try:
+            if self.backing_off:
+                return  # released untouched below; the producer's probe comes after the backoff
             result = await label_batch(
                 client,
                 api=self.args.api,
@@ -279,6 +329,11 @@ class _StreamWorker:
                 slug=record.slug,
                 crop_ids=chunk,
             )
+            if result.get('vlm_unreachable'):
+                message = result.get('message') or 'no answer'
+                self._enter_outage(f'VLM endpoint unreachable: {message}')
+                return
+            self._leave_outage()
             if result.get('no_classes'):
                 if not self.metrics.get('no_classes_logged'):
                     print('[vlm-worker] project has no classes yet; idling until some exist')
@@ -288,6 +343,8 @@ class _StreamWorker:
             self._count_chunk(consumer_id, chunk, result, t0)
         except httpx.HTTPError as exc:
             print(f'[vlm-worker] consumer {consumer_id} HTTP error: {exc}')
+            if isinstance(exc, httpx.TransportError):
+                self._enter_outage(f'curation API unreachable: {exc}')
         except Exception as exc:
             print(f'[vlm-worker] consumer {consumer_id} error: {exc}')
         finally:
@@ -358,6 +415,7 @@ class _StreamWorker:
                         'consumers': any(not t.done() for t in cons_tasks),
                     },
                     self.stop_event,
+                    stall_fn=lambda: self.stall_reason,
                 )
             )
 

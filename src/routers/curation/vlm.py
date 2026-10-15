@@ -18,6 +18,7 @@ from fastapi import HTTPException, Query
 
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import get_curation_config, get_region_fields
+from src.routers.curation._api_error import api_error
 from src.routers.curation._common import (
     OpenSearchDep,
     RegionProfileDep,
@@ -108,6 +109,17 @@ def _is_frozen_test_holdout(current_source: dict[str, Any]) -> bool:
     scope.
     """
     return bool(current_source.get('test_holdout'))
+
+
+def _refuse_when_unanswered(predictions: list[Any], labeler: Any) -> None:
+    """503 when no crop got an answer: the endpoint is down. Nothing was written, so
+    every crop stays pending; the caller backs off instead of retrying hot."""
+    if predictions and all(p.failure == 'request_failed' for p in predictions):
+        raise api_error(
+            503,
+            'vlm_unreachable',
+            f'the VLM endpoint {labeler.identity.endpoint_ref} did not answer; no crop was labelled',
+        )
 
 
 @router.post('/vlm/label_batch')
@@ -212,6 +224,7 @@ async def vlm_label_batch(
     # Use the open-vocabulary path so the VLM can flag genuinely-unknown
     # items instead of silently snapping them to the wrong class.
     predictions = await labeler.label_or_propose_batch(crops, class_names)
+    _refuse_when_unanswered(predictions, labeler)
     name_to_id = {c.class_name: c.class_id for c in labelable}
     # Collect per-doc updates, then dispatch via occ_skip_on_conflict_bulk
     # so a concurrent human edit always wins.

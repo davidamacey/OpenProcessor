@@ -527,6 +527,12 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 - An auto-label job still queued after `queue_max_age_seconds` (one hour) fails with "auto_label
   worker not running" and its trigger is withdrawn; the status serves `queue_age_seconds` and
   `queue_max_age_seconds` (#236).
+- An unreachable VLM endpoint no longer leaves the VLM worker spinning with a full queue and nothing
+  reported. `POST /curation/projects/{project}/vlm/label_batch` answers `503 vlm_unreachable` when no crop
+  got an answer (nothing is written, no crop is marked failed); the worker releases its in-flight crops,
+  backs off (poll interval, doubling to 60 s; the same for an unreachable API) and resumes by itself when
+  the endpoint answers. The stall reason is logged and served in the worker's heartbeat, so the compose
+  healthcheck output reads `ok: ... stalled: VLM endpoint unreachable: ...` while the worker stays healthy.
 - An image that does not decode reports `not a decodable image` (or Pillow's own error for a damaged
   file) instead of `No module named 'pi_heif'` from the Ultralytics `Image.open` patch (#297).
 
