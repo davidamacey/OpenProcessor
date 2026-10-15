@@ -47,7 +47,11 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 from scripts.curation._project_worker_utils import curation_api_prefix, rotated, scoped_url
-from scripts.curation._vlm_activity import idle_backoff_s, projects_with_active_vlm
+from scripts.curation._vlm_activity import (
+    idle_backoff_s,
+    project_has_item_classes,
+    projects_with_active_vlm,
+)
 from scripts.curation.vlm_cli import parse_args
 from scripts.curation.vlm_pending import _filter_fresh_ids, fetch_pending_ids
 from src.config.project_context import bind_project
@@ -153,6 +157,8 @@ class _StreamWorker:
         # consumers release their chunks untouched; when the sleep ends the next
         # chunk is the probe. Crops are never written as failed for an outage.
         self.stall_reason: str | None = None
+        # Slugs last seen without a class to label as, so the change is logged once.
+        self.classless: set[str] = set()
         self.backing_off = False
         self.outage_backoff_s = 0.0
         # Queue depth: small buffer between producer and consumers. Just
@@ -242,6 +248,24 @@ class _StreamWorker:
         )
         return False
 
+    def _labelable(self, projects: list[Any]) -> list[Any]:
+        """The projects that have a class to label as. A project without one is not
+        fetched, so its crops are never claimed in flight and cannot starve the rest."""
+        labelable = []
+        for record in projects:
+            if project_has_item_classes(record):
+                if record.slug in self.classless:
+                    self.classless.discard(record.slug)
+                    print(f'[vlm-worker] project={record.slug} has classes now; labeling it')
+                labelable.append(record)
+            elif record.slug not in self.classless:
+                self.classless.add(record.slug)
+                print(
+                    f'[vlm-worker] project={record.slug} has no classes yet; skipping it '
+                    'until some exist'
+                )
+        return labelable
+
     def _enter_outage(self, reason: str) -> None:
         """A chunk found the endpoint down: stall, and back off once for all consumers."""
         if self.backing_off:
@@ -256,7 +280,8 @@ class _StreamWorker:
 
     def _leave_outage(self) -> None:
         if self.stall_reason is not None:
-            print('[vlm-worker] VLM endpoint recovered; resuming')
+            what = 'API' if self.stall_reason.startswith('curation API') else 'VLM endpoint'
+            print(f'[vlm-worker] {what} recovered; resuming')
         self.stall_reason = None
         self.backing_off = False
         self.outage_backoff_s = 0.0
@@ -289,8 +314,9 @@ class _StreamWorker:
             # In-flight ids are excluded server-side (must_not ids), so a
             # fetch only needs to refill the queue.
             fetch_n = min(args.vlm_batch_size * args.concurrency * 2, 9000)  # OS hits cap
-            share = max(1, fetch_n // max(1, len(projects)))
-            if not await self._fetch_cycle(projects, share):
+            labelable = self._labelable(projects)
+            share = max(1, fetch_n // max(1, len(labelable)))
+            if not await self._fetch_cycle(labelable, share):
                 if await self._idle_cycle(projects):
                     return
                 continue

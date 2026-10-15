@@ -141,6 +141,7 @@ class _Env:
         m.setattr(vlm_worker, 'fetch_pending_ids', self._fetch)
         m.setattr(vlm_worker, 'label_batch', self._label)
         m.setattr(vlm_worker, 'heartbeat_loop', self._heartbeat)
+        m.setattr(vlm_worker, 'project_has_item_classes', lambda _r: True)
         m.setattr(vlm_worker, 'bind_project', lambda _r: __import__('contextlib').nullcontext())
         real_sleep = asyncio.sleep
 
@@ -207,7 +208,7 @@ async def test_worker_backs_off_releases_and_resumes_when_the_endpoint_returns(
     assert env.fetch_exclude.count([]) >= 2
     # The reason is announced and the recovery is announced.
     assert 'VLM endpoint unreachable' in out
-    assert 'VLM endpoint recovered' in out
+    assert 'VLM endpoint recovered; resuming' in out
     assert 'processed=2 updated=2 chunks=1' in out
     # The stall reason is served while down and cleared afterwards.
     assert any(s and 'VLM endpoint unreachable' in s for s in env.stall_seen)
@@ -223,6 +224,7 @@ async def test_worker_backs_off_when_the_api_itself_is_unreachable(
     await asyncio.wait_for(vlm_worker.run(_args()), 10)
     out = capsys.readouterr().out
     assert 'curation API unreachable' in out
+    assert 'API recovered; resuming' in out
     assert [s for s in env.sleeps if s > 0.5][:1] == [1.0]
     assert env.labelled[-1] == ['c1', 'c2']
     assert 'processed=2 updated=2 chunks=1' in out

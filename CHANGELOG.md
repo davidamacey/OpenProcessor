@@ -533,6 +533,9 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   backs off (poll interval, doubling to 60 s; the same for an unreachable API) and resumes by itself when
   the endpoint answers. The stall reason is logged and served in the worker's heartbeat, so the compose
   healthcheck output reads `ok: ... stalled: VLM endpoint unreachable: ...` while the worker stays healthy.
+- The VLM worker skips a project that has no class to label as, so its crops are never claimed in flight
+  and no longer fill the queue and starve the other projects; it logs the change once per project and
+  picks the project up on the next poll after its first class.
 - An image that does not decode reports `not a decodable image` (or Pillow's own error for a damaged
   file) instead of `No module named 'pi_heif'` from the Ultralytics `Image.open` patch (#297).
 
