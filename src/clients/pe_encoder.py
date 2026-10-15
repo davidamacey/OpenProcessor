@@ -133,7 +133,8 @@ def _timed_whole_frame(preprocess: Any, source: Any) -> np.ndarray:
     """``preprocess(source)`` (a whole-frame square, decoding a path first) under the stage timer."""
     nbytes = len(source) if isinstance(source, bytes) else 0
     with stage_timer('whole_frame_preprocess', nbytes=nbytes):
-        return preprocess(source)
+        typed: np.ndarray = preprocess(source)
+        return typed
 
 
 def _l2_normalize(matrix: np.ndarray) -> np.ndarray:
@@ -278,7 +279,8 @@ class PEEncoder:
         w, h = img.size
         rgb = await run_cpu(_timed_whole_frame, whole_frame_rgb_from_image, img, nbytes=w * h * 3)
         embedding = await self.encode_images(to_chw(rgb)[None, ...])
-        return embedding[0]
+        typed: np.ndarray = embedding[0]
+        return typed
 
     # ------------------------------------------------------------------
     # Text path — in-process ONNX Runtime / PyTorch, optional Triton,
