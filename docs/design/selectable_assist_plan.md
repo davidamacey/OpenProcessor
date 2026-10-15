@@ -533,6 +533,13 @@ must cover the new routes: add bodies to `_route_bodies.py` and rows to `_route_
 
 ## 5. PR sequence (each sized for one Sonnet agent)
 
+**Delivery override (owner, 2026-10-15): do not open ten PRs.** Group the steps below into the
+fewest waves that keep dependencies in order (about three: backend core, worker and storage,
+frontend and docs). Each wave is one agent on one shared branch, committed in order, with only
+the targeted tests and hooks run per wave. Open a single PR when the last wave is done, run the
+full offline suite and the stubbed e2e once on that branch, and merge once. The step list below
+stays as the work breakdown and the order inside a wave.
+
 Each PR: conventional commit title, `.venv/bin/pre-commit run --all-files`, the targeted
 tests, `make contracts` when the wire changes (commit `contracts/` in the same commit),
 `scripts/docs/check_docs_vs_code.py`, a `CHANGELOG.md` `[Unreleased]` entry (and
