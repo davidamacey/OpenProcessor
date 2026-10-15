@@ -12,6 +12,7 @@ import {
   getBulkIngestConfig,
   getBulkIngestFailures,
   listBulkIngests,
+  previewBulkIngest,
   startBulkIngest,
 } from '$lib/api_bulkIngest';
 import type {
@@ -19,6 +20,8 @@ import type {
   BulkIngestFailurePage,
   BulkIngestRequest,
   BulkIngestRun,
+  BulkPreview,
+  BulkPreviewRequest,
   BulkSourceKind,
 } from '$lib/types_bulkIngest';
 
@@ -32,6 +35,7 @@ export interface BulkDeps {
   getBulkIngest: typeof getBulkIngest;
   getBulkIngestFailures: typeof getBulkIngestFailures;
   cancelBulkIngest: typeof cancelBulkIngest;
+  previewBulkIngest: typeof previewBulkIngest;
 }
 
 const DEFAULT_DEPS: BulkDeps = {
@@ -41,6 +45,7 @@ const DEFAULT_DEPS: BulkDeps = {
   getBulkIngest,
   getBulkIngestFailures,
   cancelBulkIngest,
+  previewBulkIngest,
 };
 
 export interface BulkForm {
@@ -62,6 +67,9 @@ export class BulkIngest {
   actionError = $state<string | null>(null);
   loadError = $state<string | null>(null);
   busy = $state(false);
+  preview = $state<BulkPreview | null>(null);
+  previewing = $state(false);
+  previewError = $state<string | null>(null);
 
   form = $state<BulkForm>({
     kind: 'folder',
@@ -75,6 +83,7 @@ export class BulkIngest {
   #deps: BulkDeps;
   #timer: ReturnType<typeof setTimeout> | null = null;
   #stopped = false;
+  #previewAbort: AbortController | null = null;
 
   constructor(deps: Partial<BulkDeps> = {}) {
     this.#deps = { ...DEFAULT_DEPS, ...deps };
@@ -84,22 +93,36 @@ export class BulkIngest {
     return this.run?.poll_after_s != null;
   }
 
-  /** The request exactly as the form states it; unset options stay unset so the
-   *  backend's served defaults apply. */
-  get request(): BulkIngestRequest {
+  /** The source and extensions exactly as the form states them (a preview sends
+   *  only these). */
+  get previewRequest(): BulkPreviewRequest {
     const f = this.form;
-    const body: BulkIngestRequest = {
+    const body: BulkPreviewRequest = {
       [f.kind === 'folder' ? 'folder' : 'manifest']: f.path.trim(),
-      source: f.source.trim() || 'bulk_ingest',
     };
     const extensions = f.extensions
       .split(',')
       .map((e) => e.trim())
       .filter((e) => e.length > 0);
     if (extensions.length > 0) body.extensions = extensions;
+    return body;
+  }
+
+  /** The request exactly as the form states it; unset options stay unset so the
+   *  backend's served defaults apply. */
+  get request(): BulkIngestRequest {
+    const f = this.form;
+    const body: BulkIngestRequest = {
+      ...this.previewRequest,
+      source: f.source.trim() || 'bulk_ingest',
+    };
     if (f.batchSize) body.batch_size = f.batchSize;
     if (f.concurrency) body.concurrency = f.concurrency;
     return body;
+  }
+
+  get canPreview(): boolean {
+    return !this.previewing && this.form.path.trim().length > 0;
   }
 
   get canStart(): boolean {
@@ -124,6 +147,7 @@ export class BulkIngest {
   stop(): void {
     this.#stopped = true;
     this.#clearTimer();
+    this.#previewAbort?.abort();
   }
 
   async refreshRecent(): Promise<void> {
@@ -183,11 +207,39 @@ export class BulkIngest {
     }
   }
 
+  /** Ask the backend what the source holds and costs; nothing is ingested. A second
+   *  press while one is running cancels it (the aborted request stops the walk). */
+  async runPreview(): Promise<boolean> {
+    if (this.previewing) {
+      this.#previewAbort?.abort();
+      return false;
+    }
+    const abort = new AbortController();
+    this.#previewAbort = abort;
+    this.previewing = true;
+    this.previewError = null;
+    this.preview = null;
+    try {
+      this.preview = await this.#deps.previewBulkIngest(
+        this.previewRequest,
+        abort.signal,
+      );
+      return true;
+    } catch (e) {
+      if (!abort.signal.aborted) this.previewError = apiErrorText(e);
+      return false;
+    } finally {
+      this.previewing = false;
+      this.#previewAbort = null;
+    }
+  }
+
   async start(request: BulkIngestRequest = this.request): Promise<boolean> {
     if (this.busy) return false;
     this.busy = true;
     this.actionError = null;
     this.failures = null;
+    this.preview = null;
     try {
       this.#adopt(await this.#deps.startBulkIngest(request));
       return true;

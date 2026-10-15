@@ -74,16 +74,19 @@ requests) and `TritonServerDown`. They show on Prometheus's Alerts page
 (`http://localhost:4604/alerts`).
 
 `monitoring/grafana-alerting.yml` is provisioned into Grafana as a second,
-separate rule set: API error rate and slow responses, Triton down, latency
-and queue, GPU utilization, memory and temperature, host memory, CPU and
-load, and OpenSearch cluster status. They show at
+separate rule set under the `OpenProcessor Alerts` folder: API error rate and
+slow responses, Triton down, latency and queue, GPU utilization, memory and
+temperature (DCGM), and host memory, CPU and load. They show at
 `http://localhost:4605/alerting/list`.
 
-Neither set notifies anyone out of the box. Prometheus has no Alertmanager.
-Grafana's two contact points are webhooks to `http://localhost:9999/...`,
-which is the Grafana container itself, so nothing receives them. Point the
-contact points in `grafana-alerting.yml` at your own webhook, Slack or email
-and restart Grafana.
+**Neither set notifies anyone out of the box.** Prometheus has no Alertmanager.
+Grafana's two contact points are named `unconfigured-default` and
+`unconfigured-critical` and post to `http://localhost:9999/...`, which is the
+Grafana container itself, where nothing listens. A firing alert shows in
+Grafana and its delivery fails with a logged error; nobody is told. To be
+notified, replace the receivers in `grafana-alerting.yml` with your own
+webhook, Slack or email and restart Grafana (the file is provisioned
+read-only, so the Grafana UI cannot change them).
 
 ## Grafana dashboards
 
@@ -125,15 +128,14 @@ Panels only move while the API is serving requests; an idle stack shows
 flat lines. To add a dashboard, drop its JSON into
 `monitoring/dashboards/` and restart Grafana.
 
-:::caution[Two Grafana alert rules can never fire]
+:::note[No rule for model readiness or OpenSearch status]
 The shipped Triton does not export `nv_model_ready_state` or
-`nv_gpu_temperature`. The Prometheus `ModelNotReady` rule and the Triton
-dashboard's Model Ready panel were removed for that reason, and the
-dashboard's GPU Temperature panel reads DCGM (`DCGM_FI_DEV_GPU_TEMP`). The
-provisioned Grafana rules **Triton Model Not Ready** and **High GPU
-Temperature** still query the missing metrics, so they stay silent. Use
-`GET /models/` (below) for model readiness and the GPUs dashboard (DCGM)
-for temperature.
+`nv_gpu_temperature`, and no OpenSearch exporter ships with the stack, so there
+is no rule on per-model readiness or on OpenSearch cluster status. Use
+`GET /models/` (below) for model readiness and the GPUs dashboard (DCGM) for
+temperature; the Grafana temperature rule reads `DCGM_FI_DEV_GPU_TEMP`. An
+offline test checks that every metric an alert rule or dashboard panel reads
+is one the stack exports, so a rule on a missing series cannot come back.
 :::
 
 ## Logs with Loki

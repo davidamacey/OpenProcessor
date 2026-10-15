@@ -187,9 +187,61 @@ curl -s http://localhost:4603/curation/projects/nas-photos/ingest/policy
 Run a small slice first. It shows whether the mount, the detector and the policy do
 what you expect, and it gives you a measured speed for your hardware.
 
-There is no dry-run or file-count option today: `bulk_ingest.py` has no such flag and
-the start request accepts only the fields in the flags table below. The closest you
-can get is to limit the input yourself.
+### Preview before you ingest
+
+Before any run, ask the API what the folder or manifest holds. A preview walks the source
+read-only and ingests nothing: it returns the file count, total bytes, the breakdown by
+extension, a sample of image sizes (headers only, no pixel decoded), the directories and
+symlinks it could not follow, and an estimate of the ingest time and the OpenSearch index
+size. In Cropwright press **Preview** next to **Start bulk ingest** on the Ingest page; on the
+command line add `--preview` to the same flags:
+
+```bash
+docker compose -p <project> exec api python scripts/curation/bulk_ingest.py \
+  --project nas-photos --folder /data/source/2024-03-sat \
+  --api-base http://localhost:8000/curation --preview
+```
+
+The route is `POST /curation/projects/{project}/ingest/bulk/preview` (the same single source
+field as a start: `folder`, `manifest`, `s3` or `source_id`). An unreadable folder, a path
+outside the source roots or an S3 prefix outside `OP_S3_ALLOWED` is refused; nothing is
+guessed. Output of the command line renderer on the 10-image public COCO sample (this is the
+service run on that folder in a script, not against a deployed stack):
+
+```text
+folder /data/source/coco_sample
+  files: 10, 1.7 MiB
+    .jpg: 10 files, 1.7 MiB
+  image sizes (header sample of 10): <1 MP: 10; 0% at or above 3 MP
+  estimated ingest time: about 0.3 s (megapixel_sample)
+  estimated index size: 637.7 KiB, about 74 vectors
+  basis: measured figures in docs/PERFORMANCE.md, not a promise
+```
+
+What the numbers rest on:
+
+- **The walk is bounded.** It stops at 200,000 files or 60 seconds, whichever comes first
+  (`GET .../ingest/bulk/config` serves the limits under `preview`). A source bigger than that
+  answers `partial: true` with the reason, and every figure is then a lower bound. Closing the
+  connection (Ctrl-C on the command line, or pressing the button again) stops the walk.
+- **The estimate uses only measured figures** from [`docs/PERFORMANCE.md`](https://github.com/davidamacey/OpenProcessor/blob/main/docs/PERFORMANCE.md), served in the same config with the section each came from: ingest
+  speed by decode route (29.0 images/s for small frames, 27.0 for 12 to 24 MP photos on the CPU
+  path, 35.0 with the GPU decode) from "Decode once and the GPU decode", 7.4 embeddings per
+  image, and 65,298 bytes of index per image from "Storage per image and per vector". They were
+  measured on one RTX A6000 with public COCO and Commons photos, so another card or detector
+  profile will differ: treat the time as an order of magnitude, not a promise. When the image
+  sizes are unknown (an S3 prefix is only listed), the time is the range from the slowest to the
+  fastest measured route.
+- **Image sizes** come from the headers of a fixed-size sample (300 files), shown as a
+  histogram in megapixels and as the share at or above the GPU-decode gate
+  (`OP_INGEST_GPU_MIN_MEGAPIXELS`, 3.0).
+- **Skipped entries are counted, not hidden:** unreadable directories (with the first few
+  paths), symlinks (not followed), manifest lines that do not exist or lie outside the source
+  roots.
+
+### Run a small slice
+
+Then run a slice to get a measured speed for your own hardware. Limit the input yourself:
 
 The simplest trial is a small sub-folder:
 
@@ -283,6 +335,7 @@ the run's outcome.
 |---|---|
 | `--folder PATH` | Walk this directory (recursive). One of `--folder`, `--manifest`, `--status`, `--cancel` is required. |
 | `--manifest PATH` | Text file of image paths. |
+| `--preview` | Do not ingest: print the file count, bytes, extensions, image sizes, skipped entries and the time and index-size estimate for the source, then exit. Works with `--folder`, `--manifest`, `--s3` and `--source-id`. |
 | `--status RUN_ID` | Print one run's progress and exit. |
 | `--cancel RUN_ID` | Ask a live run to stop and exit. |
 | `--project SLUG` | Project to bind. Default `$OP_CURATION_PROJECT`, else `default`. |

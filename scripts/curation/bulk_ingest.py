@@ -42,6 +42,10 @@ the API listens, and ``localhost:4603`` on the host, where compose publishes it)
     docker compose exec api python scripts/curation/bulk_ingest.py --project cars \\
         --cancel bulk_20261011T120000_ab12cd34
 
+``--preview`` with any source walks it read-only and prints the file count, bytes,
+extension breakdown, image-size sample, estimated time and index footprint, without
+starting a run (the walk is capped by the server and reports ``PARTIAL`` when it was).
+
 Exit status: 0 completed, 1 completed with failed images, 2 failed (the run
 stopped), 130 cancelled.
 """
@@ -96,6 +100,12 @@ def build_parser() -> argparse.ArgumentParser:
         help='Curation API mount (no trailing slash); requests go to '
         '<api-base>/projects/<--project>/...',
     )
+    parser.add_argument(
+        '--preview',
+        action='store_true',
+        help='Only report what the source holds and what ingesting it would cost (file count, '
+        'bytes, extensions, image sizes, estimated time and index size), then exit',
+    )
     parser.add_argument('--source', default='bulk_ingest', help='source tag for ingested images')
     parser.add_argument(
         '--extensions', help='Comma-separated file extensions for --folder (default: jpg,jpeg,png)'
@@ -136,7 +146,7 @@ def _call(client: httpx.Client, method: str, url: str, **kwargs: Any) -> dict[st
 
 
 def _start_body(args: argparse.Namespace) -> dict[str, Any]:
-    body: dict[str, Any] = {'source': args.source}
+    body: dict[str, Any] = {} if args.preview else {'source': args.source}
     if args.folder:
         body['folder'] = args.folder
     elif args.manifest:
@@ -150,6 +160,8 @@ def _start_body(args: argparse.Namespace) -> dict[str, Any]:
         body['source_id'] = args.source_id
     if args.extensions:
         body['extensions'] = [e for e in args.extensions.split(',') if e.strip()]
+    if args.preview:
+        return body
     if args.batch_size:
         body['batch_size'] = args.batch_size
     if args.concurrency:
@@ -163,6 +175,63 @@ def _fmt_eta(seconds: float | None) -> str:
     minutes, secs = divmod(int(seconds), 60)
     hours, minutes = divmod(minutes, 60)
     return f'{hours}h{minutes:02d}m' if hours else f'{minutes}m{secs:02d}s'
+
+
+def _fmt_bytes(count: float) -> str:
+    for unit in ('B', 'KiB', 'MiB', 'GiB', 'TiB'):
+        if abs(count) < 1024 or unit == 'TiB':
+            return f'{count:.0f} {unit}' if unit == 'B' else f'{count:.1f} {unit}'
+        count /= 1024
+    return f'{count:.1f} TiB'
+
+
+def _fmt_duration(low: float, high: float) -> str:
+    if round(low) == round(high):
+        return f'about {low:.1f} s' if low < 10 else f'about {_fmt_eta(low)}'
+    return f'{_fmt_eta(low)} to {_fmt_eta(high)}'
+
+
+def print_preview(preview: dict[str, Any], config: dict[str, Any]) -> None:
+    """Render a ``POST .../ingest/bulk/preview`` answer; every figure is the server's."""
+    print(f'{preview["kind"]} {preview["target"]}')
+    print(f'  files: {preview["files"]}, {_fmt_bytes(preview["total_bytes"])}')
+    for ext, totals in sorted(preview['by_extension'].items()):
+        print(f'    {ext}: {totals["files"]} files, {_fmt_bytes(totals["bytes"])}')
+    mp = preview['megapixels']
+    if mp['sampled']:
+        shares = ', '.join(f'{k} MP: {v}' for k, v in mp['histogram'].items())
+        gate = mp['share_at_or_above_gate'] * 100
+        print(
+            f'  image sizes (header sample of {mp["sampled"]}): {shares}; '
+            f'{gate:.0f}% at or above {mp["gate_megapixels"]:g} MP'
+        )
+    skipped = [
+        (preview['unreadable_dirs'], 'unreadable directories'),
+        (preview['symlinks_skipped'], 'symlinks (not followed)'),
+        (preview['missing'], 'missing manifest entries'),
+        (preview['outside_roots'], 'entries outside the source roots'),
+        (preview['unreadable_files'], 'files that could not be read'),
+    ]
+    for count, label in skipped:
+        if count:
+            print(f'  {label}: {count}')
+    for path in preview['unreadable_samples']:
+        print(f'    unreadable: {path}')
+    est = preview['estimate']
+    print(
+        f'  estimated ingest time: {_fmt_duration(est["duration_s_min"], est["duration_s_max"])}'
+        f' ({est["basis"]})'
+    )
+    print(
+        f'  estimated index size: {_fmt_bytes(est["opensearch_bytes"])}, '
+        f'about {est["vectors"]:.0f} vectors'
+    )
+    print(f'  basis: measured figures in {config["preview"]["source_document"]}, not a promise')
+    if preview['partial']:
+        print(
+            f'  PARTIAL ({preview["stop_reason"]}): stopped early, so every figure above is a '
+            'lower bound'
+        )
 
 
 def progress_line(run: dict[str, Any]) -> str:
@@ -229,7 +298,10 @@ def _watch(client: httpx.Client, base: str, run: dict[str, Any], interval: float
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.preview and (args.status or args.cancel):
+        parser.error('--preview needs a source (--folder, --manifest, --s3 or --source-id)')
     bind_script_project(args.project)
     base = f'{args.api_base.rstrip("/")}/projects/{args.project}'
     with httpx.Client() as client:
@@ -242,6 +314,12 @@ def main(argv: list[str] | None = None) -> int:
                 run = _call(client, 'GET', f'{base}/ingest/bulk/{args.status}')
                 print(progress_line(run))
                 return EXIT_CODES.get(run['status'], 0)
+            if args.preview:
+                preview = _call(
+                    client, 'POST', f'{base}/ingest/bulk/preview', json=_start_body(args)
+                )
+                print_preview(preview, _call(client, 'GET', f'{base}/ingest/bulk/config'))
+                return 0
             run = _call(client, 'POST', f'{base}/ingest/bulk', json=_start_body(args))
             verb = 'resumed' if run['resumed'] else 'started'
             print(f'{verb} run {run["run_id"]} on {run["source"]["kind"]} {run["source"]["path"]}')

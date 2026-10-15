@@ -12,6 +12,7 @@
   } from '$lib/ingest/bulkIngestController.svelte';
   import { formatDuration } from '$lib/format/duration';
   import { headlineRate, progressPercent, stageRows } from '$lib/ingest/bulkIngestFormat';
+  import BulkPreviewResult from './BulkPreviewResult.svelte';
   import type { BulkIngestStatus } from '$lib/types_bulkIngest';
 
   interface Props {
@@ -116,6 +117,16 @@
         >
           {controller.busy && !controller.live ? 'Starting…' : 'Start bulk ingest'}
         </button>
+        <button
+          class="btn btn-sm"
+          type="button"
+          data-testid="bulk-preview-button"
+          title="Count the files and estimate time and index size; nothing is ingested"
+          disabled={!controller.previewing && !controller.canPreview}
+          onclick={() => void controller.runPreview()}
+        >
+          {controller.previewing ? 'Scanning… (click to cancel)' : 'Preview'}
+        </button>
       </div>
       <details class="text-xs text-zinc-400">
         <summary class="cursor-pointer">Advanced</summary>
@@ -156,6 +167,15 @@
         </div>
       </details>
     </form>
+
+    {#if controller.previewError}
+      <p class="text-xs text-red-300" data-testid="bulk-preview-error">
+        {controller.previewError}
+      </p>
+    {/if}
+    {#if controller.preview}
+      <BulkPreviewResult preview={controller.preview} config={config.preview} />
+    {/if}
 
     {#if controller.actionError}
       <p class="text-xs text-red-300" data-testid="bulk-action-error">

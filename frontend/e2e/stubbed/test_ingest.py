@@ -39,6 +39,23 @@ BULK_CONFIG = {
     "default_concurrency": 8,
     "max_batch_size": 64,
     "max_concurrency": 32,
+    "preview": {
+        "max_files": 200000, "max_seconds": 60.0, "header_sample": 300,
+        "gpu_decode": True, "gpu_min_megapixels": 3.0,
+        "rates": [
+            {"route": "cpu_small", "images_per_s": 29.0, "measured_on": "COCO frames (0.3 MP), CPU decode",
+             "source_section": "Decode once and the GPU decode (#217)"},
+            {"route": "cpu_large", "images_per_s": 27.0, "measured_on": "Commons photos (12 to 24 MP), CPU decode",
+             "source_section": "Decode once and the GPU decode (#217)"},
+            {"route": "gpu_large", "images_per_s": 35.0, "measured_on": "Commons photos (12 to 24 MP), GPU decode",
+             "source_section": "Decode once and the GPU decode (#217)"},
+        ],
+        "embeddings_per_image": {"value": 7.4, "unit": "embeddings per image", "measured_on": "COCO, policy all",
+                                 "source_section": "v0.5.0 baseline (set A, public COCO, 2,000 images)"},
+        "opensearch_bytes_per_image": {"value": 65298, "unit": "bytes per image", "measured_on": "COCO, policy all",
+                                       "source_section": "Storage per image and per vector"},
+        "source_document": "docs/PERFORMANCE.md",
+    },
 }
 
 

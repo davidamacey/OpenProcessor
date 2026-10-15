@@ -2460,6 +2460,9 @@
             "title": "Max Concurrency",
             "type": "integer"
           },
+          "preview": {
+            "$ref": "#/components/schemas/BulkPreviewConfig"
+          },
           "source_roots": {
             "items": {
               "type": "string"
@@ -2474,7 +2477,8 @@
           "default_batch_size",
           "default_concurrency",
           "max_batch_size",
-          "max_concurrency"
+          "max_concurrency",
+          "preview"
         ],
         "title": "BulkIngestConfig",
         "type": "object"
@@ -2908,6 +2912,252 @@
           "concurrency"
         ],
         "title": "BulkOptionsWire",
+        "type": "object"
+      },
+      "BulkPreview": {
+        "properties": {
+          "by_extension": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PreviewExtensionWire"
+            },
+            "title": "By Extension",
+            "type": "object"
+          },
+          "estimate": {
+            "$ref": "#/components/schemas/PreviewEstimateWire"
+          },
+          "extensions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Extensions",
+            "type": "array"
+          },
+          "files": {
+            "title": "Files",
+            "type": "integer"
+          },
+          "gpu_decode": {
+            "title": "Gpu Decode",
+            "type": "boolean"
+          },
+          "kind": {
+            "enum": [
+              "folder",
+              "manifest",
+              "s3"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "megapixels": {
+            "$ref": "#/components/schemas/PreviewMegapixelsWire"
+          },
+          "missing": {
+            "title": "Missing",
+            "type": "integer"
+          },
+          "outside_roots": {
+            "title": "Outside Roots",
+            "type": "integer"
+          },
+          "partial": {
+            "title": "Partial",
+            "type": "boolean"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "stop_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "file_cap",
+                  "time_cap",
+                  "cancelled"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Reason"
+          },
+          "symlinks_skipped": {
+            "title": "Symlinks Skipped",
+            "type": "integer"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          },
+          "total_bytes": {
+            "title": "Total Bytes",
+            "type": "integer"
+          },
+          "unreadable_dirs": {
+            "title": "Unreadable Dirs",
+            "type": "integer"
+          },
+          "unreadable_files": {
+            "title": "Unreadable Files",
+            "type": "integer"
+          },
+          "unreadable_samples": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unreadable Samples",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project",
+          "kind",
+          "target",
+          "extensions",
+          "files",
+          "total_bytes",
+          "by_extension",
+          "megapixels",
+          "estimate",
+          "partial",
+          "unreadable_dirs",
+          "unreadable_samples",
+          "symlinks_skipped",
+          "missing",
+          "outside_roots",
+          "unreadable_files",
+          "gpu_decode"
+        ],
+        "title": "BulkPreview",
+        "type": "object"
+      },
+      "BulkPreviewConfig": {
+        "description": "The bounds of a preview and the measured figures its estimate uses, all from\n``docs/PERFORMANCE.md`` (the section is named per figure).",
+        "properties": {
+          "embeddings_per_image": {
+            "$ref": "#/components/schemas/PreviewMeasuredWire"
+          },
+          "gpu_decode": {
+            "title": "Gpu Decode",
+            "type": "boolean"
+          },
+          "gpu_min_megapixels": {
+            "title": "Gpu Min Megapixels",
+            "type": "number"
+          },
+          "header_sample": {
+            "title": "Header Sample",
+            "type": "integer"
+          },
+          "max_files": {
+            "title": "Max Files",
+            "type": "integer"
+          },
+          "max_seconds": {
+            "title": "Max Seconds",
+            "type": "number"
+          },
+          "opensearch_bytes_per_image": {
+            "$ref": "#/components/schemas/PreviewMeasuredWire"
+          },
+          "rates": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewRateWire"
+            },
+            "title": "Rates",
+            "type": "array"
+          },
+          "source_document": {
+            "title": "Source Document",
+            "type": "string"
+          }
+        },
+        "required": [
+          "max_files",
+          "max_seconds",
+          "header_sample",
+          "gpu_decode",
+          "gpu_min_megapixels",
+          "rates",
+          "embeddings_per_image",
+          "opensearch_bytes_per_image",
+          "source_document"
+        ],
+        "title": "BulkPreviewConfig",
+        "type": "object"
+      },
+      "BulkPreviewRequest": {
+        "additionalProperties": false,
+        "description": "Exactly one of ``folder``, ``manifest``, ``s3`` and ``source_id``, as for a start.\nNothing is ingested and nothing is written.",
+        "properties": {
+          "extensions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extensions"
+          },
+          "folder": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder"
+          },
+          "manifest": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manifest"
+          },
+          "s3": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/S3Location"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          }
+        },
+        "title": "BulkPreviewRequest",
         "type": "object"
       },
       "BulkSourceWire": {
@@ -15480,6 +15730,164 @@
           }
         },
         "title": "PresetsResponse",
+        "type": "object"
+      },
+      "PreviewEstimateWire": {
+        "properties": {
+          "basis": {
+            "enum": [
+              "megapixel_sample",
+              "rate_range"
+            ],
+            "title": "Basis",
+            "type": "string"
+          },
+          "duration_s_max": {
+            "title": "Duration S Max",
+            "type": "number"
+          },
+          "duration_s_min": {
+            "title": "Duration S Min",
+            "type": "number"
+          },
+          "opensearch_bytes": {
+            "title": "Opensearch Bytes",
+            "type": "integer"
+          },
+          "vectors": {
+            "title": "Vectors",
+            "type": "number"
+          }
+        },
+        "required": [
+          "basis",
+          "duration_s_min",
+          "duration_s_max",
+          "vectors",
+          "opensearch_bytes"
+        ],
+        "title": "PreviewEstimateWire",
+        "type": "object"
+      },
+      "PreviewExtensionWire": {
+        "properties": {
+          "bytes": {
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "files": {
+            "title": "Files",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "files",
+          "bytes"
+        ],
+        "title": "PreviewExtensionWire",
+        "type": "object"
+      },
+      "PreviewMeasuredWire": {
+        "properties": {
+          "measured_on": {
+            "title": "Measured On",
+            "type": "string"
+          },
+          "source_section": {
+            "title": "Source Section",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "value",
+          "unit",
+          "source_section",
+          "measured_on"
+        ],
+        "title": "PreviewMeasuredWire",
+        "type": "object"
+      },
+      "PreviewMegapixelsWire": {
+        "properties": {
+          "gate_megapixels": {
+            "title": "Gate Megapixels",
+            "type": "number"
+          },
+          "histogram": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Histogram",
+            "type": "object"
+          },
+          "sampled": {
+            "title": "Sampled",
+            "type": "integer"
+          },
+          "share_at_or_above_gate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share At Or Above Gate"
+          },
+          "unreadable": {
+            "title": "Unreadable",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sampled",
+          "unreadable",
+          "histogram",
+          "gate_megapixels"
+        ],
+        "title": "PreviewMegapixelsWire",
+        "type": "object"
+      },
+      "PreviewRateWire": {
+        "properties": {
+          "images_per_s": {
+            "title": "Images Per S",
+            "type": "number"
+          },
+          "measured_on": {
+            "title": "Measured On",
+            "type": "string"
+          },
+          "route": {
+            "enum": [
+              "cpu_small",
+              "cpu_large",
+              "gpu_large"
+            ],
+            "title": "Route",
+            "type": "string"
+          },
+          "source_section": {
+            "title": "Source Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "route",
+          "images_per_s",
+          "source_section",
+          "measured_on"
+        ],
+        "title": "PreviewRateWire",
         "type": "object"
       },
       "ProbeRunRequest": {
@@ -37681,6 +38089,59 @@
           }
         },
         "summary": "Bulk Ingest Config",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/ingest/bulk/preview": {
+      "post": {
+        "description": "Count the files, bytes and extensions of a source, sample image sizes, and estimate\nduration and index footprint from measured figures (``GET /ingest/bulk/config``).\nCapped by file count and seconds (``partial: true`` then); a client disconnect stops\nthe walk.",
+        "operationId": "preview_bulk_ingest_curation_projects__project__ingest_bulk_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Bulk Ingest",
         "tags": [
           "Curation"
         ]

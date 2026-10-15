@@ -99,23 +99,28 @@ Rules in `monitoring/alerts/triton-alerts.yml`, evaluated by Prometheus and show
 
 ### Grafana unified alerting
 
-Rules in `monitoring/grafana-alerting.yml`, evaluated by Grafana. The shipped contact
-points are webhooks to `http://localhost:9999/...` (the Grafana container itself), so
-nothing receives them until you set real ones (below).
+Rules in `monitoring/grafana-alerting.yml`, evaluated by Grafana and filed under the
+`OpenProcessor Alerts` folder. **Nobody is notified until you configure a contact point.**
+The two shipped contact points are named `unconfigured-default` and
+`unconfigured-critical`: they post to `http://localhost:9999/...` (the Grafana container
+itself, where nothing listens), so a firing alert shows in Grafana and its delivery fails
+with a logged error. Replace the receivers (below).
 
 **Alert Groups:**
 
 | Group | Alerts |
 |-------|--------|
-| API Service Health | Error rate, slow response time |
-| Triton Inference Server | Server down, high latency, high queue, model not ready (never fires, see below) |
-| GPU Resources | High utilization, memory pressure, temperature (never fires, see below) |
+| API Service Health | Error rate (5xx share of `http_request_duration_seconds_count`), slow response time |
+| Triton Inference Server | Server down, high latency, high queue |
+| GPU Resources | High utilization, memory pressure, temperature (DCGM, `DCGM_FI_DEV_GPU_TEMP`) |
 | System Resources | CPU, memory, load average |
-| OpenSearch Health | Cluster status |
 
-Triton does not export `nv_model_ready_state` or `nv_gpu_temperature`, so the Grafana rules
-**Triton Model Not Ready** and **High GPU Temperature** can never fire. Use `GET /models/`
-for model readiness and `DCGM_FI_DEV_GPU_TEMP` for temperature.
+There is no rule for per-model readiness or OpenSearch cluster status: Triton does not
+export `nv_model_ready_state` and no OpenSearch exporter ships in this stack, so a rule on
+either could never fire. Use `GET /models/` for readiness and `GET /health` or the
+`op_opensearch_*` gauges for the datastore. A rule or dashboard panel may only read a series
+listed as exported in `tests/test_monitoring_metrics.py`; that test also covers the Grafana
+rules, so a rule on a series nothing exports fails the offline suite.
 
 ### Alert Thresholds
 
@@ -134,7 +139,9 @@ for model readiness and `DCGM_FI_DEV_GPU_TEMP` for temperature.
 
 ### Configuring Notifications
 
-Edit `monitoring/grafana-alerting.yml` to configure notification channels:
+Edit the receivers of the two contact points in `monitoring/grafana-alerting.yml` (the
+file is provisioned read-only, so the Grafana UI cannot change them), then restart Grafana.
+A real webhook needs only a new `url`. Slack and email, replacing the webhook receiver:
 
 ```yaml
 # Slack notifications
@@ -144,21 +151,25 @@ Edit `monitoring/grafana-alerting.yml` to configure notification channels:
     url: "${SLACK_WEBHOOK_URL}"
     recipient: "#alerts"
 
-# Email notifications
+# Email notifications (also needs GF_SMTP_* set on the Grafana container)
 - uid: email-alerts
   type: email
   settings:
     addresses: "ops@example.com"
 ```
 
-Then add environment variables to docker-compose.yml:
+`${SLACK_WEBHOOK_URL}` is read from the Grafana container's environment; the shipped
+`docker-compose.yml` does not set it, so add it in a `docker-compose.override.yml`:
 
 ```yaml
-grafana:
-  environment:
-    - SLACK_WEBHOOK_URL=https://hooks.slack.com/services/xxx
-    - ALERT_WEBHOOK_URL=https://your-webhook.example.com/alerts
+services:
+  grafana:
+    environment:
+      - SLACK_WEBHOOK_URL=https://hooks.slack.com/services/xxx
 ```
+
+Once a receiver can deliver, rename its contact point (and the two names in `policies:`)
+away from `unconfigured-`.
 
 ### Viewing Active Alerts
 

@@ -246,6 +246,19 @@ def _alert_exprs(path: Path) -> list[str]:
     return exprs
 
 
+def _grafana_alert_exprs(path: Path) -> list[tuple[str, str]]:
+    """``(rule title, expr)`` of every query of every Grafana-provisioned rule (the
+    queries sit under ``data[].model.expr``, not at the rule's top level)."""
+    data = yaml.safe_load(path.read_text())
+    return [
+        (rule['title'], query['model']['expr'])
+        for group in data.get('groups', [])
+        for rule in group.get('rules', [])
+        for query in rule.get('data', [])
+        if query.get('model', {}).get('expr')
+    ]
+
+
 def test_fixture_is_nonempty_and_disjoint_from_promql_keywords() -> None:
     assert REAL_METRIC_NAMES
     assert not (REAL_METRIC_NAMES & _PROMQL_KEYWORDS)
@@ -313,3 +326,46 @@ def test_every_dashboard_is_provisionable_and_linked() -> None:
         assert data['panels'], path.name
         assert 'openprocessor' in data.get('tags', []), path.name
         assert any(link.get('type') == 'dashboards' for link in data.get('links', [])), path.name
+
+
+GRAFANA_ALERTING_PATH = REPO_ROOT / 'monitoring' / 'grafana-alerting.yml'
+
+
+def test_grafana_alert_rules_query_only_real_metrics() -> None:
+    """The Grafana rules were never checked: Triton Model Not Ready, High GPU
+    Temperature, the error-rate rule (``http_requests_total``) and the OpenSearch rule
+    (``opensearch_cluster_status``) all read series nothing exports, so none could fire."""
+    rules = _grafana_alert_exprs(GRAFANA_ALERTING_PATH)
+    assert rules
+    unknown = {
+        f'{title}: {expr.strip()}': bad
+        for title, expr in rules
+        if (bad := _metric_names_in_expr(expr) - REAL_METRIC_NAMES)
+    }
+    assert not unknown, f'Grafana rule(s) query metric(s) nothing exports: {unknown}'
+
+
+def test_the_gpu_temperature_rule_reads_dcgm() -> None:
+    rules = dict(_grafana_alert_exprs(GRAFANA_ALERTING_PATH))
+    assert 'DCGM_FI_DEV_GPU_TEMP' in rules['High GPU Temperature']
+    assert 'Triton Model Not Ready' not in rules
+
+
+def test_the_grafana_folder_is_named_for_this_product() -> None:
+    data = yaml.safe_load(GRAFANA_ALERTING_PATH.read_text())
+    assert {g['folder'] for g in data['groups']} == {'OpenProcessor Alerts'}
+
+
+def test_a_contact_point_that_cannot_deliver_says_so_in_its_name() -> None:
+    """The shipped receivers post to a localhost address nothing listens on, so nobody is
+    notified until the operator replaces them; the name must not suggest otherwise."""
+    data = yaml.safe_load(GRAFANA_ALERTING_PATH.read_text())
+    points = {p['name']: p for p in data['contactPoints']}
+    for name, point in points.items():
+        for receiver in point['receivers']:
+            url = receiver.get('settings', {}).get('url', '')
+            if 'localhost' in url or '127.0.0.1' in url:
+                assert name.startswith('unconfigured-'), name
+    policy = data['policies'][0]
+    routed = {policy['receiver'], *(r['receiver'] for r in policy['routes'])}
+    assert routed <= set(points)

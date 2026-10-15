@@ -11,6 +11,8 @@ import type {
   BulkIngestList,
   BulkIngestRequest,
   BulkIngestRun,
+  BulkPreview,
+  BulkPreviewRequest,
 } from '$lib/types_bulkIngest';
 
 export function getBulkIngestConfig(signal?: AbortSignal): Promise<BulkIngestConfig> {
@@ -25,6 +27,19 @@ export function startBulkIngest(
 ): Promise<BulkIngestRun> {
   return apiFetch<BulkIngestRun>(
     `${scoped()}/ingest/bulk`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** `POST /ingest/bulk/preview`: counts, sizes and an estimate for a source, no ingestion.
+ *  Aborting the request stops the server-side walk. */
+export function previewBulkIngest(
+  body: BulkPreviewRequest,
+  signal?: AbortSignal,
+): Promise<BulkPreview> {
+  return apiFetch<BulkPreview>(
+    `${scoped()}/ingest/bulk/preview`,
     { method: 'POST', body: JSON.stringify(body) },
     signal,
   );
