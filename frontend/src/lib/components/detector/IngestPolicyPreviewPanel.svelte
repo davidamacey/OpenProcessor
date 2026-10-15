@@ -31,7 +31,15 @@
       {editor.previewError}
     </p>
   {:else if p}
-    <p class="text-sm text-zinc-200" data-testid="policy-preview-summary">
+    {#if editor.previewStale}
+      <p class="text-xs text-amber-300" data-testid="policy-preview-stale">
+        Recomputing for the edited policy; the figures below are for the previous one.
+      </p>
+    {/if}
+    <p
+      class="text-sm text-zinc-200 {editor.previewStale ? 'opacity-40' : ''}"
+      data-testid="policy-preview-summary"
+    >
       {summary}
     </p>
     <p class="text-xs text-zinc-400" data-testid="policy-preview-labeled">

@@ -35,6 +35,7 @@ const PREVIEW = {
 
 let requests: { method: string; url: string; body: unknown }[];
 let putResponse: () => Response;
+let previewGate: Promise<void> | null;
 let target: HTMLDivElement;
 let instance: ReturnType<typeof mount> | null = null;
 
@@ -42,6 +43,7 @@ const q = (id: string) => document.querySelector<HTMLElement>(`[data-testid="${i
 
 beforeEach(() => {
   requests = [];
+  previewGate = null;
   putResponse = () => json({ ...POLICY, revision: 5, unknown_names: [] });
   vi.stubGlobal(
     'fetch',
@@ -53,7 +55,10 @@ beforeEach(() => {
         url: u,
         body: init.body ? JSON.parse(String(init.body)) : undefined,
       });
-      if (u.endsWith('/ingest/policy/preview')) return json(PREVIEW);
+      if (u.endsWith('/ingest/policy/preview')) {
+        if (previewGate) await previewGate;
+        return json(PREVIEW);
+      }
       if (u.endsWith('/ingest/policy') && method === 'PUT') return putResponse();
       if (u.endsWith('/ingest/policy')) return json(POLICY);
       if (u.endsWith('/ingest/config')) {
@@ -123,6 +128,26 @@ describe('ingest policy page', () => {
     expect(requests.filter((r) => r.url.endsWith('/ingest/policy/preview'))).toHaveLength(
       1,
     );
+  });
+
+  it('marks the shown preview stale while a newer one is computed', async () => {
+    await mountPage();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(q('policy-preview-summary')).not.toBeNull();
+    });
+    expect(q('policy-preview-stale')).toBeNull();
+    let release!: () => void;
+    previewGate = new Promise<void>((r) => (release = r));
+    await chooseMode('none');
+    flushSync();
+    expect(q('policy-preview-stale')).not.toBeNull();
+    previewGate = null;
+    release();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(q('policy-preview-stale')).toBeNull();
+    });
   });
 
   it('saves only after the confirm, with expected_revision', async () => {

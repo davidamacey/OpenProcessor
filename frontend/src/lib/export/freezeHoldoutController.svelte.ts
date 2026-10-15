@@ -25,7 +25,7 @@ export function createFreezeHoldoutController(loadAll: () => Promise<void>) {
   async function submitFreeze(): Promise<void> {
     const ok = window.confirm(
       `Freeze ${freezePercent}% of validated crops as the test set? This is ` +
-        'one-shot per dataset version (Plan §B4) — re-running requires ?force=true ' +
+        'one-shot per dataset version — re-running requires ?force=true ' +
         'and is recorded in the manifest. Selection is deterministic ' +
         '(SHA1 of each crop id, per class) — no seed to pick.',
     );
