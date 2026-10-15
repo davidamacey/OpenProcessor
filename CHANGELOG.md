@@ -465,6 +465,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Fixed
 
+- `PUT /ingest/policy` dropped the `clustering` block: saving `clustering.automatic: false` answered 200 with `true` and stored `true`, so detection-only clustering could never be switched off.
 - The auto-label VLM stage no longer reports `completed` with `predicted: 0` when it could label
   nothing: it adds `failed` and `unreadable` counts, and fails the job when every selected crop
   failed (an unreachable VLM, or source images the worker cannot read).
