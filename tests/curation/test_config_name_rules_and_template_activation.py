@@ -14,7 +14,7 @@ from curation._fake_config_opensearch import FakeConfigOpenSearch
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 @pytest.fixture(autouse=True)

@@ -36,7 +36,7 @@ ITEMS = base_curation_config().items_index
 CLUSTER = 10005
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 def _docs() -> dict[str, dict[str, Any]]:

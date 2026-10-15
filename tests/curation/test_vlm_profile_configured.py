@@ -50,7 +50,17 @@ def test_the_env_url_does_not_count_once_the_project_switched_the_vlm_off(
 ) -> None:
     monkeypatch.setenv('OP_VLM_URL', 'http://vlm:8000/v1')
     monkeypatch.setenv('OP_VLM_MODEL', 'served')
+    # the deployment's endpoint is something a project opts into
+    assert 'vlm_not_configured' in _codes(_validate(vlm_api))
+    on = vlm_api.client.post(
+        f'{SCOPED}/vlm/endpoints/env/activate',
+        json={'revision': None, 'expected_active': None},
+    )
+    assert on.status_code == 200, on.text
     assert 'vlm_not_configured' not in _codes(_validate(vlm_api))
-    off = vlm_api.client.post(f'{SCOPED}/vlm/endpoints/deactivate', json={'expected_active': None})
+    off = vlm_api.client.post(
+        f'{SCOPED}/vlm/endpoints/deactivate',
+        json={'expected_active': {'name': 'env', 'revision': None}},
+    )
     assert off.status_code == 200, off.text
     assert 'vlm_not_configured' in _codes(_validate(vlm_api))

@@ -9,7 +9,7 @@ import pytest
 from curation.activation.constants import PREFIX, SETTINGS, pack_body, stripped_pack_body
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 def test_settings_pack_gate_matches_activate_route(app_client, monkeypatch):

@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 import scripts.curation.worker.state as worker_state
+from curation.vlm_opt_in import project_opts_in_to_env_vlm
 from scripts.curation.worker import runner as runner_mod
 from scripts.curation.worker.__main__ import parse_args
 
@@ -142,6 +143,7 @@ class TestSignalHandling:
 
         sentinel = tmp_path / 'pause.sentinel'  # absent
         monkeypatch.setenv('OP_VLM_URL', 'http://vlm.local:8000')
+        project_opts_in_to_env_vlm(monkeypatch)
         args = parse_args(
             [
                 '--opensearch=http://os.local:9200',

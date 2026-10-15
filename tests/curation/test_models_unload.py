@@ -30,7 +30,7 @@ from src.services.training.promote_errors import ModelNotPromotedError
 from src.services.training.triton_promote import UnloadResult
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 @pytest.fixture
@@ -340,7 +340,7 @@ def test_unload_refuses_the_segmenter(app_client, monkeypatch: pytest.MonkeyPatc
     mock.assert_not_awaited()
 
 
-@pytest.mark.usefixtures('vlm_env')
+@pytest.mark.usefixtures('vlm_env_active')
 @pytest.mark.parametrize('vlm_name', ['env', 'test-vlm'])
 def test_unload_refuses_the_vlm(app_client, monkeypatch: pytest.MonkeyPatch, vlm_name: str) -> None:
     # An endpoint is refused by its registry name AND by its model id.
@@ -350,7 +350,7 @@ def test_unload_refuses_the_vlm(app_client, monkeypatch: pytest.MonkeyPatch, vlm
     mock.assert_not_awaited()
 
 
-@pytest.mark.usefixtures('vlm_env')
+@pytest.mark.usefixtures('vlm_env_active')
 def test_external_service_model_names_includes_segmenter_and_vlm(
     monkeypatch: pytest.MonkeyPatch, reference_region_profile: None
 ) -> None:

@@ -37,7 +37,7 @@ ITEMS = base_curation_config().items_index
 # =============================================================================
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 def _finish_current(job_dir: Path, status: str = 'completed') -> None:  # noqa: F811

@@ -12,7 +12,7 @@ from curation.activation.constants import PREFIX, pack_body
 from src.services.curation.auto_label_run import run_auto_label
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 def test_start_job_args_are_accepted_by_pipeline_fn():

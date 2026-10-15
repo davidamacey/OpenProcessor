@@ -9,7 +9,7 @@ from curation.activation.constants import PREFIX, SETTINGS, pack_body, stripped_
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 def test_settings_two_axes_failure_does_not_commit_first_axis(app_client, monkeypatch):

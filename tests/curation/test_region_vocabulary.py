@@ -67,7 +67,7 @@ def test_regions_vocabulary_has_no_active_profile_by_default(client: TestClient)
     assert body['rejection_reasons'] == []
 
 
-@pytest.mark.usefixtures('vlm_env')
+@pytest.mark.usefixtures('vlm_env_active')
 def test_regions_vocabulary_reflects_the_active_profile(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -87,7 +87,7 @@ def test_regions_vocabulary_reflects_the_active_profile(
         assert by_id['sam3']['filterable'] is True
         assert 'paddleocr_det_trt' not in by_id
         # The verifier is the resolved model of the registered VLM endpoint
-        # (here the env built-in from vlm_env), never a hardcoded default.
+        # (here the env built-in from vlm_env_active), never a hardcoded default.
         assert by_id['test-vlm']['role'] == 'verifier'
         assert by_id['test-vlm']['filterable'] is False
     finally:

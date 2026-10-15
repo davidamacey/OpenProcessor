@@ -14,7 +14,7 @@ from curation._fake_config_opensearch import FakeConfigOpenSearch
 from curation.activation.constants import PREFIX, RP, SETTINGS, pack_body, stripped_pack_body
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 def _active_ref(c: Any, kind: str) -> dict[str, Any]:

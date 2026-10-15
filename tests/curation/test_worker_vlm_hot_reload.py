@@ -162,7 +162,7 @@ async def test_a_cold_worker_runs_the_activated_endpoint_at_its_pinned_revision(
 
 
 @pytest.mark.asyncio
-async def test_a_project_that_never_activated_one_runs_the_env_builtin(
+async def test_a_project_that_never_activated_one_calls_no_vlm_even_with_an_env_builtin(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv('OP_VLM_URL', 'http://vlm:8000/v1')
@@ -171,6 +171,23 @@ async def test_a_project_that_never_activated_one_runs_the_env_builtin(
     _go_cold()
     worker = Worker(client)
     runtime = await worker.cycle(_record('alpha'))
+    assert runtime is not None
+    assert runtime.vlm is None
+    assert worker.built == []
+
+
+@pytest.mark.asyncio
+async def test_a_project_that_activated_the_env_builtin_runs_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv('OP_VLM_URL', 'http://vlm:8000/v1')
+    monkeypatch.setenv('OP_VLM_MODEL', 'local-vlm')
+    client = FakeConfigOpenSearch()
+    alpha = _record('alpha')
+    await _activate_in(client, alpha, 'env', None, None)
+    _go_cold()
+    worker = Worker(client)
+    runtime = await worker.cycle(alpha)
     assert runtime is not None
     assert runtime.vlm is not None
     assert worker.built[0][0].startswith('env@')

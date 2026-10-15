@@ -242,12 +242,25 @@ def _ephemeral_worker_metrics_port(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def vlm_env(monkeypatch: pytest.MonkeyPatch) -> str:
-    """An ``env`` built-in VLM endpoint (``OP_VLM_URL``), i.e. a project
-    that never activated one. Returns the base URL."""
+    """The deployment has an ``env`` built-in VLM endpoint (``OP_VLM_URL``).
+    A project calls it only once it activates it (see ``vlm_env_active``).
+    Returns the base URL."""
     url = 'http://vlm.invalid:8000/v1'
     monkeypatch.setenv('OP_VLM_URL', url)
     monkeypatch.setenv('OP_VLM_MODEL', 'test-vlm')
     return url
+
+
+@pytest.fixture
+def vlm_env_active(vlm_env: str, monkeypatch: pytest.MonkeyPatch) -> str:
+    """``vlm_env`` plus every project snapshot without an activation doc
+    reading as having activated the ``env`` endpoint: a test double for a
+    project that opted in, for tests whose fake storage cannot hold the
+    activation doc."""
+    from curation.vlm_opt_in import project_opts_in_to_env_vlm
+
+    project_opts_in_to_env_vlm(monkeypatch)
+    return vlm_env
 
 
 collect_ignore = [

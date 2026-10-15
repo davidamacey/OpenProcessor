@@ -31,7 +31,7 @@ ITEMS = base_curation_config().items_index
 F = get_region_fields()
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 def _item(crop_id: str, **extra: Any) -> dict[str, Any]:

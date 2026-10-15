@@ -345,6 +345,9 @@ async def create_project(
             resources.upload_root.mkdir(parents=True, exist_ok=True)
             resources.project_state_dir.mkdir(parents=True, exist_ok=True)
             await ensure_indexes(client)
+            from src.services.projects.vlm_default import pin_new_project_vlm_off
+
+            await pin_new_project_vlm_off(client)
         if clone_settings_from:
             clone_conflicts = await clone_settings(
                 client,

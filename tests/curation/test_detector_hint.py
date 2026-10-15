@@ -215,7 +215,7 @@ class _RecordingLabeler:
         return []
 
 
-@pytest.mark.usefixtures('vlm_env')
+@pytest.mark.usefixtures('vlm_env_active')
 @pytest.mark.asyncio
 @pytest.mark.parametrize(('pct', 'hinted'), [(0, False), (50, True), (95, False)])
 async def test_label_batch_attaches_the_stored_detector_name_only_when_enabled(

@@ -10,7 +10,7 @@ from curation.activation.constants import PREFIX, RP, pack_body, stripped_pack_b
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 def test_rollback_transient_error_aborts_before_commit(app_client, monkeypatch):
