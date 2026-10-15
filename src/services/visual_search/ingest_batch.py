@@ -7,7 +7,7 @@ from typing import Any
 
 from src.clients.opensearch.client import OpenSearchClient
 from src.services.inference import InferenceService
-from src.services.visual_search.batch_documents import build_documents
+from src.services.visual_search.batch_documents import build_documents, face_landmark_mismatch
 from src.services.visual_search.batch_inference import infer_batch
 
 
@@ -372,6 +372,9 @@ class IngestBatchMixin:
                     'indexed': 0,
                     'message': 'No faces detected',
                 }
+
+            if reason := face_landmark_mismatch(result):
+                return {'status': 'error', 'image_id': image_id, 'error': reason}
 
             num_faces = result['num_faces']
             faces = [

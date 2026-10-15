@@ -7,6 +7,7 @@ import numpy as np
 
 from src.clients.opensearch.client import OpenSearchClient
 from src.services.inference import InferenceService
+from src.services.visual_search.batch_documents import landmarks_for
 
 
 logger = logging.getLogger(__name__)
@@ -241,6 +242,12 @@ class IngestSingleMixin:
         for i in range(min(len(face_embeddings), len(face_boxes))):
             if len(face_embeddings[i]) > 0:
                 face_id = f'{image_id}_face_{i}'
+                if face_landmarks and i >= len(face_landmarks):
+                    logger.warning(
+                        f'Not indexing {face_id}: face_landmarks_length_mismatch: '
+                        f'{len(face_landmarks)} landmark entries for face {i}'
+                    )
+                    continue
                 try:
                     await self.opensearch.index_face(
                         face_id=face_id,
@@ -250,11 +257,7 @@ class IngestSingleMixin:
                         box=face_boxes[i].tolist()
                         if hasattr(face_boxes[i], 'tolist')
                         else list(face_boxes[i]),
-                        landmarks=face_landmarks[i].tolist()
-                        if hasattr(face_landmarks[i], 'tolist')
-                        else list(face_landmarks[i])
-                        if len(face_landmarks) > i
-                        else [],
+                        landmarks=landmarks_for(face_landmarks, i),
                         confidence=float(face_scores[i]) if len(face_scores) > i else 0.0,
                         quality=float(face_quality[i]) if len(face_quality) > i else 0.0,
                     )
