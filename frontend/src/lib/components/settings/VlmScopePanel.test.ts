@@ -20,6 +20,7 @@ const SERVED: VlmPolicy = {
   per_cluster: 5,
   max_crops_per_day: 0,
   sample_frac: 1,
+  region_verify: 'vlm',
   revision: 3,
 };
 
@@ -141,5 +142,24 @@ describe('VlmScopePanel', () => {
   it('says a VLM label stays a suggestion whatever the scope', async () => {
     await render();
     expect(target.textContent).toContain('suggestion until a human validates it');
+  });
+
+  it('checks the served region verification mode and saves a switch to none', async () => {
+    const { putPolicy } = await render();
+    expect((q('[data-testid="region-verify-vlm"]') as HTMLInputElement).checked).toBe(true);
+    // The region verification mode applies whatever the VLM scope is.
+    (q('[data-testid="vlm-scope-off"]') as HTMLInputElement).click();
+    flushSync();
+    (q('[data-testid="region-verify-none"]') as HTMLInputElement).click();
+    flushSync();
+    (q('[data-testid="vlm-scope-save"]') as HTMLButtonElement).click();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(q('[data-testid="vlm-scope-saved"]')).not.toBeNull();
+    });
+    expect(putPolicy.mock.calls[0]![0]).toMatchObject({
+      region_verify: 'none',
+      expected_revision: 3,
+    });
   });
 });

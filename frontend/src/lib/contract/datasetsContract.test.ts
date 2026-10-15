@@ -384,6 +384,7 @@ const CASES: [string, string[]][] = [
       class_source: true,
       classifier_conf_lt: true,
       cluster_id: true,
+      cluster_subid: true,
       conf_max: true,
       conf_min: true,
       dataset_split: true,

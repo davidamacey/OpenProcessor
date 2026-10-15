@@ -9,10 +9,16 @@
   import { VlmPolicyEditor } from '$lib/labelConfirmation/vlmPolicyController.svelte';
   import {
     knobsFor,
+    REGION_VERIFY_COPY,
     VLM_POLICY_EFFECT,
     VLM_SCOPE_COPY,
   } from '$lib/labelConfirmation/vlmScopeCopy';
-  import { VLM_SCOPES, type VlmScope } from '$lib/types_labelConfirmation';
+  import {
+    REGION_VERIFY_MODES,
+    VLM_SCOPES,
+    type RegionVerifyMode,
+    type VlmScope,
+  } from '$lib/types_labelConfirmation';
 
   interface Props {
     editor?: VlmPolicyEditor;
@@ -30,6 +36,13 @@
 
   function pick(next: VlmScope): void {
     editor.draft.scope = next;
+    editor.touched();
+  }
+
+  const regionVerify = $derived<RegionVerifyMode>(editor.draft.region_verify ?? 'vlm');
+
+  function pickRegionVerify(next: RegionVerifyMode): void {
+    editor.draft.region_verify = next;
     editor.touched();
   }
 
@@ -157,6 +170,32 @@
         {/if}
       </div>
     {/if}
+
+    <fieldset class="flex flex-col gap-2" data-testid="region-verify">
+      <legend class="mb-1 text-sm font-medium text-zinc-200">Region verification</legend>
+      {#each REGION_VERIFY_MODES as m (m)}
+        <label
+          class="flex cursor-pointer items-start gap-2 rounded border px-3 py-2 text-sm {regionVerify ===
+          m
+            ? 'border-blue-500/60 bg-blue-500/10'
+            : 'border-zinc-800 hover:border-zinc-700'}"
+        >
+          <input
+            type="radio"
+            name="region-verify"
+            class="mt-1"
+            value={m}
+            checked={regionVerify === m}
+            onchange={() => pickRegionVerify(m)}
+            data-testid="region-verify-{m}"
+          />
+          <span class="flex min-w-0 flex-col gap-0.5">
+            <span class="font-medium text-zinc-100">{REGION_VERIFY_COPY[m].label}</span>
+            <span class="text-xs text-zinc-400">{REGION_VERIFY_COPY[m].blurb}</span>
+          </span>
+        </label>
+      {/each}
+    </fieldset>
 
     <p class="text-xs text-zinc-500">{VLM_POLICY_EFFECT}</p>
 

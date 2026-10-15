@@ -15,7 +15,13 @@ import type { RegionProfileBody } from './types_profiles';
 
 /** The call ids `PackTestRequest.call` enumerates. */
 export type PackTestCall =
-  'combined' | 'classify' | 'open_classify' | 'region_verify' | 'region_visible';
+  | 'combined'
+  | 'classify'
+  | 'open_classify'
+  | 'region_verify'
+  | 'region_visible'
+  | 'assist'
+  | 'attributes';
 
 /** Where the VLM answer comes from, shared by both test requests. Unset
  *  keys take the server's default (the active endpoint). */
