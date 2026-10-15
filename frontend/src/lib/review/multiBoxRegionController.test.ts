@@ -129,6 +129,42 @@ describe('createMultiBoxRegionController', () => {
     expect(c.boxes[0].state).toBe('accepted');
   });
 
+  it('a decision pressed while a write is in flight is applied to the box it was pressed on, not dropped', async () => {
+    const boxC = makeSlotBox({
+      boxId: 'b2',
+      state: 'proposed',
+      parent: { cx: 0.6, cy: 0.6, w: 0.1, h: 0.1 },
+    });
+    let release!: (v: ReturnType<typeof written>) => void;
+    vi.mocked(patchRegionBox)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            release = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(
+        written(
+          cropWithBoxes('c1', [
+            { ...boxA, state: 'rejected' },
+            { ...boxC, state: 'accepted' },
+          ]),
+        ),
+      );
+    const c = createMultiBoxRegionController(() => widgetTagSlot);
+    c.seedFrom(cropWithBoxes('c1', [boxA, boxC]));
+    const first = c.rejectSelected('c1');
+    c.next();
+    const second = c.acceptSelected('c1');
+    await Promise.resolve();
+    release(written(cropWithBoxes('c1', [{ ...boxA, state: 'rejected' }, boxC])));
+    await Promise.all([first, second]);
+    expect(vi.mocked(patchRegionBox).mock.calls.map((a) => [a[1], a[2].state])).toEqual([
+      ['b1', 'rejected'],
+      ['b2', 'accepted'],
+    ]);
+  });
+
   it('rejectSelected on a not-yet-saved local box flips state without a PATCH', async () => {
     const c = createMultiBoxRegionController(() => widgetTagSlot);
     c.seedFrom(cropWithBoxes('c1', [boxA]));
