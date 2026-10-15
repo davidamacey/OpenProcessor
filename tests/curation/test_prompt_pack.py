@@ -48,6 +48,11 @@ def test_prompt_pack_is_frozen_dataclass() -> None:
         'synonyms',
         'proposal_denylist',
         'detector_hint_min_confidence_pct',
+        'attributes',
+        'assist_system',
+        'assist_user_template',
+        'attributes_system',
+        'attributes_user_template',
     }
 
 

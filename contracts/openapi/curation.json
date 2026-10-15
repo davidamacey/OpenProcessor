@@ -4845,6 +4845,7 @@
               "vlm_unreachable",
               "no_box_to_verify",
               "no_class_names",
+              "pack_declares_no_attributes",
               "too_many_crops",
               "too_few_items",
               "too_many_crop_ids",
@@ -15184,7 +15185,9 @@
               "classify",
               "open_classify",
               "region_verify",
-              "region_visible"
+              "region_visible",
+              "assist",
+              "attributes"
             ],
             "title": "Call",
             "type": "string"
@@ -15309,7 +15312,9 @@
               "classify",
               "open_classify",
               "region_verify",
-              "region_visible"
+              "region_visible",
+              "assist",
+              "attributes"
             ],
             "title": "Call",
             "type": "string"
@@ -17324,6 +17329,69 @@
       "PromptPackBody": {
         "description": "Every :class:`~src.services.labeling.vlm_prompts.PromptPack` field\nexcept ``name``. Defaults to ``''``/``{}`` so a partial draft can be\nposted to ``/validate`` -- ``pack_validation.validate_pack`` reports\nmissing content as issues, not a pydantic 422.",
         "properties": {
+          "assist_system": {
+            "default": "",
+            "title": "Assist System",
+            "type": "string"
+          },
+          "assist_user_template": {
+            "default": "",
+            "title": "Assist User Template",
+            "type": "string"
+          },
+          "attributes": {
+            "items": {
+              "description": "One pack-declared attribute (the schema of ``PromptPackBody.attributes``\nentries). ``values`` is an optional closed vocabulary (lowercase).",
+              "properties": {
+                "applies_to": {
+                  "default": "item",
+                  "enum": [
+                    "item",
+                    "box"
+                  ],
+                  "title": "Applies To",
+                  "type": "string"
+                },
+                "description": {
+                  "default": "",
+                  "maxLength": 300,
+                  "title": "Description",
+                  "type": "string"
+                },
+                "key": {
+                  "pattern": "^[a-z][a-z0-9_]{0,31}$",
+                  "title": "Key",
+                  "type": "string"
+                },
+                "values": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 50,
+                  "title": "Values",
+                  "type": "array"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "title": "AttributeSpecBody",
+              "type": "object"
+            },
+            "maxItems": 16,
+            "title": "Attributes",
+            "type": "array"
+          },
+          "attributes_system": {
+            "default": "",
+            "title": "Attributes System",
+            "type": "string"
+          },
+          "attributes_user_template": {
+            "default": "",
+            "title": "Attributes User Template",
+            "type": "string"
+          },
           "class_descriptions": {
             "additionalProperties": {
               "type": "string"
@@ -17722,7 +17790,8 @@
               "text",
               "map",
               "list",
-              "int"
+              "int",
+              "attributes"
             ],
             "title": "Kind",
             "type": "string"
@@ -27964,6 +28033,8 @@
               "pack_description_class_unknown",
               "pack_example_values",
               "pack_multi_region_keys_missing",
+              "pack_attribute_invalid",
+              "pack_attribute_duplicate",
               "profile_name_invalid",
               "profile_name_reserved",
               "profile_field_unknown",
@@ -42290,7 +42361,7 @@
     },
     "/curation/projects/{project}/prompt_packs/test": {
       "post": {
-        "description": "Run one call of a pack over stored crops and preview each item's write.\n\n``parse_ok: false`` (the reply did not parse) is a 200 result, not an\nerror. 422 ``unknown_pack`` / ``unknown_revision`` / ``pack_invalid``\n(+ report) / ``unknown_vlm`` / ``vlm_external_not_acknowledged`` /\n``too_many_crops`` / ``too_many_crop_ids`` / ``no_box_to_verify`` /\n``no_class_names`` (classify with an empty registry and no ``class_names``); 404 ``crop_not_found``;\n409 ``vlm_not_configured``; 429 ``test_busy``; 502 ``vlm_transport_error``.\nWrites nothing.",
+        "description": "Run one call of a pack over stored crops and preview each item's write.\n\n``parse_ok: false`` (the reply did not parse) is a 200 result, not an\nerror. 422 ``unknown_pack`` / ``unknown_revision`` / ``pack_invalid``\n(+ report) / ``unknown_vlm`` / ``vlm_external_not_acknowledged`` /\n``too_many_crops`` / ``too_many_crop_ids`` / ``no_box_to_verify`` /\n``no_class_names`` (classify with an empty registry and no ``class_names``) /\n``pack_declares_no_attributes`` (assist / attributes with no matching attribute declared); 404 ``crop_not_found``;\n409 ``vlm_not_configured``; 429 ``test_busy``; 502 ``vlm_transport_error``.\nWrites nothing.",
         "operationId": "test_prompt_pack_curation_projects__project__prompt_packs_test_post",
         "parameters": [
           {

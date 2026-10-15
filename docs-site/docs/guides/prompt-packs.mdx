@@ -13,7 +13,7 @@ code. Packs are editable per project, versioned, and can be rolled back.
 
 ## Concepts
 
-- **Fields.** A pack has 14 text fields and two maps. Fields come in
+- **Fields.** A pack has 14 text fields, four more for attributes and two maps. Fields come in
   system and user pairs, one pair per VLM call:
 
   | Call | Fields |
@@ -44,10 +44,37 @@ code. Packs are editable per project, versioned, and can be rolled back.
   validated classes seeded). The detector is COCO-trained and the oracle is COCO ground truth,
   so the gain may be optimistic for other domains. A registry-prior variant was measured, gave
   no gain and was removed.
-- **Placeholders.** Only three fields are formatted with `str.format`:
+- **Attributes.** A pack may declare up to 16 `attributes`: free-form facts a
+  VLM reports about an item or a box, such as a car's make or a wheel's rim
+  material. Each entry has a `key` (`^[a-z][a-z0-9_]{0,31}$`, unique), a
+  `description` (up to 300 characters), an optional closed vocabulary `values`
+  (up to 50 lowercase values of up to 48 characters) and `applies_to` (`item`,
+  the default, or `box`). Two more calls report them, and their fields stay
+  empty while the pack declares no attributes:
+
+  | Call | Fields | Used for |
+  |---|---|---|
+  | `assist` | `assist_system`, `assist_user_template` | Classify and report item attributes in one call |
+  | `attributes` | `attributes_system`, `attributes_user_template` | Attributes alone: items without classify, and box sub-crops |
+
+  `assist_user_template` takes `{class_list}` and `{attribute_block}` and may
+  use `{n_images}`; `attributes_user_template` takes `{attribute_block}` and may
+  use `{n_images}`. The server renders `{attribute_block}` from `attributes`
+  (key, description, allowed values), so the author does not format it. A
+  reply entry carries `attributes` as `{key: {"value": ..., "confidence":
+  "high"|"medium"|"low"}}`. The parser drops keys the pack did not declare,
+  normalises values (trimmed, lowercase, 48 characters), drops a value outside a
+  closed vocabulary and counts it, and reads a missing confidence as `low`. An
+  attribute is a suggestion: it never changes a class or a box. Item attributes
+  need all four prompt fields filled, box attributes the `attributes_*` pair.
+  `examples/prompt_packs/vehicle_wheel.json` declares `make`, `model` and
+  `body_style` for the car and `rim_material` for the wheel box. Preview them on up
+  to 64 crops with `POST .../prompt_packs/test` and `call: "assist"` or
+  `"attributes"`.
+- **Placeholders.** Only a few fields are formatted with `str.format`:
   `class_user_template` and `open_class_user_template` accept
   `class_names_csv`; `combined_user_template` accepts `class_block` and
-  `region_block`. Each formatted field must use all of its placeholders and
+  `region_block`; the two attribute templates are described above. Each formatted field must use all of its required placeholders and
   no others. A literal brace in those fields is written doubled. Every other
   field is sent verbatim, and a placeholder in it is an error.
 - **Reply keys.** The worker parses the model's JSON reply. Each call has
@@ -117,12 +144,14 @@ named region profile (default: the active one). The response is
 | `pack_name_invalid`, `pack_name_reserved` | error | Name must match `^[a-z0-9][a-z0-9_.-]{1,63}$`; `off`, `none` and `default` are reserved |
 | `name_conflict` | error | Name already used |
 | `pack_field_missing`, `pack_field_empty` | error | A text field is absent or blank; `proposal_denylist` is not a list of strings, or holds a blank pattern; `detector_hint_min_confidence_pct` is not an integer |
-| `pack_field_too_long` | error | A field over 20000 characters, a map or `proposal_denylist` over 500 entries, or a denylist pattern over 200 characters |
+| `pack_field_too_long` | error | A field over 20000 characters, more than 16 `attributes`, a map or `proposal_denylist` over 500 entries, or a denylist pattern over 200 characters |
 | `pack_field_out_of_range` | error | `detector_hint_min_confidence_pct` is outside 0 to 100 |
 | `pack_template_format_error` | error | The field cannot be formatted (for example a single brace) |
 | `pack_placeholder_missing`, `pack_placeholder_unknown` | error | A formatted field lacks a required placeholder or uses another |
 | `pack_placeholder_in_verbatim_field` | error | A placeholder in a field that is not formatted |
 | `pack_reply_key_missing` | error | The text does not name a reply key the call needs |
+| `pack_attribute_invalid` | error | An `attributes` entry has a bad `key`, `description`, `values` or `applies_to`, or `attributes` is not a list |
+| `pack_attribute_duplicate` | error | Two attributes share a key |
 | `pack_multi_region_keys_missing` | warning on validate, error on activation | The profile allows more than one box per item and the combined prompts do not name the per-box keys |
 | `pack_asks_text_profile_text_free` | warning | The pack asks for region text and the profile reads none |
 | `pack_no_text_profile_reads_text` | warning | The profile reads text through the VLM and the pack never asks |

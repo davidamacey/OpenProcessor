@@ -501,7 +501,7 @@ enqueue.
 
 | | `POST /prompt_packs/test` | `POST /region_profiles/test` |
 |---|---|---|
-| Subject | `pack_name`, `pack_revision` or `draft`; `call` (`combined`, `classify`, `open_classify`, `region_verify`, `region_visible`); `crop_ids[]`; `use_region_box`; `class_names`; `profile_name` | one `crop_id`; `profile_name`, `profile_revision` or `draft`; `segmenter_text_prompt`; `verify`; `prompt_pack_name`, `prompt_pack_revision` or `prompt_pack_draft` |
+| Subject | `pack_name`, `pack_revision` or `draft`; `call` (`combined`, `classify`, `open_classify`, `region_verify`, `region_visible`, `assist`, `attributes`); `crop_ids[]`; `use_region_box`; `class_names`; `profile_name` | one `crop_id`; `profile_name`, `profile_revision` or `draft`; `segmenter_text_prompt`; `verify`; `prompt_pack_name`, `prompt_pack_revision` or `prompt_pack_draft` |
 | VLM source | `vlm_name`, `vlm_revision` or `vlm_draft`; `acknowledge_external` | the same |
 | Response | `call`, `pack`, `vlm`, `prompt` (exact request text), `raw_reply`, `reasoning`, `latency_ms`, `parse_ok`, `parse_error`, `results[]` (`crop_id`, `box_id`, `parsed`, `preview_item`, `skipped`), `validation` | `crop_id`, `profile`, `item_eligible`, `legs[]` (`leg`: `detector` or `segmenter`; `status`; `candidates[]`), optional `verify`, `preview_basis`, `preview_item`, `validation` |
 
@@ -517,7 +517,7 @@ profile that reads text previews boxes only.
 Limits: a crop id from another project is `404 crop_not_found`; at most 4
 concurrent segmenter calls and 2 concurrent VLM runs (`429 test_busy`); a 60
 second bound (`504 test_timeout`); a crop cap (`422 too_many_crops`,
-`422 too_many_crop_ids`); `422 no_box_to_verify`; `422 pack_invalid` and
+`422 too_many_crop_ids`); `422 no_box_to_verify`; `422 pack_declares_no_attributes` (`assist` or `attributes` on a pack with no item attributes); `422 pack_invalid` and
 `422 profile_invalid` carry `report`; upstream failures are
 `502 vlm_transport_error`, `502 segmenter_error` and `502 detector_error`.
 

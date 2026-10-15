@@ -37,13 +37,23 @@ if TYPE_CHECKING:
     from src.services.labeling.vlm_labeler import VlmLabeler
 
 
-ProbeCall = Literal['combined', 'classify', 'open_classify', 'region_verify', 'region_visible']
+ProbeCall = Literal[
+    'combined',
+    'classify',
+    'open_classify',
+    'region_verify',
+    'region_visible',
+    'assist',
+    'attributes',
+]
 PROBE_CALLS: tuple[str, ...] = (
     'combined',
     'classify',
     'open_classify',
     'region_verify',
     'region_visible',
+    'assist',
+    'attributes',
 )
 
 BBoxNorm = tuple[float, float, float, float]
@@ -145,6 +155,15 @@ async def _run_call(
         else:
             predictions = await labeler.label_or_propose_batch(item_crops, class_names or [])
         entries = [ParsedEntry(c.crop_id, p) for c, p in zip(crops, predictions, strict=True)]
+        failed = [e.crop_id for e in entries if e.value.failure is not None]
+        return entries, (f'no usable answer for: {", ".join(failed)}' if failed else None)
+    if call in ('assist', 'attributes'):
+        item_crops = [ItemCrop(img_id=c.crop_id, jpeg_bytes=c.jpeg) for c in crops]
+        if call == 'assist':
+            answers: list[Any] = await labeler.assist_batch(item_crops, class_names or [])
+        else:
+            answers = await labeler.attributes_batch(item_crops)
+        entries = [ParsedEntry(c.crop_id, a) for c, a in zip(crops, answers, strict=True)]
         failed = [e.crop_id for e in entries if e.value.failure is not None]
         return entries, (f'no usable answer for: {", ".join(failed)}' if failed else None)
     region_crops = [RegionCrop(crop_id=c.crop_id, jpeg_bytes=c.jpeg) for c in crops]

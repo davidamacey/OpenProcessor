@@ -131,6 +131,7 @@ ErrorCode = Literal[
     'vlm_unreachable',
     'no_box_to_verify',
     'no_class_names',
+    'pack_declares_no_attributes',
     'too_many_crops',
     'too_few_items',
     'too_many_crop_ids',
@@ -177,6 +178,8 @@ ValidationCode = Literal[
     'pack_description_class_unknown',
     'pack_example_values',
     'pack_multi_region_keys_missing',
+    'pack_attribute_invalid',
+    'pack_attribute_duplicate',
     # region-profile validation (any_domain_plan.md §4.3/§7.1)
     'profile_name_invalid',
     'profile_name_reserved',

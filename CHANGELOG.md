@@ -13,6 +13,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Added
 
+- Prompt packs declare `attributes` (up to 16 free-form facts about an item or a box, with an optional closed vocabulary) and carry the `assist` (classify plus item attributes) and `attributes` (attributes alone) prompts. The labeler gains `assist_batch` and `attributes_batch`, and `POST /prompt_packs/test` accepts `call: assist` and `attributes`. Pack validation checks the attribute list and the prompts it needs (`pack_attribute_invalid`, `pack_attribute_duplicate`). The `vehicle_wheel` example pack declares `make`, `model`, `body_style` and a wheel `rim_material`.
 - `GET /crops?cluster_subid=` and the item filter's `cluster_subid` select one AHC sub-cluster on the server, so a sub-cluster larger than a page can be listed whole.
 - Detection-only ingest (#279): ingest policy `embedding.mode: "none"` stores boxes with no vector
   of any kind (the whole-frame vector included) and `clustering.automatic: false` keeps ingest and

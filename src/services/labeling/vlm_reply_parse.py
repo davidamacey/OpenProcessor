@@ -252,6 +252,25 @@ def _class_reply_entries(raw: str) -> list[Any] | None:
     return None
 
 
+def entries_by_index(parsed: list[Any], n: int) -> dict[int, dict[str, Any]]:
+    """The reply entries keyed by their 1-based ``img`` index. Entries with no
+    index at all are taken positionally when their count matches ``n``."""
+    entries = [e for e in parsed if isinstance(e, dict)]
+    by_index: dict[int, dict[str, Any]] = {}
+    if entries and all(e.get('img') is None for e in entries) and len(entries) == n:
+        by_index = dict(enumerate(entries, start=1))
+    for indexed in entries:
+        raw_idx = indexed.get('img')
+        if raw_idx is None:
+            continue
+        try:
+            idx = int(raw_idx)
+        except (TypeError, ValueError):
+            continue
+        by_index[idx] = indexed
+    return by_index
+
+
 def _request_failed(chunk: list[ItemCrop]) -> list[VlmClassPrediction]:
     return [
         VlmClassPrediction(

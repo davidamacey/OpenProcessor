@@ -84,6 +84,26 @@ class CombinedCrop(BaseModel):
     )
 
 
+class AttributeValue(BaseModel):
+    """One pack-declared attribute answer: a normalised value and the VLM's
+    confidence in it. A suggestion, never a label."""
+
+    value: str
+    confidence: ConfidenceLevel = 'low'
+
+
+class VlmAttributesPrediction(BaseModel):
+    """The ``attributes`` call's answer for one crop. ``failure`` is set as in
+    :class:`VlmClassPrediction` when there is no usable entry."""
+
+    img_id: str
+    attributes: dict[str, AttributeValue] = Field(default_factory=dict)
+    invalid_values: int = Field(
+        default=0, description='Values dropped for falling outside a closed vocabulary.'
+    )
+    failure: ClassReplyFailure | None = None
+
+
 class VlmClassPrediction(BaseModel):
     """Prediction for a single item crop."""
 
@@ -109,6 +129,13 @@ class VlmClassPrediction(BaseModel):
     )
     make: str = Field(default='', description='Free-text attribute 1 when visible, else "".')
     model: str = Field(default='', description='Free-text attribute 2 when visible, else "".')
+    attributes: dict[str, AttributeValue] = Field(
+        default_factory=dict,
+        description='Pack-declared attributes the assist call reported (declared keys only).',
+    )
+    invalid_attribute_values: int = Field(
+        default=0, description='Attribute values dropped for falling outside a closed vocabulary.'
+    )
     region_visible: bool | None = Field(
         default=None,
         description='Whether the VLM sees a sub-region-of-interest on this crop; None when '

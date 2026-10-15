@@ -12,9 +12,16 @@ import string
 from dataclasses import fields as dc_fields
 from typing import TYPE_CHECKING, Any
 
+from src.services.config_store.pack_attribute_validation import check_attributes
 from src.services.labeling.detector_hint import MAX_DETECTOR_HINT_PCT
 from src.services.labeling.region_overlay import REPLY_TEXT_KEY
-from src.services.labeling.vlm_prompts import FORMATTED_PLACEHOLDERS, REPLY_KEY_CONTRACT, PromptPack
+from src.services.labeling.vlm_prompts import (
+    ATTRIBUTE_CALLS,
+    FORMATTED_PLACEHOLDERS,
+    OPTIONAL_PLACEHOLDERS,
+    REPLY_KEY_CONTRACT,
+    PromptPack,
+)
 
 
 if TYPE_CHECKING:
@@ -40,6 +47,11 @@ _STRING_FIELDS = tuple(
         'synonyms',
         'proposal_denylist',
         'detector_hint_min_confidence_pct',
+        'attributes',
+        'assist_system',
+        'assist_user_template',
+        'attributes_system',
+        'attributes_user_template',
     )
 )
 _MAP_FIELDS = ('class_descriptions', 'synonyms')
@@ -205,6 +217,7 @@ def _check_required_fields(body: dict[str, Any]) -> list[ValidationIssue]:
                 )
             )
     issues.extend(_check_denylist(body.get('proposal_denylist')))
+    issues.extend(check_attributes(body))
     issues.extend(
         _check_bounded_int(body, 'detector_hint_min_confidence_pct', MAX_DETECTOR_HINT_PCT)
     )
@@ -268,6 +281,7 @@ def _check_placeholders(body: dict[str, Any]) -> list[ValidationIssue]:
             )
             for missing in sorted(set(required) - present)
         )
+        allowed = {*required, *OPTIONAL_PLACEHOLDERS.get(field_name, ())}
         issues.extend(
             _issue(
                 'pack_placeholder_unknown',
@@ -276,7 +290,7 @@ def _check_placeholders(body: dict[str, Any]) -> list[ValidationIssue]:
                 field=field_name,
                 detail={'placeholder': extra},
             )
-            for extra in sorted(present - set(required))
+            for extra in sorted(present - allowed)
         )
     # Verbatim-field warning: a placeholder name literally appearing in a
     # field that is never .format()-ed.
@@ -310,8 +324,10 @@ def _key_present(text: str, key: str) -> bool:
 
 def _check_reply_keys(body: dict[str, Any]) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
-    for contract in REPLY_KEY_CONTRACT.values():
+    for call_id, contract in REPLY_KEY_CONTRACT.items():
         texts = [str(body.get(f) or '') for f in contract['fields']]
+        if call_id in ATTRIBUTE_CALLS and not any(t.strip() for t in texts):
+            continue
         combined = '\n'.join(texts)
         issues.extend(
             _issue(

@@ -1,5 +1,5 @@
 {
-  "_comment": "Example text-free prompt pack for the vehicle_wheel region profile: classify a car crop and verify a wheel (tire plus rim) on it. Derived from the built-in generic_region_v1 pack; no prompt asks the VLM to read text. Loadable via OP_PROMPT_PACK_PATH=examples/prompt_packs/vehicle_wheel.json (or list it in OP_PROMPT_PACK_PATHS).",
+  "_comment": "Example text-free prompt pack for the vehicle_wheel region profile: classify a car crop and verify a wheel (tire plus rim) on it. Derived from the built-in generic_region_v1 pack; no prompt asks the VLM to read text. Loadable via OP_PROMPT_PACK_PATH=examples/prompt_packs/vehicle_wheel.json (or list it in OP_PROMPT_PACK_PATHS). It also declares attributes (make, model and body_style per car, rim_material per wheel box) and the assist and attributes prompts that report them; they are suggestions stored apart from the class and the boxes.",
   "name": "vehicle_wheel",
   "class_system": "You are a photo-classification assistant. Classify each numbered car crop into one of the provided class names. If unsure, choose the most likely AND set confidence='low'. Return strict JSON only — no prose, no markdown.",
   "class_user_template": "Class names: {class_names_csv}\nLabel each numbered crop. Respond as a JSON array:\n[{{\"img\": 1, \"class\": \"<name>\", \"confidence\": \"high|medium|low\"}}, ...]",
@@ -50,5 +50,46 @@
     "shadow*",
     "*_shadow"
   ],
-  "detector_hint_min_confidence_pct": 0
+  "detector_hint_min_confidence_pct": 0,
+  "attributes": [
+    {
+      "key": "make",
+      "description": "the car manufacturer, when the badge or the shape makes it clear",
+      "values": [],
+      "applies_to": "item"
+    },
+    {
+      "key": "model",
+      "description": "the car model, only when it is clearly recognisable",
+      "values": [],
+      "applies_to": "item"
+    },
+    {
+      "key": "body_style",
+      "description": "the body style of the car",
+      "values": [
+        "sedan",
+        "hatchback",
+        "suv",
+        "coupe",
+        "wagon",
+        "van",
+        "pickup"
+      ],
+      "applies_to": "item"
+    },
+    {
+      "key": "rim_material",
+      "description": "the material of the wheel rim",
+      "values": [
+        "alloy",
+        "steel"
+      ],
+      "applies_to": "box"
+    }
+  ],
+  "assist_system": "You are a photo-classification assistant. For each numbered car crop, classify it into one of the provided class names and report the requested attributes. Report an attribute only when the crop shows it; never guess. Return strict JSON only — no prose, no markdown.",
+  "assist_user_template": "Class names: {class_list}\nAttributes to report (only those visible):\n{attribute_block}\nAnswer for each of the {n_images} numbered crops as a JSON array:\n[{{\"img\": 1, \"class\": \"<name|__new__>\", \"confidence\": \"high|medium|low\", \"proposed_class\": \"<slug or empty>\", \"attributes\": {{\"<key>\": {{\"value\": \"<value>\", \"confidence\": \"high|medium|low\"}}}}}}, ...]",
+  "attributes_system": "You describe numbered car crops or wheel crops. Report only the requested attributes, only when the crop shows them; never guess. Return strict JSON only — no prose, no markdown.",
+  "attributes_user_template": "Attributes to report (only those visible):\n{attribute_block}\nAnswer for each of the {n_images} numbered crops as a JSON array:\n[{{\"img\": 1, \"attributes\": {{\"<key>\": {{\"value\": \"<value>\", \"confidence\": \"high|medium|low\"}}}}}}, ...]"
 }

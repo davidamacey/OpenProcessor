@@ -51,12 +51,19 @@ from src.services.config_store.packs import (
 from src.services.curation.class_registry_names import registry_class_names
 from src.services.detection.profile_registry import resolve_region_profile
 from src.services.labeling.detector_hint import MAX_DETECTOR_HINT_PCT
-from src.services.labeling.vlm_prompts import FORMATTED_PLACEHOLDERS, REPLY_KEY_CONTRACT
+from src.services.labeling.vlm_prompts import (
+    FORMATTED_PLACEHOLDERS,
+    OPTIONAL_PLACEHOLDERS,
+    REPLY_KEY_CONTRACT,
+)
 
 
 _PLACEHOLDER_HELP: dict[str, str] = {
     'class_names_csv': 'comma-separated class names from the registry',
     'class_block': "the classify instruction and numbered catalog, or 'no candidate'",
+    'attribute_block': 'the pack-declared attributes, one line each with its allowed values',
+    'class_list': 'comma-separated class names from the registry',
+    'n_images': 'how many numbered crops the call carries',
     'region_block': (
         'the proposed boxes (1..N), as a numbered-overlay description or numbered '
         "normalized coordinates, or 'no candidate'"
@@ -82,9 +89,15 @@ _FIELD_GROUP: dict[str, str] = {
     'synonyms': 'vocabulary',
     'proposal_denylist': 'vocabulary',
     'detector_hint_min_confidence_pct': 'open_classify',
+    'assist_system': 'assist',
+    'assist_user_template': 'assist',
+    'attributes_system': 'attributes',
+    'attributes_user_template': 'attributes',
+    'attributes': 'attributes',
 }
 
-_FIELD_KIND: dict[str, Literal['map', 'list', 'int']] = {
+_FIELD_KIND: dict[str, Literal['map', 'list', 'int', 'attributes']] = {
+    'attributes': 'attributes',
     'class_descriptions': 'map',
     'synonyms': 'map',
     'proposal_denylist': 'list',
@@ -107,6 +120,8 @@ _CALL_LABELS: dict[str, str] = {
     'region_verify': 'Verify region',
     'region_verify_batch': 'Verify region (batch)',
     'region_visible': 'Region visible pre-filter',
+    'assist': 'Classify + attributes',
+    'attributes': 'Attributes only',
 }
 
 _FIELD_USED_BY: dict[str, list[str]] = {
@@ -117,6 +132,8 @@ _FIELD_USED_BY: dict[str, list[str]] = {
     'region_verify': ['vlm_verify_regions'],
     'region_verify_batch': ['vlm_verify_region_batch'],
     'region_visible': ['vlm_region_visible_batch'],
+    'assist': ['assist_run'],
+    'attributes': ['assist_run'],
 }
 
 
@@ -175,7 +192,10 @@ async def get_prompt_pack_schema() -> PromptPackSchema:
                 kind=kind,
                 formatted=formatted,
                 required_placeholders=list(FORMATTED_PLACEHOLDERS.get(f, ())),
-                allowed_placeholders=list(FORMATTED_PLACEHOLDERS.get(f, ())),
+                allowed_placeholders=[
+                    *FORMATTED_PLACEHOLDERS.get(f, ()),
+                    *OPTIONAL_PLACEHOLDERS.get(f, ()),
+                ],
                 expected_reply_keys=list(contract['required']) if contract else [],
                 optional_reply_keys=list(contract['optional']) if contract else [],
                 used_by=_FIELD_USED_BY.get(call_id, []),
