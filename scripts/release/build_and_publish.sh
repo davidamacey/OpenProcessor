@@ -1,7 +1,7 @@
 #!/bin/bash
 # Local release script for OpenProcessor's published images.
 #
-# Owner decision (docs/design/openprocessor_internal/one_line_installer_plan.md
+# Owner decision (the installer design
 # §11.1 item 2): no CI image builds. This script, run by hand on this host
 # (or via `make release`), builds every published image with the Docker
 # build cache, gates on a Trivy CRITICAL scan, and -- only with --push --
@@ -15,8 +15,7 @@
 # It never touches release-manifest.txt: that is the installer's file list,
 # read by scripts/release/build_deploy_bundle.sh.
 #
-# Modeled on Cropwright's local multi-arch release script
-# (scripts/release.sh and scripts/release/*.sh in that repo), trimmed to
+# Modeled on Cropwright's local multi-arch release scripts, trimmed to
 # this project's single-arch (linux/amd64, GPU) image set.
 #
 # Usage:

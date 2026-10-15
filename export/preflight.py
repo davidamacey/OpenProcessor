@@ -1,6 +1,6 @@
 """Image self-check run once, right after pull, before any export step.
 
-Installer plan (docs/design/openprocessor_internal/one_line_installer_plan.md
+Installer plan (the installer design
 section 3.2): a stale ``:latest`` API image once shipped without
 ``perception_models`` importable. This script is invoked as
 

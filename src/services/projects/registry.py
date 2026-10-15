@@ -2,7 +2,7 @@
 counter, and an in-process snapshot refreshed on a cheap poll (one GET of
 the counter; a ``_search`` only when it changed).
 
-See ``docs/design/openprocessor_internal/projects_plan.md`` §4.
+See the project-isolation design §4.
 """
 
 from __future__ import annotations

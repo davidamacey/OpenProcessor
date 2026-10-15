@@ -1,5 +1,5 @@
 """The bound-project request context (see
-``docs/design/openprocessor_internal/projects_plan.md`` §3.3).
+the project-isolation design §3.3).
 
 A project is *always* bound while curation code runs -- there is no
 ``if project is None`` branch anywhere. Unbound access raises

@@ -1,6 +1,6 @@
 """Read-only OpenSearch shard/heap capacity check, served on
 ``GET /projects`` so Cropwright can show it before create (see
-docs/design/openprocessor_internal/projects_plan.md §2.3).
+the project-isolation design §2.3).
 
 P1 only serves this; P3 adds the create-time 409 enforcement. There is
 no fixed project-count cap (owner decision D4) -- the real limits are

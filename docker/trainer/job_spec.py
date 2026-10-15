@@ -71,7 +71,7 @@ class JobSpec:
     augmentation: dict[str, Any]
     mlflow_run_name: str
     submitted_at: str
-    # Project isolation (docs/design/openprocessor_internal/projects_plan.md
+    # Project isolation (the project-isolation design
     # §5.3). ``project`` names which project submitted the run;
     # ``project_export_root`` gates ``dataset_export_dir`` -- a job whose
     # export escapes its own project's export tree is refused rather than
@@ -166,8 +166,8 @@ class JobValidationError(ValueError):
 
 class ExportOutsideProjectError(JobValidationError):
     """``dataset_export_dir`` is not a subpath of the job's own
-    ``project_export_root`` (docs/design/openprocessor_internal/
-    projects_plan.md §5.3) -- refused rather than trained, since it would
+    ``project_export_root`` (the project-isolation design, §5.3)
+    -- refused rather than trained, since it would
     otherwise let one project's training run read another project's
     dataset."""
 

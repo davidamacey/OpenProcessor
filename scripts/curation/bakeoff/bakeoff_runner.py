@@ -383,7 +383,7 @@ def run_job(spec: dict[str, Any]) -> dict[str, Any]:
 
 def _pending_job_files(jobs_dir: Path) -> list[Path]:
     """``*.job.json`` in ``jobs_dir`` plus every project's own bake-off job
-    dir (docs/design/openprocessor_internal/projects_plan.md §5.3).
+    dir (the project-isolation design §5.3).
 
     The API writes every project's jobs, ``default`` included, to
     ``<state_dir>/projects/<slug>/bakeoff_jobs``

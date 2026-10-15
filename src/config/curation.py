@@ -243,7 +243,7 @@ class CurationConfig:
 
     # --- Project-scoped fields (see ``PROJECT_SCOPED_FIELDS`` in
     # ``src.config.curation_accessors`` and
-    # docs/design/openprocessor_internal/projects_plan.md §2.2/§3.3).
+    # the project-isolation design §2.2/§3.3).
     # No env var sets any project-scoped field: ``get_curation_config()``
     # resolves them from the bound project's persisted resources. The
     # defaults only shape an explicitly constructed ``CurationConfig``

@@ -1,7 +1,7 @@
 """Project registry: the ``op_projects`` index, its in-process snapshot,
 and startup bootstrap of the ``default`` project record.
 
-See ``docs/design/openprocessor_internal/projects_plan.md`` §2/§4.
+See the project-isolation design §2/§4.
 """
 
 from __future__ import annotations

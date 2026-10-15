@@ -1,5 +1,5 @@
 """P1 commit 1: bound-project context (see
-docs/design/openprocessor_internal/projects_plan.md §10 P1 test list)."""
+the project-isolation design §10 P1 test list)."""
 
 from __future__ import annotations
 
