@@ -16,6 +16,7 @@ from src.clients.triton_client import get_sync_triton_client
 from src.config import get_settings
 from src.config.settings import TritonModelConfig
 from src.utils.cache import clip_text_tokens, get_image_cache, get_text_cache
+from src.utils.face_response import face_landmark_mismatch
 from src.utils.image_processing import decode_image, validate_image
 from src.utils.retry import RetryExhaustedError
 
@@ -188,6 +189,16 @@ class InferenceService:
                 'orig_shape': (0, 0),
             }
 
+        if reason := face_landmark_mismatch(result):
+            return {
+                'status': 'error',
+                'error': reason,
+                'num_faces': 0,
+                'faces': [],
+                'embeddings': [],
+                'orig_shape': (0, 0),
+            }
+
         # FastFaceClient returns already-normalized boxes, landmarks, embeddings
         faces = []
         for i in range(result['num_faces']):
@@ -284,6 +295,20 @@ class InferenceService:
         detections = client.format_detections(yolo_result, model_name=TritonModelConfig.YOLO_MODEL)
 
         orig_h, orig_w = face_result.get('orig_shape', (0, 0))
+
+        if reason := face_landmark_mismatch(face_result):
+            return {
+                'status': 'error',
+                'error': reason,
+                'detections': [],
+                'num_detections': 0,
+                'num_faces': 0,
+                'faces': [],
+                'face_embeddings': [],
+                'image_embedding': None,
+                'embedding_norm': 0.0,
+                'orig_shape': (0, 0),
+            }
 
         # Format face detections (FastFaceClient returns already-normalized data)
         faces = []
