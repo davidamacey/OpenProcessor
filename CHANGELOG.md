@@ -465,6 +465,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Fixed
 
+- `POST /reprocess` with a filter target and `limit` / `sample` capped only the image scopes; the `region` and `vlm` scopes ran on every match. They now act on the capped, seeded selection, and the dry run counts it.
 - `PUT /ingest/policy` dropped the `clustering` block: saving `clustering.automatic: false` answered 200 with `true` and stored `true`, so detection-only clustering could never be switched off.
 - The auto-label VLM stage no longer reports `completed` with `predicted: 0` when it could label
   nothing: it adds `failed` and `unreadable` counts, and fails the job when every selected crop
