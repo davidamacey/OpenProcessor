@@ -99,6 +99,30 @@ describe('createMultiBoxRegionController', () => {
     expect(c.selectedIndex).toBe(0);
   });
 
+  it("a re-seed of the same crop keeps the operator's selection (a slow write response must not undo a Tab)", () => {
+    const c = createMultiBoxRegionController(() => widgetTagSlot);
+    c.seedFrom(cropWithBoxes('c1', [boxA, boxB]));
+    c.next();
+    c.seedFrom(cropWithBoxes('c1', [boxA, boxB]));
+    expect(c.selectedIndex).toBe(1);
+  });
+
+  it('a re-seed of the same crop clamps the selection to the boxes that remain', () => {
+    const c = createMultiBoxRegionController(() => widgetTagSlot);
+    c.seedFrom(cropWithBoxes('c1', [boxA, boxB]));
+    c.next();
+    c.seedFrom(cropWithBoxes('c1', [boxA]));
+    expect(c.selectedIndex).toBe(0);
+  });
+
+  it('seeding a different crop selects its first box', () => {
+    const c = createMultiBoxRegionController(() => widgetTagSlot);
+    c.seedFrom(cropWithBoxes('c1', [boxA, boxB]));
+    c.next();
+    c.seedFrom(cropWithBoxes('c2', [boxA, boxB]));
+    expect(c.selectedIndex).toBe(0);
+  });
+
   it('addBox appends and selects the new box, marking the set dirty', () => {
     const c = createMultiBoxRegionController(() => widgetTagSlot);
     c.seedFrom(cropWithBoxes('c1', [boxA]));

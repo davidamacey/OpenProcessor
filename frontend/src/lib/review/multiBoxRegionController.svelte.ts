@@ -133,8 +133,16 @@ export function createMultiBoxRegionController(
     boxes = editable;
     original = editable;
     revision = data?.boxSet?.revision ?? null;
-    selectedIndex = editable.length > 0 ? 0 : null;
-    if ((crop?.id ?? null) !== seededCropId) vectorRefresh = null;
+    // The page re-seeds with the response of this controller's own write,
+    // which can land after the operator has already pressed Tab: the same
+    // crop keeps the selection (clamped), only a new crop starts at box 1.
+    const sameCrop = (crop?.id ?? null) === seededCropId;
+    if (sameCrop && selectedIndex != null && editable.length > 0) {
+      selectedIndex = Math.min(selectedIndex, editable.length - 1);
+    } else {
+      selectedIndex = editable.length > 0 ? 0 : null;
+    }
+    if (!sameCrop) vectorRefresh = null;
     seededCropId = crop?.id ?? null;
   }
 

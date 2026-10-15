@@ -107,6 +107,10 @@ def test_move_then_undo_sends_single_crop_label_undo(stub, page, app_url):
     ):
         page.keyboard.press("Enter")
 
+    # The undo entry is recorded after the response is processed, and the
+    # success toast follows it: pressing Z before that finds nothing to undo.
+    expect(page.get_by_text("Moved 1 crop").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+
     assert len(move_calls) == 1, f"expected exactly one move request: {move_calls}"
     _, _, move_body = move_calls[0]
     assert move_body.get("cluster_id") == 42

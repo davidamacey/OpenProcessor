@@ -21,6 +21,23 @@ open):
     that at least one request was actually handled — a prefix/route
     mismatch fails the test instead of passing on an empty page.
 
+Stability rules (an intermittent `expect_response` timeout is a lost
+action or a race, never "CI is slow"; raising a timeout hides it):
+
+  * Run the suite as a slow runner would: `E2E_CPU_THROTTLE=4` slows every
+    page 4x (CDP `Emulation.setCPUThrottlingRate`), and `taskset -c 0` pins
+    the browser and pytest to one core. Run it with `E2E_APP_URL` set to a
+    preview you started, `-n 2`, and repeat; one pass proves little.
+  * Wait for the stub to have ANSWERED (`expect_handled`), not only for the
+    browser to have sent: handlers record bodies when they answer.
+  * Never mark "before/after" points by an index into `stub.handled`: a
+    request sent just before the mark is recorded after it. Listen to
+    `page.on("request")` from the action on.
+  * After a response, the app keeps working (re-seeding state from it). A
+    key pressed right after `expect_handled` can meet that, so a failure of
+    the form "second action hit the first action's target" is an app race
+    to fix in `src/`, as the per-box selection was.
+
 The app under test is a real production build: ``npm run build`` once
 per session, then ``vite preview`` serves the static output. The stubs
 intercept in the browser, so a static build is enough — no dev server,

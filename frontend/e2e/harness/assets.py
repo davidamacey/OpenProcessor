@@ -13,20 +13,24 @@ class AppAssets:
         self.errors: list[str] = []
 
 
+# Both are how Node reports `vite preview` closing an idle keep-alive socket.
+_RETRYABLE = ("ECONNRESET", "socket hang up")
+
+
 def fetch_app_asset(route: Any, attempts: int = 3) -> Any:
     """`route.fetch()` for one of the app's own files, retrying a connection
-    reset. `vite preview` closes idle keep-alive sockets; a request that
+    reset or hang up. `vite preview` closes idle keep-alive sockets; a request that
     reuses one in that instant fails with `read ECONNRESET`, which used to be
     aborted as a failed chunk and left the page without its first element.
-    Only a reset is retried (these are idempotent GETs); any other error, and
-    a reset that persists, propagates."""
+    Only those are retried (these are idempotent GETs); any other error, and
+    one that persists, propagates."""
     for attempt in range(attempts):
         try:
             # 3xx goes to the browser as-is, so a navigation lands on the
             # URL the server actually redirected to.
             return route.fetch(max_redirects=0)
         except Exception as exc:  # noqa: BLE001 — re-raised unless a retryable reset
-            if "ECONNRESET" not in str(exc) or attempt == attempts - 1:
+            if not any(k in str(exc) for k in _RETRYABLE) or attempt == attempts - 1:
                 raise
     raise AssertionError("unreachable")  # pragma: no cover
 

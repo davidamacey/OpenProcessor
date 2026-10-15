@@ -3,6 +3,7 @@ test, a dump of the console, requests, stub state and DOM."""
 
 from __future__ import annotations
 
+import os
 import re
 import time
 from pathlib import Path
@@ -103,6 +104,11 @@ def page(page: Any, request: Any) -> Any:
     DOM to `artifacts_local/e2e-failures/<test id>/`, so an intermittent
     failure explains itself instead of only reporting a timeout."""
     page.set_default_timeout(ACTION_TIMEOUT_MS)
+    rate = float(os.environ.get("E2E_CPU_THROTTLE", "1"))
+    if rate > 1:
+        # Stress knob: a slow CI runner on demand (4 = the page runs 4x slower).
+        cdp = page.context.new_cdp_session(page)
+        cdp.send("Emulation.setCPUThrottlingRate", {"rate": rate})
     log = _PageLog(page)
     yield page
     rep = getattr(request.node, "rep_call", None) or getattr(request.node, "rep_setup", None)
