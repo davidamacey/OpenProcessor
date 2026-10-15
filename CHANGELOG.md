@@ -465,6 +465,12 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Fixed
 
+- CI stability: the offline suite no longer builds its app-lifespan OpenSearch client against the in-cluster
+  hostname, which resolved slowly on the runner (10 to 15 s per lookup, several per startup) and made integration
+  test setup hit the 400 s timeout, doubling the suite's run time. Tests now default `OPENSEARCH_URL` to a refused
+  loopback port. The stubbed e2e harness gains a default 404 for `GET /vlm/endpoints/active`.
+
+- `PUT /ingest/policy` dropped the `clustering` block: saving `clustering.automatic: false` answered 200 with `true` and stored `true`, so detection-only clustering could never be switched off.
 - The auto-label VLM stage no longer reports `completed` with `predicted: 0` when it could label
   nothing: it adds `failed` and `unreadable` counts, and fails the job when every selected crop
   failed (an unreachable VLM, or source images the worker cannot read).
@@ -527,6 +533,15 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 - An auto-label job still queued after `queue_max_age_seconds` (one hour) fails with "auto_label
   worker not running" and its trigger is withdrawn; the status serves `queue_age_seconds` and
   `queue_max_age_seconds` (#236).
+- An unreachable VLM endpoint no longer leaves the VLM worker spinning with a full queue and nothing
+  reported. `POST /curation/projects/{project}/vlm/label_batch` answers `503 vlm_unreachable` when no crop
+  got an answer (nothing is written, no crop is marked failed); the worker releases its in-flight crops,
+  backs off (poll interval, doubling to 60 s; the same for an unreachable API) and resumes by itself when
+  the endpoint answers. The stall reason is logged and served in the worker's heartbeat, so the compose
+  healthcheck output reads `ok: ... stalled: VLM endpoint unreachable: ...` while the worker stays healthy.
+- The VLM worker skips a project that has no class to label as, so its crops are never claimed in flight
+  and no longer fill the queue and starve the other projects; it logs the change once per project and
+  picks the project up on the next poll after its first class.
 - An image that does not decode reports `not a decodable image` (or Pillow's own error for a damaged
   file) instead of `No module named 'pi_heif'` from the Ultralytics `Image.open` patch (#297).
 

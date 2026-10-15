@@ -311,14 +311,14 @@
   {#if !expanded}
     <button
       type="button"
-      class="btn-sm min-w-0 max-w-full {bar.isDefault
+      class="btn-sm min-w-0 max-w-full overflow-hidden {bar.isDefault
         ? 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'
         : 'border-blue-500/60 bg-blue-500/15 text-blue-100 hover:bg-blue-500/25'}"
       onclick={() => (expanded = true)}
       title="Sort / filter strategy"
     >
       <span class="text-zinc-500">sort:</span>
-      <span>{currentLabel}</span>
+      <span class="min-w-0 truncate">{currentLabel}</span>
       {#if pinnedFallbackLabel}
         <!-- S1 (visual audit 2026-09-24): merges with, never doubles up
              alongside, the plain "→ applied" mismatch chip below — a
@@ -334,7 +334,7 @@
         </span>
       {:else if appliedLabel}
         <span
-          class="text-zinc-500"
+          class="hidden min-w-0 truncate text-zinc-500 sm:inline"
           title="The backend applied this sort — a tab default, or a fallback from what was requested."
         >
           → {appliedLabel}

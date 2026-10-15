@@ -312,6 +312,9 @@ class Stub:
         # mount and /audit its report and queue. Default 404s keep the zero-
         # unhandled guarantee; test_label_confirmation.py overrides them.
         self.on("GET", r"/vlm/policy(\?|$)", (404, {"detail": "Not Found"}))
+        # Dashboard quick action reads the project's active VLM; a failed read
+        # keeps the button as before, so the default is a 404.
+        self.on("GET", r"/vlm/endpoints/active(\?|$)", (404, {"detail": "Not Found"}))
         self.on("GET", r"/audit/(report|queue)(\?|$)", (404, {"detail": "Not Found"}))
 
         page.route(f"**{api_prefix}/**", self._dispatch)

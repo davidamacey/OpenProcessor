@@ -55,16 +55,18 @@ def _heartbeat_path(name: str) -> Path:
     return HEARTBEAT_DIR / f'{name}.json'
 
 
-def write_heartbeat(name: str, tasks: Mapping[str, bool]) -> None:
+def write_heartbeat(name: str, tasks: Mapping[str, bool], stall: str | None = None) -> None:
     """Atomically write the heartbeat file for worker ``name``.
 
     ``tasks`` records per-sub-task liveness (e.g. producer/consumer/writer
     task ``not task.done()``); any ``False`` value fails the healthcheck
-    even though the file itself is fresh.
+    even though the file itself is fresh. ``stall`` is why a live worker is making
+    no progress (a dependency is down): the worker stays healthy, the reason is
+    served in the healthcheck output.
     """
     HEARTBEAT_DIR.mkdir(parents=True, exist_ok=True)
     now = time.time()
-    payload = {'ts': now, 'pid': os.getpid(), 'tasks': dict(tasks)}
+    payload = {'ts': now, 'pid': os.getpid(), 'tasks': dict(tasks), 'stall': stall}
     # Lazy: the healthcheck CLI runs this file by path under a 5 s timeout and
     # only ever calls check_heartbeat, never this writer.
     from src.services.curation.ops_metrics import record_worker_heartbeat
@@ -104,7 +106,9 @@ def check_heartbeat(name: str, max_age_s: float) -> tuple[bool, str]:
     if dead:
         return False, f'task(s) not running: {", ".join(sorted(dead))}'
 
-    return True, f'ok: age={age:.1f}s tasks={list(tasks)}'
+    stall = payload.get('stall')
+    suffix = f' stalled: {stall}' if stall else ''
+    return True, f'ok: age={age:.1f}s tasks={list(tasks)}{suffix}'
 
 
 async def heartbeat_loop(
@@ -112,6 +116,7 @@ async def heartbeat_loop(
     tasks_fn: Callable[[], Mapping[str, bool]],
     stop: asyncio.Event,
     interval_s: float = DEFAULT_INTERVAL_S,
+    stall_fn: Callable[[], str | None] | None = None,
 ) -> None:
     """Long-lived task: write the heartbeat every ``interval_s`` until ``stop``.
 
@@ -122,7 +127,7 @@ async def heartbeat_loop(
     """
     while not stop.is_set():
         try:
-            write_heartbeat(name, tasks_fn())
+            write_heartbeat(name, tasks_fn(), stall_fn() if stall_fn else None)
         except Exception as exc:  # pragma: no cover — defensive, never crash the worker
             # Imported here: the healthcheck CLI runs this file by path under a
             # 5 s timeout, and src.core pulls in the whole services package.

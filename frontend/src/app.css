@@ -217,6 +217,7 @@ button {
      slightly different heights/radii/colors across pages. */
   .select {
     display: inline-flex;
+    max-width: 100%;
     align-items: center;
     padding: var(--ctl-pad-md);
     border-radius: var(--ctl-radius-md);
@@ -242,6 +243,7 @@ button {
 
   .select-sm {
     display: inline-flex;
+    max-width: 100%;
     align-items: center;
     padding: var(--ctl-pad-sm);
     border-radius: var(--ctl-radius-sm);

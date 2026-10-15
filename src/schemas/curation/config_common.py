@@ -128,6 +128,7 @@ ErrorCode = Literal[
     'test_busy',
     'test_timeout',
     'vlm_transport_error',
+    'vlm_unreachable',
     'no_box_to_verify',
     'no_class_names',
     'too_many_crops',

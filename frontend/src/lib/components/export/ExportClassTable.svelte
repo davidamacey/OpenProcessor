@@ -144,7 +144,9 @@
   {:else if error}
     <div class="p-6 text-sm text-red-300">{error}</div>
   {:else if rows.length === 0}
-    <div class="p-6 text-sm text-zinc-500">No classes yet — ingest some data first.</div>
+    <div class="p-6 text-sm text-zinc-500">
+      No classes in this project yet. Add them on the Classes page.
+    </div>
   {:else}
     <table class="w-full text-sm">
       <thead

@@ -40,6 +40,7 @@ class Fakes:
         self.label_gate: asyncio.Event | None = None
         self.fetch_gate: asyncio.Event | None = None
         self.bound: list[str] = []
+        self.classless: set[str] = set()
         self.hooks: list[Any] = []
         m = monkeypatch
         m.setattr(vlm_worker, 'curation_api_prefix', lambda: '/curation')
@@ -49,6 +50,7 @@ class Fakes:
         m.setattr(vlm_worker, 'fetch_pending_ids', self._fetch)
         m.setattr(vlm_worker, 'label_batch', self._label)
         m.setattr(vlm_worker, 'heartbeat_loop', self._heartbeat)
+        m.setattr(vlm_worker, 'project_has_item_classes', lambda r: r.slug not in self.classless)
         m.setattr(vlm_worker, 'bind_project', self._bind)
         real_sleep = asyncio.sleep
 
@@ -87,7 +89,7 @@ class Fakes:
             return {'predicted': len(crop_ids), 'updated': len(crop_ids) - 1}
         return self.label_script(slug, crop_ids)
 
-    async def _heartbeat(self, name: str, status: Any, _stop: Any) -> None:
+    async def _heartbeat(self, name: str, status: Any, _stop: Any, **_kw: Any) -> None:
         self.heartbeats.append((name, status()))
         if self.fetch_gate is not None:
             self.fetch_gate.set()
@@ -213,7 +215,7 @@ async def test_consumer_errors_are_logged_and_the_chunk_is_released(
 
     def _script(_slug: str, ids: list[str]) -> dict[str, int]:
         if ids == ['c1', 'c2']:
-            raise httpx.ConnectError('refused')
+            raise httpx.DecodingError('refused')
         if ids == ['c3', 'c4']:
             msg = 'bad json'
             raise ValueError(msg)
@@ -360,3 +362,37 @@ async def test_no_classes_is_announced_again_after_a_successful_chunk(
     await asyncio.wait_for(vlm_worker.run(_args('--until-empty', '--concurrency', '1')), 10)
     out = capsys.readouterr().out
     assert out.count('project has no classes yet; idling until some exist') == 2
+
+
+@pytest.mark.asyncio
+async def test_a_project_without_classes_is_never_claimed_and_does_not_starve_the_others(
+    fakes: Fakes, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fakes.projects = [_record('empty'), _record('full')]
+    fakes.classless = {'empty'}
+    fakes.pending = {
+        'empty': [[f'e{i}' for i in range(50)]] * 5,
+        'full': [['f1', 'f2', 'f3', 'f4']],
+    }
+    await asyncio.wait_for(vlm_worker.run(_args('--until-empty')), 10)
+    assert sorted(fakes.labelled) == [('full', ['f1', 'f2']), ('full', ['f3', 'f4'])]
+    assert all(slug != 'empty' for slug, _n, _x in fakes.fetch_calls)
+    out = capsys.readouterr().out
+    assert out.count('project=empty has no classes yet; skipping it') == 1
+
+
+@pytest.mark.asyncio
+async def test_a_project_is_picked_up_on_the_poll_after_its_first_class(
+    fakes: Fakes, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fakes.classless = {'alpha'}
+    fakes.pending['alpha'] = [['c1', 'c2']]
+
+    def _add_class(_seconds: float) -> None:
+        if len(fakes.sleeps) >= 2:
+            fakes.classless.clear()
+
+    fakes.hooks.append(_add_class)
+    await asyncio.wait_for(vlm_worker.run(_args('--idle-stop-after', '10')), 10)
+    assert fakes.labelled == [('alpha', ['c1', 'c2'])]
+    assert 'project=alpha has classes now; labeling it' in capsys.readouterr().out

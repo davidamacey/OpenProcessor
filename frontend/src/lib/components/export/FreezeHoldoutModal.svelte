@@ -18,8 +18,7 @@
       class="mb-3 rounded border border-orange-500/40 bg-orange-500/10 px-3 py-2 text-xs text-orange-200"
     >
       One-shot per dataset version. Deterministic per-class selection (SHA1 of each crop
-      id) — the same cohort always freezes the same set, so there's no seed to pick (Plan
-      §B4).
+      id) — the same cohort always freezes the same set, so there's no seed to pick.
     </div>
     <label class="mb-3 block text-sm">
       <span class="mb-1 block text-zinc-400">Percent of validated crops</span>

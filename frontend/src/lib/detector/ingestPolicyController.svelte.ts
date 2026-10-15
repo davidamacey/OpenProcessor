@@ -67,6 +67,8 @@ export class IngestPolicyEditor {
 
   preview = $state<IngestPolicyPreview | null>(null);
   previewing = $state(false);
+  /** The shown preview describes an earlier draft; a newer one is pending. */
+  previewStale = $state(false);
   previewError = $state<string | null>(null);
 
   saving = $state(false);
@@ -143,6 +145,7 @@ export class IngestPolicyEditor {
   /** Called on every draft change; one preview per quiet period, the
    *  previous request aborted. */
   schedulePreview(): void {
+    this.previewStale = true;
     if (this.#timer) clearTimeout(this.#timer);
     this.#timer = setTimeout(() => void this.#runPreview(), this.#deps.debounceMs);
   }
@@ -157,9 +160,11 @@ export class IngestPolicyEditor {
       const res = await this.#deps.previewPolicy($state.snapshot(this.draft), ctl.signal);
       if (ctl.signal.aborted) return;
       this.preview = res;
+      this.previewStale = false;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError' || ctl.signal.aborted) return;
       this.preview = null;
+      this.previewStale = false;
       this.previewError = detectorErrorLines(e).join(' ');
     } finally {
       if (this.#abort === ctl) {
