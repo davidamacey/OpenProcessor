@@ -647,7 +647,7 @@ Risks:
 - **Ratchets.** `vlm.py` (565 lines) and `vlm_stage.py` shrink. New modules stay small. Do
   not add baseline lines; split instead.
 
-Open owner decisions (recommendation first):
+Owner decisions (D1 to D4 decided 2026-10-15: all four recommendations approved, as industry best practice):
 
 - **D1. Fold `make`/`model` into pack attributes (delete the hard-coded keys and the
   `vlm_item_make`/`_model` fields)?** Recommend **yes**. They are vehicle-specific in a
