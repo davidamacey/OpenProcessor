@@ -22,6 +22,13 @@ DOC_ROOTS = (
     *ROOT.glob('docs/*.md'),
     *(ROOT / 'docs-site' / 'docs').rglob('*.md'),
     *(ROOT / 'docs-site' / 'docs').rglob('*.mdx'),
+    # The frontend's own docs. CHANGELOG.md and docs/releases/ are history: they name old releases.
+    *(p for p in (ROOT / 'frontend').glob('*.md') if p.name != 'CHANGELOG.md'),
+    *(
+        p
+        for p in (ROOT / 'frontend' / 'docs').rglob('*.md')
+        if 'releases' not in p.relative_to(ROOT / 'frontend' / 'docs').parts
+    ),
 )
 # A release mention ends at a word character or a version dot, not at a sentence period
 # ("shipped in v0.4.0." is a mention; "v0.4.0.1" and "v0.4.0rc1" are not this pattern).
@@ -83,3 +90,11 @@ def test_release_mention_pattern_catches_a_mention_at_a_sentence_end() -> None:
 
 def test_release_mention_pattern_ignores_longer_versions_and_words() -> None:
     assert RELEASE_MENTION.findall('v0.9.9.1 v0.9.9rc1 dev0.9.9') == []
+
+
+def test_the_scan_covers_the_frontend_docs_but_not_their_release_history() -> None:
+    names = {p.relative_to(ROOT).as_posix() for p in DOC_ROOTS}
+    assert 'frontend/README.md' in names
+    assert 'frontend/docs/FEATURES.md' in names
+    assert 'frontend/CHANGELOG.md' not in names
+    assert not [n for n in names if n.startswith('frontend/docs/releases/')]

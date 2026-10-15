@@ -212,10 +212,9 @@ def test_the_active_response_is_the_shared_activation_shape(vlm_api) -> None:
     body = vlm_api.client.get(f'{ACTIVE}/active').json()
     assert body['axis'] == 'vlm'
     assert set(body) >= {'active', 'source', 'previous', 'config_revision', 'applied', 'stale'}
-    # never activated and no built-in configured: nothing runs, and the source
-    # says it is the built-in default (not an explicit off)
+    # never activated: no VLM is called, and the project says so
     assert body['active'] == {'name': None, 'revision': None}
-    assert body['source'] == 'env'
+    assert body['source'] == 'off'
 
 
 def test_every_new_route_is_in_the_openapi_document() -> None:

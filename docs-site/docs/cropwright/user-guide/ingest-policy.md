@@ -32,7 +32,10 @@ The form starts from the policy the backend serves.
 
 - **Embedding mode**, always open: `all` (every detection), `selected` (only
   those matching your criteria) or `lazy` (no detection vector until asked for;
-  the whole-frame vector of each image is still computed).
+  the whole-frame vector of each image is still computed) or `none` (detection
+  only: no vector of any kind).
+- **Clustering**, a checkbox: "Cluster automatically". Unchecked, new items are not
+  placed in clusters and the refresh and idle retrains skip the project.
 - **Detect filter**, collapsed under advanced: classes, excluded classes,
   confidence, area, a per-image cap and how classes are resolved.
 - **Per-project detector override**, also advanced.

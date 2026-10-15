@@ -6,7 +6,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from opensearchpy.exceptions import OpenSearchException
 
@@ -29,7 +29,17 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-_ChunkResult = tuple[int, int, list[dict[str, Any]]]
+
+class _ChunkResult(NamedTuple):
+    """One chunk's outcome. ``failed``: crops whose VLM request or reply failed;
+    ``unreadable``: selected crops whose image could not be read, so the VLM never
+    saw them."""
+
+    predicted: int
+    updated: int
+    proposals: list[dict[str, Any]]
+    failed: int = 0
+    unreadable: int = 0
 
 
 @dataclass
@@ -236,21 +246,23 @@ async def _label_chunk(run: Run, ctx: _VlmContext, ids: list[str]) -> _ChunkResu
         run.opensearch, ids, source_includes=['image_path', 'bbox_norm', *DETECTOR_HINT_FIELDS]
     )
     crops = _chunk_crops(docs, ctx)
+    unreadable = len(docs) - len(crops)
     # No item classes yet (a fresh project, or only the region class): nothing to label as.
     if not crops or not ctx.class_names:
-        return 0, 0, []
+        return _ChunkResult(0, 0, [], unreadable=unreadable)
     preds = await ctx.labeler.label_or_propose_batch(
         crops, ctx.class_names, class_catalog=ctx.class_catalog
     )
     updates_by_id, proposals = _updates_from_predictions(preds, ctx)
     if updates_by_id:
         await _write_updates(run, ctx, updates_by_id)
-    return len(preds), len(updates_by_id), proposals
+    failed = sum(1 for p in preds if getattr(p, 'failure', None) == 'request_failed')
+    return _ChunkResult(len(preds), len(updates_by_id), proposals, failed, unreadable)
 
 
 async def _label_all(
     run: Run, ctx: _VlmContext, ids: list[str], *, batch_size: int, concurrency: int
-) -> tuple[int, int, list[dict[str, Any]]]:
+) -> _ChunkResult:
     """Label ``ids`` in chunks. The VLM is the dominant cost at scale (often hours), so
     progress is reported per chunk and an operator cancel is checked between chunks."""
     chunks = [ids[i : i + batch_size] for i in range(0, len(ids), batch_size)]
@@ -267,10 +279,13 @@ async def _label_all(
             return out
 
     results = await asyncio.gather(*[gated(c) for c in chunks])
-    proposals: list[dict[str, Any]] = []
-    for _, _, props in results:
-        proposals.extend(props)
-    return sum(r[0] for r in results), sum(r[1] for r in results), proposals
+    return _ChunkResult(
+        sum(r.predicted for r in results),
+        sum(r.updated for r in results),
+        [p for r in results for p in r.proposals],
+        sum(r.failed for r in results),
+        sum(r.unreadable for r in results),
+    )
 
 
 async def _remaining_unvalidated(run: Run) -> int:
@@ -330,9 +345,23 @@ async def run_vlm_stage(
     context_args: dict[str, Any],
 ) -> VlmStageResult:
     ctx = await _build_vlm_context(run, guard, **context_args)
-    predicted, updated, new_class_proposals = await _label_all(
+    labeled = await _label_all(
         run, ctx, unvalidated_ids, batch_size=batch_size, concurrency=concurrency
     )
+    if (
+        unvalidated_ids
+        and ctx.class_names
+        and labeled.failed + labeled.unreadable >= len(unvalidated_ids)
+    ):
+        # Every selected crop failed: a "completed" run with predicted 0 would read as
+        # "nothing to do". Fail closed with the counts.
+        msg = (
+            f'the VLM stage labeled nothing: {labeled.failed} request(s) failed and '
+            f'{labeled.unreadable} crop image(s) could not be read, of {len(unvalidated_ids)} '
+            'selected. Check that the VLM endpoint is reachable and the source images are '
+            'mounted in the worker.'
+        )
+        raise RuntimeError(msg)
     try:
         await run.opensearch.indices.refresh(index=items_index())
     except OpenSearchException as exc:
@@ -347,10 +376,12 @@ async def run_vlm_stage(
         low_conf_skipped=ctx.force_fit_bypass['low_conf_skipped'],
     )
     stage = {
-        'predicted': predicted,
-        'updated': updated,
-        'new_class_proposals': new_class_proposals[:50],
-        'new_class_proposals_total': len(new_class_proposals),
+        'predicted': labeled.predicted,
+        'updated': labeled.updated,
+        'failed': labeled.failed,
+        'unreadable': labeled.unreadable,
+        'new_class_proposals': labeled.proposals[:50],
+        'new_class_proposals_total': len(labeled.proposals),
         'force_fit_bypass': dict(ctx.force_fit_bypass),
     }
     return VlmStageResult(stage, post_normalize, remaining)

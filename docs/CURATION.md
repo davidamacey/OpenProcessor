@@ -140,7 +140,7 @@ inside the `api` container, which listens on port 8000 there:
 
 ```bash
 docker compose -p <project> exec api python scripts/curation/bulk_ingest.py \
-  --project <slug> --folder /data/source/<dir> --api-base http://localhost:8000/curation
+  --project <slug> --folder /data/source/<dir>
 ```
 
 Defaults are batch size 16 and concurrency 16
@@ -151,15 +151,16 @@ large share (mount, trial run, resume, time and disk estimate) is
 
 ### Ingest policy
 
-Each project has a policy with two independent parts: a `detect` filter on the
-detector output, and an `embedding.mode` (`all`, `selected` or `lazy`). It affects
-future ingests only. [Ingest policy](../docs-site/docs/guides/ingest-policy.mdx).
+Each project has a policy with three independent parts: a `detect` filter on the
+detector output, an `embedding.mode` (`all`, `selected`, `lazy` or `none`, the last
+being detection only with no vector at all) and a `clustering.automatic` switch. It
+affects future ingests only. [Ingest policy](../docs-site/docs/guides/ingest-policy.mdx).
 
 ### Items without an embedding
 
 An item stored without a vector has `embedding_state` `not_selected`, `deferred` or
 `failed`. `not_selected` comes from the `selected` mode. `deferred` comes from a
-combine that dropped a vector, and from `lazy` ingest. Clustering, kNN search and the
+combine that dropped a vector, and from `lazy` and `none` ingest. Clustering, kNN search and the
 VLM stage skip these items. Embed them with
 `POST /curation/projects/{project}/reprocess`, scope `embed`, `only_missing: true`.
 [Embedding state in Cropwright](../docs-site/docs/cropwright/user-guide/embedding-state.md).

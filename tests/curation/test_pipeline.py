@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 class TestPipelineSkipFilter:

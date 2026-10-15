@@ -10,6 +10,7 @@ from _fake_project_registry import install_static_project_registry
 
 import scripts.curation.worker.state as worker_state
 from curation.region_cascade_helpers import _capture_signal_handler, _FakeOpenSearch, _item, _jpeg
+from curation.vlm_opt_in import project_opts_in_to_env_vlm
 from scripts.curation.worker import runner as runner_mod, stage_a as stage_a_mod
 from scripts.curation.worker.__main__ import parse_args
 from src.config.project_context import current_project
@@ -149,6 +150,7 @@ async def _drive_text_hint_rescue(
     monkeypatch.setattr('scripts.curation.worker.state._class_group', lambda _name: None)
 
     monkeypatch.setenv('OP_VLM_URL', 'http://vlm.invalid:8000')
+    project_opts_in_to_env_vlm(monkeypatch)
     args = parse_args(
         [
             '--opensearch=http://os.invalid:9200',

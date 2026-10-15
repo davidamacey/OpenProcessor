@@ -37,33 +37,26 @@ What a profile changes, and what it does not:
   PaddleOCR models and `ocr_pipeline`: instance count, batch sizes and the GPU id
   (`gpus: [ 0 ]`). These are tracked files, so switching a profile in a checkout shows up
   in `git status`. The PE encoders are not touched. Triton reads them when it starts.
-- **It writes `GPU_PROFILE` and `OP_INGEST_GPU_DECODE` to `.env`**, but only when there is no
-  `.env` yet. The installer uses `GPU_PROFILE` for its model setup, and the API reads
+- **It writes `GPU_PROFILE` and `OP_INGEST_GPU_DECODE` to `.env`**: the installer and
+  `scripts/setup.sh` when there is no `.env` yet, `./openprocessor profile` into the existing one. The installer uses `GPU_PROFILE` for its model setup, and the API reads
   `OP_INGEST_GPU_DECODE`.
 - **It does not change the model list.** The Triton load list is fixed in
   `docker-compose.yml`. A model that was never exported stays unloaded and the server
   keeps running (`--exit-on-error=false`). `scripts/setup.sh --profile=minimal` exports the
   essential models only, with no OCR.
-- **`TRITON_WORKERS`, `MAX_BATCH_SIZE` and `SHM_SIZE` in `.env` are not read by anything.**
-  The API runs 32 uvicorn workers and every service has `shm_size: 8g` in
-  `docker-compose.yml`, whatever the profile says. To change either, edit the compose
-  file or use your own override file.
-- **The `docker-compose.override.yml` that `setup.sh` writes is not loaded.** `setup.sh`,
-  `./openprocessor` and `make` all pass explicit `-f` files, so Compose does not pick the
-  file up automatically (a bare `docker compose up` in the directory would). `./openprocessor`
-  never loads override files you add.
+- **It does not set the API worker count or `shm_size`.** The API runs 32 uvicorn workers and
+  every service has `shm_size: 8g` in `docker-compose.yml`, whatever the profile says. To
+  change either, put the change in `docker-compose.local.yml`, which `./openprocessor` and
+  `make` load after the stock files (see
+  [Ingest a large folder](../guides/ingest-large-folder.mdx#3-more-than-one-share-op_source_path_aliases)).
 
 ### Switching profile later
 
-`./openprocessor profile <name>` does not switch profiles cleanly yet:
-(issue #281). It needs a checkout. It regenerates the Triton configs, which works,
-but with an existing `.env` it leaves `GPU_PROFILE` and `OP_INGEST_GPU_DECODE` alone, and writes
-an override file the CLI never loads. Until it is fixed, switch by hand:
+`./openprocessor profile <name>` needs a checkout. It regenerates the Triton configs and sets
+`GPU_PROFILE` and `OP_INGEST_GPU_DECODE` in the existing `.env`, leaving the other lines alone:
 
 ```bash
-# not run on a stack. The generation step below was run on a scratch checkout with no .env.
-./openprocessor profile standard      # rewrites models/*/config.pbtxt
-# edit .env: set GPU_PROFILE=standard and OP_INGEST_GPU_DECODE=0 (or 1)
+./openprocessor profile standard      # rewrites models/*/config.pbtxt, updates .env
 ./openprocessor restart triton-server
 ./openprocessor gpu plan              # shows the GPU decode state and the VRAM it needs
 ```
@@ -159,9 +152,8 @@ spread the load:
 All default to `0`. Set each explicitly: `.env` values are not
 shell-expanded, so one can't reference another. The trainer accepts a
 single id from the variable; a multi-GPU trainer (`OP_TRAIN_GPU_ORDER=0,2`)
-also needs a compose override file listing the same `device_ids` in the
-same order. The `docker-compose.override.yml` that `setup.sh` writes is never
-loaded (see [GPU profiles](#gpu-profiles)), so it does not affect these variables.
+also needs a `docker-compose.local.yml` listing the same `device_ids` in the
+same order.
 
 Example layout on a three-GPU host (one card per heavy tenant):
 

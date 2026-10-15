@@ -1,7 +1,7 @@
 """Project lifecycle service: create / patch / archive / unarchive /
 clone_settings / delete (dry-run and guarded).
 
-See ``docs/design/openprocessor_internal/projects_plan.md`` §4, §7, the
+See the project-isolation design §4, §7, the
 owner decisions in §13 (D4 capacity, D5 ``default`` is undeletable), and
 the Cropwright rev-3 deltas 2 (envelope + revision), 3 (list membership,
 implemented in P1's projects wire models), 10 (delete fits a proxy
@@ -345,6 +345,9 @@ async def create_project(
             resources.upload_root.mkdir(parents=True, exist_ok=True)
             resources.project_state_dir.mkdir(parents=True, exist_ok=True)
             await ensure_indexes(client)
+            from src.services.projects.vlm_default import pin_new_project_vlm_off
+
+            await pin_new_project_vlm_off(client)
         if clone_settings_from:
             clone_conflicts = await clone_settings(
                 client,

@@ -1,7 +1,7 @@
 """The OpenSearch project guard: a transport-level wrapper that refuses
 every request that is not one of the shapes the codebase really sends,
 aimed at the bound project's concrete index names (see
-``docs/design/openprocessor_internal/projects_plan.md`` §2.4).
+the project-isolation design §2.4).
 
 It fails **closed by construction**: there is no list of bad shapes to
 keep up to date. A request passes only if it matches an allowlisted shape

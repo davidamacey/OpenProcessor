@@ -361,10 +361,22 @@ def test_confirm_one_class_then_train_single_class_subset(fake, tmp_path):
     routes[('POST', f'{P}/train/start')] = (201, {'job_id': 'j'})
     routes[('GET', f'{P}/train/status/j')] = (200, {'state': 'finished'})
     routes[('POST', f'{P}/vlm/label_batch')] = (200, {'predicted': 1})
+    routes[('GET', f'{P}/vlm/endpoints/active')] = (
+        200,
+        {'active': {'name': None, 'revision': None}, 'source': 'off'},
+    )
+    routes[('POST', f'{P}/vlm/endpoints/env/activate')] = (200, {'active': {'name': 'env'}})
     f = fake(routes)
     proc, data = run(
         f, tmp_path, '--only', 'vlm_label,confirm_labels,train', '--confirm-crops', '40'
     )  # fmt: skip
+    # a project calls no VLM until it activates one: the phase opts in first
+    calls = [(r[0], r[1]) for r in f.raw]
+    activate = ('POST', f'{P}/vlm/endpoints/env/activate')
+    assert activate in calls
+    assert calls.index(activate) < calls.index(('POST', f'{P}/vlm/label_batch'))
+    body = json.loads(next(r for r in f.raw if r[1].endswith('/env/activate'))[2])
+    assert body['expected_active'] == {'name': None, 'revision': None}
     ph = by_name(data)
     assert ph['confirm_labels']['status'] == 'pass', proc.stdout
     assert ph['train']['status'] == 'pass', proc.stdout

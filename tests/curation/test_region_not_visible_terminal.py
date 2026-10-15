@@ -1,8 +1,7 @@
 """R-B1 regression: a re-verified box the VLM says isn't visible must
 reach a TERMINAL outcome, never stay indefinitely re-queued.
 
-Reproduces the review's exact probe (docs/design/openprocessor_internal/
-w8_pipeline_review_2026-09-27.md, "Re-review 2026-09-27" section, finding
+Reproduces the review's exact probe (the 2026-09-27 pipeline review, "Re-review 2026-09-27" section, finding
 R-B1): the B1 fix made Path 1 (``pending_verification``) merge its
 resolved verdict back into the stored box list instead of replacing it
 outright. But when the VLM answers ``region_visible=False``, the pre-fix

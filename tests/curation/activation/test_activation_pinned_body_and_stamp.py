@@ -13,7 +13,7 @@ from src.core.exceptions import RequestRejectedError
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 def _activate_then_put(c):

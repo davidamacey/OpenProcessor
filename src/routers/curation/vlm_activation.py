@@ -23,7 +23,7 @@ from src.schemas.curation.config_common import ActiveRef, AppliedRuntime
 from src.services.config_store import get_config_store
 from src.services.config_store.index import ActiveConflictError, get_activation, get_runtime_docs
 from src.services.config_store.vlm_activation import activate_vlm, deactivate_vlm, rollback_vlm
-from src.services.labeling.vlm_endpoints import env_builtin, refresh_vlm_state
+from src.services.labeling.vlm_endpoints import refresh_vlm_state
 
 
 _PREFIX = '/vlm/endpoints'
@@ -44,11 +44,7 @@ async def active_response(client: Any, *, validation: Any = None) -> VlmActiveRe
     store = get_config_store()
     snapshot = store.current
     ref = snapshot.active_vlm
-    if ref is None:
-        env = env_builtin()
-        active = ActiveRef(name=env.name if env else None)
-        source = 'env'
-    elif ref == 'off':
+    if ref is None or ref == 'off':
         active = ActiveRef()
         source = 'off'
     else:

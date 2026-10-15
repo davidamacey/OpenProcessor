@@ -13,7 +13,7 @@ from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_models import VlmRegionVerdict
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 _IMG = base64.b64encode(b'\xff\xd8\xff\xd9').decode()

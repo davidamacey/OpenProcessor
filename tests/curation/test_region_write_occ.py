@@ -1,8 +1,7 @@
 """Regression: the box-list write must never use a stale
 ``region_revision`` / ``region_box_seq`` snapshot.
 
-Reproduces the review's exact probe (docs/design/openprocessor_internal/
-w8_pipeline_review_2026-09-27.md, finding M1): something else (a human
+Reproduces the review's exact probe (the 2026-09-27 pipeline review, finding M1): something else (a human
 PUT) bumps the item's stored ``region_revision`` / ``region_box_seq`` and
 replaces its box list while the worker's own VLM call is still in
 flight. Before the M1 fix, the worker's write built ``region_revision`` /

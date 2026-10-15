@@ -199,7 +199,37 @@ To change it, edit `.env`, then recreate the three services with
 `./openprocessor restart` does not re-read `.env`. Paths you pass to ingest are
 container paths under `/data/source`. `OP_SOURCE_PATH_ALIASES` adds more named
 roots, but compose does not mount them for you: bind-mount each one into the
-same three services with your own compose override file.
+same three services in your own `docker-compose.local.yml` (next).
+
+### More than one source root and your own compose overrides
+
+`./openprocessor` and `make` load `docker-compose.local.yml` (next to `docker-compose.yml`,
+ignored by git) after the stock files, when it exists. Put anything of your own in it: a second
+read-only source root, a changed `shm_size`, a mounted credentials file. A file named
+`docker-compose.override.yml` is not read. Example for a second root:
+
+```yaml
+# docker-compose.local.yml (next to docker-compose.yml; git ignores it)
+services:
+  api:
+    volumes:
+      - /srv/nas/archive:/data/archive:ro
+  curation-detection-worker:
+    volumes:
+      - /srv/nas/archive:/data/archive:ro
+  curation-auto-label-worker:
+    volumes:
+      - /srv/nas/archive:/data/archive:ro
+```
+
+and in `.env`:
+
+```bash
+OP_SOURCE_PATH_ALIASES=archive=/data/archive
+```
+
+Then `./openprocessor start` (or `make up`) recreates the services. Check the merged result with
+`docker compose -p <project> -f docker-compose.yml -f docker-compose.local.yml config`.
 
 ### The `openprocessor` CLI
 
@@ -239,7 +269,8 @@ directory created. Run `./openprocessor help` for the list.
 Labeling and region verification call an OpenAI-compatible vision-language
 model. A deployment has a **registry** of endpoints (the built-in `env`
 endpoint from `OP_VLM_URL`, plus any you save through the API) and each project
-**activates** one. Three ways to get a model:
+**activates** one. A project calls no VLM until it does, so installing a VLM never
+makes an ingest wait for it. Three ways to get a model:
 
 1. **Local model from the catalog** (the `vlm` tier). The catalog is
    `examples/vlm/catalog.tsv`. The installer picks the best `tested` entry
@@ -403,9 +434,9 @@ git clone https://github.com/davidamacey/OpenProcessor.git && cd OpenProcessor &
 
 In a checkout, manage the stack with `make` (`make up`, `make curation-up`,
 `make down`, `make status`). The `./openprocessor` CLI (and its shim
-`./scripts/openprocessor.sh`) refuses to run until `.env` has a
-`COMPOSE_PROJECT_NAME` line; the `.env` that `setup.sh` writes has none, so
-add `COMPOSE_PROJECT_NAME=openprocessor` first. When you run `docker compose`
+`./scripts/openprocessor.sh`) uses the project `openprocessor` and warns when `.env` has no
+`COMPOSE_PROJECT_NAME` line (the `.env` that `setup.sh` writes has none); set the line to
+choose another name. When you run `docker compose`
 by hand, pass `-p <project>` so you never act on another stack that uses the
 default name.
 
@@ -520,10 +551,9 @@ and **standard**. Set it yourself in `.env` to override; `openprocessor gpu plan
 - The Triton load list is fixed in `docker-compose.yml`. A model that was never exported stays
   unloaded and Triton keeps running. `scripts/setup.sh --profile=minimal` exports the
   essential models only, with no OCR.
-- `.env` also gets `TRITON_WORKERS`, `MAX_BATCH_SIZE` and `SHM_SIZE`, but nothing reads them.
-  The API runs 32 uvicorn workers and each service has `shm_size: 8g` in `docker-compose.yml`.
-- `setup.sh` writes `docker-compose.override.yml`, but it is never loaded: `setup.sh`,
-  `./openprocessor` and `make` pass explicit `-f` files.
+- The API runs 32 uvicorn workers and each service has `shm_size: 8g` in `docker-compose.yml`,
+  whatever the profile says. To change either, use your own `docker-compose.local.yml` (see
+  [More than one source root and your own compose overrides](#more-than-one-source-root-and-your-own-compose-overrides)).
 
 ### Selecting a Profile
 
@@ -532,20 +562,20 @@ and **standard**. Set it yourself in `.env` to override; `openprocessor gpu plan
 ./scripts/setup.sh --profile=minimal
 ```
 
-Switching later with `./openprocessor profile <name>` (a checkout only) is incomplete
-(issue #281). It rewrites the Triton configs but, when `.env` already exists, leaves
-`GPU_PROFILE` and `OP_INGEST_GPU_DECODE` unchanged. Switch by hand:
+Switch later with `./openprocessor profile <name>` (a checkout only). It rewrites the Triton
+configs and sets `GPU_PROFILE` and `OP_INGEST_GPU_DECODE` in the existing `.env`, leaving every
+other line alone:
 
 ```bash
-./openprocessor profile standard      # rewrites models/*/config.pbtxt
-# edit .env: GPU_PROFILE=standard and OP_INGEST_GPU_DECODE=0 (or 1)
+./openprocessor profile standard      # rewrites models/*/config.pbtxt, updates .env
 ./openprocessor restart triton-server
 ```
 
 Do not pass the optional second argument (a GPU id); it is written into every `config.pbtxt`.
-A `.env` made by `scripts/setup.sh` or copied from `env.template` must also have
-`COMPOSE_PROJECT_NAME` set, or `./openprocessor` refuses to run (see
-[Configure the environment](#4-configure-environment)).
+In a checkout, a `.env` without `COMPOSE_PROJECT_NAME` runs the default project `openprocessor`
+and says so; set `COMPOSE_PROJECT_NAME` to use another (see
+[Configure the environment](#4-configure-environment)). An install directory still refuses to run
+without it.
 See [Deployment and GPU sizing](docs-site/docs/deployment/gpu-sizing.mdx) for the details.
 
 ---
@@ -591,7 +621,7 @@ cp env.template .env
 # Edit .env to adjust settings
 ```
 
-The `./openprocessor` CLI also needs the compose project name in `.env`:
+To name the compose project yourself (the `./openprocessor` CLI otherwise uses `openprocessor`):
 
 ```bash
 echo 'COMPOSE_PROJECT_NAME=openprocessor' >> .env
@@ -804,7 +834,7 @@ docker compose down --rmi all
 # Remove generated files
 rm -rf pytorch_models/*.pt pytorch_models/*.onnx
 rm -rf models/*/1/model.plan
-rm -rf .env docker-compose.override.yml
+rm -rf .env docker-compose.local.yml
 rm -rf cache/ logs/ outputs/ test_results/
 ```
 

@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 ITEMS = base_curation_config().items_index
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 def _item(crop_id: str, **extra: Any) -> dict[str, Any]:

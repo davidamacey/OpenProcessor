@@ -429,16 +429,15 @@ def get_vlm_endpoint(name: str) -> VlmEndpoint | None:
 def active_vlm_endpoint() -> VlmEndpoint | None:
     """The bound project's active endpoint, from the snapshots: the
     activation's PINNED revision body (never the endpoint's current doc, so
-    a later PUT changes nothing until activated); ``env`` when the project
-    never activated one; ``None`` when explicitly switched off.
+    a later PUT changes nothing until activated); ``None`` when the project
+    never activated one or switched it off: a project calls NO VLM until it
+    activates one (the ``env`` built-in is an endpoint it opts into).
 
     Raises :class:`VlmEndpointUnavailableError` when an activation names a
     revision that cannot be resolved (fail closed: no silent fall back)."""
     registry, project = _registry(), _project()
     ref = project.active_vlm
-    if ref is None:
-        return env_builtin()
-    if ref == 'off':
+    if ref is None or ref == 'off':
         return None
     name, revision = ref
     if name == ENV_ENDPOINT_NAME:
@@ -452,7 +451,7 @@ def active_vlm_endpoint() -> VlmEndpoint | None:
 
 def vlm_configured() -> bool:
     """Whether the bound project has a VLM to call: its active endpoint (the
-    ``env`` built-in until it activates one) resolves to something. The one
+    ``env`` built-in only once it activates it) resolves to something. The one
     answer to "is a VLM configured" for any code that is not itself calling
     it (profile validation); an activation that cannot be resolved counts as
     not configured. Callers refresh the snapshots first."""

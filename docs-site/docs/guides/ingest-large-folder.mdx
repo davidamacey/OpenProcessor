@@ -124,7 +124,8 @@ OP_SOURCE_PATH_ALIASES={"archive": "/data/archive"}
 An alias name cannot contain `/`, and a malformed value is rejected with an error instead of being dropped.
 
 Compose does **not** mount alias paths. Add the bind mount to the same three services
-in an override file next to `docker-compose.yml`, here `docker-compose.nas.yml`:
+in `docker-compose.local.yml`, next to `docker-compose.yml`. `./openprocessor` and
+`make` load that file after the stock files when it exists, and git ignores it:
 
 ```yaml
 services:
@@ -139,20 +140,17 @@ services:
       - /srv/nas/archive:/data/archive:ro
 ```
 
-Start the stack with the override listed after the base files (add
-`-f docker-compose.dev.yml` in a checkout, and `--env-file .env` if you run from
-another directory):
+Recreate the services so they pick up the mount:
 
 ```bash
-docker compose -p <project> -f docker-compose.yml -f docker-compose.nas.yml \
-  up -d api curation-detection-worker curation-auto-label-worker
+./openprocessor start
 ```
 
-:::caution
-`./openprocessor start` builds its own list of compose files and does not read your
-override. Running it recreates the services without the alias mount. Use the
-`docker compose` command above for as long as you use the alias, or you will see 404
-thumbnails again.
+:::note
+Only the name `docker-compose.local.yml` is read. A `docker-compose.override.yml`, or
+any other file name, is not. When you run `docker compose` yourself, list the file
+after the base files: `-f docker-compose.yml -f docker-compose.local.yml` (add
+`-f docker-compose.dev.yml` in a checkout, before the local file).
 :::
 
 Ingest paths under the alias like any other (`--folder /data/archive/2023`). Images
@@ -250,7 +248,7 @@ The simplest trial is a small sub-folder:
 ```bash
 docker compose -p <project> exec api python scripts/curation/bulk_ingest.py \
   --project nas-photos --folder /data/source/2024-03-sat \
-  --api-base http://localhost:8000/curation --source nas-trial
+  --source nas-trial
 ```
 
 Or a manifest. It is a text file with one container path per line (or JSON Lines with
@@ -275,7 +273,7 @@ path in the first line differs from yours:
 ```bash
 docker compose -p <project> exec api python scripts/curation/bulk_ingest.py \
   --project nas-photos --manifest /data/source/trial.txt \
-  --api-base http://localhost:8000/curation --source nas-trial
+  --source nas-trial
 ```
 
 ```text
@@ -322,14 +320,12 @@ Projects page and start again, since a policy change does not rewrite stored ite
 
 ```bash
 docker compose -p <project> exec api python scripts/curation/bulk_ingest.py \
-  --project nas-photos --folder /data/source \
-  --api-base http://localhost:8000/curation
+  --project nas-photos --folder /data/source
 ```
 
-Pass `--api-base http://localhost:8000/curation` whenever you run the script inside
-`api`: the API listens on port 8000 in the container, while the script's default
-points at host port 4603. On the host (with the repo's Python environment and
-`OPENSEARCH_URL` set) the default works.
+The default `--api-base` follows where the script runs: `http://localhost:8000/curation`
+inside `api`, where the API listens, and `http://localhost:4603/curation` on the host
+(with the repo's Python environment and `OPENSEARCH_URL` set).
 
 `--folder` and `--manifest` are paths inside the API container and must lie under a
 source root. The script prints a live progress line, then a summary, and exits with
@@ -524,5 +520,5 @@ df -h /var/lib/docker
 | Thumbnails 404 and the VLM stage predicts 0 | A worker is missing the source mount (step 2) or the alias mount (step 3). |
 | 409 `bulk_ingest_busy` | Another run of the project is live. Watch it with `--status`, or cancel it. |
 | Fewer files discovered than on the share | Symbolic links are not followed and unreadable directories are skipped (step 8). |
-| Script cannot connect to `localhost:4603` | Inside `api` pass `--api-base http://localhost:8000/curation`. |
+| Script cannot connect | Check `--api-base`: the default is `localhost:8000` inside `api` and `localhost:4603` on the host. Pass it when the API is elsewhere. |
 | Run `failed` right after the start | Five all-failed batches in a row. Read `error` in `GET .../ingest/bulk/<run_id>`, fix the detector or OpenSearch, start the same source again. |

@@ -8,7 +8,7 @@
 #
 # Installs a pinned OpenProcessor release into ./openprocessor/ with no git
 # clone, no local image build and no host Python. Design:
-# docs/design/openprocessor_internal/one_line_installer_plan.md
+# the installer design
 #
 # The whole script is one function (__op_define) that only defines things,
 # followed by a single line that calls it and then main. A truncated

@@ -227,7 +227,7 @@ def _patch_http(monkeypatch: pytest.MonkeyPatch, handler: Any) -> None:
     monkeypatch.setattr(models_mod.httpx, 'AsyncClient', _Client)
 
 
-@pytest.mark.usefixtures('vlm_env')
+@pytest.mark.usefixtures('vlm_env_active')
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ('url', 'segmenter_loaded', 'status'),

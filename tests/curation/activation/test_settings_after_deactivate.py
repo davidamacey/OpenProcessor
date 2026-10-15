@@ -8,7 +8,7 @@ import pytest
 from curation.activation.constants import PREFIX, RP, SETTINGS, pack_body
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 @pytest.mark.parametrize('axis', ['prompt_pack', 'detection_profile'])

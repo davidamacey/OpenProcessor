@@ -16,7 +16,7 @@ from src.config.curation_roles import INDEX_ROLE_ATTR, IndexRole, index_name
 
 # Fields resolved from the *bound project*'s ``ProjectResources`` rather
 # than the process-global env-built instance (see
-# docs/design/openprocessor_internal/projects_plan.md §2.2/§3.3). Every
+# the project-isolation design §2.2/§3.3). Every
 # other ``CurationConfig`` field is global. ``test_config_view.py``
 # fails if a new dataclass field is added to neither this set nor
 # treated as global -- keep it in sync with the dataclass above.

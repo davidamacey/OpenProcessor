@@ -3733,6 +3733,19 @@
         "title": "ClusterStats",
         "type": "object"
       },
+      "ClusteringPolicy": {
+        "additionalProperties": false,
+        "description": "``automatic`` false: ingest and embed runs place no item into a cluster,\nthe cluster-refresh daemon starts no retrain and the auto-label worker's\nidle centroid retrain skips the project. Explicit clustering requests\n(``/clusters/*`` and auto-label jobs) are unaffected.",
+        "properties": {
+          "automatic": {
+            "default": true,
+            "title": "Automatic",
+            "type": "boolean"
+          }
+        },
+        "title": "ClusteringPolicy",
+        "type": "object"
+      },
       "CocoAnnotationFileSpec": {
         "additionalProperties": false,
         "properties": {
@@ -8148,7 +8161,8 @@
             "enum": [
               "all",
               "selected",
-              "lazy"
+              "lazy",
+              "none"
             ],
             "title": "Mode",
             "type": "string"
@@ -9660,6 +9674,9 @@
       "IngestPolicy": {
         "additionalProperties": false,
         "properties": {
+          "clustering": {
+            "$ref": "#/components/schemas/ClusteringPolicy"
+          },
           "detect": {
             "$ref": "#/components/schemas/DetectFilter"
           },
@@ -9688,6 +9705,9 @@
       "IngestPolicyBody": {
         "additionalProperties": false,
         "properties": {
+          "clustering": {
+            "$ref": "#/components/schemas/ClusteringPolicy"
+          },
           "detect": {
             "$ref": "#/components/schemas/DetectFilter"
           },
@@ -9765,6 +9785,9 @@
       "IngestPolicyPutResponse": {
         "additionalProperties": false,
         "properties": {
+          "clustering": {
+            "$ref": "#/components/schemas/ClusteringPolicy"
+          },
           "detect": {
             "$ref": "#/components/schemas/DetectFilter"
           },
@@ -9801,6 +9824,9 @@
         "additionalProperties": false,
         "description": "``PUT`` body: the policy plus the revision the caller read.",
         "properties": {
+          "clustering": {
+            "$ref": "#/components/schemas/ClusteringPolicy"
+          },
           "detect": {
             "$ref": "#/components/schemas/DetectFilter"
           },

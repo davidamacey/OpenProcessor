@@ -61,7 +61,7 @@ CLASS_KEYS = {
 # ---------------------------------------------------------------- combined reply
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 class TestCombinedClassUpdate:

@@ -1,5 +1,5 @@
 """Project resource naming and records (see
-``docs/design/openprocessor_internal/projects_plan.md`` §2.2).
+the project-isolation design §2.2).
 
 A *project* is a named, isolated dataset workspace. ``default`` is an
 ordinary project, created at bootstrap with the same naming as every

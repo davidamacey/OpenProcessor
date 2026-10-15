@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check the documentation against the code.
 
-Five checks, each reporting every miss (not just the first):
+Nine checks, each reporting every miss (not just the first):
 
 * routes  - every ``METHOD /path`` written in a doc exists in the generated
   OpenAPI (``contracts/openapi/*.json``) or, for non-curation routes, in the
@@ -13,6 +13,13 @@ Five checks, each reporting every miss (not just the first):
   Names the installer and CLI refuse (``RETIRED_ENV_NAMES``) are exempt.
 * template - every non-``OP_`` setting ``env.template`` assigns is read by a compose file,
   script or code, so nothing advertised does nothing.
+* cli     - every ``./openprocessor <command>`` in a doc is a command of the CLI, and a
+  ``--flag`` written in the same code span appears in the CLI sources.
+* make    - every ``make <target>`` in a code span or fenced block is a Makefile target.
+* screenshots - every ``<Screenshot name="...">`` names a file under
+  ``docs-site/static/img/screenshots/``.
+* envfiles - every ``NAME=`` line in a fenced block names a setting some compose file, script or
+  code reads (a name the block itself expands as ``$NAME`` is a local shell variable).
 * links   - every relative link resolves to a file, and every ``#anchor`` that
   points into a markdown file matches a heading in that file.
 
@@ -347,11 +354,117 @@ def check_links() -> list[str]:
     return errors
 
 
+_DESIGN_DOCS = 'docs/design/'
+_CLI_CMD_RE = re.compile(r'(?:\./|`)openprocessor[ \t]+([a-z][a-z-]*)')
+_FLAG_RE = re.compile(r'(?<![\w-])(--[a-z][a-z-]*)')
+_MAKE_RE = re.compile(r'^[ \t]*(?:\$ )?make[ \t]+([a-z][a-z0-9_-]*)(?![\w*-])', re.M)
+_SCREENSHOT_RE = re.compile(r'<Screenshot\b[^>]*?\bname="([^"]+)"')
+_FENCE_RE = re.compile(r'```[^\n]*\n(.*?)```', re.S)
+_SPAN_RE = re.compile(r'`([^`\n]+)`')
+_SHELL_ASSIGN_RE = re.compile(r'^[ \t]*(?:export[ \t]+)?([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*)=', re.M)
+
+
+def _user_docs() -> list[Path]:
+    """Docs a reader follows (markdown only; design notes describe plans, not the product)."""
+    return [
+        d
+        for d in doc_files()
+        if d.suffix in _DOC_SUFFIXES and not _rel(d).as_posix().startswith(_DESIGN_DOCS)
+    ]
+
+
+def _cli_commands() -> set[str]:
+    main = (REPO_ROOT / 'openprocessor').read_text(encoding='utf-8').split('main() {', 1)[1]
+    labels = re.findall(r'^ {8}([a-z\-|]+)\)$', main, re.M)
+    return {w for label in labels for w in label.split('|') if w[0].isalpha()}
+
+
+def _cli_corpus() -> str:
+    paths = [REPO_ROOT / 'openprocessor', REPO_ROOT / 'scripts' / 'setup.sh']
+    paths += sorted((REPO_ROOT / 'scripts' / 'lib').glob('*.sh'))
+    return '\n'.join(p.read_text(encoding='utf-8', errors='replace') for p in paths if p.is_file())
+
+
+def check_cli() -> list[str]:
+    commands = _cli_commands()
+    corpus = _cli_corpus()
+    errors: list[str] = []
+    for doc in _user_docs():
+        for line in doc.read_text(encoding='utf-8', errors='replace').splitlines():
+            for m in _CLI_CMD_RE.finditer(line):
+                if m.group(1) not in commands:
+                    errors.append(
+                        f'{_rel(doc)}: ./openprocessor {m.group(1)} is not a command'
+                    )  # formatted message built next to its check
+                span = line[m.end() :].split('`', 1)[0]
+                errors.extend(
+                    f'{_rel(doc)}: {flag} is not a flag of ./openprocessor'
+                    for flag in _FLAG_RE.findall(span)
+                    if flag not in corpus
+                )
+    return errors
+
+
+def _code_texts(text: str) -> list[str]:
+    return _FENCE_RE.findall(text) + _SPAN_RE.findall(re.sub(_FENCE_RE, '', text))
+
+
+def check_make_targets() -> list[str]:
+    targets = set(re.findall(r'^([A-Za-z][\w-]*):', (REPO_ROOT / 'Makefile').read_text(), re.M))
+    errors: list[str] = []
+    for doc in _user_docs():
+        text = doc.read_text(encoding='utf-8', errors='replace')
+        for code in _code_texts(text):
+            errors.extend(
+                f'{_rel(doc)}: make {name} is not a Makefile target'
+                for name in _MAKE_RE.findall(code)
+                if name not in targets
+            )
+    return errors
+
+
+def check_screenshots() -> list[str]:
+    root = REPO_ROOT / 'docs-site' / 'static' / 'img' / 'screenshots'
+    errors: list[str] = []
+    for doc in _user_docs():
+        for name in _SCREENSHOT_RE.findall(doc.read_text(encoding='utf-8', errors='replace')):
+            if '<' not in name and not (root / name).is_file():
+                errors.append(f'{_rel(doc)}: screenshot {name} has no file under {_rel(root)}')  # noqa: PERF401  # formatted message built next to its check
+    return errors
+
+
+def check_envfiles() -> list[str]:
+    corpus = _env_corpus()
+    live = REPO_ROOT / 'tests' / 'live'
+    if live.is_dir():
+        corpus += '\n'.join(
+            p.read_text(encoding='utf-8', errors='replace') for p in live.rglob('*.py')
+        )
+    errors: list[str] = []
+    for doc in _user_docs():
+        for block in _FENCE_RE.findall(doc.read_text(encoding='utf-8', errors='replace')):
+            for name in sorted(set(_SHELL_ASSIGN_RE.findall(block))):
+                local = re.search(rf'\$\{{?{name}\b', block)
+                if (
+                    not name.startswith('OP_')
+                    and not local
+                    and not re.search(rf'\b{name}\b', corpus)
+                ):
+                    errors.append(
+                        f'{_rel(doc)}: {name}= is not read by any code'
+                    )  # formatted message built next to its check
+    return errors
+
+
 CHECKS = {
     'routes': check_routes,
     'env': check_env,
     'compose': check_compose_vars,
     'template': check_template_names,
+    'cli': check_cli,
+    'make': check_make_targets,
+    'screenshots': check_screenshots,
+    'envfiles': check_envfiles,
     'links': check_links,
 }
 

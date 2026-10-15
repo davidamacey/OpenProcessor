@@ -284,21 +284,14 @@ async def plan_default_vlm(
     client: Any, value: str | None, *, pack: Any = UNSET, profile: Any = UNSET
 ) -> DefaultVlmPlan:
     """Resolve and gate ``PUT /settings {"defaults": {"vlm": value}}`` without
-    writing: a name = that endpoint's latest revision; ``'off'`` = VLM off;
-    ``None`` = clear the project's choice so the ``env`` built-in applies
-    (off when there is none). ``pack`` / ``profile`` are the pending sides
+    writing: a name = that endpoint's latest revision; ``'off'`` or ``None`` =
+    VLM off (a project never inherits the ``env`` built-in). ``pack`` / ``profile`` are the pending sides
     of a combined request. Goes through the one gate like every other
     activation."""
     await refresh_vlm_state(client)
     expected = expected_active_for(get_config_store().current.active_vlm)
-    if value == 'off':
+    if value is None or value == 'off':
         return DefaultVlmPlan(None, expected)
-    if value is None:
-        from src.services.labeling.vlm_endpoints import env_builtin
-
-        if env_builtin() is None:
-            return DefaultVlmPlan(None, expected)
-        value = ENV_ENDPOINT_NAME
     prepared = await prepare_vlm_activation(
         client, name=value, revision=None, mode='settings', pack=pack, profile=profile
     )

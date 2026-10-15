@@ -21,14 +21,19 @@ the network, or a hosted API.
   `api_key_ref`, a pointer to where the key lives.
 - **Built-in `env` endpoint.** Built from `OP_VLM_URL`, `OP_VLM_MODEL` and
   `OP_VLM_API_KEY`. It is read-only. Clone it to get an editable copy.
-  It is also what a project runs when nobody activated anything for it: with
-  `OP_VLM_URL` set, **every project that never activated an endpoint labels with it**
-  and `curation-vlm-worker` starts suggesting classes for it. The active
-  endpoint then shows `"source": "env"`. To stop that for a project, use the
-  explicit off state below. (Making this opt-in is issue #282.)
-- **Off.** A project can be switched off explicitly. That is a stored state
-  (`source` is `off`, `active.name` is null), not the same as never having
-  activated anything.
+  It is an endpoint a project opts into like any other: **a project calls no VLM
+  until it activates one**, so `OP_VLM_URL` alone makes `curation-vlm-worker` and the
+  auto-label VLM stage do nothing for a project. Activate it with
+  `POST .../vlm/endpoints/env/activate`; the active endpoint then shows
+  `"source": "env"`. A run can still name any endpoint without changing the
+  project's setting (`vlm=<name>`, see below).
+- **Off.** What a new project starts in: `active.name` is null and `source` is `off`.
+  `POST .../vlm/endpoints/deactivate` returns an active project to it. A VLM call that
+  names no endpoint answers `409 vlm_not_configured`.
+- **Projects from before 0.6.0.** They used to inherit `env` without activating it. The
+  first start of the new API pins each one to what it inherited (`env` if `OP_VLM_URL`
+  was set, else `off`), so nothing changes for them. They show `"source": "env"` with
+  an `activated_at` from then on.
 - **Key references.** `secret:<slug>` names a file `<slug>` in the secrets
   directory (`OP_VLM_SECRETS_DIR`, a read-only mount of `secrets/vlm`). The
   reference `env:OP_VLM_API_KEY` is valid only on the built-in endpoint.

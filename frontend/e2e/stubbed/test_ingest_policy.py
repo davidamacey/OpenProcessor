@@ -47,6 +47,7 @@ POLICY = {
         "mode": "all",
         "classes": [],
     },
+    "clustering": {"automatic": True},
     "detector": None,
     "revision": 4,
 }
@@ -134,6 +135,32 @@ def test_load_edit_preview_and_save_behind_a_confirm(stub, page, app_url):
     body = puts[0][2]
     assert body["expected_revision"] == 4
     assert body["embedding"]["mode"] == "selected"
+
+
+def test_detection_only_mode_and_clustering_off_are_saved(stub, page, app_url):
+    _stub_policy(stub, lambda _req, _m: {**POLICY, "revision": 5, "unknown_names": []})
+    page.goto(f"{app_url}/p/default/settings/ingest-policy")
+    page.get_by_test_id("ingest-policy-form").wait_for(timeout=ACTION_TIMEOUT_MS)
+    automatic = page.get_by_test_id("policy-clustering-automatic")
+    expect(automatic).to_be_checked()
+
+    page.get_by_test_id("policy-mode").select_option("none")
+    expect(page.get_by_test_id("ingest-policy-form")).to_contain_text("Detection only")
+    automatic.uncheck()
+    SHOTS.mkdir(parents=True, exist_ok=True)
+    for width in (1600, 430):
+        page.set_viewport_size({"width": width, "height": 1000})
+        page.screenshot(path=str(SHOTS / f"ingest-policy-detection-only-{width}.png"), full_page=True)
+    page.set_viewport_size({"width": 1280, "height": 720})
+
+    page.get_by_test_id("policy-save").click()
+    page.get_by_role("dialog").get_by_role("button", name="Save policy").click()
+    expect(page.get_by_test_id("policy-save")).to_be_disabled(timeout=ACTION_TIMEOUT_MS)  # saved: clean
+    puts = [c for c in stub.calls if c[0] == "PUT"]
+    assert len(puts) == 1
+    body = puts[0][2]
+    assert body["embedding"]["mode"] == "none"
+    assert body["clustering"] == {"automatic": False}
 
 
 def test_a_409_offers_reload_and_keep_my_edits(stub, page, app_url):

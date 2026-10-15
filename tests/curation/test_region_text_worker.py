@@ -24,6 +24,7 @@ from curation.region_cascade_helpers import (
     _jpeg,
     _profile,
 )
+from curation.vlm_opt_in import project_opts_in_to_env_vlm
 from scripts.curation.worker import runner as runner_mod, stage_a as stage_a_mod
 from scripts.curation.worker.__main__ import parse_args
 from src.config import get_region_fields
@@ -121,6 +122,7 @@ async def _drive(
 
     if vlm_url:
         monkeypatch.setenv('OP_VLM_URL', vlm_url)
+        project_opts_in_to_env_vlm(monkeypatch)
     else:
         monkeypatch.delenv('OP_VLM_URL', raising=False)
     args = parse_args(

@@ -13,6 +13,32 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Added
 
+- Detection-only ingest (#279): ingest policy `embedding.mode: "none"` stores boxes with no vector
+  of any kind (the whole-frame vector included) and `clustering.automatic: false` keeps ingest and
+  the embed scope from placing items in clusters, the `curation-cluster-refresh` daemon from
+  refreshing the project and the auto-label worker's idle retrain from running. Embed and cluster
+  later on demand. Cropwright's ingest-policy page offers both.
+- The cluster-refresh daemon reads `OP_CLUSTER_REFRESH_INTERVAL_S`, `_GROWTH_THRESHOLD`,
+  `_MAX_DEFERRAL_S`, `_RETRY_BACKOFF_S` and `_AUTO_LABEL` (#292); a command-line flag overrides
+  each. No compose override file is needed.
+- Pipeline modes guide: a recipe, run on public data, for "ingest without the VLM, cluster, name
+  clusters by hand, then run the VLM for one cluster, filter or batch" (`vlm=<name>` per run).
+
+- `./openprocessor` and `make` load an optional, git-ignored `docker-compose.local.yml` after the
+  stock compose files: a second read-only source root, a changed `shm_size` or a mounted credentials
+  file no longer need hand-built `docker compose` commands (#283).
+- `./openprocessor curation up [service...]` and `make curation-up SERVICES="..."` start a subset of the
+  curation services; a name that is not a curation service is refused (#285).
+- `capture_docs_screenshots.py` requires `--public-projects` (`OP_CROPWRIGHT_PUBLIC_PROJECTS`), refuses
+  a `--project` outside it, and refuses the pages that list every project (project list, combine,
+  copy-settings, clone-from, model sharing) while the backend holds any project outside it (#284).
+- `scripts/docs/check_docs_vs_code.py` checks `./openprocessor` commands and flags, `make` targets,
+  `<Screenshot>` file names and `NAME=` lines in fenced blocks against the code; the version test
+  scans the frontend docs; `docs.yml` also runs on `docs/**` and type-checks the site; a weekly
+  `docs-links.yml` checks external links (#287, #293).
+- `scripts/codegen/check_cited_paths.py` (pre-commit): a comment or docstring that cites a `docs/`,
+  `scripts/` or similar file cites one that exists. Citations of design notes that left the tree
+  in the frontend sit in a shrink-only baseline (#289).
 - Bulk-ingest preflight (#278): `POST /curation/projects/{project}/ingest/bulk/preview`,
   `scripts/curation/bulk_ingest.py --preview` and a Preview button on the Cropwright Ingest page report,
   without ingesting anything, a folder's, manifest's, S3 prefix's or registered source's file count, total
@@ -151,6 +177,29 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Changed
 
+- **Behavior change**: a project calls no VLM until it activates one (#282). Before, with
+  `OP_VLM_URL` set, every project that never activated an endpoint labeled with the env endpoint
+  and `curation-vlm-worker` labeled every embedded item in the background. Now `GET
+  .../vlm/endpoints/active` answers `source: "off"` for a project with no activation, the VLM
+  worker and the auto-label VLM stage skip it, and `PUT /settings` `defaults.vlm: null` means off.
+  New projects are created with an explicit off. Projects created by an earlier release are
+  pinned once at the first start of this version to what they inherited (`env` when `OP_VLM_URL`
+  was set, else `off`), so their behavior does not change; a `default` project created by a fresh
+  install is pinned the same way. A run that names an endpoint (`vlm=<name>`) still works.
+  `scripts/release/acceptance_run.sh` activates the env VLM in its `vlm_label` phase.
+
+- `./openprocessor profile <name>` now sets `GPU_PROFILE` and `OP_INGEST_GPU_DECODE` in an existing
+  `.env` and names the real restart command. `setup.sh` no longer writes `docker-compose.override.yml`,
+  and `TRITON_WORKERS`, `MAX_BATCH_SIZE` and `SHM_SIZE` (read by nothing) are gone from `.env`,
+  `env.template`, the profile JSON and the docs (#281).
+- `curation-evaluator` moved from the `curation` profile to its own `evaluator` profile, so
+  `--profile curation up -d` no longer reserves a GPU for it. Start it with
+  `./openprocessor curation up curation-evaluator` or `docker compose run --rm curation-evaluator` (#285).
+- In a checkout, `./openprocessor` with no `COMPOSE_PROJECT_NAME` in `.env` uses the documented default
+  project `openprocessor` and says so, instead of exiting 3. An install directory still refuses (#291).
+- `bulk_ingest.py` defaults `--api-base` to `localhost:8000` inside the container and `localhost:4603`
+  on the host (#288).
+- `docs-site/.nvmrc` follows the Node version of `docs-site/Dockerfile` (#289).
 - Repo cleanup, PR 9a (typing): mypy now runs with `disallow_untyped_defs`, `disallow_incomplete_defs`
   and `warn_return_any` over `src scripts docker export` (`tests/` is outside its scope), and the
   nine-error-code relax override for the ML modules is gone. 328 errors were fixed with real types
@@ -416,6 +465,11 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Fixed
 
+- The auto-label VLM stage no longer reports `completed` with `predicted: 0` when it could label
+  nothing: it adds `failed` and `unreadable` counts, and fails the job when every selected crop
+  failed (an unreachable VLM, or source images the worker cannot read).
+- `docs-site` `npm run typecheck` passes: `baseUrl` (deprecated, TS5101) is dropped for `paths` alone,
+  and the missing `@types/react-dom` is added (#293).
 - Monitoring alerts (#290): the Grafana rules **Triton Model Not Ready** (`nv_model_ready_state`),
   **API High Error Rate** (`http_requests_total`) and **OpenSearch Cluster Unhealthy**
   (`opensearch_cluster_status`) queried series nothing exports and could never fire; the first and last are
@@ -431,6 +485,9 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   tree and waited for a stuck directory listing before returning; it now stops at once.
 - Starting a bulk ingest on a folder the API cannot read is refused (`bulk_ingest_invalid_source`, "not
   readable") instead of completing with zero images discovered.
+- The auto-label, cluster-refresh and VLM workers no longer log `Unclosed client session` on
+  shutdown: each opened a second OpenSearch client for its project registry that nothing closed.
+  `script_project_registry` now takes the worker's own client, which the worker already closes.
 
 - Visual-search ingest (#318): a face response with fewer landmark entries than faces no longer
   raises `IndexError` and fails the whole batch. Only the affected image is refused, with the

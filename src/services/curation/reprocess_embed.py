@@ -152,10 +152,12 @@ async def reembed_items(
     *,
     parts: frozenset[str] = ALL_PARTS,
     only_missing: bool = False,
+    place_in_clusters: bool = True,
 ) -> dict[str, int]:
     """Recompute the vectors named by ``parts`` (``crop``, ``frame``,
     ``region``) for every target; ``only_missing`` limits the region part to
-    boxes with no valid stored vector. Returns counters:
+    boxes with no valid stored vector; ``place_in_clusters`` false leaves the
+    newly embedded crops out of the clusters. Returns counters:
     ``images``, ``items``, ``crop_written``, ``frame_written``,
     ``region_written``, ``missing_image`` (path unservable or unreadable)
     and ``decode_failed`` (region crop the encoder could not decode).
@@ -170,7 +172,7 @@ async def reembed_items(
         'missing_image': 0,
         'decode_failed': 0,
     }
-    ivf_store = get_ivf_ingest_store() if 'crop' in parts else None
+    ivf_store = get_ivf_ingest_store() if 'crop' in parts and place_in_clusters else None
     item_updates: dict[str, dict[str, Any]] = {}
     image_updates: list[tuple[str, dict[str, Any]]] = []
     box_entries: dict[str, list[dict[str, Any]]] = {}

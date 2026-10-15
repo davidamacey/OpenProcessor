@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 def test_get_vlm_labeler_uses_generic_pack_by_default() -> None:

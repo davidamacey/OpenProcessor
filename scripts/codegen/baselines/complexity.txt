@@ -18,7 +18,6 @@ src/services/curation/dataset_import/mapping.py::resolve_mapping	18	ratchet: may
 src/services/curation/dataset_import/yolo.py::read_yolo_labels	16	ratchet: may only go down
 src/services/curation/export_split.py::stratified_split_with_stats	16	ratchet: may only go down
 src/services/curation/ingest_batch.py::run_ingest_batch	17	ratchet: may only go down
-src/services/curation/ingest_index.py::index_items	16	ratchet: may only go down
 src/services/curation/item_doc.py::build_item_doc	17	ratchet: may only go down
 src/services/curation/proposal_merge.py::merge_item_proposals	16	ratchet: may only go down
 src/services/curation/registry_reclassify.py::reclassify_unmatched	16	ratchet: may only go down

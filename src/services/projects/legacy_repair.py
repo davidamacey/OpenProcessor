@@ -13,6 +13,8 @@ Repairs, per project:
 * load the config snapshot, then register the active region profile's class
   (the process-local snapshot is empty at bootstrap, so the profile read by
   the plain startup seed was always "none");
+* pin a project with no VLM activation doc to what it used to inherit
+  (:mod:`~src.services.projects.vlm_default`);
 * record ``embedded`` on items that have a vector but no ``embedding_state``.
 """
 
@@ -23,6 +25,7 @@ from typing import Any
 
 from src.core.logging import get_logger
 from src.services.curation.job_lock import exclusive_start_lock
+from src.services.projects.vlm_default import pin_legacy_vlm
 
 
 logger = get_logger(__name__)
@@ -66,17 +69,23 @@ async def repair_bound_project(client: Any, slug: str, lock_file: Any, items_ind
         if not acquired:
             return
         summary: dict[str, Any] = {}
-        try:
-            summary['region_class_id'] = await _ensure_active_region_class(client)
-        except Exception as exc:
-            summary['region_class_error'] = str(exc)
-        try:
-            summary['embedded_state_backfilled'] = await _backfill_with_retry(client, items_index)
-        except Exception as exc:
-            summary['embedded_state_error'] = str(exc)
+        steps = (
+            ('region_class_id', 'region_class_error', lambda: _ensure_active_region_class(client)),
+            ('vlm_pinned', 'vlm_pin_error', lambda: pin_legacy_vlm(client)),
+            (
+                'embedded_state_backfilled',
+                'embedded_state_error',
+                lambda: _backfill_with_retry(client, items_index),
+            ),
+        )
+        for key, error_key, step in steps:
+            try:
+                summary[key] = await step()
+            except Exception as exc:
+                summary[error_key] = str(exc)
         if any(k.endswith('_error') for k in summary):
             level = logger.warning
-        elif summary.get('embedded_state_backfilled'):
+        elif summary.get('embedded_state_backfilled') or summary.get('vlm_pinned'):
             level = logger.info
         else:
             # Nothing to repair: a worker that starts after the lock is

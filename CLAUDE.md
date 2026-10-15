@@ -82,7 +82,8 @@ Docker socket (read its header first).
 | `triton-server` | none | 4600 HTTP, 4601 gRPC, 4602 metrics | TensorRT models, explicit model control |
 | `api` | none | 4603 | FastAPI, all routes |
 | `opensearch` | none | 4607 | k-NN store and the curation datastore |
-| `curation-detection-worker`, `curation-vlm-worker`, `curation-auto-label-worker`, `curation-cluster-refresh`, `curation-evaluator` | `curation` | | Region cascade, VLM loop, auto-label driver, clustering refresh, bake-off runner |
+| `curation-detection-worker`, `curation-vlm-worker`, `curation-auto-label-worker`, `curation-cluster-refresh` | `curation` | | Region cascade, VLM loop, auto-label driver, clustering refresh |
+| `curation-evaluator` | `evaluator` | | Bake-off runner, on demand (`./openprocessor curation up curation-evaluator`) |
 | `segmenter` | `segmenter` | 4611 | Region proposals from a text prompt |
 | `vlm` | `vlm` | 4612 | Local vLLM serving a catalog model |
 | `curation-trainer`, `curation-mlflow` | `training` | 4609 (MLflow) | Training jobs through a file protocol, tracking |

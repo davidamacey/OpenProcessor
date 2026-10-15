@@ -236,6 +236,7 @@ Stored per-project packs are managed through the API; see
 | Item scores | `OP_SCORES_KNN_K` (10), `OP_SCORES_NPROBE` (8), `OP_SCORES_STATE_DIR` (`/jobs/scores`), `OP_CROP_DUP_THRESHOLD` (0.98), `OP_FIELD_COVERAGE_TTL_S` (60) |
 | Active-learning probe | `OP_PROBE_JOBS_DIR` (`/jobs/probe`), `OP_PROBE_ACTIONABLE_MIN_CONFIDENCE` (0.5: a disagreeing probe below this confidence is never offered as a one-click fix) |
 | Diverse selection | `OP_SELECT_JOBS_DIR` (`/jobs/select`), `OP_SELECT_JOB_MAX_N` (200000), `OP_SELECT_MAX_N` (20000), `OP_SELECT_SYNC_MAX_OPS` (3000000), `OP_SELECT_CACHE_TTL_S` (600) |
+| Cluster-refresh daemon | `OP_CLUSTER_REFRESH_INTERVAL_S` (120), `OP_CLUSTER_REFRESH_GROWTH_THRESHOLD` (200), `OP_CLUSTER_REFRESH_MAX_DEFERRAL_S` (1800), `OP_CLUSTER_REFRESH_RETRY_BACKOFF_S` (600), `OP_CLUSTER_REFRESH_AUTO_LABEL` (true). A flag on the command overrides each. A project turns automatic clustering off with the ingest policy (`clustering.automatic`) |
 | Clustering / IVF | `OP_IVF_RETRAIN_CHECK_S` (1800), `OP_IVF_RETRAIN_GROWTH` (1.5), `OP_IVF_RETRAIN_MIN_INTERVAL_S` (86400), `OP_MAX_REFINE_MEMBERS` (8000), `OP_OUTLIER_CACHE_TTL_S` (600), `OP_OUTLIER_MAX_MEMBERS` (20000), `OP_RESIDUAL_EMBEDDING_FIELD` (`pe_embedding`) |
 
 ## Reprocess, dataset import and combine

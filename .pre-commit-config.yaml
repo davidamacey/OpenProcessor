@@ -139,6 +139,13 @@ repos:
         pass_filenames: false
         always_run: true
 
+      - id: check-cited-paths
+        name: Comments and docstrings cite files that exist
+        entry: python3 scripts/codegen/check_cited_paths.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: check-vulture
         name: No new unused code (vulture)
         entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/check_vulture.py'

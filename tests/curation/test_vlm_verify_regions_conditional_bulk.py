@@ -40,7 +40,7 @@ _BOX = RegionBox(
     box_id='b1', bbox_norm=(0.1, 0.1, 0.5, 0.5), state='proposed', score=0.8, detector='det_model'
 )
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 def _item(crop_id: str, **extra: Any) -> dict[str, Any]:

@@ -201,3 +201,18 @@ def stack(vlm_api: VlmApi, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> An
     from curation.config_test_stack import build_stack
 
     return build_stack(vlm_api, tmp_path, monkeypatch)
+
+
+@pytest.fixture
+def readable_crops(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every crop image reads as a tiny JPEG, for tests whose items have no file
+    behind them but must reach the VLM (a stage whose crops are all unreadable fails)."""
+    from types import SimpleNamespace
+
+    from src.services.curation import image_serving
+
+    monkeypatch.setattr(image_serving, 'resolve_crop_root', lambda _p: '/data')
+    monkeypatch.setattr(image_serving, 'resolve_safe_path', lambda p, _r: p)
+    monkeypatch.setattr(
+        image_serving, 'THUMBNAIL_CACHE', SimpleNamespace(get_or_compute=lambda *_a, **_k: b'jpeg')
+    )

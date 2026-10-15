@@ -348,6 +348,10 @@ def test_wheel_example_end_to_end(
         act = client.post(f'{API}/{kind}/wheel_example/activate', json={'expected_active': None})
         assert act.status_code == 200, act.text
         assert act.json()['active'] == {'name': 'wheel_example', 'revision': 1}
+    # a project calls no VLM until it activates one: opt in to the deployment's
+    monkeypatch.setenv('OP_VLM_URL', 'http://vlm.invalid:8000')
+    on = client.post(f'{API}/vlm/endpoints/env/activate', json={'expected_active': None})
+    assert on.status_code == 200, on.text
     dry = client.post(
         f'{API}/reprocess',
         json={

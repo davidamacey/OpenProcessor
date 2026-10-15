@@ -132,6 +132,7 @@ Never add a line to hide a new finding; fix it.
 | `check_layering.py` | routers import services and clients, never the reverse; clients never import services; `src/domain`, `config`, `utils` and `schemas` import neither; only routers import `fastapi`. No baseline: the one permanent exception (the guarded OpenSearch client factory) is listed with its reason in the script |
 | `check_ruff_ratchet.py` | no function above complexity 15, no new `except Exception` |
 | `check_process_ids.py` | no wave, round or work-package ids, and no history names, in comments, docstrings or file names |
+| `check_cited_paths.py` | a comment or docstring that cites a `docs/`, `scripts/` or similar file cites one that exists |
 | `check_vulture.py` | no unused code; a reviewed false positive goes in `vulture_whitelist.py` with a reason |
 | `check_naming_leaks.py` | no private product or domain names in the tracked tree |
 | ruff `TID251` | `src/` reads the environment only through `src/config/env.py` (`env_str`, `env_int`, `env_float`, `env_bool`, `env_path`); a malformed value raises naming the variable |

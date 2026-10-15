@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 from _fake_project_registry import install_static_project_registry
 from PIL import Image
 
+from curation.vlm_opt_in import project_opts_in_to_env_vlm
 from scripts.curation.worker import runner as runner_mod, stage_a as stage_a_mod
 from scripts.curation.worker.__main__ import parse_args
 from src.config import get_region_fields
@@ -336,6 +337,7 @@ async def _drive_worker(
     )
 
     monkeypatch.setenv('OP_VLM_URL', 'http://vlm.invalid:8000')
+    project_opts_in_to_env_vlm(monkeypatch)
     args = parse_args(
         [
             '--opensearch=http://os.invalid:9200',

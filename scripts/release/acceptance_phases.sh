@@ -141,7 +141,16 @@ ph_cluster() {
     ev "auto_label $(jqb '.status // "done"')"
 }
 
+# A project calls no VLM until it activates one, so the phase opts in to the
+# deployment's endpoint first (the OCC value is what the project reports now).
 ph_vlm_label() {
+    local current
+    api GET "${PROJECT_API}/vlm/endpoints/active"; expect 200
+    current="$(jqb '{name: .active.name, revision: .active.revision}')"
+    api_json POST "${PROJECT_API}/vlm/endpoints/env/activate" \
+        "$(jq -nc --argjson c "$current" '{revision:null, expected_active:$c}')"
+    expect 200
+    ev "vlm activated for the project: env"
     api GET "${PROJECT_API}/crops?limit=${VLM_CROPS}"; expect 200
     local ids
     ids="$(jqb "[.crops[]? | (.crop_id // .id)] | .[0:${VLM_CROPS}]")"

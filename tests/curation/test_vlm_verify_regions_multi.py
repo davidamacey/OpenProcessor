@@ -26,7 +26,7 @@ from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, prompt_pack_sta
 ITEMS = base_curation_config().items_index
 F = get_region_fields()
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 def _box(box_id: str, x: float, **over: Any) -> RegionBox:

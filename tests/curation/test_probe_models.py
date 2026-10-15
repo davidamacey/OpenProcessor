@@ -3,7 +3,7 @@ registry's id space as the model's own dense output-index order.
 
 The registry is append-only and gapped by design (deprecated/merged
 classes keep their old id, per the class identity invariant in
-``docs/design/openprocessor_internal/any_domain_plan.md``). A checkpoint's
+the any-domain design). A checkpoint's
 dense output index 0..nc-1 has no relationship to those ids -- only to the
 checkpoint's own embedded ``names`` metadata. These tests pin that: a
 gapped registry must not affect which name a given model output index

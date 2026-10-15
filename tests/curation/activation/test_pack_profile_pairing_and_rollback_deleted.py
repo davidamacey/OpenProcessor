@@ -19,7 +19,7 @@ from curation.activation.constants import (
 )
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 def _setup_packs(c):

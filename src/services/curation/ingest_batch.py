@@ -87,7 +87,7 @@ async def _prefill_gpu_decode(
             chosen.append(idx)
         else:
             count_route('cpu_small' if mp is not None else 'cpu_not_image')
-    embed_crops = service.policy.embedding.mode != 'lazy'
+    embed_crops = service.policy.embedding.mode not in ('lazy', 'none')
     outcomes = await asyncio.gather(
         *(run_gpu_decode(service, images[idx], embed_crops=embed_crops) for idx in chosen)
     )

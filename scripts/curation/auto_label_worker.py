@@ -375,7 +375,11 @@ async def _maybe_auto_retrain(opensearch: Any) -> dict[str, Any] | None:
     """
     try:
         from src.services.curation.clustering.retrain_policy import should_retrain_centroids
+        from src.services.curation.ingest_policy_store import get_ingest_policy
 
+        if not (await get_ingest_policy(opensearch)).clustering.automatic:
+            logger.debug('ivf auto-retrain skipped: automatic clustering is off')
+            return None
         decision = await should_retrain_centroids(opensearch)
         if decision.get('should'):
             logger.info('ivf auto-retrain triggered: %s', decision)
@@ -414,8 +418,8 @@ async def _next_retrain(
 async def _main_loop(stop: asyncio.Event, only_slug: str | None) -> None:
     """One job at a time across every served project: the oldest pending
     trigger first, else a due IVF retrain."""
-    registry = script_project_registry(_opensearch_url())
     opensearch = _build_opensearch()
+    registry = script_project_registry(client=opensearch)
     logger.info(
         'worker ready project=%s poll_s=%s retrain_check_s=%s',
         only_slug or '*',

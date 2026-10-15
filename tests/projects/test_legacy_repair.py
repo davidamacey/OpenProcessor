@@ -49,6 +49,12 @@ def slept(monkeypatch: pytest.MonkeyPatch) -> list[float]:
         return 3
 
     monkeypatch.setattr(legacy_repair, '_ensure_active_region_class', _region)
+
+    async def _no_vlm_pin(_client: Any) -> None:
+        return None
+
+    # The VLM pin has its own tests (curation/test_vlm_explicit_per_project.py).
+    monkeypatch.setattr(legacy_repair, 'pin_legacy_vlm', _no_vlm_pin)
     return waits
 
 

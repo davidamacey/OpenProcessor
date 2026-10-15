@@ -82,10 +82,10 @@ never returns them. boto3 finds them the usual way, in the **`api` container**:
   `.env` into the container, so putting them there works; keep `.env` out of version
   control).
 - A mounted credentials file: set `AWS_SHARED_CREDENTIALS_FILE` to its in-container
-  path and mount it read-only with a compose override.
+  path and mount it read-only in `docker-compose.local.yml`.
 - An instance or task role on AWS.
 
-A mounted file, as `docker-compose.override.yml`:
+A mounted file, as `docker-compose.local.yml`:
 
 ```yaml
 services:
@@ -114,8 +114,7 @@ run it inside the container (the API listens on port 8000 there):
 
 ```bash
 docker compose exec api python scripts/curation/bulk_ingest.py \
-  --s3 s3://my-bucket/incoming/ --project my-project \
-  --api-base http://localhost:8000/curation
+  --s3 s3://my-bucket/incoming/ --project my-project
 ```
 
 Add `--batch-size` and `--concurrency` to tune it. The command shows progress and exits

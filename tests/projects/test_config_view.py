@@ -1,5 +1,5 @@
 """P1 commit 2: CurationConfigView resolves project-scoped fields at
-access time (docs/design/openprocessor_internal/projects_plan.md §3.3)."""
+access time (the project-isolation design §3.3)."""
 
 from __future__ import annotations
 

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
 from src.core.logging import get_logger
+from src.services.curation.ingest_policy_store import get_ingest_policy
 from src.services.curation.reprocess_detect import redetect_image
 from src.services.curation.reprocess_embed import ALL_PARTS, reembed_items
 from src.services.curation.reprocess_embed_spec import EmbedSpec, embed_targets
@@ -50,12 +51,14 @@ async def embed_image_chunk(
     image id to its images doc), accumulating into ``res``. An encoder failure
     counts every image of the chunk as failed."""
     try:
+        policy = await get_ingest_policy(opensearch)
         counts = await reembed_items(
             opensearch,
             pe,
             await embed_targets(opensearch, docs, spec),
             parts=spec.part_set,
             only_missing=spec.only_missing,
+            place_in_clusters=policy.clustering.automatic,
         )
     except Exception as exc:
         logger.warning('reprocess_embed_failed', error=str(exc))

@@ -52,6 +52,7 @@ function bodyOf(p: IngestPolicy | IngestPolicyPutResponse): IngestPolicyBody {
   const body: IngestPolicyBody = {};
   if (p.detect !== undefined) body.detect = structuredClone(p.detect);
   if (p.embedding !== undefined) body.embedding = structuredClone(p.embedding);
+  if (p.clustering !== undefined) body.clustering = structuredClone(p.clustering);
   if (p.detector !== undefined) body.detector = structuredClone(p.detector);
   return body;
 }

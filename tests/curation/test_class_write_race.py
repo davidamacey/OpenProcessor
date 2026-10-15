@@ -49,7 +49,7 @@ F = get_region_fields()
 UNDO_ENTRY = {'writer': 'human:unlabel_crop', 'at': '2026-09-24T10:56:34+00:00'}
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active')
 
 
 def _restored_by_undo(doc: dict[str, Any]) -> None:

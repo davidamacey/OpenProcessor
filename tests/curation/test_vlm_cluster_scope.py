@@ -36,13 +36,14 @@ ITEMS = base_curation_config().items_index
 CLUSTER = 10005
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env')
+pytestmark = pytest.mark.usefixtures('vlm_env_active', 'readable_crops')
 
 
 def _docs() -> dict[str, dict[str, Any]]:
     base = {
         'updated_at': '2026-09-01T00:00:00+00:00',
         'bbox_norm': [0, 0, 1, 1],
+        'image_path': '/data/img.jpg',
         'pe_embedding': [0.1],
     }
     return {

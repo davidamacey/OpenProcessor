@@ -1,7 +1,7 @@
 """Multi-project fairness scheduling for the detection worker
 (``scripts/curation/worker/runner.py`` and its stage modules).
 
-See ``docs/design/openprocessor_internal/projects_plan.md`` §5.1.
+See the project-isolation design §5.1.
 
 This module is deliberately self-contained and asyncio-free at the
 top level so the deficit round-robin math is directly unit-testable
