@@ -59,6 +59,8 @@ export interface PagerOptions<T> {
   accept?: (item: T) => boolean;
 }
 
+const MAX_STALLED_PAGES = 3;
+
 export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
   let items = $state<T[]>([]);
   let total = $state<number>(0);
@@ -67,7 +69,11 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
   let loading = $state<boolean>(false);
   let loadingMore = $state<boolean>(false);
   let error = $state<string | null>(null);
-  const hasMore = $derived(items.length < total);
+  // Pages in a row that added nothing (all repeats or excluded). A server
+  // whose `total` outruns what it serves (it still counts a crop just moved
+  // out) would otherwise have the scroll sentinel request pages forever.
+  let stalledPages = $state<number>(0);
+  const hasMore = $derived(items.length < total && stalledPages < MAX_STALLED_PAGES);
 
   // Bumped by every loadFirst(). loadMore() and loadFirst() itself each
   // capture the epoch in effect when their fetch started; if a newer
@@ -124,6 +130,7 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
       items = [];
       total = 0;
       loadedPages = 0;
+      stalledPages = 0;
       opts.onReset?.();
       try {
         const res = await opts.fetchPage(1);
@@ -145,7 +152,7 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
     },
 
     async loadMore(): Promise<void> {
-      if (loading || loadingMore || items.length >= total) return;
+      if (loading || loadingMore || !hasMore) return;
       const myEpoch = epoch;
       loadingMore = true;
       try {
@@ -164,6 +171,7 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
           (i) => !seen.has(opts.keyOf(i)) && (opts.accept?.(i) ?? true),
         );
         items = [...items, ...fresh];
+        stalledPages = fresh.length === 0 ? stalledPages + 1 : 0;
         total = res?.total ?? total;
         loadedPages = next;
       } catch (e) {
@@ -183,6 +191,7 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
       items = [];
       total = 0;
       loadedPages = 0;
+      stalledPages = 0;
       opts.onReset?.();
       try {
         const res = await opts.fetchPage(page);

@@ -34,6 +34,42 @@ describe('createPager', () => {
     expect(fetchPage).toHaveBeenNthCalledWith(2, 2);
   });
 
+  it('stops asking for pages once several in a row add nothing, however large the served total', async () => {
+    // A server whose total outruns what it serves (a moved crop it still
+    // counts) would otherwise be polled forever by the scroll sentinel.
+    const fetchPage = vi.fn(async () => ({ items: rows('a', 'b'), total: 5 }));
+    const pager = createPager<Row>({ fetchPage, keyOf: (r) => r.id });
+    await pager.loadFirst();
+    for (let i = 0; i < 10; i++) await pager.loadMore();
+    expect(fetchPage.mock.calls.length).toBeLessThan(6);
+    expect(pager.hasMore).toBe(false);
+  });
+
+  it('a page that adds something resets the stall count', async () => {
+    const fetchPage = vi.fn(async (page: number) =>
+      page === 2 || page === 3
+        ? { items: rows('n1'), total: 9 }
+        : { items: rows(`n${page}`), total: 9 },
+    );
+    const pager = createPager<Row>({ fetchPage, keyOf: (r) => r.id });
+    await pager.loadFirst();
+    await pager.loadMore(); // page 2: nothing new
+    await pager.loadMore(); // page 3: nothing new
+    await pager.loadMore(); // page 4: new row, so the stall counter resets
+    expect(pager.items.map((r) => r.id)).toEqual(['n1', 'n4']);
+    expect(pager.hasMore).toBe(true);
+  });
+
+  it('loadFirst re-arms a pager that stopped on stalled pages', async () => {
+    const fetchPage = vi.fn(async () => ({ items: rows('a'), total: 5 }));
+    const pager = createPager<Row>({ fetchPage, keyOf: (r) => r.id });
+    await pager.loadFirst();
+    for (let i = 0; i < 5; i++) await pager.loadMore();
+    expect(pager.hasMore).toBe(false);
+    await pager.loadFirst();
+    expect(pager.hasMore).toBe(true);
+  });
+
   it('loadFirst and loadPage drop a key repeated within one served page (keyed grids throw on a duplicate)', async () => {
     const pager = createPager<Row>({
       fetchPage: async () => ({ items: rows('a', 'b', 'a'), total: 3 }),
