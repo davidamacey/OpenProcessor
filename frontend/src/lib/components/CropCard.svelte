@@ -16,6 +16,7 @@
   import EmbeddingStateBadge from './embedding/EmbeddingStateBadge.svelte';
   import DetectorClass from './labelConfirmation/DetectorClass.svelte';
   import Modal from '$components/Modal.svelte';
+  import AssistSuggestions from './assistRun/AssistSuggestions.svelte';
 
   interface Props {
     crop: Crop;
@@ -480,6 +481,12 @@
       title="The VLM proposed a class that isn't in the registry yet"
     >
       VLM suggests new class: {crop.vlm_suggested_class_name}
+    </div>
+  {/if}
+
+  {#if crop.assist}
+    <div class="border-t border-zinc-800 px-2 py-1" data-testid="card-assist">
+      <AssistSuggestions assist={crop.assist} className={crop.class_name} />
     </div>
   {/if}
 </div>

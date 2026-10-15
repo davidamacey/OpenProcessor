@@ -4,6 +4,7 @@
   rank and clarity, and scores.
 -->
 <script lang="ts">
+  import AssistSuggestions from '$lib/components/assistRun/AssistSuggestions.svelte';
   import ConfirmationChip from '$lib/components/labelConfirmation/ConfirmationChip.svelte';
   import DetectorClass from '$lib/components/labelConfirmation/DetectorClass.svelte';
   import ScoreChip from '$lib/components/ScoreChip.svelte';
@@ -220,6 +221,13 @@
           >({(current.class_confidence * 100).toFixed(0)}%)</span
         >
       {/if}
+    </dd>
+  {/if}
+
+  {#if current.assist}
+    <dt class="text-zinc-500">Assist</dt>
+    <dd data-testid="review-assist">
+      <AssistSuggestions assist={current.assist} className={current.class_name} />
     </dd>
   {/if}
 

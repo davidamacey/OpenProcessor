@@ -186,6 +186,7 @@ describe('mapRawCrop full field mapping', () => {
       expect(crop.vlm_endpoint).toBe('vlm_widget@3');
       expect(crop.vlm_model).toBe('widget-vl-7b');
       expect(crop.vlm_prompt_pack).toBe('widget_pack');
+      expect(crop.assist).toEqual(raw.assist);
     });
 
     it('maps the W10 lock and import fields verbatim', () => {

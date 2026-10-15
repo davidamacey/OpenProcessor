@@ -9,6 +9,7 @@
   import OpenVocabProvenanceRows from './provenance/OpenVocabProvenanceRows.svelte';
   import EmbeddingRows from './provenance/EmbeddingRows.svelte';
   import ReprocessControl from './datasets/ReprocessControl.svelte';
+  import AssistSuggestions from './assistRun/AssistSuggestions.svelte';
   import CropMetaSlots from '$components/cropMeta/CropMetaSlots.svelte';
   import CropItemText from '$components/cropMeta/CropItemText.svelte';
   import CropHistoryBlock from '$components/cropMeta/CropHistoryBlock.svelte';
@@ -152,6 +153,13 @@
   {#if crop.vlm_raw_class}
     <dt class="text-zinc-500">VLM said</dt>
     <dd class="text-zinc-300">{crop.vlm_raw_class}</dd>
+  {/if}
+
+  {#if crop.assist}
+    <dt class="text-zinc-500">Assist</dt>
+    <dd data-testid="meta-assist">
+      <AssistSuggestions assist={crop.assist} className={crop.class_name} />
+    </dd>
   {/if}
 
   {#if crop.vlm_class_empty_reason}
