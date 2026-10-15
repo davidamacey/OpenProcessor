@@ -302,6 +302,7 @@ _EXPLICIT: dict[str, Any] = {
     "open_vocab_revision": None,
     "mask_polygon": None,
     "region_gate_skip": None,
+    "assist": None,
     # Adopted on the frontend by
     # readSlot (SlotData.text.choice/invalidReason,
     # SlotData.subBox.candidate, SlotData.lifecycle.validated/

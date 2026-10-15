@@ -8,7 +8,7 @@
   import { createClusterDetailActions } from '$lib/clusters/clusterDetailActions.svelte';
   import { createClusterDetailController } from '$lib/clusters/clusterDetailController.svelte';
   import { createClusterDetailLive } from '$lib/clusters/clusterDetailLive.svelte';
-  import AssistProposalCard from '$components/assistRun/AssistProposalCard.svelte';
+  import ClusterProposalPanel from '$components/assistRun/ClusterProposalPanel.svelte';
   import AssistRunDialog from '$components/assistRun/AssistRunDialog.svelte';
   import { createClusterAssist } from '$lib/assistRun/clusterAssist.svelte';
   import type { Crop } from '$lib/types';
@@ -33,13 +33,18 @@
   <ClusterDetailToolbar {view} {actions} {clusterAssist} />
   <ClusterDetailFilters {view} />
   <SubClusterTabs {view} />
+  {#if clusterAssist.loadError}
+    <p
+      class="border-b border-zinc-800 px-4 py-1.5 text-xs text-amber-300"
+      data-testid="cluster-assist-error"
+    >
+      VLM proposals unavailable: {clusterAssist.loadError}
+    </p>
+  {/if}
   {#if clusterAssist.latest}
     {#key clusterAssist.latest.run_id}
-      <div
-        class="border-b border-zinc-800 px-4 py-2"
-        data-testid="cluster-assist-proposal"
-      >
-        <AssistProposalCard
+      <div class="border-b border-zinc-800 px-4 py-2">
+        <ClusterProposalPanel
           run={clusterAssist.latest}
           onapplied={() => {
             void view.loadFirst();
