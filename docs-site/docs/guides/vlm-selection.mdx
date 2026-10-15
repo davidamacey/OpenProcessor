@@ -372,6 +372,7 @@ curl -s -X PUT "$API/curation/projects/cars/vlm/policy" \
 | `conf_max` | 0.80 | `uncertain` only: crops with a detector confidence below this, or none recorded |
 | `per_cluster` | 5 | `representatives` only: crops nearest each cluster centre; every unassigned crop is also kept. 1 to 100 |
 | `max_crops_per_day` | 0 | VLM class attempts per UTC day, answered or empty. 0 is unlimited |
+| `region_verify` | `vlm` | How the region worker verifies boxes: `vlm` (the active VLM, today's behaviour) or `none` (accepted without a VLM). Not a crop scope. A per-item `region_run_verify` from an assist `segment` run wins over it |
 | `sample_frac` | 1.0 | Above 0 up to 1. Keeps a stable hash-chosen fraction of the crops (the same crops on every poll) |
 
 `off` stops both automated writers for the project. The write needs the

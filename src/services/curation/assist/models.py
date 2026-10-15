@@ -18,18 +18,19 @@ from src.services.curation.item_selection import MAX_SELECTION_IDS
 from src.services.rejections import rejection
 
 
-AssistAction = Literal['classify', 'attributes', 'verify']
+AssistAction = Literal['classify', 'attributes', 'verify', 'segment']
 RunStatus = Literal[
     'dry_run',
     'queued',
     'running',
+    'waiting_region',
     'completed',
     'completed_with_errors',
     'failed',
     'cancelled',
     'interrupted',
 ]
-ACTIVE_STATUSES = frozenset({'queued', 'running'})
+ACTIVE_STATUSES = frozenset({'queued', 'running', 'waiting_region'})
 MAX_BOX_REFS = 1000
 
 
@@ -107,6 +108,17 @@ class AssistSample(BaseModel):
     stratify_by: Literal['auto', 'cluster_subid', 'none'] = 'auto'
 
 
+class SegmentSpec(BaseModel):
+    """How the region worker verifies the boxes a `segment` action makes: `vlm` (the
+    project's active VLM; the run's endpoint must be that one) or `none` (accepted
+    without a VLM; add the `verify` action to judge them afterwards with the run's own
+    endpoint)."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    verify: Literal['vlm', 'none']
+
+
 class AssistRunRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
@@ -118,6 +130,9 @@ class AssistRunRequest(BaseModel):
     )
     prompt_pack: str | None = Field(
         default=None, description="A prompt pack name; null = the project's effective default."
+    )
+    segment: SegmentSpec | None = Field(
+        default=None, description='Required with, and only with, the `segment` action.'
     )
     acknowledge_external: bool = False
     min_agreement: float = Field(
@@ -136,6 +151,19 @@ def validate_request(request: AssistRunRequest) -> None:
             raise _invalid('a boxes target has no class to suggest: use verify or attributes')
         if request.sample.mode != 'all':
             raise _invalid('a boxes target is its own sample: sample.mode must be "all"')
+    if ('segment' in request.actions) != (request.segment is not None):
+        raise _invalid('segment takes a `segment` spec, and a `segment` spec needs the action')
+    if 'segment' in request.actions:
+        if isinstance(target, BoxesTarget):
+            raise _invalid(
+                'the segmenter takes a text prompt over the item crop and cannot re-segment one '
+                'box: use a crops, cluster or filter target'
+            )
+        if 'verify' in request.actions and request.segment.verify != 'none':  # type: ignore[union-attr]
+            raise _invalid(
+                'with the verify action, segment.verify must be "none": the worker accepts '
+                'the boxes and the run then judges them with its own endpoint'
+            )
     if 'verify' in request.actions and not isinstance(target, CropsTarget | BoxesTarget):
         raise _invalid('verify takes a crops or boxes target')
     if isinstance(target, CropsTarget):
@@ -227,10 +255,18 @@ class VerifyResult(BaseModel):
     )
 
 
+class SegmentResult(BaseModel):
+    queued: int = Field(default=0, description='Items re-queued for the region worker.')
+    done: int = 0
+    pending: int = Field(default=0, description='Still waiting for the worker when the run ended.')
+    failed: int = Field(default=0, description='Items the worker wrote as detection_failed.')
+
+
 class AssistResult(BaseModel):
     classify: ClassifyResult | None = None
     attributes: AttributesResult | None = None
     verify: VerifyResult | None = None
+    segment: SegmentResult | None = None
     proposal: Proposal | None = Field(
         default=None, description='The sampled answers read as a label for the scope.'
     )
@@ -278,6 +314,8 @@ __all__ = [
     'FilterTarget',
     'ResolvedScope',
     'RunStatus',
+    'SegmentResult',
+    'SegmentSpec',
     'SkippedCounts',
     'StratumInfo',
     'VerifyResult',

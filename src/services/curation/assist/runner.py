@@ -25,10 +25,12 @@ from src.services.curation.assist.models import (
     AssistRunState,
     AttributesResult,
     ClassifyResult,
+    SegmentResult,
     VerifyResult,
 )
 from src.services.curation.assist.proposal import compute_proposal
 from src.services.curation.assist.scope_now import current_members
+from src.services.curation.assist.segment import requeue_for_run, wait_for_region
 from src.services.curation.assist.slot_write import RunMeta
 from src.services.curation.assist.verify import verify_chunk
 from src.services.curation.class_write_guard import ClassWriteGuard
@@ -113,7 +115,10 @@ def _meta(job: FileJob, prepared: PreparedRun, created_at: str, labeler: object)
 
 
 def _result(
-    request_actions: Sequence[str], total: ChunkOutcome, proposal: Proposal
+    request_actions: Sequence[str],
+    total: ChunkOutcome,
+    proposal: Proposal,
+    segment: SegmentResult | None,
 ) -> AssistResult:
     return AssistResult(
         classify=(
@@ -142,6 +147,7 @@ def _result(
             if 'verify' in request_actions
             else None
         ),
+        segment=segment,
         proposal=proposal,
     )
 
@@ -152,6 +158,22 @@ def _sum(outcomes: list[ChunkOutcome]) -> ChunkOutcome:
         for name in vars(total):
             setattr(total, name, getattr(total, name) + getattr(o, name))
     return total
+
+
+async def _segment_stage(
+    job: FileJob, opensearch: AsyncOpenSearch, prepared: PreparedRun
+) -> SegmentResult | None:
+    """Re-queue the run's items for the region worker and wait for it; ``None`` when the
+    run does not segment."""
+    spec = prepared.request.segment
+    if 'segment' not in prepared.request.actions or spec is None:
+        return None
+    ids = prepared.scope.sampled_ids
+    queued = await requeue_for_run(opensearch, ids, run_id=job.directory.name, verify=spec.verify)
+    job.update(status='waiting_region', progress={'processed': 0, 'total': queued})
+    result = await wait_for_region(job, opensearch, job.directory.name, queued)
+    job.update(status='running', progress={'processed': 0, 'total': len(ids)})
+    return result
 
 
 async def _chunk(
@@ -208,6 +230,7 @@ async def run_assist(
         meta = _meta(job, prepared, created_at, labeler)
         actions = prepared.request.actions
         ids = prepared.scope.sampled_ids
+        segment = await _segment_stage(job, opensearch, prepared)
         size = max(1, prepared.images_per_call)
         chunks = [ids[i : i + size] for i in range(0, len(ids), size)]
         sem = asyncio.Semaphore(CONCURRENCY)
@@ -227,7 +250,9 @@ async def run_assist(
         results = await asyncio.gather(*[gated(c) for c in chunks])
         total = _sum([r for r in results if r is not None])
         cancelled = job.cancel_requested()
-        nothing_to_ask = 'verify' in actions and not (total.failed or total.unreadable)
+        nothing_to_ask = bool({'verify', 'segment'} & set(actions)) and not (
+            total.failed or total.unreadable
+        )
         if (
             ids
             and not cancelled
@@ -254,7 +279,7 @@ async def run_assist(
         )
         job.update(
             status=status,
-            result=_result(actions, total, proposal).model_dump(mode='json'),
+            result=_result(actions, total, proposal, segment).model_dump(mode='json'),
             finished_at=now_iso(),
             updated_at=now_iso(),
         )

@@ -71,6 +71,8 @@ from src.services.curation.reprocess_locks import region_locked_clause, region_s
 
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from opensearchpy import AsyncOpenSearch
 
 
@@ -354,7 +356,9 @@ class _Merger:
         clear_detection: bool,
         F: RegionFields,
         now: str,
+        stamp: Mapping[str, Any] | None = None,
     ) -> None:
+        self.stamp = dict(stamp or {})
         self.expected = expected
         self.target = target
         self.clear_detection = clear_detection
@@ -372,6 +376,8 @@ class _Merger:
         update = self._merge(current)
         if not update:
             self.untouched.add(doc_id)
+        elif self.stamp:
+            update.update(self.stamp)
         return update
 
     def _merge(self, current: dict[str, Any]) -> dict[str, Any]:
@@ -438,6 +444,7 @@ async def apply_requeue_ids(
     clear_detection: bool,
     config: CurationConfig | None = None,
     fields: RegionFields | None = None,
+    stamp: Mapping[str, Any] | None = None,
 ) -> dict[str, int]:
     """:func:`apply_requeue` for explicit items (any current status): the
     per-item and per-image reprocess buttons. Returns ``{updated, skipped,
@@ -452,6 +459,7 @@ async def apply_requeue_ids(
         clear_detection=clear_detection,
         F=F,
         now=datetime.now(UTC).isoformat(),
+        stamp=stamp,
     )
     result = await occ_skip_on_conflict_bulk(
         opensearch,

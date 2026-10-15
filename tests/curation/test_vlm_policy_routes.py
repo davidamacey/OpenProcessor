@@ -47,6 +47,7 @@ def test_get_returns_the_defaults_when_never_written(client: TestClient) -> None
         'per_cluster': 5,
         'max_crops_per_day': 0,
         'sample_frac': 1.0,
+        'region_verify': 'vlm',
     }
 
 
@@ -98,3 +99,11 @@ def test_vlm_and_ingest_policies_do_not_clobber_each_other(client: TestClient) -
     assert client.get(URL).json()['scope'] == 'off'
     assert client.put(URL, json={'expected_revision': 1, 'scope': 'uncertain'}).status_code == 200
     assert client.get(INGEST_URL).json()['revision'] == 1
+
+
+def test_region_verify_round_trips_and_rejects_unknown_values(client: TestClient) -> None:
+    put = client.put(URL, json={'expected_revision': 0, 'region_verify': 'none'})
+    assert put.status_code == 200, put.text
+    assert client.get(URL).json()['region_verify'] == 'none'
+    bad = client.put(URL, json={'expected_revision': 1, 'region_verify': 'sometimes'})
+    assert bad.status_code == 422

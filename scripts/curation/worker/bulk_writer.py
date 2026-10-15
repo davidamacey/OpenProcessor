@@ -226,7 +226,7 @@ async def _bulk_update_one_project(
         # and this flush must not relabel the answer. The profile/pack refs
         # are read once per bulk call (all `eligible` tasks share one bound
         # project).
-        return finalize_region_write(
+        written = finalize_region_write(
             update,
             current,
             doc_id=doc_id,
@@ -243,6 +243,10 @@ async def _bulk_update_one_project(
                 vlm_model=task.vlm_identity.model if task.vlm_identity is not None else None,
             ),
         )
+        if written and task.region_run_verify:
+            # An assist run's choice is spent once the item is written; the run id stays.
+            written['region_run_verify'] = None
+        return written
 
     result = await occ_skip_on_conflict_bulk(
         opensearch,

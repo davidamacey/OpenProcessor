@@ -29,6 +29,10 @@ _ATTRIBUTE_MAPPING: dict[str, Any] = {
 }
 
 ASSIST_ITEM_MAPPING: dict[str, Any] = {
+    # An assist run that re-queues items for the region worker stamps its id and how the
+    # worker verifies them (`vlm` / `none`); the worker clears the second once it writes.
+    'region_run_id': {'type': 'keyword'},
+    'region_run_verify': {'type': 'keyword'},
     'assist': {
         'properties': {
             'run_id': {'type': 'keyword'},
@@ -45,7 +49,7 @@ ASSIST_ITEM_MAPPING: dict[str, Any] = {
                 'properties': {'box_id': {'type': 'keyword'}, 'attributes': _ATTRIBUTE_MAPPING},
             },
         }
-    }
+    },
 }
 
 

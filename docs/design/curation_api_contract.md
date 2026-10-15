@@ -1470,8 +1470,17 @@ its class), and the answers, including a locked item's, are kept in the item's
 | `min_agreement` | 0.5 to 1.0, default 0.6 |
 | `dry_run` | default `true` |
 
+`segment` (present exactly when `actions` has `segment`) is `{verify: "vlm" | "none"}`: how the
+region worker verifies the boxes the re-segmentation makes (`vlm`: the project's active VLM,
+so the run's endpoint must be that one, else `409 verify_endpoint_mismatch`; `none`: accepted
+without a VLM). With the `verify` action `segment.verify` must be `none` and the run then judges
+the new boxes with its own endpoint (a `crops` target). `segment` takes a `crops`, `cluster` or
+`filter` target and re-queues the resolved items for the region worker (a human-validated
+region set is skipped). Refusals: `409 region_profile_required`, `409 no_segmenter_leg` (the
+active profile has no `segmenter_text_prompt`), `409 region_stage_paused`.
+
 `AssistRunState`: `run_id` (null on a dry run), `status` (`dry_run`, `queued`,
-`running`, `completed`, `completed_with_errors`, `failed`, `cancelled`,
+`running`, `waiting_region`, `completed`, `completed_with_errors`, `failed`, `cancelled`,
 `interrupted`), `created_at`, `finished_at`, `error`, `request` (as normalised),
 `resolved`, `progress` (`processed`, `total`) and `result`. `resolved` has
 `scope_count` (members after the visibility rules), `scope_digest` (`sha256:`
@@ -1481,7 +1490,7 @@ over the sorted ids), `sampled`, `sample_seed`, `strata` (`key`, `size`,
 class is never written), `vlm` (`name`, `revision`, `model`), `prompt_pack`
 (`name`, `revision`) and `estimated_vlm_calls`. `result` has `classify`
 (`predicted`, `updated`, `failed`, `unreadable`, `locked_suggest_only`) and
-`attributes` (`items_written`, `invalid_values`), `verify` (`boxes` judged, `accepted`,
+`attributes` (`items_written`, `invalid_values`), `segment` (`queued`, `done`, `pending`, `failed`), `verify` (`boxes` judged, `accepted`,
 `rejected`, `locked_skipped`) for the actions that ran, and the `proposal`.
 
 **Proposal and scope check.** `result.proposal` reads the sampled answers as a

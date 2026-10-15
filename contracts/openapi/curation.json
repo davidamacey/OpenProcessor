@@ -691,6 +691,16 @@
             ],
             "description": "The sampled answers read as a label for the scope."
           },
+          "segment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SegmentResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "verify": {
             "anyOf": [
               {
@@ -734,7 +744,8 @@
               "enum": [
                 "classify",
                 "attributes",
-                "verify"
+                "verify",
+                "segment"
               ],
               "type": "string"
             },
@@ -769,6 +780,17 @@
           },
           "sample": {
             "$ref": "#/components/schemas/AssistSample"
+          },
+          "segment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SegmentSpec"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required with, and only with, the `segment` action."
           },
           "target": {
             "discriminator": {
@@ -897,6 +919,7 @@
               "dry_run",
               "queued",
               "running",
+              "waiting_region",
               "completed",
               "completed_with_errors",
               "failed",
@@ -5540,6 +5563,9 @@
               "scope_changed",
               "class_not_in_registry",
               "run_has_no_scope",
+              "region_stage_paused",
+              "no_segmenter_leg",
+              "verify_endpoint_mismatch",
               "too_many_crops",
               "too_few_items",
               "too_many_crop_ids",
@@ -27045,6 +27071,54 @@
         "title": "SeededClass",
         "type": "object"
       },
+      "SegmentResult": {
+        "properties": {
+          "done": {
+            "default": 0,
+            "title": "Done",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "description": "Items the worker wrote as detection_failed.",
+            "title": "Failed",
+            "type": "integer"
+          },
+          "pending": {
+            "default": 0,
+            "description": "Still waiting for the worker when the run ended.",
+            "title": "Pending",
+            "type": "integer"
+          },
+          "queued": {
+            "default": 0,
+            "description": "Items re-queued for the region worker.",
+            "title": "Queued",
+            "type": "integer"
+          }
+        },
+        "title": "SegmentResult",
+        "type": "object"
+      },
+      "SegmentSpec": {
+        "additionalProperties": false,
+        "description": "How the region worker verifies the boxes a `segment` action makes: `vlm` (the\nproject's active VLM; the run's endpoint must be that one) or `none` (accepted\nwithout a VLM; add the `verify` action to judge them afterwards with the run's own\nendpoint).",
+        "properties": {
+          "verify": {
+            "enum": [
+              "vlm",
+              "none"
+            ],
+            "title": "Verify",
+            "type": "string"
+          }
+        },
+        "required": [
+          "verify"
+        ],
+        "title": "SegmentSpec",
+        "type": "object"
+      },
       "SegmenterAvailability": {
         "description": "The segmenter every open-vocabulary run needs. ``configured``: a\nsegmenter URL is set; ``reachable``: it answered its health probe and has\nits model loaded (never true when not configured). The same fact\n``GET /models/status`` reports in its segmenter row.",
         "properties": {
@@ -30844,6 +30918,16 @@
             "title": "Per Cluster",
             "type": "integer"
           },
+          "region_verify": {
+            "default": "vlm",
+            "description": "How the region worker verifies proposed boxes: `vlm` (with the project's VLM when it has one) or `none` (accepted without a VLM).",
+            "enum": [
+              "vlm",
+              "none"
+            ],
+            "title": "Region Verify",
+            "type": "string"
+          },
           "revision": {
             "default": 0,
             "title": "Revision",
@@ -30899,6 +30983,16 @@
             "minimum": 1.0,
             "title": "Per Cluster",
             "type": "integer"
+          },
+          "region_verify": {
+            "default": "vlm",
+            "description": "How the region worker verifies proposed boxes: `vlm` (with the project's VLM when it has one) or `none` (accepted without a VLM).",
+            "enum": [
+              "vlm",
+              "none"
+            ],
+            "title": "Region Verify",
+            "type": "string"
           },
           "sample_frac": {
             "default": 1.0,

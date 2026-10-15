@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import structlog
 
-from scripts.curation.worker import stage_sam
+from scripts.curation.worker import stage_sam, verify_choice
 from scripts.curation.worker.client import SegmenterUnavailable
 from scripts.curation.worker.no_verdict import NoVerdictCounter
 from scripts.curation.worker.pipeline import PipelineContext
@@ -113,7 +113,7 @@ class Harness:
         m.setattr(stage_sam, '_resegment_from_text_hint', self._resegment_from_text_hint)
         m.setattr(stage_sam, 'apply_region_text', self._apply_region_text)
         m.setattr(stage_sam, '_box_with_resolved_text', lambda box, _doc: box)
-        m.setattr(stage_sam, 'accept_without_vlm', self._accept_without_vlm)
+        m.setattr(verify_choice, 'accept_without_vlm', self._accept_without_vlm)
         m.setattr(stage_sam, '_sync_singular_candidate', lambda t: self.calls.append(('sync', t)))
         m.setattr(
             stage_sam,

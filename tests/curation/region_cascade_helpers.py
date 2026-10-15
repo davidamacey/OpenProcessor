@@ -120,6 +120,7 @@ class _FakeOpenSearch:
         self._pending_refresh: int | None = None
         self.seq = dict.fromkeys(docs, 1)
         self.writes: list[tuple[str, dict[str, Any]]] = []
+        self.settings_doc: dict[str, Any] | None = None
         self.pending_statuses = {
             'pending',
             'pending_detection',
@@ -148,6 +149,14 @@ class _FakeOpenSearch:
                 status_code = 404
 
             raise _NotFoundError('no revision doc in the fake registry index')
+        if index.endswith('__configs') and doc_id == 'default':
+            if self.settings_doc is None:
+
+                class _MissingSettingsError(Exception):
+                    status_code = 404
+
+                raise _MissingSettingsError('NotFoundError: no settings document in the fake')
+            return {'_source': copy.deepcopy(self.settings_doc), '_seq_no': 1, '_primary_term': 1}
         msg = (
             f'_FakeOpenSearch.get is only wired for the projects revision doc, got {index}/{doc_id}'
         )
@@ -250,6 +259,7 @@ async def _drive_worker(
     class_group: Any = None,
     profile_overrides: dict[str, Any] | None = None,
     region_embed_ready: bool = False,
+    vlm_active: bool = True,
 ) -> dict[str, Any]:
     """Run the streaming worker in continuous mode until the item is
     written plus several more polls, then stop it. Returns the mocks.
@@ -335,7 +345,8 @@ async def _drive_worker(
     )
 
     monkeypatch.setenv('OP_VLM_URL', 'http://vlm.invalid:8000')
-    project_opts_in_to_env_vlm(monkeypatch)
+    if vlm_active:
+        project_opts_in_to_env_vlm(monkeypatch)
     args = parse_args(
         [
             '--opensearch=http://os.invalid:9200',

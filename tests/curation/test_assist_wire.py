@@ -72,4 +72,4 @@ def test_the_items_index_maps_the_assist_object() -> None:
     props = _items_body()['mappings']['properties']
     assert props['assist']['properties']['attributes']['type'] == 'nested'
     assert props['assist']['properties']['run_created_at']['type'] == 'date'
-    assert set(ASSIST_ITEM_MAPPING) == {'assist'}
+    assert set(ASSIST_ITEM_MAPPING) == {'assist', 'region_run_id', 'region_run_verify'}

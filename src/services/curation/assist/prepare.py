@@ -76,6 +76,49 @@ def _check_pack(request: AssistRunRequest, pack: PromptPack) -> None:
         )
 
 
+def _check_segment(request: AssistRunRequest, vlm: RunVlm) -> None:
+    """The `segment` action needs a region worker that can do the work, and an endpoint
+    the worker can verify with."""
+    if 'segment' not in request.actions or request.segment is None:
+        return
+    from src.services.curation.region_stage_control import is_region_stage_paused
+    from src.services.detection.profile_registry import get_active_region_profile
+    from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError, active_vlm_endpoint
+
+    profile = get_active_region_profile()
+    if profile is None:
+        raise rejection(
+            409,
+            'region_profile_required',
+            'segment needs an active region profile; activate one first',
+        )
+    if not profile.segmenter_text_prompt:
+        raise rejection(
+            409,
+            'no_segmenter_leg',
+            f'region profile {profile.name!r} has no segmenter text prompt, so there is no '
+            'segmenter leg to run',
+        )
+    if is_region_stage_paused():
+        raise rejection(
+            409,
+            'region_stage_paused',
+            "the project's region stage is paused; resume it, or the run would wait forever",
+        )
+    if request.segment.verify == 'vlm':
+        try:
+            active = active_vlm_endpoint()
+        except VlmEndpointUnavailableError:
+            active = None
+        if active is None or (active.name, active.revision) != (vlm.name, vlm.revision):
+            raise rejection(
+                409,
+                'verify_endpoint_mismatch',
+                "the region worker verifies with the project's active VLM only; run segment with "
+                'verify "none" plus the verify action to judge the new boxes with this endpoint',
+            )
+
+
 def _check_classes(request: AssistRunRequest) -> None:
     if 'classify' not in request.actions:
         return
@@ -103,6 +146,7 @@ async def prepare_run(opensearch: AsyncOpenSearch, request: AssistRunRequest) ->
         acknowledge_external=request.acknowledge_external,
     )
     require_run_vlm(vlm)
+    _check_segment(request, vlm)
     scope = await resolve_scope(opensearch, request)
     limit = _endpoint_images(vlm)
     return PreparedRun(

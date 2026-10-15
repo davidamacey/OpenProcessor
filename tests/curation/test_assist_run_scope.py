@@ -55,6 +55,13 @@ async def _code(coro: Any) -> tuple[int, str]:
     return info.value.status_code, info.value.detail['error']
 
 
+def test_segment_without_its_spec_is_refused() -> None:
+    request = AssistRunRequest.model_validate({'target': _cluster(), 'actions': ['segment']})
+    with pytest.raises(RequestRejectedError) as info:
+        validate_request(request)
+    assert info.value.detail['error'] == 'invalid_request'
+
+
 @pytest.mark.asyncio
 async def test_a_cluster_resolves_visible_members_and_counts_the_skipped() -> None:
     scope = await resolve_scope(_world(), _request(_cluster()))
@@ -156,7 +163,7 @@ def test_a_size_without_a_representative_sample_is_refused() -> None:
         validate_request(_request(_cluster(), sample={'mode': 'all', 'size': 5}))
 
 
-@pytest.mark.parametrize('bad', [{'actions': []}, {'actions': ['segment']}, {'bogus': 1}])
+@pytest.mark.parametrize('bad', [{'actions': []}, {'actions': ['bogus']}, {'bogus': 1}])
 def test_unknown_or_empty_actions_and_keys_fail_the_schema(bad: dict[str, Any]) -> None:
     with pytest.raises(ValueError, match='validation error'):
         AssistRunRequest.model_validate({'target': _cluster(), 'actions': ['classify'], **bad})
