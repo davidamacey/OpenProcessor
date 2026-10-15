@@ -82,3 +82,12 @@ def test_markdown_table_has_the_run_numbers() -> None:
     assert '100 % of baseline' in md
     assert '42' in md
     assert '2.00 GiB' in md
+
+
+def test_source_body_folder_or_manifest() -> None:
+    assert sr.source_body('/d', None) == {'folder': '/d'}
+    assert sr.source_body(None, '/m.txt') == {'manifest': '/m.txt'}
+    with pytest.raises(ValueError, match='exactly one'):
+        sr.source_body('/d', '/m.txt')
+    with pytest.raises(ValueError, match='exactly one'):
+        sr.source_body(None, None)

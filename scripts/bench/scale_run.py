@@ -250,8 +250,14 @@ class Sampler(threading.Thread):
         self._stop_evt.set()
 
 
-def preview_total(base: str, folder: str, expected: int | None) -> int:
-    pv = call(f'{base}/ingest/bulk/preview', {'folder': folder}, post=True)
+def source_body(folder: str | None, manifest: str | None) -> dict[str, str]:
+    if (folder is None) == (manifest is None):
+        raise ValueError('give exactly one of folder or manifest')
+    return {'folder': folder} if folder is not None else {'manifest': manifest or ''}
+
+
+def preview_total(base: str, source: dict[str, str], expected: int | None) -> int:
+    pv = call(f'{base}/ingest/bulk/preview', source, post=True)
     if pv.get('partial'):
         if expected is None:
             raise SystemExit(
@@ -295,7 +301,8 @@ def drive(args: argparse.Namespace) -> int:
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     series = out / f'{args.label}.jsonl'
-    total = preview_total(base, args.folder, args.expected_total)
+    body = source_body(args.folder, args.manifest)
+    total = preview_total(base, body, args.expected_total)
     stop_at = stop_count(total, args.stop_at) if args.stop_at > 0 else None
     print(f'total={total} stop_at={stop_at}', flush=True)
     sampler = Sampler(
@@ -304,7 +311,6 @@ def drive(args: argparse.Namespace) -> int:
     sampler.start()
     t_begin = time.time()
     legs: list[dict[str, Any]] = []
-    body = {'folder': args.folder}
     cancelled = False
     with series.open('a') as log:
         for leg in (1, 2):
@@ -393,7 +399,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument('--api', required=True, help='API base, e.g. http://127.0.0.1:4603')
     p.add_argument('--project', required=True)
-    p.add_argument('--folder', required=True, help='Folder path as the API container sees it')
+    p.add_argument('--folder', default=None, help='Folder path as the API container sees it')
+    p.add_argument(
+        '--manifest',
+        default=None,
+        help='Manifest path as the API container sees it (instead of --folder)',
+    )
     p.add_argument('--label', required=True, help='Names the output files and the table heading')
     p.add_argument(
         '--stop-at',

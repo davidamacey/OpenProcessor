@@ -8,6 +8,10 @@ hash). ``ATTRIBUTION.csv`` is written next to ``images/``. Run on the host::
     python scripts/datasets/fetch_openimages_bench.py --out <dir> --n 100000 --seed 20261009 \\
         --cache-dir <cache> --manifest <pin.json>
     python scripts/datasets/fetch_openimages_bench.py --verify-only --out <dir> --manifest <pin.json>
+
+The full 100,000-row pin is about 39 MB and is kept out of git (to be hosted as a release
+asset); ``--manifest`` accepts it at any path. The committed ``.sha256`` file next to the
+other manifests records its ``manifest_sha256``, count, seed and licence.
 """
 
 from __future__ import annotations
