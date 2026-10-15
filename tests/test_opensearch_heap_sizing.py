@@ -142,17 +142,6 @@ def test_config_sh_forced_regen_keeps_a_user_heap(tmp_path: Path) -> None:
     assert 'OPENSEARCH_HEAP=4g' not in env
 
 
-def test_config_sh_override_interpolates_opensearch_heap(tmp_path: Path) -> None:
-    proj = _project(tmp_path)
-    result = _generate(proj, _meminfo(tmp_path, 32), 'generate_compose_override standard 0')
-    assert result.returncode == 0, result.stderr
-    override = (proj / 'docker-compose.override.yml').read_text()
-    assert (
-        '"OPENSEARCH_JAVA_OPTS=-Xms${OPENSEARCH_HEAP:-2g} -Xmx${OPENSEARCH_HEAP:-2g}"' in override
-    )
-    assert not re.search(r'-Xm[sx][0-9]', override)
-
-
 def test_compose_interpolates_heap_and_hard_codes_no_xmx() -> None:
     compose = (REPO_ROOT / 'docker-compose.yml').read_text()
     assert '"OPENSEARCH_JAVA_OPTS=-Xms${OPENSEARCH_HEAP:-2g} -Xmx${OPENSEARCH_HEAP:-2g}"' in compose

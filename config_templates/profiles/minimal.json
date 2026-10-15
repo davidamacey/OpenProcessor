@@ -4,8 +4,6 @@
   "instance_count": 1,
   "max_batch_size": 16,
   "preferred_batch_sizes": [4, 8, 16],
-  "shm_size": "4g",
-  "workers": 8,
   "ocr_pipeline_instances": 1,
   "ingest_gpu_decode": false,
   "python_backend_budget_mib": 512,

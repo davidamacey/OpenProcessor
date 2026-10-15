@@ -316,9 +316,6 @@ generate_configs_step() {
     # --force was passed)
     generate_env_file "$SELECTED_PROFILE" "$GPU_ID" "$FORCE_ENV"
 
-    # Generate docker-compose.override.yml
-    generate_compose_override "$SELECTED_PROFILE" "$GPU_ID"
-
     log_success "Configuration generated"
 }
 

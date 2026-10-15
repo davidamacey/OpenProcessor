@@ -166,6 +166,10 @@ cmd_download() {
 # curation-cluster-refresh) all carry `profiles: [curation]` in
 # docker-compose.yml, so `start`/`stop` above never touch them.
 
+# Every service in the curation profile, plus the on-demand evaluator (profile
+# `evaluator`, so a bare `curation up` leaves it alone).
+CURATION_SERVICES="curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-cluster-refresh curation-evaluator"
+
 cmd_curation() {
     local subcommand="${1:-status}"
     shift 2>/dev/null || true
@@ -174,8 +178,23 @@ cmd_curation() {
 
     case "$subcommand" in
         up)
-            log_step "Starting curation subsystem (profile: curation)..."
-            dc --profile curation up -d
+            if (( $# > 0 )); then
+                local svc
+                for svc in "$@"; do
+                    case " $CURATION_SERVICES " in
+                        *" $svc "*) ;;
+                        *)
+                            log_error "Not a curation service: $svc"
+                            echo "Curation services: $CURATION_SERVICES"
+                            return 1
+                            ;;
+                    esac
+                done
+                log_step "Starting curation services: $*..."
+            else
+                log_step "Starting curation subsystem (profile: curation)..."
+            fi
+            dc --profile curation up -d "$@"
             log_success "Curation services starting. Check with: $0 curation status"
             ;;
         down)
@@ -200,7 +219,7 @@ cmd_curation() {
             ;;
         *)
             log_error "Unknown curation subcommand: $subcommand"
-            echo "Available: up, down, logs, status, seed"
+            echo "Available: up [service...], down, logs, status, seed"
             return 1
             ;;
     esac
@@ -271,7 +290,7 @@ Testing:
 
 Curation (experimental, opt-in compose profile):
   curation [action]   Manage the curation worker services
-                      Options: up, down, logs, status (default), seed
+                      Options: up [service...], down, logs, status (default), seed
 
 Maintenance:
   clean [target]      Clean files

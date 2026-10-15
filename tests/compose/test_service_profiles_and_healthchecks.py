@@ -206,3 +206,9 @@ def test_api_has_a_healthcheck() -> None:
 def test_curation_mlflow_has_a_healthcheck() -> None:
     services = _services()
     assert services['curation-mlflow'].get('healthcheck'), 'curation-mlflow needs a healthcheck'
+
+
+def test_evaluator_is_on_demand_not_in_the_curation_profile() -> None:
+    """It reserves a GPU and has no restart policy, so `--profile curation up -d` must skip it (#285)."""
+    profiles = _services()['curation-evaluator'].get('profiles') or []
+    assert profiles == ['evaluator']

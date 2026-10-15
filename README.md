@@ -255,8 +255,7 @@ make up && make curation-up
 # 3. --folder is a container path under the /data/source mount, not a
 #    host-relative one:
 docker compose -p openprocessor exec api python scripts/curation/bulk_ingest.py \
-  --folder /data/source/coco_va_readme/images --project cars \
-  --api-base http://localhost:8000/curation
+  --folder /data/source/coco_va_readme/images --project cars
 ```
 
 An installed directory already has `OP_SOURCE_ROOT_HOST=./data`, so skip step 2
@@ -569,8 +568,8 @@ Client (Port 4603)
 - `triton-server` (4600-4602): Triton with TensorRT models.
 - `opensearch` (4607): vector database and the curation datastore.
 - `curation-detection-worker`, `curation-vlm-worker`,
-  `curation-auto-label-worker`, `curation-cluster-refresh`,
-  `curation-evaluator` [`curation`].
+  `curation-auto-label-worker`, `curation-cluster-refresh` [`curation`];
+  `curation-evaluator` [`evaluator`, on demand].
 - `segmenter` (4611) [`segmenter`], `vlm` (4612) [`vlm`].
 - `curation-trainer`, `curation-mlflow` (4609) [`training`].
 - Prometheus (4604), Grafana (4605), Loki (4606), OpenSearch Dashboards (4608),

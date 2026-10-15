@@ -82,7 +82,7 @@ checkout. GPU placement comes from `.env` keys, not from the compose files.
 | `curation-vlm-worker` | `curation` | | VLM class and verification loop |
 | `curation-auto-label-worker` | `curation` | | Drives the auto-label job protocol |
 | `curation-cluster-refresh` | `curation` | | Schedules the residual-clustering retrain as an auto-label job, when ingest is quiet |
-| `curation-evaluator` | `curation` | | Runs bake-off job specs |
+| `curation-evaluator` | `evaluator` | | Runs bake-off job specs |
 | `segmenter` | `segmenter` | 4611 | Region proposals from a text prompt, `docker/segmenter/` |
 | `curation-trainer` | `training` | | Runs training jobs from `job.json` files, `docker/trainer/` |
 | `curation-mlflow` | `training` | 4609 | Experiment tracking, optional |

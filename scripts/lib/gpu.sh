@@ -149,13 +149,11 @@ load_profile() {
     PROFILE_NAME=$(grep -o '"name"[[:space:]]*:[[:space:]]*"[^"]*"' "$profile_file" | cut -d'"' -f4)
     PROFILE_INSTANCE_COUNT=$(grep -o '"instance_count"[[:space:]]*:[[:space:]]*[0-9]*' "$profile_file" | grep -o '[0-9]*$')
     PROFILE_MAX_BATCH=$(grep -o '"max_batch_size"[[:space:]]*:[[:space:]]*[0-9]*' "$profile_file" | grep -o '[0-9]*$')
-    PROFILE_SHM_SIZE=$(grep -o '"shm_size"[[:space:]]*:[[:space:]]*"[^"]*"' "$profile_file" | cut -d'"' -f4)
-    PROFILE_WORKERS=$(grep -o '"workers"[[:space:]]*:[[:space:]]*[0-9]*' "$profile_file" | grep -o '[0-9]*$')
     PROFILE_OCR_PIPELINE_INSTANCES=$(grep -o '"ocr_pipeline_instances"[[:space:]]*:[[:space:]]*[0-9]*' "$profile_file" | grep -o '[0-9]*$')
 
     PROFILE_INGEST_GPU_DECODE=$(profile_ingest_gpu_decode "$profile_file")
 
-    export PROFILE_NAME PROFILE_INSTANCE_COUNT PROFILE_MAX_BATCH PROFILE_SHM_SIZE PROFILE_WORKERS PROFILE_OCR_PIPELINE_INSTANCES PROFILE_INGEST_GPU_DECODE
+    export PROFILE_NAME PROFILE_INSTANCE_COUNT PROFILE_MAX_BATCH PROFILE_OCR_PIPELINE_INSTANCES PROFILE_INGEST_GPU_DECODE
 
     log_debug "Loaded profile: $PROFILE_NAME (instances=$PROFILE_INSTANCE_COUNT, batch=$PROFILE_MAX_BATCH)"
     return 0

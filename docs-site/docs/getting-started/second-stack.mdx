@@ -98,6 +98,6 @@ curl http://localhost:4703/health
 
 Compose reads `COMPOSE_PROJECT_NAME` from the clone's `.env`. From any other
 directory, pass `-p opdev` on every `docker compose` command. The
-`./openprocessor` CLI also reads the name from `.env`; in a checkout it exits
-with code 3 until `COMPOSE_PROJECT_NAME` is set there, which this checklist
-does.
+`./openprocessor` CLI also reads the name from `.env`; in a checkout without
+it the CLI falls back to the project `openprocessor`, which this checklist
+avoids by setting `COMPOSE_PROJECT_NAME`.
