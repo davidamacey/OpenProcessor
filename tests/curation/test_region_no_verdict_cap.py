@@ -144,7 +144,7 @@ class TestCombinedNoVerdictIsCapped:
         _assert_no_verdict_reject(doc)
         # The reply's class side still lands (the VLM did answer it).
         assert doc[F.visible] is True
-        assert doc['vlm_item_make'] == 'Chevrolet'
+        assert 'vlm_item_make' not in doc
         assert fake_os.live['c1'][F.status] == 'verify_rejected'
 
     @pytest.mark.asyncio

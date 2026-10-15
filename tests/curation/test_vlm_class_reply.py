@@ -185,7 +185,6 @@ class TestCombinedNestedEntryUnwrap:
                 'class_confidence': None,
                 'region_visible': True,
                 'region_boxes': [{'box': 1, 'region_text': '782CCB', 'region_confidence': 'high'}],
-                'make': None,
                 'model': None,
             },
         }

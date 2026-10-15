@@ -116,7 +116,7 @@ def _combined_class_update(
     ``detector`` / ``labeler`` provenance, so a hot switch never leaves a
     stale process-wide model id on a write.
 
-    Always-applicable fields (make/model/region_visible/vlm_verify_completed_at)
+    Always-applicable fields (region_visible/vlm_verify_completed_at)
     are written regardless of whether a class was resolved. ``class_id`` /
     ``class_name`` only land when the reply contains a usable index into
     ``class_names``. A reply that *named* a label outside the catalog
@@ -135,7 +135,7 @@ def _combined_class_update(
 
     Pass ``class_names=None`` (or an empty list) when the caller already
     has a trusted class label and the reply was generated with
-    ``classify=False``; only the make/model/region_visible fields are
+    ``classify=False``; only the region_visible field is
     persisted in that case so the class column is preserved.
     """
     update: dict[str, Any] = {}
@@ -194,10 +194,6 @@ def _combined_class_update(
         )
     # else: caller asked the VLM to SKIP classification — leave the
     # existing class fields untouched.
-    if reply.make:
-        update['vlm_item_make'] = reply.make
-    if reply.model:
-        update['vlm_item_model'] = reply.model
     update[get_region_fields().visible] = bool(reply.region_visible)
     update['updated_at'] = ts
     # Marker: class + region resolved in one VLM call. Downstream

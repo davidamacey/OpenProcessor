@@ -280,11 +280,6 @@ def _items_body() -> dict[str, Any]:
                 # Last VLM class attempt + why it gave no class
                 # (src/config/vlm_class_attempt.py).
                 **VLM_CLASS_ATTEMPT_MAPPING,
-                # VLM-extracted make/model hint. Field names kept as-is for
-                # the same reason as above (no region-of-interest concept
-                # applies to this item-level attribute).
-                'vlm_item_make': {'type': 'keyword'},
-                'vlm_item_model': {'type': 'keyword'},
                 # Region-visibility hint: this WAS a vendor- and
                 # domain-named field baked into the otherwise-generic
                 # index mapping, unlike its siblings above

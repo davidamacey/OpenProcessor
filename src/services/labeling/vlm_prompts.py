@@ -516,7 +516,7 @@ REPLY_KEY_CONTRACT: dict[str, dict[str, list[str]]] = {
     'classify': {
         'fields': ['class_system', 'class_user_template'],
         'required': ['img', 'class', 'confidence'],
-        'optional': ['make', 'model'],
+        'optional': [],
     },
     'open_classify': {
         'fields': ['open_class_system', 'open_class_user_template'],

@@ -137,13 +137,9 @@ def updates_from_predictions(
         labeled_at=now,
     )
     for p in preds:
-        # Always write the VLM's make/model/region_visible when reported, regardless of
-        # which class-resolution path fires.
+        # Always write the VLM's region_visible when reported, regardless of which
+        # class-resolution path fires.
         extras: dict[str, Any] = {}
-        if p.make:
-            extras['vlm_item_make'] = p.make
-        if p.model:
-            extras['vlm_item_model'] = p.model
         if p.region_visible is not None:
             extras[get_region_fields().visible] = p.region_visible
         update, proposal = prediction_class_update(

@@ -128,7 +128,7 @@ def prediction_class_update(
     Returns ``(update, new_class_proposal)``; ``update`` is ``None`` when
     nothing may be written (the call never completed). ``resolve(raw,
     confidence=...)`` maps an answer onto a registry name. ``extras``
-    (make / model / region-visible hints) ride on every written update;
+    (region-visible hints) ride on every written update;
     ``set_cluster`` also moves a resolved item into its class cluster. An
     empty answer records no raw label: a reply excerpt such as ``"]"`` is
     not a label and would pollute the raw-label aggregation.

@@ -443,6 +443,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Removed
 
+- The hard-coded `make` and `model` VLM outputs: the reply keys, `VlmClassPrediction.make/model`, the combined reply's `make/model`, and the `vlm_item_make` / `vlm_item_model` item fields (never on the wire). A prompt pack declares such facts as `attributes` instead; they are stored in the item's `assist` object by assist runs. Existing values in `vlm_item_make` / `vlm_item_model` stay in old documents and are not read.
 - `POST /vlm/label_cluster/{cluster_id}`: use `POST /assist/runs` with a `cluster` target (and `sample.mode: "all"`), or `?cluster_id=` on `auto_label/start` for the whole-cluster job. Cropwright's cluster-page and dashboard "Run VLM" calls are moved to the assist run in the frontend step of this release.
 - The region-profile fields `aspect_min` and `aspect_max` (and `OcrRegion.is_region_shaped`, which was
   their only reader and had no caller): from the profile dataclass, the profile editor schema, the

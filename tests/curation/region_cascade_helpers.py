@@ -80,8 +80,6 @@ def _combined(**over: Any) -> dict[str, Any]:
                 **box_overrides,
             }
         ],
-        'make': 'Chevrolet',
-        'model': 'Silverado',
     }
     reply.update(over)
     return reply

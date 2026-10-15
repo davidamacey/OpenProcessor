@@ -139,10 +139,7 @@ def _combined_reply_from_entry(
         raise ValueError(msg)
     class_id, class_raw = _coerce_class_answer(entry, class_names)
     class_conf_raw = entry.get('class_confidence')
-    make = str(entry.get('make') or '').strip()[:48]
-    model_name = str(entry.get('model') or '').strip()[:48]
-    # suppress a per-box
-    # text reply that's really the item's own class/make/model echoed
+    # suppress a per-box text reply that's really the item's own class echoed
     # back into the text slot -- ported from the earlier flat parser's
     # ``_clean_combined_region_text`` echo check, dropped (not ported)
     # when the per-box list shape replaced it.
@@ -151,7 +148,7 @@ def _combined_reply_from_entry(
         if class_names and class_id is not None and 0 <= class_id < len(class_names)
         else ''
     )
-    echoes = (picked_class, make, model_name, f'{make} {model_name}'.strip())
+    echoes = (picked_class,)
     region_boxes = box_verdicts(entry, n_boxes, fields, echoes=echoes) if n_boxes > 0 else []
     return VlmCombinedReply(
         img_id=img_id,
@@ -161,8 +158,6 @@ def _combined_reply_from_entry(
         ),
         region_visible=visible,
         region_boxes=region_boxes,
-        make=make,
-        model=model_name,
         class_raw=class_raw,
     )
 

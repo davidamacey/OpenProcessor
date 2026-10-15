@@ -127,8 +127,6 @@ class VlmClassPrediction(BaseModel):
         default='',
         description='Raw text the VLM returned for this crop (best-effort), even on parse failure.',
     )
-    make: str = Field(default='', description='Free-text attribute 1 when visible, else "".')
-    model: str = Field(default='', description='Free-text attribute 2 when visible, else "".')
     attributes: dict[str, AttributeValue] = Field(
         default_factory=dict,
         description='Pack-declared attributes the assist call reported (declared keys only).',
@@ -204,8 +202,6 @@ class VlmCombinedReply(BaseModel):
         default_factory=list,
         description='One verdict per candidate box offered, aligned by position (box 1..N).',
     )
-    make: str = Field(default='', description='Free-text attribute 1 when visible, else "".')
-    model: str = Field(default='', description='Free-text attribute 2 when visible, else "".')
     class_raw: str = Field(
         default='',
         description=(

@@ -228,8 +228,6 @@ class ClassifyOps(VlmLabelerCore):
             # "". Falls back to the full response excerpt when class is
             # empty.
             per_crop_raw = class_name or proposed or raw_excerpt
-            make = str(entry.get('make', '') or '').strip()[:48]
-            model = str(entry.get('model', '') or '').strip()[:48]
             attributes, invalid = parse_attributes(entry.get('attributes'), specs)
             visible_raw = entry.get(fields.visible)
             visible = bool(visible_raw) if isinstance(visible_raw, bool) else None
@@ -240,8 +238,6 @@ class ClassifyOps(VlmLabelerCore):
                     confidence=confidence,
                     proposed_class=proposed,
                     raw_response=per_crop_raw,
-                    make=make,
-                    model=model,
                     attributes=attributes,
                     invalid_attribute_values=invalid,
                     region_visible=visible,
