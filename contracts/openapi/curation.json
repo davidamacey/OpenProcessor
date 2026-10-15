@@ -460,6 +460,362 @@
         "title": "ArchiveRequest",
         "type": "object"
       },
+      "AssistAttributeWire": {
+        "description": "One suggested attribute: a pack-declared ``key``, its normalised\n``value`` and the VLM's confidence.",
+        "properties": {
+          "confidence": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "confidence"
+        ],
+        "title": "AssistAttributeWire",
+        "type": "object"
+      },
+      "AssistBoxWire": {
+        "properties": {
+          "attributes": {
+            "items": {
+              "$ref": "#/components/schemas/AssistAttributeWire"
+            },
+            "title": "Attributes",
+            "type": "array"
+          },
+          "box_id": {
+            "title": "Box Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "box_id"
+        ],
+        "title": "AssistBoxWire",
+        "type": "object"
+      },
+      "AssistContext": {
+        "additionalProperties": false,
+        "description": "The (sub-)cluster a selection of crops belongs to, so the run's result\nis listed with that scope.",
+        "properties": {
+          "cluster_id": {
+            "title": "Cluster Id",
+            "type": "integer"
+          },
+          "cluster_subid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Subid"
+          }
+        },
+        "required": [
+          "cluster_id"
+        ],
+        "title": "AssistContext",
+        "type": "object"
+      },
+      "AssistProgress": {
+        "properties": {
+          "processed": {
+            "default": 0,
+            "title": "Processed",
+            "type": "integer"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "AssistProgress",
+        "type": "object"
+      },
+      "AssistResult": {
+        "properties": {
+          "attributes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AttributesResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "classify": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClassifyResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "AssistResult",
+        "type": "object"
+      },
+      "AssistRunRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "acknowledge_external": {
+            "default": false,
+            "title": "Acknowledge External",
+            "type": "boolean"
+          },
+          "actions": {
+            "items": {
+              "enum": [
+                "classify",
+                "attributes"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Actions",
+            "type": "array"
+          },
+          "dry_run": {
+            "default": true,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "min_agreement": {
+            "default": 0.6,
+            "description": "The proposal gate's agreement floor.",
+            "maximum": 1.0,
+            "minimum": 0.5,
+            "title": "Min Agreement",
+            "type": "number"
+          },
+          "prompt_pack": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A prompt pack name; null = the project's effective default.",
+            "title": "Prompt Pack"
+          },
+          "sample": {
+            "$ref": "#/components/schemas/AssistSample"
+          },
+          "target": {
+            "discriminator": {
+              "mapping": {
+                "cluster": "#/components/schemas/ClusterTarget",
+                "crops": "#/components/schemas/CropsTarget",
+                "filter": "#/components/schemas/FilterTarget"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CropsTarget"
+              },
+              {
+                "$ref": "#/components/schemas/ClusterTarget"
+              },
+              {
+                "$ref": "#/components/schemas/FilterTarget"
+              }
+            ],
+            "title": "Target"
+          },
+          "vlm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A VLM endpoint name; null = the project's active endpoint.",
+            "title": "Vlm"
+          }
+        },
+        "required": [
+          "target",
+          "actions"
+        ],
+        "title": "AssistRunRequest",
+        "type": "object"
+      },
+      "AssistRunState": {
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/AssistProgress"
+          },
+          "request": {
+            "$ref": "#/components/schemas/AssistRunRequest"
+          },
+          "resolved": {
+            "$ref": "#/components/schemas/ResolvedScope"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "status": {
+            "enum": [
+              "dry_run",
+              "queued",
+              "running",
+              "completed",
+              "completed_with_errors",
+              "failed",
+              "cancelled",
+              "interrupted"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "request",
+          "resolved"
+        ],
+        "title": "AssistRunState",
+        "type": "object"
+      },
+      "AssistSample": {
+        "additionalProperties": false,
+        "description": "What the VLM sees. ``all``: every member of the scope. ``representative``:\na seeded sample whose size grows with the scope (``size`` overrides), stratified\nby sub-cluster when the scope has several.",
+        "properties": {
+          "mode": {
+            "default": "all",
+            "enum": [
+              "all",
+              "representative"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "seed": {
+            "default": 0,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "maximum": 256.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "stratify_by": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "cluster_subid",
+              "none"
+            ],
+            "title": "Stratify By",
+            "type": "string"
+          }
+        },
+        "title": "AssistSample",
+        "type": "object"
+      },
+      "AttributesResult": {
+        "properties": {
+          "invalid_values": {
+            "default": 0,
+            "title": "Invalid Values",
+            "type": "integer"
+          },
+          "items_written": {
+            "default": 0,
+            "title": "Items Written",
+            "type": "integer"
+          }
+        },
+        "title": "AttributesResult",
+        "type": "object"
+      },
       "AuditClassStat": {
         "properties": {
           "ci_high": {
@@ -3639,6 +3995,38 @@
         "title": "ClassUpdateRequest",
         "type": "object"
       },
+      "ClassifyResult": {
+        "properties": {
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "locked_suggest_only": {
+            "default": 0,
+            "description": "Answers on items whose class is locked: stored as suggestions only.",
+            "title": "Locked Suggest Only",
+            "type": "integer"
+          },
+          "predicted": {
+            "default": 0,
+            "title": "Predicted",
+            "type": "integer"
+          },
+          "unreadable": {
+            "default": 0,
+            "title": "Unreadable",
+            "type": "integer"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "title": "ClassifyResult",
+        "type": "object"
+      },
       "CloneSettingsRequest": {
         "description": "``POST {prefix}/clone_settings`` (P3).",
         "properties": {
@@ -3731,6 +4119,38 @@
           "method"
         ],
         "title": "ClusterStats",
+        "type": "object"
+      },
+      "ClusterTarget": {
+        "additionalProperties": false,
+        "description": "A cluster, or one sub-cluster of it, addressed by the stored ids.",
+        "properties": {
+          "cluster_id": {
+            "title": "Cluster Id",
+            "type": "integer"
+          },
+          "cluster_subid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Subid"
+          },
+          "kind": {
+            "const": "cluster",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "cluster_id"
+        ],
+        "title": "ClusterTarget",
         "type": "object"
       },
       "ClusteringPolicy": {
@@ -4846,6 +5266,12 @@
               "no_box_to_verify",
               "no_class_names",
               "pack_declares_no_attributes",
+              "invalid_request",
+              "assist_too_large",
+              "assist_busy",
+              "scope_changed",
+              "class_not_in_registry",
+              "run_has_no_scope",
               "too_many_crops",
               "too_few_items",
               "too_many_crop_ids",
@@ -5830,6 +6256,42 @@
           "crops"
         ],
         "title": "CropsPageResponse",
+        "type": "object"
+      },
+      "CropsTarget": {
+        "additionalProperties": false,
+        "description": "A single crop (one id) or a user selection (many).",
+        "properties": {
+          "context": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "crop_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5000,
+            "minItems": 1,
+            "title": "Crop Ids",
+            "type": "array"
+          },
+          "kind": {
+            "const": "crops",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "crop_ids"
+        ],
+        "title": "CropsTarget",
         "type": "object"
       },
       "CurationSettingsResponse": {
@@ -9092,6 +9554,26 @@
         "title": "FailedTask",
         "type": "object"
       },
+      "FilterTarget": {
+        "additionalProperties": false,
+        "description": "Every item a non-empty item filter matches.",
+        "properties": {
+          "filter": {
+            "$ref": "#/components/schemas/ItemFilter"
+          },
+          "kind": {
+            "const": "filter",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "filter"
+        ],
+        "title": "FilterTarget",
+        "type": "object"
+      },
       "GlobalHealthResponse": {
         "description": "Deployment facts only -- nothing here depends on a project. The\nscoped ``{prefix}/health`` serves the same facts plus the bound\nproject's.",
         "properties": {
@@ -10387,6 +10869,110 @@
         "title": "IngestUploadConfig",
         "type": "object"
       },
+      "ItemAssistWire": {
+        "description": "The VLM's suggestions for an item from the newest assist run that\nanswered it. Suggestions only: they never change the item's class or boxes,\nand a locked item carries them too (``class_name`` is what the VLM said).",
+        "properties": {
+          "attributes": {
+            "items": {
+              "$ref": "#/components/schemas/AssistAttributeWire"
+            },
+            "title": "Attributes",
+            "type": "array"
+          },
+          "boxes": {
+            "items": {
+              "$ref": "#/components/schemas/AssistBoxWire"
+            },
+            "title": "Boxes",
+            "type": "array"
+          },
+          "class_confidence": {
+            "anyOf": [
+              {
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Confidence"
+          },
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Name"
+          },
+          "prompt_pack": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Pack"
+          },
+          "prompt_pack_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Pack Revision"
+          },
+          "run_created_at": {
+            "title": "Run Created At",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "vlm_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Endpoint"
+          },
+          "vlm_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Model"
+          }
+        },
+        "required": [
+          "run_id",
+          "run_created_at"
+        ],
+        "title": "ItemAssistWire",
+        "type": "object"
+      },
       "ItemBatchRegionsRequest": {
         "additionalProperties": false,
         "description": "Body for ``PUT /crops/batch_regions``.",
@@ -10431,6 +11017,16 @@
       "ItemDoc": {
         "description": "The wire item every item-returning endpoint emits.\n\nDocumentation/OpenAPI model only: handlers return\n``src.services.curation.wire.serialize_item`` output directly (a test\npins this model's fields to that serializer's keys), so a stored value\nof an unexpected type never 500s a browse page. Region attributes use\nthe fixed ``region_<attr>`` wire names regardless of any\n``OP_REGION_FIELD_*`` storage override.",
         "properties": {
+          "assist": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemAssistWire"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "bbox_norm": {
             "items": {
               "type": "number"
@@ -19534,6 +20130,16 @@
       "RegionRow": {
         "description": "A full wire item plus the box the row is about.\n\nKey a row by ``row_key`` (equivalently ``(crop_id, region_box_id)``). The route-specific keys are\npresent only on that route's rows.",
         "properties": {
+          "assist": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemAssistWire"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "bbox_norm": {
             "items": {
               "type": "number"
@@ -22863,6 +23469,75 @@
         "title": "ResolvedMapTarget",
         "type": "object"
       },
+      "ResolvedScope": {
+        "properties": {
+          "estimated_vlm_calls": {
+            "default": 0,
+            "title": "Estimated Vlm Calls",
+            "type": "integer"
+          },
+          "prompt_pack": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Pack"
+          },
+          "sample_seed": {
+            "title": "Sample Seed",
+            "type": "integer"
+          },
+          "sampled": {
+            "title": "Sampled",
+            "type": "integer"
+          },
+          "scope_count": {
+            "description": "Members of the target after the visibility rules.",
+            "title": "Scope Count",
+            "type": "integer"
+          },
+          "scope_digest": {
+            "description": "sha256 over the sorted member ids.",
+            "title": "Scope Digest",
+            "type": "string"
+          },
+          "skipped": {
+            "$ref": "#/components/schemas/SkippedCounts"
+          },
+          "strata": {
+            "items": {
+              "$ref": "#/components/schemas/StratumInfo"
+            },
+            "title": "Strata",
+            "type": "array"
+          },
+          "vlm": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm"
+          }
+        },
+        "required": [
+          "scope_count",
+          "scope_digest",
+          "sampled",
+          "sample_seed"
+        ],
+        "title": "ResolvedScope",
+        "type": "object"
+      },
       "ResourceLink": {
         "properties": {
           "hint": {
@@ -23091,6 +23766,16 @@
       },
       "ReviewItemDoc": {
         "properties": {
+          "assist": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemAssistWire"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "bbox_norm": {
             "items": {
               "type": "number"
@@ -24601,6 +25286,16 @@
       },
       "SearchItemDoc": {
         "properties": {
+          "assist": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemAssistWire"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "bbox_norm": {
             "items": {
               "type": "number"
@@ -26131,6 +26826,34 @@
         "title": "SelectionDryRunResponse",
         "type": "object"
       },
+      "SkippedCounts": {
+        "description": "Members of the target the run did not send to the VLM, and why.",
+        "properties": {
+          "class_locked": {
+            "default": 0,
+            "description": "Sent anyway for suggestions; their class is never written (`classify` only).",
+            "title": "Class Locked",
+            "type": "integer"
+          },
+          "excluded": {
+            "default": 0,
+            "title": "Excluded",
+            "type": "integer"
+          },
+          "holdout": {
+            "default": 0,
+            "title": "Holdout",
+            "type": "integer"
+          },
+          "not_found": {
+            "default": 0,
+            "title": "Not Found",
+            "type": "integer"
+          }
+        },
+        "title": "SkippedCounts",
+        "type": "object"
+      },
       "SourceBucket": {
         "properties": {
           "doc_count": {
@@ -26688,6 +27411,29 @@
           "default"
         ],
         "title": "StrategyEntry",
+        "type": "object"
+      },
+      "StratumInfo": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "sampled": {
+            "title": "Sampled",
+            "type": "integer"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "size",
+          "sampled"
+        ],
+        "title": "StratumInfo",
         "type": "object"
       },
       "StratumMetrics": {
@@ -31673,6 +32419,163 @@
         "summary": "Archive Project",
         "tags": [
           "Projects"
+        ]
+      }
+    },
+    "/curation/projects/{project}/assist/runs": {
+      "post": {
+        "description": "Plan an assist run, and start it unless ``dry_run`` (the default).\n\nThe response says what the target resolved to (members, the sample, what is\nskipped, the endpoint and pack pinned, the VLM calls to expect). Refusals:\n409 ``vlm_not_configured`` (the project's VLM is off and ``vlm`` names none),\n409 ``assist_busy``, 404 ``not_found`` (an empty cluster), 422\n``invalid_request``, ``assist_too_large``, ``pack_declares_no_attributes``,\n``no_class_names``. Class suggestions never overwrite a locked, validated or\nholdout item; attributes are stored apart from the labels.",
+        "operationId": "create_assist_run_curation_projects__project__assist_runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistRunState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Assist Run",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/assist/runs/{run_id}": {
+      "get": {
+        "description": "The state of one run: progress while it runs, ``result`` when it ends.",
+        "operationId": "get_assist_run_curation_projects__project__assist_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistRunState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Assist Run",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/assist/runs/{run_id}/cancel": {
+      "post": {
+        "description": "Ask a live run to stop after its current chunk; what it wrote stays.",
+        "operationId": "cancel_assist_run_curation_projects__project__assist_runs__run_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistRunState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Assist Run",
+        "tags": [
+          "Curation"
         ]
       }
     },
@@ -41108,7 +42011,7 @@
             }
           },
           {
-            "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
+            "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
             "in": "query",
             "name": "cluster_id",
             "required": false,
@@ -41121,7 +42024,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
+              "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
               "title": "Cluster Id"
             }
           },
@@ -41502,7 +42405,7 @@
             }
           },
           {
-            "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
+            "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
             "in": "query",
             "name": "cluster_id",
             "required": false,
@@ -41515,7 +42418,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
+              "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
               "title": "Cluster Id"
             }
           },
@@ -50028,106 +50931,6 @@
           }
         },
         "summary": "Vlm Label Batch",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
-    "/curation/projects/{project}/vlm/label_cluster/{cluster_id}": {
-      "post": {
-        "description": "VLM-label every unvalidated member of one cluster, as a background job.\n\nQueues the auto-label job scoped to ``cluster_id`` with only the VLM\nstage (no re-clustering, no auto-promote, no cap): the server selects\nevery unvalidated, non-holdout, non-excluded member and chunks them.\nReturns the job state; poll ``GET /pipeline/auto_label/status/{job_id}`` —\n``total`` is the number selected, ``result.stages.vlm`` the outcome.\n``409`` while another auto-label job runs.",
-        "operationId": "vlm_label_cluster_curation_projects__project__vlm_label_cluster__cluster_id__post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "cluster_id",
-            "required": true,
-            "schema": {
-              "title": "Cluster Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Per-run VLM prompt_pack (an id from GET /methods axis=prompt_pack) used by the labeling stage. Overrides the settings default for this job only; never written to settings. Unset = settings default. Unknown id -> 422.",
-            "in": "query",
-            "name": "prompt_pack",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Per-run VLM prompt_pack (an id from GET /methods axis=prompt_pack) used by the labeling stage. Overrides the settings default for this job only; never written to settings. Unset = settings default. Unknown id -> 422.",
-              "title": "Prompt Pack"
-            }
-          },
-          {
-            "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
-            "in": "query",
-            "name": "vlm",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Per-run VLM endpoint (a name, or name@revision, from GET /methods axis=vlm) used by the labeling stage. Overrides this project's default for this run only; never written to settings. Unset = the project default. Unknown -> 422. An endpoint outside this deployment also needs acknowledge_external=true, unless it is already this project's acknowledged default.",
-              "title": "Vlm"
-            }
-          },
-          {
-            "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
-            "in": "query",
-            "name": "acknowledge_external",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "Acknowledge that crops will be sent to a VLM endpoint outside this deployment for this run.",
-              "title": "Acknowledge External",
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AutoLabelJobState"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Vlm Label Cluster",
         "tags": [
           "Curation"
         ]

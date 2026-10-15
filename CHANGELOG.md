@@ -13,6 +13,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Added
 
+- Assist runs, `POST /assist/runs` (dry run by default), `GET /assist/runs/{run_id}` and `POST /assist/runs/{run_id}/cancel`: one request shape sends a crop, a selection, a cluster, a sub-cluster or an item filter to the VLM, whole or as a seeded, size-scaled representative sample stratified by sub-cluster, with `classify` and `attributes` actions. Class answers go through the guarded VLM class writer (a locked, validated or holdout item keeps its class); every answer, a locked item's included, is stored in the item's new `assist` object (shown on the item wire), apart from the labels. One run per project (`409 assist_busy`); `OP_ASSIST_JOBS_DIR`.
 - Prompt packs declare `attributes` (up to 16 free-form facts about an item or a box, with an optional closed vocabulary) and carry the `assist` (classify plus item attributes) and `attributes` (attributes alone) prompts. The labeler gains `assist_batch` and `attributes_batch`, and `POST /prompt_packs/test` accepts `call: assist` and `attributes`. Pack validation checks the attribute list and the prompts it needs (`pack_attribute_invalid`, `pack_attribute_duplicate`). The `vehicle_wheel` example pack declares `make`, `model`, `body_style` and a wheel `rim_material`.
 - `GET /crops?cluster_subid=` and the item filter's `cluster_subid` select one AHC sub-cluster on the server, so a sub-cluster larger than a page can be listed whole.
 - Detection-only ingest (#279): ingest policy `embedding.mode: "none"` stores boxes with no vector
@@ -442,6 +443,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Removed
 
+- `POST /vlm/label_cluster/{cluster_id}`: use `POST /assist/runs` with a `cluster` target (and `sample.mode: "all"`), or `?cluster_id=` on `auto_label/start` for the whole-cluster job. Cropwright's cluster-page and dashboard "Run VLM" calls are moved to the assist run in the frontend step of this release.
 - The region-profile fields `aspect_min` and `aspect_max` (and `OcrRegion.is_region_shaped`, which was
   their only reader and had no caller): from the profile dataclass, the profile editor schema, the
   license plate example, the docs and the OpenAPI contract. A stored profile that still carries

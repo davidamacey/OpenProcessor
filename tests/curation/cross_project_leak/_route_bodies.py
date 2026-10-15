@@ -168,6 +168,16 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/images/{image_id}/reprocess'): {'json': {'scopes': ['region']}},
         ('POST', '/crops/{crop_id}/reprocess'): {'json': {'scopes': ['region']}},
         ('POST', '/reprocess/jobs/{job_id}/cancel'): {'json': {}},
+        # assist runs: a dry run on the seeded item (the sweep binds
+        # no VLM, so the plan stops at the VLM gate); cancel names no live run.
+        ('POST', '/assist/runs'): {
+            'json': {
+                'target': {'kind': 'crops', 'crop_ids': [item]},
+                'actions': ['classify'],
+                'dry_run': True,
+            }
+        },
+        ('POST', '/assist/runs/{run_id}/cancel'): {'json': {}},
         ('POST', '/test_holdout/freeze'): {'json': {'percent': 10}},
         ('POST', '/review/new_class_proposals/resolve'): {
             'json': {'label': f'{slug}-proposal', 'class_id': 1}

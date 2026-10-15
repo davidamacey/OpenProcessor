@@ -132,6 +132,13 @@ ErrorCode = Literal[
     'no_box_to_verify',
     'no_class_names',
     'pack_declares_no_attributes',
+    # assist runs
+    'invalid_request',
+    'assist_too_large',
+    'assist_busy',
+    'scope_changed',
+    'class_not_in_registry',
+    'run_has_no_scope',
     'too_many_crops',
     'too_few_items',
     'too_many_crop_ids',

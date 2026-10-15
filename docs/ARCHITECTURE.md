@@ -153,6 +153,7 @@ design rationale is in
 | Review | `src/services/curation/review_*.py`, `holdout.py` | Queue queries, sorts, the frozen test set |
 | VLM | `src/services/labeling/` | Transport, endpoints and probes, prompts, class and region labelers |
 | Reprocess | `src/services/curation/reprocess*.py` | One selection and lock rule behind every re-run |
+| Assist runs | `src/services/curation/assist/` | Scope, seeded sampling, the VLM call and the `assist` slot of an item; one file-backed run per project |
 | Export and training | `src/services/curation/export*.py`, `src/services/training/` | YOLO export, job lifecycle, preflight, promotion |
 | Routers | `src/routers/curation/` (including `images.py`, `umap.py`, `train/`) | HTTP surface |
 | Workers | `scripts/curation/` | Detection, VLM, auto-label, cluster refresh, evaluator |

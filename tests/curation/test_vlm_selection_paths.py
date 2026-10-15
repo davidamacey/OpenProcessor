@@ -45,7 +45,6 @@ RUN_ROUTES: dict[tuple[str, str], dict[str, Any]] = {
     ('POST', '/vlm/region_visible_batch'): {
         'json': {'items': [{'crop_id': 'c1', 'image_b64': IMG}]}
     },
-    ('POST', '/vlm/label_cluster/{cluster_id}'): {},
     ('POST', '/pipeline/auto_label'): {},
     ('POST', '/pipeline/auto_label/start'): {},
 }

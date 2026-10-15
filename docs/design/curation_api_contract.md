@@ -612,7 +612,7 @@ is never bypassable.
 The routes below take `?vlm=<name>` or `?vlm=<name>@<revision>` and
 `?acknowledge_external=true`: `POST /vlm/label_batch`,
 `POST /vlm/verify_regions`, `POST /vlm/verify_region_batch`,
-`POST /vlm/region_visible_batch`, `POST /vlm/label_cluster/{cluster_id}`,
+`POST /vlm/region_visible_batch`, `POST /assist/runs`,
 `POST /pipeline/auto_label` and `POST /pipeline/auto_label/start`. An unknown
 endpoint is `422 unknown_vlm` (`valid_ids`). A project whose VLM is off is
 `409 vlm_not_configured`. An endpoint that cannot be used is
@@ -1408,7 +1408,6 @@ can fuse. The default pool is fresh and class-bucketed unvalidated items.
 | POST | `/vlm/verify_regions` | `{crop_ids}` (at most 64) | per-crop verification |
 | POST | `/vlm/verify_region_batch` | `{items: [{crop_id, region_image_b64, candidate_text}]}` (at most 64) | `{results[]}`: `crop_id`, `is_region`, `confidence`, `reason`, `candidate_text` |
 | POST | `/vlm/region_visible_batch` | `{items: [{crop_id, image_b64}]}` (at most 64) | `{visible: {crop_id: bool}}` |
-| POST | `/vlm/label_cluster/{cluster_id}` | `prompt_pack`, `vlm`, `acknowledge_external` | the auto-label job state |
 | POST | `/pipeline/auto_label` | query parameters | runs the pipeline in the request and returns each stage's counts. Idempotent |
 | POST | `/pipeline/auto_label/start` | query parameters | starts a background job and returns at once; poll the status routes. One job at a time (`409` otherwise) |
 | GET | `/pipeline/auto_label/status` | | the current job |
@@ -1439,11 +1438,65 @@ can fuse. The default pool is fresh and class-bucketed unvalidated items.
   `finished_at`, `error`, `result`, `args`, backend and VRAM telemetry,
   `stage_durations`, `eta_seconds`, `elapsed_seconds`. The newest 50 jobs are
   kept. A start while a job runs is `409`.
-- `/vlm/label_cluster/{cluster_id}` runs only the VLM stage over every
-  unvalidated, non-holdout, non-excluded member of one cluster. It does no
-  re-clustering, no auto-promote and applies no cap. The index-wide stages are
-  skipped even if requested, and writes touch only the selected members.
-  `?cluster_id=` on `/pipeline/auto_label[/start]` gives the same scope.
+- `?cluster_id=` on `/pipeline/auto_label[/start]` scopes the whole job to one
+  cluster: it runs only the VLM stage over every unvalidated, non-holdout,
+  non-excluded member, does no re-clustering or auto-promote and applies no
+  cap. A sampled, per-sub-cluster or per-selection run is an assist run.
+
+## Assist runs
+
+One request shape sends a scope to the VLM: a crop, a selection of crops, a
+cluster, one sub-cluster or an item filter. The run writes the VLM's suggestions
+and never a label: a class goes through the same guarded writer as the
+auto-label VLM stage (a human- or import-locked, validated or holdout item keeps
+its class), and the answers, including a locked item's, are kept in the item's
+`assist` object.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | `/assist/runs` | `AssistRunRequest` | `AssistRunState`; `dry_run` (the default) plans and writes nothing |
+| GET | `/assist/runs/{run_id}` | | `AssistRunState`; `404 not_found` for an unknown id |
+| POST | `/assist/runs/{run_id}/cancel` | | `AssistRunState`; the run stops after its current chunk |
+
+`AssistRunRequest` (unknown keys are `422`):
+
+| Field | Meaning |
+|---|---|
+| `target` | exactly one kind. `{kind: "crops", crop_ids: [1..5000], context?: {cluster_id, cluster_subid?}}` is a single crop (one id) or a user selection. `{kind: "cluster", cluster_id, cluster_subid?}` is a cluster or one sub-cluster by the stored ids. `{kind: "filter", filter}` is a non-empty item filter |
+| `sample` | what the VLM sees. `mode`: `all` (every visible member; a `crops` target must use it) or `representative` (a seeded sample). `size` (1 to 256) overrides the default of `max(8, min(64, ceil(2*sqrt(n))))`; `seed` (default 0); `stratify_by`: `auto` (by `cluster_subid` when the scope has more than one), `cluster_subid` or `none` |
+| `actions` | a non-empty subset of `classify` and `attributes`. With both, and a pack that declares item attributes, one `assist` call answers both |
+| `vlm`, `prompt_pack`, `acknowledge_external` | the endpoint and pack for this run only (`name` or `name@revision`); omitted, the project's active endpoint and effective default pack. The run pins both |
+| `min_agreement` | 0.5 to 1.0, default 0.6 |
+| `dry_run` | default `true` |
+
+`AssistRunState`: `run_id` (null on a dry run), `status` (`dry_run`, `queued`,
+`running`, `completed`, `completed_with_errors`, `failed`, `cancelled`,
+`interrupted`), `created_at`, `finished_at`, `error`, `request` (as normalised),
+`resolved`, `progress` (`processed`, `total`) and `result`. `resolved` has
+`scope_count` (members after the visibility rules), `scope_digest` (`sha256:`
+over the sorted ids), `sampled`, `sample_seed`, `strata` (`key`, `size`,
+`sampled`; empty when not stratified), `skipped` (`holdout`, `excluded`,
+`not_found`, and `class_locked`: sampled members that are sent anyway and whose
+class is never written), `vlm` (`name`, `revision`, `model`), `prompt_pack`
+(`name`, `revision`) and `estimated_vlm_calls`. `result` has `classify`
+(`predicted`, `updated`, `failed`, `unreadable`, `locked_suggest_only`) and
+`attributes` (`items_written`, `invalid_values`) for the actions that ran.
+
+- The frozen test holdout and human-ignored items are never sent. A scope
+  larger than 5000 items with `sample.mode: "all"` is `422 assist_too_large`
+  (sample it, narrow it, or use the auto-label job).
+- Refusals: `409 vlm_not_configured` (the project's VLM is off and `vlm` names
+  none), `409 assist_busy` (one run per project; `run_id` names the live one),
+  `404 not_found` (a cluster with no items), `422 invalid_request` (a `crops`
+  target with a representative sample, an empty filter, a repeated action),
+  `422 pack_declares_no_attributes`, `422 no_class_names` (classify with no item
+  classes in the registry), `422 unknown_vlm`.
+- The item's `assist` object (see the item wire): `run_id`, `run_created_at`,
+  `vlm_endpoint`, `vlm_model`, `prompt_pack`, `prompt_pack_revision`,
+  `class_name`, `class_confidence`, `attributes[]` (`key`, `value`,
+  `confidence`) and `boxes[]`. One slot per item; the newest run wins, and an
+  older run never replaces a newer slot. A restart ends a live run as
+  `interrupted`; run it again.
 
 ## Ingest
 

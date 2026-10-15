@@ -38,7 +38,7 @@ CLUSTER_ID_DESC = (
     'Scope the run to one cluster: every unvalidated, non-holdout, non-excluded '
     "member is VLM-labeled (the global sweep's cost skips do not apply) and every "
     'write stays on those members, so the index-wide clustering and auto-promote '
-    'stages are skipped. POST /vlm/label_cluster/{cluster_id} starts exactly this run.'
+    'stages are skipped. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.'
 )
 
 PROMPT_PACK_DESC = (

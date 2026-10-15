@@ -38,7 +38,7 @@ Owner requirement:
 Short answer from the code:
 
 1. A whole-project VLM run exists (auto-label job, `vlm=<name>`, `vlm_scope`). A whole-cluster
-   run exists (`POST /vlm/label_cluster/{cluster_id}`, every unvalidated member, no
+   run exists (the route `/vlm/label_cluster/{cluster_id}`, every unvalidated member, no
    sampling). Selected crops and single crops work only through the synchronous
    `/vlm/label_batch` (≤64). Nothing sends a sub-cluster, one box or a sample to the VLM.
 2. There is no sample-by-size, no stratified sample and no cluster-level proposal. The
@@ -84,7 +84,7 @@ All curation routes are mounted at `/curation/projects/{project}` + path
 
 | Piece | Where | Notes |
 |---|---|---|
-| `POST /vlm/label_cluster/{cluster_id}` | `src/routers/curation/pipeline_control.py:69-104` | Path `cluster_id: int`; query `prompt_pack`, `vlm`, `acknowledge_external`. Wraps `pipeline_auto_label_start(train_clusters=False, run_vlm=True, run_auto_promote=False, max_vlm_crops=0, cluster_id=...)`. Labels **every** unvalidated, non-holdout, non-excluded member (`selection.py:70-76`, `:129-137`). No sample, no proposal, no sub-cluster. |
+| the route `/vlm/label_cluster/{cluster_id}` | `src/routers/curation/pipeline_control.py:69-104` | Path `cluster_id: int`; query `prompt_pack`, `vlm`, `acknowledge_external`. Wraps `pipeline_auto_label_start(train_clusters=False, run_vlm=True, run_auto_promote=False, max_vlm_crops=0, cluster_id=...)`. Labels **every** unvalidated, non-holdout, non-excluded member (`selection.py:70-76`, `:129-137`). No sample, no proposal, no sub-cluster. |
 | `?cluster_id=` on auto-label start | same job | Same scope. |
 | Frontend | `frontend/src/lib/api_autoLabel.ts:41` `runVlmOnCluster`; `clusterDetailActions.svelte.ts:130` `runVlm`; `ClusterDetailToolbar.svelte:198-226` ("Run VLM" + `VlmRunPicker`); dashboard modal `routes/p/[project]/dashboard/+page.svelte:131-160,285-330` | The server picks members; the UI sends no ids. |
 | Human cluster labeling | `PUT /crops/batch_label` `src/routers/curation/crops_write.py:79`, `CropBatchLabelRequest(SelectionTargets)` `_common_models.py:103`, OCC `occ_bulk_human_relabel` `crop_bulk.py:16` | Human write. |
@@ -299,7 +299,7 @@ data, all added to `tests/curation/cross_project_leak/_route_tables.py`):
 
 Deleted (no parallel routes):
 
-- `POST /vlm/label_cluster/{cluster_id}` (PR 4), replaced by `target.kind: cluster` +
+- The route `/vlm/label_cluster/{cluster_id}` (PR 4), replaced by `target.kind: cluster` +
   `sample.mode: all` + `actions: ["classify"]`.
 - `POST /vlm/verify_regions` (PR 6), replaced by `actions: ["verify"]` on `crops` or `boxes`.
 - `?cluster_id=` on `auto_label/start` stays. It is the whole-project job with a narrowing
@@ -589,7 +589,7 @@ never squash. Nothing is pushed without the owner's yes.
   merge); router `src/routers/curation/assist.py` registered in
   `src/routers/curation/__init__.py`; mapping in `bodies_core.py` + `ensure_fields.py`;
   `wire.py`; `contracts/`.
-- Delete `POST /vlm/label_cluster/{cluster_id}` (`pipeline_control.py:69-104`) and its tests
+- Delete the route `/vlm/label_cluster/{cluster_id}` (`pipeline_control.py:69-104`) and its tests
   (`tests/curation/test_vlm_cluster_scope.py` route parts; keep the `cluster_id` job
   selection tests). Swap `frontend/src/lib/api_autoLabel.ts:41` `runVlmOnCluster` to
   `createAssistRun` (target cluster, sample all, actions classify) so no caller breaks.

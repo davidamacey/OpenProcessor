@@ -420,7 +420,9 @@ project with the VLM off is `409 vlm_not_configured`.
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/vlm/label_batch` | VLM class suggestions for up to 64 `crop_ids` |
-| POST | `/vlm/label_cluster/{cluster_id}` | VLM-label one cluster's members, as a background job |
+| POST | `/assist/runs` | VLM suggestions for a crop, a selection, a cluster, a sub-cluster or a filter, as a background run (dry run by default) |
+| GET | `/assist/runs/{run_id}` | State, progress and result of one assist run |
+| POST | `/assist/runs/{run_id}/cancel` | Stop a live assist run after its current chunk |
 | POST | `/vlm/verify_regions` | Verify, box by box, whether each crop's regions are real |
 | POST | `/vlm/verify_region_batch` | The same in batches per upstream call |
 | POST | `/vlm/region_visible_batch` | "Is a region visible at all?" pre-filter |

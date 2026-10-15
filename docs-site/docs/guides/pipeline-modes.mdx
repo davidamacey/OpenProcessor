@@ -455,31 +455,37 @@ them. In Cropwright, open the cluster, filter to the crops and use **Label all m
 **5. Run the VLM for one thing only.** Without an endpoint the project refuses, which is
 the point:
 
+An assist run plans first (`dry_run` is the default) and writes nothing:
+
 ```bash
-# ran
-curl -s -X POST "$API/vlm/label_cluster/10000"
+# not run  (the refusal is code-verified by tests/curation/test_assist_run_classify.py)
+curl -s -X POST "$API/assist/runs" -H 'content-type: application/json' \
+  -d '{"target":{"kind":"cluster","cluster_id":10000},"actions":["classify"]}'
 ```
 
 ```text
 409 {"detail":{"error":"vlm_not_configured","message":"this project's VLM is off or not configured; activate an endpoint first"}}
 ```
 
-Name the endpoint for this run. The project's own setting stays `off`:
+Name the endpoint for this run, then start it. The project's own setting stays `off`:
 
 ```bash
-# ran  (the stack's VLM was unreachable; see step 6)
-curl -s -X POST "$API/vlm/label_cluster/10000?vlm=env"
-curl -s $API/pipeline/auto_label/status
+# not run
+curl -s -X POST "$API/assist/runs" -H 'content-type: application/json' \
+  -d '{"target":{"kind":"cluster","cluster_id":10000},"actions":["classify"],"vlm":"env","dry_run":false}'
+curl -s "$API/assist/runs/RUN_ID"
 ```
 
-The job selects the 134 unvalidated members of cluster `10000` and none of the 28 you
-named. Other ways to pick "one thing", all `# not run` and all taking `vlm=<name>`:
+The run sends the members of cluster `10000` that are not in the frozen holdout and not
+ignored, including the 28 you named: they are sent for a suggestion, and their class is
+never written (`locked_suggest_only` in the result). Other ways to pick "one thing", all
+`# not run` and all taking `vlm=<name>`:
 
 | Scope | Request |
 |---|---|
-| One cluster | `POST $API/vlm/label_cluster/{cluster_id}?vlm=env` |
+| One cluster, one sub-cluster, a sample of either | `POST $API/assist/runs` with `target` `{"kind":"cluster","cluster_id":10000,"cluster_subid":"10000b"}` and `sample` `{"mode":"representative"}` |
+| Chosen crops, or one crop | `POST $API/assist/runs` with `target` `{"kind":"crops","crop_ids":[...]}` |
 | A class, a confidence band or a size band | `POST $API/pipeline/auto_label/start?run_vlm=true&vlm=env&class_id=3&conf_max=0.5` (the same item filter as the crop list: `class_name`, `exclude_class_name`, `conf_min`, `conf_max`, `min_area`, `max_area`, `max_rank`, `origin`, `embedding_state`, `review_status`) |
-| Chosen crops | `POST $API/vlm/label_batch?vlm=env` with `{"crop_ids": [...]}` |
 | A budget | add `max_vlm_crops=200` to any `auto_label/start` |
 | Only representatives | `vlm_scope=representatives` on `auto_label/start`, or the project's [VLM policy](./vlm-selection.mdx#scope-and-budget) |
 

@@ -107,6 +107,15 @@ box-level browse and clustering:
 The VLM prompts and vocabulary the labeler uses.
 [Prompt packs](../docs-site/docs/guides/prompt-packs.mdx).
 
+## Assist runs
+
+Send a crop, a selection, a cluster, a sub-cluster or a filter to the VLM and get
+suggestions back: a class and the attributes the prompt pack declares. A representative
+sample keeps a large cluster cheap. The run never writes a label: a human- or
+import-locked, validated or holdout item keeps its class, and the answers, including a
+locked item's, are stored apart from the labels. Dry run by default.
+[Assist runs](../docs/design/curation_api_contract.md#assist-runs).
+
 ## Test on a crop
 
 Try a draft pack or profile on stored crops before activating it. Read-only.

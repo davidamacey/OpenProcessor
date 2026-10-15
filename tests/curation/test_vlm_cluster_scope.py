@@ -1,7 +1,6 @@
-"""VLM-labeling one cluster is a server-side job; direct calls get real defaults.
+"""The auto-label job scoped to one cluster; direct calls get real defaults.
 
-- ``POST /vlm/label_cluster/{cluster_id}`` queues the auto-label job with a
-  cluster scope: VLM only, no re-clustering, no cap. The server selects
+- ``cluster_id`` scopes the auto-label job to one cluster: the server selects
   every unvalidated, non-holdout, non-excluded member (no silent 200-item
   truncation) and reports how many it selected.
 - ``pipeline_auto_label`` is also called straight from Python by the
@@ -12,24 +11,16 @@
 
 from __future__ import annotations
 
-import json
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 
 from curation.query_fakes import QueryFakeOpenSearch
-from curation.test_auto_label_selection import client, job_dir, packs  # noqa: F401 - fixtures
 from curation.test_pipeline import _FakeClassEntry, _FakeRegistry
 from src.config.curation_accessors import base_curation_config
 from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
-
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
-    from fastapi.testclient import TestClient
 
 
 ITEMS = base_curation_config().items_index
@@ -127,15 +118,3 @@ async def test_cluster_scope_selects_every_unvalidated_member(pipeline_env: _Lab
     assert summary['cluster_id'] == CLUSTER
     # a, b (vlm_unmatched) and c (classifier-confident); never v/h/x/other.
     assert summary['stages']['unvalidated_after_promote'] == 3
-
-
-@pytest.mark.usefixtures('packs')
-def test_label_cluster_route_queues_a_scoped_vlm_job(client: TestClient, job_dir: Path) -> None:  # noqa: F811
-    r = client.post(f'/curation/projects/default/vlm/label_cluster/{CLUSTER}')
-    assert r.status_code == 200, r.text
-    args = json.loads((job_dir / 'trigger.json').read_text())['args']
-    assert args['cluster_id'] == CLUSTER
-    assert args['run_vlm'] is True
-    assert args['train_clusters'] is False
-    assert args['run_auto_promote'] is False
-    assert args['max_vlm_crops'] == 0
