@@ -1,13 +1,18 @@
 """The per-project ingest policy: which detections are stored and which get a vector.
 
-Two independent stages, both off by default (an absent policy changes nothing):
+Three independent stages, all off by default (an absent policy changes nothing):
 
 * ``detect``: a filter on the detector output. Filtered detections are not
   stored (the explicit user choice); the count is reported.
 * ``embedding``: ``all`` (default) embeds every stored detection, ``selected``
-  embeds only those matching the criteria, ``lazy`` embeds none at ingest.
+  embeds only those matching the criteria, ``lazy`` embeds no detection at
+  ingest (the image's whole-frame vector is still stored) and ``none`` embeds
+  nothing at all, the whole-frame vector included (detection only).
   A detection without a vector is still stored, with ``embedding_state``
   ``not_selected`` or ``deferred``, and can be embedded later.
+* ``clustering``: whether ingest places a freshly embedded item into the
+  existing clusters and the background retrains run. Off, clustering runs only
+  when asked.
 
 An item that carries a human or imported label always gets a vector.
 Criteria combine with AND; class names are an OR-list matched by NAME
@@ -72,7 +77,7 @@ class DetectorOverride(BaseModel):
 
 
 class EmbeddingPolicy(_Criteria):
-    mode: Literal['all', 'selected', 'lazy'] = 'all'
+    mode: Literal['all', 'selected', 'lazy', 'none'] = 'all'
     classes: list[str] = Field(default_factory=list)
 
     @model_validator(mode='after')
@@ -88,11 +93,23 @@ class EmbeddingPolicy(_Criteria):
         return self
 
 
+class ClusteringPolicy(BaseModel):
+    """``automatic`` false: ingest and embed runs place no item into a cluster,
+    the cluster-refresh daemon starts no retrain and the auto-label worker's
+    idle centroid retrain skips the project. Explicit clustering requests
+    (``/clusters/*`` and auto-label jobs) are unaffected."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    automatic: bool = True
+
+
 class IngestPolicyBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     detect: DetectFilter = Field(default_factory=DetectFilter)
     embedding: EmbeddingPolicy = Field(default_factory=EmbeddingPolicy)
+    clustering: ClusteringPolicy = Field(default_factory=ClusteringPolicy)
     # null = the deployment's primary detector.
     detector: DetectorOverride | None = None
 
@@ -190,10 +207,11 @@ def apply_detect_filter(
 def embedding_states(cands: Sequence[Candidate], policy: EmbeddingPolicy) -> list[str]:
     """Per candidate of one image: ``embedded`` when it should be embedded
     now, else the state it is stored with (``not_selected`` for mode
-    ``selected``, ``deferred`` for ``lazy``). A labeled one always embeds."""
+    ``selected``, ``deferred`` for ``lazy`` and ``none``). A labeled one always
+    embeds."""
     if policy.mode == 'all':
         return [EMBEDDED] * len(cands)
-    if policy.mode == 'lazy':
+    if policy.mode in ('lazy', 'none'):
         wanted = [False] * len(cands)
         skipped = DEFERRED
     else:

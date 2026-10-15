@@ -194,6 +194,22 @@ async def embed_items(
         items[i].embedding_state = EMBEDDED if items[i].pe_embedding is not None else FAILED
 
 
+async def _whole_frame_vector(service: CurationIngestService, ctx: ImageContext) -> Any:
+    """The image's whole-frame vector, or ``None`` for detection only (mode ``none``
+    stores no vector of any kind; the GPU decode computes this one in its single pass
+    and it is dropped here) or when the encoder fails."""
+    if service.policy.embedding.mode == 'none':
+        return None
+    try:
+        if ctx.gpu_frame is not None:
+            return ctx.gpu_frame.whole_embedding
+        assert ctx.pil is not None
+        return await service.pe_encoder.embed_whole_frame_image(ctx.pil)
+    except Exception as exc:
+        logger.warning('ingest_embed_whole_frame_failed', path=ctx.image_path, error=str(exc))
+        return None
+
+
 async def index_items(
     service: CurationIngestService,
     ctx: ImageContext,
@@ -225,15 +241,7 @@ async def index_items(
     now = datetime.now(UTC).isoformat()
     image_doc: dict[str, Any] | None = None
     if ctx.created:
-        whole_frame_embedding = None
-        try:
-            if frame is not None:
-                whole_frame_embedding = frame.whole_embedding
-            else:
-                assert img is not None
-                whole_frame_embedding = await service.pe_encoder.embed_whole_frame_image(img)
-        except Exception as exc:
-            logger.warning('ingest_embed_whole_frame_failed', path=image_path, error=str(exc))
+        whole_frame_embedding = await _whole_frame_vector(service, ctx)
         with stage_timer('doc_build'):
             image_doc = build_image_doc(
                 image_id=ctx.image_id,
@@ -273,7 +281,9 @@ async def index_items(
     }
 
     store: IVFCentroidStore | None = None
-    if any(it.class_id is None and it.pe_embedding is not None for it in items):
+    if service.policy.clustering.automatic and any(
+        it.class_id is None and it.pe_embedding is not None for it in items
+    ):
         store = get_ivf_ingest_store()
 
     box_vars: list[float | None]

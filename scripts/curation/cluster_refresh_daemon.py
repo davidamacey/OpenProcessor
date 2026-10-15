@@ -12,12 +12,17 @@ Pausing a project cancels the job this daemon started for it. The schedule
 is ``src/services/curation/clustering/refresh_schedule.py``; the work is
 unchanged.
 
-Defaults:
+Defaults (each is read from its ``OP_CLUSTER_REFRESH_*`` variable, and a
+command-line flag overrides the variable):
 
-* poll interval: 120 seconds (2 minutes)
-* growth threshold: 200 new crops
-* maximum deferral: 1800 seconds
-* incremental auto-label: on (turn off with ``--no-auto-label``)
+* poll interval: 120 seconds, ``OP_CLUSTER_REFRESH_INTERVAL_S``
+* growth threshold: 200 new crops, ``OP_CLUSTER_REFRESH_GROWTH_THRESHOLD``
+* maximum deferral: 1800 seconds, ``OP_CLUSTER_REFRESH_MAX_DEFERRAL_S``
+* retry backoff: 600 seconds, ``OP_CLUSTER_REFRESH_RETRY_BACKOFF_S``
+* incremental auto-label: on, ``OP_CLUSTER_REFRESH_AUTO_LABEL`` (``--no-auto-label``)
+
+A project whose ingest policy sets ``clustering.automatic`` false is never
+refreshed by this daemon.
 
 Designed to run as a long-lived process (``python -m
 scripts.curation.cluster_refresh_daemon``) or as a cron job invoking
@@ -57,6 +62,7 @@ from scripts.curation._project_worker_utils import (
     scoped_url,
     unpaused_projects,
 )
+from src.config.env import env_bool, env_int
 from src.config.project_context import bind_project
 from src.services.curation.clustering.refresh_schedule import (
     ACTIVE_JOB_STATUSES,
@@ -72,6 +78,7 @@ from src.services.curation.clustering.refresh_state_store import (
     load_refresh_state,
     save_refresh_state,
 )
+from src.services.curation.ingest_policy_store import get_ingest_policy
 from src.services.curation.policy_doc_store import PolicyConflictError
 from src.services.curation.worker_liveness import write_heartbeat
 from src.services.projects.guard import make_script_opensearch
@@ -100,36 +107,39 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         '--interval-seconds',
         type=int,
-        default=120,
-        help='Poll interval (default 120 = 2 min).',
+        default=env_int('OP_CLUSTER_REFRESH_INTERVAL_S', 120, minimum=1),
+        help='Poll interval (default 120 = 2 min; env OP_CLUSTER_REFRESH_INTERVAL_S).',
     )
     p.add_argument(
         '--growth-threshold',
         type=int,
-        default=200,
-        help='Trigger refresh once the items index grows by this many docs since the last refresh.',
+        default=env_int('OP_CLUSTER_REFRESH_GROWTH_THRESHOLD', 200, minimum=1),
+        help='Trigger refresh once the items index grows by this many docs since the last refresh '
+        '(default 200; env OP_CLUSTER_REFRESH_GROWTH_THRESHOLD).',
     )
     p.add_argument(
         '--max-deferral-seconds',
         type=int,
-        default=1800,
-        help='Longest a due retrain waits for ingest to go quiet before it starts anyway.',
+        default=env_int('OP_CLUSTER_REFRESH_MAX_DEFERRAL_S', 1800, minimum=0),
+        help='Longest a due retrain waits for ingest to go quiet before it starts anyway '
+        '(default 1800; env OP_CLUSTER_REFRESH_MAX_DEFERRAL_S).',
     )
     p.add_argument(
         '--retry-backoff-seconds',
         type=int,
-        default=600,
-        help='Wait before retrying a retrain job that failed, was cancelled or was lost.',
+        default=env_int('OP_CLUSTER_REFRESH_RETRY_BACKOFF_S', 600, minimum=0),
+        help='Wait before retrying a retrain job that failed, was cancelled or was lost '
+        '(default 600; env OP_CLUSTER_REFRESH_RETRY_BACKOFF_S).',
     )
     p.add_argument(
         '--auto-label',
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=env_bool('OP_CLUSTER_REFRESH_AUTO_LABEL', True),
         help='Queue the auto_label background job (the full retrain) after auto_promote so freshly-'
         'CNN-labeled crops get assigned to their named class clusters '
         '(force_cluster_id_equals_class_id) and unlabeled residuals are '
-        'fed through the VLM/segmenter. Default on; pass --no-auto-label to '
-        'skip.',
+        'fed through the VLM/segmenter. Default on (env OP_CLUSTER_REFRESH_AUTO_LABEL); '
+        'pass --no-auto-label to skip.',
     )
     p.add_argument(
         '--once',
@@ -310,6 +320,9 @@ async def _iteration(
     slug = record.slug
     try:
         with bind_project(record):
+            if not (await get_ingest_policy(opensearch)).clustering.automatic:
+                print(f'[cluster-refresh] project={slug} automatic clustering is off', flush=True)
+                return
             if not sched.restored:
                 await _restore_state(opensearch, sched)
             count = await _crop_count(opensearch)
