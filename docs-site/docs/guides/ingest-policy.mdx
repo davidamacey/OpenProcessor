@@ -5,8 +5,8 @@ title: Ingest policy, filter and select
 
 # Ingest policy, filter and select
 
-Each project has an ingest policy. It decides which detections an ingest keeps and
-which of them get an embedding vector. Set it **before** a large ingest (see
+Each project has an ingest policy. It decides which detections an ingest keeps, which of
+them get an embedding vector and whether clustering runs on its own. Set it **before** a large ingest (see
 [Ingest a large folder](./ingest-large-folder.mdx)): a policy applies to future
 ingests and explicit embed runs only. It never rewrites what is already stored.
 
@@ -55,16 +55,27 @@ field is empty by default (keep everything), and the criteria combine with AND.
 |---|---|
 | `all` (default) | Every stored detection is embedded. |
 | `selected` | Only detections that meet the `embedding` criteria (`classes`, `min_confidence`, `min_box_area_frac`, `max_per_image`). At least one criterion is required; `selected` with none is refused. The rest are stored as `not_selected`. |
-| `lazy` | No detection is embedded at ingest. They are stored as `deferred`. |
+| `lazy` | No detection is embedded at ingest. They are stored as `deferred`. The whole-frame vector of each new image is still computed and stored. |
+| `none` | Detection only. No detection is embedded and no whole-frame vector is stored: the image encoder does not run at ingest (on the GPU decode path its output is computed in the one decode pass and dropped). Detections are stored as `deferred`. |
 
 An item that already carries a human or imported label always gets a vector, whatever
-the mode.
+the mode (a dataset import under `none` still embeds its labeled items).
 
-:::caution `lazy` still computes the whole-frame vector
-`lazy` skips the **detection** vectors only. The whole-frame embedding of each new image
-is still computed and stored, so ingest still runs the image encoder once per image. No
-policy field skips it today.
-:::
+**`clustering.automatic`** (default `true`) is the project's clustering switch. `false`
+means:
+
+- ingest and the `embed` scope place no newly embedded item into a cluster;
+- `curation-cluster-refresh` skips the project;
+- the auto-label worker's idle centroid retrain skips the project.
+
+Clustering you ask for (`/clusters/*`, an auto-label job you start) always runs. With
+`embedding.mode=none` and `clustering.automatic=false` the project is detection only:
+see [Pipeline modes](./pipeline-modes.mdx#a-detection-only).
+
+```bash
+curl -s -X PUT $B -H 'content-type: application/json' \
+  -d '{"expected_revision": 0, "embedding": {"mode": "none"}, "clustering": {"automatic": false}}'
+```
 
 **`detector`** is an optional per-project detector (`model`, `version`, `input_size`,
 `labels_path`) that replaces the deployment's primary model for this project. It is
@@ -74,12 +85,13 @@ an unreachable Triton gives 503. Leave it `null` to use `OP_INGEST_PRIMARY_DETEC
 ## Cost of a choice
 
 The vectors dominate the index size, so the mode is the main lever. The per-1,000-image
-figures for `all`, `selected` and `lazy` are in
+figures for `all`, `selected` and `lazy` (`none` also saves the one whole-frame vector per image) are in
 [Ingest a large folder](./ingest-large-folder.mdx#11-how-much-disk). Use the preview to
 get the number for your own data.
 
 Anything left without a vector can be embedded later with the `embed` scope of
-[Reprocess](./reprocess.mdx), or by the `embed_missing` stage of auto-label. Items
+[Reprocess](./reprocess.mdx) (`frame` part for the whole-frame vector), or by the
+`embed_missing` stage of auto-label. Items
 without a vector are excluded from clustering, similarity search and the VLM until then.
 
 ## Filter, select, act

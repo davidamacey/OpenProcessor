@@ -16,9 +16,10 @@ is whatever `API_PORT` says in `.env`.
 
 | Mode | What runs | How you select it | What you cannot turn off today |
 |---|---|---|---|
-| [(a) Detection only](#a-detection-only) | Core stack. Ingest runs the item detector. | Start without the `curation` profile. Ingest policy `embedding.mode=lazy`. | The whole-frame embedding. Ingest-time cluster placement. Idle centroid retrain (needs a worker setting). (issue #279) |
-| [(b) Detection, embedding, clustering](#b-detection-embedding-and-clustering) | Core stack and the `curation` workers. Every detection embedded. | The default. | Clustering has no per-project switch. A cluster-refresh retrain stalls on an audit-gate 409. (issue #280) |
-| [(c) VLM-assisted labeling of a large batch](#c-vlm-assisted-labeling-of-a-large-batch) | Mode (b) plus a VLM. | `vlm` profile or a remote endpoint, project activation, VLM policy. | With `OP_VLM_URL` set, every project that never activated an endpoint uses the env VLM. (issue #282) |
+| [(a) Detection only](#a-detection-only) | Core stack. Ingest runs the item detector and stores boxes. | Ingest policy `embedding.mode=none` and `clustering.automatic=false`. | Nothing: no vector of any kind, no cluster placement, no VLM. |
+| [(b) Detection, embedding, clustering](#b-detection-embedding-and-clustering) | Core stack and the `curation` workers. Every detection embedded. | The default. | A cluster-refresh retrain stalls on an audit-gate 409. (issue #280) |
+| [(c) VLM-assisted labeling of a large batch](#c-vlm-assisted-labeling-of-a-large-batch) | Mode (b) plus a VLM. | `vlm` profile or a remote endpoint, **project activation**, VLM policy. | Nothing: a project calls no VLM until it activates one. |
+| [Selective VLM](#recipe-ingest-without-the-vlm-cluster-name-by-hand-then-run-the-vlm-for-one-thing) | Mode (b), then the VLM for one cluster, batch or filter. | The recipe below. | Nothing runs the VLM on its own. |
 | [(d) Iterative cluster-sampled labeling](#d-iterative-cluster-sampled-auto-labeling-planned) | Not shipped. | Not selectable. | Planned. (issue #286) |
 
 :::note How the commands on this page were checked
@@ -34,11 +35,12 @@ project. Treat those as code-verified, not field-tested.
 |---|---|---|
 | Compose profiles | `COMPOSE_PROFILES` in `.env`, or `--profile` on the command line | Which services exist. See [Compose profiles](../getting-started/compose-profiles.mdx). |
 | GPU profile | `./openprocessor profile`, `GPU_PROFILE` | Triton instance counts and batch sizes only. It does not choose models. See [Deployment and GPU sizing](../deployment/gpu-sizing.mdx#gpu-profiles). |
-| Ingest policy | `GET` and `PUT /curation/projects/{project}/ingest/policy` | Which detections are stored and which get a vector. See [Ingest policy](./ingest-policy.mdx). |
-| VLM activation | `POST /curation/projects/{project}/vlm/endpoints/{name}/activate` and `.../vlm/endpoints/deactivate` | Which VLM a project calls, or none (the explicit `off` state). |
+| Ingest policy | `GET` and `PUT /curation/projects/{project}/ingest/policy` | Which detections are stored, which get a vector (`embedding.mode`: `all`, `selected`, `lazy`, `none`) and whether clustering runs on its own (`clustering.automatic`). See [Ingest policy](./ingest-policy.mdx). |
+| VLM activation | `POST /curation/projects/{project}/vlm/endpoints/{name}/activate` and `.../vlm/endpoints/deactivate` | Which VLM a project calls. A new project starts with none (`off`). |
 | VLM policy | `GET` and `PUT /curation/projects/{project}/vlm/policy` | `scope` (`all`, `uncertain`, `representatives`, `off`), `per_cluster`, `max_crops_per_day`, `sample_frac`. See [VLM selection](./vlm-selection.mdx#scope-and-budget). |
 | Region profile and prompt pack | config store | What the detection worker's cascade does per item. See [Region profiles](./region-profiles.mdx). |
-| `OP_IVF_RETRAIN_CHECK_S` | `.env`, read by `curation-auto-label-worker` | `0` disables that worker's idle centroid retrain. |
+| `OP_CLUSTER_REFRESH_*` | `.env`, read by `curation-cluster-refresh` | Interval, growth threshold, deferral, retry backoff and the retrain job of the refresh daemon. See mode (b), step 3. |
+| `OP_IVF_RETRAIN_CHECK_S` | `.env`, read by `curation-auto-label-worker` | `0` disables that worker's idle centroid retrain for every project. A project turns it (and the refresh daemon) off with `clustering.automatic=false`. |
 | `OP_REGION_EMBED_ENABLED` | `.env` | `false` skips the per-box region embeddings. |
 | VLM CLI | `./openprocessor vlm list\|status\|use\|apply\|probe\|key set` | Switch the in-compose VLM model. |
 
@@ -48,14 +50,14 @@ You want boxes and classes from the detector, stored in a project, with as littl
 embedding and clustering work as the code allows.
 
 **What you get.** The API runs the item detector at ingest and stores one item per
-detection. With `embedding.mode=lazy` no detection gets a vector at ingest. No worker is
-needed.
+detection. With `embedding.mode=none` nothing is embedded at ingest, the whole-frame
+vector of each image included, and with `clustering.automatic=false` no item is placed
+in a cluster and no background retrain touches the project. No worker is needed, and
+no VLM runs unless the project activated one.
 
-**What you do not get.** `lazy` skips the detection vectors only. The whole-frame
-embedding of each image is still computed and stored (see the caution in
-[Ingest policy](./ingest-policy.mdx)). There is no policy field to skip it. Ingest also
-still places each new item into the existing cluster centroids when centroids exist.
-(issue #279)
+**What stays on.** An item that carries a human or imported label (a dataset import)
+still gets a vector, whatever the mode. On the GPU decode path the ensemble computes the
+whole-frame vector in its single pass and the API drops it.
 
 ### 1. Stateless detection, no storage
 
@@ -72,45 +74,43 @@ curl -s -X POST $API/detect -F "image=@000000000139.jpg" | head -c 300
 
 Batches: `POST /detect/batch`, up to 64 images.
 
-### 2. Stored detections without the curation workers
+### 2. Stored detections, no vectors, no clustering
 
-Start the core stack with no `curation` profile. In an installed directory the profiles
-come from `COMPOSE_PROFILES` in `.env` (the installer writes it from the tiers you
-chose), so remove `curation` from that line, then:
-
-```bash
-# not run
-./openprocessor start
-```
-
-Set the project's policy before you ingest. `lazy` stores every detection as
-`deferred` and embeds none:
+Set the project's policy before you ingest. `none` stores every detection as `deferred`
+with no vector; `clustering.automatic=false` keeps ingest and the background retrains
+from clustering:
 
 ```bash
 # not run
 curl -s -X PUT $API/curation/projects/cars/ingest/policy \
   -H 'content-type: application/json' \
-  -d '{"expected_revision": 0, "embedding": {"mode": "lazy"}}'
+  -d '{"expected_revision": 0, "embedding": {"mode": "none"},
+       "clustering": {"automatic": false}}'
 ```
 
-Then ingest with [Ingest a large folder](./ingest-large-folder.mdx). The policy and
-its limits are in [Ingest policy](./ingest-policy.mdx). To embed what was deferred
-later, run the auto-label job with `embed_missing=true` (mode (c), step 5).
+Then ingest with [Ingest a large folder](./ingest-large-folder.mdx). The policy and its
+limits are in [Ingest policy](./ingest-policy.mdx). No `curation` profile is needed: the
+core stack (Triton, API, OpenSearch) is enough.
 
-### 3. Keep clustering from running
+### 3. Embed and cluster later, on demand
 
-Clustering runs from two triggers. Switch off each one you do not want:
+Nothing was embedded, so the project can be embedded and clustered whenever you decide.
+One auto-label job does both (`embed_missing` embeds the deferred items first; the
+clustering is the job's own, so `clustering.automatic=false` does not stop it):
 
-| Trigger | How to stop it |
-|---|---|
-| `curation-cluster-refresh` (polls every 120 s, acts after 200 new items) | Do not start it, or stop it: `docker compose -p <project> stop curation-cluster-refresh`. A later `up -d` with the `curation` profile starts it again. |
-| `curation-auto-label-worker` idle retrain | Set `OP_IVF_RETRAIN_CHECK_S=0` in `.env` and recreate the worker with `./openprocessor start`. |
+```bash
+# not run
+curl -s -X POST "$API/curation/projects/cars/pipeline/auto_label/start?embed_missing=true&train_clusters=true"
+```
 
-The VLM is a third source of work. Deactivate it per project (mode (b), step 2).
+Switch the project back to automatic clustering (and a normal `embedding.mode`) with
+another `PUT` of the policy when you want ingest to cluster on its own again. The policy
+never rewrites stored data, so items already stored keep their state. The
+`embed` scope of [Reprocess](./reprocess.mdx) embeds without clustering.
 
-With only some workers running, start them by name. There is no CLI for a subset:
-`./openprocessor curation up` and `make curation-up` start all five curation services.
-(issue #285)
+The workers you run decide the rest. With only some of them running, start them by name.
+There is no CLI for a subset: `./openprocessor curation up` and `make curation-up` start
+all five curation services. (issue #285)
 
 ```bash
 # not run  (installed directory: .env holds COMPOSE_PROFILES)
@@ -144,47 +144,49 @@ The compose file documents it as run on demand with
 
 ### 2. Decide about the VLM now
 
-If `OP_VLM_URL` is set, a new project calls that VLM without anyone activating it, and
-`curation-vlm-worker` labels every embedded item in it (scope `all`). On the public
-sample project the API says so:
+A project calls **no VLM until it activates one**. `OP_VLM_URL` defines an endpoint
+(`env`) the project can opt into, nothing more, so `curation-vlm-worker` and the
+auto-label VLM stage skip a project that has not. On a new project the API says so:
 
 ```bash
-# ran
-curl -s $API/curation/projects/coco-bench-2k/vlm/endpoints/active
+# not run  (code-verified; the stack this page was checked on predates the change)
+curl -s $API/curation/projects/cars/vlm/endpoints/active
 ```
 
 ```json
-{"axis":"vlm","active":{"name":"env","revision":null},"source":"env","activated_at":null,"previous":null,"config_revision":0,"stale":false,"applied":[],"validation":null}
+{"axis":"vlm","active":{"name":null,"revision":null},"source":"off","activated_at":null,...}
 ```
 
-`"source":"env"` means the project never activated anything and inherits the
-deployment's VLM. To run mode (b) without a VLM, turn it off for the project in one of
-two ways:
+To run mode (b) with a VLM, activate an endpoint for the project (mode (c), step 3). To
+keep the VLM off, do nothing. To switch it off again later:
 
 ```bash
-# not run  (explicit off state; the project returns 409 vlm_not_configured to VLM calls)
+# not run  (the project then answers 409 vlm_not_configured to VLM calls that name no endpoint)
 curl -s -X POST $API/curation/projects/cars/vlm/endpoints/deactivate \
-  -H 'content-type: application/json' -d '{"expected_active": null}'
+  -H 'content-type: application/json' -d '{"expected_active": {"name": "env", "revision": null}}'
 
 # not run  (VLM stays active but no automated writer labels; revision from the GET)
 curl -s -X PUT $API/curation/projects/cars/vlm/policy \
   -H 'content-type: application/json' -d '{"expected_revision": 0, "scope": "off"}'
 ```
 
-With the first, the project has no VLM by default, so every VLM call that does not name
-an endpoint is refused. With the second, only the two automated writers stop (the VLM worker and the
-auto-label VLM stage); explicit requests still work. To undo the first, activate an
-endpoint again (`.../vlm/endpoints/env/activate` for the built-in one).
+With the first, every VLM call that does not name an endpoint is refused. With the
+second, only the two automated writers stop (the VLM worker and the auto-label VLM
+stage); explicit requests still work.
 
-:::note Making VLM use opt-in
-Today you cannot make "off" the default for new projects, and the project page does not
-show "inherited from the environment" separately from "chosen". (issue #282)
+:::note Behavior change in 0.6.0
+Earlier releases let every project that never activated an endpoint inherit `env`. A
+project created by an earlier release is pinned once, at the first start of the new
+API, to what it inherited: `env` when `OP_VLM_URL` was set, else `off`. Its behavior does
+not change, and `GET .../vlm/endpoints/active` now shows `"source":"env"` with an
+`activated_at` for it. A `default` project created by a fresh install is pinned the same
+way on its first start. Every project created after that starts `off`.
 :::
 
 <Screenshot
   name="cropwright/vlm-endpoint-off-1600.png"
   alt="Settings Models page for a project whose VLM is switched off"
-  caption="Settings, Models: a project with its VLM deactivated (public sample project)"
+  caption="Settings, Models: a project with its VLM off (public sample project)"
 />
 
 ### 3. What the cluster-refresh daemon does
@@ -198,50 +200,32 @@ it does two things in order:
    no VLM stage), which the auto-label worker runs.
 
 It waits for ingest to go quiet first, up to a deferral limit, and retries a failed
-retrain after a backoff. Its settings are command-line flags, and nothing in `.env`
-changes them:
+retrain after a backoff. Set its behavior in `.env` (the service reads `.env`, so no
+compose change is needed) and recreate it with `./openprocessor restart
+curation-cluster-refresh`. A command-line flag overrides the variable:
 
-| Flag | Default |
-|---|---|
-| `--interval-seconds` | 120 |
-| `--growth-threshold` | 200 new items |
-| `--max-deferral-seconds` | 1800 |
-| `--retry-backoff-seconds` | 600 |
-| `--auto-label` / `--no-auto-label` | on (queue the retrain). `--no-auto-label` runs auto_promote only. |
-| `--project` | every active project |
-| `--once` | one pass, then exit |
+| Variable | Flag | Default |
+|---|---|---|
+| `OP_CLUSTER_REFRESH_INTERVAL_S` | `--interval-seconds` | 120 |
+| `OP_CLUSTER_REFRESH_GROWTH_THRESHOLD` | `--growth-threshold` | 200 new items |
+| `OP_CLUSTER_REFRESH_MAX_DEFERRAL_S` | `--max-deferral-seconds` | 1800 |
+| `OP_CLUSTER_REFRESH_RETRY_BACKOFF_S` | `--retry-backoff-seconds` | 600 |
+| `OP_CLUSTER_REFRESH_AUTO_LABEL` | `--auto-label` / `--no-auto-label` | true (queue the retrain). `false` runs auto_promote only. |
+| | `--project` | every active project |
+| | `--once` | one pass, then exit |
 
-To change a flag, replace the service `command` in a compose override file. The merged
-result was checked with `docker compose config`:
-
-```yaml
-# docker-compose.cluster.yml
-services:
-  curation-cluster-refresh:
-    command:
-      - python
-      - scripts/curation/cluster_refresh_daemon.py
-      - --api=http://api:8000
-      - --opensearch=http://opensearch:9200
-      - --growth-threshold=1000
-```
-
-```bash
-# not run
-docker compose -p <project> -f docker-compose.yml -f docker-compose.cluster.yml \
-  --profile curation up -d curation-cluster-refresh
-```
-
-`./openprocessor` never loads your own override files, so a later `./openprocessor
-start` recreates the service with the stock command. Use `docker compose` directly for
-this service. Running it directly skips the CLI's checks that the project belongs to
-this directory, so pass the same `-p` name the CLI uses.
+**Per project off switch.** A project whose ingest policy has `clustering.automatic`
+false is skipped by this daemon entirely, by ingest-time placement and by the auto-label
+worker's idle retrain (mode (a), step 2). It is read at each poll, so the change applies
+without a restart. Explicit clustering (`/clusters/*`, an auto-label job you start)
+always runs.
 
 The second trigger lives in the auto-label worker. While idle it checks each project
 every `OP_IVF_RETRAIN_CHECK_S` seconds (default 1800). It retrains the centroids when the
 pool has grown to `OP_IVF_RETRAIN_GROWTH` times (default 1.5) the trained size and at
 least `OP_IVF_RETRAIN_MIN_INTERVAL_S` seconds (default 86400) have passed. Neither
-trigger runs the VLM.
+trigger runs the VLM unless the project activated one and the retrain job asks for it
+(the daemon's job has no VLM stage).
 
 ### 4. Known issue: the audit gate stops the retrain
 
@@ -306,15 +290,16 @@ tier. Details, including enabling it on an existing install, are in
 
 ### 3. Activate it for the project
 
-A project that never activated an endpoint already uses the env VLM (mode (b), step 2).
-To pin a registered endpoint:
+A new project has no VLM. Activate the built-in `env` endpoint, or one you registered:
 
 ```bash
 # not run
-curl -s -X POST $API/curation/projects/cars/vlm/endpoints/host-vlm/activate \
+curl -s -X POST $API/curation/projects/cars/vlm/endpoints/env/activate \
   -H 'content-type: application/json' \
   -d '{"revision": null, "acknowledge_external": false, "force": false, "expected_active": null}'
 ```
+
+Use `.../vlm/endpoints/host-vlm/activate` for a registered endpoint named `host-vlm`.
 
 ### 4. Set scope and budget before anything runs
 
@@ -349,9 +334,158 @@ curl -s -X POST "$API/curation/projects/cars/pipeline/auto_label/start?run_vlm=t
 curl -s "$API/curation/projects/cars/pipeline/auto_label/status"
 ```
 
-A project with its VLM deactivated answers the first call with `409 vlm_not_configured`.
+A project with no VLM answers the first call with `409 vlm_not_configured` unless the
+request names an endpoint with `vlm=<name>` (see the recipe below).
 VLM labels stay unvalidated suggestions (`class_source: "vlm"`). Nothing reaches an
 export until a person validates it.
+
+## Recipe: ingest without the VLM, cluster, name by hand, then run the VLM for one thing
+
+The goal: ingest images, detect cars and people, cluster, name clusters yourself (for
+example `spoiler`, a class the detector does not have), and call the VLM only for the
+part you choose. Nothing in this recipe waits for a VLM, and nothing runs one by
+itself.
+
+:::note How this was run
+Run on 2026-10-15 against the public project data of `coco-bench-2k` (40 COCO images
+copied into a throwaway project, deleted afterwards). The API on that stack predates the
+"no VLM until activated" change, so step 0 deactivates the project's VLM, which is the
+state every new project now starts in. Steps 1 to 5 are unchanged code. That stack's VLM
+endpoint was unreachable, so the VLM calls in step 6 show the refusal and the failure
+report, not labels. Where a command was only checked in the code, it says `# not run`.
+:::
+
+`API=http://localhost:4603/curation/projects/cars`
+
+**0. The project has no VLM.**
+
+```bash
+# ran  (needed only on a release before this change; new projects start here)
+curl -s -X POST $API/vlm/endpoints/deactivate -H 'content-type: application/json' \
+  -d '{"expected_active": null}'
+```
+
+```text
+{"axis":"vlm","active":{"name":null,"revision":null},"source":"off", ...}
+```
+
+**1. Keep only cars and people.** The detector knows 80 classes; this stores two.
+
+```bash
+# ran
+curl -s -X PUT $API/ingest/policy -H 'content-type: application/json' \
+  -d '{"expected_revision":0,"detect":{"classes":["car","person"]},"embedding":{"mode":"all"}}'
+```
+
+**2. Ingest.** Upload shown; a server folder uses `ingest/batch` (see
+[Ingest sources](./ingest-sources.mdx)).
+
+```bash
+# ran
+curl -s -X POST $API/ingest/upload -F images=@a.jpg -F images=@b.jpg   # 40 files in the run
+```
+
+```text
+{"status":"success","summary":{"successful":40,"duplicates":0,"failed":0,"crops_indexed":162,
+ "n_embedded":162,"n_not_embedded":0,"n_embed_failed":0,"n_filtered":155}, ...}
+```
+
+162 boxes stored, 155 other detections dropped by the policy, and the VLM was not called.
+
+**3. Cluster, with no VLM stage.** `run_vlm` defaults to false.
+
+```bash
+# ran
+curl -s -X POST "$API/pipeline/auto_label/start?train_clusters=true&run_vlm=false"
+curl -s $API/pipeline/auto_label/status      # status "completed"; stages.vlm.skipped: true
+curl -s "$API/clusters?limit=20"
+```
+
+On 162 crops the pass made one cluster (`10000`). Split it into sub-clusters:
+
+```bash
+# ran
+curl -s -X POST "$API/clusters/refine/10000?distance_threshold=0.6"
+```
+
+```text
+{"cluster_id":10000,"n_items":162,"n_subclusters":10,...,"action":"refined"}
+```
+
+**4. Name a cluster by hand.** Create the class, then label the members of a
+sub-cluster.
+
+```bash
+# ran
+curl -s -X POST $API/classes -H 'content-type: application/json' \
+  -d '{"name":"spoiler","group":"car_part"}'
+curl -s "$API/crops?cluster_id=10000&limit=200"     # pick the ids of sub-cluster 10000b
+curl -s -X PUT $API/crops/batch_label -H 'content-type: application/json' \
+  -d '{"crop_ids":["050ad3a2...","05ad8ec2..."],"class_id":0,"label_source":"human"}'
+```
+
+```text
+{"updated":28,"updated_ids":["050ad3a212d9be5304089683dc26c6a6", ...]}
+```
+
+Those 28 are now human-validated. No automated writer, the VLM included, overwrites
+them. In Cropwright, open the cluster, filter to the crops and use **Label all matching…**.
+
+**5. Run the VLM for one thing only.** Without an endpoint the project refuses, which is
+the point:
+
+```bash
+# ran
+curl -s -X POST "$API/vlm/label_cluster/10000"
+```
+
+```text
+409 {"detail":{"error":"vlm_not_configured","message":"this project's VLM is off or not configured; activate an endpoint first"}}
+```
+
+Name the endpoint for this run. The project's own setting stays `off`:
+
+```bash
+# ran  (the stack's VLM was unreachable; see step 6)
+curl -s -X POST "$API/vlm/label_cluster/10000?vlm=env"
+curl -s $API/pipeline/auto_label/status
+```
+
+The job selects the 134 unvalidated members of cluster `10000` and none of the 28 you
+named. Other ways to pick "one thing", all `# not run` and all taking `vlm=<name>`:
+
+| Scope | Request |
+|---|---|
+| One cluster | `POST $API/vlm/label_cluster/{cluster_id}?vlm=env` |
+| A class, a confidence band or a size band | `POST $API/pipeline/auto_label/start?run_vlm=true&vlm=env&class_id=3&conf_max=0.5` (the same item filter as the crop list: `class_name`, `exclude_class_name`, `conf_min`, `conf_max`, `min_area`, `max_area`, `max_rank`, `origin`, `embedding_state`, `review_status`) |
+| Chosen crops | `POST $API/vlm/label_batch?vlm=env` with `{"crop_ids": [...]}` |
+| A budget | add `max_vlm_crops=200` to any `auto_label/start` |
+| Only representatives | `vlm_scope=representatives` on `auto_label/start`, or the project's [VLM policy](./vlm-selection.mdx#scope-and-budget) |
+
+To make the VLM the project's own default instead, activate it (mode (c), step 3).
+
+**6. Check what the run did.** A VLM run that could label nothing now fails instead of
+reporting `completed` with `predicted: 0`. Found by this run: the auto-label VLM stage
+swallowed an unreachable endpoint and reported success. The stage now reports
+`failed` (requests that failed) and `unreadable` (crops whose image the worker could not
+read) next to `predicted`, and the job fails with those counts when every selected crop
+failed:
+
+```text
+# not run  (code-verified by tests/curation/test_vlm_stage_nothing_labeled.py)
+status: failed
+error: the VLM stage labeled nothing: 134 request(s) failed and 0 crop image(s) could
+       not be read, of 134 selected. Check that the VLM endpoint is reachable and the
+       source images are mounted in the worker.
+```
+
+**Labels for parts the detector does not have (a wheel, a spoiler).** Two routes besides
+naming clusters by hand. A region profile makes the segmenter propose the part inside
+each detected car, text-prompted (`wheel`), with the VLM verifying each box: see
+[Worked example: wheels on cars](./wheel-example.mdx) and
+[Region profiles](./region-profiles.mdx). The VLM can also label crops against an
+open-vocabulary prompt set: see [Open vocabulary](./open-vocabulary.mdx). Both call the
+VLM, so activate one for the project first.
 
 ## (d) Iterative cluster-sampled auto-labeling (planned)
 

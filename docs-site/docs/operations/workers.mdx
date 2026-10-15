@@ -62,7 +62,9 @@ whose VLM is off does neither VLM step.
 
 Not every mode needs every worker. [Pipeline modes](../guides/pipeline-modes.mdx) says
 which to start, and how to stop the two clustering triggers (the cluster-refresh daemon
-and the auto-label worker's idle centroid retrain, `OP_IVF_RETRAIN_CHECK_S=0`).
+and the auto-label worker's idle centroid retrain). Turn both off for one project with
+the ingest policy field `clustering.automatic=false`, or for all projects with
+`OP_IVF_RETRAIN_CHECK_S=0` and by not running the daemon.
 
 ## Heartbeats instead of `pgrep`
 

@@ -13,6 +13,17 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Added
 
+- Detection-only ingest (#279): ingest policy `embedding.mode: "none"` stores boxes with no vector
+  of any kind (the whole-frame vector included) and `clustering.automatic: false` keeps ingest and
+  the embed scope from placing items in clusters, the `curation-cluster-refresh` daemon from
+  refreshing the project and the auto-label worker's idle retrain from running. Embed and cluster
+  later on demand. Cropwright's ingest-policy page offers both.
+- The cluster-refresh daemon reads `OP_CLUSTER_REFRESH_INTERVAL_S`, `_GROWTH_THRESHOLD`,
+  `_MAX_DEFERRAL_S`, `_RETRY_BACKOFF_S` and `_AUTO_LABEL` (#292); a command-line flag overrides
+  each. No compose override file is needed.
+- Pipeline modes guide: a recipe, run on public data, for "ingest without the VLM, cluster, name
+  clusters by hand, then run the VLM for one cluster, filter or batch" (`vlm=<name>` per run).
+
 - `docs/design/engineering_standards.md`: the portable standards and lessons from the repo cleanup
   (principles, the lint, type and test config that worked, every guard with its baseline format,
   `--tighten` workflow and plant-a-violation proof, an ordered port checklist for a sister repo,
@@ -142,6 +153,17 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   `docs/benchmarks/stage4_*.json` (#248, #254, #230).
 
 ### Changed
+
+- **Behavior change**: a project calls no VLM until it activates one (#282). Before, with
+  `OP_VLM_URL` set, every project that never activated an endpoint labeled with the env endpoint
+  and `curation-vlm-worker` labeled every embedded item in the background. Now `GET
+  .../vlm/endpoints/active` answers `source: "off"` for a project with no activation, the VLM
+  worker and the auto-label VLM stage skip it, and `PUT /settings` `defaults.vlm: null` means off.
+  New projects are created with an explicit off. Projects created by an earlier release are
+  pinned once at the first start of this version to what they inherited (`env` when `OP_VLM_URL`
+  was set, else `off`), so their behavior does not change; a `default` project created by a fresh
+  install is pinned the same way. A run that names an endpoint (`vlm=<name>`) still works.
+  `scripts/release/acceptance_run.sh` activates the env VLM in its `vlm_label` phase.
 
 - Repo cleanup, PR 9a (typing): mypy now runs with `disallow_untyped_defs`, `disallow_incomplete_defs`
   and `warn_return_any` over `src scripts docker export` (`tests/` is outside its scope), and the
@@ -407,6 +429,10 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   naming-leak scan and `tests/test_no_legacy_region_scalars.py` cover the same ground.
 
 ### Fixed
+
+- The auto-label VLM stage no longer reports `completed` with `predicted: 0` when it could label
+  nothing: it adds `failed` and `unreadable` counts, and fails the job when every selected crop
+  failed (an unreachable VLM, or source images the worker cannot read).
 
 - Visual-search ingest (#318): a face response with fewer landmark entries than faces no longer
   raises `IndexError` and fails the whole batch. Only the affected image is refused, with the

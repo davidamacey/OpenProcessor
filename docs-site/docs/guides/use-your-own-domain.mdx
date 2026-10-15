@@ -128,8 +128,9 @@ curl -s -X POST "$API/vlm/endpoints/host-vlm/activate" \
   -H 'Content-Type: application/json' -d '{}'
 ```
 
-The built-in `env` endpoint (`OP_VLM_URL`, `OP_VLM_MODEL`) is the default a
-new project runs. See [VLM selection](./vlm-selection.mdx).
+The built-in `env` endpoint (`OP_VLM_URL`, `OP_VLM_MODEL`) is one a project
+opts into by activating it; a new project calls no VLM until then. See
+[VLM selection](./vlm-selection.mdx).
 
 ## 6. Ingest or import
 

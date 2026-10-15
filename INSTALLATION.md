@@ -239,7 +239,8 @@ directory created. Run `./openprocessor help` for the list.
 Labeling and region verification call an OpenAI-compatible vision-language
 model. A deployment has a **registry** of endpoints (the built-in `env`
 endpoint from `OP_VLM_URL`, plus any you save through the API) and each project
-**activates** one. Three ways to get a model:
+**activates** one. A project calls no VLM until it does, so installing a VLM never
+makes an ingest wait for it. Three ways to get a model:
 
 1. **Local model from the catalog** (the `vlm` tier). The catalog is
    `examples/vlm/catalog.tsv`. The installer picks the best `tested` entry

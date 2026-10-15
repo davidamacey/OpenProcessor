@@ -125,11 +125,13 @@ audit passes. (issue #280). See
   caption="Review queue from GET /review/{tab} (captured from Cropwright, a frontend for this backend)"
 />
 
-- **VLM assist.** A project runs its active VLM endpoint. A project that never
-  activated one runs the `env` endpoint from `OP_VLM_URL`/`OP_VLM_MODEL`, if those are
-  set, so `curation-vlm-worker` labels in every such project without being asked.
-  Switch a project off with `POST /vlm/endpoints/deactivate` (see
-  [VLM selection](../guides/vlm-selection.mdx#turn-the-vlm-off-for-a-project)). Run
+- **VLM assist.** A project runs its active VLM endpoint and calls no VLM until it
+  activates one (the `env` endpoint from `OP_VLM_URL`/`OP_VLM_MODEL` included), so
+  nothing waits for a VLM. Switch an active project off with
+  `POST /vlm/endpoints/deactivate` (see
+  [VLM selection](../guides/vlm-selection.mdx#turn-the-vlm-off-for-a-project)), or run
+  the VLM for one job only with `vlm=<name>` (see the
+  [selective recipe](../guides/pipeline-modes.mdx#recipe-ingest-without-the-vlm-cluster-name-by-hand-then-run-the-vlm-for-one-thing)). Run
   `auto_label/start?run_vlm=true`, label one cluster with
   `POST /vlm/label_cluster/{cluster_id}`, or let `curation-vlm-worker`
   suggest classes continuously. Register and activate other endpoints as

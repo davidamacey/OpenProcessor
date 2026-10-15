@@ -527,7 +527,9 @@ A VLM endpoint is an OpenAI-compatible chat endpoint with vision. The
 endpoint registry is deployment-wide: an endpoint created in one project is
 visible in all of them. Which endpoint a project uses is that project's
 activation. The built-in `env` endpoint (`OP_VLM_URL`, `OP_VLM_MODEL`) is
-listed first and is read-only. Clone it to get an editable copy.
+listed first and is read-only. Clone it to get an editable copy. A project with no
+activation calls no VLM (`GET .../vlm/endpoints/active` answers `source: "off"`); a
+project opts into `env` by activating it like any endpoint.
 
 ### Registry (global routes)
 

@@ -285,8 +285,10 @@ curl -s "$API/curation/projects/$P/pipeline/auto_label/status"
 
 Expected: a job id, then `status` moving to `completed`. `auto_label`
 clusters only by default (`run_vlm=false`). The VLM labels nothing unless you
-pass `run_vlm=true` **and** a VLM endpoint is configured (see
-[VLM selection](../guides/vlm-selection.mdx)).
+pass `run_vlm=true` **and** the project has activated a VLM endpoint, or you name one
+with `vlm=<name>` (see [VLM selection](../guides/vlm-selection.mdx)). A new project has
+none, so the request above is refused with `409 vlm_not_configured` until you activate
+one; drop `run_vlm=true` to cluster without a VLM.
 
 ### Things that trip people up
 
