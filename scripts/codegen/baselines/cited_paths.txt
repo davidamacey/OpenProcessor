@@ -45,14 +45,13 @@ frontend/src/lib/annotations/secondSlotIntegration.test.ts	2	cites a design note
 frontend/src/lib/annotations/servedRegionSlot.test.ts	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/annotations/servedRegionSlot.ts	2	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/annotations/types.ts	3	cites a design note that left the tree; drop the citation when the file is next touched
-frontend/src/lib/api.autoLabel.test.ts	2	cites a design note that left the tree; drop the citation when the file is next touched
+frontend/src/lib/api.autoLabel.test.ts	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/api.clusters.test.ts	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/api.ingest.test.ts	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/api.mapRawCrop.test.ts	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/api.settings.test.ts	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/api.ts	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/apiPrefixScan.test.ts	2	cites a design note that left the tree; drop the citation when the file is next touched
-frontend/src/lib/api_autoLabel.ts	2	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/api_clusters.ts	2	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/api_cropMap.ts	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/api_ingest.ts	1	cites a design note that left the tree; drop the citation when the file is next touched

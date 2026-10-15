@@ -1,5 +1,6 @@
 /**
- * The auto-label job (`/pipeline/auto_label/*`) and VLM-on-cluster runs.
+ * The whole-project auto-label job (`/pipeline/auto_label/*`). A VLM run on a
+ * cluster, sub-cluster, selection, box or crop is an assist run (`api_assist.ts`).
  */
 import { apiFetch, qs, scoped } from '$lib/api';
 import { ApiError } from '$lib/api_errors';
@@ -24,87 +25,6 @@ export function unknownStrategyDetail(e: unknown): UnknownStrategyDetail | null 
     requested: d.requested,
     valid_ids: d.valid_ids.filter((v): v is string => typeof v === 'string'),
   };
-}
-
-/**
- * Kick off a VLM-label run scoped to one cluster: `POST
- * {API_PREFIX}/vlm/label_cluster/{cluster_id}[?prompt_pack=&vlm=&acknowledge_external=]`. The server
- * selects every unvalidated, non-holdout, non-excluded member itself —
- * the frontend no longer fetches the crop page or chunks ids client-side
- * (that was the old `{API_PREFIX}/vlm/label_batch` chunk-of-64 loop,
- * since removed). Returns the queued job's state
- * (`AutoLabelJobState`, defined below); 409 when another auto-label job
- * is already running. Progress and the final per-stage result come from
- * polling `{API_PREFIX}/pipeline/auto_label/status` — see
- * `pollAutoLabelJob`.
- */
-export function runVlmOnCluster(
-  clusterId: number,
-  opts: {
-    promptPack?: string | null;
-    /** a registry endpoint name (or `off`) for this run only. */
-    vlm?: string | null;
-    /** Sent only when `true`. */
-    acknowledgeExternal?: boolean;
-  } = {},
-  signal?: AbortSignal,
-): Promise<AutoLabelJobState> {
-  return apiFetch<AutoLabelJobState>(
-    `${scoped()}/vlm/label_cluster/${clusterId}${qs({
-      prompt_pack: opts.promptPack ?? undefined,
-      vlm: opts.vlm ?? undefined,
-      acknowledge_external: opts.acknowledgeExternal === true ? true : undefined,
-    })}`,
-    { method: 'POST' },
-    signal,
-  );
-}
-
-/**
- * Poll a job until it leaves `running`, calling `onUpdate` with every
- * intermediate state so a caller can render stage/progress. Shared by
- * every caller of `runVlmOnCluster` (`/dashboard`, `/clusters/[id]`)
- * instead of each page hand-rolling its own `setTimeout` loop —
- * `AutoLabelPanel` keeps its own poller since it also needs to detect a
- * daemon-fired run while idle, which this helper, only ever started
- * right after `runVlmOnCluster`, does not.
- *
- * `expectedJobId` (M7, docs/design/interactive-pass-2026-09-24.md): when
- * given, polls `GET {API_PREFIX}/pipeline/auto_label/status/{job_id}`
- * (`getAutoLabelJobStatus`) for that exact job — the backend now serves
- * this per-job (b654da5), so there's no more race against
- * `{API_PREFIX}/pipeline/auto_label/status`'s single "current/most
- * recent job" slot answering with the *previous* job's already-terminal
- * status in the same tick a caller that just started a new one polls (a
- * real race, not hypothetical — observed live: a 1-crop cluster run
- * toasted "0 crops (0 updated)" because the read landed before the new
- * job had even flipped to `running`). A `404` (job not yet visible, or
- * never existed) is treated as "still waiting", bounded by `maxWaitMs` so
- * a backend that genuinely drops the job doesn't hang forever. Without
- * `expectedJobId`, falls back to `getAutoLabelStatus` (the "current job"
- * slot) unconditionally, same as before.
- */
-export async function pollAutoLabelJob(
-  onUpdate: (job: AutoLabelJobState) => void,
-  signal?: AbortSignal,
-  intervalMs = 1500,
-  expectedJobId?: string,
-  maxWaitMs = 5 * 60_000,
-): Promise<AutoLabelJobState> {
-  const deadline = Date.now() + maxWaitMs;
-  for (;;) {
-    const job =
-      expectedJobId == null
-        ? await getAutoLabelStatus(signal)
-        : await getAutoLabelJobStatus(expectedJobId, signal);
-    if (job != null) {
-      onUpdate(job);
-      if (job.status !== 'running') return job;
-    } else if (Date.now() > deadline) {
-      throw new Error(`Timed out waiting for job ${expectedJobId} to appear in status.`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
 }
 
 // -- Auto-label (recluster) job ------------------------------------------
@@ -230,31 +150,6 @@ export function getAutoLabelStatus(signal?: AbortSignal): Promise<AutoLabelJobSt
     {},
     signal,
   );
-}
-
-/**
- * `GET {API_PREFIX}/pipeline/auto_label/status/{job_id}` (M7,
- * docs/design/interactive-pass-2026-09-24.md): poll the exact job a caller
- * started, instead of the single "current/most recent job" slot
- * `getAutoLabelStatus` reads. Returns `null` for a `404` — an id no job
- * ever had (or not a 32-hex id) — so a caller can distinguish "not there
- * yet / never existed" from a real fetch failure without inspecting
- * `ApiError.status` itself.
- */
-export async function getAutoLabelJobStatus(
-  jobId: string,
-  signal?: AbortSignal,
-): Promise<AutoLabelJobState | null> {
-  try {
-    return await apiFetch<AutoLabelJobState>(
-      `${scoped()}/pipeline/auto_label/status/${encodeURIComponent(jobId)}`,
-      {},
-      signal,
-    );
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 404) return null;
-    throw e;
-  }
 }
 
 export function cancelAutoLabel(

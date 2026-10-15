@@ -18,7 +18,7 @@ async function render(active: unknown) {
   );
   target = document.createElement('div');
   document.body.appendChild(target);
-  instance = mount(VlmQuickAction, { target, props: { onrun: () => {} } });
+  instance = mount(VlmQuickAction, { target, props: {} });
   await new Promise((r) => setTimeout(r, 20));
   flushSync();
   return target;
@@ -38,11 +38,12 @@ describe('VlmQuickAction', () => {
     expect(t.querySelector('button.btn-primary')).toBeNull();
   });
 
-  it('a project with an active VLM keeps the primary button', async () => {
+  it('a project with an active VLM links to the clusters, where assist runs are started', async () => {
     const t = await render({ source: 'saved', active: { name: 'x', revision: 1 } });
-    expect(t.querySelector('button.btn-primary')?.textContent).toContain(
-      'Run VLM Labeling',
-    );
+    const link = t.querySelector('a.btn-primary');
+    expect(link?.textContent).toContain('Assist with the VLM');
+    expect(link?.getAttribute('href')).toMatch(/\/clusters$/);
+    expect(t.querySelector('button')).toBeNull();
     expect(t.querySelector('[data-testid="vlm-activate-first"]')).toBeNull();
   });
 });

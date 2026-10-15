@@ -8,24 +8,59 @@
   import { createClusterDetailActions } from '$lib/clusters/clusterDetailActions.svelte';
   import { createClusterDetailController } from '$lib/clusters/clusterDetailController.svelte';
   import { createClusterDetailLive } from '$lib/clusters/clusterDetailLive.svelte';
+  import AssistProposalCard from '$components/assistRun/AssistProposalCard.svelte';
+  import AssistRunDialog from '$components/assistRun/AssistRunDialog.svelte';
+  import { createClusterAssist } from '$lib/assistRun/clusterAssist.svelte';
   import type { Crop } from '$lib/types';
 
   const view = createClusterDetailController();
   const actions = createClusterDetailActions(view);
   const live = createClusterDetailLive(view);
+  const clusterAssist = createClusterAssist(view);
+
+  // The proposal on screen belongs to the cluster or sub-cluster being viewed.
+  $effect(() => {
+    void view.clusterId;
+    void view.subTab;
+    void clusterAssist.load();
+  });
 
   // Crop opened in the read-only details modal (info button on each card).
   let detailCrop = $state<Crop | null>(null);
 </script>
 
 <div class="flex h-full flex-col">
-  <ClusterDetailToolbar {view} {actions} />
+  <ClusterDetailToolbar {view} {actions} {clusterAssist} />
   <ClusterDetailFilters {view} />
   <SubClusterTabs {view} />
+  {#if clusterAssist.latest}
+    {#key clusterAssist.latest.run_id}
+      <div
+        class="border-b border-zinc-800 px-4 py-2"
+        data-testid="cluster-assist-proposal"
+      >
+        <AssistProposalCard
+          run={clusterAssist.latest}
+          onapplied={() => {
+            void view.loadFirst();
+            void clusterAssist.load();
+          }}
+        />
+      </div>
+    {/key}
+  {/if}
   <ClusterDetailGrid {view} {actions} {live} ondetail={(c) => (detailCrop = c)} />
 </div>
 
 <MoveClusterPicker {view} {actions} />
+
+<AssistRunDialog
+  ctl={clusterAssist.assist}
+  onclosed={() => {
+    void view.loadFirst();
+    void clusterAssist.load();
+  }}
+/>
 
 {#if detailCrop}
   <CropDetailModal crop={detailCrop} onclose={() => (detailCrop = null)} />

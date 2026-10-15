@@ -146,7 +146,9 @@ describe('VlmScopePanel', () => {
 
   it('checks the served region verification mode and saves a switch to none', async () => {
     const { putPolicy } = await render();
-    expect((q('[data-testid="region-verify-vlm"]') as HTMLInputElement).checked).toBe(true);
+    expect((q('[data-testid="region-verify-vlm"]') as HTMLInputElement).checked).toBe(
+      true,
+    );
     // The region verification mode applies whatever the VLM scope is.
     (q('[data-testid="vlm-scope-off"]') as HTMLInputElement).click();
     flushSync();
