@@ -750,3 +750,22 @@ Left for wave C (frontend, PR 8): the assist dialog, proposal card and attribute
 `runVlmOnCluster` and the dashboard modal to `createAssistRun`; rewriting the stubbed e2e and vitest
 pins for the deleted `/vlm/label_cluster` and `/vlm/verify_regions` routes; regenerating the
 `contracts/ts` consumers.
+
+Recorded after wave C (PR 8, the frontend).
+
+- **The sub-cluster tab list is not served.** `GET /clusters` serves only `n_subclusters`, so the tabs are
+  the sub-cluster ids seen while the whole cluster is shown (replaced on the first page, added to on later
+  ones). A tab loads from `GET /crops?cluster_subid=`; a sub-cluster whose members are all beyond the loaded
+  pages has no tab until the user scrolls the "all" view. A served list of sub-cluster ids would fix it.
+- **The dashboard keeps one action, as a link.** The "Run VLM on cluster" modal is gone; the quick action
+  links to `/clusters` (or to the Models settings when the project has no VLM), where **Assist…** lives.
+- **Single-box assist is on the `/review` box row**, not inside `SlotBboxEditor` or `MultiBoxCanvas`: those
+  are modals with unsaved edits, and a second dialog over them would race the save. `SlotBboxEditor` has none.
+- **The proposal is a folded line on the cluster page** that opens the card (and only then asks the server
+  for the apply dry run). `min_agreement` has no control; the server's default 0.6 applies.
+- **Tests.** The controllers, the contract test, the policy panel, the sub-cluster request and the stubbed e2e
+  were written first and watched failing; the three new components' tests were written with the components.
+- **Docs screenshots.** A capture state (`assist-dialog`) and the dry-run allow-list entries are added to
+  `frontend/scripts/docs_screenshots/`; they were not run (the live stack was off limits), so
+  `cropwright/assist-dialog-1600.png` renders as "pending". The proposal card needs a stored run and has no
+  scripted state.
