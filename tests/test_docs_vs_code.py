@@ -31,7 +31,9 @@ def _reset_only():
     checker.set_only(None)
 
 
-@pytest.mark.parametrize('name', ['routes', 'env', 'compose', 'template'])
+@pytest.mark.parametrize(
+    'name', ['routes', 'env', 'compose', 'template', 'cli', 'make', 'screenshots', 'envfiles']
+)
 def test_real_docs_match_the_code(name: str) -> None:
     errors = checker.CHECKS[name]()
     assert errors == [], f'{name} check found {len(errors)} problem(s):\n' + '\n'.join(errors)
@@ -166,3 +168,57 @@ def test_doc_files_skip_untracked_local_notes(
     names = {p.name for p in checker.doc_files()}
 
     assert names == {'tracked.md'}
+
+
+def test_cli_check_rejects_an_unknown_subcommand_and_flag(tmp_path: Path) -> None:
+    assert _check_one(tmp_path, 'Run `./openprocessor curation up --help`.\n', 'cli') == []
+    bad = _check_one(tmp_path, 'Run `./openprocessor frobnicate` first.\n', 'cli')
+    assert len(bad) == 1
+    assert 'frobnicate' in bad[0]
+    bad = _check_one(tmp_path, '`./openprocessor logs --no-such-flag`\n', 'cli')
+    assert len(bad) == 1
+    assert '--no-such-flag' in bad[0]
+
+
+def test_cli_check_reads_a_flag_only_up_to_the_end_of_its_code_span(tmp_path: Path) -> None:
+    body = '`./openprocessor upgrade`, and `./setup-openprocessor.sh --rollback`\n'
+    assert _check_one(tmp_path, body, 'cli') == []
+
+
+def test_make_check_rejects_an_unknown_target_in_code_only(tmp_path: Path) -> None:
+    assert _check_one(tmp_path, 'Run `make up` then\n```bash\nmake status\n```\n', 'make') == []
+    assert _check_one(tmp_path, 'We make the API send requests.\n', 'make') == []
+    assert _check_one(tmp_path, 'Globs like `make clone-refs-*` are fine.\n', 'make') == []
+    bad = _check_one(tmp_path, 'Run `make no-such-target`.\n', 'make')
+    assert len(bad) == 1
+    assert 'no-such-target' in bad[0]
+    bad = _check_one(tmp_path, '```bash\n$ make also-missing\n```\n', 'make')
+    assert len(bad) == 1
+
+
+def test_screenshot_check_rejects_a_name_with_no_file(tmp_path: Path) -> None:
+    assert (
+        _check_one(tmp_path, '<Screenshot name="cropwright/<file>.png" alt="x" />\n', 'screenshots')
+        == []
+    )
+    real = next((checker.REPO_ROOT / 'docs-site' / 'static' / 'img' / 'screenshots').rglob('*.png'))
+    name = real.relative_to(checker.REPO_ROOT / 'docs-site' / 'static' / 'img' / 'screenshots')
+    assert (
+        _check_one(tmp_path, f'<Screenshot name="{name.as_posix()}" alt="x" />\n', 'screenshots')
+        == []
+    )
+    bad = _check_one(
+        tmp_path, '<Screenshot name="cropwright/no-such-1600.png" alt="x" />\n', 'screenshots'
+    )
+    assert len(bad) == 1
+    assert 'no-such-1600.png' in bad[0]
+
+
+def test_envfiles_check_rejects_an_assigned_name_nothing_reads(tmp_path: Path) -> None:
+    ok = '```bash\nCOMPOSE_PROJECT_NAME=mine\n```\n'
+    assert _check_one(tmp_path, ok, 'envfiles') == []
+    local = '```bash\nBK=~/backup\nmkdir -p "$BK"\n```\n'
+    assert _check_one(tmp_path, local, 'envfiles') == []
+    bad = _check_one(tmp_path, '```bash\nNOT_A_REAL_SETTING=1\n```\n', 'envfiles')
+    assert len(bad) == 1
+    assert 'NOT_A_REAL_SETTING' in bad[0]

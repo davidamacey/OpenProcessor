@@ -53,7 +53,8 @@ import os
 import sys
 from pathlib import Path
 
-from docs_screenshots.ctx import Ctx, _settle
+from docs_screenshots import public_data
+from docs_screenshots.ctx import Ctx, _settle, api_get
 from docs_screenshots.guard import _read_only
 from docs_screenshots.registry import STATE_HEIGHT, STATES
 from playwright.sync_api import sync_playwright
@@ -94,6 +95,13 @@ def main() -> int:
         help="Project slug holding the public sample data. Without it bare routes "
         "redirect to the default project.",
     )
+    parser.add_argument(
+        "--public-projects",
+        default=os.environ.get("OP_CROPWRIGHT_PUBLIC_PROJECTS"),
+        help="Required. Comma-separated slugs of every project on the backend that is public. "
+        "--project must be one of them, and the pages that list all projects are refused "
+        "while the backend holds any project outside this list.",
+    )
     parser.add_argument("--out", type=Path, default=OUT_DIR)
     parser.add_argument(
         "--only",
@@ -113,6 +121,11 @@ def main() -> int:
     )
     args = parser.parse_args()
     args.out = args.out.resolve()
+    try:
+        allowed = public_data.parse_allowlist(args.public_projects)
+        public_data.require_allowlisted_project(args.project, allowed)
+    except ValueError as e:
+        sys.exit(str(e))
 
     routes = [] if args.skip_routes else load_routes()
     states = dict(STATES)
@@ -121,8 +134,23 @@ def main() -> int:
         states = {k: v for k, v in states.items() if k in args.only}
         if not routes and not states:
             sys.exit(f"no matching routes or states for --only {args.only}")
-    elif args.project is None:
-        states = {}  # states need a project
+
+    listing = api_get(args.base_url, "/curation/projects?include_archived=true")
+    refused = public_data.listing_pages_to_refuse(
+        [r["name"] for r in routes if r["route"].startswith("/projects")]
+        + [r["name"] for r in routes]
+        + list(states),
+        listing,
+        allowed,
+    )
+    if refused:
+        foreign = public_data.foreign_projects(listing, allowed)
+        print(
+            f"  refusing pages that list every project ({sorted(set(refused))}): the backend also "
+            f"holds {len(foreign)} project(s) outside the public allowlist."
+        )
+        routes = [r for r in routes if r["name"] not in refused and not r["route"].startswith("/projects")]
+        states = {k: v for k, v in states.items() if k not in refused}
 
     args.out.mkdir(parents=True, exist_ok=True)
 
