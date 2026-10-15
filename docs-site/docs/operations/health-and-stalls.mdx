@@ -50,7 +50,8 @@ writes), and a `building`, `deleting` or `failed` project refuses requests;
 `GET /curation/projects/{project}` serves the `status` and a typed `error`.
 A live job (import, combine, training, delete drain) makes a project busy,
 and lifecycle operations on it answer `409 project_busy` with the jobs that
-hold it.
+hold it. The message names each job; a `detection_worker` entry right after an
+ingest is the worker finishing its last batch, so retry in a few seconds.
 
 ## Why isn't the region queue shrinking?
 

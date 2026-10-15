@@ -31,6 +31,7 @@ from src.services.projects.lifecycle_checks import (
     _last_active_check,
     _require_revision,
     _require_transition,
+    busy_message,
     running_jobs,
 )
 from src.services.projects.registry import (
@@ -501,7 +502,7 @@ async def archive_project(client: Any, *, slug: str, expected_revision: int) -> 
         raise rejection(
             409,
             'project_busy',
-            f"'{slug}' has {len(jobs)} running job(s)",
+            busy_message(slug, jobs),
             project=slug,
             jobs=[j.to_wire() for j in jobs],
         )

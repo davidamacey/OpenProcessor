@@ -12,6 +12,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 ## [Unreleased]
 
 ### Fixed
+- `DELETE /projects/{p}` (and archive) answering `409 project_busy` right after an ingest finished (#249): the detection worker refreshed its in-flight count only every 15 s, so the last batch read as busy for up to that long after it had landed. The worker now rewrites a project's liveness within a second of its count changing, and the `project_busy` message names each running job and says when a retry is the answer.
 - `make pe-build-trt` (`export/build_pe_trt.sh`, #277) no longer ships an FP32 engine silently: a failed or FP32-falling-back FP16 bake, a failed FP16 build or a failed uint8 input step now exits 4 with the cause. `ALLOW_FP32=1` opts in to an FP32 engine knowingly.
 
 ### Added

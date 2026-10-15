@@ -183,7 +183,7 @@ Every error body has the shape
 | 409 | `slug_taken`, `slug_retired` | Create with a used or retired slug |
 | 409 | `revision_conflict` | `expected_revision` is stale; `current_revision` is returned |
 | 409 | `invalid_transition` | For example archiving a project that is not `active` |
-| 409 | `project_busy` | Running jobs; `jobs` lists them |
+| 409 | `project_busy` | Running jobs; `jobs` lists them and the message names them. A detection worker finishing its last batch clears within about 15 seconds, so retry |
 | 409 | `last_active_project` | Archive or delete would leave no active project |
 | 409 | `project_protected` | Delete of the `default` project |
 | 409 | `in_use` | Delete while another project depends on a shared model |

@@ -46,6 +46,20 @@ _KIND_LABELS = {
 }
 
 
+def busy_message(slug: str, jobs: list[JobRef]) -> str:
+    """The ``project_busy`` message: what is running, by name, and when a retry
+    is the right answer (a detection worker's in-flight batch drains on its
+    own; its liveness refreshes within seconds)."""
+    named = ', '.join(f'{j.kind_label} {j.id}' for j in jobs[:5])
+    more = f' and {len(jobs) - 5} more' if len(jobs) > 5 else ''
+    hint = (
+        ' A detection worker finishing its last batch clears within about 15 seconds: retry.'
+        if any(j.kind == 'detection_worker' for j in jobs)
+        else ' Cancel or wait for them, then retry.'
+    )
+    return f"'{slug}' has {len(jobs)} running job(s): {named}{more}.{hint}"
+
+
 async def running_jobs(record: ProjectRecord) -> list[JobRef]:
     """The project's real running-job inventory, via
     ``src.services.projects.busy.running_jobs`` -- the single source of

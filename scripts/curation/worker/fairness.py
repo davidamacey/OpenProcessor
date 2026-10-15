@@ -194,6 +194,7 @@ def write_liveness(
 
 
 LIVENESS_INTERVAL_S = 15.0
+LIVENESS_POLL_S = 1.0
 
 
 async def liveness_loop(
@@ -202,24 +203,37 @@ async def liveness_loop(
     stop_event: asyncio.Event,
     *,
     interval_s: float = LIVENESS_INTERVAL_S,
+    poll_s: float = LIVENESS_POLL_S,
 ) -> None:
     """Refresh every active project's liveness doc on a timer. The
     producer only writes after a fetch that found new items, so a worker
     busy on a long batch (queue full, everything pending already in
     flight, paused) would otherwise go stale and read as idle to
-    ``busy.py``."""
+    ``busy.py``.
+
+    A project whose in-flight count changed is rewritten within ``poll_s``,
+    not on the next ``interval_s`` tick: otherwise a delete right after the
+    last item landed read a stale non-zero count and answered 409
+    ``project_busy`` for up to a full interval (#249)."""
+    last: dict[str, tuple[int, float]] = {}
     while not stop_event.is_set():
         counts = inflight_counts()
+        now = time.monotonic()
         for record in projects():
+            inflight = counts.get(record.slug, 0)
+            prev = last.get(record.slug)
+            if prev is not None and prev[0] == inflight and now - prev[1] < interval_s:
+                continue
             with contextlib.suppress(OSError):
                 write_liveness(
                     record,
-                    inflight=counts.get(record.slug, 0),
+                    inflight=inflight,
                     applied=True,
                     paused=is_project_paused(record),
                 )
+                last[record.slug] = (inflight, now)
         with contextlib.suppress(TimeoutError):
-            await asyncio.wait_for(stop_event.wait(), timeout=interval_s)
+            await asyncio.wait_for(stop_event.wait(), timeout=min(poll_s, interval_s))
 
 
 def read_liveness(record: ProjectRecord, *, host: str | None = None) -> dict | None:

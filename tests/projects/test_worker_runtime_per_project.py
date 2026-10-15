@@ -157,3 +157,32 @@ async def test_liveness_is_refreshed_on_a_timer_without_new_fetches(
     doc = read_liveness(alpha)
     assert doc is not None
     assert doc['inflight'] == 3
+
+
+@pytest.mark.asyncio
+async def test_liveness_drops_to_idle_promptly_not_on_the_next_interval(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#249: when a project's last in-flight item lands, the busy check must see
+    inflight 0 within a poll, not up to a full liveness interval later (a DELETE
+    right after an ingest finished answered 409 on the stale count)."""
+    import asyncio
+
+    from scripts.curation.worker import fairness
+
+    alpha = _record(tmp_path, 'alpha')
+    monkeypatch.setattr(fairness, 'is_project_paused', lambda _p: False)
+    counts = {'alpha': 3}
+    stop = asyncio.Event()
+    task = asyncio.create_task(
+        fairness.liveness_loop(lambda: [alpha], lambda: counts, stop, interval_s=30.0, poll_s=0.01)
+    )
+    await asyncio.sleep(0.05)
+    assert read_liveness(alpha)['inflight'] == 3  # type: ignore[index]
+    counts['alpha'] = 0
+    await asyncio.sleep(0.1)
+    doc = read_liveness(alpha)
+    stop.set()
+    await task
+    assert doc is not None
+    assert doc['inflight'] == 0
