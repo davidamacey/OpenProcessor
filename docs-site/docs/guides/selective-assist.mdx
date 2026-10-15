@@ -104,7 +104,9 @@ as a car's make or a wheel's rim material:
 }
 ```
 
-`examples/prompt_packs/vehicle_wheel.json` is a complete one. The VLM answers
+`examples/prompt_packs/vehicle_wheel.json` is a complete one, and
+`examples/prompt_packs/general_objects.json` is a domain-neutral one for COCO-style
+objects (`brand` as free text, `colour` and `material` as closed lists). The VLM answers
 each attribute with a value and a confidence (`high`, `medium`, `low`). The
 server drops a key the pack did not declare and a value outside a closed
 `values` list, and counts those as `invalid_values`. The attributes are stored
