@@ -21,6 +21,7 @@ NO_WRITE: dict[tuple[str, str], str] = {
         'the sweep names no folder, so it is refused before a run is claimed; the run '
         'itself is covered in tests/integration/test_bulk_ingest_routes.py'
     ),
+    ('POST', '/ingest/bulk/preview'): 'read-only walk of a source; writes nothing',
     ('POST', '/ingest/bulk/{run_id}/cancel'): 'the sweep has no live run to cancel',
     ('POST', '/ingest/sources'): 'the sweep names no existing folder, so the source is refused',
     ('PATCH', '/ingest/sources/{source_id}'): 'the sweep has no such source (404)',

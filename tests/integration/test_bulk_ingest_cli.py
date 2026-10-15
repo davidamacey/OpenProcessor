@@ -131,3 +131,45 @@ def test_status_and_cancel_address_a_run_by_id(
     assert capsys.readouterr().out.strip()
     assert cli.main(_args('--status', 'bulk_20260101T000000_deadbeef')) == 2
     assert '404' in capsys.readouterr().err
+
+
+def test_preview_prints_the_counts_and_the_estimate_and_ingests_nothing(
+    cli: Any, client: TestClient, served_root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _write(served_root / 'imgs', [f'{i}.jpg' for i in range(6)])
+
+    code = cli.main(_args('--folder', str(served_root / 'imgs'), '--preview'))
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert 'files: 6' in out
+    assert '.jpg' in out
+    assert 'estimated ingest time' in out
+    assert 'docs/PERFORMANCE.md' in out
+    assert client.get('/curation/projects/default/ingest/bulk').json()['total'] == 0
+
+
+def test_preview_of_a_refused_source_exits_two(
+    cli: Any, served_root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert cli.main(_args('--folder', str(served_root / 'missing'), '--preview')) == 2
+    assert 'not a directory' in capsys.readouterr().err
+
+
+def test_preview_cannot_be_combined_with_status(cli: Any) -> None:
+    with pytest.raises(SystemExit):
+        cli.main(_args('--status', 'bulk_x', '--preview'))
+
+
+@pytest.mark.parametrize(
+    ('low', 'high', 'shown'),
+    [
+        (0.34, 0.34, 'about 0.3 s'),
+        (69.0, 69.0, 'about 1m09s'),
+        (3600.0, 7200.0, '1h00m to 2h00m'),
+    ],
+)
+def test_the_estimate_is_shown_in_readable_units(
+    cli: Any, low: float, high: float, shown: str
+) -> None:
+    assert cli._fmt_duration(low, high) == shown

@@ -6,6 +6,7 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from src.routers.curation._ingest_bulk_preview_models import BulkPreviewConfig
 from src.routers.curation._ingest_sources_models import S3Location
 from src.services.curation.bulk_ingest.limits import (
     DEFAULT_BATCH_SIZE,
@@ -142,3 +143,4 @@ class BulkIngestConfig(BaseModel):
     default_concurrency: int
     max_batch_size: int
     max_concurrency: int
+    preview: BulkPreviewConfig

@@ -24,6 +24,7 @@ from src.routers.curation._ingest_bulk_models import (
     BulkIngestRun,
 )
 from src.routers.curation._ingest_bulk_wire import open_run, own_address, run_wire, slug
+from src.routers.curation.ingest_bulk_preview import preview_config
 from src.routers.curation.ingest_sources import resolve_bulk_source, start_run_now
 from src.services.curation import image_serving
 from src.services.curation.bulk_ingest import limits, runner, sender
@@ -48,6 +49,7 @@ async def bulk_ingest_config() -> BulkIngestConfig:
         default_concurrency=limits.DEFAULT_CONCURRENCY,
         max_batch_size=limits.MAX_BATCH_SIZE,
         max_concurrency=limits.MAX_CONCURRENCY,
+        preview=preview_config(),
     )
 
 

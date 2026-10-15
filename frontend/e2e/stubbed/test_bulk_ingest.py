@@ -219,3 +219,61 @@ def test_no_horizontal_overflow_at_430px_with_a_live_run(stub, page, app_url):
         "() => ({sw: document.documentElement.scrollWidth, iw: window.innerWidth})"
     )
     assert width["sw"] <= width["iw"], width
+
+
+PREVIEW = {
+    "project": "default", "kind": "folder", "target": "/data/archive/coco",
+    "extensions": [".jpg", ".jpeg", ".png"], "files": 2000, "total_bytes": 836000000,
+    "by_extension": {".jpg": {"files": 1990, "bytes": 830000000}, ".png": {"files": 10, "bytes": 6000000}},
+    "megapixels": {"sampled": 300, "unreadable": 0, "histogram": {"<1": 300},
+                   "gate_megapixels": 3.0, "share_at_or_above_gate": 0.0},
+    "estimate": {"basis": "megapixel_sample", "duration_s_min": 69.0, "duration_s_max": 69.0,
+                 "vectors": 14800.0, "opensearch_bytes": 130596000},
+    "partial": False, "stop_reason": None, "unreadable_dirs": 0, "unreadable_samples": [],
+    "symlinks_skipped": 0, "missing": 0, "outside_roots": 0, "unreadable_files": 0, "gpu_decode": True,
+}
+
+
+def test_preview_shows_the_served_counts_and_estimate_and_starts_nothing(stub, page, app_url):
+    asked = []
+
+    def preview(request, _m):
+        asked.append(json.loads(request.post_data))
+        return (200, PREVIEW)
+
+    stub.on("POST", r"/ingest/bulk/preview$", preview)
+    _open(stub, page, app_url)
+    expect(page.get_by_test_id("bulk-preview-button")).to_be_disabled()
+    page.get_by_test_id("bulk-path").fill("/data/archive/coco")
+    page.get_by_test_id("bulk-preview-button").click()
+    box = page.get_by_test_id("bulk-preview")
+    box.wait_for(timeout=ACTION_TIMEOUT_MS)
+    assert asked == [{"folder": "/data/archive/coco"}]
+    expect(page.get_by_test_id("bulk-preview-total")).to_contain_text("2000 files")
+    expect(page.get_by_test_id("bulk-preview-estimate")).to_contain_text("1m 09s")
+    expect(page.get_by_test_id("bulk-preview-partial")).to_have_count(0)
+    page.get_by_text("Basis: measured figures from docs/PERFORMANCE.md").click()
+    expect(box).to_contain_text("Decode once and the GPU decode (#217)")
+    assert not [c for c in stub.calls if c[0] == "POST" and c[1].endswith("/ingest/bulk")]
+
+    page.set_viewport_size(NARROW)
+    overflow = page.evaluate("document.documentElement.scrollWidth > window.innerWidth")
+    assert not overflow
+
+
+def test_preview_says_partial_and_surfaces_a_refusal(stub, page, app_url):
+    answers = [
+        (200, {**PREVIEW, "partial": True, "stop_reason": "file_cap", "files": 200000,
+               "unreadable_dirs": 1, "unreadable_samples": ["/data/archive/coco/locked"]}),
+        (422, {"detail": {"error": "bulk_ingest_invalid_source", "message": "/data/nope: not a directory"}}),
+    ]
+    stub.on("POST", r"/ingest/bulk/preview$", lambda _r, _m: answers.pop(0))
+    _open(stub, page, app_url)
+    page.get_by_test_id("bulk-path").fill("/data/archive/coco")
+    page.get_by_test_id("bulk-preview-button").click()
+    expect(page.get_by_test_id("bulk-preview-partial")).to_contain_text("at least", timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id("bulk-preview-skipped")).to_contain_text("/data/archive/coco/locked")
+    page.get_by_test_id("bulk-path").fill("/data/nope")
+    page.get_by_test_id("bulk-preview-button").click()
+    expect(page.get_by_test_id("bulk-preview-error")).to_contain_text("not a directory", timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id("bulk-preview")).to_have_count(0)
