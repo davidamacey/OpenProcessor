@@ -7,6 +7,8 @@ from typing import Any
 
 import numpy as np
 
+from src.utils.face_response import face_landmark_mismatch
+
 
 def _image_size(result: dict, img_bytes: bytes) -> tuple[int, int]:
     """Width and height from the inference response, else from the JPEG header."""
@@ -46,6 +48,13 @@ def _image_document(
     return doc
 
 
+def landmarks_for(face_landmarks: list, j: int) -> list:
+    if len(face_landmarks) <= j:
+        return []
+    entry = face_landmarks[j]
+    return entry.tolist() if hasattr(entry, 'tolist') else list(entry)
+
+
 def _face_documents(
     face_result: dict, image_id: str, image_path: str | None, timestamp: str
 ) -> list[dict[str, Any]]:
@@ -68,11 +77,7 @@ def _face_documents(
                     'box': face_boxes[j].tolist()
                     if hasattr(face_boxes[j], 'tolist')
                     else list(face_boxes[j]),
-                    'landmarks': face_landmarks[j].tolist()
-                    if hasattr(face_landmarks[j], 'tolist')
-                    else list(face_landmarks[j])
-                    if len(face_landmarks) > j
-                    else [],
+                    'landmarks': landmarks_for(face_landmarks, j),
                     'confidence': float(face_scores[j]) if len(face_scores) > j else 0.0,
                     'quality': float(face_quality[j]) if len(face_quality) > j else 0.0,
                     'indexed_at': timestamp,
@@ -99,9 +104,14 @@ def build_documents(
         if 'error' in result:
             errors.append({'image_id': image_id, 'error': result['error']})
             continue
+        # The face fields ride on the same inference response. An image whose
+        # face response is unusable is refused whole: indexing it without its
+        # faces would look complete.
+        has_faces = result.get('num_faces', 0) > 0
+        if has_faces and (reason := face_landmark_mismatch(result)):
+            errors.append({'image_id': image_id, 'error': reason})
+            continue
         documents.append(_image_document(result, img_bytes, image_id, image_path, hashes[orig_idx]))
-        # Collect face documents for bulk indexing (the face fields ride on the
-        # same inference response).
-        if result.get('num_faces', 0) > 0:
+        if has_faces:
             face_documents.extend(_face_documents(result, image_id, image_path, timestamp))
     return documents, face_documents, errors
