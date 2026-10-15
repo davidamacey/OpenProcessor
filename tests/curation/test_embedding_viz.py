@@ -25,7 +25,7 @@ from src.services.curation import embedding_viz_read
 
 
 def test_viz_state_paths_are_distinct_from_retired_clustering_reducer() -> None:
-    from src.config.curation import umap_state_index
+    from src.config.curation_accessors import umap_state_index
     from src.services.curation import embedding_viz
     from src.services.curation.clustering import umap_state
 

@@ -377,7 +377,7 @@ def curation_app(
     # writable state dir under the same temp root the source-path tests
     # already declare servable, and force the process-wide config
     # singleton to rebuild so it picks this env var up.
-    import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_config_mod
 
     monkeypatch.setenv('OP_STATE_DIR', str(state_dir or temp_root / 'op_test_state'))
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)

@@ -84,7 +84,7 @@ async def _validate_clone(
 
     if 'classes' in resolved_axes:
         with bind_project(target_record):
-            from src.config.curation import items_index
+            from src.config.curation_accessors import items_index
 
             count_resp = await client.count(index=items_index())
         if (count_resp.get('count') or 0) > 0:

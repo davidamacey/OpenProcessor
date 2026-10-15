@@ -158,7 +158,7 @@ def ensure_marked_dir(directory: Path) -> Path:
 def project_api_base() -> str:
     """``{api_prefix}/projects/{bound slug}`` -- the base every served URL
     (and forward-looking route) is built from."""
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
 
     bound = current_project()
     return f'{base_curation_config().api_prefix}/projects/{bound.record.slug}'

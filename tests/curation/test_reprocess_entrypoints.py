@@ -281,7 +281,7 @@ def test_busy_route_error_is_a_409(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 def test_orphaned_job_is_marked_interrupted_at_startup_and_busy_sees_live_ones() -> None:
     from datetime import UTC, datetime
 
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import ProjectRecord, resources_for_new
     from src.services.projects.busy import _reprocess_jobs
 

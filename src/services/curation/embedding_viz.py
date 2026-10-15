@@ -64,7 +64,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from src.config import get_curation_config
-from src.config.curation import items_index, umap_viz_state_index
+from src.config.curation_accessors import items_index, umap_viz_state_index
 from src.config.env import env_path
 from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger

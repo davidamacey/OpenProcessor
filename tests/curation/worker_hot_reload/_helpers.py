@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock
 
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.projects import ProjectRecord, resources_for_new
 from src.services.config_store import get_global_config_store
 

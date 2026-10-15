@@ -30,7 +30,7 @@ from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes, seed_default
 
 @pytest.fixture(autouse=True)
 def _env(tmp_path, monkeypatch):
-    import src.config.curation as curation_mod
+    import src.config.curation_accessors as curation_mod
     from src.services.projects import capacity as capacity_mod
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
@@ -97,7 +97,7 @@ def test_bump_revision_failure_after_building_write_ends_failed_not_wedged(monke
 
 
 def _seed_building_record(client: FakeLifecycleOpenSearch, *, slug: str, updated_at: str):
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import ProjectRecord, resources_for_new
 
     resources = resources_for_new(slug, base_curation_config())

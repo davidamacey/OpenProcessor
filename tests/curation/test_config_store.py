@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 
 from curation._fake_config_opensearch import FakeConfigOpenSearch
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
 from src.services.config_store.index import (
@@ -336,7 +336,7 @@ async def test_poll_all_active_projects_refreshes_every_project_not_just_one() -
     one uvicorn worker stays invisible in another until some other
     route happens to touch that project's store."""
     from curation._fake_config_opensearch import TwoProjectOpenSearch
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import resources_for_new
     from src.services.config_store.store import get_config_store
     from src.services.config_store.store_poll import _poll_all_active_projects

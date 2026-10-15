@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
-from src.config.curation import umap_state_index
+from src.config.curation_accessors import umap_state_index
 from src.core.logging import get_logger
 from src.services.curation.clustering.pool_size import UMAP_METRIC, UMAP_N_COMPONENTS
 

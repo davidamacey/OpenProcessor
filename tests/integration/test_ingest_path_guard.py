@@ -103,7 +103,7 @@ def test_batch_over_the_configured_item_cap_is_413(
     client: TestClient, served_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """BA-5: /ingest/batch enforces the served item cap."""
-    import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_config_mod
 
     monkeypatch.setenv('OP_BATCH_MAX_ITEMS_PER_REQUEST', '1')
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)

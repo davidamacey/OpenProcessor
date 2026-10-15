@@ -189,7 +189,7 @@ def test_probe_actionable_false_when_confidence_exactly_missing() -> None:
 def test_probe_actionable_respects_configured_threshold(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from src.config import curation as curation_config_mod
+    import src.config.curation_accessors as curation_config_mod
 
     monkeypatch.setenv('OP_PROBE_ACTIONABLE_MIN_CONFIDENCE', '0.95')
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)

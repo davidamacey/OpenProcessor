@@ -18,7 +18,7 @@ import os
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from src.config.curation import get_curation_config
+from src.config.curation_accessors import get_curation_config
 
 
 if TYPE_CHECKING:

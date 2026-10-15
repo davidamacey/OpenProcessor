@@ -43,7 +43,7 @@ def _clear_cache():
 
 
 def test_per_project_shards_matches_resources_for_new() -> None:
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import resources_for_new
 
     expected = len(set(resources_for_new('x', base_curation_config()).indexes.values()))

@@ -68,7 +68,7 @@ def mount_all_curation_routers(app: FastAPI) -> None:
     import src.routers.curation.projects_combine
     import src.routers.curation.vlm_catalog
     import src.routers.curation.vlm_endpoints  # noqa: F401 - registers /vlm/endpoints* on global_router
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.routers.curation.projects import global_router
 
     mount_curation(

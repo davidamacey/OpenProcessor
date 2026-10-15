@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import NotFoundError
 
-from src.config.curation import items_index, umap_viz_state_index
+from src.config.curation_accessors import items_index, umap_viz_state_index
 from src.core.logging import get_logger
 from src.domain.embedding_state import embedded_clause
 from src.services.curation.embedding_viz import EMBEDDING_FIELD

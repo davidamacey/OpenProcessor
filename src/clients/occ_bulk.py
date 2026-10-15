@@ -15,7 +15,7 @@ import random
 from typing import TYPE_CHECKING, Any, Literal
 
 from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES, OCC_BULK_PAGE_SIZE
-from src.config.curation import items_index
+from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 
 

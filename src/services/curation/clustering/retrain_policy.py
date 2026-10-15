@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from src.config.curation import items_index
+from src.config.curation_accessors import items_index
 from src.config.env import env_float
 from src.domain.embedding_state import embedded_clause
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET

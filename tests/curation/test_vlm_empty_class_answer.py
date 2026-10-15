@@ -28,7 +28,7 @@ from PIL import Image
 from curation.query_fakes import QueryFakeOpenSearch
 from scripts.curation.worker.verify import _combined_class_update
 from src.clients.curation_opensearch.registry import ClassRegistry
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.project_context import current_project
 from src.config.vlm_class_attempt import (
     VLM_CLASS_ATTEMPTED_AT_FIELD as ATTEMPTED,

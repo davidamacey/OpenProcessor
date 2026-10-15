@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.config import get_region_fields
-from src.config.curation import get_curation_config
+from src.config.curation_accessors import get_curation_config
 from src.config.region_state import RegionStatus
 from src.domain.region_boxes import RegionBoxWriteError, read_boxes
 from src.routers.curation._common import OpenSearchDep, RegionProfileDep, router

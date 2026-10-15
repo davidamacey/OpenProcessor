@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 from opensearchpy.exceptions import OpenSearchException
 
-from src.config.curation import items_index
+from src.config.curation_accessors import items_index
 from src.config.env import env_int
 from src.core.logging import get_logger
 from src.services.curation.clustering.cluster_write_guard import _log_bulk_write_errors

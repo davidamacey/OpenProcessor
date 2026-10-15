@@ -105,7 +105,7 @@ async def test_two_project_worker_alpha_activation_swaps_alpha_only() -> None:
     ``ProjectRegistry`` build. Activating a profile in alpha's config
     store mid-run must rebuild alpha's runtime (its own detector
     construction count increases) while beta's stays untouched."""
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import resources_for_new
     from src.services.projects.registry import record_to_doc
 
@@ -205,7 +205,7 @@ async def test_two_project_worker_alpha_activation_swaps_alpha_only() -> None:
             # M1: runtime:detection_worker:<host> was written for both
             # projects on their first sync (never suppressed, never
             # deferred past 60s the first time).
-            from src.config.curation import IndexRole
+            from src.config.curation_roles import IndexRole
             from src.services.config_store.index import get_runtime_docs
 
             alpha_idx = resources_for_new('alpha', base_curation_config()).indexes[

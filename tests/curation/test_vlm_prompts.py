@@ -161,6 +161,7 @@ def test_resolve_prompt_pack_uses_process_default_config_when_none_passed(
     from src.config.curation import CurationConfig
 
     monkeypatch.setattr(
-        'src.config.curation.get_curation_config', lambda: CurationConfig(prompt_pack_path=None)
+        'src.config.curation_accessors.get_curation_config',
+        lambda: CurationConfig(prompt_pack_path=None),
     )
     assert resolve_prompt_pack() is GENERIC_ITEM_PACK

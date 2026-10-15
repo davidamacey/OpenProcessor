@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.clients.occ_bulk import occ_update_bulk
-from src.config.curation import items_index
+from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 
 

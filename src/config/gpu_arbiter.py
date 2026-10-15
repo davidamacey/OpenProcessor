@@ -111,7 +111,7 @@ def _default_bakeoff_jobs_dir() -> str:
     ``ProjectNotBound`` and take the startup reconcile loop down with
     it (this arbiter is process-global per projects_plan.md §5.3, not
     itself project-scoped)."""
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import DEFAULT_SLUG, resources_for_new
 
     return str(resources_for_new(DEFAULT_SLUG, base_curation_config()).bakeoff_jobs_dir)

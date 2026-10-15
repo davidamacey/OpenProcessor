@@ -12,7 +12,7 @@ from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.curation_opensearch.crops import mget_crops
 from src.config import get_region_fields
-from src.config.curation import items_index
+from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.services.curation.autolabel.run_params import labeler_resolution_args
 from src.services.curation.autolabel.run_state import Run, start_stage

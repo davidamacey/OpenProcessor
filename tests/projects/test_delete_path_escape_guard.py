@@ -34,7 +34,7 @@ from .conftest import FakeLifecycleOpenSearch, seed_default_project
 
 @pytest.fixture(autouse=True)
 def _env(tmp_path, monkeypatch):
-    import src.config.curation as curation_mod
+    import src.config.curation_accessors as curation_mod
     from src.services.projects import capacity as capacity_mod
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
@@ -94,7 +94,7 @@ _PREVIOUSLY_UNGUARDED_FIELDS = (
 
 
 def _shared_root_for(field_name: str):
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import projects_data_root
 
     if field_name in ('export_root', 'class_registry_path', 'bakeoff_eval_root'):

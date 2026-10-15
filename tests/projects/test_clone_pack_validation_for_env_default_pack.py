@@ -34,8 +34,8 @@ def test_clone_rejects_profile_paired_with_targets_own_stripped_pack(
 ):
     from curation._fake_config_opensearch import FakeConfigOpenSearch
 
-    import src.config.curation as curation_mod
-    from src.config.curation import base_curation_config
+    import src.config.curation_accessors as curation_mod
+    from src.config.curation_accessors import base_curation_config
     from src.config.project_context import bind_project
     from src.config.projects import ProjectRecord, resources_for_new
     from src.services.config_store import get_config_store

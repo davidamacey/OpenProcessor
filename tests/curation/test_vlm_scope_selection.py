@@ -13,7 +13,7 @@ import pytest
 
 from curation.query_fakes import QueryFakeOpenSearch, SettingsFakeOpenSearch
 from scripts.curation.vlm_pending import _build_pending_query
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPTED_AT_FIELD
 from src.services.curation.autolabel.selection import resolve_vlm_selection, vlm_selection_query
 from src.services.curation.vlm_policy import VlmPolicy, VlmPolicyBody

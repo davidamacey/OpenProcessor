@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from src.config.curation import items_index
+from src.config.curation_accessors import items_index
 from src.services.curation.crop_browse import parse_crop_sort
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses, visibility_clauses
 from src.services.curation.wire import item_list_source_excludes, serialize_item
