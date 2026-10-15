@@ -202,7 +202,8 @@ def find_undo_snapshot(history: list[dict[str, Any]] | None) -> dict[str, Any] |
             pending_undos += 1
         elif writer in HUMAN_LABEL_WRITERS:
             if pending_undos == 0:
-                return entry
+                typed: dict[str, Any] | None = entry
+                return typed
             pending_undos -= 1
     return None
 
