@@ -714,3 +714,39 @@ Recorded after wave A (PR 0 to PR 5). Each is the smallest correct departure fro
   to `createAssistRun`. Its vitest pins and the stubbed e2e `test_vlm_job_poll_by_id.py` still
   describe the old route and must be rewritten there. `tests/fixtures/labeler_call_sites.txt` never
   listed that route, so it is unchanged.
+
+Recorded after wave B (PR 6, PR 7, PR 9).
+
+- **The old wave A "`segment` is a 422 until PR 7" is gone.** `segment` and `boxes` are accepted;
+  `validate_request` refuses the combinations the schema cannot (`boxes` with `classify` or
+  `segment`, `verify` on a cluster or filter target, `segment.verify: vlm` together with `verify`).
+- **`segment` plus `verify` needs a `crops` target and `segment.verify: none`.** The worker accepts
+  the boxes without a VLM and the run then judges the new boxes with its own endpoint, so the
+  worker's endpoint can never differ from the run's. `segment.verify: vlm` alone needs the run's
+  endpoint to be the project's active one (`409 verify_endpoint_mismatch`).
+- **No "worker heartbeat stale" refusal.** The worker's heartbeat lives in its container, so the API
+  cannot read it. A run whose items never leave `pending_detection` ends with `result.segment.pending`
+  set (the run stays in `waiting_region` until the worker finishes or the run is cancelled).
+- **Project policy `region_verify: vlm` keeps today's behaviour for a project with its VLM off**
+  (accepted without a VLM). Only a per-item `region_run_verify: vlm` with no VLM writes
+  `detection_failed` (`vlm_unavailable`). `region_run_id` and `region_run_verify` are cleared by the
+  worker's write of the item.
+- **`verify` on a `boxes` target replaces `/vlm/verify_regions`** and `tests/live/test_live_vlm.py`
+  and the docs use the assist run. The route and `VlmVerifyRegionsRequest` are deleted.
+- **PR 9 error code.** `vlm_attributes` without `run_vlm` answers `422 invalid_request` (no new code).
+  The auto-label slot is attributed to a run id `al_<hex>`; the region worker's to `rw_<hex>` (one id
+  per chunk resolution, so the newest-run-wins rule applies per item).
+- **The combined call asks for item attributes by appending a block to the user text**, not through
+  a new `{attribute_block}` placeholder in `combined_user_template`, so existing packs keep working
+  unchanged. Only crops whose class is asked for carry the ask (a trusted-class or holdout item gets
+  no slot from the worker).
+- **Test discipline.** PR 6, PR 7 and PR 9 tests were written first and watched failing (import or
+  422 errors). `test_assist_run_lifecycle.py` (read 404, list, cancel) covers routes wave A shipped
+  without tests; the code existed, so those pass at once. The wave A classify and attributes route
+  tests already exist in `test_assist_run_classify.py`.
+
+Left for wave C (frontend, PR 8): the assist dialog, proposal card and attribute chips; the
+`region_verify` switch on the VLM policy form; `segment` and `waiting_region` in the run UI; moving
+`runVlmOnCluster` and the dashboard modal to `createAssistRun`; rewriting the stubbed e2e and vitest
+pins for the deleted `/vlm/label_cluster` and `/vlm/verify_regions` routes; regenerating the
+`contracts/ts` consumers.
