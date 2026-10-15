@@ -15,13 +15,14 @@ import {
 } from '$lib/annotations/registeredSlots';
 import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 
-vi.mock('$lib/api', () => ({
+vi.mock('$lib/api', () => ({ activeProjectKey: vi.fn(() => 'default') }));
+vi.mock('$lib/api_cropRead', () => ({
   getCropContext: vi.fn(),
   getSourceImageScaled: (id: string) => `/image/${id}`,
-  activeProjectKey: vi.fn(() => 'default'),
 }));
 
-const { getCropContext, activeProjectKey } = await import('$lib/api');
+const { activeProjectKey } = await import('$lib/api');
+const { getCropContext } = await import('$lib/api_cropRead');
 const { default: SourceImageOverlay, resetForProjectChange } =
   await import('./SourceImageOverlay.svelte');
 

@@ -52,7 +52,9 @@ function extractSearchModeEffect(src: string): string {
 }
 
 describe('/clusters search mode', () => {
-  const src = read('./+page.svelte');
+  const src = read('../../../../lib/clusters/clusterSearchModes.svelte.ts');
+  const gridSrc = read('../../../../lib/components/clusters/ClustersGrid.svelte');
+  const toolbarSrc = read('../../../../lib/components/clusters/ClustersToolbar.svelte');
 
   it('registers dropOnClassStore only inside the searchModeActive-gated effect, and unregisters on cleanup', () => {
     const body = extractSearchModeEffect(src);
@@ -61,7 +63,7 @@ describe('/clusters search mode', () => {
   });
 
   it('forces showEmbeddingViz off when search mode activates, same guard idiom as isSlotFilter', () => {
-    expect(src).toMatch(/if \(showEmbeddingViz\) showEmbeddingViz = false;/);
+    expect(src).toMatch(/if \(s\.showEmbeddingViz\) s\.showEmbeddingViz = false;/);
   });
 
   it('only wires A / Z / X / Escape in search mode — no M (move) or sub-cluster grouping', () => {
@@ -81,9 +83,9 @@ describe('/clusters search mode', () => {
   });
 
   it('renders the search-results branch before the existing card-grid {:else} (mirrors showEmbeddingViz)', () => {
-    const gridIdx = src.indexOf('<!-- Grid -->');
-    const searchIdx = src.indexOf('{#if searchModeActive}');
-    const embedIdx = src.indexOf('{:else if showEmbeddingViz}');
+    const gridIdx = gridSrc.indexOf('<!-- Grid -->');
+    const searchIdx = gridSrc.indexOf('{#if modes.searchModeActive}');
+    const embedIdx = gridSrc.indexOf('{:else if showEmbeddingViz}');
     expect(gridIdx).toBeGreaterThan(-1);
     expect(searchIdx).toBeGreaterThan(gridIdx);
     expect(embedIdx).toBeGreaterThan(searchIdx);
@@ -92,7 +94,9 @@ describe('/clusters search mode', () => {
   it('does not pass a cluster_id/tab scope into the SemanticSearchBox filter — global search is the point', () => {
     // The scope is the shared item filter (class by name, bands, origin...)
     // and nothing else.
-    const filterMatch = src.match(/<SemanticSearchBox[\s\S]*?filter=\{\{[^}]*\}\}/);
+    const filterMatch = toolbarSrc.match(
+      /<SemanticSearchBox[\s\S]*?filter=\{\{[^}]*\}\}/,
+    );
     expect(filterMatch).not.toBeNull();
     expect(filterMatch![0]).toMatch(/filter=\{\{ \.\.\.gridItemFilter\(\) \}\}/);
     expect(filterMatch![0]).not.toMatch(/cluster_id/);

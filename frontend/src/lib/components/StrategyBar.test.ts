@@ -19,12 +19,26 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { reviewPageSource } from '$lib/testing/reviewPageSources';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 function read(rel: string): string {
   return readFileSync(path.resolve(here, rel), 'utf-8');
 }
+
+// /clusters/[id] and the modules it was split into.
+const CLUSTER_DETAIL_FILES = [
+  '../../routes/p/[project]/clusters/[id]/+page.svelte',
+  '../clusters/clusterDetailController.svelte.ts',
+  '../clusters/clusterDetailActions.svelte.ts',
+  '../clusters/clusterDetailLive.svelte.ts',
+  './clusters/ClusterDetailToolbar.svelte',
+  './clusters/ClusterDetailFilters.svelte',
+  './clusters/SubClusterTabs.svelte',
+  './clusters/ClusterDetailGrid.svelte',
+  './clusters/MoveClusterPicker.svelte',
+];
 
 describe('StrategyBar.svelte', () => {
   it('never calls addEventListener — pointer-only, zero global listeners', () => {
@@ -34,12 +48,12 @@ describe('StrategyBar.svelte', () => {
 });
 
 describe('routes wired to <StrategyBar> keep their keydown listener count unchanged', () => {
-  it('review/+page.svelte still has exactly the one pre-existing window keydown forward', () => {
+  it('the review page (route, controllers, components) still has exactly the one pre-existing window keydown forward', () => {
     // Pre-existing (not introduced by this phase): forwards arrow/[/]/
     // Backspace keys into the region bbox canvas while in edit mode. If
     // wiring in <StrategyBar> ever adds a second window.addEventListener
     // call here, this catches it.
-    const src = read('../../routes/p/[project]/review/+page.svelte');
+    const src = reviewPageSource();
     const matches = src.match(/window\.addEventListener\(['"]keydown['"]/g) ?? [];
     expect(matches).toHaveLength(1);
   });
@@ -47,8 +61,11 @@ describe('routes wired to <StrategyBar> keep their keydown listener count unchan
   it('clusters/[id]/+page.svelte registers zero direct window/document keydown listeners', () => {
     // All of this route's shortcuts go through keyboardStore.register(),
     // not a direct addEventListener call in the component itself.
-    const src = read('../../routes/p/[project]/clusters/[id]/+page.svelte');
-    expect(src).not.toMatch(/(window|document)\.addEventListener\(['"]keydown['"]/);
+    for (const rel of CLUSTER_DETAIL_FILES) {
+      expect(read(rel), rel).not.toMatch(
+        /(window|document)\.addEventListener\(['"]keydown['"]/,
+      );
+    }
   });
 });
 
@@ -62,7 +79,7 @@ describe('routes wired to <StrategyBar> keep their keydown listener count unchan
 // phase adds zero new global keybindings).
 // Audit-remediation plan Phase 6 (P1-2/P1-3): StrategyBar's coverage
 // gating logic must go through the shared, unit-tested `hasFieldCoverage`
-// (strategies.test.ts covers its null-vs-zero cases directly) rather than
+// (strategies.availability.test.ts covers its null-vs-zero cases directly) rather than
 // a local reimplementation. This is a static-scan regression guard for the
 // exact bug pattern that shipped before this phase -- `?? 0` conflating
 // "coverage unknown" with "coverage confirmed zero" -- since this repo has
@@ -92,8 +109,13 @@ describe('Phase 4 (diverse overlay + k stepper) adds no new listeners', () => {
   });
 
   it('clusters/[id]/+page.svelte still registers zero direct keydown listeners with diverse wiring present', () => {
-    const src = read('../../routes/p/[project]/clusters/[id]/+page.svelte');
-    expect(src).not.toMatch(/(window|document)\.addEventListener\(['"]keydown['"]/);
-    expect(src).toMatch(/diverseAvailable/);
+    for (const rel of CLUSTER_DETAIL_FILES) {
+      expect(read(rel), rel).not.toMatch(
+        /(window|document)\.addEventListener\(['"]keydown['"]/,
+      );
+    }
+    expect(read('../clusters/clusterDetailController.svelte.ts')).toMatch(
+      /diverseAvailable/,
+    );
   });
 });

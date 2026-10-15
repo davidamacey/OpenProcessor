@@ -1,4 +1,4 @@
-import type { IngestConfig } from '$lib/types';
+import type { IngestConfig } from '$lib/types_ingest';
 
 /** A served `GET {API_PREFIX}/ingest/config` body, with per-test overrides. */
 export function servedIngestConfig(overrides: Partial<IngestConfig> = {}): IngestConfig {

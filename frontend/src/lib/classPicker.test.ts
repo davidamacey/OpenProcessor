@@ -12,7 +12,7 @@ import {
   resetDeploymentSlots,
 } from '$lib/annotations/registeredSlots';
 import { WIDGET_TAG_PROFILE } from '$lib/test/fixtures/regionSlot';
-import type { RegistryClass } from '$lib/types';
+import type { RegistryClass } from '$lib/types_classes';
 
 function cls(over: Partial<RegistryClass> & { id: number; name: string }): RegistryClass {
   return {

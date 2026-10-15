@@ -10,7 +10,7 @@ the card only rendered the export's counts when nothing was picked.
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS
 
 from playwright.sync_api import expect
 from test_train_gpus import register_train_mount

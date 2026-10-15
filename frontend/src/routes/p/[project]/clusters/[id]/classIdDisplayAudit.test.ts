@@ -19,7 +19,19 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const LIB = path.resolve(here, '../../../../../lib');
+const src = readFileSync(
+  path.join(LIB, 'clusters/clusterDetailController.svelte.ts'),
+  'utf-8',
+);
+const liveSrc = readFileSync(
+  path.join(LIB, 'clusters/clusterDetailLive.svelte.ts'),
+  'utf-8',
+);
+const toolbarSrc = readFileSync(
+  path.join(LIB, 'components/clusters/ClusterDetailToolbar.svelte'),
+  'utf-8',
+);
 
 describe('class-id-display-audit-2026-09-26: clusterName prefers the served name', () => {
   it('clusterName reads cluster.dominant_class_name before the registry lookup', () => {
@@ -29,10 +41,10 @@ describe('class-id-display-audit-2026-09-26: clusterName prefers the served name
   });
 
   it('clsForCluster (the registry row) is still used for the live count/validated figures', () => {
-    expect(src).toMatch(
-      /const liveClassId = \$derived\(clsForCluster\?\.id \?\? null\);/,
+    expect(liveSrc).toMatch(
+      /const liveClassId = \$derived\(view\.clsForCluster\?\.id \?\? null\);/,
     );
-    expect(src).toMatch(/clsForCluster\.validated_count/);
-    expect(src).toMatch(/clsForCluster\.count/);
+    expect(toolbarSrc).toMatch(/clsForCluster\.validated_count/);
+    expect(toolbarSrc).toMatch(/clsForCluster\.count/);
   });
 });

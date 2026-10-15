@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from conftest import ACTION_TIMEOUT_MS, API_PREFIX, wait_for_paint
+from harness.constants import ACTION_TIMEOUT_MS, API_PREFIX
+from harness.waits import wait_for_paint
 
 from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID, make_item, project, projects_response
 

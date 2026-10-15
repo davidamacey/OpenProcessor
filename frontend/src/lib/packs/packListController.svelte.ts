@@ -5,7 +5,7 @@
  * with Rollback, Clone and Delete; `config.changed axis=prompt_pack` is a
  * wake-up to re-read).
  */
-import { clonePromptPack, deletePromptPack, listPromptPacks } from '$lib/api';
+import { clonePromptPack, deletePromptPack, listPromptPacks } from '$lib/api_packs';
 import { ConfigList } from '$lib/config/configList.svelte';
 import { isConfigAxisEvent } from '$lib/config/validationIssues';
 import { subscribeCurationEvents, type CurationEvent } from '$lib/sse';

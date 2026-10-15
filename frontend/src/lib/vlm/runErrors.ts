@@ -6,7 +6,9 @@
  * message and how many issues the served report lists). Anything else reads
  * through `apiErrorText`.
  */
-import { apiErrorText, configErrorDetail, unknownStrategyDetail } from '$lib/api';
+import { unknownStrategyDetail } from '$lib/api_autoLabel';
+import { apiErrorText } from '$lib/api_errors';
+import { configErrorDetail } from '$lib/api_profiles';
 
 export function vlmRunErrorText(e: unknown): string {
   const unknown = unknownStrategyDetail(e);

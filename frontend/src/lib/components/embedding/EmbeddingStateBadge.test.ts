@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import EmbeddingStateBadge from './EmbeddingStateBadge.svelte';
 import EmbeddingRows from '../provenance/EmbeddingRows.svelte';
-import { mapRawCrop } from '$lib/api';
+import { mapRawCrop } from '$lib/api_cropMap';
 import { makeItem } from '$lib/test/makeItem';
 import type { EmbeddingState } from '$lib/types_itemFilter';
 

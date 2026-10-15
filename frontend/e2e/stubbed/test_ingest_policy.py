@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from conftest import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
 
 SHOTS = Path(__file__).resolve().parents[2] / "artifacts_local" / "v040-ui" / "detector"

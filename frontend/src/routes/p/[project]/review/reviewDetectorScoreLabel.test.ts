@@ -9,13 +9,11 @@
  *
  * Static source scan (no mount harness for a page this size).
  */
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { reviewPageSource, reviewSource } from '$lib/testing/reviewPageSources';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const src = reviewSource('lib/components/review/ReviewItemMeta.svelte');
+const pageSrc = reviewPageSource();
 
 describe('the review panel labels the detector score for what it is', () => {
   it('isCurrentLabelVlmSourced reads a served role, not a hardcoded string match', () => {
@@ -61,12 +59,12 @@ describe('class_confidence/vlm_raw_class/vlm_class_empty_reason fold into existi
     expect(block).toMatch(/current\.vlm_raw_class/);
     expect(block).toMatch(/current\.vlm_class_empty_reason/);
     // No separate dt for either — they're inline spans inside this dd.
-    expect(src).not.toMatch(/<dt class="text-zinc-500">VLM said<\/dt>/);
-    expect(src).not.toMatch(/<dt class="text-zinc-500">VLM empty reason<\/dt>/);
+    expect(pageSrc).not.toMatch(/<dt class="text-zinc-500">VLM said<\/dt>/);
+    expect(pageSrc).not.toMatch(/<dt class="text-zinc-500">VLM empty reason<\/dt>/);
   });
 
   it('class_confidence folds into the Confidence/Detector score row and the VLM confidence row, never its own "Label confidence" row', () => {
-    expect(src).not.toMatch(/<dt class="text-zinc-500">Label confidence<\/dt>/);
+    expect(pageSrc).not.toMatch(/<dt class="text-zinc-500">Label confidence<\/dt>/);
     expect(src).toMatch(/current\.class_confidence != null && !current\.vlm_confidence/);
     const vlmConfIdx = src.indexOf('{#if current.vlm_confidence}');
     const vlmConfSlice = src.slice(vlmConfIdx, vlmConfIdx + 700);

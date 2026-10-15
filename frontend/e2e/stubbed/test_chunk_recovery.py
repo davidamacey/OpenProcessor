@@ -1,7 +1,7 @@
 """A failed module-chunk load recovers with one guarded reload, and never
 loops (src/hooks.client.ts + src/lib/chunkRecovery.ts).
 
-The app origin is served through Playwright's own client (`conftest.py`
+The app origin is served through Playwright's own client (`harness/assets.py`
 `serve_app_through_harness`), so a later, more specific `page.route` for the
 dashboard's page-node chunk can abort it and otherwise delegate to the
 harness behaviour (`route.fallback()`).
@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from conftest import ACTION_TIMEOUT_MS, ROOT
+from harness.constants import ACTION_TIMEOUT_MS, ROOT
 from test_labeling_flow import register_base
 
 DASHBOARD = "/p/default/dashboard"

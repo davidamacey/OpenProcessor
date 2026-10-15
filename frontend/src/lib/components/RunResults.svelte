@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
   /**
    * Finished-run results — evaluation (labelled by its own `eval.split`)
    * + lineage for a terminal `/train` run. Collapsed by default; the
@@ -16,7 +16,8 @@
    */
   import { untrack } from 'svelte';
   import { externalHref } from '$lib/mlflowLink';
-  import { getTrainManifest, resolveApiUrl } from '$lib/api';
+  import { resolveApiUrl } from '$lib/api';
+  import { getTrainManifest } from '$lib/api_train';
   import {
     evalSplitLabel,
     formatMetric,

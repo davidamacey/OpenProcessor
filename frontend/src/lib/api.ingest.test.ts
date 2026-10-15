@@ -5,15 +5,15 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { API_PREFIX } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import {
-  API_PREFIX,
-  ApiError,
   getIngestStatus,
   getRegionDrain,
   ingestBatch,
   ingestPathLookup,
   ingestUpload,
-} from './api';
+} from '$lib/api_ingest';
 
 const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
   new Response(JSON.stringify(body), {

@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import RegionDrainPanel from './RegionDrainPanel.svelte';
-import { ApiError, getRegionDrain } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
+import { getRegionDrain } from '$lib/api_ingest';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_ingest', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_ingest')>('$lib/api_ingest');
   return { ...actual, getRegionDrain: vi.fn() };
 });
 

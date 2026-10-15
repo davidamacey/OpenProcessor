@@ -9,7 +9,8 @@
  * Create posts `{name, description, body}`. A 409 `name_conflict` / 422
  * `validation_failed` shows the served message and report.
  */
-import { configErrorDetail, apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { configErrorDetail } from '$lib/api_profiles';
 import {
   createVlmEndpoint,
   getVlmCatalog,

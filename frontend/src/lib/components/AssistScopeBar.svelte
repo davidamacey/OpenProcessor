@@ -40,7 +40,7 @@
     selectableAxisEntries,
   } from '$lib/strategies';
   import type { AssistScope } from '$lib/assistScope.svelte';
-  import type { RegistryClass } from '$lib/types';
+  import type { RegistryClass } from '$lib/types_classes';
   import { strategiesStore } from '$stores/strategies.svelte';
 
   interface Props {

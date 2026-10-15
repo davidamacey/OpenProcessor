@@ -3,13 +3,10 @@
  * not as a confirmable proposal. Static source scan (no component-mount
  * harness; see slotReviewCharacterization.test.ts's doc comment).
  */
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { reviewSource } from '$lib/testing/reviewPageSources';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const src = reviewSource('lib/components/review/ReviewItemMeta.svelte');
 
 describe('a name-only proposal is styled as a hint, not a confirmable proposal', () => {
   it('the Proposed row branches on proposed_class_id == null before using the yellow confirmable style', () => {

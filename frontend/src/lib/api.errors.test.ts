@@ -4,7 +4,8 @@
  * `{detail: {error}}` body must still yield readable text.
  */
 import { describe, expect, it } from 'vitest';
-import { ApiError, formatValidationEntry, unknownStrategyDetail } from './api';
+import { unknownStrategyDetail } from '$lib/api_autoLabel';
+import { ApiError, formatValidationEntry } from '$lib/api_errors';
 
 const body422 = {
   detail: {

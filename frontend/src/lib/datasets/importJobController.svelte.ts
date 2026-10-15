@@ -9,14 +9,14 @@
  */
 import {
   cancelDatasetImport,
-  apiErrorText,
   getDatasetImport,
   getDatasetImportEntries,
   getDatasetImportIssues,
   resumeDatasetImport,
-  runServedNextStep,
   undoDatasetImport,
-} from '$lib/api';
+} from '$lib/api_datasetImport';
+import { apiErrorText } from '$lib/api_errors';
+import { runServedNextStep } from '$lib/api_reprocess';
 import { subscribeCurationEvents, type CurationEvent } from '$lib/sse';
 import type {
   DatasetImportEntryPage,

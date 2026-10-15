@@ -19,7 +19,7 @@
     unmappedText,
   } from '$lib/modelSharing';
   import type { ModelSharing } from '$lib/models/modelSharingController.svelte';
-  import type { ModelInfo } from '$lib/types';
+  import type { ModelInfo } from '$lib/types_models';
 
   interface Props {
     model: ModelInfo;

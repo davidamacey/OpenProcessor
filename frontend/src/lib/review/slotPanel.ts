@@ -11,7 +11,7 @@
  */
 
 import type { SlotSpec } from '../annotations/types';
-import type { RegionStatusEntry } from '../api';
+import type { RegionStatusEntry } from '$lib/api_regions';
 import { keymapStore } from '$stores/keymap.svelte';
 
 /**

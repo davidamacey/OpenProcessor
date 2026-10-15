@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_stats', async () => {
+  const actual = await vi.importActual<typeof import('$lib/api_stats')>('$lib/api_stats');
   return { ...actual, getMatchingItemCount: vi.fn() };
 });
 
-import { ApiError, getMatchingItemCount } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
+import { getMatchingItemCount } from '$lib/api_stats';
 import ExportItemFilter from './ExportItemFilter.svelte';
 import { ItemFilterState } from '$lib/itemFilter/itemFilterState.svelte';
 

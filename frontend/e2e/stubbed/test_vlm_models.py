@@ -14,7 +14,7 @@ the test.
      carries `acknowledge_external: true` and the active ref moves.
   3. `test_rollback_and_turn_off_send_expected_active`.
   4. `test_switch_the_local_model_shows_the_restart_then_follows_the_server`.
-  5. `test_absent_when_the_registry_404s` — conftest's default 404: no
+  5. `test_absent_when_the_registry_404s` — the harness stub's default 404: no
      Models card, the route says so, no other `/vlm/*` request fires.
 """
 
@@ -23,7 +23,8 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from conftest import ACTION_TIMEOUT_MS, expect_handled
+from harness.constants import ACTION_TIMEOUT_MS
+from harness.waits import expect_handled
 from playwright.sync_api import expect
 
 CLEAN = {"ok": True, "errors": [], "warnings": [], "force_allowed": False}

@@ -8,7 +8,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import { EMPTY_METHODS } from '$lib/strategies';
-import type { ScoreCoverageEntry, ScoresCoverage, ScoresJob } from '$lib/api';
+import type { ScoreCoverageEntry, ScoresCoverage, ScoresJob } from '$lib/api_scores';
 
 const getScoresCoverage = vi.fn();
 const computeScores = vi.fn();
@@ -26,17 +26,26 @@ class FakeApiError extends Error {
   }
 }
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
+vi.mock('$lib/api_errors', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_errors')>('$lib/api_errors');
+  return { ...actual, ApiError: FakeApiError };
+});
+vi.mock('$lib/api_scores', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_scores')>('$lib/api_scores');
   return {
     ...actual,
-    ApiError: FakeApiError,
     getScoresCoverage: (...args: unknown[]) => getScoresCoverage(...args),
     computeScores: (...args: unknown[]) => computeScores(...args),
     getScoresStatus: (...args: unknown[]) => getScoresStatus(...args),
     cancelScores: (...args: unknown[]) => cancelScores(...args),
-    getMethods: (...args: unknown[]) => getMethods(...args),
   };
+});
+vi.mock('$lib/api_settings', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_settings')>('$lib/api_settings');
+  return { ...actual, getMethods: (...args: unknown[]) => getMethods(...args) };
 });
 
 const { default: ScoresCard } = await import('./ScoresCard.svelte');

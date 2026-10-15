@@ -1,15 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/api', async () => {
-  const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
-  return {
-    ...actual,
-    putRegionBoxes: vi.fn(),
-    patchRegionBox: vi.fn(),
-  };
+vi.mock('$lib/api_regionBoxes', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_regionBoxes')>('$lib/api_regionBoxes');
+  return { ...actual, putRegionBoxes: vi.fn(), patchRegionBox: vi.fn() };
 });
 
-import { putRegionBoxes, patchRegionBox, ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
+import { putRegionBoxes, patchRegionBox } from '$lib/api_regionBoxes';
 import { createMultiBoxRegionController } from './multiBoxRegionController.svelte';
 import {
   WIDGET_TAG_PROFILE,

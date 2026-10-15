@@ -24,7 +24,7 @@
 // Type-only import: erased at compile time, so this module keeps its
 // zero-runtime-dependency property (importing `$lib/api` for real would
 // drag in `$env` and the fetch layer for no reason).
-import type { AutoLabelStartParams } from '$lib/api';
+import type { AutoLabelStartParams } from '$lib/api_autoLabel';
 
 export interface AssistScope {
   /** Class to scope the run to, or `null` = whole dataset (today's

@@ -12,7 +12,7 @@ import { mount, unmount, flushSync } from 'svelte';
 import ClassesPage from './+page.svelte';
 import { classesStore } from '$stores/classes.svelte';
 import { proposalRows } from '$lib/classes/proposalRows';
-import type { NewClassProposalsSummary } from '$lib/api';
+import type { NewClassProposalsSummary } from '$lib/api_review';
 
 const CLASSES = {
   classes: [

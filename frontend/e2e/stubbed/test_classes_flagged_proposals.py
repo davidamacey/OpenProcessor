@@ -9,7 +9,7 @@ their own collapsed section with the served reason, and offers no
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS
 
 import re
 

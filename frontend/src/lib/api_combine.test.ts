@@ -14,7 +14,7 @@ import {
   runCombineNextStep,
   startCombine,
 } from '$lib/api_combine';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import type { CombineRequest } from '$lib/types_combine';
 
 const REQ: CombineRequest = {

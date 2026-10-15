@@ -6,14 +6,14 @@
  * Delete), plus the served activation impact on demand. A
  * `config.changed axis=detection_profile` event is a wake-up to re-read.
  */
+import { apiErrorText } from '$lib/api_errors';
 import {
   cloneRegionProfile,
-  apiErrorText,
   deleteRegionProfile,
   getConfigVocabulary,
   getRegionProfileImpact,
   listRegionProfiles,
-} from '$lib/api';
+} from '$lib/api_profiles';
 import { ConfigList } from '$lib/config/configList.svelte';
 import { isConfigAxisEvent } from '$lib/config/validationIssues';
 import { subscribeCurationEvents, type CurationEvent } from '$lib/sse';

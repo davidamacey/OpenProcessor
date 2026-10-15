@@ -180,7 +180,7 @@ per-entry `settable` flag on `/methods`. An empty queue shows the served reason.
   `cluster_kind === 'false_positive'`, never by an id constant.
 - Regions are lists of boxes. Per-box actions come from the multi-box surface; a stale box
   state is refused by the backend and shown as served.
-- `api.ts` wrappers of `/regions` endpoints use `Region`; the view layer uses `Slot` or
+- `api_regions.ts` wrappers of `/regions` endpoints use `Region`; the view layer uses `Slot` or
   no prefix. No rename crosses the wire: paths and JSON keys are the backend's.
 
 ### Domain neutrality
@@ -190,7 +190,7 @@ word anywhere under `src/` (code, strings, comments, tests). Fix the file; do no
 allow-list. Tests use the neutral widget domain (`WIDGET_TAG_PROFILE`, `widgetTagSlot` in
 `src/lib/test/fixtures/regionSlot.ts`; `installServedRegionProfile(...)` /
 `resetDeploymentSlots()` for the live registry). `exampleProfile.test.ts` parses every
-`examples/annotation-profiles/*.json`. e2e `conftest.py` serves the widget profile on `/health`.
+`examples/annotation-profiles/*.json`. the e2e stub (`e2e/harness/stub.py`) serves the widget profile on `/health`.
 
 ### Shared helpers (one home each)
 

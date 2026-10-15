@@ -5,7 +5,7 @@
  * one in flight, and a 502 `segmenter_error` stays an error.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import type { Crop } from '$lib/types';
 import { testResponseFixture } from './fixtures';
 import { createOpenVocabTest } from './openVocabTestController.svelte';

@@ -1,4 +1,4 @@
-import { apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
 /**
  * Accumulating page-1..N loader shared by the infinite-scroll grids.
  *

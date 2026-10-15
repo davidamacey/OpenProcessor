@@ -17,12 +17,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   activeProjectKey,
   API_PREFIX,
-  getMethods,
-  getStats,
   globalApi,
   scoped,
   setScopedPrefix,
-} from './api';
+} from '$lib/api';
+import { getMethods } from '$lib/api_settings';
+import { getStats } from '$lib/api_stats';
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {

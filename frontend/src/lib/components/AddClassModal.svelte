@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
-  import { addClass } from '$lib/api';
+  import { apiErrorText } from '$lib/api_errors';
+  import { addClass } from '$lib/api_classes';
   import { classesStore } from '$stores/classes.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import Modal from '$components/Modal.svelte';

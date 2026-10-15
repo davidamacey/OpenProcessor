@@ -40,7 +40,15 @@ import { buildGroups, createGridGroups } from '$lib/gridGroups.svelte';
 import { extractBalanced, extractFunction, normalize } from '$lib/testing/sourceScan';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.resolve(here, './+page.svelte'), 'utf-8');
+const LIB = path.resolve(here, '../../../../../lib');
+const src = readFileSync(
+  path.join(LIB, 'clusters/clusterDetailController.svelte.ts'),
+  'utf-8',
+);
+const actionsSrc = readFileSync(
+  path.join(LIB, 'clusters/clusterDetailActions.svelte.ts'),
+  'utf-8',
+);
 
 interface Row {
   id: string;
@@ -274,7 +282,7 @@ describe('wiring: /clusters/[id] +page.svelte derives the grid instead of snapsh
   });
 
   it('onGroupFinalize discards the drag override rather than adopting the library’s stale list', () => {
-    const fn = extractFunction(src, 'onGroupFinalize');
+    const fn = extractFunction(actionsSrc, 'onGroupFinalize');
     expect(fn).not.toBeNull();
     expect(normalize(fn!)).toMatch(/grid\.reset\(\)/);
     // Strip comments before asserting the payload is never adopted — the
@@ -293,7 +301,7 @@ describe('wiring: /clusters/[id] +page.svelte derives the grid instead of snapsh
 // (second pass): that logic — and the exclusion set itself, now
 // `ExclusionGuard` — moved into `$lib/clusters/clusterController.svelte.ts`
 // (commit history: "refactor(clusters): extract action logic into
-// clusterController"). `clusterController.test.ts` exercises the same
+// clusterController"). The `clusterController.*.test.ts` files exercise the same
 // guarantees behaviorally instead of by regex:
 //   - 'claims dropped ids in the exclusion guard before the request
 //     settles, and resets the grid' / 'releases conflicted ids ...' /

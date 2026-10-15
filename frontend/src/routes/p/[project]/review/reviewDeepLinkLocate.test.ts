@@ -13,23 +13,23 @@
  * this size): which pager call fires, and which state gates the keybinding
  * effect.
  */
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { reviewPageSource, reviewSource } from '$lib/testing/reviewPageSources';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const loaderSrc = reviewSource('lib/review/reviewQueueLoader.svelte.ts');
+const tabsSrc = reviewSource('lib/review/reviewTabsController.svelte.ts');
+const keyboardSrc = reviewSource('lib/review/reviewKeyboard.svelte.ts');
+const pageSrc = reviewSource('routes/p/[project]/review/+page.svelte');
 
 function fn(name: string): string {
-  const m = src.match(new RegExp(`async function ${name}\\([\\s\\S]*?\\n {2}\\}`));
+  const m = loaderSrc.match(new RegExp(`async function ${name}\\([\\s\\S]*?\\n {2}\\}`));
   expect(m, `function ${name} not found`).not.toBeNull();
   return m![0];
 }
 
 describe('/review?crop_id= deep link calls locateInReviewQueue, not a paging scan', () => {
   it('jumpToPendingCrop calls locateInReviewQueue with the effective tab, page size and current filters', () => {
-    const fn = src.match(/async function jumpToPendingCrop\([\s\S]*?\n {2}\}/)?.[0];
+    const fn = loaderSrc.match(/async function jumpToPendingCrop\([\s\S]*?\n {2}\}/)?.[0];
     expect(fn).not.toBeUndefined();
     expect(fn).toMatch(
       /await locateInReviewQueue\(\s*endpointForTab\(effectiveTab\),\s*cropId,\s*pageSize,\s*_filter\(\),\s*\)/,
@@ -44,7 +44,7 @@ describe('/review?crop_id= deep link calls locateInReviewQueue, not a paging sca
   });
 
   it('never references the deleted DEEP_LINK_MAX_ITEMS paging-scan constant', () => {
-    expect(src).not.toMatch(/DEEP_LINK_MAX_ITEMS/);
+    expect(reviewPageSource()).not.toMatch(/DEEP_LINK_MAX_ITEMS/);
   });
 });
 
@@ -74,32 +74,36 @@ describe('jumpToPendingCrop fetches only the located page', () => {
 
 describe('awaitingDeepLink gates keybindings and rendering', () => {
   it('seeds true only when a crop_id deep link is present', () => {
-    expect(src).toMatch(
+    expect(tabsSrc).toMatch(
       /let awaitingDeepLink = \$state<boolean>\(deepLink\.cropId != null\);/,
     );
   });
 
   it('the tab-action keybinding $effect returns before registering anything while awaiting', () => {
-    const idx = src.indexOf('$effect(() => {\n    // DQ-M7');
+    const idx = keyboardSrc.indexOf('$effect(() => {\n    // DQ-M7');
     expect(
       idx,
       'keybinding effect with the DQ-M7 guard comment not found',
     ).toBeGreaterThan(-1);
-    const slice = src.slice(idx, idx + 400);
+    const slice = keyboardSrc.slice(idx, idx + 400);
     expect(slice).toMatch(/if \(awaitingDeepLink\) return;/);
   });
 
   it('the body renders a locating state instead of the (possibly page-1) current item while awaiting', () => {
-    expect(src).toMatch(/\{:else if awaitingDeepLink\}/);
-    const idx = src.indexOf('{:else if awaitingDeepLink}');
-    const slice = src.slice(idx, idx + 350);
+    expect(pageSrc).toMatch(/\{:else if awaitingDeepLink\}/);
+    const idx = pageSrc.indexOf('{:else if awaitingDeepLink}');
+    const slice = pageSrc.slice(idx, idx + 350);
     expect(slice).toMatch(/Locating crop/);
   });
 
   it('switching tabs manually also clears awaitingDeepLink, not just pendingCropId', () => {
-    const idx = src.indexOf('tab = t.id;\n            pendingCropId = null;');
+    const idx = tabsSrc.indexOf('tab = t.id;\n    pendingCropId = null;');
     expect(idx).toBeGreaterThan(-1);
-    const slice = src.slice(idx, idx + 120);
+    const slice = tabsSrc.slice(idx, idx + 120);
     expect(slice).toMatch(/awaitingDeepLink = false;/);
+    // ...and that is the handler every tab button runs.
+    expect(reviewSource('lib/components/review/ReviewTabsBar.svelte')).toMatch(
+      /onclick=\{\(\) => selectTab\(t\)\}/,
+    );
   });
 });

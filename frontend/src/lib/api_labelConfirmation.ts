@@ -4,7 +4,8 @@
  * directly; never re-exported from `api.ts` (that would make the two
  * modules circular). Types live in `$lib/types_labelConfirmation`.
  */
-import { apiFetch, mapRawCrop, qs, scoped, type RawCrop } from '$lib/api';
+import { apiFetch, qs, scoped } from '$lib/api';
+import { mapRawCrop, type RawCrop } from '$lib/api_cropMap';
 import type { Crop } from '$lib/types';
 import type {
   AuditReport,

@@ -10,7 +10,8 @@
  * served report; `force` is only ever sent by a caller that saw its
  * `force_allowed`.
  */
-import { configErrorDetail, apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { configErrorDetail } from '$lib/api_profiles';
 import type {
   ActiveConfigResponse,
   ActiveRef,

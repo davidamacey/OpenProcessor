@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiErrorText } from '$lib/api';
+  import { apiErrorText, ApiError } from '$lib/api_errors';
   /**
    * Deployment defaults — admin page for the shared curation-strategy
    * defaults (`GET,PUT {API_PREFIX}/settings`). See
@@ -16,7 +16,8 @@
    * (`settableAxes`), never a hardcoded axis id.
    */
 
-  import { ApiError, configErrorDetail, unknownStrategyDetail } from '$lib/api';
+  import { unknownStrategyDetail } from '$lib/api_autoLabel';
+  import { configErrorDetail } from '$lib/api_profiles';
   import { formatTimestamp } from '$lib/format/date';
   import {
     advisoryAxes,

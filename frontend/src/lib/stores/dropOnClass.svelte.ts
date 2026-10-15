@@ -12,7 +12,7 @@
  * don't register simply don't accept drops).
  */
 
-import type { RegistryClass } from '$lib/types';
+import type { RegistryClass } from '$lib/types_classes';
 
 type DropHandler = (cls: RegistryClass, droppedIds: string[]) => void | Promise<void>;
 

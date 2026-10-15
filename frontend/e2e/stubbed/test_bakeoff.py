@@ -8,7 +8,8 @@ whose result predates v2 (409) shows the legacy note, not an error.
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS, resource_link
+from harness.constants import ACTION_TIMEOUT_MS
+from harness.stub import resource_link
 
 import json
 from urllib.parse import parse_qs, urlparse

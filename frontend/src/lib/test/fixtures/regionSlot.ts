@@ -17,7 +17,7 @@
  */
 import { regionSlotFromServedProfile } from '$lib/annotations/servedRegionSlot';
 import type { SlotSpec } from '$lib/annotations/types';
-import type { ServedRegionProfile } from '$lib/types';
+import type { ServedRegionProfile } from '$lib/types_health';
 
 export const WIDGET_TAG_CLASS = 'widget_tag';
 

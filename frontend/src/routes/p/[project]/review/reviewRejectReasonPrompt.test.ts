@@ -11,17 +11,17 @@
  *
  * Static source scan (no mount harness for a page this size).
  */
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { reviewPageSource, reviewSource } from '$lib/testing/reviewPageSources';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const src = reviewSource('lib/review/reviewSlotActions.svelte.ts');
+const promptSrc = reviewSource('lib/components/review/RejectReasonPrompt.svelte');
+const panelSrc = reviewSource('lib/components/review/ReviewSlotPanel.svelte');
+const pageSrc = reviewPageSource();
 
 describe('the reject-reason prompt is real DOM, not a native window.prompt()', () => {
   it('there is no window.prompt() call anywhere in the page (only doc comments may mention the retired call)', () => {
-    const codeOnly = src.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\/.*$/gm, '');
+    const codeOnly = pageSrc.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\/.*$/gm, '');
     expect(codeOnly).not.toMatch(/window\.prompt\(/);
   });
 
@@ -33,12 +33,24 @@ describe('the reject-reason prompt is real DOM, not a native window.prompt()', (
   });
 
   it('the modal template renders when rejectReasonPromptOpen is true, with submit/cancel wired to resolve the pending promise', () => {
-    const idx = src.indexOf('{#if rejectReasonPromptOpen}');
+    const idx = promptSrc.indexOf('{#if rejectReasonPromptOpen}');
     expect(idx).toBeGreaterThan(-1);
-    const slice = src.slice(idx, idx + 2200);
+    const slice = promptSrc.slice(idx, idx + 2200);
     expect(slice).toMatch(/onclick=\{submitRejectReasonPrompt\}/);
     expect(slice).toMatch(/onclick=\{cancelRejectReasonPrompt\}/);
     expect(slice).toMatch(/bind:value=\{rejectReasonPromptValue\}/);
+    // The page hands the prompt the slot controller's own state and resolvers.
+    const routeSrc = reviewSource('routes/p/[project]/review/+page.svelte');
+    expect(routeSrc).toMatch(/rejectReasonPromptOpen=\{slot\.rejectReasonPromptOpen\}/);
+    expect(routeSrc).toMatch(
+      /bind:rejectReasonPromptValue=\{slot\.rejectReasonPromptValue\}/,
+    );
+    expect(routeSrc).toMatch(
+      /submitRejectReasonPrompt=\{slot\.submitRejectReasonPrompt\}/,
+    );
+    expect(routeSrc).toMatch(
+      /cancelRejectReasonPrompt=\{slot\.cancelRejectReasonPrompt\}/,
+    );
   });
 
   it('cancelling resolves null (reject still proceeds with no reason, matching the old Cancel behavior) rather than throwing', () => {
@@ -50,9 +62,9 @@ describe('the reject-reason prompt is real DOM, not a native window.prompt()', (
 
 describe('the slot undo-stack footer no longer says "confirmed" for a reject/FP', () => {
   it('renders "actioned", not a hardcoded "confirmed"', () => {
-    const idx = src.indexOf('{slotUndoStack.length} actioned in this session');
+    const idx = panelSrc.indexOf('{slotUndoStack.length} actioned in this session');
     expect(idx).toBeGreaterThan(-1);
-    expect(src).not.toMatch(/\{slotUndoStack\.length\} confirmed in this session/);
+    expect(pageSrc).not.toMatch(/\{slotUndoStack\.length\} confirmed in this session/);
   });
 });
 

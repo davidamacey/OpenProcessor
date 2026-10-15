@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import type { SeedFromDetectorResponse } from '$lib/types_detector';
 import { SeedFromDetector, type SeedDeps } from './seedController.svelte';
 

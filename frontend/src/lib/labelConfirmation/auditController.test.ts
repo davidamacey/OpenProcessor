@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import { AuditController, type AuditDeps } from './auditController.svelte';
 import type { AuditReport, AuditStartResponse } from '$lib/types_labelConfirmation';
 

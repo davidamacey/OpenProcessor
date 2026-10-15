@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapRawCrop } from '$lib/api';
+import { mapRawCrop } from '$lib/api_cropMap';
 import { makeItem } from '$lib/test/makeItem';
 import { detectorClassText, percentText } from './labelConfirmation';
 

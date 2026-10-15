@@ -5,23 +5,20 @@
  * AbortError, so the previous project's data never renders.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { API_PREFIX, scopeGeneration, setScopedPrefix } from '$lib/api';
+import { ApiError, apiErrorText } from '$lib/api_errors';
 import {
-  API_PREFIX,
-  ApiError,
   archiveProject,
   cloneProjectSettings,
   createProject,
   deleteProject,
   deleteProjectDryRun,
-  getHealth,
   getProjects,
   patchProject,
   projectErrorDetail,
-  apiErrorText,
-  scopeGeneration,
-  setScopedPrefix,
   unarchiveProject,
-} from './api';
+} from '$lib/api_projects';
+import { getHealth } from '$lib/api_stats';
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

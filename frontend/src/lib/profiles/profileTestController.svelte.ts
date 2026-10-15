@@ -9,7 +9,8 @@
  * box or judges a candidate.
  */
 import { untrack } from 'svelte';
-import { configErrorDetail, apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { configErrorDetail } from '$lib/api_profiles';
 import { testRegionProfile } from '$lib/api_configTest';
 import type { ValidationReport } from '$lib/types_config';
 import type { RegionProfileBody } from '$lib/types_profiles';

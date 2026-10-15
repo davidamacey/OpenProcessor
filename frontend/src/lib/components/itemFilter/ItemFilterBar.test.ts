@@ -10,8 +10,8 @@ import ItemFilterBar from './ItemFilterBar.svelte';
 import ServedFilterField from './ServedFilterField.svelte';
 import { ItemFilterState } from '$lib/itemFilter/itemFilterState.svelte';
 import { classesStore } from '$stores/classes.svelte';
-import type { ReviewFilterSpec } from '$lib/api';
-import type { RegistryClass } from '$lib/types';
+import type { ReviewFilterSpec } from '$lib/api_review';
+import type { RegistryClass } from '$lib/types_classes';
 
 let target: HTMLDivElement;
 let instance: ReturnType<typeof mount> | null = null;

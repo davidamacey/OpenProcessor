@@ -7,7 +7,7 @@
    */
   import { untrack } from 'svelte';
   import { beforeNavigate } from '$app/navigation';
-  import { ingestPathLookup, ingestUpload } from '$lib/api';
+  import { ingestPathLookup, ingestUpload } from '$lib/api_ingest';
   import type { IngestFile } from '$lib/ingest/fileSource';
   import {
     DEFAULT_UPLOAD_CONCURRENCY,

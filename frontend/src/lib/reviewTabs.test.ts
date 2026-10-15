@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { API_PREFIX, getReviewQueue } from './api';
+import { API_PREFIX } from '$lib/api';
+import { getReviewQueue } from '$lib/api_review';
 import { WIDGET_TAG_PROFILE, widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import { registeredSlots, resetDeploymentSlots } from './annotations/registeredSlots';
 import { installedQueueSlots } from '$lib/test/fixtures/installedQueueSlots';

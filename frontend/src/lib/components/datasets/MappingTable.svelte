@@ -11,7 +11,7 @@
    */
   import type { ImportWizard } from '$lib/datasets/importWizardController.svelte';
   import type { DatasetClassRow, DatasetFormatsResponse } from '$lib/types_import';
-  import type { RegistryClass } from '$lib/types';
+  import type { RegistryClass } from '$lib/types_classes';
 
   interface Props {
     wizard: ImportWizard;

@@ -4,7 +4,8 @@ entries absolute), and never causes horizontal overflow at 800px."""
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS, DOCS_RESOURCE_LINKS, resource_link
+from harness.constants import ACTION_TIMEOUT_MS
+from harness.stub import DOCS_RESOURCE_LINKS, resource_link
 from test_labeling_flow import register_base
 
 

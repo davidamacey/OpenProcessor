@@ -15,7 +15,7 @@ import {
   forceUnshareUnreadableText,
   unshareConfirmText,
 } from './modelSharing';
-import type { ModelInfo } from './types';
+import type { ModelInfo } from '$lib/types_models';
 
 function model(over: Partial<ModelInfo>): ModelInfo {
   return {

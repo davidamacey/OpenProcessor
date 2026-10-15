@@ -6,7 +6,8 @@
  * route whose filter carries list params.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getCrops, qs } from '$lib/api';
+import { qs } from '$lib/api';
+import { getCrops } from '$lib/api_cropRead';
 
 afterEach(() => {
   vi.unstubAllGlobals();

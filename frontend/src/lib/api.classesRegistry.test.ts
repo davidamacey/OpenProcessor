@@ -7,7 +7,8 @@
  * must pass all of this through verbatim.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { API_PREFIX, getClasses, previewClassMerge } from './api';
+import { API_PREFIX } from '$lib/api';
+import { getClasses, previewClassMerge } from '$lib/api_classes';
 
 const ok = (body: unknown) =>
   new Response(JSON.stringify(body), {

@@ -17,7 +17,7 @@
  */
 
 import type { Palette } from './types';
-import type { RegionVocabularyRole } from '$lib/api';
+import type { RegionVocabularyRole } from '$lib/api_regions';
 
 export const PALETTES = {
   blue: { border: 'border-blue-500/50', bg: 'bg-blue-500/10', text: 'text-blue-200' },

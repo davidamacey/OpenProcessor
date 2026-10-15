@@ -4,8 +4,9 @@
  * `$lib/api_configTest` directly; never re-exported from `api.ts` (that
  * would make the two modules circular).
  */
-import { apiFetch, mapRawCrop, scoped } from '$lib/api';
-import type { RawCrop } from '$lib/api';
+import { apiFetch, scoped } from '$lib/api';
+import { mapRawCrop } from '$lib/api_cropMap';
+import type { RawCrop } from '$lib/api_cropMap';
 import type { Crop } from '$lib/types';
 import type {
   PackTestRequest,

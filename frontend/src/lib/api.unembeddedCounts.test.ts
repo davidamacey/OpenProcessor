@@ -5,7 +5,7 @@
  * (never a client 0).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getCrops, searchCrops } from '$lib/api';
+import { getCrops, searchCrops } from '$lib/api_cropRead';
 
 function serve(body: unknown) {
   vi.stubGlobal(

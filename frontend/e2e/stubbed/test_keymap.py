@@ -1,7 +1,7 @@
 """K2 (docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md):
 the served keymap applies to real keypresses end to end.
 
-  1. `test_keymap_absent_when_404` — the default stub (conftest.py's
+  1. `test_keymap_absent_when_404` — the default stub (harness/stub.py's
      shared `GET {prefix}/keymap` 404) means `/settings` shows no
      "Keyboard shortcuts" section, and the default key (`d`) still
      discards on `/review`.
@@ -19,7 +19,8 @@ the served keymap applies to real keypresses end to end.
 
 from __future__ import annotations
 
-from conftest import ACTION_TIMEOUT_MS, wait_for_paint
+from harness.constants import ACTION_TIMEOUT_MS
+from harness.waits import wait_for_paint
 from playwright.sync_api import expect
 
 import copy
@@ -229,7 +230,7 @@ def register_common(stub) -> None:
 
 def test_keymap_absent_when_404(stub, page, app_url):
     register_common(stub)
-    # The shared default stub (conftest.py) already serves a 404 for
+    # The shared default stub (harness/stub.py) already serves a 404 for
     # `GET {prefix}/keymap` — no override needed to exercise that path.
 
     page.goto(f"{app_url}/p/default/settings", wait_until="domcontentloaded")

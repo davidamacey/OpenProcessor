@@ -5,7 +5,11 @@
  * w3-pack-editor-ui-plan-2026-09-27.md §2, §3). The pack binding of the
  * shared `ConfigActive`: packs have no deactivate route.
  */
-import { activatePromptPack, getActivePromptPack, rollbackPromptPack } from '$lib/api';
+import {
+  activatePromptPack,
+  getActivePromptPack,
+  rollbackPromptPack,
+} from '$lib/api_packs';
 import { ConfigActive } from '$lib/config/configActive.svelte';
 import type { ActivateResponse } from '$lib/types_config';
 

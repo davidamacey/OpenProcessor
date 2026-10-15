@@ -5,7 +5,7 @@
 -->
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { getThumbUrl } from '$lib/api';
+  import { getThumbUrl } from '$lib/api_cropRead';
   import { projectHref } from '$lib/projectPaths';
   import { percentText } from '$lib/labelConfirmation';
   import { classSourcesStore } from '$stores/classSources.svelte';

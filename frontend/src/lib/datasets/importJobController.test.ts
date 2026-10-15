@@ -4,7 +4,7 @@
  * cancel / resume / undo (dry run first) as served.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api';
+import { ApiError } from '$lib/api_errors';
 import {
   importActionsFixture,
   jobFixture,

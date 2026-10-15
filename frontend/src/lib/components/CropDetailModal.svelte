@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getThumbUrl } from '$lib/api';
+  import { getThumbUrl } from '$lib/api_cropRead';
   import type { Crop } from '$lib/types';
   import CropMetaPanel from './CropMetaPanel.svelte';
   import SourceImageOverlay from './SourceImageOverlay.svelte';

@@ -10,7 +10,8 @@
  * the server's own default applies.
  */
 import { getDatasetFormatsFor, previewCombine, startCombine } from '$lib/api_combine';
-import { configErrorDetail, apiErrorText } from '$lib/api';
+import { apiErrorText } from '$lib/api_errors';
+import { configErrorDetail } from '$lib/api_profiles';
 import type {
   CombineDedupMode,
   CombineHoldoutMode,
