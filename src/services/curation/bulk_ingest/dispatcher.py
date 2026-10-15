@@ -222,7 +222,9 @@ async def run_tick() -> None:
 
     for slug in for_each_project():
         try:
-            await asyncio.to_thread(run_project_tick)
+            # On the loop, not a worker thread: a started run and a poll are asyncio
+            # tasks. The tick is a few small file reads and a non-blocking lock.
+            run_project_tick()
         except Exception as exc:  # one project's failure must not stop the others' ticks
             logger.warning('ingest_dispatch_failed', project=slug, error=str(exc))
 
