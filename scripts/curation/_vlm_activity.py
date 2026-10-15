@@ -56,3 +56,16 @@ async def projects_with_active_vlm(
         except Exception as exc:
             print(f'[vlm-worker] project={record.slug} VLM state unreadable, skipping: {exc}')
     return active
+
+
+def project_has_item_classes(record: ProjectRecord) -> bool:
+    """Whether the project's class registry has a class an item can be labeled as.
+
+    A project without one cannot be labeled (the route answers 409 ``no_classes``),
+    so the producer must not claim its crops. The registry reload is an mtime check,
+    so asking once per project per cycle is cheap and a new class is seen at once."""
+    from src.clients.curation_opensearch.registry import get_class_registry
+    from src.services.curation.region_class import item_classes
+
+    with bind_project(record):
+        return bool(item_classes(get_class_registry().load().classes))
