@@ -34,7 +34,7 @@
     {:else if ctl.runs.length === 0}
       <p class="px-3 py-3 text-xs text-zinc-500">No runs yet. Start one above.</p>
     {:else}
-      <table class="w-full table-fixed text-sm">
+      <table class="w-full min-w-[42rem] table-fixed text-sm">
         <thead
           class="sticky top-0 bg-zinc-900 text-[11px] uppercase tracking-wide text-zinc-500"
         >

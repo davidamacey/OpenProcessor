@@ -246,7 +246,8 @@ async def post_chat_with_retry(
             # Trip retry by raising HTTPStatusError.
             resp.raise_for_status()
         resp.raise_for_status()
-        return resp.json()
+        typed: dict[str, Any] = resp.json()
+        return typed
 
     try:
         async for attempt in AsyncRetrying(

@@ -99,10 +99,8 @@ class OcrMixin:
 
         try:
             success, errors = await async_bulk(self.client, docs, raise_on_error=False)
-            return {
-                'indexed': success,
-                'errors': [str(e) for e in errors] if errors else [],
-            }
+            failed = errors if isinstance(errors, list) else []
+            return {'indexed': success, 'errors': [str(e) for e in failed]}
         except Exception as e:
             logger.error(f'Failed to index OCR results: {e}')
             return {'indexed': 0, 'errors': [str(e)]}

@@ -190,21 +190,34 @@ export function createMultiBoxRegionController(
     return conflict.item;
   }
 
-  async function flipSelected(
-    cropId: string,
-    state: 'accepted' | 'rejected',
-  ): Promise<void> {
-    if (selectedIndex == null || busy) return;
+  // Per-box decisions run one write at a time, in the order they were
+  // pressed. A key pressed while the previous write is still in flight
+  // (a fast y/r/Tab sequence) waits its turn instead of being dropped.
+  let flipQueue: Promise<void> = Promise.resolve();
+
+  function flipSelected(cropId: string, state: 'accepted' | 'rejected'): Promise<void> {
+    if (selectedIndex == null) return Promise.resolve();
     const box = boxes[selectedIndex];
     if (box.boxId == null) {
       // Not-yet-saved local box: nothing to PATCH, just flip it in place.
       const idx = selectedIndex;
       boxes = boxes.map((b, i) => (i === idx ? { ...b, state } : b));
-      return;
+      return Promise.resolve();
     }
+    const boxId = box.boxId;
+    const run = flipQueue.then(() => patchBoxState(cropId, boxId, state));
+    flipQueue = run;
+    return run;
+  }
+
+  async function patchBoxState(
+    cropId: string,
+    boxId: string,
+    state: 'accepted' | 'rejected',
+  ): Promise<void> {
     busy = true;
     try {
-      const { crop, vectorRefresh: vr } = await patchRegionBox(cropId, box.boxId, {
+      const { crop, vectorRefresh: vr } = await patchRegionBox(cropId, boxId, {
         state,
         expectedRegionRevision: revision ?? undefined,
       });

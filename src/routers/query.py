@@ -61,7 +61,7 @@ def format_bytes(size_bytes: int) -> str:
 @router.get('/stats', response_model=AllIndexStatsResponse)
 async def get_all_stats(
     search_service: VisualSearchDep,
-):
+) -> AllIndexStatsResponse:
     """
     Get statistics for all visual search indexes.
 
@@ -123,7 +123,7 @@ async def get_image_data(
     search_service: VisualSearchDep,
     image_id: Annotated[str, Path(description='Image identifier')],
     include_embedding: Annotated[bool, Query(description='Include 512-dim CLIP embedding')] = False,
-):
+) -> ImageQueryResponse:
     """
     Get stored data and metadata for an image.
 
@@ -154,7 +154,7 @@ async def get_image_data(
 async def delete_image(
     search_service: VisualSearchDep,
     image_id: Annotated[str, Path(description='Image identifier to delete')],
-):
+) -> DeleteImageResponse:
     """
     Remove image from all indexes.
 

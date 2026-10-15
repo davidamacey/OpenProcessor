@@ -80,7 +80,8 @@ def _persist_task(task_id: str) -> None:
 
 def _load_task_file(path: Path) -> dict[str, Any] | None:
     try:
-        return json.loads(path.read_text())
+        typed: dict[str, Any] | None = json.loads(path.read_text())
+        return typed
     except FileNotFoundError:
         return None
     except (OSError, json.JSONDecodeError) as exc:
@@ -274,13 +275,13 @@ class StepTimer:
         self.step_name = step_name
         self.start: float = 0
 
-    def __enter__(self):
+    def __enter__(self) -> 'StepTimer':
         from time import perf_counter
 
         self.start = perf_counter()
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         from time import perf_counter
 
         self.step_times[self.step_name] = round(perf_counter() - self.start, 2)
@@ -358,6 +359,7 @@ async def run_export(
                 cwd='/app',
             )
 
+            assert process.stdout is not None  # PIPE was requested above
             output_lines = []
             current_phase = 'initialization'
             phase_start = perf_counter()

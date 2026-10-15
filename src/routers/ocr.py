@@ -141,7 +141,7 @@ def ocr_predict(
     filter_by_score: Annotated[
         bool, Query(description='Filter results by confidence thresholds')
     ] = True,
-):
+) -> OcrPredictResponse:
     """
     Extract text from a single image using PP-OCRv5.
 
@@ -233,7 +233,7 @@ def ocr_batch(
         float, Query(ge=0.0, le=1.0, description='Minimum recognition confidence')
     ] = 0.8,
     max_workers: Annotated[int, Query(ge=1, le=32, description='Parallel processing threads')] = 16,
-):
+) -> BatchOcrResponse:
     """
     Batch OCR processing for multiple images.
 
@@ -370,7 +370,7 @@ async def search_by_ocr(
     page: int = Query(0, ge=0, description='Page number (0-indexed)'),
     size: int = Query(20, ge=1, le=100, description='Results per page'),
     fuzzy: bool = Query(True, description='Enable fuzzy matching'),
-):
+) -> WireJSONResponse:
     """
     Search images by OCR text content.
 

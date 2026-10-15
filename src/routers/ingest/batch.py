@@ -98,7 +98,7 @@ async def ingest_batch(
         description='Defer heavy operations (near-duplicate detection) for faster ingestion. '
         'Use during high-throughput bulk ingestion.',
     ),
-):
+) -> BatchIngestResponse:
     """
     Batch ingest multiple images with optimized parallel processing.
 

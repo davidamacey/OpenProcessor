@@ -49,7 +49,7 @@ async def test_model_inference(
     model_name: str,
     file: UploadFile = File(..., description='Test image (JPEG or PNG)'),
     use_end2end: bool = Form(default=True),
-):
+) -> TestInferenceResponse:
     """
     Test inference on an uploaded/exported model.
 

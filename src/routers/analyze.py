@@ -54,7 +54,7 @@ def analyze_image(
     face_confidence: Annotated[
         float, Query(ge=0.1, le=0.99, description='Minimum face detection confidence')
     ] = 0.5,
-):
+) -> AnalyzeResponse:
     """
     Run all models on a single image: YOLO + faces + CLIP + OCR.
 
@@ -119,7 +119,7 @@ def analyze_batch(
     confidence: Annotated[
         float, Query(ge=0.0, le=1.0, description='Minimum YOLO detection confidence')
     ] = 0.25,
-):
+) -> BatchAnalyzeResponse:
     """
     Run all models on multiple images in batch.
 

@@ -48,7 +48,8 @@ async def _load_run_metadata(opensearch: AsyncOpenSearch) -> dict[str, Any]:
     meta = resp.get('_source')
     if not meta:
         raise ProjectionNotBuiltError
-    return meta
+    typed: dict[str, Any] = meta
+    return typed
 
 
 def _point_from_hit(h: dict[str, Any]) -> dict[str, Any]:

@@ -47,7 +47,8 @@ def vlm_snapshot(history: list[dict[str, Any]] | None) -> dict[str, Any] | None:
     for entry in reversed(history or []):
         writer = entry.get('writer')
         if isinstance(writer, str) and writer.startswith('vlm') and entry.get('restorable'):
-            return entry
+            typed: dict[str, Any] | None = entry
+            return typed
     return None
 
 

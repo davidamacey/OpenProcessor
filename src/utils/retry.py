@@ -8,7 +8,7 @@ Used to ensure requests are processed even under high load.
 import logging
 import random
 from collections.abc import Callable
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import grpc
 
@@ -64,13 +64,13 @@ def is_retryable_error(error: Exception) -> bool:
 
 def retry_sync[T](
     func: Callable[..., T],
-    *args,
+    *args: Any,
     max_retries: int = 3,
     base_delay: float = 0.1,
     max_delay: float = 5.0,
     exponential_base: float = 2.0,
     jitter: float = 0.1,
-    **kwargs,
+    **kwargs: Any,
 ) -> T:
     """
     Retry a sync function with exponential backoff and jitter.

@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import tensorrt as trt
+    from onnx import ModelProto, NodeProto
 
 
 def create_explicit_network(builder: trt.Builder) -> trt.INetworkDefinition:
@@ -121,12 +122,12 @@ _SAME_FLOAT_TYPE_OPS = frozenset(
 _MAX_RECONCILE_PASSES = 8
 
 
-def _same_type_input_indices(node) -> range:
+def _same_type_input_indices(node: NodeProto) -> range:
     """Input slots that must share a type (Where's condition is a bool)."""
     return range(1, 3) if node.op_type == 'Where' else range(len(node.input))
 
 
-def _tensor_types(model) -> dict[str, int]:
+def _tensor_types(model: ModelProto) -> dict[str, int]:
     """Element type of every tensor, re-derived from the nodes.
 
     The graph's ``value_info`` is dropped first: onnxconverter-common
@@ -145,7 +146,7 @@ def _tensor_types(model) -> dict[str, int]:
     return types
 
 
-def _reconcile_float_types(model, fp32_ops: set[str]) -> int:
+def _reconcile_float_types(model: ModelProto, fp32_ops: set[str]) -> int:
     """Insert Casts until every same-type op sees one float element type.
 
     onnxconverter-common retypes ``value_info`` and initializers but never
@@ -197,7 +198,7 @@ def _reconcile_float_types(model, fp32_ops: set[str]) -> int:
     raise ValueError(f'float types did not settle after {_MAX_RECONCILE_PASSES} passes')
 
 
-def _multiplier_depthwise_convs(model) -> list[str]:
+def _multiplier_depthwise_convs(model: ModelProto) -> list[str]:
     """Names of depthwise Convs whose output has more channels than their group.
 
     TensorRT 11.1 (strongly typed) finds no FP16 kernel for a grouped Conv with

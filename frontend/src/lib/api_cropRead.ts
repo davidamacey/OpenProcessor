@@ -132,7 +132,15 @@ export async function searchCrops(
     {},
     signal,
   );
-  const items: SearchCrop[] = (raw.items ?? []).map((it) => {
+  // A crop can be served once per matching box; the result grids key by
+  // crop id, so keep the first (best-ranked) hit per id.
+  const seen = new Set<string>();
+  const hits = (raw.items ?? []).filter((it) => {
+    if (seen.has(it.crop_id)) return false;
+    seen.add(it.crop_id);
+    return true;
+  });
+  const items: SearchCrop[] = hits.map((it) => {
     const base = mapRawCrop(it);
     return {
       ...base,

@@ -30,7 +30,10 @@ def idle_backoff_s(poll_interval: float, idle_cycles: int) -> float:
     """Sleep after ``idle_cycles`` (>= 1) consecutive cycles with no active
     VLM: ``poll_interval`` doubling per cycle, capped at ``IDLE_BACKOFF_MAX_S``
     (never below ``poll_interval`` itself; 0 cycles means a normal poll)."""
-    return min(poll_interval * 2 ** max(0, idle_cycles - 1), max(poll_interval, IDLE_BACKOFF_MAX_S))
+    result: float = min(
+        poll_interval * 2 ** max(0, idle_cycles - 1), max(poll_interval, IDLE_BACKOFF_MAX_S)
+    )
+    return result
 
 
 async def projects_with_active_vlm(

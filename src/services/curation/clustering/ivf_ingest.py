@@ -67,7 +67,8 @@ def get_ivf_ingest_store() -> IVFCentroidStore | None:
     # files would serve one project's stale cached store to the other.
     cache_key = (str(store.centroids_path), mtime)
     if _ivf_ingest_cache['mtime'] == cache_key:
-        return _ivf_ingest_cache['store']
+        typed: IVFCentroidStore | None = _ivf_ingest_cache['store']
+        return typed
 
     # mtime changed (or first load) — (re)load the centroids + gate
     # policy together, since a gated full recluster always rewrites the
@@ -81,7 +82,8 @@ def get_ivf_ingest_store() -> IVFCentroidStore | None:
         logger.warning('ivf_ingest_store_load_failed', error=str(exc))
         _ivf_ingest_cache['store'] = None
         _ivf_ingest_cache['gate'] = {}
-    return _ivf_ingest_cache['store']
+    current: IVFCentroidStore | None = _ivf_ingest_cache['store']
+    return current
 
 
 def ingest_passes_gate(rank: int | None, blur_ratio_val: float | None) -> bool:

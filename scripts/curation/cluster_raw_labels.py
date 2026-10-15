@@ -103,7 +103,8 @@ def _st_embedder(model_name: str) -> Callable[[list[str]], np.ndarray]:
     model = SentenceTransformer(model_name)
 
     def _embed(terms: list[str]) -> np.ndarray:
-        return model.encode(terms, batch_size=128, normalize_embeddings=True)
+        result: np.ndarray = model.encode(terms, batch_size=128, normalize_embeddings=True)
+        return result
 
     return _embed
 

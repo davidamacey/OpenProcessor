@@ -32,7 +32,7 @@ async def list_duplicate_groups(
     page: Annotated[int, Query(ge=0, description='Page number (0-indexed)')] = 0,
     size: Annotated[int, Query(ge=1, le=100, description='Page size')] = 50,
     min_size: Annotated[int, Query(ge=2, description='Minimum group size')] = 2,
-):
+) -> DuplicateGroupsResponse:
     """
     List duplicate groups.
 
@@ -89,7 +89,7 @@ async def list_duplicate_groups(
 @router.get('/duplicates/stats', response_model=DuplicateStatsResponse)
 async def get_duplicate_stats(
     search_service: VisualSearchDep,
-):
+) -> DuplicateStatsResponse:
     """
     Get duplicate detection statistics.
 
@@ -125,7 +125,7 @@ async def get_duplicate_stats(
 async def get_duplicate_group(
     search_service: VisualSearchDep,
     group_id: Annotated[str, Path(description='Duplicate group ID')],
-):
+) -> DuplicateGroupDetailResponse:
     """
     Get members of a duplicate group.
 

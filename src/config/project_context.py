@@ -183,10 +183,12 @@ async def run_in_executor_bound[T](
     from concurrent.futures import ProcessPoolExecutor
 
     if isinstance(executor, ProcessPoolExecutor):
-        return await loop.run_in_executor(executor, fn, *args)
+        typed: T = await loop.run_in_executor(executor, fn, *args)
+        return typed
     ctx = contextvars.copy_context()
 
     def _run_with_context() -> T:
         return ctx.run(fn, *args)
 
-    return await loop.run_in_executor(executor, _run_with_context)
+    typed_ctx: T = await loop.run_in_executor(executor, _run_with_context)
+    return typed_ctx

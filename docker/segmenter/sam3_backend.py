@@ -538,7 +538,8 @@ def _forward_with_cached_prompt(processor: Any, state: dict, prompt: str) -> dic
     state['backbone_out'].update(text_outputs)
     if 'geometric_prompt' not in state:
         state['geometric_prompt'] = processor.model._get_dummy_prompt()
-    return processor._forward_grounding(state)
+    result: dict = processor._forward_grounding(state)
+    return result
 
 
 def _autocast_ctx() -> Any:

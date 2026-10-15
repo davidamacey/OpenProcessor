@@ -103,7 +103,7 @@ def download_with_progress(url: str, output_path: Path, desc: str = '') -> bool:
     try:
         start_time = time.time()
 
-        def progress_hook(block_count, block_size, total_size):
+        def progress_hook(block_count: int, block_size: int, total_size: int) -> None:
             if total_size > 0:
                 downloaded = block_count * block_size
                 percent = min(100, downloaded * 100 / total_size)
@@ -236,7 +236,7 @@ def download_model(model_id: str, config: dict, force: bool = False) -> bool:
     return False
 
 
-def download_all(force: bool = False) -> dict:
+def download_all(force: bool = False) -> dict[str, bool]:
     """Download all models and dictionaries."""
     # Create output directory
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -259,7 +259,7 @@ def download_all(force: bool = False) -> dict:
 # =============================================================================
 
 
-def print_summary(results: dict):
+def print_summary(results: dict[str, bool]) -> int:
     """Print download summary."""
     print('\n' + '=' * 60)
     print('Download Summary')
@@ -294,7 +294,7 @@ def print_summary(results: dict):
     return 1
 
 
-def main():
+def main() -> int:
     """Main entry point."""
     import argparse
 

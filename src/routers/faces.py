@@ -152,7 +152,7 @@ def detect_faces(
         le=0.99,
         description='Minimum face detection confidence threshold',
     ),
-):
+) -> FaceDetectResponse:
     """
     Detect faces in image using SCRFD-10G.
 
@@ -214,7 +214,7 @@ def recognize_faces(
         le=0.99,
         description='Minimum face detection confidence threshold',
     ),
-):
+) -> FaceRecognizeResponse:
     """
     Detect faces and extract ArcFace identity embeddings.
 
@@ -288,7 +288,7 @@ def verify_faces(
         le=0.99,
         description='Minimum face detection confidence',
     ),
-):
+) -> FaceVerifyResponse:
     """
     Verify if two images contain the same person (1:1 verification).
 
@@ -384,7 +384,7 @@ async def search_faces(
         le=0.99,
         description='Minimum face detection confidence',
     ),
-):
+) -> FaceSearchResponse:
     """
     Find similar faces in the indexed database.
 
@@ -494,7 +494,7 @@ async def identify_faces(
         le=0.99,
         description='Minimum face detection confidence',
     ),
-):
+) -> FaceIdentifyResponse:
     """
     1:N face identification - identify all faces in image against database.
 

@@ -3,6 +3,7 @@
 import logging
 import uuid
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -11,12 +12,24 @@ from src.config.settings import Settings
 from src.services.inference import InferenceService
 
 
+if TYPE_CHECKING:
+    from src.clients.opensearch.client import OpenSearchClient
+
+
 logger = logging.getLogger(__name__)
 
 
 class PersonManagementMixin:
     settings: Settings
     inference: InferenceService
+
+    if TYPE_CHECKING:
+
+        @property
+        def opensearch(self) -> OpenSearchClient: ...
+
+        # Implemented by IdentificationMixin; declared so the mixins type-check alone.
+        async def get_person_faces(self, person_id: str) -> list: ...
 
     # =========================================================================
     # Auto-Clustering and Person Management
@@ -119,12 +132,12 @@ class PersonManagementMixin:
             # 4. Greedy clustering using Union-Find
             parent = list(range(n_faces))
 
-            def find(x):
+            def find(x: int) -> int:
                 if parent[x] != x:
                     parent[x] = find(parent[x])
                 return parent[x]
 
-            def union(x, y):
+            def union(x: int, y: int) -> None:
                 px, py = find(x), find(y)
                 if px != py:
                     parent[px] = py

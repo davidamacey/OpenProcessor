@@ -2,6 +2,8 @@
 
 import asyncio
 import contextlib
+import inspect
+from collections.abc import AsyncIterator, Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
@@ -9,7 +11,7 @@ from fastapi import FastAPI
 
 from src.app.resources import AppResources
 from src.clients.triton_pool_core import AsyncTritonPool
-from src.config import get_settings
+from src.config import Settings, get_settings
 from src.core.dependencies import OpenSearchClientFactory, TritonClientFactory
 from src.core.logging import get_logger
 from src.utils.cpu_pool import shutdown_cpu_executor
@@ -46,7 +48,7 @@ def _preflight() -> None:
     ensure_env_region_profile()
 
 
-async def _start_pools(settings) -> None:
+async def _start_pools(settings: Settings) -> None:
     """The shared CPU executor and the high-throughput async Triton pool."""
     # Shared ThreadPoolExecutor for CPU-bound tasks (JPEG decode, resize).
     AppResources.shared_executor = ThreadPoolExecutor(
@@ -123,7 +125,10 @@ def _reconcile_orphaned_state() -> None:
         logger.warning('orphaned_export_tasks_reconcile_skipped', error=str(exc))
 
 
-async def _arbiter_reconcile_loop(reconcile_on_startup, reload_promoted_models_best_effort) -> None:
+async def _arbiter_reconcile_loop(
+    reconcile_on_startup: Callable[[], Awaitable[object]],
+    reload_promoted_models_best_effort: Callable[..., Awaitable[None]],
+) -> None:
     """Re-assert the desired GPU-service state on a fixed interval.
 
     Also re-loads any promoted Triton model that's dropped out of
@@ -222,16 +227,29 @@ def _warm_pe_encoder(app: FastAPI) -> None:
         logger.warning('pe_text_encoder_warm_skipped', error=str(exc))
 
 
-async def _stop_ops_metrics_and_arbiter() -> None:
+async def _shutdown_step(step: str, run: Callable[[], Awaitable[None] | None]) -> None:
+    """Run one shutdown step on its own: a failure is logged with the step name and
+    never stops the steps after it. Startup is not routed through here, so a startup
+    failure still propagates."""
+    try:
+        result = run()
+        if inspect.isawaitable(result):
+            await result
+    except Exception as exc:
+        logger.warning('shutdown_step_failed', step=step, error=str(exc))
+
+
+async def _stop_ops_metrics() -> None:
     if AppResources.ops_metrics_task is not None:
         AppResources.ops_metrics_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await AppResources.ops_metrics_task
         AppResources.ops_metrics_task = None
 
-    # Cancel the GPU-arbiter reconcile loop. Cleared afterwards so a second
-    # app lifecycle in the same process (tests, embedded runs) never sees a
-    # stale finished task.
+
+async def _stop_arbiter() -> None:
+    # Cleared afterwards so a second app lifecycle in the same process (tests,
+    # embedded runs) never sees a stale finished task.
     if AppResources.arbiter_task is not None:
         AppResources.arbiter_task.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
@@ -240,71 +258,72 @@ async def _stop_ops_metrics_and_arbiter() -> None:
         logger.info('gpu_arbiter_loop_stopped')
 
 
-async def _stop_background_tasks() -> None:
+async def _stop_curation_jobs() -> None:
     from src.services.curation.background_jobs import stop_background_jobs
 
-    await stop_background_jobs(AppResources.curation_background_jobs)
+    jobs = AppResources.curation_background_jobs
     AppResources.curation_background_jobs = []
+    await stop_background_jobs(jobs)
 
+
+async def _stop_project_registry() -> None:
     from src.services.projects.bootstrap import shutdown_project_registry
 
-    await shutdown_project_registry(AppResources.project_registry_poll_task)
+    task = AppResources.project_registry_poll_task
     AppResources.project_registry_poll_task = None
+    await shutdown_project_registry(task)
 
+
+async def _stop_config_store_poll() -> None:
     from src.services.config_store import shutdown_config_store_poll
 
-    await shutdown_config_store_poll(AppResources.config_store_poll_task)
+    task = AppResources.config_store_poll_task
     AppResources.config_store_poll_task = None
+    await shutdown_config_store_poll(task)
 
-    # Stop the event-bus tail task.
+
+async def _stop_event_bus() -> None:
     if AppResources.event_bus_started:
-        try:
-            from src.services.curation.event_hub import get_event_hub
-
-            await get_event_hub().stop_tail()
-            logger.info('event_bus_tail_stopped')
-        except Exception as exc:
-            logger.warning('event_bus_tail_stop_error', error=str(exc))
         AppResources.event_bus_started = False
+        from src.services.curation.event_hub import get_event_hub
+
+        await get_event_hub().stop_tail()
+        logger.info('event_bus_tail_stopped')
 
 
-async def _close_pools() -> None:
-    # Close AsyncTritonPool
+async def _close_triton_pool() -> None:
     if AppResources.async_triton_pool is not None:
-        try:
-            await AppResources.async_triton_pool.close()
-            logger.info('triton_pool_closed')
-        except Exception as e:
-            logger.warning('triton_pool_close_error', error=str(e))
+        await AppResources.async_triton_pool.close()
+        logger.info('triton_pool_closed')
 
-    # The ingest CPU pool: let running pixel work finish
-    shutdown_cpu_executor()
 
-    # Shutdown shared executor
+def _shutdown_shared_executor() -> None:
     if AppResources.shared_executor is not None:
-        try:
-            AppResources.shared_executor.shutdown(wait=True)
-            logger.info('executor_shutdown')
-        except Exception as e:
-            logger.warning('executor_shutdown_error', error=str(e))
+        AppResources.shared_executor.shutdown(wait=True)
+        logger.info('executor_shutdown')
 
 
-async def _close_clients() -> None:
-    # Close Triton connections
-    try:
-        await TritonClientFactory.close_all()
-    except Exception as e:
-        logger.warning('triton_client_close_error', error=str(e))
-
-    # Close OpenSearch connections
-    try:
-        await OpenSearchClientFactory.close()
-    except Exception as e:
-        logger.warning('opensearch_close_error', error=str(e))
+async def _run_shutdown() -> None:
+    steps: list[tuple[str, Callable[[], Awaitable[None] | None]]] = [
+        ('ops_metrics', _stop_ops_metrics),
+        ('gpu_arbiter', _stop_arbiter),
+        ('curation_jobs', _stop_curation_jobs),
+        ('project_registry', _stop_project_registry),
+        ('config_store_poll', _stop_config_store_poll),
+        ('event_bus', _stop_event_bus),
+        ('triton_pool', _close_triton_pool),
+        # the ingest CPU pool: let running pixel work finish
+        ('cpu_executor', shutdown_cpu_executor),
+        ('shared_executor', _shutdown_shared_executor),
+        ('triton_clients', TritonClientFactory.close_all),
+        ('opensearch_clients', OpenSearchClientFactory.close),
+    ]
+    for step, run in steps:
+        await _shutdown_step(step, run)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     Application lifecycle manager.
 
@@ -358,9 +377,6 @@ async def lifespan(app: FastAPI):
     # =========================================================================
     logger.info('shutdown_begin', phase='cleanup')
 
-    await _stop_ops_metrics_and_arbiter()
-    await _stop_background_tasks()
-    await _close_pools()
-    await _close_clients()
+    await _run_shutdown()
 
     logger.info('shutdown_complete')

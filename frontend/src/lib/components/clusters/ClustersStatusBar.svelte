@@ -48,6 +48,8 @@
       {#if slotGallery.pager.loadingMore}loading more…{:else if slotGallery.pager.hasMore}scroll
         for more{:else}all loaded{/if}
     </span>
+  {:else if list.clusterPager.error}
+    <!-- A failed load has no honest count; the grid shows the error. -->
   {:else}
     <span class="font-mono text-xs text-zinc-500" data-testid="clusters-footer-count">
       {list.gridItems.length} / {list.clusterPager.total +

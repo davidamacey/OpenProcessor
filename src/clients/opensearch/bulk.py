@@ -110,7 +110,7 @@ class BulkMixin:
         Returns:
             Dict with face ingestion results
         """
-        results = {
+        results: dict[str, Any] = {
             'faces': 0,
             'clustered': 0,
             'errors': [],
@@ -375,7 +375,7 @@ class BulkMixin:
                         people_actions.append(_box_action(doc, i, timestamp, IndexName.PEOPLE))
 
         # Execute bulk operations
-        results = {'global': 0, 'vehicles': 0, 'people': 0, 'errors': []}
+        results: dict[str, Any] = {'global': 0, 'vehicles': 0, 'people': 0, 'errors': []}
 
         try:
             if global_actions:

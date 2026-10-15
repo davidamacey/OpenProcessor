@@ -185,8 +185,10 @@ def _load_json_or_zip(
         local = Path(source)
     if local.suffix == '.zip':
         with zipfile.ZipFile(local) as zf:
-            return json.loads(zf.read(COCO_INSTANCES_MEMBER))
-    return json.loads(local.read_text(encoding='utf-8'))
+            result: dict[str, Any] = json.loads(zf.read(COCO_INSTANCES_MEMBER))
+            return result
+    doc: dict[str, Any] = json.loads(local.read_text(encoding='utf-8'))
+    return doc
 
 
 def select_coco(

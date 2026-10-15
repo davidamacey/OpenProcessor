@@ -144,7 +144,8 @@ class AHCMethod:
                 metric=self.metric,
                 connectivity=connectivity,
             )
-            return clusterer.fit_predict(embeddings).astype(np.int64)
+            typed: np.ndarray = clusterer.fit_predict(embeddings).astype(np.int64)
+            return typed
 
         labels = await _asyncio.to_thread(_fit)
         return ClusterResult(

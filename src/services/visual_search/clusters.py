@@ -3,6 +3,8 @@
 import logging
 
 from src.clients.opensearch.client import OpenSearchClient
+from src.clients.opensearch.names import IndexName
+from src.config.cluster_index import ClusterIndex
 from src.services.inference import InferenceService
 
 
@@ -17,10 +19,8 @@ class ClusterMixin:
     # Clustering Operations (FAISS IVF - Industry Standard)
     # =========================================================================
 
-    def _get_cluster_index(self, index_name: str):
+    def _get_cluster_index(self, index_name: str) -> ClusterIndex:
         """Convert string index name to ClusterIndex enum."""
-        from src.config.cluster_index import ClusterIndex
-
         name_map = {
             'global': ClusterIndex.GLOBAL,
             'vehicles': ClusterIndex.VEHICLES,
@@ -33,10 +33,8 @@ class ClusterMixin:
             )
         return name_map[index_name.lower()]
 
-    def _get_opensearch_index(self, index_name: str):
+    def _get_opensearch_index(self, index_name: str) -> IndexName:
         """Convert string index name to OpenSearch IndexName enum."""
-        from src.clients.opensearch.names import IndexName
-
         name_map = {
             'global': IndexName.GLOBAL,
             'vehicles': IndexName.VEHICLES,

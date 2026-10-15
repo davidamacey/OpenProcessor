@@ -54,7 +54,8 @@ class Dataset:
             mask = filter_mask(flt, self.meta)
             store[key] = exact_topk(self.vectors, queries, mask, TRUTH_K)
             np.savez(cache, **store)
-        return store[key]
+        result: np.ndarray = store[key]
+        return result
 
 
 def kmeans_clusters(vectors: np.ndarray, seed: int) -> np.ndarray:

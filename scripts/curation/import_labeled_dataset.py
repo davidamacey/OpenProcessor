@@ -163,7 +163,8 @@ def _check(resp: httpx.Response) -> dict[str, Any]:
         raise ImportCliError(
             f'{resp.request.method} {resp.request.url.path}: {resp.status_code} {detail}'
         )
-    return resp.json()
+    result: dict[str, Any] = resp.json()
+    return result
 
 
 def write_ingested(client: httpx.Client, base: str, import_id: str, state_dir: Path) -> int:

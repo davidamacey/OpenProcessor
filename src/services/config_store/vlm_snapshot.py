@@ -76,7 +76,8 @@ async def fetch_revision(client: Any, name: str, revision: int) -> StoredConfig 
     key = (name, revision)
     cached = _REVISION_CACHE.get(key)
     if cached is not None:
-        return cached
+        typed: StoredConfig | None = cached
+        return typed
     try:
         with global_configs_read():
             doc = await client.get(

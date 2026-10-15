@@ -89,7 +89,8 @@ def unit_centroid(embeddings: np.ndarray) -> np.ndarray | None:
 def centroid_distances(embeddings: np.ndarray, centroid: np.ndarray) -> np.ndarray:
     """``1 - cos`` of every row to ``centroid``, clipped to ``[0, 2]``."""
     x = _normalize(np.asarray(embeddings, dtype=np.float32))
-    return np.clip(1.0 - x @ centroid, 0.0, 2.0)
+    typed: np.ndarray = np.clip(1.0 - x @ centroid, 0.0, 2.0)
+    return typed
 
 
 def _clustered_query() -> dict[str, Any]:

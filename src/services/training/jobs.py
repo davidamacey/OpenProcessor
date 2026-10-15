@@ -334,7 +334,8 @@ def _campaign_id_from_job_file(stem: str) -> str | None:
         return None
     spec_raw = _load_json_object(spec_path)
     if spec_raw is not None and spec_raw.get('campaign_id'):
-        return spec_raw['campaign_id']
+        typed: str | None = spec_raw['campaign_id']
+        return typed
     return None
 
 

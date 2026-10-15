@@ -44,7 +44,7 @@ async def upload_model(
     formats: list[ExportFormat] = Form(default=[ExportFormat.TRT_END2END]),
     normalize_boxes: bool = Form(default=True),
     auto_load: bool = Form(default=True),
-):
+) -> ExportTaskResponse:
     """
     Upload a YOLO11 model and start export to TensorRT.
 
@@ -124,7 +124,7 @@ async def export_model(
     model_name: str,
     request: ExportRequest,
     background_tasks: BackgroundTasks,
-):
+) -> ExportTaskResponse:
     """
     Export an uploaded PyTorch model to TensorRT.
 
@@ -193,7 +193,7 @@ async def export_model(
 
 
 @router.get('/export/{task_id}', response_model=ExportTaskStatus)
-async def get_export_status(task_id: str):
+async def get_export_status(task_id: str) -> ExportTaskStatus:
     """Get detailed status of an export task."""
     task = get_export_task(task_id)
     if not task:
@@ -203,6 +203,6 @@ async def get_export_status(task_id: str):
 
 
 @router.get('/exports', response_model=list[ExportTaskStatus])
-async def list_exports():
+async def list_exports() -> list[ExportTaskStatus]:
     """List all export tasks."""
     return [ExportTaskStatus(**t) for t in list_export_tasks()]

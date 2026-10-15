@@ -128,7 +128,8 @@ def _call(client: httpx.Client, method: str, url: str, **kwargs: Any) -> dict[st
             detail = resp.text
         message = detail.get('message') if isinstance(detail, dict) else detail
         raise ApiError(f'{resp.status_code} {message}')
-    return resp.json()
+    result: dict[str, Any] = resp.json()
+    return result
 
 
 def _start_body(args: argparse.Namespace) -> dict[str, Any]:
