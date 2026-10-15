@@ -333,12 +333,40 @@ def test_a_failing_shutdown_step_does_not_skip_the_ones_after_it(
     assert _normalized(world.events)[len(EXPECTED_STARTUP) :] == EXPECTED_SHUTDOWN
 
 
-def test_a_failing_cpu_pool_shutdown_is_not_guarded_and_ends_the_shutdown(world: World) -> None:
+def test_a_failing_cpu_pool_shutdown_is_logged_by_step_and_skips_nothing(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    logged: list[tuple[str, dict[str, Any]]] = []
+    monkeypatch.setattr(
+        lifespan_module.logger, 'warning', lambda event, **kw: logged.append((event, kw))
+    )
     world.fail = {'cpu_executor_shutdown'}
-    with pytest.raises(RuntimeError, match='cpu_executor_shutdown failed'):
-        _run_lifespan()
-    assert 'triton_clients_close' not in world.events
-    assert 'opensearch_close' not in world.events
+    _run_lifespan()
+    assert _normalized(world.events)[len(EXPECTED_STARTUP) :] == EXPECTED_SHUTDOWN
+    assert (
+        'shutdown_step_failed',
+        {'step': 'cpu_executor', 'error': 'cpu_executor_shutdown failed'},
+    ) in logged
+
+
+@pytest.mark.parametrize('failing', ['project_registry_shutdown', 'config_store_shutdown'])
+def test_a_failing_background_stop_does_not_skip_the_rest(world: World, failing: str) -> None:
+    world.fail = {failing}
+    _run_lifespan()
+    assert _normalized(world.events)[len(EXPECTED_STARTUP) :] == EXPECTED_SHUTDOWN
+
+
+def test_a_failing_background_job_stop_does_not_skip_the_rest(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def boom(_jobs: list[Any]) -> None:
+        world.events.append('stop_background_jobs:boom')
+        raise RuntimeError('jobs stuck')
+
+    monkeypatch.setattr('src.services.curation.background_jobs.stop_background_jobs', boom)
+    _run_lifespan()
+    tail = _normalized(world.events)[len(EXPECTED_STARTUP) :]
+    assert tail == ['stop_background_jobs:boom', *EXPECTED_SHUTDOWN[1:]]
 
 
 def test_startup_failures_before_serving_propagate(world: World) -> None:

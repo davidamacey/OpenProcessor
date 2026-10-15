@@ -399,6 +399,13 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Fixed
 
+- Visual-search ingest (#318): a face response with fewer landmark entries than faces no longer
+  raises `IndexError` and fails the whole batch. Only the affected image is refused, with the
+  reason `face_landmarks_length_mismatch`; the single-image face paths report the same reason.
+- App shutdown (#319): each lifespan shutdown step (background tasks, pools, executors, Triton and
+  OpenSearch clients) now runs independently; a failing step is logged as `shutdown_step_failed`
+  with its step name and no longer skips the steps after it.
+
 - An outage no longer reads as an empty answer. Project counts (`/projects`, `/projects/{project}/stats`
   `images`, `items`, `pending_detection`, `holdout_items`) are `null` when OpenSearch could not be
   counted, not `0`. Training preflight warns "pending ingest could not be counted" instead of "no
