@@ -197,6 +197,55 @@ def test_per_box_accept_and_reject_keys_patch_immediately_without_removing_from_
     assert not errors, f"no pageerror expected: {errors[:3]}"
 
 
+def test_keys_pressed_while_a_box_write_is_in_flight_are_applied_in_order(
+    stub, page, app_url
+):
+    """The write for the first key is held in the browser, so the next keys
+    land while it is in flight (what a loaded CI runner does by chance). They
+    must queue, not be dropped."""
+    patches: list[tuple[str, dict]] = []
+    page.add_init_script(
+        """
+        const realFetch = window.fetch;
+        window.fetch = async (input, init) => {
+          const res = await realFetch(input, init);
+          if ((init?.method ?? 'GET') === 'PATCH') await new Promise((r) => setTimeout(r, 600));
+          return res;
+        };
+        """
+    )
+    _setup(
+        stub,
+        lambda: multibox_item([_box("b1", "proposed", _BOX_A), _box("b2", "proposed", _BOX_B)]),
+    )
+
+    def region_patch(request, match):
+        box_id = match.group(2)
+        body = request.post_data_json or {}
+        patches.append((box_id, body))
+        boxes = [
+            _box("b1", body.get("state", "proposed") if box_id == "b1" else "rejected", _BOX_A),
+            _box("b2", body.get("state", "proposed") if box_id == "b2" else "proposed", _BOX_B),
+        ]
+        return (200, {"crop_id": "tag-mb-1", "box": boxes[0], "updated_fields": ["state"], "item": multibox_item(boxes)})
+
+    stub.on("PATCH", r"/crops/([^/]+)/regions/([^/]+)$", region_patch)
+
+    page.goto(f"{app_url}/p/default/review?tab={REGION_TAB_URL_ID}")
+    page.get_by_test_id("multibox-canvas").first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    wait_for_paint(page)
+    expect(page.get_by_test_id("queue-counter").first).to_have_text(
+        re.compile(r"#\d+"), timeout=ACTION_TIMEOUT_MS
+    )
+
+    with expect_handled(page, lambda r: r.method == "PATCH" and r.url.endswith("/regions/b2"), timeout=ACTION_TIMEOUT_MS):
+        page.keyboard.press("r")
+        page.keyboard.press("Tab")
+        page.keyboard.press("y")
+
+    assert [(p[0], p[1]["state"]) for p in patches] == [("b1", "rejected"), ("b2", "accepted")], patches
+
+
 def test_added_box_and_untouched_sibling_are_both_sent_in_one_confirm_write(
     stub, page, app_url
 ):
