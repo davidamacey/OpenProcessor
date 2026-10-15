@@ -406,6 +406,12 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 - App shutdown (#319): each lifespan shutdown step (background tasks, pools, executors, Triton and
   OpenSearch clients) now runs independently; a failing step is logged as `shutdown_step_failed`
   with its step name and no longer skips the steps after it.
+- `make cluster-gpu` renders again on Compose 2.29.7 (#315): the auto-label worker states its
+  2 GB memory floor under `deploy.resources.reservations`, which the GPU overlay extends, instead of
+  `mem_reservation`, which Compose rejects next to it. A new test renders every compose file
+  combination the Makefile and CLI use.
+- The `vlm use` interrupt test passes when pytest is started in the background (#304): the child
+  inherited an ignored SIGINT, which bash cannot trap; the test now restores the default.
 
 - An outage no longer reads as an empty answer. Project counts (`/projects`, `/projects/{project}/stats`
   `images`, `items`, `pending_detection`, `holdout_items`) are `null` when OpenSearch could not be
