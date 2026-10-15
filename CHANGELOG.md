@@ -17,6 +17,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 - `make pe-build-trt` (`export/build_pe_trt.sh`, #277) no longer ships an FP32 engine silently: a failed or FP32-falling-back FP16 bake, a failed FP16 build or a failed uint8 input step now exits 4 with the cause. `ALLOW_FP32=1` opts in to an FP32 engine knowingly.
 
 ### Added
+- `scripts/docs/check_docs_vs_code.py` gains an `envnames` check: a non-`OP_` variable a doc names in a code span, on a line about env or variables, must be read by a compose file, script or code (#287).
 - Example prompt pack `examples/prompt_packs/general_objects.json`: the generic item prompts plus three domain-neutral item attributes (`brand`, `colour`, `material`) for COCO-style objects; validated by the pack validation in a test.
 - `GET /clusters` cards serve `subcluster_ids` (the sorted sub-cluster ids, at most 200; `n_subclusters` stays the exact count).
 - The item wire serves the accuracy audit state (#166): `audit_sample`, `audit_batch_id`, `audit_sampled_at`, `audit_label_name`, `audit_label_source`, `audit_outcome` and `audit_human_name` (null for an item never drawn), so `GET /audit/queue` items can show the machine label they were drawn with.
