@@ -83,6 +83,13 @@ export interface ItemWire {
   excluded_reason: string | null;
   excluded_at: string | null;
   review_dismissed_at: string | null;
+  audit_sample: boolean | null;
+  audit_batch_id: string | null;
+  audit_sampled_at: string | null;
+  audit_label_name: string | null;
+  audit_label_source: string | null;
+  audit_outcome: string | null;
+  audit_human_name: string | null;
   source: string;
   test_holdout: boolean;
   crop_rank_in_image: number | null;
@@ -204,6 +211,13 @@ export const ITEM_WIRE_KEYS = [
   'excluded_reason',
   'excluded_at',
   'review_dismissed_at',
+  'audit_sample',
+  'audit_batch_id',
+  'audit_sampled_at',
+  'audit_label_name',
+  'audit_label_source',
+  'audit_outcome',
+  'audit_human_name',
   'source',
   'test_holdout',
   'crop_rank_in_image',

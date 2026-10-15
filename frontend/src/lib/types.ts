@@ -50,6 +50,12 @@ export interface Crop {
    *  (which a VLM or a human may overwrite). Null when the detector gave
    *  none, and on items stored before it was kept. */
   detector_class_name?: string | null;
+  /** Accuracy audit state (#119): see `RawCrop`. */
+  audit_sample?: boolean | null;
+  audit_label_name?: string | null;
+  audit_label_source?: string | null;
+  audit_outcome?: string | null;
+  audit_human_name?: string | null;
   detector_class_id?: number | null;
   detector_confidence?: number | null;
   /** Where the class assignment came from — `human*`, the fixed VLM

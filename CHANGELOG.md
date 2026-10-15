@@ -12,6 +12,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 ## [Unreleased]
 
 ### Added
+- The item wire serves the accuracy audit state (#166): `audit_sample`, `audit_batch_id`, `audit_sampled_at`, `audit_label_name`, `audit_label_source`, `audit_outcome` and `audit_human_name` (null for an item never drawn), so `GET /audit/queue` items can show the machine label they were drawn with.
 - Cropwright **Assist…** (cluster page, one crop, one box, Matching items): a dialog to pick what the VLM sees (selected, all, a representative sample), the actions (classify, attributes, verify, segment) and the VLM and prompt pack, with the server's dry run; the cluster and sub-cluster label proposal card with the agreement, an explicit dry-run-first **Apply** and the `scope_changed` refusal; dashed "VLM suggests" attribute chips; and a **Region verification** switch (`region_verify`) on the VLM scope panel. See the guide [Selective VLM and segmenter assist](docs-site/docs/guides/selective-assist.mdx).
 
 - Pack attributes in whole-project VLM runs: `vlm_attributes=true` on `POST /pipeline/auto_label` and `/start` makes the VLM stage use the pack's combined `assist` call and store the item attributes in each item's `assist` slot. The region worker's combined call asks for the pack's item attributes on the items it classifies and writes them to `assist.attributes` too.

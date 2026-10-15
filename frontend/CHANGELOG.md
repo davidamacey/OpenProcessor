@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The audit queue shows, on each drawn crop, the machine label and its source the crop carried when it was drawn (`audit_label_name`, `audit_label_source`, now on the item wire, #166).
 - **Assist…** on the cluster page (the cluster or the open sub-cluster, or the selected crops), on one crop's details
   panel, on one box in `/review`, and on Matching items (a filter): a dialog that posts one assist run
   (`POST {prefix}/assist/runs`). It offers what the VLM sees (selected, all members, a seeded representative sample with

@@ -76,6 +76,13 @@ export type RawCrop = {
   classifier_raw_confidence?: number | null;
   proposal_name?: string | null;
   detector_class_name?: string | null;
+  /** Accuracy audit state: drawn into a sample, the machine label it carried
+   *  when drawn, and the verdict once a human labeled it. */
+  audit_sample?: boolean | null;
+  audit_label_name?: string | null;
+  audit_label_source?: string | null;
+  audit_outcome?: string | null;
+  audit_human_name?: string | null;
   detector_class_id?: number | null;
   detector_confidence?: number | null;
   vlm_confidence?: string | null;
@@ -178,6 +185,11 @@ export const RAW_CROP_KEYS = [
   'classifier_raw_confidence',
   'proposal_name',
   'detector_class_name',
+  'audit_sample',
+  'audit_label_name',
+  'audit_label_source',
+  'audit_outcome',
+  'audit_human_name',
   'detector_class_id',
   'detector_confidence',
   'vlm_confidence',
@@ -269,6 +281,11 @@ export function mapRawCrop(c: RawCrop): Crop {
     class_id: c.class_id ?? null,
     class_name: c.class_name ?? null,
     detector_class_name: c.detector_class_name ?? null,
+    audit_sample: c.audit_sample ?? null,
+    audit_label_name: c.audit_label_name ?? null,
+    audit_label_source: c.audit_label_source ?? null,
+    audit_outcome: c.audit_outcome ?? null,
+    audit_human_name: c.audit_human_name ?? null,
     detector_class_id: c.detector_class_id ?? null,
     detector_confidence: c.detector_confidence ?? null,
     class_source: c.class_source ?? null,
