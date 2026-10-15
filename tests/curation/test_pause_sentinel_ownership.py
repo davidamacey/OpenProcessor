@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from src.services.training import gpu_arbiter as ga
+from src.services.training import gpu_arbiter as ga, gpu_arbiter_docker, gpu_arbiter_policy
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -49,7 +49,7 @@ async def test_reconcile_with_no_active_run_keeps_the_cli_sentinel(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     sentinel = _cli_sentinel(tmp_path)
-    monkeypatch.setattr(ga, '_docker_client', lambda: None)
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: None)
     jobs = tmp_path / 'jobs'
     jobs.mkdir()
     await ga.reconcile_on_startup(train_jobs_dir=jobs, sentinel=sentinel)
@@ -61,9 +61,9 @@ async def test_reconcile_still_clears_its_own_sentinel(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     sentinel = tmp_path / 'pause.sentinel'
-    await ga.pause_gpu_worker(sentinel=sentinel)
+    await gpu_arbiter_policy.pause_gpu_worker(sentinel=sentinel)
     assert json.loads(sentinel.read_text())['owner'] == 'arbiter'
-    monkeypatch.setattr(ga, '_docker_client', lambda: None)
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: None)
     await ga.reconcile_on_startup(train_jobs_dir=tmp_path / 'none', sentinel=sentinel)
     assert not sentinel.exists()
 
@@ -72,7 +72,7 @@ async def test_reconcile_still_clears_its_own_sentinel(
 async def test_a_legacy_empty_sentinel_is_still_the_arbiters_to_clear(tmp_path: Path) -> None:
     sentinel = tmp_path / 'pause.sentinel'
     sentinel.touch()
-    await ga.resume_gpu_worker(sentinel=sentinel)
+    await gpu_arbiter_policy.resume_gpu_worker(sentinel=sentinel)
     assert not sentinel.exists()
 
 
@@ -84,7 +84,7 @@ async def test_a_stale_foreign_sentinel_is_cleared_so_an_orphan_cannot_pause_for
     monkeypatch.setenv('OP_PAUSE_SENTINEL_TTL_S', '60')
     old = time.time() - 3600
     os.utime(sentinel, (old, old))
-    res = await ga.resume_gpu_worker(sentinel=sentinel)
+    res = await gpu_arbiter_policy.resume_gpu_worker(sentinel=sentinel)
     assert res.action == 'sentinel_cleared'
     assert not sentinel.exists()
 
@@ -92,7 +92,7 @@ async def test_a_stale_foreign_sentinel_is_cleared_so_an_orphan_cannot_pause_for
 @pytest.mark.asyncio
 async def test_a_fresh_foreign_sentinel_survives_resume(tmp_path: Path) -> None:
     sentinel = _cli_sentinel(tmp_path)
-    res = await ga.resume_gpu_worker(sentinel=sentinel)
+    res = await gpu_arbiter_policy.resume_gpu_worker(sentinel=sentinel)
     assert res.action == 'noop'
     assert sentinel.exists()
 

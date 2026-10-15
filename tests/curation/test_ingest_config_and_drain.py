@@ -36,7 +36,7 @@ def _client(fake: AsyncMock) -> TestClient:
 
 
 def test_ingest_config_is_typed_and_reflects_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_config_mod
 
     monkeypatch.setenv('OP_UPLOAD_MAX_IMAGES_PER_REQUEST', '7')
     monkeypatch.setenv('OP_UPLOAD_MAX_BYTES_PER_REQUEST', '1000')

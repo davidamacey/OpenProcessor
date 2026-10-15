@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel
 
 from scripts.curation._project_worker_utils import PIPELINE_PAUSED_FLAG_NAME
-from src.config.curation import get_curation_config
+from src.config.curation_accessors import get_curation_config
 from src.routers.curation._common import router
 
 
@@ -43,7 +43,7 @@ def _global_gpu_training_reason() -> str | None:
     """Best-effort: is the trainer's single-GPU claim (§ gpu_arbiter) live
     right now? Never fatal -- an unreadable lock file just reports no
     global pause, same as no lock at all."""
-    from src.services.training.gpu_arbiter import read_training_lock
+    from src.services.training.gpu_arbiter_policy import read_training_lock
 
     lock = read_training_lock()
     if lock is None:

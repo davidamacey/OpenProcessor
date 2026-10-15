@@ -10,7 +10,7 @@ Exposes:
 - ``GET {prefix}/crops/{id}/region_thumbnail``  — region-of-interest sub-bbox thumbnail
 
 Exports **two** routers — ``router`` (images) and ``crops_router``
-(crops), registered separately in ``src/main.py`` rather than nesting one
+(crops), registered separately in ``src/app/factory.py`` rather than nesting one
 under the other.
 """
 

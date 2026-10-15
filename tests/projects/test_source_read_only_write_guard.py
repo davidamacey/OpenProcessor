@@ -31,7 +31,8 @@ import pytest
 
 from src.config.project_context import try_current_project
 from src.services.projects import lifecycle
-from src.services.projects.guard import ProjectReadOnly, check_request
+from src.services.projects.guard_errors import ProjectReadOnly
+from src.services.projects.guard_policy import check_request
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
 from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes
@@ -39,7 +40,7 @@ from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes
 
 @pytest.fixture(autouse=True)
 def _env(tmp_path, monkeypatch):
-    import src.config.curation as curation_mod
+    import src.config.curation_accessors as curation_mod
     from src.services.projects import capacity as capacity_mod
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))

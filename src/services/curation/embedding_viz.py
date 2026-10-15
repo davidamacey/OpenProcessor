@@ -3,13 +3,13 @@
 Non-negotiable design rules:
 
 1. **Own persisted state slot.** Never touches
-   ``embedding_reduce.umap_state_joblib_path{,_cuml}()`` or the
+   ``umap_state.umap_state_joblib_path{,_cuml}()`` or the
    ``op_umap_state`` index — those belong to the *retired* clustering
    reducer (UMAP collapsed most of the residual pool into one
    mega-cluster and was retired for clustering). This module's state
    lives at ``umap_viz_state.joblib``
    (disk) and the ``op_umap_viz_state`` index — deliberately distinct
-   names, never imported by/from ``embedding_reduce.py`` /
+   names, never imported by/from ``embedding_reduce.py`` / ``umap_state.py`` /
    ``routers/curation/umap.py`` / ``clustering/orchestrator.py`` /
    ``clustering/methods/``.
 2. **Never fits on a request path.** ``fit_projection`` (the only
@@ -34,7 +34,7 @@ Non-negotiable design rules:
 Embedding fetch reuses the two existing helpers rather than a third
 scroll/PIT-fetch implementation: ``scope='residual'``
 delegates to
-:func:`src.services.curation.clustering.embedding_reduce.fetch_residual_embeddings_parallel`
+:func:`src.services.curation.clustering.residual_fetch.fetch_residual_embeddings_parallel`
 (same pool + ``CONFIDENT_CLASS_SOURCES``/``class_excluded`` gate
 ``item_scores.job`` uses); ``scope='cluster'`` delegates to
 :func:`src.services.curation.selection.pool_fetch.fetch_pool_embeddings`
@@ -64,7 +64,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from src.config import get_curation_config
-from src.config.curation import items_index, umap_viz_state_index
+from src.config.curation_accessors import items_index, umap_viz_state_index
 from src.config.env import env_path
 from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
@@ -81,20 +81,20 @@ logger = get_logger(__name__)
 
 # Run metadata goes to its own index, ``umap_viz_state_index()`` --
 # deliberately NOT the retired clustering reducer's index
-# (embedding_reduce.py) -- routed through CurationConfig like every other
+# (umap_state.py) -- routed through CurationConfig like every other
 # index name so a deployment renaming its indexes via env vars doesn't
 # leave this one behind.
 
 
 def viz_state_joblib_path() -> str:
-    """The bound project's state dir (same one embedding_reduce.py
+    """The bound project's state dir (same one umap_state.py
     reads), but a distinct filename -- never umap_state.joblib /
     umap_state_cuml.joblib."""
     return str(Path(get_curation_config().project_state_dir) / 'umap_viz_state.joblib')
 
 
 # Viz-only UMAP hyperparameters. min_dist is higher than the clustering
-# reducer's 0.0 (UMAP_MIN_DIST in embedding_reduce.py) -- a viz scatter
+# reducer's 0.0 (UMAP_MIN_DIST in pool_size.py) -- a viz scatter
 # benefits from a bit more visual spread between points; this has zero
 # effect on clustering since nothing here ever feeds cluster_id.
 VIZ_N_COMPONENTS = 2
@@ -298,7 +298,7 @@ async def _fetch_pool(
         return ids, embeddings
 
     # Remaining branch: scope is 'residual' (the only other value start_job accepts).
-    from src.services.curation.clustering.embedding_reduce import fetch_residual_embeddings_parallel
+    from src.services.curation.clustering.residual_fetch import fetch_residual_embeddings_parallel
 
     ids, embeddings = await fetch_residual_embeddings_parallel(
         opensearch,

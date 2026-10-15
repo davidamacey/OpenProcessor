@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from scripts.curation.worker.runtime import RuntimeHolder, applied_config_revision, current_want
-from src.services.config_store.store import ConfigSnapshot
+from src.services.config_store.snapshot import ConfigSnapshot
 
 
 def _store(current_revision: int, pending_revision: int | None = None) -> Any:

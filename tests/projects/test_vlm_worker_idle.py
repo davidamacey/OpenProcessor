@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import pytest
 
-from scripts.curation import vlm_worker
+from scripts.curation import vlm_cli, vlm_worker
 from scripts.curation._vlm_activity import IDLE_BACKOFF_MAX_S, idle_backoff_s
 from src.config.project_context import try_current_project
 from tests.projects.test_worker_leak import SLUGS, _http_world, _items_index, _record
@@ -69,7 +69,7 @@ def _world(
 
 
 def _args() -> Any:
-    return vlm_worker.parse_args(
+    return vlm_cli.parse_args(
         ['--until-empty', '--vlm-batch-size', '4', '--concurrency', '2', '--poll-interval', '0']
     )
 

@@ -17,7 +17,7 @@ from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes, seed_default
 
 @pytest.fixture(autouse=True)
 def _reset_registry(tmp_path, monkeypatch):
-    import src.config.curation as curation_mod
+    import src.config.curation_accessors as curation_mod
     from src.services.projects import capacity as capacity_mod
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
@@ -107,7 +107,7 @@ def test_write_record_create_op_type_refuses_second_writer() -> None:
     see the module docstring): two writes of the *same* building record
     with ``op_type='create'`` for one slug must let exactly one through,
     even though both pass an identical in-memory precondition check."""
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import ProjectRecord, resources_for_new
 
     client = FakeLifecycleOpenSearch()
@@ -350,7 +350,7 @@ def test_create_cloning_from_a_building_source_is_refused() -> None:
     """m9: only active/archived projects can be cloned from."""
     client = FakeLifecycleOpenSearch()
     _registry_for(client)
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import ProjectRecord, resources_for_new
     from src.services.projects.registry import write_record as raw_write_record
 
@@ -400,7 +400,7 @@ def test_write_record_is_visible_to_a_search_immediately_after_create() -> None:
 
     from datetime import UTC, datetime
 
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import ProjectRecord, resources_for_new
 
     now = datetime.now(UTC).isoformat()

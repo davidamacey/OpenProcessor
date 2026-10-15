@@ -87,7 +87,7 @@ def per_project_shards() -> int:
     today -- computed from ``resources_for_new`` rather than
     hardcoded, so this tracks reality as roles are added/folded (a planned fold of two roles into
     ``configs`` has not landed, so this is currently 7, not 6)."""
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import resources_for_new
 
     resources = resources_for_new('__capacity_probe__', base_curation_config())

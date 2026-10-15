@@ -17,7 +17,7 @@ from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes
 
 @pytest.fixture(autouse=True)
 def _env(tmp_path, monkeypatch):
-    import src.config.curation as curation_mod
+    import src.config.curation_accessors as curation_mod
     from src.services.projects import capacity as capacity_mod
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
@@ -49,7 +49,7 @@ def test_project_stats_counts_and_disk() -> None:
     record = registry.get('cars')
     assert record is not None
 
-    from src.config.curation import items_index
+    from src.config.curation_accessors import items_index
 
     with bind_project(record):
         client.indexes[items_index()] = [{'item_id': '1'}, {'item_id': '2'}]
@@ -75,7 +75,7 @@ class _TermAwareClient(FakeLifecycleOpenSearch):
 
 def test_project_stats_reads_real_holdout_models_and_class_registry(tmp_path, monkeypatch) -> None:
     from src.clients.curation_opensearch.registry import ClassRegistry
-    from src.config.curation import items_index
+    from src.config.curation_accessors import items_index
 
     models = tmp_path / 'models'
     for name, owner in (

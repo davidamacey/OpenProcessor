@@ -44,298 +44,27 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from src.config.region_rejection import REJECT_REASON_SANITY_PREFIX
 from src.config.region_state import PENDING_STATUSES, RegionStatus
-from src.domain.region_boxes import RegionBox, read_boxes
-from src.services.curation.export_support import scroll_hits
-from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
+from src.services.curation.region_eval_data import (
+    CohortImage,
+    RegionRecord,
+    fetch_regions,
+    normalize_status,
+    resolve_image_ids,
+)
+from src.services.curation.region_eval_geometry import greedy_match, iou
 
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Iterable, Sequence
+    from collections.abc import Awaitable, Callable, Iterable
 
     from src.config.curation import CurationConfig
     from src.config.region_fields import RegionFields
+    from src.services.curation.region_eval_geometry import Box
 
-
-Box = tuple[float, float, float, float]
 
 DEFAULT_ACCEPTED_STATUSES: tuple[str, ...] = (RegionStatus.DETECTED.value,)
 PENDING_VALUES: frozenset[str] = frozenset(s.value for s in PENDING_STATUSES)
-SOURCE_FRAMES: frozenset[str] = frozenset({'source'})
-CROP_FRAMES: frozenset[str] = frozenset({'crop', 'item'})
-NO_STATUS = '(none)'
-NO_DETECTOR = '(none)'
-TERMS_CHUNK = 1000
-
-
-class RegionFrameError(ValueError):
-    """A region box is stored in a coordinate frame this evaluator cannot map."""
-
-
-# =============================================================================
-# Geometry
-# =============================================================================
-
-
-def as_box(value: Any) -> Box | None:
-    """``[x1, y1, x2, y2]`` -> tuple, or None when absent / malformed / degenerate."""
-    if not isinstance(value, (list, tuple)) or len(value) != 4:
-        return None
-    try:
-        x1, y1, x2, y2 = (float(v) for v in value)
-    except (TypeError, ValueError):
-        return None
-    if x2 <= x1 or y2 <= y1:
-        return None
-    return (x1, y1, x2, y2)
-
-
-def iou(a: Box, b: Box) -> float:
-    ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
-    iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
-    inter = ix * iy
-    if inter <= 0.0:
-        return 0.0
-    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
-    return inter / union if union > 0.0 else 0.0
-
-
-def yolo_to_xyxy(cx: float, cy: float, w: float, h: float) -> Box:
-    """YOLO ``cx, cy, w, h`` (normalized) -> ``x1, y1, x2, y2``, clamped to 0..1."""
-
-    def _c(v: float) -> float:
-        return min(max(v, 0.0), 1.0)
-
-    return (_c(cx - w / 2), _c(cy - h / 2), _c(cx + w / 2), _c(cy + h / 2))
-
-
-def parse_yolo_labels(text: str, class_ids: Iterable[int] | None = None) -> list[Box]:
-    """Parse a YOLO label file into normalized xyxy boxes.
-
-    Detection rows (``cls cx cy w h``) and segmentation rows (``cls x1 y1 x2
-    y2 ...``, reduced to their bounding box) are both accepted. ``class_ids``
-    keeps only those classes (``None`` = every row).
-    """
-    wanted = None if class_ids is None else {int(c) for c in class_ids}
-    out: list[Box] = []
-    for line in text.splitlines():
-        parts = line.split()
-        if not parts or parts[0].startswith('#'):
-            continue
-        try:
-            cls = int(float(parts[0]))
-            nums = [float(v) for v in parts[1:]]
-        except ValueError:
-            continue
-        if wanted is not None and cls not in wanted:
-            continue
-        if len(nums) == 4:
-            box = yolo_to_xyxy(*nums)
-        elif len(nums) >= 6 and len(nums) % 2 == 0:
-            xs, ys = nums[0::2], nums[1::2]
-            box = (min(xs), min(ys), max(xs), max(ys))
-        else:
-            continue
-        if box[2] > box[0] and box[3] > box[1]:
-            out.append(box)
-    return out
-
-
-def greedy_match(
-    gt: Sequence[Box], pred: Sequence[Box], thr: float
-) -> list[tuple[int, int, float]]:
-    """One-to-one matching: highest-IoU pairs first, each box used once, IoU >= ``thr``."""
-    pairs = sorted(
-        (
-            (v, gi, pi)
-            for gi, g in enumerate(gt)
-            for pi, p in enumerate(pred)
-            if (v := iou(g, p)) >= thr and v > 0.0
-        ),
-        reverse=True,
-    )
-    used_g: set[int] = set()
-    used_p: set[int] = set()
-    out = []
-    for v, gi, pi in pairs:
-        if gi in used_g or pi in used_p:
-            continue
-        used_g.add(gi)
-        used_p.add(pi)
-        out.append((gi, pi, v))
-    return out
-
-
-def to_source_frame(box: Box, frame: str | None, item_box: Box | None) -> Box:
-    """Map a stored region box to source-frame coordinates, or refuse."""
-    if frame is None or frame in SOURCE_FRAMES:
-        return box
-    if frame in CROP_FRAMES:
-        if item_box is None:
-            raise RegionFrameError(
-                f'region box is in frame {frame!r} but its item has no bbox_norm to map it through'
-            )
-        return crop_norm_to_source_norm(box, item_box)
-    raise RegionFrameError(
-        f'unknown region bbox frame {frame!r} (known: '
-        f'{sorted(SOURCE_FRAMES | CROP_FRAMES)}); refusing to score boxes in an unknown '
-        'coordinate system'
-    )
-
-
-# =============================================================================
-# Cohort + index reads
-# =============================================================================
-
-
-@dataclass
-class CohortImage:
-    """One ground-truth frame. ``key`` is the local path the dataset is read from."""
-
-    key: str
-    server_path: str
-    gt: list[Box]
-    split: str = ''
-    image_id: str | None = None
-
-    @property
-    def positive(self) -> bool:
-        return bool(self.gt)
-
-
-@dataclass
-class RegionRecord:
-    crop_id: str
-    status: str
-    detector: str
-    score: float | None
-    box: Box | None  # source frame; None when the item carries no region box
-
-
-def normalize_status(raw: Any) -> str:
-    if raw is None or raw == '':
-        return NO_STATUS
-    return str(raw.value if isinstance(raw, RegionStatus) else raw)
-
-
-# Per-box ``state`` -> the RegionStatus-shaped vocabulary this
-# evaluator has always scored against. ``proposed`` (awaiting verification)
-# is treated as a pending value, same as the item-level pending statuses.
-_BOX_STATE_TO_STATUS: dict[str, str] = {
-    'accepted': RegionStatus.DETECTED.value,
-    'rejected': RegionStatus.VERIFY_REJECTED.value,
-    RegionStatus.FALSE_POSITIVE.value: RegionStatus.FALSE_POSITIVE.value,
-    'proposed': RegionStatus.PENDING_VERIFICATION.value,
-}
-
-
-def _box_status(box: RegionBox) -> str:
-    """The status a box is scored under. A box a sanity gate rejected
-    (``sanity_reject:<why>``) is an item-level ``detection_failed``, not a
-    verifier ``verify_rejected`` -- the two are different failures."""
-    if box.state == 'rejected' and (box.rejection_reason or '').startswith(
-        REJECT_REASON_SANITY_PREFIX
-    ):
-        return RegionStatus.DETECTION_FAILED.value
-    return _BOX_STATE_TO_STATUS.get(box.state, box.state)
-
-
-def region_records(
-    src: dict[str, Any], fields: RegionFields, doc_id: str = ''
-) -> list[RegionRecord]:
-    """One :class:`RegionRecord` per box in the item's ``region_boxes`` list.
-
-    An item with no boxes at all (still pending, or a terminal box-less
-    status like ``no_region_visible`` / ``detection_failed``) falls back to
-    a single box-less record built from the item-level
-    ``RegionFields.status`` field -- the only case where a region status
-    exists without any entry in the box list.
-    """
-    crop_id = str(src.get('crop_id') or doc_id)
-    boxes = read_boxes(src, fields)
-    if not boxes:
-        return [
-            RegionRecord(
-                crop_id=crop_id,
-                status=normalize_status(src.get(fields.status)),
-                detector=NO_DETECTOR,
-                score=None,
-                box=None,
-            )
-        ]
-    return [
-        RegionRecord(
-            crop_id=crop_id,
-            status=_box_status(b),
-            detector=str(b.detector or NO_DETECTOR),
-            score=b.score,
-            box=as_box(list(b.bbox_norm)),
-        )
-        for b in boxes
-    ]
-
-
-def _chunks(values: list[str], n: int = TERMS_CHUNK) -> Iterable[list[str]]:
-    for i in range(0, len(values), n):
-        yield values[i : i + n]
-
-
-async def resolve_image_ids(
-    opensearch: Any, cohort: list[CohortImage], *, config: CurationConfig
-) -> None:
-    """Fill ``image_id`` from the images index for entries that lack one."""
-    todo = sorted({c.server_path for c in cohort if not c.image_id})
-    found: dict[str, str] = {}
-    for chunk in _chunks(todo):
-        hits = await scroll_hits(
-            opensearch,
-            index=config.images_index,
-            query={'terms': {'image_path': chunk}},
-            source=['image_id', 'image_path'],
-        )
-        for hit in hits:
-            src = hit.get('_source') or {}
-            if src.get('image_path') and src.get('image_id'):
-                found[str(src['image_path'])] = str(src['image_id'])
-    for c in cohort:
-        if not c.image_id:
-            c.image_id = found.get(c.server_path)
-
-
-async def fetch_regions(
-    opensearch: Any,
-    image_ids: Iterable[str],
-    *,
-    config: CurationConfig,
-    fields: RegionFields,
-) -> dict[str, list[RegionRecord]]:
-    """Every item on the given frames, as region records keyed by image_id."""
-    source = [
-        'crop_id',
-        'image_id',
-        'image_path',
-        'bbox_norm',
-        fields.status,
-        fields.boxes,
-    ]
-    out: dict[str, list[RegionRecord]] = defaultdict(list)
-    for chunk in _chunks(sorted(set(image_ids))):
-        hits = await scroll_hits(
-            opensearch,
-            index=config.items_index,
-            query={'terms': {'image_id': chunk}},
-            source=source,
-        )
-        for hit in hits:
-            src = hit.get('_source') or {}
-            out[str(src.get('image_id'))].extend(region_records(src, fields, str(hit.get('_id'))))
-    return dict(out)
-
-
-# =============================================================================
-# Scoring
-# =============================================================================
 
 
 @dataclass
@@ -429,6 +158,178 @@ class EvalResult:
         return int(self.summary['total']['pending_images'])
 
 
+@dataclass
+class _EvalRun:
+    """Accumulators one :func:`evaluate` pass fills image by image."""
+
+    tallies: dict[str, _Tally] = field(default_factory=lambda: defaultdict(_Tally))
+    status_items: Counter[str] = field(default_factory=Counter)
+    status_boxes: Counter[str] = field(default_factory=Counter)
+    rejected_hits: Counter[str] = field(default_factory=Counter)
+    misses: list[dict[str, Any]] = field(default_factory=list)
+    fps: list[dict[str, Any]] = field(default_factory=list)
+
+
+def _bump(groups: list[_Tally], attr: str, n: int = 1) -> None:
+    for t in groups:
+        setattr(t, attr, getattr(t, attr) + n)
+
+
+def _count_statuses(run: _EvalRun, records: list[RegionRecord]) -> None:
+    for r in records:
+        run.status_items[r.status] += 1
+        if r.box is not None:
+            run.status_boxes[r.status] += 1
+
+
+def _tally_matches(
+    groups: list[_Tally],
+    preds: list[RegionRecord],
+    matched: list[tuple[int, int, float]],
+) -> set[int]:
+    """Add the matched IoU mass and per-detector counts; returns matched prediction indices."""
+    for t in groups:
+        t.iou_sum += sum(v for _g, _p, v in matched)
+    matched_p = {p for _g, p, _v in matched}
+    for pi, r in enumerate(preds):
+        for t in groups:
+            t.by_detector[r.detector]['predictions'] += 1
+            t.by_detector[r.detector]['tp'] += int(pi in matched_p)
+    return matched_p
+
+
+def _false_positive_rows(
+    img: CohortImage, preds: list[RegionRecord], matched_p: set[int]
+) -> list[dict[str, Any]]:
+    return [
+        {
+            'split': img.split,
+            'image': img.key,
+            'server_path': img.server_path,
+            'background': not img.positive,
+            'crop_id': r.crop_id,
+            'detector': r.detector,
+            'score': r.score,
+            'box': list(r.box or ()),
+            'best_gt_iou': round(max((iou(g, r.box) for g in img.gt), default=0.0), 4)
+            if r.box
+            else 0.0,
+        }
+        for pi, r in enumerate(preds)
+        if pi not in matched_p
+    ]
+
+
+def _miss_row(
+    img: CohortImage,
+    gt_box: Box,
+    *,
+    preds: list[RegionRecord],
+    pred_boxes: list[Box],
+    others: list[RegionRecord],
+    has_records: bool,
+    iou_threshold: float,
+    rejected_hits: Counter[str],
+) -> dict[str, Any]:
+    """Why one unmatched GT box was missed (counts a rejected-but-boxed hit)."""
+    best = max(
+        ((iou(gt_box, b), r) for r, b in zip(preds, pred_boxes, strict=True)),
+        default=None,
+        key=lambda t: t[0],
+    )
+    best_other = max(
+        ((iou(gt_box, r.box), r) for r in others if r.box), default=None, key=lambda t: t[0]
+    )
+    if not has_records:
+        reason = 'no_items'
+    elif best_other is not None and best_other[0] >= iou_threshold:
+        reason = f'status:{best_other[1].status}'
+        rejected_hits[best_other[1].status] += 1
+    elif best is not None and best[0] > 0.0:
+        reason = 'low_iou'
+    else:
+        reason = 'no_region'
+    return {
+        'split': img.split,
+        'image': img.key,
+        'server_path': img.server_path,
+        'image_id': img.image_id,
+        'gt_box': [round(v, 6) for v in gt_box],
+        'reason': reason,
+        'best_iou': round(best[0], 4) if best else 0.0,
+        'best_box': list(best[1].box or ()) if best else None,
+        'best_detector': best[1].detector if best else None,
+        'best_other_status': best_other[1].status if best_other else None,
+        'best_other_iou': round(best_other[0], 4) if best_other else None,
+    }
+
+
+def _score_image(
+    run: _EvalRun,
+    img: CohortImage,
+    regions: dict[str, list[RegionRecord]],
+    *,
+    accepted_set: set[str],
+    iou_threshold: float,
+    dedup_iou: float,
+) -> None:
+    tallies = run.tallies
+    groups = [tallies['total'], tallies[f'split:{img.split}']] if img.split else [tallies['total']]
+    n_gt = len(img.gt)
+    _bump(groups, 'images')
+    _bump(groups, 'positives' if img.positive else 'backgrounds')
+    _bump(groups, 'gt_boxes', n_gt)
+    if not img.image_id:
+        _bump(groups, 'not_ingested')
+        return
+    records = regions.get(img.image_id, [])
+    _count_statuses(run, records)
+    if any(r.status in PENDING_VALUES for r in records):
+        _bump(groups, 'pending_images')
+        _bump(groups, 'pending_gt_boxes', n_gt)
+        return
+    if not records:
+        _bump(groups, 'no_item_images')
+        _bump(groups, 'no_item_gt_boxes', n_gt)
+
+    preds, merged = dedup_predictions(
+        [r for r in records if r.status in accepted_set and r.box is not None], dedup_iou
+    )
+    others = [r for r in records if r.status not in accepted_set and r.box is not None]
+    pred_boxes = [r.box for r in preds if r.box is not None]
+    _bump(groups, 'evaluated_images')
+    _bump(groups, 'evaluated_gt_boxes', n_gt)
+    _bump(groups, 'predictions', len(preds))
+    _bump(groups, 'duplicates_merged', merged)
+    _bump(groups, 'tp_05', len(greedy_match(img.gt, pred_boxes, 0.5)))
+    matched = greedy_match(img.gt, pred_boxes, iou_threshold)
+    _bump(groups, 'tp', len(matched))
+    matched_p = _tally_matches(groups, preds, matched)
+    if not img.positive:
+        _bump(groups, 'evaluated_backgrounds')
+        if preds:
+            _bump(groups, 'backgrounds_with_detection')
+            _bump(groups, 'background_fp_regions', len(preds))
+    run.fps.extend(_false_positive_rows(img, preds, matched_p))
+
+    matched_g = {g for g, _p, _v in matched}
+    for gi, gt_box in enumerate(img.gt):
+        if gi in matched_g:
+            continue
+        run.misses.append(
+            _miss_row(
+                img,
+                gt_box,
+                preds=preds,
+                pred_boxes=pred_boxes,
+                others=others,
+                has_records=bool(records),
+                iou_threshold=iou_threshold,
+                rejected_hits=run.rejected_hits,
+            )
+        )
+
+
 def evaluate(
     cohort: list[CohortImage],
     regions: dict[str, list[RegionRecord]],
@@ -439,123 +340,19 @@ def evaluate(
 ) -> EvalResult:
     """Score the cohort. Pure — ``regions`` is :func:`fetch_regions`' output."""
     accepted_set = {normalize_status(s) for s in accepted}
-    tallies: dict[str, _Tally] = defaultdict(_Tally)
-    status_items: Counter[str] = Counter()
-    status_boxes: Counter[str] = Counter()
-    rejected_hits: Counter[str] = Counter()
-    misses: list[dict[str, Any]] = []
-    fps: list[dict[str, Any]] = []
-
+    run = _EvalRun()
     for img in cohort:
-        groups = (
-            [tallies['total'], tallies[f'split:{img.split}']] if img.split else [tallies['total']]
+        _score_image(
+            run,
+            img,
+            regions,
+            accepted_set=accepted_set,
+            iou_threshold=iou_threshold,
+            dedup_iou=dedup_iou,
         )
-        n_gt = len(img.gt)
 
-        def _bump(attr: str, n: int = 1, *, _groups: list[_Tally] = groups) -> None:
-            for t in _groups:
-                setattr(t, attr, getattr(t, attr) + n)
-
-        _bump('images')
-        _bump('positives' if img.positive else 'backgrounds')
-        _bump('gt_boxes', n_gt)
-        if not img.image_id:
-            _bump('not_ingested')
-            continue
-        records = regions.get(img.image_id, [])
-        for r in records:
-            status_items[r.status] += 1
-            if r.box is not None:
-                status_boxes[r.status] += 1
-        if any(r.status in PENDING_VALUES for r in records):
-            _bump('pending_images')
-            _bump('pending_gt_boxes', n_gt)
-            continue
-        if not records:
-            _bump('no_item_images')
-            _bump('no_item_gt_boxes', n_gt)
-
-        preds, merged = dedup_predictions(
-            [r for r in records if r.status in accepted_set and r.box is not None], dedup_iou
-        )
-        others = [r for r in records if r.status not in accepted_set and r.box is not None]
-        pred_boxes = [r.box for r in preds if r.box is not None]
-        _bump('evaluated_images')
-        _bump('evaluated_gt_boxes', n_gt)
-        _bump('predictions', len(preds))
-        _bump('duplicates_merged', merged)
-        _bump('tp_05', len(greedy_match(img.gt, pred_boxes, 0.5)))
-        matched = greedy_match(img.gt, pred_boxes, iou_threshold)
-        _bump('tp', len(matched))
-        for t in groups:
-            t.iou_sum += sum(v for _g, _p, v in matched)
-        matched_p = {p for _g, p, _v in matched}
-        for pi, r in enumerate(preds):
-            for t in groups:
-                t.by_detector[r.detector]['predictions'] += 1
-                t.by_detector[r.detector]['tp'] += int(pi in matched_p)
-        if not img.positive:
-            _bump('evaluated_backgrounds')
-            if preds:
-                _bump('backgrounds_with_detection')
-                _bump('background_fp_regions', len(preds))
-        for pi, r in enumerate(preds):
-            if pi not in matched_p:
-                fps.append(
-                    {
-                        'split': img.split,
-                        'image': img.key,
-                        'server_path': img.server_path,
-                        'background': not img.positive,
-                        'crop_id': r.crop_id,
-                        'detector': r.detector,
-                        'score': r.score,
-                        'box': list(r.box or ()),
-                        'best_gt_iou': round(max((iou(g, r.box) for g in img.gt), default=0.0), 4)
-                        if r.box
-                        else 0.0,
-                    }
-                )
-
-        matched_g = {g for g, _p, _v in matched}
-        for gi, g in enumerate(img.gt):
-            if gi in matched_g:
-                continue
-            best = max(
-                ((iou(g, b), r) for r, b in zip(preds, pred_boxes, strict=True)),
-                default=None,
-                key=lambda t: t[0],
-            )
-            best_other = max(
-                ((iou(g, r.box), r) for r in others if r.box), default=None, key=lambda t: t[0]
-            )
-            if not records:
-                reason = 'no_items'
-            elif best_other is not None and best_other[0] >= iou_threshold:
-                reason = f'status:{best_other[1].status}'
-                rejected_hits[best_other[1].status] += 1
-            elif best is not None and best[0] > 0.0:
-                reason = 'low_iou'
-            else:
-                reason = 'no_region'
-            misses.append(
-                {
-                    'split': img.split,
-                    'image': img.key,
-                    'server_path': img.server_path,
-                    'image_id': img.image_id,
-                    'gt_box': [round(v, 6) for v in g],
-                    'reason': reason,
-                    'best_iou': round(best[0], 4) if best else 0.0,
-                    'best_box': list(best[1].box or ()) if best else None,
-                    'best_detector': best[1].detector if best else None,
-                    'best_other_status': best_other[1].status if best_other else None,
-                    'best_other_iou': round(best_other[0], 4) if best_other else None,
-                }
-            )
-
-    misses.sort(key=lambda m: (m['best_iou'], m['image']))
-    total = tallies['total']
+    run.misses.sort(key=lambda m: (m['best_iou'], m['image']))
+    total = run.tallies['total']
     summary: dict[str, Any] = {
         'accepted_statuses': sorted(accepted_set),
         'iou_threshold': iou_threshold,
@@ -563,16 +360,17 @@ def evaluate(
         'total': total.metrics(iou_threshold),
         'splits': {
             k.removeprefix('split:'): t.metrics(iou_threshold)
-            for k, t in sorted(tallies.items())
+            for k, t in sorted(run.tallies.items())
             if k.startswith('split:')
         },
         'by_status': {
-            s: {'items': status_items[s], 'with_box': status_boxes[s]} for s in sorted(status_items)
+            s: {'items': run.status_items[s], 'with_box': run.status_boxes[s]}
+            for s in sorted(run.status_items)
         },
-        'missed_but_boxed_by_status': dict(sorted(rejected_hits.items())),
-        'miss_reasons': dict(sorted(Counter(m['reason'] for m in misses).items())),
+        'missed_but_boxed_by_status': dict(sorted(run.rejected_hits.items())),
+        'miss_reasons': dict(sorted(Counter(m['reason'] for m in run.misses).items())),
     }
-    return EvalResult(summary=summary, misses=misses, false_positives=fps)
+    return EvalResult(summary=summary, misses=run.misses, false_positives=run.fps)
 
 
 async def run_eval(
@@ -612,24 +410,3 @@ async def run_eval(
             result.summary['wait_timed_out'] = result.pending_images > 0 and wait_pending_s > 0
             return result
         await sleep(min(poll_interval_s, remaining))
-
-
-__all__ = [
-    'CROP_FRAMES',
-    'DEFAULT_ACCEPTED_STATUSES',
-    'NO_STATUS',
-    'CohortImage',
-    'EvalResult',
-    'RegionFrameError',
-    'RegionRecord',
-    'evaluate',
-    'fetch_regions',
-    'greedy_match',
-    'iou',
-    'parse_yolo_labels',
-    'region_records',
-    'resolve_image_ids',
-    'run_eval',
-    'to_source_frame',
-    'yolo_to_xyxy',
-]

@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient
 from curation.query_fakes import QueryFakeOpenSearch
 from curation.region_cascade_helpers import _drive_worker, _FakeOpenSearch, _item, _profile
 from src.config import get_region_fields
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.region_rejection import REJECT_REASON_HUMAN, REJECT_REASON_SANITY_PREFIX
 from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID

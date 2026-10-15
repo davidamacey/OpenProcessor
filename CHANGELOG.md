@@ -139,6 +139,13 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Changed
 
+- Repo cleanup, PR 6 (backend split by concern): every `src/` and `scripts/` file of 600 lines or more
+  is split into cohesive modules (routers, `src/main.py` into `src/app/`, the Triton and PE clients,
+  curation, projects, training and config-store services, `src/config/curation.py`, three scripts),
+  moved verbatim and imported from the new home with no re-exports; route order, the OpenAPI
+  contracts and behavior are unchanged. Twenty-three functions over complexity 15 are decomposed behind
+  characterization tests and leave the complexity baseline. `duplicate_detection/__init__.py` no
+  longer holds logic, and the two exporters share `export_models` and `export_writers`.
 - **BREAKING**: the Cropwright variables are now `OP_CROPWRIGHT_*`: `CROPWRIGHT_IMAGE`,
   `CROPWRIGHT_BIND_ADDRESS`, `CROPWRIGHT_PORT`, `CROPWRIGHT_INGEST_MAX_REQUEST_MB` and
   `CROPWRIGHT_DATASET_UPLOAD_MAX_MB` became `OP_CROPWRIGHT_IMAGE`, `OP_CROPWRIGHT_BIND_ADDRESS`,

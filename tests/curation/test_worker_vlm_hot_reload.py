@@ -24,7 +24,7 @@ from scripts.curation.worker.runtime import (
     quiesce_and_swap,
 )
 from scripts.curation.worker.state import _ItemTask
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
 from src.services.config_store import get_config_store, get_global_config_store

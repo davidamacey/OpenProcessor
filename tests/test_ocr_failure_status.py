@@ -68,11 +68,11 @@ def test_predict_with_no_text_is_still_a_success(
 
 
 def test_analyze_ocr_helper_reports_a_failed_result_and_not_an_empty_one() -> None:
-    from src.routers.analyze import _ocr_failure
+    from src.services.analyze_pipeline import ocr_failure
     from src.services.ocr_service import OcrService
 
     failed = OcrService()._empty_result(error='boom', kind='inference')
     empty = OcrService()._empty_result(image_size=[8, 8])
-    assert _ocr_failure(failed) == 'boom'
-    assert _ocr_failure(empty) is None
-    assert _ocr_failure(None) is None
+    assert ocr_failure(failed) == 'boom'
+    assert ocr_failure(empty) is None
+    assert ocr_failure(None) is None

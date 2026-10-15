@@ -50,7 +50,7 @@ at port 4603.
 
 | Path | What is there |
 |---|---|
-| `src/main.py` | FastAPI app, router mounting, lifespan |
+| `src/main.py`, `src/app/` | `main.py` builds the `app` that `uvicorn src.main:app` serves; `app/` holds `factory.py` (`create_app`, middleware, router mounting), `lifespan.py`, `resources.py` |
 | `src/routers/` | Core routers; `src/routers/curation/` holds the curation routers (thin HTTP adapters) |
 | `src/services/` | Logic with no FastAPI dependency: `curation/`, `config_store/`, `projects/`, `labeling/` (VLM), `detection/`, `training/` |
 | `src/clients/` | Triton, OpenSearch (`curation_opensearch/` has the index bodies, class registry and mapping migrations), OCC helpers (`occ*.py`, the lock rule in `occ_locks.py`), PE encoder |

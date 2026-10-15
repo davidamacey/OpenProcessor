@@ -87,7 +87,7 @@ def _result_payload(count: int) -> bytes:
 def serve_http(port: int) -> None:
     import uvicorn
 
-    from src.services.curation.ingest import _imohash_bytes
+    from src.services.curation.ingest_helpers import _imohash_bytes
 
     app = FastAPI()
 
@@ -112,7 +112,7 @@ def serve_http(port: int) -> None:
 def serve_grpc(port: int) -> None:
     import grpc
 
-    from src.services.curation.ingest import _imohash_bytes
+    from src.services.curation.ingest_helpers import _imohash_bytes
 
     async def stream(request_iterator: Any, _context: Any) -> bytes:
         count = 0

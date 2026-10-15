@@ -52,7 +52,7 @@ class TestBatchedTritonInference:
     async def test_batch_skips_duplicates_before_inference(self) -> None:
         """Duplicates never reach the GPU — the batched call carries only
         the non-duplicate images."""
-        from src.services.curation.ingest import _imohash_bytes
+        from src.services.curation.ingest_helpers import _imohash_bytes
 
         dup = _jpeg_bytes(seed=200)
         os_fake = FakeIngestOpenSearch(

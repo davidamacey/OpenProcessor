@@ -12,7 +12,7 @@ import numpy as np
 from PIL import Image
 from tritonclient.grpc import InferInput, InferRequestedOutput
 
-from src.clients.triton_pool import TritonClientManager
+from src.clients.triton_client_manager import TritonClientManager
 from src.config import get_settings
 from src.utils.cache import clip_text_tokens, get_image_cache, get_text_cache
 

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.curation import vlm_worker
+from scripts.curation import vlm_cli, vlm_pending, vlm_worker
 from scripts.curation._project_worker_utils import scoped_url
 
 
@@ -16,7 +16,9 @@ pytestmark = pytest.mark.unbound
 
 
 def test_no_items_index_literal_in_source() -> None:
-    text = Path(vlm_worker.__file__).read_text(encoding='utf-8')
+    text = '\n'.join(
+        Path(m.__file__).read_text(encoding='utf-8') for m in (vlm_worker, vlm_pending, vlm_cli)
+    )
     assert 'op_items' not in text
     assert '_items' not in text
 

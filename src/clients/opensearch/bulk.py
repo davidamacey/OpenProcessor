@@ -27,6 +27,58 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _listed(value: Any) -> Any:
+    """Arrays serialise as lists; plain lists pass through."""
+    return value.tolist() if hasattr(value, 'tolist') else value
+
+
+def _global_action(doc: dict[str, Any], timestamp: str) -> dict[str, Any]:
+    image_id = doc['image_id']
+    metadata = doc.get('metadata')
+    global_doc = {
+        'image_id': image_id,
+        'image_path': doc['image_path'],
+        'global_embedding': _listed(doc['global_embedding']),
+        'indexed_at': timestamp,
+    }
+    if 'width' in doc:
+        global_doc['width'] = doc['width']
+    if 'height' in doc:
+        global_doc['height'] = doc['height']
+    if metadata:
+        global_doc['metadata'] = metadata
+    return {'_index': IndexName.GLOBAL.value, '_id': image_id, '_source': global_doc}
+
+
+def _box_action(doc: dict[str, Any], i: int, timestamp: str, index: IndexName) -> dict[str, Any]:
+    """The bulk action for detection ``i`` of ``doc`` in the vehicle or people index."""
+    image_id = doc['image_id']
+    class_id = int(doc['det_classes'][i])
+    detection_id = f'{image_id}_box_{i}'
+    normalized_boxes = doc.get('normalized_boxes')
+    det_scores = doc.get('det_scores')
+    metadata = doc.get('metadata')
+    box_doc: dict[str, Any] = {
+        'detection_id': detection_id,
+        'image_id': image_id,
+        'image_path': doc['image_path'],
+        'embedding': _listed(doc['box_embeddings'][i]),
+    }
+    if index == IndexName.VEHICLES:
+        box_doc['class_id'] = class_id
+        box_doc['class_name'] = get_class_name(class_id)
+    else:
+        box_doc['has_face'] = False
+    box_doc['indexed_at'] = timestamp
+    if normalized_boxes is not None:
+        box_doc['box'] = _listed(normalized_boxes[i])
+    if det_scores is not None:
+        box_doc['confidence'] = float(det_scores[i])
+    if metadata:
+        box_doc['metadata'] = metadata
+    return {'_index': index.value, '_id': detection_id, '_source': box_doc}
+
+
 class BulkMixin:
     """Face indexing and bulk ingestion."""
 
@@ -305,118 +357,22 @@ class BulkMixin:
         Returns:
             Dict with counts per index
         """
-        global_actions = []
-        vehicle_actions = []
-        people_actions = []
+        global_actions: list[dict[str, Any]] = []
+        vehicle_actions: list[dict[str, Any]] = []
+        people_actions: list[dict[str, Any]] = []
         timestamp = datetime.now(UTC).isoformat()
 
         for doc in documents:
-            image_id = doc['image_id']
-            image_path = doc['image_path']
-            global_embedding = doc['global_embedding']
-            metadata = doc.get('metadata')
-
-            # Global document
-            global_doc = {
-                'image_id': image_id,
-                'image_path': image_path,
-                'global_embedding': (
-                    global_embedding.tolist()
-                    if hasattr(global_embedding, 'tolist')
-                    else global_embedding
-                ),
-                'indexed_at': timestamp,
-            }
-            if 'width' in doc:
-                global_doc['width'] = doc['width']
-            if 'height' in doc:
-                global_doc['height'] = doc['height']
-            if metadata:
-                global_doc['metadata'] = metadata
-
-            global_actions.append(
-                {
-                    '_index': IndexName.GLOBAL.value,
-                    '_id': image_id,
-                    '_source': global_doc,
-                }
-            )
+            global_actions.append(_global_action(doc, timestamp))
 
             # Route box embeddings
             if 'box_embeddings' in doc and 'det_classes' in doc:
-                box_embeddings = doc['box_embeddings']
-                det_classes = doc['det_classes']
-                normalized_boxes = doc.get('normalized_boxes')
-                det_scores = doc.get('det_scores')
-
-                num_boxes = len(box_embeddings)
-                for i in range(num_boxes):
-                    class_id = int(det_classes[i])
-                    category = get_category(class_id)
-                    detection_id = f'{image_id}_box_{i}'
-
-                    embedding = (
-                        box_embeddings[i].tolist()
-                        if hasattr(box_embeddings[i], 'tolist')
-                        else box_embeddings[i]
-                    )
-
+                for i in range(len(doc['box_embeddings'])):
+                    category = get_category(int(doc['det_classes'][i]))
                     if category == DetectionCategory.VEHICLE:
-                        vehicle_doc = {
-                            'detection_id': detection_id,
-                            'image_id': image_id,
-                            'image_path': image_path,
-                            'embedding': embedding,
-                            'class_id': class_id,
-                            'class_name': get_class_name(class_id),
-                            'indexed_at': timestamp,
-                        }
-                        if normalized_boxes is not None:
-                            vehicle_doc['box'] = (
-                                normalized_boxes[i].tolist()
-                                if hasattr(normalized_boxes[i], 'tolist')
-                                else normalized_boxes[i]
-                            )
-                        if det_scores is not None:
-                            vehicle_doc['confidence'] = float(det_scores[i])
-                        if metadata:
-                            vehicle_doc['metadata'] = metadata
-
-                        vehicle_actions.append(
-                            {
-                                '_index': IndexName.VEHICLES.value,
-                                '_id': detection_id,
-                                '_source': vehicle_doc,
-                            }
-                        )
-
+                        vehicle_actions.append(_box_action(doc, i, timestamp, IndexName.VEHICLES))
                     elif category == DetectionCategory.PERSON:
-                        person_doc = {
-                            'detection_id': detection_id,
-                            'image_id': image_id,
-                            'image_path': image_path,
-                            'embedding': embedding,
-                            'has_face': False,
-                            'indexed_at': timestamp,
-                        }
-                        if normalized_boxes is not None:
-                            person_doc['box'] = (
-                                normalized_boxes[i].tolist()
-                                if hasattr(normalized_boxes[i], 'tolist')
-                                else normalized_boxes[i]
-                            )
-                        if det_scores is not None:
-                            person_doc['confidence'] = float(det_scores[i])
-                        if metadata:
-                            person_doc['metadata'] = metadata
-
-                        people_actions.append(
-                            {
-                                '_index': IndexName.PEOPLE.value,
-                                '_id': detection_id,
-                                '_source': person_doc,
-                            }
-                        )
+                        people_actions.append(_box_action(doc, i, timestamp, IndexName.PEOPLE))
 
         # Execute bulk operations
         results = {'global': 0, 'vehicles': 0, 'people': 0, 'errors': []}

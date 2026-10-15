@@ -20,7 +20,7 @@ import pytest
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch.registry import ClassRegistry
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.routers.curation import label_undo
 from src.services.curation.item_doc import DetectedItem, build_item_doc
 
@@ -109,10 +109,18 @@ def ids(registry_ids: tuple[ClassRegistry, dict[str, int]]) -> dict[str, int]:
 
 @pytest.fixture
 def crops(monkeypatch: pytest.MonkeyPatch, registry: ClassRegistry):
-    from src.routers.curation import crops as crops_mod
+    from types import SimpleNamespace
 
-    monkeypatch.setattr(crops_mod, 'get_class_registry', lambda: registry)
-    return crops_mod
+    from src.routers.curation import crops_exclude, crops_write
+
+    monkeypatch.setattr(crops_write, 'get_class_registry', lambda: registry)
+    return SimpleNamespace(
+        label_crop=crops_write.label_crop,
+        batch_label_crops=crops_write.batch_label_crops,
+        move_crops=crops_write.move_crops,
+        batch_exclude_crops=crops_exclude.batch_exclude_crops,
+        batch_unexclude_crops=crops_exclude.batch_unexclude_crops,
+    )
 
 
 async def _label(crops, fake, registry, crop_id: str, class_id: int) -> None:

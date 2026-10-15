@@ -124,7 +124,7 @@ def letterbox_to_square(
 
         * ``chw``: ``(1, 3, target, target)`` uint8 array of RGB pixels
           (the engine scales them to ``[0, 1]`` itself), ready for
-          :func:`src.clients.triton_pool.uint8_images_input`.
+          :func:`src.clients.triton_pool_core.uint8_images_input`.
         * ``scale``: Uniform scale factor applied to width and height.
         * ``(pad_w, pad_h)``: Pixel padding on the left/top edges (the
           canvas is centered, so right/bottom padding is implied).

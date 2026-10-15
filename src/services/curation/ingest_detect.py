@@ -46,7 +46,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from src.clients.model_adapters import END2END_OUTPUTS
-from src.clients.triton_pool import uint8_images_input
+from src.clients.triton_pool_core import uint8_images_input
 from src.config.ingest_profiles import proposer_label
 from src.core.logging import get_logger
 from src.services.curation.item_doc import DetectedItem
@@ -64,7 +64,7 @@ if TYPE_CHECKING:
     from PIL import Image
 
     from src.clients.curation_opensearch.registry import ClassRegistry
-    from src.clients.triton_pool import AsyncTritonPool
+    from src.clients.triton_pool_core import AsyncTritonPool
     from src.config import DetectionProfile
 
 

@@ -89,7 +89,7 @@ def _region_box_seeded(env: LeakEnv, slug: str) -> None:
     directly keeps the seeded id deterministic regardless of sweep
     order."""
     from src.config import get_region_fields
-    from src.config.curation import IndexRole
+    from src.config.curation_roles import IndexRole
 
     F = get_region_fields()
     index = env.records[slug].resources.indexes[IndexRole.ITEMS]
@@ -119,7 +119,7 @@ def _stored_prompt_pack(env: Any, slug: str) -> None:
     (revision-based OCC here is enforced entirely by comparing the
     stored ``revision`` field, never real OpenSearch ``if_seq_no``, so
     resetting that field is enough)."""
-    from src.config.curation import IndexRole
+    from src.config.curation_roles import IndexRole
 
     index = env.records[slug].resources.indexes[IndexRole.CONFIGS]
     name = f'{slug}-model'
@@ -153,7 +153,7 @@ def _stored_prompt_pack(env: Any, slug: str) -> None:
 def _stored_region_profile(env: Any, slug: str) -> None:
     """(Re-)seed ``profile:<slug>-model`` at a known revision 1, with no
     activation recorded -- mirrors ``_stored_prompt_pack``."""
-    from src.config.curation import IndexRole
+    from src.config.curation_roles import IndexRole
 
     index = env.records[slug].resources.indexes[IndexRole.CONFIGS]
     name = f'{slug}-model'
@@ -188,7 +188,7 @@ def _region_failed_item(env: LeakEnv, slug: str) -> None:
     and a reprocess skips a validated set, so it must be reset right before
     each reprocess route that acts on it."""
     from src.config import get_region_fields
-    from src.config.curation import IndexRole
+    from src.config.curation_roles import IndexRole
 
     F = get_region_fields()
     index = env.records[slug].resources.indexes[IndexRole.ITEMS]
@@ -233,7 +233,7 @@ def _seed_vlm(env: Any, slug: str) -> None:
     address ``_FAKE_VLM_HOST`` resolves to) and ``slug``'s activation of it,
     re-seeded before each VLM activation route so every one is independent
     of what an earlier route left behind."""
-    from src.config.curation import IndexRole
+    from src.config.curation_roles import IndexRole
     from src.services.config_store.global_store import global_configs_index
     from src.services.config_store.store import reset_config_stores
     from src.services.config_store.vlm_snapshot import reset_vlm_revision_cache
@@ -285,7 +285,7 @@ def _prepare_vlm(env: Any, slug: str) -> None:
 def _stored_open_vocab(env: Any, slug: str) -> None:
     """(Re-)seed ``ovset:<slug>-model`` at a known revision 1, with no
     activation recorded -- mirrors ``_stored_region_profile``."""
-    from src.config.curation import IndexRole
+    from src.config.curation_roles import IndexRole
 
     index = env.records[slug].resources.indexes[IndexRole.CONFIGS]
     name = f'{slug}-model'

@@ -30,7 +30,7 @@ from typing import Any
 from src.config import get_gpu_arbiter_config
 from src.core.logging import get_logger
 from src.services.curation.export_support import _code_sha, frozen_test_sha_of, label_content_sha
-from src.services.training.gpu_arbiter import _docker_client
+from src.services.training.gpu_arbiter_docker import _docker_client
 
 
 logger = get_logger(__name__)

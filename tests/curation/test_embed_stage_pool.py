@@ -47,7 +47,7 @@ async def _docs(*_a: Any, **_k: Any) -> list[dict[str, Any]]:
 @pytest.fixture
 def patched(monkeypatch: pytest.MonkeyPatch) -> None:
     _StrictPool.instances.clear()
-    monkeypatch.setattr('src.clients.triton_pool.AsyncTritonPool', _StrictPool)
+    monkeypatch.setattr('src.clients.triton_pool_core.AsyncTritonPool', _StrictPool)
     monkeypatch.setattr('src.clients.pe_encoder.PEEncoder', _PoolEncoder)
     monkeypatch.setattr(embed_stage, 'plan_reprocess', _plan)
     monkeypatch.setattr(embed_stage, 'existing_images', _docs)

@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
 from src.services.curation import event_hub as event_hub_mod

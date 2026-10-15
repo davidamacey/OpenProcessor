@@ -10,7 +10,7 @@ import asyncio
 
 import pytest
 
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.projects import resources_for_new
 from src.services.projects.registry import ProjectRegistry, record_to_doc, set_project_registry
 
@@ -19,7 +19,7 @@ from .conftest import FakeRegistryOpenSearch
 
 @pytest.fixture(autouse=True)
 def _env(tmp_path, monkeypatch):
-    import src.config.curation as curation_mod
+    import src.config.curation_accessors as curation_mod
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
     monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path / 'projects_data'))

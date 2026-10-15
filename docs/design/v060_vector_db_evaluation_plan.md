@@ -20,8 +20,8 @@ OpenSearch holds **all** curation state, not only vectors. Per project an index 
 |---|---|---|
 | Per-document OCC with `if_seq_no`/`if_primary_term`, read-merge-write, human/locked preservation | `src/clients/occ.py` (`occ_update_one` `:113`, `occ_skip_on_conflict_bulk` `:186`, `occ_upsert_bulk` `:394`, `_merge_preserving_human` `:609`), `src/clients/occ_bulk.py`, `src/clients/occ_locks.py` | None of the candidates offers per-document compare-and-set on an arbitrary revision except pgvector (row-level transactions) |
 | Guarded scripted updates (no-op on human-owned rows) | `src/services/curation/clustering/cluster_write_guard.py:100` | Not available as server-side scripts in Milvus/Qdrant/LanceDB |
-| Aggregations: terms, filters, cardinality, composite (stats, review tabs, holdout strata, auto-promote) | `src/services/curation/stats_dataset_query.py`, `src/routers/curation/review.py`, `src/services/curation/holdout.py:199`, `src/services/curation/clustering/auto_promote.py:128` | Partial at best (Milvus/Qdrant: counts and facets only); pgvector: SQL |
-| Sort, `search_after`, PIT, locate-in-queue by counting docs before a sort key | `src/routers/curation/review.py:428-525`, `src/services/curation/review_sorts.py`, `src/services/curation/clustering/embedding_reduce.py:280` | Limited sorting on payload; no PIT |
+| Aggregations: terms, filters, cardinality, composite (stats, review tabs, holdout strata, auto-promote) | `src/services/curation/stats_dataset_query.py`, `src/routers/curation/review_terms.py`, `src/routers/curation/holdout_freeze.py`, `src/services/curation/holdout.py:199`, `src/services/curation/clustering/auto_promote.py:128` | Partial at best (Milvus/Qdrant: counts and facets only); pgvector: SQL |
+| Sort, `search_after`, PIT, locate-in-queue by counting docs before a sort key | `src/routers/curation/review.py`, `src/services/curation/review_sorts.py`, `src/services/curation/clustering/residual_fetch.py` | Limited sorting on payload; no PIT |
 | Nested region boxes plus sibling nested box vectors | `region_boxes`, `region_box_embeddings` (`src/clients/curation_opensearch/bodies_core.py:167-218`) | Must be flattened to one entity per box |
 | Dedup lookups by `imohash` via `msearch` | `src/services/curation/ingest.py:255-282` | Not a vector concern |
 | Project isolation enforced at the transport (fail closed) | `src/services/projects/guard.py` (`check_request` `:341`, `ProjectGuardedTransport` `:488`), the client factory in `src/core/dependencies.py` | A second store needs its own guard |
@@ -53,7 +53,7 @@ k-NN. Measured storage: 8.85 KB per vector settled (v0.5.0 baseline, PR #206).
 |---|---|---|
 | Insert | 7.4 vectors per image (6.4 crops + 1 whole frame) at policy `all`; 9 img/s now, 15-30 img/s expected after Wave 1 (**estimate**) = 70-220 vectors/s sustained, bulk per image | v0.5.0 baseline |
 | Filtered kNN for review/search | `k` up to 2000, filters on validated, dismissed, excluded, test_holdout, cluster_id, class, rank, created_at, blur, near-dup | `semantic_search.py` `_build_filter` |
-| Full-pool read for clustering | every residual vector, PIT + 8 slices, page 2000 | `embedding_reduce.py:280` |
+| Full-pool read for clustering | every residual vector, PIT + 8 slices, page 2000 | `residual_fetch.py` |
 | Metadata updates touching filter fields | full-pool `cluster_id` rewrite per retrain (12.8k docs per 2,000 images); auto-promote `class_validated`; human validation; exclude | `orchestrator.py:215-241`, `auto_promote.py` |
 | Delete | project delete, item delete, combine copies | `src/services/projects/` |
 

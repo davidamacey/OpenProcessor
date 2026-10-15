@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from src.services.curation.image_serving import persist_uploaded_bytes
-from src.services.curation.ingest import _imohash_bytes
+from src.services.curation.ingest_helpers import _imohash_bytes
 from src.services.curation.ingest_models import ERROR_KIND_EMPTY, ERROR_KIND_UNSUPPORTED_TYPE
 from src.services.curation.open_vocab_ingest import schedule_open_vocab_after_ingest
 from src.utils.stage_timing import stage_timer

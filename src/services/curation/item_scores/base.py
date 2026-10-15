@@ -93,7 +93,7 @@ class CropScorer(Protocol):
     Two pools exist today:
 
     * ``'residual'`` — the clustering *residual* pool
-      (:func:`~src.services.curation.clustering.embedding_reduce.fetch_residual_embeddings_parallel`):
+      (:func:`~src.services.curation.clustering.residual_fetch.fetch_residual_embeddings_parallel`):
       crops with no confident class assignment, i.e. excluding
       ``class_validated``, every ``class_source`` in
       ``CONFIDENT_CLASS_SOURCES`` (classifier/VLM machine labels), and

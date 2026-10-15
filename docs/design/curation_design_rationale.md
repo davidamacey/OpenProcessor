@@ -295,7 +295,8 @@ frozen YOLO test split with one shared metric (pycocotools COCOeval plus a
 fixed-threshold operating point), so a new training run, earlier runs and
 external baselines are compared on identical ground, per class.
 `src/routers/curation/bakeoff.py` does not score anything: it resolves a
-request into a job spec (`src/services/curation/bakeoff_jobs.py`) and drops
+request into a job spec (`src/services/curation/bakeoff_jobs.py`, with
+`bakeoff_resolve.py` and `bakeoff_mapping.py`) and drops
 `<job_id>.job.json` into a shared directory; the evaluator container
 (`docker/evaluator/Dockerfile`, running `bakeoff_runner --watch`) does the
 scoring and writes `status.json`, one `comparison.json` per dataset and a

@@ -93,7 +93,7 @@ class Harness:
         from src.services.curation import image_serving
 
         self.tmp = tmp_path
-        import src.config.curation as curation_config_mod
+        import src.config.curation_accessors as curation_config_mod
 
         monkeypatch.setenv('OP_DATASET_IMPORTS_DIR', str(tmp_path / 'imports'))
         monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))

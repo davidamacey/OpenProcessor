@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from src.config.curation import IndexRole
+from src.config.curation_roles import IndexRole
 from src.config.project_context import bind_project
 from src.config.projects import is_valid_slug
 from src.core.exceptions import RequestRejectedError
@@ -341,7 +341,7 @@ async def analyze(
 ) -> Analysis:
     """Read the sources and compute the whole plan. ``records`` are in
     ``request.sources`` order, every source present."""
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import resources_for_new
 
     stats, prints, class_counts, holdout = await _source_pass(client, request, records)

@@ -183,7 +183,7 @@ def test_stamp_failure_is_not_swallowed(
     monkeypatch.setattr(
         'src.services.training.triton_promote.promote_yolo26_to_triton', _fake_promote
     )
-    monkeypatch.setattr('src.services.training.jobs.stamp_manifest_promotion', _fake_stamp)
+    monkeypatch.setattr('src.services.training.job_manifest.stamp_manifest_promotion', _fake_stamp)
 
     with capture_logs() as cap:
         r = app_client.post(

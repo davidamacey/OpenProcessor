@@ -14,7 +14,7 @@ ids.
 label-coverage ratio, bar >= 1.3x) — that unblocked writing this module.
 The **full gate** (a real training A/B via ``/curation/bakeoff``,
 mAP50-95 >= +1.0pt) has NOT run. Until it does, ``diverse`` stays
-``experimental`` at most in ``strategy_registry.py`` — never promotable
+``experimental`` at most in ``strategy_builders.py`` — never promotable
 to ``stable`` by this module or by flipping ``OP_SELECT_DIVERSE_ENABLED``
 alone.
 
@@ -105,7 +105,7 @@ DEFAULT_JOB_MAX_N = 200_000
 def diverse_enabled() -> bool:
     """Read fresh each call (not a module constant) — same reasoning as
     every other feature flag in this codebase (e.g.
-    ``strategy_registry._scores_enabled``): tests ``monkeypatch.setenv``
+    ``strategy_flags._scores_enabled``): tests ``monkeypatch.setenv``
     without reimporting."""
     return env_bool('OP_SELECT_DIVERSE_ENABLED')
 

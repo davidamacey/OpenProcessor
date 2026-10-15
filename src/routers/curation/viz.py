@@ -21,7 +21,7 @@ Gated end-to-end by ``OP_VIZ_PROJECTION_ENABLED`` (default off, read with
 off, same convention this codebase uses for other disabled-by-default
 feature flags.
 
-**Ship-mode status** — see ``strategy_registry.py``'s ``viz_projection``
+**Ship-mode status** — see ``strategy_flags.py``'s ``viz_projection``
 entry for how the measured purity maps to this entry's
 ``status``/``purity``/``requires_banner`` fields.
 """

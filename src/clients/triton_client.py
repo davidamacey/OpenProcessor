@@ -36,7 +36,14 @@ from tritonclient.grpc import InferInput, InferRequestedOutput
 from ultralytics.data.augment import LetterBox
 
 from src.clients.model_adapters import DetectionAdapter, resolve_adapter
-from src.clients.triton_pool import TritonClientManager, uint8_images_input
+from src.clients.triton_client_manager import TritonClientManager
+from src.clients.triton_ocr import infer_ocr
+from src.clients.triton_pool_core import uint8_images_input
+from src.clients.triton_preprocess import (
+    preprocess_clip_cpu,
+    preprocess_for_mobileclip,
+    preprocess_yolo_cpu,
+)
 from src.config.settings import TritonModelConfig
 from src.utils.affine import format_detections_from_triton, inverse_letterbox_coords
 from src.utils.retry import retry_sync
@@ -283,57 +290,11 @@ class TritonClient:
         self, img_array: np.ndarray, target_size: int
     ) -> tuple[np.ndarray, float, tuple]:
         """CPU letterbox preprocessing for YOLO at ``target_size``."""
-        orig_h, orig_w = img_array.shape[:2]
-
-        scale = min(target_size / orig_h, target_size / orig_w)
-        scale = min(scale, 1.0)
-
-        new_w = round(orig_w * scale)
-        new_h = round(orig_h * scale)
-
-        if scale < 1.0:
-            resized = cv2.resize(img_array, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-        else:
-            resized = img_array
-
-        pad_w = (target_size - new_w) / 2.0
-        pad_h = (target_size - new_h) / 2.0
-        top, bottom = round(pad_h - 0.1), round(pad_h + 0.1)
-        left, right = round(pad_w - 0.1), round(pad_w + 0.1)
-
-        letterboxed = cv2.copyMakeBorder(
-            resized, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114)
-        )
-
-        if letterboxed.shape[:2] != (target_size, target_size):
-            letterboxed = cv2.resize(letterboxed, (target_size, target_size))
-
-        transposed = np.transpose(letterboxed, (2, 0, 1))
-        batched = np.expand_dims(transposed, axis=0)
-
-        return batched, scale, (pad_w, pad_h)
+        return preprocess_yolo_cpu(img_array, target_size)
 
     def _preprocess_clip_cpu(self, img_array: np.ndarray) -> np.ndarray:
         """CPU preprocessing for MobileCLIP (256x256, center crop)."""
-        orig_h, orig_w = img_array.shape[:2]
-        target_size = 256
-
-        # round() + a max(target_size, ...) floor -- see the matching
-        # fix/comment in src.utils.cpu_preprocess.center_crop_cpu. Without
-        # it, float truncation via int() could undershoot target_size by one
-        # px and produce a smaller-than-256 crop instead of erroring.
-        scale = target_size / min(orig_h, orig_w)
-        new_w = max(target_size, round(orig_w * scale))
-        new_h = max(target_size, round(orig_h * scale))
-        resized = cv2.resize(img_array, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-
-        start_x = max(0, (new_w - target_size) // 2)
-        start_y = max(0, (new_h - target_size) // 2)
-        cropped = resized[start_y : start_y + target_size, start_x : start_x + target_size]
-
-        normalized = cropped.astype(np.float32) / 255.0
-        transposed = np.transpose(normalized, (2, 0, 1))
-        return np.expand_dims(transposed, axis=0)
+        return preprocess_clip_cpu(img_array)
 
     # =========================================================================
     # Individual Model Inference (MobileCLIP Components)
@@ -365,22 +326,7 @@ class TritonClient:
 
     def _preprocess_for_mobileclip(self, image_bytes: bytes) -> np.ndarray:
         """Preprocess image for MobileCLIP (256x256, BILINEAR, center crop)."""
-        img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
-
-        width, height = img.size
-        scale = 256 / min(width, height)
-        new_width = int(width * scale)
-        new_height = int(height * scale)
-        img = img.resize((new_width, new_height), Image.Resampling.BILINEAR)
-
-        left = (new_width - 256) // 2
-        top = (new_height - 256) // 2
-        img = img.crop((left, top, left + 256, top + 256))
-
-        img_array = np.array(img).astype(np.float32) / 255.0
-        img_array = np.transpose(img_array, (2, 0, 1))
-
-        return img_array[np.newaxis, ...]
+        return preprocess_for_mobileclip(image_bytes)
 
     # =========================================================================
     # OCR: PP-OCRv5 Text Detection and Recognition
@@ -397,130 +343,7 @@ class TritonClient:
             Dict with num_texts, texts, text_boxes, text_boxes_normalized,
             text_scores, rec_scores
         """
-        import cv2
-
-        img_array = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_UNCHANGED)
-        if img_array is None:
-            return {
-                'num_texts': 0,
-                'texts': [],
-                'text_boxes': np.array([]),
-                'text_boxes_normalized': np.array([]),
-                'text_scores': np.array([]),
-                'rec_scores': np.array([]),
-            }
-
-        # Handle different channel formats
-        if len(img_array.shape) == 2:
-            img_array = cv2.cvtColor(img_array, cv2.COLOR_GRAY2BGR)
-        elif img_array.shape[2] == 4:
-            alpha = img_array[:, :, 3:4] / 255.0
-            rgb = img_array[:, :, :3]
-            white_bg = np.ones_like(rgb) * 255
-            img_array = (rgb * alpha + white_bg * (1 - alpha)).astype(np.uint8)
-
-        orig_h, orig_w = img_array.shape[:2]
-
-        # PP-OCR approach: scale to fit within limit, pad to 32-boundary
-        ocr_limit_side = 960
-        ocr_min_side = 640
-
-        max_side = max(orig_h, orig_w)
-        if max_side > ocr_limit_side:
-            ratio = ocr_limit_side / max_side
-        elif max_side < ocr_min_side:
-            ratio = ocr_min_side / max_side
-        else:
-            ratio = 1.0
-
-        resize_h = max(32, int(orig_h * ratio))
-        resize_w = max(32, int(orig_w * ratio))
-
-        resized = cv2.resize(img_array, (resize_w, resize_h), interpolation=cv2.INTER_LINEAR)
-
-        # Pad to 32-boundary
-        pad_h = (32 - resize_h % 32) % 32
-        pad_w = (32 - resize_w % 32) % 32
-        if pad_h > 0 or pad_w > 0:
-            padded = np.zeros((resize_h + pad_h, resize_w + pad_w, 3), dtype=np.uint8)
-            padded[:resize_h, :resize_w, :] = resized
-            resized = padded
-
-        # Normalize: (x / 127.5) - 1 for PP-OCR
-        ocr_input = resized.astype(np.float32) / 127.5 - 1.0
-        ocr_input = ocr_input.transpose(2, 0, 1)
-
-        # Original image for cropping
-        orig_normalized = img_array.astype(np.float32) / 255.0
-        orig_normalized = orig_normalized.transpose(2, 0, 1)
-
-        inputs = [
-            InferInput('ocr_images', list(ocr_input.shape), 'FP32'),
-            InferInput('original_image', list(orig_normalized.shape), 'FP32'),
-            InferInput('orig_shape', [2], 'INT32'),
-        ]
-
-        inputs[0].set_data_from_numpy(ocr_input)
-        inputs[1].set_data_from_numpy(orig_normalized)
-        inputs[2].set_data_from_numpy(np.array([orig_h, orig_w], dtype=np.int32))
-
-        outputs = [
-            InferRequestedOutput('num_texts'),
-            InferRequestedOutput('text_boxes'),
-            InferRequestedOutput('text_boxes_normalized'),
-            InferRequestedOutput('texts'),
-            InferRequestedOutput('text_scores'),
-            InferRequestedOutput('rec_scores'),
-        ]
-
-        response = self._infer_with_retry(TritonModelConfig.OCR_PIPELINE_MODEL, inputs, outputs)
-
-        num_texts_raw = response.as_numpy('num_texts')
-        logger.info(
-            f'OCR response: num_texts_raw shape={num_texts_raw.shape}, value={num_texts_raw}'
-        )
-        num_texts = int(num_texts_raw[0])
-        text_boxes = response.as_numpy('text_boxes')[:num_texts]
-        text_boxes_norm = response.as_numpy('text_boxes_normalized')[:num_texts]
-        text_scores = response.as_numpy('text_scores')[:num_texts]
-        rec_scores_raw = response.as_numpy('rec_scores')[:num_texts]
-
-        texts_raw = response.as_numpy('texts')[:num_texts]
-        texts = []
-        for t in texts_raw:
-            if isinstance(t, bytes):
-                texts.append(t.decode('utf-8', errors='ignore'))
-            elif isinstance(t, np.bytes_):
-                texts.append(str(t, 'utf-8', errors='ignore'))
-            else:
-                texts.append(str(t))
-
-        # The BLS (models/ocr_pipeline/1/model.py) emits -1.0 for a crop
-        # whose recognition inference itself failed -- distinguishable from
-        # a real CTC confidence, which is always in [0, 1]. -1.0 must never
-        # leave this method: every caller gets None + an explicit reason
-        # instead, so a served field can never read as a fake low score.
-        rec_scores: list[float | None] = []
-        rec_errors: list[str | None] = []
-        for s in rec_scores_raw:
-            if float(s) < 0.0:
-                rec_scores.append(None)
-                rec_errors.append('recognition_failed')
-            else:
-                rec_scores.append(float(s))
-                rec_errors.append(None)
-
-        return {
-            'num_texts': num_texts,
-            'texts': texts,
-            'text_boxes': text_boxes,
-            'text_boxes_normalized': text_boxes_norm,
-            'text_scores': text_scores,
-            'rec_scores': rec_scores,
-            'rec_errors': rec_errors,
-            'image_width': orig_w,
-            'image_height': orig_h,
-        }
+        return infer_ocr(self._infer_with_retry, image_bytes)
 
     # =========================================================================
     # Formatting Utilities

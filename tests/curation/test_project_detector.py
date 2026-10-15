@@ -76,7 +76,7 @@ def world(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> Any:
     monkeypatch.setattr('src.routers.curation.class_seed.get_class_registry', lambda: registry)
     monkeypatch.setattr('src.routers.curation.ingest_policy.get_class_registry', lambda: registry)
     pool = _Pool()
-    monkeypatch.setattr('src.main.get_async_triton_pool', lambda: pool)
+    monkeypatch.setattr('src.app.resources.get_async_triton_pool', lambda: pool)
     from _curation_app import mount_curation_routers
 
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
@@ -151,13 +151,14 @@ async def test_a_model_a_project_runs_as_its_ingest_detector_counts_as_in_use(
 async def test_the_ingest_service_runs_the_project_detector_and_its_policy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    import src.app.resources as resources_module
     import src.main as main_module
     from src.routers.curation import ingest as ingest_router
     from src.services.curation.ingest_policy import DetectFilter, IngestPolicyBody
     from src.services.curation.ingest_policy_store import put_ingest_policy
 
     monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'env_model')
-    monkeypatch.setattr(main_module, 'get_async_triton_pool', object)
+    monkeypatch.setattr(resources_module, 'get_async_triton_pool', object)
     monkeypatch.setattr(main_module.app.state, 'pe_encoder', object(), raising=False)
     fake = SettingsFakeOpenSearch()
 

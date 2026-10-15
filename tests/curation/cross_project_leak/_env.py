@@ -62,9 +62,10 @@ def leak_env(
 ) -> Any:
     """The real app, three seeded projects, a recording layer above the
     real guard, and no way out of the process (no network, no subprocess)."""
-    import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_config_mod
     from src.clients.curation_opensearch import registry as curation_registry, settings_doc
-    from src.config.curation import IndexRole, base_curation_config
+    from src.config.curation_accessors import base_curation_config
+    from src.config.curation_roles import IndexRole
     from src.config.projects import new_project_record, resources_for_new
     from src.core.dependencies import app_state, get_async_triton
     from src.services.curation import event_hub, index_bootstrap
@@ -128,10 +129,10 @@ def leak_env(
     monkeypatch.setattr(settings_doc, '_SETTINGS_CACHE_TTL_SECONDS', 0.0)
     # A UMAP fit the fixture's small pool supports (the defaults need
     # more points than the fixture seeds).
-    from src.services.curation.clustering import embedding_reduce
+    from src.services.curation.clustering import pool_size
 
-    monkeypatch.setattr(embedding_reduce, 'UMAP_N_COMPONENTS', 2)
-    monkeypatch.setattr(embedding_reduce, 'UMAP_N_NEIGHBORS', 3)
+    monkeypatch.setattr(pool_size, 'UMAP_N_COMPONENTS', 2)
+    monkeypatch.setattr(pool_size, 'UMAP_N_NEIGHBORS', 3)
     # The auto-label module resolves its state dir per bound project
     # (``_state_dir()`` -> ``get_curation_config().autolabel_dir``, itself
     # ``OP_AUTO_LABEL_STATE_DIR`` + ``/projects/<slug>``) -- keep it inside
@@ -280,14 +281,14 @@ def leak_env(
         def __getattr__(self, name: str) -> Any:
             raise ConnectionError(f'triton disabled in the leak test ({name})')
 
-    import src.main as main_module
+    import src.app.resources as resources_module
     from src.main import app
 
     env.app = app
     app.dependency_overrides[get_async_triton] = lambda: _DeadTriton()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
     # Ingest runs end to end: a fake detector pool and PE encoder at the
     # service boundary (the same fakes the ingest integration tests use).
-    monkeypatch.setattr(main_module, 'get_async_triton_pool', FakeTritonPool)
+    monkeypatch.setattr(resources_module, 'get_async_triton_pool', FakeTritonPool)
     had_encoder = hasattr(app.state, 'pe_encoder')
     previous_encoder = getattr(app.state, 'pe_encoder', None)
     app.state.pe_encoder = _LeakPEEncoder()

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from src.config.curation import IndexRole
+from src.config.curation_roles import IndexRole
 from src.config.project_context import bind_project
 from src.services.curation.dataset_import.mapping import norm_class_name
 from src.services.curation.dataset_import.project_source import item_class_name

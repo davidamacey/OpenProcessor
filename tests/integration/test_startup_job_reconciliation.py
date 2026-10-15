@@ -62,7 +62,7 @@ def test_lifespan_survives_a_module_raising_during_reconcile(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """One misbehaving module must not block startup or the other three
-    reconciliation calls -- each is wrapped independently in main.py."""
+    reconciliation calls -- each is wrapped independently in src/app/lifespan.py."""
     from src.services.curation import embedding_viz
     from src.services.curation.item_scores import job as item_scores_job
 

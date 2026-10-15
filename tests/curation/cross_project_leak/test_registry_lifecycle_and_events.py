@@ -59,7 +59,7 @@ def test_create_then_real_delete_leaves_other_projects_untouched(leak_env: LeakE
     """M6: create and a real (non-dry-run) delete, neither of which the
     sweep reaches (they're not under {SCOPED}), must not leak into
     alpha's or beta's indexes, dirs or events."""
-    from src.config.curation import IndexRole
+    from src.config.curation_roles import IndexRole
 
     client = TestClient(leak_env.app, raise_server_exceptions=False)
     before_alpha_dirs = _dir_digest(leak_env.own_dirs['alpha'])
@@ -126,7 +126,7 @@ def test_a_misrouted_mget_is_refused_before_it_reaches_opensearch(
     guard must still read it and refuse, so alpha's documents never leave
     OpenSearch."""
     from src.clients.curation_opensearch import crops
-    from src.config.curation import IndexRole
+    from src.config.curation_roles import IndexRole
 
     alpha_items = leak_env.records['alpha'].resources.indexes[IndexRole.ITEMS]
     real_mget_crops = crops.mget_crops
@@ -182,20 +182,20 @@ def test_a_planted_unkeyed_cache_behind_a_shared_helper_is_caught(
     leak_env: LeakEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Re-review R3: an unkeyed cache around the review-sort coverage helper
-    (``strategy_registry.field_coverage``) serves the second project the
+    (``field_coverage.field_coverage``) serves the second project the
     first one's coverage while the route still searches its own items
     index. The per-role request parity must catch it."""
-    from src.services.curation import strategy_registry
+    from src.services.curation import field_coverage as field_coverage_mod
 
     planted: dict[str, Any] = {}
-    real = strategy_registry.field_coverage
+    real = field_coverage_mod.field_coverage
 
     async def _unkeyed(opensearch: Any, fields: frozenset[str]) -> Any:
         if 'hit' not in planted:
             planted['hit'] = await real(opensearch, fields)
         return planted['hit']
 
-    monkeypatch.setattr(strategy_registry, 'field_coverage', _unkeyed)
+    monkeypatch.setattr(field_coverage_mod, 'field_coverage', _unkeyed)
 
     def only(key: tuple[str, str]) -> bool:
         return key[0] == 'GET' and key[1].startswith('/review/')

@@ -25,7 +25,7 @@ from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes, seed_default
 
 @pytest.fixture(autouse=True)
 def _env(tmp_path, monkeypatch):
-    import src.config.curation as curation_mod
+    import src.config.curation_accessors as curation_mod
     from src.services.projects import capacity as capacity_mod
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
@@ -99,7 +99,8 @@ def test_one_missing_index_after_ensure_indexes_ends_failed_not_active() -> None
     _registry_for(client)
     asyncio.run(seed_default_project(client))
 
-    from src.config.curation import IndexRole, get_curation_config, index_name
+    from src.config.curation_accessors import get_curation_config
+    from src.config.curation_roles import IndexRole, index_name
 
     async def _ensure_indexes_missing_one(opensearch) -> None:
         cfg = get_curation_config()
@@ -134,7 +135,8 @@ def test_real_ensure_indexes_index_create_failure_ends_create_failed() -> None:
     _registry_for(client)
     asyncio.run(seed_default_project(client))
 
-    from src.config.curation import IndexRole, get_curation_config, index_name
+    from src.config.curation_accessors import get_curation_config
+    from src.config.curation_roles import IndexRole, index_name
 
     real_create = client.indices.create
 

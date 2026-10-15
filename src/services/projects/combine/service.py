@@ -7,7 +7,7 @@ import asyncio
 import shutil
 from typing import TYPE_CHECKING, Any
 
-from src.config.curation import get_curation_config
+from src.config.curation_accessors import get_curation_config
 from src.core.logging import get_logger
 from src.schemas.curation.config_common import ValidationIssue, ValidationReport
 from src.services.curation.job_lock import exclusive_start_lock

@@ -58,9 +58,9 @@ def app_client(
     # test_gpu_arbiter.py uses) so these tests exercise a real,
     # succeeding claim instead of relying on an exception being silently
     # swallowed by a broad except-Exception (now removed).
-    from src.services.training import gpu_arbiter as _gpu_arbiter
+    from src.services.training import gpu_arbiter_policy
 
-    monkeypatch.setattr(_gpu_arbiter, '_state_dir', lambda: tmp_path)
+    monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
 
     # Stub the registry so preflight class-resolution doesn't blow up.
     class _Reg:

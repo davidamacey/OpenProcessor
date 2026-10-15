@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from src.config import GpuArbiterConfig
-from src.services.training import jobs as train_jobs
+from src.services.training import job_manifest, jobs as train_jobs
 from src.services.training.job_models import TrainJobSpec
 
 
@@ -256,14 +256,14 @@ async def test_write_job_pins_registry_snapshot(
 async def test_read_job_spec_returns_written_payload(jobs_dir: Path) -> None:
     spec = TrainJobSpec(job_id='readback', dataset_export_dir='/data/exports/x')
     await train_jobs.write_job(spec)
-    raw = await train_jobs.read_job_spec('readback')
+    raw = await job_manifest.read_job_spec('readback')
     assert raw is not None
     assert raw['job_id'] == 'readback'
 
 
 @pytest.mark.asyncio
 async def test_read_job_spec_returns_none_for_unknown_job(jobs_dir: Path) -> None:
-    assert await train_jobs.read_job_spec('nope') is None
+    assert await job_manifest.read_job_spec('nope') is None
 
 
 def test_hyperparameters_reject_top_level_spec_fields() -> None:

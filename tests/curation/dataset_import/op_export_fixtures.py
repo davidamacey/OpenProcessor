@@ -15,10 +15,8 @@ from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import CurationConfig
 from src.config.region_fields import RegionFields
 from src.services.curation.export import GenericYoloExportService
-from src.services.curation.export_single_class import (
-    SingleClassExportProfile,
-    SingleClassExportService,
-)
+from src.services.curation.export_models import SingleClassExportProfile
+from src.services.curation.export_single_class import SingleClassExportService
 
 
 if TYPE_CHECKING:

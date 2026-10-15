@@ -345,6 +345,7 @@ def curation_app(
     ``registry='project'`` leaves the class registry unfaked: each request
     resolves the bound project's own ``class_registry.json``, as in
     production. ``state_dir`` replaces the shared ``$TMP/op_test_state``."""
+    import src.app.resources as resources_module
     import src.main as main_module
     from src.core.dependencies import get_async_triton, get_opensearch
     from src.routers.curation._common import _raw_opensearch_dep, _registry_dep
@@ -362,7 +363,7 @@ def curation_app(
     # app.state.pe_encoder directly (not via FastAPI Depends()), and the
     # lifespan startup below unconditionally (re)builds both -- so these
     # must be patched AFTER entering the TestClient context, not before.
-    monkeypatch.setattr(main_module, 'get_async_triton_pool', lambda: fake_triton)
+    monkeypatch.setattr(resources_module, 'get_async_triton_pool', lambda: fake_triton)
     # These tests ingest images written under the system temp dir; declare it
     # the deployment's source root, as a real deployment declares its image
     # store (OP_SOURCE_ROOT), so path-based ingest accepts them.
@@ -376,7 +377,7 @@ def curation_app(
     # writable state dir under the same temp root the source-path tests
     # already declare servable, and force the process-wide config
     # singleton to rebuild so it picks this env var up.
-    import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_config_mod
 
     monkeypatch.setenv('OP_STATE_DIR', str(state_dir or temp_root / 'op_test_state'))
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)

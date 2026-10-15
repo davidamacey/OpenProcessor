@@ -24,7 +24,7 @@ from scripts.curation.worker.pipeline import COMBINED_CHUNK, VISIBLE_CHUNK, Pipe
 from scripts.curation.worker.stage_a import stage_a_consumer, stage_a_vlm_visible
 from scripts.curation.worker.stage_b import stage_b_combined
 from scripts.curation.worker.stage_sam import stage_a_sam_consumer
-from src.clients.triton_pool import AsyncTritonPool
+from src.clients.triton_pool_core import AsyncTritonPool
 from src.core.logging import get_logger
 from src.services.curation.worker_liveness import heartbeat_loop
 from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer

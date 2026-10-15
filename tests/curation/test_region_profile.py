@@ -220,7 +220,7 @@ def _patch_worker_io(
     pool.close = AsyncMock()
     os_client = MagicMock()
     if seed_default_project:
-        from src.config.curation import base_curation_config
+        from src.config.curation_accessors import base_curation_config
         from src.config.projects import resources_for_new
         from src.services.projects.registry import (
             REVISION_DOC_ID,

@@ -31,7 +31,7 @@ Limitations (documented so we don't re-litigate them later):
   given crop can shift. We re-run only when the residual pool has
   grown substantially.
 
-Knobs match :py:data:`src.services.visual_search.clustering.DEFAULT_CONFIGS[ClusterIndex.VEHICLES]`
+Knobs match :py:data:`src.services.visual_search.clustering_models.DEFAULT_CONFIGS[ClusterIndex.VEHICLES]`
 (n_clusters=512, niter=50, nredo=5, vectors_per_cluster=6) so this
 method produces results comparable to the existing `vehicles` FAISS
 index that the rest of the system already trusts. This is a
@@ -57,7 +57,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-# Matches DEFAULT_CONFIGS[ClusterIndex.VEHICLES] in src/services/visual_search/clustering.py.
+# Matches DEFAULT_CONFIGS[ClusterIndex.VEHICLES] in src/services/visual_search/clustering_models.py.
 IVF_DEFAULT_N_CLUSTERS = 512
 IVF_DEFAULT_NITER = 50
 IVF_DEFAULT_NREDO = 5

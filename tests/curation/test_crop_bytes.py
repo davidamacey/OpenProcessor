@@ -29,7 +29,7 @@ def cache_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     cache = tmp_path / 'crop_cache'
     cache.mkdir()
     monkeypatch.setenv('OP_CROP_CACHE_DIR', str(cache))
-    import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_config_mod
 
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
     return cache

@@ -12,7 +12,8 @@ from src.services.curation.ingest_detector import project_ingest_profile
 
 async def get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestService:
     """Refuses with 503 until the app has started and a detector is configured."""
-    from src.main import app, get_async_triton_pool
+    from src.app.resources import get_async_triton_pool
+    from src.main import app
 
     pe_encoder = getattr(app.state, 'pe_encoder', None)
     if pe_encoder is None:

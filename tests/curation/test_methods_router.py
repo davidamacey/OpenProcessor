@@ -88,7 +88,7 @@ def test_score_entries_shadow_when_enabled_and_shadow(
     ``near_dup`` only cleared its cheap pre-screen on real data; its full
     gate still needs a step this pass couldn't run (manually-judged
     near-dup pairs), so it stays ``shadow`` here."""
-    from src.services.curation.strategy_registry import VALIDATED_SCORERS
+    from src.services.curation.strategy_flags import VALIDATED_SCORERS
 
     monkeypatch.setenv('OP_SCORES_ENABLED', '1')
     monkeypatch.setenv('OP_SCORES_SHADOW', '1')
@@ -354,7 +354,7 @@ def test_prompt_pack_axis_advertises_a_deployment_supplied_pack(
     pack_path.write_text(json.dumps(custom))
 
     custom_cfg = CurationConfig(prompt_pack_path=pack_path)
-    monkeypatch.setattr('src.config.curation.get_curation_config', lambda: custom_cfg)
+    monkeypatch.setattr('src.config.curation_accessors.get_curation_config', lambda: custom_cfg)
 
     r = app_client.get('/curation/projects/default/methods')
     assert r.status_code == 200
@@ -390,7 +390,7 @@ def test_prompt_pack_axis_advertises_every_configured_pack(
         prompt_pack_path=paths['pallet_v1'],
         prompt_pack_paths=(paths['food_v2'], broken, paths['tools_v1']),
     )
-    monkeypatch.setattr('src.config.curation.get_curation_config', lambda: custom_cfg)
+    monkeypatch.setattr('src.config.curation_accessors.get_curation_config', lambda: custom_cfg)
 
     r = app_client.get('/curation/projects/default/methods')
     assert r.status_code == 200

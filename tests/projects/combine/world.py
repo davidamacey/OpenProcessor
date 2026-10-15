@@ -17,7 +17,8 @@ from curation.query_fakes import QueryFakeOpenSearch
 from PIL import Image
 
 from src.clients.curation_opensearch.registry import ClassRegistry
-from src.config.curation import IndexRole, base_curation_config
+from src.config.curation_accessors import base_curation_config
+from src.config.curation_roles import IndexRole
 from src.config.projects import ProjectRecord, new_project_record
 from src.services.curation.ingest_index import image_id_for
 from src.services.detection.geometry import crop_id as make_crop_id
@@ -63,7 +64,7 @@ class StubRegistry(ProjectRegistry):
 
 class World:
     def __init__(self, tmp_path: Path, monkeypatch: Any) -> None:
-        import src.config.curation as curation_mod
+        import src.config.curation_accessors as curation_mod
 
         self.tmp = tmp_path
         monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))

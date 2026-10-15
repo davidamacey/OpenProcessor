@@ -63,7 +63,7 @@ def _load_pack_file(path: Path) -> PromptPack | None:
 
 def _config(cfg: Any | None) -> Any:
     if cfg is None:
-        from src.config.curation import get_curation_config
+        from src.config.curation_accessors import get_curation_config
 
         return get_curation_config()
     return cfg

@@ -46,7 +46,7 @@ class StaticProjectRegistry:
 
 def default_project_record() -> ProjectRecord:
     """``default`` as bootstrap creates it from the current env."""
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import DEFAULT_SLUG, new_project_record
 
     return new_project_record(DEFAULT_SLUG, base_curation_config())

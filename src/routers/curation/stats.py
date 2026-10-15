@@ -1,6 +1,6 @@
 """Dataset stats endpoints for the curation labeler dashboard.
 
-Split out of :mod:`src.routers.curation.review` to keep individual
+Split out of :mod:`src.routers.curation.review` and `holdout_freeze` to keep individual
 router files under the 700 LOC pre-commit ceiling. Two endpoints:
 
 * ``GET /curation/stats/classes`` — per-class total/validated breakdown.

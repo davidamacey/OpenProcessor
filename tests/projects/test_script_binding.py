@@ -10,10 +10,10 @@ from typing import Any
 
 import pytest
 
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.project_context import ProjectNotBound, bind_process_project, current_project
 from src.config.projects import ProjectRecord, resources_for_new
-from src.services.projects import guard, script_binding
+from src.services.projects import guard, guard_errors, script_binding
 from src.services.projects.registry import record_to_doc
 
 
@@ -108,7 +108,7 @@ def test_archived_default_binds_read_only(monkeypatch: pytest.MonkeyPatch) -> No
     is never writable from a script."""
     import dataclasses
 
-    from src.config.curation import base_curation_config as _base
+    from src.config.curation_accessors import base_curation_config as _base
     from src.config.projects import new_project_record
 
     archived = dataclasses.replace(new_project_record('default', _base()), status='archived')
@@ -149,7 +149,7 @@ def test_script_client_is_guarded() -> None:
 
     async def _run() -> None:
         await client.search(index='op_prj_beta__items', body={})
-        with pytest.raises(guard.CrossProjectAccess):
+        with pytest.raises(guard_errors.CrossProjectAccess):
             await client.search(index='op_prj_alpha__items', body={})
 
     asyncio.run(_run())

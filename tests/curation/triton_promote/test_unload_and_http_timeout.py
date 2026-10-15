@@ -122,7 +122,7 @@ async def test_unload_posts_to_the_unload_endpoint_not_load(
             requested_urls.append(url)
             return _FakeResponse()
 
-    monkeypatch.setattr('src.services.training.triton_promote.httpx.AsyncClient', _FakeAsyncClient)
+    monkeypatch.setattr('src.services.training.triton_http.httpx.AsyncClient', _FakeAsyncClient)
 
     promoter = _promoter(scratch_models_dir)
     await promoter.unload(name)

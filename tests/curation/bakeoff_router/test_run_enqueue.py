@@ -345,12 +345,12 @@ def test_run_writes_queued_status(env: dict[str, Path], client: TestClient) -> N
 def test_run_stop_failure_returns_409_and_removes_job(
     env: dict[str, Path], client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import src.services.training.gpu_arbiter as arbiter
+    from src.services.training import gpu_arbiter_docker, gpu_arbiter_policy
 
     async def _fail(**_kw: Any) -> None:
-        raise arbiter.GpuArbiterStopFailedError('docker socket unavailable')
+        raise gpu_arbiter_policy.GpuArbiterStopFailedError('docker socket unavailable')
 
-    monkeypatch.setattr(arbiter, 'stop_gpu_services', _fail)
+    monkeypatch.setattr(gpu_arbiter_docker, 'stop_gpu_services', _fail)
     d = _live_export(env)
     make_run(env, 'run5', export_dir=d, class_remap=LIVE_REMAP)
     r = _post_run(

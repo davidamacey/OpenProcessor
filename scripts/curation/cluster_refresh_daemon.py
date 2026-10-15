@@ -143,7 +143,7 @@ def _parse_args() -> argparse.Namespace:
 
 async def _crop_count(opensearch: Any) -> int:
     """The bound project's item count."""
-    from src.config.curation import items_index
+    from src.config.curation_accessors import items_index
 
     resp = await opensearch.count(index=items_index())
     return int(resp.get('count', 0))
@@ -152,7 +152,7 @@ async def _crop_count(opensearch: Any) -> int:
 async def _unfinished_region_count(opensearch: Any) -> int:
     """Items still waiting for the region stage (the ``region_drain`` facts)."""
     from src.config import get_region_fields
-    from src.config.curation import items_index
+    from src.config.curation_accessors import items_index
     from src.config.region_state import RegionStatus
 
     resp = await opensearch.count(

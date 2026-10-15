@@ -77,7 +77,7 @@ class TestSignalHandling:
         # was built unconditionally from the env profile, regardless of
         # what the registry (a separate, only-used-for-fetch concern)
         # contained.
-        from src.config.curation import base_curation_config
+        from src.config.curation_accessors import base_curation_config
         from src.config.projects import resources_for_new
         from src.services.projects.registry import (
             REVISION_DOC_ID,

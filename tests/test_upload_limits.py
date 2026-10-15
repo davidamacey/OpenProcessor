@@ -15,7 +15,7 @@ MIB = 1024 * 1024
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    from src.main import create_app
+    from src.app.factory import create_app
 
     monkeypatch.setattr(
         limits,

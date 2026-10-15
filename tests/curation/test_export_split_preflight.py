@@ -114,9 +114,9 @@ def test_class_split_check_ok_when_every_class_is_covered() -> None:
 @pytest.fixture
 def train_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path / 'jobs'))
-    from src.services.training import gpu_arbiter
+    from src.services.training import gpu_arbiter_policy
 
-    monkeypatch.setattr(gpu_arbiter, '_state_dir', lambda: tmp_path)
+    monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
 
     class _Reg:
         def load(self) -> Any:

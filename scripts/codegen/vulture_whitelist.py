@@ -86,6 +86,7 @@ _.curation_knn_warmup_task  # AppResources keeps the warmup task referenced so a
 _._reset_for_tests  # clears module state between tests
 _._reset_field_coverage_cache  # clears a module cache between tests
 _._reset_registry_for_tests  # clears the profile registry between tests
+_.to_source_frame  # region_eval_geometry helper kept for a crop-relative ingestion path; pinned by tests/curation/test_region_eval.py (its __all__ entry used to hide it)
 _.set_project_registry  # installs the project registry a test needs (the conftest and 100+ tests call it)
 _.reset_reachability_cache  # clears a module cache between tests
 _.wait_for_inflight_refresh  # lets a test await the background refresh it triggered

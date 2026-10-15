@@ -1,4 +1,4 @@
-"""The VLM axis's part of a :class:`~src.services.config_store.store.ConfigSnapshot`.
+"""The VLM axis's part of a :class:`~src.services.config_store.snapshot.ConfigSnapshot`.
 Kept out of ``store.py`` (size ratchet, and it is one concern).
 
 Two indexes, two halves:
@@ -27,7 +27,7 @@ from src.core.logging import get_logger
 
 
 if TYPE_CHECKING:
-    from src.services.config_store.store import AxisRef, StoredConfig
+    from src.services.config_store.snapshot import AxisRef, StoredConfig
 
 logger = get_logger(__name__)
 
@@ -51,7 +51,7 @@ def reset_vlm_revision_cache() -> None:
 
 
 def _stored(src: dict[str, Any], name: str) -> StoredConfig:
-    from src.services.config_store.store import StoredConfig
+    from src.services.config_store.snapshot import StoredConfig
 
     return StoredConfig(
         kind='vlm_endpoint',
@@ -71,7 +71,7 @@ async def fetch_revision(client: Any, name: str, revision: int) -> StoredConfig 
     (never fail-open, §3.6)."""
     from src.services.config_store.global_store import global_configs_index
     from src.services.config_store.index import config_doc_id
-    from src.services.projects.guard import global_configs_read
+    from src.services.projects.guard_policy import global_configs_read
 
     key = (name, revision)
     cached = _REVISION_CACHE.get(key)
@@ -94,7 +94,7 @@ async def fetch_revision(client: Any, name: str, revision: int) -> StoredConfig 
 async def load_global_fields(client: Any, index: str) -> dict[str, Any]:
     """Probes and the desired local model (endpoint docs arrive with the
     generic ``doc_type: config`` search in ``ConfigStore._load_snapshot``)."""
-    from src.services.projects.guard import global_configs_read
+    from src.services.projects.guard_policy import global_configs_read
 
     with global_configs_read():
         probes: dict[str, dict[str, Any]] = {}
@@ -126,7 +126,7 @@ async def load_global_fields(client: Any, index: str) -> dict[str, Any]:
 
 
 def axis_ref(activation_doc: dict[str, Any] | None) -> AxisRef:
-    from src.services.config_store.store import _axis_ref
+    from src.services.config_store.snapshot import _axis_ref
 
     return _axis_ref(activation_doc)
 

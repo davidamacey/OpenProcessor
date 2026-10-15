@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config import IndexRole, get_region_fields, index_name
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 
 
 F = get_region_fields()

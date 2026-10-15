@@ -2,7 +2,7 @@
 
 Typed so the OpenAPI contract (``contracts/openapi/curation.json``) carries
 the shape a client renders from; the values come from
-:func:`src.services.curation.review_queries.review_tab_catalog`.
+:func:`src.services.curation.review_tabs.review_tab_catalog`.
 """
 
 from __future__ import annotations

@@ -20,7 +20,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from src.config.curation import CurationConfig, IndexRole
+    from src.config.curation import CurationConfig
+    from src.config.curation_roles import IndexRole
 
 
 # 2..32 chars, lowercase letters/digits, single hyphens between segments.
@@ -123,7 +124,7 @@ def resources_for_new(slug: str, base: CurationConfig) -> ProjectResources:
     """Resources for a brand-new project ``slug``, per the §2.2 naming
     table. Computed once at create time and persisted -- never
     recomputed from a later env on every boot."""
-    from src.config.curation import IndexRole
+    from src.config.curation_roles import IndexRole
 
     prefix = project_index_prefix()
     data_root = projects_data_root() / slug

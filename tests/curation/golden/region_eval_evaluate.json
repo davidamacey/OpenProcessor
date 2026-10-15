@@ -1,0 +1,659 @@
+{
+  "defaults": {
+    "false_positives": [
+      {
+        "background": false,
+        "best_gt_iou": 0.2983,
+        "box": [
+          0.7,
+          0.7,
+          0.99,
+          0.99
+        ],
+        "crop_id": "a3",
+        "detector": "yolo",
+        "image": "a.jpg",
+        "score": 0.7,
+        "server_path": "/s/a.jpg",
+        "split": "train"
+      },
+      {
+        "background": true,
+        "best_gt_iou": 0.0,
+        "box": [
+          0.3,
+          0.3,
+          0.6,
+          0.6
+        ],
+        "crop_id": "e1",
+        "detector": "yolo",
+        "image": "e.jpg",
+        "score": 0.5,
+        "server_path": "/s/e.jpg",
+        "split": "val"
+      },
+      {
+        "background": false,
+        "best_gt_iou": 0.0,
+        "box": [
+          0.7,
+          0.7,
+          0.95,
+          0.95
+        ],
+        "crop_id": "g1",
+        "detector": "yolo",
+        "image": "g.jpg",
+        "score": 0.9,
+        "server_path": "/s/g.jpg",
+        "split": "train"
+      },
+      {
+        "background": false,
+        "best_gt_iou": 0.0,
+        "box": [
+          0.0,
+          0.0,
+          0.2,
+          0.2
+        ],
+        "crop_id": "j2",
+        "detector": "yolo",
+        "image": "j.jpg",
+        "score": 0.3,
+        "server_path": "/s/j.jpg",
+        "split": "train"
+      },
+      {
+        "background": false,
+        "best_gt_iou": 0.3556,
+        "box": [
+          0.55,
+          0.55,
+          0.8,
+          0.8
+        ],
+        "crop_id": "j1",
+        "detector": "yolo",
+        "image": "j.jpg",
+        "score": null,
+        "server_path": "/s/j.jpg",
+        "split": "train"
+      }
+    ],
+    "misses": [
+      {
+        "best_box": null,
+        "best_detector": null,
+        "best_iou": 0.0,
+        "best_other_iou": null,
+        "best_other_status": null,
+        "gt_box": [
+          0.2,
+          0.2,
+          0.5,
+          0.5
+        ],
+        "image": "b.jpg",
+        "image_id": "B",
+        "reason": "no_items",
+        "server_path": "/s/b.jpg",
+        "split": "train"
+      },
+      {
+        "best_box": [
+          0.7,
+          0.7,
+          0.95,
+          0.95
+        ],
+        "best_detector": "yolo",
+        "best_iou": 0.0,
+        "best_other_iou": null,
+        "best_other_status": null,
+        "gt_box": [
+          0.1,
+          0.1,
+          0.4,
+          0.4
+        ],
+        "image": "g.jpg",
+        "image_id": "G",
+        "reason": "no_region",
+        "server_path": "/s/g.jpg",
+        "split": "train"
+      },
+      {
+        "best_box": null,
+        "best_detector": null,
+        "best_iou": 0.0,
+        "best_other_iou": null,
+        "best_other_status": null,
+        "gt_box": [
+          0.2,
+          0.2,
+          0.5,
+          0.5
+        ],
+        "image": "i.jpg",
+        "image_id": "I",
+        "reason": "no_region",
+        "server_path": "/s/i.jpg",
+        "split": "train"
+      },
+      {
+        "best_box": [
+          0.7,
+          0.7,
+          0.99,
+          0.99
+        ],
+        "best_detector": "yolo",
+        "best_iou": 0.2983,
+        "best_other_iou": 0.9667,
+        "best_other_status": "verify_rejected",
+        "gt_box": [
+          0.6,
+          0.6,
+          0.9,
+          0.9
+        ],
+        "image": "a.jpg",
+        "image_id": "A",
+        "reason": "status:verify_rejected",
+        "server_path": "/s/a.jpg",
+        "split": "train"
+      },
+      {
+        "best_box": [
+          0.55,
+          0.55,
+          0.8,
+          0.8
+        ],
+        "best_detector": "yolo",
+        "best_iou": 0.3556,
+        "best_other_iou": null,
+        "best_other_status": null,
+        "gt_box": [
+          0.6,
+          0.6,
+          0.9,
+          0.9
+        ],
+        "image": "j.jpg",
+        "image_id": "J",
+        "reason": "low_iou",
+        "server_path": "/s/j.jpg",
+        "split": "train"
+      }
+    ],
+    "pending_images": 1,
+    "summary": {
+      "accepted_statuses": [
+        "detected"
+      ],
+      "by_status": {
+        "detected": {
+          "items": 8,
+          "with_box": 8
+        },
+        "detection_failed": {
+          "items": 1,
+          "with_box": 0
+        },
+        "false_positive": {
+          "items": 1,
+          "with_box": 1
+        },
+        "no_region_visible": {
+          "items": 1,
+          "with_box": 0
+        },
+        "pending_verification": {
+          "items": 1,
+          "with_box": 1
+        },
+        "verify_rejected": {
+          "items": 1,
+          "with_box": 1
+        }
+      },
+      "dedup_iou": 0.7,
+      "iou_threshold": 0.5,
+      "miss_reasons": {
+        "low_iou": 1,
+        "no_items": 1,
+        "no_region": 2,
+        "status:verify_rejected": 1
+      },
+      "missed_but_boxed_by_status": {
+        "verify_rejected": 1
+      },
+      "splits": {
+        "train": {
+          "background_fp_image_rate": null,
+          "background_fp_regions": 0,
+          "backgrounds": 0,
+          "backgrounds_with_detection": 0,
+          "by_detector": {
+            "yolo": {
+              "fp": 4,
+              "precision": 0.2,
+              "predictions": 5,
+              "tp": 1
+            }
+          },
+          "duplicates_merged": 1,
+          "evaluated_backgrounds": 0,
+          "evaluated_gt_boxes": 6,
+          "evaluated_images": 5,
+          "f1": 0.1818,
+          "false_positives": 4,
+          "gt_boxes": 7,
+          "images": 6,
+          "iou_threshold": 0.5,
+          "mean_iou_matched": 0.877,
+          "no_item_gt_boxes": 1,
+          "no_item_images": 1,
+          "not_ingested": 1,
+          "pending_gt_boxes": 0,
+          "pending_images": 0,
+          "positives": 6,
+          "precision": 0.2,
+          "predictions": 5,
+          "recall": 0.1667,
+          "recall_at_0.5": 0.1667,
+          "tp": 1,
+          "tp_05": 1
+        },
+        "val": {
+          "background_fp_image_rate": 0.5,
+          "background_fp_regions": 1,
+          "backgrounds": 2,
+          "backgrounds_with_detection": 1,
+          "by_detector": {
+            "yolo": {
+              "fp": 1,
+              "precision": 0.0,
+              "predictions": 1,
+              "tp": 0
+            }
+          },
+          "duplicates_merged": 0,
+          "evaluated_backgrounds": 2,
+          "evaluated_gt_boxes": 0,
+          "evaluated_images": 2,
+          "f1": 0.0,
+          "false_positives": 1,
+          "gt_boxes": 1,
+          "images": 3,
+          "iou_threshold": 0.5,
+          "mean_iou_matched": null,
+          "no_item_gt_boxes": 0,
+          "no_item_images": 0,
+          "not_ingested": 0,
+          "pending_gt_boxes": 1,
+          "pending_images": 1,
+          "positives": 1,
+          "precision": 0.0,
+          "predictions": 1,
+          "recall": null,
+          "recall_at_0.5": null,
+          "tp": 0,
+          "tp_05": 0
+        }
+      },
+      "total": {
+        "background_fp_image_rate": 0.5,
+        "background_fp_regions": 1,
+        "backgrounds": 2,
+        "backgrounds_with_detection": 1,
+        "by_detector": {
+          "sam": {
+            "fp": 0,
+            "precision": 1.0,
+            "predictions": 1,
+            "tp": 1
+          },
+          "yolo": {
+            "fp": 5,
+            "precision": 0.1667,
+            "predictions": 6,
+            "tp": 1
+          }
+        },
+        "duplicates_merged": 1,
+        "evaluated_backgrounds": 2,
+        "evaluated_gt_boxes": 7,
+        "evaluated_images": 8,
+        "f1": 0.2857,
+        "false_positives": 5,
+        "gt_boxes": 9,
+        "images": 10,
+        "iou_threshold": 0.5,
+        "mean_iou_matched": 0.9385,
+        "no_item_gt_boxes": 1,
+        "no_item_images": 1,
+        "not_ingested": 1,
+        "pending_gt_boxes": 1,
+        "pending_images": 1,
+        "positives": 8,
+        "precision": 0.2857,
+        "predictions": 7,
+        "recall": 0.2857,
+        "recall_at_0.5": 0.2857,
+        "tp": 2,
+        "tp_05": 2
+      }
+    }
+  },
+  "loose_no_dedup": {
+    "false_positives": [
+      {
+        "background": false,
+        "best_gt_iou": 0.877,
+        "box": [
+          0.11,
+          0.11,
+          0.41,
+          0.41
+        ],
+        "crop_id": "a1",
+        "detector": "yolo",
+        "image": "a.jpg",
+        "score": 0.95,
+        "server_path": "/s/a.jpg",
+        "split": "train"
+      },
+      {
+        "background": false,
+        "best_gt_iou": 0.2983,
+        "box": [
+          0.7,
+          0.7,
+          0.99,
+          0.99
+        ],
+        "crop_id": "a3",
+        "detector": "yolo",
+        "image": "a.jpg",
+        "score": 0.7,
+        "server_path": "/s/a.jpg",
+        "split": "train"
+      },
+      {
+        "background": true,
+        "best_gt_iou": 0.0,
+        "box": [
+          0.3,
+          0.3,
+          0.6,
+          0.6
+        ],
+        "crop_id": "e1",
+        "detector": "yolo",
+        "image": "e.jpg",
+        "score": 0.5,
+        "server_path": "/s/e.jpg",
+        "split": "val"
+      },
+      {
+        "background": false,
+        "best_gt_iou": 0.0,
+        "box": [
+          0.7,
+          0.7,
+          0.95,
+          0.95
+        ],
+        "crop_id": "g1",
+        "detector": "yolo",
+        "image": "g.jpg",
+        "score": 0.9,
+        "server_path": "/s/g.jpg",
+        "split": "train"
+      },
+      {
+        "background": false,
+        "best_gt_iou": 0.0,
+        "box": [
+          0.0,
+          0.0,
+          0.2,
+          0.2
+        ],
+        "crop_id": "j2",
+        "detector": "yolo",
+        "image": "j.jpg",
+        "score": 0.3,
+        "server_path": "/s/j.jpg",
+        "split": "train"
+      }
+    ],
+    "misses": [
+      {
+        "best_box": null,
+        "best_detector": null,
+        "best_iou": 0.0,
+        "best_other_iou": null,
+        "best_other_status": null,
+        "gt_box": [
+          0.2,
+          0.2,
+          0.5,
+          0.5
+        ],
+        "image": "b.jpg",
+        "image_id": "B",
+        "reason": "no_items",
+        "server_path": "/s/b.jpg",
+        "split": "train"
+      },
+      {
+        "best_box": [
+          0.7,
+          0.7,
+          0.95,
+          0.95
+        ],
+        "best_detector": "yolo",
+        "best_iou": 0.0,
+        "best_other_iou": null,
+        "best_other_status": null,
+        "gt_box": [
+          0.1,
+          0.1,
+          0.4,
+          0.4
+        ],
+        "image": "g.jpg",
+        "image_id": "G",
+        "reason": "no_region",
+        "server_path": "/s/g.jpg",
+        "split": "train"
+      },
+      {
+        "best_box": null,
+        "best_detector": null,
+        "best_iou": 0.0,
+        "best_other_iou": null,
+        "best_other_status": null,
+        "gt_box": [
+          0.2,
+          0.2,
+          0.5,
+          0.5
+        ],
+        "image": "i.jpg",
+        "image_id": "I",
+        "reason": "no_region",
+        "server_path": "/s/i.jpg",
+        "split": "train"
+      }
+    ],
+    "pending_images": 1,
+    "summary": {
+      "accepted_statuses": [
+        "detected",
+        "verify_rejected"
+      ],
+      "by_status": {
+        "detected": {
+          "items": 8,
+          "with_box": 8
+        },
+        "detection_failed": {
+          "items": 1,
+          "with_box": 0
+        },
+        "false_positive": {
+          "items": 1,
+          "with_box": 1
+        },
+        "no_region_visible": {
+          "items": 1,
+          "with_box": 0
+        },
+        "pending_verification": {
+          "items": 1,
+          "with_box": 1
+        },
+        "verify_rejected": {
+          "items": 1,
+          "with_box": 1
+        }
+      },
+      "dedup_iou": 0.0,
+      "iou_threshold": 0.3,
+      "miss_reasons": {
+        "no_items": 1,
+        "no_region": 2
+      },
+      "missed_but_boxed_by_status": {},
+      "splits": {
+        "train": {
+          "background_fp_image_rate": null,
+          "background_fp_regions": 0,
+          "backgrounds": 0,
+          "backgrounds_with_detection": 0,
+          "by_detector": {
+            "sam": {
+              "fp": 0,
+              "precision": 1.0,
+              "predictions": 2,
+              "tp": 2
+            },
+            "yolo": {
+              "fp": 4,
+              "precision": 0.2,
+              "predictions": 5,
+              "tp": 1
+            }
+          },
+          "duplicates_merged": 0,
+          "evaluated_backgrounds": 0,
+          "evaluated_gt_boxes": 6,
+          "evaluated_images": 5,
+          "f1": 0.4616,
+          "false_positives": 4,
+          "gt_boxes": 7,
+          "images": 6,
+          "iou_threshold": 0.3,
+          "mean_iou_matched": 0.7425,
+          "no_item_gt_boxes": 1,
+          "no_item_images": 1,
+          "not_ingested": 1,
+          "pending_gt_boxes": 0,
+          "pending_images": 0,
+          "positives": 6,
+          "precision": 0.4286,
+          "predictions": 7,
+          "recall": 0.5,
+          "recall_at_0.5": 0.3333,
+          "tp": 3,
+          "tp_05": 2
+        },
+        "val": {
+          "background_fp_image_rate": 0.5,
+          "background_fp_regions": 1,
+          "backgrounds": 2,
+          "backgrounds_with_detection": 1,
+          "by_detector": {
+            "yolo": {
+              "fp": 1,
+              "precision": 0.0,
+              "predictions": 1,
+              "tp": 0
+            }
+          },
+          "duplicates_merged": 0,
+          "evaluated_backgrounds": 2,
+          "evaluated_gt_boxes": 0,
+          "evaluated_images": 2,
+          "f1": 0.0,
+          "false_positives": 1,
+          "gt_boxes": 1,
+          "images": 3,
+          "iou_threshold": 0.3,
+          "mean_iou_matched": null,
+          "no_item_gt_boxes": 0,
+          "no_item_images": 0,
+          "not_ingested": 0,
+          "pending_gt_boxes": 1,
+          "pending_images": 1,
+          "positives": 1,
+          "precision": 0.0,
+          "predictions": 1,
+          "recall": null,
+          "recall_at_0.5": null,
+          "tp": 0,
+          "tp_05": 0
+        }
+      },
+      "total": {
+        "background_fp_image_rate": 0.5,
+        "background_fp_regions": 1,
+        "backgrounds": 2,
+        "backgrounds_with_detection": 1,
+        "by_detector": {
+          "sam": {
+            "fp": 0,
+            "precision": 1.0,
+            "predictions": 3,
+            "tp": 3
+          },
+          "yolo": {
+            "fp": 5,
+            "precision": 0.1667,
+            "predictions": 6,
+            "tp": 1
+          }
+        },
+        "duplicates_merged": 0,
+        "evaluated_backgrounds": 2,
+        "evaluated_gt_boxes": 7,
+        "evaluated_images": 8,
+        "f1": 0.5,
+        "false_positives": 5,
+        "gt_boxes": 9,
+        "images": 10,
+        "iou_threshold": 0.3,
+        "mean_iou_matched": 0.8069,
+        "no_item_gt_boxes": 1,
+        "no_item_images": 1,
+        "not_ingested": 1,
+        "pending_gt_boxes": 1,
+        "pending_images": 1,
+        "positives": 8,
+        "precision": 0.4444,
+        "predictions": 9,
+        "recall": 0.5714,
+        "recall_at_0.5": 0.4286,
+        "tp": 4,
+        "tp_05": 3
+      }
+    }
+  }
+}

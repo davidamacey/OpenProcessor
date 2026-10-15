@@ -21,10 +21,8 @@ from curation.dataset_import.op_export_fixtures import (
 )
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.region_state import RegionStatus
-from src.services.curation.export_single_class import (
-    SingleClassExportProfile,
-    SingleClassExportService,
-)
+from src.services.curation.export_models import SingleClassExportProfile
+from src.services.curation.export_single_class import SingleClassExportService
 
 
 pytestmark = pytest.mark.asyncio

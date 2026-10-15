@@ -49,7 +49,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from src.config.curation import base_curation_config as get_curation_config
+from src.config.curation_accessors import base_curation_config as get_curation_config
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 

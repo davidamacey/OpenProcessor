@@ -315,7 +315,8 @@ async def fake_ensure_indexes(opensearch: Any) -> None:
     mapping migration the tests that stub this out intentionally skip.
     Use as ``AsyncMock(side_effect=fake_ensure_indexes)`` in place of a
     bare ``AsyncMock()``."""
-    from src.config.curation import IndexRole, get_curation_config, index_name
+    from src.config.curation_accessors import get_curation_config
+    from src.config.curation_roles import IndexRole, index_name
 
     cfg = get_curation_config()
     for role in IndexRole:

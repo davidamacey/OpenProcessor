@@ -76,7 +76,7 @@ class _RecordingClient:
 @pytest.fixture
 def custom_prefix(monkeypatch: pytest.MonkeyPatch) -> Any:
     """OP_API_PREFIX=/custom-mount, and a fresh env-built base config."""
-    import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_config_mod
 
     monkeypatch.setenv('OP_API_PREFIX', '/custom-mount')
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
@@ -90,7 +90,7 @@ def beta_bound() -> Any:
     request)."""
     from datetime import UTC, datetime
 
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.project_context import bind_process_project
     from src.config.projects import ProjectRecord, resources_for_new
 

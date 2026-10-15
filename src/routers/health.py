@@ -20,7 +20,7 @@ import torch
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 
-from src.clients.triton_pool import get_async_triton_client, get_client_pool_stats
+from src.clients.triton_client_manager import get_async_triton_client, get_client_pool_stats
 from src.config import get_settings
 from src.core.metrics import render_metrics
 

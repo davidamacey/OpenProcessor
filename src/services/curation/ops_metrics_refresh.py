@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from src.config import get_region_fields
-from src.config.curation import IndexRole
+from src.config.curation_roles import IndexRole
 from src.config.env import env_float, env_optional_str
 from src.config.project_context import bind_project
 from src.config.region_state import RegionStatus
@@ -44,7 +44,7 @@ from src.services.curation.ops_metrics import (
     OTHER_PROJECT,
     allowed_project_slugs,
 )
-from src.services.projects.guard import bind_registry_admin
+from src.services.projects.guard_policy import bind_registry_admin
 
 
 if TYPE_CHECKING:

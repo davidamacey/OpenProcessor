@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from src.config.curation import items_index
+from src.config.curation_accessors import items_index
 from src.config.env import env_float
 from src.domain.embedding_state import embedded_clause
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
@@ -56,7 +56,7 @@ async def _count_residual_pool(client: AsyncOpenSearch, *, strict: bool = False)
     ``n_trained_on`` — see ``trained_mode`` in the centroid store
     metadata.
     """
-    from src.services.curation.clustering import embedding_reduce as _ker
+    from src.services.curation.clustering import residual_fetch as _ker
 
     filt: list[dict[str, Any]] = [embedded_clause(_ker.RESIDUAL_EMBEDDING_FIELD)]
     if strict:

@@ -78,7 +78,6 @@ import argparse
 import json
 import logging
 import sys
-import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -89,305 +88,30 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from scripts.datasets import bench_set
-from scripts.datasets._common import (
-    FetchError,
-    download,
-    load_pinned_manifest,
-    require_basename,
-    seeded_sample,
-    sha256_file,
-    write_csv,
-    write_json,
+from scripts.datasets._common import FetchError, write_csv, write_json
+from scripts.datasets.coco_fetch import (
+    ANNOTATIONS_SHA256,
+    IMAGE_URL_TMPL,
+    download_images,
+    ensure_annotations,
+    write_coco_gt,
+)
+from scripts.datasets.coco_selection import (
+    DEFAULT_CLASSES,
+    DEFAULT_LICENSES,
+    eligible_images,
+    parse_side_sets,
+    primary_class_per_image,
+    resolve_license_names,
+    select_negatives,
+    select_per_class,
+    select_side_sets,
+    verify_or_write_manifest,
 )
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger('fetch_coco_subset')
-
-ANNOTATIONS_URL = 'http://images.cocodataset.org/annotations/annotations_trainval2017.zip'
-# Verified by direct download 2026-09-25 (runbook §3.1: 252,907,541 bytes).
-# COCO's file at this URL has been stable since the 2017 release.
-ANNOTATIONS_SHA256 = '113a836d90195ee1f884e704da6304dfaaecff1f023f49b6ca93c4aaae470268'
-
-DEFAULT_CLASSES = (
-    'bicycle',
-    'car',
-    'motorcycle',
-    'bus',
-    'truck',
-    'cat',
-    'dog',
-    'horse',
-    'sheep',
-    'cow',
-)
-
-# CLI --licenses token -> COCO licenses[].name (resolved by name, not id --
-# see module docstring point 4).
-LICENSE_ALIASES = {
-    'by': 'Attribution License',
-    'by-sa': 'Attribution-ShareAlike License',
-    'no-known': 'No known copyright restrictions',
-    'usgov': 'United States Government Work',
-}
-DEFAULT_LICENSES = ('by', 'by-sa', 'no-known', 'usgov')
-
-MIN_BOX_AREA_FRACTION = 0.01
-IMAGE_URL_TMPL = bench_set.IMAGE_URL_TMPL
-
-
-# =============================================================================
-# Pure selection logic (unit-testable without network)
-# =============================================================================
-
-
-def resolve_license_names(tokens: list[str]) -> set[str]:
-    bad = [t for t in tokens if t not in LICENSE_ALIASES]
-    if bad:
-        raise FetchError(f'unknown --licenses token(s) {bad}; valid: {sorted(LICENSE_ALIASES)}')
-    return {LICENSE_ALIASES[t] for t in tokens}
-
-
-def primary_class_per_image(
-    images: list[dict[str, Any]],
-    annotations: list[dict[str, Any]],
-    category_id_to_name: dict[int, str],
-    target_class_ids: set[int],
-) -> dict[int, str]:
-    """``image_id -> primary class name`` for images with a qualifying box.
-
-    The primary class is whichever target-class box has the largest area,
-    restricted to boxes covering >= ``MIN_BOX_AREA_FRACTION`` of the frame.
-    Images with no qualifying box are absent from the result.
-    """
-    dims = {im['id']: (im['width'], im['height']) for im in images}
-    best_area: dict[int, float] = {}
-    best_cat: dict[int, int] = {}
-    for ann in annotations:
-        if ann.get('iscrowd', 0):
-            continue
-        cat_id = ann['category_id']
-        if cat_id not in target_class_ids:
-            continue
-        image_id = ann['image_id']
-        w, h = dims.get(image_id, (0, 0))
-        frame_area = w * h
-        if frame_area <= 0:
-            continue
-        _, _, bw, bh = ann['bbox']
-        area = bw * bh
-        if area / frame_area < MIN_BOX_AREA_FRACTION:
-            continue
-        if area > best_area.get(image_id, -1.0):
-            best_area[image_id] = area
-            best_cat[image_id] = cat_id
-    return {img_id: category_id_to_name[cat_id] for img_id, cat_id in best_cat.items()}
-
-
-def eligible_images(
-    images: list[dict[str, Any]],
-    primary_class: dict[int, str],
-    license_id_to_name: dict[int, str],
-    allowed_license_names: set[str],
-    split: str,
-) -> list[dict[str, Any]]:
-    """Images with a primary class and an allowed license, sorted by id
-    for deterministic downstream sampling."""
-    out = []
-    for im in images:
-        cls = primary_class.get(im['id'])
-        if cls is None:
-            continue
-        lic_name = license_id_to_name.get(im['license'])
-        if lic_name not in allowed_license_names:
-            continue
-        out.append(
-            {
-                'image_id': im['id'],
-                'file_name': im['file_name'],
-                'split': split,
-                'primary_class': cls,
-                'license_name': lic_name,
-                'flickr_url': im.get('flickr_url', ''),
-                'coco_url': im.get('coco_url', ''),
-                'width': im['width'],
-                'height': im['height'],
-            }
-        )
-    out.sort(key=lambda r: r['image_id'])
-    return out
-
-
-def select_per_class(
-    val_pool: list[dict[str, Any]],
-    train_pool: list[dict[str, Any]],
-    classes: list[str],
-    per_class: int,
-    seed: int,
-) -> list[dict[str, Any]]:
-    """Val2017 first, topped up from train2017, seeded per class."""
-    selected: list[dict[str, Any]] = []
-    for cls in classes:
-        val_cls = [r for r in val_pool if r['primary_class'] == cls]
-        train_cls = [r for r in train_pool if r['primary_class'] == cls]
-        chosen = seeded_sample(val_cls, per_class, seed)
-        remaining = per_class - len(chosen)
-        if remaining > 0:
-            chosen += seeded_sample(train_cls, remaining, seed + 1)
-        if len(chosen) < per_class:
-            logger.warning(
-                'class %r: only %d/%d eligible images available', cls, len(chosen), per_class
-            )
-        selected.extend(chosen)
-    selected.sort(key=lambda r: r['image_id'])
-    return selected
-
-
-def select_side_sets(
-    val_pool: list[dict[str, Any]],
-    train_pool: list[dict[str, Any]],
-    main_ids: set[int],
-    side_sets: dict[str, int],
-    seed: int,
-) -> dict[str, list[dict[str, Any]]]:
-    """Disjoint side-set samples drawn from the leftover eligible pool
-    (any class), seeded, in image-id order for determinism."""
-    leftover = [r for r in (*val_pool, *train_pool) if r['image_id'] not in main_ids]
-    leftover.sort(key=lambda r: r['image_id'])
-    out: dict[str, list[dict[str, Any]]] = {}
-    used: set[int] = set()
-    for offset, (name, n) in enumerate(side_sets.items()):
-        pool = [r for r in leftover if r['image_id'] not in used]
-        chosen = seeded_sample(pool, n, seed + 100 + offset)
-        used.update(r['image_id'] for r in chosen)
-        out[name] = sorted(chosen, key=lambda r: r['image_id'])
-    return out
-
-
-def select_negatives(
-    images: list[dict[str, Any]],
-    annotations: list[dict[str, Any]],
-    target_class_ids: set[int],
-    license_id_to_name: dict[int, str],
-    allowed_license_names: set[str],
-    split: str,
-    n: int,
-    seed: int,
-) -> list[dict[str, Any]]:
-    """Seeded sample of allowed-license images with no box (crowd included)
-    of any target class. Their other-category annotations are kept in
-    ``coco_gt.json``, so they are negatives only for the chosen classes."""
-    annotated = {a['image_id'] for a in annotations if a['category_id'] in target_class_ids}
-    pool = []
-    for im in images:
-        if im['id'] in annotated:
-            continue
-        lic_name = license_id_to_name.get(im['license'])
-        if lic_name not in allowed_license_names:
-            continue
-        pool.append(
-            {
-                'image_id': im['id'],
-                'file_name': im['file_name'],
-                'split': split,
-                'primary_class': '',
-                'license_name': lic_name,
-                'flickr_url': im.get('flickr_url', ''),
-                'coco_url': im.get('coco_url', ''),
-                'width': im['width'],
-                'height': im['height'],
-            }
-        )
-    pool.sort(key=lambda r: r['image_id'])
-    return sorted(seeded_sample(pool, n, seed + 200), key=lambda r: r['image_id'])
-
-
-def verify_or_write_manifest(manifest_path: Path, selected: list[dict[str, Any]]) -> None:
-    """Compare ``selected`` against the committed pin, or write it if this
-    is the first run (bootstrap). Raises on drift."""
-    pinned = load_pinned_manifest(manifest_path)
-    pin_rows = [
-        {
-            'image_id': r['image_id'],
-            'file_name': r['file_name'],
-            'split': r['split'],
-            'primary_class': r['primary_class'],
-            'license_name': r['license_name'],
-            'flickr_url': r['flickr_url'],
-        }
-        for r in selected
-    ]
-    if pinned is None:
-        write_json(manifest_path, pin_rows)
-        logger.info('wrote new pinned manifest %s (%d images)', manifest_path, len(pin_rows))
-        return
-    pinned_ids = [r['image_id'] for r in pinned]
-    selected_ids = [r['image_id'] for r in pin_rows]
-    if pinned_ids != selected_ids:
-        raise FetchError(
-            f'{manifest_path}: selection drift -- pinned {len(pinned_ids)} image ids, '
-            f'recomputed {len(selected_ids)} differ. The annotation source or selection '
-            'code changed since this manifest was pinned; investigate before re-pinning.'
-        )
-
-
-# =============================================================================
-# Network-touching orchestration
-# =============================================================================
-
-
-def ensure_annotations(cache_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
-    zip_path = cache_dir / 'annotations_trainval2017.zip'
-    download(ANNOTATIONS_URL, zip_path, expected_sha256=ANNOTATIONS_SHA256)
-    extract_dir = cache_dir / 'annotations_trainval2017'
-    val_json = extract_dir / 'annotations' / 'instances_val2017.json'
-    train_json = extract_dir / 'annotations' / 'instances_train2017.json'
-    if not (val_json.is_file() and train_json.is_file()):
-        with zipfile.ZipFile(zip_path) as zf:
-            zf.extract('annotations/instances_val2017.json', extract_dir)
-            zf.extract('annotations/instances_train2017.json', extract_dir)
-    return (
-        json.loads(val_json.read_text(encoding='utf-8')),
-        json.loads(train_json.read_text(encoding='utf-8')),
-    )
-
-
-def download_images(rows: list[dict[str, Any]], images_dir: Path) -> None:
-    for row in rows:
-        url = IMAGE_URL_TMPL[row['split']].format(file_name=row['file_name'])
-        dest = images_dir / require_basename(row['file_name'])
-        download(url, dest)
-        row['sha256'] = sha256_file(dest)
-
-
-def write_coco_gt(
-    path: Path,
-    rows: list[dict[str, Any]],
-    annotations_by_image: dict[int, list[dict[str, Any]]],
-    categories: list[dict[str, Any]],
-) -> None:
-    image_ids = {r['image_id'] for r in rows}
-    payload = {
-        'images': [
-            {
-                'id': r['image_id'],
-                'file_name': r['file_name'],
-                'width': r['width'],
-                'height': r['height'],
-            }
-            for r in rows
-        ],
-        'annotations': [
-            ann for img_id in image_ids for ann in annotations_by_image.get(img_id, [])
-        ],
-        'categories': categories,
-    }
-    write_json(path, payload)
-
-
-# =============================================================================
-# CLI
-# =============================================================================
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -451,18 +175,6 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def parse_side_sets(spec: str) -> dict[str, int]:
-    if not spec:
-        return {}
-    out: dict[str, int] = {}
-    for part in spec.split(','):
-        name, _, n = part.partition('=')
-        if not name or not n.isdigit():
-            raise FetchError(f'invalid --side-sets entry {part!r}; expected name=count')
-        out[name] = int(n)
-    return out
-
-
 def run_bench_set(args: argparse.Namespace) -> dict[str, Any]:
     """``--bench-set N``: select, download, checksum and pin a throughput set."""
     if args.manifest is None:
@@ -507,6 +219,57 @@ def run_verify(args: argparse.Namespace) -> int:
         logger.error('%s', line)
     logger.info('%d images checked, %d problem(s)', pin['count'], len(problems))
     return 1 if problems else 0
+
+
+def _ground_truth(
+    val_data: dict[str, Any],
+    train_data: dict[str, Any],
+    classes: list[str],
+    category_name_to_id: dict[str, int],
+    negatives: list[dict[str, Any]],
+) -> tuple[dict[int, list[dict[str, Any]]], list[dict[str, Any]]]:
+    """Annotations per selected image and the category list of ``coco_gt.json``."""
+    target_class_ids = {category_name_to_id[c] for c in classes}
+    annotations_by_image: dict[int, list[dict[str, Any]]] = {}
+    for split_data in (val_data, train_data):
+        for ann in split_data['annotations']:
+            # Crowd boxes stay (flagged ``iscrowd``): the file is COCO-faithful, and
+            # the import fixture exercises ``coco_crowd_skipped`` from them.
+            if ann['category_id'] in target_class_ids:
+                annotations_by_image.setdefault(ann['image_id'], []).append(ann)
+    categories = [{'id': category_name_to_id[c], 'name': c} for c in classes]
+    if negatives:
+        # A negative keeps every annotation it has (other categories), so the
+        # ground truth stays COCO-faithful; it is negative only for ``classes``.
+        negative_ids = {r['image_id'] for r in negatives}
+        for ann in val_data['annotations']:
+            if ann['image_id'] in negative_ids:
+                annotations_by_image.setdefault(ann['image_id'], []).append(ann)
+        used_cat_ids = {
+            a['category_id'] for i in negative_ids for a in annotations_by_image.get(i, [])
+        }
+        categories = [
+            {'id': c['id'], 'name': c['name']}
+            for c in val_data['categories']
+            if c['name'] in classes or c['id'] in used_cat_ids
+        ]
+    return annotations_by_image, categories
+
+
+def _write_attribution(path: Path, rows: list[dict[str, Any]]) -> None:
+    write_csv(
+        path,
+        (
+            {
+                'image_id': r['image_id'],
+                'file_name': r['file_name'],
+                'license_name': r['license_name'],
+                'flickr_url': r['flickr_url'],
+            }
+            for r in rows
+        ),
+        ('image_id', 'file_name', 'license_name', 'flickr_url'),
+    )
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
@@ -578,60 +341,16 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         for name, rows in side_selected.items():
             download_images(rows, args.out / name)
 
-    annotations_by_image: dict[int, list[dict[str, Any]]] = {}
-    for split_data in (val_data, train_data):
-        for ann in split_data['annotations']:
-            # Crowd boxes stay (flagged ``iscrowd``): the file is COCO-faithful, and
-            # the import fixture exercises ``coco_crowd_skipped`` from them.
-            if ann['category_id'] in target_class_ids:
-                annotations_by_image.setdefault(ann['image_id'], []).append(ann)
-    categories = [{'id': category_name_to_id[c], 'name': c} for c in classes]
-    if negatives:
-        # A negative keeps every annotation it has (other categories), so the
-        # ground truth stays COCO-faithful; it is negative only for ``classes``.
-        negative_ids = {r['image_id'] for r in negatives}
-        for ann in val_data['annotations']:
-            if ann['image_id'] in negative_ids:
-                annotations_by_image.setdefault(ann['image_id'], []).append(ann)
-        used_cat_ids = {
-            a['category_id'] for i in negative_ids for a in annotations_by_image.get(i, [])
-        }
-        categories = [
-            {'id': c['id'], 'name': c['name']}
-            for c in val_data['categories']
-            if c['name'] in classes or c['id'] in used_cat_ids
-        ]
+    annotations_by_image, categories = _ground_truth(
+        val_data, train_data, classes, category_name_to_id, negatives
+    )
     write_coco_gt(
         args.out / 'coco_gt.json', [*selected, *negatives], annotations_by_image, categories
     )
 
-    write_csv(
-        args.out / 'ATTRIBUTION.csv',
-        (
-            {
-                'image_id': r['image_id'],
-                'file_name': r['file_name'],
-                'license_name': r['license_name'],
-                'flickr_url': r['flickr_url'],
-            }
-            for r in [*selected, *negatives]
-        ),
-        ('image_id', 'file_name', 'license_name', 'flickr_url'),
-    )
+    _write_attribution(args.out / 'ATTRIBUTION.csv', [*selected, *negatives])
     for name, rows in side_selected.items():
-        write_csv(
-            args.out / name / 'ATTRIBUTION.csv',
-            (
-                {
-                    'image_id': r['image_id'],
-                    'file_name': r['file_name'],
-                    'license_name': r['license_name'],
-                    'flickr_url': r['flickr_url'],
-                }
-                for r in rows
-            ),
-            ('image_id', 'file_name', 'license_name', 'flickr_url'),
-        )
+        _write_attribution(args.out / name / 'ATTRIBUTION.csv', rows)
 
     summary = {
         'seed': args.seed,

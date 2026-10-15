@@ -92,9 +92,9 @@ regex
 # Curation Clustering (lazily imported -- ImportError only surfaces on first
 # call to a clustering endpoint if these are missing from the image)
 scikit-learn  # src/services/curation/clustering/orchestrator.py, methods/ahc.py, backend.py; scripts/curation/bakeoff/sample.py
-umap-learn  # src/services/curation/clustering/embedding_reduce.py, backend.py; src/services/curation/embedding_viz.py
+umap-learn  # src/services/curation/clustering/embedding_reduce.py, umap_state.py, backend.py; src/services/curation/embedding_viz.py
 hdbscan  # src/services/curation/clustering/methods/hdbscan.py
-joblib  # src/services/curation/clustering/embedding_reduce.py, embedding_viz.py
+joblib  # src/services/curation/clustering/umap_state.py, embedding_viz.py
 
 # GPU arbiter (src/services/training/gpu_arbiter.py): stops/starts
 # GPU-resident sibling containers (docker.sock mount, OP_GPU_ARBITER_*)

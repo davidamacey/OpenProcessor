@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 
-from src.services.training import triton_promote
+from src.services.training import triton_http
 from src.services.training.triton_promote import TritonPromoter
 from src.services.training.triton_reload import reload_promoted_models
 from src.services.training.triton_repo import UNLOADED_MARKER, set_explicitly_unloaded
@@ -41,7 +41,7 @@ def loads(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
     real = httpx.AsyncClient
     monkeypatch.setattr(
-        triton_promote.httpx,
+        triton_http.httpx,
         'AsyncClient',
         lambda **kw: real(transport=httpx.MockTransport(handler), **kw),
     )
@@ -89,10 +89,10 @@ def test_a_directory_without_promote_json_gets_no_marker(tmp_path: Path) -> None
 def test_the_unload_route_records_the_marker(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from fastapi.testclient import TestClient
 
-    from src.routers import models as models_router
+    from src.routers import models_lifecycle
 
-    monkeypatch.setattr(models_router, 'TRITON_MODELS_DIR', repo)
-    monkeypatch.setattr(models_router, 'check_unload', lambda *_a, **_k: None)
+    monkeypatch.setattr(models_lifecycle, 'TRITON_MODELS_DIR', repo)
+    monkeypatch.setattr(models_lifecycle, 'check_unload', lambda *_a, **_k: None)
 
     class _Triton:
         async def unload_model(self, name: str) -> tuple[bool, str]:
@@ -101,7 +101,7 @@ def test_the_unload_route_records_the_marker(repo: Path, monkeypatch: pytest.Mon
         async def load_model(self, name: str) -> tuple[bool, str]:
             return True, f'{name} loaded'
 
-    monkeypatch.setattr(models_router, 'TritonControlService', _Triton)
+    monkeypatch.setattr(models_lifecycle, 'TritonControlService', _Triton)
     from src.main import app
 
     client = TestClient(app)

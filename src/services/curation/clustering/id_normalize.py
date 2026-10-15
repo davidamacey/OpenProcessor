@@ -157,7 +157,7 @@ async def _normalize(client: AsyncOpenSearch, crop_ids: list[str] | None) -> dic
 
     Idempotent and safe to re-run.
     """
-    from src.services.curation.clustering.embedding_reduce import CONFIDENT_CLASS_SOURCES
+    from src.services.curation.clustering.residual_fetch import CONFIDENT_CLASS_SOURCES
 
     config = get_curation_config()
     # `class_id` / `cluster_id` / `cluster_subid` here are the top-level
@@ -173,7 +173,7 @@ async def _normalize(client: AsyncOpenSearch, crop_ids: list[str] | None) -> dic
     # back out of their candidate cluster on every run, undoing the
     # residual pool's clustering. Narrow to confident/validated docs
     # (the same CONFIDENT_CLASS_SOURCES set the residual-pool builder in
-    # embedding_reduce.py excludes — imported from there so the two sets
+    # residual_fetch.py excludes — imported from there so the two sets
     # never drift apart) plus a doc-values script filter that excludes
     # already-correct docs at query time (no _source load). The
     # doc-values filter alone cut the legacy match from 234,575 to

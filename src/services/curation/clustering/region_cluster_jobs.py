@@ -43,7 +43,7 @@ def _region_state_dir() -> Path:
     """The bound project's region-clustering state dir: the job files and
     TTL markers below are per project (one project's refine must never
     suppress another's re-partition, nor its job show on another's status)."""
-    from src.config.curation import get_curation_config
+    from src.config.curation_accessors import get_curation_config
 
     return Path(get_curation_config().project_state_dir) / 'region_cluster'
 

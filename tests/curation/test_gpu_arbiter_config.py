@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from src.config import GpuArbiterConfig, get_curation_config, get_gpu_arbiter_config
-from src.services.training import gpu_arbiter, trainer_reachability
+from src.services.training import gpu_arbiter, gpu_arbiter_docker, trainer_reachability
 
 
 if TYPE_CHECKING:
@@ -54,17 +54,19 @@ def test_stop_gpu_services_is_noop_with_no_configured_containers() -> None:
     """An install with GpuArbiterConfig(containers=()) must not touch the
     docker SDK at all -- it degrades to a no-op rather than crashing or
     warning about a missing socket."""
-    action = asyncio.run(gpu_arbiter.stop_gpu_services(containers=()))
+    action = asyncio.run(gpu_arbiter_docker.stop_gpu_services(containers=()))
     assert action.action == 'noop'
 
 
 def test_start_gpu_services_is_noop_with_no_configured_containers() -> None:
-    action = asyncio.run(gpu_arbiter.start_gpu_services(containers=()))
+    action = asyncio.run(gpu_arbiter_docker.start_gpu_services(containers=()))
     assert action.action == 'noop'
 
 
 def test_probe_trainer_reachable_skips_when_unconfigured() -> None:
-    severity, detail = asyncio.run(gpu_arbiter.probe_trainer_reachable(container_name=None))
+    severity, detail = asyncio.run(
+        trainer_reachability.probe_trainer_reachable(container_name=None)
+    )
     assert severity == 'ok'
     assert 'not configured' in detail or 'not applicable' in detail
 
@@ -75,7 +77,7 @@ def _write_heartbeat(jobs_dir: Path, *, age_seconds: float) -> None:
 
     written_at = (datetime.now(UTC) - timedelta(seconds=age_seconds)).isoformat()
     jobs_dir.mkdir(parents=True, exist_ok=True)
-    (jobs_dir / gpu_arbiter.TRAINER_CAPABILITIES_FILENAME).write_text(
+    (jobs_dir / trainer_reachability.TRAINER_CAPABILITIES_FILENAME).write_text(
         json.dumps({'gpu_order': [], 'visible_count': 1, 'written_at': written_at})
     )
 
@@ -98,7 +100,7 @@ def test_probe_trainer_reachable_ok_on_a_stock_install_with_fresh_heartbeat(
     _write_heartbeat(tmp_path, age_seconds=5.0)
 
     severity, detail = asyncio.run(
-        gpu_arbiter.probe_trainer_reachable(container_name='op-test-trainer')
+        trainer_reachability.probe_trainer_reachable(container_name='op-test-trainer')
     )
     assert severity == 'ok'
     assert 'heartbeat' in detail
@@ -111,10 +113,12 @@ def test_probe_trainer_reachable_warns_on_stale_heartbeat_without_docker(
     warn, never block -- "can't tell" is not the same as "definitely down"."""
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
     monkeypatch.setattr(trainer_reachability, '_docker_client', lambda: None)
-    _write_heartbeat(tmp_path, age_seconds=gpu_arbiter.TRAINER_HEARTBEAT_STALE_SECONDS + 60.0)
+    _write_heartbeat(
+        tmp_path, age_seconds=trainer_reachability.TRAINER_HEARTBEAT_STALE_SECONDS + 60.0
+    )
 
     severity, detail = asyncio.run(
-        gpu_arbiter.probe_trainer_reachable(container_name='op-test-trainer')
+        trainer_reachability.probe_trainer_reachable(container_name='op-test-trainer')
     )
     assert severity == 'warn'
     assert 'stale' in detail
@@ -130,7 +134,7 @@ def test_probe_trainer_reachable_warns_when_heartbeat_file_missing(
     monkeypatch.setattr(trainer_reachability, '_docker_client', lambda: None)
 
     severity, detail = asyncio.run(
-        gpu_arbiter.probe_trainer_reachable(container_name='op-test-trainer')
+        trainer_reachability.probe_trainer_reachable(container_name='op-test-trainer')
     )
     assert severity == 'warn'
     assert 'no heartbeat file' in detail
@@ -147,7 +151,7 @@ def test_probe_trainer_reachable_blocks_when_docker_confirms_container_gone(
     monkeypatch.setattr(trainer_reachability, '_container_status_sync', lambda _client, _name: None)
 
     severity, detail = asyncio.run(
-        gpu_arbiter.probe_trainer_reachable(container_name='op-test-trainer')
+        trainer_reachability.probe_trainer_reachable(container_name='op-test-trainer')
     )
     assert severity == 'block'
     assert 'does not exist' in detail
@@ -165,18 +169,18 @@ def test_docker_client_unavailable_warns_once_not_per_call(
         def from_env(self) -> None:
             raise RuntimeError('no such file or directory: /var/run/docker.sock')
 
-    monkeypatch.setattr(gpu_arbiter, '_docker_unavailable_logged', [False])
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_unavailable_logged', [False])
     monkeypatch.setattr('docker.from_env', _Boom().from_env)
 
     warnings: list[tuple[str, dict]] = []
     monkeypatch.setattr(
-        gpu_arbiter.logger,
+        gpu_arbiter_docker.logger,
         'warning',
         lambda event, **kw: warnings.append((event, kw)),
     )
 
     for _ in range(3):
-        assert gpu_arbiter._docker_client() is None
+        assert gpu_arbiter_docker._docker_client() is None
 
     assert len(warnings) == 1
     assert warnings[0][0] == 'arbiter_docker_unavailable'
@@ -187,10 +191,10 @@ def test_docker_client_unavailable_warns_once_not_per_call(
             return None
 
     monkeypatch.setattr('docker.from_env', _Ok)
-    assert gpu_arbiter._docker_client() is not None
+    assert gpu_arbiter_docker._docker_client() is not None
 
     monkeypatch.setattr('docker.from_env', _Boom().from_env)
-    assert gpu_arbiter._docker_client() is None
+    assert gpu_arbiter_docker._docker_client() is None
     assert len(warnings) == 2
 
 
@@ -343,7 +347,7 @@ def test_bakeoff_active_after_enqueue_with_no_env(
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
-    import src.config.curation as curation_config_module
+    import src.config.curation_accessors as curation_config_module
     from src.config import CurationConfig
     from src.routers.curation import bakeoff, router as curation_router
     from src.services.curation import eval_datasets
@@ -372,7 +376,7 @@ def test_bakeoff_active_after_enqueue_with_no_env(
     async def _stop(**_kw: object) -> _Action:
         return _Action()
 
-    clean_arbiter_env.setattr(gpu_arbiter, 'stop_gpu_services', _stop)
+    clean_arbiter_env.setattr(gpu_arbiter_docker, 'stop_gpu_services', _stop)
     assert gpu_arbiter.bakeoff_active() is False
     app = FastAPI()
     from _curation_app import mount_curation_routers
@@ -397,7 +401,7 @@ def test_bakeoff_active_scans_every_projects_own_queue(
     (``gpu_arbiter.all_bakeoff_jobs_dirs()``), not one flat dir."""
     from dataclasses import replace
 
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import new_project_record
     from src.services.projects import registry as registry_mod
 

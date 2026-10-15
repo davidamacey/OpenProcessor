@@ -301,7 +301,7 @@ def test_cli_start_after_requires_single_prefix(monkeypatch):
 def test_review_router_points_at_the_real_script():
     """``GET /review/unmatched_terms`` tells operators to run a
     reclassification script — that pointer must name a file that exists."""
-    source = (REPO_ROOT / 'src' / 'routers' / 'curation' / 'review.py').read_text()
+    source = (REPO_ROOT / 'src' / 'routers' / 'curation' / 'review_terms.py').read_text()
     ref = 'scripts/curation/reclassify_after_registry_growth.py'
     assert ref in source
     assert (REPO_ROOT / ref).is_file()

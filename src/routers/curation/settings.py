@@ -67,8 +67,9 @@ async def _validate_defaults(defaults: dict[str, str | None], opensearch: Any) -
        (``review_sorts.build_sort``) still covers a pin whose coverage
        later drops to 0, or one stored before this check.
     """
+    from src.services.curation.field_coverage import invalidate_field_coverage
     from src.services.curation.strategy_defaults import SETTABLE_DEFAULT_AXES
-    from src.services.curation.strategy_registry import get_registry, invalidate_field_coverage
+    from src.services.curation.strategy_registry import get_registry
 
     # A PUT is rare; judge coverage on live counts, not a TTL-cached one
     # taken before a backfill finished.
@@ -148,7 +149,7 @@ async def _config_store_axis_defaults(opensearch: Any) -> dict[str, str | None]:
             continue
         # 'off' (an explicit deactivation) is a real,
         # distinct state from "never activated" (the store's own
-        # docstring, src/services/config_store/store.py's `AxisRef`) --
+        # docstring, src/services/config_store/snapshot.py's `AxisRef`) --
         # report it, don't fold it into the same absence as `None`.
         result[axis] = 'off' if ref == 'off' else ref[0]
     return result

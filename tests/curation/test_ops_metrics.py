@@ -26,7 +26,7 @@ from prometheus_client.metrics import MetricWrapperBase
 
 from curation.ingest_fakes import _jpeg_bytes, _make_service
 from curation.test_vlm_labeler import _fake_client, _make_chat_response
-from src.config.curation import IndexRole
+from src.config.curation_roles import IndexRole
 from src.config.project_context import bind_project
 from src.services.curation import ops_metrics as om, ops_metrics_refresh as refresh
 from src.services.curation.worker_liveness import write_heartbeat

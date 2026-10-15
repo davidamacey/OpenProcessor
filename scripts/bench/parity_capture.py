@@ -14,8 +14,8 @@ import math
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
-from scripts.bench.baseline_suite import run_autolabel
 from scripts.bench.parity_store import CaptureError
+from scripts.bench.suite_ingest import run_autolabel
 from src.config.curation import ITEM_EMBEDDING_FIELD
 
 

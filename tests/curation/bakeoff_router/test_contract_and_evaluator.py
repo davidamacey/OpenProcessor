@@ -41,6 +41,8 @@ def _bakeoff_harness_files() -> list[str]:
         ),
         'src/services/curation/eval_datasets.py',
         'src/services/curation/bakeoff_jobs.py',
+        'src/services/curation/bakeoff_mapping.py',
+        'src/services/curation/bakeoff_resolve.py',
     ]
     for root in ('scripts/curation/bakeoff', 'examples/bakeoff', 'src/schemas/bakeoff'):
         files += [

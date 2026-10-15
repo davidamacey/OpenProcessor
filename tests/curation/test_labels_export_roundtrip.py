@@ -27,7 +27,7 @@ import pytest
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch.registry import ClassRegistry
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 
 
@@ -102,7 +102,7 @@ async def _export(fake: QueryFakeOpenSearch, registry: ClassRegistry, tmp_path: 
 
 
 async def _human_label_paths(fake, registry, monkeypatch) -> None:
-    from src.routers.curation import crops
+    from src.routers.curation import crops_write as crops
     from src.routers.curation._common_models import (
         CropBatchLabelRequest,
         CropLabelRequest,
