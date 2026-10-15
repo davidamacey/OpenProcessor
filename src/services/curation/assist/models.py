@@ -18,7 +18,7 @@ from src.services.curation.item_selection import MAX_SELECTION_IDS
 from src.services.rejections import rejection
 
 
-AssistAction = Literal['classify', 'attributes']
+AssistAction = Literal['classify', 'attributes', 'verify']
 RunStatus = Literal[
     'dry_run',
     'queued',
@@ -30,6 +30,7 @@ RunStatus = Literal[
     'interrupted',
 ]
 ACTIVE_STATUSES = frozenset({'queued', 'running'})
+MAX_BOX_REFS = 1000
 
 
 class AssistContext(BaseModel):
@@ -52,6 +53,23 @@ class CropsTarget(BaseModel):
     context: AssistContext | None = None
 
 
+class BoxRef(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    crop_id: str
+    box_id: str
+
+
+class BoxesTarget(BaseModel):
+    """Chosen boxes of chosen items (a single box is one pair). Boxes have no class,
+    so this target takes `verify` and `attributes` only."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal['boxes']
+    boxes: list[BoxRef] = Field(min_length=1, max_length=MAX_BOX_REFS)
+
+
 class ClusterTarget(BaseModel):
     """A cluster, or one sub-cluster of it, addressed by the stored ids."""
 
@@ -71,7 +89,9 @@ class FilterTarget(BaseModel):
     filter: ItemFilter
 
 
-AssistTarget = Annotated[CropsTarget | ClusterTarget | FilterTarget, Field(discriminator='kind')]
+AssistTarget = Annotated[
+    CropsTarget | BoxesTarget | ClusterTarget | FilterTarget, Field(discriminator='kind')
+]
 
 
 class AssistSample(BaseModel):
@@ -111,6 +131,13 @@ def validate_request(request: AssistRunRequest) -> None:
     target = request.target
     if len(set(request.actions)) != len(request.actions):
         raise _invalid('actions must not repeat')
+    if isinstance(target, BoxesTarget):
+        if 'classify' in request.actions:
+            raise _invalid('a boxes target has no class to suggest: use verify or attributes')
+        if request.sample.mode != 'all':
+            raise _invalid('a boxes target is its own sample: sample.mode must be "all"')
+    if 'verify' in request.actions and not isinstance(target, CropsTarget | BoxesTarget):
+        raise _invalid('verify takes a crops or boxes target')
     if isinstance(target, CropsTarget):
         if request.sample.mode != 'all':
             raise _invalid(
@@ -147,6 +174,12 @@ class SkippedCounts(BaseModel):
     holdout: int = 0
     excluded: int = 0
     not_found: int = 0
+    box_not_found: int = Field(
+        default=0, description='Named boxes the item no longer has (`boxes` target).'
+    )
+    box_locked: int = Field(
+        default=0, description='Named boxes a human or an import owns (`boxes` target).'
+    )
     class_locked: int = Field(
         default=0,
         description='Sent anyway for suggestions; their class is never written (`classify` only).',
@@ -185,9 +218,19 @@ class AttributesResult(BaseModel):
     invalid_values: int = 0
 
 
+class VerifyResult(BaseModel):
+    boxes: int = Field(default=0, description='Boxes the VLM gave a verdict on.')
+    accepted: int = 0
+    rejected: int = 0
+    locked_skipped: int = Field(
+        default=0, description='Boxes a human or an import owns: never sent.'
+    )
+
+
 class AssistResult(BaseModel):
     classify: ClassifyResult | None = None
     attributes: AttributesResult | None = None
+    verify: VerifyResult | None = None
     proposal: Proposal | None = Field(
         default=None, description='The sampled answers read as a label for the scope.'
     )
@@ -227,6 +270,8 @@ __all__ = [
     'AssistSample',
     'AssistTarget',
     'AttributesResult',
+    'BoxRef',
+    'BoxesTarget',
     'ClassifyResult',
     'ClusterTarget',
     'CropsTarget',
@@ -235,5 +280,6 @@ __all__ = [
     'RunStatus',
     'SkippedCounts',
     'StratumInfo',
+    'VerifyResult',
     'validate_request',
 ]

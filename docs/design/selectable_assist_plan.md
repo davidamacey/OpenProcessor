@@ -109,7 +109,7 @@ All curation routes are mounted at `/curation/projects/{project}` + path
 | Piece | Where | Notes |
 |---|---|---|
 | `POST /vlm/label_batch` | `src/routers/curation/vlm.py:113-289`; body `VlmLabelBatchRequest` `_vlm_route_models.py:9-12` | Synchronous, `crop_ids` ≤64 (route, `vlm.py:123`; the schema allows 5000). Query `vlm`, `acknowledge_external`; **no `prompt_pack`** (always the settings default, `vlm.py:64`). Skips locked/validated (`:180`) and holdout (`:254-264`). Does not write make/model (`label_batch_write.py:44`). Used by `vlm_worker`; the frontend no longer calls it (`api_autoLabel.ts:34`). |
-| `POST /vlm/verify_regions` | `vlm.py:292-404`; body `crop_ids` ≤64 | Synchronous; every verifiable box of each crop gets one sequential `labeler.verify_region` call (`:353-364`); writes `verify_regions_update` (`src/services/curation/region_verify.py:49-122`). |
+| the route `/vlm/verify_regions` | `vlm.py:292-404`; body `crop_ids` ≤64 | Synchronous; every verifiable box of each crop gets one sequential `labeler.verify_region` call (`:353-364`); writes `verify_regions_update` (`src/services/curation/region_verify.py:49-122`). |
 | `POST /vlm/verify_region_batch`, `/vlm/region_visible_batch` | `vlm.py:407-497`, `:500-562` | Write nothing. |
 | `POST /reprocess` | `src/routers/curation/reprocess.py:81`; `ReprocessRequest` `src/services/curation/reprocess_models.py:84-97`; targets `:58` (exactly one of `image_ids`/`crop_ids`/`filter`, `limit`, `sample`, `seed`; `MAX_TARGET_IDS=5000`) | Scope `vlm` does **not** call the VLM; it clears VLM answers so the worker picks them up again (`reprocess_vlm.py:55-96`). Scope `region` re-queues for the region worker (`reprocess_region.py`, `region_requeue.py:388-406,433`). |
 | Shared selection | `ItemSelection` `src/services/curation/item_selection.py:36-67` (`crop_ids` ≤5000 or `filter`, `limit`, `sample` random/largest, `seed`, `include_test`, `include_excluded`; resolver `:134`); `SelectionTargets` `src/routers/curation/_selection.py:25-58` (`MAX_BULK_SELECTION=20_000`) | Used by the crop write routes. Auto-label and reprocess have their own shapes. |
@@ -301,7 +301,7 @@ Deleted (no parallel routes):
 
 - The route `/vlm/label_cluster/{cluster_id}` (PR 4), replaced by `target.kind: cluster` +
   `sample.mode: all` + `actions: ["classify"]`.
-- `POST /vlm/verify_regions` (PR 6), replaced by `actions: ["verify"]` on `crops` or `boxes`.
+- the route `/vlm/verify_regions` (PR 6), replaced by `actions: ["verify"]` on `crops` or `boxes`.
 - `?cluster_id=` on `auto_label/start` stays. It is the whole-project job with a narrowing
   filter, not a duplicate of the assist run.
 - `/vlm/label_batch` stays. It is the continuous worker's transport. The frontend does not
@@ -607,7 +607,7 @@ never squash. Nothing is pushed without the owner's yes.
 **PR 6 — `feat(curation): assist on single boxes; verify through assist runs`**
 - Files: `src/services/curation/region_verify.py` (`verifiable_boxes(..., box_ids=None)`),
   move the per-box verify loop from `vlm.py:292-404` to `src/services/curation/assist/verify.py`,
-  delete `POST /vlm/verify_regions` and `VlmVerifyRegionsRequest`
+  delete the route `/vlm/verify_regions` and `VlmVerifyRegionsRequest`
   (`_vlm_route_models.py:15-18`), box attributes. Update `tests/live/test_live_vlm.py`,
   `tests/curation/test_vlm_verify_regions_*.py`, `test_vlm_prompt_pack_stamp_write_sites.py`,
   `pack_test_run.py`/`prompt_packs.py` references. Docs: `docs-site/docs/guides/multi-box-regions.mdx`.

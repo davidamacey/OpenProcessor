@@ -1,9 +1,9 @@
-"""Per-box VLM region verification (``POST /vlm/verify_regions``).
+"""Per-box VLM region verification (the ``verify`` action of an assist run).
 
 One region crop is sent to the VLM per stored box that is still open to a
 machine verdict; each reply is written back onto *its* box (``bbox_correct``
 / ``confidence`` / ``state``) and the item status is re-derived. Pure, no
-I/O: the route reads, calls the VLM and hands the verdicts to
+I/O: the assist run reads, calls the VLM and hands the verdicts to
 :func:`verify_regions_update` inside its OCC merge.
 """
 
@@ -22,7 +22,7 @@ from src.services.curation.region_box_edits import same_box
 
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Collection, Mapping, Sequence
 
 _VERIFIABLE_STATES = ('proposed', 'accepted')
 
@@ -39,11 +39,19 @@ class BoxVerdict:
     reason: str | None
 
 
-def verifiable_boxes(src: dict[str, Any], F: RegionFields | None = None) -> list[RegionBox]:
+def verifiable_boxes(
+    src: dict[str, Any], F: RegionFields | None = None, *, box_ids: Collection[str] | None = None
+) -> list[RegionBox]:
     """The stored boxes the verifier may judge: ``proposed`` or
     ``accepted``, and never a box a human or an import owns (a locked box is
-    never sent for a machine verdict)."""
-    return [b for b in read_boxes(src, F) if b.state in _VERIFIABLE_STATES and not is_locked_box(b)]
+    never sent for a machine verdict). ``box_ids`` restricts it to those boxes."""
+    return [
+        b
+        for b in read_boxes(src, F)
+        if b.state in _VERIFIABLE_STATES
+        and not is_locked_box(b)
+        and (box_ids is None or b.box_id in box_ids)
+    ]
 
 
 def verify_regions_update(

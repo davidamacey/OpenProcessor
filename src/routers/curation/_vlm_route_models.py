@@ -12,12 +12,6 @@ class VlmLabelBatchRequest(BaseModel):
     crop_ids: list[str] = Field(..., min_length=1, max_length=5000)
 
 
-class VlmVerifyRegionsRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-
-    crop_ids: list[str] = Field(..., min_length=1, max_length=5000)
-
-
 class VlmVerifyRegionBatchItem(BaseModel):
     """One item in a batched region-verify request.
 

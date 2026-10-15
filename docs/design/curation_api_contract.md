@@ -611,7 +611,7 @@ is never bypassable.
 
 The routes below take `?vlm=<name>` or `?vlm=<name>@<revision>` and
 `?acknowledge_external=true`: `POST /vlm/label_batch`,
-`POST /vlm/verify_regions`, `POST /vlm/verify_region_batch`,
+`POST /vlm/verify_region_batch`,
 `POST /vlm/region_visible_batch`, `POST /assist/runs`,
 `POST /pipeline/auto_label` and `POST /pipeline/auto_label/start`. An unknown
 endpoint is `422 unknown_vlm` (`valid_ids`). A project whose VLM is off is
@@ -1405,7 +1405,6 @@ can fuse. The default pool is fresh and class-bucketed unvalidated items.
 | Method | Path | Body or query | Response |
 |---|---|---|---|
 | POST | `/vlm/label_batch` | `{crop_ids}` (at most 64), `vlm`, `acknowledge_external` | label results |
-| POST | `/vlm/verify_regions` | `{crop_ids}` (at most 64) | per-crop verification |
 | POST | `/vlm/verify_region_batch` | `{items: [{crop_id, region_image_b64, candidate_text}]}` (at most 64) | `{results[]}`: `crop_id`, `is_region`, `confidence`, `reason`, `candidate_text` |
 | POST | `/vlm/region_visible_batch` | `{items: [{crop_id, image_b64}]}` (at most 64) | `{visible: {crop_id: bool}}` |
 | POST | `/pipeline/auto_label` | query parameters | runs the pipeline in the request and returns each stage's counts. Idempotent |
@@ -1464,9 +1463,9 @@ its class), and the answers, including a locked item's, are kept in the item's
 
 | Field | Meaning |
 |---|---|
-| `target` | exactly one kind. `{kind: "crops", crop_ids: [1..5000], context?: {cluster_id, cluster_subid?}}` is a single crop (one id) or a user selection. `{kind: "cluster", cluster_id, cluster_subid?}` is a cluster or one sub-cluster by the stored ids. `{kind: "filter", filter}` is a non-empty item filter |
+| `target` | exactly one kind. `{kind: "crops", crop_ids: [1..5000], context?: {cluster_id, cluster_subid?}}` is a single crop (one id) or a user selection. `{kind: "boxes", boxes: [{crop_id, box_id}, 1..1000]}` is chosen boxes (a single box is one pair); it takes `verify` and `attributes` only. `{kind: "cluster", cluster_id, cluster_subid?}` is a cluster or one sub-cluster by the stored ids. `{kind: "filter", filter}` is a non-empty item filter |
 | `sample` | what the VLM sees. `mode`: `all` (every visible member; a `crops` target must use it) or `representative` (a seeded sample). `size` (1 to 256) overrides the default of `max(8, min(64, ceil(2*sqrt(n))))`; `seed` (default 0); `stratify_by`: `auto` (by `cluster_subid` when the scope has more than one), `cluster_subid` or `none` |
-| `actions` | a non-empty subset of `classify` and `attributes`. With both, and a pack that declares item attributes, one `assist` call answers both |
+| `actions` | a non-empty subset of `classify`, `attributes` and `verify`. With `classify` and `attributes`, and a pack that declares item attributes, one `assist` call answers both. `attributes` on a `boxes` target reports the pack's `box` attributes for each box close-up. `verify` (crops and boxes targets) has the VLM judge each stored box that is still open to a machine verdict (`proposed` or `accepted`, never a human- or import-owned box) and writes the verdict onto the box; a box the VLM gave no usable answer for is left for a retry. Order inside a run: `verify`, then `classify` / `attributes` |
 | `vlm`, `prompt_pack`, `acknowledge_external` | the endpoint and pack for this run only (`name` or `name@revision`); omitted, the project's active endpoint and effective default pack. The run pins both |
 | `min_agreement` | 0.5 to 1.0, default 0.6 |
 | `dry_run` | default `true` |
@@ -1478,12 +1477,12 @@ its class), and the answers, including a locked item's, are kept in the item's
 `scope_count` (members after the visibility rules), `scope_digest` (`sha256:`
 over the sorted ids), `sampled`, `sample_seed`, `strata` (`key`, `size`,
 `sampled`; empty when not stratified), `skipped` (`holdout`, `excluded`,
-`not_found`, and `class_locked`: sampled members that are sent anyway and whose
+`not_found`, `box_not_found` and `box_locked` for a `boxes` target, and `class_locked`: sampled members that are sent anyway and whose
 class is never written), `vlm` (`name`, `revision`, `model`), `prompt_pack`
 (`name`, `revision`) and `estimated_vlm_calls`. `result` has `classify`
 (`predicted`, `updated`, `failed`, `unreadable`, `locked_suggest_only`) and
-`attributes` (`items_written`, `invalid_values`) for the actions that ran, and the
-`proposal`.
+`attributes` (`items_written`, `invalid_values`), `verify` (`boxes` judged, `accepted`,
+`rejected`, `locked_skipped`) for the actions that ran, and the `proposal`.
 
 **Proposal and scope check.** `result.proposal` reads the sampled answers as a
 label for the scope: `class_name` (the top class, or null), `in_registry` (checked
@@ -1516,13 +1515,15 @@ name; create the class first), `409 run_has_no_scope` (a bare selection or a fil
 - Refusals: `409 vlm_not_configured` (the project's VLM is off and `vlm` names
   none), `409 assist_busy` (one run per project; `run_id` names the live one),
   `404 not_found` (a cluster with no items), `422 invalid_request` (a `crops`
-  target with a representative sample, an empty filter, a repeated action),
+  or `boxes` target with a representative sample, `classify` on a `boxes` target, `verify`
+  on a cluster or filter target, an empty filter, a repeated action),
   `422 pack_declares_no_attributes`, `422 no_class_names` (classify with no item
   classes in the registry), `422 unknown_vlm`.
 - The item's `assist` object (see the item wire): `run_id`, `run_created_at`,
   `vlm_endpoint`, `vlm_model`, `prompt_pack`, `prompt_pack_revision`,
   `class_name`, `class_confidence`, `attributes[]` (`key`, `value`,
-  `confidence`) and `boxes[]`. One slot per item; the newest run wins, and an
+  `confidence`) and `boxes[]` (`box_id`, `attributes[]`: the box attributes, never part of the box itself; a
+  box id the item no longer has is not served). One slot per item; the newest run wins, and an
   older run never replaces a newer slot. A restart ends a live run as
   `interrupted`; run it again.
 

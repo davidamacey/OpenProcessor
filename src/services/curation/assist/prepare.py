@@ -17,7 +17,7 @@ from src.services.curation.assist.scope import ScopeResolution, resolve_scope
 from src.services.curation.autolabel.run_params import resolve_run_prompt_pack
 from src.services.curation.autolabel.run_vlm import RunVlm, require_run_vlm, resolve_run_vlm
 from src.services.labeling.run_labeler import resolve_pack
-from src.services.labeling.vlm_attributes import specs_for
+from src.services.labeling.vlm_attributes import AppliesTo, specs_for
 from src.services.labeling.vlm_client import DEFAULT_OPEN_IMAGES_PER_CALL
 from src.services.rejections import rejection
 
@@ -61,20 +61,17 @@ class PreparedRun:
 def _check_pack(request: AssistRunRequest, pack: PromptPack) -> None:
     if 'attributes' not in request.actions:
         return
-    blank = [
-        f
-        for f in ('assist_system', 'assist_user_template')
-        if 'classify' in request.actions and not getattr(pack, f).strip()
-    ] + [
-        f
-        for f in ('attributes_system', 'attributes_user_template')
-        if 'classify' not in request.actions and not getattr(pack, f).strip()
-    ]
-    if not specs_for(pack.attributes, 'item') or blank:
+    kind: AppliesTo = 'box' if request.target.kind == 'boxes' else 'item'
+    if kind == 'item' and 'classify' in request.actions:
+        prompts = ('assist_system', 'assist_user_template')
+    else:
+        prompts = ('attributes_system', 'attributes_user_template')
+    blank = [f for f in prompts if not getattr(pack, f).strip()]
+    if not specs_for(pack.attributes, kind) or blank:
         raise rejection(
             422,
             'pack_declares_no_attributes',
-            f'prompt pack {pack.name!r} declares no item attributes'
+            f'prompt pack {pack.name!r} declares no {kind} attributes'
             + (f' or has no {", ".join(blank)}' if blank else ''),
         )
 

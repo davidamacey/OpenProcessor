@@ -129,7 +129,7 @@ _FIELD_USED_BY: dict[str, list[str]] = {
     'open_classify': ['auto_label_vlm_stage', 'vlm_label_batch'],
     'combined': ['detection_worker_combined_verify'],
     'combined_batch': ['detection_worker_combined_verify'],
-    'region_verify': ['vlm_verify_regions'],
+    'region_verify': ['assist_run'],
     'region_verify_batch': ['vlm_verify_region_batch'],
     'region_visible': ['vlm_region_visible_batch'],
     'assist': ['assist_run'],

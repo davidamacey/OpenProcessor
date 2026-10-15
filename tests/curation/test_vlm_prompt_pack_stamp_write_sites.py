@@ -1,5 +1,5 @@
 """``vlm_prompt_pack`` is stamped onto the
-item at every VLM write site: ``/vlm/label_batch``, ``/vlm/verify_regions``,
+item at every VLM write site: ``/vlm/label_batch``, the assist run's verify action,
 the pipeline's inline VLM classification stage, and (the 4th site) the
 detection worker's bulk writer (``scripts/curation/worker/bulk_writer.py``),
 alongside ``RegionFields.profile``/``profile_revision``."""
@@ -18,7 +18,6 @@ from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import get_region_fields
 from src.config.curation_accessors import base_curation_config
 from src.domain.region_boxes import RegionBox, boxes_write_fields
-from src.services.curation import image_serving
 from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_models import VlmClassPrediction
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, prompt_pack_stamp
@@ -90,29 +89,6 @@ async def test_label_batch_stamps_vlm_prompt_pack(
     fake = QueryFakeOpenSearch({ITEMS: {'cand': _item('cand')}})
 
     await vlm_mod.vlm_label_batch(VlmLabelBatchRequest(crop_ids=['cand']), fake)
-
-    doc = fake.docs(ITEMS)['cand']
-    assert doc['vlm_prompt_pack'] == prompt_pack_stamp(GENERIC_ITEM_PACK)
-
-
-@pytest.mark.asyncio
-async def test_verify_regions_stamps_vlm_prompt_pack(monkeypatch: pytest.MonkeyPatch) -> None:
-    import src.routers.curation.vlm as vlm_mod
-    from src.routers.curation.vlm import VlmVerifyRegionsRequest
-
-    async def _no_pack(_os: Any) -> None:
-        return None
-
-    monkeypatch.setattr(vlm_mod, '_default_pack_name', _no_pack)
-    monkeypatch.setattr(vlm_mod, 'get_vlm_labeler', lambda *_a, **_k: _Labeler())
-    monkeypatch.setattr(image_serving, 'resolve_crop_root', lambda _p: '/data')
-    monkeypatch.setattr(image_serving, 'resolve_safe_path', lambda p, _r: p)
-    monkeypatch.setattr(
-        image_serving, 'THUMBNAIL_CACHE', SimpleNamespace(get_or_compute=lambda *_a, **_k: b'jpeg')
-    )
-    fake = QueryFakeOpenSearch({ITEMS: {'cand': _item('cand')}})
-
-    await vlm_mod.vlm_verify_regions(VlmVerifyRegionsRequest(crop_ids=['cand']), fake, object())
 
     doc = fake.docs(ITEMS)['cand']
     assert doc['vlm_prompt_pack'] == prompt_pack_stamp(GENERIC_ITEM_PACK)

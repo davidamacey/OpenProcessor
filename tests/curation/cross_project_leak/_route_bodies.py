@@ -97,7 +97,6 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/vlm/endpoints/active/rollback'): {'json': {'expected_active': _VLM_ACTIVE}},
         ('POST', '/vlm/endpoints/deactivate'): {'json': {'expected_active': _VLM_ACTIVE}},
         ('POST', '/vlm/label_batch'): {'json': {'crop_ids': [item]}},
-        ('POST', '/vlm/verify_regions'): {'json': {'crop_ids': [f'{slug}-item-0004']}},
         ('POST', '/vlm/verify_region_batch'): {
             'json': {'items': [{'crop_id': item, 'region_image_b64': b64}]}
         },

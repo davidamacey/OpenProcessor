@@ -16,6 +16,7 @@ from opensearchpy.exceptions import OpenSearchException
 
 from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
+from src.services.curation.assist.box_attributes import box_attributes_chunk
 from src.services.curation.assist.chunk import ChunkOutcome, process_chunk
 from src.services.curation.assist.job import create_run
 from src.services.curation.assist.models import (
@@ -24,13 +25,15 @@ from src.services.curation.assist.models import (
     AssistRunState,
     AttributesResult,
     ClassifyResult,
+    VerifyResult,
 )
 from src.services.curation.assist.proposal import compute_proposal
 from src.services.curation.assist.scope_now import current_members
 from src.services.curation.assist.slot_write import RunMeta
+from src.services.curation.assist.verify import verify_chunk
 from src.services.curation.class_write_guard import ClassWriteGuard
 from src.services.curation.file_job import FileJob, heartbeat_ticker
-from src.services.curation.vlm_class_batch import class_context
+from src.services.curation.vlm_class_batch import VlmContext, class_context
 from src.services.labeling.run_labeler import get_vlm_labeler
 from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError
 from src.services.labeling.vlm_factory import assert_may_connect
@@ -129,6 +132,16 @@ def _result(
             if 'attributes' in request_actions
             else None
         ),
+        verify=(
+            VerifyResult(
+                boxes=total.verify_boxes,
+                accepted=total.verify_accepted,
+                rejected=total.verify_rejected,
+                locked_skipped=total.verify_locked,
+            )
+            if 'verify' in request_actions
+            else None
+        ),
         proposal=proposal,
     )
 
@@ -139,6 +152,45 @@ def _sum(outcomes: list[ChunkOutcome]) -> ChunkOutcome:
         for name in vars(total):
             setattr(total, name, getattr(total, name) + getattr(o, name))
     return total
+
+
+async def _chunk(
+    opensearch: AsyncOpenSearch,
+    ctx: VlmContext,
+    prepared: PreparedRun,
+    chunk: list[str],
+    meta: RunMeta,
+) -> ChunkOutcome:
+    """One chunk, in the documented order: verify the boxes, then the item's class and
+    attributes (or the chosen boxes' attributes)."""
+    actions = prepared.request.actions
+    box_ids = prepared.scope.box_ids
+    parts: list[ChunkOutcome] = []
+    if 'verify' in actions:
+        parts.append(
+            await verify_chunk(
+                opensearch, ctx.labeler, chunk, box_ids=box_ids, pack_stamp=ctx.pack_stamp
+            )
+        )
+    if box_ids is not None:
+        if 'attributes' in actions:
+            parts.append(
+                await box_attributes_chunk(
+                    opensearch, ctx.labeler, chunk, box_ids=box_ids, meta=meta
+                )
+            )
+    elif 'classify' in actions or 'attributes' in actions:
+        parts.append(
+            await process_chunk(
+                opensearch,
+                ctx,
+                chunk,
+                classify='classify' in actions,
+                attributes='attributes' in actions,
+                meta=meta,
+            )
+        )
+    return _sum(parts)
 
 
 async def run_assist(
@@ -166,14 +218,7 @@ async def run_assist(
             async with sem:
                 if job.cancel_requested():
                     return None
-                out = await process_chunk(
-                    opensearch,
-                    ctx,
-                    chunk,
-                    classify='classify' in actions,
-                    attributes='attributes' in actions,
-                    meta=meta,
-                )
+                out = await _chunk(opensearch, ctx, prepared, chunk, meta)
                 done += len(chunk)
                 job.update(progress={'processed': done, 'total': len(ids)}, updated_at=now_iso())
                 job.touch_heartbeat()
@@ -182,7 +227,13 @@ async def run_assist(
         results = await asyncio.gather(*[gated(c) for c in chunks])
         total = _sum([r for r in results if r is not None])
         cancelled = job.cancel_requested()
-        if ids and not cancelled and total.predicted == 0:
+        nothing_to_ask = 'verify' in actions and not (total.failed or total.unreadable)
+        if (
+            ids
+            and not cancelled
+            and total.predicted + total.verify_boxes == 0
+            and not nothing_to_ask
+        ):
             msg = (
                 f'the VLM answered nothing: {total.failed} request(s) failed and '
                 f'{total.unreadable} crop image(s) could not be read, of {len(ids)} selected. '

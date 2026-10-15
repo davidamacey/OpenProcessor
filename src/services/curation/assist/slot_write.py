@@ -97,4 +97,40 @@ async def write_slots(opensearch: AsyncOpenSearch, slots: dict[str, dict[str, An
     return int(result.get('updated', 0))
 
 
-__all__ = ['RunMeta', 'build_slot', 'write_slots']
+async def write_box_attributes(
+    opensearch: AsyncOpenSearch,
+    meta: RunMeta,
+    by_crop: dict[str, dict[str, list[dict[str, str]]]],
+) -> int:
+    """Write ``{crop_id: {box_id: attributes}}`` into ``assist.boxes[]``. An item that
+    has no slot gets one carrying only the run; an existing slot keeps its item-level
+    suggestions. Entries for other boxes are kept; the named boxes are replaced."""
+    if not by_crop:
+        return 0
+
+    def merge(doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
+        if current.get('test_holdout'):
+            return {}
+        stored = dict(current.get('assist') or {})
+        if not stored:
+            stored = build_slot(meta, class_name=None, class_confidence=None, attributes={})
+        named = by_crop[doc_id]
+        kept = [b for b in stored.get('boxes') or [] if b.get('box_id') not in named]
+        stored['boxes'] = [
+            *kept,
+            *({'box_id': box_id, 'attributes': attrs} for box_id, attrs in named.items()),
+        ]
+        return {'assist': stored}
+
+    result = await occ_skip_on_conflict_bulk(
+        opensearch,
+        doc_ids=list(by_crop),
+        merger=merge,
+        index=items_index(),
+        refresh=False,
+        writer_id='assist_run',
+    )
+    return int(result.get('updated', 0))
+
+
+__all__ = ['RunMeta', 'build_slot', 'write_box_attributes', 'write_slots']

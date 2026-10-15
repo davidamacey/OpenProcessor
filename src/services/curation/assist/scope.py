@@ -18,6 +18,7 @@ from src.domain.assist_sampling import MAX_ASSIST_ITEMS, representative_size, st
 from src.services.curation.assist.models import (
     AssistRunRequest,
     AssistTarget,
+    BoxesTarget,
     ClusterTarget,
     CropsTarget,
     FilterTarget,
@@ -46,6 +47,8 @@ class ScopeResolution:
     sampled_ids: list[str]
     strata: list[StratumInfo]
     seed: int
+    box_ids: dict[str, list[str]] | None = None
+    """For a boxes target: the valid named box ids per item."""
     class_locked_ids: set[str] = field(default_factory=set)
     """Sampled members whose class an automated writer may not touch."""
 
@@ -149,6 +152,51 @@ async def _crop_members(
     )
 
 
+async def _box_members(
+    opensearch: AsyncOpenSearch, target: BoxesTarget
+) -> tuple[list[tuple[str, dict[str, Any]]], SkippedCounts, dict[str, list[str]]]:
+    from src.clients.occ_locks import is_locked_box
+    from src.config.region_fields import get_region_fields
+    from src.domain.region_boxes import read_boxes
+
+    F = get_region_fields()
+    wanted: dict[str, list[str]] = {}
+    for ref in target.boxes:
+        ids = wanted.setdefault(ref.crop_id, [])
+        if ref.box_id not in ids:
+            ids.append(ref.box_id)
+    found = await items_by_terms(
+        opensearch, 'crop_id', list(wanted), index=items_index(), includes=[*_INCLUDES, F.boxes]
+    )
+    by_id = dict(found)
+    holdout = excluded = box_not_found = box_locked = 0
+    members: list[tuple[str, dict[str, Any]]] = []
+    valid: dict[str, list[str]] = {}
+    for cid, named in wanted.items():
+        source = by_id.get(cid)
+        if source is None:
+            continue
+        if source.get('test_holdout'):
+            holdout += 1
+            continue
+        if source.get('class_excluded'):
+            excluded += 1
+            continue
+        stored = {b.box_id: b for b in read_boxes(source, F)}
+        valid[cid] = [b for b in named if b in stored]
+        box_not_found += len(named) - len(valid[cid])
+        box_locked += sum(1 for b in valid[cid] if is_locked_box(stored[b]))
+        members.append((cid, source))
+    skipped = SkippedCounts(
+        not_found=len(wanted) - len(by_id),
+        holdout=holdout,
+        excluded=excluded,
+        box_not_found=box_not_found,
+        box_locked=box_locked,
+    )
+    return members, skipped, valid
+
+
 def _stratum(source: dict[str, Any]) -> str:
     return str(source.get('cluster_subid') or '')
 
@@ -191,7 +239,10 @@ async def resolve_scope(opensearch: AsyncOpenSearch, request: AssistRunRequest) 
     Raises a structured refusal: 404 ``not_found`` (an empty cluster), 422
     ``assist_too_large`` or ``invalid_request``."""
     target = request.target
-    if isinstance(target, CropsTarget):
+    box_ids: dict[str, list[str]] | None = None
+    if isinstance(target, BoxesTarget):
+        members, skipped, box_ids = await _box_members(opensearch, target)
+    elif isinstance(target, CropsTarget):
         members, skipped = await _crop_members(opensearch, target)
     else:
         label = (
@@ -213,6 +264,7 @@ async def resolve_scope(opensearch: AsyncOpenSearch, request: AssistRunRequest) 
         sampled_ids=sampled,
         strata=strata,
         seed=request.sample.seed,
+        box_ids=box_ids,
         class_locked_ids=locked,
     )
 

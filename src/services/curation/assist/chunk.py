@@ -44,6 +44,10 @@ class ChunkOutcome:
     items_written: int = 0
     invalid_values: int = 0
     answers: list[ClassAnswer] = field(default_factory=list)
+    verify_boxes: int = 0
+    verify_accepted: int = 0
+    verify_rejected: int = 0
+    verify_locked: int = 0
 
 
 def _suggested_name(update: dict[str, Any] | None, pred: Any) -> str | None:

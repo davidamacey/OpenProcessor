@@ -106,17 +106,32 @@ def test_vlm_label_batch_caps_the_request_size(api_client: Any) -> None:
     assert resp.status_code == 400, resp.text
 
 
-def test_vlm_verify_regions_persists_the_verdict(
+def test_assist_verify_persists_the_verdict(
     api_client: Any, opensearch: Any, fake_vlm: Any
 ) -> None:
+    import time
+
     crop_ids = crop_ids_in(opensearch, 'rgn', limit=40)[-3:]
     # One verdict per stored box, and a seeded crop holds several.
     n_boxes = sum(len(_source(opensearch, cid)['region_boxes']) for cid in crop_ids)
     assert n_boxes > len(crop_ids)
 
-    resp = api_client.post('/vlm/verify_regions', json={'crop_ids': crop_ids})
+    resp = api_client.post(
+        '/assist/runs',
+        json={
+            'target': {'kind': 'crops', 'crop_ids': crop_ids},
+            'actions': ['verify'],
+            'dry_run': False,
+        },
+    )
     assert resp.status_code == 200, resp.text
-    assert resp.json()['verified'] == n_boxes, resp.text
+    run_id = resp.json()['run_id']
+    for _ in range(120):
+        state = api_client.get(f'/assist/runs/{run_id}').json()
+        if state['status'] not in ('queued', 'running'):
+            break
+        time.sleep(0.5)
+    assert state['result']['verify']['boxes'] == n_boxes, state
 
     refresh(opensearch, INDEXES['items'])
     for crop_id in crop_ids:
