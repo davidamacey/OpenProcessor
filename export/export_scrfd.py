@@ -62,7 +62,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(
         description='Export SCRFD face detection to TensorRT for Triton',
         formatter_class=argparse.RawDescriptionHelpFormatter,

@@ -20,12 +20,17 @@ import argparse
 import importlib.util
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 
 _HERE = Path(__file__).resolve().parent
 
 
-def _load(name: str):
+def _load(name: str) -> ModuleType:
     spec = importlib.util.spec_from_file_location(f'_contracts_{name}', _HERE / f'{name}.py')
     if spec is None or spec.loader is None:
         raise ImportError(f'cannot load {name}')

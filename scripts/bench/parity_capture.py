@@ -51,7 +51,7 @@ def project_indexes(client: httpx.Client, base: str) -> tuple[str, str]:
 def require_embed_all(client: httpx.Client, base: str) -> str:
     """Fail unless the project embeds every crop; a parity set needs a vector per item."""
     policy = client.get(f'{base}/ingest/policy').raise_for_status().json()
-    mode = policy['embedding']['mode']
+    mode: str = policy['embedding']['mode']
     if mode != 'all':
         raise CaptureError(f'ingest embedding policy is {mode!r}; a parity capture needs "all"')
     return mode
@@ -64,7 +64,10 @@ def ingest_images(
 
     def post(batch: Sequence[Path]) -> dict[str, Any]:
         upload = [('images', (p.name, p.read_bytes(), 'image/jpeg')) for p in batch]
-        return client.post(f'{base}/ingest/upload', files=upload).raise_for_status().json()
+        result: dict[str, Any] = (
+            client.post(f'{base}/ingest/upload', files=upload).raise_for_status().json()
+        )
+        return result
 
     with ThreadPoolExecutor(concurrency) as pool:
         bodies = list(pool.map(post, chunks(list(files), batch_size)))
@@ -87,7 +90,8 @@ def ingest_images(
 
 def _crops_page(client: httpx.Client, base: str, params: dict[str, Any]) -> dict[str, Any]:
     query = {'include_test': 'true', 'include_excluded': 'true', **params}
-    return client.get(f'{base}/crops', params=query).raise_for_status().json()
+    result: dict[str, Any] = client.get(f'{base}/crops', params=query).raise_for_status().json()
+    return result
 
 
 def fetch_items(
@@ -167,7 +171,8 @@ def probe_core(
         )
         if resp.status_code == 422:
             return None
-        return resp.raise_for_status().json()
+        result: dict[str, Any] | None = resp.raise_for_status().json()
+        return result
 
     def one(path: Path) -> dict[str, list[tuple[Any, ...]]]:
         out: dict[str, list[tuple[Any, ...]]] = {'clip': [], 'faces': [], 'ocr': []}

@@ -46,10 +46,15 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from capture_hero_frames import _guard_api, _multipart, _terminal_html
+
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Browser, Page
 
 
 WIDTH = 1600
@@ -88,7 +93,8 @@ def _post(url: str, body: bytes, ctype: str) -> int:
     try:
         with urllib.request.urlopen(req, timeout=120) as resp:  # nosec B310  URL is the local API or the public COCO host
             resp.read()
-            return resp.status
+            status: int = resp.status
+            return status
     except urllib.error.HTTPError as exc:
         return exc.code
 
@@ -125,7 +131,9 @@ def traffic(api: str, seconds: int, workers: int, cache: Path) -> None:
         print(f'{counts[key]:6d}  {key}')
 
 
-def _get_json(url: str, headers: dict | None = None, body: dict | None = None) -> dict:
+def _get_json(
+    url: str, headers: dict[str, str] | None = None, body: dict[str, Any] | None = None
+) -> Any:  # a JSON document: object or array depending on the endpoint
     data = json.dumps(body).encode() if body is not None else None
     hdrs = {'Content-Type': 'application/json', **(headers or {})}
     req = urllib.request.Request(url, data=data, headers=hdrs, method='POST' if data else 'GET')
@@ -143,12 +151,12 @@ def _grafana_auth() -> dict | None:
     return None
 
 
-def _shot(page, path: Path, full_page: bool = False) -> None:
+def _shot(page: Page, path: Path, full_page: bool = False) -> None:
     page.screenshot(path=str(path), full_page=full_page)
     print(f'wrote {path}')
 
 
-def capture_models(page, api: str, out: Path) -> None:
+def capture_models(page: Page, api: str, out: Path) -> None:
     models = _get_json(f'{api}/models/').get('models', [])
     # Loaded models first; the rest are in the repository but not loaded
     # (Triton runs in explicit model-control mode).
@@ -169,7 +177,7 @@ def capture_models(page, api: str, out: Path) -> None:
     term.unlink(missing_ok=True)
 
 
-def capture_swagger(page, api: str, out: Path) -> None:
+def capture_swagger(page: Page, api: str, out: Path) -> None:
     page.goto(f'{api}/docs', wait_until='networkidle')
     page.wait_for_selector('.opblock-tag')
     page.wait_for_timeout(4000)
@@ -187,7 +195,7 @@ def capture_swagger(page, api: str, out: Path) -> None:
     _shot(page, out / 'swagger.png')
 
 
-def capture_prometheus(page, prom: str, out: Path) -> None:
+def capture_prometheus(page: Page, prom: str, out: Path) -> None:
     page.add_init_script("localStorage.setItem('mantine-color-scheme-value', 'dark')")
     page.goto(f'{prom}/targets', wait_until='load')
     page.wait_for_timeout(5000)
@@ -206,7 +214,7 @@ GRAFANA_LOADING = (
 GRAFANA_FOCUS = {'yolo-triton-unified': 'Model Track Throughput Comparison'}
 
 
-def _wait_for_panels(page, timeout_s: float = 90.0, settle_ms: int = 4000) -> None:
+def _wait_for_panels(page: Page, timeout_s: float = 90.0, settle_ms: int = 4000) -> None:
     """Wait until no panel has shown a loading indicator for ~3 s, then settle."""
     deadline = time.monotonic() + timeout_s
     quiet = 0
@@ -216,7 +224,7 @@ def _wait_for_panels(page, timeout_s: float = 90.0, settle_ms: int = 4000) -> No
     page.wait_for_timeout(settle_ms)
 
 
-def capture_grafana(browser, grafana: str, out: Path, minutes: int) -> None:
+def capture_grafana(browser: Browser, grafana: str, out: Path, minutes: int) -> None:
     auth = _grafana_auth()
     if auth is None:
         print('skipping Grafana: set DOCS_GRAFANA_TOKEN or DOCS_GRAFANA_USER/DOCS_GRAFANA_PASSWORD')
@@ -257,7 +265,7 @@ def capture_grafana(browser, grafana: str, out: Path, minutes: int) -> None:
     ctx.close()
 
 
-def capture_mlflow(page, mlflow: str, out: Path) -> None:
+def capture_mlflow(page: Page, mlflow: str, out: Path) -> None:
     exps = _get_json(f'{mlflow}/api/2.0/mlflow/experiments/search', body={'max_results': 100})
     ids = [e['experiment_id'] for e in exps.get('experiments', [])]
     runs = _get_json(
@@ -311,7 +319,7 @@ def capture_mlflow(page, mlflow: str, out: Path) -> None:
         _shot(page, out / 'mlflow-compare.png')
 
 
-def capture_opensearch(page, osd: str, out: Path) -> None:
+def capture_opensearch(page: Page, osd: str, out: Path) -> None:
     page.goto(
         f'{osd}/app/opensearch_index_management_dashboards#/indices?search=op_&size=20&sortField=index&sortDirection=asc',
         wait_until='load',
@@ -330,7 +338,7 @@ def capture(args: argparse.Namespace) -> None:
         # Chromium's GPU compositor refuse screenshots.
         browser = p.chromium.launch(args=['--disable-gpu'])
 
-        def fresh():
+        def fresh() -> Page:
             return browser.new_context(
                 viewport={'width': WIDTH, 'height': 1000}, color_scheme='dark'
             ).new_page()

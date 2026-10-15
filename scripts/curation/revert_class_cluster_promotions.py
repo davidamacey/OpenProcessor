@@ -92,7 +92,7 @@ def _last_auto_promote_entry(source: dict[str, Any]) -> dict[str, Any] | None:
     history = source.get('class_id_history') or []
     if not history:
         return None
-    last = history[-1]
+    last: dict[str, Any] = history[-1]
     if last.get('writer') != 'auto_promote':
         return None
     cluster_id = source.get('cluster_id')

@@ -71,12 +71,12 @@ class MobileCLIPTextEncoder(nn.Module):
     3. L2-normalizes output (critical for cosine similarity with image embeddings)
     """
 
-    def __init__(self, clip_model):
+    def __init__(self, clip_model: nn.Module) -> None:
         super().__init__()
         # CustomTextCLIP stores text encoder as unified .text object
         # Use the entire TextTransformer module directly - it handles
         # embeddings, positional encoding, attention mask, pooling, and projection
-        self.text_encoder = clip_model.text
+        self.text_encoder = clip_model.get_submodule('text')
 
     def forward(self, text: torch.Tensor) -> torch.Tensor:
         """
@@ -93,13 +93,14 @@ class MobileCLIPTextEncoder(nn.Module):
         # - Pooling (argmax for EOS position)
         # - Final layer norm
         # - Text projection
-        x = self.text_encoder(text)
+        x: torch.Tensor = self.text_encoder(text)
 
         # L2 normalize (CRITICAL for cosine similarity)
-        return x / x.norm(dim=-1, keepdim=True)
+        result: torch.Tensor = x / x.norm(dim=-1, keepdim=True)
+        return result
 
 
-def load_mobileclip_model(model_name, checkpoint_path):
+def load_mobileclip_model(model_name: str, checkpoint_path: str | Path) -> nn.Module:
     """Load MobileCLIP2 model with proper configuration."""
     print(f'\nLoading {model_name}...')
     print(f'  Checkpoint: {checkpoint_path}')
@@ -121,7 +122,7 @@ def load_mobileclip_model(model_name, checkpoint_path):
     return model
 
 
-def export_to_onnx(model, output_path):
+def export_to_onnx(model: nn.Module, output_path: str | Path) -> tuple[str | Path, nn.Module]:
     """Export text encoder to ONNX format with dynamic batch support.
 
     Uses opset 17 for best TensorRT 10.x compatibility with LayerNorm.
@@ -171,7 +172,7 @@ def export_to_onnx(model, output_path):
     return output_path, encoder
 
 
-def validate_onnx(pytorch_encoder, onnx_path):
+def validate_onnx(pytorch_encoder: nn.Module, onnx_path: str | Path) -> bool:
     """Validate ONNX model matches PyTorch output."""
     print('\nValidating ONNX model...')
 
@@ -220,7 +221,7 @@ def validate_onnx(pytorch_encoder, onnx_path):
     return False
 
 
-def test_with_real_queries(onnx_path, model_name):
+def test_with_real_queries(onnx_path: str | Path, model_name: str) -> None:
     """Test with actual text queries."""
     print('\nTesting with real text queries...')
 
@@ -258,7 +259,9 @@ def test_with_real_queries(onnx_path, model_name):
     print('  ✓ Text encoding working correctly')
 
 
-def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=64):
+def convert_to_tensorrt(
+    onnx_path: str | Path, plan_path: str | Path, fp16: bool = True, max_batch_size: int = 64
+) -> Path | None:
     """Convert ONNX to TensorRT for maximum throughput."""
     print('\nConverting to TensorRT engine...')
     print(f'  Input: {onnx_path}')
@@ -339,7 +342,7 @@ def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=64):
         return None
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Export MobileCLIP2 Text Encoder')
     parser.add_argument(
         '--model',
@@ -355,7 +358,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def main():
+def main() -> None:
     args = parse_args()
 
     config = MODEL_CONFIGS[args.model]

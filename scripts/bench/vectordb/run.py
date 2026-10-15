@@ -49,7 +49,8 @@ ALL_PHASES = ('load', 'footprint', 'query', 'rewrite', 'stream', 'delete')
 def make_adapter(arm_name: str, endpoint: str) -> Adapter:
     arm = ARMS[arm_name]
     module, cls = ADAPTERS[arm['store']]
-    return getattr(importlib.import_module(module), cls)(arm, endpoint)
+    result: Adapter = getattr(importlib.import_module(module), cls)(arm, endpoint)
+    return result
 
 
 def timed(name: str, fn: Any, doc: dict[str, Any]) -> Any:
@@ -110,7 +111,7 @@ def run_arm(arm_name: str, ds: dataset.Dataset, args: argparse.Namespace) -> dic
 
 def write_arm(arm_name: str, ds: dataset.Dataset, args: argparse.Namespace) -> Path:
     """Run one arm and write ``<out>/<size>/<arm>[_load1]_r<N>.json``."""
-    outdir = args.out / str(ds.size)
+    outdir: Path = args.out / str(ds.size)
     outdir.mkdir(parents=True, exist_ok=True)
     print(f'{arm_name} @ {ds.size}', flush=True)
     doc = run_arm(arm_name, ds, args)

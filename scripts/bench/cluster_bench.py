@@ -71,7 +71,8 @@ def take_prefix(pool: np.ndarray, size: int) -> np.ndarray:
     if size > len(pool):
         raise ValueError(f'size {size} requested but the dump has only {len(pool)} rows')
     head = np.asarray(pool[:size], dtype=np.float32)
-    return head / np.maximum(np.linalg.norm(head, axis=1, keepdims=True), 1e-12)
+    result: np.ndarray = head / np.maximum(np.linalg.norm(head, axis=1, keepdims=True), 1e-12)
+    return result
 
 
 async def timed_pass(

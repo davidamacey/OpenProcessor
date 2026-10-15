@@ -122,7 +122,7 @@ def create_document_image(lines: list[str], filename: str) -> Path:
     )
 
 
-def main():
+def main() -> int:
     """Create all sample OCR images."""
     print('=' * 60)
     print('OCR Test Image Creator')

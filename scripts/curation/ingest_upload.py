@@ -210,7 +210,8 @@ class UploadRunner:
                 )
                 if resp.status_code < 500:
                     resp.raise_for_status()
-                    return resp.json()
+                    result: dict[str, Any] | None = resp.json()
+                    return result
                 logger.warning('upload HTTP %d (attempt %d)', resp.status_code, attempt)
             except httpx.HTTPStatusError as exc:
                 # 4xx is not transient — retrying the same payload won't help.
@@ -290,7 +291,9 @@ class UploadRunner:
         batch: list[tuple[str, bytes]] = []
         max_inflight = max(1, self.cfg.reader_threads * 2)
 
-        async def _collect(done: set[asyncio.Future[tuple[Path, bytes | None, str | None]]]):
+        async def _collect(
+            done: set[asyncio.Future[tuple[Path, bytes | None, str | None]]],
+        ) -> None:
             nonlocal batch
             for fut in done:
                 path, data, err = fut.result()

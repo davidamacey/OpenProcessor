@@ -151,7 +151,7 @@ def test_onnx_inference(onnx_path: Path) -> bool:
         return False
 
 
-def unload_models_for_memory():
+def unload_models_for_memory() -> None:
     """Unload Triton models to free GPU memory for TensorRT build."""
     import logging
     import time
@@ -278,7 +278,7 @@ def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path
         return None
 
 
-def create_triton_config(plan_path: Path):
+def create_triton_config(plan_path: Path) -> None:
     """Create Triton config.pbtxt with dynamic dimensions."""
     print('\n' + '=' * 60)
     print('Step 4: Create Triton Config')
@@ -343,7 +343,7 @@ dynamic_batching {{
     print(f'  Max batch: {MAX_BATCH}')
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
         description='Verify & convert PP-OCRv5 multilingual recognition to TensorRT'
@@ -356,7 +356,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def main():
+def main() -> int:
     """Main entry point."""
     args = parse_args()
 

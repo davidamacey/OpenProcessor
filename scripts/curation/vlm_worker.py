@@ -95,7 +95,8 @@ async def label_batch(
     if r.status_code == 409 and _error_code(r) == 'no_classes':
         return {'no_classes': True}
     r.raise_for_status()
-    return r.json()
+    result: dict = r.json()
+    return result
 
 
 class _StreamWorker:

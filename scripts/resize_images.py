@@ -21,7 +21,9 @@ from PIL import Image
 from tqdm import tqdm
 
 
-def resize_single_image(args_tuple):
+def resize_single_image(
+    args_tuple: tuple[Path, Path, int],
+) -> tuple[int, int, int, int, int, int] | None:
     """
     Resize a single image (worker function for multiprocessing).
 
@@ -71,7 +73,7 @@ def resize_single_image(args_tuple):
         return None
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description='Resize test images for performance comparison (multiprocessing)'
     )

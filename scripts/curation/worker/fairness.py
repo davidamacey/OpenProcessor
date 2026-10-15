@@ -228,7 +228,8 @@ def read_liveness(record: ProjectRecord, *, host: str | None = None) -> dict | N
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text())
+        result: dict | None = json.loads(path.read_text())
+        return result
     except (OSError, ValueError):
         return None
 

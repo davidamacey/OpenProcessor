@@ -100,6 +100,8 @@ from src.services.projects.script_binding import (
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from src.config.projects import ProjectRecord
 
 
@@ -133,7 +135,7 @@ AUTO_RETRAIN_CHECK_INTERVAL_S = float(os.getenv('OP_IVF_RETRAIN_CHECK_S', '1800'
 _IVF_PIPELINE_PATH = 'src.services.curation.auto_label_run:run_auto_label'
 
 
-def _resolve_pipeline_fn(pipeline_path: str):
+def _resolve_pipeline_fn(pipeline_path: str) -> Callable[..., Any]:
     """``module:qualname`` -> callable."""
     mod_name, _, attr_path = pipeline_path.partition(':')
     if not mod_name or not attr_path:
@@ -142,7 +144,8 @@ def _resolve_pipeline_fn(pipeline_path: str):
     obj: Any = mod
     for part in attr_path.split('.'):
         obj = getattr(obj, part)
-    return obj
+    fn: Callable[..., Any] = obj
+    return fn
 
 
 def _opensearch_url() -> str:
@@ -314,7 +317,8 @@ def _claim_trigger_for(record: ProjectRecord) -> dict[str, Any] | None:
         with contextlib.suppress(FileNotFoundError):
             trigger_path.unlink()
     try:
-        return json.loads(raw)
+        result: dict[str, Any] | None = json.loads(raw)
+        return result
     except json.JSONDecodeError as exc:
         logger.error('project=%s trigger JSON invalid: %s; raw=%r', record.slug, exc, raw[:200])
         return None
