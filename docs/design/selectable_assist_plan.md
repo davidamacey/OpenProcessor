@@ -38,7 +38,7 @@ Owner requirement:
 Short answer from the code:
 
 1. A whole-project VLM run exists (auto-label job, `vlm=<name>`, `vlm_scope`). A whole-cluster
-   run exists (`POST /vlm/label_cluster/{cluster_id}`, every unvalidated member, no
+   run exists (the route `/vlm/label_cluster/{cluster_id}`, every unvalidated member, no
    sampling). Selected crops and single crops work only through the synchronous
    `/vlm/label_batch` (≤64). Nothing sends a sub-cluster, one box or a sample to the VLM.
 2. There is no sample-by-size, no stratified sample and no cluster-level proposal. The
@@ -84,7 +84,7 @@ All curation routes are mounted at `/curation/projects/{project}` + path
 
 | Piece | Where | Notes |
 |---|---|---|
-| `POST /vlm/label_cluster/{cluster_id}` | `src/routers/curation/pipeline_control.py:69-104` | Path `cluster_id: int`; query `prompt_pack`, `vlm`, `acknowledge_external`. Wraps `pipeline_auto_label_start(train_clusters=False, run_vlm=True, run_auto_promote=False, max_vlm_crops=0, cluster_id=...)`. Labels **every** unvalidated, non-holdout, non-excluded member (`selection.py:70-76`, `:129-137`). No sample, no proposal, no sub-cluster. |
+| the route `/vlm/label_cluster/{cluster_id}` | `src/routers/curation/pipeline_control.py:69-104` | Path `cluster_id: int`; query `prompt_pack`, `vlm`, `acknowledge_external`. Wraps `pipeline_auto_label_start(train_clusters=False, run_vlm=True, run_auto_promote=False, max_vlm_crops=0, cluster_id=...)`. Labels **every** unvalidated, non-holdout, non-excluded member (`selection.py:70-76`, `:129-137`). No sample, no proposal, no sub-cluster. |
 | `?cluster_id=` on auto-label start | same job | Same scope. |
 | Frontend | `frontend/src/lib/api_autoLabel.ts:41` `runVlmOnCluster`; `clusterDetailActions.svelte.ts:130` `runVlm`; `ClusterDetailToolbar.svelte:198-226` ("Run VLM" + `VlmRunPicker`); dashboard modal `routes/p/[project]/dashboard/+page.svelte:131-160,285-330` | The server picks members; the UI sends no ids. |
 | Human cluster labeling | `PUT /crops/batch_label` `src/routers/curation/crops_write.py:79`, `CropBatchLabelRequest(SelectionTargets)` `_common_models.py:103`, OCC `occ_bulk_human_relabel` `crop_bulk.py:16` | Human write. |
@@ -109,7 +109,7 @@ All curation routes are mounted at `/curation/projects/{project}` + path
 | Piece | Where | Notes |
 |---|---|---|
 | `POST /vlm/label_batch` | `src/routers/curation/vlm.py:113-289`; body `VlmLabelBatchRequest` `_vlm_route_models.py:9-12` | Synchronous, `crop_ids` ≤64 (route, `vlm.py:123`; the schema allows 5000). Query `vlm`, `acknowledge_external`; **no `prompt_pack`** (always the settings default, `vlm.py:64`). Skips locked/validated (`:180`) and holdout (`:254-264`). Does not write make/model (`label_batch_write.py:44`). Used by `vlm_worker`; the frontend no longer calls it (`api_autoLabel.ts:34`). |
-| `POST /vlm/verify_regions` | `vlm.py:292-404`; body `crop_ids` ≤64 | Synchronous; every verifiable box of each crop gets one sequential `labeler.verify_region` call (`:353-364`); writes `verify_regions_update` (`src/services/curation/region_verify.py:49-122`). |
+| the route `/vlm/verify_regions` | `vlm.py:292-404`; body `crop_ids` ≤64 | Synchronous; every verifiable box of each crop gets one sequential `labeler.verify_region` call (`:353-364`); writes `verify_regions_update` (`src/services/curation/region_verify.py:49-122`). |
 | `POST /vlm/verify_region_batch`, `/vlm/region_visible_batch` | `vlm.py:407-497`, `:500-562` | Write nothing. |
 | `POST /reprocess` | `src/routers/curation/reprocess.py:81`; `ReprocessRequest` `src/services/curation/reprocess_models.py:84-97`; targets `:58` (exactly one of `image_ids`/`crop_ids`/`filter`, `limit`, `sample`, `seed`; `MAX_TARGET_IDS=5000`) | Scope `vlm` does **not** call the VLM; it clears VLM answers so the worker picks them up again (`reprocess_vlm.py:55-96`). Scope `region` re-queues for the region worker (`reprocess_region.py`, `region_requeue.py:388-406,433`). |
 | Shared selection | `ItemSelection` `src/services/curation/item_selection.py:36-67` (`crop_ids` ≤5000 or `filter`, `limit`, `sample` random/largest, `seed`, `include_test`, `include_excluded`; resolver `:134`); `SelectionTargets` `src/routers/curation/_selection.py:25-58` (`MAX_BULK_SELECTION=20_000`) | Used by the crop write routes. Auto-label and reprocess have their own shapes. |
@@ -299,9 +299,9 @@ data, all added to `tests/curation/cross_project_leak/_route_tables.py`):
 
 Deleted (no parallel routes):
 
-- `POST /vlm/label_cluster/{cluster_id}` (PR 4), replaced by `target.kind: cluster` +
+- The route `/vlm/label_cluster/{cluster_id}` (PR 4), replaced by `target.kind: cluster` +
   `sample.mode: all` + `actions: ["classify"]`.
-- `POST /vlm/verify_regions` (PR 6), replaced by `actions: ["verify"]` on `crops` or `boxes`.
+- the route `/vlm/verify_regions` (PR 6), replaced by `actions: ["verify"]` on `crops` or `boxes`.
 - `?cluster_id=` on `auto_label/start` stays. It is the whole-project job with a narrowing
   filter, not a duplicate of the assist run.
 - `/vlm/label_batch` stays. It is the continuous worker's transport. The frontend does not
@@ -589,7 +589,7 @@ never squash. Nothing is pushed without the owner's yes.
   merge); router `src/routers/curation/assist.py` registered in
   `src/routers/curation/__init__.py`; mapping in `bodies_core.py` + `ensure_fields.py`;
   `wire.py`; `contracts/`.
-- Delete `POST /vlm/label_cluster/{cluster_id}` (`pipeline_control.py:69-104`) and its tests
+- Delete the route `/vlm/label_cluster/{cluster_id}` (`pipeline_control.py:69-104`) and its tests
   (`tests/curation/test_vlm_cluster_scope.py` route parts; keep the `cluster_id` job
   selection tests). Swap `frontend/src/lib/api_autoLabel.ts:41` `runVlmOnCluster` to
   `createAssistRun` (target cluster, sample all, actions classify) so no caller breaks.
@@ -607,7 +607,7 @@ never squash. Nothing is pushed without the owner's yes.
 **PR 6 — `feat(curation): assist on single boxes; verify through assist runs`**
 - Files: `src/services/curation/region_verify.py` (`verifiable_boxes(..., box_ids=None)`),
   move the per-box verify loop from `vlm.py:292-404` to `src/services/curation/assist/verify.py`,
-  delete `POST /vlm/verify_regions` and `VlmVerifyRegionsRequest`
+  delete the route `/vlm/verify_regions` and `VlmVerifyRegionsRequest`
   (`_vlm_route_models.py:15-18`), box attributes. Update `tests/live/test_live_vlm.py`,
   `tests/curation/test_vlm_verify_regions_*.py`, `test_vlm_prompt_pack_stamp_write_sites.py`,
   `pack_test_run.py`/`prompt_packs.py` references. Docs: `docs-site/docs/guides/multi-box-regions.mdx`.
@@ -676,3 +676,96 @@ supplies its parts: the stratified sample, the proposal with agreement, the
 method-independent scope and the apply. #286 can then be a driver over assist runs.
 Rework of clustering methods (owner, later) does not touch the assist layer: it reads only
 `cluster_id`/`cluster_subid` fields and member ids.
+
+## Deviations
+
+Recorded after wave A (PR 0 to PR 5). Each is the smallest correct departure from the text above.
+
+- **PR 2 is folded into PR 4.** The unused-code ratchet flags `src/domain/assist_sampling.py`
+  until a caller exists, as 5 allowed. The sampling module and its test ship in the PR 4 commit.
+- **Models live in `src/services/curation/assist/models.py` and `proposal_models.py`, not in
+  `src/schemas/curation/assist.py`.** `src/schemas/` may not import services, and the request
+  embeds `ItemFilter`. The item's `assist` wire models are in `src/routers/curation/_item_models.py`
+  next to `ItemDoc`.
+- **Wave A takes only `classify` and `attributes`, and `crops`, `cluster` and `filter` targets.**
+  The request model forbids `boxes`, `segment`, `verify` and `segment.verify` (422) until PR 6 and
+  PR 7 add them; `waiting_region` is not a status yet.
+- **A live run killed by a restart ends `interrupted`, not `lost`.** That is the status every
+  file-backed job here already uses (`reconcile_orphaned_jobs`).
+- **An assist class suggestion does not move the item into its class cluster.** The shared writer
+  now takes `set_cluster` (auto-label keeps `True`); an assist run passes `False`. With the move,
+  the first chunk of a run empties the cluster it was asked about, so `scope_now`, the digest and
+  `apply` would all see a different scope.
+- **`members.json` holds the (sub-)cluster the proposal is about.** For a `crops` target with a
+  `context` that is the context's members at run start, not the selected ids, so `scope_now` and
+  `apply` act on the cluster the user was refining. A bare selection or a filter run keeps no list.
+- **`OP_ASSIST_JOBS_DIR`** (default `/jobs/assist`) is new, with the project-delete path, startup
+  reconcile, `env.template` and the advanced configuration page.
+- **`/prompt_packs/test` with `call: assist` or `attributes` returns the parsed answers only**
+  (`preview_item` is null): the answers are stored in the `assist` slot, not as an item write.
+- **PR 3b did not add attributes to the combined call or to the region worker.** `make` and `model`
+  are deleted everywhere (reply keys, models, `vlm_item_make` / `vlm_item_model`, the worker's
+  write). The combined prompts never asked for them and no pack asks for attributes in the combined
+  call yet, so the worker has nothing to write to `assist.attributes`; that belongs to the worker
+  wave (PR 7).
+- **Frontend parts of PR 1 and PR 4 are left for the frontend wave.** The sub-cluster tab still
+  filters the loaded page (the server filter exists: `GET /crops?cluster_subid=`), and Cropwright's
+  `runVlmOnCluster` still posts to the deleted `/vlm/label_cluster/{id}` route until PR 8 swaps it
+  to `createAssistRun`. Its vitest pins and the stubbed e2e `test_vlm_job_poll_by_id.py` still
+  describe the old route and must be rewritten there. `tests/fixtures/labeler_call_sites.txt` never
+  listed that route, so it is unchanged.
+
+Recorded after wave B (PR 6, PR 7, PR 9).
+
+- **The old wave A "`segment` is a 422 until PR 7" is gone.** `segment` and `boxes` are accepted;
+  `validate_request` refuses the combinations the schema cannot (`boxes` with `classify` or
+  `segment`, `verify` on a cluster or filter target, `segment.verify: vlm` together with `verify`).
+- **`segment` plus `verify` needs a `crops` target and `segment.verify: none`.** The worker accepts
+  the boxes without a VLM and the run then judges the new boxes with its own endpoint, so the
+  worker's endpoint can never differ from the run's. `segment.verify: vlm` alone needs the run's
+  endpoint to be the project's active one (`409 verify_endpoint_mismatch`).
+- **No "worker heartbeat stale" refusal.** The worker's heartbeat lives in its container, so the API
+  cannot read it. A run whose items never leave `pending_detection` ends with `result.segment.pending`
+  set (the run stays in `waiting_region` until the worker finishes or the run is cancelled).
+- **Project policy `region_verify: vlm` keeps today's behaviour for a project with its VLM off**
+  (accepted without a VLM). Only a per-item `region_run_verify: vlm` with no VLM writes
+  `detection_failed` (`vlm_unavailable`). `region_run_id` and `region_run_verify` are cleared by the
+  worker's write of the item.
+- **`verify` on a `boxes` target replaces `/vlm/verify_regions`** and `tests/live/test_live_vlm.py`
+  and the docs use the assist run. The route and `VlmVerifyRegionsRequest` are deleted.
+- **PR 9 error code.** `vlm_attributes` without `run_vlm` answers `422 invalid_request` (no new code).
+  The auto-label slot is attributed to a run id `al_<hex>`; the region worker's to `rw_<hex>` (one id
+  per chunk resolution, so the newest-run-wins rule applies per item).
+- **The combined call asks for item attributes by appending a block to the user text**, not through
+  a new `{attribute_block}` placeholder in `combined_user_template`, so existing packs keep working
+  unchanged. Only crops whose class is asked for carry the ask (a trusted-class or holdout item gets
+  no slot from the worker).
+- **Test discipline.** PR 6, PR 7 and PR 9 tests were written first and watched failing (import or
+  422 errors). `test_assist_run_lifecycle.py` (read 404, list, cancel) covers routes wave A shipped
+  without tests; the code existed, so those pass at once. The wave A classify and attributes route
+  tests already exist in `test_assist_run_classify.py`.
+
+Left for wave C (frontend, PR 8): the assist dialog, proposal card and attribute chips; the
+`region_verify` switch on the VLM policy form; `segment` and `waiting_region` in the run UI; moving
+`runVlmOnCluster` and the dashboard modal to `createAssistRun`; rewriting the stubbed e2e and vitest
+pins for the deleted `/vlm/label_cluster` and `/vlm/verify_regions` routes; regenerating the
+`contracts/ts` consumers.
+
+Recorded after wave C (PR 8, the frontend).
+
+- **The sub-cluster tab list is not served.** `GET /clusters` serves only `n_subclusters`, so the tabs are
+  the sub-cluster ids seen while the whole cluster is shown (replaced on the first page, added to on later
+  ones). A tab loads from `GET /crops?cluster_subid=`; a sub-cluster whose members are all beyond the loaded
+  pages has no tab until the user scrolls the "all" view. A served list of sub-cluster ids would fix it.
+- **The dashboard keeps one action, as a link.** The "Run VLM on cluster" modal is gone; the quick action
+  links to `/clusters` (or to the Models settings when the project has no VLM), where **Assist…** lives.
+- **Single-box assist is on the `/review` box row**, not inside `SlotBboxEditor` or `MultiBoxCanvas`: those
+  are modals with unsaved edits, and a second dialog over them would race the save. `SlotBboxEditor` has none.
+- **The proposal is a folded line on the cluster page** that opens the card (and only then asks the server
+  for the apply dry run). `min_agreement` has no control; the server's default 0.6 applies.
+- **Tests.** The controllers, the contract test, the policy panel, the sub-cluster request and the stubbed e2e
+  were written first and watched failing; the three new components' tests were written with the components.
+- **Docs screenshots.** A capture state (`assist-dialog`) and the dry-run allow-list entries are added to
+  `frontend/scripts/docs_screenshots/`; they were not run (the live stack was off limits), so
+  `cropwright/assist-dialog-1600.png` renders as "pending". The proposal card needs a stored run and has no
+  scripted state.

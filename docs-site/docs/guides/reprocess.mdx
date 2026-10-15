@@ -77,6 +77,10 @@ selector. With only a profile selector it selects `detection_failed`,
 `verify_rejected`, `no_region_box` and `no_region_visible` items (and
 `detected` ones with `include_detected`).
 
+`targets.limit` with `sample` (`random` with a `seed`, or `largest`) caps a filter
+for every scope, `region` and `vlm` included: the dry run counts and the apply acts
+on the same capped items.
+
 ## Dry run, then apply
 
 ```bash

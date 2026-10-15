@@ -123,6 +123,18 @@ and [Prompt packs](./prompt-packs.mdx).
 To try the profile on one stored crop before ingesting everything, use the
 test routes in [Test on a crop](./test-on-crop.mdx).
 
+### Re-run the segmenter on chosen crops
+
+To re-segment three crops and verify the new boxes with the run's own VLM:
+
+```bash
+curl -s -X POST "$API/assist/runs" -H 'Content-Type: application/json' \
+  -d '{"target": {"kind": "crops", "crop_ids": ["car_1", "car_2", "car_3"]},
+       "actions": ["segment", "verify"], "segment": {"verify": "none"}, "dry_run": false}'
+```
+
+The run is `waiting_region` while the region worker segments, then judges the new boxes.
+
 ## What you should see
 
 - Items proposed as `car` carry a `region_boxes` list of up to four wheel

@@ -97,7 +97,6 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/vlm/endpoints/active/rollback'): {'json': {'expected_active': _VLM_ACTIVE}},
         ('POST', '/vlm/endpoints/deactivate'): {'json': {'expected_active': _VLM_ACTIVE}},
         ('POST', '/vlm/label_batch'): {'json': {'crop_ids': [item]}},
-        ('POST', '/vlm/verify_regions'): {'json': {'crop_ids': [f'{slug}-item-0004']}},
         ('POST', '/vlm/verify_region_batch'): {
             'json': {'items': [{'crop_id': item, 'region_image_b64': b64}]}
         },
@@ -168,6 +167,17 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/images/{image_id}/reprocess'): {'json': {'scopes': ['region']}},
         ('POST', '/crops/{crop_id}/reprocess'): {'json': {'scopes': ['region']}},
         ('POST', '/reprocess/jobs/{job_id}/cancel'): {'json': {}},
+        # assist runs: a dry run on the seeded item (the sweep binds
+        # no VLM, so the plan stops at the VLM gate); cancel names no live run.
+        ('POST', '/assist/runs'): {
+            'json': {
+                'target': {'kind': 'crops', 'crop_ids': [item]},
+                'actions': ['classify'],
+                'dry_run': True,
+            }
+        },
+        ('POST', '/assist/runs/{run_id}/cancel'): {'json': {}},
+        ('POST', '/assist/runs/{run_id}/apply'): {'json': {'class_name': 'x', 'dry_run': False}},
         ('POST', '/test_holdout/freeze'): {'json': {'percent': 10}},
         ('POST', '/review/new_class_proposals/resolve'): {
             'json': {'label': f'{slug}-proposal', 'class_id': 1}

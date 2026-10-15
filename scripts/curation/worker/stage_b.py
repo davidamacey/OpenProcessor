@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 from functools import partial
 from typing import Any
 
@@ -26,8 +27,10 @@ from scripts.curation.worker.state import (
 )
 from scripts.curation.worker.verify import candidate_actor, chain_entry
 from src.core.logging import get_logger
+from src.services.curation.assist.slot_write import RunMeta
 from src.services.curation.metrics import OP_STAGE_B_VLM_VERIFY_DURATION_SECONDS
 from src.services.labeling.vlm_models import CombinedCrop
+from src.utils.timeutil import now_iso
 
 
 logger = get_logger('curation_worker')
@@ -212,6 +215,22 @@ async def _label_combined(
     return replies_by_id
 
 
+def combined_slot_meta(rt: Any) -> RunMeta | None:
+    """Who a combined call's `assist` slot is attributed to: the runtime's endpoint and pack."""
+    identity = rt.vlm_identity
+    if identity is None:
+        return None
+    name, revision = rt.pack_ref
+    return RunMeta(
+        run_id=f'rw_{uuid.uuid4().hex[:12]}',
+        created_at=now_iso(),
+        vlm_endpoint=identity.endpoint_ref,
+        vlm_model=identity.model,
+        prompt_pack=name,
+        prompt_pack_revision=revision,
+    )
+
+
 async def _resolve_task(
     ctx: PipelineContext,
     rt: Any,
@@ -251,6 +270,7 @@ async def _resolve_task(
         effective_class_names=effective_class_names,
         name_to_id=name_to_id,
         vlm_model=rt.vlm_model,
+        slot_meta=combined_slot_meta(rt),
         profile=rt.profile,
         rules=rt.text_rules,
         ocr=rt.ocr_recognizer,

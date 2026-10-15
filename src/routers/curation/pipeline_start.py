@@ -18,6 +18,7 @@ from src.routers.curation.pipeline_params import (
     PROMPT_PACK_DESC as _PROMPT_PACK_DESC,
     REASSIGN_ONLY_DESC as _REASSIGN_ONLY_DESC,
     RUN_VLM_DESC as _RUN_VLM_DESC,
+    VLM_ATTRIBUTES_DESC,
     VLM_DESC,
     VLM_SCOPE_DESC as _VLM_SCOPE_DESC,
 )
@@ -27,10 +28,16 @@ from src.services.curation.autolabel.run_params import (
     reject_detection_profile,
     resolve_run_prompt_pack,
 )
-from src.services.curation.autolabel.run_vlm import RunVlm, require_run_vlm, resolve_run_vlm
+from src.services.curation.autolabel.run_vlm import (
+    RunVlm,
+    require_item_attributes,
+    require_run_vlm,
+    resolve_run_vlm,
+)
 from src.services.curation.cluster_purity import PROMOTE_MIN_MEMBERS, PROMOTE_MIN_PURITY
 from src.services.curation.vlm_policy import VlmScope  # noqa: TC001 - FastAPI
 from src.services.labeling.run_labeler import resolve_pack
+from src.services.rejections import rejection
 
 
 _EMBED_MISSING_DESC = (
@@ -70,6 +77,7 @@ async def pipeline_auto_label_start(
     acknowledge_external: Annotated[bool, Query(description=ACKNOWLEDGE_EXTERNAL_DESC)] = False,
     embed_missing: Annotated[bool, Query(description=_EMBED_MISSING_DESC)] = False,
     vlm_scope: Annotated[VlmScope | None, Query(description=_VLM_SCOPE_DESC)] = None,
+    vlm_attributes: Annotated[bool, Query(description=VLM_ATTRIBUTES_DESC)] = False,
 ) -> dict[str, Any]:
     """Kick off auto_label as a background job. Returns immediately.
 
@@ -102,11 +110,17 @@ async def pipeline_auto_label_start(
     # to a concrete `(name, revision)` here, before queueing -- the job then
     # resolves exactly that by id, in whichever process runs it, so an
     # activation or an endpoint edit made mid-job changes nothing for it.
+    if vlm_attributes and not run_vlm:
+        raise rejection(
+            422, 'invalid_request', 'vlm_attributes needs run_vlm=true: it is a VLM option'
+        )
     vlm_run = RunVlm(None, None, None)
     if run_vlm or isinstance(vlm, str):
         pack_name, pack_revision = labeler_resolution_args(
             prompt_pack, prompt_pack_revision, prompt_pack_omitted=prompt_pack_was_omitted
         )
+        if vlm_attributes:
+            require_item_attributes(resolve_pack(pack_name, pack_revision))
         vlm_run = await resolve_run_vlm(
             opensearch,
             vlm,
@@ -144,6 +158,7 @@ async def pipeline_auto_label_start(
                 'item_filter': item_filter.model_dump(mode='json', exclude_defaults=True),
                 'embed_missing': embed_missing,
                 'vlm_scope': vlm_scope,
+                'vlm_attributes': vlm_attributes,
                 'prompt_pack': prompt_pack,
                 'prompt_pack_revision': prompt_pack_revision,
                 # always set, even for the omitted-pack default

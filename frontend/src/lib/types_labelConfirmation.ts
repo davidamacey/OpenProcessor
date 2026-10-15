@@ -5,13 +5,18 @@
 export const VLM_SCOPES = ['all', 'uncertain', 'representatives', 'off'] as const;
 export type VlmScope = (typeof VLM_SCOPES)[number];
 
-/** `VlmPolicy`: which crops the VLM labels, and its daily budget. */
+export const REGION_VERIFY_MODES = ['vlm', 'none'] as const;
+export type RegionVerifyMode = (typeof REGION_VERIFY_MODES)[number];
+
+/** `VlmPolicy`: which crops the VLM labels, its daily budget and how the region
+ *  worker verifies proposed boxes. */
 export interface VlmPolicy {
   scope?: VlmScope;
   conf_max?: number;
   per_cluster?: number;
   max_crops_per_day?: number;
   sample_frac?: number;
+  region_verify?: RegionVerifyMode;
   revision?: number;
 }
 

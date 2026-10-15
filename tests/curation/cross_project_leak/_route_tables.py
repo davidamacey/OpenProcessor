@@ -49,6 +49,15 @@ NO_WRITE: dict[tuple[str, str], str] = {
         'touches a cancel flag only for a live job; the sweep has none (the live path is '
         'covered in test_reprocess_entrypoints)'
     ),
+    ('POST', '/assist/runs'): 'a dry run plans and counts; the sweep starts no run',
+    ('POST', '/assist/runs/{run_id}/cancel'): (
+        'touches a cancel flag only for a live run; the sweep has none (the live path is '
+        'covered in test_assist_run_classify)'
+    ),
+    ('POST', '/assist/runs/{run_id}/apply'): (
+        'names a run of the bound project; the sweep has none (the write path is covered in '
+        'test_assist_proposal)'
+    ),
     ('POST', '/train/reload_promoted'): 'asks Triton to load promoted models; stores nothing',
     (
         'POST',
@@ -153,9 +162,6 @@ UNSEEDED_WRITES: dict[tuple[str, str], str] = {
     ('POST', '/bakeoff/run'): 'needs a resolvable contender model list, not seeded',
     ('POST', '/train/promote/{job_id}'): 'needs an exported best.onnx, not seeded',
     ('DELETE', '/models/{model_name}'): 'see EXPECTED_5XX: no live Triton to confirm the unload',
-    ('POST', '/vlm/label_cluster/{cluster_id}'): (
-        '409s: /pipeline/auto_label/start already queued a run earlier in the pass'
-    ),
     ('POST', '/vlm/endpoints/active/rollback'): (
         'the seeded previous endpoint was deleted (409 previous_deleted, the marker this '
         'sweep plants); rollback success is covered by test_vlm_hot_switch_api.py'

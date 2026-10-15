@@ -12,7 +12,15 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 ## [Unreleased]
 
 ### Added
+- Cropwright **Assist…** (cluster page, one crop, one box, Matching items): a dialog to pick what the VLM sees (selected, all, a representative sample), the actions (classify, attributes, verify, segment) and the VLM and prompt pack, with the server's dry run; the cluster and sub-cluster label proposal card with the agreement, an explicit dry-run-first **Apply** and the `scope_changed` refusal; dashed "VLM suggests" attribute chips; and a **Region verification** switch (`region_verify`) on the VLM scope panel. See the guide [Selective VLM and segmenter assist](docs-site/docs/guides/selective-assist.mdx).
 
+- Pack attributes in whole-project VLM runs: `vlm_attributes=true` on `POST /pipeline/auto_label` and `/start` makes the VLM stage use the pack's combined `assist` call and store the item attributes in each item's `assist` slot. The region worker's combined call asks for the pack's item attributes on the items it classifies and writes them to `assist.attributes` too.
+- Selectable segmenter verification: the VLM policy takes `region_verify` (`vlm`, the default, or `none`) for the region worker, and an assist run with the `segment` action re-segments chosen crops, a cluster or a filter, with `segment.verify` (`vlm` or `none`) for those items only. The run waits in the new status `waiting_region` and reports `result.segment`. Refusals: `409 region_profile_required`, `no_segmenter_leg`, `region_stage_paused`, `verify_endpoint_mismatch`. With the worker's VLM requested but unreachable, an item is written as `detection_failed` (`vlm_unavailable`).
+- Assist runs on boxes: a `boxes` target (chosen `{crop_id, box_id}` pairs) takes `verify` and `attributes`. The `verify` action replaces `POST /vlm/verify_regions` (one verdict per box, only the named boxes, never a human- or import-owned one); box attributes the pack declares with `applies_to: box` are stored under the item's `assist.boxes[]`, apart from the box.
+- Cluster and sub-cluster label proposals from an assist run: `result.proposal` (top class, agreement, vote distribution, new-class proposals by name, attribute summary) with an agreement gate (at least 3 answers, `min_agreement`), `scope_now` on every read (membership overlap against the members the run resolved, so a re-refine shows as a changed scope), `GET /assist/runs` for a cluster or sub-cluster, and `POST /assist/runs/{run_id}/apply`: the explicit, dry-run-first action that labels the scope's current members as a human would, skips locked and validated ones and refuses a changed scope (`409 scope_changed`). Assist class suggestions leave the item in its cluster.
+- Assist runs, `POST /assist/runs` (dry run by default), `GET /assist/runs/{run_id}` and `POST /assist/runs/{run_id}/cancel`: one request shape sends a crop, a selection, a cluster, a sub-cluster or an item filter to the VLM, whole or as a seeded, size-scaled representative sample stratified by sub-cluster, with `classify` and `attributes` actions. Class answers go through the guarded VLM class writer (a locked, validated or holdout item keeps its class); every answer, a locked item's included, is stored in the item's new `assist` object (shown on the item wire), apart from the labels. One run per project (`409 assist_busy`); `OP_ASSIST_JOBS_DIR`.
+- Prompt packs declare `attributes` (up to 16 free-form facts about an item or a box, with an optional closed vocabulary) and carry the `assist` (classify plus item attributes) and `attributes` (attributes alone) prompts. The labeler gains `assist_batch` and `attributes_batch`, and `POST /prompt_packs/test` accepts `call: assist` and `attributes`. Pack validation checks the attribute list and the prompts it needs (`pack_attribute_invalid`, `pack_attribute_duplicate`). The `vehicle_wheel` example pack declares `make`, `model`, `body_style` and a wheel `rim_material`.
+- `GET /crops?cluster_subid=` and the item filter's `cluster_subid` select one AHC sub-cluster on the server, so a sub-cluster larger than a page can be listed whole.
 - Detection-only ingest (#279): ingest policy `embedding.mode: "none"` stores boxes with no vector
   of any kind (the whole-frame vector included) and `clustering.automatic: false` keeps ingest and
   the embed scope from placing items in clusters, the `curation-cluster-refresh` daemon from
@@ -440,6 +448,9 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Removed
 
+- `POST /vlm/verify_regions`: use `POST /assist/runs` with action `verify` on a `crops` or `boxes` target.
+- The hard-coded `make` and `model` VLM outputs: the reply keys, `VlmClassPrediction.make/model`, the combined reply's `make/model`, and the `vlm_item_make` / `vlm_item_model` item fields (never on the wire). A prompt pack declares such facts as `attributes` instead; they are stored in the item's `assist` object by assist runs. Existing values in `vlm_item_make` / `vlm_item_model` stay in old documents and are not read.
+- `POST /vlm/label_cluster/{cluster_id}`: use `POST /assist/runs` with a `cluster` target (and `sample.mode: "all"`), or `?cluster_id=` on `auto_label/start` for the whole-cluster job. Cropwright's cluster-page "Run VLM" and the dashboard's "Run VLM on cluster" dialog are replaced by **Assist…** on the cluster page, which uses the assist run.
 - The region-profile fields `aspect_min` and `aspect_max` (and `OcrRegion.is_region_shaped`, which was
   their only reader and had no caller): from the profile dataclass, the profile editor schema, the
   license plate example, the docs and the OpenAPI contract. A stored profile that still carries
@@ -465,6 +476,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Fixed
 
+- `POST /reprocess` with a filter target and `limit` / `sample` capped only the image scopes; the `region` and `vlm` scopes ran on every match. They now act on the capped, seeded selection, and the dry run counts it.
 - CI stability: the offline suite no longer builds its app-lifespan OpenSearch client against the in-cluster
   hostname, which resolved slowly on the runner (10 to 15 s per lookup, several per startup) and made integration
   test setup hit the 400 s timeout, doubling the suite's run time. Tests now default `OPENSEARCH_URL` to a refused

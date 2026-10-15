@@ -280,6 +280,34 @@ async def _classify(
     return run
 
 
+async def _assist(
+    labeler: VlmLabeler,
+    call: ProbeCall,
+    crops: list[CropInput],
+    *,
+    class_names: list[str],
+    capacity: int,
+) -> PackTestRun:
+    """``assist`` / ``attributes``: the parsed answers only. The result is a
+    suggestion stored apart from the item's class and boxes, so there is no
+    item write to preview."""
+    _check_capacity(len(crops), capacity)
+    cache_dir = get_curation_config().crop_cache_dir
+    probe_crops = []
+    for c in crops:
+        jpeg = load_vlm_item_jpeg(c.crop_id, str(c.image_path), c.bbox, cache_dir=cache_dir)
+        if jpeg is None:
+            raise CropImageUnavailableError(c.crop_id)
+        probe_crops.append(ProbeCrop(crop_id=c.crop_id, jpeg=jpeg))
+    result = await probe(labeler, call, probe_crops, class_names=class_names)
+    run = PackTestRun(probe=result)
+    run.results = [
+        CropResult(c.crop_id, parsed=jsonable(e.value))
+        for c, e in zip(crops, result.parsed, strict=True)
+    ]
+    return run
+
+
 async def _region_verify(
     labeler: VlmLabeler, crops: list[CropInput], *, pack_stamp: str, capacity: int
 ) -> PackTestRun:
@@ -389,6 +417,8 @@ async def run_pack_test(
             pack_stamp=pack_stamp,
             capacity=capacity,
         )
+    if call in ('assist', 'attributes'):
+        return await _assist(labeler, call, crops, class_names=class_names, capacity=capacity)
     if call == 'region_verify':
         return await _region_verify(labeler, crops, pack_stamp=pack_stamp, capacity=capacity)
     return await _region_visible(labeler, crops, capacity=capacity)

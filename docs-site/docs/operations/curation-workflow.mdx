@@ -132,8 +132,8 @@ audit passes. (issue #280). See
   [VLM selection](../guides/vlm-selection.mdx#turn-the-vlm-off-for-a-project)), or run
   the VLM for one job only with `vlm=<name>` (see the
   [selective recipe](../guides/pipeline-modes.mdx#recipe-ingest-without-the-vlm-cluster-name-by-hand-then-run-the-vlm-for-one-thing)). Run
-  `auto_label/start?run_vlm=true`, label one cluster with
-  `POST /vlm/label_cluster/{cluster_id}`, or let `curation-vlm-worker`
+  `auto_label/start?run_vlm=true`, label a cluster, a sub-cluster or a
+  sample with `POST /assist/runs`, or let `curation-vlm-worker`
   suggest classes continuously. Register and activate other endpoints as
   in [VLM selection](../guides/vlm-selection.mdx); `?vlm=<name>` picks one
   for a single run. VLM answers that name no registry class surface as

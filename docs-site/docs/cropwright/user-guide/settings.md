@@ -30,6 +30,18 @@ full editors, see [Prompt packs](./prompt-packs.md),
 hasn't been acknowledged is disabled in the dropdown with a link to
 **Settings → Models**.
 
+## VLM scope and region verification
+
+A **VLM scope** card sets which crops the always-on VLM worker and auto-label
+runs label (everything, uncertain only, cluster representatives, or off) and
+the daily budget. Below the scope, **Region verification** chooses how the
+region worker treats the boxes the segmenter proposes: **Verify with the VLM**
+(the project's VLM judges each box; with none active the boxes are accepted
+without a check) or **Accept without a VLM** (accepted as they are, even with a
+VLM active). Both are one saved policy. See
+[VLM selection](../../guides/vlm-selection.mdx#scope-and-budget) and
+[Assist](./assist.md#region-verification-on-the-vlm-scope-panel).
+
 ## Curation scores card
 
 Per-scorer coverage, with confirm-gated "Compute all" / "Compute selected"

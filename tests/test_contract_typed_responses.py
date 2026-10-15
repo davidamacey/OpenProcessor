@@ -91,7 +91,6 @@ LEGACY_DICT = frozenset(
         'POST /viz/projection/cancel',
         'GET /viz/projection/status',
         'POST /vlm/label_batch',
-        'POST /vlm/verify_regions',
     }
 )
 

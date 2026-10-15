@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
 from src.services.labeling.region_overlay import draw_region_overlay, render_region_block
+from src.services.labeling.vlm_attributes import render_attribute_block, specs_for
 from src.services.labeling.vlm_client import extract_message_content
 from src.services.labeling.vlm_labeler_core import VlmLabelerCore, _b64_jpeg
 from src.services.labeling.vlm_models import (
@@ -29,14 +30,29 @@ from src.utils.upstream_errors import describe_upstream_error
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from src.config import RegionFields
+    from src.services.labeling.vlm_attributes import AttributeSpec
 
 
 logger = get_logger(__name__)
 
 
+_ATTRIBUTE_ASK = (
+    'Also report these item attributes (only those visible; leave one out when the crop does '
+    'not show it) as "attributes": {{"<key>": {{"value": "<value>", "confidence": '
+    '"high|medium|low"}}}}:\n{block}\n'
+)
+
+
 class CombinedOps(VlmLabelerCore):
     """One-call class + region labeling, single and batched."""
+
+    def _attribute_ask(self) -> str:
+        """The prompt text asking for the pack's item attributes ('' when it declares none)."""
+        specs = specs_for(self._pack.attributes, 'item')
+        return _ATTRIBUTE_ASK.format(block=render_attribute_block(specs)) if specs else ''
 
     async def label_combined(
         self,
@@ -95,6 +111,9 @@ class CombinedOps(VlmLabelerCore):
         user_text = self._pack.combined_user_template.format(
             class_block=class_block, region_block=region_block
         )
+        ask = self._attribute_ask() if class_names else ''
+        if ask:
+            user_text += '\n' + ask
         b64 = _b64_jpeg(bytes_to_send)
         user_content: list[dict[str, Any]] = [
             {'type': 'text', 'text': user_text},
@@ -111,7 +130,7 @@ class CombinedOps(VlmLabelerCore):
                 {'role': 'user', 'content': user_content},
             ],
             'temperature': 0.0,
-            'max_tokens': 256,
+            'max_tokens': 768 if ask else 256,
             **self._json_mode_kwargs(),
         }
 
@@ -151,6 +170,7 @@ class CombinedOps(VlmLabelerCore):
                 fields=self._fields,
                 class_names=class_names,
                 n_boxes=len(boxes),
+                attribute_specs=specs_for(self._pack.attributes, 'item') if class_names else (),
             )
         except (TypeError, ValueError) as exc:
             logger.info(
@@ -246,7 +266,7 @@ class CombinedOps(VlmLabelerCore):
                 + ', '.join(f'{i}={name}' for i, name in enumerate(class_names))
                 + '.\n'
             )
-            header = catalog + header
+            header = catalog + header + self._attribute_ask()
 
         user_content: list[dict[str, Any]] = [{'type': 'text', 'text': header}]
         for i, crop in enumerate(chunk, start=1):
@@ -329,7 +349,7 @@ class CombinedOps(VlmLabelerCore):
                 raw_preview=raw[:300],
             )
         return self._parse_combined_batch_response(
-            raw, chunk, self._fields, class_names=class_names
+            raw, chunk, self._fields, class_names=class_names, pack_attributes=self._pack.attributes
         )
 
     @staticmethod
@@ -339,6 +359,7 @@ class CombinedOps(VlmLabelerCore):
         fields: RegionFields,
         *,
         class_names: list[str] | None = None,
+        pack_attributes: Sequence[AttributeSpec] = (),
     ) -> dict[str, VlmCombinedReply | None]:
         """Parse a batched combined response into ``{crop_id: reply | None}``.
 
@@ -416,6 +437,9 @@ class CombinedOps(VlmLabelerCore):
                     fields=fields,
                     class_names=class_names if crop.classify else None,
                     n_boxes=len(crop.region_bboxes_norm),
+                    attribute_specs=(
+                        specs_for(pack_attributes, 'item') if crop.classify and class_names else ()
+                    ),
                 )
             except (TypeError, ValueError) as exc:
                 logger.warning(

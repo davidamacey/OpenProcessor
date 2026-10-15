@@ -80,7 +80,6 @@ _GATED_ROUTES: tuple[tuple[str, str, dict[str, Any] | None], ...] = (
     ),
     ('post', '/curation/projects/default/crops/crop1/region/undo', None),
     ('post', '/curation/projects/default/crops/region/undo_batch', {'crop_ids': ['crop1']}),
-    ('post', '/curation/projects/default/vlm/verify_regions', {'crop_ids': ['crop1']}),
     ('post', '/curation/projects/default/vlm/verify_region_batch', {'crops': []}),
     ('post', '/curation/projects/default/vlm/region_visible_batch', {'crops': []}),
     ('post', '/curation/projects/default/regions/clusters/refine/5', None),

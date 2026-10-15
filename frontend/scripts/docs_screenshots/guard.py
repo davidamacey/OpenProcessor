@@ -62,6 +62,18 @@ READ_ONLY_CALLS: list[tuple[str, re.Pattern[str], str, object]] = [
         None,
     ),
     ("POST", re.compile(r"/vlm/endpoints/validate$"), "VLM endpoint validation report", None),
+    (
+        "POST",
+        re.compile(r"/assist/runs$"),
+        "assist dialog dry run (body dry_run: true: the server plans the run and writes nothing)",
+        lambda q, body: '"dry_run":true' in body.replace(" ", ""),
+    ),
+    (
+        "POST",
+        re.compile(r"/assist/runs/[^/]+/apply$"),
+        "assist proposal 'Apply' count (body dry_run: true: counts the members, writes nothing)",
+        lambda q, body: '"dry_run":true' in body.replace(" ", ""),
+    ),
 ]
 
 

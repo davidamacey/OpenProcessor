@@ -38,14 +38,12 @@ IMG = base64.b64encode(b'\xff\xd8\xff\xd9').decode()
 #: The routes that accept ``?vlm=`` and the request each one needs.
 RUN_ROUTES: dict[tuple[str, str], dict[str, Any]] = {
     ('POST', '/vlm/label_batch'): {'json': {'crop_ids': ['c1']}},
-    ('POST', '/vlm/verify_regions'): {'json': {'crop_ids': ['c1']}},
     ('POST', '/vlm/verify_region_batch'): {
         'json': {'items': [{'crop_id': 'c1', 'region_image_b64': IMG}]}
     },
     ('POST', '/vlm/region_visible_batch'): {
         'json': {'items': [{'crop_id': 'c1', 'image_b64': IMG}]}
     },
-    ('POST', '/vlm/label_cluster/{cluster_id}'): {},
     ('POST', '/pipeline/auto_label'): {},
     ('POST', '/pipeline/auto_label/start'): {},
 }

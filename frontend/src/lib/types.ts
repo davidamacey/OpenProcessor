@@ -10,6 +10,7 @@
 import type { SlotData, SlotKey } from '$lib/annotations/types';
 import type { EmbeddingState, ItemFilterQuery } from '$lib/types_itemFilter';
 import type { ReprocessRequest } from '$lib/types_import';
+import type { ItemAssist } from '$lib/types_assist';
 
 /** Who wrote a crop's current label. Same vocabulary as `class_source`
  *  (curation_api_contract.md "class_source values"): `human*`, the fixed
@@ -199,6 +200,9 @@ export interface Crop {
   vlm_endpoint?: string | null;
   vlm_model?: string | null;
   vlm_prompt_pack?: string | null;
+  /** Suggestions from the newest assist run (attributes, the VLM's class
+   *  answer). Never a label: a locked item carries them too. */
+  assist?: ItemAssist | null;
   /** a human-locked label the pipeline must not overwrite. */
   label_locked?: boolean;
   /** ids of the dataset imports that carried this item. */

@@ -2,9 +2,9 @@
 
 ``POST /curation/vlm/label_batch`` classifies item crops via the shared
 :class:`~src.services.labeling.vlm_labeler.VlmLabeler` singleton;
-``/verify_regions``, ``/verify_region_batch`` and ``/region_visible_batch``
-verify (and, for the first two, read) the crop's sub-region-of-interest
-(e.g. a printed label or sticker).
+``/verify_region_batch`` and ``/region_visible_batch`` judge a
+sub-region-of-interest (e.g. a printed label or sticker) from caller-supplied crops;
+per-box verification of stored boxes is the ``verify`` action of an assist run.
 """
 
 from __future__ import annotations
@@ -35,7 +35,6 @@ from src.routers.curation._vlm_route_models import (
     VlmVerifyRegionBatchRequest,
     VlmVerifyRegionBatchResponse,
     VlmVerifyRegionBatchResult,
-    VlmVerifyRegionsRequest,
 )
 from src.routers.curation.pipeline_params import ACKNOWLEDGE_EXTERNAL_DESC, VLM_DESC
 from src.services.curation.class_write_guard import (
@@ -43,7 +42,7 @@ from src.services.curation.class_write_guard import (
     ClassWriteGuard,
     class_write_locked,
 )
-from src.services.curation.crop_bytes import load_region_jpeg, load_vlm_item_jpeg
+from src.services.curation.crop_bytes import load_vlm_item_jpeg
 from src.services.curation.label_batch_write import label_batch_merge, label_batch_update
 from src.services.labeling.detector_hint import DETECTOR_HINT_FIELDS, hinted_crop
 from src.services.labeling.run_labeler import get_vlm_labeler, resolve_pack, vlm_stamp
@@ -302,121 +301,6 @@ async def vlm_label_batch(
     }
 
 
-@router.post('/vlm/verify_regions', responses=REGION_PROFILE_RESPONSES)
-async def vlm_verify_regions(
-    payload: VlmVerifyRegionsRequest,
-    opensearch: OpenSearchDep,
-    _profile: RegionProfileDep,
-    vlm: Annotated[str | None, Query(description=VLM_DESC)] = None,
-    acknowledge_external: Annotated[bool, Query(description=ACKNOWLEDGE_EXTERNAL_DESC)] = False,
-) -> dict[str, Any]:
-    """Verify, box by box, whether each crop's regions contain a real region.
-
-    One region crop is sent per stored box still open to a machine verdict
-    (``proposed`` or ``accepted``, never a human- or import-owned box);
-    each verdict lands on its own box and the item status is re-derived
-    (:func:`~src.services.curation.region_verify.verify_regions_update`).
-    A box the VLM gave no usable answer for (upstream failure, empty or
-    unparseable reply) is skipped entirely -- its state is left untouched
-    for a later retry rather than written as rejected, a verdict the VLM
-    never actually gave. ``verified`` counts the VLM verdicts obtained.
-    """
-    if not payload.crop_ids:
-        return {'verified': 0}
-    if len(payload.crop_ids) > 64:
-        raise HTTPException(status_code=400, detail='maximum 64 crop_ids per call')
-
-    from src.services.curation.region_verify import (
-        BoxVerdict,
-        verifiable_boxes,
-        verify_regions_update,
-    )
-    from src.services.labeling.vlm_models import RegionCrop
-    from src.services.labeling.vlm_prompts import prompt_pack_stamp
-
-    labeler = await request_labeler(opensearch, vlm, acknowledge_external)
-    pack_stamp = prompt_pack_stamp(labeler._pack)
-    n_verified = 0
-    # Keyed by crop_id rather than written straight to a plain bulk
-    # body -- the actual write goes through occ_skip_on_conflict_bulk
-    # below so a human verify/label landing on the same crop while this
-    # loop's VLM round-trips are in flight wins outright (conflict -> skip,
-    # never retried against).
-    verdicts_by_id: dict[str, list[BoxVerdict]] = {}
-    now = now_iso()
-    # One mget_crops() call instead of N separate opensearch.get()
-    # round trips.
-    from src.clients.curation_opensearch.crops import mget_crops
-
-    docs_by_id = await mget_crops(
-        opensearch,
-        list(payload.crop_ids),
-        index=items_index(),
-        source_includes=[_F.boxes, _F.verifier, _F.label_source, 'image_path'],
-    )
-    for crop_id in payload.crop_ids:
-        doc = docs_by_id.get(crop_id)
-        if doc is None:
-            logger.debug('curation_vlm_region_verify_skip_missing', crop_id=crop_id)
-            continue
-        src = doc.get('_source') or {}
-        image_path = src.get('image_path', '')
-        if not image_path:
-            continue
-        for box in verifiable_boxes(src, _F):
-            try:
-                jpeg = load_region_jpeg(image_path, tuple(box.bbox_norm))
-            except Exception as exc:
-                logger.warning(
-                    'curation_vlm_region_thumb_failed',
-                    crop_id=crop_id,
-                    box_id=box.box_id,
-                    error=str(exc),
-                )
-                continue
-            verdict = await labeler.verify_region(RegionCrop(crop_id=crop_id, jpeg_bytes=jpeg))
-            if verdict is None:
-                # No usable answer at all -- leave this box's state
-                # untouched for a retry rather than writing a rejection
-                # the VLM never actually gave.
-                continue
-            n_verified += 1
-            verdicts_by_id.setdefault(crop_id, []).append(
-                BoxVerdict(
-                    box_id=box.box_id,
-                    bbox_norm=box.bbox_norm,
-                    is_region=bool(verdict.is_region),
-                    confidence=verdict.confidence,
-                    reason=verdict.reason,
-                )
-            )
-    if verdicts_by_id:
-
-        def _merge_verify_regions(doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
-            # Applied to the freshest `current`, not the doc read above: a
-            # human write landing during the VLM round-trips wins outright.
-            return verify_regions_update(
-                current,
-                verdicts_by_id[doc_id],
-                now=now,
-                pack_stamp=pack_stamp,
-                vlm_stamp=vlm_stamp(labeler),
-            )
-
-        try:
-            await occ_skip_on_conflict_bulk(
-                opensearch,
-                doc_ids=list(verdicts_by_id.keys()),
-                merger=_merge_verify_regions,
-                index=items_index(),
-                refresh=False,
-                writer_id='vlm_verify_regions',
-            )
-        except Exception as exc:
-            logger.warning('curation_vlm_region_bulk_failed', error=str(exc))
-    return {'verified': n_verified}
-
-
 @router.post(
     '/vlm/verify_region_batch',
     response_model=VlmVerifyRegionBatchResponse,
@@ -433,7 +317,7 @@ async def vlm_verify_region_batch(
 
     Why this endpoint exists
     ------------------------
-    The single-crop ``/curation/vlm/verify_regions`` path bottlenecks a
+    A one-crop-at-a-time verify bottlenecks a
     high-throughput worker because every verify pins an upstream slot
     for the whole prompt+decode round-trip. This endpoint mirrors the
     chunked-fan-out pattern from ``/curation/vlm/label_batch``: pack
@@ -442,8 +326,8 @@ async def vlm_verify_region_batch(
     :py:meth:`VlmLabeler.verify_region_batch`, and return verdicts
     ordered by input ``crop_id``.
 
-    Unlike ``/curation/vlm/verify_regions`` (which re-derives the region
-    JPEG from OpenSearch), this endpoint expects the caller to supply
+    Unlike the assist run's verify action (which reads the region JPEGs of
+    stored boxes), this endpoint expects the caller to supply
     the region JPEG directly — cheap for a worker that already holds
     the cropped JPEG in memory.
 

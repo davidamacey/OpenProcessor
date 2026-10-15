@@ -4,7 +4,7 @@
  * (`docs/design/label_confirmation_plan.md` section 4). Which knob a scope
  * reads is the plan's definition of that scope, not a client decision.
  */
-import type { VlmScope } from '$lib/types_labelConfirmation';
+import type { RegionVerifyMode, VlmScope } from '$lib/types_labelConfirmation';
 
 export const VLM_SCOPE_COPY: Record<VlmScope, { label: string; blurb: string }> = {
   all: {
@@ -42,3 +42,20 @@ export function knobsFor(scope: VlmScope): VlmKnob[] {
 
 export const VLM_POLICY_EFFECT =
   "Takes effect on the VLM worker's next poll (within about 30 seconds) and on the next auto-label run. Stored labels are untouched. A VLM label is a suggestion until a human validates it, whatever the scope.";
+
+/** How the region worker verifies the boxes the segmenter proposes. */
+export const REGION_VERIFY_COPY: Record<
+  RegionVerifyMode,
+  { label: string; blurb: string }
+> = {
+  vlm: {
+    label: 'Verify with the VLM',
+    blurb:
+      "The region worker asks the project's VLM to judge each proposed box. With no VLM active, boxes are accepted without a check.",
+  },
+  none: {
+    label: 'Accept without a VLM',
+    blurb:
+      'Proposed boxes are accepted as they are, even when a VLM is active. A run can still choose otherwise for its own items.',
+  },
+};

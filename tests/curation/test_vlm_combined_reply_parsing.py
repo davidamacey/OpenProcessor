@@ -35,15 +35,14 @@ class TestCombinedSingle:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         'echo',
-        ['chevycar', 'CHEVYCAR', 'Chevy Car', 'Chevrolet', 'Silverado', 'Chevrolet Silverado'],
+        ['chevycar', 'CHEVYCAR', 'Chevy Car'],
     )
-    async def test_class_or_attribute_echo_is_not_region_text(self, echo: str) -> None:
+    async def test_class_echo_is_not_region_text(self, echo: str) -> None:
         reply = await _labeler(_combined(region_text=echo)).label_combined(
             'c1', _jpeg(), class_names=CLASS_NAMES, region_bboxes_norm=[(0.2, 0.6, 0.5, 0.8)]
         )
         # box_verdicts' text cleaning (region_overlay._clean_text_reply)
-        # now suppresses an item-answer echo (the picked class name, make,
-        # model, or their join) the same way the old flat parser's
+        # now suppresses an item-answer echo (the picked class name) the same way the old flat parser's
         # _clean_combined_region_text did. The class side still resolves
         # regardless.
         assert reply.region_boxes[0].text_reply is None

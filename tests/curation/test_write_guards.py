@@ -165,20 +165,18 @@ class TestCombinedClassUpdateResetsProvenance:
 
     def test_plate_fields_stay_unconditional_when_class_write_suppressed(self) -> None:
         """Region-write non-regression guard: proves the human/holdout
-        guards did not leak into region data. make/model/region_visible
+        guards did not leak into region data. region_visible
         must still be written even when class fields are suppressed."""
         reply = VlmCombinedReply(
             img_id='crop-1',
             class_id=0,
             class_confidence='high',
             region_visible=True,
-            make='Acme',
-            model='X100',
         )
         update = _combined_class_update(reply, None, vlm_model='vlm-model')
         assert update[get_region_fields().visible] is True
-        assert update['vlm_item_make'] == 'Acme'
-        assert update['vlm_item_model'] == 'X100'
+        assert 'vlm_item_make' not in update
+        assert 'vlm_item_model' not in update
         assert 'class_source' not in update
 
 

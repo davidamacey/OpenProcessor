@@ -24,7 +24,6 @@ frontend/e2e/stubbed/test_tier2_profile.py	2	cites a design note that left the t
 frontend/e2e/stubbed/test_train_gpus.py	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/e2e/stubbed/test_visual_audit_review.py	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/e2e/stubbed/test_visual_fix_pages_narrow.py	1	cites a design note that left the tree; drop the citation when the file is next touched
-frontend/e2e/stubbed/test_vlm_job_poll_by_id.py	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/scripts/capture_docs_screenshots.py	2	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/scripts/docs_screenshot_fixtures.py	4	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/scripts/repro_chromium_network_change.py	1	cites a design note that left the tree; drop the citation when the file is next touched
@@ -45,14 +44,13 @@ frontend/src/lib/annotations/secondSlotIntegration.test.ts	2	cites a design note
 frontend/src/lib/annotations/servedRegionSlot.test.ts	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/annotations/servedRegionSlot.ts	2	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/annotations/types.ts	3	cites a design note that left the tree; drop the citation when the file is next touched
-frontend/src/lib/api.autoLabel.test.ts	2	cites a design note that left the tree; drop the citation when the file is next touched
+frontend/src/lib/api.autoLabel.test.ts	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/api.clusters.test.ts	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/api.ingest.test.ts	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/api.mapRawCrop.test.ts	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/api.settings.test.ts	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/api.ts	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/apiPrefixScan.test.ts	2	cites a design note that left the tree; drop the citation when the file is next touched
-frontend/src/lib/api_autoLabel.ts	2	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/api_clusters.ts	2	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/api_cropMap.ts	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/api_ingest.ts	1	cites a design note that left the tree; drop the citation when the file is next touched

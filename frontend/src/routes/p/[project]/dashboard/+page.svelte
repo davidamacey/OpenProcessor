@@ -10,8 +10,8 @@
    * dropped — see below for where each piece landed:
    *
    *   1. `AutoLabelPanel` / `DatasetStats` — unchanged, already here.
-   *   2. Quick actions (Run VLM Labeling / Export / Snapshot) — brought over
-   *      verbatim, same handlers.
+   *   2. Quick actions (VLM assist link / Export / Snapshot). A VLM run is an
+   *      assist run started from a cluster page, so the VLM action links there.
    *   3. Class balance bar chart — brought over verbatim; this is a
    *      genuinely different view from DatasetStats' "Labeled by
    *      source" breakdown (per-CLASS, not per-source), so it's kept
@@ -30,16 +30,9 @@
   import { keyboardStore } from '$stores/keyboard.svelte';
   import AutoLabelPanel from '$components/AutoLabelPanel.svelte';
   import VlmQuickAction from '$components/vlm/VlmQuickAction.svelte';
-  import VlmRunPicker from '$components/vlm/VlmRunPicker.svelte';
-  import { vlmRunErrorText } from '$lib/vlm/runErrors';
   import DatasetStats from '$components/DatasetStats.svelte';
   import DetectionsSummaryPanel from '$lib/components/detector/DetectionsSummaryPanel.svelte';
   import ClassBalanceChart from '$components/ClassBalanceChart.svelte';
-  import {
-    pollAutoLabelJob,
-    runVlmOnCluster,
-    type AutoLabelJobState,
-  } from '$lib/api_autoLabel';
   import { getCrops, getThumbUrl } from '$lib/api_cropRead';
   import { exportYolo, getTestHoldoutStats } from '$lib/api_export';
   import { getStats } from '$lib/api_stats';
@@ -62,19 +55,6 @@
   let recent = $state<Crop[]>([]);
   let legacyLoading = $state<boolean>(false);
 
-  let vlmOpen = $state<boolean>(false);
-  let vlmClusterId = $state<string>('');
-  let vlmBusy = $state<boolean>(false);
-  // the endpoint this one run uses (`null` = the project default) and
-  // the acknowledgement for an external one.
-  let vlmChoice = $state<string | null>(null);
-  let vlmAck = $state<boolean>(false);
-  // Live status while the cluster-scoped VLM job runs — polled via
-  // pollAutoLabelJob (POST /vlm/label_cluster/{id}, then GET
-  // /pipeline/auto_label/status), same job shape AutoLabelPanel shows
-  // for a full recluster.
-  let vlmJob = $state<AutoLabelJobState | null>(null);
-
   // M13 (2026-09-24 interactive pass): "Export Dataset (YOLO)" used to
   // fire POST {API_PREFIX}/export/yolo with no confirmation and toast
   // "job started" — but that endpoint is synchronous (verified live and
@@ -89,14 +69,9 @@
   let exportResult = $state<ExportResult | null>(null);
   let exportError = $state<string | null>(null);
 
-  // m12 (2026-09-24 interactive pass): Esc/backdrop-click now dismiss
-  // these confirm dialogs too, guarded the same way as their own Cancel
-  // buttons — never while the underlying request is in flight.
-  function closeVlmDialog(): void {
-    if (vlmBusy) return;
-    vlmOpen = false;
-  }
-
+  // m12 (2026-09-24 interactive pass): Esc/backdrop-click dismiss the export
+  // confirm dialog too, guarded like its own Cancel button — never while the
+  // request is in flight.
   function closeExportConfirm(): void {
     if (exportRunning) return;
     exportConfirmOpen = false;
@@ -128,47 +103,6 @@
     const id = setInterval(() => void refreshLegacy(), 30_000);
     return () => clearInterval(id);
   });
-
-  async function runVlm(): Promise<void> {
-    const id = Number(vlmClusterId);
-    if (!Number.isFinite(id) || id < 0) {
-      toastStore.error('Enter a valid cluster id');
-      return;
-    }
-    vlmBusy = true;
-    vlmJob = null;
-    try {
-      vlmJob = await runVlmOnCluster(id, {
-        vlm: vlmChoice,
-        acknowledgeExternal: vlmAck,
-      });
-      // M7: poll only the job we just started, by id — see
-      // pollAutoLabelJob's `expectedJobId` doc comment.
-      const final = await pollAutoLabelJob(
-        (j) => (vlmJob = j),
-        undefined,
-        undefined,
-        vlmJob.job_id,
-      );
-      const stages = (final.result?.stages ?? {}) as Record<
-        string,
-        Record<string, unknown>
-      >;
-      const vlm = stages.vlm ?? {};
-      if (final.status === 'failed') {
-        toastStore.error(`VLM run failed: ${final.error ?? 'unknown error'}`);
-      } else {
-        toastStore.success(
-          `VLM labeled ${Number(vlm.predicted ?? 0)} crops (${Number(vlm.updated ?? 0)} updated).`,
-        );
-        vlmOpen = false;
-      }
-    } catch (e) {
-      toastStore.error(`VLM run failed: ${vlmRunErrorText(e)}`);
-    } finally {
-      vlmBusy = false;
-    }
-  }
 
   function openExportConfirm(): void {
     exportResult = null;
@@ -220,7 +154,7 @@
   <!-- Quick actions -->
   <section class="surface flex flex-wrap items-center gap-2 p-4">
     <h2 class="mr-3 text-sm font-semibold text-zinc-400">Quick actions</h2>
-    <VlmQuickAction onrun={() => (vlmOpen = true)} />
+    <VlmQuickAction />
     <button class="btn" type="button" onclick={openExportConfirm}>
       Export Dataset (YOLO)
     </button>
@@ -281,52 +215,6 @@
     {/if}
   </section>
 </div>
-
-{#if vlmOpen}
-  <Modal label="Run VLM on cluster" onclose={closeVlmDialog}>
-    <h3 class="mb-3 text-base font-semibold">Run VLM on cluster</h3>
-    <label class="mb-3 block text-sm">
-      <span class="mb-1 block text-zinc-400">Cluster ID</span>
-      <input
-        type="number"
-        min="0"
-        bind:value={vlmClusterId}
-        class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-        placeholder="e.g. 42"
-      />
-    </label>
-    <p class="mb-4 text-xs text-zinc-500">
-      Only un-validated crops in the cluster will be sent. Test-holdout crops are excluded
-      by the API.
-    </p>
-    <div class="mb-4 text-sm">
-      <VlmRunPicker
-        vlm={vlmChoice}
-        acknowledgeExternal={vlmAck}
-        disabled={vlmBusy}
-        onchange={(next) => {
-          vlmChoice = next.vlm;
-          vlmAck = next.acknowledgeExternal;
-        }}
-      />
-    </div>
-    {#if vlmJob}
-      <p class="mb-4 text-xs text-zinc-400">
-        {vlmJob.status === 'running'
-          ? `Running — stage: ${vlmJob.stage || 'preparing…'}${vlmJob.total > 0 ? ` (${vlmJob.processed}/${vlmJob.total})` : ''}`
-          : `Status: ${vlmJob.status}`}
-      </p>
-    {/if}
-    <div class="flex justify-end gap-2">
-      <button type="button" class="btn" onclick={closeVlmDialog} disabled={vlmBusy}>
-        Cancel
-      </button>
-      <button type="button" class="btn btn-primary" onclick={runVlm} disabled={vlmBusy}>
-        {vlmBusy ? 'Running...' : 'Run'}
-      </button>
-    </div>
-  </Modal>
-{/if}
 
 {#if exportConfirmOpen}
   <!-- M13 (2026-09-24 interactive pass): confirm before kicking off a

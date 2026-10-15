@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from scripts.curation.worker.verify import TaskBoxInput
     from src.config import DetectionProfile
     from src.domain.region_boxes import RegionBox
+    from src.services.curation.assist.slot_write import RunMeta
     from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
     from src.services.detection.region_text_rules import RegionTextRules
     from src.services.labeling.vlm_models import VlmCombinedReply
@@ -113,6 +114,7 @@ async def resolve_combined_reply(
     crop_jpeg: bytes | None,
     crop_id: str,
     force_resolve: bool = False,
+    slot_meta: RunMeta | None = None,
 ) -> CombinedResolution:
     """Resolve ``reply`` (``None``: no parseable entry) for one item.
 
@@ -126,7 +128,11 @@ async def resolve_combined_reply(
         None
         if reply is None
         else _combined_class_update(
-            reply, effective_class_names, name_to_id=name_to_id, vlm_model=vlm_model
+            reply,
+            effective_class_names,
+            name_to_id=name_to_id,
+            vlm_model=vlm_model,
+            slot_meta=slot_meta,
         )
     )
 

@@ -16,11 +16,7 @@ from scripts.curation.worker.pipeline import (
     _select_candidates,
     _sync_singular_candidate,
 )
-from scripts.curation.worker.region_text_stage import (
-    accept_without_vlm,
-    item_text_fields,
-    read_item_lines,
-)
+from scripts.curation.worker.region_text_stage import item_text_fields, read_item_lines
 from scripts.curation.worker.state import (
     _TERMINAL_STATUSES,
     STATUS_PENDING_DETECTION,
@@ -33,6 +29,7 @@ from scripts.curation.worker.state import (
     unreadable_crop_update,
 )
 from scripts.curation.worker.verify import task_box_from_stored
+from scripts.curation.worker.verify_choice import dispatch_verification
 from src.config import get_region_fields
 from src.config.region_source import CANDIDATE_DETECTOR
 from src.config.region_state import RegionStatus
@@ -66,7 +63,6 @@ async def stage_a_consumer(ctx: PipelineContext, consumer_id: int) -> None:
     in_q = ctx.in_q
     vlm_visible_q = ctx.vlm_visible_q
     sam_q = ctx.sam_q
-    combined_q = ctx.combined_q
     out_q = ctx.out_q
     in_flight = ctx.in_flight
     in_flight_lock = ctx.in_flight_lock
@@ -154,13 +150,7 @@ async def stage_a_consumer(ctx: PipelineContext, consumer_id: int) -> None:
                 t.reverify = True
                 _sync_singular_candidate(t)
                 if t.candidates:
-                    if rt.vlm_available:
-                        await combined_q.put(t)
-                    else:
-                        await accept_without_vlm(
-                            t, ocr=rt.ocr_recognizer, profile=rt.profile, rules=rt.text_rules
-                        )
-                        await out_q.put(t)
+                    await dispatch_verification(ctx, rt, t)
                 else:
                     t.update_doc = _box_list_doc(t, [], RegionStatus.NO_REGION_BOX)
                     await out_q.put(t)
@@ -238,13 +228,7 @@ async def stage_a_consumer(ctx: PipelineContext, consumer_id: int) -> None:
                     # (``<detector>:miss`` + segmenter hit) can find it.
                     t.detection_trace.append(f'{rt.profile.detector_model}:miss')
                 if t.candidates:
-                    if rt.vlm_available:
-                        await combined_q.put(t)
-                    else:
-                        await accept_without_vlm(
-                            t, ocr=rt.ocr_recognizer, profile=rt.profile, rules=rt.text_rules
-                        )
-                        await out_q.put(t)
+                    await dispatch_verification(ctx, rt, t)
                     in_q.task_done()
                     continue
                 # No candidates (detector miss, or every raw candidate

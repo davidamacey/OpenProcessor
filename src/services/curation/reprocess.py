@@ -49,6 +49,7 @@ from src.services.curation.reprocess_models import (
     ReprocessResponse,
     ReprocessScope,
     ReprocessScopeResult,
+    ReprocessTargets,
 )
 from src.services.curation.reprocess_open_vocab import plan_open_vocab_scope
 from src.services.curation.reprocess_region import (
@@ -93,6 +94,11 @@ class ReprocessPlan:
     not_found_crops: int = 0
     embed: EmbedSpec | None = None
     """What the ``embed`` scope covers; set when that scope was requested."""
+    item_request: ReprocessRequest | None = None
+    item_kind: str = ''
+    """The targets the item-unit scopes (region, vlm) run on. A capped filter
+    (``limit`` / ``sample``) is resolved to its crop ids once here, so the
+    dry-run counts and the apply act on the same items."""
 
 
 def _ordered(scopes: list[ReprocessScope]) -> list[ReprocessScope]:
@@ -265,6 +271,26 @@ def _lock_includes() -> list[str]:
     return ['class_source', 'class_validated', 'test_holdout', F.boxes, F.validated, F.verifier]
 
 
+async def _item_targets(
+    opensearch: AsyncOpenSearch, request: ReprocessRequest, kind: str
+) -> tuple[ReprocessRequest, str]:
+    """The request the item-unit scopes plan and apply: a capped filter
+    becomes the explicit crop ids it selects."""
+    targets = request.targets
+    if kind != 'filter' or targets.limit is None:
+        return request, kind
+    assert targets.filter is not None
+    capped = await resolve_ids(
+        opensearch,
+        item_filter_query(targets.filter),
+        index=_cfg_indexes()[0],
+        limit=targets.limit,
+        sample=targets.sample,
+        seed=targets.seed,
+    )
+    return request.model_copy(update={'targets': ReprocessTargets(crop_ids=capped)}), 'crop_ids'
+
+
 async def plan_reprocess(opensearch: AsyncOpenSearch, request: ReprocessRequest) -> ReprocessPlan:
     """Read-only: resolve the targets and count, per scope, what is
     selected and what the lock rule skips. Raises
@@ -301,11 +327,16 @@ async def plan_reprocess(opensearch: AsyncOpenSearch, request: ReprocessRequest)
                 f'detect over more than {reprocess_sync_max()} images runs as a background '
                 'job; run region and vlm as a separate request once it finishes'
             )
+    plan.item_request, plan.item_kind = request, kind
+    if any(s in ('region', 'vlm') for s in scopes):
+        plan.item_request, plan.item_kind = await _item_targets(opensearch, request, kind)
     for scope in scopes:
         if scope == 'region':
-            plan.results.append((await _plan_region(opensearch, request, kind))[0])
+            plan.results.append(
+                (await _plan_region(opensearch, plan.item_request, plan.item_kind))[0]
+            )
         elif scope == 'vlm':
-            plan.results.append((await _plan_vlm(opensearch, request, kind))[0])
+            plan.results.append((await _plan_vlm(opensearch, plan.item_request, plan.item_kind))[0])
         else:
             plan.results.append(
                 await _plan_images(
@@ -333,10 +364,12 @@ async def apply_reprocess(
 
     region_ids: list[str] = []
     vlm_ids: list[str] | None = None
-    if 'region' in by_scope and kind != 'filter':
-        region_ids = (await _plan_region(opensearch, request, kind))[1]
+    item_request = plan.item_request or request
+    item_kind = plan.item_kind or kind
+    if 'region' in by_scope and item_kind != 'filter':
+        region_ids = (await _plan_region(opensearch, item_request, item_kind))[1]
     if 'vlm' in by_scope:
-        vlm_ids = (await _plan_vlm(opensearch, request, kind))[1]
+        vlm_ids = (await _plan_vlm(opensearch, item_request, item_kind))[1]
 
     image_scopes = [s for s in _ORDER if s in by_scope and s in IMAGE_SCOPES]
     if image_scopes and plan.image_ids:
@@ -369,7 +402,7 @@ async def apply_reprocess(
                 by_scope[res.scope].locked_skipped = res.locked_skipped
 
     if 'region' in by_scope:
-        if kind == 'filter':
+        if item_kind == 'filter':
             assert request.targets.filter is not None
             by_scope['region'].queued = await apply_region_filter(
                 opensearch, request.targets.filter, request.region_mode

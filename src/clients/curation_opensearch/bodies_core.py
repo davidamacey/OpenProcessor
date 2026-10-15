@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.clients.curation_opensearch.assist_fields import ASSIST_ITEM_MAPPING
 from src.clients.curation_opensearch.base import F, _knn_field, _knn_settings, config
 from src.clients.curation_opensearch.items_extra import ITEMS_EXTRA_MAPPING
 from src.clients.curation_opensearch.open_vocab_fields import (
@@ -279,11 +280,6 @@ def _items_body() -> dict[str, Any]:
                 # Last VLM class attempt + why it gave no class
                 # (src/config/vlm_class_attempt.py).
                 **VLM_CLASS_ATTEMPT_MAPPING,
-                # VLM-extracted make/model hint. Field names kept as-is for
-                # the same reason as above (no region-of-interest concept
-                # applies to this item-level attribute).
-                'vlm_item_make': {'type': 'keyword'},
-                'vlm_item_model': {'type': 'keyword'},
                 # Region-visibility hint: this WAS a vendor- and
                 # domain-named field baked into the otherwise-generic
                 # index mapping, unlike its siblings above
@@ -420,6 +416,7 @@ def _items_body() -> dict[str, Any]:
                 # restores (src/services/curation/exclusion.py).
                 **_EXCLUSION_MAPPING,
                 **OPEN_VOCAB_ITEM_MAPPING,
+                **ASSIST_ITEM_MAPPING,
             }
         },
     }

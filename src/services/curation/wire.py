@@ -23,6 +23,7 @@ from src.clients.occ_locks import is_locked_box, is_locked_item
 from src.config.curation import BACKBONE_EMBEDDING_FIELD, ITEM_EMBEDDING_FIELD
 from src.config.region_fields import RegionFields, get_region_fields
 from src.domain.item_text import ITEM_TEXT_LINES_FIELD, item_text_lines_to_wire
+from src.services.curation.assist.item_wire import assist_to_wire
 from src.services.curation.class_sources import (
     class_confidence,
     vlm_suggestion,
@@ -405,6 +406,8 @@ def serialize_item(
     }
     item.update(region_to_wire(src, f))
     item.update(region_boxes_to_wire(src, f, crop_id=crop_id, prefix=prefix))
+    # The VLM's suggestions (class answer, pack attributes), apart from the labels.
+    item['assist'] = assist_to_wire(src.get('assist'), {b['box_id'] for b in item['region_boxes']})
     return item
 
 

@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from src.clients.curation_opensearch.assist_fields import ensure_assist_fields
 from src.clients.curation_opensearch.ensure_fields import (
     ensure_items_cluster_geometry_fields,
     ensure_items_embedding_fields,
@@ -139,6 +140,7 @@ def _migrations() -> tuple[tuple[str, Callable[[Any], Awaitable[Any]]], ...]:
         ('validation_split_fields', ensure_items_validation_split_fields),
         ('embedding_fields', ensure_items_embedding_fields),
         ('open_vocab_fields', ensure_open_vocab_fields),
+        ('assist_fields', ensure_assist_fields),
         ('labels_confirmed_fields', ensure_labels_confirmed_fields),
     )
 

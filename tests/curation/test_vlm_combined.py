@@ -209,8 +209,6 @@ class TestLabelCombinedBatch:
                             'region_confidence': 'high',
                         }
                     ],
-                    'make': 'Ford',
-                    'model': 'F150',
                 },
                 {
                     'img': 2,
@@ -220,16 +218,12 @@ class TestLabelCombinedBatch:
                     'region_boxes': [
                         {'box': 1, 'region_bbox_correct': False, 'region_text': None},
                     ],
-                    'make': '',
-                    'model': '',
                 },
                 {
                     'img': 3,
                     'class_id': None,
                     'region_visible': False,
                     'region_boxes': [{'box': 1, 'region_bbox_correct': None}],
-                    'make': '',
-                    'model': '',
                 },
             ]
         )
@@ -247,7 +241,6 @@ class TestLabelCombinedBatch:
         assert out['c1'] is not None
         assert out['c1'].region_boxes[0].bbox_correct is True
         assert out['c1'].region_boxes[0].text_reply == 'ABC123'
-        assert out['c1'].make == 'Ford'
         # Bbox-wrong-but-region-visible.
         assert out['c2'] is not None
         assert out['c2'].region_visible is True

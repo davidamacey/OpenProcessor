@@ -28,6 +28,7 @@ from src.domain.region_boxes import (
     is_human_owned,
     new_box_placeholder,
 )
+from src.services.curation.assist.slot_write import build_slot
 from src.services.curation.vlm_class_attempt import (
     class_attempt_fields,
     empty_answer_reason_for_index,
@@ -38,6 +39,7 @@ from src.utils.timeutil import now_iso
 
 if TYPE_CHECKING:
     from src.config import DetectionProfile
+    from src.services.curation.assist.slot_write import RunMeta
     from src.services.labeling.region_overlay import VlmBoxVerdict
     from src.services.labeling.vlm_models import VlmCombinedReply
 
@@ -108,6 +110,7 @@ def _combined_class_update(
     vlm_model: str | None,
     now: str | None = None,
     name_to_id: dict[str, int] | None = None,
+    slot_meta: RunMeta | None = None,
 ) -> dict[str, Any]:
     """Build the class-side update dict from a combined VLM reply.
 
@@ -116,7 +119,7 @@ def _combined_class_update(
     ``detector`` / ``labeler`` provenance, so a hot switch never leaves a
     stale process-wide model id on a write.
 
-    Always-applicable fields (make/model/region_visible/vlm_verify_completed_at)
+    Always-applicable fields (region_visible/vlm_verify_completed_at)
     are written regardless of whether a class was resolved. ``class_id`` /
     ``class_name`` only land when the reply contains a usable index into
     ``class_names``. A reply that *named* a label outside the catalog
@@ -135,7 +138,7 @@ def _combined_class_update(
 
     Pass ``class_names=None`` (or an empty list) when the caller already
     has a trusted class label and the reply was generated with
-    ``classify=False``; only the make/model/region_visible fields are
+    ``classify=False``; only the region_visible field is
     persisted in that case so the class column is preserved.
     """
     update: dict[str, Any] = {}
@@ -194,10 +197,14 @@ def _combined_class_update(
         )
     # else: caller asked the VLM to SKIP classification — leave the
     # existing class fields untouched.
-    if reply.make:
-        update['vlm_item_make'] = reply.make
-    if reply.model:
-        update['vlm_item_model'] = reply.model
+    if slot_meta is not None and reply.attributes:
+        # The item's suggestions slot (apart from the class); `build_slot` sets every key.
+        update['assist'] = build_slot(
+            slot_meta,
+            class_name=update.get('class_name'),
+            class_confidence=reply.class_confidence,
+            attributes=reply.attributes,
+        )
     update[get_region_fields().visible] = bool(reply.region_visible)
     update['updated_at'] = ts
     # Marker: class + region resolved in one VLM call. Downstream

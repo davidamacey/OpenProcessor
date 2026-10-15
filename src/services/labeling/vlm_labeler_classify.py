@@ -9,6 +9,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
+from src.services.labeling.vlm_attributes import parse_attributes
 from src.services.labeling.vlm_client import extract_message_content, extract_reasoning_content
 from src.services.labeling.vlm_labeler_core import _RESULTS_ENVELOPE, VlmLabelerCore, _b64_jpeg
 from src.services.labeling.vlm_models import ItemCrop, VlmClassPrediction
@@ -18,11 +19,15 @@ from src.services.labeling.vlm_reply_parse import (
     _normalize_confidence,
     _request_failed,
     _strip_markdown_fences,
+    entries_by_index,
 )
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from src.config import RegionFields
+    from src.services.labeling.vlm_attributes import AttributeSpec
 
 
 logger = get_logger(__name__)
@@ -111,7 +116,10 @@ class ClassifyOps(VlmLabelerCore):
         return self._parse_class_reply(response, chunk)
 
     def _parse_class_reply(
-        self, response: dict[str, Any], chunk: list[ItemCrop]
+        self,
+        response: dict[str, Any],
+        chunk: list[ItemCrop],
+        specs: Sequence[AttributeSpec] = (),
     ) -> list[VlmClassPrediction]:
         """Parse a class call's reply, falling back to the reasoning channel.
 
@@ -120,7 +128,7 @@ class ClassifyOps(VlmLabelerCore):
         """
         content = _strip_markdown_fences(extract_message_content(response))
         preds = self._parse_item_response(
-            content, chunk, self._fields, denylist=self._pack.proposal_denylist
+            content, chunk, self._fields, denylist=self._pack.proposal_denylist, specs=specs
         )
         if any(p.failure is None for p in preds):
             return preds
@@ -133,6 +141,7 @@ class ClassifyOps(VlmLabelerCore):
             self._fields,
             log_failures=False,
             denylist=self._pack.proposal_denylist,
+            specs=specs,
         )
         if any(p.failure is None for p in from_reasoning):
             logger.info(
@@ -151,6 +160,7 @@ class ClassifyOps(VlmLabelerCore):
         *,
         log_failures: bool = True,
         denylist: list[str] | tuple[str, ...] = (),
+        specs: Sequence[AttributeSpec] = (),
     ) -> list[VlmClassPrediction]:
         """Parse the VLM's JSON-array response into one prediction per chunk crop.
 
@@ -188,22 +198,7 @@ class ClassifyOps(VlmLabelerCore):
                 )
             return fallback
 
-        # Map img-index → record. The VLM is told to use 1-based ``img`` ids;
-        # entries with no index at all are taken positionally when their
-        # count matches the chunk.
-        entries = [e for e in parsed if isinstance(e, dict)]
-        by_index: dict[int, dict[str, Any]] = {}
-        if entries and all(e.get('img') is None for e in entries) and len(entries) == len(chunk):
-            by_index = dict(enumerate(entries, start=1))
-        for indexed in entries:
-            raw_idx = indexed.get('img')
-            if raw_idx is None:
-                continue
-            try:
-                idx = int(raw_idx)
-            except (TypeError, ValueError):
-                continue
-            by_index[idx] = indexed
+        by_index = entries_by_index(parsed, len(chunk))
 
         out: list[VlmClassPrediction] = []
         for i, crop in enumerate(chunk, start=1):
@@ -233,8 +228,7 @@ class ClassifyOps(VlmLabelerCore):
             # "". Falls back to the full response excerpt when class is
             # empty.
             per_crop_raw = class_name or proposed or raw_excerpt
-            make = str(entry.get('make', '') or '').strip()[:48]
-            model = str(entry.get('model', '') or '').strip()[:48]
+            attributes, invalid = parse_attributes(entry.get('attributes'), specs)
             visible_raw = entry.get(fields.visible)
             visible = bool(visible_raw) if isinstance(visible_raw, bool) else None
             out.append(
@@ -244,8 +238,8 @@ class ClassifyOps(VlmLabelerCore):
                     confidence=confidence,
                     proposed_class=proposed,
                     raw_response=per_crop_raw,
-                    make=make,
-                    model=model,
+                    attributes=attributes,
+                    invalid_attribute_values=invalid,
                     region_visible=visible,
                 )
             )

@@ -20,6 +20,7 @@ from scripts.curation.worker.no_verdict import NoVerdictCounter
 from scripts.curation.worker.pipeline import PipelineContext
 from scripts.curation.worker.state import RegionProfileNotConfiguredError, _ItemTask
 from src.config.region_state import RegionStatus
+from src.services.labeling.vlm_client import VlmIdentity
 
 
 def _candidate(detector: str = 'det') -> Any:
@@ -51,7 +52,8 @@ class Harness:
         self.vlm.label_combined_batch = AsyncMock(side_effect=self._replies)
         self.rt = SimpleNamespace(
             vlm=self.vlm,
-            vlm_identity='identity',
+            vlm_identity=VlmIdentity('env@None', 'model-x'),
+            pack_ref=('pack-x', 2),
             vlm_model='model-x',
             profile='profile-x',
             text_rules='rules-x',
@@ -171,7 +173,7 @@ async def test_resolved_chunk_is_written_with_trace_metrics_and_vlm_stamp(h: Har
     assert [c.region_bboxes_norm for c in crops] == [[(0.1, 0.2, 0.3, 0.4)]] * 2
     assert kw == {'class_names': ['car', 'bus']}
     assert a.vlm_called is True
-    assert a.vlm_identity == 'identity'
+    assert a.vlm_identity == VlmIdentity('env@None', 'model-x')
     # in_flight is released by the writer, not here.
     assert h.ctx.in_flight == {'a', 'b'}
     h.metric.labels.assert_called_once_with(outcome='ok')

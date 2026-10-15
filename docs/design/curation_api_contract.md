@@ -501,7 +501,7 @@ enqueue.
 
 | | `POST /prompt_packs/test` | `POST /region_profiles/test` |
 |---|---|---|
-| Subject | `pack_name`, `pack_revision` or `draft`; `call` (`combined`, `classify`, `open_classify`, `region_verify`, `region_visible`); `crop_ids[]`; `use_region_box`; `class_names`; `profile_name` | one `crop_id`; `profile_name`, `profile_revision` or `draft`; `segmenter_text_prompt`; `verify`; `prompt_pack_name`, `prompt_pack_revision` or `prompt_pack_draft` |
+| Subject | `pack_name`, `pack_revision` or `draft`; `call` (`combined`, `classify`, `open_classify`, `region_verify`, `region_visible`, `assist`, `attributes`); `crop_ids[]`; `use_region_box`; `class_names`; `profile_name` | one `crop_id`; `profile_name`, `profile_revision` or `draft`; `segmenter_text_prompt`; `verify`; `prompt_pack_name`, `prompt_pack_revision` or `prompt_pack_draft` |
 | VLM source | `vlm_name`, `vlm_revision` or `vlm_draft`; `acknowledge_external` | the same |
 | Response | `call`, `pack`, `vlm`, `prompt` (exact request text), `raw_reply`, `reasoning`, `latency_ms`, `parse_ok`, `parse_error`, `results[]` (`crop_id`, `box_id`, `parsed`, `preview_item`, `skipped`), `validation` | `crop_id`, `profile`, `item_eligible`, `legs[]` (`leg`: `detector` or `segmenter`; `status`; `candidates[]`), optional `verify`, `preview_basis`, `preview_item`, `validation` |
 
@@ -517,7 +517,7 @@ profile that reads text previews boxes only.
 Limits: a crop id from another project is `404 crop_not_found`; at most 4
 concurrent segmenter calls and 2 concurrent VLM runs (`429 test_busy`); a 60
 second bound (`504 test_timeout`); a crop cap (`422 too_many_crops`,
-`422 too_many_crop_ids`); `422 no_box_to_verify`; `422 pack_invalid` and
+`422 too_many_crop_ids`); `422 no_box_to_verify`; `422 pack_declares_no_attributes` (`assist` or `attributes` on a pack with no item attributes); `422 pack_invalid` and
 `422 profile_invalid` carry `report`; upstream failures are
 `502 vlm_transport_error`, `502 segmenter_error` and `502 detector_error`.
 
@@ -611,8 +611,8 @@ is never bypassable.
 
 The routes below take `?vlm=<name>` or `?vlm=<name>@<revision>` and
 `?acknowledge_external=true`: `POST /vlm/label_batch`,
-`POST /vlm/verify_regions`, `POST /vlm/verify_region_batch`,
-`POST /vlm/region_visible_batch`, `POST /vlm/label_cluster/{cluster_id}`,
+`POST /vlm/verify_region_batch`,
+`POST /vlm/region_visible_batch`, `POST /assist/runs`,
 `POST /pipeline/auto_label` and `POST /pipeline/auto_label/start`. An unknown
 endpoint is `422 unknown_vlm` (`valid_ids`). A project whose VLM is off is
 `409 vlm_not_configured`. An endpoint that cannot be used is
@@ -929,7 +929,7 @@ default state of a new box.
 |---|---|
 | `page`, `page_size` (1 to 500, default 50), `limit` | paging. `limit` is an alias of `page_size` and wins when both are set |
 | `sort` | `<field>[:asc\|desc]`, default `updated_at:desc`. Fields: `updated_at`, `created_at`, `confidence`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `cluster_distance`, `mistakenness_score`, `uniqueness_score`. Anything else is `400`. Ignored by `order=outliers` and `order=diverse` |
-| `cluster_id`, `label_source`, `class_source`, `label_validated`, `source` | exact filters. A class is filtered by name (`class_name`, repeatable; the shared item filter): `class_id` is not a query parameter. `GET /classes/{class_id}/crops` is the by-id listing |
+| `cluster_id`, `cluster_subid`, `label_source`, `class_source`, `label_validated`, `source` | exact filters (`cluster_subid` is one AHC sub-cluster such as `10000b`; it embeds the cluster id, so it works without `cluster_id`). A class is filtered by name (`class_name`, repeatable; the shared item filter): `class_id` is not a query parameter. `GET /classes/{class_id}/crops` is the by-id listing |
 | `needs_new_class`, `review_dismissed` | boolean filters |
 | `ids` | comma-separated, at most 500. Returns exactly those items in that order, drops missing ids and ignores every other filter |
 | `include_test`, `include_excluded` | include frozen test-holdout and excluded items |
@@ -1405,10 +1405,8 @@ can fuse. The default pool is fresh and class-bucketed unvalidated items.
 | Method | Path | Body or query | Response |
 |---|---|---|---|
 | POST | `/vlm/label_batch` | `{crop_ids}` (at most 64), `vlm`, `acknowledge_external` | label results |
-| POST | `/vlm/verify_regions` | `{crop_ids}` (at most 64) | per-crop verification |
 | POST | `/vlm/verify_region_batch` | `{items: [{crop_id, region_image_b64, candidate_text}]}` (at most 64) | `{results[]}`: `crop_id`, `is_region`, `confidence`, `reason`, `candidate_text` |
 | POST | `/vlm/region_visible_batch` | `{items: [{crop_id, image_b64}]}` (at most 64) | `{visible: {crop_id: bool}}` |
-| POST | `/vlm/label_cluster/{cluster_id}` | `prompt_pack`, `vlm`, `acknowledge_external` | the auto-label job state |
 | POST | `/pipeline/auto_label` | query parameters | runs the pipeline in the request and returns each stage's counts. Idempotent |
 | POST | `/pipeline/auto_label/start` | query parameters | starts a background job and returns at once; poll the status routes. One job at a time (`409` otherwise) |
 | GET | `/pipeline/auto_label/status` | | the current job |
@@ -1431,7 +1429,9 @@ can fuse. The default pool is fresh and class-bucketed unvalidated items.
   `clustering_method`, `run_vlm`, `recluster_unvalidated`, `reassign_only`,
   `run_auto_promote`, `gate_max_rank`, `gate_min_blur_ratio`, `n_clusters`,
   `class_id`, `cluster_id`, `prompt_pack` (`<name>` or `<name>@<revision>`),
-  `vlm` and `acknowledge_external`. A `detection_profile` parameter is `422`:
+  `vlm`, `acknowledge_external` and `vlm_attributes` (with `run_vlm`, store the pack's item
+  attributes in each item's `assist` slot through the combined `assist` call; `422
+  pack_declares_no_attributes` when the pack cannot serve it). A `detection_profile` parameter is `422`:
   no stage runs region detection. Region detection runs in the detection
   worker on the active profile.
 - Job state: `job_id`, `status` (`queued`, `running`, `completed`, `failed`,
@@ -1439,11 +1439,104 @@ can fuse. The default pool is fresh and class-bucketed unvalidated items.
   `finished_at`, `error`, `result`, `args`, backend and VRAM telemetry,
   `stage_durations`, `eta_seconds`, `elapsed_seconds`. The newest 50 jobs are
   kept. A start while a job runs is `409`.
-- `/vlm/label_cluster/{cluster_id}` runs only the VLM stage over every
-  unvalidated, non-holdout, non-excluded member of one cluster. It does no
-  re-clustering, no auto-promote and applies no cap. The index-wide stages are
-  skipped even if requested, and writes touch only the selected members.
-  `?cluster_id=` on `/pipeline/auto_label[/start]` gives the same scope.
+- `?cluster_id=` on `/pipeline/auto_label[/start]` scopes the whole job to one
+  cluster: it runs only the VLM stage over every unvalidated, non-holdout,
+  non-excluded member, does no re-clustering or auto-promote and applies no
+  cap. A sampled, per-sub-cluster or per-selection run is an assist run.
+
+## Assist runs
+
+One request shape sends a scope to the VLM: a crop, a selection of crops, a
+cluster, one sub-cluster or an item filter. The run writes the VLM's suggestions
+and never a label: a class goes through the same guarded writer as the
+auto-label VLM stage (a human- or import-locked, validated or holdout item keeps
+its class), and the answers, including a locked item's, are kept in the item's
+`assist` object.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | `/assist/runs` | `AssistRunRequest` | `AssistRunState`; `dry_run` (the default) plans and writes nothing |
+| GET | `/assist/runs` | `cluster_id`, `cluster_subid`, `limit` (1 to 100, default 20) | `{runs: AssistRunState[]}`, newest first: the runs whose target or context names that (sub-)cluster; all runs without `cluster_id` |
+| GET | `/assist/runs/{run_id}` | | `AssistRunState`; `404 not_found` for an unknown id |
+| POST | `/assist/runs/{run_id}/cancel` | | `AssistRunState`; the run stops after its current chunk |
+| POST | `/assist/runs/{run_id}/apply` | `AssistApplyRequest` | `AssistApplyResponse` |
+
+`AssistRunRequest` (unknown keys are `422`):
+
+| Field | Meaning |
+|---|---|
+| `target` | exactly one kind. `{kind: "crops", crop_ids: [1..5000], context?: {cluster_id, cluster_subid?}}` is a single crop (one id) or a user selection. `{kind: "boxes", boxes: [{crop_id, box_id}, 1..1000]}` is chosen boxes (a single box is one pair); it takes `verify` and `attributes` only. `{kind: "cluster", cluster_id, cluster_subid?}` is a cluster or one sub-cluster by the stored ids. `{kind: "filter", filter}` is a non-empty item filter |
+| `sample` | what the VLM sees. `mode`: `all` (every visible member; a `crops` target must use it) or `representative` (a seeded sample). `size` (1 to 256) overrides the default of `max(8, min(64, ceil(2*sqrt(n))))`; `seed` (default 0); `stratify_by`: `auto` (by `cluster_subid` when the scope has more than one), `cluster_subid` or `none` |
+| `actions` | a non-empty subset of `classify`, `attributes` and `verify`. With `classify` and `attributes`, and a pack that declares item attributes, one `assist` call answers both. `attributes` on a `boxes` target reports the pack's `box` attributes for each box close-up. `verify` (crops and boxes targets) has the VLM judge each stored box that is still open to a machine verdict (`proposed` or `accepted`, never a human- or import-owned box) and writes the verdict onto the box; a box the VLM gave no usable answer for is left for a retry. Order inside a run: `verify`, then `classify` / `attributes` |
+| `vlm`, `prompt_pack`, `acknowledge_external` | the endpoint and pack for this run only (`name` or `name@revision`); omitted, the project's active endpoint and effective default pack. The run pins both |
+| `min_agreement` | 0.5 to 1.0, default 0.6 |
+| `dry_run` | default `true` |
+
+`segment` (present exactly when `actions` has `segment`) is `{verify: "vlm" | "none"}`: how the
+region worker verifies the boxes the re-segmentation makes (`vlm`: the project's active VLM,
+so the run's endpoint must be that one, else `409 verify_endpoint_mismatch`; `none`: accepted
+without a VLM). With the `verify` action `segment.verify` must be `none` and the run then judges
+the new boxes with its own endpoint (a `crops` target). `segment` takes a `crops`, `cluster` or
+`filter` target and re-queues the resolved items for the region worker (a human-validated
+region set is skipped). Refusals: `409 region_profile_required`, `409 no_segmenter_leg` (the
+active profile has no `segmenter_text_prompt`), `409 region_stage_paused`.
+
+`AssistRunState`: `run_id` (null on a dry run), `status` (`dry_run`, `queued`,
+`running`, `waiting_region`, `completed`, `completed_with_errors`, `failed`, `cancelled`,
+`interrupted`), `created_at`, `finished_at`, `error`, `request` (as normalised),
+`resolved`, `progress` (`processed`, `total`) and `result`. `resolved` has
+`scope_count` (members after the visibility rules), `scope_digest` (`sha256:`
+over the sorted ids), `sampled`, `sample_seed`, `strata` (`key`, `size`,
+`sampled`; empty when not stratified), `skipped` (`holdout`, `excluded`,
+`not_found`, `box_not_found` and `box_locked` for a `boxes` target, and `class_locked`: sampled members that are sent anyway and whose
+class is never written), `vlm` (`name`, `revision`, `model`), `prompt_pack`
+(`name`, `revision`) and `estimated_vlm_calls`. `result` has `classify`
+(`predicted`, `updated`, `failed`, `unreadable`, `locked_suggest_only`) and
+`attributes` (`items_written`, `invalid_values`), `segment` (`queued`, `done`, `pending`, `failed`), `verify` (`boxes` judged, `accepted`,
+`rejected`, `locked_skipped`) for the actions that ran, and the `proposal`.
+
+**Proposal and scope check.** `result.proposal` reads the sampled answers as a
+label for the scope: `class_name` (the top class, or null), `in_registry` (checked
+against the registry on every read), `agreement` (top votes over `answered`),
+`answered`, `min_agreement`, `passes_gate`, `distribution` (`class_name`, `votes`),
+`new_class_proposals` (`name`, `votes`: the slugs the VLM proposed when nothing fit,
+counted by name and not votes for a class) and `attribute_summary` (per key the top
+10 values with counts). The gate passes with at least 3 answers and `agreement >=
+min_agreement`; a locked item's answer counts as a vote, its class is never written.
+A run with a cluster target, or a `crops` target with a `context`, keeps the members
+of that (sub-)cluster, and every read carries `scope_now`: `count` (members now),
+`overlap`, `jaccard` and `changed`. The assist layer reads only the stored
+`cluster_id` and `cluster_subid` and the member ids, so a re-refine shows as a changed
+scope and never as a silently different proposal.
+
+`POST /assist/runs/{run_id}/apply` (`AssistApplyRequest`: `class_name`,
+`label_source: "human"`, `allow_changed_scope` default `false`, `dry_run` default
+`true`) is the only path from a proposal to labels. It labels the scope's **current**
+members as a human would (validated, trainable), through the writer behind
+`PUT /crops/batch_label`, and leaves alone every member whose class is locked or
+validated and the holdout and ignored ones. The response has `selected` (members the
+class may be applied to), `skipped_locked`, `updated`, `updated_ids`, `conflicts` and
+`scope_now`. Refusals: `409 scope_changed` (under 90% of the scope is what the run saw;
+`allow_changed_scope` overrides), `409 class_not_in_registry` (`class_name` is matched by
+name; create the class first), `409 run_has_no_scope` (a bare selection or a filter run).
+
+- The frozen test holdout and human-ignored items are never sent. A scope
+  larger than 5000 items with `sample.mode: "all"` is `422 assist_too_large`
+  (sample it, narrow it, or use the auto-label job).
+- Refusals: `409 vlm_not_configured` (the project's VLM is off and `vlm` names
+  none), `409 assist_busy` (one run per project; `run_id` names the live one),
+  `404 not_found` (a cluster with no items), `422 invalid_request` (a `crops`
+  or `boxes` target with a representative sample, `classify` on a `boxes` target, `verify`
+  on a cluster or filter target, an empty filter, a repeated action),
+  `422 pack_declares_no_attributes`, `422 no_class_names` (classify with no item
+  classes in the registry), `422 unknown_vlm`.
+- The item's `assist` object (see the item wire): `run_id`, `run_created_at`,
+  `vlm_endpoint`, `vlm_model`, `prompt_pack`, `prompt_pack_revision`,
+  `class_name`, `class_confidence`, `attributes[]` (`key`, `value`,
+  `confidence`) and `boxes[]` (`box_id`, `attributes[]`: the box attributes, never part of the box itself; a
+  box id the item no longer has is not served). One slot per item; the newest run wins, and an
+  older run never replaces a newer slot. A restart ends a live run as
+  `interrupted`; run it again.
 
 ## Ingest
 

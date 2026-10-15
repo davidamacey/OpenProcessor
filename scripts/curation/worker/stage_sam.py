@@ -17,11 +17,7 @@ from scripts.curation.worker.pipeline import (
     _select_candidates,
     _sync_singular_candidate,
 )
-from scripts.curation.worker.region_text_stage import (
-    _box_with_resolved_text,
-    accept_without_vlm,
-    apply_region_text,
-)
+from scripts.curation.worker.region_text_stage import _box_with_resolved_text, apply_region_text
 from scripts.curation.worker.state import _ItemTask, bind_task_project, unreadable_crop_update
 from scripts.curation.worker.verify import (
     _SKIP_VLM_VERIFY_SECONDARY_SCORE,
@@ -29,6 +25,7 @@ from scripts.curation.worker.verify import (
     _bbox_shape_is_plausible,
     item_verification_fields,
 )
+from scripts.curation.worker.verify_choice import dispatch_verification, effective_verify
 from src.config import get_region_fields
 from src.config.region_source import CANDIDATE_SEGMENTER, CANDIDATE_SEGMENTER_TEXT_HINT
 from src.config.region_state import RegionStatus
@@ -201,12 +198,8 @@ async def _segment(
 
 async def _queue_for_verification(ctx: PipelineContext, rt: Any, t: _ItemTask) -> None:
     """Candidates set on ``t``: one combined VLM call, or straight to the writer
-    when no VLM is available."""
-    if rt.vlm_available:
-        await ctx.combined_q.put(t)
-    else:
-        await accept_without_vlm(t, ocr=rt.ocr_recognizer, profile=rt.profile, rules=rt.text_rules)
-        await ctx.out_q.put(t)
+    (see :mod:`~scripts.curation.worker.verify_choice`)."""
+    await dispatch_verification(ctx, rt, t)
 
 
 async def _route_hits(
@@ -221,6 +214,7 @@ async def _route_hits(
     top = sam_selected[0]
     if (
         len(sam_selected) == 1
+        and effective_verify(t) == 'vlm'
         and top.score >= _SKIP_VLM_VERIFY_SECONDARY_SCORE
         and _bbox_shape_is_plausible(top.bbox_in_crop)
     ):

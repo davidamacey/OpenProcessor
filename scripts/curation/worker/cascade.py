@@ -35,6 +35,7 @@ logger = get_logger('curation_worker')
 
 from scripts.curation.worker.client import SegmenterClient  # noqa: TC001  # runtime re-export for shim + tests
 from scripts.curation.worker.state import JPEG_QUALITY, _ItemTask, items_index
+from scripts.curation.worker.verify_policy import project_region_verify
 
 
 if TYPE_CHECKING:
@@ -121,6 +122,8 @@ async def _fetch_pending(
             'confidence',
             'request_id',
             'test_holdout',
+            'region_run_verify',
+            'region_run_id',
             *CLASS_GUARD_SOURCE_FIELDS,
         ],
         'track_total_hits': False,
@@ -129,6 +132,7 @@ async def _fetch_pending(
     }
     resp = await opensearch.search(index=items_index(), body=body)
     hits = (resp.get('hits') or {}).get('hits') or []
+    policy_verify = await project_region_verify(opensearch) if hits else 'vlm'
     tasks: list[_ItemTask] = []
     for h in hits:
         src = h.get('_source') or {}
@@ -157,6 +161,9 @@ async def _fetch_pending(
                 region_box_seq=int(src.get(F.box_seq) or 0),
                 request_id=str(src.get('request_id') or '-'),
                 class_token=class_state_token(src),
+                region_run_verify=src.get('region_run_verify'),
+                region_run_id=src.get('region_run_id'),
+                policy_verify=policy_verify,
                 project=project,
             )
         )

@@ -204,7 +204,7 @@ def _clean_text_reply(value: Any, *, echoes: tuple[str, ...] = ()) -> str | None
 
     Drops sentinels and any value that is really one of the reply's own
     item-level answers echoed into the text slot (``echoes``: the class
-    name it picked, its ``make`` / ``model``, both joined) -- M5: this
+    name it picked) -- M5: this
     suppression lived in the earlier flat parser
     (``vlm_labeler._clean_combined_region_text``) and was dropped, not
     ported, when the per-box list shape replaced it.
@@ -264,7 +264,7 @@ def box_verdicts(
     no matching element gets ``bbox_correct=None`` (no verdict).
 
     ``echoes`` (M5): the reply's own item-level answers (the class name
-    it picked, ``make``, ``model``, both joined) -- a per-box ``text``
+    it picked) -- a per-box ``text``
     reply that's really one of those echoed back is dropped, never
     stored as if it were text read off the region.
 

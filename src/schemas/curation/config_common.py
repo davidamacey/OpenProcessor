@@ -131,6 +131,17 @@ ErrorCode = Literal[
     'vlm_unreachable',
     'no_box_to_verify',
     'no_class_names',
+    'pack_declares_no_attributes',
+    # assist runs
+    'invalid_request',
+    'assist_too_large',
+    'assist_busy',
+    'scope_changed',
+    'class_not_in_registry',
+    'run_has_no_scope',
+    'region_stage_paused',
+    'no_segmenter_leg',
+    'verify_endpoint_mismatch',
     'too_many_crops',
     'too_few_items',
     'too_many_crop_ids',
@@ -177,6 +188,8 @@ ValidationCode = Literal[
     'pack_description_class_unknown',
     'pack_example_values',
     'pack_multi_region_keys_missing',
+    'pack_attribute_invalid',
+    'pack_attribute_duplicate',
     # region-profile validation (any_domain_plan.md §4.3/§7.1)
     'profile_name_invalid',
     'profile_name_reserved',
@@ -376,6 +389,8 @@ class ConfigErrorDetail(BaseModel):
     limit: int | None = None
     # 422 too_few_items: the smallest pool the clustering route accepts.
     min_items: int | None = None
+    # 409 scope_changed: the assist run's scope now against the members it resolved.
+    scope_now: dict[str, Any] | None = None
     # unknown_vlm carries `requested`; a refused external endpoint names
     # itself and where its acknowledgement is given.
     requested: str | None = None

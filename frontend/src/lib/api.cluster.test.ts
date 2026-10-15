@@ -238,3 +238,47 @@ describe('getCluster k param', () => {
     expect(res.crops.n_pool).toBeNull();
   });
 });
+
+describe('getCluster cluster_subid param', () => {
+  const jsonResponse = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  const crops = (fetchMock: ReturnType<typeof vi.fn>) =>
+    fetchMock.mock.calls
+      .map((c) => c[0] as string)
+      .find((u) => u.startsWith(`${API_PREFIX}/crops`)) ?? '';
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stub() {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((url: string) =>
+        Promise.resolve(
+          url.startsWith(`${API_PREFIX}/crops`)
+            ? jsonResponse({ total: 0, page: 1, page_size: 60, crops: [] })
+            : jsonResponse({ items: [] }),
+        ),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('asks the server for one sub-cluster instead of filtering the loaded page', async () => {
+    const fetchMock = stub();
+    await getCluster(42, 1, 60, undefined, { clusterSubid: '42b' });
+    const url = crops(fetchMock);
+    expect(url).toContain('cluster_id=42');
+    expect(url).toContain('cluster_subid=42b');
+  });
+
+  it('omits cluster_subid for the whole cluster', async () => {
+    const fetchMock = stub();
+    await getCluster(42, 1, 60, undefined, { clusterSubid: null });
+    expect(crops(fetchMock)).not.toContain('cluster_subid');
+  });
+});

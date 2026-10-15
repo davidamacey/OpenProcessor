@@ -12,6 +12,7 @@ that model) to:
 
 This module composes :class:`VlmLabeler` from the operation families, one
 module each: ``vlm_labeler_core.py`` (transport), ``vlm_labeler_classify.py``,
+``vlm_labeler_assist.py`` (assist and attributes calls),
 ``vlm_labeler_verify.py``, ``vlm_labeler_visibility.py`` and
 ``vlm_labeler_combined.py``. Models and errors live in ``vlm_models.py``,
 reply parsing in ``vlm_reply_parse.py``, class-name helpers in
@@ -48,13 +49,13 @@ Public surface
 
 from __future__ import annotations
 
-from src.services.labeling.vlm_labeler_classify import ClassifyOps
+from src.services.labeling.vlm_labeler_assist import AssistOps
 from src.services.labeling.vlm_labeler_combined import CombinedOps
 from src.services.labeling.vlm_labeler_verify import VerifyOps
 from src.services.labeling.vlm_labeler_visibility import VisibilityOps
 
 
-class VlmLabeler(ClassifyOps, VerifyOps, VisibilityOps, CombinedOps):
+class VlmLabeler(AssistOps, VerifyOps, VisibilityOps, CombinedOps):
     """Async client for an OpenAI-compatible vision-chat VLM endpoint."""
 
 

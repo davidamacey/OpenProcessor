@@ -52,6 +52,11 @@ async def list_crops(
         ),
     ] = None,
     cluster_id: int | None = None,
+    cluster_subid: Annotated[
+        str | None,
+        UnsetIfEmpty,
+        Query(description="One AHC sub-cluster of a cluster, e.g. '10000b'."),
+    ] = None,
     label_source: str | None = None,
     class_source: str | None = None,
     label_validated: bool | None = None,
@@ -160,6 +165,7 @@ async def list_crops(
             item_filter_params=item_filter.model_dump(exclude_defaults=True),
             route_params={
                 'cluster_id': cluster_id,
+                'cluster_subid': cluster_subid,
                 'label_source': label_source,
                 'class_source': class_source,
                 'label_validated': label_validated,

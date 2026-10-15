@@ -33,6 +33,7 @@ exactly these calls, each of which writes nothing server-side:
 | `DELETE /curation/projects/{project}?dry_run=true` (never with `confirm`) | the delete dialog's dry-run report |
 | `POST /projects/combine/preview` | combine preview report |
 | `POST .../reprocess` with `dry_run: true` | Reprocess "Check what would run" |
+| `POST .../assist/runs` with `dry_run: true`, `POST .../assist/runs/{run_id}/apply` with `dry_run: true` | the Assist dialog's plan and the proposal card's apply count (the server plans and counts, writes nothing) |
 | `POST .../prompt_packs/validate` | live pack validation |
 | `POST .../prompt_packs/test` | "Test on a crop" (runs the VLM, "Nothing is written") |
 | `POST .../region_profiles/validate`, `.../keymap/validate`, `.../vlm/endpoints/validate` | validation reports |

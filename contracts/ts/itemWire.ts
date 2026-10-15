@@ -3,6 +3,30 @@
 // DO NOT EDIT BY HAND: edit the Python source and re-run
 // `python3 scripts/codegen/generate_contracts.py`.
 
+export interface AssistAttributeWire {
+  key: string;
+  value: string;
+  confidence: string;
+}
+
+export interface AssistBoxWire {
+  box_id: string;
+  attributes: AssistAttributeWire[];
+}
+
+export interface ItemAssistWire {
+  run_id: string;
+  run_created_at: string;
+  vlm_endpoint: string | null;
+  vlm_model: string | null;
+  prompt_pack: string | null;
+  prompt_pack_revision: number | null;
+  class_name: string | null;
+  class_confidence: string | null;
+  attributes: AssistAttributeWire[];
+  boxes: AssistBoxWire[];
+}
+
 export interface ItemTextLine {
   text: string | null;
   box_norm: number[] | null;
@@ -130,6 +154,7 @@ export interface ItemWire {
   combine_conflict_origins: string[];
   combine_merged_origins: string[];
   item_text_lines: ItemTextLine[];
+  assist: ItemAssistWire | null;
 }
 
 export type ItemWireKey = keyof ItemWire;
@@ -250,6 +275,7 @@ export const ITEM_WIRE_KEYS = [
   'combine_conflict_origins',
   'combine_merged_origins',
   'item_text_lines',
+  'assist',
 ] as const satisfies readonly ItemWireKey[];
 
 /** Region-of-interest attributes (fixed wire names, whatever the storage names). */

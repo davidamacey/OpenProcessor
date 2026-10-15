@@ -1,5 +1,5 @@
 /**
- * The served words for a refused per-run VLM call (`label_cluster`,
+ * The served words for a refused per-run VLM call (`assist/runs`,
  * `auto_label/start`): 422 `unknown_vlm` (axis / requested / valid ids),
  * 422 `vlm_external_not_acknowledged`, 409 `vlm_not_configured`, 409
  * `vlm_endpoint_unavailable` and a pairing 422 `validation_failed` (its

@@ -128,10 +128,170 @@
     "combine_conflict",
     "combine_conflict_origins",
     "combine_merged_origins",
-    "item_text_lines"
+    "item_text_lines",
+    "assist"
   ],
   "json_schema": {
     "$defs": {
+      "AssistAttributeWire": {
+        "description": "One suggested attribute: a pack-declared ``key``, its normalised\n``value`` and the VLM's confidence.",
+        "properties": {
+          "confidence": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "confidence"
+        ],
+        "title": "AssistAttributeWire",
+        "type": "object"
+      },
+      "AssistBoxWire": {
+        "properties": {
+          "attributes": {
+            "items": {
+              "$ref": "#/$defs/AssistAttributeWire"
+            },
+            "title": "Attributes",
+            "type": "array"
+          },
+          "box_id": {
+            "title": "Box Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "box_id"
+        ],
+        "title": "AssistBoxWire",
+        "type": "object"
+      },
+      "ItemAssistWire": {
+        "description": "The VLM's suggestions for an item from the newest assist run that\nanswered it. Suggestions only: they never change the item's class or boxes,\nand a locked item carries them too (``class_name`` is what the VLM said).",
+        "properties": {
+          "attributes": {
+            "items": {
+              "$ref": "#/$defs/AssistAttributeWire"
+            },
+            "title": "Attributes",
+            "type": "array"
+          },
+          "boxes": {
+            "items": {
+              "$ref": "#/$defs/AssistBoxWire"
+            },
+            "title": "Boxes",
+            "type": "array"
+          },
+          "class_confidence": {
+            "anyOf": [
+              {
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Class Confidence"
+          },
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Class Name"
+          },
+          "prompt_pack": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Prompt Pack"
+          },
+          "prompt_pack_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Prompt Pack Revision"
+          },
+          "run_created_at": {
+            "title": "Run Created At",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "vlm_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Vlm Endpoint"
+          },
+          "vlm_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Vlm Model"
+          }
+        },
+        "required": [
+          "run_id",
+          "run_created_at"
+        ],
+        "title": "ItemAssistWire",
+        "type": "object"
+      },
       "ItemTextLine": {
         "description": "One OCR text line on the item crop (``box_norm`` in the item-crop\nframe; ``rel_height`` = line height / crop height).",
         "properties": {
@@ -193,6 +353,17 @@
     },
     "description": "The wire item every item-returning endpoint emits.\n\nDocumentation/OpenAPI model only: handlers return\n``src.services.curation.wire.serialize_item`` output directly (a test\npins this model's fields to that serializer's keys), so a stored value\nof an unexpected type never 500s a browse page. Region attributes use\nthe fixed ``region_<attr>`` wire names regardless of any\n``OP_REGION_FIELD_*`` storage override.",
     "properties": {
+      "assist": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ItemAssistWire"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
       "bbox_norm": {
         "items": {
           "type": "number"

@@ -69,6 +69,11 @@ def set_region_stage_paused(paused: bool) -> None:
         flag.unlink(missing_ok=True)
 
 
+def is_region_stage_paused() -> bool:
+    """Whether the bound project's region stage is paused."""
+    return _flag(REGION_STAGE_PAUSED_FLAG_NAME).exists()
+
+
 def rerun_skipped_request() -> ReprocessRequest:
     return ReprocessRequest(
         targets=ReprocessTargets(
@@ -112,6 +117,7 @@ async def region_stage_state(opensearch: AsyncOpenSearch) -> RegionStageState:
 __all__ = [
     'RegionStageCounts',
     'RegionStageState',
+    'is_region_stage_paused',
     'region_stage_state',
     'rerun_skipped_request',
     'set_region_stage_paused',

@@ -34,6 +34,14 @@ from src.services.labeling.region_overlay import (
     REPLY_CONFIDENCE_KEY,
     REPLY_TEXT_KEY,
 )
+from src.services.labeling.vlm_attributes import (
+    DEFAULT_ASSIST_SYSTEM,
+    DEFAULT_ASSIST_USER_TEMPLATE,
+    DEFAULT_ATTRIBUTES_SYSTEM,
+    DEFAULT_ATTRIBUTES_USER_TEMPLATE,
+    AttributeSpec,
+    specs_from_body,
+)
 
 
 if TYPE_CHECKING:
@@ -108,6 +116,16 @@ class PromptPack:
     # this many percent. 0 = off. Bounded by ``MAX_DETECTOR_HINT_PCT`` (100).
     detector_hint_min_confidence_pct: int = 0
 
+    # Attributes (free-form facts about an item or a box, suggestions only) and the
+    # two calls that report them: ``assist`` classifies and reports item attributes
+    # in one call, ``attributes`` reports attributes alone (items without classify,
+    # and box sub-crops). Empty prompts are valid while ``attributes`` is empty.
+    attributes: list[AttributeSpec] = field(default_factory=list)
+    assist_system: str = ''
+    assist_user_template: str = ''  # .format(class_list=..., attribute_block=..., n_images=...)
+    attributes_system: str = ''
+    attributes_user_template: str = ''  # .format(attribute_block=..., n_images=...)
+
     def to_dict(self) -> dict[str, Any]:
         """Plain-dict serialization -- every field is a ``str`` or a
         ``dict[str, str]``, so this round-trips through JSON cleanly."""
@@ -124,7 +142,10 @@ class PromptPack:
         a deployment-supplied pack should be allowed to silently omit.
         """
         known = {f.name for f in fields(cls)}
-        return cls(**{k: v for k, v in data.items() if k in known})
+        picked = {k: v for k, v in data.items() if k in known}
+        if 'attributes' in picked:
+            picked['attributes'] = specs_from_body(picked['attributes'])
+        return cls(**picked)
 
     @classmethod
     def from_json(cls, path: str | Path) -> PromptPack:
@@ -325,6 +346,10 @@ GENERIC_ITEM_PACK = PromptPack(
     # and the shipped default must validate with zero warnings on any registry
     # (empty, COCO, ...). Domain vocabulary belongs in a stored pack.
     proposal_denylist=list(DEFAULT_PROPOSAL_DENYLIST),
+    assist_system=DEFAULT_ASSIST_SYSTEM,
+    assist_user_template=DEFAULT_ASSIST_USER_TEMPLATE,
+    attributes_system=DEFAULT_ATTRIBUTES_SYSTEM,
+    attributes_user_template=DEFAULT_ATTRIBUTES_USER_TEMPLATE,
 )
 
 
@@ -434,6 +459,10 @@ GENERIC_REGION_PACK = PromptPack(
         '{"results": [{"img": 1, "visible": true|false}, ...]}'
     ),
     proposal_denylist=list(DEFAULT_PROPOSAL_DENYLIST),
+    assist_system=DEFAULT_ASSIST_SYSTEM,
+    assist_user_template=DEFAULT_ASSIST_USER_TEMPLATE,
+    attributes_system=DEFAULT_ATTRIBUTES_SYSTEM,
+    attributes_user_template=DEFAULT_ATTRIBUTES_USER_TEMPLATE,
 )
 
 # A quoted value in a prompt: "..." or '...'. Double-quoted strings are
@@ -487,7 +516,7 @@ REPLY_KEY_CONTRACT: dict[str, dict[str, list[str]]] = {
     'classify': {
         'fields': ['class_system', 'class_user_template'],
         'required': ['img', 'class', 'confidence'],
-        'optional': ['make', 'model'],
+        'optional': [],
     },
     'open_classify': {
         'fields': ['open_class_system', 'open_class_user_template'],
@@ -538,7 +567,21 @@ REPLY_KEY_CONTRACT: dict[str, dict[str, list[str]]] = {
         'required': ['results', 'img', 'visible'],
         'optional': [],
     },
+    'assist': {
+        'fields': ['assist_system', 'assist_user_template'],
+        'required': ['img', 'class', 'confidence'],
+        'optional': ['proposed_class', 'attributes'],
+    },
+    'attributes': {
+        'fields': ['attributes_system', 'attributes_user_template'],
+        'required': ['img', 'attributes'],
+        'optional': [],
+    },
 }
+
+# Calls a pack may leave blank while it declares no attributes; their reply keys
+# are checked only once the prompt fields are filled.
+ATTRIBUTE_CALLS: frozenset[str] = frozenset({'assist', 'attributes'})
 
 # The three fields that go through ``str.format`` -- every other field is
 # sent verbatim (any_domain_plan.md §3.3).
@@ -546,6 +589,14 @@ FORMATTED_PLACEHOLDERS: dict[str, tuple[str, ...]] = {
     'class_user_template': ('class_names_csv',),
     'open_class_user_template': ('class_names_csv',),
     'combined_user_template': ('class_block', 'region_block'),
+    'assist_user_template': ('class_list', 'attribute_block'),
+    'attributes_user_template': ('attribute_block',),
+}
+
+# Placeholders a formatted field may use but need not (``{n_images}``).
+OPTIONAL_PLACEHOLDERS: dict[str, tuple[str, ...]] = {
+    'assist_user_template': ('n_images',),
+    'attributes_user_template': ('n_images',),
 }
 
 
@@ -568,11 +619,13 @@ from src.services.labeling.vlm_prompt_resolution import (  # noqa: E402  # botto
 
 
 __all__ = [
+    'ATTRIBUTE_CALLS',
     'BUILT_IN_PACKS',
     'DEFAULT_PROPOSAL_DENYLIST',
     'FORMATTED_PLACEHOLDERS',
     'GENERIC_ITEM_PACK',
     'GENERIC_REGION_PACK',
+    'OPTIONAL_PLACEHOLDERS',
     'REPLY_KEY_CONTRACT',
     'PromptPack',
     'active_prompt_pack',

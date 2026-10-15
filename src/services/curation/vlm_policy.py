@@ -3,8 +3,7 @@
 Distinct from the ingest policy (which governs what ingest stores and embeds):
 this one limits the two automated VLM class writers, the continuous
 ``curation-vlm-worker`` and the ``auto_label`` VLM stage. An explicit request
-(``POST /vlm/label_cluster/{id}``, a ``cluster_id``-scoped auto-label run, a
-single-crop label) is never limited by it.
+(an assist run, a ``cluster_id``-scoped auto-label run, a single-crop label) is never limited by it.
 
 Scopes:
 
@@ -17,6 +16,8 @@ Scopes:
 
 ``max_crops_per_day`` (0 = unlimited) caps VLM class attempts per UTC day and
 ``sample_frac`` (0..1] keeps a stable hash-selected fraction of the crops.
+``region_verify`` is not a crop scope: it picks how the region worker verifies boxes
+(``vlm`` or ``none``), independent of the class-labelling scope above.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 VlmScope = Literal['all', 'uncertain', 'representatives', 'off']
+RegionVerify = Literal['vlm', 'none']
 
 
 class VlmPolicyBody(BaseModel):
@@ -37,6 +39,11 @@ class VlmPolicyBody(BaseModel):
     per_cluster: int = Field(default=5, ge=1, le=100)
     max_crops_per_day: int = Field(default=0, ge=0)
     sample_frac: float = Field(default=1.0, gt=0.0, le=1.0)
+    region_verify: RegionVerify = Field(
+        default='vlm',
+        description='How the region worker verifies proposed boxes: `vlm` (with the '
+        "project's VLM when it has one) or `none` (accepted without a VLM).",
+    )
 
 
 class VlmPolicy(VlmPolicyBody):

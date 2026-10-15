@@ -360,6 +360,14 @@ request names an endpoint with `vlm=<name>` (see the recipe below).
 VLM labels stay unvalidated suggestions (`class_source: "vlm"`). Nothing reaches an
 export until a person validates it.
 
+To collect the pack's item attributes in the same run, add `vlm_attributes=true`. The
+VLM stage then uses the pack's combined `assist` call (class and attributes in one
+request) and stores the attributes in each item's `assist` slot, apart from the class.
+It needs `run_vlm=true` (`422 invalid_request` otherwise) and a pack that declares item
+attributes and fills the `assist` prompts (`422 pack_declares_no_attributes`). The
+region worker's combined call does the same for the items it classifies, when the
+active pack declares item attributes.
+
 ## Recipe: ingest without the VLM, cluster, name by hand, then run the VLM for one thing
 
 The goal: ingest images, detect cars and people, cluster, name clusters yourself (for
@@ -440,7 +448,7 @@ sub-cluster.
 # ran
 curl -s -X POST $API/classes -H 'content-type: application/json' \
   -d '{"name":"spoiler","group":"car_part"}'
-curl -s "$API/crops?cluster_id=10000&limit=200"     # pick the ids of sub-cluster 10000b
+curl -s "$API/crops?cluster_id=10000&cluster_subid=10000b&limit=200"   # the ids of sub-cluster 10000b
 curl -s -X PUT $API/crops/batch_label -H 'content-type: application/json' \
   -d '{"crop_ids":["050ad3a2...","05ad8ec2..."],"class_id":0,"label_source":"human"}'
 ```
@@ -455,35 +463,60 @@ them. In Cropwright, open the cluster, filter to the crops and use **Label all m
 **5. Run the VLM for one thing only.** Without an endpoint the project refuses, which is
 the point:
 
+An assist run plans first (`dry_run` is the default) and writes nothing:
+
 ```bash
-# ran
-curl -s -X POST "$API/vlm/label_cluster/10000"
+# not run  (the refusal is code-verified by tests/curation/test_assist_run_classify.py)
+curl -s -X POST "$API/assist/runs" -H 'content-type: application/json' \
+  -d '{"target":{"kind":"cluster","cluster_id":10000},"actions":["classify"]}'
 ```
 
 ```text
 409 {"detail":{"error":"vlm_not_configured","message":"this project's VLM is off or not configured; activate an endpoint first"}}
 ```
 
-Name the endpoint for this run. The project's own setting stays `off`:
+Name the endpoint for this run, then start it. The project's own setting stays `off`:
 
 ```bash
-# ran  (the stack's VLM was unreachable; see step 6)
-curl -s -X POST "$API/vlm/label_cluster/10000?vlm=env"
-curl -s $API/pipeline/auto_label/status
+# not run
+curl -s -X POST "$API/assist/runs" -H 'content-type: application/json' \
+  -d '{"target":{"kind":"cluster","cluster_id":10000},"actions":["classify"],"vlm":"env","dry_run":false}'
+curl -s "$API/assist/runs/RUN_ID"
 ```
 
-The job selects the 134 unvalidated members of cluster `10000` and none of the 28 you
-named. Other ways to pick "one thing", all `# not run` and all taking `vlm=<name>`:
+The run sends the members of cluster `10000` that are not in the frozen holdout and not
+ignored, including the 28 you named: they are sent for a suggestion, and their class is
+never written (`locked_suggest_only` in the result). Other ways to pick "one thing", all
+`# not run` and all taking `vlm=<name>`:
 
 | Scope | Request |
 |---|---|
-| One cluster | `POST $API/vlm/label_cluster/{cluster_id}?vlm=env` |
+| One cluster, one sub-cluster, a sample of either | `POST $API/assist/runs` with `target` `{"kind":"cluster","cluster_id":10000,"cluster_subid":"10000b"}` and `sample` `{"mode":"representative"}` |
+| Chosen crops, or one crop | `POST $API/assist/runs` with `target` `{"kind":"crops","crop_ids":[...]}` |
 | A class, a confidence band or a size band | `POST $API/pipeline/auto_label/start?run_vlm=true&vlm=env&class_id=3&conf_max=0.5` (the same item filter as the crop list: `class_name`, `exclude_class_name`, `conf_min`, `conf_max`, `min_area`, `max_area`, `max_rank`, `origin`, `embedding_state`, `review_status`) |
-| Chosen crops | `POST $API/vlm/label_batch?vlm=env` with `{"crop_ids": [...]}` |
 | A budget | add `max_vlm_crops=200` to any `auto_label/start` |
 | Only representatives | `vlm_scope=representatives` on `auto_label/start`, or the project's [VLM policy](./vlm-selection.mdx#scope-and-budget) |
 
-To make the VLM the project's own default instead, activate it (mode (c), step 3).
+A run over a cluster or sub-cluster returns a proposal: the class most sampled answers
+agree on, the vote distribution, the new-class slugs the VLM proposed and a summary of
+the attributes the pack declares. Read it from the run, and apply it only on purpose:
+
+```bash
+# not run  (code-verified by tests/curation/test_assist_proposal.py)
+curl -s "$API/assist/runs?cluster_id=10000&cluster_subid=10000b"
+curl -s -X POST "$API/assist/runs/RUN_ID/apply" -H 'content-type: application/json' \
+  -d '{"class_name":"spoiler","dry_run":true}'
+```
+
+`dry_run` counts the members that would be labelled and the locked ones left alone; send
+`"dry_run": false` to label them as a human would. After a re-refine the run's
+`scope_now.changed` is true, and apply refuses with `scope_changed` until you run again
+(or pass `allow_changed_scope`).
+
+The sample modes, attributes and segmenter verification are described in
+[Selective VLM and segmenter assist](./selective-assist.mdx); in Cropwright it is the
+**Assist…** button on a cluster page. To make the VLM the project's own default instead,
+activate it (mode (c), step 3).
 
 **6. Check what the run did.** A VLM run that could label nothing now fails instead of
 reporting `completed` with `predicted: 0`. Found by this run: the auto-label VLM stage
@@ -516,7 +549,10 @@ document yet. (issue #286), related to #97 and #218.
 
 The idea is a loop: sample crops from each cluster and sub-cluster, label them with
 the VLM, measure how well the labels agree, propagate the label to the whole cluster
-when agreement passes a gate, and split the cluster and repeat when it does not.
+when agreement passes a gate, and split the cluster and repeat when it does not. The
+parts exist as single steps today: the seeded, stratified sample, the proposal with its
+agreement gate and the explicit apply of an assist run (step 5 of the recipe above).
+The loop that drives them is what is not shipped.
 :::
 
 What exists today, and can be combined by hand:

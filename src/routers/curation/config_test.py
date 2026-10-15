@@ -66,6 +66,7 @@ from src.services.detection.segmenter_health import configured_segmenter_health
 from src.services.detection.segmenter_http import first_segmenter_url
 from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError
 from src.services.labeling.vlm_factory import assert_may_connect, labeler_for
+from src.services.labeling.vlm_labeler_assist import PackAttributesError
 from src.services.labeling.vlm_models import VlmTransportError
 from src.services.labeling.vlm_prompts import PromptPack, active_prompt_pack, prompt_pack_stamp
 
@@ -200,7 +201,8 @@ async def test_prompt_pack(body: PackTestRequest, opensearch: OpenSearchDep) -> 
     error. 422 ``unknown_pack`` / ``unknown_revision`` / ``pack_invalid``
     (+ report) / ``unknown_vlm`` / ``vlm_external_not_acknowledged`` /
     ``too_many_crops`` / ``too_many_crop_ids`` / ``no_box_to_verify`` /
-    ``no_class_names`` (classify with an empty registry and no ``class_names``); 404 ``crop_not_found``;
+    ``no_class_names`` (classify with an empty registry and no ``class_names``) /
+    ``pack_declares_no_attributes`` (assist / attributes with no matching attribute declared); 404 ``crop_not_found``;
     409 ``vlm_not_configured``; 429 ``test_busy``; 502 ``vlm_transport_error``.
     Writes nothing."""
     if not body.crop_ids:
@@ -235,7 +237,7 @@ async def test_prompt_pack(body: PackTestRequest, opensearch: OpenSearchDep) -> 
     labeler = await _labeler(endpoint, pack)
     capacity = (
         labeler.open_images_per_call
-        if body.call == 'open_classify'
+        if body.call in ('open_classify', 'assist', 'attributes')
         else labeler.max_images_per_call
     )
     if body.call == 'combined' and profile is None:
@@ -246,7 +248,7 @@ async def test_prompt_pack(body: PackTestRequest, opensearch: OpenSearchDep) -> 
     if body.class_names is not None:
         class_names = body.class_names
     crops = await _load_crops(opensearch, body.crop_ids)
-    if body.call == 'classify' and not class_names:
+    if body.call in ('classify', 'assist') and not class_names:
         raise api_error(
             422,
             'no_class_names',
@@ -269,6 +271,8 @@ async def test_prompt_pack(body: PackTestRequest, opensearch: OpenSearchDep) -> 
                     capacity=capacity,
                 )
             )
+    except PackAttributesError as exc:
+        raise api_error(422, 'pack_declares_no_attributes', str(exc)) from exc
     except NoRegionBoxError as exc:
         raise api_error(
             422, 'no_box_to_verify', 'region_verify needs a stored box open to a machine verdict'

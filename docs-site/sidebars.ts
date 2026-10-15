@@ -36,6 +36,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'guides/pipeline-modes',
             'guides/vlm-selection',
+            'guides/selective-assist',
             'guides/region-profiles',
             'guides/prompt-packs',
             'guides/open-vocabulary',
@@ -129,6 +130,7 @@ const sidebars: SidebarsConfig = {
         'cropwright/user-guide/embedding-state',
         'cropwright/user-guide/dataset-import',
         'cropwright/user-guide/clusters',
+        'cropwright/user-guide/assist',
         'cropwright/user-guide/item-filter',
         'cropwright/user-guide/review',
         'cropwright/user-guide/audit',

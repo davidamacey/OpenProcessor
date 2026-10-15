@@ -420,8 +420,11 @@ project with the VLM off is `409 vlm_not_configured`.
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/vlm/label_batch` | VLM class suggestions for up to 64 `crop_ids` |
-| POST | `/vlm/label_cluster/{cluster_id}` | VLM-label one cluster's members, as a background job |
-| POST | `/vlm/verify_regions` | Verify, box by box, whether each crop's regions are real |
+| POST | `/assist/runs` | VLM suggestions for a crop, a selection, a cluster, a sub-cluster or a filter, as a background run (dry run by default) |
+| GET | `/assist/runs` | The newest assist runs for a cluster or sub-cluster, each with `scope_now` |
+| GET | `/assist/runs/{run_id}` | State, progress, result (with the cluster proposal) and `scope_now` of one assist run |
+| POST | `/assist/runs/{run_id}/cancel` | Stop a live assist run after its current chunk |
+| POST | `/assist/runs/{run_id}/apply` | Label the scope's current members with the proposed class, as a human would (dry run by default) |
 | POST | `/vlm/verify_region_batch` | The same in batches per upstream call |
 | POST | `/vlm/region_visible_batch` | "Is a region visible at all?" pre-filter |
 | GET | `/vlm/policy` | The VLM scope policy: `scope` (`all`, `uncertain`, `representatives`, `off`), `conf_max`, `per_cluster`, `max_crops_per_day`, `sample_frac`, `revision` |

@@ -372,6 +372,7 @@ curl -s -X PUT "$API/curation/projects/cars/vlm/policy" \
 | `conf_max` | 0.80 | `uncertain` only: crops with a detector confidence below this, or none recorded |
 | `per_cluster` | 5 | `representatives` only: crops nearest each cluster centre; every unassigned crop is also kept. 1 to 100 |
 | `max_crops_per_day` | 0 | VLM class attempts per UTC day, answered or empty. 0 is unlimited |
+| `region_verify` | `vlm` | How the region worker verifies boxes: `vlm` (the active VLM, today's behaviour) or `none` (accepted without a VLM). Not a crop scope. A per-item `region_run_verify` from an assist `segment` run wins over it |
 | `sample_frac` | 1.0 | Above 0 up to 1. Keeps a stable hash-chosen fraction of the crops (the same crops on every poll) |
 
 `off` stops both automated writers for the project. The write needs the
@@ -383,11 +384,25 @@ stale. The worker re-reads the policy about every 30 seconds; the next
 `sample_frac` hashes the crop id, so the sample is only as uniform as the ids: hash-like ids
 give a proportional sample, sequential or patterned ids may not.
 
-An explicit request is never limited by the policy: labelling one cluster
-(`POST /vlm/label_cluster/{cluster_id}`), an `auto_label` run with
-`cluster_id`, and labelling named crops. A human-validated crop is never
+`POST /pipeline/auto_label/start` takes `vlm_attributes=true` to store the pack's item
+attributes in the same run (see the pipeline modes guide, mode (c)).
+
+An explicit request is never limited by the policy: an assist run
+(`POST /assist/runs`) over a cluster, a sub-cluster or named crops, an
+`auto_label` run with `cluster_id`, and labelling named crops. A human-validated crop is never
 selected under any scope. When a run selects nothing because of the policy,
 its VLM stage reports why (`skipped` with the reason).
+
+## Assist runs
+
+`POST /curation/projects/{project}/assist/runs` sends a crop, a selection, a cluster, a
+sub-cluster or a filter to the VLM, optionally as a seeded representative sample, with
+`vlm=<name>` and `prompt_pack` for that run only. It is a dry run by default. It needs an
+active endpoint or a `vlm` name (`409 vlm_not_configured` otherwise). It is not limited by
+the VLM policy, and ignores the daily budget. See [Selective VLM and segmenter assist](./selective-assist.mdx)
+for the sample modes, attributes and segmenter verification, [Pipeline modes](./pipeline-modes.mdx) for
+the recipe and the API contract (`docs/design/curation_api_contract.md`)
+for the request and result.
 
 ## Cropwright
 

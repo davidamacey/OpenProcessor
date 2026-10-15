@@ -111,6 +111,12 @@ curl -s -X PATCH "$API/curation/projects/cars/crops/CROP_ID/regions/b2" \
 
 `text` is accepted only when the profile reads text.
 
+Ask the VLM to judge boxes with an assist run (`POST .../assist/runs`, action `verify`):
+target `{"kind": "boxes", "boxes": [{"crop_id": "CROP_ID", "box_id": "b2"}]}` for chosen
+boxes, or a `crops` target for every box of those items. A box a human or an import owns is
+never sent. The same target with action `attributes` stores the pack's `box` attributes
+(for example a wheel's rim material) next to the box, in the item's `assist` object.
+
 Item-level metadata, without touching box geometry:
 
 ```bash

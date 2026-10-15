@@ -38,7 +38,7 @@ Three VLM class writers exist. Only the first two are in the default stack.
 |---|---|---|
 | `curation-vlm-worker --continuous` (`docker-compose.yml:338-362`, profile `curation`; `scripts/curation/vlm_worker.py:99-176`) | Always running when the `curation` profile is up; polls forever for every active, unpaused project | Every embedded, non-validated crop except: classifier-labelled at conf >= 0.80 (`DEFAULT_CLASSIFIER_CONF_SKIP`, :78-84), already `vlm`/`classifier_vlm_agreement`/`cluster_majority_agreement`/`vlm_unmatched`/`vlm_new_class_pending` (:149-162), recent empty answer (:128). No class, confidence, representative, sample or budget limit. Only per-project pause (`pipeline_paused.flag`, `_project_pause.py`) and GPU-arbiter sentinel stop it |
 | `POST /pipeline/auto_label/start?run_vlm=true` (`pipeline_start.py:60`, `pipeline.py:96,353-385`, `autolabel/selection.py:35-76`) | **Opt-in**: `run_vlm` defaults to `false` (`pipeline.py:96`; stage reports "skipped", `selection.py:95`) | Same global-sweep predicate as above plus 24 h skip of items the region worker already verified. Knobs: `class_id`, `cluster_id`, `max_vlm_crops` (cap, 0 = all, `pipeline.py:80`), `classifier_confidence_skip_vlm` (default 0.80, `pipeline_start.py:58`), `vlm_batch_size`, item filter |
-| `POST /vlm/label_cluster/{id}` (`pipeline_control.py:67-98`) | Operator action | Every unvalidated, non-holdout, non-excluded member of one cluster (`selection.py:52-58`) |
+| the route `/vlm/label_cluster/{id}` (`pipeline_control.py:67-98`) | Operator action | Every unvalidated, non-holdout, non-excluded member of one cluster (`selection.py:52-58`) |
 
 So the auto-label pipeline run does NOT use the VLM by default; the continuous
 worker does. The docs say as much without warning of the cost
@@ -262,7 +262,7 @@ All additive; no removals, so old frontends keep working.
 
 ## 8. Verification
 
-- V1 (throughput): on the bound project, `POST /vlm/label_cluster/{id}` for a 200-crop cluster after warm-up; record crops/s and add a labelled row to `docs/PERFORMANCE.md`.
+- V1 (throughput): on the bound project, the route `/vlm/label_cluster/{id}` for a 200-crop cluster after warm-up; record crops/s and add a labelled row to `docs/PERFORMANCE.md`.
 - V2: with policy `off`, up `curation-vlm-worker` for 2 minutes against a project with unlabelled crops; assert zero `class_source='vlm'` writes (`GET /stats`).
 - V3: `representatives` with K=5: VLM call count <= 5 x clusters (worker log + `vlm_class_attempted_at` count).
 - V4: validate one VLM label via `PUT /crops/{id}/label`; confirm `class_source='human'`, locked, and eligible for `POST /test_holdout/freeze`; confirm an unvalidated VLM crop is absent from `POST /export/yolo`.

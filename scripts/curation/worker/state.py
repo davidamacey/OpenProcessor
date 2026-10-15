@@ -135,6 +135,11 @@ class _ItemTask:
     # Class state this task was read in (class_state_token). The writer
     # applies class fields only if the item still has exactly this state.
     class_token: tuple[Any, ...] | None = None
+    # Per-item verification choice (``vlm`` / ``none``) stamped by an assist run that
+    # re-queued the item, the run's id (provenance), and the project policy's choice.
+    region_run_verify: str | None = None
+    region_run_id: str | None = None
+    policy_verify: str = 'vlm'
     # Cropped JPEG bytes — built lazily so we don't load images we'd skip.
     crop_jpeg: bytes | None = None
     # Two-stage pipeline state — Stage A (primary/secondary/OCR-det)
@@ -335,6 +340,17 @@ def unreadable_crop_update(task: _ItemTask) -> dict[str, Any]:
         F.status: RegionStatus.DETECTION_FAILED,
         F.reason: 'image_unavailable',
         F.detector_chain: [*task.detection_trace, 'worker:image_unavailable'],
+    }
+
+
+def vlm_unavailable_update(task: _ItemTask) -> dict[str, Any]:
+    """Region update for an item a run asked to verify with the VLM when none is
+    available: ``detection_failed``, never an unverified accept."""
+    F = get_region_fields()
+    return {
+        F.status: RegionStatus.DETECTION_FAILED,
+        F.reason: 'vlm_unavailable',
+        F.detector_chain: [*task.detection_trace, 'worker:vlm_unavailable'],
     }
 
 

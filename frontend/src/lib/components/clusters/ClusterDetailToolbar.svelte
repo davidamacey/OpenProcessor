@@ -3,19 +3,24 @@
   import ChevronDownIcon from '$components/ChevronDownIcon.svelte';
   import ReprocessControl from '$components/datasets/ReprocessControl.svelte';
   import ShortcutsButton from '$components/ShortcutsButton.svelte';
-  import VlmRunPicker from '$components/vlm/VlmRunPicker.svelte';
   import { isAssignableClass } from '$lib/classVisibility';
   import { cohesionText, COHESION_TOOLTIP } from '$lib/clusters/clusterCardText';
   import { projectHref } from '$lib/projectPaths';
   import { classesStore } from '$stores/classes.svelte';
   import type { ClusterDetailController } from '$lib/clusters/clusterDetailController.svelte';
   import type { ClusterDetailActions } from '$lib/clusters/clusterDetailActions.svelte';
+  import type { ClusterAssist } from '$lib/assistRun/clusterAssist.svelte';
 
   // Title, cluster stats and the bulk-action row of /clusters/[id].
   let {
     view,
     actions,
-  }: { view: ClusterDetailController; actions: ClusterDetailActions } = $props();
+    clusterAssist,
+  }: {
+    view: ClusterDetailController;
+    actions: ClusterDetailActions;
+    clusterAssist: ClusterAssist;
+  } = $props();
 </script>
 
 <!-- Toolbar — title + summary + bulk-action buttons + class assignment.
@@ -195,37 +200,16 @@
 
     <span class="mx-1 h-5 w-px bg-zinc-800"></span>
 
+    <!-- Assist with the VLM on this (sub-)cluster, or on the crops selected in it. -->
     <button
       class="btn"
       type="button"
-      onclick={actions.runVlm}
-      disabled={actions.vlmRunning}
+      onclick={clusterAssist.openAssist}
+      title="Ask the VLM about the selected crops, this cluster or sub-cluster, or a representative sample of it"
+      data-testid="assist-open"
     >
-      {#if actions.vlmRunning}
-        <span
-          class="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-zinc-500 border-t-zinc-100 align-[-1px]"
-        ></span>
-        Running…
-      {:else}
-        Run VLM
-      {/if}
+      Assist…
     </button>
-    <VlmRunPicker
-      vlm={actions.vlmChoice}
-      acknowledgeExternal={actions.vlmAck}
-      disabled={actions.vlmRunning}
-      onchange={(next) => {
-        actions.vlmChoice = next.vlm;
-        actions.vlmAck = next.acknowledgeExternal;
-      }}
-    />
-    {#if actions.vlmRunning && actions.vlmJob}
-      <span class="text-xs text-zinc-400">
-        {actions.vlmJob.stage || 'preparing…'}{actions.vlmJob.total > 0
-          ? ` (${actions.vlmJob.processed}/${actions.vlmJob.total})`
-          : ''}
-      </span>
-    {/if}
     <button
       class="btn"
       type="button"

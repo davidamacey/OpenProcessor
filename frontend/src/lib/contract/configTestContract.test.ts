@@ -266,6 +266,8 @@ describe('both test requests are strict, and the controllers send only declared 
       'open_classify',
       'region_verify',
       'region_visible',
+      'assist',
+      'attributes',
     ];
     expect([...calls].sort()).toEqual(enums('PackTestRequest', 'call'));
     const legs: T.RegionTestLeg['leg'][] = ['detector', 'segmenter'];

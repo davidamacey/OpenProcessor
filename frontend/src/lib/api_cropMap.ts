@@ -6,6 +6,7 @@ import type { EmbeddingState } from '$lib/types_itemFilter';
 import type { Crop, ItemTextLine } from '$lib/types';
 import { mapCropSlots } from '$lib/annotations/cropSlots';
 import type { XYXY } from '$lib/annotations/types';
+import type { ItemAssist } from '$lib/types_assist';
 
 /** Convert API's [x1, y1, x2, y2] to the labeler's BBoxNorm {cx, cy, w, h}. */
 function xyxyToBBoxNorm(bb: number[]): import('$lib/types').BBoxNorm {
@@ -131,6 +132,8 @@ export type RawCrop = {
   open_vocab_revision?: number | null;
   mask_polygon?: number[][] | null;
   region_gate_skip?: string | null;
+  /** The newest assist run's suggestions (attributes, the VLM's class answer). */
+  assist?: ItemAssist | null;
 };
 
 /**
@@ -220,6 +223,7 @@ export const RAW_CROP_KEYS = [
   'open_vocab_revision',
   'mask_polygon',
   'region_gate_skip',
+  'assist',
 ] as const satisfies readonly (keyof RawCrop)[];
 // Compile error if RAW_CROP_KEYS drops (or never gains) a RawCrop key.
 type _RawCropKeysExhaustive =
@@ -336,6 +340,7 @@ export function mapRawCrop(c: RawCrop): Crop {
     open_vocab_revision: c.open_vocab_revision ?? null,
     mask_polygon: c.mask_polygon ?? null,
     region_gate_skip: c.region_gate_skip ?? null,
+    assist: c.assist ?? null,
     slots: mapCropSlots(c as unknown as Record<string, unknown>, bb as XYXY),
     // Preserve server-side updated_at — overriding it client-side breaks
     // ordering and lets the same crop key appear twice in keyed each blocks

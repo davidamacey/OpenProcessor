@@ -7,13 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- The docs screenshot capture (`scripts/capture_docs_screenshots.py`) now requires `--public-projects` and
-  refuses any project outside that list, and refuses pages that list every project while the backend holds
-  another project, so a capture can never show private data.
-
 ### Added
+
+- **Assist…** on the cluster page (the cluster or the open sub-cluster, or the selected crops), on one crop's details
+  panel, on one box in `/review`, and on Matching items (a filter): a dialog that posts one assist run
+  (`POST {prefix}/assist/runs`). It offers what the VLM sees (selected, all members, a seeded representative sample with
+  size, seed and spread), the actions (classify, attributes, verify, segment, with the segmenter's verify choice), the
+  VLM endpoint (with the external-endpoint acknowledgement) and the prompt pack. Each change re-asks the server for a dry
+  run and shows its counts (members sent, estimated VLM calls, strata, what was left out, the endpoint and pack pinned) or
+  its refusal verbatim; Start run stays disabled on a refusal. The run is followed to its end, including `waiting_region`
+  for a segment run, with the served result counts; Cancel run stops it.
+- The newest label proposal for the viewed cluster or sub-cluster is a folded line above the grid and opens a proposal
+  card: the proposed class, the agreement and gate, the votes, new-class names (with Add class…), attribute suggestions
+  marked "not labels", a stale banner from the served `scope_now`, and **Apply {class} to {N} members**, the explicit
+  button, with the server's dry-run count first. The backend's `scope_changed` and `class_not_in_registry` refusals are
+  shown as served, and the override is offered only after the refusal.
+- Attribute chips (`assist.attributes`, per box `assist.boxes`) on the crop card, the details panel and `/review`, dashed
+  and labelled "VLM suggests"; "VLM said: {class}" when the VLM's answer differs from the item's class.
+- The VLM scope panel on Settings has a **Region verification** choice (`region_verify`: verify with the VLM, or accept
+  without a VLM).
+- Wire types `types_assist.ts`, `api_assist.ts` and the contract test `assistContract.test.ts`; the item wire's `assist`
+  object; `cluster_subid` on the item filter and the reprocess filter; `assist` and `attributes` in the pack test calls.
 
 - The ingest-policy page offers the `none` embedding mode (detection only: no vector of any kind) and a
   "Cluster automatically" checkbox (`clustering.automatic`), both written to the policy the backend serves.
@@ -34,6 +48,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   served `poll_after_s`. No credential is entered or shown.
 
 ### Changed
+
+- The sub-cluster tab asks the server for the sub-cluster (`GET /crops?cluster_subid=`) instead of filtering the loaded
+  page, so a sub-cluster larger than a page is shown whole. The tab list is the sub-clusters seen while the whole cluster
+  is shown.
+- The dashboard's quick action links to the clusters (where Assist runs) instead of opening a "Run VLM on cluster"
+  dialog.
+
+- The docs screenshot capture (`scripts/capture_docs_screenshots.py`) now requires `--public-projects` and
+  refuses any project outside that list, and refuses pages that list every project while the backend holds
+  another project, so a capture can never show private data.
 
 - **BREAKING**: the container reads `OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB` and
   `OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB` (were `CROPWRIGHT_*`), and `docker-entrypoint.sh` exits 2 at
@@ -122,6 +146,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `scripts/release-smoke.sh`), the frontend's own compose files, pre-commit config, diagram and GIF scripts,
   and its own `SECURITY.md` and `CONTRIBUTING.md`. The Cropwright image ships through the repository's
   `scripts/release/build_and_publish.sh`; the README and docs point at the root files.
+
+- `runVlmOnCluster`, `pollAutoLabelJob` and `getAutoLabelJobStatus`, the dashboard's "Run VLM on cluster" modal and the
+  cluster page's "Run VLM" button: the backend deleted its per-cluster label route; an assist run replaces it.
 
 ## [0.5.0] - 2026-10-09
 

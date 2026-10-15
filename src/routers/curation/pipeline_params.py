@@ -24,6 +24,12 @@ VLM_SCOPE_DESC = (
     'explicit request that no policy limits.'
 )
 
+VLM_ATTRIBUTES_DESC = (
+    "Ask the pack's combined `assist` call in the VLM stage and store the pack's item "
+    "attributes in each item's `assist` slot, next to the class. Needs run_vlm=true and a "
+    'pack that declares item attributes (422 pack_declares_no_attributes).'
+)
+
 REASSIGN_ONLY_DESC = 'IVF: stream-assign residuals vs persisted centroids; skip retrain.'
 
 # Labeling-assist item selection (task d): scope a run to one registry class.
@@ -38,7 +44,7 @@ CLUSTER_ID_DESC = (
     'Scope the run to one cluster: every unvalidated, non-holdout, non-excluded '
     "member is VLM-labeled (the global sweep's cost skips do not apply) and every "
     'write stays on those members, so the index-wide clustering and auto-promote '
-    'stages are skipped. POST /vlm/label_cluster/{cluster_id} starts exactly this run.'
+    'stages are skipped. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.'
 )
 
 PROMPT_PACK_DESC = (

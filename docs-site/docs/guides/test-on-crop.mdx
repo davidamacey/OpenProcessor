@@ -66,6 +66,8 @@ curl -s -X POST "$API/curation/projects/cars/prompt_packs/test" \
 | `combined` | Classify and verify every stored region box in one call. Needs a region profile (the active one, or `profile_name`) |
 | `region_verify` | Verify one stored box per crop |
 | `region_visible` | Ask whether a region is visible at all (no write) |
+| `assist` | Classify and report the pack's item attributes. Needs a pack that declares item attributes (`422 pack_declares_no_attributes`) |
+| `attributes` | Report the pack's item attributes without classifying |
 
 `use_region_box` applies to `combined`. `current` draws every stored box as
 the numbered overlay, and `none` sends the crop with no boxes.
@@ -87,8 +89,9 @@ The response has:
 | `validation` | The pack's validation report against the profile |
 
 `preview_item` is the item as the production write would leave it, in the
-shared item wire format. It is null for `region_visible` and for a skipped
-item. `skipped` gives the reason, for example `class_locked`.
+shared item wire format. It is null for `region_visible`, `assist` and
+`attributes` (their answers are suggestions stored apart from the item, so
+`parsed` is the whole result) and for a skipped item. `skipped` gives the reason, for example `class_locked`.
 
 ## Test a region profile
 

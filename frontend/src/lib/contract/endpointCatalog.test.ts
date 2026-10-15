@@ -32,6 +32,7 @@ const srcRoot = path.resolve(here, '..', '..');
 
 /** Every file that composes a backend URL through `${scoped()}`. */
 const SCANNED_FILES = [
+  'lib/api_assist.ts',
   'lib/api_autoLabel.ts',
   'lib/api_bakeoff.ts',
   'lib/api_classes.ts',

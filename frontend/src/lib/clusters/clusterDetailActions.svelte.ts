@@ -1,23 +1,17 @@
 /**
  * The /clusters/[id] actions: class assignment and advance, the M-key move
- * picker, flag / ignore / refine / Run VLM, the drag-and-drop handlers and
+ * picker, flag / ignore / refine, the drag-and-drop handlers and
  * every keyboard action. Optimistic writes go through the shared
  * `createClusterActionController`; the move-picker state stays together
  * here with the drag set it races against.
  */
 import { SOURCES, TRIGGERS } from 'svelte-dnd-action';
-import {
-  pollAutoLabelJob,
-  runVlmOnCluster,
-  type AutoLabelJobState,
-} from '$lib/api_autoLabel';
 import { refineCluster } from '$lib/api_clusters';
 import { flagNeedsNewClass, type ExcludeReason } from '$lib/api_cropWrites';
 import { apiErrorText } from '$lib/api_errors';
 import { createClusterActionController } from '$lib/clusters/clusterController.svelte';
 import type { ClusterDetailController } from '$lib/clusters/clusterDetailController.svelte';
 import type { Crop } from '$lib/types';
-import { vlmRunErrorText } from '$lib/vlm/runErrors';
 import { dropOnClassStore } from '$stores/dropOnClass.svelte';
 import { keyboardStore } from '$stores/keyboard.svelte';
 import { keymapStore } from '$stores/keymap.svelte';
@@ -117,62 +111,6 @@ export function createClusterDetailActions(view: ClusterDetailController) {
   // In-flight guards so the operator gets feedback and can't double-fire
   // these long-running cluster ops.
   let refining = $state<boolean>(false);
-  let vlmRunning = $state<boolean>(false);
-  // Live status while POST /vlm/label_cluster/{id}'s job runs, polled via
-  // pollAutoLabelJob — rendered as a compact inline stage/progress string
-  // next to the Run VLM button.
-  let vlmJob = $state<AutoLabelJobState | null>(null);
-  // the endpoint this one run uses (`null` = the project default) and
-  // the acknowledgement for an external one.
-  let vlmChoice = $state<string | null>(null);
-  let vlmAck = $state<boolean>(false);
-
-  async function runVlm(): Promise<void> {
-    if (vlmRunning) return;
-    // p2/M7: a nag-confirm, unlike the one-keystroke label/move/discard
-    // actions above (which Z undoes instantly) — this kicks off a
-    // background VLM sweep over every unvalidated member of the cluster
-    // with no undo, so a misclick isn't free.
-    if (
-      !window.confirm(
-        `Run the VLM over every unvalidated crop in cluster #${view.clusterId}?`,
-      )
-    ) {
-      return;
-    }
-    vlmRunning = true;
-    vlmJob = null;
-    try {
-      vlmJob = await runVlmOnCluster(view.clusterId, {
-        vlm: vlmChoice,
-        acknowledgeExternal: vlmAck,
-      });
-      // M7: poll only the job we just started — see pollAutoLabelJob's
-      // `expectedJobId` doc comment for why this matters.
-      const final = await pollAutoLabelJob(
-        (j) => (vlmJob = j),
-        undefined,
-        undefined,
-        vlmJob.job_id,
-      );
-      const stages = (final.result?.stages ?? {}) as Record<
-        string,
-        Record<string, unknown>
-      >;
-      const vlm = stages.vlm ?? {};
-      if (final.status === 'failed') {
-        toastStore.error(`VLM run failed: ${final.error ?? 'unknown error'}`);
-      } else {
-        toastStore.success(
-          `VLM labeled ${Number(vlm.predicted ?? 0)} crops (${Number(vlm.updated ?? 0)} updated).`,
-        );
-      }
-    } catch (e) {
-      toastStore.error(`VLM run failed: ${vlmRunErrorText(e)}`);
-    } finally {
-      vlmRunning = false;
-    }
-  }
 
   // -- Ignore / exclude --------------------------------------------------
   // Excluded crops drop out of training + clustering (reversible). Actual
@@ -200,6 +138,8 @@ export function createClusterDetailActions(view: ClusterDetailController) {
     try {
       const res = await refineCluster(view.clusterId);
       toastStore.success(`Refine produced ${res.n_subclusters ?? 0} sub-clusters.`);
+      // A refine renames every sub-cluster, so the tab that was open means nothing now.
+      view.subTab = null;
       await loadFirst();
     } catch (e) {
       toastStore.error(`Refine failed: ${apiErrorText(e)}`);
@@ -455,24 +395,6 @@ export function createClusterDetailActions(view: ClusterDetailController) {
     get refining() {
       return refining;
     },
-    get vlmRunning() {
-      return vlmRunning;
-    },
-    get vlmJob() {
-      return vlmJob;
-    },
-    get vlmChoice() {
-      return vlmChoice;
-    },
-    set vlmChoice(v: string | null) {
-      vlmChoice = v;
-    },
-    get vlmAck() {
-      return vlmAck;
-    },
-    set vlmAck(v: boolean) {
-      vlmAck = v;
-    },
     get ignoreMenuOpen() {
       return ignoreMenuOpen;
     },
@@ -484,7 +406,6 @@ export function createClusterDetailActions(view: ClusterDetailController) {
     kg,
     kc,
     flagSelectedForNewClass,
-    runVlm,
     ignoreSelected,
     refine,
     confirmSelected,

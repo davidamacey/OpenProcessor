@@ -119,6 +119,8 @@ class Stub:
         self.on("GET", r"/crops/[^/]+/image(/|$|\?)", self._image)
         self.on("GET", r"(/events|/stream)(/|$|\?)", (204, "", "text/plain"))
         self.on("GET", r"/methods(\?|$)", {"strategies": [], "flags": {}})
+        # /clusters/[id] lists the assist runs for the viewed cluster on every visit.
+        self.on("GET", r"/assist/runs(\?|$)", {"runs": []})
         # S1 fix (visual audit 2026-09-24): `/review` now reads the
         # deployment's pinned curation defaults (`curationSettingsStore`)
         # so StrategyBar can flag a zero-coverage pinned sort — fired on

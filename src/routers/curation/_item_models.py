@@ -26,6 +26,37 @@ class ItemTextLine(BaseModel):
     rel_height: float | None = None
 
 
+class AssistAttributeWire(BaseModel):
+    """One suggested attribute: a pack-declared ``key``, its normalised
+    ``value`` and the VLM's confidence."""
+
+    key: str
+    value: str
+    confidence: Literal['high', 'medium', 'low']
+
+
+class AssistBoxWire(BaseModel):
+    box_id: str
+    attributes: list[AssistAttributeWire] = Field(default_factory=list)
+
+
+class ItemAssistWire(BaseModel):
+    """The VLM's suggestions for an item from the newest assist run that
+    answered it. Suggestions only: they never change the item's class or boxes,
+    and a locked item carries them too (``class_name`` is what the VLM said)."""
+
+    run_id: str
+    run_created_at: str
+    vlm_endpoint: str | None = None
+    vlm_model: str | None = None
+    prompt_pack: str | None = None
+    prompt_pack_revision: int | None = None
+    class_name: str | None = None
+    class_confidence: Literal['high', 'medium', 'low'] | None = None
+    attributes: list[AssistAttributeWire] = Field(default_factory=list)
+    boxes: list[AssistBoxWire] = Field(default_factory=list)
+
+
 class ItemDoc(BaseModel):
     """The wire item every item-returning endpoint emits.
 
@@ -220,6 +251,8 @@ class ItemDoc(BaseModel):
     combine_merged_origins: list[str] = Field(default_factory=list)
     # Every OCR line read on the item crop ([] when none / not yet read).
     item_text_lines: list[ItemTextLine] = Field(default_factory=list)
+    # The VLM's assist-run suggestions; null when no run answered this item.
+    assist: ItemAssistWire | None = None
 
 
 class CropsPageResponse(BaseModel):
@@ -242,4 +275,11 @@ class CropsPageResponse(BaseModel):
     suggested_reprocess: ReprocessRequest | None = None
 
 
-__all__ = ['CropsPageResponse', 'ItemDoc', 'ItemTextLine']
+__all__ = [
+    'AssistAttributeWire',
+    'AssistBoxWire',
+    'CropsPageResponse',
+    'ItemAssistWire',
+    'ItemDoc',
+    'ItemTextLine',
+]

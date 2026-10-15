@@ -14,6 +14,16 @@ from src.services.labeling.vlm_prompts import REPLY_KEY_CONTRACT
 PackSourceWire = Literal['builtin', 'file', 'template', 'stored']
 
 
+class AttributeSpecBody(BaseModel):
+    """One pack-declared attribute (the schema of ``PromptPackBody.attributes``
+    entries). ``values`` is an optional closed vocabulary (lowercase)."""
+
+    key: str = Field(pattern=r'^[a-z][a-z0-9_]{0,31}$')
+    description: str = Field(default='', max_length=300)
+    values: list[str] = Field(default_factory=list, max_length=50)
+    applies_to: Literal['item', 'box'] = 'item'
+
+
 class PromptPackBody(BaseModel):
     """Every :class:`~src.services.labeling.vlm_prompts.PromptPack` field
     except ``name``. Defaults to ``''``/``{}`` so a partial draft can be
@@ -36,6 +46,23 @@ class PromptPackBody(BaseModel):
     region_visible_user: str = ''
     class_descriptions: dict[str, str] = Field(default_factory=dict)
     synonyms: dict[str, str] = Field(default_factory=dict)
+    assist_system: str = ''
+    assist_user_template: str = ''
+    attributes_system: str = ''
+    attributes_user_template: str = ''
+    # Typed ``Any`` for the same reason as ``proposal_denylist``: a malformed entry
+    # must come back as a validation issue. At most 16 entries.
+    attributes: Annotated[
+        Any,
+        Field(
+            default_factory=list,
+            json_schema_extra={
+                'type': 'array',
+                'items': AttributeSpecBody.model_json_schema(),
+                'maxItems': 16,
+            },
+        ),
+    ]
     # Typed ``Any`` on purpose: a non-list or non-string entry must reach
     # ``validate_pack`` and come back as a validation issue, not a pydantic
     # 422. The schema still advertises ``list[str]`` to clients.
@@ -162,7 +189,7 @@ class PromptPackFieldSchema(BaseModel):
     field: str
     label: str
     group: str
-    kind: Literal['text', 'map', 'list', 'int']
+    kind: Literal['text', 'map', 'list', 'int', 'attributes']
     formatted: bool
     required_placeholders: list[str]
     allowed_placeholders: list[str]
@@ -199,6 +226,7 @@ class PromptPackSchema(BaseModel):
 
 __all__ = [
     'ActiveConfigResponse',
+    'AttributeSpecBody',
     'PackSourceWire',
     'PromptPackActivateRequest',
     'PromptPackBody',

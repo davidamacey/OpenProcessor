@@ -10,6 +10,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from src.services.labeling.region_overlay import box_verdicts
+from src.services.labeling.vlm_attributes import parse_attributes
 from src.services.labeling.vlm_models import (
     ConfidenceLevel,
     ItemCrop,
@@ -19,7 +20,10 @@ from src.services.labeling.vlm_models import (
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from src.config import RegionFields
+    from src.services.labeling.vlm_attributes import AttributeSpec
 
 
 _FENCE_RE = re.compile(r'^\s*```(?:json|JSON)?\s*\n?(.*?)\n?```\s*$', re.DOTALL)
@@ -115,6 +119,7 @@ def _combined_reply_from_entry(
     fields: RegionFields,
     class_names: list[str] | None,
     n_boxes: int,
+    attribute_specs: Sequence[AttributeSpec] = (),
 ) -> VlmCombinedReply:
     """Build a :class:`VlmCombinedReply` from one parsed reply object.
 
@@ -139,10 +144,7 @@ def _combined_reply_from_entry(
         raise ValueError(msg)
     class_id, class_raw = _coerce_class_answer(entry, class_names)
     class_conf_raw = entry.get('class_confidence')
-    make = str(entry.get('make') or '').strip()[:48]
-    model_name = str(entry.get('model') or '').strip()[:48]
-    # suppress a per-box
-    # text reply that's really the item's own class/make/model echoed
+    # suppress a per-box text reply that's really the item's own class echoed
     # back into the text slot -- ported from the earlier flat parser's
     # ``_clean_combined_region_text`` echo check, dropped (not ported)
     # when the per-box list shape replaced it.
@@ -151,18 +153,21 @@ def _combined_reply_from_entry(
         if class_names and class_id is not None and 0 <= class_id < len(class_names)
         else ''
     )
-    echoes = (picked_class, make, model_name, f'{make} {model_name}'.strip())
+    echoes = (picked_class,)
     region_boxes = box_verdicts(entry, n_boxes, fields, echoes=echoes) if n_boxes > 0 else []
+    attributes, invalid = (
+        parse_attributes(entry.get('attributes'), attribute_specs) if attribute_specs else ({}, 0)
+    )
     return VlmCombinedReply(
         img_id=img_id,
+        attributes=attributes,
+        invalid_attribute_values=invalid,
         class_id=class_id,
         class_confidence=(
             _normalize_confidence(class_conf_raw) if class_conf_raw is not None else None
         ),
         region_visible=visible,
         region_boxes=region_boxes,
-        make=make,
-        model=model_name,
         class_raw=class_raw,
     )
 
@@ -250,6 +255,25 @@ def _class_reply_entries(raw: str) -> list[Any] | None:
         if isinstance(value, list):
             return value
     return None
+
+
+def entries_by_index(parsed: list[Any], n: int) -> dict[int, dict[str, Any]]:
+    """The reply entries keyed by their 1-based ``img`` index. Entries with no
+    index at all are taken positionally when their count matches ``n``."""
+    entries = [e for e in parsed if isinstance(e, dict)]
+    by_index: dict[int, dict[str, Any]] = {}
+    if entries and all(e.get('img') is None for e in entries) and len(entries) == n:
+        by_index = dict(enumerate(entries, start=1))
+    for indexed in entries:
+        raw_idx = indexed.get('img')
+        if raw_idx is None:
+            continue
+        try:
+            idx = int(raw_idx)
+        except (TypeError, ValueError):
+            continue
+        by_index[idx] = indexed
+    return by_index
 
 
 def _request_failed(chunk: list[ItemCrop]) -> list[VlmClassPrediction]:

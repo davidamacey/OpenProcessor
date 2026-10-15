@@ -107,6 +107,29 @@ box-level browse and clustering:
 The VLM prompts and vocabulary the labeler uses.
 [Prompt packs](../docs-site/docs/guides/prompt-packs.mdx).
 
+## Assist runs
+
+Send a crop, a selection, a cluster, a sub-cluster or a filter to the VLM and get
+suggestions back: a class and the attributes the prompt pack declares. A representative
+sample keeps a large cluster cheap. The run never writes a label: a human- or
+import-locked, validated or holdout item keeps its class, and the answers, including a
+locked item's, are stored apart from the labels. Dry run by default.
+
+A run over a cluster or sub-cluster also returns a proposal: the class most of the sampled
+answers agree on, shown with the distribution, once at least three answers agree past the
+gate (`min_agreement`, default 0.6). Nothing is labelled until you apply it, with a dry-run
+count first (`POST .../assist/runs/{run_id}/apply`). Apply labels the scope's current
+members as you would by hand, skips every locked or validated one, and refuses
+(`scope_changed`) when a re-refine has moved the members since the run.
+[Assist runs](../docs/design/curation_api_contract.md#assist-runs).
+
+Cropwright's **Assist…** button on a cluster page is the front end of this: pick the
+selection, all members or a representative sample, the actions and the VLM, read the
+server's dry run (members sent, estimated VLM calls), start, and read the proposal card
+(agreement, votes, attribute suggestions, an explicit **Apply** with the dry-run count and
+the `scope_changed` refusal). The guide, with the recipe and the segmenter verification
+choice: [Selective VLM and segmenter assist](../docs-site/docs/guides/selective-assist.mdx).
+
 ## Test on a crop
 
 Try a draft pack or profile on stored crops before activating it. Read-only.

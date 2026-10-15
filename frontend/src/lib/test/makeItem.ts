@@ -103,6 +103,23 @@ const DEFAULT_ITEM: Required<RawCrop> = {
     [0.2, 0.4],
   ],
   region_gate_skip: 'tier3_hit_rate',
+  assist: {
+    run_id: 'asr_fixture',
+    run_created_at: '2026-10-15T01:02:03Z',
+    vlm_endpoint: 'vlm_widget@3',
+    vlm_model: 'widget-vl-7b',
+    prompt_pack: 'widget_pack',
+    prompt_pack_revision: 5,
+    class_name: 'widget_b',
+    class_confidence: 'medium',
+    attributes: [{ key: 'finish', value: 'matte', confidence: 'high' }],
+    boxes: [
+      {
+        box_id: 'box-1',
+        attributes: [{ key: 'edge', value: 'rounded', confidence: 'low' }],
+      },
+    ],
+  },
 };
 
 // Runtime cross-check that DEFAULT_ITEM's own keys match RAW_CROP_KEYS
