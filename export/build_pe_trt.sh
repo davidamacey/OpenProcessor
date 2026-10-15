@@ -70,14 +70,25 @@ fi
 # export_mobileclip_image_encoder.py call). PE was shipping FP32-only
 # (~2x the VRAM, slower) because this build script never called it.
 #
-# BAKE_FP16=0 opts out entirely (build straight from the FP32 ONNX, the old
-# behavior). Default on, with an FP32 fallback: if the bake step itself
-# fails (module unavailable, graph rewrite error), trt_utils.py's own CLI
-# already falls back and reports 'fp32'; if the bake *succeeds* but the
-# resulting FP16 ONNX fails to build in trtexec below, this script retries
-# once from the original FP32 ONNX before giving up.
+# FP16 is required. If the bake falls back to FP32 (trt_utils.py reports
+# 'fp32') or fails, or the FP16 ONNX fails to build in trtexec below, this
+# script FAILS (exit 4) rather than ship an FP32 engine nobody asked for.
+# ALLOW_FP32=1 is the explicit opt-in to an FP32 engine (it says so loudly);
+# BAKE_FP16=0 builds straight from the FP32 ONNX and needs ALLOW_FP32=1 too.
 # -----------------------------------------------------------------------------
 BAKE_FP16="${BAKE_FP16:-1}"
+ALLOW_FP32="${ALLOW_FP32:-0}"
+
+# _fp32_refused WHY: stop unless the caller opted in to FP32.
+_fp32_refused() {
+    if [ "$ALLOW_FP32" != "1" ]; then
+        err "$1"
+        err "Refusing to build an FP32 engine (about twice the GPU memory, slower)."
+        err "Fix the cause, or set ALLOW_FP32=1 to accept an FP32 engine knowingly."
+        exit 4
+    fi
+    err "WARNING: $1 -- continuing with an FP32 engine because ALLOW_FP32=1."
+}
 BUILD_ONNX_PATH="$ONNX_PATH"
 PE_PRECISION="fp32"
 if [ "$BAKE_FP16" = "1" ]; then
@@ -92,15 +103,15 @@ if [ "$BAKE_FP16" = "1" ]; then
             PE_PRECISION="fp16"
             log "  FP16 ONNX: $BUILD_ONNX_PATH"
         else
-            log "  bake_fp16_onnx fell back to FP32: $(cat "$BAKE_ERR")"
+            _fp32_refused "FP16 bake fell back to FP32: $(cat "$BAKE_ERR")"
         fi
     else
-        err "  trt_utils.py bake step failed unexpectedly; continuing with FP32: $(cat "$BAKE_ERR")"
+        _fp32_refused "FP16 bake step failed: $(cat "$BAKE_ERR")"
         BUILD_ONNX_PATH="$ONNX_PATH"
     fi
     rm -f "$BAKE_OUT" "$BAKE_ERR"
 else
-    log "BAKE_FP16=0 -- building FP32 (as before)"
+    _fp32_refused "BAKE_FP16=0 asks for an FP32 build"
 fi
 
 # -----------------------------------------------------------------------------
@@ -131,7 +142,10 @@ PE_NORMALIZE="--mean 0.5 0.5 0.5 --std 0.5 0.5 0.5"
 _stage_and_resolve_args() {
     local src_onnx="$1"
     # shellcheck disable=SC2086
-    src_onnx="$("$PYTHON" "$SCRIPT_DIR/uint8_input.py" "$src_onnx" "${src_onnx%.onnx}.u8.onnx" $PE_NORMALIZE)"
+    src_onnx="$("$PYTHON" "$SCRIPT_DIR/uint8_input.py" "$src_onnx" "${src_onnx%.onnx}.u8.onnx" $PE_NORMALIZE)" || {
+        err "could not add the uint8 input to the engine ONNX; config.pbtxt declares uint8, so Triton would refuse the engine"
+        exit 4
+    }
     if [ -n "${TRTEXEC:-}" ] || command -v trtexec >/dev/null 2>&1; then
         ONNX_ARG="$src_onnx"
         PLAN_ARG="$PLAN_TMP"
@@ -168,7 +182,7 @@ if ! "${TRTEXEC_CMD[@]}" \
         --skipInference ; then
     if [ "$PE_PRECISION" = "fp16" ]; then
         err ""
-        err "trtexec failed to build the FP16 engine. Falling back to FP32 (original ONNX)..."
+        _fp32_refused "trtexec failed to build the FP16 engine"
         PE_PRECISION="fp32"
         _stage_and_resolve_args "$ONNX_PATH"
         if ! "${TRTEXEC_CMD[@]}" \
