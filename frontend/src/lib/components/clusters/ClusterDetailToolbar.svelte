@@ -270,7 +270,7 @@
       </button>
       {#if actions.ignoreMenuOpen}
         <div
-          class="absolute right-0 top-full z-20 mt-1 w-44 rounded border border-zinc-700 bg-zinc-900 py-1 shadow-lg"
+          class="absolute left-0 top-full z-20 mt-1 w-44 sm:left-auto sm:right-0 rounded border border-zinc-700 bg-zinc-900 py-1 shadow-lg"
         >
           {#each actions.EXCLUDE_REASONS as r (r.value)}
             <button

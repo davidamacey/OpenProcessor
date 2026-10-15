@@ -71,6 +71,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   region-profile and open-vocabulary lists. `scripts/docs_screenshot_fixtures.py` gains `bulk` and `vlm-off` to set up
   throwaway `cwlife-*` projects for them.
 
+### Fixed
+
+- `/clusters` semantic search no longer throws `each_key_duplicate` (and re-requests `/search/text` in a loop)
+  when the backend serves one crop id more than once: the first, best-ranked hit per id is kept.
+- At 430 px the ignore-reason menu on `/clusters/[id]` opens inside the viewport, the `/train` past-runs table keeps a
+  readable Name column (the table scrolls sideways instead), and the `/clusters` error state shows no count.
+- A per-box accept or reject key (`y`/`r`) pressed while the previous box write is still in flight is applied in
+  order instead of being silently dropped; this was the cause of the intermittent
+  `test_per_box_accept_and_reject_keys_patch_immediately_without_removing_from_queue` CI timeout.
+
 ### Removed
 
 - Standalone-repository leftovers: the release scripts (`scripts/release.sh`, `scripts/release/`,
