@@ -241,6 +241,19 @@ export function createReviewSlotActions(opts: ReviewSlotActionsOptions) {
     }
   }
 
+  // An assist run may have written suggestions on the item under review: adopt
+  // the served item, keeping the queue-only metadata the crop read does not carry.
+  async function reloadCurrent(): Promise<void> {
+    const id = current?.id;
+    if (!id) return;
+    try {
+      const fresh = await getCrop(id);
+      queue.items = queue.items.map((it) => (it.id === id ? { ...it, ...fresh } : it));
+    } catch (e) {
+      toastStore.warn(`Could not reload the item: ${apiErrorText(e)}`);
+    }
+  }
+
   return {
     get rejectReasonPromptOpen() {
       return rejectReasonPromptOpen;
@@ -261,6 +274,7 @@ export function createReviewSlotActions(opts: ReviewSlotActionsOptions) {
     confirmMultiBoxSlot,
     rejectSlot,
     markFalsePositive,
+    reloadCurrent,
   };
 }
 

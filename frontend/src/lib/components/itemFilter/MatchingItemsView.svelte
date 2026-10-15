@@ -3,12 +3,15 @@
    * "Matching items" on /clusters: every item the shared filter matches, as a
    * flat crop grid, with run-on-selection actions (ignore, restore, label,
    * move) that act on all of them through the server's dry-run-first
-   * selection writes. The counts shown are the server's.
+   * selection writes, and "Assist" to ask the VLM about them as an assist
+   * run on the filter. The counts shown are the server's.
    */
   import { untrack } from 'svelte';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import CropResultGrid from '$lib/components/CropResultGrid.svelte';
+  import AssistRunDialog from '$components/assistRun/AssistRunDialog.svelte';
   import SelectionActionDialog from './SelectionActionDialog.svelte';
+  import { AssistRunController } from '$lib/assistRun/assistRunController.svelte';
   import { createMatchingItems } from '$lib/itemFilter/matchingItems.svelte';
   import { createSelectionActionController } from '$lib/itemFilter/selectionActionController.svelte';
   import { createSelection } from '$lib/selection.svelte';
@@ -32,6 +35,7 @@
   const pager = matching.pager;
   const sel = createSelection({ plainClick: 'replace' });
   const actions = createSelectionActionController(() => body());
+  const assist = new AssistRunController();
 
   const queryKey = $derived(JSON.stringify(query()));
   $effect(() => {
@@ -87,6 +91,19 @@
   <button
     type="button"
     class="btn-sm border border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+    data-testid="matching-action-assist"
+    disabled={pager.loading}
+    onclick={() =>
+      assist.open({
+        title: 'Matching items',
+        whole: { kind: 'filter', filter: structuredClone($state.snapshot(body())) },
+      })}
+  >
+    Assist on all matching…
+  </button>
+  <button
+    type="button"
+    class="btn-sm border border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
     onclick={onexit}
   >
     ← Back to clusters
@@ -117,3 +134,4 @@
 {/if}
 
 <SelectionActionDialog controller={actions} onapplied={() => void pager.loadFirst()} />
+<AssistRunDialog ctl={assist} onclosed={() => void pager.loadFirst()} />

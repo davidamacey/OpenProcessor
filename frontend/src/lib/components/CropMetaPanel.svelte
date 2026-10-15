@@ -9,6 +9,7 @@
   import OpenVocabProvenanceRows from './provenance/OpenVocabProvenanceRows.svelte';
   import EmbeddingRows from './provenance/EmbeddingRows.svelte';
   import ReprocessControl from './datasets/ReprocessControl.svelte';
+  import AssistButton from './assistRun/AssistButton.svelte';
   import AssistSuggestions from './assistRun/AssistSuggestions.svelte';
   import CropMetaSlots from '$components/cropMeta/CropMetaSlots.svelte';
   import CropItemText from '$components/cropMeta/CropItemText.svelte';
@@ -16,7 +17,10 @@
   import CropSourceContext from '$components/cropMeta/CropSourceContext.svelte';
   import { createCropMetaLoader } from '$lib/cropMeta/cropMetaLoader.svelte';
   import { pct } from '$lib/cropMeta/pct';
+  import { getCrop } from '$lib/api_cropRead';
+  import { apiErrorText } from '$lib/api_errors';
   import { classSourcesStore } from '$stores/classSources.svelte';
+  import { toastStore } from '$stores/toast.svelte';
   import { humanizeId } from '$lib/humanizeId';
   import { formatTimestamp } from '$lib/format/date';
 
@@ -33,6 +37,15 @@
   }
 
   let { crop, embedded = false, onreprocessed }: Props = $props();
+
+  // An assist run may have written suggestions on this crop; adopt the served item.
+  async function adoptAfterAssist(): Promise<void> {
+    try {
+      onreprocessed?.(await getCrop(crop.id));
+    } catch (e) {
+      toastStore.error(`Could not reload the crop: ${apiErrorText(e)}`);
+    }
+  }
 
   const vlmConf = $derived<string | null>(crop.vlm_confidence ?? null);
   const classSource = $derived<string | null>(crop.class_source ?? null);
@@ -214,7 +227,14 @@
 </dl>
 
 <!-- Reprocess: absent unless the backend serves it. -->
-<div class="mt-2">
+<div class="mt-2 flex flex-wrap items-center gap-2">
+  <AssistButton
+    opener={{
+      title: 'This crop',
+      selected: { kind: 'crops', crop_ids: [crop.id] },
+    }}
+    onclosed={() => void adoptAfterAssist()}
+  />
   <ReprocessControl
     target={{ kind: 'crop', cropId: crop.id }}
     onadopt={(crops) => {

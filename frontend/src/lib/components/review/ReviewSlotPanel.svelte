@@ -4,6 +4,7 @@
   actions with the step-back footer.
 -->
 <script lang="ts">
+  import AssistButton from '$lib/components/assistRun/AssistButton.svelte';
   import AssistSuggestions from '$lib/components/assistRun/AssistSuggestions.svelte';
   import ProvenanceChip from '$lib/components/ProvenanceChip.svelte';
   import RejectedBoxChips from '$lib/components/review/RejectedBoxChips.svelte';
@@ -165,10 +166,21 @@
       {/if}
     {/if}
   </span>
-  {#if isMultiBoxSlot && selectedSlotBox?.boxId && current.assist?.boxes?.some((b) => b.box_id === selectedSlotBox.boxId)}
+  {#if isMultiBoxSlot && selectedSlotBox?.boxId}
     <span class="text-zinc-500">Assist</span>
-    <span data-testid="review-box-assist">
+    <span class="flex flex-wrap items-center gap-2" data-testid="review-box-assist">
       <AssistSuggestions assist={current.assist} boxId={selectedSlotBox.boxId} />
+      <AssistButton
+        label="Assist on this box…"
+        opener={{
+          title: 'This box',
+          selected: {
+            kind: 'boxes',
+            boxes: [{ crop_id: current.id, box_id: selectedSlotBox.boxId }],
+          },
+        }}
+        onclosed={() => void slot.reloadCurrent()}
+      />
     </span>
   {/if}
   {#if slotData?.provenance?.chain && slotData.provenance.chain.length > 0}
