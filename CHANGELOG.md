@@ -408,6 +408,10 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Fixed
 
+- The auto-label, cluster-refresh and VLM workers no longer log `Unclosed client session` on
+  shutdown: each opened a second OpenSearch client for its project registry that nothing closed.
+  `script_project_registry` now takes the worker's own client, which the worker already closes.
+
 - Visual-search ingest (#318): a face response with fewer landmark entries than faces no longer
   raises `IndexError` and fails the whole batch. Only the affected image is refused, with the
   reason `face_landmarks_length_mismatch`; `detect_faces`, `recognize_faces` and the single-image face paths

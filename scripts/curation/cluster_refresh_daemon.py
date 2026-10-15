@@ -396,8 +396,8 @@ async def _sleep_with_heartbeat(stop: asyncio.Event, sleep_s: float) -> None:
 
 async def run(args: argparse.Namespace) -> int:
     stop, _ = _make_signal_stop()
-    registry = script_project_registry(args.opensearch)
     opensearch = make_script_opensearch([args.opensearch], timeout=30)
+    registry = script_project_registry(client=opensearch)
     api_prefix = curation_api_prefix()
     book = ScheduleBook()
     policy = Policy(

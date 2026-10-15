@@ -13,7 +13,7 @@ read refuses to bind at all: a script never guesses.
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.config.env import env_str
 from src.config.project_context import bind_process_project
@@ -89,15 +89,21 @@ async def abind_script_project(slug: str, *, opensearch_url: str | None = None) 
     return record
 
 
-def script_project_registry(opensearch_url: str | None = None) -> ProjectRegistry:
+def script_project_registry(
+    opensearch_url: str | None = None, *, client: Any = None
+) -> ProjectRegistry:
     """A project registry for a multi-project worker or maintenance script,
     reading the projects index through the script's own guarded client
     (``opensearch_url``, else ``$OPENSEARCH_URL``) rather than the API
-    process's client factory. The client lives as long as the registry."""
+    process's client factory.
+
+    Pass ``client`` (the caller's own guarded client) to share it: the caller
+    then closes the one client at shutdown. Without it the registry opens a
+    client nothing can close, which is fine only for a short-lived script."""
     from src.services.projects.guard import make_script_opensearch
 
-    client = make_script_opensearch([opensearch_url or _default_opensearch_url()])
-    return ProjectRegistry(lambda: client)
+    shared = client or make_script_opensearch([opensearch_url or _default_opensearch_url()])
+    return ProjectRegistry(lambda: shared)
 
 
 def only_project(records: list[ProjectRecord], slug: str | None) -> list[ProjectRecord]:
