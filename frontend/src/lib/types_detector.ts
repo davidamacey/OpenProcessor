@@ -26,7 +26,7 @@ export interface IngestDetectorInfo {
 export const CLASS_RESOLUTIONS = ['proposal', 'by_name'] as const;
 export type ClassResolution = (typeof CLASS_RESOLUTIONS)[number];
 
-export const EMBEDDING_MODES = ['all', 'selected', 'lazy'] as const;
+export const EMBEDDING_MODES = ['all', 'selected', 'lazy', 'none'] as const;
 export type EmbeddingMode = (typeof EMBEDDING_MODES)[number];
 
 /** `DetectFilter`: which detections an ingest keeps. */
@@ -48,6 +48,11 @@ export interface EmbeddingPolicy {
   mode?: EmbeddingMode;
 }
 
+/** `ClusteringPolicy`: false = no automatic placement, refresh or idle retrain. */
+export interface ClusteringPolicy {
+  automatic?: boolean;
+}
+
 /** `DetectorOverride`: a per-project detector instead of the deployment's. */
 export interface DetectorOverride {
   input_size?: number | null;
@@ -59,6 +64,7 @@ export interface DetectorOverride {
 /** `IngestPolicy`: the served policy (a GET). */
 export interface IngestPolicy {
   detect?: DetectFilter;
+  clustering?: ClusteringPolicy;
   detector?: DetectorOverride | null;
   embedding?: EmbeddingPolicy;
   revision?: number;
@@ -67,6 +73,7 @@ export interface IngestPolicy {
 /** `IngestPolicyBody`: the preview request. */
 export interface IngestPolicyBody {
   detect?: DetectFilter;
+  clustering?: ClusteringPolicy;
   detector?: DetectorOverride | null;
   embedding?: EmbeddingPolicy;
 }

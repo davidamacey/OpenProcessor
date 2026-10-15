@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The ingest-policy page offers the `none` embedding mode (detection only: no vector of any kind) and a
+  "Cluster automatically" checkbox (`clustering.automatic`), both written to the policy the backend serves.
+
 - `/ingest` has a "Bulk ingest (folder or manifest)" panel, shown with the server-path ingest it sits beside: start a
   run over a folder or a manifest the backend has mounted, follow served progress (counts, speed, time left,
   seconds per stage), cancel, resume, and read the failed images with their reasons. Everything shown and every

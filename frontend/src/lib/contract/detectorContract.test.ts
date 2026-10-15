@@ -75,6 +75,7 @@ const CASES: [string, string[]][] = [
   [
     'IngestPolicy',
     keys<keyof T.IngestPolicy>({
+      clustering: true,
       detect: true,
       detector: true,
       embedding: true,
@@ -83,11 +84,17 @@ const CASES: [string, string[]][] = [
   ],
   [
     'IngestPolicyBody',
-    keys<keyof T.IngestPolicyBody>({ detect: true, detector: true, embedding: true }),
+    keys<keyof T.IngestPolicyBody>({
+      clustering: true,
+      detect: true,
+      detector: true,
+      embedding: true,
+    }),
   ],
   [
     'IngestPolicyUpdate',
     keys<keyof T.IngestPolicyUpdate>({
+      clustering: true,
       detect: true,
       detector: true,
       embedding: true,
@@ -97,6 +104,7 @@ const CASES: [string, string[]][] = [
   [
     'IngestPolicyPutResponse',
     keys<keyof T.IngestPolicyPutResponse>({
+      clustering: true,
       detect: true,
       detector: true,
       embedding: true,

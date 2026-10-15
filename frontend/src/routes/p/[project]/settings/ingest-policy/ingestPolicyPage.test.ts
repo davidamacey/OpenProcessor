@@ -142,6 +142,27 @@ describe('ingest policy page', () => {
     });
   });
 
+  it('saves detection-only mode with automatic clustering off', async () => {
+    await mountPage();
+    await chooseMode('none');
+    const box = q('policy-clustering-automatic') as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    box.checked = false;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    flushSync();
+    q('policy-save')!.click();
+    flushSync();
+    [...document.querySelectorAll('button')]
+      .find((b) => b.textContent?.trim() === 'Save policy' && b !== q('policy-save'))!
+      .click();
+    await vi.waitFor(() => expect(puts()).toHaveLength(1));
+    expect(puts()[0]!.body).toMatchObject({
+      embedding: { mode: 'none' },
+      clustering: { automatic: false },
+      expected_revision: 4,
+    });
+  });
+
   it('shows a served unknown_names warning after a save', async () => {
     putResponse = () => json({ ...POLICY, revision: 5, unknown_names: ['gizmo'] });
     await mountPage();

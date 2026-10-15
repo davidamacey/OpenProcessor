@@ -20,7 +20,8 @@
   const MODE_HELP: Record<EmbeddingMode, string> = {
     all: 'Every detection gets a vector at ingest.',
     selected: 'Only detections matching the criteria below get a vector.',
-    lazy: 'No detection gets a vector at ingest; embed them later.',
+    lazy: 'No detection gets a vector at ingest; embed them later. The whole-frame vector is still stored.',
+    none: 'Detection only: no vector of any kind, the whole-frame vector included. Embed later.',
   };
   const RESOLUTION_HELP: Record<ClassResolution, string> = {
     proposal: 'The detector label is kept as a proposal; no class is assigned.',
@@ -38,6 +39,9 @@
 
   function setEmbedding(patch: Record<string, unknown>): void {
     editor.draft.embedding = { ...(editor.draft.embedding ?? {}), ...patch };
+  }
+  function setClustering(patch: Record<string, unknown>): void {
+    editor.draft.clustering = { ...(editor.draft.clustering ?? {}), ...patch };
   }
   function setDetect(patch: Record<string, unknown>): void {
     editor.draft.detect = { ...(editor.draft.detect ?? {}), ...patch };
@@ -111,6 +115,23 @@
         </label>
       </div>
     {/if}
+  </section>
+
+  <section class="surface space-y-2 p-4">
+    <h2 class="text-sm font-semibold">Clustering</h2>
+    <label class="flex items-center gap-2 text-xs">
+      <input
+        type="checkbox"
+        data-testid="policy-clustering-automatic"
+        checked={draft.clustering?.automatic ?? true}
+        onchange={(e) => setClustering({ automatic: e.currentTarget.checked })}
+      />
+      <span class="text-zinc-200">Cluster automatically</span>
+    </label>
+    <p class="text-xs text-zinc-500">
+      Off: new items are not placed in clusters, and the refresh and idle retrains skip
+      this project. Cluster when you ask.
+    </p>
   </section>
 
   <details class="surface p-4" data-testid="policy-detect-section">
