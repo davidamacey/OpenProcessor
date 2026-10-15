@@ -261,7 +261,7 @@ async def create_project(
     sources). ``activate=False`` stops with the verified record still
     ``building`` for a caller that fills the project first and then calls
     :func:`finish_building`."""
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
 
     if not is_valid_slug(slug):
         raise rejection(422, 'slug_invalid', f"'{slug}' is not a valid project slug", project=slug)

@@ -91,7 +91,7 @@ def _import_time_nodes(tree: ast.Module) -> list[ast.AST]:
 def test_no_import_time_read_of_a_project_scoped_field() -> None:
     """``X = get_curation_config().items_index``, ``config.export_root`` as a
     default argument, and friends freeze one project's value at import."""
-    from src.config.curation import PROJECT_SCOPED_FIELDS
+    from src.config.curation_accessors import PROJECT_SCOPED_FIELDS
 
     offenders: list[str] = []
     for path in _iter_py_files('src', 'scripts'):
@@ -215,7 +215,7 @@ def test_no_index_name_literals() -> None:
     an explicitly constructed ``CurationConfig``."""
     import re
 
-    from src.config.curation import IndexRole
+    from src.config.curation_roles import IndexRole
 
     roles = '|'.join(role.value for role in IndexRole)
     pattern = re.compile(rf'^op_(prj_[a-z0-9-]+__)?({roles}|curation_settings|clusters)$')

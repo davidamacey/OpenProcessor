@@ -15,7 +15,7 @@ from curation.cross_project_leak._seeders import _promoted_model
 from fastapi.testclient import TestClient
 
 from projects.test_model_sharing_used_by import MODEL, _activate_profile, _put
-from src.config.curation import IndexRole
+from src.config.curation_roles import IndexRole
 from src.services.projects.registry import projects_index
 
 

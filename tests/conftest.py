@@ -46,7 +46,7 @@ class _EnvDefaultProjectRecord:
 
     @property
     def resources(self) -> object:
-        from src.config.curation import base_curation_config
+        from src.config.curation_accessors import base_curation_config
         from src.config.projects import resources_for_new
 
         return resources_for_new('default', base_curation_config())
@@ -73,7 +73,7 @@ def project_export_root() -> Path:
     """The bound ``default`` project's ``export_root`` (created). Training
     routes refuse a ``dataset_export_dir`` outside it
     (``export_outside_project``), so fixture exports live here."""
-    from src.config.curation import get_curation_config
+    from src.config.curation_accessors import get_curation_config
 
     root = Path(get_curation_config().export_root)
     root.mkdir(parents=True, exist_ok=True)

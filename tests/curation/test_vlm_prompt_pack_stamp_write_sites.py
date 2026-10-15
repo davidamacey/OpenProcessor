@@ -16,7 +16,7 @@ from PIL import Image
 from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import get_region_fields
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.services.curation import image_serving
 from src.services.labeling.vlm_client import VlmIdentity

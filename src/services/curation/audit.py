@@ -18,7 +18,7 @@ from typing import Any
 
 from src.clients.occ import is_locked_class
 from src.clients.occ_bulk import occ_update_bulk
-from src.config.curation import items_index
+from src.config.curation_accessors import items_index
 from src.domain.audit_math import (
     AUDIT_BATCH,
     AUDIT_HUMAN,

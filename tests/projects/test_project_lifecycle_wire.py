@@ -44,7 +44,7 @@ class _CountingOpenSearch(FakeLifecycleOpenSearch):
 
 @pytest.fixture(autouse=True)
 def _env(tmp_path, monkeypatch):
-    import src.config.curation as curation_mod
+    import src.config.curation_accessors as curation_mod
     from src.services.projects import capacity as capacity_mod
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
@@ -251,7 +251,7 @@ def test_refused_clone_settings_keeps_the_revision(
 ) -> None:
     _create('alpha', client)
     beta = _create('beta', client)
-    from src.config.curation import IndexRole
+    from src.config.curation_roles import IndexRole
 
     client.indexes[beta.resources.indexes[IndexRole.ITEMS]] = [{'crop_id': 'b-1'}]
     before = _revision(http, 'beta')
@@ -301,7 +301,7 @@ def test_counts_validated_is_the_same_number_on_every_route(
 ) -> None:
     alpha = _create('alpha', client)
     _create('beta', client)
-    from src.config.curation import IndexRole
+    from src.config.curation_roles import IndexRole
 
     client.indexes[alpha.resources.indexes[IndexRole.ITEMS]] = [
         {'crop_id': 'a1', 'class_validated': True},

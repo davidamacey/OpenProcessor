@@ -93,7 +93,7 @@ def _disk_usage(slug: str, resources: Any) -> dict[str, Any]:
 
 async def project_stats(client: Any) -> dict[str, Any]:
     """Must run inside a bound project (the route is scoped)."""
-    from src.config.curation import images_index, items_index
+    from src.config.curation_accessors import images_index, items_index
 
     bound = current_project()
     items_idx = items_index()

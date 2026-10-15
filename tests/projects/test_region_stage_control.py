@@ -37,7 +37,7 @@ def _corpus() -> list[dict[str, Any]]:
 
 @pytest.fixture
 def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    import src.config.curation as curation_config
+    import src.config.curation_accessors as curation_config
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path))

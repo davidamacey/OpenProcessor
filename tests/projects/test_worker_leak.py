@@ -34,7 +34,8 @@ from scripts.curation.worker.state import _ItemTask, bind_task_project, bound_cl
 from scripts.curation.worker.verify import TaskBoxInput, _combined_class_update, verdicts_to_boxes
 from src.clients.curation_opensearch import ClassRegistryFile, RegistryClassEntry
 from src.config import get_region_fields
-from src.config.curation import IndexRole, base_curation_config
+from src.config.curation_accessors import base_curation_config
+from src.config.curation_roles import IndexRole
 from src.config.project_context import bind_project, try_current_project
 from src.config.projects import ProjectRecord, resources_for_new
 from src.domain.region_boxes import boxes_write_fields

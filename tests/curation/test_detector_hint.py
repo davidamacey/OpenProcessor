@@ -165,7 +165,7 @@ def _wire_label_batch(
     import src.routers.curation.vlm as vlm_mod
     from curation.query_fakes import QueryFakeOpenSearch
     from src.clients.curation_opensearch.registry import ClassRegistry
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
 
     items = base_curation_config().items_index
     buf = io.BytesIO()

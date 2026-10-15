@@ -27,7 +27,7 @@ import numpy as np
 from opensearchpy.exceptions import OpenSearchException
 
 from src.config import get_region_fields
-from src.config.curation import items_index
+from src.config.curation_accessors import items_index
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.domain.region_boxes import RegionBox, derive_status

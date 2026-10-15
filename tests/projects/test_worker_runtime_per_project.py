@@ -19,7 +19,7 @@ import pytest
 
 from scripts.curation.worker.fairness import read_liveness, write_liveness
 from scripts.curation.worker.state import _ItemTask
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.project_context import current_project, set_bound_project
 from src.config.projects import ProjectRecord, resources_for_new
 

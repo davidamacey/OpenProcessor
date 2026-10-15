@@ -89,7 +89,7 @@ async def test_vlm_worker_fetch_pending_ids_query_shape() -> None:
         exclude_ids=['x1', 'x2'],
     )
     # The bound project's own items index, never a literal.
-    from src.config.curation import items_index
+    from src.config.curation_accessors import items_index
 
     assert captured['index'] == items_index()
     assert ids == ['c1', 'c2']

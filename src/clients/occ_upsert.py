@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES
 from src.clients.occ_locks import _is_locked_marker, is_locked_class
-from src.config.curation import items_index
+from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.domain.embedding_state import keep_stored_vector_state
 from src.domain.history import CLASS_STATE_FIELDS

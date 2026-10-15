@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.projects import ProjectRecord, resources_for_new
 from src.services.projects.busy import (
     JobRef,

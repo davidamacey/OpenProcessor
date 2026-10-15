@@ -26,7 +26,7 @@ from PIL import Image
 from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import CurationConfig, get_region_fields
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.project_context import current_project
 from src.services.curation.class_write_guard import (
     CLASS_GUARD_SOURCE_FIELDS,

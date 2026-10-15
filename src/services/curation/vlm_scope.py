@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from src.config.curation import items_index
+from src.config.curation_accessors import items_index
 from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPTED_AT_FIELD
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET, cluster_kind
 from src.services.curation.cluster_representatives import representatives_msearch_body

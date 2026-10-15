@@ -59,7 +59,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from src.config.curation import get_curation_config
+from src.config.curation_accessors import get_curation_config
 from src.config.env import env_path
 from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
@@ -211,7 +211,8 @@ async def bulk_write_result(
     *,
     chunk_size: int = 500,
 ) -> None:
-    from src.config.curation import IndexRole, get_curation_config, index_name
+    from src.config.curation_accessors import get_curation_config
+    from src.config.curation_roles import IndexRole, index_name
 
     index = index_name(get_curation_config(), IndexRole.ITEMS)
     items = list(result.fields.items())
@@ -239,7 +240,8 @@ async def _fetch_probe_scored_ids(client: AsyncOpenSearch) -> list[str]:
     scroll, no cap — a silent partial pool here would silently under-audit
     machine labels, the exact failure mode this pool exists to fix.
     """
-    from src.config.curation import IndexRole, get_curation_config, index_name
+    from src.config.curation_accessors import get_curation_config
+    from src.config.curation_roles import IndexRole, index_name
 
     index = index_name(get_curation_config(), IndexRole.ITEMS)
     query = {
@@ -371,7 +373,8 @@ async def run_scoring_job(
 
 async def compute_coverage(opensearch: AsyncOpenSearch) -> dict[str, Any]:
     """Per-scorer ``{n_scored, total, pct}`` for ``GET /curation/scores/coverage``."""
-    from src.config.curation import IndexRole, get_curation_config, index_name
+    from src.config.curation_accessors import get_curation_config
+    from src.config.curation_roles import IndexRole, index_name
     from src.services.curation.item_scores import SCORER_METADATA
 
     index = index_name(get_curation_config(), IndexRole.ITEMS)

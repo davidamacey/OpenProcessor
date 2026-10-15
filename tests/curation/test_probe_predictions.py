@@ -473,7 +473,7 @@ async def test_probe_pred_class_id_is_the_registry_id_not_the_model_dense_id(
 
     import dataclasses
 
-    from src.config.curation import base_curation_config as _base
+    from src.config.curation_accessors import base_curation_config as _base
     from src.config.project_context import bind_project
     from src.config.projects import new_project_record
 

@@ -8,7 +8,8 @@ import hashlib
 import json
 from typing import TYPE_CHECKING, Any
 
-from src.config.curation import ITEM_EMBEDDING_FIELD, IndexRole
+from src.config.curation import ITEM_EMBEDDING_FIELD
+from src.config.curation_roles import IndexRole
 from src.config.project_context import bind_project
 from src.domain.embedding_state import embedded_clause
 from src.services.projects.combine.models import CombineIssue

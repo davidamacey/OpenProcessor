@@ -170,7 +170,7 @@ async def fetch_pending_ids(
     into the query itself instead of being filtered out in Python after
     over-fetching ``batch_size + len(in_flight)`` docs.
     """
-    from src.config.curation import items_index
+    from src.config.curation_accessors import items_index
 
     policy, reps = await scope_cache.get(opensearch, slug)
     remaining = await daily_budget_remaining(opensearch, policy)

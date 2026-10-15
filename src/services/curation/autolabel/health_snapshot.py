@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.config.curation import items_index
+from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.domain.embedding_state import not_embedded_clause
 

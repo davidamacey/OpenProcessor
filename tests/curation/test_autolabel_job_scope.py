@@ -20,7 +20,7 @@ import pytest
 from curation.query_fakes import QueryFakeOpenSearch, matches
 from curation.test_auto_label_selection import client, job_dir, packs  # noqa: F401 - fixtures
 from curation.test_vlm_cluster_scope import CLUSTER, _Labeler, pipeline_env  # noqa: F401
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 
 
 if TYPE_CHECKING:

@@ -13,7 +13,7 @@ from typing import Annotated, Any, Literal
 from fastapi import Query
 from pydantic import BaseModel
 
-from src.config.curation import get_curation_config
+from src.config.curation_accessors import get_curation_config
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, logger, router
 from src.schemas.curation.config_common import ModelSharingUser

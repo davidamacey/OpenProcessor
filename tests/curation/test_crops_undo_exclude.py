@@ -20,7 +20,7 @@ import pytest
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch.registry import ClassRegistry
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.routers.curation import label_undo
 from src.services.curation.item_doc import DetectedItem, build_item_doc
 

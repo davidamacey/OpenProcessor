@@ -58,7 +58,8 @@ async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> di
     single ``_search`` (``size: 0``, ``track_total_hits: true``, one
     ``filter: {exists}`` sub-agg per field) -- same answer, one request.
     """
-    from src.config.curation import IndexRole, get_curation_config, index_name
+    from src.config.curation_accessors import get_curation_config
+    from src.config.curation_roles import IndexRole, index_name
 
     index = index_name(get_curation_config(), IndexRole.ITEMS)
     now = time.monotonic()
@@ -105,7 +106,8 @@ async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> di
 def invalidate_field_coverage() -> None:
     """Drop the bound project's cached coverage so its next lookup counts
     live."""
-    from src.config.curation import IndexRole, get_curation_config, index_name
+    from src.config.curation_accessors import get_curation_config
+    from src.config.curation_roles import IndexRole, index_name
 
     _COVERAGE_CACHE.pop(index_name(get_curation_config(), IndexRole.ITEMS), None)
 

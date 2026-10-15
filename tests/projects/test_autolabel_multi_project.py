@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 
 from scripts.curation import auto_label_worker
-from src.config.curation import base_curation_config, get_curation_config
+from src.config.curation_accessors import base_curation_config, get_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
 from src.services.curation.file_job import FileJob

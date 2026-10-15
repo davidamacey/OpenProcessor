@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel
 
 from scripts.curation._project_worker_utils import PIPELINE_PAUSED_FLAG_NAME
-from src.config.curation import get_curation_config
+from src.config.curation_accessors import get_curation_config
 from src.routers.curation._common import router
 
 

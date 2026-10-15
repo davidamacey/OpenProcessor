@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from opensearchpy.exceptions import OpenSearchException
 
-from src.config.curation import items_index
+from src.config.curation_accessors import items_index
 from src.config.env import env_str
 from src.core.logging import get_logger
 from src.domain.embedding_state import embedded_clause

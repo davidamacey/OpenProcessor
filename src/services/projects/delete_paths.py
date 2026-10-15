@@ -54,7 +54,7 @@ def _project_scoped_dirs(record: ProjectRecord) -> list[tuple[Path, Path]]:
     under the deployment ``state_dir``/jobs roots (uploads, job dirs,
     autolabel state) -- never under ``default``'s own dirs, which
     :func:`resources_for_new` never nests anything into."""
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import projects_data_root, trainer_jobs_root
 
     base = base_curation_config()

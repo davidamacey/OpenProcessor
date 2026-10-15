@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 
 from curation import query_fakes
 from curation.query_fakes import QueryFakeOpenSearch
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.services.curation import review_queries, review_sorts, review_tabs
 from src.services.curation.review_request import ReviewFilters, before_query, build_review_request
 from src.services.curation.review_tab_clauses import DETECTOR_DISAGREES_SCRIPT

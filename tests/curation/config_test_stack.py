@@ -21,7 +21,7 @@ from PIL import Image
 from curation.conftest import SCOPED, HybridOpenSearch, VlmApi, good_probe
 from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch.registry import ClassRegistry
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 
 
 if TYPE_CHECKING:
@@ -159,7 +159,7 @@ def build_stack(vlm_api: VlmApi, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (tmp_path,))  # noqa: ARG005
     image_serving.THUMBNAIL_CACHE.clear()
 
-    import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_config_mod
 
     monkeypatch.setenv('OP_CROP_CACHE_DIR', str(tmp_path / 'crop_cache'))
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)

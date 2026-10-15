@@ -202,7 +202,8 @@ def test_put_prompt_pack_activates_a_stored_pack_at_its_real_revision(
     fake_os = app_client.fake_os  # type: ignore[attr-defined]
 
     async def _seed() -> tuple[int, str]:
-        from src.config.curation import IndexRole, base_curation_config
+        from src.config.curation_accessors import base_curation_config
+        from src.config.curation_roles import IndexRole
         from src.config.projects import ProjectRecord, resources_for_new
 
         record = ProjectRecord(

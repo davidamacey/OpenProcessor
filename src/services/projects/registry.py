@@ -50,7 +50,7 @@ def _resources_to_dict(resources: ProjectResources) -> dict[str, Any]:
 
 
 def _resources_from_dict(data: Mapping[str, Any]) -> ProjectResources:
-    from src.config.curation import IndexRole
+    from src.config.curation_roles import IndexRole
 
     return ProjectResources(
         indexes={IndexRole(role): name for role, name in data['indexes'].items()},

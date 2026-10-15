@@ -20,7 +20,7 @@ from scripts.curation._project_worker_utils import PIPELINE_PAUSED_FLAG_NAME
 from scripts.curation.worker import cascade, fairness
 from scripts.curation.worker.fairness import FairnessScheduler, fetch_pending_multi_project
 from scripts.curation.worker.state import _ItemTask
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.project_context import current_project
 from src.config.projects import ProjectRecord, resources_for_new
 

@@ -151,7 +151,7 @@ def test_bad_paths_json_rejected(client: TestClient) -> None:
 
 
 def test_oversized_upload_rejected(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_config_mod
 
     monkeypatch.setenv('OP_UPLOAD_MAX_IMAGES_PER_REQUEST', '1')
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
@@ -352,7 +352,7 @@ def test_unsupported_extension_fails_per_item_with_a_stable_code(
 def test_total_bytes_over_the_configured_limit_is_413(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_config_mod
 
     monkeypatch.setenv('OP_UPLOAD_MAX_BYTES_PER_REQUEST', '10')
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)

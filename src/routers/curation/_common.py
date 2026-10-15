@@ -13,7 +13,12 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import get_curation_config
-from src.config.curation import classes_index, images_index, items_index, labels_confirmed_index  # noqa: F401 - re-exported for the router modules
+from src.config.curation_accessors import (  # noqa: F401 - re-exported for the router modules
+    classes_index,
+    images_index,
+    items_index,
+    labels_confirmed_index,
+)
 from src.core.dependencies import get_curation_opensearch
 from src.core.logging import get_logger
 from src.core.wire_json import WireRoute
@@ -47,7 +52,7 @@ router = APIRouter(
 
 
 # Index names are resolved per bound project at call time -- see
-# src.config.curation.items_index() and friends (re-exported here).
+# src.config.curation_accessors.items_index() and friends (re-exported here).
 
 
 # OpenSearch's index.max_result_window default. from+size past this 500s

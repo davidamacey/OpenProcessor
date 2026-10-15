@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.occ_locks import is_locked_box, is_locked_class, is_locked_item
 from src.config import BACKBONE_EMBEDDING_FIELD, ITEM_EMBEDDING_FIELD, get_region_fields
-from src.config.curation import items_index
+from src.config.curation_accessors import items_index
 from src.config.env import env_int
 from src.core.logging import get_logger
 

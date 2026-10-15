@@ -85,7 +85,7 @@ def test_get_vlm_labeler_selects_and_caches_per_pack_name(
     default_path.write_text(json.dumps(replace(GENERIC_ITEM_PACK, name='pallet_v1').to_dict()))
     extra_path.write_text(json.dumps(replace(GENERIC_ITEM_PACK, name='food_v2').to_dict()))
     cfg = CurationConfig(prompt_pack_path=default_path, prompt_pack_paths=(extra_path,))
-    monkeypatch.setattr('src.config.curation.get_curation_config', lambda: cfg)
+    monkeypatch.setattr('src.config.curation_accessors.get_curation_config', lambda: cfg)
 
     assert vlm_mod.get_vlm_labeler()._pack.name == 'pallet_v1'
     food = vlm_mod.get_vlm_labeler('food_v2')

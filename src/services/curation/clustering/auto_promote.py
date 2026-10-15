@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from src.clients.occ import occ_skip_on_conflict_bulk
-from src.config.curation import items_index
+from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.domain.history import record_class_history
 from src.domain.ingest_class_sources import CLUSTER_MAJORITY_CLASS_SOURCE, classifier_class_sources

@@ -14,7 +14,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from src.config.curation import CurationConfig, get_curation_config
+from src.config.curation import CurationConfig
+from src.config.curation_accessors import get_curation_config
 from src.services.training import gpu_arbiter_policy
 
 

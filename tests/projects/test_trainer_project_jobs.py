@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import DEFAULT_SLUG, ProjectRecord, resources_for_new
 from src.services.training import job_manifest, jobs as train_jobs
@@ -71,7 +71,7 @@ def test_default_project_job_lands_in_the_default_dir(tmp_path, monkeypatch) -> 
     """``default`` is an ordinary project (P1: no special-casing) --
     its jobs land under ``<jobs_root>/projects/default/`` exactly like
     any other project's, not at the jobs-root top level."""
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import new_project_record
 
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path / 'jobs'))

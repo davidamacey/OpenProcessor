@@ -18,7 +18,7 @@ from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes
 
 @pytest.fixture(autouse=True)
 def _env(tmp_path, monkeypatch):
-    import src.config.curation as curation_mod
+    import src.config.curation_accessors as curation_mod
     from src.services.projects import capacity as capacity_mod
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
@@ -87,7 +87,7 @@ def test_clone_classes_refused_on_non_empty_target() -> None:
     target = registry.get('target')
     assert target is not None
 
-    from src.config.curation import items_index
+    from src.config.curation_accessors import items_index
     from src.config.project_context import bind_project
 
     with bind_project(target):

@@ -22,7 +22,7 @@ from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes
 
 @pytest.fixture(autouse=True)
 def _env(tmp_path, monkeypatch):
-    import src.config.curation as curation_mod
+    import src.config.curation_accessors as curation_mod
     from src.services.projects import capacity as capacity_mod
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))

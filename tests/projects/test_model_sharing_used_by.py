@@ -14,7 +14,7 @@ from curation.cross_project_leak import _env as _sweep
 from curation.cross_project_leak._seeders import _promoted_model
 from fastapi.testclient import TestClient
 
-from src.config.curation import IndexRole
+from src.config.curation_roles import IndexRole
 
 
 if TYPE_CHECKING:

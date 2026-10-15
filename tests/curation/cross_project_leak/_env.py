@@ -62,9 +62,10 @@ def leak_env(
 ) -> Any:
     """The real app, three seeded projects, a recording layer above the
     real guard, and no way out of the process (no network, no subprocess)."""
-    import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_config_mod
     from src.clients.curation_opensearch import registry as curation_registry, settings_doc
-    from src.config.curation import IndexRole, base_curation_config
+    from src.config.curation_accessors import base_curation_config
+    from src.config.curation_roles import IndexRole
     from src.config.projects import new_project_record, resources_for_new
     from src.core.dependencies import app_state, get_async_triton
     from src.services.curation import event_hub, index_bootstrap

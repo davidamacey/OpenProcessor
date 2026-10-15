@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.domain.ingest_class_sources import classifier_class_sources, is_classifier_class_source
 from src.services.curation.class_sources import (
     VLM_CATEGORY_SCORE,

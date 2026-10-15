@@ -347,7 +347,7 @@ def test_bakeoff_active_after_enqueue_with_no_env(
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
-    import src.config.curation as curation_config_module
+    import src.config.curation_accessors as curation_config_module
     from src.config import CurationConfig
     from src.routers.curation import bakeoff, router as curation_router
     from src.services.curation import eval_datasets
@@ -401,7 +401,7 @@ def test_bakeoff_active_scans_every_projects_own_queue(
     (``gpu_arbiter.all_bakeoff_jobs_dirs()``), not one flat dir."""
     from dataclasses import replace
 
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import new_project_record
     from src.services.projects import registry as registry_mod
 
