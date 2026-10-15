@@ -209,6 +209,8 @@ export async function getCluster(
     maxRank?: number | null;
     minBlurRatio?: number | null;
     classifierConfLt?: number | null;
+    /** One sub-cluster of the cluster, filtered by the server (`/crops?cluster_subid=`). */
+    clusterSubid?: string | null;
     /**
      * Forwarded verbatim to `{API_PREFIX}/crops?order=`. Only `'outliers'` is
      * special-cased server-side today (crops.py `order` query param —
@@ -269,6 +271,7 @@ export async function getCluster(
   if (opts.maxRank != null) cropQuery.max_rank = opts.maxRank;
   if (opts.minBlurRatio != null) cropQuery.min_blur_ratio = opts.minBlurRatio;
   if (opts.classifierConfLt != null) cropQuery.classifier_conf_lt = opts.classifierConfLt;
+  if (opts.clusterSubid) cropQuery.cluster_subid = opts.clusterSubid;
   if (opts.order) cropQuery.order = opts.order;
   if (opts.k != null) cropQuery.k = opts.k;
   let cardError: string | null = null;

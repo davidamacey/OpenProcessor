@@ -92,9 +92,11 @@ export function createClusterDetailController() {
   // can't be applied to the first request and silently dropped on the next.
   const cropPager = createPager<Crop>({
     fetchPage: async (page) => {
-      const res = await getCluster(clusterId, page, pageSize, undefined, cropQuery());
+      const query = cropQuery();
+      const res = await getCluster(clusterId, page, pageSize, undefined, query);
       cluster = res.cluster;
       cardError = res.cardError;
+      if (query.clusterSubid == null) rememberSubids(res.crops.items, page === 1);
       orderMeta =
         orderMode === 'diverse'
           ? {
@@ -120,8 +122,22 @@ export function createClusterDetailController() {
   const sel = createSelection({ plainClick: 'replace' });
 
   // Sub-cluster tab (null = all). Backend stores cluster_subid as a
-  // keyword string ("47a", "47b", "47aa", ...).
-  let subTab = $state<string | null>(null);
+  // keyword string ("47a", "47b", "47aa", ...). The tab belongs to the
+  // cluster it was picked on, so moving to another cluster reads as "all".
+  let subTabPick = $state<{ cluster: number; subid: string | null } | null>(null);
+  const subTab = $derived(subTabPick?.cluster === clusterId ? subTabPick.subid : null);
+
+  // The sub-cluster ids seen while viewing the whole cluster. A sub-cluster tab
+  // loads only its own members from the server, so the tab list cannot be read
+  // off the page that is showing.
+  let knownSubids = $state<string[]>([]);
+  function rememberSubids(items: Crop[], firstPage: boolean): void {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local set built and consumed within this function, never stored in reactive state
+    const seen = new Set<string>(firstPage ? [] : knownSubids);
+    for (const c of items) if (c.cluster_subid != null) seen.add(c.cluster_subid);
+    // Lexicographic sort keeps "47a","47b","47aa"... in human-expected order.
+    knownSubids = [...seen].sort();
+  }
 
   // class_source filter (null = all). Drives the chip-group in the
   // header and propagates to {API_PREFIX}/crops?class_source=... so the grid
@@ -207,6 +223,7 @@ export function createClusterDetailController() {
   function cropQuery() {
     return {
       classSource: classSourceFilter,
+      clusterSubid: subTab,
       maxRank,
       minBlurRatio,
       // Unless the operator picked an explicit order, ask for the server's
@@ -251,6 +268,7 @@ export function createClusterDetailController() {
     // Track every filter input so a change triggers a fresh load.
     void clusterId;
     void classSourceFilter;
+    void subTab;
     void maxRank;
     void minBlurRatio;
     void orderMode;
@@ -258,23 +276,12 @@ export function createClusterDetailController() {
     void loadFirst();
   });
 
-  // Sub-cluster filtering (in-memory, after load). cluster_subid is
-  // backend-owned (keyword like "47a") — the frontend string-matches.
-  const filteredCrops = $derived(
-    subTab == null
-      ? cropPager.items
-      : cropPager.items.filter((c) => c.cluster_subid === subTab),
-  );
+  // The crops on screen. A sub-cluster tab is filtered by the server
+  // (`/crops?cluster_subid=`), so a sub-cluster larger than a page is shown
+  // whole; the loaded page is never filtered here.
+  const filteredCrops = $derived(cropPager.items);
 
-  const subClusterIds = $derived.by(() => {
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local set built and consumed within this computation, never stored in reactive state (only the resulting sorted array is)
-    const set = new Set<string>();
-    for (const c of cropPager.items) {
-      if (c.cluster_subid != null) set.add(c.cluster_subid);
-    }
-    // Lexicographic sort keeps "47a","47b","47aa"... in human-expected order.
-    return [...set].sort();
-  });
+  const subClusterIds = $derived(knownSubids);
 
   // When refine has produced sub-clusters and we're viewing "all", group
   // the grid inline by cluster_subid (contiguous groups + a labeled
@@ -304,8 +311,6 @@ export function createClusterDetailController() {
     grouped: () => groupBySubcluster,
     keyOf: (c) => c.id,
     subidOf: (c) => c.cluster_subid ?? null,
-    // Truth is the *whole* pager buffer, not filteredCrops: a sub-cluster tab
-    // narrows what's rendered but doesn't mean the hidden crops left.
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- a throwaway id lookup the grid reads synchronously
     liveIds: () => new Set(cropPager.items.map((c) => c.id)),
   });
@@ -387,7 +392,7 @@ export function createClusterDetailController() {
       return subTab;
     },
     set subTab(v: string | null) {
-      subTab = v;
+      subTabPick = { cluster: clusterId, subid: v };
     },
     get classSourceFilter() {
       return classSourceFilter;
