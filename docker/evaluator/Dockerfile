@@ -9,7 +9,8 @@
 # Standalone image (no shared trainer base image exists in this repo):
 # installs the same detection-stack pins as the core API image
 # (requirements.txt) plus the harness-only extras
-# (scripts/curation/bakeoff/requirements.txt).
+# (scripts/curation/bakeoff/requirements.txt). Two stages: the compilers that
+# build wheel dependencies stay in the builder and never reach the runtime image.
 #
 # Build:
 #   docker compose --profile curation build curation-evaluator
@@ -19,18 +20,39 @@
 # One-shot job:
 #   docker compose --profile curation run --rm curation-evaluator \
 #     python -m scripts.curation.bakeoff.bakeoff_runner --job /eval_jobs/x.job.json
-#
-# WAIVER (release checklist): still a single
-# `FROM`, not multi-stage. build-essential/cmake/pkg-config stay in the
-# final image to compile wheel deps at `pip install` time, which the
-# other images' builder-stage split avoids. Deferred: the current scope is the
-# compose/mount split, not image-size hardening, and this image is
-# on-demand only (`docker compose ... run --rm`), never a long-running
-# service. Track the multi-stage conversion as release-checklist debt
-# (§3.4) rather than doing it silently here.
 # =============================================================================
 
-FROM python:3.13-slim-trixie
+# -----------------------------------------------------------------------------
+# Stage 1: build -- resolve every wheel into a relocatable --user tree
+# -----------------------------------------------------------------------------
+FROM python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f AS builder
+
+WORKDIR /build
+
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt requirements.txt
+COPY scripts/curation/bakeoff/requirements.txt bakeoff-requirements.txt
+
+# hadolint ignore=DL3013
+RUN pip install --user --no-cache-dir --upgrade pip \
+    && pip install --user --no-cache-dir --no-warn-script-location \
+        --extra-index-url https://pypi.nvidia.com \
+        -r requirements.txt \
+    && pip install --user --no-cache-dir --no-warn-script-location -r bakeoff-requirements.txt \
+    && pip install --user --no-cache-dir --no-warn-script-location mlflow
+
+# -----------------------------------------------------------------------------
+# Stage 2: runtime
+# -----------------------------------------------------------------------------
+FROM python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f
 
 LABEL org.opencontainers.image.title="OpenProcessor Curation Evaluator" \
       org.opencontainers.image.description="On-demand detector bake-off harness runner" \
@@ -47,11 +69,6 @@ LABEL org.opencontainers.image.revision=${OP_BUILD_SHA}
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
-    build-essential \
-    cmake \
-    curl \
-    git \
-    pkg-config \
     libgl1 \
     libglib2.0-0t64 \
     libgomp1 \
@@ -65,24 +82,17 @@ RUN groupadd -r appuser && \
 
 WORKDIR /app
 
-COPY requirements.txt requirements.txt
-COPY scripts/curation/bakeoff/requirements.txt bakeoff-requirements.txt
+COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
 
-# hadolint ignore=DL3013
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir --extra-index-url https://pypi.nvidia.com \
-        -r requirements.txt \
-    && pip install --no-cache-dir -r bakeoff-requirements.txt \
-    && pip install --no-cache-dir mlflow
-
-ENV PYTHONUNBUFFERED=1 \
+ENV PATH=/home/appuser/.local/bin:$PATH \
+    PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
     HF_HOME=/home/appuser/.cache/huggingface \
     TORCH_HOME=/home/appuser/.cache/torch
 
 COPY --chown=appuser:appuser src/ ./src/
-COPY --chown=appuser:appuser scripts/ ./scripts/
+COPY --chown=appuser:appuser scripts/curation/ ./scripts/curation/
 # scripts/curation/bakeoff/profile.py reads opt-in baseline profiles under
 # the repo's examples/ tree (path given explicitly via a job's
 # baselines_path) -- bake it in so a non-checkout deploy doesn't need a

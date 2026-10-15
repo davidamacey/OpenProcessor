@@ -1127,9 +1127,9 @@ docs-build: ## Build docs-site (npm ci + docusaurus build; broken links and anch
 DOCS_PROJECT ?= coco-bench-2k
 
 .PHONY: docs-screenshots
-docs-screenshots: ## Capture the Cropwright docs screenshots (CROPWRIGHT_URL=... required; public sample project only)
-	@test -n "$(CROPWRIGHT_URL)" || { echo "Set CROPWRIGHT_URL to a Cropwright instance that holds only public sample data."; exit 2; }
-	cd frontend && e2e/.venv/bin/python scripts/capture_docs_screenshots.py --base-url $(CROPWRIGHT_URL) --project $(DOCS_PROJECT)
+docs-screenshots: ## Capture the Cropwright docs screenshots (OP_CROPWRIGHT_URL=... required; public sample project only)
+	@test -n "$(OP_CROPWRIGHT_URL)" || { echo "Set OP_CROPWRIGHT_URL to a Cropwright instance that holds only public sample data."; exit 2; }
+	cd frontend && e2e/.venv/bin/python scripts/capture_docs_screenshots.py --base-url $(OP_CROPWRIGHT_URL) --project $(DOCS_PROJECT)
 
 .PHONY: docs
 docs: info ## Alias for info

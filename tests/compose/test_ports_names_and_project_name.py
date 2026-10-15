@@ -129,7 +129,7 @@ def test_every_published_port_uses_op_bind_address() -> None:
             text = str(entry)
             # Cropwright has its own knob so the installer can open only the web UI to a LAN.
             if not text.startswith(
-                ('${OP_BIND_ADDRESS', '${OP_UI_BIND_ADDRESS', '${CROPWRIGHT_BIND_ADDRESS')
+                ('${OP_BIND_ADDRESS', '${OP_UI_BIND_ADDRESS', '${OP_CROPWRIGHT_BIND_ADDRESS')
             ):
                 bad.append(f'{name}: {text!r}')
     assert not bad, 'published ports missing ${OP_BIND_ADDRESS prefix:\n' + '\n'.join(bad)

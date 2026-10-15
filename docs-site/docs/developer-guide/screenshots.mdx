@@ -58,8 +58,8 @@ names, file paths and class names that are not sample data.
 # Once: creates frontend/e2e/.venv with Playwright.
 cd frontend && npm run test:e2e
 
-# From the repository root. CROPWRIGHT_URL has no default.
-make docs-screenshots CROPWRIGHT_URL=http://localhost:<cropwright-port>
+# From the repository root. OP_CROPWRIGHT_URL has no default.
+make docs-screenshots OP_CROPWRIGHT_URL=http://localhost:<cropwright-port>
 ```
 
 `make docs-screenshots` runs the script with `--project $(DOCS_PROJECT)`,

@@ -31,7 +31,7 @@ def _reset_only():
     checker.set_only(None)
 
 
-@pytest.mark.parametrize('name', ['routes', 'env', 'compose'])
+@pytest.mark.parametrize('name', ['routes', 'env', 'compose', 'template'])
 def test_real_docs_match_the_code(name: str) -> None:
     errors = checker.CHECKS[name]()
     assert errors == [], f'{name} check found {len(errors)} problem(s):\n' + '\n'.join(errors)
@@ -82,6 +82,55 @@ def test_compose_check_rejects_a_variable_missing_from_env_template(
 
     assert checker.check_compose_vars() == [
         'docker-compose.yml: ${NOT_DOCUMENTED} is not in env.template (commented is fine)'
+    ]
+
+
+def test_compose_check_wants_an_assignment_not_a_prose_mention(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / 'docker-compose.yml').write_text(
+        'services:\n  a:\n    image: ${ONLY_IN_PROSE:-x}\n', encoding='utf-8'
+    )
+    (tmp_path / 'env.template').write_text(
+        '# Set ONLY_IN_PROSE to pin the image, see the docs.\n', encoding='utf-8'
+    )
+    monkeypatch.setattr(checker, 'REPO_ROOT', tmp_path)
+
+    assert checker.check_compose_vars() == [
+        'docker-compose.yml: ${ONLY_IN_PROSE} is not in env.template (commented is fine)'
+    ]
+
+
+def test_compose_check_skips_retired_names_the_installer_refuses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / 'docker-compose.yml').write_text(
+        'services:\n  a:\n    environment:\n      - OLD_NAME=${OLD_NAME:-}\n', encoding='utf-8'
+    )
+    (tmp_path / 'env.template').write_text('# NEW_NAME=1\n', encoding='utf-8')
+    (tmp_path / 'scripts' / 'lib').mkdir(parents=True)
+    (tmp_path / 'scripts' / 'lib' / 'retired_env.sh').write_text(
+        'RETIRED_ENV_NAMES=(\n    OLD_NAME\n)\n', encoding='utf-8'
+    )
+    monkeypatch.setattr(checker, 'REPO_ROOT', tmp_path)
+
+    assert checker.check_compose_vars() == []
+
+
+def test_template_check_rejects_a_setting_nothing_reads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / 'docker-compose.yml').write_text(
+        'services:\n  a:\n    image: ${READ_BY_COMPOSE:-x}\n', encoding='utf-8'
+    )
+    (tmp_path / 'env.template').write_text(
+        'READ_BY_COMPOSE=x\n# READ_NOWHERE=info\nOP_SKIPPED=1\n', encoding='utf-8'
+    )
+    monkeypatch.setattr(checker, 'REPO_ROOT', tmp_path)
+    monkeypatch.setattr(checker, '_CODE_ENV_ROOTS', ())
+
+    assert checker.check_template_names() == [
+        'env.template: READ_NOWHERE is set by no compose file, script or code'
     ]
 
 

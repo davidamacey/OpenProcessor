@@ -21,7 +21,7 @@ export const PATH_LOOKUP_MAX = 10_000;
 /**
  * Deployment-owned (not a backend value at all — see A.4): the nginx
  * body-size cap this Cropwright deployment was built/started with.
- * `CROPWRIGHT_INGEST_MAX_REQUEST_MB` (docker-entrypoint.sh) substitutes
+ * `OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB` (docker-entrypoint.sh) substitutes
  * the runtime value into `window.__CROPWRIGHT_INGEST_MAX_REQUEST_MB__`;
  * unset (local dev, or the literal unresolved placeholder) falls back
  * to nginx.conf's default.

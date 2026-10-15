@@ -23,7 +23,7 @@ the stack:
 | -------------------- | --------------------------------------------------------------------------------- | -------------------------------- |
 | `API_UPSTREAM`       | Where nginx proxies API calls, by service name over the compose network          | `http://op-api:8000`             |
 | `PUBLIC_API_PREFIX`  | Must equal the backend's own `OP_API_PREFIX`                                      | `/curation`                      |
-| `CROPWRIGHT_PORT`    | Host port to publish                                                              | `5184`                           |
+| `OP_CROPWRIGHT_PORT`    | Host port to publish                                                              | `5184`                           |
 | `OP_UI_BIND_ADDRESS` | Address the Cropwright port (and the monitoring UIs) is published on              | `OP_BIND_ADDRESS`, then loopback |
 
 See [Environment variables](../configuration/environment-variables.md) for
@@ -41,9 +41,9 @@ From a source checkout, `docker-compose.dev.yml` builds the image from `./fronte
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile cropwright up -d --build cropwright
 ```
 
-Open `http://localhost:5184` (or whatever `CROPWRIGHT_PORT` you set). The
+Open `http://localhost:5184` (or whatever `OP_CROPWRIGHT_PORT` you set). The
 image runs nginx as a non-root user (uid 101) listening on container port
-8080; Compose maps `CROPWRIGHT_PORT` to it. The same origin also serves the backend's API
+8080; Compose maps `OP_CROPWRIGHT_PORT` to it. The same origin also serves the backend's API
 reference (`/docs`, `/redoc`, `/openapi.json`) and, when the docs service is running
 (`docker-compose.docs.yml`), this documentation; the top-bar **Resources** menu links to them.
 

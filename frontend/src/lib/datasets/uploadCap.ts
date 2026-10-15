@@ -2,7 +2,7 @@
  * The archive-upload size the client allows: the lower of the served
  * `GET /datasets/formats` `upload.max_bytes` and this deployment's own
  * nginx `client_max_body_size` for `/datasets/uploads`
- * (`CROPWRIGHT_DATASET_UPLOAD_MAX_MB`, substituted into
+ * (`OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB`, substituted into
  * `window.__CROPWRIGHT_DATASET_UPLOAD_MAX_MB__` by docker-entrypoint.sh).
  * A file above either one would be refused anyway, after a long upload.
  */

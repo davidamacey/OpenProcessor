@@ -23,8 +23,8 @@ Usage:
     npm run test:e2e   # once, to provision e2e/.venv with Playwright
     e2e/.venv/bin/python scripts/capture_docs_screenshots.py \\
         --base-url http://localhost:<port-of-a-public-data-instance>
-    # or: CROPWRIGHT_URL=... e2e/.venv/bin/python scripts/capture_docs_screenshots.py
-    # or, from the repo root: make docs-screenshots CROPWRIGHT_URL=...
+    # or: OP_CROPWRIGHT_URL=... e2e/.venv/bin/python scripts/capture_docs_screenshots.py
+    # or, from the repo root: make docs-screenshots OP_CROPWRIGHT_URL=...
 
 The capture is read-only: every non-GET/HEAD request is aborted, so a
 screenshot pass can never write to the backend it points at.
@@ -83,14 +83,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("CROPWRIGHT_URL"),
-        required="CROPWRIGHT_URL" not in os.environ,
+        default=os.environ.get("OP_CROPWRIGHT_URL"),
+        required="OP_CROPWRIGHT_URL" not in os.environ,
         help="Base URL of a Cropwright instance pointed at a PUBLIC-sample-data "
         "OpenProcessor backend only. Never a real deployment.",
     )
     parser.add_argument(
         "--project",
-        default=os.environ.get("CROPWRIGHT_PROJECT"),
+        default=os.environ.get("OP_CROPWRIGHT_PROJECT"),
         help="Project slug holding the public sample data. Without it bare routes "
         "redirect to the default project.",
     )

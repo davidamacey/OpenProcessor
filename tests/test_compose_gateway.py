@@ -92,7 +92,7 @@ def test_gateway_switch_reaches_the_api_the_gateway_and_each_ui(tmp_path: Path) 
 
 def test_ui_ports_stay_on_loopback_in_gateway_mode(tmp_path: Path) -> None:
     services = _services(
-        tmp_path, {'OP_GATEWAY_SUBPATHS': 'true', 'CROPWRIGHT_BIND_ADDRESS': '0.0.0.0'}
+        tmp_path, {'OP_GATEWAY_SUBPATHS': 'true', 'OP_CROPWRIGHT_BIND_ADDRESS': '0.0.0.0'}
     )
     for name in UI_SERVICES:
         assert {p['host_ip'] for p in services[name]['ports']} == {'127.0.0.1'}, name
