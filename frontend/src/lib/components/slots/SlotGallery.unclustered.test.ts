@@ -38,6 +38,7 @@ function fpCluster(): Cluster {
     representative_crop_ids: [],
     has_subclusters: false,
     n_subclusters: 0,
+    subcluster_ids: [],
     updated_at: null,
   };
 }

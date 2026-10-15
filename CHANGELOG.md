@@ -17,6 +17,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 - `make pe-build-trt` (`export/build_pe_trt.sh`, #277) no longer ships an FP32 engine silently: a failed or FP32-falling-back FP16 bake, a failed FP16 build or a failed uint8 input step now exits 4 with the cause. `ALLOW_FP32=1` opts in to an FP32 engine knowingly.
 
 ### Added
+- `GET /clusters` cards serve `subcluster_ids` (the sorted sub-cluster ids, at most 200; `n_subclusters` stays the exact count).
 - The item wire serves the accuracy audit state (#166): `audit_sample`, `audit_batch_id`, `audit_sampled_at`, `audit_label_name`, `audit_label_source`, `audit_outcome` and `audit_human_name` (null for an item never drawn), so `GET /audit/queue` items can show the machine label they were drawn with.
 - Cropwright **Assist…** (cluster page, one crop, one box, Matching items): a dialog to pick what the VLM sees (selected, all, a representative sample), the actions (classify, attributes, verify, segment) and the VLM and prompt pack, with the server's dry run; the cluster and sub-cluster label proposal card with the agreement, an explicit dry-run-first **Apply** and the `scope_changed` refusal; dashed "VLM suggests" attribute chips; and a **Region verification** switch (`region_verify`) on the VLM scope panel. See the guide [Selective VLM and segmenter assist](docs-site/docs/guides/selective-assist.mdx).
 

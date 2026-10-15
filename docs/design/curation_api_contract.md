@@ -1394,7 +1394,7 @@ Representatives are paged. Every card is returned with `size`, `purity` and
 the rest, but `representatives` is filled only for cards in the
 `[offset, offset + limit)` window of the kind-filtered, member-count-descending
 list (`limit` default 50, max 500). Other cards carry `representatives: []`.
-`per_cluster=0` skips representatives. `GET /clusters/representatives`
+Each card carries `n_subclusters` (the exact count) and `subcluster_ids` (the sorted ids, at most 200), which the Cropwright sub-cluster tabs use. `per_cluster=0` skips representatives. `GET /clusters/representatives`
 pages the same way by `offset` and `max_clusters`.
 
 Clustering runs inside the auto-label pipeline. Setting

@@ -96,7 +96,6 @@ export function createClusterDetailController() {
       const res = await getCluster(clusterId, page, pageSize, undefined, query);
       cluster = res.cluster;
       cardError = res.cardError;
-      if (query.clusterSubid == null) rememberSubids(res.crops.items, page === 1);
       orderMeta =
         orderMode === 'diverse'
           ? {
@@ -126,18 +125,6 @@ export function createClusterDetailController() {
   // cluster it was picked on, so moving to another cluster reads as "all".
   let subTabPick = $state<{ cluster: number; subid: string | null } | null>(null);
   const subTab = $derived(subTabPick?.cluster === clusterId ? subTabPick.subid : null);
-
-  // The sub-cluster ids seen while viewing the whole cluster. A sub-cluster tab
-  // loads only its own members from the server, so the tab list cannot be read
-  // off the page that is showing.
-  let knownSubids = $state<string[]>([]);
-  function rememberSubids(items: Crop[], firstPage: boolean): void {
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local set built and consumed within this function, never stored in reactive state
-    const seen = new Set<string>(firstPage ? [] : knownSubids);
-    for (const c of items) if (c.cluster_subid != null) seen.add(c.cluster_subid);
-    // Lexicographic sort keeps "47a","47b","47aa"... in human-expected order.
-    knownSubids = [...seen].sort();
-  }
 
   // class_source filter (null = all). Drives the chip-group in the
   // header and propagates to {API_PREFIX}/crops?class_source=... so the grid
@@ -281,7 +268,9 @@ export function createClusterDetailController() {
   // whole; the loaded page is never filtered here.
   const filteredCrops = $derived(cropPager.items);
 
-  const subClusterIds = $derived(knownSubids);
+  // The tabs are the ids the server serves on the cluster card, not a guess from the
+  // loaded page.
+  const subClusterIds = $derived(cluster?.subcluster_ids ?? []);
 
   // When refine has produced sub-clusters and we're viewing "all", group
   // the grid inline by cluster_subid (contiguous groups + a labeled

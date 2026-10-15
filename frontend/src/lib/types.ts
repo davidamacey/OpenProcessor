@@ -319,6 +319,9 @@ export interface Cluster {
   has_subclusters: boolean;
   /** Distinct cluster_subid count from the backend. */
   n_subclusters: number;
+  /** The cluster's sub-cluster ids (e.g. "47a"), sorted, served by the backend;
+   *  the sub-cluster tabs are exactly these. */
+  subcluster_ids: string[];
   centroid_sha?: string;
   updated_at: string | null;
   /** Set only on the client-built region inventory entry pinned

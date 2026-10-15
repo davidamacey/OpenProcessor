@@ -58,6 +58,9 @@ def _candidate_dominant_name(cls_buckets: list[dict[str, Any]], labelled: int) -
     return None
 
 
+MAX_SUBCLUSTER_IDS = 200
+"""The most sub-cluster ids one card lists (``n_subclusters`` stays exact)."""
+
 PURITY_BASIS = 'nearest_centroid'
 """What a card's ``purity`` measures (served per card): see ``_FITS``."""
 
@@ -175,7 +178,8 @@ async def list_clusters(
       member has been measured,
     * ``is_unlabeled`` (true when no class_name has any signal at all),
     * ``cluster_kind`` (``class`` | ``candidate`` | ``unassigned``),
-    * ``n_subclusters`` (distinct cluster_subid values), and
+    * ``n_subclusters`` (distinct cluster_subid values), ``subcluster_ids``
+      (those ids, at most ``MAX_SUBCLUSTER_IDS``), and
     * ``representatives`` (top ``per_cluster`` crops sorted by
       cluster_distance asc).
 
@@ -249,6 +253,13 @@ async def list_clusters(
             # cluster_subid is mapped keyword directly on the live index —
             # no .keyword subfield exists.
             'subclusters': {'cardinality': {'field': 'cluster_subid'}},
+            'subcluster_ids': {
+                'terms': {
+                    'field': 'cluster_subid',
+                    'size': MAX_SUBCLUSTER_IDS,
+                    'order': {'_key': 'asc'},
+                }
+            },
             # Purity: members measured against their current cluster
             # by the geometry pass, and those whose nearest centroid is it.
             'geometry_measured': {'filter': _MEASURED},
@@ -327,6 +338,11 @@ async def list_clusters(
                 and is_promotable(members=size, labelled=labelled_total, purity=label_purity),
                 'is_unlabeled': is_unlabeled,
                 'n_subclusters': n_subclusters,
+                # Sorted so '7a', '7aa', '7b' read in the order the tabs show; capped at
+                # MAX_SUBCLUSTER_IDS (n_subclusters stays the true count).
+                'subcluster_ids': sorted(
+                    str(b['key']) for b in bucket.get('subcluster_ids', {}).get('buckets', [])
+                ),
                 'updated_at': bucket.get('latest_update', {}).get('value_as_string'),
                 # Populated below, only for the [offset, offset+limit) page
                 # — every other card keeps an empty list.

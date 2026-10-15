@@ -8,7 +8,7 @@ import {
 import { assistRun, proposal } from '$lib/test/fixtures/assist';
 import { EMPTY_METHODS, parseMethodsResponse } from '$lib/strategies';
 import { strategiesStore } from '$stores/strategies.svelte';
-import type { AssistRunRequest } from '$lib/types_assist';
+import { MIN_AGREEMENT_RANGE, type AssistRunRequest } from '$lib/types_assist';
 
 vi.mock('$lib/api_assist', () => ({
   applyAssistRun: vi.fn(async () => ({})),
@@ -96,6 +96,25 @@ describe('AssistRunDialog', () => {
       expect(q('assist-plan-sampled')?.textContent).toBe('41');
     });
     expect(q('assist-plan-calls')?.textContent).toBe('6');
+  });
+
+  it('shows the server default for min_agreement and re-plans with the typed value', async () => {
+    const { ctl, deps } = setup();
+    open(ctl);
+    ctl.setChoice('all');
+    await vi.waitFor(() => expect(ctl.preview).not.toBeNull());
+    flushSync();
+    const field = q('assist-min-agreement') as HTMLInputElement;
+    expect(field.placeholder).toBe(String(ctl.preview!.request.min_agreement));
+    expect(field.min).toBe(String(MIN_AGREEMENT_RANGE.min));
+    expect(field.max).toBe(String(MIN_AGREEMENT_RANGE.max));
+    field.value = '0.8';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+    await vi.waitFor(() => {
+      const last = vi.mocked(deps.create).mock.calls.at(-1)![0];
+      expect(last.min_agreement).toBe(0.8);
+    });
   });
 
   it('re-plans with the representative sample, seed and size the user typed', async () => {

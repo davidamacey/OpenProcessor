@@ -189,6 +189,46 @@ describe('getClusters purity_tier/promotable/core_similarity_min', () => {
     expect(res.items[2]).toMatchObject({ label_agreement: 0.7, dominant_pct: 0.7 });
   });
 
+  it('maps the served sub-cluster ids onto the cluster', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          items: [
+            {
+              cluster_id: 10000,
+              cluster_kind: 'candidate',
+              size: 9,
+              validated_count: 0,
+              labelled_count: 0,
+              dominant_class_id: null,
+              dominant_class_name: null,
+              dominant_count: 0,
+              purity: null,
+              purity_n: 0,
+              purity_basis: 'nearest_centroid',
+              purity_tier: null,
+              label_purity: null,
+              labelled_share: null,
+              promotable: false,
+              is_unlabeled: true,
+              n_subclusters: 2,
+              subcluster_ids: ['10000a', '10000b'],
+              updated_at: null,
+              representatives: [],
+            },
+          ],
+          total: 1,
+          total_class_clusters: 0,
+          total_candidate_clusters: 1,
+          cluster_id_offset: 10000,
+        }),
+      ),
+    );
+    const res = await getClusters();
+    expect(res.items[0]!.subcluster_ids).toEqual(['10000a', '10000b']);
+  });
+
   it('getClusters reports purity_thresholds as null when the server omits it, never a stale hardcoded value', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({

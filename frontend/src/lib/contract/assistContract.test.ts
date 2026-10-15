@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import spec from '$contracts/openapi/curation.json';
 import type * as T from '$lib/types_assist';
-import { ASSIST_ACTIONS, ASSIST_STATUSES } from '$lib/types_assist';
+import { ASSIST_ACTIONS, ASSIST_STATUSES, MIN_AGREEMENT_RANGE } from '$lib/types_assist';
 
 type Schema = {
   properties?: Record<string, { enum?: string[]; items?: { enum?: string[] } }>;
@@ -292,5 +292,13 @@ describe('assist types vs the generated contract', () => {
     expect([...ASSIST_STATUSES].sort()).toEqual(
       [...schemas.AssistRunState!.properties!.status!.enum!].sort(),
     );
+  });
+
+  it('the min_agreement range the dialog offers is the served one', () => {
+    const served = schemas.AssistRunRequest!.properties!.min_agreement as unknown as {
+      minimum: number;
+      maximum: number;
+    };
+    expect(MIN_AGREEMENT_RANGE).toEqual({ min: served.minimum, max: served.maximum });
   });
 });
