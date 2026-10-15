@@ -257,3 +257,55 @@ def test_an_unknown_project_is_refused_before_anything_runs(
     )
     assert resp.status_code == 404
     assert resp.json()['detail']['error'] == 'project_not_found'
+
+
+def test_config_serves_the_preview_bounds_and_the_measured_figures(client: TestClient) -> None:
+    preview = client.get(f'{BASE}/config').json()['preview']
+    assert preview['max_files'] > 0
+    assert preview['max_seconds'] > 0
+    assert preview['header_sample'] > 0
+    assert {r['route'] for r in preview['rates']} == {'cpu_small', 'cpu_large', 'gpu_large'}
+    assert all(r['source_section'] for r in preview['rates'])
+    assert preview['embeddings_per_image']['value'] == 7.4
+    assert preview['source_document'] == 'docs/PERFORMANCE.md'
+
+
+def test_preview_reports_a_folder_and_writes_nothing(
+    client: TestClient, fake_os: FakeOpenSearch, served_root: Path
+) -> None:
+    _write_images(served_root / 'a', [f'{i}.jpg' for i in range(4)])
+    (served_root / 'a' / 'notes.txt').write_text('x')
+    res = client.post(f'{BASE}/preview', json={'folder': str(served_root / 'a')})
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert (body['kind'], body['files'], body['partial']) == ('folder', 4, False)
+    assert body['by_extension']['.jpg']['files'] == 4
+    assert body['megapixels']['sampled'] == 4
+    assert body['estimate']['basis'] == 'megapixel_sample'
+    assert body['estimate']['opensearch_bytes'] > 0
+    assert fake_os.images == {}
+    assert client.get(BASE).json()['total'] == 0
+
+
+def test_preview_refuses_a_folder_outside_the_source_roots(client: TestClient) -> None:
+    res = client.post(f'{BASE}/preview', json={'folder': '/etc'})
+    assert res.status_code == 422
+    assert res.json()['detail']['error'] == 'bulk_ingest_invalid_source'
+
+
+def test_preview_needs_exactly_one_source(client: TestClient) -> None:
+    assert client.post(f'{BASE}/preview', json={}).status_code == 422
+    two = {'folder': '/a', 'manifest': '/b'}
+    assert client.post(f'{BASE}/preview', json=two).status_code == 422
+
+
+def test_preview_of_s3_is_refused_while_s3_is_off(client: TestClient) -> None:
+    res = client.post(f'{BASE}/preview', json={'s3': {'bucket': 'b', 'prefix': 'p/'}})
+    assert res.status_code == 503
+    assert res.json()['detail']['error'] == 's3_not_configured'
+
+
+def test_preview_of_an_unknown_source_is_a_404(client: TestClient) -> None:
+    res = client.post(f'{BASE}/preview', json={'source_id': 'nope_nope'})
+    assert res.status_code == 404
+    assert res.json()['detail']['error'] == 'ingest_source_not_found'

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The ingest-policy page offers the `none` embedding mode (detection only: no vector of any kind) and a
   "Cluster automatically" checkbox (`clustering.automatic`), both written to the policy the backend serves.
 
+- The Bulk ingest panel has a **Preview** button: it asks `POST /ingest/bulk/preview` what the folder or
+  manifest holds and shows the served file count, bytes, extensions, image-size sample, skipped entries
+  and the estimated time and index size with the measured figures behind them. A capped scan is marked
+  "partial" (every figure a lower bound); pressing the button again while it scans cancels it.
 - `/ingest` has a "Bulk ingest (folder or manifest)" panel, shown with the server-path ingest it sits beside: start a
   run over a folder or a manifest the backend has mounted, follow served progress (counts, speed, time left,
   seconds per stage), cancel, resume, and read the failed images with their reasons. Everything shown and every

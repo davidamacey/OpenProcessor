@@ -24,6 +24,14 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 - Pipeline modes guide: a recipe, run on public data, for "ingest without the VLM, cluster, name
   clusters by hand, then run the VLM for one cluster, filter or batch" (`vlm=<name>` per run).
 
+- Bulk-ingest preflight (#278): `POST /curation/projects/{project}/ingest/bulk/preview`,
+  `scripts/curation/bulk_ingest.py --preview` and a Preview button on the Cropwright Ingest page report,
+  without ingesting anything, a folder's, manifest's, S3 prefix's or registered source's file count, total
+  bytes, extension breakdown, a header-sampled megapixel histogram, unreadable directories, symlinks and
+  missing manifest entries, and an estimate of the ingest time and the OpenSearch footprint. The estimate
+  uses only figures measured in `docs/PERFORMANCE.md`, served (with the section each came from) in
+  `GET .../ingest/bulk/config` under `preview`. The walk is capped (200,000 files, 60 seconds) and answers
+  `partial: true` with the reason, stops when the client disconnects, and refuses an unreadable root.
 - `docs/design/engineering_standards.md`: the portable standards and lessons from the repo cleanup
   (principles, the lint, type and test config that worked, every guard with its baseline format,
   `--tighten` workflow and plant-a-violation proof, an ordered port checklist for a sister repo,
@@ -433,6 +441,21 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 - The auto-label VLM stage no longer reports `completed` with `predicted: 0` when it could label
   nothing: it adds `failed` and `unreadable` counts, and fails the job when every selected crop
   failed (an unreachable VLM, or source images the worker cannot read).
+- Monitoring alerts (#290): the Grafana rules **Triton Model Not Ready** (`nv_model_ready_state`),
+  **API High Error Rate** (`http_requests_total`) and **OpenSearch Cluster Unhealthy**
+  (`opensearch_cluster_status`) queried series nothing exports and could never fire; the first and last are
+  removed (no exporter has the data) and the error rate reads `http_request_duration_seconds_count`.
+  **High GPU Temperature** read the missing `nv_gpu_temperature` and now reads DCGM
+  `DCGM_FI_DEV_GPU_TEMP`. `tests/test_monitoring_metrics.py` now checks the Grafana rules against the
+  recorded exported names, not only the dashboards and Prometheus rules. The alert folder `Visual AI Alerts`
+  is renamed `OpenProcessor Alerts` (an existing Grafana keeps the old, now empty, folder until you delete
+  it), and the two contact points are renamed `unconfigured-default` and `unconfigured-critical` because
+  they post to a localhost address nothing listens on: nobody is notified until you configure a receiver
+  (`monitoring/README.md`, `docs-site/docs/operations/monitoring.mdx`).
+- A bulk-ingest folder walk that was stopped (a cancelled run, a closed walk) kept listing the rest of the
+  tree and waited for a stuck directory listing before returning; it now stops at once.
+- Starting a bulk ingest on a folder the API cannot read is refused (`bulk_ingest_invalid_source`, "not
+  readable") instead of completing with zero images discovered.
 
 - Visual-search ingest (#318): a face response with fewer landmark entries than faces no longer
   raises `IndexError` and fails the whole batch. Only the affected image is refused, with the

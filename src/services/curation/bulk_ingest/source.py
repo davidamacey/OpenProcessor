@@ -18,6 +18,7 @@ reported as a failure with its reason.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -85,6 +86,13 @@ def validate_source(source: BulkSource) -> None:
     path = Path(source.path)
     if source.kind == 'folder' and not path.is_dir():
         raise InvalidSourceError(f'{source.path}: not a directory')
+    if source.kind == 'folder':
+        # A walk lists an unreadable directory as empty, so a run would "complete" with
+        # nothing discovered; refuse the unreadable root up front instead.
+        try:
+            os.scandir(path).close()
+        except OSError as exc:
+            raise InvalidSourceError(f'{source.path}: not readable ({exc.strerror})') from None
     if source.kind == 'manifest' and not path.is_file():
         raise InvalidSourceError(f'{source.path}: not a file')
 
@@ -102,7 +110,7 @@ def _manifest_entry(line: str) -> str | None:
     return text
 
 
-def _manifest_paths(path: Path) -> Iterator[str]:
+def iter_manifest_paths(path: Path) -> Iterator[str]:
     with path.open(encoding='utf-8') as fh:
         for line in fh:
             entry = _manifest_entry(line)
@@ -142,7 +150,7 @@ def iter_source_paths(
         yield from _queue_refs(source, should_stop)
         return
     if source.kind == 'manifest':
-        yield from _manifest_paths(Path(source.path))
+        yield from iter_manifest_paths(Path(source.path))
         return
     for found in iter_image_paths(Path(source.path), frozenset(source.extensions), walk_workers):
         yield str(found)

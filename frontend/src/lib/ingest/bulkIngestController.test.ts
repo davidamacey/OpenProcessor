@@ -8,6 +8,7 @@ import { ApiError } from '$lib/api_errors';
 import {
   RUN_ID,
   configFixture,
+  previewFixture,
   progressFixture,
   runFixture,
 } from '$lib/test/fixtures/bulkIngest';
@@ -30,6 +31,7 @@ function make(sequence: ReturnType<typeof runFixture>[], recent = sequence.slice
     cancelBulkIngest: vi
       .fn()
       .mockResolvedValue(runFixture({ status: 'cancelled', poll_after_s: null })),
+    previewBulkIngest: vi.fn().mockResolvedValue(previewFixture()),
   };
   return { ctl: new BulkIngest(deps), deps };
 }
@@ -191,5 +193,73 @@ describe('actions', () => {
       concurrency: 4,
     });
     ctl.stop();
+  });
+});
+
+describe('previewing a source', () => {
+  it('sends only the source and extensions and keeps the served answer', async () => {
+    const { ctl, deps } = make([runFixture()]);
+    ctl.form.path = ' /data/source/coco ';
+    ctl.form.extensions = 'jpg, png';
+    ctl.form.source = 'census';
+    ctl.form.batchSize = 8;
+    expect(await ctl.runPreview()).toBe(true);
+    expect(deps.previewBulkIngest.mock.calls[0][0]).toEqual({
+      folder: '/data/source/coco',
+      extensions: ['jpg', 'png'],
+    });
+    expect(ctl.preview?.files).toBe(2000);
+    expect(deps.startBulkIngest).not.toHaveBeenCalled();
+    expect(ctl.previewing).toBe(false);
+  });
+
+  it('cannot preview without a path', () => {
+    const { ctl } = make([runFixture()]);
+    expect(ctl.canPreview).toBe(false);
+    ctl.form.path = '/data/x';
+    expect(ctl.canPreview).toBe(true);
+  });
+
+  it('shows the served refusal and no stale answer', async () => {
+    const { ctl, deps } = make([runFixture()]);
+    ctl.form.path = '/data/x';
+    await ctl.runPreview();
+    expect(ctl.preview).not.toBeNull();
+    deps.previewBulkIngest.mockRejectedValueOnce(
+      new ApiError(422, 'bulk_ingest_invalid_source', '/x: not a directory'),
+    );
+    expect(await ctl.runPreview()).toBe(false);
+    expect(ctl.preview).toBeNull();
+    expect(ctl.previewError).toContain('not a directory');
+  });
+
+  it('a second press aborts the walk and shows nothing', async () => {
+    const { ctl, deps } = make([runFixture()]);
+    ctl.form.path = '/data/x';
+    let signal: AbortSignal | undefined;
+    deps.previewBulkIngest.mockImplementationOnce(
+      (_b: unknown, s?: AbortSignal) =>
+        new Promise((_res, rej) => {
+          signal = s;
+          s?.addEventListener('abort', () =>
+            rej(new DOMException('aborted', 'AbortError')),
+          );
+        }),
+    );
+    const first = ctl.runPreview();
+    expect(ctl.previewing).toBe(true);
+    await ctl.runPreview();
+    expect(signal?.aborted).toBe(true);
+    expect(await first).toBe(false);
+    expect(ctl.previewError).toBeNull();
+    expect(ctl.previewing).toBe(false);
+  });
+
+  it('starting a run drops the preview', async () => {
+    const { ctl } = make([runFixture()]);
+    ctl.form.path = '/data/x';
+    await ctl.runPreview();
+    await ctl.start();
+    expect(ctl.preview).toBeNull();
   });
 });

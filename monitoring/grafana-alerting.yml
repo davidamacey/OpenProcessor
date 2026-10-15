@@ -1,8 +1,20 @@
 # Grafana Unified Alerting Configuration
 # This file configures Grafana's native alerting system with:
-# - Alert rules for API, Triton, and system metrics
+# - Alert rules for the API, Triton, GPU and host metrics
 # - Contact points for notifications
 # - Notification policies for routing
+#
+# Every metric a rule reads must be one the stack exports:
+# tests/test_monitoring_metric_names.py checks them against
+# monitoring/exported_metrics.txt. Per-model readiness and OpenSearch cluster status are
+# not exported by anything here, so there is no rule for them (see monitoring/README.md).
+#
+# NOTIFICATIONS ARE OFF UNTIL YOU CONFIGURE A CONTACT POINT. The two contact points
+# below are named "unconfigured-*" on purpose: they post to a localhost address nothing
+# listens on, so a firing alert shows in Grafana (Alerting > Alert rules, and the
+# dashboards' firing-alerts panel) and its delivery fails with a logged error; nobody is
+# told. Replace the receivers (a real webhook URL, Slack or email, examples below) and
+# restart Grafana; the file is provisioned read-only, so edit it here, not in the UI.
 
 apiVersion: 1
 
@@ -10,20 +22,21 @@ apiVersion: 1
 # Contact Points - Where alerts are sent
 # =============================================================================
 contactPoints:
-  # Default contact point - customize with your notification channels
+  # Default (warning) alerts. Replace the receiver to notify anyone.
   - orgId: 1
-    name: default-notifications
+    name: unconfigured-default
     receivers:
-      # Webhook for custom integrations (Discord, custom scripts, etc.)
-      # To use: set ALERT_WEBHOOK_URL in your .env or docker-compose.override.yml
       - uid: webhook-default
         type: webhook
         settings:
+          # Placeholder: nothing listens here. Set a real webhook URL (Discord, a
+          # script, an incident tool).
           url: "http://localhost:9999/alerts"
           httpMethod: POST
         disableResolveMessage: false
 
-      # Uncomment and configure for Slack notifications
+      # Slack: set SLACK_WEBHOOK_URL in the Grafana container's environment (for example
+      # in a docker-compose.override.yml) and uncomment.
       # - uid: slack-alerts
       #   type: slack
       #   settings:
@@ -36,16 +49,16 @@ contactPoints:
       #       {{ .Annotations.summary }}
       #       {{ end }}
 
-      # Uncomment and configure for email notifications
+      # Email needs an SMTP server configured for Grafana (GF_SMTP_* variables).
       # - uid: email-alerts
       #   type: email
       #   settings:
       #     addresses: "ops@example.com"
       #     singleEmail: true
 
-  # Critical alerts - for urgent notifications
+  # Critical alerts (faster repeat). Replace the receiver the same way.
   - orgId: 1
-    name: critical-notifications
+    name: unconfigured-critical
     receivers:
       - uid: webhook-critical
         type: webhook
@@ -59,7 +72,7 @@ contactPoints:
 # =============================================================================
 policies:
   - orgId: 1
-    receiver: default-notifications
+    receiver: unconfigured-default
     group_by:
       - alertname
       - severity
@@ -68,7 +81,7 @@ policies:
     repeat_interval: 4h
     routes:
       # Critical alerts go to critical channel with faster notification
-      - receiver: critical-notifications
+      - receiver: unconfigured-critical
         matchers:
           - severity = critical
         group_wait: 10s
@@ -85,7 +98,7 @@ groups:
   # -------------------------------------------------------------------------
   - orgId: 1
     name: API Service Health
-    folder: Visual AI Alerts
+    folder: OpenProcessor Alerts
     interval: 30s
     rules:
       # API High Error Rate
@@ -100,8 +113,8 @@ groups:
             datasourceUid: prometheus
             model:
               expr: |
-                sum(rate(http_requests_total{status=~"5.."}[5m])) /
-                sum(rate(http_requests_total[5m])) * 100
+                sum(rate(http_request_duration_seconds_count{status=~"5.."}[5m])) /
+                sum(rate(http_request_duration_seconds_count[5m])) * 100
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: B
@@ -197,7 +210,7 @@ groups:
   # -------------------------------------------------------------------------
   - orgId: 1
     name: Triton Inference Server
-    folder: Visual AI Alerts
+    folder: OpenProcessor Alerts
     interval: 30s
     rules:
       # Triton Server Down
@@ -302,56 +315,6 @@ groups:
           severity: warning
           component: triton
 
-      # Model Not Ready
-      - uid: triton-model-not-ready
-        title: Triton Model Not Ready
-        condition: C
-        data:
-          - refId: A
-            relativeTimeRange:
-              from: 300
-              to: 0
-            datasourceUid: prometheus
-            model:
-              expr: nv_model_ready_state == 0
-              intervalMs: 1000
-              maxDataPoints: 43200
-          - refId: B
-            relativeTimeRange:
-              from: 300
-              to: 0
-            datasourceUid: __expr__
-            model:
-              conditions:
-                - evaluator:
-                    params: [0]
-                    type: gt
-                  operator:
-                    type: and
-                  query:
-                    params:
-                      - A
-                  reducer:
-                    type: count
-              type: classic_conditions
-          - refId: C
-            relativeTimeRange:
-              from: 300
-              to: 0
-            datasourceUid: __expr__
-            model:
-              expression: B
-              type: threshold
-        noDataState: OK
-        execErrState: OK
-        for: 1m
-        annotations:
-          summary: "Model {{ $labels.model }} is not ready"
-          description: "Model is in not-ready state - inference requests will fail"
-        labels:
-          severity: critical
-          component: triton
-
       # High Request Queue
       - uid: triton-high-queue
         title: Triton High Request Queue
@@ -407,7 +370,7 @@ groups:
   # -------------------------------------------------------------------------
   - orgId: 1
     name: GPU Resources
-    folder: Visual AI Alerts
+    folder: OpenProcessor Alerts
     interval: 30s
     rules:
       # High GPU Utilization
@@ -522,7 +485,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: nv_gpu_temperature
+              expr: DCGM_FI_DEV_GPU_TEMP
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: B
@@ -555,8 +518,8 @@ groups:
         execErrState: OK
         for: 2m
         annotations:
-          summary: "High GPU temperature on {{ $labels.gpu_uuid }}"
-          description: "GPU temperature above 80°C - check cooling"
+          summary: "High GPU temperature on GPU {{ $labels.gpu }}"
+          description: "GPU temperature (DCGM, needs the monitoring profile) above 80°C - check cooling"
         labels:
           severity: warning
           component: gpu
@@ -566,7 +529,7 @@ groups:
   # -------------------------------------------------------------------------
   - orgId: 1
     name: System Resources
-    folder: Visual AI Alerts
+    folder: OpenProcessor Alerts
     interval: 30s
     rules:
       # High System Memory
@@ -721,62 +684,3 @@ groups:
         labels:
           severity: warning
           component: system
-
-  # -------------------------------------------------------------------------
-  # OpenSearch Alerts
-  # -------------------------------------------------------------------------
-  - orgId: 1
-    name: OpenSearch Health
-    folder: Visual AI Alerts
-    interval: 60s
-    rules:
-      # OpenSearch Cluster Status
-      - uid: opensearch-cluster-status
-        title: OpenSearch Cluster Unhealthy
-        condition: C
-        data:
-          - refId: A
-            relativeTimeRange:
-              from: 300
-              to: 0
-            datasourceUid: prometheus
-            model:
-              expr: |
-                opensearch_cluster_status{color!="green"}
-              intervalMs: 1000
-              maxDataPoints: 43200
-          - refId: B
-            relativeTimeRange:
-              from: 300
-              to: 0
-            datasourceUid: __expr__
-            model:
-              conditions:
-                - evaluator:
-                    params: [0]
-                    type: gt
-                  operator:
-                    type: and
-                  query:
-                    params:
-                      - A
-                  reducer:
-                    type: count
-              type: classic_conditions
-          - refId: C
-            relativeTimeRange:
-              from: 300
-              to: 0
-            datasourceUid: __expr__
-            model:
-              expression: B
-              type: threshold
-        noDataState: OK
-        execErrState: OK
-        for: 2m
-        annotations:
-          summary: "OpenSearch cluster is not healthy"
-          description: "Cluster status is not green - check cluster health"
-        labels:
-          severity: warning
-          component: opensearch
