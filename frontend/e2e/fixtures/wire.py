@@ -303,6 +303,14 @@ _EXPLICIT: dict[str, Any] = {
     "mask_polygon": None,
     "region_gate_skip": None,
     "assist": None,
+    # Audit draw state the audit queue shows (#166); all null off the audit queue.
+    "audit_sample": None,
+    "audit_batch_id": None,
+    "audit_sampled_at": None,
+    "audit_label_name": None,
+    "audit_label_source": None,
+    "audit_outcome": None,
+    "audit_human_name": None,
     # Adopted on the frontend by
     # readSlot (SlotData.text.choice/invalidReason,
     # SlotData.subBox.candidate, SlotData.lifecycle.validated/
