@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class TritonControlService:
     """Service for controlling Triton model repository."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         settings = get_settings()
         host = settings.triton_host
         self.http_url = f'http://{host}:8000'
@@ -69,7 +69,8 @@ class TritonControlService:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.post(f'{self.http_url}/v2/repository/index')
                 if response.status_code == 200:
-                    return response.json()
+                    typed: list[dict[str, Any]] = response.json()
+                    return typed
         except Exception as e:
             logger.warning(f'Failed to get repository index: {e}')
         return []
@@ -80,7 +81,8 @@ class TritonControlService:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(f'{self.http_url}/v2/models/{model_name}/config')
                 if response.status_code == 200:
-                    return response.json()
+                    typed: dict[str, Any] | None = response.json()
+                    return typed
         except Exception as e:
             # Model may not exist or Triton may be unavailable
             logger.debug('Could not get model config for %s: %s', model_name, e)

@@ -2,6 +2,7 @@
 
 import logging
 
+from opensearchpy import AsyncOpenSearch
 from opensearchpy.exceptions import NotFoundError
 
 from src.clients.opensearch.names import IndexName
@@ -11,7 +12,9 @@ from src.schemas.query import DeleteImageResponse, ImageMetadata, ImageQueryResp
 logger = logging.getLogger(__name__)
 
 
-async def fetch_image_data(client, image_id: str, include_embedding: bool) -> ImageQueryResponse:
+async def fetch_image_data(
+    client: AsyncOpenSearch, image_id: str, include_embedding: bool
+) -> ImageQueryResponse:
     """The metadata and per-index counts of one image (``not_found`` when absent)."""
     # Query global index for primary metadata
     try:
@@ -122,7 +125,7 @@ async def fetch_image_data(client, image_id: str, include_embedding: bool) -> Im
     )
 
 
-async def delete_image_everywhere(client, image_id: str) -> DeleteImageResponse:
+async def delete_image_everywhere(client: AsyncOpenSearch, image_id: str) -> DeleteImageResponse:
     """Remove one image from every index that holds it."""
     deleted_from = []
     total_deleted = 0

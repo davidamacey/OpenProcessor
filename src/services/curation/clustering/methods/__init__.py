@@ -18,6 +18,8 @@ the data has actual density structure.
 
 from __future__ import annotations
 
+from typing import Any
+
 from src.services.curation.clustering.methods.ahc import AHCMethod
 from src.services.curation.clustering.methods.base import ClusterMethod, ClusterResult
 from src.services.curation.clustering.methods.hdbscan import HDBSCANMethod
@@ -33,7 +35,7 @@ _METHODS: dict[str, type[ClusterMethod]] = {
 }
 
 
-def get_method(name: str | None = None, **kwargs) -> ClusterMethod:
+def get_method(name: str | None = None, **kwargs: Any) -> ClusterMethod:
     """Resolve a clustering method by name; default → IVF (see DEFAULT_METHOD)."""
     key = (name or DEFAULT_METHOD).lower()
     if key not in _METHODS:

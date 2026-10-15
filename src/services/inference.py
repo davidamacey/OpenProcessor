@@ -83,7 +83,7 @@ class InferenceService:
     - total_time_ms: Injected by middleware
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize inference service."""
         self.settings = get_settings()
 
@@ -252,10 +252,10 @@ class InferenceService:
 
         try:
             # Run YOLO+CLIP and face detection in parallel
-            def run_yolo_clip():
+            def run_yolo_clip() -> dict[str, Any]:
                 return client.infer_yolo_clip_cpu(image_bytes)
 
-            def run_face_detection():
+            def run_face_detection() -> dict[str, Any]:
                 return face_client.recognize(image_bytes, confidence=confidence)
 
             with ThreadPoolExecutor(max_workers=2) as executor:

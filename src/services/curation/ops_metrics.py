@@ -20,7 +20,7 @@ a snapshot, not a per-process partial.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Protocol
 
 from prometheus_client import Counter, Gauge, Histogram
 
@@ -163,7 +163,15 @@ def project_label(slug: str) -> str:
 _INGEST_OUTCOME_BY_STATUS = {'success': 'ok', 'failed': 'failed', 'duplicate': 'skipped'}
 
 
-def record_ingest_result(result: Any) -> Any:
+class _IngestOutcome(Protocol):
+    @property
+    def status(self) -> str: ...
+
+    @property
+    def n_crops(self) -> int: ...
+
+
+def record_ingest_result[R: _IngestOutcome](result: R) -> R:
     """Count one finished image (and its items) against the bound project; returns ``result``."""
     from src.config.project_context import try_current_project
 

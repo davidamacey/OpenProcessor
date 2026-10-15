@@ -267,7 +267,8 @@ class IVFCentroidStore:
         if not self._gate_path.is_file():
             return {}
         try:
-            return json.loads(self._gate_path.read_text())
+            typed: dict[str, Any] = json.loads(self._gate_path.read_text())
+            return typed
         except (json.JSONDecodeError, OSError) as exc:
             logger.warning('curation_ivf_store_gate_read_failed', error=str(exc))
             return {}

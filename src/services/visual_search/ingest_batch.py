@@ -3,12 +3,16 @@
 import functools
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.clients.opensearch.client import OpenSearchClient
 from src.services.inference import InferenceService
 from src.services.visual_search.batch_documents import build_documents
 from src.services.visual_search.batch_inference import infer_batch
+
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 logger = logging.getLogger(__name__)
@@ -35,7 +39,8 @@ def _compute_hashes(images_bytes: list[bytes]) -> list[str]:
     import imohash
 
     def compute_hash(img_bytes: bytes) -> str:
-        return imohash.hashfileobject(io.BytesIO(img_bytes)).hex()
+        typed: str = imohash.hashfileobject(io.BytesIO(img_bytes)).hex()
+        return typed
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         return list(executor.map(compute_hash, images_bytes))
@@ -69,6 +74,12 @@ def _split_duplicates(
 class IngestBatchMixin:
     opensearch: OpenSearchClient
     inference: InferenceService
+
+    if TYPE_CHECKING:
+        # Implemented by IngestSingleMixin; declared so the mixin type-checks alone.
+        async def _assign_to_duplicate_group(
+            self, image_id: str, embedding: np.ndarray, threshold: float = 0.99
+        ) -> dict[str, Any] | None: ...
 
     # =========================================================================
     # Batch Ingestion (HIGH THROUGHPUT - 300+ RPS)
@@ -326,7 +337,7 @@ class IngestBatchMixin:
             *[check_near_dup(doc) for doc in documents],
             return_exceptions=True,
         )
-        return [r for r in dup_results if r and not isinstance(r, Exception)]
+        return [r for r in dup_results if isinstance(r, dict) and r]
 
     async def ingest_faces(
         self,

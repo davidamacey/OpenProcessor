@@ -9,6 +9,7 @@ import io
 import logging
 
 import numpy as np
+import tritonclient.grpc.aio as grpcclient_aio
 from PIL import Image
 from tritonclient.grpc import InferInput, InferRequestedOutput
 
@@ -35,12 +36,12 @@ class EmbeddingService:
     Uses native async gRPC for Triton batching.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.settings = get_settings()
-        self._triton_client = None
+        self._triton_client: grpcclient_aio.InferenceServerClient | None = None
         self.embedding_dim = EMBEDDING_DIM
 
-    async def _get_client(self):
+    async def _get_client(self) -> grpcclient_aio.InferenceServerClient:
         """Get async Triton client (lazy init)."""
         if self._triton_client is None:
             self._triton_client = await TritonClientManager.get_async_client(
@@ -135,7 +136,8 @@ class EmbeddingService:
         if use_cache and cache_key:
             cache.set(cache_key, embedding)
 
-        return embedding
+        typed: np.ndarray = embedding
+        return typed
 
     async def encode_text(self, text: str, use_cache: bool = True) -> np.ndarray:
         """
@@ -182,4 +184,5 @@ class EmbeddingService:
         if use_cache and cache_key:
             cache.set(cache_key, embedding)
 
-        return embedding
+        typed: np.ndarray = embedding
+        return typed

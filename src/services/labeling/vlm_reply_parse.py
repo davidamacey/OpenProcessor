@@ -243,7 +243,8 @@ def _class_reply_entries(raw: str) -> list[Any] | None:
         if isinstance(value, dict):
             for key in ('results', 'predictions', 'data'):
                 if isinstance(value.get(key), list):
-                    return value[key]
+                    typed: list[Any] | None = value[key]
+                    return typed
             if 'class' in value or 'img' in value:
                 return [value]
         if isinstance(value, list):
