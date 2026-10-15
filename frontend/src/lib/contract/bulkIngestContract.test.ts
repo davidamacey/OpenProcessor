@@ -15,6 +15,14 @@ import type {
   BulkIngestRun,
   BulkIngestStatus,
   BulkOptions,
+  BulkPreview,
+  BulkPreviewConfig,
+  BulkPreviewRequest,
+  PreviewEstimate,
+  PreviewExtension,
+  PreviewMeasured,
+  PreviewMegapixels,
+  PreviewRate,
   BulkSource,
 } from '$lib/types_bulkIngest';
 
@@ -55,11 +63,73 @@ describe('bulk ingest contract', () => {
         'default_concurrency',
         'max_batch_size',
         'max_concurrency',
+        'preview',
       ],
       'BulkIngestConfig',
     );
     pin<BulkSource>(['kind', 'path', 'extensions', 'label'], 'BulkSourceWire');
     pin<BulkOptions>(['source_tag', 'batch_size', 'concurrency'], 'BulkOptionsWire');
+  });
+
+  it('preview request, config and answer types', () => {
+    pin<BulkPreviewRequest>(
+      ['folder', 'manifest', 's3', 'source_id', 'extensions'],
+      'BulkPreviewRequest',
+    );
+    pin<BulkPreviewConfig>(
+      [
+        'max_files',
+        'max_seconds',
+        'header_sample',
+        'gpu_decode',
+        'gpu_min_megapixels',
+        'rates',
+        'embeddings_per_image',
+        'opensearch_bytes_per_image',
+        'source_document',
+      ],
+      'BulkPreviewConfig',
+    );
+    pin<PreviewRate>(
+      ['route', 'images_per_s', 'source_section', 'measured_on'],
+      'PreviewRateWire',
+    );
+    pin<PreviewMeasured>(
+      ['value', 'unit', 'source_section', 'measured_on'],
+      'PreviewMeasuredWire',
+    );
+    pin<BulkPreview>(
+      [
+        'project',
+        'kind',
+        'target',
+        'extensions',
+        'files',
+        'total_bytes',
+        'by_extension',
+        'megapixels',
+        'estimate',
+        'partial',
+        'stop_reason',
+        'unreadable_dirs',
+        'unreadable_samples',
+        'symlinks_skipped',
+        'missing',
+        'outside_roots',
+        'unreadable_files',
+        'gpu_decode',
+      ],
+      'BulkPreview',
+    );
+    pin<PreviewExtension>(['files', 'bytes'], 'PreviewExtensionWire');
+    pin<PreviewMegapixels>(
+      ['sampled', 'unreadable', 'histogram', 'gate_megapixels', 'share_at_or_above_gate'],
+      'PreviewMegapixelsWire',
+    );
+    pin<PreviewEstimate>(
+      ['basis', 'duration_s_min', 'duration_s_max', 'vectors', 'opensearch_bytes'],
+      'PreviewEstimateWire',
+    );
   });
 
   it('run and progress types', () => {

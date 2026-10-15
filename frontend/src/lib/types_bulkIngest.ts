@@ -25,6 +25,90 @@ export interface BulkIngestConfig {
   default_concurrency: number;
   max_batch_size: number;
   max_concurrency: number;
+  preview: BulkPreviewConfig;
+}
+
+/** Served bounds of a preview and the measured figures its estimate uses. */
+export interface BulkPreviewConfig {
+  max_files: number;
+  max_seconds: number;
+  header_sample: number;
+  gpu_decode: boolean;
+  gpu_min_megapixels: number;
+  rates: PreviewRate[];
+  embeddings_per_image: PreviewMeasured;
+  opensearch_bytes_per_image: PreviewMeasured;
+  /** The document the figures are measured in (named per figure by `source_section`). */
+  source_document: string;
+}
+
+export interface PreviewRate {
+  route: 'cpu_small' | 'cpu_large' | 'gpu_large';
+  images_per_s: number;
+  source_section: string;
+  measured_on: string;
+}
+
+export interface PreviewMeasured {
+  value: number;
+  unit: string;
+  source_section: string;
+  measured_on: string;
+}
+
+/** `POST /ingest/bulk/preview`: exactly one of `folder`, `manifest`, `s3`, `source_id`. */
+export interface BulkPreviewRequest {
+  folder?: string | null;
+  manifest?: string | null;
+  s3?: S3Location | null;
+  source_id?: string | null;
+  extensions?: string[] | null;
+}
+
+export interface PreviewExtension {
+  files: number;
+  bytes: number;
+}
+
+export interface PreviewMegapixels {
+  sampled: number;
+  unreadable: number;
+  /** Bucket label (`<1`, `1-3`, `3-8`, `8-16`, `16-24`, `24+` megapixels) to count. */
+  histogram: Record<string, number>;
+  gate_megapixels: number;
+  share_at_or_above_gate?: number | null;
+}
+
+export interface PreviewEstimate {
+  basis: 'megapixel_sample' | 'rate_range';
+  duration_s_min: number;
+  duration_s_max: number;
+  vectors: number;
+  opensearch_bytes: number;
+}
+
+export type PreviewStopReason = 'file_cap' | 'time_cap' | 'cancelled';
+
+export interface BulkPreview {
+  project: string;
+  kind: 'folder' | 'manifest' | 's3';
+  target: string;
+  extensions: string[];
+  files: number;
+  total_bytes: number;
+  by_extension: Record<string, PreviewExtension>;
+  megapixels: PreviewMegapixels;
+  estimate: PreviewEstimate;
+  /** A cap or a cancel ended the walk: every figure is a lower bound. */
+  partial: boolean;
+  stop_reason?: PreviewStopReason | null;
+  unreadable_dirs: number;
+  unreadable_samples: string[];
+  symlinks_skipped: number;
+  missing: number;
+  outside_roots: number;
+  unreadable_files: number;
+  gpu_decode: boolean;
 }
 
 /** `POST /ingest/bulk`: exactly one of `folder`, `manifest`, `s3` and `source_id`. */

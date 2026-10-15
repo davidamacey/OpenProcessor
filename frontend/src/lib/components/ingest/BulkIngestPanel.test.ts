@@ -8,6 +8,7 @@ import BulkIngestPanel from './BulkIngestPanel.svelte';
 import { BulkIngest } from '$lib/ingest/bulkIngestController.svelte';
 import {
   configFixture,
+  previewFixture,
   progressFixture,
   runFixture,
 } from '$lib/test/fixtures/bulkIngest';
@@ -38,6 +39,7 @@ function controller(run = runFixture(), over: Record<string, unknown> = {}) {
       .fn()
       .mockResolvedValue({ items: [], total: 0, offset: 0, limit: 20 }),
     cancelBulkIngest: vi.fn().mockResolvedValue(run),
+    previewBulkIngest: vi.fn().mockResolvedValue(previewFixture()),
     ...over,
   };
   return { ctl: new BulkIngest(deps), deps };
@@ -183,5 +185,86 @@ describe('BulkIngestPanel', () => {
     });
     instance = mount(BulkIngestPanel, { target, props: { controller: ctl } });
     await vi.waitFor(() => expect(text()).toContain('Could not load bulk ingest: boom'));
+  });
+});
+
+describe('BulkIngestPanel preview', () => {
+  async function previewed(over = {}, ctlOver = {}) {
+    const { ctl, deps } = controller(
+      runFixture({ status: 'completed', poll_after_s: null }),
+      { previewBulkIngest: vi.fn().mockResolvedValue(previewFixture(over)), ...ctlOver },
+    );
+    await render(ctl);
+    ctl.form.path = '/data/source/coco';
+    flushSync();
+    (byId('bulk-preview-button') as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(byId('bulk-preview')).toBeTruthy());
+    return { ctl, deps };
+  }
+
+  it('is disabled until a path is typed and ingests nothing', async () => {
+    const { ctl, deps } = controller(
+      runFixture({ status: 'completed', poll_after_s: null }),
+    );
+    await render(ctl);
+    expect((byId('bulk-preview-button') as HTMLButtonElement).disabled).toBe(true);
+    ctl.form.path = '/data/x';
+    flushSync();
+    expect((byId('bulk-preview-button') as HTMLButtonElement).disabled).toBe(false);
+    expect(deps.startBulkIngest).not.toHaveBeenCalled();
+  });
+
+  it('renders the served counts, extensions, sizes and estimate with their basis', async () => {
+    await previewed();
+    const t = byId('bulk-preview')?.textContent ?? '';
+    expect(t).toContain('2000 files');
+    expect(t).toContain('797.3 MB');
+    expect(t).toContain('.jpg');
+    expect(t).toContain('1990');
+    expect(t).toContain('1m 09s');
+    expect(t).toContain('124.5 MB');
+    expect(t).toContain('14800');
+    expect(t).toContain('docs/PERFORMANCE.md');
+    expect(t).toContain('Decode once and the GPU decode (#217)');
+    expect(byId('bulk-preview-partial')).toBeNull();
+  });
+
+  it('says partial and lower bound when the walk was capped, and lists what was skipped', async () => {
+    await previewed({
+      partial: true,
+      stop_reason: 'file_cap',
+      unreadable_dirs: 2,
+      unreadable_samples: ['/data/source/coco/locked'],
+      symlinks_skipped: 3,
+    });
+    expect(byId('bulk-preview-partial')?.textContent).toContain('at least');
+    const t = byId('bulk-preview')?.textContent ?? '';
+    expect(t).toContain('/data/source/coco/locked');
+    expect(t).toContain('3 symlinks');
+  });
+
+  it('shows a range when the sizes are unknown', async () => {
+    await previewed({
+      estimate: {
+        basis: 'rate_range',
+        duration_s_min: 60,
+        duration_s_max: 120,
+        vectors: 100,
+        opensearch_bytes: 1000,
+      },
+    });
+    expect(byId('bulk-preview')?.textContent).toContain('1m 00s to 2m 00s');
+  });
+
+  it('shows the served refusal', async () => {
+    const { ctl } = controller(runFixture({ status: 'completed', poll_after_s: null }), {
+      previewBulkIngest: vi.fn().mockRejectedValue(new Error('not a directory')),
+    });
+    await render(ctl);
+    ctl.form.path = '/nope';
+    flushSync();
+    (byId('bulk-preview-button') as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(byId('bulk-preview-error')).toBeTruthy());
+    expect(byId('bulk-preview-error')?.textContent).toContain('not a directory');
   });
 });

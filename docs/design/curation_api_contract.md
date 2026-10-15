@@ -1456,7 +1456,8 @@ can fuse. The default pool is fresh and class-bucketed unvalidated items.
 | GET | `/ingest/region_drain` | | drain state |
 | POST | `/ingest/bulk` | `BulkIngestRequest`: exactly one of `folder`, `manifest`; `source`, `extensions`, `batch_size`, `concurrency` (`extra='forbid'`) | `BulkIngestRun` (202) |
 | GET | `/ingest/bulk` | query `page`, `page_size` | `BulkIngestList`, newest first |
-| GET | `/ingest/bulk/config` | | `BulkIngestConfig` |
+| GET | `/ingest/bulk/config` | | `BulkIngestConfig` (includes `preview`: the caps and the measured figures the estimate uses) |
+| POST | `/ingest/bulk/preview` | `BulkPreviewRequest`: exactly one of `folder`, `manifest`, `s3`, `source_id`; `extensions` (`extra='forbid'`) | `BulkPreview` (200): read-only; counts, bytes, extensions, size sample, estimate; `partial` with `stop_reason` when a cap or a client disconnect ended the walk |
 | GET | `/ingest/bulk/{run_id}` | | `BulkIngestRun` |
 | GET | `/ingest/bulk/{run_id}/failures` | query `offset`, `limit` | `BulkIngestFailurePage` |
 | POST | `/ingest/bulk/{run_id}/cancel` | | `BulkIngestRun` |
