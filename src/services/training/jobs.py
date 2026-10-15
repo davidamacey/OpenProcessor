@@ -36,8 +36,7 @@ import json
 import os
 from collections import deque
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
 from src.core.logging import get_logger
@@ -48,7 +47,6 @@ from src.services.training.job_files import (
     _cancel_path,
     _job_path,
     _log_path,
-    _manifest_path,
     _read_json,
     _registry_snapshot_path,
     _resolve_jobs_dir,
@@ -56,161 +54,16 @@ from src.services.training.job_files import (
     _status_path,
     _validate_job_id,
 )
-from src.services.training.job_models import TrainCampaignSpec, TrainJobSpec, TrainJobStatus
-from src.services.training.job_wire import (
-    RUN_ARTIFACT_WHITELIST,
-    _prepare_status_for_wire,
-    _public_mlflow_url,
-    _rewrite_eval_for_wire,
-)
+from src.services.training.job_models import TrainJobSpec, TrainJobStatus
+from src.services.training.job_wire import _prepare_status_for_wire
 from src.utils.timeutil import now_iso
 
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
+
 logger = get_logger(__name__)
-
-
-async def read_manifest(job_id: str) -> dict[str, Any] | None:
-    """Return the parsed run manifest or None if absent.
-
-    The trainer writes the manifest at job-end. The promote endpoint reads
-    + updates the ``promoted_to`` field so callers can trace which Triton
-    model name a checkpoint shipped under. The served ``results.eval`` /
-    ``results.mlflow_run_url`` go through the same wire rewrite as
-    ``TrainJobStatus`` (see ``_rewrite_eval_for_wire``/``_public_mlflow_url``)
-    -- the manifest is a raw dict, not that model, so it isn't covered by
-    ``_prepare_status_for_wire`` automatically.
-    """
-    _validate_job_id(job_id)
-    path = _manifest_path(job_id)
-
-    def _do() -> dict[str, Any] | None:
-        if not path.is_file():
-            return None
-        try:
-            payload = json.loads(path.read_text(encoding='utf-8'))
-        except (OSError, ValueError):
-            return None
-        return payload if isinstance(payload, dict) else None
-
-    manifest = await asyncio.to_thread(_do)
-    if manifest is None:
-        return None
-    results = manifest.get('results')
-    if isinstance(results, dict):
-        results = dict(results)
-        results['eval'] = _rewrite_eval_for_wire(results.get('eval'), job_id)
-        results['mlflow_run_url'] = _public_mlflow_url(
-            results.get('mlflow_run_id'), results.get('mlflow_experiment_id')
-        )
-        manifest = {**manifest, 'results': results}
-    return manifest
-
-
-async def resolve_run_dir(job_id: str) -> Path | None:
-    """Resolve the on-disk training-run directory for ``job_id``, best-effort.
-
-    Used only by :func:`read_artifact` to locate metrics/plot files a
-    finished (or partially finished) run wrote -- never exposed on the wire
-    itself. Derived from the *raw* (unrewritten) ``status.json``:
-    ``checkpoint_path`` (``<run_dir>/weights/best.pt``) first, falling back
-    to ``eval.confusion_matrix_path`` for a run that failed before export.
-    ``None`` if neither is on disk yet.
-    """
-    _validate_job_id(job_id)
-    raw = await _read_json(_status_path(job_id))
-    if raw is None:
-        return None
-    ckpt = raw.get('checkpoint_path')
-    if isinstance(ckpt, str) and ckpt:
-        return Path(ckpt).resolve().parent.parent
-    eval_block = raw.get('eval')
-    if isinstance(eval_block, dict):
-        cm_path = eval_block.get('confusion_matrix_path')
-        if isinstance(cm_path, str) and cm_path:
-            return Path(cm_path).resolve().parent
-    return None
-
-
-async def read_artifact(job_id: str, name: str) -> Path | None:
-    """Return the absolute path of a whitelisted run artifact, or ``None``.
-
-    ``None`` covers every "don't serve this" case alike (name not in
-    :data:`RUN_ARTIFACT_WHITELIST`, unresolvable run dir, missing file, or a
-    resolved path that escaped the run dir) -- the router turns any of them
-    into a plain 404 so a probe can't learn more than "nothing there."
-    """
-    _validate_job_id(job_id)
-    if name not in RUN_ARTIFACT_WHITELIST:
-        return None
-    run_dir = await resolve_run_dir(job_id)
-    if run_dir is None:
-        return None
-
-    def _do() -> Path | None:
-        candidate = (run_dir / name).resolve()
-        if candidate.parent != run_dir or not candidate.is_file():
-            return None
-        return candidate
-
-    return await asyncio.to_thread(_do)
-
-
-async def read_job_spec(job_id: str) -> dict[str, Any] | None:
-    """Return the raw ``<job_id>.job.json`` dict, or None if absent.
-
-    Unlike :func:`read_manifest` (trainer-written, best-effort, only exists
-    after a run finishes), ``job.json`` is written synchronously by
-    :func:`write_job` and always available once a job has been submitted.
-    Used by promote to find the registry snapshot pinned at submit time,
-    since older/failed runs may lack a manifest entirely.
-    """
-    _validate_job_id(job_id)
-    return await _read_json(_job_path(job_id))
-
-
-async def stamp_manifest_promotion(
-    job_id: str,
-    *,
-    triton_name: str,
-    promoted_at: str,
-    force_used: bool = False,
-    gate_report: dict[str, Any] | None = None,
-) -> bool:
-    """Set ``manifest.promoted_to`` after a successful Triton handoff.
-
-    ``force_used`` + ``gate_report`` record whether the promote gate was
-    bypassed and, if so, what it found, so a forced promote is traceable
-    from the manifest alone.
-
-    Returns False if the manifest doesn't exist yet (older runs without
-    one) -- a legitimate, non-error case. Raises on a real failure (corrupt
-    JSON, disk/permission error) instead of swallowing it -- the caller
-    (the promote router) distinguishes "nothing to stamp" (False, no
-    exception) from "stamping broke" (exception) and surfaces the latter
-    loudly instead of a silent warn-and-forget.
-    """
-    _validate_job_id(job_id)
-    path = _manifest_path(job_id)
-
-    def _do() -> bool:
-        if not path.is_file():
-            return False
-        payload = json.loads(path.read_text(encoding='utf-8'))
-        if not isinstance(payload, dict):
-            msg = f'manifest for job {job_id!r} is not a JSON object'
-            raise ValueError(msg)
-        payload['promoted_to'] = {
-            'triton_model_name': triton_name,
-            'promoted_at': promoted_at,
-            'force_used': force_used,
-            'gate_report': gate_report,
-        }
-        tmp = path.with_suffix('.json.tmp')
-        tmp.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding='utf-8')
-        tmp.replace(path)
-        return True
-
-    return await asyncio.to_thread(_do)
 
 
 def _pin_registry_snapshot_sync(job_id: str) -> tuple[str | None, str | None]:
@@ -439,6 +292,68 @@ def _list_job_files() -> list[Path]:
     )
 
 
+def _load_json_object(path: Path) -> dict[str, Any] | None:
+    """``path`` parsed as a JSON object, or ``None`` if unreadable, not JSON or not an object."""
+    try:
+        with path.open('r', encoding='utf-8') as fh:
+            raw = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return None
+    return raw if isinstance(raw, dict) else None
+
+
+def _gather_run_rows() -> list[tuple[Path, dict[str, Any], str]]:
+    out: list[tuple[Path, dict[str, Any], str]] = []
+    jobs_dir = _resolve_jobs_dir()
+    if not jobs_dir.exists():
+        return out
+    # status.json wins where both exist
+    seen: set[str] = set()
+    for sp in _list_status_files():
+        stem = sp.name[: -len('.status.json')]
+        raw = _load_json_object(sp)
+        if raw is None:
+            continue
+        seen.add(stem)
+        out.append((sp, raw, 'status'))
+    for jp in _list_job_files():
+        stem = jp.name[: -len('.job.json')]
+        if stem in seen:
+            continue
+        raw = _load_json_object(jp)
+        if raw is None:
+            continue
+        out.append((jp, raw, 'job'))
+    return out
+
+
+def _campaign_id_from_job_file(stem: str) -> str | None:
+    """The ``campaign_id`` recorded in ``<stem>.job.json``, if that file has one."""
+    spec_path = _resolve_jobs_dir() / f'{stem}.job.json'
+    if not spec_path.exists():
+        return None
+    spec_raw = _load_json_object(spec_path)
+    if spec_raw is not None and spec_raw.get('campaign_id'):
+        return spec_raw['campaign_id']
+    return None
+
+
+def _status_row_to_wire(path: Path, raw: dict[str, Any]) -> TrainJobStatus | None:
+    try:
+        status = TrainJobStatus.model_validate(raw)
+    except Exception as exc:
+        logger.warning('curation_train_status_invalid', error=str(exc))
+        return None
+    # If the trainer didn't carry through ``campaign_id`` in the
+    # status, re-hydrate it from the matching job.json so the
+    # campaign-cancel path can find sibling runs.
+    if status.campaign_id is None:
+        campaign_id = _campaign_id_from_job_file(path.name[: -len('.status.json')])
+        if campaign_id is not None:
+            status = status.model_copy(update={'campaign_id': campaign_id})
+    return _prepare_status_for_wire(_maybe_lost(status))
+
+
 async def list_runs(limit: int = 50, offset: int = 0) -> list[TrainJobStatus]:
     """Return up to ``limit`` past + active runs, newest first.
 
@@ -453,67 +368,16 @@ async def list_runs(limit: int = 50, offset: int = 0) -> list[TrainJobStatus]:
     if limit <= 0:
         return []
 
-    def _gather() -> list[tuple[Path, dict[str, Any], str]]:
-        out: list[tuple[Path, dict[str, Any], str]] = []
-        jobs_dir = _resolve_jobs_dir()
-        if not jobs_dir.exists():
-            return out
-        # status.json wins where both exist
-        seen: set[str] = set()
-        for sp in _list_status_files():
-            stem = sp.name[: -len('.status.json')]
-            try:
-                with sp.open('r', encoding='utf-8') as fh:
-                    raw = json.load(fh)
-            except (OSError, json.JSONDecodeError):
-                continue
-            if not isinstance(raw, dict):
-                continue
-            seen.add(stem)
-            out.append((sp, raw, 'status'))
-        for jp in _list_job_files():
-            stem = jp.name[: -len('.job.json')]
-            if stem in seen:
-                continue
-            try:
-                with jp.open('r', encoding='utf-8') as fh:
-                    raw = json.load(fh)
-            except (OSError, json.JSONDecodeError):
-                continue
-            if not isinstance(raw, dict):
-                continue
-            out.append((jp, raw, 'job'))
-        return out
-
-    rows = await asyncio.to_thread(_gather)
+    rows = await asyncio.to_thread(_gather_run_rows)
     rows.sort(key=lambda t: t[0].stat().st_mtime, reverse=True)
     rows = rows[offset : offset + limit]
 
     results: list[TrainJobStatus] = []
     for path, raw, kind in rows:
         if kind == 'status':
-            try:
-                status = TrainJobStatus.model_validate(raw)
-            except Exception as exc:
-                logger.warning('curation_train_status_invalid', error=str(exc))
-                continue
-            # If the trainer didn't carry through ``campaign_id`` in the
-            # status, re-hydrate it from the matching job.json so the
-            # campaign-cancel path can find sibling runs.
-            if status.campaign_id is None:
-                stem = path.name[: -len('.status.json')]
-                spec_path = _resolve_jobs_dir() / f'{stem}.job.json'
-                if spec_path.exists():
-                    try:
-                        with spec_path.open('r', encoding='utf-8') as fh:
-                            spec_raw = json.load(fh)
-                        if isinstance(spec_raw, dict) and spec_raw.get('campaign_id'):
-                            status = status.model_copy(
-                                update={'campaign_id': spec_raw['campaign_id']}
-                            )
-                    except (OSError, json.JSONDecodeError):
-                        pass
-            results.append(_prepare_status_for_wire(_maybe_lost(status)))
+            status = _status_row_to_wire(path, raw)
+            if status is not None:
+                results.append(status)
         else:
             results.append(
                 TrainJobStatus(
@@ -585,80 +449,3 @@ async def tail_run_log(job_id: str, lines: int = 200) -> list[str]:
         return text[-lines:]
 
     return await asyncio.to_thread(_do)
-
-
-# =============================================================================
-# Campaigns
-# =============================================================================
-
-
-async def write_campaign(campaign: TrainCampaignSpec) -> tuple[str, list[str]]:
-    """Materialize one ``job.json`` per ``runs[]`` entry in order.
-
-    Returns ``(campaign_id, [job_id, ...])``. The trainer processes the
-    files in the order they're written; we write smallest-to-largest so
-    the user gets fast feedback first.
-    """
-    spec = campaign.model_copy(deep=True)
-    if not spec.campaign_id:
-        spec.campaign_id = f'{_slug()}_campaign'
-    _validate_job_id(spec.campaign_id)
-
-    valid_profiles = {'probe', 'nano', 'small', 'medium', 'large', 'xlarge', 'custom'}
-    job_ids: list[str] = []
-    last_idx = len(spec.runs) - 1
-    for idx, run in enumerate(spec.runs):
-        # Narrow ``profile`` to the literal set TrainJobSpec accepts;
-        # fall through to ``custom`` for unknown names so the trainer can
-        # still receive a hyperparameter override-only spec.
-        profile_value: Any = run.profile if run.profile in valid_profiles else 'custom'
-        job_spec = TrainJobSpec(
-            job_id=f'{spec.campaign_id}_run{idx:02d}_{run.profile}',
-            campaign_id=spec.campaign_id,
-            submitted_by=spec.submitted_by,
-            model_family='yolo26',
-            model_size=run.model_size or 'm',
-            profile=profile_value,
-            dataset_export_dir=spec.dataset_export_dir,
-            include_classes=spec.include_classes,
-            single_cls=spec.single_cls,
-            cuda_visible_devices=spec.cuda_visible_devices,
-            hyperparameters=run.hyperparameters,
-            augmentation=spec.augmentation,
-            # Carry campaign-wide policy onto every per-job spec so the
-            # trainer can act on them between runs (auto-skip +
-            # auto-promote).
-            stop_when=spec.stop_when,
-            auto_promote_best=spec.auto_promote_best,
-            is_last_in_campaign=(idx == last_idx),
-        )
-        jid = await write_job(job_spec)
-        job_ids.append(jid)
-
-    logger.info(
-        'curation_train_campaign_written',
-        campaign_id=spec.campaign_id,
-        n_runs=len(job_ids),
-    )
-    return spec.campaign_id, job_ids
-
-
-async def cancel_campaign(campaign_id: str) -> int:
-    """Cancel every job belonging to ``campaign_id``.
-
-    We walk every ``job.json`` in the directory, match on the embedded
-    ``campaign_id``, and drop a cancel sentinel for non-terminal runs.
-    Returns the count of sentinels written.
-    """
-    _validate_job_id(campaign_id)
-    runs = await list_runs(limit=200)
-    cancelled = 0
-    for run in runs:
-        if run.campaign_id != campaign_id:
-            continue
-        if run.state in ('finished', 'failed', 'cancelled', 'skipped'):
-            continue
-        await write_cancel(run.job_id)
-        cancelled += 1
-    logger.info('curation_train_campaign_cancelled', campaign_id=campaign_id, n=cancelled)
-    return cancelled

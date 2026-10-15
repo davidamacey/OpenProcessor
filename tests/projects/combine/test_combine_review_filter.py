@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.services.curation import review_queries
+from src.services.curation import review_tabs
 from src.services.curation.review_request import ReviewFilters, build_review_request
 
 from .test_combine_execute import MAPPING, build
@@ -37,4 +37,4 @@ async def test_the_filter_lists_only_flagged_items(world: World) -> None:
     assert len(flagged) == 1
     assert flagged[0]['combine_conflict'] is True
     assert len(everything) == 2  # the conflict, plus the outlier
-    assert 'combine_conflict' in review_queries.COMMON_FILTERS
+    assert 'combine_conflict' in review_tabs.COMMON_FILTERS

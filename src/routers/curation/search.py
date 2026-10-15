@@ -103,11 +103,9 @@ async def search_text(
 
     await ensure_indexes(opensearch)
 
-    # Lazy import: src.main imports the curation router package (which
-    # imports this module) at module load time, so importing
-    # get_shared_executor at *this* module's top level would be a circular
-    # import. By call-time (a real HTTP request) src.main is fully loaded.
-    from src.main import get_shared_executor
+    # Looked up at call time so a test replaces the accessor in one place
+    # (src.app.resources), not in every caller.
+    from src.app.resources import get_shared_executor
 
     try:
         executor = get_shared_executor()

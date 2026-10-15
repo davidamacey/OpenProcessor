@@ -12,7 +12,8 @@ from unittest.mock import AsyncMock
 import pytest
 
 from curation.conftest import SCOPED
-from src.config.curation import IndexRole, base_curation_config
+from src.config.curation_accessors import base_curation_config
+from src.config.curation_roles import IndexRole
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
 from src.core.exceptions import RequestRejectedError

@@ -286,7 +286,7 @@ def test_autolabel_job_reconciles_orphaned_running_state(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_AUTO_LABEL_STATE_DIR', str(tmp_path / 'auto_label'))
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.project_context import bind_project
     from src.config.projects import DEFAULT_SLUG, new_project_record
     from src.services.curation.autolabel import job
@@ -309,7 +309,7 @@ def test_autolabel_job_leaves_fresh_running_state_alone(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_AUTO_LABEL_STATE_DIR', str(tmp_path / 'auto_label'))
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.project_context import bind_project
     from src.config.projects import DEFAULT_SLUG, new_project_record
     from src.services.curation.autolabel import job
@@ -330,7 +330,7 @@ def test_autolabel_job_ignores_pending_unclaimed_trigger(
     orphaned run -- the worker container has its own independent
     lifecycle and may simply not have gotten to it."""
     monkeypatch.setenv('OP_AUTO_LABEL_STATE_DIR', str(tmp_path / 'auto_label'))
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.project_context import bind_project
     from src.config.projects import DEFAULT_SLUG, new_project_record
     from src.services.curation.autolabel import job

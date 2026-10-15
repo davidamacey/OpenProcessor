@@ -55,7 +55,7 @@ packages `WP-Sn`. A fresh agent can run any experiment from this file plus the w
 | F2 | PE FP16 cost | 5.5 ms per embedding (182 emb/s) in the pipeline, mean batch 13.5, 7.39 embeddings per image (6.39 crops + 1 whole frame) | PR #225 |
 | F3 | GPU busy after FP16 | 74 % (`nvidia-smi`), own SM 71 % (`pmon`): the GPU is no longer the only limit | PR #225 |
 | F4 | API CPU after FP16 | 0.188 CPU-s/image upload, 0.177 batch; Triton 0.035 | PR #225 |
-| F5 | Wire to Triton | 14.9 MB FP32 per image (PE 10.0 MB, detector 4.9 MB) inline in gRPC protobuf, no shared memory | B7, `src/clients/triton_pool.py`, `src/clients/pe_encoder.py:352` |
+| F5 | Wire to Triton | 14.9 MB FP32 per image (PE 10.0 MB, detector 4.9 MB) inline in gRPC protobuf, no shared memory | B7, `src/clients/triton_pool_core.py`, `src/clients/pe_encoder.py:352` |
 | F6 | Client shape | `tritonclient.grpc.aio`, 32 uvicorn workers, 2.07 PE requests per image (crops of one image, then the whole frame), harness 4 threads x 32 images | `docker-compose.yml:247`, `src/services/curation/ingest_index.py:118`, B1 |
 | F7 | Model placement | every GPU model pinned to `gpus: [0]`, one instance (detector 2), PE `max_queue_delay` 15 ms, `preferred_batch_size [4, 8, 16, 32]`, engine profile opt 8 max 32; CUDA graphs off (MobileCLIP explicitly) | `models/*/config.pbtxt`, `scripts/lib/model_setup.sh` `_ms_pe_trtexec` |
 | F8 | Cluster training (CPU IVF) after ingest | 78-159 s per 12.8k items (30-55 % of ingest wall) | B8, PR #225 |

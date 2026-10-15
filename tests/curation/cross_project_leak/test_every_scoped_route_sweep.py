@@ -160,7 +160,7 @@ def _sweep(
     """Call every scoped route (or those ``only`` accepts) as ``slug``.
     Returns (leaks, routes that wrote, the OpenSearch request shapes each
     route issued, counted per index role)."""
-    from src.config.curation import IndexRole
+    from src.config.curation_roles import IndexRole
 
     app, records = env.app, env.records
     own_indexes = set(records[slug].resources.indexes.values())

@@ -32,7 +32,7 @@ from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.item_filter import item_filter_clauses
 from src.services.curation.region_rows import search_region_rows
 from src.services.curation.region_vocabulary import region_vocabulary_catalog
-from src.services.curation.review_queries import region_text_clause
+from src.services.curation.review_tab_clauses import region_text_clause
 from src.services.curation.training_cohorts import REGION_LOW_SCORE_MAX, TRAINING_CANDIDATE_MODES
 from src.services.curation.wire import item_list_source_excludes
 from src.services.detection.profile_registry import region_profile_or_neutral

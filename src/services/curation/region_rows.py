@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.ensure_overlay_fields import inner_result_window
 from src.config import get_region_fields
-from src.config.curation import get_curation_config
+from src.config.curation_accessors import get_curation_config
 from src.core.logging import get_logger
 from src.services.curation.wire import serialize_item
 

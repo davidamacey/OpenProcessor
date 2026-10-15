@@ -139,7 +139,8 @@ async def _already_indexed(opensearch: Any, prepared: PreparedImport) -> int:
 def _import_service(
     opensearch: Any, registry: Any, *, need_detector: bool, policy: IngestPolicy
 ) -> CurationIngestService:
-    from src.main import app, get_async_triton_pool
+    from src.app.resources import get_async_triton_pool
+    from src.main import app
 
     pe_encoder = getattr(app.state, 'pe_encoder', None)
     if pe_encoder is None:

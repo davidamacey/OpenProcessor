@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.projects import DEFAULT_SLUG, ProjectRecord, new_project_record
 from src.core.logging import get_logger
 from src.services.projects.registry import REVISION_DOC_ID, projects_index, record_to_doc
@@ -46,7 +46,7 @@ async def bootstrap_default_project(client: Any) -> ProjectRecord:
     return the existing one unchanged. Never overwrites an existing
     record (a later env change must not remap a live project), and never
     touches any data index."""
-    from src.services.projects.guard import bind_registry_admin
+    from src.services.projects.guard_policy import bind_registry_admin
     from src.services.projects.registry import doc_to_record
 
     doc_id = f'project:{DEFAULT_SLUG}'

@@ -28,12 +28,11 @@ from typing import Any
 import numpy as np
 import pytest
 
-from src.clients.pe_encoder import (
-    PE_EMBEDDING_DIM,
+from src.clients.pe_encoder import PE_EMBEDDING_DIM, PEEncoder
+from src.clients.pe_text_backends import (
     PE_TEXT_INPUT,
     PE_TEXT_OUTPUT,
     PE_TEXT_TRITON_MODEL,
-    PEEncoder,
     trim_text_tokens,
 )
 

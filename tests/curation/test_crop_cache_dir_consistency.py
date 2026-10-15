@@ -13,7 +13,7 @@ returns) rather than a local default.
 
 from __future__ import annotations
 
-import src.config.curation as curation_config_module
+import src.config.curation_accessors as curation_config_module
 from src.config import get_curation_config
 
 

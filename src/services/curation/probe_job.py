@@ -55,7 +55,7 @@ import contextlib
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 
-from src.config.curation import get_curation_config
+from src.config.curation_accessors import get_curation_config
 from src.config.env import env_path
 from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
@@ -242,7 +242,7 @@ async def start_probe_job(
     check-and-claim is atomic across processes, not just within one (see
     module docstring / :mod:`src.services.curation.job_lock`). If ``gpu``
     is set, claims it via the training GPU arbiter first -- a
-    :class:`~src.services.training.gpu_arbiter.GpuArbiterStopFailedError`
+    :class:`~src.services.training.gpu_arbiter_policy.GpuArbiterStopFailedError`
     propagates (never silently ignored). Raises ``ValueError`` immediately
     (before claiming the lock or a GPU) for an ``architecture`` outside
     :data:`~src.services.curation.probe_models.PROBE_ARCHITECTURES`, rather

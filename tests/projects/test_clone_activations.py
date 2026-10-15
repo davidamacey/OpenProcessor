@@ -19,7 +19,7 @@ from projects.clone_flow_fakes import (  # noqa: F401 - isolated_state is an aut
     patch_lifecycle,
     save,
 )
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import CLONEABLE_AXES, ProjectRecord, resources_for_new
 from src.services.config_store.index import get_activation

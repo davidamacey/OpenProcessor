@@ -26,12 +26,9 @@ from fastapi.testclient import TestClient
 
 from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import CurationConfig
-from src.services.curation.export import (
-    GenericYoloExportService,
-    _ExportRow,
-    resolve_current_export_dir,
-)
+from src.services.curation.export import GenericYoloExportService, resolve_current_export_dir
 from src.services.curation.export_split import stratified_split
+from src.services.curation.export_support import _ExportRow
 
 
 CLASS_NAMES = ['alpha', 'beta', 'gamma', 'delta', 'epsilon']

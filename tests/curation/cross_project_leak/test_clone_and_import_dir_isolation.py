@@ -30,7 +30,7 @@ def test_from_project_clone_reads_source_index_only_under_the_real_guard(
     the target.
     """
     client = TestClient(leak_env.app, raise_server_exceptions=False)
-    from src.config.curation import IndexRole
+    from src.config.curation_roles import IndexRole
 
     _stored_prompt_pack(leak_env, 'alpha')
     _stored_region_profile(leak_env, 'alpha')

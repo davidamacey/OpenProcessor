@@ -81,14 +81,9 @@ from scripts.curation._project_worker_utils import curation_api_prefix, scoped_u
 from scripts.curation.ingest_upload import map_identifier, parse_path_map
 from scripts.curation.yolo_dataset import DatasetError, discover, label_path_for
 from src.config import RegionStatus, get_curation_config, get_region_fields
-from src.services.curation.region_eval import (
-    DEFAULT_ACCEPTED_STATUSES,
-    CohortImage,
-    EvalResult,
-    RegionFrameError,
-    parse_yolo_labels,
-    run_eval,
-)
+from src.services.curation.region_eval import DEFAULT_ACCEPTED_STATUSES, EvalResult, run_eval
+from src.services.curation.region_eval_data import CohortImage
+from src.services.curation.region_eval_geometry import RegionFrameError, parse_yolo_labels
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 

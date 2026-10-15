@@ -33,7 +33,7 @@ def all_bakeoff_jobs_dirs() -> list[Path]:
 def _resolve_train_jobs_dir() -> Path:
     """The *default* project's jobs dir (P1R §6.1/D-A: an ordinary
     registered project -- read from the registry, else build fresh)."""
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.project_context import bind_project
     from src.config.projects import DEFAULT_SLUG, new_project_record
     from src.services.projects.registry import get_project_registry

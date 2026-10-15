@@ -4,7 +4,7 @@ product's CPU path on the same images, through the same detector and PE engines.
 
 ``capture`` runs every image three ways and stores what ingest would store:
 
-* ``cpu``  the product: Pillow decode + EXIF (``ingest._decode_image``), Pillow letterbox,
+* ``cpu``  the product: Pillow decode + EXIF (``ingest_helpers._decode_image``), Pillow letterbox,
            crops by ``crop_pil`` + ``resize_crop_rgb``, the whole frame from OpenCV's 1/8
            DCT decode, OpenCV blur.
 * ``dec``  GPU decode (``--decoder``: nvImageCodec, default, or torchvision), then the product's CPU functions on the
@@ -146,7 +146,7 @@ def capture_image(name: str, data: bytes, eng: Engines, out: dict[str, Any]) -> 
     from PIL import Image
 
     from scripts.bench import gpu_decode_kernels as k
-    from src.services.curation.ingest import _decode_image
+    from src.services.curation.ingest_helpers import _decode_image
     from src.services.curation.ingest_index import crop_pil
     from src.services.detection.crop_quality import crop_lap_var, image_lap_var
     from src.services.detection.geometry import letterbox_to_square

@@ -9,7 +9,8 @@ from typing import Any
 
 import pytest
 
-from src.config.curation import IndexRole, base_curation_config
+from src.config.curation_accessors import base_curation_config
+from src.config.curation_roles import IndexRole
 from src.config.projects import ProjectRecord, resources_for_new
 from src.routers.curation.projects import _fetch_counts
 

@@ -13,7 +13,7 @@ import pytest
 from src.domain.embedding_state import EmbeddingState
 from src.routers.curation._stats_models import DatasetStatsResponse
 from src.routers.curation.stats import stats_dataset
-from src.services.curation import review_queries
+from src.services.curation import review_tabs
 from src.services.curation.item_filter import Origin, ReviewStatus
 from src.services.curation.review_filter_specs import EMBEDDING_STATE_LABELS, FILTER_SPECS
 from src.services.curation.stats_embedding import EmbeddingByState, embedding_summary
@@ -35,18 +35,18 @@ def _query_params(path: str) -> set[str]:
 # --- review tabs: one spec per served filter ---------------------------------
 
 
-@pytest.mark.parametrize('tab', review_queries.KNOWN_TABS)
+@pytest.mark.parametrize('tab', review_tabs.KNOWN_TABS)
 def test_every_filter_a_tab_serves_has_a_spec(tab: str) -> None:
-    filters = set(review_queries.tab_filters(tab))
+    filters = set(review_tabs.tab_filters(tab))
     assert filters <= set(FILTER_SPECS)
-    served = {t['id']: t for t in review_queries.review_tab_catalog()}
+    served = {t['id']: t for t in review_tabs.review_tab_catalog()}
     if tab in served:  # the regions tab is absent without a region profile
         assert {s['param'] for s in served[tab]['filter_specs']} == filters
 
 
 def test_no_spec_is_orphaned() -> None:
-    served = set(review_queries.COMMON_FILTERS) | {
-        f for extra in review_queries.TAB_EXTRA_FILTERS.values() for f in extra
+    served = set(review_tabs.COMMON_FILTERS) | {
+        f for extra in review_tabs.TAB_EXTRA_FILTERS.values() for f in extra
     }
     assert set(FILTER_SPECS) == served
 
@@ -92,7 +92,7 @@ def test_item_filter_routes_take_class_name_not_class_id(path: str) -> None:
 
 
 def test_the_review_tab_catalog_no_longer_lists_class_id() -> None:
-    assert 'class_id' not in review_queries.COMMON_FILTERS
+    assert 'class_id' not in review_tabs.COMMON_FILTERS
 
 
 # --- dataset stats ------------------------------------------------------------
@@ -246,7 +246,7 @@ def test_every_spec_serves_its_filter_model_default() -> None:
         expected = getattr(review, field) if hasattr(review, field) else getattr(item, field)
         assert spec['default'] == expected, param
         assert spec['allows_unset'] is (expected is None), param
-    served = {t['id']: t for t in review_queries.review_tab_catalog()}
+    served = {t['id']: t for t in review_tabs.review_tab_catalog()}
     for tab in served.values():
         for spec in tab['filter_specs']:
             assert spec['default'] == FILTER_SPECS[spec['param']]['default']

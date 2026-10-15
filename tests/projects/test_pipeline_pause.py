@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from scripts.curation._project_worker_utils import PIPELINE_PAUSED_FLAG_NAME, is_project_paused
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.projects import new_project_record
 
 
@@ -41,7 +41,7 @@ def app_client():
 def test_pause_then_resume_flips_the_flag_workers_read(
     app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_config_mod
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path))
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
@@ -78,7 +78,7 @@ def test_pause_then_resume_flips_the_flag_workers_read(
 def test_pause_and_resume_are_idempotent(
     app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_config_mod
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path))
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
@@ -91,13 +91,13 @@ def test_pause_and_resume_are_idempotent(
 def test_pause_state_reports_global_gpu_training_claim(
     app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import src.config.curation as curation_config_mod
-    from src.services.training import gpu_arbiter
+    import src.config.curation_accessors as curation_config_mod
+    from src.services.training import gpu_arbiter_policy
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path))
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
     monkeypatch.setattr(
-        gpu_arbiter, 'read_training_lock', lambda **_: {'cuda_visible_devices': '0'}
+        gpu_arbiter_policy, 'read_training_lock', lambda **_: {'cuda_visible_devices': '0'}
     )
 
     r = app_client.get('/curation/projects/default/pause')
@@ -111,7 +111,7 @@ def test_pause_state_reports_global_gpu_training_claim(
 def test_pause_publishes_a_global_event(
     app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_config_mod
     from src.services.curation import event_hub
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path))

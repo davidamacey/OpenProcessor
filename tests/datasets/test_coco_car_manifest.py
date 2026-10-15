@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from scripts.datasets import fetch_coco_subset as f
+from scripts.datasets import coco_selection
 
 
 MANIFEST = Path(__file__).resolve().parents[2] / 'scripts/datasets/manifests/coco_car_60.json'
@@ -49,15 +49,17 @@ def _dataset() -> dict[str, Any]:
 def _pick() -> list[dict]:
     data = _dataset()
     name_of: dict[int, str] = {c['id']: c['name'] for c in CATEGORIES}
-    primary = f.primary_class_per_image(data['images'], data['annotations'], name_of, {3})
-    pool = f.eligible_images(
+    primary = coco_selection.primary_class_per_image(
+        data['images'], data['annotations'], name_of, {3}
+    )
+    pool = coco_selection.eligible_images(
         data['images'],
         primary,
         {lic['id']: lic['name'] for lic in LICENSES},
-        f.resolve_license_names(['by']),
+        coco_selection.resolve_license_names(['by']),
         'val2017',
     )
-    return f.select_per_class(pool, [], ['car'], 60, 20260925)
+    return coco_selection.select_per_class(pool, [], ['car'], 60, 20260925)
 
 
 @pytest.fixture

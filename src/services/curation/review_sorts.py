@@ -36,7 +36,7 @@ from src.config.region_fields import get_region_fields
 
 
 if TYPE_CHECKING:
-    from src.services.curation.strategy_registry import StrategyStatus
+    from src.services.curation.strategy_flags import StrategyStatus
 
 
 # ``vlm_confidence`` is a keyword, so sorting the field would order its words
@@ -80,13 +80,13 @@ class ReviewSort:
 
 def _mistakenness_status() -> StrategyStatus:
     """``mistakenness``'s status must reflect whatever
-    ``strategy_registry.py``'s live ``OP_SCORES_ENABLED``/``OP_SCORES_SHADOW``
+    ``strategy_flags.py``'s live ``OP_SCORES_ENABLED``/``OP_SCORES_SHADOW``
     + ``VALIDATED_SCORERS`` promotion currently computes — NOT a hardcoded
     ``'experimental'`` literal, even though that promotion is real today
     (synthetic label-flip gate passed
     outright). Delegates to the shared helper so this can never drift from
     what ``GET /curation/methods`` reports for the same scorer id."""
-    from src.services.curation.strategy_registry import effective_scorer_status
+    from src.services.curation.strategy_flags import effective_scorer_status
 
     return effective_scorer_status('mistakenness')
 
@@ -97,10 +97,10 @@ def _uniqueness_status() -> StrategyStatus:
     was previously pinned to a hardcoded ``'shadow'`` literal here
     regardless of the live ``OP_SCORES_ENABLED``/``OP_SCORES_SHADOW`` +
     ``VALIDATED_SCORERS`` promotion — which meant ``sort=uniqueness`` 400'd
-    even once ``strategy_registry.VALIDATED_SCORERS`` promoted it to
+    even once ``strategy_flags.VALIDATED_SCORERS`` promoted it to
     ``'experimental'``, and ``GET /curation/methods`` disagreed with this
     registry about the same scorer's status. Delegating closes that gap."""
-    from src.services.curation.strategy_registry import effective_scorer_status
+    from src.services.curation.strategy_flags import effective_scorer_status
 
     return effective_scorer_status('uniqueness')
 
@@ -108,7 +108,7 @@ def _uniqueness_status() -> StrategyStatus:
 def _build_review_sorts() -> dict[str, ReviewSort]:
     """Construct a fresh registry snapshot. Called by :func:`get_review_sorts`
     on every access (not cached at import) so ``mistakenness``'s env-driven
-    status is always current — mirrors ``strategy_registry._score_strategy_status``'s
+    status is always current — mirrors ``strategy_flags._score_strategy_status``'s
     "read fresh each call" convention, needed so tests can
     ``monkeypatch.setenv`` around a ``build_sort()`` call without a module
     reload."""
@@ -418,7 +418,7 @@ async def _first_covered(
     fields = frozenset(f for sid in chain if (f := registry[sid].requires_field))
     if registry[primary].requires_field is None or not fields:
         return primary, None
-    from src.services.curation.strategy_registry import field_coverage
+    from src.services.curation.field_coverage import field_coverage
 
     coverage = await field_coverage(opensearch, fields)
     chosen = next(

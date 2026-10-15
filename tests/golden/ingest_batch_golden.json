@@ -1,0 +1,7511 @@
+{
+ "all_duplicates": {
+  "dup_calls": [],
+  "face": [],
+  "ocr": [],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ]
+  ],
+  "result": {
+   "duplicate_details": [
+    {
+     "existing_image_id": "old-a",
+     "image_id": "id-a",
+     "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e"
+    },
+    {
+     "existing_image_id": "old-b",
+     "image_id": "id-b",
+     "imohash": "0c77a9787ec06067e77d09b76050a2b0"
+    },
+    {
+     "existing_image_id": "old-c",
+     "image_id": "id-c",
+     "imohash": "0c57f75c074ec2bf71e076dad1f3ca53"
+    },
+    {
+     "existing_image_id": "old-d",
+     "image_id": "id-d",
+     "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    }
+   ],
+   "duplicates": 4,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 0,
+    "global": 0,
+    "ocr": 0,
+    "people": 0,
+    "vehicles": 0
+   },
+   "near_duplicates": 0,
+   "processed": 0,
+   "status": "success",
+   "total": 4
+  },
+  "triton": []
+ },
+ "bulk_ingest_partial_result": {
+  "dup_calls": [
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-a",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-b",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-c",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-d",
+    "threshold": 0.99
+   }
+  ],
+  "face": [
+   [
+    "jpeg-bytes-a",
+    0.5
+   ],
+   [
+    "jpeg-bytes-b",
+    0.5
+   ],
+   [
+    "jpeg-bytes-c",
+    0.5
+   ],
+   [
+    "jpeg-bytes-d",
+    0.5
+   ]
+  ],
+  "ocr": [
+   [
+    "jpeg-bytes-a",
+    true
+   ],
+   [
+    "jpeg-bytes-b",
+    true
+   ],
+   [
+    "jpeg-bytes-c",
+    true
+   ],
+   [
+    "jpeg-bytes-d",
+    true
+   ]
+  ],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ],
+   [
+    "bulk_ingest",
+    {
+     "documents": [
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0,
+        16
+       ],
+       "det_scores": [
+        0.9,
+        0.8,
+        0.7
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-a",
+       "image_path": "id-a",
+       "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 0,
+       "image_id": "id-b",
+       "image_path": "/p/b.jpg",
+       "imohash": "0c77a9787ec06067e77d09b76050a2b0",
+       "width": 0
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2
+       ],
+       "det_scores": [
+        0.9
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-c",
+       "image_path": "/p/c.jpg",
+       "imohash": "0c57f75c074ec2bf71e076dad1f3ca53",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0
+       ],
+       "det_scores": [
+        0.9,
+        0.8
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-d",
+       "image_path": "/p/d.jpg",
+       "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      }
+     ],
+     "refresh": false
+    }
+   ],
+   [
+    "bulk_index_faces",
+    [
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_0",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_1",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_0",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_1",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.0,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_2",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.0
+     }
+    ]
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB CD",
+     "image_id": "id-a",
+     "image_path": "id-a",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB",
+      "CD"
+     ]
+    }
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB",
+     "image_id": "id-c",
+     "image_path": "/p/c.jpg",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB"
+     ]
+    }
+   ]
+  ],
+  "result": {
+   "deferred_ops": 0,
+   "duplicate_details": null,
+   "duplicates": 0,
+   "error_details": null,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 4,
+    "global": 2,
+    "ocr": 2,
+    "people": 0,
+    "vehicles": 0
+   },
+   "near_duplicate_details": null,
+   "near_duplicates": 0,
+   "processed": 4,
+   "status": "success",
+   "total": 4
+  },
+  "triton": [
+   "jpeg-bytes-a",
+   "jpeg-bytes-b",
+   "jpeg-bytes-c",
+   "jpeg-bytes-d"
+  ]
+ },
+ "defer_heavy_ops": {
+  "dup_calls": [],
+  "face": [
+   [
+    "jpeg-bytes-a",
+    0.5
+   ],
+   [
+    "jpeg-bytes-b",
+    0.5
+   ],
+   [
+    "jpeg-bytes-c",
+    0.5
+   ],
+   [
+    "jpeg-bytes-d",
+    0.5
+   ]
+  ],
+  "ocr": [
+   [
+    "jpeg-bytes-a",
+    true
+   ],
+   [
+    "jpeg-bytes-b",
+    true
+   ],
+   [
+    "jpeg-bytes-c",
+    true
+   ],
+   [
+    "jpeg-bytes-d",
+    true
+   ]
+  ],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ],
+   [
+    "bulk_ingest",
+    {
+     "documents": [
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0,
+        16
+       ],
+       "det_scores": [
+        0.9,
+        0.8,
+        0.7
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-a",
+       "image_path": "id-a",
+       "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 0,
+       "image_id": "id-b",
+       "image_path": "/p/b.jpg",
+       "imohash": "0c77a9787ec06067e77d09b76050a2b0",
+       "width": 0
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2
+       ],
+       "det_scores": [
+        0.9
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-c",
+       "image_path": "/p/c.jpg",
+       "imohash": "0c57f75c074ec2bf71e076dad1f3ca53",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0
+       ],
+       "det_scores": [
+        0.9,
+        0.8
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-d",
+       "image_path": "/p/d.jpg",
+       "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      }
+     ],
+     "refresh": false
+    }
+   ],
+   [
+    "bulk_index_faces",
+    [
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_0",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_1",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_0",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_1",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.0,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_2",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.0
+     }
+    ]
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB CD",
+     "image_id": "id-a",
+     "image_path": "id-a",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB",
+      "CD"
+     ]
+    }
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB",
+     "image_id": "id-c",
+     "image_path": "/p/c.jpg",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB"
+     ]
+    }
+   ]
+  ],
+  "result": {
+   "deferred_ops": 4,
+   "duplicate_details": null,
+   "duplicates": 0,
+   "error_details": null,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 4,
+    "global": 4,
+    "ocr": 2,
+    "people": 1,
+    "vehicles": 3
+   },
+   "near_duplicate_details": null,
+   "near_duplicates": 0,
+   "processed": 4,
+   "status": "success",
+   "total": 4
+  },
+  "triton": [
+   "jpeg-bytes-a",
+   "jpeg-bytes-b",
+   "jpeg-bytes-c",
+   "jpeg-bytes-d"
+  ]
+ },
+ "empty": {
+  "dup_calls": [],
+  "face": [],
+  "ocr": [],
+  "opensearch": [],
+  "result": {
+   "duplicates": 0,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 0,
+    "global": 0,
+    "ocr": 0,
+    "people": 0,
+    "vehicles": 0
+   },
+   "near_duplicates": 0,
+   "processed": 0,
+   "status": "success",
+   "total": 0
+  },
+  "triton": []
+ },
+ "face_bulk_errors": {
+  "dup_calls": [
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-a",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-b",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-c",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-d",
+    "threshold": 0.99
+   }
+  ],
+  "face": [
+   [
+    "jpeg-bytes-a",
+    0.5
+   ],
+   [
+    "jpeg-bytes-b",
+    0.5
+   ],
+   [
+    "jpeg-bytes-c",
+    0.5
+   ],
+   [
+    "jpeg-bytes-d",
+    0.5
+   ]
+  ],
+  "ocr": [
+   [
+    "jpeg-bytes-a",
+    true
+   ],
+   [
+    "jpeg-bytes-b",
+    true
+   ],
+   [
+    "jpeg-bytes-c",
+    true
+   ],
+   [
+    "jpeg-bytes-d",
+    true
+   ]
+  ],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ],
+   [
+    "bulk_ingest",
+    {
+     "documents": [
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0,
+        16
+       ],
+       "det_scores": [
+        0.9,
+        0.8,
+        0.7
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-a",
+       "image_path": "id-a",
+       "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 0,
+       "image_id": "id-b",
+       "image_path": "/p/b.jpg",
+       "imohash": "0c77a9787ec06067e77d09b76050a2b0",
+       "width": 0
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2
+       ],
+       "det_scores": [
+        0.9
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-c",
+       "image_path": "/p/c.jpg",
+       "imohash": "0c57f75c074ec2bf71e076dad1f3ca53",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0
+       ],
+       "det_scores": [
+        0.9,
+        0.8
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-d",
+       "image_path": "/p/d.jpg",
+       "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      }
+     ],
+     "refresh": false
+    }
+   ],
+   [
+    "bulk_index_faces",
+    [
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_0",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_1",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_0",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_1",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.0,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_2",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.0
+     }
+    ]
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB CD",
+     "image_id": "id-a",
+     "image_path": "id-a",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB",
+      "CD"
+     ]
+    }
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB",
+     "image_id": "id-c",
+     "image_path": "/p/c.jpg",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB"
+     ]
+    }
+   ]
+  ],
+  "result": {
+   "deferred_ops": 0,
+   "duplicate_details": null,
+   "duplicates": 0,
+   "error_details": null,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 3,
+    "global": 4,
+    "ocr": 2,
+    "people": 1,
+    "vehicles": 3
+   },
+   "near_duplicate_details": null,
+   "near_duplicates": 0,
+   "processed": 4,
+   "status": "success",
+   "total": 4
+  },
+  "triton": [
+   "jpeg-bytes-a",
+   "jpeg-bytes-b",
+   "jpeg-bytes-c",
+   "jpeg-bytes-d"
+  ]
+ },
+ "full": {
+  "dup_calls": [
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-a",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-b",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-c",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-d",
+    "threshold": 0.99
+   }
+  ],
+  "face": [
+   [
+    "jpeg-bytes-a",
+    0.5
+   ],
+   [
+    "jpeg-bytes-b",
+    0.5
+   ],
+   [
+    "jpeg-bytes-c",
+    0.5
+   ],
+   [
+    "jpeg-bytes-d",
+    0.5
+   ]
+  ],
+  "ocr": [
+   [
+    "jpeg-bytes-a",
+    true
+   ],
+   [
+    "jpeg-bytes-b",
+    true
+   ],
+   [
+    "jpeg-bytes-c",
+    true
+   ],
+   [
+    "jpeg-bytes-d",
+    true
+   ]
+  ],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ],
+   [
+    "bulk_ingest",
+    {
+     "documents": [
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0,
+        16
+       ],
+       "det_scores": [
+        0.9,
+        0.8,
+        0.7
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-a",
+       "image_path": "id-a",
+       "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 0,
+       "image_id": "id-b",
+       "image_path": "/p/b.jpg",
+       "imohash": "0c77a9787ec06067e77d09b76050a2b0",
+       "width": 0
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2
+       ],
+       "det_scores": [
+        0.9
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-c",
+       "image_path": "/p/c.jpg",
+       "imohash": "0c57f75c074ec2bf71e076dad1f3ca53",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0
+       ],
+       "det_scores": [
+        0.9,
+        0.8
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-d",
+       "image_path": "/p/d.jpg",
+       "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      }
+     ],
+     "refresh": false
+    }
+   ],
+   [
+    "bulk_index_faces",
+    [
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_0",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_1",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_0",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_1",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.0,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_2",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.0
+     }
+    ]
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB CD",
+     "image_id": "id-a",
+     "image_path": "id-a",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB",
+      "CD"
+     ]
+    }
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB",
+     "image_id": "id-c",
+     "image_path": "/p/c.jpg",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB"
+     ]
+    }
+   ]
+  ],
+  "result": {
+   "deferred_ops": 0,
+   "duplicate_details": null,
+   "duplicates": 0,
+   "error_details": null,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 4,
+    "global": 4,
+    "ocr": 2,
+    "people": 1,
+    "vehicles": 3
+   },
+   "near_duplicate_details": null,
+   "near_duplicates": 0,
+   "processed": 4,
+   "status": "success",
+   "total": 4
+  },
+  "triton": [
+   "jpeg-bytes-a",
+   "jpeg-bytes-b",
+   "jpeg-bytes-c",
+   "jpeg-bytes-d"
+  ]
+ },
+ "inference_error_on_all": {
+  "dup_calls": [],
+  "face": [],
+  "ocr": [],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ]
+  ],
+  "result": {
+   "deferred_ops": 0,
+   "duplicate_details": null,
+   "duplicates": 0,
+   "error_details": [
+    {
+     "error": "triton down",
+     "image_id": "id-a"
+    },
+    {
+     "error": "triton down",
+     "image_id": "id-b"
+    },
+    {
+     "error": "triton down",
+     "image_id": "id-c"
+    },
+    {
+     "error": "triton down",
+     "image_id": "id-d"
+    }
+   ],
+   "errors_count": 4,
+   "indexed": {
+    "faces": 0,
+    "global": 0,
+    "ocr": 0,
+    "people": 0,
+    "vehicles": 0
+   },
+   "near_duplicate_details": null,
+   "near_duplicates": 0,
+   "processed": 0,
+   "status": "success",
+   "total": 4
+  },
+  "triton": [
+   "jpeg-bytes-a",
+   "jpeg-bytes-b",
+   "jpeg-bytes-c",
+   "jpeg-bytes-d"
+  ]
+ },
+ "inference_error_on_one": {
+  "dup_calls": [
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-a",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-b",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-d",
+    "threshold": 0.99
+   }
+  ],
+  "face": [
+   [
+    "jpeg-bytes-a",
+    0.5
+   ],
+   [
+    "jpeg-bytes-b",
+    0.5
+   ],
+   [
+    "jpeg-bytes-d",
+    0.5
+   ]
+  ],
+  "ocr": [
+   [
+    "jpeg-bytes-a",
+    true
+   ],
+   [
+    "jpeg-bytes-b",
+    true
+   ],
+   [
+    "jpeg-bytes-d",
+    true
+   ]
+  ],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ],
+   [
+    "bulk_ingest",
+    {
+     "documents": [
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0,
+        16
+       ],
+       "det_scores": [
+        0.9,
+        0.8,
+        0.7
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-a",
+       "image_path": "id-a",
+       "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 0,
+       "image_id": "id-b",
+       "image_path": "/p/b.jpg",
+       "imohash": "0c77a9787ec06067e77d09b76050a2b0",
+       "width": 0
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0
+       ],
+       "det_scores": [
+        0.9,
+        0.8
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-d",
+       "image_path": "/p/d.jpg",
+       "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      }
+     ],
+     "refresh": false
+    }
+   ],
+   [
+    "bulk_index_faces",
+    [
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_0",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_1",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     }
+    ]
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB CD",
+     "image_id": "id-a",
+     "image_path": "id-a",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB",
+      "CD"
+     ]
+    }
+   ]
+  ],
+  "result": {
+   "deferred_ops": 0,
+   "duplicate_details": null,
+   "duplicates": 0,
+   "error_details": [
+    {
+     "error": "triton down",
+     "image_id": "id-c"
+    }
+   ],
+   "errors_count": 1,
+   "indexed": {
+    "faces": 4,
+    "global": 4,
+    "ocr": 1,
+    "people": 1,
+    "vehicles": 3
+   },
+   "near_duplicate_details": null,
+   "near_duplicates": 0,
+   "processed": 3,
+   "status": "success",
+   "total": 4
+  },
+  "triton": [
+   "jpeg-bytes-a",
+   "jpeg-bytes-b",
+   "jpeg-bytes-c",
+   "jpeg-bytes-d"
+  ]
+ },
+ "jpeg_header_fallback": {
+  "dup_calls": [
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-a",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-b",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-c",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-d",
+    "threshold": 0.99
+   }
+  ],
+  "face": [
+   [
+    "jpeg-bytes-a",
+    0.5
+   ],
+   [
+    "jpeg-bytes-b",
+    0.5
+   ],
+   [
+    "jpeg-bytes-c",
+    0.5
+   ],
+   [
+    "jpeg-bytes-d",
+    0.5
+   ]
+  ],
+  "ocr": [
+   [
+    "jpeg-bytes-a",
+    true
+   ],
+   [
+    "jpeg-bytes-b",
+    true
+   ],
+   [
+    "jpeg-bytes-c",
+    true
+   ],
+   [
+    "jpeg-bytes-d",
+    true
+   ]
+  ],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ],
+   [
+    "bulk_ingest",
+    {
+     "documents": [
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0,
+        16
+       ],
+       "det_scores": [
+        0.9,
+        0.8,
+        0.7
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-a",
+       "image_path": "id-a",
+       "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 123,
+       "image_id": "id-b",
+       "image_path": "/p/b.jpg",
+       "imohash": "0c77a9787ec06067e77d09b76050a2b0",
+       "width": 321
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2
+       ],
+       "det_scores": [
+        0.9
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-c",
+       "image_path": "/p/c.jpg",
+       "imohash": "0c57f75c074ec2bf71e076dad1f3ca53",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0
+       ],
+       "det_scores": [
+        0.9,
+        0.8
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-d",
+       "image_path": "/p/d.jpg",
+       "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      }
+     ],
+     "refresh": false
+    }
+   ],
+   [
+    "bulk_index_faces",
+    [
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_0",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_1",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_0",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_1",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.0,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_2",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.0
+     }
+    ]
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB CD",
+     "image_id": "id-a",
+     "image_path": "id-a",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB",
+      "CD"
+     ]
+    }
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB",
+     "image_id": "id-c",
+     "image_path": "/p/c.jpg",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB"
+     ]
+    }
+   ]
+  ],
+  "result": {
+   "deferred_ops": 0,
+   "duplicate_details": null,
+   "duplicates": 0,
+   "error_details": null,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 4,
+    "global": 4,
+    "ocr": 2,
+    "people": 1,
+    "vehicles": 3
+   },
+   "near_duplicate_details": null,
+   "near_duplicates": 0,
+   "processed": 4,
+   "status": "success",
+   "total": 4
+  },
+  "triton": [
+   "jpeg-bytes-a",
+   "jpeg-bytes-b",
+   "jpeg-bytes-c",
+   "jpeg-bytes-d"
+  ]
+ },
+ "jpeg_header_unreadable": {
+  "dup_calls": [
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-a",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-b",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-c",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-d",
+    "threshold": 0.99
+   }
+  ],
+  "face": [
+   [
+    "jpeg-bytes-a",
+    0.5
+   ],
+   [
+    "jpeg-bytes-b",
+    0.5
+   ],
+   [
+    "jpeg-bytes-c",
+    0.5
+   ],
+   [
+    "jpeg-bytes-d",
+    0.5
+   ]
+  ],
+  "ocr": [
+   [
+    "jpeg-bytes-a",
+    true
+   ],
+   [
+    "jpeg-bytes-b",
+    true
+   ],
+   [
+    "jpeg-bytes-c",
+    true
+   ],
+   [
+    "jpeg-bytes-d",
+    true
+   ]
+  ],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ],
+   [
+    "bulk_ingest",
+    {
+     "documents": [
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0,
+        16
+       ],
+       "det_scores": [
+        0.9,
+        0.8,
+        0.7
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-a",
+       "image_path": "id-a",
+       "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 0,
+       "image_id": "id-b",
+       "image_path": "/p/b.jpg",
+       "imohash": "0c77a9787ec06067e77d09b76050a2b0",
+       "width": 0
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2
+       ],
+       "det_scores": [
+        0.9
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-c",
+       "image_path": "/p/c.jpg",
+       "imohash": "0c57f75c074ec2bf71e076dad1f3ca53",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0
+       ],
+       "det_scores": [
+        0.9,
+        0.8
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-d",
+       "image_path": "/p/d.jpg",
+       "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      }
+     ],
+     "refresh": false
+    }
+   ],
+   [
+    "bulk_index_faces",
+    [
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_0",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_1",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_0",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_1",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.0,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_2",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.0
+     }
+    ]
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB CD",
+     "image_id": "id-a",
+     "image_path": "id-a",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB",
+      "CD"
+     ]
+    }
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB",
+     "image_id": "id-c",
+     "image_path": "/p/c.jpg",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB"
+     ]
+    }
+   ]
+  ],
+  "result": {
+   "deferred_ops": 0,
+   "duplicate_details": null,
+   "duplicates": 0,
+   "error_details": null,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 4,
+    "global": 4,
+    "ocr": 2,
+    "people": 1,
+    "vehicles": 3
+   },
+   "near_duplicate_details": null,
+   "near_duplicates": 0,
+   "processed": 4,
+   "status": "success",
+   "total": 4
+  },
+  "triton": [
+   "jpeg-bytes-a",
+   "jpeg-bytes-b",
+   "jpeg-bytes-c",
+   "jpeg-bytes-d"
+  ]
+ },
+ "near_duplicate_group_and_error": {
+  "dup_calls": [
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-a",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-b",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-c",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-d",
+    "threshold": 0.99
+   }
+  ],
+  "face": [
+   [
+    "jpeg-bytes-a",
+    0.5
+   ],
+   [
+    "jpeg-bytes-b",
+    0.5
+   ],
+   [
+    "jpeg-bytes-c",
+    0.5
+   ],
+   [
+    "jpeg-bytes-d",
+    0.5
+   ]
+  ],
+  "ocr": [
+   [
+    "jpeg-bytes-a",
+    true
+   ],
+   [
+    "jpeg-bytes-b",
+    true
+   ],
+   [
+    "jpeg-bytes-c",
+    true
+   ],
+   [
+    "jpeg-bytes-d",
+    true
+   ]
+  ],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ],
+   [
+    "bulk_ingest",
+    {
+     "documents": [
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0,
+        16
+       ],
+       "det_scores": [
+        0.9,
+        0.8,
+        0.7
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-a",
+       "image_path": "id-a",
+       "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 0,
+       "image_id": "id-b",
+       "image_path": "/p/b.jpg",
+       "imohash": "0c77a9787ec06067e77d09b76050a2b0",
+       "width": 0
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2
+       ],
+       "det_scores": [
+        0.9
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-c",
+       "image_path": "/p/c.jpg",
+       "imohash": "0c57f75c074ec2bf71e076dad1f3ca53",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0
+       ],
+       "det_scores": [
+        0.9,
+        0.8
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-d",
+       "image_path": "/p/d.jpg",
+       "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      }
+     ],
+     "refresh": false
+    }
+   ],
+   [
+    "bulk_index_faces",
+    [
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_0",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_1",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_0",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_1",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.0,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_2",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.0
+     }
+    ]
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB CD",
+     "image_id": "id-a",
+     "image_path": "id-a",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB",
+      "CD"
+     ]
+    }
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB",
+     "image_id": "id-c",
+     "image_path": "/p/c.jpg",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB"
+     ]
+    }
+   ]
+  ],
+  "result": {
+   "deferred_ops": 0,
+   "duplicate_details": null,
+   "duplicates": 0,
+   "error_details": null,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 4,
+    "global": 4,
+    "ocr": 2,
+    "people": 1,
+    "vehicles": 3
+   },
+   "near_duplicate_details": [
+    {
+     "action": "joined_group",
+     "group_id": "g1",
+     "image_id": "id-a",
+     "similarity": 0.99
+    },
+    {
+     "action": "created_group",
+     "group_id": "g2",
+     "image_id": "id-d",
+     "similarity": 0.97
+    }
+   ],
+   "near_duplicates": 2,
+   "processed": 4,
+   "status": "success",
+   "total": 4
+  },
+  "triton": [
+   "jpeg-bytes-a",
+   "jpeg-bytes-b",
+   "jpeg-bytes-c",
+   "jpeg-bytes-d"
+  ]
+ },
+ "near_duplicates_disabled": {
+  "dup_calls": [],
+  "face": [
+   [
+    "jpeg-bytes-a",
+    0.5
+   ],
+   [
+    "jpeg-bytes-b",
+    0.5
+   ],
+   [
+    "jpeg-bytes-c",
+    0.5
+   ],
+   [
+    "jpeg-bytes-d",
+    0.5
+   ]
+  ],
+  "ocr": [
+   [
+    "jpeg-bytes-a",
+    true
+   ],
+   [
+    "jpeg-bytes-b",
+    true
+   ],
+   [
+    "jpeg-bytes-c",
+    true
+   ],
+   [
+    "jpeg-bytes-d",
+    true
+   ]
+  ],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ],
+   [
+    "bulk_ingest",
+    {
+     "documents": [
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0,
+        16
+       ],
+       "det_scores": [
+        0.9,
+        0.8,
+        0.7
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-a",
+       "image_path": "id-a",
+       "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 0,
+       "image_id": "id-b",
+       "image_path": "/p/b.jpg",
+       "imohash": "0c77a9787ec06067e77d09b76050a2b0",
+       "width": 0
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2
+       ],
+       "det_scores": [
+        0.9
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-c",
+       "image_path": "/p/c.jpg",
+       "imohash": "0c57f75c074ec2bf71e076dad1f3ca53",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0
+       ],
+       "det_scores": [
+        0.9,
+        0.8
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-d",
+       "image_path": "/p/d.jpg",
+       "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      }
+     ],
+     "refresh": false
+    }
+   ],
+   [
+    "bulk_index_faces",
+    [
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_0",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_1",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_0",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_1",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.0,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_2",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.0
+     }
+    ]
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB CD",
+     "image_id": "id-a",
+     "image_path": "id-a",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB",
+      "CD"
+     ]
+    }
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB",
+     "image_id": "id-c",
+     "image_path": "/p/c.jpg",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB"
+     ]
+    }
+   ]
+  ],
+  "result": {
+   "deferred_ops": 0,
+   "duplicate_details": null,
+   "duplicates": 0,
+   "error_details": null,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 4,
+    "global": 4,
+    "ocr": 2,
+    "people": 1,
+    "vehicles": 3
+   },
+   "near_duplicate_details": null,
+   "near_duplicates": 0,
+   "processed": 4,
+   "status": "success",
+   "total": 4
+  },
+  "triton": [
+   "jpeg-bytes-a",
+   "jpeg-bytes-b",
+   "jpeg-bytes-c",
+   "jpeg-bytes-d"
+  ]
+ },
+ "no_skip_duplicates": {
+  "dup_calls": [
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-a",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-b",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-c",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-d",
+    "threshold": 0.99
+   }
+  ],
+  "face": [
+   [
+    "jpeg-bytes-a",
+    0.5
+   ],
+   [
+    "jpeg-bytes-b",
+    0.5
+   ],
+   [
+    "jpeg-bytes-c",
+    0.5
+   ],
+   [
+    "jpeg-bytes-d",
+    0.5
+   ]
+  ],
+  "ocr": [
+   [
+    "jpeg-bytes-a",
+    true
+   ],
+   [
+    "jpeg-bytes-b",
+    true
+   ],
+   [
+    "jpeg-bytes-c",
+    true
+   ],
+   [
+    "jpeg-bytes-d",
+    true
+   ]
+  ],
+  "opensearch": [
+   [
+    "bulk_ingest",
+    {
+     "documents": [
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0,
+        16
+       ],
+       "det_scores": [
+        0.9,
+        0.8,
+        0.7
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-a",
+       "image_path": "id-a",
+       "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 0,
+       "image_id": "id-b",
+       "image_path": "/p/b.jpg",
+       "imohash": "0c77a9787ec06067e77d09b76050a2b0",
+       "width": 0
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2
+       ],
+       "det_scores": [
+        0.9
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-c",
+       "image_path": "/p/c.jpg",
+       "imohash": "0c57f75c074ec2bf71e076dad1f3ca53",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0
+       ],
+       "det_scores": [
+        0.9,
+        0.8
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-d",
+       "image_path": "/p/d.jpg",
+       "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      }
+     ],
+     "refresh": false
+    }
+   ],
+   [
+    "bulk_index_faces",
+    [
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_0",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_1",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_0",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_1",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.0,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_2",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.0
+     }
+    ]
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB CD",
+     "image_id": "id-a",
+     "image_path": "id-a",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB",
+      "CD"
+     ]
+    }
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB",
+     "image_id": "id-c",
+     "image_path": "/p/c.jpg",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB"
+     ]
+    }
+   ]
+  ],
+  "result": {
+   "deferred_ops": 0,
+   "duplicate_details": null,
+   "duplicates": 0,
+   "error_details": null,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 4,
+    "global": 4,
+    "ocr": 2,
+    "people": 1,
+    "vehicles": 3
+   },
+   "near_duplicate_details": null,
+   "near_duplicates": 0,
+   "processed": 4,
+   "status": "success",
+   "total": 4
+  },
+  "triton": [
+   "jpeg-bytes-a",
+   "jpeg-bytes-b",
+   "jpeg-bytes-c",
+   "jpeg-bytes-d"
+  ]
+ },
+ "nothing_enabled": {
+  "dup_calls": [
+   {
+    "embedding": {
+     "ndarray": []
+    },
+    "image_id": "id-a",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": []
+    },
+    "image_id": "id-b",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": []
+    },
+    "image_id": "id-c",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": []
+    },
+    "image_id": "id-d",
+    "threshold": 0.99
+   }
+  ],
+  "face": [],
+  "ocr": [],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ],
+   [
+    "bulk_ingest",
+    {
+     "documents": [
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": []
+       },
+       "height": 0,
+       "image_id": "id-a",
+       "image_path": "id-a",
+       "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+       "width": 0
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": []
+       },
+       "height": 0,
+       "image_id": "id-b",
+       "image_path": "/p/b.jpg",
+       "imohash": "0c77a9787ec06067e77d09b76050a2b0",
+       "width": 0
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": []
+       },
+       "height": 0,
+       "image_id": "id-c",
+       "image_path": "/p/c.jpg",
+       "imohash": "0c57f75c074ec2bf71e076dad1f3ca53",
+       "width": 0
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": []
+       },
+       "height": 0,
+       "image_id": "id-d",
+       "image_path": "/p/d.jpg",
+       "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad",
+       "width": 0
+      }
+     ],
+     "refresh": false
+    }
+   ]
+  ],
+  "result": {
+   "deferred_ops": 0,
+   "duplicate_details": null,
+   "duplicates": 0,
+   "error_details": null,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 0,
+    "global": 4,
+    "ocr": 0,
+    "people": 1,
+    "vehicles": 3
+   },
+   "near_duplicate_details": null,
+   "near_duplicates": 0,
+   "processed": 4,
+   "status": "success",
+   "total": 4
+  },
+  "triton": []
+ },
+ "ocr_index_failure": {
+  "dup_calls": [
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-a",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-b",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-c",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-d",
+    "threshold": 0.99
+   }
+  ],
+  "face": [
+   [
+    "jpeg-bytes-a",
+    0.5
+   ],
+   [
+    "jpeg-bytes-b",
+    0.5
+   ],
+   [
+    "jpeg-bytes-c",
+    0.5
+   ],
+   [
+    "jpeg-bytes-d",
+    0.5
+   ]
+  ],
+  "ocr": [
+   [
+    "jpeg-bytes-a",
+    true
+   ],
+   [
+    "jpeg-bytes-b",
+    true
+   ],
+   [
+    "jpeg-bytes-c",
+    true
+   ],
+   [
+    "jpeg-bytes-d",
+    true
+   ]
+  ],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ],
+   [
+    "bulk_ingest",
+    {
+     "documents": [
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0,
+        16
+       ],
+       "det_scores": [
+        0.9,
+        0.8,
+        0.7
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-a",
+       "image_path": "id-a",
+       "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 0,
+       "image_id": "id-b",
+       "image_path": "/p/b.jpg",
+       "imohash": "0c77a9787ec06067e77d09b76050a2b0",
+       "width": 0
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2
+       ],
+       "det_scores": [
+        0.9
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-c",
+       "image_path": "/p/c.jpg",
+       "imohash": "0c57f75c074ec2bf71e076dad1f3ca53",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0
+       ],
+       "det_scores": [
+        0.9,
+        0.8
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-d",
+       "image_path": "/p/d.jpg",
+       "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      }
+     ],
+     "refresh": false
+    }
+   ],
+   [
+    "bulk_index_faces",
+    [
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_0",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_1",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_0",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_1",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.0,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_2",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.0
+     }
+    ]
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB CD",
+     "image_id": "id-a",
+     "image_path": "id-a",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB",
+      "CD"
+     ]
+    }
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB",
+     "image_id": "id-c",
+     "image_path": "/p/c.jpg",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB"
+     ]
+    }
+   ]
+  ],
+  "result": {
+   "deferred_ops": 0,
+   "duplicate_details": null,
+   "duplicates": 0,
+   "error_details": null,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 4,
+    "global": 4,
+    "ocr": 1,
+    "people": 1,
+    "vehicles": 3
+   },
+   "near_duplicate_details": null,
+   "near_duplicates": 0,
+   "processed": 4,
+   "status": "success",
+   "total": 4
+  },
+  "triton": [
+   "jpeg-bytes-a",
+   "jpeg-bytes-b",
+   "jpeg-bytes-c",
+   "jpeg-bytes-d"
+  ]
+ },
+ "only_clip": {
+  "dup_calls": [
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-a",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-b",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-c",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-d",
+    "threshold": 0.99
+   }
+  ],
+  "face": [],
+  "ocr": [],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ],
+   [
+    "bulk_ingest",
+    {
+     "documents": [
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-a",
+       "image_path": "id-a",
+       "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+       "width": 640
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 0,
+       "image_id": "id-b",
+       "image_path": "/p/b.jpg",
+       "imohash": "0c77a9787ec06067e77d09b76050a2b0",
+       "width": 0
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-c",
+       "image_path": "/p/c.jpg",
+       "imohash": "0c57f75c074ec2bf71e076dad1f3ca53",
+       "width": 640
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-d",
+       "image_path": "/p/d.jpg",
+       "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad",
+       "width": 640
+      }
+     ],
+     "refresh": false
+    }
+   ]
+  ],
+  "result": {
+   "deferred_ops": 0,
+   "duplicate_details": null,
+   "duplicates": 0,
+   "error_details": null,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 0,
+    "global": 4,
+    "ocr": 0,
+    "people": 1,
+    "vehicles": 3
+   },
+   "near_duplicate_details": null,
+   "near_duplicates": 0,
+   "processed": 4,
+   "status": "success",
+   "total": 4
+  },
+  "triton": [
+   "jpeg-bytes-a",
+   "jpeg-bytes-b",
+   "jpeg-bytes-c",
+   "jpeg-bytes-d"
+  ]
+ },
+ "only_detection": {
+  "dup_calls": [
+   {
+    "embedding": {
+     "ndarray": []
+    },
+    "image_id": "id-a",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": []
+    },
+    "image_id": "id-b",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": []
+    },
+    "image_id": "id-c",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": []
+    },
+    "image_id": "id-d",
+    "threshold": 0.99
+   }
+  ],
+  "face": [],
+  "ocr": [],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ],
+   [
+    "bulk_ingest",
+    {
+     "documents": [
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0,
+        16
+       ],
+       "det_scores": [
+        0.9,
+        0.8,
+        0.7
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": []
+       },
+       "height": 480,
+       "image_id": "id-a",
+       "image_path": "id-a",
+       "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": []
+       },
+       "height": 0,
+       "image_id": "id-b",
+       "image_path": "/p/b.jpg",
+       "imohash": "0c77a9787ec06067e77d09b76050a2b0",
+       "width": 0
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2
+       ],
+       "det_scores": [
+        0.9
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": []
+       },
+       "height": 480,
+       "image_id": "id-c",
+       "image_path": "/p/c.jpg",
+       "imohash": "0c57f75c074ec2bf71e076dad1f3ca53",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0
+       ],
+       "det_scores": [
+        0.9,
+        0.8
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": []
+       },
+       "height": 480,
+       "image_id": "id-d",
+       "image_path": "/p/d.jpg",
+       "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      }
+     ],
+     "refresh": false
+    }
+   ]
+  ],
+  "result": {
+   "deferred_ops": 0,
+   "duplicate_details": null,
+   "duplicates": 0,
+   "error_details": null,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 0,
+    "global": 4,
+    "ocr": 0,
+    "people": 1,
+    "vehicles": 3
+   },
+   "near_duplicate_details": null,
+   "near_duplicates": 0,
+   "processed": 4,
+   "status": "success",
+   "total": 4
+  },
+  "triton": [
+   "jpeg-bytes-a",
+   "jpeg-bytes-b",
+   "jpeg-bytes-c",
+   "jpeg-bytes-d"
+  ]
+ },
+ "only_faces": {
+  "dup_calls": [
+   {
+    "embedding": {
+     "ndarray": []
+    },
+    "image_id": "id-a",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": []
+    },
+    "image_id": "id-b",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": []
+    },
+    "image_id": "id-c",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": []
+    },
+    "image_id": "id-d",
+    "threshold": 0.99
+   }
+  ],
+  "face": [
+   [
+    "jpeg-bytes-a",
+    0.5
+   ],
+   [
+    "jpeg-bytes-b",
+    0.5
+   ],
+   [
+    "jpeg-bytes-c",
+    0.5
+   ],
+   [
+    "jpeg-bytes-d",
+    0.5
+   ]
+  ],
+  "ocr": [],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ],
+   [
+    "bulk_ingest",
+    {
+     "documents": [
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": []
+       },
+       "height": 0,
+       "image_id": "id-a",
+       "image_path": "id-a",
+       "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+       "width": 0
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": []
+       },
+       "height": 0,
+       "image_id": "id-b",
+       "image_path": "/p/b.jpg",
+       "imohash": "0c77a9787ec06067e77d09b76050a2b0",
+       "width": 0
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": []
+       },
+       "height": 0,
+       "image_id": "id-c",
+       "image_path": "/p/c.jpg",
+       "imohash": "0c57f75c074ec2bf71e076dad1f3ca53",
+       "width": 0
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": []
+       },
+       "height": 0,
+       "image_id": "id-d",
+       "image_path": "/p/d.jpg",
+       "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad",
+       "width": 0
+      }
+     ],
+     "refresh": false
+    }
+   ],
+   [
+    "bulk_index_faces",
+    [
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_0",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_1",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_0",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_1",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.0,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_2",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.0
+     }
+    ]
+   ]
+  ],
+  "result": {
+   "deferred_ops": 0,
+   "duplicate_details": null,
+   "duplicates": 0,
+   "error_details": null,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 4,
+    "global": 4,
+    "ocr": 0,
+    "people": 1,
+    "vehicles": 3
+   },
+   "near_duplicate_details": null,
+   "near_duplicates": 0,
+   "processed": 4,
+   "status": "success",
+   "total": 4
+  },
+  "triton": []
+ },
+ "only_ocr": {
+  "dup_calls": [
+   {
+    "embedding": {
+     "ndarray": []
+    },
+    "image_id": "id-a",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": []
+    },
+    "image_id": "id-b",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": []
+    },
+    "image_id": "id-c",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": []
+    },
+    "image_id": "id-d",
+    "threshold": 0.99
+   }
+  ],
+  "face": [],
+  "ocr": [
+   [
+    "jpeg-bytes-a",
+    true
+   ],
+   [
+    "jpeg-bytes-b",
+    true
+   ],
+   [
+    "jpeg-bytes-c",
+    true
+   ],
+   [
+    "jpeg-bytes-d",
+    true
+   ]
+  ],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ],
+   [
+    "bulk_ingest",
+    {
+     "documents": [
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": []
+       },
+       "height": 0,
+       "image_id": "id-a",
+       "image_path": "id-a",
+       "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+       "width": 0
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": []
+       },
+       "height": 0,
+       "image_id": "id-b",
+       "image_path": "/p/b.jpg",
+       "imohash": "0c77a9787ec06067e77d09b76050a2b0",
+       "width": 0
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": []
+       },
+       "height": 0,
+       "image_id": "id-c",
+       "image_path": "/p/c.jpg",
+       "imohash": "0c57f75c074ec2bf71e076dad1f3ca53",
+       "width": 0
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": []
+       },
+       "height": 0,
+       "image_id": "id-d",
+       "image_path": "/p/d.jpg",
+       "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad",
+       "width": 0
+      }
+     ],
+     "refresh": false
+    }
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB CD",
+     "image_id": "id-a",
+     "image_path": "id-a",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB",
+      "CD"
+     ]
+    }
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB",
+     "image_id": "id-c",
+     "image_path": "/p/c.jpg",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB"
+     ]
+    }
+   ]
+  ],
+  "result": {
+   "deferred_ops": 0,
+   "duplicate_details": null,
+   "duplicates": 0,
+   "error_details": null,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 0,
+    "global": 4,
+    "ocr": 2,
+    "people": 1,
+    "vehicles": 3
+   },
+   "near_duplicate_details": null,
+   "near_duplicates": 0,
+   "processed": 4,
+   "status": "success",
+   "total": 4
+  },
+  "triton": []
+ },
+ "some_duplicates": {
+  "dup_calls": [
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-a",
+    "threshold": 0.99
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-c",
+    "threshold": 0.99
+   }
+  ],
+  "face": [
+   [
+    "jpeg-bytes-a",
+    0.5
+   ],
+   [
+    "jpeg-bytes-c",
+    0.5
+   ]
+  ],
+  "ocr": [
+   [
+    "jpeg-bytes-a",
+    true
+   ],
+   [
+    "jpeg-bytes-c",
+    true
+   ]
+  ],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ],
+   [
+    "bulk_ingest",
+    {
+     "documents": [
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0,
+        16
+       ],
+       "det_scores": [
+        0.9,
+        0.8,
+        0.7
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-a",
+       "image_path": "id-a",
+       "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2
+       ],
+       "det_scores": [
+        0.9
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-c",
+       "image_path": "/p/c.jpg",
+       "imohash": "0c57f75c074ec2bf71e076dad1f3ca53",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      }
+     ],
+     "refresh": false
+    }
+   ],
+   [
+    "bulk_index_faces",
+    [
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_0",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_1",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_0",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_1",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.0,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_2",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.0
+     }
+    ]
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB CD",
+     "image_id": "id-a",
+     "image_path": "id-a",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB",
+      "CD"
+     ]
+    }
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB",
+     "image_id": "id-c",
+     "image_path": "/p/c.jpg",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB"
+     ]
+    }
+   ]
+  ],
+  "result": {
+   "deferred_ops": 0,
+   "duplicate_details": [
+    {
+     "existing_image_id": "old-b",
+     "image_id": "id-b",
+     "imohash": "0c77a9787ec06067e77d09b76050a2b0"
+    },
+    {
+     "existing_image_id": "old-d",
+     "image_id": "id-d",
+     "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    }
+   ],
+   "duplicates": 2,
+   "error_details": null,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 4,
+    "global": 4,
+    "ocr": 2,
+    "people": 1,
+    "vehicles": 3
+   },
+   "near_duplicate_details": null,
+   "near_duplicates": 0,
+   "processed": 2,
+   "status": "success",
+   "total": 4
+  },
+  "triton": [
+   "jpeg-bytes-a",
+   "jpeg-bytes-c"
+  ]
+ },
+ "threshold_forwarded": {
+  "dup_calls": [
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-a",
+    "threshold": 0.95
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-b",
+    "threshold": 0.95
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-c",
+    "threshold": 0.95
+   },
+   {
+    "embedding": {
+     "ndarray": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "image_id": "id-d",
+    "threshold": 0.95
+   }
+  ],
+  "face": [
+   [
+    "jpeg-bytes-a",
+    0.5
+   ],
+   [
+    "jpeg-bytes-b",
+    0.5
+   ],
+   [
+    "jpeg-bytes-c",
+    0.5
+   ],
+   [
+    "jpeg-bytes-d",
+    0.5
+   ]
+  ],
+  "ocr": [
+   [
+    "jpeg-bytes-a",
+    true
+   ],
+   [
+    "jpeg-bytes-b",
+    true
+   ],
+   [
+    "jpeg-bytes-c",
+    true
+   ],
+   [
+    "jpeg-bytes-d",
+    true
+   ]
+  ],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ],
+   [
+    "bulk_ingest",
+    {
+     "documents": [
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0,
+        16
+       ],
+       "det_scores": [
+        0.9,
+        0.8,
+        0.7
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-a",
+       "image_path": "id-a",
+       "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 0,
+       "image_id": "id-b",
+       "image_path": "/p/b.jpg",
+       "imohash": "0c77a9787ec06067e77d09b76050a2b0",
+       "width": 0
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2
+       ],
+       "det_scores": [
+        0.9
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-c",
+       "image_path": "/p/c.jpg",
+       "imohash": "0c57f75c074ec2bf71e076dad1f3ca53",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0
+       ],
+       "det_scores": [
+        0.9,
+        0.8
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-d",
+       "image_path": "/p/d.jpg",
+       "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      }
+     ],
+     "refresh": false
+    }
+   ],
+   [
+    "bulk_index_faces",
+    [
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_0",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_1",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_0",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_1",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.0,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_2",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.0
+     }
+    ]
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB CD",
+     "image_id": "id-a",
+     "image_path": "id-a",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB",
+      "CD"
+     ]
+    }
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB",
+     "image_id": "id-c",
+     "image_path": "/p/c.jpg",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB"
+     ]
+    }
+   ]
+  ],
+  "result": {
+   "deferred_ops": 0,
+   "duplicate_details": null,
+   "duplicates": 0,
+   "error_details": null,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 4,
+    "global": 4,
+    "ocr": 2,
+    "people": 1,
+    "vehicles": 3
+   },
+   "near_duplicate_details": [
+    {
+     "action": "joined_group",
+     "group_id": "g1",
+     "image_id": "id-a",
+     "similarity": 0.99
+    }
+   ],
+   "near_duplicates": 1,
+   "processed": 4,
+   "status": "success",
+   "total": 4
+  },
+  "triton": [
+   "jpeg-bytes-a",
+   "jpeg-bytes-b",
+   "jpeg-bytes-c",
+   "jpeg-bytes-d"
+  ]
+ }
+}

@@ -29,7 +29,11 @@
 
 ```
 src/
-├── main.py                      # Application entry point with lifespan management
+├── main.py                      # Builds the `app` that uvicorn serves
+├── app/                         # Application assembly
+│   ├── factory.py               # create_app: middleware, handlers, router mounting
+│   ├── lifespan.py              # Startup and shutdown steps
+│   └── resources.py             # Shared executor and Triton pool
 │
 ├── routers/                     # FastAPI route handlers (one per capability)
 │   ├── __init__.py              # Router exports
@@ -42,7 +46,8 @@ src/
 │   ├── ocr.py                   # Text extraction (/ocr)
 │   ├── analyze.py               # Combined analysis (/analyze)
 │   ├── clusters.py              # Clustering (/clusters)
-│   └── query.py                 # Data retrieval (/query)
+│   ├── query.py                 # Data retrieval (/query)
+│   └── query_duplicates.py      # Duplicate groups (/query/duplicates)
 │
 ├── services/                    # Business logic layer
 │   ├── __init__.py              # Service exports
@@ -59,7 +64,8 @@ src/
 ├── clients/                     # External service clients
 │   ├── __init__.py              # Client exports
 │   ├── triton_client.py         # Triton gRPC client wrapper
-│   ├── triton_pool.py           # Connection pooling for Triton
+│   ├── triton_pool_core.py      # Async Triton connection pool
+│   ├── triton_client_manager.py # Shared Triton client singletons
 │   └── opensearch/              # OpenSearch async client (client.py entry point)
 │
 ├── schemas/                     # Pydantic models for validation
@@ -369,7 +375,7 @@ curl -X POST http://localhost:4603/ocr/predict -F "image=@document.jpg"
 
 ---
 
-### Combined Analysis (`routers/analyze.py`)
+### Combined Analysis (`routers/analyze.py`, `services/analyze_pipeline.py`)
 
 Run all models on a single image in one request.
 

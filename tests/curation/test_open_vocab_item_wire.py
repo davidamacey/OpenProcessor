@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.services.curation.wire import item_list_source_excludes, serialize_item
 
 

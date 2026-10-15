@@ -39,7 +39,8 @@ from integration.ingest_fakes import FakeTritonPool, curation_app
 from integration.wheel_worker import run_region_worker
 from integration.wheel_world import WRITE_OPS, RoutedOpenSearch
 from scripts.datasets import build_import_fixture as fx
-from src.config.curation import IndexRole, base_curation_config
+from src.config.curation_accessors import base_curation_config
+from src.config.curation_roles import IndexRole
 from src.config.projects import new_project_record
 from src.routers.curation import projects as projects_router
 from src.services.detection.cascade_detect.candidate import RegionCandidate
@@ -96,7 +97,7 @@ class World:
 
 @pytest.fixture
 def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[World]:
-    import src.config.curation as curation_mod
+    import src.config.curation_accessors as curation_mod
     from src.services.curation import index_bootstrap
     from src.services.projects import capacity as capacity_mod
     from src.services.projects.bootstrap import bootstrap_default_project

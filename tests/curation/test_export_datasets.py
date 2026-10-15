@@ -140,7 +140,7 @@ def test_profile_name_filter(client: TestClient) -> None:
 def test_export_kinds_match_the_methods_export_axis() -> None:
     """``kind`` values are the same ids /methods advertises on the export axis."""
     from src.routers.curation.export import MULTI_CLASS_DATASET_KIND, SINGLE_CLASS_DATASET_KIND
-    from src.services.curation.strategy_registry import _export_strategies
+    from src.services.curation.strategy_builders import _export_strategies
 
     export_ids = {s['id'] for s in _export_strategies()}
     assert {MULTI_CLASS_DATASET_KIND, SINGLE_CLASS_DATASET_KIND} <= export_ids

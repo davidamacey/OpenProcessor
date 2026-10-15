@@ -29,7 +29,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_mget_response
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.services.curation.clustering.auto_promote import auto_promote_clusters
 
 

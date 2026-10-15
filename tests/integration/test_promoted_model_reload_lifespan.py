@@ -42,13 +42,14 @@ def _wait_until(predicate, timeout: float = 5.0, poll: float = 0.02) -> bool:
 def test_lifespan_reloads_promoted_models_at_startup_and_on_every_tick(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    import src.app.lifespan as lifespan_module
     import src.main as main_module
-    from src.services.training import gpu_arbiter, triton_reload
+    from src.services.training import gpu_arbiter, gpu_arbiter_policy, triton_reload
 
     calls: list[str] = []
 
     async def _fake_reconcile(**_kwargs):
-        return gpu_arbiter.ArbiterAction(action='noop', detail='stubbed')
+        return gpu_arbiter_policy.ArbiterAction(action='noop', detail='stubbed')
 
     async def _fake_reload(*_args, **_kwargs):
         calls.append('tick')
@@ -56,7 +57,7 @@ def test_lifespan_reloads_promoted_models_at_startup_and_on_every_tick(
 
     monkeypatch.setattr(gpu_arbiter, 'reconcile_on_startup', _fake_reconcile)
     monkeypatch.setattr(triton_reload, 'reload_promoted_models', _fake_reload)
-    monkeypatch.setattr(main_module, 'ARBITER_RECONCILE_INTERVAL_SECONDS', _TEST_INTERVAL_S)
+    monkeypatch.setattr(lifespan_module, 'ARBITER_RECONCILE_INTERVAL_SECONDS', _TEST_INTERVAL_S)
 
     with TestClient(main_module.app):
         # Once at startup, before the app serves anything.
@@ -72,21 +73,22 @@ def test_a_failing_reload_does_not_kill_the_reconcile_loop(
     """A scan failure or unreachable Triton must never take the arbiter
     loop down -- the next tick (GPU reconcile and the next reload
     attempt) still has to run."""
+    import src.app.lifespan as lifespan_module
     import src.main as main_module
-    from src.services.training import gpu_arbiter, triton_reload
+    from src.services.training import gpu_arbiter, gpu_arbiter_policy, triton_reload
 
     arbiter_calls: list[str] = []
 
     async def _fake_reconcile(**_kwargs):
         arbiter_calls.append('tick')
-        return gpu_arbiter.ArbiterAction(action='noop', detail='stubbed')
+        return gpu_arbiter_policy.ArbiterAction(action='noop', detail='stubbed')
 
     async def _boom(*_args, **_kwargs):
         raise RuntimeError('simulated reload failure')
 
     monkeypatch.setattr(gpu_arbiter, 'reconcile_on_startup', _fake_reconcile)
     monkeypatch.setattr(triton_reload, 'reload_promoted_models', _boom)
-    monkeypatch.setattr(main_module, 'ARBITER_RECONCILE_INTERVAL_SECONDS', _TEST_INTERVAL_S)
+    monkeypatch.setattr(lifespan_module, 'ARBITER_RECONCILE_INTERVAL_SECONDS', _TEST_INTERVAL_S)
 
     with TestClient(main_module.app) as client:
         assert _wait_until(lambda: len(arbiter_calls) >= 3), (

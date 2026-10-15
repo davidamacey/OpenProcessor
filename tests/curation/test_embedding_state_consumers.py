@@ -42,7 +42,7 @@ def _bool(must: list[dict[str, Any]], must_not: list[dict[str, Any]]) -> dict[st
 
 
 def _vlm_worker() -> dict[str, Any]:
-    from scripts.curation.vlm_worker import _build_pending_query
+    from scripts.curation.vlm_pending import _build_pending_query
 
     return _build_pending_query(0.8)
 

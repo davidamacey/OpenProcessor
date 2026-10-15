@@ -22,7 +22,7 @@ import pytest
 if TYPE_CHECKING:
     from pathlib import Path
 
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import DEFAULT_SLUG, ProjectRecord, resources_for_new
 from src.services.training.job_models import TrainJobStatus
@@ -96,7 +96,7 @@ async def test_promote_writes_namespaced_name_and_project(
     promoter = TritonPromoter(triton_models_dir=scratch_models_dir, triton_http_url='http://unused')
 
     with bind_project(_record('beta')):
-        from src.config.curation import get_curation_config
+        from src.config.curation_accessors import get_curation_config
 
         cfg = get_curation_config()
         requested = 'detector_v3'
@@ -130,11 +130,11 @@ async def test_default_promote_name_is_unprefixed(
     monkeypatch.setattr(TritonPromoter, '_trigger_load', AsyncMock(return_value=True))
     promoter = TritonPromoter(triton_models_dir=scratch_models_dir, triton_http_url='http://unused')
 
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
     from src.config.projects import new_project_record
 
     with bind_project(new_project_record('default', base_curation_config())):
-        from src.config.curation import get_curation_config
+        from src.config.curation_accessors import get_curation_config
 
         cfg = get_curation_config()
         assert cfg.model_prefix == ''
@@ -197,7 +197,7 @@ def test_project_owns_model_prefix_isolation() -> None:
             assert project_owns_model('other__x') is False
             assert project_owns_model('yolov11_small_trt_end2end') is False
 
-        from src.config.curation import base_curation_config
+        from src.config.curation_accessors import base_curation_config
         from src.config.projects import new_project_record
 
         with bind_project(new_project_record('default', base_curation_config())):

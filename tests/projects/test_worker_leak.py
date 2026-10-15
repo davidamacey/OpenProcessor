@@ -34,13 +34,15 @@ from scripts.curation.worker.state import _ItemTask, bind_task_project, bound_cl
 from scripts.curation.worker.verify import TaskBoxInput, _combined_class_update, verdicts_to_boxes
 from src.clients.curation_opensearch import ClassRegistryFile, RegistryClassEntry
 from src.config import get_region_fields
-from src.config.curation import IndexRole, base_curation_config
+from src.config.curation_accessors import base_curation_config
+from src.config.curation_roles import IndexRole
 from src.config.project_context import bind_project, try_current_project
 from src.config.projects import ProjectRecord, resources_for_new
 from src.domain.region_boxes import boxes_write_fields
 from src.services.labeling.region_overlay import VlmBoxVerdict
 from src.services.labeling.vlm_models import VlmCombinedReply
-from src.services.projects.guard import cross_project_access_count, install_project_guard
+from src.services.projects.guard import install_project_guard
+from src.services.projects.guard_errors import cross_project_access_count
 
 
 if TYPE_CHECKING:
@@ -371,7 +373,7 @@ async def test_guard_rejects_a_cross_project_write(
 ) -> None:
     """Control: the harness really is guarded -- beta's binding cannot
     write alpha's index."""
-    from src.services.projects.guard import CrossProjectAccess
+    from src.services.projects.guard_errors import CrossProjectAccess
 
     client, transport = world
     with bind_project(projects['beta']), pytest.raises(CrossProjectAccess):
@@ -454,7 +456,7 @@ def _assert_requests_scoped(api: _Api, projects: dict[str, ProjectRecord]) -> No
 async def test_vlm_worker_reads_and_labels_each_project_in_its_own_scope(
     projects: dict[str, ProjectRecord], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from scripts.curation import vlm_worker
+    from scripts.curation import vlm_cli, vlm_worker
 
     transport, api = _http_world(monkeypatch, vlm_worker, projects)
 
@@ -469,7 +471,7 @@ async def test_vlm_worker_reads_and_labels_each_project_in_its_own_scope(
 
     monkeypatch.setattr(vlm_worker, 'heartbeat_loop', _no_heartbeat)
     rejected_before = cross_project_access_count()
-    args = vlm_worker.parse_args(
+    args = vlm_cli.parse_args(
         ['--until-empty', '--vlm-batch-size', '4', '--concurrency', '2', '--poll-interval', '0']
     )
     assert await vlm_worker.run(args) == 0

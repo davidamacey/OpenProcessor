@@ -127,7 +127,7 @@ F8. Wire: vectors are excluded from every item read
     (`src/routers/curation/_item_models.py:25`) and `serialize_item`
     (`wire.py:214`) carry no embedding field.
 F9. Filtering by detector class name is not exposed: `GET /crops` has no
-    `proposal_name` filter (`src/routers/curation/crops.py:102-147`), though the
+    `proposal_name` filter (`src/services/curation/crop_listing.py`), though the
     field is mapped keyword (`curation_opensearch.py:504`). Region scope already
     matches by name case-insensitively against `class_name` OR `proposal_name`
     (`src/services/curation/region_scope.py:25-62`); that predicate is the model
@@ -175,7 +175,7 @@ claim should be re-checked when the wave touches it.
 | 12 | Review queues | `all` tab's "no class" branch requires the vector (`review_queries.py:392`); empty-state reasons are computed from live state (`review_empty_reason.py:47`) | Keep the requirement through the shared predicate; add review/empty reason "N detections are not embedded (policy: ...)" and a way to list them (filter `embedding_state`) |
 | 13 | Dashboards / stats | `GET .../stats` and `class_sources` aggs count all items (`routers/curation/stats.py:340-390`), project counts in `services/projects/stats.py:36`; no embedding breakdown. `unlabeled` currently means "no class", not "clusterable" | Add `embedding_states` terms agg (with `missing` bucket) to curation stats and `items_embedded` to project counts |
 | 14 | Undo | Label/edit undo restore class/box fields from `class_id_history`/edit history without touching vectors (`edit_history.py:67`; `label_undo.py`); item delete has no vector logic (`item_delete.py`); dataset-import undo (`dataset_import/undo.py`) deletes imported items | None; add a test that exclude -> undo of a vectorless item leaves `embedding_state` and cluster fields coherent (exclusion stores prior cluster id, `exclusion.py:32-60`) |
-| 15 | Dataset import | Import builds `DetectedItem`s and calls `index_items` (`dataset_import/chunk.py:330`), so imported items embed through the same code | Imported/labeled items are always embedded (P2); propose-mode machine items follow the policy; project-to-project import excludes vectors by default (`project_source.py:88`) and re-embeds via the same path |
+| 15 | Dataset import | Import builds `DetectedItem`s and calls `index_items` (`dataset_import/chunk.py:245`), so imported items embed through the same code | Imported/labeled items are always embedded (P2); propose-mode machine items follow the policy; project-to-project import excludes vectors by default (`project_source.py:88`) and re-embeds via the same path |
 | 16 | Combine projects | `copy_docs.py:100-135` deletes a vector the target cannot use (dimension) and keeps vectorless docs as is | When a vector is dropped set `embedding_state=deferred`; target project policy is not merged |
 | 17 | Detection (region) worker | Selects by region status and `parent_classes` only (`scripts/curation/worker/cascade.py:55-100`); its box vectors are independent (`region_embed_stage.py`) | None for vectors. With full vocabulary, a region profile with EMPTY `parent_classes` now applies to every class: shipped profiles must keep `parent_classes` set (docs note) |
 | 18 | VLM worker | Pending query requires the vector (`vlm_worker.py:172`, `_build_pending_query` :105); the auto-label VLM stage selection does NOT (`autolabel/selection.py:30`) | One shared predicate for both (P3); expose a "waiting for embedding" count |
@@ -360,7 +360,7 @@ The bulk ingest script prints them.
 - `seed_from_detector`: reads the label list the same way ingest does
   (`proposer_label` / `get_class_names`), slugifies (F10), skips names already
   in the registry (by name, case-insensitive), appends the rest through
-  `create_registry_class` (`routers/curation/classes.py:251` path), group
+  `create_registry_class` (`routers/curation/classes_write.py` path), group
   defaults to `detector`, `dry_run` default true. It does not align ids, so it
   never conflicts with a hand-built registry. The CLI
   `scripts/curation/seed_class_registry.py` (id-aligned, for a model that
@@ -497,7 +497,7 @@ with person, animal and food items (checked live in section 8).
 Files: `src/routers/curation/_common_models.py` (`IngestConfigResponse` +
 `IngestDetectorInfo`), `src/routers/curation/ingest.py:313`, new
 `src/services/curation/detector_vocabulary.py` (labels, slug, seed plan),
-`src/routers/curation/classes.py` (route `seed_from_detector`),
+`src/routers/curation/class_seed.py` (route `seed_from_detector`),
 `src/routers/curation/_class_models.py` (request/response), contracts.
 Tests (red-first): `tests/curation/test_detector_vocabulary.py` (slugify:
 `traffic light` -> `traffic_light`, collisions, duplicates), 

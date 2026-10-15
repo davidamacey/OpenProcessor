@@ -155,7 +155,9 @@ def test_an_unservable_detector_override_is_a_typed_422_with_every_reason(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        'src.main.get_async_triton_pool', lambda: _Pool(ready=False, outputs=[]), raising=False
+        'src.app.resources.get_async_triton_pool',
+        lambda: _Pool(ready=False, outputs=[]),
+        raising=False,
     )
     r = client.put(URL, json={'expected_revision': 0, 'detector': {'model': 'ghost'}})
     assert r.status_code == 422, r.text
@@ -171,7 +173,7 @@ def test_no_triton_pool_is_a_typed_503(client: TestClient, monkeypatch: pytest.M
     def _no_pool() -> Any:
         raise RuntimeError('not started')
 
-    monkeypatch.setattr('src.main.get_async_triton_pool', _no_pool, raising=False)
+    monkeypatch.setattr('src.app.resources.get_async_triton_pool', _no_pool, raising=False)
     r = client.put(URL, json={'expected_revision': 0, 'detector': {'model': 'ghost'}})
     assert r.status_code == 503
     assert r.json()['detail']['error'] == 'detector_unavailable'

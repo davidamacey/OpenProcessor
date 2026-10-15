@@ -21,7 +21,7 @@ import pytest
 from curation.query_fakes import QueryFakeOpenSearch
 from curation.test_auto_label_selection import client, job_dir, packs  # noqa: F401 - fixtures
 from curation.test_pipeline import _FakeClassEntry, _FakeRegistry
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 

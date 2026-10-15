@@ -13,7 +13,8 @@ from _fake_project_registry import StaticProjectRegistry
 from opensearchpy import AsyncOpenSearch
 from prometheus_client import REGISTRY
 
-from src.config.curation import IndexRole, base_curation_config
+from src.config.curation_accessors import base_curation_config
+from src.config.curation_roles import IndexRole
 from src.config.projects import ProjectRecord, resources_for_new
 from src.services.curation import ops_metrics_refresh as refresh
 from src.services.projects.guard import install_project_guard

@@ -13,7 +13,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from src.clients.pe_encoder import PE_IMAGE_MODEL
-from src.config.curation import get_curation_config
+from src.config.curation_accessors import get_curation_config
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.config.settings import TritonModelConfig
 from src.core.logging import get_logger

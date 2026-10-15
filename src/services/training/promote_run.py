@@ -13,7 +13,7 @@ from src.config import get_curation_config
 from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
 from src.schemas.train_promote import PromoteRequest, PromoteResponse
-from src.services.training import jobs as train_jobs
+from src.services.training import job_manifest, jobs as train_jobs
 from src.services.training.promote_gate import (
     PROMOTE_GATE_MAP50_MIN,
     PROMOTE_GATE_PER_CLASS_PRECISION_MIN,
@@ -223,8 +223,8 @@ async def _resolve_class_names(
     from src.services.training.promote_errors import ClassRemapUnreadableError
 
     full_registry = await resolve_full_registry_for_promote(job_id)
-    job_spec = await train_jobs.read_job_spec(job_id)
-    manifest = await train_jobs.read_manifest(job_id)
+    job_spec = await job_manifest.read_job_spec(job_id)
+    manifest = await job_manifest.read_manifest(job_id)
     is_subset_run = bool((job_spec or {}).get('include_classes')) or bool(
         (job_spec or {}).get('single_cls')
     )
@@ -285,7 +285,7 @@ async def _stamp_lineage(plan: PromotePlan, result_triton_name: str, *, force: b
     reported as ``lineage_stamped: false``; the promote is not failed, because the model is
     already live in Triton and a 500 would mislead."""
     try:
-        stamped = await train_jobs.stamp_manifest_promotion(
+        stamped = await job_manifest.stamp_manifest_promotion(
             plan.job_id,
             triton_name=result_triton_name,
             promoted_at=datetime.now(tz=UTC).isoformat(),

@@ -24,7 +24,8 @@ from _route_helpers import api_routes
 
 import src.services.labeling.vlm_url_policy as policy
 from curation.conftest import ACTIVE, GLOBAL_VLM, SCOPED
-from src.config.curation import IndexRole, base_curation_config
+from src.config.curation_accessors import base_curation_config
+from src.config.curation_roles import IndexRole
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
 from src.services.labeling.vlm_endpoint_body import VlmEndpointBody

@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from src.config import GpuArbiterConfig, gpu_arbiter as gpu_arbiter_config_module
-from src.services.training import gpu_arbiter as ga
+from src.services.training import gpu_arbiter as ga, gpu_arbiter_docker, gpu_arbiter_policy
 
 
 if TYPE_CHECKING:
@@ -68,7 +68,7 @@ class _FakeDockerClient:
 def _enqueue_stop_containers(cfg: GpuArbiterConfig) -> tuple[str, ...] | None:
     """Mirrors the router's ``containers=`` argument at enqueue time."""
     scope = cfg.bakeoff_host_gpus
-    return ga.containers_to_stop(scope) if scope else None
+    return gpu_arbiter_policy.containers_to_stop(scope) if scope else None
 
 
 @pytest.mark.asyncio
@@ -81,7 +81,7 @@ async def test_bakeoff_host_gpu_disjoint_from_service_scope_is_noop(
     def _boom() -> None:
         raise AssertionError('docker client must not be constructed for a disjoint scope')
 
-    monkeypatch.setattr(ga, '_docker_client', _boom)
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', _boom)
     cfg = GpuArbiterConfig(
         containers=('svc',),
         container_gpus=(('svc', frozenset({2})),),
@@ -89,7 +89,7 @@ async def test_bakeoff_host_gpu_disjoint_from_service_scope_is_noop(
     )
     _set_config(monkeypatch, cfg)
 
-    action = await ga.stop_gpu_services(containers=_enqueue_stop_containers(cfg))
+    action = await gpu_arbiter_docker.stop_gpu_services(containers=_enqueue_stop_containers(cfg))
     assert action.action == 'noop'
 
 
@@ -98,9 +98,9 @@ async def test_bakeoff_host_gpu_intersects_service_scope_stops_it(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Evaluator on host GPU 2 -- the service pinned there is stopped."""
-    monkeypatch.setattr(ga, '_state_dir', lambda: tmp_path)
+    monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
     registry = {'svc': _FakeContainer('svc')}
-    monkeypatch.setattr(ga, '_docker_client', lambda: _FakeDockerClient(registry))
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: _FakeDockerClient(registry))
     cfg = GpuArbiterConfig(
         containers=('svc',),
         container_gpus=(('svc', frozenset({2})),),
@@ -108,7 +108,7 @@ async def test_bakeoff_host_gpu_intersects_service_scope_stops_it(
     )
     _set_config(monkeypatch, cfg)
 
-    action = await ga.stop_gpu_services(containers=_enqueue_stop_containers(cfg))
+    action = await gpu_arbiter_docker.stop_gpu_services(containers=_enqueue_stop_containers(cfg))
     assert action.action == 'gpu_services_stopped'
     assert registry['svc'].status == 'exited'
 
@@ -119,9 +119,9 @@ async def test_bakeoff_host_gpu_unset_keeps_back_compat_stop_everything(
 ) -> None:
     """OP_BAKEOFF_HOST_GPUS unset must keep today's behavior: stop every
     configured container regardless of scope."""
-    monkeypatch.setattr(ga, '_state_dir', lambda: tmp_path)
+    monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
     registry = {'svc': _FakeContainer('svc')}
-    monkeypatch.setattr(ga, '_docker_client', lambda: _FakeDockerClient(registry))
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: _FakeDockerClient(registry))
     cfg = GpuArbiterConfig(
         containers=('svc',),
         container_gpus=(('svc', frozenset({2})),),
@@ -129,7 +129,7 @@ async def test_bakeoff_host_gpu_unset_keeps_back_compat_stop_everything(
     )
     _set_config(monkeypatch, cfg)
 
-    action = await ga.stop_gpu_services(containers=_enqueue_stop_containers(cfg))
+    action = await gpu_arbiter_docker.stop_gpu_services(containers=_enqueue_stop_containers(cfg))
     assert action.action == 'gpu_services_stopped'
     assert registry['svc'].status == 'exited'
 
@@ -142,7 +142,7 @@ async def test_reconcile_restarts_service_outside_bakeoff_host_gpu_scope(
     service down: reconcile only holds down the intersecting subset,
     releasing everything else (e.g. after a training run on GPU 2 that
     claimed it releases)."""
-    monkeypatch.setattr(ga, '_state_dir', lambda: tmp_path)
+    monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
     jobs_dir = tmp_path / 'jobs'
     jobs_dir.mkdir()
     bakeoff_jobs_dir = tmp_path / 'bakeoff_jobs'
@@ -150,7 +150,7 @@ async def test_reconcile_restarts_service_outside_bakeoff_host_gpu_scope(
     (bakeoff_jobs_dir / 'b1.job.json').write_text('{}')
 
     registry = {'svc': _FakeContainer('svc', status='exited')}
-    monkeypatch.setattr(ga, '_docker_client', lambda: _FakeDockerClient(registry))
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: _FakeDockerClient(registry))
     cfg = GpuArbiterConfig(
         containers=('svc',),
         container_gpus=(('svc', frozenset({2})),),
@@ -171,7 +171,7 @@ async def test_reconcile_keeps_intersecting_service_down_during_bakeoff(
 ) -> None:
     """A queued bake-off scoped to host GPU 2 keeps a GPU-2-scoped service
     stopped."""
-    monkeypatch.setattr(ga, '_state_dir', lambda: tmp_path)
+    monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
     jobs_dir = tmp_path / 'jobs'
     jobs_dir.mkdir()
     bakeoff_jobs_dir = tmp_path / 'bakeoff_jobs'
@@ -179,7 +179,7 @@ async def test_reconcile_keeps_intersecting_service_down_during_bakeoff(
     (bakeoff_jobs_dir / 'b1.job.json').write_text('{}')
 
     registry = {'svc': _FakeContainer('svc', status='running')}
-    monkeypatch.setattr(ga, '_docker_client', lambda: _FakeDockerClient(registry))
+    monkeypatch.setattr(gpu_arbiter_docker, '_docker_client', lambda: _FakeDockerClient(registry))
     cfg = GpuArbiterConfig(
         containers=('svc',),
         container_gpus=(('svc', frozenset({2})),),

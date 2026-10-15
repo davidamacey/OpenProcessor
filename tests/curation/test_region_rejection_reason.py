@@ -19,7 +19,7 @@ from src.config.region_rejection import (
     REJECT_REASON_VERIFIER,
     compose_rejection_reason,
 )
-from src.services.curation.review_queries import region_reason
+from src.services.curation.review_reasons import region_reason
 
 
 def test_no_verdict_reads_needs_human_review_not_rejected() -> None:

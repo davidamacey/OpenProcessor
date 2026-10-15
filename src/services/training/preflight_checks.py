@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from src.clients.curation_opensearch.registry import get_class_registry
 from src.config import get_curation_config, get_region_fields
-from src.config.curation import items_index
+from src.config.curation_accessors import items_index
 from src.config.env import env_str
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger

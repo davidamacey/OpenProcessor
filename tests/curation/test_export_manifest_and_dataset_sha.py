@@ -10,12 +10,8 @@ import pytest
 
 from curation.export_fakes import FakeOpenSearch, generic_service, make_registry
 from src.config import CurationConfig
-from src.services.curation.export import (
-    GenericYoloExportService,
-    frozen_test_sha_of,
-    label_content_sha,
-    resolve_current_export_dir,
-)
+from src.services.curation.export import GenericYoloExportService, resolve_current_export_dir
+from src.services.curation.export_support import frozen_test_sha_of, label_content_sha
 
 
 def test_label_content_sha_tracks_content_and_class_names(tmp_path: Path):

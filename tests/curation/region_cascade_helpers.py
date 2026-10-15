@@ -133,7 +133,7 @@ class _FakeOpenSearch:
         # `default` project doc so ProjectRegistry.ensure_fresh() finds
         # exactly one active project instead of silently discovering
         # none and processing nothing.
-        from src.config.curation import base_curation_config
+        from src.config.curation_accessors import base_curation_config
         from src.config.projects import DEFAULT_SLUG, new_project_record
         from src.services.projects.registry import REVISION_DOC_ID, projects_index, record_to_doc
 

@@ -28,7 +28,7 @@ from PIL import Image
 from curation.query_fakes import QueryFakeOpenSearch
 from scripts.curation.worker.verify import _combined_class_update
 from src.clients.curation_opensearch.registry import ClassRegistry
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.project_context import current_project
 from src.config.vlm_class_attempt import (
     VLM_CLASS_ATTEMPTED_AT_FIELD as ATTEMPTED,
@@ -381,7 +381,7 @@ def _recent_empty(now: datetime, hours_ago: float) -> dict[str, Any]:
 
 @pytest.mark.asyncio
 async def test_selectors_skip_items_with_a_recent_empty_answer() -> None:
-    from scripts.curation.vlm_worker import _build_pending_query
+    from scripts.curation.vlm_pending import _build_pending_query
     from src.services.curation.autolabel.selection import vlm_selection_query
 
     now = datetime.now(UTC)

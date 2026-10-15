@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config import IndexRole, get_region_fields, index_name
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
 from src.services.curation.region_box_embeddings import entry_for

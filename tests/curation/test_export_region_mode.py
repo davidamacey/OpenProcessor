@@ -10,7 +10,7 @@ from PIL import Image
 
 from curation.export_fakes import FakeOpenSearch, make_region_item, single_class_service
 from src.config.region_state import RegionStatus
-from src.services.curation.export_single_class import SingleClassExportProfile
+from src.services.curation.export_models import SingleClassExportProfile
 
 
 # ---------------------------------------------------------------------------

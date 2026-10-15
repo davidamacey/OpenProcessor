@@ -9,7 +9,7 @@ from typing import Literal
 
 import pytest
 
-from src.config.curation import base_curation_config
+from src.config.curation_accessors import base_curation_config
 from src.config.projects import ProjectRecord, resources_for_new
 from src.routers.curation import projects as projects_router
 from src.schemas.curation.config_common import ConfigErrorDetail

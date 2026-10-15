@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 
 from curation.export_fakes import generic_service
-from src.services.curation.export import _ExportRow, hash_split
 from src.services.curation.export_split import stratified_split
+from src.services.curation.export_support import _ExportRow, hash_split
 
 
 def test_hash_split_is_deterministic():

@@ -82,7 +82,7 @@ STAGES: tuple[str, ...] = (
 def _state_dir() -> Path:
     # The bound project's own autolabel_dir -- resolved fresh on every
     # call, never cached at import time (PROJECT_SCOPED_FIELDS).
-    from src.config.curation import get_curation_config
+    from src.config.curation_accessors import get_curation_config
 
     return get_curation_config().autolabel_dir
 

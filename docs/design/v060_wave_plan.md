@@ -414,7 +414,7 @@ lower. Rollback: `version_policy` back to version 1, reload model.
 
 ### WP-2.2 Triton system shared memory for the API hop (#215). Tier: Opus writes the isolation sub-plan, Sonnet implements.
 
-No shared memory is used today (tensors inline in gRPC, `src/clients/triton_pool.py`). Design: a
+No shared memory is used today (tensors inline in gRPC, `src/clients/triton_pool_core.py`). Design: a
 per-API-worker pool of system shared memory regions (`tritonclient.utils.shared_memory`),
 registered with Triton once per worker, sized for the largest batch (uint8 after WP-2.1: PE 32 x
 336 x 336 x 3 = 10.8 MB; detector 16 x 640 x 640 x 3 = 19.7 MB), outputs also in regions. Requires

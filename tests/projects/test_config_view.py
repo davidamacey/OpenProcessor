@@ -8,9 +8,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from src.config.curation import (
+from src.config.curation import CurationConfig
+from src.config.curation_accessors import (
     PROJECT_SCOPED_FIELDS,
-    CurationConfig,
     base_curation_config,
     get_curation_config,
 )
@@ -80,7 +80,7 @@ def test_module_level_captured_view_follows_a_later_binding() -> None:
 
 def test_idx_helper_matches_index_name() -> None:
     from src.config import IndexRole, index_name
-    from src.config.curation import idx
+    from src.config.curation_accessors import idx
 
     with bind_project(_record('alpha')):
         assert idx(IndexRole.ITEMS) == index_name(get_curation_config(), IndexRole.ITEMS)

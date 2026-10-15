@@ -144,12 +144,12 @@ def _fetch_order(n: int, n_slices: int = 8) -> list[int]:
 async def test_ivf_stores_what_the_method_returns_for_the_fetched_rows(ivf_state: None) -> None:
     from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
     from src.services.curation.clustering.backend import detect_cluster_backend
-    from src.services.curation.clustering.embedding_reduce import _normalize_rows
     from src.services.curation.clustering.methods import get_method
     from src.services.curation.clustering.orchestrator import (
         assign_only_residuals,
         cluster_residuals,
     )
+    from src.services.curation.clustering.residual_fetch import _normalize_rows
 
     ids, vectors = _load_embeddings()
     order = _fetch_order(len(ids))

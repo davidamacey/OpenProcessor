@@ -13,8 +13,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
-from src.config.curation import base_curation_config
-from src.services.curation import review_queries
+from src.config.curation_accessors import base_curation_config
+from src.services.curation import review_tabs
 
 
 ITEMS = base_curation_config().items_index
@@ -113,7 +113,7 @@ def test_the_catalog_serves_the_tab_with_its_filters_and_split_options(client: T
     split_spec = next(s for s in tab['filter_specs'] if s['param'] == 'dataset_split')
     assert [o['value'] for o in split_spec['options']] == ['', 'train', 'val', 'test']
     assert 'import_id' not in tabs['all']['filters']
-    assert review_queries.tab_filters('imported') == tuple(tab['filters'])
+    assert review_tabs.tab_filters('imported') == tuple(tab['filters'])
 
 
 def test_empty_reason_tells_the_operator_what_to_do(client: TestClient) -> None:

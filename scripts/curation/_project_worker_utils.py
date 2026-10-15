@@ -61,7 +61,7 @@ def rotated(records: list[ProjectRecord], start: int) -> list[ProjectRecord]:
 
 def curation_api_prefix() -> str:
     """The deployment's curation API mount (a global setting)."""
-    from src.config.curation import base_curation_config
+    from src.config.curation_accessors import base_curation_config
 
     return base_curation_config().api_prefix.rstrip('/')
 

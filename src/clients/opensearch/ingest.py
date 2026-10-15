@@ -26,6 +26,33 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _assign_cluster(
+    doc: dict[str, Any],
+    clustering_service: ClusterAssigner | None,
+    index: IndexName,
+    embedding: np.ndarray,
+    label: str,
+) -> bool:
+    """Stamp the cluster assignment onto ``doc``; True when one was made.
+
+    A failing assigner is logged and skipped: clustering never blocks ingestion.
+    """
+    if clustering_service is None:
+        return False
+    try:
+        cluster_idx = get_cluster_index_name(index)
+        if not clustering_service.is_trained(cluster_idx):
+            return False
+        assignment = clustering_service.assign_cluster(cluster_idx, embedding)
+        doc['cluster_id'] = assignment.cluster_id
+        doc['cluster_distance'] = assignment.distance
+        doc['clustered_at'] = doc['indexed_at']
+    except Exception as e:
+        logger.warning(f'Cluster assignment failed for {label}: {e}')
+        return False
+    return True
+
+
 class IngestMixin:
     """Single-image ingestion and hash duplicate checks."""
 
@@ -82,7 +109,7 @@ class IngestMixin:
         Returns:
             Dict with ingestion results per index
         """
-        results = {
+        results: dict[str, Any] = {
             'global': False,
             'vehicles': 0,
             'people': 0,
@@ -100,21 +127,10 @@ class IngestMixin:
                 'global_embedding': global_embedding.tolist(),
                 'indexed_at': timestamp,
             }
-
-            # Assign to cluster if clustering is available
-            if clustering_service is not None:
-                try:
-                    cluster_idx = get_cluster_index_name(IndexName.GLOBAL)
-                    if clustering_service.is_trained(cluster_idx):
-                        assignment = clustering_service.assign_cluster(
-                            cluster_idx, global_embedding
-                        )
-                        global_doc['cluster_id'] = assignment.cluster_id
-                        global_doc['cluster_distance'] = assignment.distance
-                        global_doc['clustered_at'] = timestamp
-                        results['clustered'] += 1
-                except Exception as e:
-                    logger.warning(f'Cluster assignment failed for global: {e}')
+            if _assign_cluster(
+                global_doc, clustering_service, IndexName.GLOBAL, global_embedding, 'global'
+            ):
+                results['clustered'] += 1
 
             if image_width:
                 global_doc['width'] = image_width
@@ -139,101 +155,22 @@ class IngestMixin:
 
         # 2. Route box embeddings to category-specific indexes
         if box_embeddings is not None and det_classes is not None:
-            num_boxes = box_embeddings.shape[0]
-
-            for i in range(num_boxes):
-                class_id = int(det_classes[i])
-                category = get_category(class_id)
+            for i in range(box_embeddings.shape[0]):
                 detection_id = f'{image_id}_box_{i}'
-
                 try:
-                    if category == DetectionCategory.VEHICLE:
-                        # Index vehicle detection
-                        vehicle_doc = {
-                            'detection_id': detection_id,
-                            'image_id': image_id,
-                            'image_path': image_path,
-                            'embedding': box_embeddings[i].tolist(),
-                            'class_id': class_id,
-                            'class_name': get_class_name(class_id),
-                            'indexed_at': timestamp,
-                        }
-
-                        # Assign to vehicle cluster
-                        if clustering_service is not None:
-                            try:
-                                cluster_idx = get_cluster_index_name(IndexName.VEHICLES)
-                                if clustering_service.is_trained(cluster_idx):
-                                    assignment = clustering_service.assign_cluster(
-                                        cluster_idx, box_embeddings[i]
-                                    )
-                                    vehicle_doc['cluster_id'] = assignment.cluster_id
-                                    vehicle_doc['cluster_distance'] = assignment.distance
-                                    vehicle_doc['clustered_at'] = timestamp
-                                    results['clustered'] += 1
-                            except Exception as e:
-                                logger.warning(f'Cluster assignment failed for vehicle: {e}')
-
-                        if normalized_boxes is not None:
-                            vehicle_doc['box'] = normalized_boxes[i].tolist()
-                        if det_scores is not None:
-                            vehicle_doc['confidence'] = float(det_scores[i])
-                        if metadata:
-                            vehicle_doc['metadata'] = metadata
-
-                        await self.client.index(
-                            index=IndexName.VEHICLES.value,
-                            id=detection_id,
-                            body=vehicle_doc,
-                            refresh=False,
-                        )
-                        results['vehicles'] += 1
-
-                    elif category == DetectionCategory.PERSON:
-                        # Index person detection
-                        person_doc = {
-                            'detection_id': detection_id,
-                            'image_id': image_id,
-                            'image_path': image_path,
-                            'embedding': box_embeddings[i].tolist(),
-                            'has_face': False,  # Will be updated when face detection is added
-                            'indexed_at': timestamp,
-                        }
-
-                        # Assign to people cluster
-                        if clustering_service is not None:
-                            try:
-                                cluster_idx = get_cluster_index_name(IndexName.PEOPLE)
-                                if clustering_service.is_trained(cluster_idx):
-                                    assignment = clustering_service.assign_cluster(
-                                        cluster_idx, box_embeddings[i]
-                                    )
-                                    person_doc['cluster_id'] = assignment.cluster_id
-                                    person_doc['cluster_distance'] = assignment.distance
-                                    person_doc['clustered_at'] = timestamp
-                                    results['clustered'] += 1
-                            except Exception as e:
-                                logger.warning(f'Cluster assignment failed for person: {e}')
-
-                        if normalized_boxes is not None:
-                            person_doc['box'] = normalized_boxes[i].tolist()
-                        if det_scores is not None:
-                            person_doc['confidence'] = float(det_scores[i])
-                        if metadata:
-                            person_doc['metadata'] = metadata
-
-                        await self.client.index(
-                            index=IndexName.PEOPLE.value,
-                            id=detection_id,
-                            body=person_doc,
-                            refresh=False,
-                        )
-                        results['people'] += 1
-
-                    else:
-                        # Skip non-vehicle, non-person classes
-                        results['skipped'] += 1
-
+                    await self._ingest_box(
+                        results,
+                        detection_id=detection_id,
+                        image_id=image_id,
+                        image_path=image_path,
+                        timestamp=timestamp,
+                        embedding=box_embeddings[i],
+                        class_id=int(det_classes[i]),
+                        box=normalized_boxes[i] if normalized_boxes is not None else None,
+                        score=det_scores[i] if det_scores is not None else None,
+                        metadata=metadata,
+                        clustering_service=clustering_service,
+                    )
                 except Exception as e:
                     results['errors'].append(f'{detection_id}: {e!s}')
 
@@ -243,6 +180,61 @@ class IngestMixin:
             f'skipped={results["skipped"]}, clustered={results["clustered"]}'
         )
         return results
+
+    async def _ingest_box(
+        self,
+        results: dict[str, Any],
+        *,
+        detection_id: str,
+        image_id: str,
+        image_path: str,
+        timestamp: str,
+        embedding: np.ndarray,
+        class_id: int,
+        box: np.ndarray | None,
+        score: float | None,
+        metadata: dict[str, Any] | None,
+        clustering_service: ClusterAssigner | None,
+    ) -> None:
+        """Index one detection into the vehicle or person index; other classes are skipped."""
+        category = get_category(class_id)
+        if category == DetectionCategory.VEHICLE:
+            index, label, counter = IndexName.VEHICLES, 'vehicle', 'vehicles'
+            doc: dict[str, Any] = {
+                'detection_id': detection_id,
+                'image_id': image_id,
+                'image_path': image_path,
+                'embedding': embedding.tolist(),
+                'class_id': class_id,
+                'class_name': get_class_name(class_id),
+                'indexed_at': timestamp,
+            }
+        elif category == DetectionCategory.PERSON:
+            index, label, counter = IndexName.PEOPLE, 'person', 'people'
+            doc = {
+                'detection_id': detection_id,
+                'image_id': image_id,
+                'image_path': image_path,
+                'embedding': embedding.tolist(),
+                'has_face': False,  # Will be updated when face detection is added
+                'indexed_at': timestamp,
+            }
+        else:
+            # Skip non-vehicle, non-person classes
+            results['skipped'] += 1
+            return
+
+        if _assign_cluster(doc, clustering_service, index, embedding, label):
+            results['clustered'] += 1
+        if box is not None:
+            doc['box'] = box.tolist()
+        if score is not None:
+            doc['confidence'] = float(score)
+        if metadata:
+            doc['metadata'] = metadata
+
+        await self.client.index(index=index.value, id=detection_id, body=doc, refresh=False)
+        results[counter] += 1
 
     async def check_duplicate_by_hash(self, imohash: str) -> dict[str, Any] | None:
         """

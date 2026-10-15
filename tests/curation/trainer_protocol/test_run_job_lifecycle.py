@@ -16,7 +16,7 @@ import trainer_callbacks
 import trainer_kwargs
 
 from curation.trainer_protocol._helpers import _write_job
-from src.services.training import jobs as train_jobs
+from src.services.training import job_manifest, jobs as train_jobs
 from src.services.training.class_remap import build_class_id_to_name, resolve_class_remap
 
 
@@ -232,7 +232,7 @@ def test_run_job_drives_a_whole_export_run_to_finished(
     # ONNX sibling is what promote actually copies into the Triton repo.
     assert Path(status.checkpoint_path).with_suffix('.onnx').is_file()
 
-    manifest = asyncio.run(train_jobs.read_manifest(job_id))
+    manifest = asyncio.run(job_manifest.read_manifest(job_id))
     assert manifest is not None
     # The export fixture's manifest.json only sets frozen_test_sha -- no
     # dataset_sha key, and dataset_sha is never computed (it's the export's
@@ -329,7 +329,7 @@ def test_normal_run_manifest_has_no_null_lineage(
 
     trainer.run_job(spec)
 
-    manifest = asyncio.run(train_jobs.read_manifest(job_id))
+    manifest = asyncio.run(job_manifest.read_manifest(job_id))
     assert manifest is not None
     for key in ('dataset_sha', 'frozen_test_sha', 'test_label_sha', 'registry_sha'):
         assert manifest['lineage'][key] is not None, key
@@ -357,7 +357,7 @@ def test_run_job_propagates_class_remap_for_a_subset_run(
     assert status.state == 'finished', status.error
     assert status.class_remap_copy_failed is False  # type: ignore[attr-defined]
     checkpoint = Path(status.checkpoint_path or '')
-    manifest = asyncio.run(train_jobs.read_manifest(job_id))
+    manifest = asyncio.run(job_manifest.read_manifest(job_id))
     assert manifest is not None
 
     # (a) manifest lineage -- survives tmp cleanup.
@@ -413,7 +413,7 @@ def test_run_job_records_a_training_failure_in_status_and_log(
     assert 'dataset is corrupt' in (status.error or '')
     assert any('FAILED' in line for line in asyncio.run(train_jobs.tail_run_log(job_id, 200)))
 
-    manifest = asyncio.run(train_jobs.read_manifest(job_id))
+    manifest = asyncio.run(job_manifest.read_manifest(job_id))
     assert manifest is not None
     assert manifest['results']['final_state'] == 'failed'
 

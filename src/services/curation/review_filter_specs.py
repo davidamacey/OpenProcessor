@@ -3,7 +3,7 @@
 Served as ``filter_specs`` on ``GET /review/tabs`` so a client renders any
 filter (its widget, label, range and fixed options) without per-filter code.
 :data:`FILTER_SPECS` has one entry per query parameter in
-:data:`~src.services.curation.review_queries.COMMON_FILTERS` and
+:data:`~src.services.curation.review_tabs.COMMON_FILTERS` and
 ``TAB_EXTRA_FILTERS`` (a test pins that), so a tab can never advertise a
 filter with no spec.
 

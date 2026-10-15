@@ -62,13 +62,13 @@ def _written(client: Any) -> dict[str, dict[str, Any]]:
 
 @pytest.fixture
 def residuals(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> np.ndarray:
-    from src.services.curation.clustering import embedding_reduce
+    from src.services.curation.clustering import embedding_reduce, residual_fetch
     from src.services.curation.clustering.methods import ivf_store
 
     emb = _embeddings()
     ids = [f'crop-{i}' for i in range(len(emb))]
     monkeypatch.setattr(
-        embedding_reduce,
+        residual_fetch,
         'fetch_residual_embeddings_parallel',
         AsyncMock(return_value=(ids, emb)),
     )
