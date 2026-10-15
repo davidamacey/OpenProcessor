@@ -561,7 +561,7 @@ tree) unless noted; after is the tip of the merged series.
 | Frontend vitest tests | 4,575 (4,604 after hygiene) | 4,750 |
 | Image size, `evaluator` | 14.82 GB | 14.35 GB (multi-stage, -470 MB) |
 | Dockerfile `FROM` pinned by digest | 0 of 9 | all |
-| Typing strictness (final step) | `disallow_untyped_defs` false, `warn_return_any` false, nine-code relax override on 13 module patterns | **PLACEHOLDER, filled by the typing PR: final mypy error count, remaining ignores, override list** |
+| Typing strictness (final step) | `disallow_untyped_defs` false, `warn_return_any` false, nine-code relax override on 13 module patterns | `disallow_untyped_defs`, `disallow_incomplete_defs` and `warn_return_any` on globally; the nine-code relax override is deleted. 328 errors fixed (services 92, scripts 58, routers 51, export 49, clients 34, utils 12, core 11, app 11, docker 6, config 3, domain 1; 180 missing annotations, 112 any-returns), mypy clean over 938 source files, no new `# type: ignore`, no blanket `Any` (one JSON-array `Any` return remains in a docs script). Tests are exempt by scope: the mypy `files` setting does not include `tests/` |
 
 Per-guard proof outputs are in the table in 3.2. Cost notes: pre-commit full run with mypy cold was
 minutes and warm seconds; the full offline suite 10 to 11 minutes at `-n 6`; the guards themselves
