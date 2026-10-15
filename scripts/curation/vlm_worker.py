@@ -105,8 +105,8 @@ class _StreamWorker:
     def __init__(self, args: argparse.Namespace) -> None:
         self.args = args
         self.api_prefix = curation_api_prefix()
-        self.registry = script_project_registry(args.opensearch)
         self.opensearch = make_script_opensearch([args.opensearch], timeout=30)
+        self.registry = script_project_registry(client=self.opensearch)
         self.scope_cache = ScopeCache()
         self.rotation = 0
         self.stop_event = asyncio.Event()

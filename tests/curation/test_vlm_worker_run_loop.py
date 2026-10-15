@@ -43,7 +43,7 @@ class Fakes:
         self.hooks: list[Any] = []
         m = monkeypatch
         m.setattr(vlm_worker, 'curation_api_prefix', lambda: '/curation')
-        m.setattr(vlm_worker, 'script_project_registry', lambda _url: object())
+        m.setattr(vlm_worker, 'script_project_registry', lambda *_a, **_kw: object())
         m.setattr(vlm_worker, 'make_script_opensearch', lambda *_a, **_kw: self)
         m.setattr(vlm_worker, 'projects_with_active_vlm', self._projects)
         m.setattr(vlm_worker, 'fetch_pending_ids', self._fetch)

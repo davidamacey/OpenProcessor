@@ -164,7 +164,7 @@ def test_worker_loop_runs_triggers_fifo_one_at_a_time(
         os.utime(path, (now - age, now - age))
     _RUNS.clear()
     monkeypatch.setattr(
-        auto_label_worker, 'script_project_registry', lambda *_a: _Registry([beta, alpha])
+        auto_label_worker, 'script_project_registry', lambda *_a, **_kw: _Registry([beta, alpha])
     )
     monkeypatch.setattr(auto_label_worker, '_build_opensearch', _NullOpenSearch)
     monkeypatch.setattr(auto_label_worker, '_write_container_heartbeat', lambda *_a: None)

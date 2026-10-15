@@ -456,6 +456,9 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   tree and waited for a stuck directory listing before returning; it now stops at once.
 - Starting a bulk ingest on a folder the API cannot read is refused (`bulk_ingest_invalid_source`, "not
   readable") instead of completing with zero images discovered.
+- The auto-label, cluster-refresh and VLM workers no longer log `Unclosed client session` on
+  shutdown: each opened a second OpenSearch client for its project registry that nothing closed.
+  `script_project_registry` now takes the worker's own client, which the worker already closes.
 
 - Visual-search ingest (#318): a face response with fewer landmark entries than faces no longer
   raises `IndexError` and fails the whole batch. Only the affected image is refused, with the

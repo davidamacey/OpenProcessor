@@ -168,3 +168,16 @@ def test_unknown_or_building_project_refuses(monkeypatch: pytest.MonkeyPatch) ->
         script_binding.bind_script_project('ghost')
     with pytest.raises(SystemExit, match='is building'):
         script_binding.bind_script_project('newbie')
+
+
+def test_script_project_registry_reads_through_the_callers_client() -> None:
+    """A worker hands its own client to the registry so closing that one
+    client at shutdown leaves no unclosed aiohttp session behind."""
+    sentinel = object()
+    registry = script_binding.script_project_registry(client=sentinel)
+    assert asyncio.run(_resolve(registry._client_factory)) is sentinel
+
+
+async def _resolve(factory: Any) -> Any:
+    result = factory()
+    return await result if asyncio.iscoroutine(result) else result
