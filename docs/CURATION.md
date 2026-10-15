@@ -123,6 +123,13 @@ members as you would by hand, skips every locked or validated one, and refuses
 (`scope_changed`) when a re-refine has moved the members since the run.
 [Assist runs](../docs/design/curation_api_contract.md#assist-runs).
 
+Cropwright's **Assist…** button on a cluster page is the front end of this: pick the
+selection, all members or a representative sample, the actions and the VLM, read the
+server's dry run (members sent, estimated VLM calls), start, and read the proposal card
+(agreement, votes, attribute suggestions, an explicit **Apply** with the dry-run count and
+the `scope_changed` refusal). The guide, with the recipe and the segmenter verification
+choice: [Selective VLM and segmenter assist](../docs-site/docs/guides/selective-assist.mdx).
+
 ## Test on a crop
 
 Try a draft pack or profile on stored crops before activating it. Read-only.

@@ -399,7 +399,8 @@ its VLM stage reports why (`skipped` with the reason).
 sub-cluster or a filter to the VLM, optionally as a seeded representative sample, with
 `vlm=<name>` and `prompt_pack` for that run only. It is a dry run by default. It needs an
 active endpoint or a `vlm` name (`409 vlm_not_configured` otherwise). It is not limited by
-the VLM policy, and ignores the daily budget. See [Pipeline modes](./pipeline-modes.mdx) for
+the VLM policy, and ignores the daily budget. See [Selective VLM and segmenter assist](./selective-assist.mdx)
+for the sample modes, attributes and segmenter verification, [Pipeline modes](./pipeline-modes.mdx) for
 the recipe and the [API contract](../../../docs/design/curation_api_contract.md#assist-runs)
 for the request and result.
 

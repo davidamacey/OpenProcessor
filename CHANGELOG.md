@@ -12,6 +12,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 ## [Unreleased]
 
 ### Added
+- Cropwright **Assist…** (cluster page, one crop, one box, Matching items): a dialog to pick what the VLM sees (selected, all, a representative sample), the actions (classify, attributes, verify, segment) and the VLM and prompt pack, with the server's dry run; the cluster and sub-cluster label proposal card with the agreement, an explicit dry-run-first **Apply** and the `scope_changed` refusal; dashed "VLM suggests" attribute chips; and a **Region verification** switch (`region_verify`) on the VLM scope panel. See the guide [Selective VLM and segmenter assist](docs-site/docs/guides/selective-assist.mdx).
 
 - Pack attributes in whole-project VLM runs: `vlm_attributes=true` on `POST /pipeline/auto_label` and `/start` makes the VLM stage use the pack's combined `assist` call and store the item attributes in each item's `assist` slot. The region worker's combined call asks for the pack's item attributes on the items it classifies and writes them to `assist.attributes` too.
 - Selectable segmenter verification: the VLM policy takes `region_verify` (`vlm`, the default, or `none`) for the region worker, and an assist run with the `segment` action re-segments chosen crops, a cluster or a filter, with `segment.verify` (`vlm` or `none`) for those items only. The run waits in the new status `waiting_region` and reports `result.segment`. Refusals: `409 region_profile_required`, `no_segmenter_leg`, `region_stage_paused`, `verify_endpoint_mismatch`. With the worker's VLM requested but unreachable, an item is written as `detection_failed` (`vlm_unavailable`).
@@ -449,7 +450,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 - `POST /vlm/verify_regions`: use `POST /assist/runs` with action `verify` on a `crops` or `boxes` target.
 - The hard-coded `make` and `model` VLM outputs: the reply keys, `VlmClassPrediction.make/model`, the combined reply's `make/model`, and the `vlm_item_make` / `vlm_item_model` item fields (never on the wire). A prompt pack declares such facts as `attributes` instead; they are stored in the item's `assist` object by assist runs. Existing values in `vlm_item_make` / `vlm_item_model` stay in old documents and are not read.
-- `POST /vlm/label_cluster/{cluster_id}`: use `POST /assist/runs` with a `cluster` target (and `sample.mode: "all"`), or `?cluster_id=` on `auto_label/start` for the whole-cluster job. Cropwright's cluster-page and dashboard "Run VLM" calls are moved to the assist run in the frontend step of this release.
+- `POST /vlm/label_cluster/{cluster_id}`: use `POST /assist/runs` with a `cluster` target (and `sample.mode: "all"`), or `?cluster_id=` on `auto_label/start` for the whole-cluster job. Cropwright's cluster-page "Run VLM" and the dashboard's "Run VLM on cluster" dialog are replaced by **Assist…** on the cluster page, which uses the assist run.
 - The region-profile fields `aspect_min` and `aspect_max` (and `OcrRegion.is_region_shaped`, which was
   their only reader and had no caller): from the profile dataclass, the profile editor schema, the
   license plate example, the docs and the OpenAPI contract. A stored profile that still carries

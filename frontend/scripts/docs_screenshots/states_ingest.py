@@ -76,6 +76,17 @@ def state_cluster_detail(page, ctx: Ctx) -> None:
     _settle(page, 2500)
 
 
+def state_assist_dialog(page, ctx: Ctx) -> None:
+    # The dialog only plans (a dry run); nothing is started or written.
+    state_cluster_detail(page, ctx)
+    page.get_by_role("button", name="Select page").click()
+    page.locator("[data-testid='assist-open']").click()
+    page.wait_for_selector("[data-testid='assist-plan-sampled'], [data-testid='assist-plan-error']", timeout=30_000)
+    page.locator("[data-testid='assist-choice-representative'] input").check()
+    page.wait_for_selector("[data-testid='assist-plan-sampled'], [data-testid='assist-plan-error']", timeout=30_000)
+    _settle(page, 1500)
+
+
 def state_dataset_imports(page, ctx: Ctx) -> None:
     page.goto(ctx.url("/datasets/imports"), wait_until="domcontentloaded", timeout=30_000)
     page.wait_for_selector("main", timeout=20_000)

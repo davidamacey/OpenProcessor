@@ -37,11 +37,13 @@ bulk-edits everything the filter matches, are described in
 
 The core triage surface: a crop grid for one cluster with pointer-based
 drag and drop onto class rows, bulk select/confirm/move/discard/ignore,
-per-class hotkeys, **Run VLM** (with an optional per-run endpoint picker, see
-[VLM models](./vlm-models.md#choosing-a-vlm-per-run)) and **Accept VLM** for
+per-class hotkeys, **Assist…** (ask the VLM about the selection, the cluster
+or the open sub-cluster, with a per-run endpoint and a proposal for the
+cluster's label, see [Assist (VLM)](./assist.md)) and **Accept VLM** for
 the page, **Reprocess** for the selection (see
 [Reprocess](./dataset-import.md#reprocess)), **Refine**
-(sub-cluster with agglomerative clustering), a strategy bar (sort, score
+(sub-cluster with agglomerative clustering; a sub-cluster tab lists that
+sub-cluster's members from the server), a strategy bar (sort, score
 chips, diverse-selection overlay) and a core-member cut line.
 
 See [Keyboard shortcuts](./keyboard-shortcuts.md) for the full key table.

@@ -513,7 +513,10 @@ curl -s -X POST "$API/assist/runs/RUN_ID/apply" -H 'content-type: application/js
 `scope_now.changed` is true, and apply refuses with `scope_changed` until you run again
 (or pass `allow_changed_scope`).
 
-To make the VLM the project's own default instead, activate it (mode (c), step 3).
+The sample modes, attributes and segmenter verification are described in
+[Selective VLM and segmenter assist](./selective-assist.mdx); in Cropwright it is the
+**Assist…** button on a cluster page. To make the VLM the project's own default instead,
+activate it (mode (c), step 3).
 
 **6. Check what the run did.** A VLM run that could label nothing now fails instead of
 reporting `completed` with `predicted: 0`. Found by this run: the auto-label VLM stage

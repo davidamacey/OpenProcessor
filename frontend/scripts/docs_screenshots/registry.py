@@ -23,6 +23,7 @@ from docs_screenshots.states_core import (
     state_vlm_run_picker,
 )
 from docs_screenshots.states_ingest import (
+    state_assist_dialog,
     state_audit,
     state_cluster_detail,
     state_dataset_imports,
@@ -109,6 +110,7 @@ STATES = {
     "vlm-endpoint-off": state_vlm_endpoint_off,
     "audit": state_audit,
     "cluster-detail": state_cluster_detail,
+    "assist-dialog": state_assist_dialog,
     "dataset-imports": state_dataset_imports,
     "prompt-packs-list": state_prompt_packs_list,
     "region-profiles-list": state_region_profiles_list,

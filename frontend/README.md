@@ -139,7 +139,8 @@ and [CLAUDE.md](CLAUDE.md)'s Routes and Keyboard shortcuts
 sections for the authoritative, current tables (kept in lockstep with
 the code, not duplicated here to avoid drift). Highlights: `/dashboard`
 (pipeline health), `/ingest` (bring images in), `/clusters` +
-`/clusters/[id]` (cluster-based triage, drag-and-drop), `/review`
+`/clusters/[id]` (cluster-based triage, drag-and-drop, and **Assist…**: VLM runs
+on a cluster, sub-cluster, selection, crop or box with a label proposal), `/review`
 (keyboard-driven queues), `/classes`, `/export`, `/train`, `/models`,
 `/bakeoff`, `/settings`.
 

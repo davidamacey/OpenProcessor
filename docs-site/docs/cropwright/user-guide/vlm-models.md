@@ -65,7 +65,7 @@ A **Project default** option sends nothing and uses the active endpoint.
 Alternatively, choose a specific endpoint for one run in:
 
 - the dashboard's assist bar (a pick implies running the VLM);
-- the **Run VLM** buttons on the dashboard and on a cluster page;
+- the **Assist…** dialog (a cluster, a sub-cluster, a selection, one crop or one box; see [Assist](./assist.md)), which also carries the prompt pack;
 - the prompt-pack and region-profile **test on a crop** panels.
 
 Each shows the endpoint's status; an external endpoint shows the warning and
