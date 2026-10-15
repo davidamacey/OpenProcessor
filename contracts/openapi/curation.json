@@ -447,6 +447,30 @@
         "title": "AppliedRuntime",
         "type": "object"
       },
+      "ApplyConflict": {
+        "properties": {
+          "crop_id": {
+            "title": "Crop Id",
+            "type": "string"
+          },
+          "current_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Source"
+          }
+        },
+        "required": [
+          "crop_id"
+        ],
+        "title": "ApplyConflict",
+        "type": "object"
+      },
       "ArchiveRequest": {
         "properties": {
           "expected_revision": {
@@ -458,6 +482,89 @@
           "expected_revision"
         ],
         "title": "ArchiveRequest",
+        "type": "object"
+      },
+      "AssistApplyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_changed_scope": {
+            "default": false,
+            "title": "Allow Changed Scope",
+            "type": "boolean"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "dry_run": {
+            "default": true,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "label_source": {
+            "const": "human",
+            "default": "human",
+            "title": "Label Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "class_name"
+        ],
+        "title": "AssistApplyRequest",
+        "type": "object"
+      },
+      "AssistApplyResponse": {
+        "properties": {
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/ApplyConflict"
+            },
+            "title": "Conflicts",
+            "type": "array"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "scope_now": {
+            "$ref": "#/components/schemas/ScopeNow"
+          },
+          "selected": {
+            "description": "Current members the class may be applied to.",
+            "title": "Selected",
+            "type": "integer"
+          },
+          "skipped_locked": {
+            "description": "Current members left alone: a human- or import-set class, or validated.",
+            "title": "Skipped Locked",
+            "type": "integer"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          },
+          "updated_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Updated Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dry_run",
+          "class_name",
+          "selected",
+          "skipped_locked",
+          "scope_now"
+        ],
+        "title": "AssistApplyResponse",
         "type": "object"
       },
       "AssistAttributeWire": {
@@ -572,9 +679,36 @@
                 "type": "null"
               }
             ]
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Proposal"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The sampled answers read as a label for the scope."
           }
         },
         "title": "AssistResult",
+        "type": "object"
+      },
+      "AssistRunList": {
+        "properties": {
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/AssistRunState"
+            },
+            "title": "Runs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "runs"
+        ],
+        "title": "AssistRunList",
         "type": "object"
       },
       "AssistRunRequest": {
@@ -732,6 +866,17 @@
             ],
             "title": "Run Id"
           },
+          "scope_now": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScopeNow"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set on reads for a cluster target or a run with a context: the scope now against the members the run resolved."
+          },
           "status": {
             "enum": [
               "dry_run",
@@ -798,6 +943,51 @@
           }
         },
         "title": "AssistSample",
+        "type": "object"
+      },
+      "AttributeSummary": {
+        "properties": {
+          "answered": {
+            "description": "Answers that gave this attribute.",
+            "title": "Answered",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/AttributeValueCount"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "values",
+          "answered"
+        ],
+        "title": "AttributeSummary",
+        "type": "object"
+      },
+      "AttributeValueCount": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "count"
+        ],
+        "title": "AttributeValueCount",
         "type": "object"
       },
       "AttributesResult": {
@@ -3995,6 +4185,24 @@
         "title": "ClassUpdateRequest",
         "type": "object"
       },
+      "ClassVotes": {
+        "properties": {
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "votes": {
+            "title": "Votes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "class_name",
+          "votes"
+        ],
+        "title": "ClassVotes",
+        "type": "object"
+      },
       "ClassifyResult": {
         "properties": {
           "failed": {
@@ -5487,6 +5695,18 @@
               }
             ],
             "title": "Run Id"
+          },
+          "scope_now": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Now"
           },
           "soft_limit": {
             "anyOf": [
@@ -14298,6 +14518,24 @@
         "title": "ModelSharingUser",
         "type": "object"
       },
+      "NewClassVotes": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "votes": {
+            "title": "Votes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "votes"
+        ],
+        "title": "NewClassVotes",
+        "type": "object"
+      },
       "NextStep": {
         "properties": {
           "action": {
@@ -18792,6 +19030,81 @@
           "body"
         ],
         "title": "PromptPackValidateRequest",
+        "type": "object"
+      },
+      "Proposal": {
+        "description": "What the sampled answers say the scope is, never what it is. The label is\nproposed only when enough answers agree; ``apply`` is the one path that turns\nit into labels.",
+        "properties": {
+          "agreement": {
+            "description": "Top votes over answered.",
+            "title": "Agreement",
+            "type": "number"
+          },
+          "answered": {
+            "description": "Sampled answers that named a class or proposed one.",
+            "title": "Answered",
+            "type": "integer"
+          },
+          "attribute_summary": {
+            "items": {
+              "$ref": "#/components/schemas/AttributeSummary"
+            },
+            "title": "Attribute Summary",
+            "type": "array"
+          },
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The top class when the gate passes, else null (the distribution is still given).",
+            "title": "Class Name"
+          },
+          "distribution": {
+            "items": {
+              "$ref": "#/components/schemas/ClassVotes"
+            },
+            "title": "Distribution",
+            "type": "array"
+          },
+          "in_registry": {
+            "description": "Whether `class_name` is a registry class right now.",
+            "title": "In Registry",
+            "type": "boolean"
+          },
+          "min_agreement": {
+            "title": "Min Agreement",
+            "type": "number"
+          },
+          "new_class_proposals": {
+            "items": {
+              "$ref": "#/components/schemas/NewClassVotes"
+            },
+            "title": "New Class Proposals",
+            "type": "array"
+          },
+          "passes_gate": {
+            "description": "`answered >= 3` and `agreement >= min_agreement`.",
+            "title": "Passes Gate",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "class_name",
+          "in_registry",
+          "agreement",
+          "answered",
+          "min_agreement",
+          "passes_gate",
+          "distribution",
+          "new_class_proposals",
+          "attribute_summary"
+        ],
+        "title": "Proposal",
         "type": "object"
       },
       "QuantizeRequest": {
@@ -25261,6 +25574,35 @@
           }
         },
         "title": "ScheduleTriggerWire",
+        "type": "object"
+      },
+      "ScopeNow": {
+        "description": "The scope's members now against those the run resolved: a re-refine or a\nrelabel changes them, and a proposal about other members is stale.",
+        "properties": {
+          "changed": {
+            "title": "Changed",
+            "type": "boolean"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "jaccard": {
+            "title": "Jaccard",
+            "type": "number"
+          },
+          "overlap": {
+            "title": "Overlap",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "overlap",
+          "jaccard",
+          "changed"
+        ],
+        "title": "ScopeNow",
         "type": "object"
       },
       "ScoresComputeRequest": {
@@ -32423,6 +32765,91 @@
       }
     },
     "/curation/projects/{project}/assist/runs": {
+      "get": {
+        "description": "The newest runs, newest first, whose target or context names that cluster (and\nsub-cluster); all runs without ``cluster_id``. Each carries ``scope_now``, so a\nclient can mark a proposal stale after a re-refine. The newest 100 runs are kept.",
+        "operationId": "list_assist_runs_curation_projects__project__assist_runs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cluster_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cluster Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cluster_subid",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cluster Subid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistRunList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Assist Runs",
+        "tags": [
+          "Curation"
+        ]
+      },
       "post": {
         "description": "Plan an assist run, and start it unless ``dry_run`` (the default).\n\nThe response says what the target resolved to (members, the sample, what is\nskipped, the endpoint and pack pinned, the VLM calls to expect). Refusals:\n409 ``vlm_not_configured`` (the project's VLM is off and ``vlm`` names none),\n409 ``assist_busy``, 404 ``not_found`` (an empty cluster), 422\n``invalid_request``, ``assist_too_large``, ``pack_declares_no_attributes``,\n``no_class_names``. Class suggestions never overwrite a locked, validated or\nholdout item; attributes are stored apart from the labels.",
         "operationId": "create_assist_run_curation_projects__project__assist_runs_post",
@@ -32477,7 +32904,7 @@
     },
     "/curation/projects/{project}/assist/runs/{run_id}": {
       "get": {
-        "description": "The state of one run: progress while it runs, ``result`` when it ends.",
+        "description": "The state of one run: progress while it runs, ``result`` (with the cluster\nproposal) when it ends, and ``scope_now`` for a run with a cluster scope.",
         "operationId": "get_assist_run_curation_projects__project__assist_runs__run_id__get",
         "parameters": [
           {
@@ -32522,6 +32949,68 @@
           }
         },
         "summary": "Get Assist Run",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/assist/runs/{run_id}/apply": {
+      "post": {
+        "description": "Label the scope's current members with ``class_name`` as a human would\n(validated, trainable), through the same writer as ``PUT /crops/batch_label``.\n\nA dry run (the default) counts. Members with a locked or validated class, and\nholdout or ignored ones, are left alone (`skipped_locked`). 409 ``scope_changed``\nwhen under 90% of the scope is what the run saw (``allow_changed_scope`` overrides),\n``class_not_in_registry`` (matched by name) and ``run_has_no_scope`` (a bare\nselection or a filter run).",
+        "operationId": "apply_assist_run_curation_projects__project__assist_runs__run_id__apply_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistApplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistApplyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apply Assist Run",
         "tags": [
           "Curation"
         ]

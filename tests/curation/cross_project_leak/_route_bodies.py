@@ -178,6 +178,7 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
             }
         },
         ('POST', '/assist/runs/{run_id}/cancel'): {'json': {}},
+        ('POST', '/assist/runs/{run_id}/apply'): {'json': {'class_name': 'x', 'dry_run': False}},
         ('POST', '/test_holdout/freeze'): {'json': {'percent': 10}},
         ('POST', '/review/new_class_proposals/resolve'): {
             'json': {'label': f'{slug}-proposal', 'class_id': 1}

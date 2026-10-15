@@ -489,6 +489,22 @@ never written (`locked_suggest_only` in the result). Other ways to pick "one thi
 | A budget | add `max_vlm_crops=200` to any `auto_label/start` |
 | Only representatives | `vlm_scope=representatives` on `auto_label/start`, or the project's [VLM policy](./vlm-selection.mdx#scope-and-budget) |
 
+A run over a cluster or sub-cluster returns a proposal: the class most sampled answers
+agree on, the vote distribution, the new-class slugs the VLM proposed and a summary of
+the attributes the pack declares. Read it from the run, and apply it only on purpose:
+
+```bash
+# not run  (code-verified by tests/curation/test_assist_proposal.py)
+curl -s "$API/assist/runs?cluster_id=10000&cluster_subid=10000b"
+curl -s -X POST "$API/assist/runs/RUN_ID/apply" -H 'content-type: application/json' \
+  -d '{"class_name":"spoiler","dry_run":true}'
+```
+
+`dry_run` counts the members that would be labelled and the locked ones left alone; send
+`"dry_run": false` to label them as a human would. After a re-refine the run's
+`scope_now.changed` is true, and apply refuses with `scope_changed` until you run again
+(or pass `allow_changed_scope`).
+
 To make the VLM the project's own default instead, activate it (mode (c), step 3).
 
 **6. Check what the run did.** A VLM run that could label nothing now fails instead of
@@ -522,7 +538,10 @@ document yet. (issue #286), related to #97 and #218.
 
 The idea is a loop: sample crops from each cluster and sub-cluster, label them with
 the VLM, measure how well the labels agree, propagate the label to the whole cluster
-when agreement passes a gate, and split the cluster and repeat when it does not.
+when agreement passes a gate, and split the cluster and repeat when it does not. The
+parts exist as single steps today: the seeded, stratified sample, the proposal with its
+agreement gate and the explicit apply of an assist run (step 5 of the recipe above).
+The loop that drives them is what is not shipped.
 :::
 
 What exists today, and can be combined by hand:

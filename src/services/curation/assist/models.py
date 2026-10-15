@@ -12,6 +12,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.domain.assist_sampling import MAX_ASSIST_ITEMS, SAMPLE_HARD_MAX
+from src.services.curation.assist.proposal_models import Proposal, ScopeNow
 from src.services.curation.item_filter import ItemFilter
 from src.services.curation.item_selection import MAX_SELECTION_IDS
 from src.services.rejections import rejection
@@ -187,6 +188,9 @@ class AttributesResult(BaseModel):
 class AssistResult(BaseModel):
     classify: ClassifyResult | None = None
     attributes: AttributesResult | None = None
+    proposal: Proposal | None = Field(
+        default=None, description='The sampled answers read as a label for the scope.'
+    )
 
 
 class AssistRunState(BaseModel):
@@ -199,6 +203,15 @@ class AssistRunState(BaseModel):
     resolved: ResolvedScope
     progress: AssistProgress = Field(default_factory=AssistProgress)
     result: AssistResult | None = None
+    scope_now: ScopeNow | None = Field(
+        default=None,
+        description='Set on reads for a cluster target or a run with a context: the scope '
+        'now against the members the run resolved.',
+    )
+
+
+class AssistRunList(BaseModel):
+    runs: list[AssistRunState]
 
 
 __all__ = [
@@ -208,6 +221,7 @@ __all__ = [
     'AssistContext',
     'AssistProgress',
     'AssistResult',
+    'AssistRunList',
     'AssistRunRequest',
     'AssistRunState',
     'AssistSample',

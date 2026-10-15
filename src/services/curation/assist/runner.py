@@ -25,6 +25,8 @@ from src.services.curation.assist.models import (
     AttributesResult,
     ClassifyResult,
 )
+from src.services.curation.assist.proposal import compute_proposal
+from src.services.curation.assist.scope_now import current_members
 from src.services.curation.assist.slot_write import RunMeta
 from src.services.curation.class_write_guard import ClassWriteGuard
 from src.services.curation.file_job import FileJob, heartbeat_ticker
@@ -41,6 +43,7 @@ if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
     from src.services.curation.assist.prepare import PreparedRun
+    from src.services.curation.assist.proposal_models import Proposal
 
 logger = get_logger(__name__)
 
@@ -61,7 +64,7 @@ CONCURRENCY = 4
 _tasks: dict[str, asyncio.Task[None]] = {}
 
 
-def start_run(opensearch: AsyncOpenSearch, prepared: PreparedRun) -> AssistRunState:
+async def start_run(opensearch: AsyncOpenSearch, prepared: PreparedRun) -> AssistRunState:
     """Claim the project's single run slot, persist the run and schedule it.
     Raises the 409 ``assist_busy`` refusal when a run is live."""
     created = now_iso()
@@ -72,18 +75,26 @@ def start_run(opensearch: AsyncOpenSearch, prepared: PreparedRun) -> AssistRunSt
         resolved=prepared.resolved(),
         progress=AssistProgress(total=len(prepared.scope.sampled_ids)),
     )
-    cluster_target = prepared.request.target.kind == 'cluster'
-    context = getattr(prepared.request.target, 'context', None)
     job = create_run(
         state=state.model_dump(mode='json'),
         request=prepared.request.model_dump(mode='json'),
-        members=prepared.scope.members if cluster_target or context is not None else None,
+        members=await _scope_members(opensearch, prepared),
     )
     _tasks[job.directory.name] = asyncio.create_task(
         run_assist(job, opensearch, prepared, created_at=created)
     )
     state.run_id = job.directory.name
     return state
+
+
+async def _scope_members(opensearch: AsyncOpenSearch, prepared: PreparedRun) -> list[str] | None:
+    """The members of the (sub-)cluster the run's proposal is about, kept for the
+    staleness check: the resolved scope of a cluster target, the context's members
+    for a selection made in one, ``None`` for a bare selection or a filter."""
+    if prepared.request.target.kind == 'cluster':
+        return prepared.scope.members
+    current = await current_members(opensearch, prepared.request)
+    return None if current is None else [cid for cid, _ in current]
 
 
 def _meta(job: FileJob, prepared: PreparedRun, created_at: str, labeler: object) -> RunMeta:
@@ -98,7 +109,9 @@ def _meta(job: FileJob, prepared: PreparedRun, created_at: str, labeler: object)
     )
 
 
-def _result(request_actions: Sequence[str], total: ChunkOutcome) -> AssistResult:
+def _result(
+    request_actions: Sequence[str], total: ChunkOutcome, proposal: Proposal
+) -> AssistResult:
     return AssistResult(
         classify=(
             ClassifyResult(
@@ -116,6 +129,7 @@ def _result(request_actions: Sequence[str], total: ChunkOutcome) -> AssistResult
             if 'attributes' in request_actions
             else None
         ),
+        proposal=proposal,
     )
 
 
@@ -175,6 +189,11 @@ async def run_assist(
                 'Check that the VLM endpoint is reachable and the source images are mounted.'
             )
             raise RuntimeError(msg)
+        proposal = compute_proposal(
+            total.answers,
+            min_agreement=prepared.request.min_agreement,
+            registry_names=frozenset(ctx.class_names),
+        )
         status = (
             'cancelled'
             if cancelled
@@ -184,7 +203,7 @@ async def run_assist(
         )
         job.update(
             status=status,
-            result=_result(actions, total).model_dump(mode='json'),
+            result=_result(actions, total, proposal).model_dump(mode='json'),
             finished_at=now_iso(),
             updated_at=now_iso(),
         )

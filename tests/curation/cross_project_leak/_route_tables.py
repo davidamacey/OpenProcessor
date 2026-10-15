@@ -54,6 +54,10 @@ NO_WRITE: dict[tuple[str, str], str] = {
         'touches a cancel flag only for a live run; the sweep has none (the live path is '
         'covered in test_assist_run_classify)'
     ),
+    ('POST', '/assist/runs/{run_id}/apply'): (
+        'names a run of the bound project; the sweep has none (the write path is covered in '
+        'test_assist_proposal)'
+    ),
     ('POST', '/train/reload_promoted'): 'asks Triton to load promoted models; stores nothing',
     (
         'POST',

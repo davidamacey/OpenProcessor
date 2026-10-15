@@ -17,6 +17,7 @@ from src.config.curation_accessors import items_index
 from src.domain.assist_sampling import MAX_ASSIST_ITEMS, representative_size, stratified_sample
 from src.services.curation.assist.models import (
     AssistRunRequest,
+    AssistTarget,
     ClusterTarget,
     CropsTarget,
     FilterTarget,
@@ -74,6 +75,18 @@ def scope_filter(target: ClusterTarget | FilterTarget) -> ItemFilter:
     return target.filter
 
 
+def proposal_scope(target: AssistTarget) -> ItemFilter | None:
+    """The (sub-)cluster a run's proposal is about: the cluster target itself, or the
+    context a selection of crops was made in; ``None`` for a bare selection or a filter."""
+    if isinstance(target, ClusterTarget):
+        return scope_filter(target)
+    if isinstance(target, CropsTarget) and target.context is not None:
+        return ItemFilter(
+            cluster_id=target.context.cluster_id, cluster_subid=target.context.cluster_subid
+        )
+    return None
+
+
 def _base_query(flt: ItemFilter, *extra: dict[str, Any]) -> dict[str, Any]:
     try:
         clauses = [*item_filter_clauses(flt), *extra]
@@ -87,7 +100,7 @@ async def _count(opensearch: AsyncOpenSearch, query: dict[str, Any]) -> int:
     return int(resp.get('count', 0))
 
 
-async def _filter_members(
+async def filter_members(
     opensearch: AsyncOpenSearch, flt: ItemFilter, *, label: str
 ) -> tuple[list[tuple[str, dict[str, Any]]], SkippedCounts]:
     total = await _count(opensearch, _base_query(flt))
@@ -187,7 +200,7 @@ async def resolve_scope(opensearch: AsyncOpenSearch, request: AssistRunRequest) 
             if isinstance(target, ClusterTarget)
             else 'the filter'
         )
-        members, skipped = await _filter_members(opensearch, scope_filter(target), label=label)
+        members, skipped = await filter_members(opensearch, scope_filter(target), label=label)
     sampled, strata = _sample(request, members)
     sampled_set = set(sampled)
     locked = {cid for cid, s in members if cid in sampled_set and class_write_locked(s)}
@@ -206,8 +219,10 @@ async def resolve_scope(opensearch: AsyncOpenSearch, request: AssistRunRequest) 
 
 __all__ = [
     'ScopeResolution',
+    'filter_members',
     'membership_digest',
     'membership_overlap',
+    'proposal_scope',
     'resolve_scope',
     'scope_filter',
 ]

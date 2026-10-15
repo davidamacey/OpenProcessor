@@ -1455,8 +1455,10 @@ its class), and the answers, including a locked item's, are kept in the item's
 | Method | Path | Body | Response |
 |---|---|---|---|
 | POST | `/assist/runs` | `AssistRunRequest` | `AssistRunState`; `dry_run` (the default) plans and writes nothing |
+| GET | `/assist/runs` | `cluster_id`, `cluster_subid`, `limit` (1 to 100, default 20) | `{runs: AssistRunState[]}`, newest first: the runs whose target or context names that (sub-)cluster; all runs without `cluster_id` |
 | GET | `/assist/runs/{run_id}` | | `AssistRunState`; `404 not_found` for an unknown id |
 | POST | `/assist/runs/{run_id}/cancel` | | `AssistRunState`; the run stops after its current chunk |
+| POST | `/assist/runs/{run_id}/apply` | `AssistApplyRequest` | `AssistApplyResponse` |
 
 `AssistRunRequest` (unknown keys are `422`):
 
@@ -1480,7 +1482,33 @@ over the sorted ids), `sampled`, `sample_seed`, `strata` (`key`, `size`,
 class is never written), `vlm` (`name`, `revision`, `model`), `prompt_pack`
 (`name`, `revision`) and `estimated_vlm_calls`. `result` has `classify`
 (`predicted`, `updated`, `failed`, `unreadable`, `locked_suggest_only`) and
-`attributes` (`items_written`, `invalid_values`) for the actions that ran.
+`attributes` (`items_written`, `invalid_values`) for the actions that ran, and the
+`proposal`.
+
+**Proposal and scope check.** `result.proposal` reads the sampled answers as a
+label for the scope: `class_name` (the top class, or null), `in_registry` (checked
+against the registry on every read), `agreement` (top votes over `answered`),
+`answered`, `min_agreement`, `passes_gate`, `distribution` (`class_name`, `votes`),
+`new_class_proposals` (`name`, `votes`: the slugs the VLM proposed when nothing fit,
+counted by name and not votes for a class) and `attribute_summary` (per key the top
+10 values with counts). The gate passes with at least 3 answers and `agreement >=
+min_agreement`; a locked item's answer counts as a vote, its class is never written.
+A run with a cluster target, or a `crops` target with a `context`, keeps the members
+of that (sub-)cluster, and every read carries `scope_now`: `count` (members now),
+`overlap`, `jaccard` and `changed`. The assist layer reads only the stored
+`cluster_id` and `cluster_subid` and the member ids, so a re-refine shows as a changed
+scope and never as a silently different proposal.
+
+`POST /assist/runs/{run_id}/apply` (`AssistApplyRequest`: `class_name`,
+`label_source: "human"`, `allow_changed_scope` default `false`, `dry_run` default
+`true`) is the only path from a proposal to labels. It labels the scope's **current**
+members as a human would (validated, trainable), through the writer behind
+`PUT /crops/batch_label`, and leaves alone every member whose class is locked or
+validated and the holdout and ignored ones. The response has `selected` (members the
+class may be applied to), `skipped_locked`, `updated`, `updated_ids`, `conflicts` and
+`scope_now`. Refusals: `409 scope_changed` (under 90% of the scope is what the run saw;
+`allow_changed_scope` overrides), `409 class_not_in_registry` (`class_name` is matched by
+name; create the class first), `409 run_has_no_scope` (a bare selection or a filter run).
 
 - The frozen test holdout and human-ignored items are never sent. A scope
   larger than 5000 items with `sample.mode: "all"` is `422 assist_too_large`

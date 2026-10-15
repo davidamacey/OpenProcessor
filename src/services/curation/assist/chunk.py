@@ -9,10 +9,11 @@ only ever written to that slot.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.crops import mget_crops
+from src.services.curation.assist.proposal import ClassAnswer
 from src.services.curation.assist.slot_write import RunMeta, build_slot, write_slots
 from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, class_write_locked
 from src.services.curation.vlm_class_attempt import NEW_CLASS_SENTINEL, prediction_empty_reason
@@ -42,6 +43,7 @@ class ChunkOutcome:
     locked_suggest_only: int = 0
     items_written: int = 0
     invalid_values: int = 0
+    answers: list[ClassAnswer] = field(default_factory=list)
 
 
 def _suggested_name(update: dict[str, Any] | None, pred: Any) -> str | None:
@@ -51,6 +53,19 @@ def _suggested_name(update: dict[str, Any] | None, pred: Any) -> str | None:
         return str(update['class_name'])
     raw = pred.proposed_class if pred.class_name == NEW_CLASS_SENTINEL else pred.class_name
     return raw.strip().lower()[:64] or None
+
+
+def _answer(update: dict[str, Any] | None, pred: Any) -> ClassAnswer:
+    """The vote one prediction casts: the registry class it resolved to, else the
+    class it named, else (a `__new__` answer) the slug it proposed."""
+    resolved = str(update['class_name']) if update and update.get('class_source') == 'vlm' else ''
+    is_new = pred.class_name == NEW_CLASS_SENTINEL
+    named = '' if is_new else pred.class_name.strip().lower()[:64]
+    return ClassAnswer(
+        class_name=resolved or named or None,
+        proposed='' if resolved or named else pred.proposed_class,
+        attributes={key: a.value for key, a in pred.attributes.items()},
+    )
 
 
 async def _classify(
@@ -74,7 +89,7 @@ async def _classify(
         )
     out.predicted += len(preds)
     out.failed += sum(1 for p in preds if p.failure == 'request_failed')
-    updates, _proposals = updates_from_predictions(preds, ctx)
+    updates, _proposals = updates_from_predictions(preds, ctx, set_cluster=False)
     locked = {cid for cid in updates if class_write_locked(sources.get(cid, {}))}
     writable = {cid: u for cid, u in updates.items() if cid not in locked}
     await write_updates(opensearch, ctx, writable, writer_id=WRITER)
@@ -93,6 +108,8 @@ async def _classify(
         )
         attributes[p.img_id] = p.attributes
         out.invalid_values += p.invalid_attribute_values
+        if answered:
+            out.answers.append(_answer(updates.get(p.img_id), p))
     return classes, attributes
 
 
@@ -141,6 +158,11 @@ async def process_chunk(
                 classes[p.img_id] = (None, None)
                 found[p.img_id] = p.attributes
                 out.invalid_values += p.invalid_values
+                out.answers.append(
+                    ClassAnswer(
+                        class_name=None, attributes={k: a.value for k, a in p.attributes.items()}
+                    )
+                )
     slots = {
         cid: build_slot(
             meta,

@@ -127,6 +127,8 @@ def test_unlocked_items_get_a_class_suggestion_and_an_assist_slot(stack: Any) ->
     assert one['assist']['class_name'] == 'gadget'
     assert one['assist']['run_id'] == state['run_id']
     assert one['assist']['class_confidence'] == 'high'
+    assert one['cluster_id'] == CLUSTER, 'a suggestion does not move the item out of its cluster'
+    assert one['cluster_subid'] == f'{CLUSTER}a'
     assert one['vlm_prompt_pack'].startswith(GENERIC_ITEM_PACK.name)
 
 

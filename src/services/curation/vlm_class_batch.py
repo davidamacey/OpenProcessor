@@ -122,8 +122,11 @@ def chunk_crops(docs: dict[str, Any], ctx: VlmContext) -> list[Any]:
 
 
 def updates_from_predictions(
-    preds: list[Any], ctx: VlmContext
+    preds: list[Any], ctx: VlmContext, *, set_cluster: bool = True
 ) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
+    """The item update per prediction, and the new-class proposals. ``set_cluster``
+    moves a resolved item into its class cluster (the auto-label stage); an assist run
+    leaves the item where it is so the scope it was asked about stays whole."""
     from src.services.curation.vlm_class_attempt import prediction_class_update
     from src.services.detection.cascade_detect.sanity import class_provenance
 
@@ -149,7 +152,7 @@ def updates_from_predictions(
             now=now,
             provenance=provenance,
             extras=extras,
-            set_cluster=True,
+            set_cluster=set_cluster,
         )
         if update is None:
             continue

@@ -386,6 +386,8 @@ class ConfigErrorDetail(BaseModel):
     limit: int | None = None
     # 422 too_few_items: the smallest pool the clustering route accepts.
     min_items: int | None = None
+    # 409 scope_changed: the assist run's scope now against the members it resolved.
+    scope_now: dict[str, Any] | None = None
     # unknown_vlm carries `requested`; a refused external endpoint names
     # itself and where its acknowledgement is given.
     requested: str | None = None

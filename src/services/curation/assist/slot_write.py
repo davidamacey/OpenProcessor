@@ -77,9 +77,13 @@ async def write_slots(opensearch: AsyncOpenSearch, slots: dict[str, dict[str, An
         if current.get('test_holdout'):
             return {}
         slot = slots[doc_id]
-        stored = (current.get('assist') or {}).get('run_created_at')
-        if stored and not _older_than(stored, slot['run_created_at']):
+        stored = current.get('assist') or {}
+        if stored.get('run_created_at') and not _older_than(
+            stored['run_created_at'], slot['run_created_at']
+        ):
             return {}
+        if stored.get('boxes'):
+            slot = {**slot, 'boxes': stored['boxes']}
         return {'assist': slot}
 
     result = await occ_skip_on_conflict_bulk(
