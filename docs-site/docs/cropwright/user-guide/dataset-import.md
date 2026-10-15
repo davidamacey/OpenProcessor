@@ -26,7 +26,7 @@ serves.
 1. **Source.** Type a folder path the backend can read (the allowed roots
    are listed under the field, and the preview tells you if the path isn't
    usable), or upload an archive. An archive larger than the smaller of the
-   backend's own limit and the deployment's `CROPWRIGHT_DATASET_UPLOAD_MAX_MB`
+   backend's own limit and the deployment's `OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB`
    is refused before it is sent. Pick a format, or leave **Detect
    automatically**.
 2. **Preview.** A moment after any change, the backend previews exactly what

@@ -465,7 +465,7 @@ def test_release_dir_install_pins_and_enables_cropwright(shimmed: Shimmed, tmp_p
     assert result.returncode == 0, result.stderr[-2000:]
     env_text = (shimmed.root / 'inst' / '.env').read_text()
     assert 'cropwright' in env_text.split('COMPOSE_PROFILES=')[1].splitlines()[0].split(',')
-    assert f'CROPWRIGHT_IMAGE=davidamacey/cropwright@{fake_digest("cropwright")}' in env_text
+    assert f'OP_CROPWRIGHT_IMAGE=davidamacey/cropwright@{fake_digest("cropwright")}' in env_text
     assert not (shimmed.root / 'inst' / 'cropwright').exists()
     assert [ln for ln in shimmed.log_lines('curl') if 'cw.test' in ln] == []
 

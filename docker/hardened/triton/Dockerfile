@@ -18,8 +18,10 @@
 # Build:  docker build -f docker/hardened/triton/Dockerfile -t triton-hardened:26.06 .
 # Scan:   trivy image --scanners vuln --severity CRITICAL,HIGH triton-hardened:26.06
 
+# Bump TRITON_TAG and TRITON_DIGEST together (docs/releases/RELEASE_CHECKLIST.md, base image digests).
 ARG TRITON_TAG=26.06-py3
-FROM nvcr.io/nvidia/tritonserver:${TRITON_TAG}
+ARG TRITON_DIGEST=sha256:58df7489c3f2276f9591d500a012dee03e23d35543ce3c390b4c001e6bf90794
+FROM nvcr.io/nvidia/tritonserver:${TRITON_TAG}@${TRITON_DIGEST}
 
 # hadolint ignore=DL3008,DL3009,DL4006
 RUN set -eux; \

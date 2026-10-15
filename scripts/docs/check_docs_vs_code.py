@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """Check the documentation against the code.
 
-Four checks, each reporting every miss (not just the first):
+Five checks, each reporting every miss (not just the first):
 
 * routes  - every ``METHOD /path`` written in a doc exists in the generated
   OpenAPI (``contracts/openapi/*.json``) or, for non-curation routes, in the
   assembled FastAPI app.
 * env     - every ``OP_*`` token written in a doc exists in code, ``env.template``,
   compose files or the installer scripts.
-* compose - every ``${VAR}`` a root compose file reads appears in ``env.template``
-  (commented counts), so an operator can find every knob.
+* compose - every ``${VAR}`` a root compose file reads is assigned in ``env.template``
+  (commented counts, a prose mention does not), so an operator can find every knob.
+  Names the installer and CLI refuse (``RETIRED_ENV_NAMES``) are exempt.
+* template - every non-``OP_`` setting ``env.template`` assigns is read by a compose file,
+  script or code, so nothing advertised does nothing.
 * links   - every relative link resolves to a file, and every ``#anchor`` that
   points into a markdown file matches a heading in that file.
 
@@ -64,7 +67,15 @@ _EXTERNAL_ROUTE_PREFIXES = ('/v2/',)
 # Resolution prefixes for abbreviated paths, tried in order.
 _ROUTE_PREFIXES = ('', '/curation', '/curation/projects/{project}')
 
-_CODE_ENV_ROOTS = ('src', 'scripts', 'docker', 'openprocessor', 'config_templates')
+_CODE_ENV_ROOTS = (
+    'src',
+    'scripts',
+    'docker',
+    'openprocessor',
+    'config_templates',
+    'frontend/e2e',
+    'frontend/scripts',
+)
 _CODE_ENV_FILES = (
     'env.template',
     'setup-openprocessor.sh',
@@ -195,7 +206,7 @@ def _env_corpus() -> str:
         for p in base.rglob('*'):
             if not p.is_file() or set(p.relative_to(REPO_ROOT).parts) & _SKIP_DIR_NAMES:
                 continue
-            if p.suffix in {'.py', '.sh', '.yml', '.yaml', '.json', '.toml', ''}:
+            if p.suffix in {'.py', '.sh', '.mjs', '.yml', '.yaml', '.json', '.toml', ''}:
                 parts.append(p.read_text(encoding='utf-8', errors='replace'))
     parts.extend(
         p.read_text(encoding='utf-8', errors='replace')
@@ -216,18 +227,52 @@ def check_env() -> list[str]:
 
 
 _COMPOSE_VAR_RE = re.compile(r'(?<!\$)\$\{([A-Za-z_][A-Za-z0-9_]*)')
+_TEMPLATE_ASSIGN_RE = re.compile(r'^#?[ \t]*([A-Z][A-Z0-9_]*)=', re.M)
+_RETIRED_BLOCK_RE = re.compile(r'RETIRED_ENV_NAMES=\((.*?)\)', re.S)
+
+
+def _template_names() -> set[str]:
+    """Names env.template assigns, commented out or not; prose mentions do not count."""
+    text = (REPO_ROOT / 'env.template').read_text(encoding='utf-8', errors='replace')
+    return set(_TEMPLATE_ASSIGN_RE.findall(text))
+
+
+def _retired_env_names() -> set[str]:
+    """Names the installer and CLI refuse in a .env (renamed); compose may still pass them through."""
+    script = REPO_ROOT / 'scripts' / 'lib' / 'retired_env.sh'
+    if not script.is_file():
+        return set()
+    block = _RETIRED_BLOCK_RE.search(script.read_text(encoding='utf-8', errors='replace'))
+    return set(block.group(1).split()) if block else set()
 
 
 def check_compose_vars() -> list[str]:
-    template = (REPO_ROOT / 'env.template').read_text(encoding='utf-8', errors='replace')
+    documented = _template_names() | _retired_env_names()
     errors = []
     for compose in sorted(REPO_ROOT.glob('docker-compose*.yml')):
         text = compose.read_text(encoding='utf-8', errors='replace')
         for var in sorted(set(_COMPOSE_VAR_RE.findall(text))):
-            if not re.search(rf'\b{re.escape(var)}\b', template):
+            if var not in documented:
                 errors.append(  # noqa: PERF401  # the append carries a formatted message built next to its check
                     f'{_rel(compose)}: ${{{var}}} is not in env.template (commented is fine)'
                 )
+    return errors
+
+
+def check_template_names() -> list[str]:
+    """A non-OP_ setting in env.template that no compose file, script or code reads is
+    advertised but does nothing (OP_ names are covered by tests/test_env_surface.py)."""
+    template = (REPO_ROOT / 'env.template').read_text(encoding='utf-8', errors='replace')
+    corpus = _env_corpus()
+    errors = []
+    for name in sorted(_template_names()):
+        if name.startswith('OP_'):
+            continue
+        word = re.compile(rf'\b{re.escape(name)}\b')
+        if len(word.findall(corpus)) <= len(word.findall(template)):
+            errors.append(
+                f'env.template: {name} is set by no compose file, script or code'
+            )  # the append carries a formatted message built next to its check
     return errors
 
 
@@ -306,6 +351,7 @@ CHECKS = {
     'routes': check_routes,
     'env': check_env,
     'compose': check_compose_vars,
+    'template': check_template_names,
     'links': check_links,
 }
 

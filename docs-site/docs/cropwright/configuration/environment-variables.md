@@ -36,11 +36,10 @@ Compose setting: the published image and the Compose stack never read them.
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `API_UPSTREAM` | Where nginx proxies `PUBLIC_API_PREFIX/*` — the OpenProcessor API container, by name over the shared docker network | `http://op-api:8000` |
-| `CROPWRIGHT_PORT` | Host port this instance publishes nginx on | `5184` |
+| `OP_CROPWRIGHT_PORT` | Host port this instance publishes nginx on | `5184` |
 | `OP_UI_BIND_ADDRESS` | Host address the Cropwright port is published on (the optional monitoring UIs follow it). Defaults to `OP_BIND_ADDRESS`, then loopback. Set `0.0.0.0` to allow your local network; the API has no authentication, so keep it on a trusted network. | `127.0.0.1` |
-| `CROPWRIGHT_TAG` | Which published image tag to pull; pin a version for a reproducible deploy | `latest` |
-| `CROPWRIGHT_DATASET_UPLOAD_MAX_MB` | Upload cap for a dataset archive on [dataset import](../user-guide/dataset-import.md) (nginx `client_max_body_size` for the dataset-upload route, in MB), with a one-hour read timeout. Substituted into both nginx.conf and the served client config; the client refuses a larger file before sending it. | `2048` |
-| `CROPWRIGHT_INGEST_MAX_REQUEST_MB` | Deployment-owned upload cap for `/ingest` (nginx `client_max_body_size`, in MB); substituted into both nginx.conf and the served client config so the two can't drift | `256` |
+| `OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB` | Upload cap for a dataset archive on [dataset import](../user-guide/dataset-import.md) (nginx `client_max_body_size` for the dataset-upload route, in MB), with a one-hour read timeout. Substituted into both nginx.conf and the served client config; the client refuses a larger file before sending it. | `2048` |
+| `OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB` | Deployment-owned upload cap for `/ingest` (nginx `client_max_body_size`, in MB); substituted into both nginx.conf and the served client config so the two can't drift | `256` |
 
 Both upload caps must be positive integers; the container refuses to start
 otherwise. Values are substituted when the container starts, so one image

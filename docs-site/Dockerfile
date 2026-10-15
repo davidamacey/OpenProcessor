@@ -1,5 +1,5 @@
 # Multi-stage build: Node.js build -> nginx:alpine serve, non-root.
-FROM node:26-alpine AS build
+FROM node:26-alpine@sha256:6f08a523443ddedf52941874c203475b0ad503e859ad70cb26ab8be9a517dbd5 AS build
 WORKDIR /app
 
 COPY package*.json ./
@@ -10,7 +10,7 @@ RUN npm run build
 
 # nginx-unprivileged: listens on 8080 as a non-root user out of the box,
 # same base family as the other project images.
-FROM nginxinc/nginx-unprivileged:1.31-alpine
+FROM nginxinc/nginx-unprivileged:1.31-alpine@sha256:378d0c32f6562f7fd9629170797f57d2b953aa09be983b3daaf4809bb039ca00
 
 LABEL org.opencontainers.image.title="OpenProcessor Documentation" \
       org.opencontainers.image.description="Docusaurus documentation site for OpenProcessor" \

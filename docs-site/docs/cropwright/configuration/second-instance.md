@@ -9,7 +9,7 @@ Give it its own compose project name, container name and host port so it
 never collides with a running instance:
 
 ```bash
-CROPWRIGHT_PORT=5190 docker compose -p second --profile cropwright up -d
+OP_CROPWRIGHT_PORT=5190 docker compose -p second --profile cropwright up -d
 ```
 
 This is the same image and compose file, pointed at a different backend

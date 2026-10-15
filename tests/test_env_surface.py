@@ -102,6 +102,13 @@ _TEMPLATE_SIDE_ALLOWLIST = {
     'OP_SHARDS_PER_HEAP_GB',
     # docker-compose.docs.yml's own ${OP_DOCS_IMAGE:-...} interpolation is the reader.
     'OP_DOCS_IMAGE',
+    # The Cropwright service's own ${VAR:-default} interpolation in docker-compose.yml (and
+    # frontend/docker-entrypoint.sh in the container) reads these, not Python code.
+    'OP_CROPWRIGHT_IMAGE',
+    'OP_CROPWRIGHT_BIND_ADDRESS',
+    'OP_CROPWRIGHT_PORT',
+    'OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB',
+    'OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB',
     # `openprocessor vlm use` waits for the VLM; read by scripts/lib/vlm_switch.sh (bash).
     'OP_VLM_WAIT_S',
     'OP_VLM_POLL_S',

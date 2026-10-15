@@ -20,7 +20,7 @@
 # Isolated so neither git nor the clone's history reaches the runtime
 # image. Pin to a known-good upstream SHA for reproducible rebuilds;
 # `main` is the default only because upstream publishes no releases.
-FROM alpine/git:v2.54.0 AS sam3-src
+FROM alpine/git:v2.54.0@sha256:ce84fd6a057b4dc5cf5009da2dd832f1c6d096c1984bf50496cf3c256402264d AS sam3-src
 
 ARG SAM3_SHA=main
 WORKDIR /src
@@ -28,10 +28,42 @@ RUN git clone https://github.com/facebookresearch/sam3.git sam3
 WORKDIR /src/sam3
 RUN git checkout "$SAM3_SHA" && rm -rf .git
 
-# -- Stage 2: runtime --------------------------------------------------------
+# -- Stage 2: build the Python environment ------------------------------------
+# Wheels resolve into a relocatable --user tree here; the runtime stage copies only that tree, so
+# neither pip's cache nor the SAM 3 source checkout reaches the final image. gcc/g++ are present
+# so a dependency without a wheel can still compile.
+# This base is Ubuntu 24.04 with a PEP 668 system Python (older bases used conda), so pip
+# refuses to install without PIP_BREAK_SYSTEM_PACKAGES. Its torch lives in the system
+# site-packages, which a --user install resolves against.
+FROM pytorch/pytorch:2.14.1-cuda12.6-cudnn9-runtime@sha256:1262abc856a428933c0477b4be87079173a0b087b7691c47fcb396b7b5775c56 AS builder
+
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=sam3-src /src/sam3 /opt/sam3
+
+# hadolint ignore=DL3013
+RUN pip install --user --no-cache-dir --upgrade pip \
+    && pip install --user --no-cache-dir --no-warn-script-location /opt/sam3 \
+    && pip install --user --no-cache-dir --no-warn-script-location \
+        'fastapi==0.115.4' \
+        'uvicorn[standard]==0.32.0' \
+        'pydantic>=2.7,<3' \
+        'numpy>=1.26,<2.0' \
+        'pillow>=10.0' \
+        'opencv-python-headless>=4.10' \
+        'scikit-image>=0.24' \
+        'huggingface-hub>=0.24' \
+        'einops>=0.8' \
+        'pycocotools>=2.0.7'
+
+# -- Stage 3: runtime --------------------------------------------------------
 # No -slim base is available for a CUDA + cuDNN + PyTorch runtime; this
 # is the smallest official image that carries the stack the model needs.
-FROM pytorch/pytorch:2.14.1-cuda12.6-cudnn9-runtime
+FROM pytorch/pytorch:2.14.1-cuda12.6-cudnn9-runtime@sha256:1262abc856a428933c0477b4be87079173a0b087b7691c47fcb396b7b5775c56
 
 LABEL org.opencontainers.image.title="OpenProcessor Segmenter" \
       org.opencontainers.image.description="Promptable segmentation (SAM 3) for the detection cascade" \
@@ -53,29 +85,6 @@ RUN apt-get update && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-COPY --from=sam3-src /src/sam3 /opt/sam3
-
-# This base is Ubuntu 24.04 with a PEP 668 system Python (older bases used
-# conda), so pip refuses to install without this. The image is single-purpose
-# and its torch lives in the system site-packages, so a venv would only add
-# python3-venv (not in the base) and a PATH indirection.
-ENV PIP_BREAK_SYSTEM_PACKAGES=1
-
-# hadolint ignore=DL3013
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir /opt/sam3 \
-    && pip install --no-cache-dir \
-        'fastapi==0.115.4' \
-        'uvicorn[standard]==0.32.0' \
-        'pydantic>=2.7,<3' \
-        'numpy>=1.26,<2.0' \
-        'pillow>=10.0' \
-        'opencv-python-headless>=4.10' \
-        'scikit-image>=0.24' \
-        'huggingface-hub>=0.24' \
-        'einops>=0.8' \
-        'pycocotools>=2.0.7'
-
 # Ubuntu 24.04 bases ship an `ubuntu` user at uid 1000; appuser must own that
 # uid to read the host-owned HF cache bind mount. No-op on bases without it.
 RUN if getent passwd ubuntu >/dev/null; then userdel -r ubuntu; fi && \
@@ -85,9 +94,11 @@ RUN if getent passwd ubuntu >/dev/null; then userdel -r ubuntu; fi && \
     chown -R appuser:appuser /app /home/appuser/.cache
 
 WORKDIR /app
+COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
 COPY --chown=appuser:appuser main.py sam3_backend.py /app/
 
-ENV PYTHONUNBUFFERED=1 \
+ENV PATH=/home/appuser/.local/bin:$PATH \
+    PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     SEGMENTER_DEVICE=cuda:0 \
     SEGMENTER_LISTEN_PORT=8000 \

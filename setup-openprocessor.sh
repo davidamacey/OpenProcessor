@@ -148,8 +148,8 @@ dc() {
         echo "DRY: ${cmd[*]//"$dir"/"${OP_REAL_DIR:-$dir}"}"
         return 0
     fi
-    env -u COMPOSE_PROFILES -u COMPOSE_FILE -u COMPOSE_ENV_FILES -u CROPWRIGHT_BIND_ADDRESS \
-        -u CROPWRIGHT_IMAGE -u CROPWRIGHT_PORT COMPOSE_PROJECT_NAME="$project" "${cmd[@]}"
+    env -u COMPOSE_PROFILES -u COMPOSE_FILE -u COMPOSE_ENV_FILES -u OP_CROPWRIGHT_BIND_ADDRESS \
+        -u OP_CROPWRIGHT_IMAGE -u OP_CROPWRIGHT_PORT COMPOSE_PROJECT_NAME="$project" "${cmd[@]}"
 }
 
 # docker_mut ARGS... -- a state-changing plain docker call (pull/run/rmi)
@@ -1845,38 +1845,35 @@ _version_ge() {
     [[ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" == "$2" ]]
 }
 
-# choose_cropwright_bind -> CROPWRIGHT_BIND (owner decision, plan 7 addendum):
-# the web UI is for this computer AND the local LAN, so it binds 0.0.0.0 by
-# default; --local-only, or "no" at the prompt, keeps it on 127.0.0.1. The
-# backend ports stay on OP_BIND_ADDRESS (127.0.0.1); LAN browsers reach the
-# API through Cropwright's nginx on the docker network. A specific
-# non-loopback --bind (say 10.0.0.5) narrows Cropwright to that interface
-# too: never wider than the one the user chose.
+# choose_cropwright_bind -> OP_CROPWRIGHT_BIND: the web UI serves this computer AND the local LAN
+# (0.0.0.0) unless --local-only, or "no" at the prompt, keeps it on 127.0.0.1. Backend ports stay on
+# OP_BIND_ADDRESS; LAN browsers reach the API through Cropwright's nginx on the docker network. A
+# specific non-loopback --bind (say 10.0.0.5) narrows Cropwright to that interface too.
 choose_cropwright_bind() {
     local reply prev
-    prev="$(read_env_var "${OP_DIR}/.env" CROPWRIGHT_BIND_ADDRESS 2>/dev/null || true)"
+    prev="$(read_env_var "${OP_DIR}/.env" OP_CROPWRIGHT_BIND_ADDRESS 2>/dev/null || true)"
     if [[ "$OP_LOCAL_ONLY" == 1 ]]; then
-        CROPWRIGHT_BIND=127.0.0.1
+        OP_CROPWRIGHT_BIND=127.0.0.1
     elif [[ "$OP_BIND_ADDRESS" != 0.0.0.0 ]] && ! is_loopback_ipv4 "$OP_BIND_ADDRESS"; then
-        CROPWRIGHT_BIND="$OP_BIND_ADDRESS"
+        OP_CROPWRIGHT_BIND="$OP_BIND_ADDRESS"
     elif [[ -n "$prev" ]] && is_ipv4 "$prev"; then
-        CROPWRIGHT_BIND="$prev"
+        OP_CROPWRIGHT_BIND="$prev"
     elif [[ "$OP_UNATTENDED" != 1 ]] && tty_usable; then
         prompt_line reply "Let other computers on your LAN open the Cropwright web UI? [Y/n]: " "--local-only"
-        if [[ -z "$reply" || "${reply,,}" == y* ]]; then CROPWRIGHT_BIND=0.0.0.0; else CROPWRIGHT_BIND=127.0.0.1; fi
+        if [[ -z "$reply" || "${reply,,}" == y* ]]; then OP_CROPWRIGHT_BIND=0.0.0.0; else OP_CROPWRIGHT_BIND=127.0.0.1; fi
     else
-        CROPWRIGHT_BIND=0.0.0.0
+        OP_CROPWRIGHT_BIND=0.0.0.0
     fi
 }
 
 setup_cropwright() {
     local port
-    port="$(read_env_var "${OP_DIR}/.env" CROPWRIGHT_PORT || true)"
+    port="$(read_env_var "${OP_DIR}/.env" OP_CROPWRIGHT_PORT || true)"
     [[ "$port" =~ ^[0-9]+$ ]] || port=5184
     port="$(next_free_port "$port" "${TAKEN_PORTS}")" || die "no free port for Cropwright"
-    CROPWRIGHT_PORT="$port"
-    env_set CROPWRIGHT_PORT "$port"
-    env_set CROPWRIGHT_BIND_ADDRESS "$CROPWRIGHT_BIND"
+    OP_CROPWRIGHT_PORT="$port"
+    env_set OP_CROPWRIGHT_PORT "$port"
+    env_set OP_CROPWRIGHT_BIND_ADDRESS "$OP_CROPWRIGHT_BIND"
 
     # Check what Compose will really do with the cropwright service: the
     # published host IP must be the chosen one, and the image the pinned one.
@@ -1885,11 +1882,11 @@ setup_cropwright() {
     hosts="$(printf '%s\n' "$json" | awk '/"cropwright": \{/ {on=1} on && /"host_ip":/ {gsub(/.*"host_ip": *"|".*/, ""); print; exit}')"
     # A port without a host IP is published on every interface.
     [[ -z "$hosts" ]] && hosts="0.0.0.0"
-    if [[ "$hosts" != "$CROPWRIGHT_BIND" ]]; then
-        die "the cropwright service would publish on '${hosts}', not ${CROPWRIGHT_BIND} (its compose entry must honour CROPWRIGHT_BIND_ADDRESS)" "$EXIT_VERIFY"
+    if [[ "$hosts" != "$OP_CROPWRIGHT_BIND" ]]; then
+        die "the cropwright service would publish on '${hosts}', not ${OP_CROPWRIGHT_BIND} (its compose entry must honour OP_CROPWRIGHT_BIND_ADDRESS)" "$EXIT_VERIFY"
     fi
     assert_container_names_free "${OP_PROJECT}-cropwright"
-    log_success "Cropwright configured on ${CROPWRIGHT_BIND}:${port}"
+    log_success "Cropwright configured on ${OP_CROPWRIGHT_BIND}:${port}"
 }
 
 # -----------------------------------------------------------------------------
@@ -2022,8 +2019,8 @@ run_health() {
         wait_http "http://${h}:${p}/health" 180 || fails+=("mlflow not healthy: ./openprocessor logs curation-mlflow")
     fi
     if _has_tier cropwright; then
-        wait_http "http://${h}:${CROPWRIGHT_PORT}/" 120 || fails+=("cropwright / not 200")
-        wait_http "http://${h}:${CROPWRIGHT_PORT}/curation/health" 60 || fails+=("cropwright cannot reach the API through its proxy (network ${OP_PROJECT}_triton_net)")
+        wait_http "http://${h}:${OP_CROPWRIGHT_PORT}/" 120 || fails+=("cropwright / not 200")
+        wait_http "http://${h}:${OP_CROPWRIGHT_PORT}/curation/health" 60 || fails+=("cropwright cannot reach the API through its proxy (network ${OP_PROJECT}_triton_net)")
     fi
     if [[ "$OP_WITH_MONITORING" == 1 ]]; then
         local unreadable
@@ -2354,11 +2351,11 @@ print_summary() {
     if _has_tier vlm; then vlmp="$(read_env_var "$ENV_FILE" VLM_PORT)"; echo "    VLM         http://${h}:${vlmp}/v1/models (${VLM_PICK})"; fi
     if _has_tier trainer; then ml="$(read_env_var "$ENV_FILE" MLFLOW_PORT)"; echo "    MLflow      http://${h}:${ml}"; fi
     if _has_tier cropwright; then
-        echo "    Cropwright  http://${h}:${CROPWRIGHT_PORT}"
-        if ! is_loopback_ipv4 "${CROPWRIGHT_BIND:-127.0.0.1}"; then
-            local lan="$CROPWRIGHT_BIND"
+        echo "    Cropwright  http://${h}:${OP_CROPWRIGHT_PORT}"
+        if ! is_loopback_ipv4 "${OP_CROPWRIGHT_BIND:-127.0.0.1}"; then
+            local lan="$OP_CROPWRIGHT_BIND"
             [[ "$lan" == 0.0.0.0 ]] && lan="$(hostname -I 2>/dev/null | awk '{ print $1 }' || true)"
-            echo "    Cropwright on your LAN: http://${lan:-<this-computer-ip>}:${CROPWRIGHT_PORT}"
+            echo "    Cropwright on your LAN: http://${lan:-<this-computer-ip>}:${OP_CROPWRIGHT_PORT}"
             log_warn "Cropwright is reachable from your LAN and has NO login: use it only on a trusted network,"
             log_warn "never port-forward it to the internet, and put a reverse proxy with authentication in front"
             log_warn "for anything wider (SECURITY.md). Re-run with --local-only to keep it on this computer."
@@ -2374,7 +2371,7 @@ print_summary() {
     fi
     if ! is_loopback_ipv4 "$OP_BIND_ADDRESS"; then
         log_warn "SECURITY: services are published on ${OP_BIND_ADDRESS} with NO authentication. See SECURITY.md."
-    elif _has_tier cropwright && ! is_loopback_ipv4 "${CROPWRIGHT_BIND:-127.0.0.1}"; then
+    elif _has_tier cropwright && ! is_loopback_ipv4 "${OP_CROPWRIGHT_BIND:-127.0.0.1}"; then
         echo "  Security: every OpenProcessor API port is bound to ${OP_BIND_ADDRESS}; Cropwright is the exception (your LAN, above)."
         echo "            The API has no auth; use a reverse proxy before exposing it."
     else
@@ -2789,6 +2786,9 @@ do_install() {
     source "${OP_DIR}/scripts/lib/image_keys.sh"
     # shellcheck source=scripts/lib/opensearch_heap.sh
     source "${OP_DIR}/scripts/lib/opensearch_heap.sh"
+    # shellcheck source=scripts/lib/retired_env.sh
+    source "${OP_DIR}/scripts/lib/retired_env.sh"
+    refuse_retired_env "$ENV_FILE"
 
     env_create_or_merge
     env_set COMPOSE_PROJECT_NAME "$OP_PROJECT"
@@ -3152,8 +3152,8 @@ main() {
     TRITON_DIGEST=""
     IMAGE_DIGESTS=()
     PINNED_IMAGES=()
-    CROPWRIGHT_PORT=""
-    CROPWRIGHT_BIND=""
+    OP_CROPWRIGHT_PORT=""
+    OP_CROPWRIGHT_BIND=""
     ACTIVE_IMAGES=()
     VLM_PICK=""
     RESOLVED_MODE=""

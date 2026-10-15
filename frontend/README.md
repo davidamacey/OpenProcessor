@@ -65,8 +65,8 @@ docker compose --profile cropwright up -d
 ```
 
 See the [quick start](../docs-site/docs/cropwright/getting-started/quick-start.md) for the
-settings (`API_UPSTREAM`, `PUBLIC_API_PREFIX`, `CROPWRIGHT_PORT`, `CROPWRIGHT_BIND_ADDRESS`).
-Open `http://localhost:5184` (or the `CROPWRIGHT_PORT` you set). The app origin also serves
+settings (`API_UPSTREAM`, `PUBLIC_API_PREFIX`, `OP_CROPWRIGHT_PORT`, `OP_CROPWRIGHT_BIND_ADDRESS`).
+Open `http://localhost:5184` (or the `OP_CROPWRIGHT_PORT` you set). The app origin also serves
 the API's own Swagger UI at `/docs` (ReDoc at `/redoc`); the top bar's **Resources** menu
 links to them, to the documentation when it is running, and to any dashboards the backend
 serves. The image runs nginx as a non-root user (uid 101) on port 8080 inside the container.
@@ -158,11 +158,10 @@ key a registered region slot's own keymap declares.
 | `PUBLIC_API_PREFIX`                    | `/curation`          | both          | Path prefix the backend serves its curation endpoints under. Must equal the backend's own `OP_API_PREFIX`.                                                                  |
 | `PUBLIC_TRITON_API_URL`                | _(empty)_            | `npm run dev` | Legacy name (predates the OpenProcessor rename). Points the dev server straight at a backend origin, bypassing the nginx proxy Docker gets for free. Leave empty in Docker. |
 | `API_UPSTREAM`                         | `http://op-api:8000` | Docker        | Where nginx proxies `PUBLIC_API_PREFIX/*` to, by container name over the shared docker network.                                                                             |
-| `CROPWRIGHT_PORT`                      | `5184`               | Docker        | Host port nginx is published on.                                                                                                                                            |
-| `CROPWRIGHT_BIND_ADDRESS`              | `0.0.0.0`            | Docker        | Host address the port is published on: this machine and the local network. `127.0.0.1` limits it to this machine. Keep it on a trusted network.                             |
-| `CROPWRIGHT_CONTAINER_NAME`            | `cropwright`         | Docker        | Container name — set uniquely for a second instance .                                                                                                                       |
-| `CROPWRIGHT_INGEST_MAX_REQUEST_MB`     | `256`                | Docker        | Upload cap for `/ingest` (nginx `client_max_body_size`); kept in lockstep with the client-side chunk planner.                                                               |
-| `CROPWRIGHT_DATASET_UPLOAD_MAX_MB`     | `2048`               | Docker        | Upload cap for a dataset archive on `/datasets/import` (nginx `client_max_body_size`); the client refuses a larger file before sending.                                     |
+| `OP_CROPWRIGHT_PORT`                   | `5184`               | Docker        | Host port nginx is published on.                                                                                                                                            |
+| `OP_CROPWRIGHT_BIND_ADDRESS`           | `0.0.0.0`            | Docker        | Host address the port is published on: this machine and the local network. `127.0.0.1` limits it to this machine. Keep it on a trusted network.                             |
+| `OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB`  | `256`                | Docker        | Upload cap for `/ingest` (nginx `client_max_body_size`); kept in lockstep with the client-side chunk planner.                                                               |
+| `OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB`  | `2048`               | Docker        | Upload cap for a dataset archive on `/datasets/import` (nginx `client_max_body_size`); the client refuses a larger file before sending.                                     |
 | `PUBLIC_APP_NAME` / `PUBLIC_APP_BADGE` | `Cropwright` / `CW`  | build time    | Top-bar wordmark/badge, for a white-labeled deployment.                                                                                                                     |
 
 The app is a pure SPA consumer of the OpenProcessor API — there is
@@ -189,7 +188,7 @@ npm run test:e2e # Playwright against an in-browser stub backend (own venv, auto
 ```
 
 **Live, read-only tests** against a real deployed backend:
-`CROPWRIGHT_LIVE_URL=http://localhost:5184 npm run test:live` — skipped
+`OP_CROPWRIGHT_LIVE_URL=http://localhost:5184 npm run test:live` — skipped
 entirely unless that env var is set; structurally read-only (aborts any
 non-GET/HEAD request to the API and fails the test if one was even
 attempted).
@@ -214,8 +213,7 @@ repository root builds and publishes it (see `docs/releases/RELEASE_CHECKLIST.md
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Top-bar status chip red / "API unavailable"           | Backend not reachable at `API_UPSTREAM` (Docker) or `PUBLIC_TRITON_API_URL` (dev); or `{API_PREFIX}/health` returns 5xx              |
 | A write returns 409 "no region profile is configured" | The backend has no region profile set — region-specific actions (confirm/reject a sub-box, etc.) are unavailable until it does       |
-| Upload to `/ingest` fails with 413                    | File(s) exceed `CROPWRIGHT_INGEST_MAX_REQUEST_MB` (nginx) or the backend's own configured upload cap — raise the env var, rebuild    |
-| Port already in use                                   | Another service already publishes that host port — set `CROPWRIGHT_PORT` (and give the instance its own `CROPWRIGHT_CONTAINER_NAME`) |
+| Upload to `/ingest` fails with 413                    | File(s) exceed `OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB` (nginx) or the backend's own configured upload cap — raise the env var, rebuild |
 | Empty cluster grid / review queues                    | The backend's index isn't populated yet — ingest some images first                                                                   |
 | Build fails: `Cannot find module 'svelte-dnd-action'` | `npm install` wasn't run, or `node_modules` is stale — `rm -rf node_modules && npm install`                                          |
 

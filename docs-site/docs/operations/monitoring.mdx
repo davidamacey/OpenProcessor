@@ -265,7 +265,7 @@ nginx proxy the UIs under sub-paths. The UIs stay on `127.0.0.1`.
 COMPOSE_PROFILES=cropwright,monitoring,training
 OP_GATEWAY_SUBPATHS=true
 GF_SECURITY_ADMIN_PASSWORD=<not admin>
-CROPWRIGHT_BIND_ADDRESS=0.0.0.0   # the gateway; leave OP_UI_BIND_ADDRESS unset
+OP_CROPWRIGHT_BIND_ADDRESS=0.0.0.0   # the gateway; leave OP_UI_BIND_ADDRESS unset
 ```
 
 One switch does everything: compose starts Grafana, Prometheus and OpenSearch

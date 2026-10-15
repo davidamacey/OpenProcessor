@@ -41,7 +41,7 @@ def test_dashboard_cluster_count_agrees_with_stats_dataset(
     page = guarded_page.page
     page.goto(f"{live_url}{page_path(live_project, '/dashboard')}", wait_until="domcontentloaded")
     # `data-testid="dataset-cluster-count"` (DatasetStats.svelte) is only
-    # in source as of this change — the deployment at CROPWRIGHT_LIVE_URL
+    # in source as of this change — the deployment at OP_CROPWRIGHT_LIVE_URL
     # is a prior build without it (this tier is instructed not to rebuild
     # or restart the container), so select by the stable dt/dd label
     # pairing instead, which works against both the old and new build.

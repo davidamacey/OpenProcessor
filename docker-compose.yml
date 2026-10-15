@@ -41,7 +41,7 @@ x-gateway-wrap: &gateway_wrap |
   esac
   case "$${OP_UI_PUBLISH_ADDRESS:-}" in
     127.*|localhost|::1|'[::1]') ;;
-    *) echo "gateway-wrap: refusing to start $$tag: OP_GATEWAY_SUBPATHS=true but the UI ports are published on '$$OP_UI_PUBLISH_ADDRESS'. Unset OP_UI_BIND_ADDRESS (or set it to 127.0.0.1) and publish only the gateway (CROPWRIGHT_BIND_ADDRESS)." >&2; exit 1 ;;
+    *) echo "gateway-wrap: refusing to start $$tag: OP_GATEWAY_SUBPATHS=true but the UI ports are published on '$$OP_UI_PUBLISH_ADDRESS'. Unset OP_UI_BIND_ADDRESS (or set it to 127.0.0.1) and publish only the gateway (OP_CROPWRIGHT_BIND_ADDRESS)." >&2; exit 1 ;;
   esac
   case "$$tag" in
     grafana)
@@ -330,8 +330,8 @@ services:
   # ===================================================================
   cropwright:
     profiles: ['cropwright']
-    # CROPWRIGHT_IMAGE (a full reference, e.g. a digest pin) wins over CROPWRIGHT_TAG.
-    image: ${CROPWRIGHT_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/cropwright:${OP_IMAGE_TAG:-0.5.0}}
+    # OP_CROPWRIGHT_IMAGE (a full reference, e.g. a digest pin) wins over the OP_IMAGE_TAG default.
+    image: ${OP_CROPWRIGHT_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/cropwright:${OP_IMAGE_TAG:-0.5.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-cropwright
     # Soft scheduling floor for the static-file nginx, not a cap.
     mem_reservation: 64m
@@ -354,17 +354,24 @@ services:
       # different origin directly from the browser.
       - PUBLIC_TRITON_API_URL=${PUBLIC_TRITON_API_URL:-}
       # Deployment-owned nginx upload caps: /ingest (MB) and dataset archives (MB).
-      - CROPWRIGHT_INGEST_MAX_REQUEST_MB=${CROPWRIGHT_INGEST_MAX_REQUEST_MB:-256}
-      - CROPWRIGHT_DATASET_UPLOAD_MAX_MB=${CROPWRIGHT_DATASET_UPLOAD_MAX_MB:-2048}
+      - OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB=${OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB:-256}
+      - OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB=${OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB:-2048}
       # Where nginx proxies /OpenProcessor/ (the docs site): the docs service of docker-compose.docs.yml, when run.
       - DOCS_UPSTREAM=${DOCS_UPSTREAM:-http://docs:8080}
       # Gateway mode: also serve the monitoring UIs under /grafana/, /prometheus/,
       # /dashboards/ and /mlflow/ of this one origin (see x-gateway-wrap below).
       - OP_GATEWAY_SUBPATHS=${OP_GATEWAY_SUBPATHS:-false}
+      # Retired names (renamed to OP_CROPWRIGHT_*): passed through only so the entrypoint
+      # can refuse to start while a .env still sets one.
+      - CROPWRIGHT_IMAGE=${CROPWRIGHT_IMAGE:-}
+      - CROPWRIGHT_BIND_ADDRESS=${CROPWRIGHT_BIND_ADDRESS:-}
+      - CROPWRIGHT_PORT=${CROPWRIGHT_PORT:-}
+      - CROPWRIGHT_INGEST_MAX_REQUEST_MB=${CROPWRIGHT_INGEST_MAX_REQUEST_MB:-}
+      - CROPWRIGHT_DATASET_UPLOAD_MAX_MB=${CROPWRIGHT_DATASET_UPLOAD_MAX_MB:-}
     ports:
-      # A UI: CROPWRIGHT_BIND_ADDRESS opens just this one to a LAN (the installer's default for
+      # A UI: OP_CROPWRIGHT_BIND_ADDRESS opens just this one to a LAN (the installer's default for
       # homelabs), OP_UI_BIND_ADDRESS opens it with the other UIs, and the API stays on loopback.
-      - '${CROPWRIGHT_BIND_ADDRESS:-${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}}:${CROPWRIGHT_PORT:-5184}:8080'
+      - '${OP_CROPWRIGHT_BIND_ADDRESS:-${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}}:${OP_CROPWRIGHT_PORT:-5184}:8080'
     healthcheck:
       # 127.0.0.1, not localhost: localhost resolves to ::1 and nginx listens on IPv4 only.
       test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/']

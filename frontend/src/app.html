@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#09090b" />
     <title>Cropwright</title>
     <!-- __INGEST_MAX_REQUEST_MB__ is substituted at container start
-         (docker-entrypoint.sh) from CROPWRIGHT_INGEST_MAX_REQUEST_MB —
+         (docker-entrypoint.sh) from OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB —
          the deployment-owned nginx client_max_body_size cap ingestConfig.ts's
          upload chunk planner needs to know (docs/design/
          ingest-ui-and-acceptance-plan-2026-09-24.md §A.4). The
@@ -17,7 +17,7 @@
          "unset" the same way normalizeApiPrefix treats __API_PREFIX__. -->
     <script>
       window.__CROPWRIGHT_INGEST_MAX_REQUEST_MB__ = '__INGEST_MAX_REQUEST_MB__';
-      // W10 dataset-archive upload cap (CROPWRIGHT_DATASET_UPLOAD_MAX_MB);
+      // W10 dataset-archive upload cap (OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB);
       // the unresolved literal means "unset" (src/lib/datasets/uploadCap.ts).
       window.__CROPWRIGHT_DATASET_UPLOAD_MAX_MB__ = '__DATASET_UPLOAD_MAX_MB__';
     </script>

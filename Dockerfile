@@ -14,7 +14,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Build - Install Python dependencies with compilation tools
 # -----------------------------------------------------------------------------
-FROM python:3.13-slim-trixie AS builder
+FROM python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f AS builder
 
 WORKDIR /build
 
@@ -62,7 +62,7 @@ RUN rm -rf /root/.local/lib/python3.13/site-packages/pip \
 # -----------------------------------------------------------------------------
 # Stage 2: Runtime - Minimal image with only runtime dependencies
 # -----------------------------------------------------------------------------
-FROM python:3.13-slim-trixie
+FROM python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f
 
 LABEL org.opencontainers.image.title="OpenProcessor FastAPI Service" \
       org.opencontainers.image.description="Visual AI API with object detection, face recognition, embeddings, and OCR" \
@@ -137,7 +137,14 @@ ENV PATH=/home/appuser/.local/bin:$PATH \
 
 # Copy application code
 COPY --chown=appuser:appuser src/ ./src/
-COPY --chown=appuser:appuser scripts/ ./scripts/
+# Only what runs inside the container: the curation workers and the CLIs operators run with
+# `docker compose exec api python -m scripts.curation...`, the public COCO sample fetcher, and the
+# shell libraries `openprocessor models install` sources in the container (config.sh and what it
+# sources, download.sh). tests/test_dockerfile_hygiene.py checks this set against the imports.
+COPY --chown=appuser:appuser scripts/curation/ ./scripts/curation/
+COPY --chown=appuser:appuser scripts/datasets/ ./scripts/datasets/
+COPY --chown=appuser:appuser scripts/lib/colors.sh scripts/lib/config.sh scripts/lib/config_models.sh \
+     scripts/lib/download.sh scripts/lib/gpu.sh scripts/lib/opensearch_heap.sh ./scripts/lib/
 COPY --chown=appuser:appuser VERSION ./VERSION
 COPY --chown=appuser:appuser config_templates/ ./config_templates/
 

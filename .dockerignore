@@ -45,6 +45,15 @@ Dockerfile*
 docker-compose*.yml
 .dockerignore
 
+# Local and sibling trees no root-context image reads (the frontend and the docs site build
+# from their own contexts)
+artifacts_local/
+docs-site/
+frontend/
+.claude/
+.install/
+export_*/
+
 # Documentation (not needed in containers)
 docs/
 *.md
