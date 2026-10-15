@@ -7,8 +7,9 @@ from typing import Any
 
 from src.clients.opensearch.client import OpenSearchClient
 from src.services.inference import InferenceService
-from src.services.visual_search.batch_documents import build_documents, face_landmark_mismatch
+from src.services.visual_search.batch_documents import build_documents
 from src.services.visual_search.batch_inference import infer_batch
+from src.utils.face_response import face_landmark_mismatch
 
 
 logger = logging.getLogger(__name__)

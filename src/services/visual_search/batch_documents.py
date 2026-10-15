@@ -7,6 +7,8 @@ from typing import Any
 
 import numpy as np
 
+from src.utils.face_response import face_landmark_mismatch
+
 
 def _image_size(result: dict, img_bytes: bytes) -> tuple[int, int]:
     """Width and height from the inference response, else from the JPEG header."""
@@ -44,20 +46,6 @@ def _image_document(
         doc['det_classes'] = result.get('classes', [])
         doc['det_scores'] = result.get('scores', [])
     return doc
-
-
-def face_landmark_mismatch(face_result: dict) -> str | None:
-    """The reason a face response is unusable, or ``None``.
-
-    An empty landmark list means "not provided"; a non-empty one shorter than the
-    faces it describes cannot be paired with them, so the image is refused rather
-    than guessed at.
-    """
-    faces = min(len(face_result.get('face_embeddings', [])), len(face_result.get('face_boxes', [])))
-    landmarks = len(face_result.get('face_landmarks', []))
-    if 0 < landmarks < faces:
-        return f'face_landmarks_length_mismatch: {landmarks} landmark entries for {faces} faces'
-    return None
 
 
 def landmarks_for(face_landmarks: list, j: int) -> list:

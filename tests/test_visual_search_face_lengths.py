@@ -89,3 +89,40 @@ def test_ingest_faces_reports_the_reason() -> None:
         ffc.get_fast_face_client = orig
     assert out['status'] == 'error'
     assert out['error'].startswith('face_landmarks_length_mismatch')
+
+
+def _inference_service(monkeypatch: pytest.MonkeyPatch, faces: dict[str, Any]) -> Any:
+    import src.services.inference as inf
+
+    class FakeFace:
+        def recognize(self, *_a: Any, **_k: Any) -> dict[str, Any]:
+            return {'status': 'success', 'orig_shape': (10, 10), **faces}
+
+    class FakeTriton:
+        def infer_yolo_clip_cpu(self, _b: bytes) -> dict[str, Any]:
+            return {'image_embedding': [1.0]}
+
+        def format_detections(self, *_a: Any, **_k: Any) -> list:
+            return []
+
+    monkeypatch.setattr(inf, 'get_fast_face_client', lambda *_a, **_k: FakeFace())
+    monkeypatch.setattr(inf, 'get_sync_triton_client', lambda *_a, **_k: FakeTriton())
+    svc = inf.InferenceService.__new__(inf.InferenceService)
+    svc.settings = SimpleNamespace(triton_url='x')
+    return svc
+
+
+def test_detect_faces_reports_the_reason(monkeypatch: pytest.MonkeyPatch) -> None:
+    svc = _inference_service(monkeypatch, _faces(2, 1))
+    out = svc.detect_faces(b'x')
+    assert out['status'] == 'error'
+    assert out['error'].startswith('face_landmarks_length_mismatch')
+    assert out['faces'] == []
+
+
+def test_recognize_faces_reports_the_reason(monkeypatch: pytest.MonkeyPatch) -> None:
+    svc = _inference_service(monkeypatch, _faces(2, 1))
+    out = svc.recognize_faces(b'x')
+    assert out['status'] == 'error'
+    assert out['error'].startswith('face_landmarks_length_mismatch')
+    assert out['faces'] == []
