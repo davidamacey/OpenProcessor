@@ -23,6 +23,13 @@ import pytest
 # per-test just to get a stable, non-empty verifier/labeler string.
 os.environ.setdefault('OP_VLM_MODEL', 'test-vlm-model')
 
+# Tests that enter the app lifespan build a real OpenSearch client from the
+# default in-cluster hostname. On a CI runner that name resolves slowly (10-15 s
+# per lookup, several lookups per startup), which made lifespan setup take
+# minutes and tripped the 400 s per-test timeout. A refused loopback port fails
+# at once, and every test that needs OpenSearch fakes it.
+os.environ.setdefault('OPENSEARCH_URL', 'http://127.0.0.1:9')
+
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

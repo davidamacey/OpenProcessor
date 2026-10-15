@@ -465,6 +465,11 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Fixed
 
+- CI stability: the offline suite no longer builds its app-lifespan OpenSearch client against the in-cluster
+  hostname, which resolved slowly on the runner (10 to 15 s per lookup, several per startup) and made integration
+  test setup hit the 400 s timeout, doubling the suite's run time. Tests now default `OPENSEARCH_URL` to a refused
+  loopback port. The stubbed e2e harness gains a default 404 for `GET /vlm/endpoints/active`.
+
 - `PUT /ingest/policy` dropped the `clustering` block: saving `clustering.automatic: false` answered 200 with `true` and stored `true`, so detection-only clustering could never be switched off.
 - The auto-label VLM stage no longer reports `completed` with `predicted: 0` when it could label
   nothing: it adds `failed` and `unreadable` counts, and fails the job when every selected crop
