@@ -68,7 +68,7 @@ class, 83% of 41 answers", opens the proposal card:
 - the **votes** per class, and the new class names the VLM proposed that the
   registry lacks (with **Add class…** to create one).
 - the **attribute suggestions**, labelled "suggestions, not labels".
-- **Apply {class} to {N} members**: the explicit button. N is the server's
+- **Apply `{class}` to `{N}` members**: the explicit button. N is the server's
   dry-run count of members it would label; the members it leaves alone
   (locked, validated, held-out) are counted next to it. Applying labels them
   as you would by hand (validated, trainable).
@@ -81,11 +81,11 @@ offered only after that refusal, and still counts first.
 
 ## Attribute suggestions
 
-Attributes a [prompt pack](./prompt-packs.mdx) declares appear as dashed
+Attributes a [prompt pack](../../guides/prompt-packs.mdx) declares appear as dashed
 **VLM suggests** chips with the VLM's confidence, on the crop card, in the crop
 details panel and in Review, and per box on the Review box row. They are never
 labels and never change the class or the boxes. When the VLM's class answer
-differs from a locked label, the card shows **VLM said: {class}** beside it.
+differs from a locked label, the card shows **VLM said: `{class}`** beside it.
 
 ## Region verification on the VLM scope panel
 
