@@ -11602,6 +11602,17 @@
             ],
             "title": "Cluster Id"
           },
+          "cluster_subid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Subid"
+          },
           "conf_max": {
             "anyOf": [
               {
@@ -21781,6 +21792,17 @@
               }
             ],
             "title": "Cluster Id"
+          },
+          "cluster_subid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Subid"
           },
           "conf_max": {
             "anyOf": [
@@ -33863,6 +33885,24 @@
                 }
               ],
               "title": "Cluster Id"
+            }
+          },
+          {
+            "description": "One AHC sub-cluster of a cluster, e.g. '10000b'.",
+            "in": "query",
+            "name": "cluster_subid",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One AHC sub-cluster of a cluster, e.g. '10000b'.",
+              "title": "Cluster Subid"
             }
           },
           {

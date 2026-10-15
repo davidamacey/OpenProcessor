@@ -57,6 +57,8 @@ class ItemFilter(BaseModel):
     source: str | None = None
     class_id: int | None = None
     cluster_id: int | None = None
+    # Sub-ids embed the cluster id ("47b"), so this needs no cluster_id.
+    cluster_subid: str | None = None
     import_id: str | None = None
     dataset_split: str | None = None
     label_source: str | None = None
@@ -179,6 +181,7 @@ def _term_clauses(f: ItemFilter) -> list[dict[str, Any]]:
         ('source', f.source),
         ('class_id', f.class_id),
         ('cluster_id', f.cluster_id),
+        ('cluster_subid', f.cluster_subid),
         ('dataset_split', f.dataset_split),
         ('label_source', f.label_source),
         ('class_source', f.class_source),

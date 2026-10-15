@@ -366,6 +366,13 @@
    }
   }
  ],
+ "cluster_subid": [
+  {
+   "term": {
+    "cluster_subid": "7b"
+   }
+  }
+ ],
  "dataset_split": [
   {
    "term": {
@@ -768,6 +775,11 @@
   {
    "term": {
     "cluster_id": 2
+   }
+  },
+  {
+   "term": {
+    "cluster_subid": "2a"
    }
   },
   {

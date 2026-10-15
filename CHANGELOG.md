@@ -13,6 +13,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Added
 
+- `GET /crops?cluster_subid=` and the item filter's `cluster_subid` select one AHC sub-cluster on the server, so a sub-cluster larger than a page can be listed whole.
 - Detection-only ingest (#279): ingest policy `embedding.mode: "none"` stores boxes with no vector
   of any kind (the whole-frame vector included) and `clustering.automatic: false` keeps ingest and
   the embed scope from placing items in clusters, the `curation-cluster-refresh` daemon from

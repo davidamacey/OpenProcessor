@@ -929,7 +929,7 @@ default state of a new box.
 |---|---|
 | `page`, `page_size` (1 to 500, default 50), `limit` | paging. `limit` is an alias of `page_size` and wins when both are set |
 | `sort` | `<field>[:asc\|desc]`, default `updated_at:desc`. Fields: `updated_at`, `created_at`, `confidence`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `cluster_distance`, `mistakenness_score`, `uniqueness_score`. Anything else is `400`. Ignored by `order=outliers` and `order=diverse` |
-| `cluster_id`, `label_source`, `class_source`, `label_validated`, `source` | exact filters. A class is filtered by name (`class_name`, repeatable; the shared item filter): `class_id` is not a query parameter. `GET /classes/{class_id}/crops` is the by-id listing |
+| `cluster_id`, `cluster_subid`, `label_source`, `class_source`, `label_validated`, `source` | exact filters (`cluster_subid` is one AHC sub-cluster such as `10000b`; it embeds the cluster id, so it works without `cluster_id`). A class is filtered by name (`class_name`, repeatable; the shared item filter): `class_id` is not a query parameter. `GET /classes/{class_id}/crops` is the by-id listing |
 | `needs_new_class`, `review_dismissed` | boolean filters |
 | `ids` | comma-separated, at most 500. Returns exactly those items in that order, drops missing ids and ignores every other filter |
 | `include_test`, `include_excluded` | include frozen test-holdout and excluded items |

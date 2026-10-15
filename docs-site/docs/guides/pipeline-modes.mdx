@@ -440,7 +440,7 @@ sub-cluster.
 # ran
 curl -s -X POST $API/classes -H 'content-type: application/json' \
   -d '{"name":"spoiler","group":"car_part"}'
-curl -s "$API/crops?cluster_id=10000&limit=200"     # pick the ids of sub-cluster 10000b
+curl -s "$API/crops?cluster_id=10000&cluster_subid=10000b&limit=200"   # the ids of sub-cluster 10000b
 curl -s -X PUT $API/crops/batch_label -H 'content-type: application/json' \
   -d '{"crop_ids":["050ad3a2...","05ad8ec2..."],"class_id":0,"label_source":"human"}'
 ```
