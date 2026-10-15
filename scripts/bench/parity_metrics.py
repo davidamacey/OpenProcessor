@@ -34,7 +34,8 @@ def box_iou(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     area_a = np.clip(a64[:, 2:] - a64[:, :2], 0.0, None).prod(axis=1)
     area_b = np.clip(b64[:, 2:] - b64[:, :2], 0.0, None).prod(axis=1)
     union = area_a[:, None] + area_b[None, :] - inter
-    return np.divide(inter, union, out=np.zeros_like(inter), where=union > 0)
+    result: np.ndarray = np.divide(inter, union, out=np.zeros_like(inter), where=union > 0)
+    return result
 
 
 def match_boxes(
@@ -267,7 +268,8 @@ def knn_agreement(
 def _vote(row: np.ndarray) -> str:
     """The most common label of a neighbour list; ties go to the alphabetically first."""
     counts = Counter(row.tolist())
-    return min(counts, key=lambda label: (-counts[label], label))
+    result: str = min(counts, key=lambda label: (-counts[label], label))
+    return result
 
 
 def _neighbour_precision(truth: np.ndarray, queries: np.ndarray, nn: np.ndarray) -> float | None:

@@ -165,7 +165,7 @@ async def make_curation_opensearch() -> Any:
     from src.core.dependencies import get_opensearch
 
     wrapper = await get_opensearch()
-    raw = getattr(wrapper, 'client', wrapper)
+    raw: Any = getattr(wrapper, 'client', wrapper)
     if not getattr(raw.transport, 'project_guarded', False):
         from src.services.projects.registry import get_project_registry
 

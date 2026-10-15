@@ -30,13 +30,18 @@ import argparse
 import importlib.util
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 _SOURCE = REPO_ROOT / 'src' / 'config' / 'region_state.py'
 
 
-def _load_region_state():
+def _load_region_state() -> ModuleType:
     # Load the module file directly rather than via ``src.config`` so the
     # pre-commit hook runs under a bare system python3: the package
     # ``__init__`` pulls in pydantic-settings and friends, region_state.py

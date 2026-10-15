@@ -96,7 +96,8 @@ class FastFaceClient:
         # L2 normalize
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
         norms = np.maximum(norms, 1e-10)
-        return embeddings / norms
+        typed: np.ndarray = embeddings / norms
+        return typed
 
     # =========================================================================
     # Quality scoring
@@ -126,7 +127,8 @@ class FastFaceClient:
         aspect_ratio = np.minimum(face_w, face_h) / (np.maximum(face_w, face_h) + 1e-6)
 
         quality = np.clip(size_score * boundary_score * aspect_ratio, 0, 1)
-        return quality.astype(np.float32)
+        typed: np.ndarray = quality.astype(np.float32)
+        return typed
 
     # =========================================================================
     # Main pipeline

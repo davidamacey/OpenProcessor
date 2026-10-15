@@ -317,7 +317,8 @@ def _spawn(name: str, port: int) -> subprocess.Popen[bytes]:
 
 def _cpu(proc: psutil.Process) -> float:
     t = proc.cpu_times()
-    return t.user + t.system
+    result: float = t.user + t.system
+    return result
 
 
 class _RssPeak(threading.Thread):

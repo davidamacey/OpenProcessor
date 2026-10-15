@@ -9,6 +9,8 @@ import asyncio
 import logging
 from typing import Annotated, Any
 
+import tritonclient.grpc as grpcclient
+import tritonclient.grpc.aio as grpcclient_aio
 from fastapi import Depends
 
 from src.clients.opensearch.client import OpenSearchClient
@@ -30,10 +32,10 @@ class AppState:
     This avoids global state while providing singleton-like behavior.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.pytorch_models: dict[str, Any] = {}
-        self._triton_async_client = None
-        self._opensearch_client = None
+        self._triton_async_client: grpcclient_aio.InferenceServerClient | None = None
+        self._opensearch_client: OpenSearchClient | None = None
 
     @property
     def triton_url(self) -> str:
@@ -59,12 +61,12 @@ class TritonClientFactory:
     """
 
     @staticmethod
-    def get_sync_client():
+    def get_sync_client() -> grpcclient.InferenceServerClient:
         """Get sync Triton gRPC client with connection pooling."""
         return TritonClientManager.get_sync_client(app_state.triton_url)
 
     @staticmethod
-    async def get_async_client():
+    async def get_async_client() -> grpcclient_aio.InferenceServerClient:
         """Get async Triton gRPC client (lazy initialization)."""
         if app_state._triton_async_client is None:
             logger.info(f'Initializing async Triton client ({app_state.triton_url})...')
@@ -75,7 +77,7 @@ class TritonClientFactory:
         return app_state._triton_async_client
 
     @staticmethod
-    async def close_all():
+    async def close_all() -> None:
         """Close all Triton connections."""
         await TritonClientManager.close_all()
         app_state._triton_async_client = None
@@ -89,7 +91,7 @@ class OpenSearchClientFactory:
     """Factory for OpenSearch client with lazy initialization."""
 
     @staticmethod
-    async def get_client():
+    async def get_client() -> OpenSearchClient:
         """Get OpenSearch client (lazy initialization)."""
         if app_state._opensearch_client is None:
             settings = get_settings()
@@ -101,14 +103,14 @@ class OpenSearchClientFactory:
             # OpenSearchClient installs the project guard at construction.
             app_state._opensearch_client = client
 
-            if not await app_state._opensearch_client.ping():
+            if not await client.ping():
                 raise RuntimeError(f'OpenSearch connection failed: {settings.opensearch_url}')
 
             logger.info('OpenSearch client ready')
         return app_state._opensearch_client
 
     @staticmethod
-    async def close():
+    async def close() -> None:
         """Close OpenSearch client."""
         if app_state._opensearch_client is not None:
             await app_state._opensearch_client.close()
@@ -160,10 +162,10 @@ async def bootstrap_opensearch_indexes() -> 'asyncio.Task[None] | None':
 class VisualSearchServiceFactory:
     """Factory for VisualSearchService with lazy initialization."""
 
-    _instance = None
+    _instance: 'VisualSearchService | None' = None
 
     @classmethod
-    async def get_service(cls):
+    async def get_service(cls) -> 'VisualSearchService':
         """Get VisualSearchService (lazy initialization)."""
         if cls._instance is None:
             from src.services.visual_search import VisualSearchService
@@ -174,7 +176,7 @@ class VisualSearchServiceFactory:
         return cls._instance
 
     @classmethod
-    async def close(cls):
+    async def close(cls) -> None:
         """Close service resources."""
         cls._instance = None
 
@@ -182,12 +184,12 @@ class VisualSearchServiceFactory:
 # =============================================================================
 # FastAPI Dependencies (use with Depends())
 # =============================================================================
-async def get_async_triton():
+async def get_async_triton() -> grpcclient_aio.InferenceServerClient:
     """Dependency for async Triton client."""
     return await TritonClientFactory.get_async_client()
 
 
-async def get_opensearch():
+async def get_opensearch() -> OpenSearchClient:
     """Dependency for OpenSearch client."""
     return await OpenSearchClientFactory.get_client()
 
@@ -210,7 +212,7 @@ async def get_curation_opensearch() -> Any:
     return client
 
 
-async def get_visual_search_service():
+async def get_visual_search_service() -> 'VisualSearchService':
     """Dependency for VisualSearchService."""
     return await VisualSearchServiceFactory.get_service()
 

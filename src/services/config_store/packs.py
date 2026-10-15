@@ -85,7 +85,8 @@ def load_template(name: str) -> dict[str, Any] | None:
     if path is None:
         return None
     try:
-        return json.loads(path.read_text(encoding='utf-8'))
+        typed: dict[str, Any] | None = json.loads(path.read_text(encoding='utf-8'))
+        return typed
     except (OSError, ValueError):
         return None
 

@@ -112,7 +112,8 @@ class LazyTorchTextBackend:
                     )
                     real = self._loader()
                     self._real = real
-        return real.encode(tokens)
+        typed: np.ndarray = real.encode(tokens)
+        return typed
 
 
 class OnnxTextBackend:

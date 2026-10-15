@@ -132,12 +132,11 @@ class DuplicateDetectionService:
         Returns:
             List of DuplicateMatch objects
         """
-        if isinstance(embedding, np.ndarray):
-            embedding = embedding.tolist()
+        vector = embedding.tolist() if isinstance(embedding, np.ndarray) else embedding
 
         response = await self.opensearch.client.search(
             index=IndexName.GLOBAL.value,
-            body=knn_body(embedding, max_results),
+            body=knn_body(vector, max_results),
         )
 
         return matches_from_hits(response['hits']['hits'], threshold, exclude_image_id)

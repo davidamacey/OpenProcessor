@@ -124,8 +124,8 @@ async def _readiness_payload() -> tuple[int, dict[str, Any]]:
     return (200 if all_ok else 503), payload
 
 
-@router.get('/')
-def root():
+@router.get('/', response_model=None)
+def root() -> dict[str, Any]:
     """
     Service information endpoint.
 
@@ -253,8 +253,8 @@ def metrics() -> Response:
     return Response(content=body, media_type=content_type)
 
 
-@router.get('/connection_pool_info')
-def connection_pool_info():
+@router.get('/connection_pool_info', response_model=None)
+def connection_pool_info() -> dict[str, Any]:
     """
     Triton gRPC connection pool statistics.
 

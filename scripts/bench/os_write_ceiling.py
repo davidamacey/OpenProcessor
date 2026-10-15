@@ -75,7 +75,8 @@ def arm_config(name: str) -> dict[str, Any]:
 
 def unit_rows(matrix: np.ndarray) -> np.ndarray:
     norms = np.linalg.norm(matrix, axis=1, keepdims=True)
-    return (matrix / np.maximum(norms, 1e-12)).astype(np.float32)
+    result: np.ndarray = (matrix / np.maximum(norms, 1e-12)).astype(np.float32)
+    return result
 
 
 def synth_vectors(

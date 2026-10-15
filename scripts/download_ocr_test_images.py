@@ -66,7 +66,7 @@ def download_image(url: str, output_path: Path) -> bool:
         return False
 
 
-def main():
+def main() -> int:
     """Download all sample OCR images."""
     print('=' * 60)
     print('OCR Test Image Downloader')

@@ -58,7 +58,7 @@ import contextlib
 import json
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -387,12 +387,12 @@ class _Progress:
             raise asyncio.CancelledError('auto_label run cancelled by operator')
 
 
-async def with_elapsed_tick(
+async def with_elapsed_tick[T](
     progress: _Progress | None,
-    coro: Any,
+    coro: Coroutine[Any, Any, T],
     *,
     interval: float = 5.0,
-) -> Any:
+) -> T:
     """Run ``coro`` while a sibling task ticks ``progress.update(elapsed_s)``.
 
     Stages whose underlying operation (e.g. OpenSearch

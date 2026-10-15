@@ -72,7 +72,8 @@ class GpuDecodeFrame:
     def crop_embedding(self, item: DetectedItem) -> np.ndarray | None:
         if self.crop_embeddings is None:
             return None
-        return self.crop_embeddings[self._row(item)]
+        typed: np.ndarray | None = self.crop_embeddings[self._row(item)]
+        return typed
 
     def crop_jpeg(self, item: DetectedItem) -> bytes:
         return self.crop_jpegs[self._row(item)]

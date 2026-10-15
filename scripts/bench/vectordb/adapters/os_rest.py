@@ -72,22 +72,31 @@ class Rest:
         self.call('GET', f'/_plugins/_knn/warmup/{index}')
 
     def knn_stats(self) -> dict[str, Any]:
-        return self.call('GET', '/_plugins/_knn/stats')
+        result: dict[str, Any] = self.call('GET', '/_plugins/_knn/stats')
+        return result
 
     def search(self, index: str, body: dict[str, Any]) -> dict[str, Any]:
-        return self.call('POST', f'/{index}/_search', body, params={'request_cache': 'false'})
+        result: dict[str, Any] = self.call(
+            'POST', f'/{index}/_search', body, params={'request_cache': 'false'}
+        )
+        return result
 
     def count(self, index: str) -> int:
         return int(self.call('GET', f'/{index}/_count')['count'])
 
     def stats(self, index: str, metric: str) -> dict[str, Any]:
-        return self.call('GET', f'/{index}/_stats/{metric}')
+        result: dict[str, Any] = self.call('GET', f'/{index}/_stats/{metric}')
+        return result
 
     def jvm(self) -> dict[str, Any]:
-        return self.call('GET', '/_nodes/stats/jvm')['nodes']
+        result: dict[str, Any] = self.call('GET', '/_nodes/stats/jvm')['nodes']
+        return result
 
     def segments(self, index: str) -> list[dict[str, Any]]:
-        return self.call('GET', f'/_cat/segments/{index}', params={'format': 'json', 'bytes': 'b'})
+        result: list[dict[str, Any]] = self.call(
+            'GET', f'/_cat/segments/{index}', params={'format': 'json', 'bytes': 'b'}
+        )
+        return result
 
     def delete_by_query(self, index: str, body: dict[str, Any]) -> None:
         self.call(
@@ -106,7 +115,8 @@ class Rest:
             headers={'content-type': 'application/x-ndjson'},
         )
         resp.raise_for_status()
-        return resp.json()
+        result: dict[str, Any] = resp.json()
+        return result
 
     def close(self) -> None:
         self.http.close()

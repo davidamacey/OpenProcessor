@@ -20,6 +20,12 @@ import argparse
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+
+if TYPE_CHECKING:
+    import numpy as np
+    from onnx import GraphProto, NodeProto
 
 
 logger = logging.getLogger(__name__)
@@ -60,7 +66,7 @@ def _qk_column_order(width: int, heads: int, head_dim: int) -> list[int]:
     return order
 
 
-def _constant_input(graph, node):
+def _constant_input(graph: GraphProto, node: NodeProto) -> np.ndarray:
     """The value of the one constant input of ``node`` (an initializer or a Constant node)."""
     from onnx import numpy_helper
 
@@ -75,7 +81,7 @@ def _constant_input(graph, node):
     raise ValueError(f'{node.name}: no constant input')
 
 
-def _ancestors(graph, roots: list[str], stop: str, prefix: str) -> set[int]:
+def _ancestors(graph: GraphProto, roots: list[str], stop: str, prefix: str) -> set[int]:
     """Indices of the nodes named under ``prefix`` that feed ``roots``, not crossing ``stop``."""
     producer = {out: index for index, node in enumerate(graph.node) for out in node.output}
     seen: set[int] = set()
@@ -92,7 +98,7 @@ def _ancestors(graph, roots: list[str], stop: str, prefix: str) -> set[int]:
     return seen
 
 
-def _prune_unused(graph) -> None:
+def _prune_unused(graph: GraphProto) -> None:
     """Drop nodes and initializers that no graph output depends on."""
     producer = {out: node for node in graph.node for out in node.output}
     live: set[int] = set()
@@ -115,7 +121,7 @@ def _prune_unused(graph) -> None:
     graph.initializer.extend(kept_inits)
 
 
-def rotary_tables(onnx_path: str | Path, block: int = 0):
+def rotary_tables(onnx_path: str | Path, block: int = 0) -> tuple[np.ndarray, np.ndarray]:
     """Evaluate the model's own cosine and sine tables (``[1, 1, seq, head_dim]``, float32)."""
     import numpy as np
     import onnx
@@ -134,7 +140,7 @@ def rotary_tables(onnx_path: str | Path, block: int = 0):
     return cos, sin
 
 
-def _block_nodes(prefix: str, qkv: str, outputs: tuple[str, str, str]) -> list:
+def _block_nodes(prefix: str, qkv: str, outputs: tuple[str, str, str]) -> list[NodeProto]:
     """The half-split rotary nodes of one block, producing the three tensors of ``outputs``.
 
     ``outputs`` are the scaled queries ``[B, H, S, D]``, the scaled keys transposed
@@ -144,12 +150,12 @@ def _block_nodes(prefix: str, qkv: str, outputs: tuple[str, str, str]) -> list:
     from onnx import helper
 
     scaled_q, scaled_k_t, value = outputs
-    nodes: list = []
+    nodes: list[NodeProto] = []
 
-    def add(op, inputs, output, name, **attrs):
+    def add(op: str, inputs: list[str], output: str, name: str, **attrs: Any) -> None:
         nodes.append(helper.make_node(op, inputs, [output], name=f'{prefix}rope_{name}', **attrs))
 
-    def head_view(tag, out=None):
+    def head_view(tag: str, out: str | None = None) -> str:
         out = out or f'{prefix}{tag}_heads'
         add(
             'Slice',
@@ -166,8 +172,8 @@ def _block_nodes(prefix: str, qkv: str, outputs: tuple[str, str, str]) -> list:
         add('Transpose', [f'{prefix}{tag}_split'], out, f'{tag}_transpose', perm=[0, 2, 1, 3])
         return out
 
-    def rotate(tag, heads):
-        def step(op, inputs, suffix, **attrs):
+    def rotate(tag: str, heads: str) -> str:
+        def step(op: str, inputs: list[str], suffix: str, **attrs: Any) -> str:
             add(op, inputs, f'{prefix}{tag}_{suffix}', f'{tag}_{suffix}', **attrs)
             return f'{prefix}{tag}_{suffix}'
 

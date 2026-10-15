@@ -1,10 +1,15 @@
 """Single-face record lookup, deletion and person listing."""
 
 import logging
+from typing import TYPE_CHECKING
 
 from src.clients.opensearch.names import IndexName
 from src.config.settings import Settings
 from src.services.inference import InferenceService
+
+
+if TYPE_CHECKING:
+    from src.clients.opensearch.client import OpenSearchClient
 
 
 logger = logging.getLogger(__name__)
@@ -13,6 +18,11 @@ logger = logging.getLogger(__name__)
 class FaceRecordMixin:
     settings: Settings
     inference: InferenceService
+
+    if TYPE_CHECKING:
+
+        @property
+        def opensearch(self) -> OpenSearchClient: ...
 
     # =========================================================================
     # Utility Methods

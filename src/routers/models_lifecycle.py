@@ -43,7 +43,7 @@ TRITON_MODELS_DIR = Path('/app/models')
 
 
 @router.get('/{model_name}/status', response_model=ModelStatusResponse)
-async def get_model_status(model_name: str):
+async def get_model_status(model_name: str) -> ModelStatusResponse:
     """
     Get comprehensive status of a model.
 
@@ -120,7 +120,7 @@ async def get_model_status(model_name: str):
 
 
 @router.post('/{model_name}/load', response_model=ModelLoadResponse)
-async def load_model(model_name: str):
+async def load_model(model_name: str) -> ModelLoadResponse:
     """
     Load a model into Triton server.
 
@@ -152,7 +152,7 @@ async def load_model(model_name: str):
 @router.post('/{model_name}/unload', response_model=ModelLoadResponse)
 async def unload_model(
     model_name: str, force: bool = Query(False, description='Also unload a core pipeline model')
-):
+) -> ModelLoadResponse:
     """
     Unload a model from Triton (files stay in the repository, reloadable).
 
@@ -182,7 +182,7 @@ async def unload_model(
 @router.delete('/{model_name}', response_model=ModelDeleteResponse)
 async def delete_model(
     model_name: str, force: bool = Query(False, description='Also delete a core pipeline model')
-):
+) -> ModelDeleteResponse:
     """
     Delete a model from the repository and unload from Triton.
 
@@ -256,7 +256,7 @@ async def delete_model(
 
 
 @router.get('/', response_model=ModelListResponse)
-async def list_models():
+async def list_models() -> ModelListResponse:
     """
     List all models in Triton repository.
 

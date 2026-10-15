@@ -5,8 +5,9 @@ Thread-safe wrappers, model loading, and lifecycle management for PyTorch models
 """
 
 import logging
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
+from typing import Any
 
 import numpy as np
 import torch
@@ -107,7 +108,7 @@ def load_pytorch_models(
     return loaded_models
 
 
-def log_gpu_info():
+def log_gpu_info() -> None:
     """
     Log GPU information (name, memory, compute capability).
 
@@ -122,7 +123,7 @@ def log_gpu_info():
         logger.warning('GPU not available - using CPU')
 
 
-def log_gpu_memory():
+def log_gpu_memory() -> None:
     """
     Log current GPU memory usage (allocated and reserved).
 
@@ -134,7 +135,7 @@ def log_gpu_memory():
         logger.info(f'  Reserved:  {torch.cuda.memory_reserved(0) / 1e9:.2f} GB')
 
 
-def cleanup_pytorch_models(model_instances: dict[str, YOLO]):
+def cleanup_pytorch_models(model_instances: dict[str, YOLO]) -> None:
     """
     Clean up PyTorch models and free GPU memory.
 
@@ -172,7 +173,7 @@ def cleanup_pytorch_models(model_instances: dict[str, YOLO]):
 
 @asynccontextmanager
 async def pytorch_lifespan(
-    _app, model_paths: dict[str, str], model_storage: dict[str, YOLO]
+    _app: object, model_paths: dict[str, str], model_storage: dict[str, YOLO]
 ) -> AsyncGenerator[None, None]:
     """
     FastAPI lifespan context manager for PyTorch models.
@@ -261,7 +262,7 @@ async def pytorch_lifespan(
 # ============================================================================
 
 
-def format_detections(results) -> list[dict]:
+def format_detections(results: Sequence[Any]) -> list[dict]:
     """
     Extract and format detections from YOLO results with NORMALIZED coordinates.
 

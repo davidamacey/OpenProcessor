@@ -91,7 +91,8 @@ def _normalize_rows(vecs: np.ndarray) -> np.ndarray:
     arr = np.asarray(vecs, dtype=np.float32)
     norms = np.linalg.norm(arr, axis=1, keepdims=True)
     norms[norms == 0] = 1.0
-    return arr / norms
+    typed: np.ndarray = arr / norms
+    return typed
 
 
 def cluster_terms(

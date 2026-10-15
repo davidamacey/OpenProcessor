@@ -172,7 +172,8 @@ def _run_ocr(
     t0 = time.perf_counter()
     result = ocr_service.extract_text(image_bytes, filter_by_score=True)
     timing['ocr_ms'] = (time.perf_counter() - t0) * 1000
-    return result
+    typed: dict[str, Any] | None = result
+    return typed
 
 
 def _run_crop_embeddings(

@@ -189,7 +189,8 @@ async def _trigger_auto_promote(
         # stop the retrain (it re-clusters whatever is labelled).
         return {'promoted': 0, 'blocked': r.text}
     r.raise_for_status()
-    return r.json()
+    result: dict[str, Any] = r.json()
+    return result
 
 
 async def _start_auto_label_job(
@@ -216,7 +217,8 @@ async def _job_status(
     if r.status_code == httpx.codes.NOT_FOUND:
         return {'status': 'unknown'}
     r.raise_for_status()
-    return r.json()
+    result: dict[str, Any] = r.json()
+    return result
 
 
 async def _cancel_job(client: httpx.AsyncClient, api: str, api_prefix: str, slug: str) -> None:

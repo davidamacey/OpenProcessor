@@ -153,7 +153,8 @@ def read_training_lock(*, path: Path | None = None) -> dict[str, Any] | None:
     """Return the lock payload, or ``None`` if absent/unreadable."""
     target = lock_path(path)
     try:
-        return json.loads(target.read_text(encoding='utf-8'))
+        typed: dict[str, Any] | None = json.loads(target.read_text(encoding='utf-8'))
+        return typed
     except (FileNotFoundError, ValueError, OSError):
         return None
 

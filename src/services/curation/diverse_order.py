@@ -177,7 +177,8 @@ async def compute_diverse_order(
         and (now - cached['at']) < _CACHE_TTL_S
         and (current_count is None or cached['count'] == current_count)
     ):
-        return cached['order']
+        typed: list[str] | None = cached['order']
+        return typed
 
     ids, embeddings, truncated = await fetch_pool_embeddings(client, index, query, cap=inline_max)
     if truncated:

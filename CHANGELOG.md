@@ -139,6 +139,11 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Changed
 
+- Repo cleanup, PR 9a (typing): mypy now runs with `disallow_untyped_defs`, `disallow_incomplete_defs`
+  and `warn_return_any` over `src scripts docker export` (`tests/` is outside its scope), and the
+  nine-error-code relax override for the ML modules is gone. 328 errors were fixed with real types
+  (route return annotations that match each `response_model`, `Protocol`s for the FAISS index and the
+  ingest outcome, typed mixin attributes); the OpenAPI contracts are unchanged.
 - Repo cleanup, PR 6 (backend split by concern): every `src/` and `scripts/` file of 600 lines or more
   is split into cohesive modules (routers, `src/main.py` into `src/app/`, the Triton and PE clients,
   curation, projects, training and config-store services, `src/config/curation.py`, three scripts),
@@ -398,6 +403,20 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   naming-leak scan and `tests/test_no_legacy_region_scalars.py` cover the same ground.
 
 ### Fixed
+
+- Visual-search ingest (#318): a face response with fewer landmark entries than faces no longer
+  raises `IndexError` and fails the whole batch. Only the affected image is refused, with the
+  reason `face_landmarks_length_mismatch`; `detect_faces`, `recognize_faces` and the single-image face paths
+  report the same reason.
+- App shutdown (#319): each lifespan shutdown step (background tasks, pools, executors, Triton and
+  OpenSearch clients) now runs independently; a failing step is logged as `shutdown_step_failed`
+  with its step name and no longer skips the steps after it.
+- `make cluster-gpu` renders again on Compose 2.29.7 (#315): the auto-label worker states its
+  2 GB memory floor under `deploy.resources.reservations`, which the GPU overlay extends, instead of
+  `mem_reservation`, which Compose rejects next to it. A new test renders every compose file
+  combination the Makefile and CLI use.
+- The `vlm use` interrupt test passes when pytest is started in the background (#304): the child
+  inherited an ignored SIGINT, which bash cannot trap; the test now restores the default.
 
 - An outage no longer reads as an empty answer. Project counts (`/projects`, `/projects/{project}/stats`
   `images`, `items`, `pending_detection`, `holdout_items`) are `null` when OpenSearch could not be

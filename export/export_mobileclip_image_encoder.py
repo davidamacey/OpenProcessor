@@ -77,9 +77,9 @@ class MobileCLIPImageEncoder(nn.Module):
     3. L2-normalizes output (critical for cosine similarity)
     """
 
-    def __init__(self, clip_model):
+    def __init__(self, clip_model: nn.Module) -> None:
         super().__init__()
-        self.visual = clip_model.visual
+        self.visual = clip_model.get_submodule('visual')
 
     def forward(self, images: torch.Tensor) -> torch.Tensor:
         """
@@ -90,13 +90,14 @@ class MobileCLIPImageEncoder(nn.Module):
             embeddings: [B, 768] FP32, L2-normalized
         """
         # Encode image
-        image_features = self.visual(images)
 
         # L2 normalize (CRITICAL for cosine similarity in OpenSearch)
-        return image_features / image_features.norm(dim=-1, keepdim=True)
+        image_features: torch.Tensor = self.visual(images)
+        result: torch.Tensor = image_features / image_features.norm(dim=-1, keepdim=True)
+        return result
 
 
-def load_mobileclip_model(model_name, checkpoint_path):
+def load_mobileclip_model(model_name: str, checkpoint_path: str | Path) -> nn.Module:
     """
     Load MobileCLIP2 model with proper configuration.
 
@@ -129,7 +130,7 @@ def load_mobileclip_model(model_name, checkpoint_path):
     return model
 
 
-def export_to_onnx(model, output_path):
+def export_to_onnx(model: nn.Module, output_path: str | Path) -> str | Path:
     """Export image encoder to ONNX format with dynamic batch support.
 
     Uses opset 17 for best TensorRT 10.x compatibility with LayerNorm.
@@ -181,7 +182,7 @@ def export_to_onnx(model, output_path):
     return output_path
 
 
-def validate_onnx(pytorch_encoder, onnx_path):
+def validate_onnx(pytorch_encoder: nn.Module, onnx_path: str | Path) -> bool:
     """Validate ONNX model matches PyTorch output."""
 
     print('\nValidating ONNX model...')
@@ -235,7 +236,7 @@ def validate_onnx(pytorch_encoder, onnx_path):
     return False
 
 
-def benchmark_onnx(onnx_path, num_iterations=100):
+def benchmark_onnx(onnx_path: str | Path, num_iterations: int = 100) -> None:
     """Benchmark ONNX inference speed."""
 
     print(f'\nBenchmarking ONNX inference ({num_iterations} iterations)...')
@@ -272,7 +273,9 @@ def benchmark_onnx(onnx_path, num_iterations=100):
         )
 
 
-def _build_engine(onnx_path, plan_path, fp16, max_batch_size):
+def _build_engine(
+    onnx_path: str | Path, plan_path: str | Path, fp16: bool, max_batch_size: int
+) -> Path:
     """Attempt a single engine build at a fixed precision.
 
     Returns the plan path on success, or raises ``RuntimeError``/lets the
@@ -348,7 +351,9 @@ def _build_engine(onnx_path, plan_path, fp16, max_batch_size):
     return plan_path
 
 
-def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=128):
+def convert_to_tensorrt(
+    onnx_path: str | Path, plan_path: str | Path, fp16: bool = True, max_batch_size: int = 128
+) -> Path:
     """
     Convert ONNX model to TensorRT engine for maximum throughput.
 
@@ -419,7 +424,7 @@ def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=128):
     )
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description='Export MobileCLIP2 Image Encoder')
     parser.add_argument(
@@ -439,7 +444,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def main():
+def main() -> None:
     """Main entry point."""
     args = parse_args()
 

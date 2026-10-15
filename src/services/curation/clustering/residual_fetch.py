@@ -234,7 +234,8 @@ async def _create_pit(client: AsyncOpenSearch) -> str:
     pit_id = pit_resp.get('pit_id') or pit_resp.get('pit')
     if not pit_id:
         raise RuntimeError(f'create_pit returned no pit_id: {pit_resp!r}')
-    return pit_id
+    typed: str = pit_id
+    return typed
 
 
 class _SliceProgress:

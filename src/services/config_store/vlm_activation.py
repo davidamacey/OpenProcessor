@@ -43,6 +43,8 @@ from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from src.services.config_store.snapshot import AxisRef
 
 logger = get_logger(__name__)
@@ -61,7 +63,9 @@ def expected_active_for(ref: AxisRef) -> dict[str, Any] | None:
     return None
 
 
-def _carry(endpoint: VlmEndpoint | None, *, ack_now: bool):
+def _carry(
+    endpoint: VlmEndpoint | None, *, ack_now: bool
+) -> Callable[[dict[str, Any] | None], dict[str, Any]]:
     """The activation doc's extras, computed from the CURRENT doc inside the
     same OCC step so a concurrent activation's acknowledgements are never
     lost."""

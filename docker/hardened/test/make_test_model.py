@@ -33,7 +33,8 @@ class TinyNet(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.act(self.conv(x))
         x = self.pool(x).flatten(1)
-        return self.fc(x)
+        result: torch.Tensor = self.fc(x)
+        return result
 
 
 CONFIG_ONNX = f"""\

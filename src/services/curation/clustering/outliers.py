@@ -73,7 +73,8 @@ async def compute_centroid_distances(
         and (now - cached['at']) < _TTL_S
         and (current_count is None or cached['count'] == current_count)
     ):
-        return cached['distances']
+        typed: dict[str, float] | None = cached['distances']
+        return typed
 
     # Count before scrolling — a cluster far past _MAX_MEMBERS should
     # never pay for a scroll (even a partial, break-early one) just to

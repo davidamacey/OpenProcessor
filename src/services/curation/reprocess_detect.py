@@ -40,6 +40,8 @@ from src.services.detection.geometry import bbox_norm as _bbox_norm
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from opensearchpy import AsyncOpenSearch
 
     from src.services.curation.ingest import CurationIngestService
@@ -88,7 +90,7 @@ def _pixel_box(
     )
 
 
-def _note_chain(note: str):
+def _note_chain(note: str) -> Callable[[dict[str, Any]], dict[str, Any]]:
     def _merge(current: dict[str, Any]) -> dict[str, Any]:
         chain = list(current.get('proposal_chain') or [])
         if note in chain:

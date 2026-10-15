@@ -11,7 +11,7 @@ Endpoints:
 """
 
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
@@ -44,7 +44,7 @@ def detect_single(
     confidence: Annotated[
         float, Query(ge=0.0, le=1.0, description='Minimum confidence threshold')
     ] = 0.25,
-):
+) -> dict[str, Any]:
     """
     Single image object detection using CPU preprocessing + Triton TRT.
 
@@ -103,7 +103,7 @@ def detect_batch(
     confidence: Annotated[
         float, Query(ge=0.0, le=1.0, description='Minimum confidence threshold')
     ] = 0.25,
-):
+) -> BatchInferenceResult:
     """
     Batch object detection using CPU preprocessing + Triton TRT.
 

@@ -507,7 +507,12 @@ services:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.5.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-auto-label-worker
     logging: *default-logging
-    mem_reservation: 2g
+    # deploy form, not mem_reservation: Compose rejects the two together, and
+    # docker-compose.gpu-clustering.yml adds deploy.resources.reservations.
+    deploy:
+      resources:
+        reservations:
+          memory: 2g
     profiles:
       - curation
     restart: unless-stopped

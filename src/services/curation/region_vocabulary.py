@@ -100,7 +100,8 @@ def _detectors() -> list[dict[str, Any]]:
 def _text_hint_on(profile: Any) -> bool:
     # The segmenter URL is worker config the API can't see; a profile with
     # the hint on and an OCR pipeline is advertised as able to run it.
-    return profile.text_hint_active(segmenter_enabled=True)
+    typed: bool = profile.text_hint_active(segmenter_enabled=True)
+    return typed
 
 
 def _region_sources(profile: Any) -> list[dict[str, Any]]:

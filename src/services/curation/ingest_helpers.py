@@ -32,7 +32,8 @@ def _imohash_bytes(data: bytes) -> str:
         try:
             import imohash
 
-            return imohash.hashfileobject(io.BytesIO(data)).hex()
+            typed: str = imohash.hashfileobject(io.BytesIO(data)).hex()
+            return typed
         except Exception:
             return hashlib.sha256(data).hexdigest()[:32]
 

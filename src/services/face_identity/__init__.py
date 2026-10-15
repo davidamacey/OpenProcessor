@@ -58,7 +58,7 @@ class FaceIdentityService(IdentificationMixin, FaceRecordMixin, PersonManagement
             )
         return self._opensearch
 
-    async def close(self):
+    async def close(self) -> None:
         """Close OpenSearch connection."""
         if self._opensearch is not None:
             await self._opensearch.close()

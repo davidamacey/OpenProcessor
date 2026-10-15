@@ -129,7 +129,8 @@ def service_url(service_id: str) -> str | None:
     spec = _spec(service_id)
     explicit = getattr(cfg, _url_attr(spec))
     if explicit:
-        return explicit
+        typed: str | None = explicit
+        return typed
     port = getattr(cfg, f'{spec.name}_port')
     if not port:
         return None

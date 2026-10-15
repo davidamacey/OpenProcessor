@@ -129,7 +129,7 @@ def group_from_bucket(bucket: dict[str, Any]) -> DuplicateGroup:
 
 def group_members_body(group_id: str, include_primary: bool) -> dict[str, Any]:
     """Members of one group, the primary first, then by descending score."""
-    query = {'term': {'duplicate_group_id': group_id}}
+    query: dict[str, Any] = {'term': {'duplicate_group_id': group_id}}
 
     if not include_primary:
         query = {

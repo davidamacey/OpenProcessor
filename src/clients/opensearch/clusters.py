@@ -194,7 +194,7 @@ class ClustersMixin:
 
         try:
             success, errors = await async_bulk(self.client, actions, raise_on_error=False)
-            if errors:
+            if errors and isinstance(errors, list):
                 logger.warning(f'Some cluster updates failed: {len(errors)} errors')
             logger.info(f'Updated {success} cluster assignments in {index_name.value}')
             return success

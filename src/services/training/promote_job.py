@@ -175,7 +175,7 @@ def start(job: FileJob, work: Callable[[Callable[[str], None]], Awaitable[dict[s
 _detached: set[asyncio.Task[Any]] = set()
 
 
-async def run_detached(work: Awaitable[Any]) -> Any:
+async def run_detached[T](work: Awaitable[T]) -> T:
     """Await ``work`` so that the *caller* being cancelled does not cancel it.
 
     ``?wait=true`` runs the whole export, load and warm-up inside one request.
@@ -188,7 +188,7 @@ async def run_detached(work: Awaitable[Any]) -> Any:
     task = asyncio.ensure_future(work)
     _detached.add(task)
 
-    def _done(t: asyncio.Task[Any]) -> None:
+    def _done(t: asyncio.Task[T]) -> None:
         _detached.discard(t)
         if not t.cancelled() and t.exception() is not None:
             logger.warning('promote_wait_abandoned_failed', error=str(t.exception()))

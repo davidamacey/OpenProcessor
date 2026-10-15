@@ -71,7 +71,8 @@ def compute_mistakenness_from_posterior(
     n = probs.shape[0]
     top1 = probs.max(axis=1)
     stored_p = probs[np.arange(n), stored_label_idx]
-    return (top1 - stored_p).astype(np.float32)
+    typed: np.ndarray = (top1 - stored_p).astype(np.float32)
+    return typed
 
 
 def compute_mistakenness_from_margin(
