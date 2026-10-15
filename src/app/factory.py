@@ -2,11 +2,13 @@
 
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from pathlib import Path
+from typing import cast
 
 import orjson
 from fastapi import Depends, FastAPI, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from src.app.lifespan import lifespan
 from src.clients.occ import OCCFinalConflictError
@@ -80,7 +82,9 @@ def create_app() -> FastAPI:
 
     # Performance Middleware (defined first, runs second in LIFO order)
     @application.middleware('http')
-    async def performance_middleware(request: Request, call_next):
+    async def performance_middleware(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         """
         Monitor request performance, validate file size, and inject timing into response.
 
@@ -120,8 +124,10 @@ def create_app() -> FastAPI:
 
         if 'application/json' in content_type and is_inference_endpoint:
             # Read response body
-            body_chunks = [chunk async for chunk in response.body_iterator]
-            body = b''.join(body_chunks)
+            # Starlette's call_next always hands back a streaming response.
+            streaming = cast('StreamingResponse', response)
+            body_chunks = [chunk async for chunk in streaming.body_iterator]
+            body = b''.join(c.encode() if isinstance(c, str) else bytes(c) for c in body_chunks)
 
             try:
                 # Parse and inject timing + request ID
@@ -167,7 +173,9 @@ def create_app() -> FastAPI:
         return response
 
     @application.exception_handler(OCCFinalConflictError)
-    async def occ_final_conflict_handler(request: Request, exc: OCCFinalConflictError):
+    async def occ_final_conflict_handler(
+        request: Request, exc: OCCFinalConflictError
+    ) -> JSONResponse:
         """Map exhausted-OCC-retry conflicts to HTTP 409.
 
         Registered ahead of the generic ``Exception`` handler below so a
@@ -201,7 +209,7 @@ def create_app() -> FastAPI:
 
     # Global Exception Handler - include request ID for debugging
     @application.exception_handler(Exception)
-    async def global_exception_handler(request: Request, exc: Exception):
+    async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         """Handle uncaught exceptions with request context for debugging."""
         req_id = get_request_id()
         logger.error(
@@ -224,7 +232,9 @@ def create_app() -> FastAPI:
         )
 
     @application.middleware('http')
-    async def http_duration_middleware(request: Request, call_next):
+    async def http_duration_middleware(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         """Record per-request latency into the Prometheus histogram."""
         from src.core.metrics import HTTP_REQUEST_DURATION_SECONDS
 
@@ -248,7 +258,9 @@ def create_app() -> FastAPI:
 
     # Request ID Middleware (defined last, runs first in LIFO order)
     @application.middleware('http')
-    async def request_id_middleware(request: Request, call_next):
+    async def request_id_middleware(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         """
         Add correlation ID (X-Request-ID) to all requests.
 

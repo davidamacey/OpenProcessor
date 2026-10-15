@@ -175,7 +175,7 @@ async def train_clusters(
     max_samples: Annotated[
         int | None, Query(ge=100, description='Max samples for training (all if not set)')
     ] = None,
-):
+) -> TrainResponse:
     """
     Train FAISS IVF clustering for an index.
 
@@ -241,7 +241,7 @@ async def train_clusters(
 async def assign_unclustered(
     search_service: VisualSearchDep,
     index: Annotated[str, Path(description='Index to process: global, vehicles, people, or faces')],
-):
+) -> AssignResponse:
     """
     Assign clusters to unclustered documents.
 
@@ -288,7 +288,7 @@ async def assign_unclustered(
 async def get_cluster_stats(
     search_service: VisualSearchDep,
     index: Annotated[str, Path(description='Index to query: global, vehicles, people, or faces')],
-):
+) -> ClusterStatsResponse:
     """
     Get detailed cluster statistics.
 
@@ -350,7 +350,7 @@ async def rebalance_clusters(
     index: Annotated[
         str, Path(description='Index to rebalance: global, vehicles, people, or faces')
     ],
-):
+) -> TrainResponse:
     """
     Force rebalance clusters by re-training.
 
@@ -407,7 +407,7 @@ async def rebalance_clusters(
 async def check_cluster_balance(
     search_service: VisualSearchDep,
     index: Annotated[str, Path(description='Index to check: global, vehicles, people, or faces')],
-):
+) -> BalanceCheckResponse:
     """
     Check if clusters need rebalancing.
 
@@ -461,7 +461,7 @@ async def check_cluster_balance(
 async def list_albums(
     search_service: VisualSearchDep,
     min_size: Annotated[int, Query(ge=1, description='Minimum cluster size to include')] = 5,
-):
+) -> ListAlbumsResponse:
     """
     List auto-generated albums from global index clusters.
 
@@ -508,7 +508,7 @@ async def get_cluster_members(
     cluster_id: Annotated[int, Path(ge=0, description='Cluster ID to retrieve')],
     page: Annotated[int, Query(ge=0, description='Page number (0-indexed)')] = 0,
     size: Annotated[int, Query(ge=1, le=100, description='Page size')] = 50,
-):
+) -> ClusterMembersResponse:
     """
     Get members of a specific cluster (album view).
 

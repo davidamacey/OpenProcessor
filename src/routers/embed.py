@@ -59,7 +59,7 @@ def embed_image(
     use_cache: bool = Query(True, description='Use embedding cache'),
     index: bool = Query(False, description='Store embedding for later retrieval'),
     image_id: str | None = Query(None, description='Custom ID (auto-generated if not provided)'),
-):
+) -> ImageEmbeddingResponse:
     """
     Generate MobileCLIP embedding for an image.
 
@@ -116,7 +116,7 @@ def embed_image(
 def embed_text(
     text: str = Body(..., embed=True, description='Text to encode'),
     use_cache: bool = Query(True, description='Use embedding cache'),
-):
+) -> TextEmbeddingResponse:
     """
     Generate MobileCLIP embedding for text.
 
@@ -156,7 +156,7 @@ def embed_text(
 def embed_batch(
     images: list[UploadFile] = File(..., description='Image files (JPEG/PNG), max 64'),
     use_cache: bool = Query(True, description='Use embedding cache'),
-):
+) -> BatchEmbeddingResponse:
     """
     Generate MobileCLIP embeddings for multiple images.
 
@@ -242,7 +242,7 @@ def embed_boxes(
     image: UploadFile = File(..., description='Image file (JPEG/PNG)'),
     boxes: str = Body(..., description='JSON array of boxes [[x1,y1,x2,y2], ...] normalized [0,1]'),
     use_cache: bool = Query(True, description='Use embedding cache'),  # noqa: ARG001  # parameter kept for the documented signature
-):
+) -> BoxEmbeddingsResponse:
     """
     Extract MobileCLIP embeddings for bounding box crops from an image.
 

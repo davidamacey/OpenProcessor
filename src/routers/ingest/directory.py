@@ -98,7 +98,7 @@ async def ingest_directory(
         False,
         description='Defer heavy operations for faster bulk ingestion',
     ),
-):
+) -> DirectoryIngestResponse:
     """
     Bulk ingest all images from a server-side directory.
 

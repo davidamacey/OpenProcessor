@@ -97,7 +97,7 @@ async def ingest_image(
         True,
         description='Run MobileCLIP to generate global image embedding.',
     ),
-):
+) -> IngestResponse | Response:
     """
     Ingest a single image with automatic multi-index routing.
 
