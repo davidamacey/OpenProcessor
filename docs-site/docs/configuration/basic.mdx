@@ -60,10 +60,8 @@ profile (`minimal`, `standard` or `full`; see [GPU sizing](../deployment/gpu-siz
 The profile is applied **when it is chosen**: it sets the Triton model
 instance counts and batch size in the model configs, and decides whether GPU
 decode is on (`OP_INGEST_GPU_DECODE`, the one profile-driven key the app
-acts on). The other keys below record the choice; `docker-compose.yml`
-does not read `TRITON_WORKERS`, `MAX_BATCH_SIZE` or `SHM_SIZE` (the API
-runs 32 uvicorn workers and every service that sets `shm_size` uses `8g`), so
-editing them changes nothing.
+acts on). The API runs 32 uvicorn workers and every service that sets
+`shm_size` uses `8g`, whatever the profile.
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -75,8 +73,9 @@ editing them changes nothing.
 Choose the profile at install time: pass `--profile NAME` to the installer,
 or run `scripts/setup.sh --profile=NAME --force` in a checkout (`--force`
 rewrites `.env`, keeping your `OPENSEARCH_HEAP`). Then check the result with
-`./openprocessor gpu plan`. `./openprocessor profile <name>` does not switch
-an existing install: it leaves `GPU_PROFILE` in `.env` unchanged.
+`./openprocessor gpu plan`. In a checkout, `./openprocessor profile <name>`
+switches an existing install: it rewrites the Triton configs and sets
+`GPU_PROFILE` and `OP_INGEST_GPU_DECODE` in `.env`.
 
 ## GPU ids
 

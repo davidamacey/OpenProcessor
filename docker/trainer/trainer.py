@@ -184,8 +184,8 @@ def run_job(spec: JobSpec) -> None:
                 'MLFLOW_TRACKING_URI', os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow:5000')
             )
             os.environ['MLFLOW_RUN'] = spec.mlflow_run_name
-            # The job's own project experiment (docs/design/
-            # openprocessor_internal/projects_plan.md §5.3) takes priority
+            # The job's own project experiment (the project-isolation design,
+            # §5.3) takes priority
             # over any env-var-only experiment name -- one trainer process
             # serves every project's jobs, so a stale process-wide env var
             # must never leak one project's runs into another's experiment.

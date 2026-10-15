@@ -1,9 +1,7 @@
 """Guard test: the semantic-search files never reintroduce the legacy
 ``/search/*`` surface, ``visual_search_*``, or ``MobileCLIP``.
 
-Mirrors what ``scripts/codegen/check_no_legacy_search.py`` /
-``check_no_mobileclip.py`` enforce at pre-commit time (neither guard is
-wired up here — this test stands in for them at file scope), scoped
+Scoped
 explicitly to the files this task added — an independent, in-repo
 double-check that
 ``/curation/search/text`` is the only ``/search/*``-shaped route string

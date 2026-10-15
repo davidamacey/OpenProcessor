@@ -50,11 +50,10 @@ cmd_profile() {
 
     # Generate new configs
     generate_all_configs "$profile" "$gpu_id"
-    generate_env_file "$profile" "$gpu_id"
-    generate_compose_override "$profile" "$gpu_id"
+    apply_profile_to_env "$profile"
 
     log_success "Profile switched to: $profile"
-    log_info "Restart services to apply: ./scripts/openprocessor.sh restart"
+    log_info "Restart services to apply: ./openprocessor restart triton-server"
 }
 
 # =============================================================================

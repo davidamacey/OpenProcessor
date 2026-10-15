@@ -75,7 +75,7 @@ from src.services.training.run_retention import bakeoff_out_dir
 logger = get_logger(__name__)
 
 
-# Project-scoped (docs/design/openprocessor_internal/projects_plan.md
+# Project-scoped (the project-isolation design
 # §5.3): each project's bake-off jobs/outputs live under its own
 # ``CurationConfig.bakeoff_jobs_dir`` (a PROJECT_SCOPED_FIELDS entry), not
 # a single global dir, so no project's queue or results leak into

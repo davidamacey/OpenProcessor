@@ -46,6 +46,11 @@ fi
 if [[ -f "$PROJECT_DIR/docker-compose.cpu.yml" ]]; then
     DC_FILES+=(-f "$PROJECT_DIR/docker-compose.cpu.yml")
 fi
+# The user's own overrides (extra bind mounts, a second source root), last so
+# they win. docker-compose.override.yml is not read: the file name is yours.
+if [[ -f "$PROJECT_DIR/docker-compose.local.yml" ]]; then
+    DC_FILES+=(-f "$PROJECT_DIR/docker-compose.local.yml")
+fi
 
 _env_value() {
     local key="$1" file="${2:-$PROJECT_DIR/.env}"
@@ -86,8 +91,11 @@ resolve_project() {
         fi
         OP_PROJECT="$from_env"
     elif [[ -z "${OP_PROJECT:-}" ]]; then
-        log_error "no compose project: set COMPOSE_PROJECT_NAME in ${PROJECT_DIR}/.env (or OP_PROJECT)"
-        exit 3
+        # Only a checkout gets here: an install dir exited above. docker-compose.yml
+        # names the project this way too; assert_project_owned still refuses a
+        # project whose containers came from another directory.
+        log_warn "no COMPOSE_PROJECT_NAME in ${PROJECT_DIR}/.env: using the default project 'openprocessor' (set COMPOSE_PROJECT_NAME or OP_PROJECT to choose another)"
+        OP_PROJECT="openprocessor"
     fi
     if [[ ! "$OP_PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ ]]; then
         log_error "invalid compose project name '${OP_PROJECT}'"

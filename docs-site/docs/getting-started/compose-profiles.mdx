@@ -12,7 +12,8 @@ exactly Triton, the API and OpenSearch. Everything else is opt-in.
 | Profile | Services | Needs a GPU | Start with |
 |---|---|---|---|
 | *(none)* | `triton-server`, `api`, `opensearch` | Triton, and the API for torch fallbacks | `docker compose up -d` / `make up` |
-| `curation` | `curation-detection-worker`, `curation-vlm-worker`, `curation-auto-label-worker`, `curation-cluster-refresh`, `curation-evaluator` | only the evaluator | `docker compose --profile curation up -d` / `make curation-up` |
+| `curation` | `curation-detection-worker`, `curation-vlm-worker`, `curation-auto-label-worker`, `curation-cluster-refresh` | no | `docker compose --profile curation up -d` / `make curation-up` |
+| `evaluator` | `curation-evaluator` (bake-off runner, on demand) | yes | `./openprocessor curation up curation-evaluator` / `docker compose run --rm curation-evaluator` |
 | `segmenter` | `segmenter` (SAM 3 behind the generic segment protocol) | yes, plus `HF_TOKEN` for the gated weights | `docker compose --profile curation --profile segmenter up -d` |
 | `vlm` | `vlm` (vLLM, OpenAI-compatible) | yes | `docker compose --profile vlm up -d` |
 | `training` | `curation-trainer`, `curation-mlflow` | the trainer | `docker compose --profile training up -d` |
@@ -36,15 +37,15 @@ Notes:
   [VLM selection](../guides/vlm-selection.mdx). `./secrets/vlm` is mounted
   read-only into `api` and the workers so endpoints can reference keys
   as `secret:<slug>`.
-- **`curation-evaluator` is documented as run on demand.** It watches the
-  bake-off job directories, has no restart policy, and reserves the card
-  named by `EVALUATOR_GPU_ID`. The compose file runs it with
-  `docker compose --profile curation run --rm curation-evaluator`, which
-  blocks your shell while it watches. `--profile curation up -d` and
-  `./openprocessor curation up` also start it.
+- **`curation-evaluator` runs on demand.** It watches the bake-off job
+  directories, has no restart policy, and reserves the card named by
+  `EVALUATOR_GPU_ID`, so it has its own `evaluator` profile and
+  `--profile curation up -d` does not start it. Start it with
+  `./openprocessor curation up curation-evaluator`, or run it in the
+  foreground with `docker compose run --rm curation-evaluator`.
 - **Starting only some curation services.** Name them:
-  `docker compose -p <project> --profile curation up -d curation-detection-worker`.
-  The CLI has no subset command (issue #285). Which workers a
+  `./openprocessor curation up curation-detection-worker` or
+  `make curation-up SERVICES=curation-detection-worker`. Which workers a
   workflow needs is in [Pipeline modes](../guides/pipeline-modes.mdx).
 - **In an installed directory the profiles come from `.env`.** The installer
   writes `COMPOSE_PROFILES` from the tiers you chose, and `./openprocessor

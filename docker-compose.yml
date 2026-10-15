@@ -606,14 +606,15 @@ services:
     networks:
       - triton_net
 
-  # On-demand only (no `restart:` — see docker/evaluator/Dockerfile):
-  # `docker compose --profile curation run --rm curation-evaluator`.
+  # On-demand only (no `restart:` — see docker/evaluator/Dockerfile): its own
+  # profile, so `--profile curation up -d` does not reserve a GPU for it.
+  # `docker compose run --rm curation-evaluator`.
   curation-evaluator:
     image: ${OP_EVALUATOR_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-evaluator:${OP_IMAGE_TAG:-0.5.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-evaluator
     logging: *default-logging
     profiles:
-      - curation
+      - evaluator
     env_file:
       - path: ./.env
         required: false

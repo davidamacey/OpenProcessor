@@ -169,7 +169,6 @@ class _Cfg:
     ('module', 'argv'),
     [
         ('scripts.curation.ingest_upload', ['--root', '/tmp']),
-        ('scripts.curation.bulk_ingest', ['--folder', '/tmp']),
         ('scripts.curation.import_labeled_dataset', ['--dataset', '/tmp']),
     ],
 )
@@ -180,3 +179,17 @@ def test_ingest_tools_default_api_base_follows_prefix(
     monkeypatch.setattr(mod, 'get_curation_config', _Cfg)
     args = mod.build_parser().parse_args(argv)
     assert args.api_base == 'http://localhost:4603/custom-mount'
+
+
+@pytest.mark.parametrize(
+    ('in_container', 'expected'),
+    [(False, 'http://localhost:4603/custom-mount'), (True, 'http://localhost:8000/custom-mount')],
+)
+def test_bulk_ingest_default_api_base_works_in_the_container_and_on_the_host(
+    monkeypatch: pytest.MonkeyPatch, in_container: bool, expected: str
+) -> None:
+    """Inside ``api`` the API listens on 8000; the published 4603 is the host's view (#288)."""
+    mod = importlib.import_module('scripts.curation.bulk_ingest')
+    monkeypatch.setattr(mod, 'get_curation_config', _Cfg)
+    monkeypatch.setattr(mod, '_in_container', lambda: in_container)
+    assert mod.build_parser().parse_args(['--folder', '/tmp']).api_base == expected

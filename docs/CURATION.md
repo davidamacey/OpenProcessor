@@ -140,7 +140,7 @@ inside the `api` container, which listens on port 8000 there:
 
 ```bash
 docker compose -p <project> exec api python scripts/curation/bulk_ingest.py \
-  --project <slug> --folder /data/source/<dir> --api-base http://localhost:8000/curation
+  --project <slug> --folder /data/source/<dir>
 ```
 
 Defaults are batch size 16 and concurrency 16

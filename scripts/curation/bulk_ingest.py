@@ -25,23 +25,22 @@ finished with failures resumes that run and skips what it already stored.
 Ctrl-C asks the server to cancel (images already stored stay stored) and waits
 for it to stop.
 
-Usage (inside the ``api`` container the API listens on port 8000, so pass
-``--api-base``; on the host the default ``localhost:4603`` works):
+Usage (the default ``--api-base`` is ``localhost:8000`` inside the ``api`` container, where
+the API listens, and ``localhost:4603`` on the host, where compose publishes it):
     docker compose exec api python scripts/curation/bulk_ingest.py \\
-        --folder /data/source/my_dataset --project cars \\
-        --api-base http://localhost:8000/curation
+        --folder /data/source/my_dataset --project cars
 
     docker compose exec api python scripts/curation/bulk_ingest.py \\
         --manifest /data/source/list.txt --batch-size 16 --concurrency 8 \\
-        --source census --project cars --api-base http://localhost:8000/curation
+        --source census --project cars
 
     docker compose exec api python scripts/curation/bulk_ingest.py \\
-        --s3 s3://my-bucket/incoming/ --project cars --api-base http://localhost:8000/curation
+        --s3 s3://my-bucket/incoming/ --project cars
 
     docker compose exec api python scripts/curation/bulk_ingest.py --project cars \\
-        --status bulk_20261011T120000_ab12cd34 --api-base http://localhost:8000/curation
+        --status bulk_20261011T120000_ab12cd34
     docker compose exec api python scripts/curation/bulk_ingest.py --project cars \\
-        --cancel bulk_20261011T120000_ab12cd34 --api-base http://localhost:8000/curation
+        --cancel bulk_20261011T120000_ab12cd34
 
 ``--preview`` with any source walks it read-only and prints the file count, bytes,
 extension breakdown, image-size sample, estimated time and index footprint, without
@@ -76,6 +75,10 @@ EXIT_CODES = {'completed': 0, 'completed_with_errors': 1, 'failed': 2, 'cancelle
 REQUEST_TIMEOUT_S = 60.0
 
 
+def _in_container() -> bool:
+    return Path('/.dockerenv').exists()
+
+
 class ApiError(Exception):
     pass
 
@@ -93,7 +96,7 @@ def build_parser() -> argparse.ArgumentParser:
     what.add_argument('--cancel', metavar='RUN_ID', help='Ask a live run to stop and exit')
     parser.add_argument(
         '--api-base',
-        default=f'http://localhost:4603{get_curation_config().api_prefix}',
+        default=f'http://localhost:{8000 if _in_container() else 4603}{get_curation_config().api_prefix}',
         help='Curation API mount (no trailing slash); requests go to '
         '<api-base>/projects/<--project>/...',
     )

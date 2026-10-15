@@ -18,10 +18,10 @@ from src.config.curation import ITEM_EMBEDDING_FIELD
 
 
 EMBEDDED = 'embedded'
-# Reserved for the selective-embedding policy; written by no path yet.
+# Ingest policy mode ``selected``: this detection was left out of the embedding.
 NOT_SELECTED = 'not_selected'
-# No vector yet by design: the vector was dropped because the target project
-# could not use it.
+# No vector yet by design: ingest policy mode ``lazy`` stores no vector at ingest, and a
+# vector dropped because the target project could not use it is stored this way too.
 DEFERRED = 'deferred'
 # The encoder raised for this item at ingest.
 FAILED = 'failed'

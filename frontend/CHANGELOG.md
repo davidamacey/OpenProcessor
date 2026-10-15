@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The docs screenshot capture (`scripts/capture_docs_screenshots.py`) now requires `--public-projects` and
+  refuses any project outside that list, and refuses pages that list every project while the backend holds
+  another project, so a capture can never show private data.
+
 ### Added
 
 - The ingest-policy page offers the `none` embedding mode (detection only: no vector of any kind) and a

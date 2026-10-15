@@ -1,5 +1,5 @@
 """Mount the curation routers (see
-``docs/design/openprocessor_internal/projects_plan.md`` §3.2 and its
+the project-isolation design §3.2 and its
 "fresh build, no backwards compatibility" owner decision).
 
 Every curation route lives under ``{api_prefix}/projects/{project}`` and

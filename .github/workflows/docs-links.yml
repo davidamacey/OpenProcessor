@@ -1,0 +1,28 @@
+name: Docs External Links
+
+# External links rot without a code change, so this runs on a schedule and by hand rather
+# than on every PR. Relative links and anchors are checked offline by
+# scripts/docs/check_docs_vs_code.py (pre-commit and the test suite).
+
+on:
+  schedule:
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  external-links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check external links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --no-progress --scheme https --max-retries 2 --timeout 20
+            --exclude '^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|example\.)'
+            README.md INSTALLATION.md SECURITY.md CONTRIBUTING.md docs docs-site/docs
+          fail: true

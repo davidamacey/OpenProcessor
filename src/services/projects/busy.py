@@ -1,5 +1,4 @@
-"""Per-project job inventory (docs/design/openprocessor_internal/
-projects_plan.md §5.4): what's currently running for one project, across
+"""Per-project job inventory (the project-isolation design, §5.4): what's currently running for one project, across
 every job-producing subsystem.
 
 Each source is its own small function so a unit test can fake one at a

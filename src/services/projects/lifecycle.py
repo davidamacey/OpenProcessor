@@ -1,7 +1,7 @@
 """Project lifecycle service: create / patch / archive / unarchive /
 clone_settings / delete (dry-run and guarded).
 
-See ``docs/design/openprocessor_internal/projects_plan.md`` §4, §7, the
+See the project-isolation design §4, §7, the
 owner decisions in §13 (D4 capacity, D5 ``default`` is undeletable), and
 the Cropwright rev-3 deltas 2 (envelope + revision), 3 (list membership,
 implemented in P1's projects wire models), 10 (delete fits a proxy

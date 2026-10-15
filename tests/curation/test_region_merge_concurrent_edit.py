@@ -2,8 +2,7 @@
 its own VLM re-verification call must never be silently reverted or
 resurrected by that pass's now-stale merge.
 
-Reproduces the review's exact probes (docs/design/openprocessor_internal/
-w8_pipeline_review_2026-09-27.md, "Re-review 2026-09-27" section, finding
+Reproduces the review's exact probes (the 2026-09-27 pipeline review, "Re-review 2026-09-27" section, finding
 R-M3): the B1 fix's ``merge_boxes_for_write`` only guarded the ITEM-level
 ``region_revision`` (via the status staleness check in
 ``bulk_writer._merge``), never the specific box a pass's own verdict

@@ -111,14 +111,17 @@ never rewrites stored data, so items already stored keep their state. The
 The workers you run decide the rest. With only some of them running, start them by name.
 There is no CLI for a subset: `./openprocessor curation up` and `make curation-up` start
 all five curation services. (issue #285)
+With only some workers running, start them by name:
 
 ```bash
-# not run  (installed directory: .env holds COMPOSE_PROFILES)
-docker compose -p <project> --profile curation up -d curation-detection-worker
-# not run  (checkout: add the dev overlay)
-docker compose -p <project> -f docker-compose.yml -f docker-compose.dev.yml \
-  --profile curation up -d curation-detection-worker
+./openprocessor curation up curation-detection-worker
+make curation-up SERVICES="curation-detection-worker curation-auto-label-worker"
 ```
+
+`curation up` with no names starts the four curation workers. `curation-evaluator` (a
+bake-off watcher with no restart policy that needs the NVIDIA runtime) has its own
+`evaluator` profile and starts only when you name it, or with
+`docker compose run --rm curation-evaluator`.
 
 `curation-detection-worker` runs the region cascade. Without a region profile it idles,
 so for plain item detection you do not need it at all.
@@ -137,10 +140,9 @@ if one is configured.
 ./openprocessor curation status
 ```
 
-`curation up` starts all five curation services, including `curation-evaluator`, which
-needs the NVIDIA runtime. The evaluator is a bake-off watcher with no restart policy.
-The compose file documents it as run on demand with
-`docker compose --profile curation run --rm curation-evaluator`.
+`curation up` starts the four curation workers. `curation-evaluator` is not among them: it needs
+the NVIDIA runtime and is a bake-off watcher with no restart policy, so it has its own
+`evaluator` profile (`./openprocessor curation up curation-evaluator`).
 
 ### 2. Decide about the VLM now
 
@@ -219,6 +221,25 @@ false is skipped by this daemon entirely, by ingest-time placement and by the au
 worker's idle retrain (mode (a), step 2). It is read at each poll, so the change applies
 without a restart. Explicit clustering (`/clusters/*`, an auto-label job you start)
 always runs.
+To change a flag, replace the service `command` in `docker-compose.local.yml`, which
+`./openprocessor` and `make` load after the stock files. The merged result was checked
+with `docker compose config`:
+
+```yaml
+# docker-compose.local.yml
+services:
+  curation-cluster-refresh:
+    command:
+      - python
+      - scripts/curation/cluster_refresh_daemon.py
+      - --api=http://api:8000
+      - --opensearch=http://opensearch:9200
+      - --growth-threshold=1000
+```
+
+```bash
+./openprocessor curation up curation-cluster-refresh
+```
 
 The second trigger lives in the auto-label worker. While idle it checks each project
 every `OP_IVF_RETRAIN_CHECK_S` seconds (default 1800). It retrains the centroids when the

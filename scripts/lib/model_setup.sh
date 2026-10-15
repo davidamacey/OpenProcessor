@@ -4,7 +4,7 @@
 # =============================================================================
 # Shared by setup-openprocessor.sh and the `openprocessor models` CLI. One
 # implementation, per the installer plan
-# (docs/design/openprocessor_internal/one_line_installer_plan.md section 4).
+# (the installer design section 4).
 #
 # Every compose invocation here goes through the caller's dc() wrapper;
 # this file never calls `docker compose` directly

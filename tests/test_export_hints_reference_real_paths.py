@@ -4,8 +4,7 @@ exists.
 
 ``export_mobileclip_image_encoder.py`` / ``export_mobileclip_text_encoder.py``
 told an operator with a missing checkpoint to run
-``bash scripts/track_e/setup_mobileclip_env.sh`` -- a directory that has
-never existed in this repo (``scripts/track_e/`` is not a real path).
+a script in a ``track_e`` directory that has never existed in this repo.
 The actual downloader is ``make download-models``
 (``scripts/lib/download.sh``). Both files' module docstrings also told
 an operator to run the export scripts themselves from a stale

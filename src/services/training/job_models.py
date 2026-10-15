@@ -189,7 +189,7 @@ class TrainJobSpec(BaseModel):
     registry_sha: str | None = None
     registry_snapshot_path: str | None = None
 
-    # Project isolation (docs/design/openprocessor_internal/projects_plan.md
+    # Project isolation (the project-isolation design
     # §5.3) -- filled in by write_job() from the bound project, never set by
     # API callers directly. ``project_export_root`` lets the trainer refuse
     # a job whose ``dataset_export_dir`` escapes the project's own export

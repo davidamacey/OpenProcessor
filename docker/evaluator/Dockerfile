@@ -13,12 +13,12 @@
 # build wheel dependencies stay in the builder and never reach the runtime image.
 #
 # Build:
-#   docker compose --profile curation build curation-evaluator
+#   docker compose build curation-evaluator
 #
 # Run on demand (watch mode; scans every projects/*/bakeoff_jobs under the state dir):
-#   docker compose --profile curation run --rm curation-evaluator
+#   docker compose run --rm curation-evaluator
 # One-shot job:
-#   docker compose --profile curation run --rm curation-evaluator \
+#   docker compose run --rm curation-evaluator \
 #     python -m scripts.curation.bakeoff.bakeoff_runner --job /eval_jobs/x.job.json
 # =============================================================================
 

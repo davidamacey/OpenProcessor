@@ -283,7 +283,7 @@ class TritonPromoter(TritonHttpControl):
             'triton_name': triton_name,
             'version': str(next_version),
             'promoted_at': datetime.now(tz=UTC).isoformat(),
-            # docs/design/openprocessor_internal/projects_plan.md §5.3: the
+            # the project-isolation design §5.3: the
             # project that submitted this promote, so an operator (or
             # DELETE /models/{name}'s ownership check) can trace a served
             # model back to its owning project without re-deriving it from

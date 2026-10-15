@@ -15,8 +15,10 @@ SHELL := /bin/bash
 # checkout, so it always adds that overlay -- detected by src/main.py
 # existing next to the compose file (same check scripts/setup.sh and
 # scripts/openprocessor.sh use).
-DEV_COMPOSE := docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.gpu-arbiter.yml --profile curation --profile segmenter --profile vlm --profile training
-COMPOSE := docker compose $(if $(wildcard src/main.py),-f docker-compose.yml -f docker-compose.dev.yml,-f docker-compose.yml)
+DEV_DEV_COMPOSE := docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.gpu-arbiter.yml --profile curation --profile segmenter --profile vlm --profile training
+# The curation services `curation-up SERVICES=...` accepts (the evaluator is on demand).
+CURATION_SERVICES := curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-cluster-refresh curation-evaluator
+COMPOSE := docker compose $(if $(wildcard src/main.py),-f docker-compose.yml -f docker-compose.dev.yml,-f docker-compose.yml)$(if $(wildcard docker-compose.local.yml), -f docker-compose.local.yml)
 V := .venv/bin
 # Prefer the project venv's interpreter when it exists; fall back to
 # system python3 for a fresh checkout that hasn't created .venv yet.
@@ -1125,11 +1127,12 @@ docs-build: ## Build docs-site (npm ci + docusaurus build; broken links and anch
 	cd docs-site && npm ci && npm run build
 
 DOCS_PROJECT ?= coco-bench-2k
+DOCS_PUBLIC_PROJECTS ?= $(DOCS_PROJECT)
 
 .PHONY: docs-screenshots
 docs-screenshots: ## Capture the Cropwright docs screenshots (OP_CROPWRIGHT_URL=... required; public sample project only)
 	@test -n "$(OP_CROPWRIGHT_URL)" || { echo "Set OP_CROPWRIGHT_URL to a Cropwright instance that holds only public sample data."; exit 2; }
-	cd frontend && e2e/.venv/bin/python scripts/capture_docs_screenshots.py --base-url $(OP_CROPWRIGHT_URL) --project $(DOCS_PROJECT)
+	cd frontend && e2e/.venv/bin/python scripts/capture_docs_screenshots.py --base-url $(OP_CROPWRIGHT_URL) --project $(DOCS_PROJECT) --public-projects $(DOCS_PUBLIC_PROJECTS)
 
 .PHONY: docs
 docs: info ## Alias for info
@@ -1178,9 +1181,10 @@ clone-ref: ## Clone a specific reference repo (usage: make clone-ref REPO=ultral
 # never touch them. Use the targets below instead.
 
 .PHONY: curation-up
-curation-up: ## Start the curation worker services (experimental, opt-in)
+curation-up: ## Start the curation workers (all, or SERVICES="curation-vlm-worker ...")
+	$(if $(filter-out $(CURATION_SERVICES),$(SERVICES)),$(error Not a curation service: $(filter-out $(CURATION_SERVICES),$(SERVICES)). Choose from: $(CURATION_SERVICES)))
 	@echo "Starting curation subsystem (profile: curation)..."
-	$(COMPOSE) --profile curation up -d
+	$(COMPOSE) --profile curation up -d $(SERVICES)
 	@echo ""
 	@echo "Curation services starting. Check status with: make curation-status"
 

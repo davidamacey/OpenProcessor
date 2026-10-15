@@ -6,8 +6,7 @@ property (the index-mapping builder produces the same key set as a
 ``RegionFields`` instance) is covered separately, alongside
 ``curation_opensearch/bodies_core.py`` (and its mapping builder).
 
-This file is one of the two hardcoded exemptions in
-``scripts/codegen/check_no_literal_region_fields.py`` — it legitimately
+This file legitimately
 constructs a ``roi_*``-named instance to prove overridability without
 a reindex.
 """

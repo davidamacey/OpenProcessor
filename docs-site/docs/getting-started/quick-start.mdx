@@ -125,11 +125,11 @@ make down
 ```
 
 :::note[`./openprocessor` in a checkout]
-The `openprocessor` CLI refuses to run until `.env` names its compose project
-(exit code 3). The `.env` that `scripts/setup.sh` writes does not, so add
-`COMPOSE_PROJECT_NAME=openprocessor` to `.env` before using
-`./openprocessor` or `./scripts/openprocessor.sh` in a checkout. The `make`
-targets do not need it. When you run `docker compose` by hand, always pass
+In a checkout the `openprocessor` CLI uses the compose project `openprocessor`
+when `.env` does not name one (the `.env` that `scripts/setup.sh` writes does
+not) and prints a warning; add `COMPOSE_PROJECT_NAME=<name>` to `.env` to
+choose another. An install directory still refuses to run without it (exit
+code 3). When you run `docker compose` by hand, always pass
 `-p <project>` so you never act on another stack that uses the default name.
 :::
 
@@ -253,11 +253,10 @@ SRC=/data/source/samples/coco_va_readme/images   # installed directory
 # SRC=/data/source/coco_va_readme/images         # source checkout
 
 docker compose -p openprocessor exec api python scripts/curation/bulk_ingest.py \
-  --project $P --folder $SRC --api-base http://localhost:8000/curation
+  --project $P --folder $SRC
 ```
 
-Inside the `api` container the API listens on port 8000, so `--api-base` is
-required there; the script's default targets host port 4603. The script shows
+The script shows
 live progress and exits 0 when the run completes, 1 when some images failed, 2
 when the run failed.
 
