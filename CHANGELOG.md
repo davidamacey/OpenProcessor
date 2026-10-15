@@ -13,6 +13,10 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ### Added
 
+- `docs/design/engineering_standards.md`: the portable standards and lessons from the repo cleanup
+  (principles, the lint, type and test config that worked, every guard with its baseline format,
+  `--tighten` workflow and plant-a-violation proof, an ordered port checklist for a sister repo,
+  pitfalls, before/after numbers). `CONTRIBUTING.md` points to it.
 - `scripts/bench/cluster_bench.py` (#218): times the production cluster pass at a chosen pool size
   (`--sizes`, `--methods`, `--reps`) on real public COCO embeddings in a throw-away project and
   records method, wall time and counts; a pass that did not cluster the whole pool is refused.
