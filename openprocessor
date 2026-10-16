@@ -450,7 +450,7 @@ main() {
             cmd_uninstall "$@"
             ;;
         version)
-            echo "openprocessor CLI ${OP_CLI_VERSION:-0.5.0}"
+            echo "openprocessor CLI ${OP_CLI_VERSION:-0.6.0}"
             ;;
         help|--help|-h)
             load_cli_core_lib
