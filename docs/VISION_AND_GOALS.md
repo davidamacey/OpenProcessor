@@ -28,7 +28,7 @@ Every stage is designed to be reused across domains by *configuring* it
 (detection profiles, prompt packs, class registries) rather than by
 forking the code per domain.
 
-**Explicit owner scope decision:** the full v0.5.0 and v0.6.0 feature set below was
+**Explicit owner scope decision:** the full feature set below was
 deliberately *not* trimmed to ship faster. Nothing here is a stretch goal.
 
 ## What "done" means for v0.6.0
@@ -106,12 +106,12 @@ release.
 
 ## What's explicitly not in v0.6.0, and why
 
-These are real, tracked commitments, not abandoned ideas (milestone v0.7.0):
+These are real, tracked commitments, not abandoned ideas (the next milestone):
 
 - **The full zero-copy GPU pipeline** (issue #40). v0.6.0 ships the measured steps
   (decode once, uint8 inputs to Triton, an FP16 PE image encoder, GPU decode for large
   photos, data-parallel PE encoding, coalesced ingest writes); keeping the decoded
-  frame resident on the GPU across every model is v0.7.0 work. Plan:
+  frame resident on the GPU across every model is next-release work. Plan:
   `docs/design/triton_pipeline_optimization_plan.md`.
 - **The 1M-image scale step.** The scale ladder is a goal, not a v0.6.0 claim.
 - Request-driven processing plans (#67), faces and OCR on resident crops (#220),

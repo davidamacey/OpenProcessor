@@ -44,7 +44,7 @@ export function configFixture(over: Partial<BulkIngestConfig> = {}): BulkIngestC
       embeddings_per_image: {
         value: 7.4,
         unit: 'embeddings per image',
-        source_section: 'v0.5.0 baseline (set A, public COCO, 2,000 images)',
+        source_section: '0.5.0 baseline (set A, public COCO, 2,000 images)',
         measured_on: 'COCO, policy all',
       },
       opensearch_bytes_per_image: {

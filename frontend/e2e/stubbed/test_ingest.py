@@ -51,7 +51,7 @@ BULK_CONFIG = {
              "source_section": "Decode once and the GPU decode (#217)"},
         ],
         "embeddings_per_image": {"value": 7.4, "unit": "embeddings per image", "measured_on": "COCO, policy all",
-                                 "source_section": "v0.5.0 baseline (set A, public COCO, 2,000 images)"},
+                                 "source_section": "0.5.0 baseline (set A, public COCO, 2,000 images)"},
         "opensearch_bytes_per_image": {"value": 65298, "unit": "bytes per image", "measured_on": "COCO, policy all",
                                        "source_section": "Storage per image and per vector"},
         "source_document": "docs/PERFORMANCE.md",

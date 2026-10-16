@@ -306,7 +306,7 @@ wire per model, API and Triton CPU seconds per image, GPU samples with the forei
 split out per process, cluster-training wall time, settled OpenSearch bytes per image and
 per vector, perf_analyzer points at batch 1/8/16/32 for five TensorRT models, the
 single-image endpoints, and a VLM labeling run. Results and the method are in
-`docs/PERFORMANCE.md` ("v0.5.0 baseline") and the raw JSON in `docs/benchmarks/`. Earlier
+`docs/PERFORMANCE.md` ("0.5.0 baseline") and the raw JSON in `docs/benchmarks/`. Earlier
 tools: the manifest tool and the run harness are
 `scripts/bench/select_baseline_set.py` (`local` and `coco` modes, checksummed
 manifest, license sidecar) and `scripts/bench/run_baseline.py` (one command per

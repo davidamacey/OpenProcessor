@@ -403,8 +403,8 @@ ingested at **13.39 images/s** (0 failed, 1.37 crops per image, batch p50 10.0 s
 4,000-image mixed set that is half 12 to 20 MP JPEGs ingested at 4.90 images/s
 (about 15 for the small photos, about 2.5 for the large ones; decode and resize
 dominate). Those runs used the narrow vehicle detector; the full-vocabulary
-policy rows above are computed, not measured. The v0.5.0 re-measurement on the pinned
-2,000-image set is in "v0.5.0 baseline" below.
+policy rows above are computed, not measured. The 0.5.0 re-measurement on the pinned
+2,000-image set is in "0.5.0 baseline" below.
 
 ### Measured VLM labeling speed
 
@@ -510,10 +510,10 @@ Triton compute_infer, A all: pe_image_encoder 1,590 s total for 33,388 inference
 
 A second baseline on a set of real high-resolution (about 20 MP) photos was measured privately; its numbers are not published. It showed the same pipeline is decode and I/O bound at that image size (the GPU was mostly idle), which is what the GPU decode and crop-at-model-size waves in the optimization plan target. Single run per row; a 3-round median is planned before the optimization work starts.
 
-### v0.5.0 baseline (set A, public COCO, 2,000 images)
+### 0.5.0 baseline (set A, public COCO, 2,000 images)
 
 The Wave 0 baseline of `docs/design/triton_pipeline_optimization_plan.md`, measured on the
-published v0.5.0 images before any optimization (issues #45 and #40). Raw JSON:
+published 0.5.0 images before any optimization (issues #45 and #40). Raw JSON:
 `docs/benchmarks/v050_baseline.json` (environment, ingest, Triton statistics,
 perf_analyzer points, endpoints, VLM) and `docs/benchmarks/v050_storage.json` (the
 storage run); idle-CPU readings in `docs/benchmarks/v050_idle_background.json`. (The VLM model label in the raw JSON metrics is replaced by `catalog-default`.) Every
@@ -524,7 +524,7 @@ unless stated.
 **8.9 images/s** through `POST /curation/projects/{project}/ingest/upload` and
 **9.2 images/s** through `.../ingest/batch`, with the
 GPU 91 percent busy. The run-to-run spread is under 6 percent. 90 percent of the GPU time is
-the PE image encoder (7.4 embeddings per image). That engine is FP32, and a fresh v0.5.0
+the PE image encoder (7.4 embeddings per image). That engine is FP32, and a fresh 0.5.0
 install builds the same FP32 engine (see Caveats), so this is the true "before" for the
 default install.
 
@@ -543,11 +543,11 @@ default install.
 
 Software under test: the images pinned by `images.lock` (API `openprocessor:0.5.0`
 `sha256:b0af838e...`, Triton `openprocessor-triton:0.5.0` `sha256:1ac56ac9...`,
-OpenSearch `3.6.0`), installed with `setup-openprocessor.sh --version v0.5.0 --tiers
+OpenSearch `3.6.0`), installed with `setup-openprocessor.sh --version 0.5.0 --tiers
 core,curation --local-only --bind 127.0.0.1 --skip-models` into an isolated compose project on its own
 ports, GPU 0 only. The VLM worker was stopped for the measured ingest runs. OpenSearch
 heap 8 GB, no replicas, one node. Models: TensorRT engines built on 2026-09-26 and copied
-from an earlier v0.5.0 install on the same host. The PE image encoder engine is FP32
+from an earlier 0.5.0 install on the same host. The PE image encoder engine is FP32
 (1.27 GB); every other engine is consistent with FP16 by file size.
 
 #### Method
@@ -723,7 +723,7 @@ already seen is much faster (27 to 31 crops/s) because of vLLM's multimodal cach
   image) that build fails at parse time on both `Einsum` nodes: `IEinsumLayer must have all
   inputs of same type. Input 1 has type Half and input 0 has type Float` (`/visual/Einsum`: the FP16
   graph rewrite converted its float `Constant` to half but left the explicit float32 `Cast` that
-  feeds the other input). The installer then retries from the FP32 ONNX, which builds. A fresh v0.5.0
+  feeds the other input). The installer then retries from the FP32 ONNX, which builds. A fresh 0.5.0
   install therefore ends up with the same FP32 engine as this baseline, so the baseline is the true
   "before" for the default install. The fix and its measured effect are in the next section.
 - OpenSearch data and the upload store live on a RAID array (Docker data root), not on NVMe.
@@ -746,7 +746,7 @@ already seen is much faster (27 to 31 crops/s) because of vLLM's multimodal cach
 
 The first change of `docs/design/triton_pipeline_optimization_plan.md` after the baseline above:
 the PE image encoder is built as a real FP16 engine. Same pinned set, same harness
-(`scripts/bench/baseline_suite.py --phases env,ingest`), same host and GPU 0, same published v0.5.0
+(`scripts/bench/baseline_suite.py --phases env,ingest`), same host and GPU 0, same published 0.5.0
 images; the only difference is the engine behind `pe_image_encoder`. Raw JSON:
 `docs/benchmarks/v060_fp16_pe.json` (ingest, Triton statistics, GPU) and
 `docs/benchmarks/v060_fp16_pe_engine.json` (engine size, build time, parity). Medians with the
@@ -759,7 +759,7 @@ stay equivalent to the FP32 engine (cosine similarity 0.9996 mean, 0.9976 minimu
 
 #### Root cause and fix
 
-The v0.5.0 FP16 bake (`bake_fp16_onnx` in `export/trt_utils.py`) never produced a buildable graph on
+The 0.5.0 FP16 bake (`bake_fp16_onnx` in `export/trt_utils.py`) never produced a buildable graph on
 TensorRT 11.1, and the installer hid it by retrying from FP32. Two defects, both found by building
 the baked ONNX with `trtexec`:
 
@@ -783,7 +783,7 @@ Caveats).
 
 #### Engine and parity
 
-| Item | FP32 (v0.5.0) | FP16 (this change) |
+| Item | FP32 (0.5.0) | FP16 (this change) |
 |---|---:|---:|
 | Plan size | 1,272,018,292 B | 644,778,380 B (0.51x) |
 | `trtexec` engine build | 38 s | 81 s |
@@ -847,7 +847,7 @@ The earlier private FP16 measurement of about 170 embeddings/s (5.9 ms) matches 
 - Parity covers 200 public images on whole-frame preprocessing. Retrieval and clustering gates on
   labelled data (plan section 7) are open.
 - The fix bakes FP16 for every model that calls `bake_fp16_onnx`. On TensorRT 11.1 the MobileCLIP
-  image encoder's v0.5.0 bake also failed at parse (`ElementWiseOperation DIV must have same input
+  image encoder's 0.5.0 bake also failed at parse (`ElementWiseOperation DIV must have same input
   types`); with the reconcile pass it parses, but the build stopped at
   `Could not find any implementation for node .../reparam_conv/Conv + PWN(...)` (#224). The failing
   layers are the depthwise 7x7 stride-2 convs with a channel multiplier of 2 (the three
@@ -1064,8 +1064,8 @@ reference: [parity_references.md](benchmarks/parity_references.md).
 
 #### FP16 against FP32 PE engine
 
-Same isolated stack (the published v0.5.0 images, GPU 0, own ports, no VLM), only the file behind
-`pe_image_encoder` changes. The FP32 plan is the one of the v0.5.0 baseline (1,272,018,292 B). The FP16 plan
+Same isolated stack (the published 0.5.0 images, GPU 0, own ports, no VLM), only the file behind
+`pe_image_encoder` changes. The FP32 plan is the one of the 0.5.0 baseline (1,272,018,292 B). The FP16 plan
 is built through the fixed installer path (`export/trt_utils.py` bake, then `trtexec` with the shapes of
 `scripts/lib/model_setup.sh`): 641,185,140 B, built in 95 s. Each configuration was captured twice,
 once with 4 and once with 1 upload request in flight (run 1 and run 2), and the FP32 plan was captured
@@ -1132,7 +1132,7 @@ Reading the numbers:
 
 #### Caveats
 
-- One host, one GPU shared with other projects, the published v0.5.0 images; the container image ids are
+- One host, one GPU shared with other projects, the published 0.5.0 images; the container image ids are
   in each `capture.json`. The summaries of the four comparisons are in `docs/benchmarks/parity/`.
 - The VLM gate and the label agreement of a registry-labelled project are not exercised: no VLM is
   configured and the project has no class registry, so stored class names are empty. The label gates here
@@ -1186,8 +1186,8 @@ parentheses.
 | GPU | one RTX A6000 (GPU 2, 300 W cap, 48 GB), driver 615.71.09, CUDA 13.4; foreign SM load on it 0.0 percent in every sample of all 198 measured runs |
 | Other GPUs | GPU 0 holds another project (16 GB resident, up to 95 percent utilization during one of my windows), GPU 1 another (7 GB): neither was used |
 | Host | 2 x Xeon E5-2680 v3, 48 logical cores, 504 GB RAM, load average 5 to 59 over the runs (other projects), whole-host CPU busy 10 to 77 percent (columns below) |
-| Stack | published v0.5.0 images (`images.lock` digests), isolated compose project, own ports, loopback only, OpenSearch heap 8 GB, no replicas, 32 API workers, curation workers and VLM not running |
-| PE engine | FP16, baked with the fixed `export/trt_utils.py` and built with `trtexec` as in Wave 1: plan 644,771,508 bytes; all other engines as installed by v0.5.0 |
+| Stack | published 0.5.0 images (`images.lock` digests), isolated compose project, own ports, loopback only, OpenSearch heap 8 GB, no replicas, 32 API workers, curation workers and VLM not running |
+| PE engine | FP16, baked with the fixed `export/trt_utils.py` and built with `trtexec` as in Wave 1: plan 644,771,508 bytes; all other engines as installed by 0.5.0 |
 | Set A | the pinned COCO set (2,000 images, 640 x 480 median 166 KB); sweeps use its first 1,000 images, the headline rows all 2,000 |
 | Set B | 500 public photos from the Wikimedia Commons featured-picture category, CC0, public domain, CC BY and CC BY-SA, 12.0 to 24.0 MP (median 17.0, mean 17.4), 5.2 GB (mean 10.4 MB), pinned in `scripts/datasets/manifests/commons_hires_500.json` (manifest sha256 `c013c1f9...`, seed 20261010, fetched with `scripts/datasets/fetch_hires_set.py`) |
 | Protocol | the Wave 1 protocol: fresh project per repetition, warm-up project first, 3 repetitions, policy `all`; clients are threads of one Python process; cluster training and the storage merge are skipped in these runs (`--skip-cluster --skip-settle`) so that the window is the ingest alone |
@@ -1572,7 +1572,7 @@ those costs, fixes the ones that measure as worth fixing, and repeats the Wave 0
 Medians with the minimum and maximum of 3 repetitions in parentheses.
 
 **Method.** The Wave 0 stack and protocol on GPU 2 of the same host (an isolated compose project,
-loopback ports, the published v0.5.0 images with the branch's `src/` mounted over `/app/src`,
+loopback ports, the published 0.5.0 images with the branch's `src/` mounted over `/app/src`,
 the FP16 PE plan of the Wave 0 reference, plan sha256 `b9a6f397...`, 32 uvicorn workers, a fresh
 OpenSearch for each series). Set A is the pinned COCO set (first 1,000 images, `/ingest/upload`, 32
 images per request), set B the 500 photos of `commons_hires_500.json` (`/ingest/batch`, 8 images per
@@ -1801,13 +1801,13 @@ Runtime backend (`output0`, used by the region detector) and the bake-off engine
 
 #### Method
 
-One RTX A6000 (GPU 2), the published v0.5.0 images with the checkout's `src/` mounted over `/app/src`,
+One RTX A6000 (GPU 2), the published 0.5.0 images with the checkout's `src/` mounted over `/app/src`,
 an isolated compose project on loopback, OpenSearch 8 GB heap, 32 API workers, a fresh stack per
 configuration, policy `all`. Set A: the pinned COCO set (2,000 images, `coco_bench_2000.json`),
 `scripts/bench/baseline_suite.py --phases env,ingest --reps 3 --skip-cluster --skip-settle` (32 images
 per request, 4 clients; upload and batch). Set B: the 500 pinned photos, `scripts/bench/ingest_sweep_suite.py
 --phases sweep --sweep-points 8x16 --modes batch`. Configurations: **base** is `origin/main` with the
-detector plan of the v0.5.0 install (Sep 26 build) and an FP16 PE plan from `build_pe_trt.sh`;
+detector plan of the 0.5.0 install (Sep 26 build) and an FP16 PE plan from `build_pe_trt.sh`;
 **detector uint8** is the first commit of this change (PE still FP32); **final** is both. The uint8
 detector plan was built with the real exporter path (`export_models.export_trt_end2end`), the PE plan
 with `build_pe_trt.sh`, both on the TensorRT 11.1 of the Triton image.
@@ -1911,7 +1911,7 @@ Three findings, in order of importance.
    crop rectangles are identical on 98.7 percent of items against the control and 99.1 to 99.2 percent
    between two runs of the same engine.
 2. **Rebuilding the detector engine, with no input change, fails the gates against `ref-fp16`.**
-   The v0.5.0 detector plan (Sep 26) was built from an ONNX baked before the FP16 cast fix of the FP16
+   The 0.5.0 detector plan (Sep 26) was built from an ONNX baked before the FP16 cast fix of the FP16
    PE section; the plan rebuilt today from the same weights moves 6.5 percent of images beyond the box
    gate, 2 confident boxes go unmatched, and crop-vector agreement drops to 0.978 (1st percentile). This
    is independent of the input type (the "rebuilt FP32" row has no uint8 in it) and applies to every
@@ -1957,7 +1957,7 @@ shipped**: no setting, no compose change, no client code. The implementation and
 commits on the local branch `perf/shared-memory-impl` (`4de40001`, `8e20afe5`), for reference only.
 
 **Method.** The isolated stack of the uint8 section (GPU 2, foreign load 0.0 percent in every sampled
-run, published v0.5.0 images with the branch `src/` mounted, uint8 detector and PE plans, PE plan sha256
+run, published 0.5.0 images with the branch `src/` mounted, uint8 detector and PE plans, PE plan sha256
 `a4feb7df...`, a fresh project per repetition, policy `all`), one extra tmpfs volume mounted as `/dev/shm`
 in both containers and `--allow-client-shm=true` on Triton. Wire and shared memory were the same code with
 the transport switch off or on, the API container recreated between launches, arms interleaved (wire, shm, shm,
@@ -2731,7 +2731,7 @@ does the packing across concurrent requests; the fix is to have concurrent reque
 |---|---|
 | GPU | RTX A6000, GPU 2, 0.0 percent foreign SM share in every counted repetition; another project held GPU 0 at 100 percent and was not touched. SM clock 1,416-1,444 MHz (c16), 1,449-1,482 MHz (c4) |
 | Host | 48 logical cores shared with other projects; 1-minute load 5-9 on the c16 and c4 repetitions, 12-20 at c32, 14-25 on set B; host 12-15 percent busy (set A, c4 and c16) |
-| Stack | project `xbatch`: Triton, API (the published v0.5.0 image with this checkout's `src/` mounted), OpenSearch 8 GB heap, 32 API workers, loopback ports; the uint8 FP16 PE plan of `ref-u8fp16` (sha256 `a4feb7df...`), `pe_image_encoder` dynamic batcher `preferred_batch_size: [4, 8, 16, 32]`, `max_queue_delay_microseconds: 15000` (unchanged) |
+| Stack | project `xbatch`: Triton, API (the published 0.5.0 image with this checkout's `src/` mounted), OpenSearch 8 GB heap, 32 API workers, loopback ports; the uint8 FP16 PE plan of `ref-u8fp16` (sha256 `a4feb7df...`), `pe_image_encoder` dynamic batcher `preferred_batch_size: [4, 8, 16, 32]`, `max_queue_delay_microseconds: 15000` (unchanged) |
 | Load | set A: 2,000 COCO images, `POST /ingest/batch`, 32 images per request, policy `all`, 1 warm-up and 3 counted repetitions (`ingest_sweep_suite.py --phases env,sweep --sweep-points 32x16,32x4 --modes batch --skip-cluster --skip-settle`); set B: 500 photos, 8 per request, 16 clients; the embed bench is `scripts/bench/embed_missing_bench.py` (500 images ingested, then 3 rewrites of every crop and frame vector) |
 
 #### Measurement first: PE batch sizes Triton sees today (set A, unchanged ingest code)
@@ -2973,7 +2973,7 @@ finish at 100,000 and HDBSCAN was not run there (see above), so only `ivf` belon
 Question: does decoding JPEGs on the GPU, and building each model's input there, speed up ingest?
 The full design, the dataflow map and the implementation plan are in
 [design/gpu_decode_plan.md](design/gpu_decode_plan.md); this section keeps the numbers. One RTX
-A6000 (GPU 2; SM86 has no hardware JPEG decoder), the published v0.5.0 images, the `ref-u8fp16`
+A6000 (GPU 2; SM86 has no hardware JPEG decoder), the published 0.5.0 images, the `ref-u8fp16`
 engines, an isolated compose project, only this work's processes on GPU 2 during every timed run.
 Tools: `scripts/bench/gpu_decode_bench.py`, `scripts/bench/gpu_decode_parity.py`.
 
