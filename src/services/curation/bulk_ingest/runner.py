@@ -474,6 +474,17 @@ class BulkIngestRun:
         self.job.update(status=status, error=self._abort, finished_at=now_iso())
 
 
+def _on_loop(loop: asyncio.AbstractEventLoop) -> bool:
+    try:
+        return asyncio.get_running_loop() is loop
+    except RuntimeError:
+        return False
+
+
+async def _create_task(coroutine: Any) -> asyncio.Task[None]:
+    return asyncio.create_task(coroutine)
+
+
 def spawn(
     *,
     sender: BatchSender,
@@ -481,7 +492,10 @@ def spawn(
     source: BulkSource,
     options: BulkOptions,
     listener: RunListener | None = None,
+    loop: asyncio.AbstractEventLoop | None = None,
 ) -> None:
+    """Start the run as a task. From a worker thread (the dispatcher's tick) pass the
+    running ``loop`` the task belongs to."""
     run = BulkIngestRun(
         sender=sender, store=store, source=source, options=options, listener=listener
     )
@@ -499,7 +513,10 @@ def spawn(
 
     coroutine = runner()
     try:
-        task = asyncio.create_task(coroutine)
+        if loop is not None and loop.is_running() and not _on_loop(loop):
+            task = asyncio.run_coroutine_threadsafe(_create_task(coroutine), loop).result(10)
+        else:
+            task = asyncio.create_task(coroutine)
     except RuntimeError as exc:  # no running loop: the claimed run must not stay queued
         coroutine.close()
         store.job.update(

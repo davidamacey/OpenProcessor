@@ -86,7 +86,7 @@ def create_run(
                 'an assist run is already running for this project; cancel it or wait',
                 run_id=live[0] if live else None,
             )
-        run_id = f'asr_{datetime.now(UTC):%Y%m%dT%H%M%S}_{uuid.uuid4().hex[:6]}'
+        run_id = f'asr_{datetime.now(UTC):%Y%m%dT%H%M%S%f}_{uuid.uuid4().hex[:6]}'
         job = _job(run_id)
         job.directory.mkdir(parents=True)
         (job.directory / 'request.json').write_text(json.dumps(request), encoding='utf-8')
