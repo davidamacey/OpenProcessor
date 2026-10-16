@@ -55,6 +55,7 @@ type RawCluster = {
   promotable: boolean;
   is_unlabeled: boolean;
   n_subclusters: number;
+  subcluster_ids: string[];
   updated_at: string | null;
   representatives: Array<{
     crop_id: string;
@@ -121,6 +122,7 @@ function _rawClusterToCluster(
     representative_crop_ids: (c.representatives ?? []).map((r) => r.crop_id),
     has_subclusters: c.n_subclusters > 0,
     n_subclusters: c.n_subclusters,
+    subcluster_ids: c.subcluster_ids,
     updated_at: c.updated_at,
   };
 }
@@ -316,6 +318,7 @@ export async function getCluster(
         is_unlabeled: true,
         has_subclusters: false,
         n_subclusters: 0,
+        subcluster_ids: [],
         representative_crop_ids: items.slice(0, 4).map((c) => c.id),
         updated_at: null,
       };

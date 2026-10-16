@@ -58,6 +58,13 @@
     "excluded_reason",
     "excluded_at",
     "review_dismissed_at",
+    "audit_sample",
+    "audit_batch_id",
+    "audit_sampled_at",
+    "audit_label_name",
+    "audit_label_source",
+    "audit_outcome",
+    "audit_human_name",
     "source",
     "test_holdout",
     "crop_rank_in_image",
@@ -363,6 +370,96 @@
           }
         ],
         "default": null
+      },
+      "audit_batch_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Audit Batch Id"
+      },
+      "audit_human_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Audit Human Name"
+      },
+      "audit_label_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Audit Label Name"
+      },
+      "audit_label_source": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Audit Label Source"
+      },
+      "audit_outcome": {
+        "anyOf": [
+          {
+            "enum": [
+              "agree",
+              "detector_wrong",
+              "vlm_wrong",
+              "both_wrong"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Audit Outcome"
+      },
+      "audit_sample": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Audit Sample"
+      },
+      "audit_sampled_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Audit Sampled At"
       },
       "bbox_norm": {
         "items": {

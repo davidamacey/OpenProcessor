@@ -160,3 +160,28 @@ def test_delete_busy_409_carries_typed_job_refs(monkeypatch) -> None:
         ]
 
     asyncio.run(_run())
+
+
+def test_busy_message_names_the_jobs_and_hints_at_the_worker_settle(monkeypatch) -> None:
+    """#249: a 409 right after an ingest says which job is busy, and that a
+    detection worker's in-flight batch clears on its own within seconds."""
+    from src.services.projects import busy
+
+    async def _run() -> None:
+        client = FakeLifecycleOpenSearch()
+        set_project_registry(ProjectRegistry(lambda: client))
+        await seed_default_project(client)
+        record, _ = await lifecycle.create_project(client, slug='cars', display_name='Cars')
+        monkeypatch.setattr(
+            busy,
+            'running_jobs',
+            lambda _rec: [busy.JobRef(kind='detection_worker', job_id='host-a')],
+        )
+        with pytest.raises(RequestRejectedError) as exc_info:
+            await lifecycle.archive_project(client, slug='cars', expected_revision=record.revision)
+        message = exc_info.value.detail['message']
+        assert 'detection_worker' in message or 'Detection worker' in message
+        assert 'host-a' in message
+        assert 'retry' in message
+
+    asyncio.run(_run())

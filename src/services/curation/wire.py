@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 from src.clients.occ_locks import is_locked_box, is_locked_item
 from src.config.curation import BACKBONE_EMBEDDING_FIELD, ITEM_EMBEDDING_FIELD
 from src.config.region_fields import RegionFields, get_region_fields
+from src.domain.audit_math import AUDIT_FIELDS
 from src.domain.item_text import ITEM_TEXT_LINES_FIELD, item_text_lines_to_wire
 from src.services.curation.assist.item_wire import assist_to_wire
 from src.services.curation.class_sources import (
@@ -404,6 +405,8 @@ def serialize_item(
         # Every OCR line on the item crop; [] when none / not yet read.
         'item_text_lines': item_text_lines_to_wire(src.get(ITEM_TEXT_LINES_FIELD)),
     }
+    # The accuracy audit's state (drawn or not, the machine label it carried, the verdict).
+    item.update({key: src.get(key) for key in AUDIT_FIELDS})
     item.update(region_to_wire(src, f))
     item.update(region_boxes_to_wire(src, f, crop_id=crop_id, prefix=prefix))
     # The VLM's suggestions (class answer, pack attributes), apart from the labels.

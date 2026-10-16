@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.services.curation.bulk_ingest import runner
 from src.services.curation.bulk_ingest.queue_listener import QueueListener
@@ -21,6 +21,10 @@ from src.services.curation.bulk_ingest.sources import IngestSource, source_queue
 from src.services.curation.bulk_ingest.store import ACTIVE_STATUSES, BulkStore, open_store
 
 
+if TYPE_CHECKING:
+    import asyncio
+
+
 def bulk_source(source: IngestSource, *, scan: bool) -> BulkSource:
     return BulkSource('queue', source.source_id, tuple(source.extensions), scan)
 
@@ -30,7 +34,13 @@ def bulk_options(source: IngestSource) -> runner.BulkOptions:
 
 
 def start_source_run(
-    source: IngestSource, *, base_url: str, api_prefix: str, project: str, scan: bool
+    source: IngestSource,
+    *,
+    base_url: str,
+    api_prefix: str,
+    project: str,
+    scan: bool,
+    loop: asyncio.AbstractEventLoop | None = None,
 ) -> tuple[BulkStore, bool]:
     """Claim and spawn a run draining ``source``'s queue (after a scan when ``scan``).
     Raises :class:`~src.services.curation.bulk_ingest.runner.BulkBusyError` while any run
@@ -47,6 +57,7 @@ def start_source_run(
         source=spec,
         options=options,
         listener=QueueListener(source),
+        loop=loop,
     )
     return store, resumed
 

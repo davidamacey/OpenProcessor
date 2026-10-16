@@ -241,7 +241,10 @@ ONNX_PATH=./pytorch_models/pe_image_encoder.onnx bash export/build_pe_ort_fallba
 
 Path 2 exists because PE's attention-pooling head has, on some TensorRT
 releases, used ops the ONNX parser rejects. `build_pe_trt.sh` exits `3` with
-an explicit pointer to the fallback when that happens. Both paths install
+an explicit pointer to the fallback when that happens. The engine is FP16 with a uint8 input;
+if the FP16 bake or the FP16 build fails, `build_pe_trt.sh` exits `4` instead of shipping an FP32
+engine, and `ALLOW_FP32=1` is the explicit opt-in to one (`BAKE_FP16=0` needs it too). The installer
+records any FP32 fallback as `degraded` in its precision ledger. Both paths install
 into `models/pe_image_encoder/` and render the matching `config.pbtxt`
 (`tensorrt_plan` vs. `onnxruntime_onnx`); each removes the other's artifact
 so Triton never sees both. The committed `models/pe_image_encoder/config.pbtxt`

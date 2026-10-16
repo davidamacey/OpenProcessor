@@ -260,3 +260,24 @@ def test_a_pack_without_item_attributes_is_a_422(stack: Any) -> None:
     assert r.status_code == 422
     assert r.json()['detail']['error'] == 'pack_declares_no_attributes'
     assert stack.upstream.vlm_requests == []
+
+
+def test_the_general_objects_example_loads_validates_and_declares_domain_neutral_attributes() -> (
+    None
+):
+    from pathlib import Path
+
+    path = (
+        Path(__file__).resolve().parents[2] / 'examples' / 'prompt_packs' / 'general_objects.json'
+    )
+    pack = PromptPack.from_json(path)
+    assert pack.name == 'general_objects'
+    by_key = {a.key: a for a in pack.attributes}
+    assert set(by_key) == {'brand', 'colour', 'material'}
+    assert {a.applies_to for a in pack.attributes} == {'item'}
+    assert by_key['brand'].values == []  # free text
+    assert 'red' in by_key['colour'].values  # a closed vocabulary
+    body = json.loads(path.read_text())
+    body.pop('_comment', None)
+    body.pop('name')
+    assert validate_pack(None, body).ok

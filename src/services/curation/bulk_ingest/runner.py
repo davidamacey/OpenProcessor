@@ -31,6 +31,7 @@ import hashlib
 import time
 from collections import deque
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
 from src.config.project_context import ensure_marked_dir
@@ -152,9 +153,36 @@ def claim_run(source: BulkSource, options: BulkOptions) -> tuple[BulkStore, bool
     return store, resumed
 
 
+# A claimed run is spawned in the same call, so a run still ``queued`` this long
+# after its claim was never started (its spawn failed, or the process died between).
+QUEUED_ORPHAN_GRACE_S = 10.0
+
+
+def _is_orphan(store: BulkStore) -> bool:
+    """A run no task will ever finalize: ``queued`` past the grace with no task in
+    this process (a started run flips to ``running`` at once, and another worker's
+    ``queued`` run is only ever milliseconds old), or ``interrupted`` (its heartbeat
+    went stale, e.g. across an API restart)."""
+    state = store.job.read()
+    status = state.get('status')
+    if status == 'interrupted':
+        return True
+    if status != 'queued' or store.run_id in _tasks:
+        return False
+    try:
+        age = (datetime.now(UTC) - datetime.fromisoformat(state['updated_at'])).total_seconds()
+    except (KeyError, TypeError, ValueError):
+        return True  # an unreadable timestamp cannot vouch for a live claim
+    return age > QUEUED_ORPHAN_GRACE_S
+
+
 def cancel_run(store: BulkStore) -> None:
-    """Ask a live run to stop after its in-flight batches. A run that is not live
-    keeps its status (the flag is cleared by the next claim)."""
+    """Ask a live run to stop after its in-flight batches, or, for an orphan no task
+    will finalize, mark it ``cancelled`` now. A run that is finished keeps its status
+    (the flag is cleared by the next claim)."""
+    if _is_orphan(store):
+        store.job.update(status='cancelled', finished_at=now_iso(), error=None)
+        return
     if store.job.is_live(ACTIVE_STATUSES):
         store.job.request_cancel()
 
@@ -446,6 +474,17 @@ class BulkIngestRun:
         self.job.update(status=status, error=self._abort, finished_at=now_iso())
 
 
+def _on_loop(loop: asyncio.AbstractEventLoop) -> bool:
+    try:
+        return asyncio.get_running_loop() is loop
+    except RuntimeError:
+        return False
+
+
+async def _create_task(coroutine: Any) -> asyncio.Task[None]:
+    return asyncio.create_task(coroutine)
+
+
 def spawn(
     *,
     sender: BatchSender,
@@ -453,7 +492,10 @@ def spawn(
     source: BulkSource,
     options: BulkOptions,
     listener: RunListener | None = None,
+    loop: asyncio.AbstractEventLoop | None = None,
 ) -> None:
+    """Start the run as a task. From a worker thread (the dispatcher's tick) pass the
+    running ``loop`` the task belongs to."""
     run = BulkIngestRun(
         sender=sender, store=store, source=source, options=options, listener=listener
     )
@@ -469,6 +511,17 @@ def spawn(
             if aclose is not None:
                 await aclose()
 
-    task = asyncio.create_task(runner())
+    coroutine = runner()
+    try:
+        if loop is not None and loop.is_running() and not _on_loop(loop):
+            task = asyncio.run_coroutine_threadsafe(_create_task(coroutine), loop).result(10)
+        else:
+            task = asyncio.create_task(coroutine)
+    except RuntimeError as exc:  # no running loop: the claimed run must not stay queued
+        coroutine.close()
+        store.job.update(
+            status='failed', error=f'could not start: {exc}'[:300], finished_at=now_iso()
+        )
+        raise
     _tasks[store.run_id] = task
     task.add_done_callback(lambda _t: _tasks.pop(store.run_id, None))

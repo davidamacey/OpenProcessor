@@ -104,7 +104,9 @@ as a car's make or a wheel's rim material:
 }
 ```
 
-`examples/prompt_packs/vehicle_wheel.json` is a complete one. The VLM answers
+`examples/prompt_packs/vehicle_wheel.json` is a complete one, and
+`examples/prompt_packs/general_objects.json` is a domain-neutral one for COCO-style
+objects (`brand` as free text, `colour` and `material` as closed lists). The VLM answers
 each attribute with a value and a confidence (`high`, `medium`, `low`). The
 server drops a key the pack did not declare and a value outside a closed
 `values` list, and counts those as `invalid_values`. The attributes are stored
@@ -121,6 +123,8 @@ of answers for it), the vote distribution, new-class names the VLM proposed
 when nothing fit, and a summary of the attributes. The proposal names a class
 only when at least 3 answers exist and the agreement reaches `min_agreement`
 (default 0.6); otherwise the distribution is shown and no class is proposed.
+The assist dialog has an **Agreement needed** field for a cluster `classify` run: empty uses the
+server's default (shown in the field), and it accepts 0.5 to 1.0.
 
 Applying it is a separate, explicit call, with a dry-run count first:
 

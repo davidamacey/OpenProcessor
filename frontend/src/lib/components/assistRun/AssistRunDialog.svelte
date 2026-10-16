@@ -19,7 +19,11 @@
     type SampleChoice,
   } from '$lib/assistRun/assistRunController.svelte';
   import { isPromptPackAvailable, selectableAxisEntries } from '$lib/strategies';
-  import type { AssistAction, AssistStratifyBy } from '$lib/types_assist';
+  import {
+    MIN_AGREEMENT_RANGE,
+    type AssistAction,
+    type AssistStratifyBy,
+  } from '$lib/types_assist';
   import { strategiesStore } from '$stores/strategies.svelte';
 
   interface Props {
@@ -214,6 +218,26 @@
               </label>
             {/each}
           </div>
+          {#if ctl.target?.kind === 'cluster' && ctl.actions.includes('classify')}
+            <label class="flex flex-col gap-1 pl-1 text-xs text-zinc-300">
+              Agreement needed to propose a label
+              <input
+                class="input w-32"
+                type="number"
+                step="0.05"
+                min={MIN_AGREEMENT_RANGE.min}
+                max={MIN_AGREEMENT_RANGE.max}
+                placeholder={ctl.preview ? String(ctl.preview.request.min_agreement) : ''}
+                value={ctl.minAgreement ?? ''}
+                oninput={(e) => (ctl.minAgreement = numberOrNull(e))}
+                data-testid="assist-min-agreement"
+              />
+              <span class="text-zinc-500"
+                >Share of the answers that must name the same class. Empty uses the
+                server's default.</span
+              >
+            </label>
+          {/if}
           {#if ctl.actions.includes('segment')}
             <div
               class="flex flex-col gap-1 pl-1 text-xs text-zinc-300"

@@ -76,6 +76,7 @@ export function createSlotInventory() {
         dominant_class_name: cls.name,
         dominant_pct: null,
         n_subclusters: 0,
+        subcluster_ids: [],
         has_subclusters: false,
         representative_crop_ids: reps.map((r) => r.p.crop_id),
         // Region close-ups, not parent-item thumbnails: the card is the

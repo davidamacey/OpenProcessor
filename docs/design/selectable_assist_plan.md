@@ -753,7 +753,7 @@ pins for the deleted `/vlm/label_cluster` and `/vlm/verify_regions` routes; rege
 
 Recorded after wave C (PR 8, the frontend).
 
-- **The sub-cluster tab list is not served.** `GET /clusters` serves only `n_subclusters`, so the tabs are
+- **The sub-cluster tab list is not served** (fixed afterwards: `GET /clusters` serves `subcluster_ids` per card and the tabs use it; the text below is the gap as it stood). `GET /clusters` serves only `n_subclusters`, so the tabs are
   the sub-cluster ids seen while the whole cluster is shown (replaced on the first page, added to on later
   ones). A tab loads from `GET /crops?cluster_subid=`; a sub-cluster whose members are all beyond the loaded
   pages has no tab until the user scrolls the "all" view. A served list of sub-cluster ids would fix it.
@@ -762,7 +762,7 @@ Recorded after wave C (PR 8, the frontend).
 - **Single-box assist is on the `/review` box row**, not inside `SlotBboxEditor` or `MultiBoxCanvas`: those
   are modals with unsaved edits, and a second dialog over them would race the save. `SlotBboxEditor` has none.
 - **The proposal is a folded line on the cluster page** that opens the card (and only then asks the server
-  for the apply dry run). `min_agreement` has no control; the server's default 0.6 applies.
+  for the apply dry run). `min_agreement` had no control (added afterwards: the dialog's **Agreement needed** field, empty = the server's default).
 - **Tests.** The controllers, the contract test, the policy panel, the sub-cluster request and the stubbed e2e
   were written first and watched failing; the three new components' tests were written with the components.
 - **Docs screenshots.** A capture state (`assist-dialog`) and the dry-run allow-list entries are added to

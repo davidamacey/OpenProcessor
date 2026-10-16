@@ -42,6 +42,7 @@ CLUSTERS = {
             "is_unlabeled": True,
             "representatives": [{"crop_id": "crop-0"}],
             "n_subclusters": 2,
+            "subcluster_ids": ["10000a", "10000b"],
             "updated_at": None,
         }
     ],

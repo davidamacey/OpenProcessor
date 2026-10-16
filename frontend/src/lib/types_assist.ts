@@ -61,6 +61,10 @@ export interface AssistFilterTarget {
 export type AssistTarget =
   AssistCropsTarget | AssistBoxesTarget | AssistClusterTarget | AssistFilterTarget;
 
+/** The range `min_agreement` accepts (pinned to the served schema by assistContract.test.ts);
+ *  the default is whatever the server echoes on the dry run. */
+export const MIN_AGREEMENT_RANGE = { min: 0.5, max: 1 } as const;
+
 export type AssistSampleMode = 'all' | 'representative';
 export type AssistStratifyBy = 'auto' | 'cluster_subid' | 'none';
 

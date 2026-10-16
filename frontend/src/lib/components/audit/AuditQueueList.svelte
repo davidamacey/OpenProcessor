@@ -62,6 +62,14 @@
                 ></span
               >
             {/if}
+            {#if crop.audit_sample && crop.audit_label_name}
+              <span class="truncate text-zinc-500" data-testid="audit-queue-drawn"
+                >Drawn with: <span class="text-zinc-300">{crop.audit_label_name}</span
+                >{#if crop.audit_label_source}
+                  ({classSourcesStore.labelFor(crop.audit_label_source) ||
+                    crop.audit_label_source}){/if}</span
+              >
+            {/if}
           </div>
           <a
             class="btn shrink-0"

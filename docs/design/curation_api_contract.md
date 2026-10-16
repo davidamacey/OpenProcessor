@@ -672,6 +672,7 @@ the TypeScript form. `tests/curation/test_wire_contract.py` pins the key set.
 | Region (item level) | `region_status`, `region_reason`, `region_rejection_reason`, `region_validated`, `region_auto_confirmed`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector_chain`, `region_detected_at`, `region_profile`, `region_profile_revision`, `region_class_id`, `region_label_source`, `region_pairing`, `region_skip_verify` |
 | Region boxes | `region_boxes`, `region_count`, `region_rejected_count`, `region_max_score`, `region_set_complete`, `region_revision` |
 | Import and combine | `import_ids`, `dataset_split`, `imported_at`, `proposed_by_import`, `on_negative_frame`, `import_standalone_region`, `origin_project`, `origin_item_id`, `origin_image_id`, `origin_split`, `combine_conflict`, `combine_conflict_origins`, `combine_merged_origins` |
+| Accuracy audit | `audit_sample`, `audit_batch_id`, `audit_sampled_at`, `audit_label_name`, `audit_label_source`, `audit_outcome`, `audit_human_name` (all null on an item never drawn into an audit) |
 | Text | `item_text_lines` |
 
 Endpoint-specific extra keys on top of the item:
@@ -1393,7 +1394,7 @@ Representatives are paged. Every card is returned with `size`, `purity` and
 the rest, but `representatives` is filled only for cards in the
 `[offset, offset + limit)` window of the kind-filtered, member-count-descending
 list (`limit` default 50, max 500). Other cards carry `representatives: []`.
-`per_cluster=0` skips representatives. `GET /clusters/representatives`
+Each card carries `n_subclusters` (the exact count) and `subcluster_ids` (the sorted ids, at most 200), which the Cropwright sub-cluster tabs use. `per_cluster=0` skips representatives. `GET /clusters/representatives`
 pages the same way by `offset` and `max_clusters`.
 
 Clustering runs inside the auto-label pipeline. Setting

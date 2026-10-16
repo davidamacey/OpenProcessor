@@ -11,7 +11,17 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 
 ## [Unreleased]
 
+### Fixed
+- Ingest no longer fails a JPEG that Pillow reads but libjpeg-turbo's header read refuses (`tjDecompressHeader3(): Could not determine subsampling level`, 2 of 100,000 Open Images files, `decode_failed`): that error alone sends the image to the Pillow decode; a damaged file still fails.
+- Dispatcher-started bulk-ingest runs (poll, cron, webhook) never started: the tick ran in a worker thread and both the run and the poll called `asyncio.create_task` there (`ingest_dispatch_failed`, `no running event loop`). The tick now runs on the loop. A run whose spawn fails is marked `failed` instead of staying `queued` (which kept every later start, and the project's delete, answering 409), and `POST /ingest/bulk/{run_id}/cancel` finalizes an orphan (a run `queued` past 10 s with no task, or `interrupted` after a restart) as `cancelled`.
+- `DELETE /projects/{p}` (and archive) answering `409 project_busy` right after an ingest finished (#249): the detection worker refreshed its in-flight count only every 15 s, so the last batch read as busy for up to that long after it had landed. The worker now rewrites a project's liveness within a second of its count changing, and the `project_busy` message names each running job and says when a retry is the answer.
+- `make pe-build-trt` (`export/build_pe_trt.sh`, #277) no longer ships an FP32 engine silently: a failed or FP32-falling-back FP16 bake, a failed FP16 build or a failed uint8 input step now exits 4 with the cause. `ALLOW_FP32=1` opts in to an FP32 engine knowingly.
+
 ### Added
+- `scripts/docs/check_docs_vs_code.py` gains an `envnames` check: a non-`OP_` variable a doc names in a code span, on a line about env or variables, must be read by a compose file, script or code (#287).
+- Example prompt pack `examples/prompt_packs/general_objects.json`: the generic item prompts plus three domain-neutral item attributes (`brand`, `colour`, `material`) for COCO-style objects; validated by the pack validation in a test.
+- `GET /clusters` cards serve `subcluster_ids` (the sorted sub-cluster ids, at most 200; `n_subclusters` stays the exact count).
+- The item wire serves the accuracy audit state (#166): `audit_sample`, `audit_batch_id`, `audit_sampled_at`, `audit_label_name`, `audit_label_source`, `audit_outcome` and `audit_human_name` (null for an item never drawn), so `GET /audit/queue` items can show the machine label they were drawn with.
 - Cropwright **Assist…** (cluster page, one crop, one box, Matching items): a dialog to pick what the VLM sees (selected, all, a representative sample), the actions (classify, attributes, verify, segment) and the VLM and prompt pack, with the server's dry run; the cluster and sub-cluster label proposal card with the agreement, an explicit dry-run-first **Apply** and the `scope_changed` refusal; dashed "VLM suggests" attribute chips; and a **Region verification** switch (`region_verify`) on the VLM scope panel. See the guide [Selective VLM and segmenter assist](docs-site/docs/guides/selective-assist.mdx).
 
 - Pack attributes in whole-project VLM runs: `vlm_attributes=true` on `POST /pipeline/auto_label` and `/start` makes the VLM stage use the pack's combined `assist` call and store the item attributes in each item's `assist` slot. The region worker's combined call asks for the pack's item attributes on the items it classifies and writes them to `assist.attributes` too.

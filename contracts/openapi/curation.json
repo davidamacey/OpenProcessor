@@ -11333,6 +11333,89 @@
               }
             ]
           },
+          "audit_batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Batch Id"
+          },
+          "audit_human_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Human Name"
+          },
+          "audit_label_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Label Name"
+          },
+          "audit_label_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Label Source"
+          },
+          "audit_outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "agree",
+                  "detector_wrong",
+                  "vlm_wrong",
+                  "both_wrong"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Outcome"
+          },
+          "audit_sample": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Sample"
+          },
+          "audit_sampled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Sampled At"
+          },
           "bbox_norm": {
             "items": {
               "type": "number"
@@ -20539,6 +20622,89 @@
               }
             ]
           },
+          "audit_batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Batch Id"
+          },
+          "audit_human_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Human Name"
+          },
+          "audit_label_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Label Name"
+          },
+          "audit_label_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Label Source"
+          },
+          "audit_outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "agree",
+                  "detector_wrong",
+                  "vlm_wrong",
+                  "both_wrong"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Outcome"
+          },
+          "audit_sample": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Sample"
+          },
+          "audit_sampled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Sampled At"
+          },
           "bbox_norm": {
             "items": {
               "type": "number"
@@ -24175,6 +24341,89 @@
               }
             ]
           },
+          "audit_batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Batch Id"
+          },
+          "audit_human_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Human Name"
+          },
+          "audit_label_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Label Name"
+          },
+          "audit_label_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Label Source"
+          },
+          "audit_outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "agree",
+                  "detector_wrong",
+                  "vlm_wrong",
+                  "both_wrong"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Outcome"
+          },
+          "audit_sample": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Sample"
+          },
+          "audit_sampled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Sampled At"
+          },
           "bbox_norm": {
             "items": {
               "type": "number"
@@ -25723,6 +25972,89 @@
                 "type": "null"
               }
             ]
+          },
+          "audit_batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Batch Id"
+          },
+          "audit_human_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Human Name"
+          },
+          "audit_label_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Label Name"
+          },
+          "audit_label_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Label Source"
+          },
+          "audit_outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "agree",
+                  "detector_wrong",
+                  "vlm_wrong",
+                  "both_wrong"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Outcome"
+          },
+          "audit_sample": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Sample"
+          },
+          "audit_sampled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Sampled At"
           },
           "bbox_norm": {
             "items": {
@@ -34695,7 +35027,7 @@
     },
     "/curation/projects/{project}/clusters": {
       "get": {
-        "description": "Authoritative per-cluster card payload for the labeler.\n\nSingle OpenSearch aggregation that returns, for every cluster_id:\n\n* ``size`` (total members), ``validated_count`` (class_validated=true),\n* ``dominant_class_{id,name,count}`` and ``label_purity``\n  (largest-class share among labelled members) with\n  ``labelled_share``. A candidate cluster only gets a\n  ``dominant_class_name`` when a unique top class has at least\n  ``CANDIDATE_DOMINANT_MIN_COUNT`` members and\n  ``CANDIDATE_DOMINANT_MIN_SHARE`` of the labelled ones;\n  ``dominant_count``/``labelled_count``/``label_purity`` are always\n  reported,\n* ``purity`` / ``purity_n`` / ``purity_basis`` / ``purity_tier``\n  : the share of the ``purity_n`` members the cluster-geometry\n  pass measured for this cluster whose nearest cluster centroid is\n  this cluster's own — independent of the labels that placed them, so\n  a class cluster is no longer 1.0 by construction; ``null`` when no\n  member has been measured,\n* ``is_unlabeled`` (true when no class_name has any signal at all),\n* ``cluster_kind`` (``class`` | ``candidate`` | ``unassigned``),\n* ``n_subclusters`` (distinct cluster_subid values), and\n* ``representatives`` (top ``per_cluster`` crops sorted by\n  cluster_distance asc).\n\nThis endpoint exists so the frontend can stop computing dominant\nclass / purity from a 4-crop sample (it was getting wrong answers\non candidate clusters where all reps were null-class). The\naggregation is cheap because ``cluster_id`` is a low-cardinality\ninteger field; ``class_name``/``class_source``/``cluster_subid`` are\nall mapped ``keyword`` directly on the live index (no ``.keyword``\nsubfield).",
+        "description": "Authoritative per-cluster card payload for the labeler.\n\nSingle OpenSearch aggregation that returns, for every cluster_id:\n\n* ``size`` (total members), ``validated_count`` (class_validated=true),\n* ``dominant_class_{id,name,count}`` and ``label_purity``\n  (largest-class share among labelled members) with\n  ``labelled_share``. A candidate cluster only gets a\n  ``dominant_class_name`` when a unique top class has at least\n  ``CANDIDATE_DOMINANT_MIN_COUNT`` members and\n  ``CANDIDATE_DOMINANT_MIN_SHARE`` of the labelled ones;\n  ``dominant_count``/``labelled_count``/``label_purity`` are always\n  reported,\n* ``purity`` / ``purity_n`` / ``purity_basis`` / ``purity_tier``\n  : the share of the ``purity_n`` members the cluster-geometry\n  pass measured for this cluster whose nearest cluster centroid is\n  this cluster's own — independent of the labels that placed them, so\n  a class cluster is no longer 1.0 by construction; ``null`` when no\n  member has been measured,\n* ``is_unlabeled`` (true when no class_name has any signal at all),\n* ``cluster_kind`` (``class`` | ``candidate`` | ``unassigned``),\n* ``n_subclusters`` (distinct cluster_subid values), ``subcluster_ids``\n  (those ids, at most ``MAX_SUBCLUSTER_IDS``), and\n* ``representatives`` (top ``per_cluster`` crops sorted by\n  cluster_distance asc).\n\nThis endpoint exists so the frontend can stop computing dominant\nclass / purity from a 4-crop sample (it was getting wrong answers\non candidate clusters where all reps were null-class). The\naggregation is cheap because ``cluster_id`` is a low-cardinality\ninteger field; ``class_name``/``class_source``/``cluster_subid`` are\nall mapped ``keyword`` directly on the live index (no ``.keyword``\nsubfield).",
         "operationId": "list_clusters_curation_projects__project__clusters_get",
         "parameters": [
           {

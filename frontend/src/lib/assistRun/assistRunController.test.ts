@@ -61,6 +61,17 @@ describe('AssistRunController request', () => {
     expect(c.request.sample).toMatchObject({ mode: 'representative', size: null });
   });
 
+  it('sends min_agreement only once the user sets it, and a new dialog starts at the server default', () => {
+    const c = new AssistRunController(deps());
+    c.open(CLUSTER_OPENER);
+    expect(c.request).not.toHaveProperty('min_agreement');
+    c.minAgreement = 0.8;
+    expect(c.request.min_agreement).toBe(0.8);
+    c.open(CLUSTER_OPENER);
+    expect(c.minAgreement).toBeNull();
+    expect(c.request).not.toHaveProperty('min_agreement');
+  });
+
   it('offers a sample choice only for the scopes the opener gave', () => {
     const c = new AssistRunController(deps());
     c.open({ title: 'This crop', selected: { kind: 'crops', crop_ids: ['c1'] } });

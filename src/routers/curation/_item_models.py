@@ -138,6 +138,16 @@ class ItemDoc(BaseModel):
     excluded_reason: str | None = None
     excluded_at: str | None = None
     review_dismissed_at: str | None = None
+    # Accuracy audit (#119): drawn into a sample (null = never drawn), the batch
+    # and time, the machine label it carried when drawn (name and class_source),
+    # and, once a human labeled it, the verdict and the human's class.
+    audit_sample: bool | None = None
+    audit_batch_id: str | None = None
+    audit_sampled_at: str | None = None
+    audit_label_name: str | None = None
+    audit_label_source: str | None = None
+    audit_outcome: Literal['agree', 'detector_wrong', 'vlm_wrong', 'both_wrong'] | None = None
+    audit_human_name: str | None = None
     # Ingest source tag.
     source: str = ''
     test_holdout: bool = False

@@ -74,6 +74,8 @@ export class AssistRunController {
   acknowledgeExternal = $state(false);
   promptPack = $state<string | null>(null);
   segmentVerify = $state<'vlm' | 'none'>('vlm');
+  /** The agreement floor of the label proposal; null = the server's default. */
+  minAgreement = $state<number | null>(null);
 
   /** The server's dry run for the current request, or null while unknown. */
   preview = $state<AssistRunState | null>(null);
@@ -138,6 +140,7 @@ export class AssistRunController {
     if (this.vlm) req.vlm = this.vlm;
     if (this.promptPack) req.prompt_pack = this.promptPack;
     if (this.acknowledgeExternal) req.acknowledge_external = true;
+    if (this.minAgreement !== null) req.min_agreement = this.minAgreement;
     if (this.actions.includes('segment')) req.segment = { verify: this.segmentVerify };
     return req;
   }
@@ -161,6 +164,7 @@ export class AssistRunController {
     this.size = null;
     this.seed = 0;
     this.stratifyBy = 'auto';
+    this.minAgreement = null;
     this.preview = null;
     this.planError = null;
     this.planErrorCode = null;

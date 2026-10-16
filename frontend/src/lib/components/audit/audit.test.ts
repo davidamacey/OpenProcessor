@@ -212,6 +212,7 @@ describe('AuditQueueList', () => {
           class_source: 'vlm',
           detector_class_name: 'widget_b',
           detector_confidence: 0.61,
+          audit_sample: false,
         }),
       ),
     ),
@@ -235,6 +236,25 @@ describe('AuditQueueList', () => {
       .querySelector('[data-testid="audit-queue-open"]')!
       .getAttribute('href')!;
     expect(href).toContain('/review?tab=all&crop_id=q0');
+  });
+
+  it('shows the machine label the crop carried when it was drawn', () => {
+    const q = queue(1);
+    q.items[0] = {
+      ...q.items[0]!,
+      audit_sample: true,
+      audit_label_name: 'widget_c',
+      audit_label_source: 'vlm',
+      audit_outcome: null,
+    };
+    const el = render(AuditQueueList, { queue: q, ongoto: () => {} });
+    const badge = el.querySelector('[data-testid="audit-queue-drawn"]');
+    expect(badge?.textContent).toContain('widget_c');
+  });
+
+  it('shows no audit badge on a crop that was never drawn', () => {
+    const el = render(AuditQueueList, { queue: queue(1), ongoto: () => {} });
+    expect(el.querySelector('[data-testid="audit-queue-drawn"]')).toBeNull();
   });
 
   it('pages by the served total and page size', () => {

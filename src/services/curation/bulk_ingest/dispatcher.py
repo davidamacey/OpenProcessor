@@ -61,6 +61,8 @@ MAX_BACKOFF_S = 600.0
 FAILED_RUN_HOLD_S = 300.0
 ActionKind = Literal['run_scan', 'poll', 'drain']
 _scans: dict[tuple[str, str], asyncio.Task[None]] = {}
+# 'tasks': the loop run and poll tasks belong to (the tick itself runs in a thread).
+_loops: dict[str, asyncio.AbstractEventLoop] = {}
 
 
 @dataclass(frozen=True)
@@ -159,11 +161,19 @@ def _start(source: IngestSource, scan: bool) -> None:
             api_prefix=get_curation_config().api_prefix,
             project=get_curation_config().project_slug,
             scan=scan,
+            loop=_loops.get('tasks'),
         )
     except runner.BulkBusyError:
         return  # another run holds the project; the next tick tries again
     if scan:
         source_state(source.source_id).update(last_fire_at=datetime.now(UTC).isoformat())
+
+
+def _on_task_loop() -> bool:
+    try:
+        return asyncio.get_running_loop() is _loops.get('tasks')
+    except RuntimeError:
+        return False
 
 
 def _execute(action: Action, source: IngestSource) -> None:
@@ -174,9 +184,17 @@ def _execute(action: Action, source: IngestSource) -> None:
             return
         # Stamped here, under the tick's lock, so a second worker's tick sees it at once.
         source_state(source.source_id).update(last_poll_started_at=time.time())
-        task = asyncio.create_task(_poll(source, start_run=_start))
-        _scans[key] = task
-        task.add_done_callback(lambda _t: _scans.pop(key, None))
+
+        def begin() -> None:
+            task = asyncio.create_task(_poll(source, start_run=_start))
+            _scans[key] = task
+            task.add_done_callback(lambda _t: _scans.pop(key, None))
+
+        task_loop = _loops.get('tasks')
+        if task_loop is not None and task_loop.is_running() and not _on_task_loop():
+            task_loop.call_soon_threadsafe(begin)
+        else:
+            begin()
     elif action.kind == 'run_scan':
         _start(source, True)
     else:
@@ -220,8 +238,11 @@ def run_project_tick(*, now: float | None = None) -> list[Action]:
 async def run_tick() -> None:
     from src.services.projects.bootstrap import for_each_project
 
+    _loops['tasks'] = asyncio.get_running_loop()
     for slug in for_each_project():
         try:
+            # The tick does blocking file I/O, so it runs in a thread; the run and the poll
+            # are asyncio tasks, created on `_loops['tasks']`.
             await asyncio.to_thread(run_project_tick)
         except Exception as exc:  # one project's failure must not stop the others' ticks
             logger.warning('ingest_dispatch_failed', project=slug, error=str(exc))

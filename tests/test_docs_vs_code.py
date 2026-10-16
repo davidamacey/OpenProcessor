@@ -32,7 +32,8 @@ def _reset_only():
 
 
 @pytest.mark.parametrize(
-    'name', ['routes', 'env', 'compose', 'template', 'cli', 'make', 'screenshots', 'envfiles']
+    'name',
+    ['routes', 'env', 'compose', 'template', 'cli', 'make', 'screenshots', 'envfiles', 'envnames'],
 )
 def test_real_docs_match_the_code(name: str) -> None:
     errors = checker.CHECKS[name]()
@@ -220,5 +221,15 @@ def test_envfiles_check_rejects_an_assigned_name_nothing_reads(tmp_path: Path) -
     local = '```bash\nBK=~/backup\nmkdir -p "$BK"\n```\n'
     assert _check_one(tmp_path, local, 'envfiles') == []
     bad = _check_one(tmp_path, '```bash\nNOT_A_REAL_SETTING=1\n```\n', 'envfiles')
+    assert len(bad) == 1
+    assert 'NOT_A_REAL_SETTING' in bad[0]
+
+
+def test_envnames_check_rejects_a_named_variable_nothing_reads(tmp_path: Path) -> None:
+    ok = 'Set `COMPOSE_PROJECT_NAME` in the env file.\n'
+    assert _check_one(tmp_path, ok, 'envnames') == []
+    prose = 'The `RAW_THING_NOBODY_HAS` constant is just prose.\n'
+    assert _check_one(tmp_path, prose, 'envnames') == []  # no env context on the line
+    bad = _check_one(tmp_path, 'Set the variable `NOT_A_REAL_SETTING` to 1.\n', 'envnames')
     assert len(bad) == 1
     assert 'NOT_A_REAL_SETTING' in bad[0]

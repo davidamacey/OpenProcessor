@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check the documentation against the code.
 
-Nine checks, each reporting every miss (not just the first):
+Ten checks, each reporting every miss (not just the first):
 
 * routes  - every ``METHOD /path`` written in a doc exists in the generated
   OpenAPI (``contracts/openapi/*.json``) or, for non-curation routes, in the
@@ -20,6 +20,8 @@ Nine checks, each reporting every miss (not just the first):
   ``docs-site/static/img/screenshots/``.
 * envfiles - every ``NAME=`` line in a fenced block names a setting some compose file, script or
   code reads (a name the block itself expands as ``$NAME`` is a local shell variable).
+* envnames - every non-``OP_`` variable a doc names in a code span, on a line that says env,
+  variable or assigns it, is read by a compose file, script or code.
 * links   - every relative link resolves to a file, and every ``#anchor`` that
   points into a markdown file matches a heading in that file.
 
@@ -456,6 +458,57 @@ def check_envfiles() -> list[str]:
     return errors
 
 
+_NAME_SPAN_RE = re.compile(r'`([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)(?:=[^`\n]*)?`')
+_ENV_CONTEXT_RE = re.compile(r'\benv(?:ironment)?\b|\.env\b|variable|\bexport\b|=', re.I)
+# Roots beyond _CODE_ENV_ROOTS that read variables (the export scripts, the monitoring stack, the
+# frontend build config).
+_NAME_EXTRA_ROOTS = ('export', 'monitoring', 'frontend/src', 'frontend/static')
+# Variables that belong to a tool the code does not read itself.
+_FOREIGN_ENV_NAMES = frozenset({'LD_LIBRARY_PATH'})
+
+
+def check_env_names() -> list[str]:
+    """A non-``OP_`` variable a doc names as a variable (an inline code span on a line that says
+    env, environment, variable, export or assigns it) must be read by a compose file, script or
+    code, or be a known foreign name. Fenced ``NAME=`` lines are ``envfiles``; ``OP_`` names are
+    ``env``."""
+    parts = [
+        _env_corpus(),
+        (REPO_ROOT / 'env.template').read_text(encoding='utf-8', errors='replace'),
+    ]
+    for root in _NAME_EXTRA_ROOTS:
+        base = REPO_ROOT / root
+        parts.extend(
+            p.read_text(encoding='utf-8', errors='replace')
+            for p in base.rglob('*')
+            if p.is_file()
+            and not set(p.relative_to(REPO_ROOT).parts) & _SKIP_DIR_NAMES
+            and p.suffix
+            in {'.py', '.sh', '.ts', '.js', '.mjs', '.svelte', '.yml', '.yaml', '.json', ''}
+        )
+    corpus = '\n'.join(parts)
+    errors: list[str] = []
+    for doc in _user_docs():
+        if 'releases' in doc.parts:  # historical notes name variables of their day
+            continue
+        text = re.sub(_FENCE_RE, '', doc.read_text(encoding='utf-8', errors='replace'))
+        names = {
+            name
+            for line in text.splitlines()
+            if _ENV_CONTEXT_RE.search(line)
+            for name in _NAME_SPAN_RE.findall(line)
+        }
+        for name in sorted(names):
+            if name.startswith('OP_') or name in _FOREIGN_ENV_NAMES:
+                continue
+            # Case-insensitive: pydantic settings read slow_request_threshold_ms as SLOW_REQUEST_THRESHOLD_MS.
+            if not re.search(rf'\b{name}\b', corpus, re.I):
+                errors.append(
+                    f'{_rel(doc)}: {name} is not read by any code'
+                )  # formatted message built next to its check
+    return errors
+
+
 CHECKS = {
     'routes': check_routes,
     'env': check_env,
@@ -465,6 +518,7 @@ CHECKS = {
     'make': check_make_targets,
     'screenshots': check_screenshots,
     'envfiles': check_envfiles,
+    'envnames': check_env_names,
     'links': check_links,
 }
 
