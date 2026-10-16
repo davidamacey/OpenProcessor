@@ -1,0 +1,533 @@
+{
+  "arms": {
+    "shipped": {
+      "config": {
+        "bulk": 1000,
+        "ef": null,
+        "refresh": "shipped",
+        "settings": {},
+        "vectors": "real",
+        "writers": 4
+      },
+      "runs": [
+        {
+          "arm": "shipped",
+          "config": {
+            "bulk": 1000,
+            "ef": null,
+            "refresh": "shipped",
+            "settings": {},
+            "vectors": "real",
+            "writers": 4
+          },
+          "flat": {
+            "bulk_p50_s": 1.839055459946394,
+            "bulk_p95_s": 14.737652974785304,
+            "bytes_per_doc": 6236.092583783784,
+            "docs_per_s": 1105.5299569272436,
+            "failed_docs": 0.0,
+            "images_per_s_equivalent": 149.39594012530318,
+            "io_full_stall_s_during_load": 4.868422,
+            "io_some_stall_s_during_load": 5.910973,
+            "load_avg_1m_before": 23.14892578125,
+            "load_s": 62.7527092914097,
+            "node_cpu_cores_during_load": 2.0084772820677763,
+            "node_flush_count": 3.0,
+            "node_flush_ms_s": 26.072,
+            "node_gc_ms_s": 0.347,
+            "node_index_ms_s": 106.634,
+            "node_index_throttle_ms_s": 0.0,
+            "node_merge_bytes": 179375597.0,
+            "node_merge_count": 6.0,
+            "node_merge_ms_s": 10.298,
+            "node_merge_throttled_ms_s": 0.0,
+            "node_refresh_count": 38.0,
+            "node_refresh_ms_s": 5.734,
+            "refresh_tail_s": 0.507089220918715,
+            "retries_429": 0.0,
+            "searchable_s": 63.259798512328416,
+            "vectors_per_s": 1254.9258970525466
+          },
+          "rep": 1
+        }
+      ],
+      "summary": {
+        "bulk_p50_s": {
+          "max": 1.839055459946394,
+          "mean": 1.839055459946394,
+          "median": 1.839055459946394,
+          "min": 1.839055459946394,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "bulk_p95_s": {
+          "max": 14.737652974785304,
+          "mean": 14.737652974785304,
+          "median": 14.737652974785304,
+          "min": 14.737652974785304,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "bytes_per_doc": {
+          "max": 6236.092583783784,
+          "mean": 6236.092583783784,
+          "median": 6236.092583783784,
+          "min": 6236.092583783784,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "docs_per_s": {
+          "max": 1105.5299569272436,
+          "mean": 1105.5299569272436,
+          "median": 1105.5299569272436,
+          "min": 1105.5299569272436,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "failed_docs": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "images_per_s_equivalent": {
+          "max": 149.39594012530318,
+          "mean": 149.39594012530318,
+          "median": 149.39594012530318,
+          "min": 149.39594012530318,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "io_full_stall_s_during_load": {
+          "max": 4.868422,
+          "mean": 4.868422,
+          "median": 4.868422,
+          "min": 4.868422,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "io_some_stall_s_during_load": {
+          "max": 5.910973,
+          "mean": 5.910973,
+          "median": 5.910973,
+          "min": 5.910973,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "load_avg_1m_before": {
+          "max": 23.14892578125,
+          "mean": 23.14892578125,
+          "median": 23.14892578125,
+          "min": 23.14892578125,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "load_s": {
+          "max": 62.7527092914097,
+          "mean": 62.7527092914097,
+          "median": 62.7527092914097,
+          "min": 62.7527092914097,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_cpu_cores_during_load": {
+          "max": 2.0084772820677763,
+          "mean": 2.0084772820677763,
+          "median": 2.0084772820677763,
+          "min": 2.0084772820677763,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_flush_count": {
+          "max": 3.0,
+          "mean": 3.0,
+          "median": 3.0,
+          "min": 3.0,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_flush_ms_s": {
+          "max": 26.072,
+          "mean": 26.072,
+          "median": 26.072,
+          "min": 26.072,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_gc_ms_s": {
+          "max": 0.347,
+          "mean": 0.347,
+          "median": 0.347,
+          "min": 0.347,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_index_ms_s": {
+          "max": 106.634,
+          "mean": 106.634,
+          "median": 106.634,
+          "min": 106.634,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_index_throttle_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_merge_bytes": {
+          "max": 179375597.0,
+          "mean": 179375597.0,
+          "median": 179375597.0,
+          "min": 179375597.0,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_merge_count": {
+          "max": 6.0,
+          "mean": 6.0,
+          "median": 6.0,
+          "min": 6.0,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_merge_ms_s": {
+          "max": 10.298,
+          "mean": 10.298,
+          "median": 10.298,
+          "min": 10.298,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_merge_throttled_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_refresh_count": {
+          "max": 38.0,
+          "mean": 38.0,
+          "median": 38.0,
+          "min": 38.0,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_refresh_ms_s": {
+          "max": 5.734,
+          "mean": 5.734,
+          "median": 5.734,
+          "min": 5.734,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "refresh_tail_s": {
+          "max": 0.507089220918715,
+          "mean": 0.507089220918715,
+          "median": 0.507089220918715,
+          "min": 0.507089220918715,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "retries_429": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "searchable_s": {
+          "max": 63.259798512328416,
+          "mean": 63.259798512328416,
+          "median": 63.259798512328416,
+          "min": 63.259798512328416,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "vectors_per_s": {
+          "max": 1254.9258970525466,
+          "mean": 1254.9258970525466,
+          "median": 1254.9258970525466,
+          "min": 1254.9258970525466,
+          "n": 1,
+          "spread_pct": 0.0
+        }
+      }
+    },
+    "writers8": {
+      "config": {
+        "bulk": 1000,
+        "ef": null,
+        "refresh": "shipped",
+        "settings": {},
+        "vectors": "real",
+        "writers": 8
+      },
+      "runs": [
+        {
+          "arm": "writers8",
+          "config": {
+            "bulk": 1000,
+            "ef": null,
+            "refresh": "shipped",
+            "settings": {},
+            "vectors": "real",
+            "writers": 8
+          },
+          "flat": {
+            "bulk_p50_s": 1.847971994895488,
+            "bulk_p95_s": 2.661314673745073,
+            "bytes_per_doc": 4774.442536936937,
+            "docs_per_s": 3919.252255302217,
+            "failed_docs": 0.0,
+            "images_per_s_equivalent": 529.6286831489482,
+            "io_full_stall_s_during_load": 0.571607,
+            "io_some_stall_s_during_load": 0.652825,
+            "load_avg_1m_before": 24.9111328125,
+            "load_s": 17.70108058396727,
+            "node_cpu_cores_during_load": 7.778046676127968,
+            "node_flush_count": 3.0,
+            "node_flush_ms_s": 30.603,
+            "node_gc_ms_s": 0.437,
+            "node_index_ms_s": 104.64,
+            "node_index_throttle_ms_s": 0.0,
+            "node_merge_bytes": 289016378.0,
+            "node_merge_count": 10.0,
+            "node_merge_ms_s": 14.306,
+            "node_merge_throttled_ms_s": 0.0,
+            "node_refresh_count": 38.0,
+            "node_refresh_ms_s": 3.356,
+            "refresh_tail_s": 0.1900760023854673,
+            "retries_429": 0.0,
+            "searchable_s": 17.891156586352736,
+            "vectors_per_s": 4448.880938451165
+          },
+          "rep": 1
+        }
+      ],
+      "summary": {
+        "bulk_p50_s": {
+          "max": 1.847971994895488,
+          "mean": 1.847971994895488,
+          "median": 1.847971994895488,
+          "min": 1.847971994895488,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "bulk_p95_s": {
+          "max": 2.661314673745073,
+          "mean": 2.661314673745073,
+          "median": 2.661314673745073,
+          "min": 2.661314673745073,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "bytes_per_doc": {
+          "max": 4774.442536936937,
+          "mean": 4774.442536936937,
+          "median": 4774.442536936937,
+          "min": 4774.442536936937,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "docs_per_s": {
+          "max": 3919.252255302217,
+          "mean": 3919.252255302217,
+          "median": 3919.252255302217,
+          "min": 3919.252255302217,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "failed_docs": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "images_per_s_equivalent": {
+          "max": 529.6286831489482,
+          "mean": 529.6286831489482,
+          "median": 529.6286831489482,
+          "min": 529.6286831489482,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "io_full_stall_s_during_load": {
+          "max": 0.571607,
+          "mean": 0.571607,
+          "median": 0.571607,
+          "min": 0.571607,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "io_some_stall_s_during_load": {
+          "max": 0.652825,
+          "mean": 0.652825,
+          "median": 0.652825,
+          "min": 0.652825,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "load_avg_1m_before": {
+          "max": 24.9111328125,
+          "mean": 24.9111328125,
+          "median": 24.9111328125,
+          "min": 24.9111328125,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "load_s": {
+          "max": 17.70108058396727,
+          "mean": 17.70108058396727,
+          "median": 17.70108058396727,
+          "min": 17.70108058396727,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_cpu_cores_during_load": {
+          "max": 7.778046676127968,
+          "mean": 7.778046676127968,
+          "median": 7.778046676127968,
+          "min": 7.778046676127968,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_flush_count": {
+          "max": 3.0,
+          "mean": 3.0,
+          "median": 3.0,
+          "min": 3.0,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_flush_ms_s": {
+          "max": 30.603,
+          "mean": 30.603,
+          "median": 30.603,
+          "min": 30.603,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_gc_ms_s": {
+          "max": 0.437,
+          "mean": 0.437,
+          "median": 0.437,
+          "min": 0.437,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_index_ms_s": {
+          "max": 104.64,
+          "mean": 104.64,
+          "median": 104.64,
+          "min": 104.64,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_index_throttle_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_merge_bytes": {
+          "max": 289016378.0,
+          "mean": 289016378.0,
+          "median": 289016378.0,
+          "min": 289016378.0,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_merge_count": {
+          "max": 10.0,
+          "mean": 10.0,
+          "median": 10.0,
+          "min": 10.0,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_merge_ms_s": {
+          "max": 14.306,
+          "mean": 14.306,
+          "median": 14.306,
+          "min": 14.306,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_merge_throttled_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_refresh_count": {
+          "max": 38.0,
+          "mean": 38.0,
+          "median": 38.0,
+          "min": 38.0,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "node_refresh_ms_s": {
+          "max": 3.356,
+          "mean": 3.356,
+          "median": 3.356,
+          "min": 3.356,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "refresh_tail_s": {
+          "max": 0.1900760023854673,
+          "mean": 0.1900760023854673,
+          "median": 0.1900760023854673,
+          "min": 0.1900760023854673,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "retries_429": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "searchable_s": {
+          "max": 17.891156586352736,
+          "mean": 17.891156586352736,
+          "median": 17.891156586352736,
+          "min": 17.891156586352736,
+          "n": 1,
+          "spread_pct": 0.0
+        },
+        "vectors_per_s": {
+          "max": 4448.880938451165,
+          "mean": 4448.880938451165,
+          "median": 4448.880938451165,
+          "min": 4448.880938451165,
+          "n": 1,
+          "spread_pct": 0.0
+        }
+      }
+    }
+  },
+  "docs_images": 9375,
+  "docs_items": 60000,
+  "items_per_image": 6.4,
+  "opensearch": "3.6.0",
+  "schema": "2-os-1"
+}
