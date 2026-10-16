@@ -5,7 +5,8 @@ Complete guide for optimizing FastAPI and Triton Inference Server performance.
 > **Status (v0.6.0):** this guide covers the API-layer tuning, the measured results of the GPU and
 > Triton pipeline optimization milestone (summary table below; plan in
 > [`design/triton_pipeline_optimization_plan.md`](design/triton_pipeline_optimization_plan.md)),
-> and the benchmark protocol. The scale ladder (10k, 100k, 1M images) is not in this guide yet.
+> and the benchmark protocol. The scale ladder at 10k and 100k images is in
+> [Scale ladder: 10k and 100k](#scale-ladder-10k-and-100k); the 1M step is v0.7.0.
 
 ---
 
@@ -3460,6 +3461,197 @@ Reproduce:
 .venv/bin/python -m scripts.bench.ingest_transport_bench --images <dir> --label <name> \
   --pipeline-cpu <API CPU s/image> --concurrency 4,16,32 --reps 3 --out transport.json
 ```
+
+### Scale ladder: 10k and 100k
+
+Three runs of the bulk ingest runner ([Bulk ingest runner](#bulk-ingest-runner)) at larger sizes than the 2,000-image
+baseline: 10,000 public COCO images, 100,000 public Open Images, and 100,000 camera-original photos. All three
+use the 0.6.0 defaults (policy `all`, the 3-stage index policy defaults, 16 images per request, 16 requests in
+flight, FP16 PE engine, GPU decode on) and a fresh project. The 1M-image step is not run (v0.7.0).
+
+#### Sets and environment
+
+| Run | Images | Source |
+|---|---|---|
+| coco-10k | 10,000, all under 1 MP, 1.65 GB | public COCO train and val 2017, seed 20261009 (`--bench-set 10000`, same command as the 2k pin) |
+| oi-100k | 100,000, each at most 1,024 px (about 0.7 MP) | public Open Images v7 train, every image CC BY 2.0, seed 20261009; manifest sha256 `b9deca207878b569...` |
+| hires-100k | 100,000, median about 20 MP, about 6.8 MB each | a private collection of 20 MP camera-original JPEGs, not redistributable; aggregates only |
+
+One RTX A6000 (GPU 2) for Triton, VLM stopped. OpenSearch data and the source images are on a NAS (RAID6 over a
+network share), Docker data is on the NAS too, and the host is shared with other workloads. One earlier attempt
+window was invalid because the NAS saturated on IO from another job; the runs below are the repeat. Each run
+was stopped once with a forced cancel part-way and resumed with the same source (see Stop and resume).
+
+#### Results
+
+| Measure | coco-10k | oi-100k | hires-100k |
+|---|---:|---:|---:|
+| Throughput, images/s | 29.04 to 29.08 | 35.96 | 21.00 |
+| Share of the 2k baseline (29.0 images/s) | 100 % | 124 % | 72 % |
+| Wall time, ingest | 311 s (run A, one leg); 155 s second leg (run B) | 2,781 s | 4,761 s |
+| Legs (forced stop, then resume) | 2 (run B) | 1,384 s + 1,397 s | 2,582 s + 2,179 s |
+| Failures | 0 | 2 (decode, see below) | 0 |
+| Duplicate images | 0 | 0 | 2,120 |
+| Crops indexed and embedded | 64,415 | 490,804 | 236,689 |
+| Crops per stored image | 6.44 | 4.91 | 2.42 |
+| Crops embedded per second | about 187 | about 177 | about 50 |
+| Cluster pass (CPU, after the last ingest) | 269 s at 64,415 crops | 2,042 s at 490,804 | 1,802 s at 236,689 |
+| Index size on disk | not measured (preview estimate 653 MB) | 8.86 GiB | 4.35 GiB |
+| Index bytes per input image | not measured | 95.2 KB | 46.7 KB |
+| Index bytes per crop | not measured | 19.4 KB | 19.7 KB |
+| Peak GPU utilization and memory (card 2) | not recorded | 100 % and 21.1 GiB | 100 % and 25.8 GiB |
+| Mean GPU utilization over the samples | not recorded | 94 % | 51 % |
+| OpenSearch heap peak, segments peak | not recorded | 79 %, 159 | 79 %, 128 |
+| Peak host CPU and memory | not recorded | 90 %, 152 GB | 79 %, 159 GB |
+
+Images per second is images processed in the whole run divided by the ingest wall time including both legs
+(the legs include the cost of the forced stop and the restart). The 29.0 baseline is the 2k pin on the same
+build. Index bytes are the OpenSearch store size the driver sampled at the end of the run; the 2,120 duplicates in hires-100k are not stored, so its per-unique-image figure is 47.7 KB.
+The two decode failures in oi-100k were fixed after this run by the Pillow header fallback (#333); the run was
+not repeated.
+The 10k cluster pass is the `cluster_residuals` stage (4 m 29 s); the other stages in it took 2 s or less.
+The bytes per crop are the same in both 100k runs (about 19.5 KB), so the index grows with the crop count,
+not the pixel count: a 20 MP photo costs the index less than a 0.7 MP one because it holds fewer objects.
+
+#### Throughput over time
+
+From the 15 s progress polls in `scale/oi-100k.jsonl` and `scale/hires-100k.jsonl` (images stored per second
+over a rolling 5-minute window, per leg; a leg's first minutes include model and cache warm-up).
+
+| Run and leg | Quarter 1 | Quarter 2 | Quarter 3 | Quarter 4 | 5-min window min, median, max |
+|---|---:|---:|---:|---:|---|
+| oi-100k leg 1 | 37.0 | 36.8 | 36.9 | 36.2 | 35.9, 36.9, 37.6 |
+| oi-100k leg 2 | 36.6 | 37.3 | 36.3 | 31.9 | 32.1, 36.6, 37.7 |
+| hires-100k leg 1 | 22.7 | 23.5 | 19.1 | 12.8 | 4.6, 19.5, 30.4 |
+| hires-100k leg 2 | 23.5 | 22.4 | 21.5 | 23.7 | 15.1, 22.4, 28.6 |
+
+- **oi-100k does not decay.** Leg 1 is flat to within 2 percent over 1,368 s (37.0 to 36.2 images/s). Leg 2 is flat for
+  three quarters and drops to 31.9 in the last quarter, as the index passed 159 segments with merges running
+  (the sampler saw three merges in flight in the second half); the whole-run rate of 35.96 includes it.
+- **hires-100k is noisier and leg 1 decayed.** Leg 1 held 23 images/s for 20 minutes, then fell to 19, 16 and
+  9 images/s over the last ten minutes before the forced stop (the minimum 5-minute window was 4.6). Leg 2, after the
+  restart and on the same index, held 21.5 to 23.7 for its whole length. A restart that cures the slowdown points
+  at something that builds up in a long-running process or on the host (the leg 1 GPU utilization also fell to 11 to 51 percent
+  in that stretch) rather than at index size, because leg 2 started with the bigger index and did not slow down. This run
+  cannot say which. The shared host and the NAS are both candidates (see Caveats).
+
+#### Stop and resume
+
+| Run | Stop | Resume | Result |
+|---|---|---|---|
+| coco-10k run A | cancel sent at about 7 % (the threshold used the growing discovery count; fixed in the driver) | restart returned the same run id, 944 images skipped | 10,000 stored, 0 failed, 29.08 images/s |
+| coco-10k run B | forced cancel at 5,232 stored | the same run resumed (attempts 2), 5,488 skipped from the ledger | 10,000 stored, 0 failed, 29.04 images/s, 155 s second leg |
+| oi-100k | forced cancel at 50,000 (50,654 stored by the time it took effect) | skipped 50,654, no re-embedding | 99,998 stored plus 2 failed |
+| hires-100k | forced cancel at 50,000 (50,272 stored) | skipped 50,272 | 97,880 stored plus 2,120 duplicates, 0 failed |
+
+In every case the stop and the restart changed no count: images stored plus skipped plus duplicates plus failed
+equals the input exactly, and the project holds 99,998 images and 490,804 crops (oi-100k), 97,880 images and
+236,689 crops (hires-100k), all embedded (`n_not_embedded` 0, `n_embed_failed` 0). `resumed` is only in the
+response of the start call; `attempts` 2 on the stored run is the record of a resume.
+
+#### Where the time goes
+
+`stage_s` in the run record is cumulative worker-seconds summed over every concurrent worker, not wall seconds.
+Dividing a stage by the run's `elapsed_s` gives its average concurrency; dividing by the 16 requests in flight gives
+a loose share. Stages overlap (a request's time includes the stages inside it), so the columns do not add to 100 %.
+For the resumed runs the record's `elapsed_s` (1,394.7 s, 2,176.7 s) matches the last leg, so these are the last
+leg's figures.
+
+| Stage (worker-s) | coco-10k | oi-100k | hires-100k |
+|---|---:|---:|---:|
+| `batch_requests` (whole request) | 4,899 | 21,813 | 33,999 |
+| as average concurrency (over `elapsed_s`) | 15.7 | 15.6 | 15.6 |
+| `embed` | 51,662 | 171,182 | 35 |
+| `opensearch_write` | 5,042 | 28,971 | 49,432 |
+| `admission_wait` | 0.04 | 0.2 | 13,919 |
+| `decode` | 47 | 500 | 15 |
+| `letterbox` | 26 | 590 | 7 |
+| `whole_frame_preprocess` | 59 | 508 | 4 |
+| `jpeg_encode` | 30 | 220 | 1 |
+| `blur` | 28 | 309 | 3 |
+| `triton_request`, `hash`, `crop`, `doc_build`, `bulk_serialize`, `pe_preprocess` (each) | under 45 | under 220 | under 18 |
+
+- **All three runs keep 16 requests in flight all the time** (15.6 to 15.7 average), so the client side never
+  starves; what differs is what the requests wait on.
+- **The small-image runs wait on the GPU.** `embed` is 3.5 to 5.7 worker-seconds per image, summed over the
+  crops of a request waiting in the Triton queue (about 123 waiters at once in oi-100k), while the CPU stages are
+  each under 1 percent of it. Mean GPU utilization is 94 % and 100 % is the peak. The crops-per-second figures
+  fit the same picture: 187 (coco-10k) and 177 (oi-100k) crops embedded per second on different image
+  sets. That is why oi-100k beats the 29.0 baseline (124 %): its images carry 4.91 crops against 6.44, so
+  at the same crop rate it stores 22 percent more images per second. The images-per-second figure is a property of the
+  crops per image as much as of the pipeline.
+- **The 20 MP run does not wait on the GPU.** `embed` is 35 worker-seconds, mean GPU utilization is 51 % (median 53),
+  and the crop rate is 50 per second, a quarter of the small-image runs. The time sits in `opensearch_write`
+  (49,432, 22.7 workers) and `admission_wait` (13,919, 6.4 workers). `admission_wait` is time spent waiting for
+  the in-flight bytes budget (`OP_INGEST_INFLIGHT_MB`): at 6.8 MB per photo and 16 images per request, a share of requests waited for
+  memory budget, about 0.28 s per image. At 21 images/s the runner moves about 143 MB/s of source files off the NAS.
+- **What the stage timers cannot say.** In the 20 MP run `decode` is 15 s and `embed` 35 s, which are not credible
+  as the cost of the work, so on the GPU decode path these timers do not cover the work and its time shows up
+  in the stage that awaits it (`opensearch_write` here). Reading `opensearch_write` literally as the OpenSearch
+  commit time would contradict probe 5 (one writer sustains the equivalent of 137 images/s). The defensible
+  statements are: the GPU is idle half the time, so the limit is upstream of it (NAS reads of 6.8 MB files,
+  the GPU decode and the in-flight bytes cap, or a combination) and the OpenSearch write stage is not shown to be
+  the limit. Storage is on the same NAS as the sources, so a NAS-bound reading fits but is not proven; a run with
+  the sources on local NVMe, or the same photos downsized, would separate them.
+- **The small-image runs are not storage-write bound.** `opensearch_write` is 0.5 to 0.6 worker-seconds per image
+  in coco-10k and oi-100k (21 workers in oi-100k) with the GPU saturated, and the throughput matches the crop rate
+  of the GPU-bound baseline, so the NAS-hosted OpenSearch kept up with 177 documents per second of crops at
+  100,000 images (heap peak 79 %, 159 segments).
+
+#### Caveats
+
+- One card, one run per configuration; the 100k runs are single observations, not medians. The coco-10k pair
+  (29.08 and 29.04) is the only repeat, and it agrees within 0.2 percent.
+- The host and the NAS are shared with other workloads. An earlier first attempt was lost to a NAS IO saturation
+  episode. The hires-100k leg 1 slowdown may be the same kind of interference; the data cannot exclude it.
+- The hires-100k set is private and cannot be reproduced; only its aggregates are published. Its crops
+  per photo (2.42) depend on its content and do not transfer to other photo sets.
+- `stage_s` for a resumed run covers only the final leg (see above), and the stage timers cover different work
+  on the CPU and GPU decode paths.
+- The cluster pass runs on the CPU and shares the host. Its time per crop was 4.2 ms in oi-100k and 7.6 ms in
+  hires-100k, and the cause of the difference was not found.
+- The coco-10k run recorded no GPU, heap or index-size samples; the preview route estimated 653 MB for it.
+- Both 100k indexes were left unmerged (128 and 159 segments); size on disk after a force merge was not measured.
+
+#### Bottlenecks and next steps
+
+1. **Decode once on the GPU, stay on the GPU (#40).** The 20 MP run leaves the GPU half idle while the host
+   moves 6.8 MB files and decodes; the small-image runs are GPU bound on embedding, so keeping the decoded frame
+   resident removes the repeated host work.
+2. **Multi-size views of one decode (#219).** Work crops at model size for the VLM and region consumers so the
+   embed and region stages share one decode.
+3. **Faces and OCR on resident crops (#220).** Ingest does not call them today (probe 3); on resident crops they cost
+   a model pass, not a decode.
+4. **ortloom head-to-head against Triton on the ingest-path models (#231)**, since the small-image runs are bound by
+   the embedding model's throughput.
+5. **The embed reprocess pass stops at about 58 percent GPU (#259)**, the same underuse the 20 MP ingest shows.
+6. **Raise or tune the in-flight bytes gate (`OP_INGEST_INFLIGHT_MB`)** for photo-sized sets and re-run hires-100k
+   with the sources on local storage, to split the NAS from the pipeline. Not run in 0.6.0.
+7. The 1M-image step follows once 1 to 5 land; at 36 images/s it would be about 7.7 hours of ingest and a
+   cluster pass that grows faster than linearly (269 s at 64k crops, 2,042 s at 491k).
+
+#### Reproduce
+
+```bash
+# Public Open Images v7 train, seed 20261009, 100,000 images, CC BY 2.0 (checksum-pinned; the 39 MB pin is not in git)
+python scripts/datasets/fetch_openimages_bench.py --out data/bench100k --n 100000 --seed 20261009 \
+  --cache-dir data/oi-cache --manifest data/oi_bench_100000.json
+python scripts/datasets/fetch_openimages_bench.py --verify-only --out data/bench100k --manifest data/oi_bench_100000.json
+# pin: manifest_sha256 b9deca207878b569b7cd6e649dbd68d1b34b70db0a0fb0f5d43cc4d554da9f50
+# (scripts/datasets/manifests/openimages_bench_100000.sha256)
+
+# 10k COCO set (same command as the 2k pin, larger --bench-set)
+# the driver: ingest, one forced cancel at 50 %, resume, 15 s polls, 30 s resource samples, cluster pass timing
+.venv/bin/python scripts/bench/scale_run.py --api http://127.0.0.1:4603 \
+  --project oi-100k --folder /data/bench100k/images --label oi-100k \
+  --stop-at 0.5 --baseline-img-s 29.0 --out-dir artifacts_local/scale
+# --manifest <path as the API container sees it> replaces --folder for a manifest source
+```
+
+The driver writes `<label>.jsonl` and a `<label>.md` table; `curl .../curation/projects/<p>/ingest/bulk` returns
+the run record with `stage_s`. It reads the stack only (HTTP, `nvidia-smi`, `docker stats`); it needs `docker`
+on the host for the resource samples.
+
 
 ## Benchmarking
 
