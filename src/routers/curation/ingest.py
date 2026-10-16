@@ -20,7 +20,6 @@ module ships no domain-specific class taxonomy or detector weights.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
@@ -60,6 +59,7 @@ from src.services.curation.ingest_models import ERROR_KIND_DECODE_FAILED, ERROR_
 from src.services.curation.ingest_policy_store import get_ingest_policy
 from src.services.curation.ingest_service_factory import get_ingest_service
 from src.services.curation.open_vocab_ingest import schedule_open_vocab_after_ingest
+from src.utils.file_read import read_files
 
 
 class IngestBatchItem(IngestImageRequest):
@@ -90,11 +90,11 @@ async def curation_ingest_image(
     if not is_servable_image_path(body.path):
         raise HTTPException(status_code=422, detail=f'{body.path}: {UNSERVABLE_PATH_ERROR}')
     await ensure_indexes(opensearch)
-    path = Path(body.path)
-    try:
-        image_bytes = path.read_bytes()
-    except OSError as exc:
-        raise HTTPException(status_code=404, detail=f'cannot read {body.path}: {exc}') from None
+    [image_bytes] = await read_files([body.path])
+    if isinstance(image_bytes, OSError):
+        raise HTTPException(
+            status_code=404, detail=f'cannot read {body.path}: {image_bytes}'
+        ) from None
 
     service = await get_ingest_service(opensearch, registry)
     result = await service.ingest_one(image_bytes, body.path, source=body.source)
@@ -150,8 +150,11 @@ async def curation_ingest_batch(
     images: list[bytes] = []
     paths: list[str] = []
     failed_early: list[IngestImageResponse] = []
+    servable = []
     for item in body.items:
-        if not is_servable_image_path(item.path):
+        if is_servable_image_path(item.path):
+            servable.append(item)
+        else:
             failed_early.append(
                 IngestImageResponse(
                     status='failed',
@@ -160,19 +163,19 @@ async def curation_ingest_batch(
                     error_kind=ERROR_KIND_UNSERVABLE_PATH,
                 )
             )
-            continue
-        try:
-            images.append(Path(item.path).read_bytes())
-            paths.append(item.path)
-        except OSError as exc:
+    for item, data in zip(servable, await read_files([i.path for i in servable]), strict=True):
+        if isinstance(data, OSError):
             failed_early.append(
                 IngestImageResponse(
                     status='failed',
                     image_path=item.path,
-                    error=str(exc),
+                    error=str(data),
                     error_kind=ERROR_KIND_DECODE_FAILED,
                 )
             )
+        else:
+            images.append(data)
+            paths.append(item.path)
 
     # The service stamps one source per call; honour the per-item tag when
     # the batch agrees on one (the common case — a driver tags a whole run).
