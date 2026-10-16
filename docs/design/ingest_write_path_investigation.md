@@ -174,3 +174,18 @@ API CPU is only 1 to 2 cores out of 48 throughout, and the host never exceeded 6
   decodes up to one request of photos on the host outside the charge; counted in `op_ingest_decode_total{route="cpu_call_failed"}`).
 - Caveats: one dev host with 21 to 36 load average, 2 repetitions (1 for the mixed case), random vectors in real-shaped documents,
   2 GB heap, the NAS is a local md array mounted on this host (not a remote share in the mount table) so a true remote share is likely worse.
+
+## After the fixes: 20 MP re-check (2026-10-16)
+
+The admission-gate and parallel-read fixes (07cb77fa, c2292728) were run on the dev stack and compared with the earlier 100k
+run of the same kind of photos (a private collection of 20 MP camera-original JPEGs, aggregates only).
+
+| Run | Images | Throughput | Wall | Failures | Peak GPU util |
+|---|---|---|---|---|---|
+| Before (100k, two legs) | 100,000 | 21.0 img/s (72% of the 29.0 baseline) | 4,761 s | 0 | 100% / 26 GiB (mean 51%) |
+| After (20k, forced stop at 50% and resume) | 20,000 | 27.18 img/s (94% of baseline) | 736 s (421 s + 315 s) | 0 | 100% / 36 GiB |
+
+About 29% faster, with the stop and resume intact. Caveats: the after run is a 20k slice of the same collection, not the same
+100k files, and a single observation on a shared host; the cumulative `admission_wait` fell from a large share of request time
+to roughly a sixth of `opensearch_write` early in the run. The mean GPU utilisation of the after run was not sampled over a
+full 100k, so a repeat at 100k is a 0.7.0 item. The OpenSearch node was not moved to NVMe for this check.
