@@ -7,10 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-16
+
+### Highlights
+
+Cropwright 0.6.0 adds **Assist…** (send a crop, a box, a selection, a cluster or a sub-cluster to the VLM, review the proposed label and apply it explicitly), a bulk-ingest panel with Preview, a sources panel for S3 buckets and watched folders, detection-only ingest settings, and a tidier, split-by-concern codebase with one accessible dialog component.
+
+### Upgrade notes / behaviour changes
+
+- The container reads `OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB` and `OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB` (were `CROPWRIGHT_*`); a container started with an old name set exits with the new name in the message. `OP_CROPWRIGHT_IMAGE`, `_BIND_ADDRESS` and `_PORT` are the compose-side names.
+- The "Run VLM on cluster" dialog and the cluster page's "Run VLM" are replaced by **Assist…**, which needs a backend with `/assist/runs` (0.6.0).
+- `scripts/capture_docs_screenshots.py` requires `--public-projects`.
+
 ### Added
 
 - The sub-cluster tabs on the cluster page list the ids the server serves on the cluster card (`subcluster_ids`), so a sub-cluster whose members are not on the loaded page still has its tab. The assist dialog has an **Agreement needed** field (`min_agreement`) for a cluster classify run: the server's default shown, the contract's 0.5 to 1.0 range.
+
 - The audit queue shows, on each drawn crop, the machine label and its source the crop carried when it was drawn (`audit_label_name`, `audit_label_source`, now on the item wire, #166).
+
 - **Assist…** on the cluster page (the cluster or the open sub-cluster, or the selected crops), on one crop's details
   panel, on one box in `/review`, and on Matching items (a filter): a dialog that posts one assist run
   (`POST {prefix}/assist/runs`). It offers what the VLM sees (selected, all members, a seeded representative sample with
@@ -19,15 +33,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   run and shows its counts (members sent, estimated VLM calls, strata, what was left out, the endpoint and pack pinned) or
   its refusal verbatim; Start run stays disabled on a refusal. The run is followed to its end, including `waiting_region`
   for a segment run, with the served result counts; Cancel run stops it.
+
 - The newest label proposal for the viewed cluster or sub-cluster is a folded line above the grid and opens a proposal
   card: the proposed class, the agreement and gate, the votes, new-class names (with Add class…), attribute suggestions
   marked "not labels", a stale banner from the served `scope_now`, and **Apply {class} to {N} members**, the explicit
   button, with the server's dry-run count first. The backend's `scope_changed` and `class_not_in_registry` refusals are
   shown as served, and the override is offered only after the refusal.
+
 - Attribute chips (`assist.attributes`, per box `assist.boxes`) on the crop card, the details panel and `/review`, dashed
   and labelled "VLM suggests"; "VLM said: {class}" when the VLM's answer differs from the item's class.
+
 - The VLM scope panel on Settings has a **Region verification** choice (`region_verify`: verify with the VLM, or accept
   without a VLM).
+
 - Wire types `types_assist.ts`, `api_assist.ts` and the contract test `assistContract.test.ts`; the item wire's `assist`
   object; `cluster_subid` on the item filter and the reprocess filter; `assist` and `attributes` in the pack test calls.
 
@@ -38,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   manifest holds and shows the served file count, bytes, extensions, image-size sample, skipped entries
   and the estimated time and index size with the measured figures behind them. A capped scan is marked
   "partial" (every figure a lower bound); pressing the button again while it scans cancels it.
+
 - `/ingest` has a "Bulk ingest (folder or manifest)" panel, shown with the server-path ingest it sits beside: start a
   run over a folder or a manifest the backend has mounted, follow served progress (counts, speed, time left,
   seconds per stage), cancel, resume, and read the failed images with their reasons. Everything shown and every
@@ -54,6 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The sub-cluster tab asks the server for the sub-cluster (`GET /crops?cluster_subid=`) instead of filtering the loaded
   page, so a sub-cluster larger than a page is shown whole. The tab list is the sub-clusters seen while the whole cluster
   is shown.
+
 - The dashboard's quick action links to the clusters (where Assist runs) instead of opening a "Run VLM on cluster"
   dialog.
 
@@ -66,6 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   start while a retired `CROPWRIGHT_*` name is still set. The browser-side `window.__CROPWRIGHT_*__`
   globals are unchanged. `.env.example` and the README drop the container-name variables only the
   removed standalone compose used.
+
 - The oversize frontend files are split by concern, with no behavior change. `lib/api.ts` is the HTTP core and
   the calls live in `lib/api_<domain>.ts` modules (`api_errors`, `api_projects`, `api_review`, `api_clusters`,
   `api_train` and the rest); `lib/types.ts` keeps the core entities and the rest are `types_<domain>.ts`. The
@@ -105,42 +126,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the route tests under `src/routes/p/[project]/` are named by what they test (for example
   `reviewDismissedPanel`, `clusterPurityDisplay`, `servedTrainingCohorts`) instead of by the pass that
   wrote them. Same 4,575 tests; no rendered change.
+
 - `scripts/capture_docs_screenshots.py` gains states for the sources panel and the bulk-ingest panel (idle, running, failures), the ingest
   policy page, a project with its VLM off, the audit page, a cluster page, the dataset imports list and the prompt-pack,
   region-profile and open-vocabulary lists. `scripts/docs_screenshot_fixtures.py` gains `bulk` and `vlm-off` to set up
   throwaway `cwlife-*` projects for them.
-
-### Fixed
-
-- At narrow widths the top navigation wraps onto a second row, so Export, Models, Train, Bake-off and Settings are reachable without scrolling a clipped strip.
-- The dashboard "Run VLM Labeling" action becomes a link to the Models settings ("activate a VLM first") when the backend serves the project's VLM source as `off`, instead of a ready primary button.
-- Model titles on the Models page wrap instead of truncating.
-- Ingest policy cost preview marks its figures as belonging to the previous policy while a new preview is computed (a large project takes seconds), instead of showing stale numbers as current.
-- A project with no classes says "No classes yet" on the Classes page and "No classes in this project yet" on Export instead of "No classes match this filter" and "ingest some data first".
-- Removed the internal "Plan §B4" reference from the test-holdout texts.
-- At 430 px the Settings page selects (long option text) and the Review sort button no longer widen the page, and served filter fields wrap instead of overflowing when "More filters" is open.
-- Review, multi-box tabs: after Tab moved to the next box, the response of the previous accept or reject re-seeded the
-  controller and snapped the selection back to box 1, so a fast `R`, `Tab`, `Y` accepted the wrong box. A re-seed of
-  the same crop now keeps the selection (clamped to the boxes that remain).
-- Infinite-scroll grids (`createPager`) stop requesting pages after three in a row add nothing. A server whose
-  `total` outruns what it serves (it still counts a crop just moved out of `/clusters/[id]`) made the scroll
-  sentinel fetch pages without end.
-- Stubbed e2e suite: a key pressed right after a write's response met the app before it had recorded the undo entry
-  ("Nothing to undo", then a 45 s `expect_response` timeout), and a boot chunk fetched with `socket hang up` was not
-  retried. The tests now wait for the app's own signal (the success toast) and the harness retries both spellings
-  of a closed keep-alive socket.
-- Stubbed e2e suite: the project-switch test judged "requests to the previous project" by an index into the stub's
-  answered list, which counted requests sent before the switch; it now listens to the requests the page sends. The
-  harness gains `E2E_CPU_THROTTLE` to run the suite as a slow runner would, and its docstring states the stability
-  rules.
-
-- `/clusters` semantic search no longer throws `each_key_duplicate` (and re-requests `/search/text` in a loop)
-  when the backend serves one crop id more than once: the first, best-ranked hit per id is kept.
-- At 430 px the ignore-reason menu on `/clusters/[id]` opens inside the viewport, the `/train` past-runs table keeps a
-  readable Name column (the table scrolls sideways instead), and the `/clusters` error state shows no count.
-- A per-box accept or reject key (`y`/`r`) pressed while the previous box write is still in flight is applied in
-  order instead of being silently dropped; this was the cause of the intermittent
-  `test_per_box_accept_and_reject_keys_patch_immediately_without_removing_from_queue` CI timeout.
 
 ### Removed
 
@@ -151,6 +141,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `runVlmOnCluster`, `pollAutoLabelJob` and `getAutoLabelJobStatus`, the dashboard's "Run VLM on cluster" modal and the
   cluster page's "Run VLM" button: the backend deleted its per-cluster label route; an assist run replaces it.
+
+### Fixed
+
+- At narrow widths the top navigation wraps onto a second row, so Export, Models, Train, Bake-off and Settings are reachable without scrolling a clipped strip.
+
+- The dashboard "Run VLM Labeling" action becomes a link to the Models settings ("activate a VLM first") when the backend serves the project's VLM source as `off`, instead of a ready primary button.
+
+- Model titles on the Models page wrap instead of truncating.
+
+- Ingest policy cost preview marks its figures as belonging to the previous policy while a new preview is computed (a large project takes seconds), instead of showing stale numbers as current.
+
+- A project with no classes says "No classes yet" on the Classes page and "No classes in this project yet" on Export instead of "No classes match this filter" and "ingest some data first".
+
+- Removed the internal "Plan §B4" reference from the test-holdout texts.
+
+- At 430 px the Settings page selects (long option text) and the Review sort button no longer widen the page, and served filter fields wrap instead of overflowing when "More filters" is open.
+
+- Review, multi-box tabs: after Tab moved to the next box, the response of the previous accept or reject re-seeded the
+  controller and snapped the selection back to box 1, so a fast `R`, `Tab`, `Y` accepted the wrong box. A re-seed of
+  the same crop now keeps the selection (clamped to the boxes that remain).
+
+- Infinite-scroll grids (`createPager`) stop requesting pages after three in a row add nothing. A server whose
+  `total` outruns what it serves (it still counts a crop just moved out of `/clusters/[id]`) made the scroll
+  sentinel fetch pages without end.
+
+- Stubbed e2e suite: a key pressed right after a write's response met the app before it had recorded the undo entry
+  ("Nothing to undo", then a 45 s `expect_response` timeout), and a boot chunk fetched with `socket hang up` was not
+  retried. The tests now wait for the app's own signal (the success toast) and the harness retries both spellings
+  of a closed keep-alive socket.
+
+- Stubbed e2e suite: the project-switch test judged "requests to the previous project" by an index into the stub's
+  answered list, which counted requests sent before the switch; it now listens to the requests the page sends. The
+  harness gains `E2E_CPU_THROTTLE` to run the suite as a slow runner would, and its docstring states the stability
+  rules.
+
+- `/clusters` semantic search no longer throws `each_key_duplicate` (and re-requests `/search/text` in a loop)
+  when the backend serves one crop id more than once: the first, best-ranked hit per id is kept.
+
+- At 430 px the ignore-reason menu on `/clusters/[id]` opens inside the viewport, the `/train` past-runs table keeps a
+  readable Name column (the table scrolls sideways instead), and the `/clusters` error state shows no count.
+
+- A per-box accept or reject key (`y`/`r`) pressed while the previous box write is still in flight is applied in
+  order instead of being silently dropped; this was the cause of the intermittent
+  `test_per_box_accept_and_reject_keys_patch_immediately_without_removing_from_queue` CI timeout.
 
 ## [0.5.0] - 2026-10-09
 
