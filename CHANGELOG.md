@@ -38,6 +38,8 @@ Read these before upgrading from 0.5.0.
 
 ### Added
 
+- `scripts/bench/scale_run.py`, a driver for 100k-image ingest benchmarks (forced stop, resume, 15 s progress polls and 30 s resource samples, `--folder` or `--manifest` source), and `scripts/datasets/fetch_openimages_bench.py`, a seeded, checksum-pinned fetcher for a CC BY 2.0 Open Images v7 train set (pin in `scripts/datasets/manifests/openimages_bench_100000.sha256`). Results are in `docs/PERFORMANCE.md`, "Scale ladder: 10k and 100k".
+
 - `scripts/docs/check_docs_vs_code.py` gains an `envnames` check: a non-`OP_` variable a doc names in a code span, on a line about env or variables, must be read by a compose file, script or code (#287).
 
 - Example prompt pack `examples/prompt_packs/general_objects.json`: the generic item prompts plus three domain-neutral item attributes (`brand`, `colour`, `material`) for COCO-style objects; validated by the pack validation in a test.
