@@ -7,56 +7,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Releases 0.2.0, 0.2.1 and 0.3.0 are published on GitHub; their entries below are
 the content of those tags. The entry headed `Pre-release 0.1.0` is the earliest private
-history of this codebase and was never published. This release is `[0.5.0]`.
+history of this codebase and was never published. This release is `[0.6.0]`.
 
 ## [Unreleased]
 
-### Fixed
-- Ingest no longer fails a JPEG that Pillow reads but libjpeg-turbo's header read refuses (`tjDecompressHeader3(): Could not determine subsampling level`, 2 of 100,000 Open Images files, `decode_failed`): that error alone sends the image to the Pillow decode; a damaged file still fails.
-- Dispatcher-started bulk-ingest runs (poll, cron, webhook) never started: the tick ran in a worker thread and both the run and the poll called `asyncio.create_task` there (`ingest_dispatch_failed`, `no running event loop`). The tick now runs on the loop. A run whose spawn fails is marked `failed` instead of staying `queued` (which kept every later start, and the project's delete, answering 409), and `POST /ingest/bulk/{run_id}/cancel` finalizes an orphan (a run `queued` past 10 s with no task, or `interrupted` after a restart) as `cancelled`.
-- `DELETE /projects/{p}` (and archive) answering `409 project_busy` right after an ingest finished (#249): the detection worker refreshed its in-flight count only every 15 s, so the last batch read as busy for up to that long after it had landed. The worker now rewrites a project's liveness within a second of its count changing, and the `project_busy` message names each running job and says when a retry is the answer.
-- `make pe-build-trt` (`export/build_pe_trt.sh`, #277) no longer ships an FP32 engine silently: a failed or FP32-falling-back FP16 bake, a failed FP16 build or a failed uint8 input step now exits 4 with the cause. `ALLOW_FP32=1` opts in to an FP32 engine knowingly.
+## [0.6.0] - 2026-10-16
+
+### Highlights
+
+0.6.0 makes ingest much faster and adds a way to point the VLM at exactly the crops you choose. Images are decoded once and (for large photos) on the GPU, detector and embedding inputs travel to Triton as uint8, the embedding engine is FP16, the PE image encoder can spread across several GPUs, and ingest writes to OpenSearch are batched; on the pinned public COCO set one RTX A6000 went from 8.9 to 17.4 images/s through `/ingest/upload` on the FP16 engine alone, with the rest of the gains measured in `docs/PERFORMANCE.md`. The new **assist runs** (`/assist/runs`) send a crop, a selection, a cluster, a sub-cluster or a filter to the VLM, with cluster label proposals you apply explicitly. Bulk ingest runs in the background from a folder, a manifest or S3, with a preview first, and ingest can be detection-only. A project calls no VLM until you activate one. The repository itself was cleaned up (guards, dead code removed, large files split, one typed env module, one docs source of truth).
+
+### Upgrade notes / behaviour changes
+
+Read these before upgrading from 0.5.0.
+
+- **New projects start with the VLM off** (#282). A project calls no VLM until it activates one (`GET .../vlm/endpoints/active` answers `source: "off"`). Projects that exist already are pinned once, at the first start of this version, to what they had (`env` when `OP_VLM_URL` was set, else `off`), so their behaviour does not change.
+- **`make` and `model` are no longer hard-coded VLM outputs.** The reply keys, `vlm_item_make` and `vlm_item_model` are gone (old values stay in old documents, unread). Declare such facts as prompt-pack `attributes`; assist runs store them in the item's `assist` object.
+- **`POST /vlm/label_cluster/{cluster_id}` and `POST /vlm/verify_regions` are removed.** Use `POST /assist/runs` (a `cluster` target, or `verify` on a `crops` or `boxes` target), or `?cluster_id=` on `auto_label/start`.
+- **`curation-evaluator` moved from the `curation` profile to its own `evaluator` profile**, so `--profile curation up -d` no longer reserves a GPU for it. Start it with `./openprocessor curation up curation-evaluator`.
+- **`CROPWRIGHT_*` env names are now `OP_CROPWRIGHT_*`** (`_IMAGE`, `_BIND_ADDRESS`, `_PORT`, `_INGEST_MAX_REQUEST_MB`, `_DATASET_UPLOAD_MAX_MB`). A `.env` that still sets an old name is refused at startup (`./openprocessor` and the installer exit 2, the container exits). Rename the keys and run `./openprocessor restart`.
+- **Region-profile fields `aspect_min` and `aspect_max` are retired** (and `OP_REGION_DETECTION_ASPECT_MIN` / `_MAX`). A stored profile that carries either is rejected by name, and skipped with a warning when the registry loads; re-save it without them.
+- **Rebuild the detector and PE image encoder engines** (`./openprocessor models repair`): both now take uint8 input, and a model whose plan and `config.pbtxt` disagree does not reach READY.
+- **GPU decode is on by default** for the `full` profile (`OP_INGEST_GPU_DECODE`; `minimal` and `standard` default off). It adds about 8.5 GB to the Triton card.
+- **New projects use the Lucene vector engine** (`ef_construction` 128); existing projects keep their faiss fields (no migration; re-ingest to move one).
+- **Tests default `OPENSEARCH_URL` to a refused local address**, so an offline test run never reaches a live OpenSearch; set `OPENSEARCH_URL` for the live suite.
+- **Retired region statuses `pending` and `pending_verify`, `regions.by_human` (use `regions.by_human_drew`) and `scripts/curation/region_worker_main.py` are removed.** `scripts/curation/ingest_walker.py` is replaced by `scripts/curation/bulk_ingest.py` (`--folder` instead of the old flags).
+- **`TRITON_WORKERS`, `MAX_BATCH_SIZE` and `SHM_SIZE` are gone** from `.env`, `env.template` and the profile JSON (nothing read them); `setup.sh` no longer writes `docker-compose.override.yml`.
+- **New environment variables** (all optional, documented in `env.template`): `OP_ASSIST_JOBS_DIR`, `OP_BULK_INGEST_DIR`, `OP_API_LOOPBACK_URL`, `OP_CPU_POOL_THREADS`, `OP_INGEST_INFLIGHT_MB`, `OP_INGEST_GPU_DECODE`, `OP_INGEST_GPU_MIN_MEGAPIXELS`, `OP_INGEST_DISPATCH_S`, `OP_CLUSTER_REFRESH_INTERVAL_S`, `_GROWTH_THRESHOLD`, `_MAX_DEFERRAL_S`, `_RETRY_BACKOFF_S` and `_AUTO_LABEL`, `OP_S3_ALLOWED`, `OP_S3_ENDPOINT_URL`, `OP_S3_REGION`, `OP_S3_PATH_STYLE`, `OP_S3_FETCH_WORKERS`, `OP_S3_LIST_WORKERS`, `OP_S3_INFLIGHT_MB`, `OP_S3_MAX_OBJECT_MB`, `OP_SOURCE_ROOT_HOST`, `OP_VLM_POLL_S`, `OP_VLM_WAIT_S`, plus the renamed `OP_CROPWRIGHT_*` set. `OP_HNSW_EF_CONSTRUCTION` now documents the new default of 128.
+- **Compose changes**: the `evaluator` profile above; Triton gets `CUDA_DEVICE_ORDER=PCI_BUS_ID` (so `TRITON_GPU_ID=0,2` means the lowest listed id first), `CUPY_CACHE_DIR` and glibc malloc tuning for the API; Triton runs with `--log-verbose=0`; the API's memory reservation uses the `deploy.resources.reservations` form; an optional git-ignored `docker-compose.local.yml` is loaded after the stock files; the `gateway-wrap` message names `OP_CROPWRIGHT_BIND_ADDRESS`. Image defaults now point at `0.6.0`.
 
 ### Added
+- Stage timers `file_read` and `gpu_decode` in `op_pipeline_stage_seconds` and the bulk run's `stage_s`, so time spent reading source files and in the GPU decode call no longer lands in `opensearch_write`.
+- `OP_OPENSEARCH_DATA` (compose): the OpenSearch data directory as a Docker volume name (default) or a host path; docs-site Operations > Storage and sizing recommends local NVMe with measured numbers and the steps to move.
+
+- `scripts/bench/scale_run.py`, a driver for 100k-image ingest benchmarks (forced stop, resume, 15 s progress polls and 30 s resource samples, `--folder` or `--manifest` source), and `scripts/datasets/fetch_openimages_bench.py`, a seeded, checksum-pinned fetcher for a CC BY 2.0 Open Images v7 train set (pin in `scripts/datasets/manifests/openimages_bench_100000.sha256`). Results are in `docs/PERFORMANCE.md`, "Scale ladder: 10k and 100k".
+
 - `scripts/docs/check_docs_vs_code.py` gains an `envnames` check: a non-`OP_` variable a doc names in a code span, on a line about env or variables, must be read by a compose file, script or code (#287).
+
 - Example prompt pack `examples/prompt_packs/general_objects.json`: the generic item prompts plus three domain-neutral item attributes (`brand`, `colour`, `material`) for COCO-style objects; validated by the pack validation in a test.
+
 - `GET /clusters` cards serve `subcluster_ids` (the sorted sub-cluster ids, at most 200; `n_subclusters` stays the exact count).
+
 - The item wire serves the accuracy audit state (#166): `audit_sample`, `audit_batch_id`, `audit_sampled_at`, `audit_label_name`, `audit_label_source`, `audit_outcome` and `audit_human_name` (null for an item never drawn), so `GET /audit/queue` items can show the machine label they were drawn with.
+
 - Cropwright **Assist…** (cluster page, one crop, one box, Matching items): a dialog to pick what the VLM sees (selected, all, a representative sample), the actions (classify, attributes, verify, segment) and the VLM and prompt pack, with the server's dry run; the cluster and sub-cluster label proposal card with the agreement, an explicit dry-run-first **Apply** and the `scope_changed` refusal; dashed "VLM suggests" attribute chips; and a **Region verification** switch (`region_verify`) on the VLM scope panel. See the guide [Selective VLM and segmenter assist](docs-site/docs/guides/selective-assist.mdx).
 
 - Pack attributes in whole-project VLM runs: `vlm_attributes=true` on `POST /pipeline/auto_label` and `/start` makes the VLM stage use the pack's combined `assist` call and store the item attributes in each item's `assist` slot. The region worker's combined call asks for the pack's item attributes on the items it classifies and writes them to `assist.attributes` too.
+
 - Selectable segmenter verification: the VLM policy takes `region_verify` (`vlm`, the default, or `none`) for the region worker, and an assist run with the `segment` action re-segments chosen crops, a cluster or a filter, with `segment.verify` (`vlm` or `none`) for those items only. The run waits in the new status `waiting_region` and reports `result.segment`. Refusals: `409 region_profile_required`, `no_segmenter_leg`, `region_stage_paused`, `verify_endpoint_mismatch`. With the worker's VLM requested but unreachable, an item is written as `detection_failed` (`vlm_unavailable`).
+
 - Assist runs on boxes: a `boxes` target (chosen `{crop_id, box_id}` pairs) takes `verify` and `attributes`. The `verify` action replaces `POST /vlm/verify_regions` (one verdict per box, only the named boxes, never a human- or import-owned one); box attributes the pack declares with `applies_to: box` are stored under the item's `assist.boxes[]`, apart from the box.
+
 - Cluster and sub-cluster label proposals from an assist run: `result.proposal` (top class, agreement, vote distribution, new-class proposals by name, attribute summary) with an agreement gate (at least 3 answers, `min_agreement`), `scope_now` on every read (membership overlap against the members the run resolved, so a re-refine shows as a changed scope), `GET /assist/runs` for a cluster or sub-cluster, and `POST /assist/runs/{run_id}/apply`: the explicit, dry-run-first action that labels the scope's current members as a human would, skips locked and validated ones and refuses a changed scope (`409 scope_changed`). Assist class suggestions leave the item in its cluster.
+
 - Assist runs, `POST /assist/runs` (dry run by default), `GET /assist/runs/{run_id}` and `POST /assist/runs/{run_id}/cancel`: one request shape sends a crop, a selection, a cluster, a sub-cluster or an item filter to the VLM, whole or as a seeded, size-scaled representative sample stratified by sub-cluster, with `classify` and `attributes` actions. Class answers go through the guarded VLM class writer (a locked, validated or holdout item keeps its class); every answer, a locked item's included, is stored in the item's new `assist` object (shown on the item wire), apart from the labels. One run per project (`409 assist_busy`); `OP_ASSIST_JOBS_DIR`.
+
 - Prompt packs declare `attributes` (up to 16 free-form facts about an item or a box, with an optional closed vocabulary) and carry the `assist` (classify plus item attributes) and `attributes` (attributes alone) prompts. The labeler gains `assist_batch` and `attributes_batch`, and `POST /prompt_packs/test` accepts `call: assist` and `attributes`. Pack validation checks the attribute list and the prompts it needs (`pack_attribute_invalid`, `pack_attribute_duplicate`). The `vehicle_wheel` example pack declares `make`, `model`, `body_style` and a wheel `rim_material`.
+
 - `GET /crops?cluster_subid=` and the item filter's `cluster_subid` select one AHC sub-cluster on the server, so a sub-cluster larger than a page can be listed whole.
+
 - Detection-only ingest (#279): ingest policy `embedding.mode: "none"` stores boxes with no vector
   of any kind (the whole-frame vector included) and `clustering.automatic: false` keeps ingest and
   the embed scope from placing items in clusters, the `curation-cluster-refresh` daemon from
   refreshing the project and the auto-label worker's idle retrain from running. Embed and cluster
   later on demand. Cropwright's ingest-policy page offers both.
+
 - The cluster-refresh daemon reads `OP_CLUSTER_REFRESH_INTERVAL_S`, `_GROWTH_THRESHOLD`,
   `_MAX_DEFERRAL_S`, `_RETRY_BACKOFF_S` and `_AUTO_LABEL` (#292); a command-line flag overrides
   each. No compose override file is needed.
+
 - Pipeline modes guide: a recipe, run on public data, for "ingest without the VLM, cluster, name
   clusters by hand, then run the VLM for one cluster, filter or batch" (`vlm=<name>` per run).
 
 - `./openprocessor` and `make` load an optional, git-ignored `docker-compose.local.yml` after the
   stock compose files: a second read-only source root, a changed `shm_size` or a mounted credentials
   file no longer need hand-built `docker compose` commands (#283).
+
 - `./openprocessor curation up [service...]` and `make curation-up SERVICES="..."` start a subset of the
   curation services; a name that is not a curation service is refused (#285).
+
 - `capture_docs_screenshots.py` requires `--public-projects` (`OP_CROPWRIGHT_PUBLIC_PROJECTS`), refuses
   a `--project` outside it, and refuses the pages that list every project (project list, combine,
   copy-settings, clone-from, model sharing) while the backend holds any project outside it (#284).
+
 - `scripts/docs/check_docs_vs_code.py` checks `./openprocessor` commands and flags, `make` targets,
   `<Screenshot>` file names and `NAME=` lines in fenced blocks against the code; the version test
   scans the frontend docs; `docs.yml` also runs on `docs/**` and type-checks the site; a weekly
   `docs-links.yml` checks external links (#287, #293).
+
 - `scripts/codegen/check_cited_paths.py` (pre-commit): a comment or docstring that cites a `docs/`,
   `scripts/` or similar file cites one that exists. Citations of design notes that left the tree
   in the frontend sit in a shrink-only baseline (#289).
+
 - Bulk-ingest preflight (#278): `POST /curation/projects/{project}/ingest/bulk/preview`,
   `scripts/curation/bulk_ingest.py --preview` and a Preview button on the Cropwright Ingest page report,
   without ingesting anything, a folder's, manifest's, S3 prefix's or registered source's file count, total
@@ -65,16 +107,19 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   uses only figures measured in `docs/PERFORMANCE.md`, served (with the section each came from) in
   `GET .../ingest/bulk/config` under `preview`. The walk is capped (200,000 files, 60 seconds) and answers
   `partial: true` with the reason, stops when the client disconnects, and refuses an unreadable root.
+
 - `docs/design/engineering_standards.md`: the portable standards and lessons from the repo cleanup
   (principles, the lint, type and test config that worked, every guard with its baseline format,
   `--tighten` workflow and plant-a-violation proof, an ordered port checklist for a sister repo,
   pitfalls, before/after numbers). `CONTRIBUTING.md` points to it.
+
 - `scripts/bench/cluster_bench.py` (#218): times the production cluster pass at a chosen pool size
   (`--sizes`, `--methods`, `--reps`) on real public COCO embeddings in a throw-away project and
   records method, wall time and counts; a pass that did not cluster the whole pool is refused.
   `docs/PERFORMANCE.md` gains a summary table of the optimization milestone's results, the k-NN
   native-memory formula checked against the stored 100k data (#56) and the go / no-go of the
   write ceiling against 100 images/s (#230).
+
 - Ingest from S3 and S3-compatible stores (#264): `--s3` and `--source-id` on
   `scripts/curation/bulk_ingest.py`, an `s3` or `source_id` start on
   `POST /curation/projects/{project}/ingest/bulk`, and registered ingest sources under
@@ -85,6 +130,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   already stored. S3 is off until `OP_S3_ALLOWED` is set; credentials come only from the `api`
   container's environment, a mounted file or a role. A dispatcher in the API acts on due
   triggers (`OP_INGEST_DISPATCH_S`). Guide: Ingest from S3 and watched sources.
+
 - `scripts/bench/ingest_transport_bench.py` and the "Ingest transports (#263)" measurement in
   `docs/PERFORMANCE.md`: HTTP/1.1 multipart against `grpc.aio` streaming and unary, transport only, on
   public images. A gRPC ingest channel saves under 1.2 percent of the pipeline's API CPU per image and the
@@ -110,18 +156,22 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 - A checksum-pinned public benchmark set: `fetch_coco_subset.py --bench-set N` draws a seeded,
   license-filtered, all-class COCO 2017 set and pins per-image SHA-256 and bytes
   (`scripts/datasets/manifests/coco_bench_2000.json`); `--verify-only` re-hashes a download offline (#45).
+
 - Ingest stage timers for the work that ran untimed: `hash`, `persist`, `letterbox`, `triton_request`,
   `whole_frame_preprocess`, `blur`, `doc_build`, `bulk_serialize` and `admission_wait` join the
   `op_pipeline_stage_seconds` stages, and `resize` is renamed `pe_preprocess` (it is the PE crop
   preprocessing). On 12-24 MP photos the timers name 93 percent of the API CPU, on 640 x 480 frames 54
   percent; the table and the native profile of the rest are in `docs/PERFORMANCE.md` (#210).
+
 - `OP_CPU_POOL_THREADS` (default 8) and `OP_INGEST_INFLIGHT_MB` (default 1024): the threads per API
   worker for pixel work on large images, and the megabytes of decoded pixels a worker admits into
   ingest at once (#241).
+
 - `scripts/bench/baseline_suite.py` and `suite_report.py`: one entry point that records the
   environment, ingest through `/ingest/upload` and `/ingest/batch`, Triton statistics,
   perf_analyzer points, endpoints and VLM throughput as one JSON; the v0.5.0 numbers are in
   `docs/PERFORMANCE.md` and `docs/benchmarks/` (#45, #40).
+
 - Wave 0 full-pipeline throughput probes: `scripts/bench/ingest_sweep_suite.py` (client concurrency and
   batch sweep, Triton instance-count, queue-delay and preferred-batch arms applied and restored
   through the model store, per-endpoint stage cost for faces, OCR and the combined analyze route,
@@ -130,6 +180,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   `ingest_sweep_report.py` (the tables). `scripts/datasets/fetch_hires_set.py` pins a 500-image set of
   12 to 24 MP public photos (`manifests/commons_hires_500.json`). Results and the binding resource
   per stage are in `docs/PERFORMANCE.md` ("Wave 0: full-pipeline throughput") (#45, #210, #230).
+
 - `scripts/bench/parity.py` with `capture` and `compare` subcommands: the accuracy gate every
   v0.6.0 change passes. `capture` ingests the pinned COCO set into a fresh project and stores the
   per-stage outputs (detector boxes, crop rectangles, PE crop and whole-frame vectors, cluster
@@ -139,11 +190,13 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   neighbour overlap, cluster agreement and purity against the COCO ground truth, label agreement),
   applies the thresholds of `scripts/bench/parity_gates.json` and exits non-zero on failure. The
   FP32 against FP16 PE engine results are in `docs/PERFORMANCE.md` (#208).
+
 - Measured INT8 evaluation of the PE image encoder on Ampere (RTX A6000 and RTX 3080 Ti), recorded in
   `docs/PERFORMANCE.md` and `docs/benchmarks/int8_pe_eval.json`. Result: explicit Q/DQ INT8 is
   1.2-1.4x faster than FP16 but fails the parity gates (crop cosine median 0.94-0.99 against 0.999,
   neighbour overlap 0.52-0.82 against 0.95), and weight-only INT8 passes the gates with no speed or
   size gain. INT8 is not offered; FP16 stays the only PE precision and no code changed (#213).
+
 - Measured system shared memory between the API and Triton for the detector and PE image batches,
   recorded in `docs/PERFORMANCE.md` and `docs/benchmarks/shared_memory_transport.json`. Result: it
   removes about 6 ms of client CPU per frame when the transport is measured alone, but ingest API CPU
@@ -163,6 +216,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   repeated card, mixed compute capabilities, or a card without room; the installer takes
   `--gpu-plan triton=0+2` and refuses the same cases. `scripts/bench/pe_gpu_parity.py` compares
   embeddings of the same crops per card (#228).
+
 - GPU decode measured and planned (`docs/design/gpu_decode_plan.md`, numbers in
   `docs/PERFORMANCE.md`): on 12-24 MP photos the CPU JPEG decode caps ingest at about 26 photos/s on
   this host; GPU decode cuts the decode's host cost 3.7x and a GPU decode cut API CPU per photo by
@@ -171,6 +225,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   references while AP and kNN precision are unchanged, so it waits for an owner decision. New probe
   tools `scripts/bench/gpu_decode_bench.py` and `scripts/bench/gpu_decode_parity.py` with tested
   kernels and helpers (#217). No product code changed.
+
 - GPU decode for photos, opt-in with `OP_INGEST_GPU_DECODE` and gated by
   `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0): the `gpu_image_prep` Triton model decodes each JPEG once on the
   GPU (nvJPEG with GPU Huffman decoding), builds the detector letterbox and the PE squares with fused
@@ -210,19 +265,25 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   `.env` and names the real restart command. `setup.sh` no longer writes `docker-compose.override.yml`,
   and `TRITON_WORKERS`, `MAX_BATCH_SIZE` and `SHM_SIZE` (read by nothing) are gone from `.env`,
   `env.template`, the profile JSON and the docs (#281).
+
 - `curation-evaluator` moved from the `curation` profile to its own `evaluator` profile, so
   `--profile curation up -d` no longer reserves a GPU for it. Start it with
   `./openprocessor curation up curation-evaluator` or `docker compose run --rm curation-evaluator` (#285).
+
 - In a checkout, `./openprocessor` with no `COMPOSE_PROJECT_NAME` in `.env` uses the documented default
   project `openprocessor` and says so, instead of exiting 3. An install directory still refuses (#291).
+
 - `bulk_ingest.py` defaults `--api-base` to `localhost:8000` inside the container and `localhost:4603`
   on the host (#288).
+
 - `docs-site/.nvmrc` follows the Node version of `docs-site/Dockerfile` (#289).
+
 - Repo cleanup, PR 9a (typing): mypy now runs with `disallow_untyped_defs`, `disallow_incomplete_defs`
   and `warn_return_any` over `src scripts docker export` (`tests/` is outside its scope), and the
   nine-error-code relax override for the ML modules is gone. 328 errors were fixed with real types
   (route return annotations that match each `response_model`, `Protocol`s for the FAISS index and the
   ingest outcome, typed mixin attributes); the OpenAPI contracts are unchanged.
+
 - Repo cleanup, PR 6 (backend split by concern): every `src/` and `scripts/` file of 600 lines or more
   is split into cohesive modules (routers, `src/main.py` into `src/app/`, the Triton and PE clients,
   curation, projects, training and config-store services, `src/config/curation.py`, three scripts),
@@ -230,6 +291,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   contracts and behavior are unchanged. Twenty-three functions over complexity 15 are decomposed behind
   characterization tests and leave the complexity baseline. `duplicate_detection/__init__.py` no
   longer holds logic, and the two exporters share `export_models` and `export_writers`.
+
 - **BREAKING**: the Cropwright variables are now `OP_CROPWRIGHT_*`: `CROPWRIGHT_IMAGE`,
   `CROPWRIGHT_BIND_ADDRESS`, `CROPWRIGHT_PORT`, `CROPWRIGHT_INGEST_MAX_REQUEST_MB` and
   `CROPWRIGHT_DATASET_UPLOAD_MAX_MB` became `OP_CROPWRIGHT_IMAGE`, `OP_CROPWRIGHT_BIND_ADDRESS`,
@@ -238,6 +300,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   way). A `.env` that still sets an old name is refused: `./openprocessor` and
   `setup-openprocessor.sh` exit 2 and print the new name, and the cropwright container exits
   at start. Rename the keys in `.env` and run `./openprocessor restart`.
+
 - Every Dockerfile base image is pinned by digest (`image:tag@sha256:...`); the bump procedure is
   in `docs/releases/RELEASE_CHECKLIST.md`. The evaluator and segmenter images build their Python
   environment in a separate stage (no compilers or pip cache in the evaluator runtime; the
@@ -245,10 +308,12 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   api image copies only the `scripts/` it runs (`scripts/curation`, `scripts/datasets`, six shell
   libraries) instead of the whole tree. The root `.dockerignore` also excludes `artifacts_local/`,
   `docs-site/`, `frontend/`, `.claude/`, `.install/` and `export_*/`.
+
 - `check_docs_vs_code.py` requires an assignment line in `env.template` for every compose
   `${VAR}` (a prose mention no longer counts) and gains a `template` check: a non-`OP_` setting
   that no compose file, script or code reads is rejected. The unread `LOG_LEVEL` and the unread
   `OP_CROPWRIGHT_TAG` documentation are removed.
+
 - Repo cleanup, PR 5b (duplicates): one `now_iso()` (`src/utils/timeutil.py`, UTC, microsecond
   precision) replaces 21 private timestamp helpers with three different bodies; the class-history
   and edit-history entries used `timespec='seconds'` and now carry microseconds like every other
@@ -261,6 +326,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   `curation_umap.py` moved under `src/routers/curation/` (`train/`, `images.py`, `umap.py`),
   `src/services/clustering.py` to `src/services/visual_search/clustering.py`; routes and the
   OpenAPI contract are unchanged. `requirements-dev.txt` is gone (no consumer).
+
 - Environment variables are read through one typed module, `src/config/env.py`
   (`env_str`/`env_int`/`env_float`/`env_bool`/`env_path`), and ruff `TID251` bans
   `os.environ`/`os.getenv` in `src/`. Behavior change: a variable that is set but malformed or
@@ -287,9 +353,11 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   `docs/benchmarks/v060_wave0_*.json` keep their names), and the review-id file and test names under
   `tests/curation/` lost their suffixes. Comments and docstrings no longer carry wave, round or
   work-package ids (`scripts/codegen/check_process_ids.py` now enforces that with an empty baseline).
+
 - The region field that keeps the status an item had before a region requeue is now
   `region_status_before_requeue` (was `region_status_legacy`). Values already stored under the old
   name are not read; they only recorded a past requeue.
+
 - Repo guards, the first step of the repo cleanup (`docs/design/repo_cleanup_plan.md`). Hooks:
   pre-commit-hooks 6, gitleaks 8.30, bandit 1.9, shellcheck 0.11, hadolint 2.15 and ruff 0.17
   (the hook id is now `ruff-check`; Dockerfile health checks use the JSON form hadolint wants).
@@ -310,7 +378,6 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   `--root`, no progress file: the run resumes from the server). The parallel directory walk moved to
   `src/services/curation/bulk_ingest/walk.py`.
 
-
 - The detector engines (`trt`, `trt_end2end`, YOLO26 and dual-head exports) take uint8 pixels and do
   the `/255` in the TensorRT graph, so a detector request carries a quarter of the bytes of the FP32
   tensor it replaces (4.9 MB to 1.2 MB per image). `export/uint8_input.py` puts the cast and divide in
@@ -319,6 +386,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   detector engine (`./openprocessor models repair`); a model whose plan and config disagree on the
   input type does not reach READY, so the installer rebuilds it. Promoted trained models (ORT,
   `output0`) and the bake-off engines keep float32 input (#214).
+
 - The PE image encoder takes uint8 pixels and applies `(x / 255 - 0.5) / 0.5` in the TensorRT graph
   (`build_pe_trt.sh` and `build_pe_ort_fallback.sh` run `export/uint8_input.py` after the FP16 bake),
   so a PE request carries a quarter of the bytes of the FP32 tensor it replaces (10.0 MB to 2.5 MB
@@ -329,12 +397,14 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   49 percent (0.118 to 0.062 CPU-s), and images/s rise 10 to 12 percent (19.1 to 21.0 upload); the
   gates pass against a rebuilt FP32 control, and rebuilding the detector engine alone already moves
   detections past the box gate of the v0.5.0 reference (`docs/PERFORMANCE.md`) (#214).
+
 - `ocr_pipeline` ships two Python instances instead of one, and the installer profile now sets
   its count (`ocr_pipeline_instances`: minimal 1, standard 2, full 4). The Python BLS model runs
   one request per instance, so OCR was capped at about 21 images/s; Wave 0 measured 42 with two
   instances and 80 with four. A warm instance costs about 256 MiB of GPU memory (measured on a
   12 GB card); `GPU_MIB_PER_INSTANCE` in the model config and `python_backend_budget_mib` per
   profile bound the count, and `tests/test_triton_instance_budget.py` enforces it (#240).
+
 - Response serialization no longer uses FastAPI's deprecated `ORJSONResponse` (about 15
   routers, the error handlers and four routes that built it directly). Routes with a response
   model serialize through Pydantic straight to bytes; the curation routes that return a
@@ -343,6 +413,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   about 4 ms instead of about 69 ms and the acceptance log no longer repeats the deprecation
   warning. Response bytes are unchanged; the one contract change is that
   `POST .../datasets/imports/{import_id}/undo` now documents its response schema (#153).
+
 - Ingest on 12-24 MP photos is no longer bound by one event-loop thread per worker. Decode, the
   detector letterbox, PE and whole-frame preprocessing, blur scoring and crop encoding of a large image
   run on a bounded per-worker thread pool (work under 4 MiB of pixels stays in place: a pool hop cost
@@ -350,6 +421,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   decoded megabytes fit under `OP_INGEST_INFLIGHT_MB`. On the 500-photo set at 8 images per request
   throughput is 21.5, 27.3, 23.6 and 24.1 images/s at 8, 16, 32 and 64 clients against 5.2, 8.7, 10.8
   and 4.9, and no longer falls past 32 clients (#241).
+
 - API CPU per 640 x 480 frame is down 29 to 33 percent (0.170-0.192 to 0.113-0.136 CPU-s; the 40 percent
   target was not met) with no change to any stored value: vectors reach OpenSearch through
   `ndarray.tolist()` and an orjson serializer (34 to 1 ms per image), PE normalization is a lookup table
@@ -359,8 +431,10 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   checks each distinct index once, and the API container keeps freed buffers instead of trimming them
   (`MALLOC_TRIM_THRESHOLD_`, `MALLOC_TOP_PAD_`, `MALLOC_MMAP_THRESHOLD_` in `docker-compose.yml`,
   up to about 128 MB resident per worker) (#211).
+
 - Triton runs with `--log-verbose=0` instead of logging an allocation and a free for every tensor of
   every request (#211).
+
 - The PE image encoder engine is 17 to 25 percent faster (181 to 225 images/s through Triton at batch 16, same
   output: crop cosine median 0.99996, every `precision` parity gate passes). `export/pe_rope_layout.py`,
   the last step of `export/export_pe_image_encoder.py`, permutes the query and key channels of every
@@ -410,6 +484,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   that used to stop at about 26 images/s now sustains 100 (and 175 to 187 at 200), with 62 percent less
   API CPU per image at 100 and k-NN p95 under the same writes down from 449 to 28 ms at 25. The upsert
   moved to `src/clients/occ_upsert.py` and returns an outcome per document (#248).
+
 - New projects build their vector fields on the Lucene engine with `ef_construction` 128 (was faiss 512):
   the items index is 48 percent smaller on the product stack, filtered recall stays near 1.0, the cosine
   score is unchanged, and the review-default overlap@10 against faiss is 0.992 (gate 0.95) with cluster
@@ -450,6 +525,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   the status and body the old `HTTPException` carried. No route, status code or response body
   changed. An auto-label job queued before the upgrade names the old function path and fails to
   resolve it: requeue it.
+
 - The frontend's oversize files are split by concern: `api.ts` into per-domain `api_<domain>.ts`
   modules, the review, train, export, clusters, cluster-detail and classes pages into a controller
   plus components, `types.ts`, the slot-config parser, the large vitest files, `e2e/conftest.py`
@@ -459,13 +535,17 @@ history of this codebase and was never published. This release is `[0.5.0]`.
 ### Removed
 
 - `POST /vlm/verify_regions`: use `POST /assist/runs` with action `verify` on a `crops` or `boxes` target.
+
 - The hard-coded `make` and `model` VLM outputs: the reply keys, `VlmClassPrediction.make/model`, the combined reply's `make/model`, and the `vlm_item_make` / `vlm_item_model` item fields (never on the wire). A prompt pack declares such facts as `attributes` instead; they are stored in the item's `assist` object by assist runs. Existing values in `vlm_item_make` / `vlm_item_model` stay in old documents and are not read.
+
 - `POST /vlm/label_cluster/{cluster_id}`: use `POST /assist/runs` with a `cluster` target (and `sample.mode: "all"`), or `?cluster_id=` on `auto_label/start` for the whole-cluster job. Cropwright's cluster-page "Run VLM" and the dashboard's "Run VLM on cluster" dialog are replaced by **Assist…** on the cluster page, which uses the assist run.
+
 - The region-profile fields `aspect_min` and `aspect_max` (and `OcrRegion.is_region_shaped`, which was
   their only reader and had no caller): from the profile dataclass, the profile editor schema, the
   license plate example, the docs and the OpenAPI contract. A stored profile that still carries
   either key is rejected by name and skipped with a logged warning when the registry loads, so
   re-save it without them. `OP_REGION_DETECTION_ASPECT_MIN` and `_MAX` no longer exist.
+
 - Dead code, found by the new vulture guard (`scripts/codegen/check_vulture.py`) and the plan's
   list: `src/services/cluster_maintenance.py`, the unused `ImageService`, the unused
   `region_lean` module (and the `paddleocr` requirement only it imported), the unused
@@ -474,30 +554,47 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   and other helpers only a test called, and the `src.utils` package re-exports (import from the
   submodule). Reviewed dynamic-dispatch cases are in `scripts/codegen/vulture_whitelist.py`
   with a reason each.
+
 - The `scripts/curation/region_worker_main.py` compatibility entry point: start the detection
   worker with `python -m scripts.curation.worker` (the compose file already does).
+
 - `regions.by_human` in `GET /curation/projects/{project}/stats/dataset`: it was the old name of
   `regions.by_human_drew`.
+
 - The retired region statuses `pending` and `pending_verify`: queries, the worker and the queue
   gauges now match only the `RegionStatus` values, which is all any writer has emitted since the
   rename.
+
 - The `check-no-literal-region-fields` hook and `scripts/codegen/check_no_literal_region_fields.py`: the
   naming-leak scan and `tests/test_no_legacy_region_scalars.py` cover the same ground.
 
 ### Fixed
+- Bulk ingest of large photos was held back by its own admission gate and by file reads on the event loop (see `docs/design/ingest_write_path_investigation.md`). The per-process gate now charges a photo the GPU decode takes its encoded size, not the decoded pixels it never holds in the API (a 16-photo request of 20 MP counted 915 of 1,024 MiB, so a second request on the same worker waited, 41 percent of request time in the 100k 20 MP run). `/ingest/batch` and `/ingest/image` read their files in parallel on a per-process pool (`OP_INGEST_READ_THREADS`, default 8) instead of one after another on the loop thread.
+
+- Ingest no longer fails a JPEG that Pillow reads but libjpeg-turbo's header read refuses (`tjDecompressHeader3(): Could not determine subsampling level`, 2 of 100,000 Open Images files, `decode_failed`): that error alone sends the image to the Pillow decode; a damaged file still fails.
+
+- Dispatcher-started bulk-ingest runs (poll, cron, webhook) never started: the tick ran in a worker thread and both the run and the poll called `asyncio.create_task` there (`ingest_dispatch_failed`, `no running event loop`). The tick now runs on the loop. A run whose spawn fails is marked `failed` instead of staying `queued` (which kept every later start, and the project's delete, answering 409), and `POST /ingest/bulk/{run_id}/cancel` finalizes an orphan (a run `queued` past 10 s with no task, or `interrupted` after a restart) as `cancelled`.
+
+- `DELETE /projects/{p}` (and archive) answering `409 project_busy` right after an ingest finished (#249): the detection worker refreshed its in-flight count only every 15 s, so the last batch read as busy for up to that long after it had landed. The worker now rewrites a project's liveness within a second of its count changing, and the `project_busy` message names each running job and says when a retry is the answer.
+
+- `make pe-build-trt` (`export/build_pe_trt.sh`, #277) no longer ships an FP32 engine silently: a failed or FP32-falling-back FP16 bake, a failed FP16 build or a failed uint8 input step now exits 4 with the cause. `ALLOW_FP32=1` opts in to an FP32 engine knowingly.
 
 - `POST /reprocess` with a filter target and `limit` / `sample` capped only the image scopes; the `region` and `vlm` scopes ran on every match. They now act on the capped, seeded selection, and the dry run counts it.
+
 - CI stability: the offline suite no longer builds its app-lifespan OpenSearch client against the in-cluster
   hostname, which resolved slowly on the runner (10 to 15 s per lookup, several per startup) and made integration
   test setup hit the 400 s timeout, doubling the suite's run time. Tests now default `OPENSEARCH_URL` to a refused
   loopback port. The stubbed e2e harness gains a default 404 for `GET /vlm/endpoints/active`.
 
 - `PUT /ingest/policy` dropped the `clustering` block: saving `clustering.automatic: false` answered 200 with `true` and stored `true`, so detection-only clustering could never be switched off.
+
 - The auto-label VLM stage no longer reports `completed` with `predicted: 0` when it could label
   nothing: it adds `failed` and `unreadable` counts, and fails the job when every selected crop
   failed (an unreachable VLM, or source images the worker cannot read).
+
 - `docs-site` `npm run typecheck` passes: `baseUrl` (deprecated, TS5101) is dropped for `paths` alone,
   and the missing `@types/react-dom` is added (#293).
+
 - Monitoring alerts (#290): the Grafana rules **Triton Model Not Ready** (`nv_model_ready_state`),
   **API High Error Rate** (`http_requests_total`) and **OpenSearch Cluster Unhealthy**
   (`opensearch_cluster_status`) queried series nothing exports and could never fire; the first and last are
@@ -509,10 +606,13 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   it), and the two contact points are renamed `unconfigured-default` and `unconfigured-critical` because
   they post to a localhost address nothing listens on: nobody is notified until you configure a receiver
   (`monitoring/README.md`, `docs-site/docs/operations/monitoring.mdx`).
+
 - A bulk-ingest folder walk that was stopped (a cancelled run, a closed walk) kept listing the rest of the
   tree and waited for a stuck directory listing before returning; it now stops at once.
+
 - Starting a bulk ingest on a folder the API cannot read is refused (`bulk_ingest_invalid_source`, "not
   readable") instead of completing with zero images discovered.
+
 - The auto-label, cluster-refresh and VLM workers no longer log `Unclosed client session` on
   shutdown: each opened a second OpenSearch client for its project registry that nothing closed.
   `script_project_registry` now takes the worker's own client, which the worker already closes.
@@ -521,13 +621,16 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   raises `IndexError` and fails the whole batch. Only the affected image is refused, with the
   reason `face_landmarks_length_mismatch`; `detect_faces`, `recognize_faces` and the single-image face paths
   report the same reason.
+
 - App shutdown (#319): each lifespan shutdown step (background tasks, pools, executors, Triton and
   OpenSearch clients) now runs independently; a failing step is logged as `shutdown_step_failed`
   with its step name and no longer skips the steps after it.
+
 - `make cluster-gpu` renders again on Compose 2.29.7 (#315): the auto-label worker states its
   2 GB memory floor under `deploy.resources.reservations`, which the GPU overlay extends, instead of
   `mem_reservation`, which Compose rejects next to it. A new test renders every compose file
   combination the Makefile and CLI use.
+
 - The `vlm use` interrupt test passes when pytest is started in the background (#304): the child
   inherited an ignored SIGINT, which bash cannot trap; the test now restores the default.
 
@@ -545,25 +648,31 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   a cluster run raise instead of returning `0`. A crashed background job is logged at shutdown and
   the ingest dispatch tick runs off the event loop. About thirty best-effort OpenSearch cleanup
   handlers now catch only OpenSearch errors.
+
 - A job state file that exists but cannot be read counts as a running job in every start guard
   (`FileJob.is_live`, and the auto-label guard), so a second job is not started beside one it cannot
   see (#161).
+
 - The cluster-refresh daemon keeps its per-project growth state (items at the last retrain, the job
   in flight, the previous poll's count) in the project's settings document, so a restart neither
   retrains a project that was just retrained nor starts a retrain in the middle of an ingest (#235).
   An audit-gate `409` from `auto_promote` no longer stops the retrain from being queued (#280).
+
 - An auto-label job still queued after `queue_max_age_seconds` (one hour) fails with "auto_label
   worker not running" and its trigger is withdrawn; the status serves `queue_age_seconds` and
   `queue_max_age_seconds` (#236).
+
 - An unreachable VLM endpoint no longer leaves the VLM worker spinning with a full queue and nothing
   reported. `POST /curation/projects/{project}/vlm/label_batch` answers `503 vlm_unreachable` when no crop
   got an answer (nothing is written, no crop is marked failed); the worker releases its in-flight crops,
   backs off (poll interval, doubling to 60 s; the same for an unreachable API) and resumes by itself when
   the endpoint answers. The stall reason is logged and served in the worker's heartbeat, so the compose
   healthcheck output reads `ok: ... stalled: VLM endpoint unreachable: ...` while the worker stays healthy.
+
 - The VLM worker skips a project that has no class to label as, so its crops are never claimed in flight
   and no longer fill the queue and starve the other projects; it logs the change once per project and
   picks the project up on the next poll after its first class.
+
 - An image that does not decode reports `not a decodable image` (or Pillow's own error for a damaged
   file) instead of `No module named 'pi_heif'` from the Ultralytics `Image.open` patch (#297).
 
@@ -583,6 +692,7 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   channel multiplier, so `bake_fp16_onnx` keeps those four convs in FP32. The engine is 75 MB
   against 147 MB, 1.5x (batch 8) to 2.1x (batch 32) faster per image, cosine similarity to the FP32
   engine at least 0.9998 on 200 COCO images (#224).
+
 - The `curation-vlm-worker` no longer polls every project each cycle and takes a 409
   `vlm_not_configured` from the ones with no VLM (#207, about 2.7 idle cores at 18 projects). Each
   cycle it asks the registry and each project's activation which projects have an active VLM,
@@ -594,10 +704,12 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   per embedding, ingest 17.4 against 8.9 images/s on the 2,000-image COCO set, cosine similarity to
   FP32 0.9997 mean). Before, the FP16 build failed at ONNX parse and the installer silently shipped
   the FP32 engine.
+
 - The installer no longer reports a precision fallback as a clean success: the FP32 retry warns with
   the model, the FP16 failure reason and the consequence, is recorded in `.install/precision.tsv`,
   marks the model group `degraded` (a re-run retries FP16) and shows under "Degraded precision" in
   `./openprocessor models status` and in the install summary.
+
 - `frontend/scripts/capture_docs_screenshots.py` no longer aborts after the first image when `--out` is
   outside `frontend/` (it printed the path with `relative_to`, which raised `ValueError`).
 
@@ -607,8 +719,10 @@ history of this codebase and was never published. This release is `[0.5.0]`.
   expecting TYPE_UINT8". `export/check_input_dtype.py` compares the built input datatype to
   `config.pbtxt` and fails the install on a mismatch; the build stamp records `input=uint8`, so an
   engine built before this fix is rebuilt on the next `models install`.
+
 - `./openprocessor models install|repair` in a checkout without `.install/state.json` no longer exits
   silently: it logs that every model group will be built and goes on (#270).
+
 - The committed `yolov11_small_trt_end2end` config declares the FP16 build's `det_scores` datatype, so a
   default export leaves the tree clean; a test compares each committed exporter-written config with its
   renderer. The installer no longer builds the unused standard `yolov11_small_trt` engine, and that
@@ -1022,7 +1136,6 @@ optional Cropwright 0.1.0 UI that ships staged in the deploy bundle.
 - Full gate on the release commit: 6,943 tests passed (12 skipped), `pre-commit run --all-files` and `generate_contracts.py --check` clean.
 - Measured on the public COCO set (2,000-image subset, one run): 13.39 images/s, 0 failed, 1.37 crops per image (`docs/PERFORMANCE.md`).
 
-
 ### Added
 - Every compose service rotates its logs (`json-file`, 10 MB x 5) and has a `mem_reservation` (OpenSearch reserves its heap size).
 - Installer warns when `vm.max_map_count` is below 262144, with the fix.
@@ -1250,7 +1363,6 @@ optional Cropwright 0.1.0 UI that ships staged in the deploy bundle.
 - Region-profile and prompt-pack activate re-read the store before 404ing, so a clone made through another API worker is found (#115).
 - Auto-label's `vlm` stage reports `skipped` with an explicit `reason` when it selects nothing or `run_vlm` is off (#116).
 - ReDoc no longer loads its footer logo from `cdn.redoc.ly`; a test scans the vendored bundles for external fetches (#117).
-
 
 - The config-store poll no longer logs a 404 WARNING per request for projects that never wrote `meta:config_revision`: optional documents (revision counter, activations, curation settings) are read through one shared reader that treats a miss as absent without a transport error, and an absent revision is remembered for one poll interval (`OP_CONFIG_POLL_S`).
 - `resource_links` no longer lists `triton_metrics` and `dcgm_metrics` (and `OP_TRITON_METRICS_*` / `OP_DCGM_*` are gone): they are Prometheus scrape endpoints bound to localhost, not browser UIs; Grafana and Prometheus show their data.

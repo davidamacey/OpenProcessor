@@ -443,6 +443,8 @@ Measured rates, all on an RTX A6000, from
 | 12 to 24 MP photos, `/ingest/batch`, CPU decode, detect and embed | 27.0 images/s | Decode once and the GPU decode |
 | The same photos with GPU decode | 35.0 images/s | Decode once and the GPU decode |
 | The same photos, GPU decode, detect only | 44.0 images/s | Decode once and the GPU decode |
+| 100,000 public Open Images (up to 0.7 MP), one A6000, stopped and resumed once | 35.96 images/s | Scale ladder: 10k and 100k |
+| 100,000 camera-original 20 MP JPEGs on a NAS, one A6000, stopped and resumed once | 21.00 images/s | Scale ladder: 10k and 100k |
 
 Host CPU per photo at bulk was 1.12 s on the CPU path and 0.34 s with GPU decode.
 

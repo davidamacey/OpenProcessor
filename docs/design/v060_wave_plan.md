@@ -49,7 +49,7 @@ the `OP_*` name and adds it to `env.template` and `tests/test_env_surface.py`.
 
 ## 1. Measured baseline this plan answers to (v0.5.0, PR #206)
 
-Source: `docs/PERFORMANCE.md` "v0.5.0 baseline" and parent plan section 11.1 on branch
+Source: `docs/PERFORMANCE.md` "0.5.0 baseline" and parent plan section 11.1 on branch
 `perf/baseline-045` (PR #206, not yet merged); raw JSON `docs/benchmarks/v050_baseline.json`,
 `v050_storage.json`, `v050_idle_background.json` on that branch. One RTX A6000 (GPU 0),
 Xeon E5-2680 v3 48 threads, Triton 2.70.0, TensorRT `libnvinfer.so.11`, OpenSearch 3.6.0.

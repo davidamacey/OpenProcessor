@@ -1,0 +1,77 @@
+---
+sidebar_position: 10
+title: Storage and sizing
+---
+
+# Storage and sizing
+
+**Put the OpenSearch data directory on local NVMe.** Do not put it on a network share (NFS, SMB, a NAS
+volume), and keep it off the disk that holds your source images when that disk is shared. OpenSearch
+syncs its transaction log on every bulk request, flushes segments and merges them in the background;
+those are many small synced writes, which a local SSD absorbs and a network share does not under load.
+
+## What was measured
+
+One OpenSearch 3.6.0 node (2 GB heap, the project's index bodies and Lucene HNSW fields, random
+1024-dimension vectors in documents shaped like real crop and image documents, 60,000 crop documents
+plus 9,375 image documents per run, 4 bulk writers of 1,000 documents), data on local NVMe against
+data on the NAS array (md RAID6, ext4), same host and same moment. Raw files:
+`docs/benchmarks/write_path_*.json`; method and every number: `docs/design/ingest_write_path_investigation.md`.
+
+| Case | NVMe | NAS |
+|---|---:|---:|
+| Documents per second, nothing else running (4 writers) | 3,199 | 2,631 |
+| Documents per second, 8 writers | 5,334 | 3,542 |
+| Flush time per run (node counter) | 3.4 s | 14.8 s |
+| Same run while two readers stream source photos from the same NAS (167 MB/s) | 2,511 docs/s, bulk p95 2.6 s | 1,106 docs/s, bulk p95 14.7 s, flush 26 s |
+
+Alone, the NAS costs about 18 percent of write speed. Sharing the array with the image reads
+costs 2.3 times, and the slowest bulk request grows from 2.6 to 14.7 seconds. A 100,000-image
+run at 36 images per second needs about 200 documents per second, so OpenSearch on a NAS keeps up
+with ingest; the damage is the tail (stalls during merges and while other jobs use the array), and
+every other consumer of that array pays for the merge traffic.
+
+## Sizing
+
+| Quantity | Measured |
+|---|---:|
+| Index size per 100,000 small images (about 0.7 MP, 4.9 crops each) | 8.9 GiB (about 91 KB per image) |
+| Index size per 100,000 camera photos (20 MP, 2.4 crops each) | 4.4 GiB (about 47 KB per image) |
+| Index bytes per crop | about 19.5 KB |
+| Segments after a 100,000-image run (before any merge) | 128 to 159 |
+
+Plan for about 20 KB per crop plus the same again for merge headroom: a million small images is
+about 90 GiB of index and needs about 180 GiB free. Merges rewrite data many times over (one
+real index merged 68 GB in total to hold a few GB), so free space is a hard requirement, not a
+comfort.
+
+## Moving the data directory to NVMe
+
+`OP_OPENSEARCH_DATA` in `.env` is either a Docker volume name (the default, `opensearch_data`) or
+an absolute host path. To move an existing deployment:
+
+```bash
+./openprocessor stop                              # or: make down
+sudo mkdir -p /srv/opensearch-data
+sudo docker run --rm -v <project>_opensearch_data:/from -v /srv/opensearch-data:/to \
+  alpine sh -c 'cp -a /from/. /to/'               # <project> is COMPOSE_PROJECT_NAME
+sudo chown -R 1000:1000 /srv/opensearch-data # OpenSearch runs as uid 1000
+echo 'OP_OPENSEARCH_DATA=/srv/opensearch-data' >> .env
+./openprocessor start
+curl -s localhost:4607/_cluster/health            # green, then check the document counts
+```
+
+Keep the old volume until the counts match, then remove it.
+
+## Ingest settings that depend on where the files are
+
+- `OP_INGEST_READ_THREADS` (default 8): threads per API worker that read a batch's source files in
+  parallel. One read after another from a share ran at 155 MB/s; 16 in parallel at 700 MB/s.
+- `OP_INGEST_INFLIGHT_MB` (default 1024): decoded megabytes one worker holds. Photos the GPU
+  decode takes are counted by their encoded size, so a 16-photo request of 20 MP no longer fills
+  the whole budget.
+
+Index-level levers that were tried and are not recommended for bulk runs on this index type
+(`refresh_interval` -1 or 30 s were 28 percent slower, because the HNSW graph is then built in
+one large flush; `translog.durability: async` gained 3 to 12 percent and gives up the crash
+guarantee) are in the investigation file.

@@ -53,11 +53,26 @@ README is the overview, the install and a first result.
 - **Dataset import, combine, export, train, promote.** YOLO, COCO and
   OpenProcessor-export layouts; merge up to eight projects; bake-off model
   comparison; promotion back into Triton.
+- **Selective VLM assist.** `POST /assist/runs` sends a crop, a box, a
+  selection, a cluster, a sub-cluster or a filter to the VLM, whole or as a
+  representative sample, and proposes a cluster label you apply explicitly
+  (see [Selective VLM and segmenter assist](docs-site/docs/guides/selective-assist.mdx)).
+  A project calls no VLM until it activates one.
+- **Bulk ingest.** A folder, a manifest or an S3 bucket runs as a background
+  job with a preview first; ingest can also be detection-only.
 - **Class identity by name.** Import, combine, export, train, promote and
   model sharing map classes by name, never by index.
 - **The lock rule.** A human-set or import-validated label or box, and
   anything in the frozen test holdout, is never overwritten by an automated
   writer.
+
+**What's new in 0.6.0.** Faster ingest (images decoded once, uint8 inputs to
+Triton, an FP16 embedding engine, GPU decode for large photos, multi-GPU
+embedding, batched writes; numbers in [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)),
+assist runs, bulk and S3 ingest, and a cleaned-up codebase. Upgrading from 0.5.0:
+read the upgrade notes in [`CHANGELOG.md`](CHANGELOG.md) (new projects start
+with the VLM off, `CROPWRIGHT_*` env names are now `OP_CROPWRIGHT_*`, the
+evaluator has its own `evaluator` profile).
 
 The whole curation surface is in
 [`contracts/openapi/curation.json`](contracts/openapi/curation.json); the

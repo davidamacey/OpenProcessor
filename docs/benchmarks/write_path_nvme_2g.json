@@ -1,0 +1,2455 @@
+{
+  "arms": {
+    "bulk_mode": {
+      "config": {
+        "bulk": 1000,
+        "ef": null,
+        "refresh": "-1",
+        "settings": {
+          "translog.durability": "async",
+          "translog.sync_interval": "30s"
+        },
+        "vectors": "real",
+        "writers": 4
+      },
+      "runs": [
+        {
+          "arm": "bulk_mode",
+          "config": {
+            "bulk": 1000,
+            "ef": null,
+            "refresh": "-1",
+            "settings": {
+              "translog.durability": "async",
+              "translog.sync_interval": "30s"
+            },
+            "vectors": "real",
+            "writers": 4
+          },
+          "flat": {
+            "bulk_p50_s": 1.554858386516571,
+            "bulk_p95_s": 3.141395094874315,
+            "bytes_per_doc": 4765.704172972973,
+            "docs_per_s": 2336.8104720818233,
+            "failed_docs": 0.0,
+            "images_per_s_equivalent": 315.78519892997616,
+            "io_full_stall_s_during_load": 0.074538,
+            "io_some_stall_s_during_load": 0.086241,
+            "load_avg_1m_before": 23.85986328125,
+            "load_s": 29.687901876866817,
+            "node_cpu_cores_during_load": 4.262897813557324,
+            "node_flush_count": 3.0,
+            "node_flush_ms_s": 0.846,
+            "node_gc_ms_s": 0.357,
+            "node_index_ms_s": 112.37,
+            "node_index_throttle_ms_s": 0.0,
+            "node_merge_bytes": 0.0,
+            "node_merge_count": 0.0,
+            "node_merge_ms_s": 0.0,
+            "node_merge_throttled_ms_s": 0.0,
+            "node_refresh_count": 10.0,
+            "node_refresh_ms_s": 1.016,
+            "refresh_tail_s": 0.716244603972882,
+            "retries_429": 0.0,
+            "searchable_s": 30.4041464808397,
+            "vectors_per_s": 2652.5956710117994
+          },
+          "rep": 1
+        },
+        {
+          "arm": "bulk_mode",
+          "config": {
+            "bulk": 1000,
+            "ef": null,
+            "refresh": "-1",
+            "settings": {
+              "translog.durability": "async",
+              "translog.sync_interval": "30s"
+            },
+            "vectors": "real",
+            "writers": 4
+          },
+          "flat": {
+            "bulk_p50_s": 1.5862271471414715,
+            "bulk_p95_s": 3.2835861808620392,
+            "bytes_per_doc": 2819.972036036036,
+            "docs_per_s": 2229.10315697115,
+            "failed_docs": 0.0,
+            "images_per_s_equivalent": 301.2301563474527,
+            "io_full_stall_s_during_load": 0.058354,
+            "io_some_stall_s_during_load": 0.077018,
+            "load_avg_1m_before": 23.3427734375,
+            "load_s": 31.12238201405853,
+            "node_cpu_cores_during_load": 4.163173947979679,
+            "node_flush_count": 3.0,
+            "node_flush_ms_s": 1.798,
+            "node_gc_ms_s": 0.361,
+            "node_index_ms_s": 117.946,
+            "node_index_throttle_ms_s": 0.0,
+            "node_merge_bytes": 0.0,
+            "node_merge_count": 0.0,
+            "node_merge_ms_s": 0.0,
+            "node_merge_throttled_ms_s": 0.0,
+            "node_refresh_count": 10.0,
+            "node_refresh_ms_s": 1.139,
+            "refresh_tail_s": 0.7073271288536489,
+            "retries_429": 0.0,
+            "searchable_s": 31.82970914291218,
+            "vectors_per_s": 2530.3333133186024
+          },
+          "rep": 2
+        }
+      ],
+      "summary": {
+        "bulk_p50_s": {
+          "max": 1.5862271471414715,
+          "mean": 1.5705427668290213,
+          "median": 1.5705427668290213,
+          "min": 1.554858386516571,
+          "n": 2,
+          "spread_pct": 1.9973197347713771
+        },
+        "bulk_p95_s": {
+          "max": 3.2835861808620392,
+          "mean": 3.212490637868177,
+          "median": 3.212490637868177,
+          "min": 3.141395094874315,
+          "n": 2,
+          "spread_pct": 4.426194564167916
+        },
+        "bytes_per_doc": {
+          "max": 4765.704172972973,
+          "mean": 3792.8381045045044,
+          "median": 3792.8381045045044,
+          "min": 2819.972036036036,
+          "n": 2,
+          "spread_pct": 51.30016318455877
+        },
+        "docs_per_s": {
+          "max": 2336.8104720818233,
+          "mean": 2282.9568145264866,
+          "median": 2282.9568145264866,
+          "min": 2229.10315697115,
+          "n": 2,
+          "spread_pct": 4.717886664580345
+        },
+        "failed_docs": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "images_per_s_equivalent": {
+          "max": 315.78519892997616,
+          "mean": 308.5076776387144,
+          "median": 308.5076776387144,
+          "min": 301.2301563474527,
+          "n": 2,
+          "spread_pct": 4.717886664580359
+        },
+        "io_full_stall_s_during_load": {
+          "max": 0.074538,
+          "mean": 0.066446,
+          "median": 0.066446,
+          "min": 0.058354,
+          "n": 2,
+          "spread_pct": 24.356620413568898
+        },
+        "io_some_stall_s_during_load": {
+          "max": 0.086241,
+          "mean": 0.0816295,
+          "median": 0.0816295,
+          "min": 0.077018,
+          "n": 2,
+          "spread_pct": 11.298611408865662
+        },
+        "load_avg_1m_before": {
+          "max": 23.85986328125,
+          "mean": 23.601318359375,
+          "median": 23.601318359375,
+          "min": 23.3427734375,
+          "n": 2,
+          "spread_pct": 2.1909362683741764
+        },
+        "load_s": {
+          "max": 31.12238201405853,
+          "mean": 30.405141945462674,
+          "median": 30.405141945462674,
+          "min": 29.687901876866817,
+          "n": 2,
+          "spread_pct": 4.71788666458036
+        },
+        "node_cpu_cores_during_load": {
+          "max": 4.262897813557324,
+          "mean": 4.213035880768501,
+          "median": 4.213035880768501,
+          "min": 4.163173947979679,
+          "n": 2,
+          "spread_pct": 2.3670310056664996
+        },
+        "node_flush_count": {
+          "max": 3.0,
+          "mean": 3.0,
+          "median": 3.0,
+          "min": 3.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_flush_ms_s": {
+          "max": 1.798,
+          "mean": 1.322,
+          "median": 1.322,
+          "min": 0.846,
+          "n": 2,
+          "spread_pct": 72.01210287443268
+        },
+        "node_gc_ms_s": {
+          "max": 0.361,
+          "mean": 0.359,
+          "median": 0.359,
+          "min": 0.357,
+          "n": 2,
+          "spread_pct": 1.1142061281337057
+        },
+        "node_index_ms_s": {
+          "max": 117.946,
+          "mean": 115.158,
+          "median": 115.158,
+          "min": 112.37,
+          "n": 2,
+          "spread_pct": 4.842043105993499
+        },
+        "node_index_throttle_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_merge_bytes": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_merge_count": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_merge_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_merge_throttled_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_refresh_count": {
+          "max": 10.0,
+          "mean": 10.0,
+          "median": 10.0,
+          "min": 10.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_refresh_ms_s": {
+          "max": 1.139,
+          "mean": 1.0775000000000001,
+          "median": 1.0775000000000001,
+          "min": 1.016,
+          "n": 2,
+          "spread_pct": 11.415313225058004
+        },
+        "refresh_tail_s": {
+          "max": 0.716244603972882,
+          "mean": 0.7117858664132655,
+          "median": 0.7117858664132655,
+          "min": 0.7073271288536489,
+          "n": 2,
+          "spread_pct": 1.252831158922677
+        },
+        "retries_429": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "searchable_s": {
+          "max": 31.82970914291218,
+          "mean": 31.11692781187594,
+          "median": 31.11692781187594,
+          "min": 30.4041464808397,
+          "n": 2,
+          "spread_pct": 4.58130915330403
+        },
+        "vectors_per_s": {
+          "max": 2652.5956710117994,
+          "mean": 2591.4644921652007,
+          "median": 2591.4644921652007,
+          "min": 2530.3333133186024,
+          "n": 2,
+          "spread_pct": 4.717886664580351
+        }
+      }
+    },
+    "merge_threads1": {
+      "config": {
+        "bulk": 1000,
+        "ef": null,
+        "refresh": "shipped",
+        "settings": {
+          "merge.scheduler.max_thread_count": 1
+        },
+        "vectors": "real",
+        "writers": 4
+      },
+      "runs": [
+        {
+          "arm": "merge_threads1",
+          "config": {
+            "bulk": 1000,
+            "ef": null,
+            "refresh": "shipped",
+            "settings": {
+              "merge.scheduler.max_thread_count": 1
+            },
+            "vectors": "real",
+            "writers": 4
+          },
+          "flat": {
+            "bulk_p50_s": 1.2357502325903624,
+            "bulk_p95_s": 1.9857969816541299,
+            "bytes_per_doc": 5182.333088288288,
+            "docs_per_s": 2878.472899644969,
+            "failed_docs": 0.0,
+            "images_per_s_equivalent": 388.9828242763472,
+            "io_full_stall_s_during_load": 0.125571,
+            "io_some_stall_s_during_load": 0.255374,
+            "load_avg_1m_before": 24.60400390625,
+            "load_s": 24.10132122784853,
+            "node_cpu_cores_during_load": 6.002413669871411,
+            "node_flush_count": 3.0,
+            "node_flush_ms_s": 4.204,
+            "node_gc_ms_s": 0.367,
+            "node_index_ms_s": 84.792,
+            "node_index_throttle_ms_s": 0.0,
+            "node_merge_bytes": 294639433.0,
+            "node_merge_count": 9.0,
+            "node_merge_ms_s": 18.389,
+            "node_merge_throttled_ms_s": 0.0,
+            "node_refresh_count": 49.0,
+            "node_refresh_ms_s": 4.309,
+            "refresh_tail_s": 0.22971893707290292,
+            "retries_429": 0.0,
+            "searchable_s": 24.331040164921433,
+            "vectors_per_s": 3267.455723921316
+          },
+          "rep": 1
+        },
+        {
+          "arm": "merge_threads1",
+          "config": {
+            "bulk": 1000,
+            "ef": null,
+            "refresh": "shipped",
+            "settings": {
+              "merge.scheduler.max_thread_count": 1
+            },
+            "vectors": "real",
+            "writers": 4
+          },
+          "flat": {
+            "bulk_p50_s": 1.2710224953480065,
+            "bulk_p95_s": 1.615081049944274,
+            "bytes_per_doc": 6245.877362162162,
+            "docs_per_s": 3082.5255533668605,
+            "failed_docs": 0.0,
+            "images_per_s_equivalent": 416.5575072117379,
+            "io_full_stall_s_during_load": 0.099994,
+            "io_some_stall_s_during_load": 0.124216,
+            "load_avg_1m_before": 24.5322265625,
+            "load_s": 22.505896155256778,
+            "node_cpu_cores_during_load": 5.90865509565321,
+            "node_flush_count": 3.0,
+            "node_flush_ms_s": 6.589,
+            "node_gc_ms_s": 0.308,
+            "node_index_ms_s": 82.368,
+            "node_index_throttle_ms_s": 0.0,
+            "node_merge_bytes": 303439241.0,
+            "node_merge_count": 9.0,
+            "node_merge_ms_s": 15.327,
+            "node_merge_throttled_ms_s": 0.0,
+            "node_refresh_count": 48.0,
+            "node_refresh_ms_s": 2.285,
+            "refresh_tail_s": 0.1498314100317657,
+            "retries_429": 0.0,
+            "searchable_s": 22.655727565288544,
+            "vectors_per_s": 3499.0830605785986
+          },
+          "rep": 2
+        }
+      ],
+      "summary": {
+        "bulk_p50_s": {
+          "max": 1.2710224953480065,
+          "mean": 1.2533863639691845,
+          "median": 1.2533863639691845,
+          "min": 1.2357502325903624,
+          "n": 2,
+          "spread_pct": 2.8141572121420695
+        },
+        "bulk_p95_s": {
+          "max": 1.9857969816541299,
+          "mean": 1.8004390157992018,
+          "median": 1.8004390157992018,
+          "min": 1.615081049944274,
+          "n": 2,
+          "spread_pct": 20.59030761146318
+        },
+        "bytes_per_doc": {
+          "max": 6245.877362162162,
+          "mean": 5714.105225225225,
+          "median": 5714.105225225225,
+          "min": 5182.333088288288,
+          "n": 2,
+          "spread_pct": 18.612612683063666
+        },
+        "docs_per_s": {
+          "max": 3082.5255533668605,
+          "mean": 2980.4992265059145,
+          "median": 2980.4992265059145,
+          "min": 2878.472899644969,
+          "n": 2,
+          "spread_pct": 6.846257563405097
+        },
+        "failed_docs": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "images_per_s_equivalent": {
+          "max": 416.5575072117379,
+          "mean": 402.7701657440425,
+          "median": 402.7701657440425,
+          "min": 388.9828242763472,
+          "n": 2,
+          "spread_pct": 6.846257563405094
+        },
+        "io_full_stall_s_during_load": {
+          "max": 0.125571,
+          "mean": 0.1127825,
+          "median": 0.1127825,
+          "min": 0.099994,
+          "n": 2,
+          "spread_pct": 22.678163722208666
+        },
+        "io_some_stall_s_during_load": {
+          "max": 0.255374,
+          "mean": 0.189795,
+          "median": 0.189795,
+          "min": 0.124216,
+          "n": 2,
+          "spread_pct": 69.10508706762559
+        },
+        "load_avg_1m_before": {
+          "max": 24.60400390625,
+          "mean": 24.568115234375,
+          "median": 24.568115234375,
+          "min": 24.5322265625,
+          "n": 2,
+          "spread_pct": 0.2921564925321223
+        },
+        "load_s": {
+          "max": 24.10132122784853,
+          "mean": 23.303608691552654,
+          "median": 23.303608691552654,
+          "min": 22.505896155256778,
+          "n": 2,
+          "spread_pct": 6.8462575634051
+        },
+        "node_cpu_cores_during_load": {
+          "max": 6.002413669871411,
+          "mean": 5.955534382762311,
+          "median": 5.955534382762311,
+          "min": 5.90865509565321,
+          "n": 2,
+          "spread_pct": 1.574310014724707
+        },
+        "node_flush_count": {
+          "max": 3.0,
+          "mean": 3.0,
+          "median": 3.0,
+          "min": 3.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_flush_ms_s": {
+          "max": 6.589,
+          "mean": 5.3965,
+          "median": 5.3965,
+          "min": 4.204,
+          "n": 2,
+          "spread_pct": 44.19531177615122
+        },
+        "node_gc_ms_s": {
+          "max": 0.367,
+          "mean": 0.3375,
+          "median": 0.3375,
+          "min": 0.308,
+          "n": 2,
+          "spread_pct": 17.481481481481477
+        },
+        "node_index_ms_s": {
+          "max": 84.792,
+          "mean": 83.58,
+          "median": 83.58,
+          "min": 82.368,
+          "n": 2,
+          "spread_pct": 2.9002153625269282
+        },
+        "node_index_throttle_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_merge_bytes": {
+          "max": 303439241.0,
+          "mean": 299039337.0,
+          "median": 299039337.0,
+          "min": 294639433.0,
+          "n": 2,
+          "spread_pct": 2.942692452531755
+        },
+        "node_merge_count": {
+          "max": 9.0,
+          "mean": 9.0,
+          "median": 9.0,
+          "min": 9.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_merge_ms_s": {
+          "max": 18.389,
+          "mean": 16.858,
+          "median": 16.858,
+          "min": 15.327,
+          "n": 2,
+          "spread_pct": 18.163483212717992
+        },
+        "node_merge_throttled_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_refresh_count": {
+          "max": 49.0,
+          "mean": 48.5,
+          "median": 48.5,
+          "min": 48.0,
+          "n": 2,
+          "spread_pct": 2.0618556701030926
+        },
+        "node_refresh_ms_s": {
+          "max": 4.309,
+          "mean": 3.297,
+          "median": 3.297,
+          "min": 2.285,
+          "n": 2,
+          "spread_pct": 61.38914164391871
+        },
+        "refresh_tail_s": {
+          "max": 0.22971893707290292,
+          "mean": 0.1897751735523343,
+          "median": 0.1897751735523343,
+          "min": 0.1498314100317657,
+          "n": 2,
+          "spread_pct": 42.0958787947606
+        },
+        "retries_429": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "searchable_s": {
+          "max": 24.331040164921433,
+          "mean": 23.493383865104988,
+          "median": 23.493383865104988,
+          "min": 22.655727565288544,
+          "n": 2,
+          "spread_pct": 7.130997429966874
+        },
+        "vectors_per_s": {
+          "max": 3499.0830605785986,
+          "mean": 3383.2693922499575,
+          "median": 3383.2693922499575,
+          "min": 3267.455723921316,
+          "n": 2,
+          "spread_pct": 6.846257563405107
+        }
+      }
+    },
+    "merge_threads4": {
+      "config": {
+        "bulk": 1000,
+        "ef": null,
+        "refresh": "shipped",
+        "settings": {
+          "merge.scheduler.max_thread_count": 4
+        },
+        "vectors": "real",
+        "writers": 4
+      },
+      "runs": [
+        {
+          "arm": "merge_threads4",
+          "config": {
+            "bulk": 1000,
+            "ef": null,
+            "refresh": "shipped",
+            "settings": {
+              "merge.scheduler.max_thread_count": 4
+            },
+            "vectors": "real",
+            "writers": 4
+          },
+          "flat": {
+            "bulk_p50_s": 1.216862148605287,
+            "bulk_p95_s": 1.6467868721112608,
+            "bytes_per_doc": 5305.042162162162,
+            "docs_per_s": 3136.4029252987993,
+            "failed_docs": 0.0,
+            "images_per_s_equivalent": 423.83823314848644,
+            "io_full_stall_s_during_load": 0.07437,
+            "io_some_stall_s_during_load": 0.111282,
+            "load_avg_1m_before": 37.2197265625,
+            "load_s": 22.119288131128997,
+            "node_cpu_cores_during_load": 5.9777433711313135,
+            "node_flush_count": 3.0,
+            "node_flush_ms_s": 2.608,
+            "node_gc_ms_s": 0.304,
+            "node_index_ms_s": 81.697,
+            "node_index_throttle_ms_s": 0.0,
+            "node_merge_bytes": 298264710.0,
+            "node_merge_count": 9.0,
+            "node_merge_ms_s": 14.944,
+            "node_merge_throttled_ms_s": 0.0,
+            "node_refresh_count": 48.0,
+            "node_refresh_ms_s": 3.727,
+            "refresh_tail_s": 0.13596770586445928,
+            "retries_429": 0.0,
+            "searchable_s": 22.255255836993456,
+            "vectors_per_s": 3560.2411584472857
+          },
+          "rep": 1
+        },
+        {
+          "arm": "merge_threads4",
+          "config": {
+            "bulk": 1000,
+            "ef": null,
+            "refresh": "shipped",
+            "settings": {
+              "merge.scheduler.max_thread_count": 4
+            },
+            "vectors": "real",
+            "writers": 4
+          },
+          "flat": {
+            "bulk_p50_s": 1.263666523154825,
+            "bulk_p95_s": 2.529543207492676,
+            "bytes_per_doc": 4526.261218018018,
+            "docs_per_s": 2801.448190325345,
+            "failed_docs": 0.0,
+            "images_per_s_equivalent": 378.57407977369525,
+            "io_full_stall_s_during_load": 0.393438,
+            "io_some_stall_s_during_load": 0.561026,
+            "load_avg_1m_before": 26.71728515625,
+            "load_s": 24.7639775169082,
+            "node_cpu_cores_during_load": 5.210812960555089,
+            "node_flush_count": 3.0,
+            "node_flush_ms_s": 6.962,
+            "node_gc_ms_s": 0.305,
+            "node_index_ms_s": 83.138,
+            "node_index_throttle_ms_s": 0.0,
+            "node_merge_bytes": 270372690.0,
+            "node_merge_count": 8.0,
+            "node_merge_ms_s": 13.174,
+            "node_merge_throttled_ms_s": 0.0,
+            "node_refresh_count": 49.0,
+            "node_refresh_ms_s": 3.392,
+            "refresh_tail_s": 0.22596845915541053,
+            "retries_429": 0.0,
+            "searchable_s": 24.98994597606361,
+            "vectors_per_s": 3180.0222700990403
+          },
+          "rep": 2
+        }
+      ],
+      "summary": {
+        "bulk_p50_s": {
+          "max": 1.263666523154825,
+          "mean": 1.240264335880056,
+          "median": 1.240264335880056,
+          "min": 1.216862148605287,
+          "n": 2,
+          "spread_pct": 3.773741870625253
+        },
+        "bulk_p95_s": {
+          "max": 2.529543207492676,
+          "mean": 2.0881650398019684,
+          "median": 2.0881650398019684,
+          "min": 1.6467868721112608,
+          "n": 2,
+          "spread_pct": 42.27426082495526
+        },
+        "bytes_per_doc": {
+          "max": 5305.042162162162,
+          "mean": 4915.65169009009,
+          "median": 4915.65169009009,
+          "min": 4526.261218018018,
+          "n": 2,
+          "spread_pct": 15.84288296329375
+        },
+        "docs_per_s": {
+          "max": 3136.4029252987993,
+          "mean": 2968.925557812072,
+          "median": 2968.925557812072,
+          "min": 2801.448190325345,
+          "n": 2,
+          "spread_pct": 11.282018644492279
+        },
+        "failed_docs": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "images_per_s_equivalent": {
+          "max": 423.83823314848644,
+          "mean": 401.2061564610908,
+          "median": 401.2061564610908,
+          "min": 378.57407977369525,
+          "n": 2,
+          "spread_pct": 11.282018644492295
+        },
+        "io_full_stall_s_during_load": {
+          "max": 0.393438,
+          "mean": 0.233904,
+          "median": 0.233904,
+          "min": 0.07437,
+          "n": 2,
+          "spread_pct": 136.40980915247283
+        },
+        "io_some_stall_s_during_load": {
+          "max": 0.561026,
+          "mean": 0.336154,
+          "median": 0.336154,
+          "min": 0.111282,
+          "n": 2,
+          "spread_pct": 133.7910600498581
+        },
+        "load_avg_1m_before": {
+          "max": 37.2197265625,
+          "mean": 31.968505859375,
+          "median": 31.968505859375,
+          "min": 26.71728515625,
+          "n": 2,
+          "spread_pct": 32.85246252186066
+        },
+        "load_s": {
+          "max": 24.7639775169082,
+          "mean": 23.441632824018598,
+          "median": 23.441632824018598,
+          "min": 22.119288131128997,
+          "n": 2,
+          "spread_pct": 11.282018644492286
+        },
+        "node_cpu_cores_during_load": {
+          "max": 5.9777433711313135,
+          "mean": 5.5942781658432015,
+          "median": 5.5942781658432015,
+          "min": 5.210812960555089,
+          "n": 2,
+          "spread_pct": 13.709193355075664
+        },
+        "node_flush_count": {
+          "max": 3.0,
+          "mean": 3.0,
+          "median": 3.0,
+          "min": 3.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_flush_ms_s": {
+          "max": 6.962,
+          "mean": 4.785,
+          "median": 4.785,
+          "min": 2.608,
+          "n": 2,
+          "spread_pct": 90.99268547544408
+        },
+        "node_gc_ms_s": {
+          "max": 0.305,
+          "mean": 0.3045,
+          "median": 0.3045,
+          "min": 0.304,
+          "n": 2,
+          "spread_pct": 0.32840722495894936
+        },
+        "node_index_ms_s": {
+          "max": 83.138,
+          "mean": 82.4175,
+          "median": 82.4175,
+          "min": 81.697,
+          "n": 2,
+          "spread_pct": 1.748415081748418
+        },
+        "node_index_throttle_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_merge_bytes": {
+          "max": 298264710.0,
+          "mean": 284318700.0,
+          "median": 284318700.0,
+          "min": 270372690.0,
+          "n": 2,
+          "spread_pct": 9.810125046294878
+        },
+        "node_merge_count": {
+          "max": 9.0,
+          "mean": 8.5,
+          "median": 8.5,
+          "min": 8.0,
+          "n": 2,
+          "spread_pct": 11.76470588235294
+        },
+        "node_merge_ms_s": {
+          "max": 14.944,
+          "mean": 14.059000000000001,
+          "median": 14.059000000000001,
+          "min": 13.174,
+          "n": 2,
+          "spread_pct": 12.589800128031875
+        },
+        "node_merge_throttled_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_refresh_count": {
+          "max": 49.0,
+          "mean": 48.5,
+          "median": 48.5,
+          "min": 48.0,
+          "n": 2,
+          "spread_pct": 2.0618556701030926
+        },
+        "node_refresh_ms_s": {
+          "max": 3.727,
+          "mean": 3.5595,
+          "median": 3.5595,
+          "min": 3.392,
+          "n": 2,
+          "spread_pct": 9.411434190195251
+        },
+        "refresh_tail_s": {
+          "max": 0.22596845915541053,
+          "mean": 0.1809680825099349,
+          "median": 0.1809680825099349,
+          "min": 0.13596770586445928,
+          "n": 2,
+          "spread_pct": 49.732942982368364
+        },
+        "retries_429": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "searchable_s": {
+          "max": 24.98994597606361,
+          "mean": 23.622600906528533,
+          "median": 23.622600906528533,
+          "min": 22.255255836993456,
+          "n": 2,
+          "spread_pct": 11.576583585740435
+        },
+        "vectors_per_s": {
+          "max": 3560.2411584472857,
+          "mean": 3370.131714273163,
+          "median": 3370.131714273163,
+          "min": 3180.0222700990403,
+          "n": 2,
+          "spread_pct": 11.282018644492275
+        }
+      }
+    },
+    "refresh30": {
+      "config": {
+        "bulk": 1000,
+        "ef": null,
+        "refresh": "30s",
+        "settings": {},
+        "vectors": "real",
+        "writers": 4
+      },
+      "runs": [
+        {
+          "arm": "refresh30",
+          "config": {
+            "bulk": 1000,
+            "ef": null,
+            "refresh": "30s",
+            "settings": {},
+            "vectors": "real",
+            "writers": 4
+          },
+          "flat": {
+            "bulk_p50_s": 1.582483186153695,
+            "bulk_p95_s": 3.3203054510988284,
+            "bytes_per_doc": 4769.109881081081,
+            "docs_per_s": 2273.676314902787,
+            "failed_docs": 0.0,
+            "images_per_s_equivalent": 307.2535560679442,
+            "io_full_stall_s_during_load": 0.182593,
+            "io_some_stall_s_during_load": 0.217009,
+            "load_avg_1m_before": 21.31884765625,
+            "load_s": 30.512258735019714,
+            "node_cpu_cores_during_load": 4.268576480393949,
+            "node_flush_count": 3.0,
+            "node_flush_ms_s": 1.125,
+            "node_gc_ms_s": 0.432,
+            "node_index_ms_s": 113.838,
+            "node_index_throttle_ms_s": 0.0,
+            "node_merge_bytes": 0.0,
+            "node_merge_count": 0.0,
+            "node_merge_ms_s": 0.0,
+            "node_merge_throttled_ms_s": 0.0,
+            "node_refresh_count": 15.0,
+            "node_refresh_ms_s": 0.887,
+            "refresh_tail_s": 0.35662683192640543,
+            "retries_429": 0.0,
+            "searchable_s": 30.86888556694612,
+            "vectors_per_s": 2580.9298709707314
+          },
+          "rep": 1
+        },
+        {
+          "arm": "refresh30",
+          "config": {
+            "bulk": 1000,
+            "ef": null,
+            "refresh": "30s",
+            "settings": {},
+            "vectors": "real",
+            "writers": 4
+          },
+          "flat": {
+            "bulk_p50_s": 1.5473267096094787,
+            "bulk_p95_s": 3.2681891821091993,
+            "bytes_per_doc": 4767.201571171171,
+            "docs_per_s": 2351.1599980606625,
+            "failed_docs": 0.0,
+            "images_per_s_equivalent": 317.7243240622517,
+            "io_full_stall_s_during_load": 0.073629,
+            "io_some_stall_s_during_load": 0.08417,
+            "load_avg_1m_before": 20.8974609375,
+            "load_s": 29.506711605004966,
+            "node_cpu_cores_during_load": 4.275042223905548,
+            "node_flush_count": 4.0,
+            "node_flush_ms_s": 1.067,
+            "node_gc_ms_s": 0.352,
+            "node_index_ms_s": 111.714,
+            "node_index_throttle_ms_s": 0.0,
+            "node_merge_bytes": 30083.0,
+            "node_merge_count": 1.0,
+            "node_merge_ms_s": 0.014,
+            "node_merge_throttled_ms_s": 0.0,
+            "node_refresh_count": 14.0,
+            "node_refresh_ms_s": 0.707,
+            "refresh_tail_s": 0.24531899904832244,
+            "retries_429": 0.0,
+            "searchable_s": 29.75203060405329,
+            "vectors_per_s": 2668.884322122914
+          },
+          "rep": 2
+        }
+      ],
+      "summary": {
+        "bulk_p50_s": {
+          "max": 1.582483186153695,
+          "mean": 1.5649049478815868,
+          "median": 1.5649049478815868,
+          "min": 1.5473267096094787,
+          "n": 2,
+          "spread_pct": 2.2465566737332914
+        },
+        "bulk_p95_s": {
+          "max": 3.3203054510988284,
+          "mean": 3.2942473166040136,
+          "median": 3.2942473166040136,
+          "min": 3.2681891821091993,
+          "n": 2,
+          "spread_pct": 1.582038747575118
+        },
+        "bytes_per_doc": {
+          "max": 4769.109881081081,
+          "mean": 4768.155726126126,
+          "median": 4768.155726126126,
+          "min": 4767.201571171171,
+          "n": 2,
+          "spread_pct": 0.04002197116704081
+        },
+        "docs_per_s": {
+          "max": 2351.1599980606625,
+          "mean": 2312.4181564817245,
+          "median": 2312.4181564817245,
+          "min": 2273.676314902787,
+          "n": 2,
+          "spread_pct": 3.350764347732185
+        },
+        "failed_docs": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "images_per_s_equivalent": {
+          "max": 317.7243240622517,
+          "mean": 312.48894006509795,
+          "median": 312.48894006509795,
+          "min": 307.2535560679442,
+          "n": 2,
+          "spread_pct": 3.350764347732184
+        },
+        "io_full_stall_s_during_load": {
+          "max": 0.182593,
+          "mean": 0.128111,
+          "median": 0.128111,
+          "min": 0.073629,
+          "n": 2,
+          "spread_pct": 85.05436691618988
+        },
+        "io_some_stall_s_during_load": {
+          "max": 0.217009,
+          "mean": 0.1505895,
+          "median": 0.1505895,
+          "min": 0.08417,
+          "n": 2,
+          "spread_pct": 88.21265758900854
+        },
+        "load_avg_1m_before": {
+          "max": 21.31884765625,
+          "mean": 21.108154296875,
+          "median": 21.108154296875,
+          "min": 20.8974609375,
+          "n": 2,
+          "spread_pct": 1.996321956071664
+        },
+        "load_s": {
+          "max": 30.512258735019714,
+          "mean": 30.00948517001234,
+          "median": 30.00948517001234,
+          "min": 29.506711605004966,
+          "n": 2,
+          "spread_pct": 3.3507643477321736
+        },
+        "node_cpu_cores_during_load": {
+          "max": 4.275042223905548,
+          "mean": 4.271809352149749,
+          "median": 4.271809352149749,
+          "min": 4.268576480393949,
+          "n": 2,
+          "spread_pct": 0.1513584286795364
+        },
+        "node_flush_count": {
+          "max": 4.0,
+          "mean": 3.5,
+          "median": 3.5,
+          "min": 3.0,
+          "n": 2,
+          "spread_pct": 28.57142857142857
+        },
+        "node_flush_ms_s": {
+          "max": 1.125,
+          "mean": 1.096,
+          "median": 1.096,
+          "min": 1.067,
+          "n": 2,
+          "spread_pct": 5.291970802919712
+        },
+        "node_gc_ms_s": {
+          "max": 0.432,
+          "mean": 0.392,
+          "median": 0.392,
+          "min": 0.352,
+          "n": 2,
+          "spread_pct": 20.408163265306126
+        },
+        "node_index_ms_s": {
+          "max": 113.838,
+          "mean": 112.776,
+          "median": 112.776,
+          "min": 111.714,
+          "n": 2,
+          "spread_pct": 1.8833794424345562
+        },
+        "node_index_throttle_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_merge_bytes": {
+          "max": 30083.0,
+          "mean": 15041.5,
+          "median": 15041.5,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 200.0
+        },
+        "node_merge_count": {
+          "max": 1.0,
+          "mean": 0.5,
+          "median": 0.5,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 200.0
+        },
+        "node_merge_ms_s": {
+          "max": 0.014,
+          "mean": 0.007,
+          "median": 0.007,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 200.0
+        },
+        "node_merge_throttled_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_refresh_count": {
+          "max": 15.0,
+          "mean": 14.5,
+          "median": 14.5,
+          "min": 14.0,
+          "n": 2,
+          "spread_pct": 6.896551724137931
+        },
+        "node_refresh_ms_s": {
+          "max": 0.887,
+          "mean": 0.7969999999999999,
+          "median": 0.7969999999999999,
+          "min": 0.707,
+          "n": 2,
+          "spread_pct": 22.584692597239655
+        },
+        "refresh_tail_s": {
+          "max": 0.35662683192640543,
+          "mean": 0.30097291548736393,
+          "median": 0.30097291548736393,
+          "min": 0.24531899904832244,
+          "n": 2,
+          "spread_pct": 36.98267423759469
+        },
+        "retries_429": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "searchable_s": {
+          "max": 30.86888556694612,
+          "mean": 30.310458085499704,
+          "median": 30.310458085499704,
+          "min": 29.75203060405329,
+          "n": 2,
+          "spread_pct": 3.6847181911352416
+        },
+        "vectors_per_s": {
+          "max": 2668.884322122914,
+          "mean": 2624.9070965468227,
+          "median": 2624.9070965468227,
+          "min": 2580.9298709707314,
+          "n": 2,
+          "spread_pct": 3.3507643477321714
+        }
+      }
+    },
+    "shipped": {
+      "config": {
+        "bulk": 1000,
+        "ef": null,
+        "refresh": "shipped",
+        "settings": {},
+        "vectors": "real",
+        "writers": 4
+      },
+      "runs": [
+        {
+          "arm": "shipped",
+          "config": {
+            "bulk": 1000,
+            "ef": null,
+            "refresh": "shipped",
+            "settings": {},
+            "vectors": "real",
+            "writers": 4
+          },
+          "flat": {
+            "bulk_p50_s": 1.1773637731093913,
+            "bulk_p95_s": 1.618091184343211,
+            "bytes_per_doc": 5291.035618018018,
+            "docs_per_s": 3189.775050035216,
+            "failed_docs": 0.0,
+            "images_per_s_equivalent": 431.05068243719137,
+            "io_full_stall_s_during_load": 0.095491,
+            "io_some_stall_s_during_load": 0.110948,
+            "load_avg_1m_before": 21.326171875,
+            "load_s": 21.749182594940066,
+            "node_cpu_cores_during_load": 6.127499570076014,
+            "node_flush_count": 3.0,
+            "node_flush_ms_s": 3.499,
+            "node_gc_ms_s": 0.25,
+            "node_index_ms_s": 77.532,
+            "node_index_throttle_ms_s": 0.0,
+            "node_merge_bytes": 300419846.0,
+            "node_merge_count": 9.0,
+            "node_merge_ms_s": 13.344,
+            "node_merge_throttled_ms_s": 0.0,
+            "node_refresh_count": 49.0,
+            "node_refresh_ms_s": 2.737,
+            "refresh_tail_s": 0.12932620011270046,
+            "retries_429": 0.0,
+            "searchable_s": 21.878508795052767,
+            "vectors_per_s": 3620.8257324724073
+          },
+          "rep": 1
+        },
+        {
+          "arm": "shipped",
+          "config": {
+            "bulk": 1000,
+            "ef": null,
+            "refresh": "shipped",
+            "settings": {},
+            "vectors": "real",
+            "writers": 4
+          },
+          "flat": {
+            "bulk_p50_s": 1.2089136806316674,
+            "bulk_p95_s": 1.551070228801109,
+            "bytes_per_doc": 6119.510745945946,
+            "docs_per_s": 3208.3774348662505,
+            "failed_docs": 0.0,
+            "images_per_s_equivalent": 433.56451822516897,
+            "io_full_stall_s_during_load": 0.109734,
+            "io_some_stall_s_during_load": 0.125671,
+            "load_avg_1m_before": 22.97412109375,
+            "load_s": 21.623079393990338,
+            "node_cpu_cores_during_load": 5.481844090760909,
+            "node_flush_count": 3.0,
+            "node_flush_ms_s": 3.266,
+            "node_gc_ms_s": 0.297,
+            "node_index_ms_s": 76.495,
+            "node_index_throttle_ms_s": 0.0,
+            "node_merge_bytes": 283983826.0,
+            "node_merge_count": 8.0,
+            "node_merge_ms_s": 12.363,
+            "node_merge_throttled_ms_s": 0.0,
+            "node_refresh_count": 48.0,
+            "node_refresh_ms_s": 3.495,
+            "refresh_tail_s": 0.12714898586273193,
+            "retries_429": 0.0,
+            "searchable_s": 21.75022837985307,
+            "vectors_per_s": 3641.9419530914197
+          },
+          "rep": 2
+        }
+      ],
+      "summary": {
+        "bulk_p50_s": {
+          "max": 1.2089136806316674,
+          "mean": 1.1931387268705294,
+          "median": 1.1931387268705294,
+          "min": 1.1773637731093913,
+          "n": 2,
+          "spread_pct": 2.6442782227870483
+        },
+        "bulk_p95_s": {
+          "max": 1.618091184343211,
+          "mean": 1.58458070657216,
+          "median": 1.58458070657216,
+          "min": 1.551070228801109,
+          "n": 2,
+          "spread_pct": 4.2295703377005704
+        },
+        "bytes_per_doc": {
+          "max": 6119.510745945946,
+          "mean": 5705.273181981982,
+          "median": 5705.273181981982,
+          "min": 5291.035618018018,
+          "n": 2,
+          "spread_pct": 14.521217503560804
+        },
+        "docs_per_s": {
+          "max": 3208.3774348662505,
+          "mean": 3199.076242450733,
+          "median": 3199.076242450733,
+          "min": 3189.775050035216,
+          "n": 2,
+          "spread_pct": 0.5814923878395547
+        },
+        "failed_docs": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "images_per_s_equivalent": {
+          "max": 433.56451822516897,
+          "mean": 432.3076003311802,
+          "median": 432.3076003311802,
+          "min": 431.05068243719137,
+          "n": 2,
+          "spread_pct": 0.5814923878395407
+        },
+        "io_full_stall_s_during_load": {
+          "max": 0.109734,
+          "mean": 0.1026125,
+          "median": 0.1026125,
+          "min": 0.095491,
+          "n": 2,
+          "spread_pct": 13.880375197953459
+        },
+        "io_some_stall_s_during_load": {
+          "max": 0.125671,
+          "mean": 0.11830950000000001,
+          "median": 0.11830950000000001,
+          "min": 0.110948,
+          "n": 2,
+          "spread_pct": 12.444478254070889
+        },
+        "load_avg_1m_before": {
+          "max": 22.97412109375,
+          "mean": 22.150146484375,
+          "median": 22.150146484375,
+          "min": 21.326171875,
+          "n": 2,
+          "spread_pct": 7.43990212395428
+        },
+        "load_s": {
+          "max": 21.749182594940066,
+          "mean": 21.686130994465202,
+          "median": 21.686130994465202,
+          "min": 21.623079393990338,
+          "n": 2,
+          "spread_pct": 0.5814923878395502
+        },
+        "node_cpu_cores_during_load": {
+          "max": 6.127499570076014,
+          "mean": 5.804671830418462,
+          "median": 5.804671830418462,
+          "min": 5.481844090760909,
+          "n": 2,
+          "spread_pct": 11.123031554198299
+        },
+        "node_flush_count": {
+          "max": 3.0,
+          "mean": 3.0,
+          "median": 3.0,
+          "min": 3.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_flush_ms_s": {
+          "max": 3.499,
+          "mean": 3.3825000000000003,
+          "median": 3.3825000000000003,
+          "min": 3.266,
+          "n": 2,
+          "spread_pct": 6.888396156688842
+        },
+        "node_gc_ms_s": {
+          "max": 0.297,
+          "mean": 0.27349999999999997,
+          "median": 0.27349999999999997,
+          "min": 0.25,
+          "n": 2,
+          "spread_pct": 17.18464351005484
+        },
+        "node_index_ms_s": {
+          "max": 77.532,
+          "mean": 77.0135,
+          "median": 77.0135,
+          "min": 76.495,
+          "n": 2,
+          "spread_pct": 1.3465171690677504
+        },
+        "node_index_throttle_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_merge_bytes": {
+          "max": 300419846.0,
+          "mean": 292201836.0,
+          "median": 292201836.0,
+          "min": 283983826.0,
+          "n": 2,
+          "spread_pct": 5.624885943564023
+        },
+        "node_merge_count": {
+          "max": 9.0,
+          "mean": 8.5,
+          "median": 8.5,
+          "min": 8.0,
+          "n": 2,
+          "spread_pct": 11.76470588235294
+        },
+        "node_merge_ms_s": {
+          "max": 13.344,
+          "mean": 12.8535,
+          "median": 12.8535,
+          "min": 12.363,
+          "n": 2,
+          "spread_pct": 7.632162446026373
+        },
+        "node_merge_throttled_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_refresh_count": {
+          "max": 49.0,
+          "mean": 48.5,
+          "median": 48.5,
+          "min": 48.0,
+          "n": 2,
+          "spread_pct": 2.0618556701030926
+        },
+        "node_refresh_ms_s": {
+          "max": 3.495,
+          "mean": 3.116,
+          "median": 3.116,
+          "min": 2.737,
+          "n": 2,
+          "spread_pct": 24.326059050064185
+        },
+        "refresh_tail_s": {
+          "max": 0.12932620011270046,
+          "mean": 0.1282375929877162,
+          "median": 0.1282375929877162,
+          "min": 0.12714898586273193,
+          "n": 2,
+          "spread_pct": 1.6977971897656274
+        },
+        "retries_429": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "searchable_s": {
+          "max": 21.878508795052767,
+          "mean": 21.81436858745292,
+          "median": 21.81436858745292,
+          "min": 21.75022837985307,
+          "n": 2,
+          "spread_pct": 0.5880546791231938
+        },
+        "vectors_per_s": {
+          "max": 3641.9419530914197,
+          "mean": 3631.3838427819137,
+          "median": 3631.3838427819137,
+          "min": 3620.8257324724073,
+          "n": 2,
+          "spread_pct": 0.5814923878395576
+        }
+      }
+    },
+    "translog_async": {
+      "config": {
+        "bulk": 1000,
+        "ef": null,
+        "refresh": "shipped",
+        "settings": {
+          "translog.durability": "async",
+          "translog.sync_interval": "30s"
+        },
+        "vectors": "real",
+        "writers": 4
+      },
+      "runs": [
+        {
+          "arm": "translog_async",
+          "config": {
+            "bulk": 1000,
+            "ef": null,
+            "refresh": "shipped",
+            "settings": {
+              "translog.durability": "async",
+              "translog.sync_interval": "30s"
+            },
+            "vectors": "real",
+            "writers": 4
+          },
+          "flat": {
+            "bulk_p50_s": 1.1712656929157674,
+            "bulk_p95_s": 1.48402332609985,
+            "bytes_per_doc": 5230.417945945946,
+            "docs_per_s": 3263.258220744722,
+            "failed_docs": 0.0,
+            "images_per_s_equivalent": 440.9808406411787,
+            "io_full_stall_s_during_load": 0.065358,
+            "io_some_stall_s_during_load": 0.07643,
+            "load_avg_1m_before": 21.87548828125,
+            "load_s": 21.259427022654563,
+            "node_cpu_cores_during_load": 5.744581444733154,
+            "node_flush_count": 3.0,
+            "node_flush_ms_s": 2.336,
+            "node_gc_ms_s": 0.253,
+            "node_index_ms_s": 78.502,
+            "node_index_throttle_ms_s": 0.0,
+            "node_merge_bytes": 260057944.0,
+            "node_merge_count": 8.0,
+            "node_merge_ms_s": 11.423,
+            "node_merge_throttled_ms_s": 0.0,
+            "node_refresh_count": 46.0,
+            "node_refresh_ms_s": 2.767,
+            "refresh_tail_s": 0.17704318510368466,
+            "retries_429": 0.0,
+            "searchable_s": 21.436470207758248,
+            "vectors_per_s": 3704.239061385901
+          },
+          "rep": 1
+        },
+        {
+          "arm": "translog_async",
+          "config": {
+            "bulk": 1000,
+            "ef": null,
+            "refresh": "shipped",
+            "settings": {
+              "translog.durability": "async",
+              "translog.sync_interval": "30s"
+            },
+            "vectors": "real",
+            "writers": 4
+          },
+          "flat": {
+            "bulk_p50_s": 1.1498251918237656,
+            "bulk_p95_s": 1.4345517535926775,
+            "bytes_per_doc": 5291.436266666667,
+            "docs_per_s": 3339.7713371418363,
+            "failed_docs": 0.0,
+            "images_per_s_equivalent": 451.32045096511297,
+            "io_full_stall_s_during_load": 0.039985,
+            "io_some_stall_s_during_load": 0.046355,
+            "load_avg_1m_before": 21.78125,
+            "load_s": 20.772380201146007,
+            "node_cpu_cores_during_load": 6.080309515663114,
+            "node_flush_count": 3.0,
+            "node_flush_ms_s": 2.586,
+            "node_gc_ms_s": 0.259,
+            "node_index_ms_s": 77.637,
+            "node_index_throttle_ms_s": 0.0,
+            "node_merge_bytes": 283596882.0,
+            "node_merge_count": 8.0,
+            "node_merge_ms_s": 14.125,
+            "node_merge_throttled_ms_s": 0.0,
+            "node_refresh_count": 46.0,
+            "node_refresh_ms_s": 2.24,
+            "refresh_tail_s": 0.14694778388366103,
+            "retries_429": 0.0,
+            "searchable_s": 20.919327985029668,
+            "vectors_per_s": 3791.091788106949
+          },
+          "rep": 2
+        }
+      ],
+      "summary": {
+        "bulk_p50_s": {
+          "max": 1.1712656929157674,
+          "mean": 1.1605454423697665,
+          "median": 1.1605454423697665,
+          "min": 1.1498251918237656,
+          "n": 2,
+          "spread_pct": 1.847450371975227
+        },
+        "bulk_p95_s": {
+          "max": 1.48402332609985,
+          "mean": 1.459287539846264,
+          "median": 1.459287539846264,
+          "min": 1.4345517535926775,
+          "n": 2,
+          "spread_pct": 3.390118201953841
+        },
+        "bytes_per_doc": {
+          "max": 5291.436266666667,
+          "mean": 5260.927106306306,
+          "median": 5260.927106306306,
+          "min": 5230.417945945946,
+          "n": 2,
+          "spread_pct": 1.1598396915170708
+        },
+        "docs_per_s": {
+          "max": 3339.7713371418363,
+          "mean": 3301.5147789432795,
+          "median": 3301.5147789432795,
+          "min": 3263.258220744722,
+          "n": 2,
+          "spread_pct": 2.317515489711174
+        },
+        "failed_docs": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "images_per_s_equivalent": {
+          "max": 451.32045096511297,
+          "mean": 446.15064580314584,
+          "median": 446.15064580314584,
+          "min": 440.9808406411787,
+          "n": 2,
+          "spread_pct": 2.317515489711157
+        },
+        "io_full_stall_s_during_load": {
+          "max": 0.065358,
+          "mean": 0.052671499999999996,
+          "median": 0.052671499999999996,
+          "min": 0.039985,
+          "n": 2,
+          "spread_pct": 48.17216141556629
+        },
+        "io_some_stall_s_during_load": {
+          "max": 0.07643,
+          "mean": 0.0613925,
+          "median": 0.0613925,
+          "min": 0.046355,
+          "n": 2,
+          "spread_pct": 48.988068575151686
+        },
+        "load_avg_1m_before": {
+          "max": 21.87548828125,
+          "mean": 21.828369140625,
+          "median": 21.828369140625,
+          "min": 21.78125,
+          "n": 2,
+          "spread_pct": 0.43172387567247145
+        },
+        "load_s": {
+          "max": 21.259427022654563,
+          "mean": 21.015903611900285,
+          "median": 21.015903611900285,
+          "min": 20.772380201146007,
+          "n": 2,
+          "spread_pct": 2.3175154897111616
+        },
+        "node_cpu_cores_during_load": {
+          "max": 6.080309515663114,
+          "mean": 5.912445480198134,
+          "median": 5.912445480198134,
+          "min": 5.744581444733154,
+          "n": 2,
+          "spread_pct": 5.678328401578926
+        },
+        "node_flush_count": {
+          "max": 3.0,
+          "mean": 3.0,
+          "median": 3.0,
+          "min": 3.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_flush_ms_s": {
+          "max": 2.586,
+          "mean": 2.461,
+          "median": 2.461,
+          "min": 2.336,
+          "n": 2,
+          "spread_pct": 10.158472165786266
+        },
+        "node_gc_ms_s": {
+          "max": 0.259,
+          "mean": 0.256,
+          "median": 0.256,
+          "min": 0.253,
+          "n": 2,
+          "spread_pct": 2.343750000000002
+        },
+        "node_index_ms_s": {
+          "max": 78.502,
+          "mean": 78.0695,
+          "median": 78.0695,
+          "min": 77.637,
+          "n": 2,
+          "spread_pct": 1.1079871140458115
+        },
+        "node_index_throttle_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_merge_bytes": {
+          "max": 283596882.0,
+          "mean": 271827413.0,
+          "median": 271827413.0,
+          "min": 260057944.0,
+          "n": 2,
+          "spread_pct": 8.659515881865822
+        },
+        "node_merge_count": {
+          "max": 8.0,
+          "mean": 8.0,
+          "median": 8.0,
+          "min": 8.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_merge_ms_s": {
+          "max": 14.125,
+          "mean": 12.774000000000001,
+          "median": 12.774000000000001,
+          "min": 11.423,
+          "n": 2,
+          "spread_pct": 21.152340692030684
+        },
+        "node_merge_throttled_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_refresh_count": {
+          "max": 46.0,
+          "mean": 46.0,
+          "median": 46.0,
+          "min": 46.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_refresh_ms_s": {
+          "max": 2.767,
+          "mean": 2.5035,
+          "median": 2.5035,
+          "min": 2.24,
+          "n": 2,
+          "spread_pct": 21.050529259037337
+        },
+        "refresh_tail_s": {
+          "max": 0.17704318510368466,
+          "mean": 0.16199548449367285,
+          "median": 0.16199548449367285,
+          "min": 0.14694778388366103,
+          "n": 2,
+          "spread_pct": 18.577925992251398
+        },
+        "retries_429": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "searchable_s": {
+          "max": 21.436470207758248,
+          "mean": 21.177899096393958,
+          "median": 21.177899096393958,
+          "min": 20.919327985029668,
+          "n": 2,
+          "spread_pct": 2.4418957724500445
+        },
+        "vectors_per_s": {
+          "max": 3791.091788106949,
+          "mean": 3747.665424746425,
+          "median": 3747.665424746425,
+          "min": 3704.239061385901,
+          "n": 2,
+          "spread_pct": 2.31751548971116
+        }
+      }
+    },
+    "writers1": {
+      "config": {
+        "bulk": 1000,
+        "ef": null,
+        "refresh": "shipped",
+        "settings": {},
+        "vectors": "real",
+        "writers": 1
+      },
+      "runs": [
+        {
+          "arm": "writers1",
+          "config": {
+            "bulk": 1000,
+            "ef": null,
+            "refresh": "shipped",
+            "settings": {},
+            "vectors": "real",
+            "writers": 1
+          },
+          "flat": {
+            "bulk_p50_s": 1.4691092174034566,
+            "bulk_p95_s": 2.219012896833009,
+            "bytes_per_doc": 4764.427387387387,
+            "docs_per_s": 673.8625718466229,
+            "failed_docs": 0.0,
+            "images_per_s_equivalent": 91.0625097090031,
+            "io_full_stall_s_during_load": 0.194741,
+            "io_some_stall_s_during_load": 0.226838,
+            "load_avg_1m_before": 32.1162109375,
+            "load_s": 102.95125875575468,
+            "node_cpu_cores_during_load": 1.2149726143392898,
+            "node_flush_count": 5.0,
+            "node_flush_ms_s": 1.517,
+            "node_gc_ms_s": 0.271,
+            "node_index_ms_s": 96.798,
+            "node_index_throttle_ms_s": 0.0,
+            "node_merge_bytes": 84304152.0,
+            "node_merge_count": 3.0,
+            "node_merge_ms_s": 3.404,
+            "node_merge_throttled_ms_s": 0.0,
+            "node_refresh_count": 45.0,
+            "node_refresh_ms_s": 2.841,
+            "refresh_tail_s": 0.9262703652493656,
+            "retries_429": 0.0,
+            "searchable_s": 103.87752912100405,
+            "vectors_per_s": 764.925081555626
+          },
+          "rep": 1
+        },
+        {
+          "arm": "writers1",
+          "config": {
+            "bulk": 1000,
+            "ef": null,
+            "refresh": "shipped",
+            "settings": {},
+            "vectors": "real",
+            "writers": 1
+          },
+          "flat": {
+            "bulk_p50_s": 1.519768490921706,
+            "bulk_p95_s": 2.9506869194097813,
+            "bytes_per_doc": 2902.510428828829,
+            "docs_per_s": 615.3895082419976,
+            "failed_docs": 0.0,
+            "images_per_s_equivalent": 83.16074435702672,
+            "io_full_stall_s_during_load": 0.567648,
+            "io_some_stall_s_during_load": 0.858422,
+            "load_avg_1m_before": 31.17138671875,
+            "load_s": 112.73347866814584,
+            "node_cpu_cores_during_load": 1.1620120087451442,
+            "node_flush_count": 3.0,
+            "node_flush_ms_s": 1.129,
+            "node_gc_ms_s": 0.326,
+            "node_index_ms_s": 106.79,
+            "node_index_throttle_ms_s": 0.0,
+            "node_merge_bytes": 74351596.0,
+            "node_merge_count": 2.0,
+            "node_merge_ms_s": 2.992,
+            "node_merge_throttled_ms_s": 0.0,
+            "node_refresh_count": 37.0,
+            "node_refresh_ms_s": 2.246,
+            "refresh_tail_s": 0.9256013580597937,
+            "retries_429": 0.0,
+            "searchable_s": 113.65908002620563,
+            "vectors_per_s": 698.5502525990244
+          },
+          "rep": 2
+        }
+      ],
+      "summary": {
+        "bulk_p50_s": {
+          "max": 1.519768490921706,
+          "mean": 1.4944388541625813,
+          "median": 1.4944388541625813,
+          "min": 1.4691092174034566,
+          "n": 2,
+          "spread_pct": 3.389852544126782
+        },
+        "bulk_p95_s": {
+          "max": 2.9506869194097813,
+          "mean": 2.584849908121395,
+          "median": 2.584849908121395,
+          "min": 2.219012896833009,
+          "n": 2,
+          "spread_pct": 28.306247889980384
+        },
+        "bytes_per_doc": {
+          "max": 4764.427387387387,
+          "mean": 3833.468908108108,
+          "median": 3833.468908108108,
+          "min": 2902.510428828829,
+          "n": 2,
+          "spread_pct": 48.570028952639944
+        },
+        "docs_per_s": {
+          "max": 673.8625718466229,
+          "mean": 644.6260400443102,
+          "median": 644.6260400443102,
+          "min": 615.3895082419976,
+          "n": 2,
+          "spread_pct": 9.070850380261703
+        },
+        "failed_docs": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "images_per_s_equivalent": {
+          "max": 91.0625097090031,
+          "mean": 87.11162703301491,
+          "median": 87.11162703301491,
+          "min": 83.16074435702672,
+          "n": 2,
+          "spread_pct": 9.07085038026169
+        },
+        "io_full_stall_s_during_load": {
+          "max": 0.567648,
+          "mean": 0.3811945,
+          "median": 0.3811945,
+          "min": 0.194741,
+          "n": 2,
+          "spread_pct": 97.82591301815741
+        },
+        "io_some_stall_s_during_load": {
+          "max": 0.858422,
+          "mean": 0.5426300000000001,
+          "median": 0.5426300000000001,
+          "min": 0.226838,
+          "n": 2,
+          "spread_pct": 116.39312238541915
+        },
+        "load_avg_1m_before": {
+          "max": 32.1162109375,
+          "mean": 31.643798828125,
+          "median": 31.643798828125,
+          "min": 31.17138671875,
+          "n": 2,
+          "spread_pct": 2.985811608403478
+        },
+        "load_s": {
+          "max": 112.73347866814584,
+          "mean": 107.84236871195026,
+          "median": 107.84236871195026,
+          "min": 102.95125875575468,
+          "n": 2,
+          "spread_pct": 9.070850380261692
+        },
+        "node_cpu_cores_during_load": {
+          "max": 1.2149726143392898,
+          "mean": 1.188492311542217,
+          "median": 1.188492311542217,
+          "min": 1.1620120087451442,
+          "n": 2,
+          "spread_pct": 4.456116802760182
+        },
+        "node_flush_count": {
+          "max": 5.0,
+          "mean": 4.0,
+          "median": 4.0,
+          "min": 3.0,
+          "n": 2,
+          "spread_pct": 50.0
+        },
+        "node_flush_ms_s": {
+          "max": 1.517,
+          "mean": 1.323,
+          "median": 1.323,
+          "min": 1.129,
+          "n": 2,
+          "spread_pct": 29.327286470143605
+        },
+        "node_gc_ms_s": {
+          "max": 0.326,
+          "mean": 0.2985,
+          "median": 0.2985,
+          "min": 0.271,
+          "n": 2,
+          "spread_pct": 18.42546063651591
+        },
+        "node_index_ms_s": {
+          "max": 106.79,
+          "mean": 101.79400000000001,
+          "median": 101.79400000000001,
+          "min": 96.798,
+          "n": 2,
+          "spread_pct": 9.815902705463978
+        },
+        "node_index_throttle_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_merge_bytes": {
+          "max": 84304152.0,
+          "mean": 79327874.0,
+          "median": 79327874.0,
+          "min": 74351596.0,
+          "n": 2,
+          "spread_pct": 12.546102017053931
+        },
+        "node_merge_count": {
+          "max": 3.0,
+          "mean": 2.5,
+          "median": 2.5,
+          "min": 2.0,
+          "n": 2,
+          "spread_pct": 40.0
+        },
+        "node_merge_ms_s": {
+          "max": 3.404,
+          "mean": 3.198,
+          "median": 3.198,
+          "min": 2.992,
+          "n": 2,
+          "spread_pct": 12.88305190744215
+        },
+        "node_merge_throttled_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_refresh_count": {
+          "max": 45.0,
+          "mean": 41.0,
+          "median": 41.0,
+          "min": 37.0,
+          "n": 2,
+          "spread_pct": 19.51219512195122
+        },
+        "node_refresh_ms_s": {
+          "max": 2.841,
+          "mean": 2.5435,
+          "median": 2.5435,
+          "min": 2.246,
+          "n": 2,
+          "spread_pct": 23.392962453312375
+        },
+        "refresh_tail_s": {
+          "max": 0.9262703652493656,
+          "mean": 0.9259358616545796,
+          "median": 0.9259358616545796,
+          "min": 0.9256013580597937,
+          "n": 2,
+          "spread_pct": 0.07225200116738005
+        },
+        "retries_429": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "searchable_s": {
+          "max": 113.65908002620563,
+          "mean": 108.76830457360484,
+          "median": 108.76830457360484,
+          "min": 103.87752912100405,
+          "n": 2,
+          "spread_pct": 8.993015882289763
+        },
+        "vectors_per_s": {
+          "max": 764.925081555626,
+          "mean": 731.7376670773251,
+          "median": 731.7376670773251,
+          "min": 698.5502525990244,
+          "n": 2,
+          "spread_pct": 9.070850380261696
+        }
+      }
+    },
+    "writers8": {
+      "config": {
+        "bulk": 1000,
+        "ef": null,
+        "refresh": "shipped",
+        "settings": {},
+        "vectors": "real",
+        "writers": 8
+      },
+      "runs": [
+        {
+          "arm": "writers8",
+          "config": {
+            "bulk": 1000,
+            "ef": null,
+            "refresh": "shipped",
+            "settings": {},
+            "vectors": "real",
+            "writers": 8
+          },
+          "flat": {
+            "bulk_p50_s": 1.356685992097482,
+            "bulk_p95_s": 1.7334089522715657,
+            "bytes_per_doc": 5314.685405405406,
+            "docs_per_s": 5430.584291735563,
+            "failed_docs": 0.0,
+            "images_per_s_equivalent": 733.8627421264274,
+            "io_full_stall_s_during_load": 0.042471,
+            "io_some_stall_s_during_load": 0.049385,
+            "load_avg_1m_before": 22.50244140625,
+            "load_s": 12.774868462234735,
+            "node_cpu_cores_during_load": 11.011300383706086,
+            "node_flush_count": 3.0,
+            "node_flush_ms_s": 2.68,
+            "node_gc_ms_s": 0.463,
+            "node_index_ms_s": 90.447,
+            "node_index_throttle_ms_s": 0.0,
+            "node_merge_bytes": 307343046.0,
+            "node_merge_count": 9.0,
+            "node_merge_ms_s": 14.285,
+            "node_merge_throttled_ms_s": 0.0,
+            "node_refresh_count": 30.0,
+            "node_refresh_ms_s": 3.138,
+            "refresh_tail_s": 0.1988246450200677,
+            "retries_429": 0.0,
+            "searchable_s": 12.973693107254803,
+            "vectors_per_s": 6164.44703386199
+          },
+          "rep": 1
+        },
+        {
+          "arm": "writers8",
+          "config": {
+            "bulk": 1000,
+            "ef": null,
+            "refresh": "shipped",
+            "settings": {},
+            "vectors": "real",
+            "writers": 8
+          },
+          "flat": {
+            "bulk_p50_s": 1.4174280394800007,
+            "bulk_p95_s": 1.8315117266029117,
+            "bytes_per_doc": 5945.91052972973,
+            "docs_per_s": 5237.378416153812,
+            "failed_docs": 0.0,
+            "images_per_s_equivalent": 707.7538400207854,
+            "io_full_stall_s_during_load": 0.054588,
+            "io_some_stall_s_during_load": 0.070412,
+            "load_avg_1m_before": 26.83837890625,
+            "load_s": 13.246130886022002,
+            "node_cpu_cores_during_load": 11.014812495471036,
+            "node_flush_count": 3.0,
+            "node_flush_ms_s": 2.949,
+            "node_gc_ms_s": 0.479,
+            "node_index_ms_s": 94.422,
+            "node_index_throttle_ms_s": 0.0,
+            "node_merge_bytes": 300037958.0,
+            "node_merge_count": 9.0,
+            "node_merge_ms_s": 15.723,
+            "node_merge_throttled_ms_s": 0.0,
+            "node_refresh_count": 31.0,
+            "node_refresh_ms_s": 4.381,
+            "refresh_tail_s": 0.22144871670752764,
+            "retries_429": 0.0,
+            "searchable_s": 13.46757960272953,
+            "vectors_per_s": 5945.132256174597
+          },
+          "rep": 2
+        }
+      ],
+      "summary": {
+        "bulk_p50_s": {
+          "max": 1.4174280394800007,
+          "mean": 1.3870570157887414,
+          "median": 1.3870570157887414,
+          "min": 1.356685992097482,
+          "n": 2,
+          "spread_pct": 4.3792033558172125
+        },
+        "bulk_p95_s": {
+          "max": 1.8315117266029117,
+          "mean": 1.7824603394372387,
+          "median": 1.7824603394372387,
+          "min": 1.7334089522715657,
+          "n": 2,
+          "spread_pct": 5.503784413083729
+        },
+        "bytes_per_doc": {
+          "max": 5945.91052972973,
+          "mean": 5630.297967567568,
+          "median": 5630.297967567568,
+          "min": 5314.685405405406,
+          "n": 2,
+          "spread_pct": 11.211220577674503
+        },
+        "docs_per_s": {
+          "max": 5430.584291735563,
+          "mean": 5333.981353944688,
+          "median": 5333.981353944688,
+          "min": 5237.378416153812,
+          "n": 2,
+          "spread_pct": 3.6221700594972526
+        },
+        "failed_docs": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "images_per_s_equivalent": {
+          "max": 733.8627421264274,
+          "mean": 720.8082910736064,
+          "median": 720.8082910736064,
+          "min": 707.7538400207854,
+          "n": 2,
+          "spread_pct": 3.6221700594972503
+        },
+        "io_full_stall_s_during_load": {
+          "max": 0.054588,
+          "mean": 0.0485295,
+          "median": 0.0485295,
+          "min": 0.042471,
+          "n": 2,
+          "spread_pct": 24.96831823942137
+        },
+        "io_some_stall_s_during_load": {
+          "max": 0.070412,
+          "mean": 0.0598985,
+          "median": 0.0598985,
+          "min": 0.049385,
+          "n": 2,
+          "spread_pct": 35.10438491781932
+        },
+        "load_avg_1m_before": {
+          "max": 26.83837890625,
+          "mean": 24.67041015625,
+          "median": 24.67041015625,
+          "min": 22.50244140625,
+          "n": 2,
+          "spread_pct": 17.575457694210787
+        },
+        "load_s": {
+          "max": 13.246130886022002,
+          "mean": 13.010499674128368,
+          "median": 13.010499674128368,
+          "min": 12.774868462234735,
+          "n": 2,
+          "spread_pct": 3.6221700594972575
+        },
+        "node_cpu_cores_during_load": {
+          "max": 11.014812495471036,
+          "mean": 11.01305643958856,
+          "median": 11.01305643958856,
+          "min": 11.011300383706086,
+          "n": 2,
+          "spread_pct": 0.0318904364489131
+        },
+        "node_flush_count": {
+          "max": 3.0,
+          "mean": 3.0,
+          "median": 3.0,
+          "min": 3.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_flush_ms_s": {
+          "max": 2.949,
+          "mean": 2.8145,
+          "median": 2.8145,
+          "min": 2.68,
+          "n": 2,
+          "spread_pct": 9.557647894830332
+        },
+        "node_gc_ms_s": {
+          "max": 0.479,
+          "mean": 0.471,
+          "median": 0.471,
+          "min": 0.463,
+          "n": 2,
+          "spread_pct": 3.3970276008492486
+        },
+        "node_index_ms_s": {
+          "max": 94.422,
+          "mean": 92.4345,
+          "median": 92.4345,
+          "min": 90.447,
+          "n": 2,
+          "spread_pct": 4.300342404621644
+        },
+        "node_index_throttle_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_merge_bytes": {
+          "max": 307343046.0,
+          "mean": 303690502.0,
+          "median": 303690502.0,
+          "min": 300037958.0,
+          "n": 2,
+          "spread_pct": 2.4054384157196984
+        },
+        "node_merge_count": {
+          "max": 9.0,
+          "mean": 9.0,
+          "median": 9.0,
+          "min": 9.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_merge_ms_s": {
+          "max": 15.723,
+          "mean": 15.004000000000001,
+          "median": 15.004000000000001,
+          "min": 14.285,
+          "n": 2,
+          "spread_pct": 9.584110903759
+        },
+        "node_merge_throttled_ms_s": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "node_refresh_count": {
+          "max": 31.0,
+          "mean": 30.5,
+          "median": 30.5,
+          "min": 30.0,
+          "n": 2,
+          "spread_pct": 3.278688524590164
+        },
+        "node_refresh_ms_s": {
+          "max": 4.381,
+          "mean": 3.7595,
+          "median": 3.7595,
+          "min": 3.138,
+          "n": 2,
+          "spread_pct": 33.06290730150287
+        },
+        "refresh_tail_s": {
+          "max": 0.22144871670752764,
+          "mean": 0.21013668086379766,
+          "median": 0.21013668086379766,
+          "min": 0.1988246450200677,
+          "n": 2,
+          "spread_pct": 10.766360063583559
+        },
+        "retries_429": {
+          "max": 0.0,
+          "mean": 0.0,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2,
+          "spread_pct": 0.0
+        },
+        "searchable_s": {
+          "max": 13.46757960272953,
+          "mean": 13.220636354992166,
+          "median": 13.220636354992166,
+          "min": 12.973693107254803,
+          "n": 2,
+          "spread_pct": 3.735724077216846
+        },
+        "vectors_per_s": {
+          "max": 6164.44703386199,
+          "mean": 6054.789645018294,
+          "median": 6054.789645018294,
+          "min": 5945.132256174597,
+          "n": 2,
+          "spread_pct": 3.622170059497258
+        }
+      }
+    }
+  },
+  "docs_images": 9375,
+  "docs_items": 60000,
+  "items_per_image": 6.4,
+  "opensearch": "3.6.0",
+  "schema": "2-os-1"
+}

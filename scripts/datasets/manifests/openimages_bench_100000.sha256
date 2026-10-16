@@ -1,0 +1,5 @@
+manifest_sha256: b9deca207878b569b7cd6e649dbd68d1b34b70db0a0fb0f5d43cc4d554da9f50
+count: 100000
+seed: 20261009
+license: https://creativecommons.org/licenses/by/2.0/
+fetcher: python scripts/datasets/fetch_openimages_bench.py --out <dir> --n 100000 --seed 20261009 --cache-dir <cache> --manifest <pin.json>

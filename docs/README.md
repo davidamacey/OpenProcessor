@@ -28,7 +28,7 @@ Build the site with `make docs-build`.
 
 | Document | What it covers |
 |---|---|
-| [VISION_AND_GOALS.md](VISION_AND_GOALS.md) | What the project is for, the v0.5.0 scope and the standards the code is held to (canonical) |
+| [VISION_AND_GOALS.md](VISION_AND_GOALS.md) | What the project is for, the v0.6.0 scope and the standards the code is held to (canonical) |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Services, project isolation, data model, the multi-box region cascade, config store, workers |
 | [opensearch_schema_design.md](opensearch_schema_design.md) | Global and per-project index schemas, `region_boxes`, clustering |
 | [design/curation_api_contract.md](design/curation_api_contract.md) | Route table and wire models for `/curation` |

@@ -16,7 +16,7 @@ from typing import Literal
 
 DECODE_SECTION = 'Decode once and the GPU decode (#217)'
 STORAGE_SECTION = 'Storage per image and per vector'
-BASELINE_SECTION = 'v0.5.0 baseline (set A, public COCO, 2,000 images)'
+BASELINE_SECTION = '0.5.0 baseline (set A, public COCO, 2,000 images)'
 
 
 @dataclass(frozen=True)
