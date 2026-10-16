@@ -5,7 +5,7 @@ This page is a map. The user guides live in the documentation site
 page that explains it. Headings that code, compose files and scripts cite are
 kept, so those references still resolve.
 
-> **Status: experimental for v0.5.0.** The subsystem is working and tested, but its
+> **Status: experimental for v0.6.0.** The subsystem is working and tested, but its
 > API can still change between releases. It ships opt-in, behind Docker Compose
 > profiles.
 

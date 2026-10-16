@@ -21,7 +21,7 @@ The pipeline, end to end: ingest, detection, region stage (one or many boxes per
 embedding and clustering, human and AI review, import of labeled datasets, export,
 training, bake-off, and promotion back into serving.
 
-## What v0.5.0 delivers
+## What v0.6.0 delivers
 
 - Isolated projects, each with its own indexes, directories and class registry.
 - Editable prompt packs and region profiles, versioned and revertible.
@@ -31,6 +31,8 @@ training, bake-off, and promotion back into serving.
 - Dataset import (YOLO, COCO, OpenProcessor exports) and project combine, with classes
   mapped by name.
 - A one-line installer.
+- Assist runs: send a crop, a selection, a cluster or a filter to the VLM and apply the proposed label explicitly.
+- Bulk ingest from a folder, a manifest or S3, with a preview, and measured ingest speed-ups (decode once, uint8 inputs, FP16 embeddings, GPU decode, multi-GPU embedding).
 - Documentation for every feature, and a public, reproducible cars-and-wheels example.
 
 ## Standards the code is held to
@@ -44,10 +46,11 @@ training, bake-off, and promotion back into serving.
   operation.
 - Work is merged in waves, each with its own gate.
 
-## Not in v0.5.0
+## Not in v0.6.0
 
-Deep GPU and Triton pipeline optimization (issue #40), benchmarks, a technical white
-paper and more domain showcases are planned after the release.
+The full zero-copy GPU pipeline (issue #40), the 1M-image scale step, request-driven
+processing plans, faces and OCR on resident crops, a technical white paper and more
+domain showcases are planned for v0.7.0 and after.
 
 ## More detail
 

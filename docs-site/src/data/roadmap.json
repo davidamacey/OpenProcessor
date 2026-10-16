@@ -3,6 +3,20 @@
   "note": "Hand-maintained, not derived from an issue tracker. 'Shipped' means it is on main today; 'Planned' items are design work that has not landed and may change after measurement. Update this file when scope actually changes; never describe work that isn't planned.",
   "releases": [
     {
+      "version": "v0.6.0",
+      "headline": "Faster ingest and assist runs: selective VLM labeling, bulk ingest, measured GPU pipeline steps",
+      "stage": "shipped",
+      "summary": "The measured first half of the Triton throughput plan (decode once, uint8 inputs, FP16 PE image encoder, GPU decode, multi-GPU embedding, coalesced writes) plus assist runs, bulk and S3 ingest, detection-only ingest and a repository cleanup. Numbers are in docs/PERFORMANCE.md.",
+      "items": [
+        "Assist runs (/assist/runs): send a crop, box, selection, cluster, sub-cluster or filter to the VLM; cluster label proposals applied explicitly",
+        "Prompt-pack attributes replace the hard-coded make and model; a project calls no VLM until one is activated",
+        "Bulk ingest of a folder, manifest or S3 with a preview; detection-only ingest",
+        "Ingest speed-ups: decode once, uint8 inputs, FP16 PE image encoder, GPU decode, data-parallel PE encoding, coalesced writes, Lucene vector engine for new projects",
+        "Breaking: CROPWRIGHT_* env names are OP_CROPWRIGHT_*; /vlm/label_cluster and /vlm/verify_regions are replaced by /assist/runs; the evaluator has its own compose profile",
+        "Repository cleanup: guards, dead code removed, large files split, one typed env module, one docs source of truth"
+      ]
+    },
+    {
       "version": "v0.5.0",
       "headline": "The monorepo release: backend and Cropwright in one repository, label confirmation, one-port gateway",
       "stage": "shipped",
@@ -19,12 +33,11 @@
       ]
     },
     {
-      "version": "Next",
+      "version": "v0.7.0",
       "headline": "Triton throughput: keep images on the GPU",
       "stage": "next",
-      "summary": "A measured, wave-by-wave optimization plan for the inference and ingest pipeline. The goal is to decode each image once on the GPU and keep it resident across the models that need it, with every change behind a flag, a parity gate against today's outputs, and a p50/p99 benchmark gate. None of this has shipped.",
+      "summary": "The rest of the measured optimization plan: keep each decoded image resident on the GPU across the models that need it, with every change behind a flag, a parity gate against today's outputs and a p50/p99 benchmark gate. The 1M-image scale step is a goal here, not a claim. None of this has shipped.",
       "items": [
-        "CPU-side fixes first: decode once, stop blocking the event loop, shorter Triton queue delays",
         "Smaller model outputs (end2end secondary detector, in-graph OCR argmax) and a GPU-resident OCR BLS",
         "GPU JPEG decode (DALI or nvJPEG, chosen by bake-off) and static Triton ensembles for /detect and /embed",
         "A GPU-resident curation ingest pipeline (BLS) that cuts crops and embeddings from the full-resolution frame",

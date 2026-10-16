@@ -2,7 +2,7 @@
 
 Complete guide for optimizing FastAPI and Triton Inference Server performance.
 
-> **Status (v0.5.0):** this guide covers the API-layer tuning, the measured results of the GPU and
+> **Status (v0.6.0):** this guide covers the API-layer tuning, the measured results of the GPU and
 > Triton pipeline optimization milestone (summary table below; plan in
 > [`design/triton_pipeline_optimization_plan.md`](design/triton_pipeline_optimization_plan.md)),
 > and the benchmark protocol. The scale ladder (10k, 100k, 1M images) is not in this guide yet.
