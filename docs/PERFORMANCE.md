@@ -6,7 +6,7 @@ Complete guide for optimizing FastAPI and Triton Inference Server performance.
 > Triton pipeline optimization milestone (summary table below; plan in
 > [`design/triton_pipeline_optimization_plan.md`](design/triton_pipeline_optimization_plan.md)),
 > and the benchmark protocol. The scale ladder at 10k and 100k images is in
-> [Scale ladder: 10k and 100k](#scale-ladder-10k-and-100k); the 1M step is v0.7.0.
+> [Scale ladder: 10k and 100k](#scale-ladder-10k-and-100k); the 1M step is planned for the next release.
 
 ---
 
@@ -3467,7 +3467,7 @@ Reproduce:
 Three runs of the bulk ingest runner ([Bulk ingest runner](#bulk-ingest-runner)) at larger sizes than the 2,000-image
 baseline: 10,000 public COCO images, 100,000 public Open Images, and 100,000 camera-original photos. All three
 use the 0.6.0 defaults (policy `all`, the 3-stage index policy defaults, 16 images per request, 16 requests in
-flight, FP16 PE engine, GPU decode on) and a fresh project. The 1M-image step is not run (v0.7.0).
+flight, FP16 PE engine, GPU decode on) and a fresh project. The 1M-image step is not run (planned for the next release).
 
 #### Sets and environment
 

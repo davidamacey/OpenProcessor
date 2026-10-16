@@ -29,6 +29,14 @@ from pathlib import Path
 from typing import Any
 
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+# ruff: noqa: E402
+from scripts.curation._project_worker_utils import curation_api_prefix, scoped_url
+
+
 POLL_S = 15.0
 SAMPLE_S = 30.0
 TERMINAL = ('completed', 'completed_with_errors', 'failed')
@@ -297,7 +305,7 @@ def _parse_ts(s: str) -> float:
 
 
 def drive(args: argparse.Namespace) -> int:
-    base = f'{args.api.rstrip("/")}/curation/projects/{args.project}'
+    base = scoped_url(args.api.rstrip('/'), curation_api_prefix(), args.project, '')
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     series = out / f'{args.label}.jsonl'
