@@ -48,7 +48,7 @@ from src.core.logging import get_logger
 from src.services.curation.ingest_models import BatchIngestResult, IngestResult, IngestSummary
 from src.services.curation.ops_metrics import record_ingest_result
 from src.utils.cpu_pool import encoded_nbytes, ingest_gate, mib, run_cpu
-from src.utils.stage_timing import observe_stage
+from src.utils.stage_timing import observe_stage, stage_timer
 
 
 if TYPE_CHECKING:
@@ -57,7 +57,7 @@ if TYPE_CHECKING:
     from src.services.curation.image_decode import DecodedImage
     from src.services.curation.ingest import CurationIngestService
     from src.services.curation.ingest_detect import SecondaryOutput
-    from src.services.curation.ingest_gpu_decode import GpuDecodeFrame
+    from src.services.curation.ingest_gpu_decode import GpuDecodeFrame, GpuRoute
     from src.services.curation.item_doc import DetectedItem
 
 
@@ -65,33 +65,30 @@ logger = get_logger(__name__)
 
 
 async def _prefill_gpu_decode(
-    service: CurationIngestService, images: list[bytes], indices: list[int]
+    service: CurationIngestService, images: list[bytes], indices: list[int], route: GpuRoute
 ) -> tuple[dict[int, GpuDecodeFrame], dict[int, list[DetectedItem]]]:
-    """Run the GPU decode on the images of ``indices`` at or above its size gate."""
-    from src.services.curation.ingest_gpu_decode import (
-        count_route,
-        gpu_decode_ready,
-        megapixels,
-        run_gpu_decode,
-    )
+    """Run the GPU decode on the images ``route`` chose."""
+    from src.services.curation.ingest_gpu_decode import count_route, run_gpu_decode
 
     frames: dict[int, GpuDecodeFrame] = {}
     items: dict[int, list[DetectedItem]] = {}
-    if not indices or not await gpu_decode_ready(service):
+    if not route.ready:
         return frames, items
-    gate = service.config.ingest_gpu_min_megapixels
-    chosen = []
+    chosen = set(route.chosen)
+    unreadable = set(route.unreadable)
     for idx in indices:
-        mp = megapixels(images[idx])
-        if mp is not None and mp >= gate:
-            chosen.append(idx)
-        else:
-            count_route('cpu_small' if mp is not None else 'cpu_not_image')
+        if idx not in chosen:
+            count_route('cpu_not_image' if idx in unreadable else 'cpu_small')
+    taken = [idx for idx in indices if idx in chosen]
     embed_crops = service.policy.embedding.mode not in ('lazy', 'none')
-    outcomes = await asyncio.gather(
-        *(run_gpu_decode(service, images[idx], embed_crops=embed_crops) for idx in chosen)
-    )
-    for idx, outcome in zip(chosen, outcomes, strict=True):
+
+    async def timed(idx: int) -> tuple[GpuDecodeFrame, list[DetectedItem]] | str:
+        # Wall time of the call, which includes its wait in the Triton queue.
+        with stage_timer('gpu_decode'):
+            return await run_gpu_decode(service, images[idx], embed_crops=embed_crops)
+
+    outcomes = await asyncio.gather(*(timed(idx) for idx in taken))
+    for idx, outcome in zip(taken, outcomes, strict=True):
         if isinstance(outcome, str):
             count_route(f'cpu_{outcome}')
             continue
@@ -106,6 +103,7 @@ async def _prefill_detections(
     image_paths: list[str],
     indices: list[int],
     sizes: dict[int, int | None],
+    route: GpuRoute,
 ) -> tuple[
     dict[int, DecodedImage],
     dict[int, list[DetectedItem]],
@@ -124,7 +122,7 @@ async def _prefill_detections(
 
     prefilled_imgs: dict[int, DecodedImage] = {}
     prefilled_secondary: dict[int, SecondaryOutput] = {}
-    frames, prefilled_items = await _prefill_gpu_decode(service, images, indices)
+    frames, prefilled_items = await _prefill_gpu_decode(service, images, indices, route)
     indices = [idx for idx in indices if idx not in frames]
     if not indices:
         return prefilled_imgs, prefilled_items, prefilled_secondary, frames
@@ -191,6 +189,7 @@ async def run_ingest_batch(
 
     See that method's docstring for the argument contract.
     """
+    from src.services.curation.ingest_gpu_decode import gpu_route
     from src.services.curation.ingest_helpers import MAX_INGEST_CONCURRENCY, _imohash_bytes
 
     if len(images) != len(image_paths):
@@ -225,15 +224,18 @@ async def run_ingest_batch(
 
     # Hold the decoded megabytes this request will bring against the process's in-flight cap,
     # so more clients queue here instead of all decoding at once (#241).
+    # A photo the GPU decode takes is never decoded here, so it holds only its encoded bytes.
     sizes = {i: encoded_nbytes(images[i]) for i in non_dup}
+    route = await gpu_route(service, images, non_dup)
+    held = sum(mib(len(images[i]) if i in route.chosen else sizes[i]) for i in non_dup)
     wait_start = time.perf_counter()
-    async with ingest_gate().hold(sum(mib(n) for n in sizes.values())):
+    async with ingest_gate().hold(held):
         observe_stage('admission_wait', time.perf_counter() - wait_start)
         # Only pay the (expensive) batched decode + inference for images that
         # dedup did not already resolve to an existing document or an
         # earlier-in-batch representative.
         prefilled_imgs, prefilled_items, prefilled_secondary, frames = await _prefill_detections(
-            service, images, image_paths, non_dup, sizes
+            service, images, image_paths, non_dup, sizes, route
         )
 
         sem = asyncio.Semaphore(MAX_INGEST_CONCURRENCY)

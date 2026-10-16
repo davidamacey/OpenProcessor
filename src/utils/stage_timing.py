@@ -24,8 +24,8 @@ if TYPE_CHECKING:
 
 # ``decode`` .. ``opensearch_write`` are the original ingest stages. The rest (#210)
 # name the work that ran untimed on the event loop. All are wall time of a synchronous block,
-# so on the loop thread a stage's seconds are API CPU seconds; ``embed`` and
-# ``opensearch_write`` also include the awaited round trip.
+# so on the loop thread a stage's seconds are API CPU seconds; ``embed``, ``opensearch_write``,
+# ``file_read`` and ``gpu_decode`` also include the awaited round trip.
 STAGES: tuple[str, ...] = (
     'decode',
     'crop',
@@ -42,6 +42,8 @@ STAGES: tuple[str, ...] = (
     'doc_build',
     'bulk_serialize',
     'admission_wait',
+    'file_read',
+    'gpu_decode',
 )
 
 _SECONDS = Histogram(

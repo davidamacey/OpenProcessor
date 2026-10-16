@@ -126,6 +126,36 @@ async def gpu_decode_ready(service: CurationIngestService) -> bool:
     return ready
 
 
+@dataclass(frozen=True)
+class GpuRoute:
+    """Which images of a batch the GPU decode takes (``chosen``); ``unreadable`` are those whose
+    header cannot be read, the rest of the others are below the size gate. ``ready`` is false
+    when the GPU decode is off or unusable: every image then takes the CPU path."""
+
+    ready: bool
+    chosen: tuple[int, ...] = ()
+    unreadable: tuple[int, ...] = ()
+
+
+async def gpu_route(
+    service: CurationIngestService, images: list[bytes], indices: list[int]
+) -> GpuRoute:
+    """Route ``indices`` of ``images`` before any of them is admitted or decoded, so the
+    admission gate can charge each for what it will hold in the API process."""
+    if not indices or not await gpu_decode_ready(service):
+        return GpuRoute(ready=False)
+    gate = service.config.ingest_gpu_min_megapixels
+    chosen: list[int] = []
+    unreadable: list[int] = []
+    for idx in indices:
+        mp = megapixels(images[idx])
+        if mp is None:
+            unreadable.append(idx)
+        elif mp >= gate:
+            chosen.append(idx)
+    return GpuRoute(ready=True, chosen=tuple(chosen), unreadable=tuple(unreadable))
+
+
 def _input(name: str, arr: np.ndarray, dtype: str) -> Any:
     from tritonclient.grpc import InferInput
 
