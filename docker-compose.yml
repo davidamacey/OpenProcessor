@@ -1102,7 +1102,7 @@ services:
         soft: 65536
         hard: 65536
     volumes:
-      - opensearch_data:/usr/share/opensearch/data
+      - ${OP_OPENSEARCH_DATA:-opensearch_data}:/usr/share/opensearch/data
     ports:
       - "${OP_BIND_ADDRESS:-127.0.0.1}:${OPENSEARCH_PORT:-4607}:9200"  # REST API
     healthcheck:

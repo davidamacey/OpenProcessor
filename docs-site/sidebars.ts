@@ -88,6 +88,7 @@ const sidebars: SidebarsConfig = {
         'operations/training-and-promote',
         'operations/monitoring',
         'operations/release-acceptance',
+        'operations/storage',
         'operations/upgrade-and-backup',
       ],
     },

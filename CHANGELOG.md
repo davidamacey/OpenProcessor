@@ -37,6 +37,8 @@ Read these before upgrading from 0.5.0.
 - **Compose changes**: the `evaluator` profile above; Triton gets `CUDA_DEVICE_ORDER=PCI_BUS_ID` (so `TRITON_GPU_ID=0,2` means the lowest listed id first), `CUPY_CACHE_DIR` and glibc malloc tuning for the API; Triton runs with `--log-verbose=0`; the API's memory reservation uses the `deploy.resources.reservations` form; an optional git-ignored `docker-compose.local.yml` is loaded after the stock files; the `gateway-wrap` message names `OP_CROPWRIGHT_BIND_ADDRESS`. Image defaults now point at `0.6.0`.
 
 ### Added
+- Stage timers `file_read` and `gpu_decode` in `op_pipeline_stage_seconds` and the bulk run's `stage_s`, so time spent reading source files and in the GPU decode call no longer lands in `opensearch_write`.
+- `OP_OPENSEARCH_DATA` (compose): the OpenSearch data directory as a Docker volume name (default) or a host path; docs-site Operations > Storage and sizing recommends local NVMe with measured numbers and the steps to move.
 
 - `scripts/bench/scale_run.py`, a driver for 100k-image ingest benchmarks (forced stop, resume, 15 s progress polls and 30 s resource samples, `--folder` or `--manifest` source), and `scripts/datasets/fetch_openimages_bench.py`, a seeded, checksum-pinned fetcher for a CC BY 2.0 Open Images v7 train set (pin in `scripts/datasets/manifests/openimages_bench_100000.sha256`). Results are in `docs/PERFORMANCE.md`, "Scale ladder: 10k and 100k".
 
@@ -567,6 +569,7 @@ Read these before upgrading from 0.5.0.
   naming-leak scan and `tests/test_no_legacy_region_scalars.py` cover the same ground.
 
 ### Fixed
+- Bulk ingest of large photos was held back by its own admission gate and by file reads on the event loop (see `docs/design/ingest_write_path_investigation.md`). The per-process gate now charges a photo the GPU decode takes its encoded size, not the decoded pixels it never holds in the API (a 16-photo request of 20 MP counted 915 of 1,024 MiB, so a second request on the same worker waited, 41 percent of request time in the 100k 20 MP run). `/ingest/batch` and `/ingest/image` read their files in parallel on a per-process pool (`OP_INGEST_READ_THREADS`, default 8) instead of one after another on the loop thread.
 
 - Ingest no longer fails a JPEG that Pillow reads but libjpeg-turbo's header read refuses (`tjDecompressHeader3(): Could not determine subsampling level`, 2 of 100,000 Open Images files, `decode_failed`): that error alone sends the image to the Pillow decode; a damaged file still fails.
 

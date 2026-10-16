@@ -15,6 +15,7 @@ from src.config import Settings, get_settings
 from src.core.dependencies import OpenSearchClientFactory, TritonClientFactory
 from src.core.logging import get_logger
 from src.utils.cpu_pool import shutdown_cpu_executor
+from src.utils.file_read import shutdown_read_executor
 
 
 logger = get_logger(__name__)
@@ -314,6 +315,7 @@ async def _run_shutdown() -> None:
         ('triton_pool', _close_triton_pool),
         # the ingest CPU pool: let running pixel work finish
         ('cpu_executor', shutdown_cpu_executor),
+        ('read_executor', shutdown_read_executor),
         ('shared_executor', _shutdown_shared_executor),
         ('triton_clients', TritonClientFactory.close_all),
         ('opensearch_clients', OpenSearchClientFactory.close),

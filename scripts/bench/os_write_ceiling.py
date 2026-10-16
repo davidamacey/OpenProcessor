@@ -48,7 +48,14 @@ from scripts.bench.suite_probes import cgroup_cpu_s
 
 
 ARMS: dict[str, dict[str, Any]] = {
-    'shipped': {'bulk': 1000, 'writers': 4, 'refresh': 'shipped', 'ef': None, 'vectors': 'real'},
+    'shipped': {
+        'bulk': 1000,
+        'writers': 4,
+        'refresh': 'shipped',
+        'ef': None,
+        'vectors': 'real',
+        'settings': {},
+    },
     'bulk500': {'bulk': 500},
     'bulk5000': {'bulk': 5000},
     'writers1': {'writers': 1},
@@ -57,6 +64,19 @@ ARMS: dict[str, dict[str, Any]] = {
     'refresh_off': {'refresh': '-1'},
     'ef128': {'ef': 128},
     'iid_vectors': {'vectors': 'iid'},
+    # Index-level levers (``settings`` is merged into the index settings as given).
+    'translog_async': {
+        'settings': {'translog.durability': 'async', 'translog.sync_interval': '30s'}
+    },
+    'refresh30': {'refresh': '30s'},
+    'merge_threads1': {'settings': {'merge.scheduler.max_thread_count': 1}},
+    'merge_threads4': {'settings': {'merge.scheduler.max_thread_count': 4}},
+    'bulk_mode': {
+        'refresh': '-1',
+        'settings': {'translog.durability': 'async', 'translog.sync_interval': '30s'},
+    },
+    'shards2': {'settings': {'number_of_shards': 2}},
+    'zstd': {'settings': {'codec': 'zstd_no_dict'}},
 }
 INDEX_SETTING_KEYS = (
     'number_of_shards',
@@ -113,11 +133,14 @@ def with_ef_construction(mappings: dict[str, Any], ef: int | None) -> dict[str, 
     return out
 
 
-def index_body(source: dict[str, Any], refresh: str, ef: int | None) -> dict[str, Any]:
+def index_body(
+    source: dict[str, Any], refresh: str, ef: int | None, extra: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Create-index body from a real index's GET response: its settings, mapping and refresh."""
     settings = {k: v for k, v in source['settings']['index'].items() if k in INDEX_SETTING_KEYS}
     if refresh != 'shipped':
         settings['refresh_interval'] = refresh
+    settings.update(extra or {})
     return {
         'settings': {'index': settings},
         'mappings': with_ef_construction(source['mappings'], ef),
@@ -169,6 +192,34 @@ def post_bulk(client: httpx.Client, url: str, body: bytes) -> tuple[float, int, 
         return time.monotonic() - started, failed, retries
 
 
+def node_counters(client: httpx.Client, url: str) -> dict[str, float]:
+    """Cumulative merge, flush, refresh, translog and GC counters of the node (ms and counts)."""
+    node = next(iter(client.get(f'{url}/_nodes/stats/jvm,indices').json()['nodes'].values()))
+    ind, gc = node['indices'], node['jvm']['gc']['collectors']
+    return {
+        'merge_ms': ind['merges']['total_time_in_millis'],
+        'merge_throttled_ms': ind['merges']['total_throttled_time_in_millis'],
+        'merge_count': ind['merges']['total'],
+        'merge_bytes': ind['merges']['total_size_in_bytes'],
+        'flush_ms': ind['flush']['total_time_in_millis'],
+        'flush_count': ind['flush']['total'],
+        'refresh_ms': ind['refresh']['total_time_in_millis'],
+        'refresh_count': ind['refresh']['total'],
+        'index_ms': ind['indexing']['index_time_in_millis'],
+        'index_throttle_ms': ind['indexing']['throttle_time_in_millis'],
+        'gc_ms': sum(c['collection_time_in_millis'] for c in gc.values()),
+    }
+
+
+def pressure_io() -> tuple[float, float]:
+    """Cumulative (some, full) IO stall microseconds of the host (/proc/pressure/io)."""
+    vals = {}
+    for line in Path('/proc/pressure/io').read_text().splitlines():
+        kind, *rest = line.split()
+        vals[kind] = float(dict(kv.split('=') for kv in rest)['total'])
+    return vals['some'], vals['full']
+
+
 def run_arm(
     client: httpx.Client,
     args: argparse.Namespace,
@@ -182,7 +233,8 @@ def run_arm(
     names = {k: f'w0os-{name}-r{rep}-{k}'.lower() for k in ('items', 'images')}
     for kind, idx in names.items():
         client.put(
-            f'{url}/{idx}', json=index_body(source[kind], cfg['refresh'], cfg['ef'])
+            f'{url}/{idx}',
+            json=index_body(source[kind], cfg['refresh'], cfg['ef'], cfg['settings']),
         ).raise_for_status()
     jobs = make_jobs(len(docs['items']), len(docs['images']), cfg['bulk'])
     bodies = {
@@ -190,10 +242,13 @@ def run_arm(
     }  # built before the clock starts
     cpu0 = cgroup_cpu_s(f'{args.project}-opensearch')
     load0 = os.getloadavg()[0]
+    c0 = node_counters(client, url)
+    io0 = pressure_io()
     started = time.monotonic()
     with ThreadPoolExecutor(cfg['writers']) as pool:
         results = list(pool.map(lambda j: post_bulk(client, url, bodies[(j[0], j[1])]), jobs))
     load_s = time.monotonic() - started
+    io1 = pressure_io()
     cpu_load = cgroup_cpu_s(f'{args.project}-opensearch') - cpu0
     if cfg['refresh'] != 'shipped':
         for idx in names.values():
@@ -206,6 +261,12 @@ def run_arm(
     for idx in names.values():
         client.post(f'{url}/{idx}/_flush').raise_for_status()
     count, size = settled_totals(client, url, list(names.values()))
+    c1 = node_counters(client, url)
+    delta = {
+        f'node_{k}_s' if k.endswith('_ms') else f'node_{k}': (c1[k] - c0[k])
+        / (1000 if k.endswith('_ms') else 1)
+        for k in c0
+    }
     sent = len(docs['items']) + len(docs['images'])
     lat = [t for t, _, _ in results]
     for idx in names.values():
@@ -228,6 +289,9 @@ def run_arm(
             'bytes_per_doc': size / max(count, 1),
             'node_cpu_cores_during_load': cpu_load / load_s,
             'load_avg_1m_before': load0,
+            'io_some_stall_s_during_load': (io1[0] - io0[0]) / 1e6,
+            'io_full_stall_s_during_load': (io1[1] - io0[1]) / 1e6,
+            **delta,
         },
     }
 
@@ -272,6 +336,15 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     p.add_argument('--opensearch-url', required=True)
     p.add_argument('--project', required=True, help='compose project (node CPU is read from it)')
+    p.add_argument(
+        '--source-url',
+        help='read templates and mappings from this OpenSearch instead of --opensearch-url',
+    )
+    p.add_argument(
+        '--repo-mappings',
+        action='store_true',
+        help="use the repo's index body builders (current engine, settings) instead of the source's",
+    )
     p.add_argument('--items-index', required=True)
     p.add_argument('--images-index', required=True)
     p.add_argument('--out', type=Path, required=True)
@@ -291,8 +364,9 @@ def main(argv: list[str] | None = None) -> int:
     url = args.opensearch_url.rstrip('/')
     rng = np.random.default_rng(args.seed)
     with httpx.Client(timeout=httpx.Timeout(900.0)) as client:
-        item_t, item_src = load_templates(client, url, args.items_index, args.templates)
-        image_t, image_src = load_templates(client, url, args.images_index, args.templates)
+        src_url = (args.source_url or url).rstrip('/')
+        item_t, item_src = load_templates(client, src_url, args.items_index, args.templates)
+        image_t, image_src = load_templates(client, src_url, args.images_index, args.templates)
         pool = {
             'pe': np.array([t['pe_embedding'] for t in item_t if 'pe_embedding' in t], np.float32),
             'img_pe': np.array(
@@ -300,6 +374,13 @@ def main(argv: list[str] | None = None) -> int:
             ),
             'img_clip': np.array([t['embedding'] for t in image_t if 'embedding' in t], np.float32),
         }
+        if args.repo_mappings:
+            from src.clients.curation_opensearch.bodies_core import _images_body, _items_body
+
+            item_src, image_src = (
+                {'settings': b['settings'], 'mappings': b['mappings']}
+                for b in (_items_body(), _images_body())
+            )
         n_images = round(args.docs / args.items_per_image)
         docs_by_mode: dict[str, dict[str, list[bytes]]] = {}
         for mode in sorted({arm_config(a)['vectors'] for a in args.arms.split(',')}):
