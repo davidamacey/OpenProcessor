@@ -5,7 +5,8 @@ same library and settings Pillow uses (accurate DCT, smooth chroma upsampling), 
 identical, at about half of Pillow's CPU on a 12-24 MP photo, and the result is a numpy array the
 blur scoring reads without the 54 MB copy ``np.asarray(PIL image)`` makes. Pillow still holds the
 frame for the letterbox, the whole-frame square and the crops (one copy into its own layout).
-Everything else, CMYK JPEGs included, decodes through Pillow as before.
+Everything else, CMYK JPEGs and a JPEG whose header libjpeg-turbo cannot read (no
+subsampling level) included, decodes through Pillow.
 
 Damaged files are refused as before: ``simplejpeg`` raises on libjpeg's recoverable errors
 (``strict``), so a truncated JPEG fails the decode instead of ingesting a grey tail.
@@ -23,6 +24,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 EXIF_ORIENTATION = 0x0112
 
 NOT_DECODABLE = 'not a decodable image'
+HEADER_REJECTED = 'Could not determine subsampling level'
 
 
 class ImageDecodeError(ValueError):
@@ -79,8 +81,17 @@ def _decode(data: bytes) -> DecodedImage:
     if header.format == 'JPEG' and header.mode in ('RGB', 'L'):
         import simplejpeg
 
-        rgb = orient_array(simplejpeg.decode_jpeg(data, colorspace='RGB'), orientation)
-        return DecodedImage(Image.fromarray(rgb), rgb)
+        try:
+            decoded = simplejpeg.decode_jpeg(data, colorspace='RGB')
+        except ValueError as exc:
+            # libjpeg-turbo's header read refuses some JPEGs Pillow reads fine (it cannot
+            # determine the subsampling). That, and only that, takes the Pillow path; a
+            # damaged file (any other error) still fails.
+            if HEADER_REJECTED not in str(exc):
+                raise
+        else:
+            rgb = orient_array(decoded, orientation)
+            return DecodedImage(Image.fromarray(rgb), rgb)
     img = ImageOps.exif_transpose(header) if orientation != 1 else header
     if img.mode != 'RGB':
         img = img.convert('RGB')
