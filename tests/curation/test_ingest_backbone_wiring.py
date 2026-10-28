@@ -23,6 +23,10 @@ class _FakeGrpcClient:
         self.calls.append({'model_name': model_name, **kwargs})
         return {
             'name': model_name,
+            'inputs': [
+                {'name': 'jpeg', 'datatype': 'UINT8', 'shape': ['-1']},
+                {'name': 'boxes', 'datatype': 'FP64', 'shape': ['-1', '4']},
+            ],
             'outputs': [
                 {'name': 'output0', 'datatype': 'FP32', 'shape': ['-1', '100800', '85']},
                 {'name': 'sppf_feat', 'datatype': 'FP32', 'shape': ['-1', '768', '40', '40']},
@@ -46,6 +50,17 @@ class TestPoolOutputNames:
         assert client.calls[0]['as_json'] is True
 
     @pytest.mark.asyncio
+    async def test_reads_input_names_from_json_metadata(self) -> None:
+        pool = AsyncTritonPool(pool_size=1)
+        pool._clients = [_FakeGrpcClient()]  # type: ignore[list-item]
+        pool._lock = asyncio.Lock()
+        pool._initialized = True
+
+        assert await pool.get_model_input_names('gpu_image_prep') == ['jpeg', 'boxes']
+
+    @pytest.mark.asyncio
     async def test_uninitialized_pool_raises(self) -> None:
         with pytest.raises(RuntimeError, match='not initialized'):
             await AsyncTritonPool(pool_size=1).get_model_output_names('m')
+        with pytest.raises(RuntimeError, match='not initialized'):
+            await AsyncTritonPool(pool_size=1).get_model_input_names('m')

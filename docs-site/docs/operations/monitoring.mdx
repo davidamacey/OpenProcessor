@@ -168,6 +168,7 @@ previous value in place.
 | --- | --- | --- | --- |
 | `op_ingest_images_total` | counter | `project`, `outcome` (`ok`, `failed`, `skipped`) | Images that finished ingest; `skipped` is a duplicate of an existing image. |
 | `op_ingest_items_total` | counter | `project` | Items (crops) indexed by ingest. |
+| `op_reprocess_decode_total` | counter | `route` (`gpu`, `cpu_<reason>`) | Photos of the `embed` reprocess pass while the GPU decode is usable: `gpu` = decoded and embedded by `gpu_image_prep`, `cpu_small` = below `OP_INGEST_GPU_MIN_MEGAPIXELS`, any other `cpu_*` = declined or failed and decoded in the API. |
 | `op_queue_depth` | gauge | `queue` (`segment`, `label`, `embed`), `project` | Items waiting: `segment` = `pending_detection`, `label` = `pending_verification`, `embed` = vector deferred. |
 | `op_queue_oldest_item_age_seconds` | gauge | `queue` | Age of the longest-waiting item in that queue, worst project. |
 | `op_embedding_state_items` | gauge | `project`, `state` (`pending`, `embedded`, `failed`) | Items by embedding state; `pending` is `embedding_state=deferred`. |

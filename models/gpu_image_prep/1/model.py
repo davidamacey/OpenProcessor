@@ -18,6 +18,10 @@ concurrent images are batched by those models' own dynamic batchers. Per image:
 Only boxes, vectors, sums and the crop JPEGs leave the GPU. Requests beyond ``MAX_IN_FLIGHT``
 wait in ``execute``, which holds Triton's queue: back-pressure instead of unbounded memory.
 
+Stored-box mode (the reprocess embed pass, #259): a request that also carries ``boxes`` (stored
+``bbox_norm`` rows) skips steps 3, 5 and 6 and embeds the whole-frame square and one square per
+stored box, cut by the rectangle the CPU embed pass cuts (``prep_geometry.stored_box_rects``).
+
 Measured on one RTX A6000 with 12-24 MP photos (set B, detect + embed): about 43 photos/s with the
 GPU about 75 % busy (PE is most of it); the worker count past 32 and batching requests before the
 stages change nothing.
@@ -41,6 +45,7 @@ from prep_geometry import (
     letterbox_geometry,
     oriented_size,
     route,
+    stored_box_rects,
     undo_letterbox,
     whole_square_geometry,
 )
@@ -246,14 +251,33 @@ class TritonPythonModel:
             raise RuntimeError('crop JPEG encode failed')
         return buf.tobytes()
 
+    def _embed_stored(self, im: _Image, boxes: np.ndarray) -> Any:
+        """Stored-box mode: the whole-frame vector and one vector per stored box, in order."""
+        w, h = im.size
+        im.rects = stored_box_rects(boxes, w, h)
+        im.embed = True
+        vectors = self._embed(im)
+        im.frame = None
+        return pb_utils.InferenceResponse(
+            output_tensors=[
+                _tensor('status', np.array(['ok'], np.object_)),
+                _tensor('size', np.array([w, h], np.int32)),
+                _tensor('whole_embedding', vectors[0]),
+                _tensor('crop_embeddings', vectors[1:].reshape(-1, vectors.shape[1])),
+            ]
+        )
+
     def _process(self, request: Any) -> Any:
         data = pb_utils.get_input_tensor_by_name(request, 'jpeg').as_numpy().tobytes()
         flag = pb_utils.get_input_tensor_by_name(request, 'embed_crops')
+        stored = pb_utils.get_input_tensor_by_name(request, 'boxes')
         im = self._decode(data, True if flag is None else bool(flag.as_numpy().reshape(-1)[0]))
         if im.reason != 'ok':
             return pb_utils.InferenceResponse(
                 output_tensors=[_tensor('status', np.array([im.reason], np.object_))]
             )
+        if stored is not None:
+            return self._embed_stored(im, stored.as_numpy())
         self._detect(im)
         jpegs = [self.encode_pool.submit(self._encode, px) for px in self._crop_pixels(im)]
         vectors = self._embed(im)

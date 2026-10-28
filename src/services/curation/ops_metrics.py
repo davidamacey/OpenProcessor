@@ -49,6 +49,13 @@ OP_INGEST_DECODE_TOTAL = Counter(
     'off, small, not_jpeg, progressive, truncated, decoder, call_failed, ...).',
     labelnames=('route',),
 )
+OP_REPROCESS_DECODE_TOTAL = Counter(
+    'op_reprocess_decode_total',
+    'Photos of the embed reprocess pass, by route, counted while the GPU decode is usable: gpu '
+    '(embedded on the GPU decode) or cpu_<reason> (decoded in the API: small, not_image, '
+    'progressive, decoder, call_failed, box_count, ...).',
+    labelnames=('route',),
+)
 OP_INGEST_ITEMS_TOTAL = Counter(
     'op_ingest_items_total',
     'Items (crops) indexed by ingest, by project.',

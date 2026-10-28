@@ -42,6 +42,7 @@ SPEC: dict[str, tuple[str, tuple[str, ...], str | None]] = {
     'op_ingest_images_total': ('counter', ('project', 'outcome'), None),
     'op_ingest_items_total': ('counter', ('project',), None),
     'op_ingest_decode_total': ('counter', ('route',), None),
+    'op_reprocess_decode_total': ('counter', ('route',), None),
     'op_queue_depth': ('gauge', ('queue', 'project'), 'livemostrecent'),
     'op_queue_oldest_item_age_seconds': ('gauge', ('queue',), 'livemostrecent'),
     'op_worker_last_heartbeat_timestamp_seconds': ('gauge', ('worker',), 'livemostrecent'),

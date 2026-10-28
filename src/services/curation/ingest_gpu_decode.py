@@ -164,24 +164,37 @@ def _input(name: str, arr: np.ndarray, dtype: str) -> Any:
     return inp
 
 
+async def call_gpu_image_prep(
+    triton_pool: Any, data: bytes, extra: list[tuple[str, np.ndarray, str]], *, caller: str
+) -> Any:
+    """One ``gpu_image_prep`` request for the encoded image ``data`` plus the ``extra`` inputs
+    (name, array, Triton dtype): the result when its status is ``ok``, else the reason the image
+    takes the CPU path as a string (``call_failed`` when the call itself raised)."""
+    inputs = [_input('jpeg', np.frombuffer(data, dtype=np.uint8), 'UINT8')]
+    inputs.extend(_input(name, arr, dtype) for name, arr, dtype in extra)
+    try:
+        result = await triton_pool.stream_one(GPU_IMAGE_PREP_MODEL, inputs)
+    except Exception as exc:
+        logger.warning('gpu_image_prep_call_failed', caller=caller, error=str(exc))
+        return 'call_failed'
+    status = result.as_numpy('status')[0]
+    status = status.decode() if isinstance(status, bytes) else str(status)
+    return result if status == 'ok' else status
+
+
 async def run_gpu_decode(
     service: CurationIngestService, data: bytes, *, embed_crops: bool
 ) -> tuple[GpuDecodeFrame, list[DetectedItem]] | str:
     """The GPU decode's products and the detected items for one image, or the reason the image
     takes the CPU path."""
-    inputs = [
-        _input('jpeg', np.frombuffer(data, dtype=np.uint8), 'UINT8'),
-        _input('embed_crops', np.array([embed_crops]), 'BOOL'),
-    ]
-    try:
-        result = await service.triton_pool.stream_one(GPU_IMAGE_PREP_MODEL, inputs)
-    except Exception as exc:
-        logger.warning('ingest_gpu_decode_call_failed', error=str(exc))
-        return 'call_failed'
-    status = result.as_numpy('status')[0]
-    status = status.decode() if isinstance(status, bytes) else str(status)
-    if status != 'ok':
-        return status
+    result = await call_gpu_image_prep(
+        service.triton_pool,
+        data,
+        [('embed_crops', np.array([embed_crops]), 'BOOL')],
+        caller='ingest',
+    )
+    if isinstance(result, str):
+        return result
     width, height = (int(v) for v in result.as_numpy('size'))
     scale, pad_w, pad_h = (float(v) for v in result.as_numpy('letterbox'))
     boxes = result.as_numpy('det_boxes').reshape(-1, 4)
