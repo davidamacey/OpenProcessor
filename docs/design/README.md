@@ -63,6 +63,7 @@ how it was measured and whether the design is implemented.
 | [vlm_serving_sizing.md](../research/vlm_serving_sizing.md) | vLLM sizing, flag recon, profile sweep and the VLM-versus-segmenter bottleneck finding |
 | [pe_encoder_batching_benchmark.md](../research/pe_encoder_batching_benchmark.md) | Perception encoder batched TensorRT parity and throughput |
 | [ingest_concurrency_tuning.md](../research/ingest_concurrency_tuning.md) | Batch and concurrency sweep for bulk ingest |
+| [cluster_eval_baseline.md](../research/cluster_eval_baseline.md) | Baseline of the cluster-quality harness (false merges and false splits scored separately) on the current IVF + AHC partition of a public COCO project (#341) |
 | [clustering_methods.md](../research/clustering_methods.md) | UMAP, AHC, HDBSCAN and IVF methods, the IVF-then-refine hierarchy and the ablation |
 | [gpu_clustering.md](../research/gpu_clustering.md) | cuML UMAP backend detection and VRAM budget (#66) |
 | [curation_scores.md](../research/curation_scores.md) | Uniqueness, mistakenness, near-duplicate and diversity score validation |
