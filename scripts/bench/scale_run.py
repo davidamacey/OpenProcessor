@@ -34,6 +34,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
+from scripts.bench.host_pressure import PRESSURE_IO, pressure_io
 from scripts.curation._project_worker_utils import curation_api_prefix, scoped_url
 
 
@@ -79,6 +80,10 @@ def _peak(samples: list[dict[str, Any]], key: str) -> float:
     return max(vals) if vals else 0.0
 
 
+def _stall_delta(samples: list[dict[str, Any]], key: str) -> float:
+    return float(samples[-1][key] - samples[0][key]) if samples else 0.0
+
+
 def summarize(
     legs: list[dict[str, Any]],
     samples: list[dict[str, Any]],
@@ -103,6 +108,8 @@ def summarize(
         'peak_os_heap_pct': _peak(samples, 'os_heap_pct'),
         'peak_os_segments': _peak(samples, 'os_segments'),
         'os_store_bytes': _peak(samples, 'os_store_bytes'),
+        'io_some_stall_s': _stall_delta(samples, 'io_some_stall_s'),
+        'io_full_stall_s': _stall_delta(samples, 'io_full_stall_s'),
     }
 
 
@@ -187,6 +194,12 @@ def _mem_used_gb() -> float:
     return (kv['MemTotal'] - kv['MemAvailable']) / 1024**2
 
 
+def io_stall_fields(path: Path = PRESSURE_IO) -> dict[str, float]:
+    """Cumulative host IO stall seconds, so a window's stall is the difference of two samples."""
+    some, full = pressure_io(path)
+    return {'io_some_stall_s': some / 1e6, 'io_full_stall_s': full / 1e6}
+
+
 def take_sample(
     project: str, os_container: str, prefix: str, cpu_prev: tuple[int, int] | None
 ) -> tuple[dict[str, Any], tuple[int, int]]:
@@ -221,6 +234,7 @@ def take_sample(
         'gpu_mem_mib': [int(r[2]) for r in rows],
         'host_cpu_pct': cpu,
         'host_mem_used_gb': _mem_used_gb(),
+        **io_stall_fields(),
         'containers': containers,
         'os_store_bytes': sum(int(i.get('store.size') or 0) for i in mine),
         'os_docs': sum(int(i.get('docs.count') or 0) for i in mine),
