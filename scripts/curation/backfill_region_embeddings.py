@@ -157,17 +157,13 @@ async def _run(
         )
         n_written = counts['region_written']
         n_missing_image = counts['missing_image']
-        n_decode_failed = counts['decode_failed']
 
         try:
             await client.indices.refresh(index=cfg.items_index)
         except Exception as exc:
             logger.debug('refresh_failed: %s', exc)
 
-        print(
-            f'\nwritten={n_written:,} missing_source_image={n_missing_image:,} '
-            f'decode_failed={n_decode_failed:,}'
-        )
+        print(f'\nwritten={n_written:,} missing_source_image={n_missing_image:,}')
         return 0
     finally:
         await client.close()

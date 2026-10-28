@@ -60,12 +60,9 @@ def crop_jpeg_from_cache(crop_id: str) -> bytes | None:
     return data
 
 
-def crop_jpeg_from_disk(image_path: str, bbox: tuple[float, float, float, float]) -> bytes | None:
-    """A JPEG of the item crop cut from the source image on disk.
-
-    The slow path: re-opens the source, EXIF-transposes, crops and
-    re-encodes. ``None`` when the image is missing or unreadable.
-    """
+def decode_source_rgb(image_path: str) -> Image.Image | None:
+    """The EXIF-transposed RGB source image at ``image_path``, ``None`` when it is missing or
+    unreadable."""
     p = Path(image_path)
     if not p.is_file():
         logger.warning('image_missing', path=image_path)
@@ -82,6 +79,18 @@ def crop_jpeg_from_disk(image_path: str, bbox: tuple[float, float, float, float]
         return None
     except OSError as exc:
         logger.warning('image_io_error', path=image_path, error=str(exc))
+        return None
+    return img
+
+
+def crop_jpeg_from_disk(image_path: str, bbox: tuple[float, float, float, float]) -> bytes | None:
+    """A JPEG of the item crop cut from the source image on disk.
+
+    The slow path: re-opens the source, EXIF-transposes, crops and
+    re-encodes. ``None`` when the image is missing or unreadable.
+    """
+    img = decode_source_rgb(image_path)
+    if img is None:
         return None
 
     full_w, full_h = img.size
@@ -174,6 +183,7 @@ __all__ = [
     'cache_stats',
     'crop_jpeg_from_cache',
     'crop_jpeg_from_disk',
+    'decode_source_rgb',
     'load_item_crop_jpeg',
     'load_region_jpeg',
     'load_vlm_item_jpeg',

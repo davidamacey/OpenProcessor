@@ -41,7 +41,6 @@ from src.services.curation.region_box_embeddings import (
     write_box_embeddings,
 )
 from src.services.curation.reprocess_gpu_embed import embed_on_gpu
-from src.services.detection.region_embed import embed_region_crops
 from src.utils.cpu_pool import offload_always, run_cpu
 from src.utils.vectors import float_list
 
@@ -125,28 +124,20 @@ def _pixel_box(
     return (x1 * width, y1 * height, x2 * width, y2 * height)
 
 
-def _jpeg(img: Image.Image) -> bytes:
-    buf = io.BytesIO()
-    img.save(buf, format='JPEG', quality=92)
-    return buf.getvalue()
-
-
-def _crop_arrays(img: Image.Image, boxes: Sequence[Sequence[float]]) -> list[np.ndarray]:
+def crop_arrays(img: Image.Image, boxes: Sequence[Sequence[float]]) -> list[np.ndarray]:
+    """The decoded pixels of each stored ``bbox_norm`` box of ``img`` (never re-encoded: a
+    JPEG round trip moves the vector of a small box of a large photo, #360)."""
     return [np.asarray(crop_pil(img, _pixel_box(box, *img.size))) for box in boxes]
-
-
-def _crop_jpegs(img: Image.Image, boxes: Sequence[Sequence[float]]) -> list[bytes]:
-    return [_jpeg(crop_pil(img, _pixel_box(box, *img.size))) for box in boxes]
 
 
 @dataclass
 class _Vectors:
     """One photo's vectors: the frame (``None`` when not asked), one per crop box and one per
-    region box in the order asked (``None`` for a region crop the encoder could not decode)."""
+    region box in the order asked."""
 
     frame: np.ndarray | None
     crops: Sequence[np.ndarray] | np.ndarray
-    regions: Sequence[Sequence[float] | np.ndarray | None]
+    regions: Sequence[Sequence[float] | np.ndarray] | np.ndarray
 
 
 async def _cpu_vectors(
@@ -158,12 +149,12 @@ async def _cpu_vectors(
     frame: bool,
 ) -> _Vectors:
     whole = await pe.embed_whole_frame_image(img) if frame else None
-    crops = await run_cpu(_crop_arrays, img, crop_boxes) if crop_boxes else []
-    jpegs = await run_cpu(_crop_jpegs, img, region_boxes) if region_boxes else []
+    crops = await run_cpu(crop_arrays, img, crop_boxes) if crop_boxes else []
+    regions = await run_cpu(crop_arrays, img, region_boxes) if region_boxes else []
     return _Vectors(
         frame=whole,
         crops=await pe.embed_crops(crops, max_batch=_BATCH) if crops else [],
-        regions=await embed_region_crops(pe, jpegs) if jpegs else [],
+        regions=await pe.embed_crops(regions, max_batch=_BATCH) if regions else [],
     )
 
 
@@ -261,7 +252,6 @@ class _Writes:
                 'frame_written',
                 'region_written',
                 'missing_image',
-                'decode_failed',
             ),
             0,
         )
@@ -288,9 +278,6 @@ class _Writes:
             update.update(_placement(self.ivf_store, src, vec))
             self.counts['crop_written'] += 1
         for (cid, box), region_vec in zip(work, vectors.regions, strict=True):
-            if region_vec is None:
-                self.counts['decode_failed'] += 1
-                continue
             self.boxes.setdefault(cid, []).append(entry_for(box, region_vec))
             self.counts['region_written'] += 1
 
@@ -311,8 +298,7 @@ async def reembed_items(
     newly embedded crops out of the clusters; ``gpu`` sends photos at or above
     the ingest size gate to the GPU decode. Returns counters:
     ``images``, ``items``, ``crop_written``, ``frame_written``,
-    ``region_written``, ``missing_image`` (path unservable or unreadable)
-    and ``decode_failed`` (region crop the encoder could not decode).
+    ``region_written`` and ``missing_image`` (path unservable or unreadable).
     """
     cfg = get_curation_config()
     writes = _Writes(get_ivf_ingest_store() if 'crop' in parts and place_in_clusters else None)
