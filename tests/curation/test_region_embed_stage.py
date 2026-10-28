@@ -1,15 +1,16 @@
 """Unit tests for scripts.curation.worker.region_embed_stage (LG-1).
 
 Every task is a full `_ItemTask` (mirrors `_make_task` in
-region_worker_helpers.py); the crop JPEG is real so `_crop_region_jpeg` runs
-for real, and the PE encoder is a stub returning fixed unit vectors. The
-stage embeds each ACCEPTED box of ``pending_boxes`` and keys the vector by
-the box's pre-merge id.
+region_worker_helpers.py) over a real source image on disk, and the PE encoder
+is a stub returning fixed unit vectors. The stage embeds each ACCEPTED box of
+``pending_boxes`` cut from the decoded source pixels (never the item-crop JPEG,
+#360) and keys the vector by the box's pre-merge id.
 """
 
 from __future__ import annotations
 
 import io
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
@@ -20,10 +21,25 @@ from scripts.curation.worker.state import _ItemTask
 from src.domain.region_boxes import RegionBox
 
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
+
 def _make_jpeg(width: int = 320, height: int = 240) -> bytes:
     buf = io.BytesIO()
     Image.new('RGB', (width, height), (50, 80, 120)).save(buf, format='JPEG', quality=85)
     return buf.getvalue()
+
+
+@pytest.fixture(autouse=True)
+def _source_image(tmp_path: Path) -> None:
+    global _SOURCE  # noqa: PLW0603
+    path = tmp_path / 'source.jpg'
+    path.write_bytes(_make_jpeg())
+    _SOURCE = str(path)
+
+
+_SOURCE = ''
 
 
 def _box(box_id: str, state: str = 'accepted', x: float = 0.1) -> RegionBox:
@@ -38,7 +54,7 @@ def _make_task(
 ) -> _ItemTask:
     t = _ItemTask(
         crop_id=crop_id,
-        image_path='/dev/null/never-read',
+        image_path=_SOURCE,
         item_bbox_norm=(0.0, 0.0, 1.0, 1.0),
         region_status='pending',
         class_name='',
@@ -84,22 +100,31 @@ class TestEmbedWrittenRegions:
         assert set(t.box_vectors) == {'b1'}
         assert pe.calls == [1]
 
-    async def test_each_box_is_cropped_from_its_own_geometry(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        seen: list[tuple[float, float, float, float]] = []
-        real = stage._crop_region_jpeg
+    async def test_each_box_is_cropped_from_its_own_geometry(self) -> None:
+        sizes: list[tuple[int, ...]] = []
 
-        def _recording(jpeg: bytes, region_in_crop: tuple[float, float, float, float]) -> bytes:
-            seen.append(region_in_crop)
-            return real(jpeg, region_in_crop)
+        class _Recording(_FakePE):
+            async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:
+                sizes.extend(c.shape for c in crops)
+                return await super().embed_crops(crops, max_batch)
 
-        monkeypatch.setattr(stage, '_crop_region_jpeg', _recording)
-        t = _make_task(boxes=[_box('b1', x=0.1), _box('b2', x=0.5)])
+        t = _make_task(boxes=[_box('b1', x=0.1), _box('b2', x=0.3)])
+        t.pending_boxes = [
+            RegionBox(box_id='b1', bbox_norm=(0.0, 0.0, 0.5, 0.5), state='accepted'),
+            RegionBox(box_id='b2', bbox_norm=(0.5, 0.25, 1.0, 1.0), state='accepted'),
+        ]
+
+        await stage.embed_written_regions([t], _Recording())
+
+        assert sizes == [(120, 160, 3), (180, 160, 3)]  # source is 320x240
+
+    async def test_unreadable_source_leaves_boxes_without_a_vector(self) -> None:
+        t = _make_task(boxes=[_box('b1')])
+        t.image_path = '/nonexistent/source.jpg'
 
         await stage.embed_written_regions([t], _FakePE())
 
-        assert seen == [pytest.approx((0.1, 0.1, 0.3, 0.4)), pytest.approx((0.5, 0.1, 0.7, 0.4))]
+        assert t.box_vectors == {}
 
     async def test_task_with_no_boxes_gets_nothing(self) -> None:
         t = _make_task(boxes=None)  # e.g. a stale-skip with no box write

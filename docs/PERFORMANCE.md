@@ -3206,11 +3206,17 @@ embed stage keep the CPU path.
 bilinear as `resize_crop_rgb` (within one grey level in the host model of the kernel), frame part: Pillow
 `BILINEAR` antialiased (within one grey level); nvJPEG's IDCT differs from libjpeg by a grey level here and
 there. This is the parity ingest's GPU decode already has against its CPU path (#217,
-`docs/design/gpu_decode_plan.md`: same boxes, crop cosine p01 0.996 to 0.998 on every set). Region part: the CPU pass embedded each region crop after a JPEG round trip at quality 92;
-the GPU embeds the decoded pixels directly, so region vectors move by that JPEG loss (expected cosine above
-0.99, to confirm live) and a region box equal to the item box now gets the same vector as the crop. Vectors of
-a photo are therefore not bit-identical between the two routes; within one route repeated passes agree as
-before.
+`docs/design/gpu_decode_plan.md`: same boxes, crop cosine p01 0.996 to 0.998 on every set). Region part (#360): every route embeds the decoded pixels of the stored box. The CPU pass, the
+backfill script and the detection worker's per-box stage used to embed each region crop after a JPEG round
+trip at quality 92 (the worker cut it from the item-crop JPEG). On a 21 MP photo that moved the vector of a
+small box a lot (live check on 5,177 boxes: cosine against the GPU vector median 0.965, p01 0.886, min 0.842;
+median 0.933 for boxes under 2 percent of the frame), because the encoder client shrinks a large crop by a
+large factor and so turns the JPEG noise into a vector change. The GPU vector agreed with the raw-pixel CPU
+vector at a median of 0.9993. The CPU paths now cut the box from the decoded source (`crop_pil`, the same
+rectangle as the crop vectors) and embed it without re-encoding, so a region box equal to the item box gets the
+same vector as the crop. Vectors of a photo are not bit-identical between the two routes (decoder and resize
+differences, as for crops); within one route repeated passes agree. The old "cosine above 0.99 for region
+vectors" expectation held only for small photos and is withdrawn.
 
 **Model files.** The change touches `models/gpu_image_prep/config.pbtxt`, `1/model.py` and
 `1/prep_geometry.py`. Triton reads them at load: copy the three files into the model repository the stack
@@ -3241,8 +3247,9 @@ a finding), at least 20 images/s (ingest reaches 31.8 with one `gpu_image_prep` 
 the same photos, E4, while doing more per photo), API CPU at most 0.047 CPU-s per image (the API now reads,
 sends and writes only) and GPU busy above 50 percent. Then the vectors: crop and frame vectors after the pass
 against the same project's ingest vectors (median 0.99999 or better, p01 at least 0.995, as the GPU-decode
-ingest parity), and region vectors after the pass against those of a CPU pass on the same project (GPU decode
-off: the API restarted with `OP_INGEST_GPU_DECODE=0` for that run; p01 at least 0.99). COCO must reproduce the E1 release/0.7.0 row
+ingest parity), and region vectors after the pass against those of a no-round-trip CPU pass on the same project (GPU decode
+off: the API restarted with `OP_INGEST_GPU_DECODE=0` for that run, on the build with the #360 fix; p01 at least
+0.99; a CPU pass from before the fix is not a valid reference). COCO must reproduce the E1 release/0.7.0 row
 (all photos counted `cpu_small`). If set P stays under 20 images/s with the GPU under 50 percent, the
 in-flight bound of the pass (16 photos, `_IMAGES_IN_FLIGHT` in `reprocess_embed.py`) or the 64-photo chunk
 barrier is the next limit to test.

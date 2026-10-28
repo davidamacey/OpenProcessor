@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import pytest
+from PIL import Image
 
 from curation.region_cascade_helpers import _drive_worker, _FakeOpenSearch, _item, _profile
 from src.config import get_region_fields
@@ -239,15 +240,18 @@ class TestPerBoxEmbeddings:
 
         monkeypatch.setattr(pe_encoder_mod, 'PEEncoder', MagicMock(return_value=_FakePE()))
 
-        # Which crop-frame bbox the embed stage actually cropped.
-        crop_calls: list[tuple[float, float, float, float]] = []
-        real_crop_region_jpeg = region_embed_stage_mod._crop_region_jpeg
+        # Which source-frame boxes the embed stage cut from the decoded source pixels.
+        monkeypatch.setattr(
+            region_embed_stage_mod, 'decode_source_rgb', lambda _p: Image.new('RGB', (320, 240))
+        )
+        crop_calls: list[Any] = []
+        real_crop_arrays = region_embed_stage_mod.crop_arrays
 
-        def _recording_crop(jpeg: bytes, region_in_crop: Any) -> bytes:
-            crop_calls.append(tuple(region_in_crop))
-            return real_crop_region_jpeg(jpeg, region_in_crop)
+        def _recording_crop(img: Any, boxes: Any) -> Any:
+            crop_calls.extend(tuple(b) for b in boxes)
+            return real_crop_arrays(img, boxes)
 
-        monkeypatch.setattr(region_embed_stage_mod, '_crop_region_jpeg', _recording_crop)
+        monkeypatch.setattr(region_embed_stage_mod, 'crop_arrays', _recording_crop)
 
         published: list[dict[str, Any]] = []
 
@@ -283,9 +287,9 @@ class TestPerBoxEmbeddings:
         assert entry['bbox_norm'] == pytest.approx(list(source_b))
         assert list(entry['embedding'][:3]) == pytest.approx([0.0, 1.0, 0.0])
 
-        # Embedded from the ACCEPTED box's crop only: the rejected
-        # (higher-scored) candidate is never cropped for an embedding.
-        assert crop_calls == [pytest.approx(BOX_B)]
+        # Embedded from the ACCEPTED box only: the rejected (higher-scored)
+        # candidate is never cropped for an embedding.
+        assert crop_calls == [pytest.approx(source_b)]
 
         # The real published event -- absent entirely under R-M1.
         assert published, 'crop.region_verified event was never published (R-M1 regression)'
