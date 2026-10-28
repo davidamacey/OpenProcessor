@@ -55,7 +55,7 @@ README is the overview, the install and a first result.
 - **Dataset import, combine, export, train, promote.** YOLO, COCO and
   OpenProcessor-export layouts; merge up to eight projects; bake-off model
   comparison; promotion back into Triton.
-- **Selective VLM assist.** `POST /assist/runs` sends a crop, a box, a
+- **Selective VLM assist.** `POST /curation/projects/{project}/assist/runs` sends a crop, a box, a
   selection, a cluster, a sub-cluster or a filter to the VLM, whole or as a
   representative sample, and proposes a cluster label you apply explicitly
   (see [Selective VLM and segmenter assist](docs-site/docs/guides/selective-assist.mdx)).
@@ -694,11 +694,12 @@ pre-commit hooks.
 ## Benchmarking
 
 ```bash
-cd benchmarks
-./build.sh
-./triton_bench --mode quick    # 30-second test
-./triton_bench --mode full     # Full benchmark
+make bench-quick    # single-request latency check
 ```
+
+Load-test and scale-ladder tools are described in
+[benchmarks/README.md](benchmarks/README.md) and
+[docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 
 See [benchmarks/README.md](benchmarks/README.md) and
 [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
