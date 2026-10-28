@@ -20,10 +20,11 @@ def _item(crop_id: str) -> dict[str, Any]:
     return {'crop_id': crop_id, 'image_id': crop_id[:2], 'class_name': 'widget'}
 
 
-async def _write(writer: IngestWriter, image_id: str, crops: list[str], **kw: Any) -> Any:
+async def _write(writer: IngestWriter, image_id: str | None, crops: list[str], **kw: Any) -> Any:
+    """``image_id`` None writes items only, onto an image that exists (a dataset import)."""
     cfg = get_curation_config()
     return await writer.write(
-        {'image_id': image_id},
+        {'image_id': image_id} if image_id else None,
         [_item(c) for c in crops],
         images_index=cfg.images_index,
         items_index=cfg.items_index,
@@ -113,13 +114,13 @@ async def test_rejected_items_are_retried_after_429() -> None:
 
 
 @pytest.mark.asyncio
-async def test_same_item_in_two_images_never_shares_a_flush() -> None:
+async def test_same_item_in_two_writes_never_shares_a_flush() -> None:
     os_fake = FakeIngestOpenSearch()
     writer = IngestWriter(os_fake)
     first, second = await asyncio.gather(
-        _write(writer, 'a', ['same', 'a2']), _write(writer, 'a', ['same'])
+        _write(writer, 'a', ['same', 'a2']), _write(writer, None, ['same'])
     )
-    assert writer.bulk_sizes == [3, 2]
+    assert writer.bulk_sizes == [3, 1]
     assert (first.created, second.created, second.updated) == (2, 0, 1)
 
 

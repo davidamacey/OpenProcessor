@@ -20,7 +20,6 @@ from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation_accessors import base_curation_config
 from src.config.curation_roles import IndexRole
 from src.config.projects import ProjectRecord, new_project_record
-from src.services.curation.ingest_index import image_id_for
 from src.services.detection.geometry import crop_id as make_crop_id
 from src.services.projects import registry as registry_module
 from src.services.projects.combine import service as combine_service
@@ -145,7 +144,8 @@ class World:
         path = self.records[slug].resources.upload_root / imohash[:2] / f'{imohash}.jpg'
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
-        image_id = image_id_for(str(path), imohash)
+        # A path-and-hash id, as ingest wrote before #358: one content at two paths is two ids.
+        image_id = hashlib.sha256(f'{path}|{imohash}'.encode()).hexdigest()[:32]
         names = self.registry_ids(slug)
         image_doc: dict[str, Any] = {
             'image_id': image_id,

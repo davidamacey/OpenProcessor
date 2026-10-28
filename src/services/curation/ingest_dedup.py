@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from src.clients.optional_doc import get_doc_or_none
 from src.core.logging import get_logger
 
 
@@ -43,6 +44,16 @@ class IngestDedupMixin:
             return None
         source = hits[0].get('_source') or {}
         return source if source.get('image_id') else None
+
+    async def stored_image(self, image_id: str) -> dict[str, Any] | None:
+        """The images doc ``image_id`` (``image_id``, ``image_path``, ``dataset_split``)
+        read by id, so it sees a write the index has not refreshed yet; None when absent."""
+        resp = await get_doc_or_none(self.opensearch, self.config.images_index, image_id)
+        if resp is None:
+            return None
+        source = resp['_source']
+        kept = {k: source[k] for k in ('image_path', 'dataset_split') if k in source}
+        return {'image_id': image_id, **kept}
 
     async def _check_duplicate(self, image_hash: str) -> str | None:
         """Existing image_id for ``image_hash``, or None."""

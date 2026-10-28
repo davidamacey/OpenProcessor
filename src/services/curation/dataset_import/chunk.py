@@ -243,6 +243,8 @@ async def _import_one(
     # ---- apply
     seed = ctx.options.processing == 'propose'
     outcome = await ctx.service.index_items(img, new.all(), seed_region=seed)
+    if outcome.result.status == 'duplicate':
+        return await _import_onto_stored(ctx, store, chunk, entry, prior, img, base)
     if outcome.result.status == 'failed':
         return _failed(
             store,
@@ -294,6 +296,27 @@ async def _import_one(
     }
     store.append_ledger(chunk, final)
     return report
+
+
+async def _import_onto_stored(
+    ctx: ImportContext,
+    store: ImportStore,
+    chunk: int,
+    entry: ScanEntry,
+    prior: dict[str, Any] | None,
+    img: ImageContext,
+    base: dict[str, Any],
+) -> ImportReport:
+    """Another writer stored this content between the image's lookup and its
+    write, so the images-doc create was refused and nothing was written (#358).
+    Import the entry again onto that stored image, as a lookup that had seen it
+    would have; the image is read by id, which does not wait for a refresh."""
+    stored = await ctx.service.stored_image(img.image_id)
+    if stored is None:
+        message = f'images doc {img.image_id} was refused as existing but cannot be read'
+        return _failed(store, chunk, base, 'bulk_index', message, ImportReport())
+    ctx.seen_images[img.imohash] = stored
+    return await _import_one(ctx, store, chunk, entry, prior)
 
 
 def _hash_of(data: bytes) -> str:

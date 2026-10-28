@@ -14,7 +14,9 @@ Triton round-trips and is measurably slower for identical output. It is:
    the index, i.e. images already committed before this batch started —
    see :func:`run_ingest_batch` for the separate in-batch dedup pass (D3)
    that also collapses byte-identical repeats *within* one request onto a
-   single representative.
+   single representative. Copies in *concurrent* requests are kept apart
+   at write time: the images doc is created under a content-derived id, and
+   the copy that loses the create is a ``duplicate``.
 2. **Decode once** — non-duplicates are decoded up front, and the PIL
    image is handed to ``ingest_one`` so it does not decode again. With the
    GPU decode on, photos at or above its size gate are decoded on the GPU
@@ -268,7 +270,9 @@ async def run_ingest_batch(
             rep = batch_dup_of.get(i)
             if rep is not None:
                 rep_result = await rep_futures[rep]
-                if rep_result.status == 'success':
+                # A representative that lost the images-doc create to another request
+                # is itself a duplicate; its image_id is the stored image's.
+                if rep_result.status != 'failed':
                     return record_ingest_result(
                         IngestResult(
                             status='duplicate',
