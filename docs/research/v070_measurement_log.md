@@ -321,7 +321,7 @@ of the 5k set runs at 28 img/s against 37 for folder F because it has 2.35 crops
 (more crops to embed and encode per photo). Every pass clustered the whole pool (`n_residuals` 91,184;
 none discarded) although the stack's refresh daemon was running.
 
-## D. Text search latency (GET `/curation/projects/nas20k/search/text`, 91,184 items, 200 requests per row)
+## D. Text search latency (GET `/curation/projects/{project}/search/text` on the 91,184 items, 200 requests per row)
 
 Sequential requests, 0.25 s apart, `page_size` 30, one client. "unique" = 200 different phrases;
 "repeat" = 10 phrases cycling. Client time in ms; `total_time_ms` is the server's own figure.
