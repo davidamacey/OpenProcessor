@@ -51,10 +51,14 @@ _gpu_plan_placement() {
 # use and falls back to the CPU path per image, so a forced-on card without room only warns.
 _gpu_plan_decode() {
     local ids="$1" table="$2" running="$3" primary_mib="$4" setting profile source primary
-    local decode_mib=8704
+    local decode_mib per_instance=8704 instances
     setting="$(_env_value OP_INGEST_GPU_DECODE)"
     profile="$(_env_value GPU_PROFILE)"
     profile="${profile:-standard}"
+    # One copy of the model per instance; the installed config holds the profile's count (#268).
+    instances="$(sed -n -E 's/^[[:space:]]*count:[[:space:]]*([0-9]+).*/\1/p' \
+        "${PROJECT_DIR}/models/gpu_image_prep/config.pbtxt" 2>/dev/null | head -1)" || true
+    decode_mib=$(( per_instance * ${instances:-1} ))
     if [[ -n "$setting" ]]; then
         source="OP_INGEST_GPU_DECODE=${setting} in .env"
     else

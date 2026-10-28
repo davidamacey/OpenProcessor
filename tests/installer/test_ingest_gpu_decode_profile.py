@@ -149,3 +149,19 @@ def test_gpu_plan_warns_but_does_not_refuse_a_forced_on_card_without_room(
     done = cli(shimmed, inst, 'gpu', 'plan')
     assert 'need about 20992 MiB' in done.stdout + done.stderr
     assert 'ingest stays on the CPU path' in done.stdout + done.stderr
+
+
+def test_gpu_plan_sizes_the_gpu_decode_by_the_installed_instance_count(
+    shimmed: Shimmed, inst: Path
+) -> None:
+    shimmed.gpus(A6000)
+    set_env(inst, GPU_PROFILE='full', TRITON_GPU_ID='0', OP_INGEST_GPU_DECODE='1')
+    cfg = inst / 'models' / 'gpu_image_prep' / 'config.pbtxt'
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    cfg.write_text(
+        (REPO_ROOT / 'models' / 'gpu_image_prep' / 'config.pbtxt')
+        .read_text()
+        .replace('count: 2', 'count: 3')
+    )
+    done = cli(shimmed, inst, 'gpu', 'plan')
+    assert f'about {3 * GPU_IMAGE_PREP_MIB} MiB more on the primary card' in done.stdout

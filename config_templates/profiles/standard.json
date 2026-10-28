@@ -5,6 +5,7 @@
   "max_batch_size": 32,
   "preferred_batch_sizes": [8, 16, 32],
   "ocr_pipeline_instances": 2,
+  "gpu_image_prep_instances": 1,
   "ingest_gpu_decode": false,
   "python_backend_budget_mib": 1024,
   "models": "all",

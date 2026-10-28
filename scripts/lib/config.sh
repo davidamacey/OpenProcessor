@@ -79,6 +79,12 @@ generate_model_config() {
             update_config_instance_settings "$config_file" "$profile" "$gpu_id" \
                 "$PROFILE_OCR_PIPELINE_INSTANCES"
             ;;
+        gpu_image_prep)
+            # Python model, one CUDA context and CuPy pool per instance (GPU_MIB_PER_INSTANCE
+            # each): the profile decides how many copies the card holds (#268).
+            update_config_instance_settings "$config_file" "$profile" "$gpu_id" \
+                "$PROFILE_GPU_IMAGE_PREP_INSTANCES"
+            ;;
         *)
             log_warn "No config template for: $model_name"
             return 1
@@ -212,6 +218,7 @@ generate_all_configs() {
         "paddleocr_det_trt"
         "paddleocr_rec_trt"
         "ocr_pipeline"
+        "gpu_image_prep"
     )
 
     local failed=0

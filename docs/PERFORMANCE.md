@@ -3232,7 +3232,8 @@ or above `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0). The CPU single decode alone does 
 ingest (the next binders are elsewhere); it is the CPU path the GPU decode falls back to.
 
 The GPU decode is the default, sized by hardware. It adds about 8.5 GB (8,704 MiB, loaded on first use)
-to the Triton card, on top of the profile's own models (about 8, 12 and 17 GB for `minimal`,
+per model instance to the Triton card (`full` runs two instances, 17,408 MiB, #268; the other profiles
+run one if you turn the GPU decode on), on top of the profile's own models (about 8, 12 and 17 GB for `minimal`,
 `standard` and `full`). Only `full` (48 GB+) has room, so the installer writes
 `OP_INGEST_GPU_DECODE=1` for it and `0` for `minimal` and `standard`; a 12 GB card does not hold
 the full model set beside other projects' resident processes, let alone the GPU decode. A checkout
@@ -3240,6 +3241,14 @@ whose `.env` has no such line gets the code default (on), and an explicit value 
 `openprocessor gpu plan` prints whether it is on and why, and warns (never refuses) when it is on
 for a card without room. If the model cannot load, Triton leaves the other models serving and
 every photo is ingested on the CPU path, as with a declined file.
+
+Instance count (#268, one RTX A6000, 3,275 photos of about 18 MP, three runs each): one
+`gpu_image_prep` instance 31.8 images/s, two 48.0 (+51 percent; GPU utilization 70-75 to 78-87
+percent, Triton CPU 610 to 865 percent), three adds 0.6 percent over two for another 6 to 7 GB. The
+single instance is one Python process: its worker threads share one GIL. `gpu_image_prep_instances`
+in `config_templates/profiles/*.json` sets the count (`full` 2, `minimal` and `standard` 1), the
+installer writes it into `models/gpu_image_prep/config.pbtxt`, and `openprocessor gpu plan` sizes the
+GPU decode as count times 8,704 MiB. The committed config carries 2, the `full` value.
 
 ### Stage 4: coalesced ingest writes, Lucene engine, write ceiling on the final mapping (#248, #254, #230)
 
