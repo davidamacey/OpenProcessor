@@ -401,3 +401,66 @@ def test_the_arbiter_loop_reconciles_on_a_timer_and_survives_a_failing_tick(
     # one reload at startup, one per tick (the failing tick still reloads)
     assert world.reload_log_events[0] == 'promoted_models_reload_on_startup'
     assert world.reload_log_events.count('promoted_models_reload_tick') >= 3
+
+
+def _app_with_nested_routers() -> FastAPI:
+    from fastapi import APIRouter
+
+    app = FastAPI()
+    outer = APIRouter(prefix='/outer')
+    inner = APIRouter(prefix='/inner')
+
+    @inner.get('/ping')
+    async def ping() -> dict[str, bool]:
+        return {'ok': True}
+
+    outer.include_router(inner)
+    app.include_router(outer)
+    app.include_router(APIRouter(prefix='/other'))
+    return app
+
+
+def _unbuilt_included_routers(routes: list[Any]) -> list[str]:
+    """Included routers whose lazily built route state does not exist yet (FastAPI >= 0.143)."""
+    from fastapi.routing import _IncludedRouter
+
+    missing: list[str] = []
+    for route in routes:
+        if not isinstance(route, _IncludedRouter):
+            continue
+        if route._effective_candidates_version is None:
+            missing.append(route.include_context.prefix)
+            continue
+        missing.extend(_unbuilt_included_routers(route._effective_candidates))
+    return missing
+
+
+def test_startup_builds_the_lazy_route_state_of_every_router(world: World) -> None:
+    app = _app_with_nested_routers()
+    assert _unbuilt_included_routers(app.router.routes)  # lazily built: nothing exists yet
+    seen: dict[str, Any] = {}
+
+    async def _drive() -> None:
+        async with lifespan_module.lifespan(app):
+            seen['unbuilt'] = _unbuilt_included_routers(app.router.routes)
+
+    asyncio.run(_drive())
+    assert seen['unbuilt'] == []
+
+
+def test_a_failing_route_warmup_never_blocks_startup(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _boom(*_a: Any, **_k: Any) -> None:
+        raise RuntimeError('asgi warm-up failed')
+
+    app = _app_with_nested_routers()
+    monkeypatch.setattr(type(app), '__call__', _boom)
+    seen: dict[str, Any] = {}
+
+    async def _drive() -> None:
+        async with lifespan_module.lifespan(app):
+            seen['up'] = 'start_background_jobs' in world.events
+
+    asyncio.run(_drive())
+    assert seen['up'] is True
