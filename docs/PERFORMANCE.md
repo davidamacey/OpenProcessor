@@ -3151,8 +3151,12 @@ itself because both preprocess calls declare under 4 MiB (`OFFLOAD_MIN_BYTES`) a
 resize 21 percent of all samples, whole-frame decode and resize 15 percent, tensor packing 6 percent, gRPC
 serialization 9 percent, bulk-update JSON 3 percent. The encoder is 57 to 60 percent busy, so the pass is
 latency-bound on one loop thread and the 64-image chunk boundary (read, process, write in sequence), not
-on the engine. A fix that overlaps chunks or moves the preprocess to the pool is output-preserving but was
-**not measured** (the confirmation runs were cut); follow-up issue.
+on the engine. The fix (0.7.0) is output-preserving: the embed pass runs every crop, frame and
+JPEG step on the CPU pool whatever its size (`offload_always` in `src/utils/cpu_pool.py`; ingest keeps the
+4 MiB in-place rule it was measured with), and the next 64-image chunk is read while the current one is
+processed and written. **The throughput gain is not yet measured**: acceptance is at least 20 images/s on set A
+(500 and 800 images, 16 at a time, one card), encoder busy above 80 percent, API CPU at most 0.047 CPU-s per
+image, three repetitions, re-embedded vectors bit-identical to the pre-change pass.
 
 Re-embedded crop vectors against the ingest vectors (same project, 3,166 and 5,133 crops): median cosine
 0.999997 (identical), first percentile 0.9981 and 0.99992, minimum 0.9728 and 0.9337; 35 and 44 crops are
@@ -3160,7 +3164,14 @@ below 0.999. Crops whose box touches the right or bottom edge are 5 percent of t
 of those below 0.999 (20 of 35 and 25 of 44; 20 of 153 edge crops, 13 percent, against 15 of 3,013 others, 0.5 percent). Cause:
 ingest crops the detector's pixel box, which can extend past the frame, and Pillow pads the outside with
 black; the stored `bbox_norm` is clamped to the frame, so the re-embed crops less. The padding cannot be
-recovered from the stored box, so matching ingest would change stored vectors: reported, not changed.
+recovered from the stored box. **Decision (0.7.0, owner, #259): the vector is computed from the box that is
+stored.** Ingest now cuts the image-clamped rectangle on both decode paths (`geometry.crop_rect`, repeated in
+`models/gpu_image_prep/1/prep_geometry.py` and held equal by `tests/curation/test_crop_is_stored_box.py`), so
+a crop touching the right or bottom edge is embedded without the black padding, and the crop-cache JPEG is the
+stored box too. Interior boxes are bit-identical to 0.6.0. Vectors ingested before this change keep the padded
+input; re-embed them (`reprocess` scope `embed`, parts `crop`) to move them into the stored-box space. The
+reprocess embed and the region-box refresh already cut the stored box. The P-pe parity capture against the 0.6.0
+reference (crop cosine p01 at least 0.995) is still to run.
 
 #### Parity (final configuration against `ref-u8fp16` and `ref-u8fp16-repeat`, `precision` profile)
 
