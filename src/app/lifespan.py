@@ -223,6 +223,7 @@ def _warm_pe_encoder(app: FastAPI) -> None:
     app.state.pe_encoder = PEEncoder(triton_pool=AppResources.async_triton_pool)
     try:
         app.state.pe_encoder.warm_text_encoder()
+        app.state.pe_encoder.prime_text_backend()
         logger.info('pe_text_encoder_warmed', backend=app.state.pe_encoder.text_backend)
     except Exception as exc:
         logger.warning('pe_text_encoder_warm_skipped', error=str(exc))
