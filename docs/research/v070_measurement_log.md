@@ -414,3 +414,122 @@ Findings:
   a review UI does), after the bootstrap fix, to see the real tail.
 * Re-run A with the ingest at higher crops per image, and with a spinning-disk-bound (cold, 2 x
   larger) set, to find when the read stage reaches the critical path.
+
+# Live verification of release/0.7.0 (#259, #356, #358, #268)
+
+Measured 2026-10-28 (evening) on the same test stack (compose project `optest1`, Triton on one RTX A6000,
+OpenSearch on local NVMe, 32 API workers). The stack ran the v0.6.0 images with the release branch bind-mounted
+over `src/` and `scripts/` of the API and the four curation workers (read-only), and the branch's two changed
+`gpu_image_prep` files copied into the Triton model repository; the model was reloaded through Triton model
+control. Live check: the API container holds `PEEncoder.prime_text_backend`, `/health/pe_text` reports `pid` and
+`cache_scope`, and the startup log carries one `curation_indexes_bootstrapped` line per project per worker. After
+the campaign the original files and compose were restored and the stack was back on the v0.6.0 images. The host was
+not quiet (1-minute load average 6 to 16 in most runs, up to 22 once; the figure for each group is in the
+tables). Every group is 3 repetitions unless stated, each in a fresh throw-away project that was deleted
+afterwards. Input data: **set P** photographs (private; 16 to 24 MP baseline JPEGs) and 1,500 public COCO val2017
+images (the 200-image README sample plus 1,300 more at random, seed 5). The crop cache was set unbounded
+(`OP_CROP_CACHE_MAX_BYTES=0`) for the runs below, see the #358 note.
+
+## E1. #259 embed reprocess pass (scope `embed`, parts crop, frame and region; all vectors rewritten)
+
+Project holding 1,500 COCO images (9,666 crops, 6.4 per image) and, separately, 300 set-P photographs (675
+crops). Baseline = the same pass on the same project with the API container switched back to the v0.6.0 image
+code (only `src/` differs; Triton unchanged). API CPU = cgroup `usage_usec` of the API container over the pass
+divided by images; GPU util = `nvidia-smi` mean of the Triton card over the pass.
+
+| Set | Code | img/s (3 runs) | Median | API CPU-s / image | GPU util % (mean of runs) | Load avg during |
+|---|---|---|---|---|---|---|
+| COCO 1,500 | 0.6.0 | 15.64, 15.68, 15.71 | 15.68 | 0.0516, 0.0539, 0.0527 | 51 | 7.5 to 14.4 |
+| COCO 1,500 | release/0.7.0 | 16.58, 16.29, 16.69 | 16.58 | 0.0660, 0.0658, 0.0649 | 52 | 6.5 to 9.5 |
+| Set P 300 | 0.6.0 | 10.19, 10.87, 10.48 | 10.48 | 0.522, 0.520, 0.517 | 16 | 6.0 to 8.4 |
+| Set P 300 | release/0.7.0 | 10.76, 10.73, 11.86 | 10.76 | 0.529, 0.524, 0.506 | 10 | 6.6 to 11.1 |
+
+* The branch is 6 percent faster on COCO and unchanged on set P. The acceptance bar of #259 (at least 20 img/s,
+  API CPU at most 0.047 CPU-s per image, encoder above 80 percent busy) is **not met** on this set: 16.6
+  img/s, 0.065 CPU-s per image (25 percent more CPU per image than 0.6.0: the work moved to pool threads, it did
+  not shrink), GPU about half idle. Set P is bound by CPU decode of 20 MP frames in the API (0.52 CPU-s per image).
+  Triton's per-model compute counters sum over concurrent requests (they read 400 percent), so they are not a busy
+  fraction and the card-level utilisation is used instead.
+* **Vectors** (ingest vector against the vector after each pass, cosine; edge = box touching the right or bottom
+  edge, 1,193 of 9,666 crops):
+
+| Comparison | Crops | Median | p01 | Min | Below 0.999 |
+|---|---|---|---|---|---|
+| Branch ingest vs branch pass, interior | 8,473 | 0.999997 | 0.99996 | 0.9609 | 24 |
+| Branch ingest vs branch pass, edge | 1,193 | 0.999997 | 0.99996 | 0.9993 | 0 |
+| Branch ingest vs 0.6.0 pass (after the baseline runs), edge | 1,193 | 0.999997 | 0.99997 | 0.9993 | 0 |
+| Frame vector, branch ingest vs branch pass | 1,500 | 0.999997 | 0.99992 | 0.9996 | 0 |
+| 0.6.0 ingest (an older project of the same 200 images) vs branch ingest, interior | 1,185 | 0.999997 | 0.99999 | 0.99995 | 0 |
+| 0.6.0 ingest vs branch ingest, edge | 169 | 0.999997 | 0.9885 | 0.9334 | 7 |
+
+  The median is 0.999997, not exactly 1.0 (GPU float noise; repeated passes agree to the same level). Edge
+  crops now agree between ingest and the pass (minimum 0.9993; 0.6.0 documented a minimum of 0.93 to 0.97),
+  and interior crops of old and new ingest are identical. What remains is 24 small interior crops (median
+  area 1.1 percent of the frame against 2.0 percent for all crops, minimum cosine 0.961) that differ between
+  ingest and pass before and after the change; the likely cause is the stored box being rounded to
+  normalized coordinates (not isolated here). The 7 edge crops that moved between 0.6.0 and the branch ingest are
+  the intended change.
+
+## E2. #358 duplicate content in concurrent batches
+
+Folder of 3,450 files on NVMe: 3,000 distinct contents (set P) plus 450 byte-identical copies under other
+names in 5 subfolders. Page cache of the input dropped before each run, fresh project per run, crop cache emptied.
+
+| Concurrency | img/s (3 runs) | Ingested (3 runs) | `imohash` cardinality = images count | Items | Item image ids in images | Crop-cache files | GPU util % | Triton CPU % | Load avg during |
+|---|---|---|---|---|---|---|---|---|---|
+| 8 | 35.51, 36.36, 36.07 | 3,000 x 3 (450 duplicates) | 3,000 x 3 | 7,097 x 3 | yes x 3 | 7,097 x 3 | 61, 71, 68 | 584 to 610 | 10.0 to 12.7 |
+| 16 | 34.96, 36.00, 36.57 | 3,000 x 3 | 3,000 x 3 | 7,097 x 3 | yes x 3 | 7,097 x 3 | 64, 65, 73 | 595 to 623 | 10.3 to 13.3 |
+| 32 | 35.22, 36.04, 35.78 | 3,000 x 3 | 3,000 x 3 | 7,097 x 3 | yes x 3 | 7,097 x 3 | 73, 60, 66 | 603 to 608 | 12.3 to 13.7 |
+
+All 9 runs: ingested equals the distinct count, no content stored twice, no orphan item, crop-cache file count
+equals the item count. The campaign before the fix stored a content twice in 11 of 24 runs. Throughput does not
+depend on concurrency (35.0 to 36.6). Notes: (1) with the default crop-cache cap of 3 GiB a 7,097-crop ingest
+prunes the cache (one probe run held 5,347 files for 7,097 items), so the file-count check is only valid with
+the cap off; (2) deleting a project does not remove its crop-cache files (7,097 orphan files remained after
+all runs, 27 after a 10-image test).
+
+## E3. #356 text search after an API restart and after a worker recycle
+
+`GET /curation/projects/nas20k/search/text` (91,184 items), 300 sequential requests 0.25 s apart, a new
+connection per request (so any of the 32 workers answers), `page_size` 30, client time in ms. "Recycle" = all 32
+worker processes sent SIGTERM and respawned by the supervisor, searches started about 50 s later.
+
+| Condition | Phrases | First | p50 | p95 | p99 | Max | > 300 ms | > 1 s | Load avg |
+|---|---|---|---|---|---|---|---|---|---|
+| After `restart api` | 300 distinct | 919 | 71.5 | 891.9 | 969.7 | 1,119 | 19 | 1 | 11.1 |
+| After `restart api` | 10 repeated | 68 | 39.1 | 76.0 | 79.8 | 877 | 1 | 0 | 5.9 |
+| After worker recycle | 300 distinct | 945 | 71.9 | 84.0 | 966.1 | 997 | 14 | 0 | 6.8 |
+| After worker recycle | 10 repeated | 68 | 39.6 | 77.0 | 86.6 | 102 | 0 | 0 | 10.1 |
+| After a second recycle, other project (1,364 items) | 200 distinct | 938 | 65.6 | 826.4 | 937.9 | 988 | 13 | 0 | 22.2 |
+| Earlier log (0.6.0, new connection, unique) | 400 | n/a | 64.3 | 80.1 | 533.0 | 1,383 | 7 (> 500 ms) | 1 | 10.9 |
+
+* **The bootstrap part of the fix works and the outlier is not gone.** The per-worker `ensure_indexes` cost
+  (about 0.45 s) is now paid at startup, but the first search a worker answers still takes 0.8 to 1.1 s (a
+  worker answers its first search in 0.9 s whatever the project, then 30 to 70 ms). 14 to 19 of the first
+  about 150 requests are slow, one per worker; after that no request is above 130 ms. The largest value and
+  the count over 300 ms are not better than the 0.6.0 log; the count is higher because the 0.6.0 run had more
+  requests after warm-up.
+* **Root cause of what remains** (profiled in the API container with cProfile on the first request of a fresh
+  app, single worker reproduces 0.90 s then 0.05 s): FastAPI 0.143.2 builds its route state lazily on the first
+  request that reaches a router (`effective_candidates` / `_populate_api_route_state`, 321 routes, 1.5 s under
+  the profiler). A text encode (0.03 s with the primed backend), the kNN query and the bootstrap are not
+  involved. A throw-away request through the curation router at startup (in-process ASGI call, run with the
+  lifespan) moves the cost out: first search 0.87 s on the warm-up request, 0.048 s after. A warm-up request
+  to `/health/pe_text` does not help (a different router). This is a proposed fix, not part of the branch.
+* `/health/pe_text` now reports `pid` and `cache_scope: "process"`; 12 reads returned 3 to 7 distinct pids, so
+  a reader sees that the cache figures are one worker's.
+
+## E4. #268 `gpu_image_prep` instance count (3,000 distinct NVMe photos, concurrency 16, batch 16)
+
+Same card, KIND_GPU, the model unloaded and loaded through Triton model control after each config change.
+
+| Instances | img/s (3 runs) | Median | GPU util % (3 runs) | Triton CPU % (3 runs) | GPU memory used after, MiB | `gpu_decode` stage s (sum) | Load avg during |
+|---|---|---|---|---|---|---|---|
+| 1 (shipped) | 31.75, 31.96, 31.63 | 31.75 | 71, 75, 70 | 600, 611, 634 | 30.4 to 30.7 k | 16.4 to 17.3 k | 8.5 to 11.9 |
+| 2 | 47.06, 49.16, 48.01 | 48.01 | 87, 79, 78 | 875, 852, 864 | 34.6 to 37.9 k | 10.5 to 10.8 k | 12.3 to 16.2 |
+| 3 | 48.28, 48.48, 48.04 | 48.28 | 79, 80, 80 | 914, 877, 810 | 43.5 to 44.9 k | 9.5 to 10.2 k | 12.4 to 14.4 |
+
+Two instances raise ingest by 51 percent (31.8 to 48.0 img/s) for about 7 GB more card memory and 2.5 more Triton
+cores; a third instance adds 0.6 percent (inside the spread) for another 6 to 7 GB. Recommended count: 2.
+(The 31.8 img/s baseline is the 3,000 distinct photos, 2.3 crops per image; folder F of the earlier campaign
+had 1.5 crops per image and reached 37.) Output parity with two instances was not checked here.
