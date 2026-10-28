@@ -490,7 +490,7 @@ all runs, 27 after a 10-image test).
 
 ## E3. #356 text search after an API restart and after a worker recycle
 
-`GET /curation/projects/nas20k/search/text` (91,184 items), 300 sequential requests 0.25 s apart, a new
+`GET /curation/projects/{project}/search/text` (a project of 91,184 items), 300 sequential requests 0.25 s apart, a new
 connection per request (so any of the 32 workers answers), `page_size` 30, client time in ms. "Recycle" = all 32
 worker processes sent SIGTERM and respawned by the supervisor, searches started about 50 s later.
 
