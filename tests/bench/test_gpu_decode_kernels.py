@@ -15,7 +15,7 @@ from PIL import Image
 from scripts.bench import gpu_decode_kernels as k, gpu_decode_lib as lib
 from src.services.curation.ingest_index import crop_pil
 from src.services.detection.crop_quality import crop_lap_var, image_lap_var
-from src.services.detection.geometry import letterbox_to_square
+from src.services.detection.geometry import crop_rect, letterbox_to_square
 from src.utils.pe_preprocess import resize_crop_rgb
 
 
@@ -65,12 +65,12 @@ def test_pe_square_matches_cv2_linear(size: tuple[int, int]) -> None:
     assert d.max_abs <= 8, d
 
 
-def test_crop_matches_crop_pil_including_out_of_frame_fill() -> None:
+def test_crop_matches_crop_pil_for_the_stored_box() -> None:
     rgb = _photo(80, 100)
     img = Image.fromarray(rgb)
     for box in [(10.4, 5.5, 50.6, 60.49), (-3.2, -1.0, 20.0, 20.0), (90.0, 70.0, 130.2, 95.1)]:
         ref = np.asarray(crop_pil(img, box))
-        got = k.crop_u8(torch.from_numpy(rgb), lib.crop_rect(box)).numpy()
+        got = k.crop_u8(torch.from_numpy(rgb), crop_rect(box, 100, 80)).numpy()
         np.testing.assert_array_equal(got, ref)
 
 

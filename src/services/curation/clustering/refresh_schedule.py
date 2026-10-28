@@ -6,7 +6,8 @@ and per poll, whether to start it now. Pure logic with an injected clock so
 it is tested without a stack.
 
 * A retrain is requested once the item count has grown by ``threshold``
-  since the last one dispatched (or never trained).
+  since the last one dispatched, or once a never-trained project has any item.
+  An empty project requests nothing.
 * It starts when ingest is quiet: the item count did not change since the
   previous poll and no region work is unfinished. While ingest runs, new
   items are already assigned to the persisted centroids at ingest time.
@@ -125,7 +126,11 @@ def step(s: ProjectSchedule, o: Observation, now: float, p: Policy) -> Action:
             s.retry_not_before = now + p.retry_backoff_s
             return Action.NONE
 
-    crossed = s.last_trained_count == 0 or o.count - s.last_trained_count >= p.threshold
+    # last_trained_count == 0 means never trained; an empty project has nothing to train on,
+    # and on_started(0) would leave the mark at 0, re-requesting a job every cycle.
+    crossed = o.count > 0 and (
+        s.last_trained_count == 0 or o.count - s.last_trained_count >= p.threshold
+    )
     if crossed and s.pending_since is None:
         s.pending_since = now
     if s.pending_since is None or in_flight or o.busy or now < s.retry_not_before:

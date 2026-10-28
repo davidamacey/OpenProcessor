@@ -298,13 +298,16 @@ class FakeOpenSearch:
                 store.setdefault(meta['_id'], {}).update(doc.get('doc', {}))
                 result_items.append({'update': {'_id': meta['_id'], 'status': 200}})
             elif 'create' in action:
+                # A create on an existing _id is a 409 and writes nothing, on any index.
                 meta = action['create']
-                if meta['_id'] in self.items:
+                store = self.items if meta['_index'] == items_index else self.images
+                if meta['_id'] in store:
                     result_items.append({'create': {'_id': meta['_id'], 'status': 409}})
                 else:
-                    self.items[meta['_id']] = doc
+                    store[meta['_id']] = doc
                     result_items.append({'create': {'_id': meta['_id'], 'status': 201}})
-        return {'errors': False, 'items': result_items}
+        errors = any(next(iter(i.values()))['status'] >= 300 for i in result_items)
+        return {'errors': errors, 'items': result_items}
 
     async def update(
         self,

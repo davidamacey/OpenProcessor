@@ -105,7 +105,7 @@ class TestGeometry:
         self, box: tuple[float, float, float, float]
     ) -> None:
         img = Image.new('RGB', (120, 90))
-        x1, y1, x2, y2 = fg.crop_rect(box)
+        x1, y1, x2, y2 = fg.crop_rect(box, 120, 90)
         assert crop_pil(img, box).size == (x2 - x1, y2 - y1)
         rgb = np.random.default_rng(1).integers(0, 256, (90, 120, 3), dtype=np.uint8)
         rect = fg.blur_rect(box, 120, 90)

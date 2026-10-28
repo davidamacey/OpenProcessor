@@ -37,6 +37,7 @@ from src.services.curation.region_box_embeddings import (
     write_box_embeddings,
 )
 from src.services.detection.region_embed import embed_region_crops
+from src.utils.cpu_pool import offload_always, run_cpu
 from src.utils.vectors import float_list
 
 
@@ -112,6 +113,14 @@ def _jpeg(img: Image.Image) -> bytes:
     buf = io.BytesIO()
     img.save(buf, format='JPEG', quality=92)
     return buf.getvalue()
+
+
+def _crop_arrays(img: Image.Image, boxes: Sequence[Sequence[float]]) -> list[np.ndarray]:
+    return [np.asarray(crop_pil(img, _pixel_box(box, *img.size))) for box in boxes]
+
+
+def _crop_jpegs(img: Image.Image, boxes: Sequence[Sequence[float]]) -> list[bytes]:
+    return [_jpeg(crop_pil(img, _pixel_box(box, *img.size))) for box in boxes]
 
 
 async def _bulk_update(
@@ -199,9 +208,7 @@ async def reembed_items(
                 for cid, s in target.items
                 if s.get('bbox_norm') and cid not in target.skip_crop
             ]
-            crops = [
-                np.asarray(crop_pil(img, _pixel_box(s['bbox_norm'], *img.size))) for _, s in boxed
-            ]
+            crops = await run_cpu(_crop_arrays, img, [s['bbox_norm'] for _, s in boxed])
             if crops:
                 vectors = await pe.embed_crops(crops, max_batch=_BATCH)
                 for (cid, src), vec in zip(boxed, vectors, strict=True):
@@ -215,7 +222,7 @@ async def reembed_items(
                 for cid, s in target.items
                 for box in (missing_boxes(s) if only_missing else embeddable(read_boxes(s)))
             ]
-            jpegs = [_jpeg(crop_pil(img, _pixel_box(box.bbox_norm, *img.size))) for _, box in work]
+            jpegs = await run_cpu(_crop_jpegs, img, [box.bbox_norm for _, box in work])
             if jpegs:
                 for (cid, box), vec in zip(work, await embed_region_crops(pe, jpegs), strict=True):
                     if vec is None:
@@ -230,7 +237,9 @@ async def reembed_items(
         async with gate:
             await embed_target(target)
 
-    outcomes = await asyncio.gather(*(gated(t) for t in targets), return_exceptions=True)
+    # The loop thread was the limit (#259): crop, resize and pack on the pool, whatever the size.
+    with offload_always():
+        outcomes = await asyncio.gather(*(gated(t) for t in targets), return_exceptions=True)
     for outcome in outcomes:
         if isinstance(outcome, BaseException):
             raise outcome

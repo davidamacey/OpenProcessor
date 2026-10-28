@@ -79,6 +79,18 @@ def make_bulk_update_item(
     return item
 
 
+def make_create_conflict(doc_id: str) -> dict[str, Any]:
+    """The body of a bulk ``create`` item OpenSearch answers for an ``_id`` that already exists."""
+    return {
+        '_id': doc_id,
+        'status': 409,
+        'error': {
+            'type': 'version_conflict_engine_exception',
+            'reason': f'[{doc_id}]: version conflict, document already exists',
+        },
+    }
+
+
 def make_bulk_response(items: list[dict[str, Any]]) -> dict[str, Any]:
     errors = any((i.get('update', {}).get('status') not in (200, 201)) for i in items)
     return {'errors': errors, 'items': items}
@@ -234,16 +246,20 @@ class FakeIngestOpenSearch:
                     self._seq[doc_id] = 1
                 items.append({'index': {'_id': doc_id, 'status': 201}})
             elif 'create' in action:
+                # OpenSearch semantics on any index: a create on an existing _id is a 409
+                # version conflict and writes nothing.
                 meta = action['create']
                 doc_id = meta['_id']
+                store = self.images if meta['_index'] != items_index else self.items
                 if doc_id in self._create_conflict_pending:
                     self._create_conflict_pending.discard(doc_id)
                     items.append({'create': {'_id': doc_id, 'status': 409}})
-                elif doc_id in self.items:
-                    items.append({'create': {'_id': doc_id, 'status': 409}})
+                elif doc_id in store:
+                    items.append({'create': make_create_conflict(doc_id)})
                 else:
-                    self.items[doc_id] = doc
-                    self._seq[doc_id] = 1
+                    store[doc_id] = doc
+                    if store is self.items:
+                        self._seq[doc_id] = 1
                     items.append({'create': {'_id': doc_id, 'status': 201}})
             elif 'update' in action:
                 # label_import emits partial-doc updates against items it

@@ -29,14 +29,17 @@ Pipeline, per image:
    (:mod:`~src.services.detection.crop_quality`), and residual-pool
    cluster assignment via the ingest-time IVF cache
    (:mod:`~src.services.curation.clustering.ivf_ingest`).
-6. Crop-cache write (:func:`~src.services.curation.source_image_cache.write_crop_cache`).
-7. Bulk index: the images doc is a blind upsert (nothing else writes
-   that index); items docs go through
+6. Bulk index: the images doc is a ``create`` under an id derived from the
+   content (:func:`~src.services.curation.ingest_index.content_image_id`), so
+   a copy that raced past step 1's lookup (a search does not see an
+   unrefreshed write) is refused 409 and reported ``duplicate`` with none of
+   its items or crops stored (#358). Items docs go through
    :func:`~src.clients.occ_upsert.occ_upsert_bulk` with human-field guards so a
    re-ingest never clobbers a human-applied label. With a region profile
    active, new items are seeded ``pending_detection`` (never overwriting
    an existing region status) so the region-detection worker picks them
    up — see :func:`~src.services.curation.item_doc.region_seed_status`.
+7. Crop-cache write (:func:`~src.services.curation.source_image_cache.write_crop_cache`).
 8. After a successful write, one advisory ``crop.created`` event per
    newly created item on the in-process event hub
    (:func:`~src.services.curation.event_hub.publish_crop_created`).
@@ -80,7 +83,7 @@ from src.services.curation.ingest_index import (
     PARKED_CLUSTER_ID,
     ImageContext,
     IndexOutcome,
-    image_id_for,
+    content_image_id,
     index_items,
 )
 from src.services.curation.ingest_items import IngestItemsMixin
@@ -224,7 +227,7 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
                 imohash=image_hash,
             )
         if existing is None:
-            image_id = image_id_for(image_path, image_hash)
+            image_id = content_image_id(image_hash)
             resolved_path = image_path
         else:
             image_id = existing['image_id']

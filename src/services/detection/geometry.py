@@ -42,6 +42,26 @@ def bbox_norm(
     ]
 
 
+def crop_rect(
+    bbox_pixel: tuple[float, float, float, float], width: int, height: int
+) -> tuple[int, int, int, int]:
+    """The integer pixel rectangle ``(x1, y1, x2, y2)`` (x2/y2 exclusive) that holds the box
+    :func:`bbox_norm` stores: rounded, cut to the frame, at least one pixel wide and high.
+
+    A crop (and so its PE vector) is the pixels of the stored box. The GPU decode repeats this
+    arithmetic in ``models/gpu_image_prep/1/prep_geometry.py``; a test holds the two equal.
+    """
+    x1, y1, x2, y2 = bbox_pixel
+    x1i = min(max(0, round(x1)), max(width, 1) - 1)
+    y1i = min(max(0, round(y1)), max(height, 1) - 1)
+    return (
+        x1i,
+        y1i,
+        min(max(x1i + 1, round(x2)), max(width, 1)),
+        min(max(y1i + 1, round(y2)), max(height, 1)),
+    )
+
+
 def stored_bbox_norm(
     bbox_norm_values: tuple[float, float, float, float] | list[float], width: int, height: int
 ) -> tuple[float, float, float, float]:

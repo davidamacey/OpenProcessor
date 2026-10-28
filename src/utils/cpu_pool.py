@@ -32,7 +32,8 @@ import os
 import threading
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
+from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any
 
 from PIL import Image
@@ -42,7 +43,7 @@ from src.config.project_context import run_in_executor_bound
 
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable
+    from collections.abc import AsyncIterator, Callable, Iterator
 
 
 DEFAULT_CPU_THREADS = 8
@@ -50,6 +51,8 @@ DEFAULT_INFLIGHT_MB = 1024
 MIB = 1024 * 1024
 # Below this much pixel data (about 1.3 MP of RGB) a call runs in place.
 OFFLOAD_MIN_BYTES = 4 * 1024 * 1024
+
+_offload_always: ContextVar[bool] = ContextVar('op_cpu_offload_always', default=False)
 
 # One pool and one gate per process id, so a forked child builds its own.
 _executors: dict[int, ThreadPoolExecutor] = {}
@@ -104,16 +107,33 @@ def encoded_nbytes(source: bytes | str) -> int | None:
         return None
 
 
+@contextmanager
+def offload_always() -> Iterator[None]:
+    """Inside this block (and the tasks started in it) every :func:`run_cpu` call goes to the
+    pool whatever its ``nbytes``.
+
+    For a pass whose own event-loop thread is the limit (the embed reprocess runs many small
+    crops and frames side by side, #259) a hop costs less than a few milliseconds of in-place
+    work times every image. Ingest keeps the in-place rule it was measured with.
+    """
+    token = _offload_always.set(True)
+    try:
+        yield
+    finally:
+        _offload_always.reset(token)
+
+
 async def run_cpu[T](
     fn: Callable[..., T], /, *args: Any, nbytes: int | None = None, **kwargs: Any
 ) -> T:
     """Run ``fn(*args, **kwargs)`` on the CPU pool and await the result.
 
     ``nbytes`` is the pixel data the call touches. Under ``OFFLOAD_MIN_BYTES`` the call runs
-    in place (see the module docstring); unknown (``None``) is offloaded.
+    in place (see the module docstring) unless :func:`offload_always` is active; unknown
+    (``None``) is offloaded.
     """
     call = functools.partial(fn, **kwargs) if kwargs else fn
-    if nbytes is not None and nbytes < OFFLOAD_MIN_BYTES:
+    if nbytes is not None and nbytes < OFFLOAD_MIN_BYTES and not _offload_always.get():
         return call(*args)
     return await run_in_executor_bound(asyncio.get_running_loop(), cpu_executor(), call, *args)
 
@@ -194,6 +214,7 @@ __all__ = [
     'inflight_mb',
     'ingest_gate',
     'mib',
+    'offload_always',
     'run_cpu',
     'shutdown_cpu_executor',
 ]

@@ -189,7 +189,7 @@ class TritonPythonModel:
         im.boxes = boxes[0][: im.num].astype(np.float32).reshape(-1, 4)
         im.scores = scores[0][: im.num].astype(np.float32)
         im.classes = classes[0][: im.num].astype(np.int32)
-        im.rects = [crop_rect(undo_letterbox(tuple(b), self.net, lb)) for b in im.boxes]
+        im.rects = [crop_rect(undo_letterbox(tuple(b), self.net, lb), w, h) for b in im.boxes]
 
     def _embed(self, im: _Image) -> np.ndarray:
         """PE vectors of the whole-frame square and, when asked, of every detection's square."""
@@ -235,18 +235,10 @@ class TritonPythonModel:
         return np.array(rows, np.int64).reshape(-1, 3)
 
     def _crop_pixels(self, im: _Image) -> list[np.ndarray]:
-        """Each detection's ``crop_pil`` rectangle, BGR, zeros outside the frame (host)."""
-        w, h = im.size
-        out = []
-        for x1, y1, x2, y2 in im.rects:
-            sx2, sy2 = min(x2, w), min(y2, h)
-            host = np.zeros((y2 - y1, x2 - x1, 3), np.uint8)
-            if sx2 > x1 and sy2 > y1:
-                host[: sy2 - y1, : sx2 - x1] = cp.ascontiguousarray(
-                    im.frame[y1:sy2, x1:sx2, ::-1]
-                ).get()
-            out.append(host)
-        return out
+        """Each detection's ``crop_pil`` rectangle (inside the frame), BGR (host)."""
+        return [
+            cp.ascontiguousarray(im.frame[y1:y2, x1:x2, ::-1]).get() for x1, y1, x2, y2 in im.rects
+        ]
 
     def _encode(self, pixels: np.ndarray) -> bytes:
         ok, buf = cv2.imencode('.jpg', pixels, [cv2.IMWRITE_JPEG_QUALITY, self.quality])
