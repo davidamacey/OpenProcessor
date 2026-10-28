@@ -36,7 +36,11 @@ from src.services.curation.item_doc import (
 )
 from src.services.curation.source_image_cache import maybe_prune_crop_cache, write_crop_cache
 from src.services.detection.crop_quality import blur_ratio, crop_lap_var, image_lap_var
-from src.services.detection.geometry import bbox_norm as _bbox_norm_fn, crop_id as _crop_id
+from src.services.detection.geometry import (
+    bbox_norm as _bbox_norm_fn,
+    crop_id as _crop_id,
+    crop_rect,
+)
 from src.utils.cpu_pool import run_cpu
 from src.utils.stage_timing import stage_timer
 
@@ -101,13 +105,11 @@ class IndexOutcome:
 
 
 def crop_pil(img: Image.Image, bbox_pixel: tuple[float, float, float, float]) -> Image.Image:
-    x1, y1, x2, y2 = bbox_pixel
-    x1i = max(0, round(x1))
-    y1i = max(0, round(y1))
-    x2i = max(x1i + 1, round(x2))
-    y2i = max(y1i + 1, round(y2))
+    """The pixels of the box that is stored: ``bbox_pixel`` cut to the frame, so the crop (and its
+    PE vector) never carries the zero padding Pillow adds past the edge (#259)."""
+    rect = crop_rect(bbox_pixel, *img.size)
     with stage_timer('crop'):
-        return img.crop((x1i, y1i, x2i, y2i))
+        return img.crop(rect)
 
 
 def _box_bytes(items: list[DetectedItem]) -> int:

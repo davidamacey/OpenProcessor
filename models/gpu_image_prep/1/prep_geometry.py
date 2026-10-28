@@ -6,7 +6,7 @@ Every function reproduces the arithmetic of the CPU ingest path it stands in for
 * :func:`letterbox_geometry`  ``geometry.letterbox_to_square``
 * :func:`whole_square_geometry`  ``pe_preprocess.whole_frame_rgb_from_image`` and
   ``pe_preprocess.resize_crop_rgb`` (shorter edge to 336, centre crop)
-* :func:`crop_rect`  ``ingest_index.crop_pil`` (zeros outside the frame)
+* :func:`crop_rect`  ``ingest_index.crop_pil`` cut to the frame, the stored box (#259)
 * :func:`blur_rect`  ``crop_quality.crop_lap_var``'s clamped rectangle
 * :func:`filter_weights`  Pillow ``BILINEAR`` (antialiased: the support widens with the
   downscale factor) or, with ``antialias=False``, plain bilinear as OpenCV ``INTER_LINEAR``
@@ -163,11 +163,16 @@ def undo_letterbox(
     return ((x1 - lb.pad_w) / s, (y1 - lb.pad_h) / s, (x2 - lb.pad_w) / s, (y2 - lb.pad_h) / s)
 
 
-def crop_rect(bbox: tuple[float, float, float, float]) -> tuple[int, int, int, int]:
+def crop_rect(bbox: tuple[float, float, float, float], w: int, h: int) -> tuple[int, int, int, int]:
     x1, y1, x2, y2 = bbox
-    x1i = max(0, round(x1))
-    y1i = max(0, round(y1))
-    return x1i, y1i, max(x1i + 1, round(x2)), max(y1i + 1, round(y2))
+    x1i = min(max(0, round(x1)), max(w, 1) - 1)
+    y1i = min(max(0, round(y1)), max(h, 1) - 1)
+    return (
+        x1i,
+        y1i,
+        min(max(x1i + 1, round(x2)), max(w, 1)),
+        min(max(y1i + 1, round(y2)), max(h, 1)),
+    )
 
 
 def blur_rect(

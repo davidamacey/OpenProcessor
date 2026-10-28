@@ -149,7 +149,7 @@ def capture_image(name: str, data: bytes, eng: Engines, out: dict[str, Any]) -> 
     from src.services.curation.ingest_helpers import _decode_image
     from src.services.curation.ingest_index import crop_pil
     from src.services.detection.crop_quality import crop_lap_var, image_lap_var
-    from src.services.detection.geometry import letterbox_to_square
+    from src.services.detection.geometry import crop_rect, letterbox_to_square
     from src.utils.pe_preprocess import resize_crop_rgb, whole_frame_rgb_from_bytes
 
     pil = _decode_image(data).pil
@@ -215,22 +215,22 @@ def capture_image(name: str, data: bytes, eng: Engines, out: dict[str, Any]) -> 
         for det in dets[arm]:
             box = det[:4]
             if arm == 'gpu':
-                sq = k.pe_square_u8(k.crop_u8(frame, lib.crop_rect(_box4(box)))).cpu().numpy()
+                sq = k.pe_square_u8(k.crop_u8(frame, crop_rect(_box4(box), w, h))).cpu().numpy()
                 r = _clamped_rect(box, w, h)
                 bv = None if r is None else k.lap_var(frame[r[1] : r[3], r[0] : r[2]])
             else:
                 sq = resize_crop_rgb(np.asarray(crop_pil(src_pil, _box4(box))))
                 bv = crop_lap_var(src_rgb, _box4(box), 'rgb')
             squares[arm].append(sq)
-            out['items'][arm].append((name, *det, bv, full_var[arm], *lib.crop_rect(_box4(box))))
+            out['items'][arm].append((name, *det, bv, full_var[arm], *crop_rect(_box4(box), w, h)))
     for det in dets['cpu']:
-        sq = k.pe_square_u8(k.crop_u8(frame, lib.crop_rect(_box4(det)))).cpu().numpy()
+        sq = k.pe_square_u8(k.crop_u8(frame, crop_rect(_box4(det), w, h))).cpu().numpy()
         squares['gpu_on_cpu_boxes'].append(sq)
         lb_box = _box4(
             [v * scale + (pad[0] if i % 2 == 0 else pad[1]) for i, v in enumerate(det[:4])]
         )
         squares['cascade_on_cpu_boxes'].append(
-            k.pe_square_u8(k.crop_u8(lb_hwc, lib.crop_rect(lb_box))).cpu().numpy()
+            k.pe_square_u8(k.crop_u8(lb_hwc, crop_rect(lb_box, 640, 640))).cpu().numpy()
         )
         cpu_sq = squares['cpu'][len(squares['gpu_on_cpu_boxes']) - 1]
         t = lib.tensor_diff(cpu_sq, sq)

@@ -181,14 +181,6 @@ def pe_square_geometry(w: int, h: int, target: int = 336) -> PeSquare:
     return PeSquare(nw, nh, (nh - target) // 2, (nw - target) // 2)
 
 
-def crop_rect(bbox: tuple[float, float, float, float]) -> tuple[int, int, int, int]:
-    """``crop_pil``'s integer rectangle (PIL fills any part outside the frame with zeros)."""
-    x1, y1, x2, y2 = bbox
-    x1i = max(0, round(x1))
-    y1i = max(0, round(y1))
-    return x1i, y1i, max(x1i + 1, round(x2)), max(y1i + 1, round(y2))
-
-
 # ---------------------------------------------------------------------------- tensor gate
 
 

@@ -126,10 +126,11 @@ def test_pe_square_geometry_matches_product(size: tuple[int, int]) -> None:
 
 def test_crop_rect_matches_crop_pil() -> None:
     from src.services.curation.ingest_index import crop_pil
+    from src.services.detection.geometry import crop_rect
 
     img = Image.new('RGB', (100, 80))
     for box in [(10.4, 5.5, 50.6, 60.49), (-3.2, -1.0, 20.0, 20.0), (90.0, 70.0, 90.2, 70.1)]:
-        x1, y1, x2, y2 = lib.crop_rect(box)
+        x1, y1, x2, y2 = crop_rect(box, 100, 80)
         assert crop_pil(img, box).size == (x2 - x1, y2 - y1)
         assert min(x1, y1) >= 0
         assert x2 > x1
