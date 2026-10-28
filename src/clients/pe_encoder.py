@@ -61,6 +61,7 @@ Embedding contract (both paths):
 
 from __future__ import annotations
 
+import os
 import threading
 from collections import OrderedDict, namedtuple
 from pathlib import Path
@@ -335,6 +336,19 @@ class PEEncoder:
                 requested=pref,
             )
 
+    def prime_text_backend(self) -> None:
+        """Send one trivial query through the Triton text backend, bypassing the LRU.
+
+        Opens the gRPC channel and the model instance so a worker's first real
+        search does not pay for them. Local (ONNX/torch) backends load lazily and
+        are multi-GB, so they are left alone. A backend error propagates (the lifespan
+        logs it and carries on; the first real query then retries).
+        """
+        backend = self._text_backend
+        if not self._text_ready or backend is None or backend.name != 'triton':
+            return
+        self._encode_uncached(['warmup'])
+
     @property
     def text_ready(self) -> bool:
         """Whether :meth:`warm_text_encoder` has completed."""
@@ -350,6 +364,10 @@ class PEEncoder:
         """Operator-facing snapshot for ``GET /health/pe_text``."""
         info = self.text_cache_info()
         return {
+            # The LRU and its counters live in this uvicorn worker only; with N
+            # workers each /health/pe_text call reports whichever one answered.
+            'cache_scope': 'process',
+            'pid': os.getpid(),
             'ready': self._text_ready,
             'backend': self.text_backend,
             'requested_backend': self._text_backend_pref,

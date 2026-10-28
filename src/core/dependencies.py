@@ -135,15 +135,19 @@ async def bootstrap_opensearch_indexes() -> 'asyncio.Task[None] | None':
     if bootstrap itself failed.
     """
     try:
-        from src.clients.curation_opensearch.lifecycle import create_curation_indexes
-        from src.services.curation.index_bootstrap import warm_knn_indexes
+        from src.services.curation.index_bootstrap import ensure_indexes, warm_knn_indexes
         from src.services.projects.bootstrap import for_each_project
 
         os_client = await OpenSearchClientFactory.get_client()
         await os_client.create_all_indexes(force_recreate=False)
         logger.info('core_visual_search_indexes_bootstrapped')
         for slug in for_each_project():
-            await create_curation_indexes(os_client.client, force_recreate=False)
+            # The full bootstrap (exists checks + mapping migrations), not just
+            # index creation: it costs 380-470 ms cold and is cached per
+            # (worker, project), so paying it here keeps it off the first
+            # request of every recycled worker (#356). A failure is logged
+            # inside and leaves the project uncached, so a request retries.
+            await ensure_indexes(os_client.client)
             logger.info(f'curation_indexes_bootstrapped project={slug}')
 
         async def _warm_every_project() -> None:
