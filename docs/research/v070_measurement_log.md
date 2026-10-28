@@ -543,3 +543,112 @@ count). Max abs diff and minimum cosine, count 1 vs count 1 / count 1 vs count 2
 0.99992 / 2.2e-3 and 0.99992, crop_embeddings 4.1e-2 and 0.9885 / 5.7e-2 and 0.9905, blur_sums 3.04e6 in both
 (max over 10 to 12 of 200 images; cosine 0.999988 in both), crop JPEG bytes differing 13 / 12 of 1,365. Memory after
 the run was 9.6 GB for one instance and 9.8 GB for two (the CuPy pool grows with use on 0.3 MP frames).
+
+# Live verification 2 of release/0.7.0: #259 embed pass on the GPU decode (2026-10-28, late)
+
+Same test stack as above (compose project `optest1`, v0.6.0 images, Triton on one RTX A6000, 32 API workers).
+Branch `src/` and `scripts/` of release/0.7.0 (3c8d0d38) bind-mounted read-only over the API and the four
+curation workers; the three changed `gpu_image_prep` files (`config.pbtxt`, `1/model.py`, `1/prep_geometry.py`)
+copied into the model repository and the model reloaded through Triton model control. After the reload
+`/v2/models/gpu_image_prep` listed the inputs `jpeg`, `embed_crops`, `boxes`, and the instance count was 2 (as
+committed). The photos were hard links of 1,500 set-P photographs (private; 16 to 24 MP) on NVMe and 1,500 public
+COCO images (the first 1,500 of the pinned `coco_bench_2000` manifest, SHA-256 checked), read through the source
+alias overlay. Fresh throw-away projects (`lw-` prefix) were used and deleted at the end. Host load average during
+the runs was 5 to 10. The GPU-route runs and the CPU baseline differ only in the API environment
+(`OP_INGEST_GPU_DECODE=0` through a second overlay for the baseline). API CPU = cgroup `usage_usec` of the API
+container over the pass divided by images; GPU util = mean of 5 s `nvidia-smi` samples of the Triton card.
+
+## F1. Throughput (set P, 1,500 photos, 3,451 crops, parts crop, frame and region; every vector rewritten)
+
+Ingest of the set into the fresh project ran at 45.2 img/s (1,500 ingested, 0 failed). The photos carry no region
+boxes (as in E1), so the region part had nothing to embed in these runs.
+
+| Route | img/s (3 runs) | Median | API CPU-s / image | GPU util % (5 s mean) | `op_reprocess_decode_total` per pass |
+|---|---|---|---|---|---|
+| GPU route (branch) | 28.06, 29.30, 28.11 | 28.11 | 0.0294, 0.0313, 0.0316 | 33.3, 31.5, 34.9 | gpu +1,497, cpu_small +3, no other `cpu_*` |
+| CPU route (`OP_INGEST_GPU_DECODE=0`, 1 run) | 12.23 | 12.23 | 0.497 | 27.5 | counter absent (route not usable) |
+| E1 release/0.7.0 before the route (for reference) | 10.76, 10.73, 11.86 | 10.76 | 0.529, 0.524, 0.506 | 10 | n/a |
+
+A fourth GPU-route pass in a second fresh project with `nvidia-smi` every 500 ms: 28.64 img/s, 0.0302 CPU-s per
+image, GPU utilization mean 34.3 percent, 34 percent of the 148 samples above 50 percent (max 100).
+
+| Target | Result | Met |
+|---|---|---|
+| at least 20 img/s | 28.1 median (2.6x the 10.8 of E1; 2.3x the CPU run of this campaign) | yes |
+| at most 0.047 API CPU-s per image | 0.029 to 0.032 (0.497 on the CPU route) | yes |
+| GPU more than 50 percent busy | 31.5 to 34.9 percent (5 s samples), 34.3 percent (500 ms samples) | **no** |
+| `route="gpu"` equals the photo count | 1,497 of 1,500 per pass; the other 3 photos are under 3.0 MP and counted `cpu_small` (the gate, by design) | yes, with that reading |
+
+* The GPU does not reach 50 percent although the pass is 2.3x faster than the CPU route; the pass runs at 28 img/s
+  while ingest of the same photos on this stack runs at 45 to 49 img/s. The pass is therefore limited upstream of
+  Triton: the candidates named in the procedure are the 16-photo in-flight bound (`_IMAGES_IN_FLIGHT`) and the
+  64-photo chunk barrier. Neither was varied here (source not edited).
+* With 5,177 synthetic region boxes added (about 5.7 vectors per photo, see F2) the GPU pass ran at 12.92 img/s,
+  0.0482 CPU-s per image, GPU 52 percent busy (1 run); the CPU route on the same boxes ran at 4.44 img/s, 0.753
+  CPU-s per image. Vectors per second are about the same as without regions (about 90 to 95 per second), so the
+  encoder side is what bounds a box-heavy pass. The 0.047 CPU-s bar is missed by 0.001 in that one run.
+
+## F2. Vector parity
+
+Crop and frame vectors of the GPU pass against the vectors written by ingest (3 passes; cosine):
+
+| Pass | Part | Vectors | Min | p01 | Median | Below 0.999 |
+|---|---|---|---|---|---|---|
+| 1 | crop | 3,451 | 0.99984 | 0.99993 | 0.999997 | 0 |
+| 1 | frame | 1,500 | 0.99986 | 0.99994 | 0.999996 | 0 |
+| 2 | crop | 3,451 | 0.99986 | 0.99993 | 0.999997 | 0 |
+| 2 | frame | 1,500 | 0.99989 | 0.99995 | 0.999996 | 0 |
+| 3 | crop | 3,451 | 0.99984 | 0.99993 | 0.999997 | 0 |
+| 3 | frame | 1,500 | 0.99991 | 0.99995 | 0.999996 | 0 |
+
+Gate (p01 at least 0.995): met by a wide margin, and repeat passes agree. For comparison, the CPU pass against
+ingest on the same photos: crop min 0.9936, p01 0.9975, median 0.9994 (559 below 0.999); frame min 0.9974, p01
+0.9991, median 0.9997. That is the nvJPEG against libjpeg difference ingest already has.
+
+**Region vectors, GPU route against the CPU route: gate not met.** The photos had no region boxes, so for this
+check two accepted boxes were written straight into the throw-away project's items (the first inside each item box
+at 70 percent of its size, on all 3,451 items; the second at the top-left half of the item box on every second
+item): 5,177 boxes, identical stored geometry on both runs. One CPU-route pass and one GPU-route pass, vectors
+compared by cosine: n 5,177, **min 0.842, p01 0.886, median 0.965**, 4,226 below 0.995 (required: p01 at least
+0.99). The cosine depends on the box size (medians: area under 2 percent of the frame 0.933, 2 to 5 percent
+0.937, 5 to 10 percent 0.981, 10 to 30 percent 0.995, over 30 percent 0.997).
+
+Cause (probed in the API container on 40 items, 55 boxes, crops of 800 to 3,800 px per side): the CPU region path
+embeds the crop after a JPEG round trip at quality 92 (as designed and as the docs say). The same crop embedded
+without the round trip against the GPU vector: median cosine 0.9993 and 0.9994. The CPU crop with the round trip
+against the one without: median 0.934 for boxes under 5 percent of the frame, 0.993 above. So the GPU vector
+agrees with the raw-pixel CPU embedding to the level of the crop part; the divergence is the CPU path's JPEG
+round trip on multi-megapixel crops (the encoder client then downsamples them by a large factor, which turns the
+JPEG noise into a large vector change). The "expected above 0.99" statement in PERFORMANCE.md is wrong for
+21 MP photos. The GPU route is the closer one to the pixels; the fix, if cross-route agreement is wanted, is on
+the CPU path (drop the round trip), which changes stored region vectors of existing CPU-embedded projects.
+
+## F3. COCO (1,500 public images, ingest 29.1 img/s), release/0.7.0, GPU route enabled
+
+| Run | img/s | API CPU-s / image | GPU util % (5 s) | `op_reprocess_decode_total` growth |
+|---|---|---|---|---|
+| 1 | 16.27 | 0.0640 | 43 | cpu_small +1,500 |
+| 2 | 16.20 | 0.0642 | 42 | cpu_small +1,500 |
+| 3 | 16.19 | 0.0643 | 54 | cpu_small +1,500 |
+
+Reproduces the E1 release/0.7.0 row (16.58, 16.29, 16.69 img/s; 0.0660, 0.0658, 0.0649 CPU-s per image). Every
+photo is counted `cpu_small`, no `gpu` growth, nothing else: the gate keeps COCO on the CPU path unchanged.
+
+## F4. Zero-box request (parts `["frame"]`, set P, 1,500 photos)
+
+No crop and no region box is sent for any photo (an empty `boxes` input). Completed, 0 failed, 1,500 frames
+written, 47.6 img/s. Counter growth: gpu +1,497, cpu_small +3, no other `cpu_*`: no fallback storm, the model
+accepts a `[0, 4]` boxes tensor.
+
+## F5. Bugs and findings
+
+1. Region parity gate as written in PERFORMANCE.md fails (F2); cause is the CPU path's JPEG round trip, not the
+   GPU route. The documented expectation and the gate need to be rewritten or the CPU path changed.
+2. GPU busy stays at about a third on set P (F1); the pass is not Triton bound.
+3. Documentation points to correct: `route=gpu` equals the photo count only for photos at or above 3.0 MP (3 of
+   the 1,500 set-P photos are below).
+4. The route counter does not exist while the route is unusable (`OP_INGEST_GPU_DECODE=0`): nothing to read.
+
+After the runs the three model files were restored (diff against the backup identical), the model reloaded with
+the original two inputs, the overlays removed, the API and four workers recreated on the v0.6.0 images with no
+branch mounts, and the three `lw-` projects deleted (default, cocotest, hiresp and nas20k untouched).
