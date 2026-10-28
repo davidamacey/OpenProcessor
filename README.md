@@ -17,6 +17,8 @@ and standards.
 
 ![Cropwright review screen: one car image with four wheel boxes, each accepted or rejected, on a public COCO sample](docs-site/static/img/screenshots/cropwright/review-regions-multibox-1600.png)
 
+**Documentation:** <https://davidamacey.github.io/OpenProcessor/>
+
 **Where to start.** Not sure whether you need the inference API or the curation
 tools? Read [Choose your path](docs-site/docs/getting-started/choose-your-path.mdx).
 The user documentation lives in [`docs-site/docs/`](docs-site/docs/); this
@@ -705,7 +707,7 @@ See [benchmarks/README.md](benchmarks/README.md) and
 
 ## Documentation
 
-- **User and operator docs:** [`docs-site/docs/`](docs-site/docs/), a Docusaurus
+- **User and operator docs:** [published site](https://davidamacey.github.io/OpenProcessor/), source in [`docs-site/docs/`](docs-site/docs/), a Docusaurus
   site (`make docs-build` builds it).
   - [Choose your path](docs-site/docs/getting-started/choose-your-path.mdx)
   - [Quick start](docs-site/docs/getting-started/quick-start.mdx)

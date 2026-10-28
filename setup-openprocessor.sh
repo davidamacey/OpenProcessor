@@ -22,7 +22,7 @@
 #   OP_GH_REPO             GitHub org/repo to install from (default davidamacey/OpenProcessor)
 #   OP_GH_DEFAULT_REF      default branch for --branch (default main)
 #   OP_IMAGE_NAMESPACE     Docker Hub namespace (default davidamacey)
-#   OP_DOCS_URL            docs-site URL, printed in the summary if set
+#   OP_DOCS_URL            docs-site URL printed in the summary (default: the published site)
 #   OP_ARTIFACT_BASE_URL   release-asset base (https only; <base>/<ref>/<asset>)
 #   OP_RAW_BASE_URL        raw-file base (https only; <base>/<ref>/<path>)
 #   OP_INSTALL_DIR / --dir           install directory (default ./openprocessor, or . when run inside an install dir)
@@ -72,7 +72,7 @@ __op_define() {
 OP_GH_REPO="${OP_GH_REPO:-davidamacey/OpenProcessor}"
 OP_GH_DEFAULT_REF="${OP_GH_DEFAULT_REF:-main}"
 OP_IMAGE_NAMESPACE="${OP_IMAGE_NAMESPACE:-davidamacey}"
-OP_DOCS_URL="${OP_DOCS_URL:-}"
+OP_DOCS_URL="${OP_DOCS_URL:-https://davidamacey.github.io/OpenProcessor/}"
 
 SCRIPT_VERSION="0.6.0"
 
@@ -2655,20 +2655,20 @@ dry_run_report() {
 # select_tiers_interactive REC -> the validated tier list; an invalid answer
 # re-prompts, and three invalid answers exit 2 (never a silent fallback).
 select_tiers_interactive() {
-    local rec="$1" reply attempt
-    echo "Recommended tiers for this machine: ${rec}" >&2
-    echo "Available: ${TIER_LIST[*]} (dependencies are added automatically)" >&2
+    local rec="$1" reply custom attempt; local -a presets=("$rec" core "core,curation,cropwright" "$(IFS=,; echo "${TIER_LIST[*]}")")
+    printf '%s\n' "Choose what to install (dependencies are added automatically):" \
+        "  1) Recommended for this machine: ${presets[0]}" "  2) Core only (inference API)" \
+        "  3) Curation with the Cropwright web UI" "  4) Everything" "  5) Custom (type a list)" >&2
     for attempt in 1 2 3; do
-        prompt_line reply "Tiers to install [${rec}]: " "--tiers LIST"
-        [[ -z "$reply" ]] && reply="$rec"
-        reply="${reply// /}"
-        if tiers_validate "$reply"; then
-            echo "$reply"
-            return 0
-        fi
-        (( attempt < 3 )) && echo "Try again (comma-separated, from: ${TIER_LIST[*]})." >&2
+        prompt_line reply "Choice [1]: " "--tiers LIST"
+        case "${reply:-1}" in
+            [1-4]) echo "${presets[$((${reply:-1} - 1))]}"; return 0 ;;
+            5) prompt_line custom "Tiers (from: ${TIER_LIST[*]}): " "--tiers LIST"
+               if tiers_validate "${custom// /}"; then echo "${custom// /}"; return 0; fi ;;
+        esac
+        (( attempt < 3 )) && echo "Enter a number from 1 to 5." >&2
     done
-    die "no valid tier list after 3 tries" "$EXIT_USAGE"
+    die "no valid selection after 3 tries" "$EXIT_USAGE"
 }
 
 print_gpu_plan() {
