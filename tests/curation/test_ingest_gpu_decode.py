@@ -123,7 +123,7 @@ async def test_a_photo_above_the_gate_is_ingested_from_the_gpu_decode(tmp_path) 
     assert item['blur_full_var'] == 5.0
     assert item['blur_lap_var'] == 2.0
     assert item['class_name'] == 'widget'
-    assert (tmp_path / 'crops' / f'{crop_id}.jpg').read_bytes() == b'\xff\xd8crop'
+    assert (tmp_path / 'crops' / 'default' / f'{crop_id}.jpg').read_bytes() == b'\xff\xd8crop'
     assert triton.calls.count('primary_end2end') == 1  # the CPU detector ran for the small one only
     assert triton.loaded == [ingest_gpu_decode.GPU_IMAGE_PREP_MODEL]  # loaded on first use, once
 

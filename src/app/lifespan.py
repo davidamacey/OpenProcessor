@@ -229,6 +229,47 @@ def _warm_pe_encoder(app: FastAPI) -> None:
         logger.warning('pe_text_encoder_warm_skipped', error=str(exc))
 
 
+async def _warm_routes(app: FastAPI) -> None:
+    """Build FastAPI's lazily constructed route state before the first real request.
+
+    FastAPI 0.143 builds the effective route tables of every included router on the first
+    request that is matched against them (about 0.9 s for 321 routes, once per uvicorn
+    worker). One request that matches no route walks every router, so the cost is paid here
+    instead of by the first search a worker answers (#356). A no-match request runs no
+    handler and no dependency, so there is no side effect and no auth or project guard to
+    bypass. Best-effort: a failure is logged and startup continues.
+    """
+    status: list[int] = []
+
+    async def receive() -> dict[str, object]:
+        return {'type': 'http.request', 'body': b'', 'more_body': False}
+
+    async def send(message: dict[str, object]) -> None:
+        if message['type'] == 'http.response.start':
+            status.append(int(str(message['status'])))
+
+    scope = {
+        'type': 'http',
+        'asgi': {'version': '3.0'},
+        'http_version': '1.1',
+        'method': 'GET',
+        'scheme': 'http',
+        'path': '/_route_warmup_no_match',
+        'raw_path': b'/_route_warmup_no_match',
+        'query_string': b'',
+        'root_path': '',
+        'headers': [(b'host', b'localhost')],
+        'client': ('127.0.0.1', 0),
+        'server': ('localhost', 80),
+        'app': app,
+    }
+    try:
+        await app(scope, receive, send)  # type: ignore[arg-type]
+        logger.info('route_state_warmed', status=status[0] if status else None)
+    except (RuntimeError, OSError, ValueError) as exc:
+        logger.warning('route_state_warm_skipped', error=str(exc))
+
+
 async def _shutdown_step(step: str, run: Callable[[], Awaitable[None] | None]) -> None:
     """Run one shutdown step on its own: a failure is logged with the step name and
     never stops the steps after it. Startup is not routed through here, so a startup
@@ -362,6 +403,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await _start_gpu_arbiter()
     await _reload_promoted_models()
     _warm_pe_encoder(app)
+    await _warm_routes(app)
 
     from src.services.curation.background_jobs import start_background_jobs
 

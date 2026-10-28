@@ -25,8 +25,8 @@ def test_router_and_worker_resolve_the_same_crop_cache_dir(monkeypatch, tmp_path
     from scripts.curation.worker import state as worker_state
 
     override = tmp_path / 'shared_crop_cache'
-    override.mkdir()
-    (override / 'c1.jpg').write_bytes(b'cached-by-ingest')
+    (override / 'default').mkdir(parents=True)
+    (override / 'default' / 'c1.jpg').write_bytes(b'cached-by-ingest')
     try:
         monkeypatch.setenv('OP_CROP_CACHE_DIR', str(override))
         _reset_curation_config_singleton()
@@ -41,20 +41,20 @@ def test_router_and_worker_resolve_the_same_crop_cache_dir(monkeypatch, tmp_path
 
 
 def test_default_crop_cache_dir_is_what_the_worker_reads(monkeypatch, tmp_path) -> None:
-    from src.services.curation import crop_bytes
+    from src.services.curation import crop_bytes, source_image_cache
 
     try:
         monkeypatch.delenv('OP_CROP_CACHE_DIR', raising=False)
         _reset_curation_config_singleton()
         default_dir = get_curation_config().crop_cache_dir
         seen: list[str] = []
-        real = crop_bytes.Path
+        real = source_image_cache.Path
 
         def spy(*parts: str):
             seen.append(str(parts[0]))
             return real(tmp_path / 'absent')
 
-        monkeypatch.setattr(crop_bytes, 'Path', spy)
+        monkeypatch.setattr(source_image_cache, 'Path', spy)
         crop_bytes.crop_jpeg_from_cache('anything')
 
         assert seen == [str(default_dir)]

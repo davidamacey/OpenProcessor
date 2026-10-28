@@ -1165,7 +1165,8 @@ volumes:
   # ST-1: shared tmpfs item-crop cache (api + curation-detection-worker).
   # Size is the OS-level ceiling; OP_CROP_CACHE_MAX_BYTES (default 3 GiB,
   # see CurationConfig.crop_cache_max_bytes) prunes the *content* down
-  # before this fills.
+  # before this fills. Files sit under <mount>/<project slug>/; the cap covers
+  # every project together and a project delete removes its own directory.
   openprocessor-crop-cache:
     driver: local
     driver_opts:

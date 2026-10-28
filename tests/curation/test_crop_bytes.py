@@ -35,12 +35,18 @@ def cache_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return cache
 
 
+def _put(cache_dir: Path, crop_id: str, data: bytes) -> None:
+    """Cache a crop under the bound (default) project, where the readers look."""
+    (cache_dir / 'default').mkdir(exist_ok=True)
+    (cache_dir / 'default' / f'{crop_id}.jpg').write_bytes(data)
+
+
 def _size(jpeg: bytes) -> tuple[int, int]:
     return Image.open(io.BytesIO(jpeg)).size
 
 
 def test_a_cache_hit_is_returned_verbatim(cache_dir: Path, source_image: Path) -> None:
-    (cache_dir / 'c1.jpg').write_bytes(b'cached-bytes')
+    _put(cache_dir, 'c1', b'cached-bytes')
 
     out = crop_bytes.load_item_crop_jpeg('c1', str(source_image), (0.0, 0.0, 0.5, 1.0))
 
@@ -59,7 +65,7 @@ def test_a_cache_miss_cuts_the_crop_from_the_source_image(
 
 
 def test_the_cache_counters_follow_the_lookups(cache_dir: Path, source_image: Path) -> None:
-    (cache_dir / 'hit.jpg').write_bytes(b'x')
+    _put(cache_dir, 'hit', b'x')
     hits, misses = crop_bytes.cache_stats()
 
     crop_bytes.load_item_crop_jpeg('hit', str(source_image), (0, 0, 1, 1))
@@ -81,7 +87,7 @@ def test_the_worker_gets_exactly_the_bytes_the_shared_function_returns(
 ) -> None:
     bbox = (0.25, 0.1, 0.9, 0.8)
     expected = crop_bytes.load_item_crop_jpeg('w1', str(source_image), bbox)
-    (cache_dir / 'w2.jpg').write_bytes(b'from-cache')
+    _put(cache_dir, 'w2', b'from-cache')
 
     assert state._crop_jpeg_for_task('w1', str(source_image), bbox) == expected
     assert state._crop_jpeg_for_task('w2', str(source_image), bbox) == b'from-cache'
@@ -102,7 +108,7 @@ def test_the_vlm_crop_from_the_cache_is_shrunk_to_vlm_size(
 ) -> None:
     big = io.BytesIO()
     Image.new('RGB', (900, 600), (1, 2, 3)).save(big, format='JPEG')
-    (cache_dir / 'c1.jpg').write_bytes(big.getvalue())
+    _put(cache_dir, 'c1', big.getvalue())
 
     out = crop_bytes.load_vlm_item_jpeg('c1', '/gone.jpg', (0, 0, 1, 1), cache_dir=cache_dir)
 

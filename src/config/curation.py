@@ -133,6 +133,8 @@ class CurationConfig:
     # ST-1: crop-cache prune threshold. write_crop_cache had no cap, so a
     # tmpfs mount without an OS-level size limit grows unbounded. 0 disables
     # pruning (source_image_cache.maybe_prune_crop_cache becomes a no-op).
+    # One cap over every project's directory under crop_cache_dir; an evicted
+    # crop is a cache miss (re-cropped from the source image), not an error.
     crop_cache_max_bytes: int = 3 * 1024**3
     # BA-1: server-managed, content-addressed root for uploaded image
     # bytes (POST /ingest/upload). Added to _configured_roots() (see

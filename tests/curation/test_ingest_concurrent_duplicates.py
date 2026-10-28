@@ -63,7 +63,7 @@ def _assert_stored_once(os_fake: FakeIngestOpenSearch, cache: Path) -> None:
     hashes = [d['imohash'] for d in os_fake.images.values()]
     assert len(hashes) == len(set(hashes)), 'the same content is stored as two images'
     assert {d['image_id'] for d in os_fake.items.values()} <= set(os_fake.images)
-    assert {p.stem for p in cache.glob('*.jpg')} == set(os_fake.items)
+    assert {p.stem for p in (cache / 'default').glob('*.jpg')} == set(os_fake.items)
 
 
 @pytest.mark.asyncio

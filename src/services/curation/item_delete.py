@@ -15,14 +15,16 @@ from __future__ import annotations
 
 import contextlib
 from collections.abc import Awaitable, Callable
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES
 from src.core.logging import get_logger
+from src.services.curation.source_image_cache import crop_cache_file
 
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from opensearchpy import AsyncOpenSearch
 
 logger = get_logger(__name__)
@@ -142,7 +144,7 @@ def _drop_cached_crop(cache_dir: str | Path | None, crop_id: str) -> None:
     if not cache_dir:
         return
     with contextlib.suppress(OSError):
-        (Path(cache_dir) / f'{crop_id}.jpg').unlink()
+        crop_cache_file(cache_dir, crop_id).unlink()
 
 
 __all__ = ['Deletable', 'delete_items']
