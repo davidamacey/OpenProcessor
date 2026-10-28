@@ -532,4 +532,14 @@ Same card, KIND_GPU, the model unloaded and loaded through Triton model control 
 Two instances raise ingest by 51 percent (31.8 to 48.0 img/s) for about 7 GB more card memory and 2.5 more Triton
 cores; a third instance adds 0.6 percent (inside the spread) for another 6 to 7 GB. Recommended count: 2.
 (The 31.8 img/s baseline is the 3,000 distinct photos, 2.3 crops per image; folder F of the earlier campaign
-had 1.5 crops per image and reached 37.) Output parity with two instances was not checked here.
+had 1.5 crops per image and reached 37.) Output parity with two instances: see below.
+
+Parity (throw-away Triton 26.06 on GPU 0 only, detector, PE encoder and `gpu_image_prep`, the 200 public COCO
+images, 8 concurrent streams, every output tensor kept): count 1 against count 2 gave identical status, size,
+letterbox, det_scores and det_classes; embeddings, boxes, blur sums and crop JPEGs differ at the level of run-to-run
+noise already present between two runs at count 1 (TensorRT kernels and the concurrent batching, not the instance
+count). Max abs diff and minimum cosine, count 1 vs count 1 / count 1 vs count 2: det_boxes 2.9e-3 / 3.4e-3
+(the 0.1975 raw diff in one image is row order; sorted by score it is 3.4e-3), whole_embedding 1.9e-3 and cosine
+0.99992 / 2.2e-3 and 0.99992, crop_embeddings 4.1e-2 and 0.9885 / 5.7e-2 and 0.9905, blur_sums 3.04e6 in both
+(max over 10 to 12 of 200 images; cosine 0.999988 in both), crop JPEG bytes differing 13 / 12 of 1,365. Memory after
+the run was 9.6 GB for one instance and 9.8 GB for two (the CuPy pool grows with use on 0.3 MP frames).

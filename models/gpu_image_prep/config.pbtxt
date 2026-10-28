@@ -41,15 +41,20 @@ output [
 
 instance_group [
   {
-    count: 1  # one process owns the decoder; its worker threads give the concurrency
+    count: 2  # per-profile value (config_templates/profiles/*.json, gpu_image_prep_instances)
     kind: KIND_GPU
     gpus: [ 0 ]
   }
 ]
 
-# GPU memory: the CuPy pool is capped at POOL_MIB (frames in flight, letterbox and squares), plus
-# the CUDA context, the nvJPEG lane buffers and the BLS tensors: 8.2 GB measured at 32 streams of
-# 12-24 MP photos. Not in Triton's default load list (loaded on first use).
+# Two instances raised ingest from 31.8 to 48.0 images/s on one A6000 (#268); a third added 0.6
+# percent. Each instance runs its own worker threads, so the count removes the single-process limit.
+#
+# GPU memory, per instance: the CuPy pool is capped at POOL_MIB (frames in flight, letterbox and
+# squares), plus the CUDA context, the nvJPEG lane buffers and the BLS tensors: 8.2 GB measured at
+# 32 streams of 12-24 MP photos. The installer sets the count per profile (minimal and standard 1,
+# full 2), so the card holds count x GPU_MIB_PER_INSTANCE. Not in Triton's default load list
+# (loaded on first use).
 parameters { key: "GPU_MIB_PER_INSTANCE" value: { string_value: "8704" } }
 parameters { key: "POOL_MIB" value: { string_value: "4096" } }
 

@@ -461,7 +461,8 @@ ingest can decode JPEGs on the GPU.
   already have it off.
 - Only images of at least `OP_INGEST_GPU_MIN_MEGAPIXELS` (default 3.0) use it. Small
   frames are faster on the CPU.
-- It needs about 8.5 GB more VRAM on the Triton card, loaded on first use. If the model
+- It needs about 8.5 GB more VRAM on the Triton card per model instance (the `full` profile runs
+  two, 17 GB; the other profiles one), loaded on first use. If the model
   cannot load, every photo is decoded on the CPU instead.
 - A JPEG that is not a baseline 8-bit file falls back to the CPU; the counter
   `op_ingest_decode_total` shows how many were taken either way.

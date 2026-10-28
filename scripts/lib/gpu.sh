@@ -151,9 +151,12 @@ load_profile() {
     PROFILE_MAX_BATCH=$(grep -o '"max_batch_size"[[:space:]]*:[[:space:]]*[0-9]*' "$profile_file" | grep -o '[0-9]*$')
     PROFILE_OCR_PIPELINE_INSTANCES=$(grep -o '"ocr_pipeline_instances"[[:space:]]*:[[:space:]]*[0-9]*' "$profile_file" | grep -o '[0-9]*$')
 
+    PROFILE_GPU_IMAGE_PREP_INSTANCES=$(grep -o '"gpu_image_prep_instances"[[:space:]]*:[[:space:]]*[0-9]*' "$profile_file" | grep -o '[0-9]*$')
+    PROFILE_GPU_IMAGE_PREP_INSTANCES="${PROFILE_GPU_IMAGE_PREP_INSTANCES:-1}"
+
     PROFILE_INGEST_GPU_DECODE=$(profile_ingest_gpu_decode "$profile_file")
 
-    export PROFILE_NAME PROFILE_INSTANCE_COUNT PROFILE_MAX_BATCH PROFILE_OCR_PIPELINE_INSTANCES PROFILE_INGEST_GPU_DECODE
+    export PROFILE_NAME PROFILE_INSTANCE_COUNT PROFILE_MAX_BATCH PROFILE_OCR_PIPELINE_INSTANCES PROFILE_GPU_IMAGE_PREP_INSTANCES PROFILE_INGEST_GPU_DECODE
 
     log_debug "Loaded profile: $PROFILE_NAME (instances=$PROFILE_INSTANCE_COUNT, batch=$PROFILE_MAX_BATCH)"
     return 0

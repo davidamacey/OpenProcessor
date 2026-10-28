@@ -724,7 +724,7 @@ _triton_need_gb() {
     esac
 }
 
-# The GPU decode (gpu_image_prep, about 8.5 GB more on the Triton card). Mirrors
+# The GPU decode (gpu_image_prep, about 8.5 GB more on the Triton card per instance). Mirrors
 # "ingest_gpu_decode" in config_templates/profiles/*.json (tests/installer keeps them equal):
 # only the full profile (48 GB+) has room beside the profile's own Triton budget.
 _ingest_gpu_decode_for_profile() {
