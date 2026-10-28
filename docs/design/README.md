@@ -63,6 +63,7 @@ how it was measured and whether the design is implemented.
 | [pe_encoder_batching_benchmark.md](../research/pe_encoder_batching_benchmark.md) | Perception encoder batched TensorRT parity and throughput |
 | [ingest_concurrency_tuning.md](../research/ingest_concurrency_tuning.md) | Batch and concurrency sweep for bulk ingest |
 | [clustering_methods.md](../research/clustering_methods.md) | UMAP, AHC, HDBSCAN and IVF methods, the IVF-then-refine hierarchy and the ablation |
+| [OpenProcessor_Spatial_Memory_Photogrammetry_Research_README.md](../research/OpenProcessor_Spatial_Memory_Photogrammetry_Research_README.md) | Long-term research: discovering same-place photo groups, COLMAP and Gaussian-splat reconstruction, a dated spatial timeline. Not implemented; scheduled after 0.7.0 |
 | [gpu_clustering.md](../research/gpu_clustering.md) | cuML UMAP backend detection and VRAM budget (#66) |
 | [curation_scores.md](../research/curation_scores.md) | Uniqueness, mistakenness, near-duplicate and diversity score validation |
 | [detector_quantization_results.md](../research/detector_quantization_results.md) | Detector precision, runtime and hardware matrix |
