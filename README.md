@@ -169,7 +169,7 @@ cd openprocessor
 ./openprocessor sample coco       # fetch a public COCO sample (200 images)
 ./openprocessor vlm list          # the local VLM catalog
 ./openprocessor upgrade           # to the latest release (backs up first)
-./setup-openprocessor.sh --repair | --rollback | --uninstall
+./setup-openprocessor.sh --repair      # also --rollback and --uninstall
 ```
 
 ```bash
@@ -194,8 +194,9 @@ git clone https://github.com/davidamacey/OpenProcessor.git && cd OpenProcessor &
 exports them to TensorRT and starts the services. Add `--yes` for no prompts,
 or `--profile=standard --gpu=0 --yes` to choose explicitly. In a checkout,
 manage the stack with `make up`, `make curation-up`, `make status` and
-`make down`. The `./openprocessor` CLI also works there once `.env` has a
-`COMPOSE_PROJECT_NAME` line (the `.env` that `setup.sh` writes has none). See
+`make down`. The `./openprocessor` CLI also works there; without a
+`COMPOSE_PROJECT_NAME` in `.env` it falls back to project `openprocessor` and
+warns. See
 [INSTALLATION.md](INSTALLATION.md#install-from-source) for manual steps.
 
 ### Docker Hub
@@ -265,9 +266,13 @@ Government Work"; never NonCommercial or NoDerivs). Then, in a source checkout:
 #    (PUT /curation/projects/{project}/ingest/policy); the old
 #    OP_INGEST_PRIMARY_CLASS_IDS env var is retired and ignored.
 # 2. Point OP_SOURCE_ROOT_HOST at data/samples in .env (the compose mount
-#    target is fixed at /data/source), then recreate the services that mount
+#    target is fixed at /data/source), set the ingest detector (ingest
+#    answers 503 until it is set), then recreate the services that mount
 #    it: api, curation-detection-worker, curation-auto-label-worker.
-echo 'OP_SOURCE_ROOT_HOST=./data/samples' >> .env
+cat >> .env <<'EOF'
+OP_INGEST_PRIMARY_DETECTOR_MODEL=yolov11_small_trt_end2end
+OP_SOURCE_ROOT_HOST=./data/samples
+EOF
 make up && make curation-up
 # 3. --folder is a container path under the /data/source mount, not a
 #    host-relative one:
@@ -663,12 +668,16 @@ Run the offline suite (no Docker, no GPU needed):
 .venv/bin/python -m pytest tests/ -q
 ```
 
+Create the venv first (`python3 -m venv .venv`, then the install steps in
+[CONTRIBUTING.md](CONTRIBUTING.md)).
+
 `tests/test_full_system.py` and `tests/validate_visual_results.py` hit the
 running stack over HTTP, so they read their target ports from the environment
 (`API_PORT`, `TRITON_HTTP_PORT`, `OPENSEARCH_PORT`; defaults 4603/4600/4607):
 
 ```bash
 # Full system test (all endpoints) — host venv path
+mkdir -p test_results
 .venv/bin/python tests/test_full_system.py 2>&1 | tee test_results/test_results.txt
 
 # Visual validation (draws bounding boxes on test images)
@@ -682,7 +691,8 @@ found`. Install the test deps into the running container first (not persisted
 across a recreate):
 
 ```bash
-docker compose -p openprocessor exec api pip install -r requirements-test.txt
+docker compose -p openprocessor cp requirements-test.txt api:/tmp/requirements-test.txt
+docker compose -p openprocessor exec api pip install -r /tmp/requirements-test.txt
 docker compose -p openprocessor exec api python -m pytest tests/ -q --ignore=tests/live
 ```
 
