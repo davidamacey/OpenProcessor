@@ -57,7 +57,8 @@ async def test_label_batch_moves_labelled_items_into_their_class_cluster(
     buf = io.BytesIO()
     Image.new('RGB', (32, 32), (1, 2, 3)).save(buf, format='JPEG')
     for cid in answers:
-        (tmp_path / f'{cid}.jpg').write_bytes(buf.getvalue())
+        (tmp_path / 'default').mkdir(exist_ok=True)
+        (tmp_path / 'default' / f'{cid}.jpg').write_bytes(buf.getvalue())
     monkeypatch.setattr(
         vlm_mod, 'get_curation_config', lambda: SimpleNamespace(crop_cache_dir=tmp_path)
     )

@@ -225,14 +225,17 @@ directory removal, promoted-model unload and the tombstone run in the
 background. Follow the `project.deleted` event on `/curation/events`, or poll
 `GET /curation/projects/{project}` until it answers `404`.
 
-A delete is refused while the project has running jobs (`project_busy`), is
+A delete is refused while the project has running jobs (`project_busy`; the body
+names each job, and the caller cancels or waits for them, then repeats the `DELETE`, which does
+not wait for a job to finish), is
 the last active project, or has promoted models shared with other projects
 (`in_use`; `force=true` bypasses only this check). The `in_use` body names the
 shared models in `message`, the projects whose active detection profile uses them
 in `projects[]` and `used_by[]` (`{project, profile}`); the dry run lists the
 same rows in `referenced_by[]`. A project that cannot be read makes the real
 delete `503 config_store_unavailable` (`force=true` bypasses). Repeating a `DELETE` for a
-project that is already `deleting` retries the background work.
+project that is already `deleting` retries the background work. The background work also removes
+the project's crop-cache directory (`<OP_CROP_CACHE_DIR>/<slug>`), and no other project's.
 
 ### Pause
 

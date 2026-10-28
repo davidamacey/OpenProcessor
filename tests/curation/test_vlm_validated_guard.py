@@ -58,7 +58,8 @@ async def test_label_batch_never_overwrites_validated_class(
     buf = io.BytesIO()
     Image.new('RGB', (32, 32), (1, 2, 3)).save(buf, format='JPEG')
     for cid in ids:
-        (tmp_path / f'{cid}.jpg').write_bytes(buf.getvalue())
+        (tmp_path / 'default').mkdir(exist_ok=True)
+        (tmp_path / 'default' / f'{cid}.jpg').write_bytes(buf.getvalue())
     monkeypatch.setattr(
         vlm_mod, 'get_curation_config', lambda: SimpleNamespace(crop_cache_dir=tmp_path)
     )

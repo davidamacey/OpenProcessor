@@ -170,7 +170,8 @@ def _wire_label_batch(
     items = base_curation_config().items_index
     buf = io.BytesIO()
     Image.new('RGB', (32, 32), (1, 2, 3)).save(buf, format='JPEG')
-    (tmp_path / 'c1.jpg').write_bytes(buf.getvalue())
+    (tmp_path / 'default').mkdir(exist_ok=True)
+    (tmp_path / 'default' / 'c1.jpg').write_bytes(buf.getvalue())
     monkeypatch.setattr(
         vlm_mod, 'get_curation_config', lambda: SimpleNamespace(crop_cache_dir=tmp_path)
     )

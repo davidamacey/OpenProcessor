@@ -34,7 +34,11 @@ from src.services.curation.item_doc import (
     build_item_doc,
     region_seed_status,
 )
-from src.services.curation.source_image_cache import maybe_prune_crop_cache, write_crop_cache
+from src.services.curation.source_image_cache import (
+    maybe_prune_crop_cache,
+    project_crop_cache_dir,
+    write_crop_cache,
+)
 from src.services.detection.crop_quality import blur_ratio, crop_lap_var, image_lap_var
 from src.services.detection.geometry import (
     bbox_norm as _bbox_norm_fn,
@@ -202,13 +206,14 @@ async def _cache_crops(
     """Fill the crop cache for the items just written. After the write, so a copy that
     lost the images-doc ``create`` leaves no crops behind; a reader that comes first
     re-crops from the source, as on any cache miss."""
+    project_dir = project_crop_cache_dir(service.config.crop_cache_dir)
     await asyncio.gather(
         *(
             run_cpu(
                 write_crop_cache,
                 cid,
                 crop,
-                service.config.crop_cache_dir,
+                project_dir,
                 nbytes=len(crop) if isinstance(crop, bytes) else crop.width * crop.height * 3,
             )
             for cid, crop in zip(cids, crops, strict=True)
