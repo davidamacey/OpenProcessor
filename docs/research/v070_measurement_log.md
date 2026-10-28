@@ -226,3 +226,191 @@ $PY scripts/bench/ivf_fit_scaling.py --data $OUT/synth1m.npz --sizes 10000,25000
 `cluster_ladder.py` writes `<label>_<size>.json` with every repetition's stage split, resident set,
 index sizes and the k-NN percentiles. The older single-tool ladder
 (`scripts/bench/cluster_bench.py --source vecdb`) reads the same npz and gives wall time only.
+
+# Live ingest, contention and query-latency campaign
+
+Measured 2026-10-28 (afternoon, one session, about 4 hours) on a running test stack (compose project
+`optest1`: Triton on one RTX A6000, OpenSearch 3.6.0 single node on local NVMe, API with 32 uvicorn
+workers, the stack's refresh daemon and curation workers running). Not a quiet machine: other users'
+jobs kept the 1-minute load average between 4 and 31 (typically 9 to 17); the load during each group is
+in the tables. Every group is 3 repetitions unless stated, each in a fresh throw-away project that was
+deleted afterwards (no existing project was changed). The driver scripts and the raw per-run JSON and
+5-second GPU/CPU samples are kept outside the repository.
+
+Data: **set P** photographs (private, 16 to 24 MP baseline JPEGs, GPU decode on). Two inputs:
+
+* **Folder F**: 3,275 files (20.1 GiB), 3,184 distinct contents (88 groups of byte-identical files).
+  One byte-identical copy lived on the bulk HDD RAID (ext4, local mount) and one on NVMe (copy verified by
+  SHA-256 of every file).
+* **5k**: 5,000 files, 4,997 distinct contents, 2.35 crops per image (F: 1.53).
+
+Method notes: before every ingest the input files' page-cache pages were dropped
+(`posix_fadvise(DONTNEED)`; verified: a cold sequential read of 100 files ran at 185 MB/s, the second read
+at 2,500 MB/s), so every run reads from the device. GPU utilisation is `nvidia-smi` every 5 s on the
+Triton GPU, averaged over the run window only. Triton CPU is `docker stats` (100 percent = one core),
+mean over the run. **Stage seconds are summed over all batches in flight, not wall time** (concurrency x
+batch images are in flight at once, so `gpu_decode` is mostly queueing time inside Triton); they are
+compared across runs, not added up to the wall. Default ingest settings are batch size 16, concurrency
+16. Reference: 17.9 MP per image on folder F, so 37.5 img/s is about 670 MP/s.
+
+## A. Source device: HDD RAID against NVMe, same files (folder F, 2 x 3 runs)
+
+| Source | img/s (3 runs) | Run s | GPU util % (3 runs) | Triton CPU % | `file_read` stage s (sum) | `opensearch_write` stage s (sum) | Load avg during |
+|---|---|---|---|---|---|---|---|
+| HDD RAID (cold cache) | 37.2, 38.3, 38.9 | 88, 86, 84 | 58, 58, 65 | 690 | 84, 97, 110 | 1,477 to 1,978 | 10.7 to 20.5 |
+| NVMe (cold cache) | 37.3, 33.9, 37.2 | 88, 96, 88 | 62, 70, 77 | 665 | 14 to 17 | 873 to 1,088 | 14.4 to 25.8 |
+
+The device does not matter: the median is 38.3 img/s from HDD and 37.2 from NVMe (the NVMe low run, 33.9,
+ran at a load average of 25.8). The read stage is 5 to 7 times faster on NVMe (about 5 ms against 30 ms per
+image summed over workers) but it is not on the critical path at 37 img/s (a 6.6 MB file at 37 img/s is
+245 MB/s, within what the RAID delivers).
+
+## B. Concurrency and batch size, NVMe, folder F (one factor at a time, 3 runs each)
+
+| Setting | img/s (3 runs) | Median | GPU util % (3 runs) | Triton CPU % | `gpu_decode` stage s (sum, first run) | Load avg during |
+|---|---|---|---|---|---|---|
+| concurrency 4 (batch 16) | 33.0, 33.1, 33.9 | 33.1 | 65, 65, 58 | 588 | 2,964 | 9.4 to 11.4 |
+| concurrency 8 | 37.2, 38.0, 37.6 | 37.6 | 69, 67, 64 | 667 | 6,586 | 11.6 to 13.0 |
+| concurrency 16 (default, from A) | 37.3, 33.9, 37.2 | 37.2 | 62, 70, 77 | 665 | 16,278 | 14.4 to 25.8 |
+| concurrency 32 (maximum) | 37.7, 37.0, 37.7 | 37.7 | 63, 63, 68 | 673 | 33,702 | 13.7 to 14.8 |
+| batch 8 (concurrency 16) | 38.6, 39.0, 40.9 | 39.0 | 76, 64, 76 | 740 | 6,962 | 14.2 to 16.9 |
+| batch 16 (default, from A) | 37.3, 33.9, 37.2 | 37.2 | 62, 70, 77 | 665 | 16,278 | 14.4 to 25.8 |
+| batch 32 | 38.0, 39.2, 39.1 | 39.1 | 62, 76, 67 | 678 | 28,714 | 15.0 to 17.9 |
+| batch 64 (maximum) | 37.3, 36.4, 36.8 | 36.8 | 56, 57, 69 | 664 | 41,382 | 13.2 to 17.1 |
+
+Throughput saturates at about 37 to 39 img/s from concurrency 8 on. Four batches in flight (64 images) cost
+12 percent; 8, 16 and 32 batches in flight, and batches from 8 to 64 images, are all within the spread of
+a loaded host (36.8 to 39.1 medians). What grows with in-flight images is latency: the `gpu_decode`
+stage sum rises 5.7 times from concurrency 4 to 32 (and 5.8 times from batch 8 to 64) at the same
+throughput, i.e. the extra images wait in Triton's queue. At saturation the GPU is **not** busy: mean
+utilisation is 56 to 77 percent (single samples reach 100 and drop to 0 between bursts), while Triton
+uses about 6.7 cores (about 180 CPU-ms per photo) and the 48-thread host is 70 percent idle. Triton's
+`top -H` during a 5k ingest shows about 30 `triton_python_b` threads at 5 to 60 percent each and no
+single thread pegged, so the limit is not one saturated thread. The `gpu_image_prep` model has
+`instance_group count: 1` (one Python-backend process owns the decoder); the data are consistent with
+that one process being the ceiling (its CPU-side work: nvJPEG Huffman stage, crop JPEG encoding,
+Python between GPU calls) but this campaign did not prove it, see the next measurements below.
+
+**Same-content count is not stable (bug, see Bugs).** Folder F holds 3,184 distinct contents, yet runs
+reported 3,184 to 3,189 images ingested (11 of the 24 runs in A and B stored more than 3,184).
+
+## C. Cluster pass against a concurrent 5k ingest (#337 contention)
+
+Ingest of the 5k set (GPU decode, cold cache, default settings) with and without a concurrent
+`cluster_ladder.py` pass at 91,184 real vectors (set P export, IVF, the same call as the winter log
+above). The ingest was started when the ladder's items index was loaded (50 to 58 s after the ladder
+started), so the whole ingest ran inside the pass's fetch and fit stages. 3 runs each.
+
+| Run | Wall s | Fetch s | Fit s | Write-back s | Refresh + tail s | Load avg at start |
+|---|---|---|---|---|---|---|
+| Cluster pass alone | 224.2, 224.6, 237.4 | 16.7, 16.5, 23.7 | 178.3, 176.1, 183.4 | 27.8, 31.6, 30.0 | 1.5, 0.6, 0.6 | 19.1, 9.8, 16.1 |
+| Cluster pass during the ingest | 241.5, 238.1, 242.7 | 17.9, 16.9, 17.1 | 192.5, 191.5, 197.5 | 30.8, 29.1, 27.3 | 0.6, 0.8, 0.9 | 9.5, 20.1, 9.2 |
+| Winter log (91,184 crops, 3 runs) | 231.2 (226.6 to 235.8) | 17.4 | 181.6 | 30.4 | 0.2 | 8 to 16 |
+
+| Ingest of the 5k set | img/s (3 runs) | Run s | GPU util % | Triton CPU % | Crops stored | Load avg during |
+|---|---|---|---|---|---|---|
+| Alone | 28.0, 27.6, 27.7 | 179 to 181 | 60, 62, 65 | 613 | 11,723 / 11,724 / 11,723 | 14.2 to 17.4 |
+| During the cluster pass | 28.8, 28.6, 28.2 | 174 to 177 | 71, 63, 69 | 622 to 636 | 11,723 / 11,724 / 11,724 | 13.5 to 17.1 |
+
+The cluster pass alone today reproduces the winter log (median wall 224.6 s against 231.2 s; fit 178 s
+against 182 s). **A concurrent ingest slows the cluster pass by about 8 percent** (median wall 241.5 s,
++17 s; fit +14 s, 192.5 s against 178.3 s; fetch and write-back unchanged), and **the cluster pass does
+not slow the ingest** (28.6 against 27.7 img/s, +3 percent, inside the spread). The fit is CPU-bound
+(FAISS threads) and the ingest's CPU work is in Triton and the API, so they compete mildly. The ingest
+of the 5k set runs at 28 img/s against 37 for folder F because it has 2.35 crops per image against 1.53
+(more crops to embed and encode per photo). Every pass clustered the whole pool (`n_residuals` 91,184;
+none discarded) although the stack's refresh daemon was running.
+
+## D. Text search latency (GET `/curation/projects/nas20k/search/text`, 91,184 items, 200 requests per row)
+
+Sequential requests, 0.25 s apart, `page_size` 30, one client. "unique" = 200 different phrases;
+"repeat" = 10 phrases cycling. Client time in ms; `total_time_ms` is the server's own figure.
+
+| Condition | n | p50 | p95 | p99 | max | > 500 ms | > 1 s | Server p50 | Server p99 | Load avg |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Idle, unique (run 1, first after restart) | 200 | 66.9 | 73.8 | 93.3 | 611.8 | 1 | 0 | 61.7 | 83.7 | 9.6 |
+| Idle, unique (run 2) | 200 | 69.4 | 75.9 | 88.4 | 101.5 | 0 | 0 | 64.0 | 83.6 | 9.8 |
+| Idle, unique (run 3) | 200 | 35.8 | 42.8 | 48.7 | 70.3 | 0 | 0 | 29.1 | 41.0 | 5.0 |
+| Idle, unique (run 4) | 200 | 68.4 | 81.6 | 101.0 | 508.8 | 1 | 0 | 62.8 | 95.8 | 4.4 |
+| Idle, repeat (run 1) | 200 | 34.2 | 38.4 | 42.8 | 53.4 | 0 | 0 | 27.9 | 33.6 | 9.0 |
+| Idle, repeat (run 2) | 200 | 35.2 | 63.3 | 78.5 | 546.6 | 1 | 0 | 28.6 | 72.9 | 6.2 |
+| During a 5k ingest, unique (run 1) | 200 | 36.0 | 50.3 | 110.6 | 114.2 | 0 | 0 | 29.4 | 99.4 | 6.9 to 11.3 |
+| During a 5k ingest, unique (run 2) | 200 | 79.1 | 152.2 | 459.3 | 977.5 | 2 | 0 | 73.0 | 274.2 | 17.5 to 20.9 |
+| During a 5k ingest, repeat | 200 | 36.5 | 164.1 | 353.7 | 747.8 | 1 | 0 | 29.6 | 193.9 | 12.2 to 13.3 |
+| Idle, **new connection per request**, unique | 400 | 64.3 | 80.1 | 533.0 | **1,382.7** | 7 | **1** | 58.5 | 518.8 | 10.9 |
+| Idle, new connection, same, after 600 warm-up requests | 400 | 65.6 | 74.5 | 88.1 | 257.8 | 0 | 0 | 59.8 | 81.7 | 12.5 |
+| Idle, new connection, second project (1,364 items), unique | 300 | 60.0 | 86.5 | 484.7 | 514.6 | 1 | 0 | 54.7 | 479.0 | 8.9 |
+
+(The three rows "during a 5k ingest" ran while the ingest was in progress: 26.7 to 27.6 img/s, about
+the same as the ingest alone. The ingest and the queries are two clients of the same 32-worker API.)
+
+Findings:
+
+* Idle and with a persistent connection the endpoint is steady: p50 35 to 69 ms, p99 under 110 ms, no
+  request over 1 s in 1,200. The two p50 levels (about 35 and about 67 ms) are two different workers:
+  the 200 phrases are the same every run, a connection stays on one worker, and a worker that already
+  encoded them answers from its text-encoder cache (about 29 ms: kNN plus response) while one that has
+  not pays about 32 ms more for the text encode (Triton).
+* **During an ingest the tail grows**: p95 150 to 165 ms, p99 350 to 460 ms, maximum 748 to 978 ms (idle:
+  p99 under 110 ms apart from the cold-start rows). No request reached 1 s.
+* **The ~0.5 s and ~1.4 s outliers are a per-worker, per-project first-request cost.** With a new
+  connection per request (which lands on any of the 32 uvicorn workers) 7 of the first 400 requests
+  took 445 to 586 ms and one took 1,383 ms; server time was within 10 ms of client time, so the time is
+  spent inside the handler. After 600 more requests (every worker touched) the same 400 requests had a
+  maximum of 258 ms. On a second project the 13 slow requests (445 to 515 ms) were all among the
+  first 120, a constant about 480 ms, although every worker was warm for the first project. Timing the
+  call directly in the API container: `ensure_indexes` (the first-request bootstrap of
+  `src/services/curation/index_bootstrap.py`: index-exists checks plus 22 mapping migrations) takes
+  **380 to 470 ms cold and 0.01 ms warm**, for both projects. That is the constant outlier: it is paid
+  once per (uvicorn worker, project), and again after a worker is recycled (`--limit-max-requests=10000`
+  in the image command). The 1.38 s request fell on a worker with 27 earlier queries in its cache
+  statistics, i.e. a barely used worker; its extra 0.9 s was not decomposed (host load 10.9, other
+  first-use work in the worker, or the bootstrap against a busier OpenSearch).
+* The text-encoder LRU is per worker (256 entries x 32 workers) and `GET /health/pe_text` reports the
+  cache of whichever worker answers: it showed `hits 0 / misses 0` after hundreds of searches, then
+  `hits 600 / misses 201` and `hits 27 / misses 201` on later reads. Across connections the cache hit
+  rate is therefore far below what the 256-entry figure suggests.
+* OpenSearch k-NN statistics (`GET _plugins/_knn/stats`, read before and after every run and right
+  after each request over 1 s): `knn_query_requests` grows by the number of queries, `graph_memory_usage`
+  0, `hit_count` / `miss_count` / `load_exception_count` 0, circuit breaker not triggered. The index is
+  on the Lucene engine, so there is no native graph cache to go cold; nothing in these statistics changes
+  at an outlier. The earlier cluster ladder already showed k-NN itself under 13 ms.
+* The first text search after the API was restarted took 8.8 s (one observation, `total_time_ms` 8,843:
+  a cold worker plus a cold first query; not repeated, since the stack was not restarted again).
+
+## Bugs and suspected bugs found
+
+1. **Bulk ingest stores identical files twice when copies are processed in concurrent batches.** Folder F
+   has 3,184 distinct contents (SHA-256 and the product's `imohash` agree). Runs reported
+   3,184 to 3,189 images ingested; the image index of one run held 3,189 documents with 3,184 distinct
+   `imohash` values (5 contents stored twice, 4 in another run, 0 in a run that reported 3,184). It
+   happened in 11 of 24 runs, never in the 3 NVMe default runs and the 3 concurrency-4 runs, and not in
+   the 5k set's 9 runs (3 duplicate files, always 4,997 stored). The duplicate check in
+   `ingest_batch` is a batch lookup against the index (`check_duplicates_by_hash_batch`) before the
+   write, so a copy in another batch still in flight (or written but not yet refreshed) is not seen; a
+   hypothesis from the code and the counts, not instrumented here. The summary counters then disagree with
+   the folder's distinct-content count run to run, and the index holds duplicate items and crops.
+2. **Per-worker first-request cost of about 0.5 s (up to 1.4 s) on every project and worker**, the #356
+   outlier: see D. A fix direction is to bootstrap the indexes once at project bind (or at worker start
+   for known projects) rather than on the first request, or to remember the bootstrapped set in shared
+   state. The exact 1.5 s of the issue (on a larger deployment) was not reproduced; the closest was
+   1.38 s.
+3. **`GET /health/pe_text` cache figures are one worker's** (32 workers), so they cannot be used to judge
+   the cache hit rate.
+
+## What this changes in the plan, and what to measure next
+
+* The ingest ceiling on this card is about 37 to 39 img/s for 18 MP photos (28 img/s at 2.35 crops per
+  image), with the GPU 35 percent idle and Triton at 6.7 cores. The 34 img/s floor of the rehearsal
+  table (stage 1) is for 0.7 MP images and is not comparable; the stage 2 floor for set P of 27 img/s is
+  met by this measurement only at 2.35 crops per image (27.6 to 28.8), without margin.
+* More concurrency or bigger batches will not raise throughput; do not spend sweep time there. The
+  lever is inside `gpu_image_prep` (one instance): measure with `instance_group count: 2` on the same
+  card (the model config records 8.2 GB measured per instance; the A6000 has 48 GB), and profile the model's time
+  between GPU calls (Python/GIL time against nvJPEG Huffman and crop encoding).
+* Measure a second decode route: a 640-pixel-reduced decode (DCT scaling) for the detector input against
+  the full-frame decode, since 18 MP decode dominates.
+* Repeat D under the cluster pass and the ingest together, and with 4 to 8 parallel search clients (what
+  a review UI does), after the bootstrap fix, to see the real tail.
+* Re-run A with the ingest at higher crops per image, and with a spinning-disk-bound (cold, 2 x
+  larger) set, to find when the read stage reaches the critical path.
