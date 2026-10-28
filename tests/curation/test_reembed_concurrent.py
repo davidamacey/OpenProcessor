@@ -19,6 +19,11 @@ if TYPE_CHECKING:
 BOX = (0.1, 0.1, 0.6, 0.6)
 
 
+def _image(path: str) -> Any:
+    """The frame the CPU route of the pass decodes for ``path``."""
+    return reprocess_embed._decode_image(reprocess_embed._read_image(path) or b'', path)
+
+
 class TaggingPE:
     """An encoder that answers a crop with a vector derived from its pixels and counts overlap."""
 
@@ -87,7 +92,7 @@ async def test_images_are_embedded_concurrently_and_each_item_gets_its_own_vecto
     assert pe.peak > 1  # one image at a time would leave the engine batch at one image's crops
     stored = docs(fake)
     for i, target in enumerate(targets):
-        img = reembed_items.__globals__['_load_image'](target.image_path)
+        img = _image(target.image_path)
         crop = np.asarray(reprocess_embed.crop_pil(img, reprocess_embed._pixel_box(BOX, *img.size)))
         np.testing.assert_allclose(stored[f'c{i}']['pe_embedding'], pe.vector(crop), atol=1e-6)
 
@@ -97,7 +102,7 @@ async def test_one_images_encoder_failure_stops_the_pass_like_before(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake, targets = _world(tmp_path, monkeypatch, n=3)
-    img = reembed_items.__globals__['_load_image'](targets[1].image_path)
+    img = _image(targets[1].image_path)
     tag = TaggingPE.vector(
         np.asarray(reprocess_embed.crop_pil(img, reprocess_embed._pixel_box(BOX, *img.size)))
     )[0]

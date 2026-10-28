@@ -66,7 +66,8 @@ class _Pass:
 
 
 async def _run(**kw: Any) -> Any:
-    service = SimpleNamespace(pe_encoder=object())
+    # GPU decode off: every photo takes the CPU route, which these fakes stand in for.
+    service = SimpleNamespace(pe_encoder=object(), config=SimpleNamespace(ingest_gpu_decode=False))
     return await reprocess_images.process_images(
         object(),  # type: ignore[arg-type]
         service,  # type: ignore[arg-type]

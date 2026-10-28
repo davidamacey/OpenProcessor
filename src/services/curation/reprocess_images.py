@@ -19,6 +19,7 @@ from src.services.curation.ingest_policy_store import get_ingest_policy
 from src.services.curation.reprocess_detect import redetect_image
 from src.services.curation.reprocess_embed import ALL_PARTS, reembed_items
 from src.services.curation.reprocess_embed_spec import EmbedSpec, embed_targets
+from src.services.curation.reprocess_gpu_embed import gpu_embed_route
 from src.services.curation.reprocess_models import ReprocessScope, ReprocessScopeResult
 from src.services.curation.reprocess_open_vocab import OpenVocabPass, active_set_for_run
 from src.services.curation.reprocess_targets import existing_images
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
     from src.services.curation.ingest import CurationIngestService
     from src.services.curation.open_vocab_run import SegmentImage
     from src.services.curation.reprocess_embed import EmbedTarget
+    from src.services.curation.reprocess_gpu_embed import GpuEmbedRoute
 
 logger = get_logger(__name__)
 
@@ -95,11 +97,13 @@ async def embed_image_chunk(
     spec: EmbedSpec,
     res: ReprocessScopeResult,
     targets: list[EmbedTarget] | BaseException | None = None,
+    gpu: GpuEmbedRoute | None = None,
 ) -> None:
     """The ``embed`` scope over one chunk of existing images (``docs`` maps
     image id to its images doc), accumulating into ``res``. ``targets`` is the
-    chunk's already-read targets (:func:`read_chunk`); read here when absent. An
-    encoder failure counts every image of the chunk as failed."""
+    chunk's already-read targets (:func:`read_chunk`); read here when absent.
+    ``gpu`` embeds large photos on the GPU decode. An encoder failure counts
+    every image of the chunk as failed."""
     try:
         if isinstance(targets, BaseException):
             raise targets
@@ -111,6 +115,7 @@ async def embed_image_chunk(
             parts=spec.part_set,
             only_missing=spec.only_missing,
             place_in_clusters=policy.clustering.automatic,
+            gpu=gpu,
         )
     except Exception as exc:
         logger.warning('reprocess_embed_failed', error=str(exc))
@@ -174,6 +179,7 @@ async def process_images(
     # Targets are read ahead only when nothing else runs first on a chunk: detect and open-vocab
     # change the items, and the embed must see them as they are after.
     chunk_embed = embed_spec if set(scopes) == {'embed'} else None
+    gpu = await gpu_embed_route(service) if 'embed' in scopes else None
     async with aclosing(read_chunks(opensearch, image_ids, chunk_embed)) as chunks:
         async for chunk, read in chunks:
             if should_cancel():
@@ -199,7 +205,13 @@ async def process_images(
                 )
             if 'embed' in scopes and docs:
                 await embed_image_chunk(
-                    opensearch, service.pe_encoder, docs, embed_spec, results['embed'], read.targets
+                    opensearch,
+                    service.pe_encoder,
+                    docs,
+                    embed_spec,
+                    results['embed'],
+                    read.targets,
+                    gpu,
                 )
             done += len(chunk)
             failed_images = _failed_images(results)

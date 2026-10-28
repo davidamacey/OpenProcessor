@@ -3173,6 +3173,80 @@ input; re-embed them (`reprocess` scope `embed`, parts `crop`) to move them into
 reprocess embed and the region-box refresh already cut the stored box. The P-pe parity capture against the 0.6.0
 reference (crop cosine p01 at least 0.995) is still to run.
 
+#### Embed pass on the GPU decode (#259, 0.7.0)
+
+The offload and read-ahead above moved the work, they did not remove it: live on release/0.7.0
+(`docs/research/v070_measurement_log.md`, E1) COCO went from 15.7 to 16.6 images/s at 0.065 API CPU-s per
+image, and set P (about 21 MP) stayed at 10.5 to 11.9 images/s with the GPU 10 to 16 percent busy, because
+the pass decoded every 21 MP photo in the API (0.52 CPU-s per image) while ingest sends the same photos to
+`gpu_image_prep`. The pass now takes the same route for large photos.
+
+**What runs.** When the ingest GPU decode is usable (`OP_INGEST_GPU_DECODE` on, the model loaded for the
+ingest profile, no secondary detector: the same readiness rule as ingest) and the loaded model files declare
+the new optional `boxes` input, a photo at or above `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0) is sent to
+`gpu_image_prep` as its stored bytes plus its stored boxes: the item's `bbox_norm` (part `crop`) and its
+embeddable region boxes (part `region`), as FP64 rows so the model cuts exactly the rectangle the CPU pass
+cuts. A box asked for both parts is sent once. In this stored-box mode the model decodes once (nvJPEG, EXIF
+orientation), skips the detector, the blur sums and the crop JPEGs, and returns the whole-frame vector and
+one vector per box; the API only reads the file, sends it and writes vectors. Photos below the gate stay on
+the CPU path unchanged (a COCO frame decodes in 5 ms on one core), so the COCO rows above do not move.
+Code: `src/services/curation/reprocess_gpu_embed.py`, `reembed_items(..., gpu=...)` in
+`reprocess_embed.py`, stored-box mode in `models/gpu_image_prep/1/model.py`, the rectangle in
+`prep_geometry.stored_box_rects` (held equal to the CPU pass by `tests/models/test_gpu_image_prep_geometry.py`).
+
+**Fallback (fail closed, the same cases as ingest).** Below the gate, an unreadable header, any status other
+than `ok` (progressive, truncated, decoder, ...), a failed call, or an answer with a row count other than the
+boxes sent: that photo is decoded in the API as before. Each photo is counted in
+`op_reprocess_decode_total{route}` (`gpu` or `cpu_<reason>`) while the route is usable. Model files older
+than the API (no `boxes` input) disable the route for the run (log `reprocess_gpu_embed_model_outdated`), with
+no call per photo. The single-item region refresh after a box edit, the backfill script and the auto-label
+embed stage keep the CPU path.
+
+**Numerics against the CPU pass.** Same rectangle (exact, tested). Crop part: the GPU square is plain
+bilinear as `resize_crop_rgb` (within one grey level in the host model of the kernel), frame part: Pillow
+`BILINEAR` antialiased (within one grey level); nvJPEG's IDCT differs from libjpeg by a grey level here and
+there. This is the parity ingest's GPU decode already has against its CPU path (#217,
+`docs/design/gpu_decode_plan.md`: same boxes, crop cosine p01 0.996 to 0.998 on every set). Region part: the CPU pass embedded each region crop after a JPEG round trip at quality 92;
+the GPU embeds the decoded pixels directly, so region vectors move by that JPEG loss (expected cosine above
+0.99, to confirm live) and a region box equal to the item box now gets the same vector as the crop. Vectors of
+a photo are therefore not bit-identical between the two routes; within one route repeated passes agree as
+before.
+
+**Model files.** The change touches `models/gpu_image_prep/config.pbtxt`, `1/model.py` and
+`1/prep_geometry.py`. Triton reads them at load: copy the three files into the model repository the stack
+mounts (in a checkout that is `models/` itself) and reload the model (unload and load through Triton model
+control, or restart `triton-server`). Ingest requests do not send `boxes`, so ingest is unchanged by the
+model change.
+
+**Live procedure (not yet run).** On the test stack (own compose project name, GPU 0 or 2, quiet host), for
+set P (300 photos, 16 to 24 MP) and COCO 1,500 as in E1, three repetitions each, a fresh project per set:
+
+```bash
+P=<project>; API=http://127.0.0.1:4603; TRITON=http://127.0.0.1:4600; API_CTR=<api container>
+# 1. the model declares the input (expect "boxes" in the list) after the reload
+curl -s "$TRITON/v2/models/gpu_image_prep" | python3 -c 'import json,sys; print([i["name"] for i in json.load(sys.stdin)["inputs"]])'
+# 2. counters, API CPU and GPU before the pass
+curl -s "$API/metrics" | grep '^op_reprocess_decode_total'
+docker exec "$API_CTR" cat /sys/fs/cgroup/cpu.stat | grep usage_usec
+nvidia-smi -i <triton gpu> --query-gpu=utilization.gpu --format=csv,noheader,nounits -lms 500 > gpu.log &
+# 3. the pass (every vector rewritten, as E1); poll the job until it finishes
+curl -s -X POST "$API/curation/projects/$P/reprocess" -H 'content-type: application/json' \
+  -d '{"targets":{"filter":{"all_images":true}},"scopes":["embed"],"embed":{"parts":["crop","frame","region"]},"dry_run":false}'
+curl -s "$API/curation/projects/$P/reprocess/jobs/<job_id>"   # images_done, started_at, finished_at
+# 4. the same three readings after; img/s = images / (finished_at - started_at)
+```
+
+Expected on set P: `op_reprocess_decode_total{route="gpu"}` grows by the photo count (any `cpu_*` growth is
+a finding), at least 20 images/s (ingest reaches 31.8 with one `gpu_image_prep` instance and 48.0 with two on
+the same photos, E4, while doing more per photo), API CPU at most 0.047 CPU-s per image (the API now reads,
+sends and writes only) and GPU busy above 50 percent. Then the vectors: crop and frame vectors after the pass
+against the same project's ingest vectors (median 0.99999 or better, p01 at least 0.995, as the GPU-decode
+ingest parity), and region vectors after the pass against those of a CPU pass on the same project (GPU decode
+off: the API restarted with `OP_INGEST_GPU_DECODE=0` for that run; p01 at least 0.99). COCO must reproduce the E1 release/0.7.0 row
+(all photos counted `cpu_small`). If set P stays under 20 images/s with the GPU under 50 percent, the
+in-flight bound of the pass (16 photos, `_IMAGES_IN_FLIGHT` in `reprocess_embed.py`) or the 64-photo chunk
+barrier is the next limit to test.
+
 #### Parity (final configuration against `ref-u8fp16` and `ref-u8fp16-repeat`, `precision` profile)
 
 One capture of the final configuration (shipped engines and Triton settings, one card, set A, policy `all`,

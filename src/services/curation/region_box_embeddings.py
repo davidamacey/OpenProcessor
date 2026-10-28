@@ -35,6 +35,7 @@ from src.utils.vectors import float_list
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
+    import numpy as np
     from opensearchpy import AsyncOpenSearch
 
 logger = get_logger(__name__)
@@ -61,7 +62,7 @@ def embeddable(boxes: Iterable[RegionBox]) -> list[RegionBox]:
     return [b for b in boxes if b.state in EMBEDDED_BOX_STATES]
 
 
-def entry_for(box: RegionBox, vector: Sequence[float]) -> dict[str, Any]:
+def entry_for(box: RegionBox, vector: Sequence[float] | np.ndarray) -> dict[str, Any]:
     """The stored entry for ``box``'s vector. It records the geometry the
     vector was computed from, so a box a human later moves is recognised as
     having a stale vector (:func:`current_vectors`)."""
