@@ -2392,7 +2392,7 @@ print_summary() {
     fi
     echo ""
     echo "  Manage: cd ${OP_REAL_DIR} && ./openprocessor status|logs|health|stop|start"
-    echo "          ./setup-openprocessor.sh --repair | --rollback | --uninstall"
+    echo "          ./setup-openprocessor.sh --repair   (also --rollback, --uninstall)"
     [[ "$OP_NO_START" == 1 ]] && echo "  Nothing was started (--no-start): run ./openprocessor start, then ./openprocessor models install"
     return 0
 }
