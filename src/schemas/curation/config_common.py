@@ -201,6 +201,7 @@ ValidationCode = Literal[
     'text_regex_invalid',
     'detector_model_not_found',
     'detector_model_not_ready',
+    'detector_model_unusable',
     'detector_model_not_shared',
     'detector_model_other_project',
     'detector_model_classes_unmapped',

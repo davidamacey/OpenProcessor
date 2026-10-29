@@ -35,6 +35,7 @@ def _client(embeddings: np.ndarray) -> Any:
     client.search = AsyncMock(return_value={'_scroll_id': 's1', 'hits': {'hits': hits}})
     client.scroll = AsyncMock(return_value={'_scroll_id': None, 'hits': {'hits': []}})
     client.clear_scroll = AsyncMock(return_value=None)
+    client.count = AsyncMock(return_value={'count': len(hits)})
     client.bulk = AsyncMock(return_value={'errors': False})
     client.indices = MagicMock()
     client.indices.refresh = AsyncMock(return_value=None)

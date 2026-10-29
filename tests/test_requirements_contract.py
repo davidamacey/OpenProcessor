@@ -36,3 +36,12 @@ def test_dockerfile_installs_pinned_perception_models_without_deps() -> None:
 def test_pe_encoder_runtime_deps_declared() -> None:
     names = {re.split(r'[<>=\[ ;@]', ln, maxsplit=1)[0].lower() for ln in _requirement_lines()}
     assert {'einops', 'regex', 'timm', 'ftfy', 'huggingface_hub'} <= names
+
+
+def test_the_image_pins_fastapi_as_the_tests_do() -> None:
+    """The committed OpenAPI contract and the route warm-up's test (which reads FastAPI's
+    included-router internals) are checked against the test pin; an unpinned image could
+    serve another FastAPI where both differ unnoticed."""
+    test_lines = (ROOT / 'requirements-test.txt').read_text(encoding='utf-8').splitlines()
+    (tested,) = [ln.split('#', 1)[0].strip() for ln in test_lines if ln.startswith('fastapi')]
+    assert tested in _requirement_lines()

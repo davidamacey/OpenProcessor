@@ -186,7 +186,7 @@ class Harness:
         self.last_store = store
         materialize_created_classes(prepared.resolved, self.registry)
         runner.persist_pinned(store, prepared)
-        runner.persist_scan_summary(store, prepared)
+        runner.persist_scan_summary(store, prepared, [])
         store.job.update(freeze_test=runner.freeze_default(prepared, request))
         ctx = self.context(store, request, prepared)
         ctx.after_chunk = after_chunk

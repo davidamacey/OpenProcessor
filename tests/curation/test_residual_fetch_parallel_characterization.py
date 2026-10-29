@@ -122,12 +122,12 @@ def _unit(rows: list[list[float]]) -> np.ndarray:
 
 
 @pytest.mark.asyncio
-async def test_slices_page_with_search_after_and_return_normalized_rows_in_slice_order() -> None:
+async def test_slices_page_with_search_after_and_return_normalized_rows_in_id_order() -> None:
     client = _Client(7)
     ids, matrix = await fetch_residual_embeddings_parallel(client, n_slices=3, page_size=2)
-    # slice 0 = d0,d3,d6; slice 1 = d1,d4; slice 2 = d2,d5 -- concatenated in slice order
-    assert ids == ['d0', 'd3', 'd6', 'd1', 'd4', 'd2', 'd5']
-    order = [0, 3, 6, 1, 4, 2, 5]
+    # slice 0 = d0,d3,d6; slice 1 = d1,d4; slice 2 = d2,d5 -- merged in document-id order (#372)
+    assert ids == ['d0', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6']
+    order = [0, 1, 2, 3, 4, 5, 6]
     assert np.allclose(matrix, _unit([client.docs[i][1] for i in order]))
     assert matrix.dtype == np.float32
     per_slice: dict[int, list[Any]] = {}

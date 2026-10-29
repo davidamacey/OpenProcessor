@@ -1,0 +1,77 @@
+# =============================================================================
+# Docs-screenshot overlay for the live write-path harness (compose.yml): adds
+# the Cropwright frontend and a public-image mount at the documented
+# /data/source, so frontend/scripts/capture_docs_screenshots.py can run against
+# a stack that holds only the public sample data it seeds itself. No GPU, no
+# Triton, no host data.
+#
+#   export VERIFY_COMPOSE_PROJECT=shots VERIFY_CONTAINER_PREFIX=shots-verify
+#   docker compose -p shots -f docker/test/compose.yml -f docker/test/compose.docs-shots.yml up -d --build --wait
+#   docker compose -p shots -f docker/test/compose.yml -f docker/test/compose.docs-shots.yml down -v --remove-orphans
+#
+# See docs-site/docs/developer-guide/screenshots.mdx for the whole flow.
+# =============================================================================
+
+services:
+  api:
+    depends_on:
+      fake-segmenter:
+        condition: service_healthy
+    environment:
+      # The documented container paths, so no screenshot shows a harness-only one.
+      - OP_SOURCE_ROOT=/data/source
+      - OP_STATE_DIR=/var/lib/openprocessor
+      - OP_PROJECTS_DATA_ROOT=/var/lib/openprocessor/projects
+      # A stub: region profiles that name a segmenter can be activated and tested.
+      - OP_SEGMENTER_URL=http://fake-segmenter:8000
+    volumes:
+      - ./verify-data/source:/data/source
+      - ./verify-data/state:/var/lib/openprocessor
+
+  # Region profiles need a segmenter to activate; this serves fixed wheel-shaped
+  # candidates so "Test on a crop" runs without a GPU. Reuses the API image for
+  # python3 only; it runs no application code.
+  fake-segmenter:
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
+    container_name: ${VERIFY_CONTAINER_PREFIX:-op-verify}-fake-segmenter
+    volumes:
+      - ./fake_segmenter.py:/opt/fake_segmenter.py:ro
+    command: ["python3", "-u", "/opt/fake_segmenter.py"]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - verify_net
+
+  # What the stand-in VLM answers, so the worker's region stage and the prompt-pack
+  # test have something to show: cars, a visible region, and per box
+  # accept, accept, reject (the third candidate is the weak one).
+  fake-vlm:
+    environment:
+      - FAKE_VLM_CLASS=car
+      - FAKE_VLM_REGION_VISIBLE=true
+      - FAKE_VLM_BOX_VERDICTS=true,true,false
+
+  cropwright:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-cropwright:latest
+    container_name: ${VERIFY_CONTAINER_PREFIX:-op-verify}-cropwright
+    environment:
+      - PUBLIC_API_PREFIX=/curation
+      - API_UPSTREAM=http://api:8000
+    ports:
+      - 127.0.0.1:${VERIFY_CROPWRIGHT_PORT:-14705}:8080
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - verify_net

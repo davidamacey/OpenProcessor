@@ -1,0 +1,204 @@
+{
+ "schema_version": 1,
+ "started_utc": "2026-10-29T02:51:48+00:00",
+ "finished_utc": "2026-10-29T02:53:23+00:00",
+ "api": "http://127.0.0.1:5603",
+ "sample_seed": 20261028,
+ "host_load_start": {
+  "load1": 47.0634765625,
+  "load5": 70.6474609375,
+  "load15": 58.04248046875,
+  "nproc": 48
+ },
+ "host_load_end": {
+  "load1": 35.66845703125,
+  "load5": 60.03662109375,
+  "load15": 55.4609375,
+  "nproc": 48
+ },
+ "route": "POST /search/text (MobileCLIP, visual_search_global)",
+ "params": {
+  "captions": 1,
+  "n_queries": 2000,
+  "top_k": 100,
+  "min_score": 0.0
+ },
+ "load1_samples": [
+  47.0634765625,
+  44.65576171875,
+  45.96484375,
+  45.96484375,
+  43.96533203125,
+  43.96826171875,
+  42.048828125,
+  40.12255859375,
+  40.12255859375,
+  38.3505859375,
+  37.44140625,
+  36.60498046875,
+  35.67529296875,
+  34.740234375,
+  35.40185546875,
+  35.40185546875,
+  35.20947265625,
+  34.6318359375,
+  34.0205078125,
+  38.02294921875
+ ],
+ "quality": {
+  "recall@1": {
+   "value": 0.5665,
+   "ci95": [
+    0.5455,
+    0.588
+   ]
+  },
+  "recall@5": {
+   "value": 0.817,
+   "ci95": [
+    0.8,
+    0.8345
+   ]
+  },
+  "recall@10": {
+   "value": 0.886,
+   "ci95": [
+    0.872,
+    0.9005
+   ]
+  },
+  "mrr@10": {
+   "value": 0.6710113095238095,
+   "ci95": [
+    0.6540261904761905,
+    0.6882081349206349
+   ]
+  },
+  "ndcg@10": {
+   "value": 0.7229473083236929,
+   "ci95": [
+    0.7080433674219011,
+    0.7384309812214968
+   ]
+  },
+  "not_found_in_depth": 11,
+  "median_rank_found": 1
+ },
+ "latency_ms": {
+  "n": 2000,
+  "p50": 41.35187700740062,
+  "p95": 54.09747999510728,
+  "p99": 62.79853999149054,
+  "mean": 42.26499904625234,
+  "min": 29.422613995848224,
+  "max": 522.7215659979265
+ },
+ "server_search_time_ms": {
+  "n": 2000,
+  "p50": 36.37,
+  "p95": 46.94,
+  "p99": 51.62,
+  "mean": 36.93629,
+  "min": 24.6,
+  "max": 514.75
+ },
+ "empty_result_queries": 0,
+ "failure_examples": [
+  {
+   "gt": 872,
+   "query": "A couple of baseball player standing on a field.",
+   "rank": 13,
+   "top1": 448263,
+   "top_score": 0.6474073,
+   "top1_caption": "A baseball player kneeling to speak to a child"
+  },
+  {
+   "gt": 885,
+   "query": "a male tennis player in white shorts is playing tennis",
+   "rank": 28,
+   "top1": 25424,
+   "top_score": 0.6664586,
+   "top1_caption": "A man hitting a tennis ball with a tennis racquet."
+  },
+  {
+   "gt": 1268,
+   "query": "A beautiful woman taking a picture with her smart phone.",
+   "rank": 66,
+   "top1": 151000,
+   "top_score": 0.65652883,
+   "top1_caption": "A woman taking pictures on a busy street."
+  },
+  {
+   "gt": 1425,
+   "query": "A meal is lying on a plate on a table.",
+   "rank": 30,
+   "top1": 66817,
+   "top_score": 0.6409078,
+   "top1_caption": "A white plate topped with meat veggies and rice with sauce."
+  },
+  {
+   "gt": 5037,
+   "query": "A passenger bus pulling up to the side of a street.",
+   "rank": 22,
+   "top1": 460347,
+   "top_score": 0.6751307,
+   "top1_caption": "A bus traveling on a freeway next to other traffic."
+  },
+  {
+   "gt": 6471,
+   "query": "A baseball player holding a bat next to a base.",
+   "rank": 14,
+   "top1": 356094,
+   "top_score": 0.66395915,
+   "top1_caption": "A man holding a baseball bat wearing a baseball uniform."
+  },
+  {
+   "gt": 7278,
+   "query": "there is a male surfer that is riding in the wave",
+   "rank": 23,
+   "top1": 190007,
+   "top_score": 0.66565025,
+   "top1_caption": "this is man riding a wave on a board"
+  },
+  {
+   "gt": 7977,
+   "query": "A young man performing tricks on a skateboard.",
+   "rank": 11,
+   "top1": 125472,
+   "top_score": 0.6820266,
+   "top1_caption": "A man flying through the air while riding a skateboard."
+  },
+  {
+   "gt": 11149,
+   "query": "A man standing next to a bikes and a motorcycle.",
+   "rank": 42,
+   "top1": 491090,
+   "top_score": 0.65589714,
+   "top1_caption": "A man sitting on one of a group of motorcycles."
+  },
+  {
+   "gt": 12576,
+   "query": "A woman sitting at a table topped with pizza.",
+   "rank": 15,
+   "top1": 240250,
+   "top_score": 0.6807154,
+   "top1_caption": "A woman sitting down at a table with pizza."
+  },
+  {
+   "gt": 22589,
+   "query": "A couple of sheep standing next to each other on a field.",
+   "rank": 11,
+   "top1": 547383,
+   "top_score": 0.6617428,
+   "top1_caption": "Two adult sheep lay on the green grass."
+  },
+  {
+   "gt": 23899,
+   "query": "Three young men playing Wii on a projection television.",
+   "rank": 13,
+   "top1": 257370,
+   "top_score": 0.6762394,
+   "top1_caption": "two people are playing a baseball video game"
+  }
+ ]
+}

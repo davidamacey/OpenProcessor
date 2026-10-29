@@ -157,7 +157,11 @@ def claim_import(
 # ----------------------------------------------------------------- execution
 
 
-def persist_scan_summary(store: ImportStore, prepared: PreparedImport) -> None:
+def persist_scan_summary(
+    store: ImportStore, prepared: PreparedImport, issues: list[dict[str, Any]]
+) -> None:
+    """Store the scan totals and ``issues``, the wire issues the job serves as
+    ``issues_summary`` (the same shape the preview serves)."""
     entries = prepared.scan.entries
     store.write_scan(
         {
@@ -165,9 +169,7 @@ def persist_scan_summary(store: ImportStore, prepared: PreparedImport) -> None:
             'chunks_total': len(chunked(entries)),
             'source_sha': prepared.source_sha,
             'boxes': sum(len(e.boxes) for e in entries),
-            'issues': [
-                {'code': i.code, 'count': i.count, 'severity': i.severity} for i in prepared.issues
-            ],
+            'issues': issues,
         }
     )
 

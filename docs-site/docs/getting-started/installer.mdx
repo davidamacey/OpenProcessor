@@ -19,7 +19,13 @@ The installer then:
 
 1. downloads the release bundle and checks every file against `SHA256SUMS`;
 2. checks Docker, Compose, the GPUs and free disk, asks which tiers you want
-   (or takes `--tiers`) and plans GPU placement;
+   (or takes `--tiers`) and plans GPU placement. The prompt is a numbered menu:
+   `1` the tiers recommended for this machine (the default, so Enter takes it),
+   `2` core only, `3` curation with the Cropwright web UI, `4` everything, `5` a
+   custom comma-separated list. Dependencies are added automatically; an invalid
+   answer asks again and the third one exits with a usage error. The plan picks
+   the `full` Triton profile only for a card with 40 GB or more free (see
+   [GPU sizing](../deployment/gpu-sizing.mdx));
 3. writes `.env` (mode 600): tiers as `COMPOSE_PROFILES`, ports, image
    digests from `images.lock`, the GPU plan and the OpenSearch heap. It never
    changes a value you set yourself;

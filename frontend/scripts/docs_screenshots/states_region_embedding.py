@@ -112,7 +112,11 @@ def state_reprocess_served_scopes(page, ctx: Ctx) -> None:
     page.goto(f"{ctx.base}/p/{IMPORT_PROJECT}/clusters/{cid}", wait_until="domcontentloaded", timeout=30_000)
     page.wait_for_selector("[data-testid='cluster-header-counts']", timeout=15_000)
     _settle(page)
-    page.keyboard.press("a")
+    # The first twelve crops: over 20 the server runs detection as a background job and
+    # asks for one scope at a time, which is a different dialog.
+    cards = page.locator("[role='button'][aria-pressed]")
+    cards.nth(0).click()
+    cards.nth(11).click(modifiers=["Shift"])  # a range, anchor to here
     page.wait_for_timeout(500)
     page.locator("[data-testid='reprocess-open']").first.click()
     page.wait_for_selector("[role='dialog'][aria-label='Reprocess']", timeout=10_000)
@@ -240,10 +244,12 @@ def state_crop_embedding_row(page, ctx: Ctx) -> None:
 
 
 def state_run_results_confusion(page, ctx: Ctx) -> None:
-    page.goto(f"{ctx.base}/p/{SHARE_OWNER}/train", wait_until="domcontentloaded", timeout=30_000)
+    page.goto(f"{ctx.base}/p/{IMPORT_PROJECT}/train", wait_until="domcontentloaded", timeout=30_000)
     page.wait_for_selector("text=Past runs", timeout=30_000)
     _settle(page, 1500)
     page.locator("button[aria-expanded]", has_text="Results").first.click()
     page.wait_for_selector("[data-testid='run-results-title']", timeout=20_000)
-    page.get_by_label("Enlarge confusion matrix").first.scroll_into_view_if_needed()
+    page.get_by_label("Enlarge confusion matrix").first.evaluate(
+        "e => e.scrollIntoView({block: 'center'})"
+    )
     _settle(page, 2500)

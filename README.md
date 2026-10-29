@@ -319,7 +319,7 @@ stack with the segmenter and an activated VLM. The same walk runs offline in
 |---------|------|------|
 | minimal | 6-8GB | RTX 3060, RTX 4060 |
 | standard | 12-24GB | RTX 3080, RTX 4090 |
-| full | 48GB+ | A6000, A100 |
+| full | 40GB+ | A6000, A100 |
 
 Choose the profile at install time (`--profile` on the installer, or
 `scripts/setup.sh --profile=NAME`). Measured throughput is in

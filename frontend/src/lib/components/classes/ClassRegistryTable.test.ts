@@ -6,14 +6,14 @@ const noop = async () => {};
 let instance: ReturnType<typeof mount> | null = null;
 let target: HTMLDivElement | null = null;
 
-function render(allClasses: never[]): string {
+function render(allClasses: never[], activeRows: never[] = []): string {
   target = document.createElement('div');
   document.body.appendChild(target);
   instance = mount(ClassRegistryTable, {
     target,
     props: {
       allClasses,
-      activeRows: [],
+      activeRows,
       groups: [],
       busy: false,
       testHeldOutByClass: new Map(),
@@ -42,5 +42,29 @@ describe('ClassRegistryTable empty state', () => {
     const text = render([]);
     expect(text).toContain('No classes yet');
     expect(text).not.toContain('match this filter');
+  });
+});
+
+describe('ClassRegistryTable row controls are named for assistive tech', () => {
+  it('names the group select, the hotkey input and the actions column', () => {
+    const row = {
+      id: 3,
+      name: 'widget',
+      group: 'tools',
+      count: 1,
+      validated_count: 0,
+      cluster_size: 1,
+      hotkey_letter: null,
+      added_at: '2026-10-01T00:00:00Z',
+    } as never;
+    render([row], [row]);
+    expect(target!.querySelector('select')?.getAttribute('aria-label')).toBe(
+      'Group for widget',
+    );
+    expect(target!.querySelector('input')?.getAttribute('aria-label')).toBe(
+      'Hotkey for widget',
+    );
+    const headers = [...target!.querySelectorAll('th')];
+    expect(headers.every((th) => (th.textContent ?? '').trim() !== '')).toBe(true);
   });
 });

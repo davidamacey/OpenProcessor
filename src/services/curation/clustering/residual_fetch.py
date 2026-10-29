@@ -69,7 +69,17 @@ def _normalize_rows(matrix: np.ndarray) -> np.ndarray:
     return matrix / norms
 
 
-def _residual_pool_query(
+def _sorted_by_id(ids: list[str], matrix: np.ndarray) -> tuple[list[str], np.ndarray]:
+    """The pool in document-id order, so a fit is a function of the document set (#372).
+
+    The fetch order is the shard and ingest order, and k-means picks its initial centroids and
+    training sample by row position: the same documents in another order gave another partition.
+    """
+    order = sorted(range(len(ids)), key=ids.__getitem__)
+    return [ids[i] for i in order], matrix[order]
+
+
+def residual_pool_query(
     *,
     include_candidate_clusters: bool,
     candidate_cluster_id_min: int | None,
@@ -164,7 +174,7 @@ async def fetch_residual_embeddings(
     operator-initiated cancel takes effect within a single scroll
     batch (~50 ms) instead of waiting for the full fetch to finish.
     """
-    query = _residual_pool_query(
+    query = residual_pool_query(
         include_candidate_clusters=include_candidate_clusters,
         candidate_cluster_id_min=candidate_cluster_id_min,
         extra_must=extra_must,
@@ -208,7 +218,7 @@ async def fetch_residual_embeddings(
 
     if not pages:
         return [], np.zeros((0, 0), dtype=np.float32)
-    return ids, _normalize_rows(stack_pages(pages))
+    return _sorted_by_id(ids, _normalize_rows(stack_pages(pages)))
 
 
 # ============================================================================
@@ -327,7 +337,7 @@ async def fetch_residual_embeddings_parallel(
     (older OpenSearch, missing _shard_doc sort support, etc.) so the
     pipeline never breaks on a fetch-layer issue.
     """
-    query = _residual_pool_query(
+    query = residual_pool_query(
         include_candidate_clusters=include_candidate_clusters,
         candidate_cluster_id_min=candidate_cluster_id_min,
         extra_must=extra_must,
@@ -378,4 +388,4 @@ async def fetch_residual_embeddings_parallel(
 
     if not embs:
         return [], np.zeros((0, 0), dtype=np.float32)
-    return ids, _normalize_rows(stack_pages(embs))
+    return _sorted_by_id(ids, _normalize_rows(stack_pages(embs)))

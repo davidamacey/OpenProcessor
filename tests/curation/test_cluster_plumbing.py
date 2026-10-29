@@ -258,15 +258,15 @@ def test_hits_to_rows_of_a_page_without_vectors_is_empty() -> None:
 
 
 @pytest.mark.asyncio
-async def test_parallel_fetch_keeps_slice_then_shard_order(
+async def test_parallel_fetch_returns_the_pool_in_document_id_order(
     pool: tuple[list[str], np.ndarray],
 ) -> None:
-    """The row order is part of the result (some methods sample by position)."""
+    """The rows come back sorted by document id: some methods sample by position (#372)."""
     client = FakeItemsClient(*pool)
     ids, matrix = await residual_fetch.fetch_residual_embeddings_parallel(
         client, n_slices=4, page_size=700
     )
-    expected = [i for s in range(4) for i in range(N_DOCS) if i % 4 == s]
+    expected = sorted(range(N_DOCS), key=client.ids.__getitem__)
     assert ids == [client.ids[p] for p in expected]
     unit = pool[1][expected]
     unit = unit / np.linalg.norm(unit, axis=1, keepdims=True)

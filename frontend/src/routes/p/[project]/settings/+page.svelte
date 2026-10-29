@@ -260,6 +260,7 @@
             {:else}
               <select
                 class="select"
+                aria-label={copy.label}
                 value={selected ?? ''}
                 onchange={(e) =>
                   onSelectChange(spec, (e.currentTarget as HTMLSelectElement).value)}

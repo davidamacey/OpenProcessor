@@ -64,6 +64,13 @@ _ITEMS_IMPORT_MAPPING: dict[str, Any] = {
 }
 
 
+# The ingest writer's per-write id (src/services/curation/ingest_writer.py): read
+# back from _source only, to tell its own retried create from another copy's (#375).
+IMAGES_WRITE_ID_MAPPING: dict[str, Any] = {
+    'ingest_write_id': {'type': 'keyword', 'index': False, 'doc_values': False},
+}
+
+
 def _images_body() -> dict[str, Any]:
     return {
         'settings': _knn_settings(),
@@ -78,6 +85,7 @@ def _images_body() -> dict[str, Any]:
                 'source_identifier': {'type': 'keyword'},
                 # BA-4: optional client-supplied tag for one upload call.
                 'ingest_run_id': {'type': 'keyword'},
+                **IMAGES_WRITE_ID_MAPPING,
                 'source': {'type': 'keyword'},
                 'width': {'type': 'integer'},
                 'height': {'type': 'integer'},
@@ -223,6 +231,14 @@ def _region_boxes_mapping() -> dict[str, Any]:
         F.revision: {'type': 'integer'},
         F.box_seq: {'type': 'integer', 'index': False},
     }
+
+
+# The UMAP-visualization overlay (src/services/curation/embedding_viz.py writes it).
+ITEMS_VIZ_MAPPING: dict[str, Any] = {
+    'viz_x': {'type': 'float'},
+    'viz_y': {'type': 'float'},
+    'viz_projection_version': {'type': 'keyword'},
+}
 
 
 def _items_body() -> dict[str, Any]:
@@ -417,6 +433,7 @@ def _items_body() -> dict[str, Any]:
                 **_EXCLUSION_MAPPING,
                 **OPEN_VOCAB_ITEM_MAPPING,
                 **ASSIST_ITEM_MAPPING,
+                **ITEMS_VIZ_MAPPING,
             }
         },
     }

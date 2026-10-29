@@ -487,8 +487,8 @@ _ms_run_group_steps() {
     case "$group" in
         preflight)
             "$runner" preflight_image _ms_api python -m export.preflight || return 1
-            "$runner" preflight_seed dc run --rm --no-deps -T --entrypoint cp api \
-                -rn /opt/openprocessor/model_repo_seed/. /app/models/ || return 1
+            "$runner" preflight_seed dc run --rm --no-deps -T --entrypoint python api \
+                /app/export/sync_model_seed.py /opt/openprocessor/model_repo_seed /app/models || return 1
             "$runner" preflight_profile _ms_api bash -c \
                 'PROJECT_DIR=/app; source /app/scripts/lib/config.sh && generate_all_configs "$1" 0' \
                 _ "${GPU_PROFILE:-standard}" || return 1

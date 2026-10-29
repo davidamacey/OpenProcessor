@@ -225,3 +225,34 @@ async def test_cluster_scoped_job_skips_dataset_wide_stages(
     for stage in ('cluster_id_normalize', 'cluster_residuals', 'auto_promote'):
         assert summary['stages'][stage]['skipped'] is True, stage
         assert 'cluster-scoped' in summary['stages'][stage]['reason'], stage
+
+
+@pytest.mark.asyncio
+async def test_partial_cluster_pass_stops_the_pipeline(
+    pipeline_env: _Labeler,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A cluster pass that did not cover its pool (#357) ends the run: no geometry,
+    promotion or VLM stage works on top of a half-clustered pool."""
+    from unittest.mock import AsyncMock
+
+    from src.routers.curation.pipeline_public import pipeline_auto_label
+    from src.services.curation.clustering import cluster_geometry, orchestrator
+
+    partial = {'status': 'partial', 'n_residuals': 5, 'expected_pool': 50}
+    monkeypatch.setattr(orchestrator, 'cluster_residuals', AsyncMock(return_value=partial))
+    geometry = AsyncMock(return_value={})
+    monkeypatch.setattr(cluster_geometry, 'cluster_geometry_stage', geometry)
+    promote = AsyncMock(return_value={})
+    monkeypatch.setattr(
+        'src.services.curation.clustering.auto_promote.auto_promote_clusters', promote
+    )
+    fake = _NormalizingOpenSearch({ITEMS: _scope_docs()})
+    summary = await pipeline_auto_label(
+        opensearch=fake, train_clusters=True, run_auto_promote=True, run_vlm=True
+    )
+    assert summary['stages']['cluster_residuals']['status'] == 'partial'
+    geometry.assert_not_awaited()
+    promote.assert_not_awaited()
+    assert 'auto_promote' not in summary['stages']
+    assert 'vlm' not in summary['stages']

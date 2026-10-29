@@ -168,3 +168,22 @@ describe('load / adopt / selectable', () => {
     expect(projectsStore.selectable.map((p) => p.slug)).toEqual(['default', 'old']);
   });
 });
+
+describe('load', () => {
+  it('a persistent failure gives a reason that adds to the screen title instead of repeating it', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('network down')));
+      projectsStore.loaded = false;
+      const done = projectsStore.load();
+      await vi.runAllTimersAsync();
+      await done;
+      expect(projectsStore.error).not.toBeNull();
+      expect(projectsStore.error).not.toMatch(/reach the backend's project list/i);
+      expect(projectsStore.error).toMatch(/running/i);
+    } finally {
+      vi.useRealTimers();
+      projectsStore.error = null;
+    }
+  });
+});

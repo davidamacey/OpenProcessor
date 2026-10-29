@@ -1,0 +1,470 @@
+[
+  {
+    "make": "Toyota",
+    "model": "Corolla",
+    "generation": "E210",
+    "category": "Toyota Corolla (E210)"
+  },
+  {
+    "make": "Toyota",
+    "model": "Corolla",
+    "generation": "E170",
+    "category": "Toyota Corolla (E170)"
+  },
+  {
+    "make": "Toyota",
+    "model": "Camry",
+    "generation": "XV70",
+    "category": "Toyota Camry (XV70)"
+  },
+  {
+    "make": "Toyota",
+    "model": "Camry",
+    "generation": "XV50",
+    "category": "Toyota Camry (XV50)"
+  },
+  {
+    "make": "Toyota",
+    "model": "Prius",
+    "generation": "XW30",
+    "category": "Toyota Prius (XW30)"
+  },
+  {
+    "make": "Toyota",
+    "model": "RAV4",
+    "generation": "XA50",
+    "category": "Toyota RAV4 (XA50)"
+  },
+  {
+    "make": "Toyota",
+    "model": "Land Cruiser",
+    "generation": "J200",
+    "category": "Toyota Land Cruiser (J200)"
+  },
+  {
+    "make": "Toyota",
+    "model": "Yaris",
+    "generation": "XP210",
+    "category": "Toyota Yaris (XP210)"
+  },
+  {
+    "make": "Toyota",
+    "model": "Yaris",
+    "generation": "XP90",
+    "category": "Toyota Yaris (XP90)"
+  },
+  {
+    "make": "Honda",
+    "model": "Jazz",
+    "generation": "3rd generation",
+    "category": "Honda Jazz (3rd generation)"
+  },
+  {
+    "make": "Honda",
+    "model": "Jazz",
+    "generation": "4th generation",
+    "category": "Honda Jazz (4th generation)"
+  },
+  {
+    "make": "Honda",
+    "model": "CR-V",
+    "generation": "4th generation",
+    "category": "Honda CR-V (4th generation)"
+  },
+  {
+    "make": "Honda",
+    "model": "CR-V",
+    "generation": "3rd generation",
+    "category": "Honda CR-V (3rd generation)"
+  },
+  {
+    "make": "Honda",
+    "model": "Accord",
+    "generation": "2013",
+    "category": "Honda Accord (2013)"
+  },
+  {
+    "make": "Honda",
+    "model": "Accord",
+    "generation": "2007",
+    "category": "Honda Accord (2007, Japan & Europe)"
+  },
+  {
+    "make": "Ford",
+    "model": "Focus",
+    "generation": "Mk III",
+    "category": "Ford Focus Mk III"
+  },
+  {
+    "make": "Ford",
+    "model": "Mustang",
+    "generation": "VI",
+    "category": "Ford Mustang VI"
+  },
+  {
+    "make": "Ford",
+    "model": "Mustang",
+    "generation": "V",
+    "category": "Ford Mustang V"
+  },
+  {
+    "make": "Ford",
+    "model": "Transit",
+    "generation": "Custom",
+    "category": "Ford Transit Custom"
+  },
+  {
+    "make": "Ford",
+    "model": "Transit",
+    "generation": "Connect",
+    "category": "Ford Transit Connect"
+  },
+  {
+    "make": "Ford",
+    "model": "F-150",
+    "generation": "13th generation",
+    "category": "Ford F-150 (thirteenth generation)"
+  },
+  {
+    "make": "Volkswagen",
+    "model": "Golf",
+    "generation": "V",
+    "category": "Volkswagen Golf V"
+  },
+  {
+    "make": "Volkswagen",
+    "model": "Golf",
+    "generation": "VI",
+    "category": "Volkswagen Golf VI"
+  },
+  {
+    "make": "Volkswagen",
+    "model": "Polo",
+    "generation": "V",
+    "category": "Volkswagen Polo V"
+  },
+  {
+    "make": "Volkswagen",
+    "model": "Polo",
+    "generation": "IV",
+    "category": "Volkswagen Polo IV"
+  },
+  {
+    "make": "Volkswagen",
+    "model": "Passat",
+    "generation": "B6",
+    "category": "Volkswagen Passat B6"
+  },
+  {
+    "make": "Volkswagen",
+    "model": "Passat",
+    "generation": "B7",
+    "category": "Volkswagen Passat B7"
+  },
+  {
+    "make": "Volkswagen",
+    "model": "Tiguan",
+    "generation": "I",
+    "category": "Volkswagen Tiguan I"
+  },
+  {
+    "make": "Volkswagen",
+    "model": "Tiguan",
+    "generation": "II",
+    "category": "Volkswagen Tiguan II"
+  },
+  {
+    "make": "Volkswagen",
+    "model": "Beetle",
+    "generation": "A5",
+    "category": "Volkswagen Beetle (A5)"
+  },
+  {
+    "make": "BMW",
+    "model": "5 Series",
+    "generation": "F10",
+    "category": "BMW 5 Series (F10)"
+  },
+  {
+    "make": "BMW",
+    "model": "X5",
+    "generation": "E70",
+    "category": "BMW X5 (E70)"
+  },
+  {
+    "make": "Audi",
+    "model": "A3",
+    "generation": "8V",
+    "category": "Audi A3 8V"
+  },
+  {
+    "make": "Audi",
+    "model": "A3",
+    "generation": "8P",
+    "category": "Audi A3 8P"
+  },
+  {
+    "make": "Audi",
+    "model": "A4",
+    "generation": "B8",
+    "category": "Audi A4 B8"
+  },
+  {
+    "make": "Audi",
+    "model": "A4",
+    "generation": "B9",
+    "category": "Audi A4 B9"
+  },
+  {
+    "make": "Audi",
+    "model": "A6",
+    "generation": "C7",
+    "category": "Audi A6 C7"
+  },
+  {
+    "make": "Audi",
+    "model": "A6",
+    "generation": "C6",
+    "category": "Audi A6 C6"
+  },
+  {
+    "make": "Opel",
+    "model": "Astra",
+    "generation": "H",
+    "category": "Opel Astra H"
+  },
+  {
+    "make": "Opel",
+    "model": "Astra",
+    "generation": "J",
+    "category": "Opel Astra J"
+  },
+  {
+    "make": "Opel",
+    "model": "Astra",
+    "generation": "K",
+    "category": "Opel Astra K"
+  },
+  {
+    "make": "Opel",
+    "model": "Corsa",
+    "generation": "D",
+    "category": "Opel Corsa D"
+  },
+  {
+    "make": "Opel",
+    "model": "Corsa",
+    "generation": "E",
+    "category": "Opel Corsa E"
+  },
+  {
+    "make": "Renault",
+    "model": "Megane",
+    "generation": "III",
+    "category": "Renault Mégane III"
+  },
+  {
+    "make": "Renault",
+    "model": "Megane",
+    "generation": "II",
+    "category": "Renault Mégane II"
+  },
+  {
+    "make": "Renault",
+    "model": "Megane",
+    "generation": "IV",
+    "category": "Renault Mégane IV"
+  },
+  {
+    "make": "Peugeot",
+    "model": "308",
+    "generation": "A",
+    "category": "Peugeot 308 A"
+  },
+  {
+    "make": "Peugeot",
+    "model": "308",
+    "generation": "B",
+    "category": "Peugeot 308 B"
+  },
+  {
+    "make": "Skoda",
+    "model": "Octavia",
+    "generation": "II",
+    "category": "Škoda Octavia II"
+  },
+  {
+    "make": "Skoda",
+    "model": "Octavia",
+    "generation": "I",
+    "category": "Škoda Octavia I"
+  },
+  {
+    "make": "Nissan",
+    "model": "Qashqai",
+    "generation": "J11",
+    "category": "Nissan Qashqai (J11)"
+  },
+  {
+    "make": "Nissan",
+    "model": "Leaf",
+    "generation": "ZE1",
+    "category": "Nissan Leaf (ZE1)"
+  },
+  {
+    "make": "Nissan",
+    "model": "Micra",
+    "generation": "K13",
+    "category": "Nissan Micra (K13)"
+  },
+  {
+    "make": "Nissan",
+    "model": "X-Trail",
+    "generation": "T32",
+    "category": "Nissan X-Trail (T32)"
+  },
+  {
+    "make": "Hyundai",
+    "model": "i30",
+    "generation": "PD",
+    "category": "Hyundai i30 (PD)"
+  },
+  {
+    "make": "Hyundai",
+    "model": "Tucson",
+    "generation": "TL",
+    "category": "Hyundai Tucson (TL)"
+  },
+  {
+    "make": "Kia",
+    "model": "Sportage",
+    "generation": "QL",
+    "category": "Kia Sportage (QL)"
+  },
+  {
+    "make": "Mazda",
+    "model": "3",
+    "generation": "BM",
+    "category": "Mazda3 (BM)"
+  },
+  {
+    "make": "Mazda",
+    "model": "CX-5",
+    "generation": "KE",
+    "category": "Mazda CX-5 (KE)"
+  },
+  {
+    "make": "Mazda",
+    "model": "MX-5",
+    "generation": "ND",
+    "category": "Mazda MX-5 (ND)"
+  },
+  {
+    "make": "Subaru",
+    "model": "Impreza",
+    "generation": "GJ",
+    "category": "Subaru Impreza (GJ)"
+  },
+  {
+    "make": "Tesla",
+    "model": "Model S",
+    "generation": "first generation",
+    "category": "Tesla Model S"
+  },
+  {
+    "make": "Jeep",
+    "model": "Wrangler",
+    "generation": "JK",
+    "category": "Jeep Wrangler (JK)"
+  },
+  {
+    "make": "Mini",
+    "model": "Hatch",
+    "generation": "F56",
+    "category": "Mini Hatch (F56)"
+  },
+  {
+    "make": "Dacia",
+    "model": "Duster",
+    "generation": "I",
+    "category": "Dacia Duster I"
+  },
+  {
+    "make": "Dacia",
+    "model": "Duster",
+    "generation": "II",
+    "category": "Dacia Duster II"
+  },
+  {
+    "make": "Mitsubishi",
+    "model": "Outlander",
+    "generation": "2nd generation",
+    "category": "Mitsubishi Outlander (second generation)"
+  },
+  {
+    "make": "Volvo",
+    "model": "XC60",
+    "generation": "2013",
+    "category": "Volvo XC60 (2013)"
+  },
+  {
+    "make": "Smart",
+    "model": "Fortwo",
+    "generation": "3rd generation",
+    "category": "Smart Fortwo (3rd gen)"
+  },
+  {
+    "make": "Citroën",
+    "model": "C3",
+    "generation": "2009",
+    "category": "Citroën C3 (2009)"
+  },
+  {
+    "make": "Suzuki",
+    "model": "Swift",
+    "generation": "2004",
+    "category": "Suzuki Swift (2004)"
+  },
+  {
+    "make": "Fiat",
+    "model": "500",
+    "generation": "type 312",
+    "category": "Fiat 500 (type 312)"
+  },
+  {
+    "make": "Peugeot",
+    "model": "208",
+    "generation": "A",
+    "category": "Peugeot 208 A"
+  },
+  {
+    "make": "Porsche",
+    "model": "911",
+    "generation": "G-series",
+    "category": "Porsche 911 G-series"
+  },
+  {
+    "make": "Lexus",
+    "model": "RX",
+    "generation": "XU30",
+    "category": "Lexus RX (XU30)"
+  },
+  {
+    "make": "Lexus",
+    "model": "RX",
+    "generation": "AL10",
+    "category": "Lexus RX (AL10, 2022)"
+  },
+  {
+    "make": "Ford",
+    "model": "Fiesta",
+    "generation": "Mk7",
+    "category": "Ford Fiesta MK7"
+  },
+  {
+    "make": "Ford",
+    "model": "Fiesta",
+    "generation": "Mk6",
+    "category": "Ford Fiesta MK6"
+  }
+]

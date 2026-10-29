@@ -136,3 +136,24 @@ def test_a_region_close_up_is_cut_from_the_source_at_vlm_size(
     assert max(_size(out)) <= crop_bytes.VLM_CROP_SIZE
     red, _g, _b = Image.open(io.BytesIO(out)).convert('RGB').getpixel((10, 10))
     assert red > 150
+
+
+@pytest.mark.parametrize('bbox', [(1.0, 0.0, 1.0, 1.0), (0.0, 1.0, 1.0, 1.0), (0.9, 0.0, 1.2, 1.0)])
+def test_a_cache_miss_cuts_the_same_rectangle_as_ingest(
+    source_image: Path, bbox: tuple[float, float, float, float]
+) -> None:
+    """The miss path cuts the stored box the way ingest cut the cached crop
+    (``geometry.crop_rect``): clamped to the frame, never a padded column past the edge."""
+    from src.services.curation.ingest_index import crop_pil
+
+    img = Image.open(source_image).convert('RGB')
+    x1, y1, x2, y2 = bbox
+    want = crop_pil(img, (x1 * 200, y1 * 100, x2 * 200, y2 * 100))
+
+    out = crop_bytes.crop_jpeg_from_disk(str(source_image), bbox)
+
+    assert out is not None
+    got = Image.open(io.BytesIO(out)).convert('RGB')
+    assert got.size == want.size
+    # A padded column is black; the frame's edge here is (200, 40, 40) or (10, 20, 30).
+    assert abs(sum(got.getpixel((0, 0))) - sum(want.getpixel((0, 0)))) < 40

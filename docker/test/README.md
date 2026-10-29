@@ -113,6 +113,20 @@ A third, non-bug prerequisite is documented by
 and `near_dup` scorers require a trained IVF centroid store, which only the
 item-clustering pipeline produces.
 
+## The docs-screenshot overlay
+
+`compose.docs-shots.yml` adds Cropwright, a stand-in segmenter
+(`fake_segmenter.py`: fixed wheel-shaped candidates, so a region profile can be
+activated and tested without a GPU), the documented `/data/source` and
+`/var/lib/openprocessor` paths, and fake-VLM defaults (`FAKE_VLM_CLASS`,
+`FAKE_VLM_REGION_VISIBLE`, `FAKE_VLM_BOX_VERDICTS`). The capture script seeds it
+and captures the docs screenshots; the whole flow is in
+[Seeded capture on an isolated stack](../../docs-site/docs/developer-guide/screenshots.mdx#seeded-capture-on-an-isolated-stack).
+The host ports are `VERIFY_API_PORT`, `VERIFY_OPENSEARCH_PORT`,
+`VERIFY_FAKE_VLM_PORT` and `VERIFY_CROPWRIGHT_PORT` (defaults 14701, 14702, 14704
+and 14705). Bind-mounted state lives in the git-ignored `verify-data/`; remove it
+before starting a stack that must begin empty.
+
 ## Running a second harness beside the first
 
 Container names and image tags take the `VERIFY_CONTAINER_PREFIX` prefix

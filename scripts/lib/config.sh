@@ -286,7 +286,7 @@ generate_env_file() {
 # =============================================================================
 
 # GPU Profile
-# Options: minimal (6-8GB), standard (12-24GB), full (48GB+)
+# Options: minimal (6-8GB), standard (12-24GB), full (40GB+)
 GPU_PROFILE=$profile
 GPU_ID=$gpu_id
 

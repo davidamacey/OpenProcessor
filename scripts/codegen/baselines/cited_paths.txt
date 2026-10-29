@@ -25,7 +25,7 @@ frontend/e2e/stubbed/test_train_gpus.py	1	cites a design note that left the tree
 frontend/e2e/stubbed/test_visual_audit_review.py	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/e2e/stubbed/test_visual_fix_pages_narrow.py	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/scripts/capture_docs_screenshots.py	2	cites a design note that left the tree; drop the citation when the file is next touched
-frontend/scripts/docs_screenshot_fixtures.py	4	cites a design note that left the tree; drop the citation when the file is next touched
+frontend/scripts/docs_screenshot_fixtures.py	3	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/scripts/repro_chromium_network_change.py	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/scripts/run-e2e.mjs	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/annotations/cohorts.ts	2	cites a design note that left the tree; drop the citation when the file is next touched

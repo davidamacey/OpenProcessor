@@ -1,0 +1,14 @@
+{
+  "count": 13237,
+  "dataset": "lfw",
+  "licence": {
+    "name": "no formal licence published",
+    "note": "Web-crawled news photographs; copyright stays with the original owners. Local evaluation only; aggregates are published only after owner review (plan O2).",
+    "redistributable": false,
+    "url": "https://www.cs.umass.edu/~elm/papers/lfw.pdf"
+  },
+  "manifest_sha256": "e9e273847eaa5ace858084297338ddc5a1d9c9fb09281286395bce68cb1115a4",
+  "schema": "proxy-dataset-manifest/1-pin",
+  "source_url": "https://ndownloader.figshare.com/files/5976018",
+  "total_bytes": 369157186
+}
