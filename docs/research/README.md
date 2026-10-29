@@ -14,6 +14,7 @@ on what it was measured, and every result that matters has a reproduce command.
 | [v070_measurement_log.md](v070_measurement_log.md) | The running 0.7.0 log: cluster pass size ladder to 1M crops, ingest and decode-instance sweeps, NVMe versus HDD, contention, search latency, live checks of the embedding fixes. Each section has setup, method, results and reproduce commands. |
 | [cluster_eval_baseline.md](cluster_eval_baseline.md) | First cluster-quality baseline from the evaluation harness on public COCO crops. |
 | [installer_drive_log.md](installer_drive_log.md) | Installer drives (fresh, re-run, interrupt, control-plane-only, branch mode, upgrade and rollback, edge cases): results and the fixes they led to. |
+| [cropwright_health_2026-10-29.md](cropwright_health_2026-10-29.md) | Cropwright frontend health pass against a live stack: checks, defects fixed, screenshots index. |
 | [ingest_concurrency_tuning.md](ingest_concurrency_tuning.md) | Batch and concurrency sweep for bulk ingest. |
 | [pe_encoder_batching_benchmark.md](pe_encoder_batching_benchmark.md) | Batched TensorRT PE-Core-L14-336: parity and throughput. |
 | [detector_quantization_results.md](detector_quantization_results.md) | Detector precision, runtime and hardware matrix. |

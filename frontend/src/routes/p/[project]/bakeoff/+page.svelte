@@ -224,7 +224,7 @@
       </ul>
     </aside>
 
-    <main class="min-w-0" data-testid="results">
+    <section class="min-w-0" data-testid="results">
       {#if s.viewJob}
         <h2 class="mb-3 text-sm font-medium text-zinc-400">
           Results · <span class="font-mono">{s.viewJob}</span>
@@ -266,6 +266,6 @@
       {:else}
         <p class="text-sm text-zinc-500">Select a run to view its results.</p>
       {/if}
-    </main>
+    </section>
   </div>
 </div>

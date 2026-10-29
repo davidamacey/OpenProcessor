@@ -147,7 +147,9 @@
         {/if}
       {/if}
       {#if cornerBadge}
-        <div class="pointer-events-none absolute right-1 top-1 z-10">
+        <div
+          class="pointer-events-none absolute right-1 top-1 z-10 flex max-w-[calc(100%-5.25rem)] justify-end"
+        >
           {@render cornerBadge(crop)}
         </div>
       {/if}

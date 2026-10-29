@@ -59,6 +59,7 @@
 </script>
 
 <div class="flex h-full flex-col">
+  <h1 class="sr-only">Review</h1>
   <ReviewTabsBar
     {tabs}
     {loader}

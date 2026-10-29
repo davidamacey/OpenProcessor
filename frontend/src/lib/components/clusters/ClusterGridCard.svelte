@@ -81,8 +81,11 @@
           src={c.representative_thumb_urls?.[i]
             ? resolveApiUrl(c.representative_thumb_urls[i])
             : getThumbUrl(cropId)}
-          alt="thumb"
+          alt=""
           loading="lazy"
+          onerror={(e) => {
+            (e.currentTarget as HTMLImageElement).style.opacity = '0.2';
+          }}
           class="aspect-square w-full bg-zinc-950 object-contain"
         />
       {/each}
