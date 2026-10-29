@@ -109,3 +109,14 @@ _.child_sample  # src/domain/loop_tree.py, seeded child draw with answer reuse
 _.best_first_key  # src/domain/loop_tree.py, the scheduler's priority order
 _.root_of  # PartitionReader.root_of in assist_loop/partition.py: the driver's drift check
 _.member_ids  # RootRef.member_ids in assist_loop/partition.py: the driver's membership digest
+_.would_refuse  # LoopBudget.would_refuse in assist_loop/budget.py: the evaluator's pre-check before a node draws
+_.from_request  # BudgetLimits.from_request in assist_loop/budget.py: the driver builds the caps from the loop request
+_.reserve  # LoopBudget.reserve in assist_loop/budget.py: the evaluator's write-ahead reservation per chunk
+_.propagate_begun  # NodeRecord.propagate_begun in assist_loop/store.py: the driver resumes an interrupted propagation
+_.pause_requested  # LoopStore.pause_requested in assist_loop/store.py: the driver's user-pause check
+_.read_json  # LoopStore.read_json in assist_loop/store.py: the driver reads request.json on resume
+_.read_node_members  # LoopStore.read_node_members in assist_loop/store.py: the driver reloads child nodes on resume
+_.read_roots  # LoopStore.read_roots in assist_loop/store.py: the driver reloads the pinned roots on resume
+_.write_node_members  # LoopStore.write_node_members in assist_loop/store.py: the driver persists a split's children
+_.write_roots  # LoopStore.write_roots in assist_loop/store.py: the driver pins the roots at start
+_.loop_id  # LoopStore.loop_id in assist_loop/store.py: the run id the driver stamps on every write
