@@ -392,19 +392,23 @@ def run_scale_time(args: argparse.Namespace) -> dict[str, Any]:
     keys = detector_keys(meta)
     counts = {k: int((keys == k).sum()) for k in sorted(set(keys.tolist()))}
     rows = vectors[keys == args.key]
-    fit = sc.dense_average_partition if args.mode == 'dense' else sc.sparse_average_partition
+    sweep: dict[str, Any] = {}
     with scorecard.RunMeter(seed=SEED) as meter:
         t0 = time.perf_counter()
-        part = fit(rows, args.cut)
+        if args.mode == 'dense':
+            z = sc.dense_average_linkage(rows)
+            part = sc.cut_dendrogram(z, args.cut)
+            sweep = {str(c): sc.cluster_shape(sc.cut_dendrogram(z, c)) for c in args.sweep}
+        else:
+            part = sc.sparse_average_partition(rows, args.cut)
         seconds = time.perf_counter() - t0
-    sizes = np.bincount(part)
     return {
         'mode': args.mode,
         'key': args.key,
         'key_crops': len(rows),
         'cut': args.cut,
-        'clusters': int(part.max()) + 1,
-        'largest_cluster_share': float(sizes.max() / len(rows)),
+        **sc.cluster_shape(part),
+        'cut_sweep_same_dendrogram': sweep,
         'fit_seconds': seconds,
         'peak_rss_gb': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024 / 1024,
         'crops_per_key': counts,
@@ -442,6 +446,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     t.add_argument('--key', required=True)
     t.add_argument('--mode', choices=('dense', 'sparse'), required=True)
     t.add_argument('--cut', type=float, required=True)
+    t.add_argument('--sweep', type=float, nargs='*', default=[], help='more cuts (dense mode)')
     args = ap.parse_args(argv)
     run = run_scale_time if args.cmd == 'scale-time' else COMMANDS[args.cmd][0]
     load_start = os.getloadavg()

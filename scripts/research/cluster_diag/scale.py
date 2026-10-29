@@ -44,12 +44,27 @@ def condensed_cosine_distance(vectors: Floats, chunk: int = CHUNK) -> Floats:
     return out
 
 
+def dense_average_linkage(vectors: Floats) -> Floats:
+    """The average-linkage dendrogram of one key, from the full distance matrix."""
+    return np.asarray(linkage(condensed_cosine_distance(vectors), method='average'))
+
+
+def cut_dendrogram(z: Floats, cut: float) -> Ints:
+    """Cluster codes of a dendrogram cut at one height."""
+    return np.asarray(fcluster(z, cut, 'distance'), dtype=np.int64) - 1
+
+
 def dense_average_partition(vectors: Floats, cut: float) -> Ints:
     """Average-linkage clusters of one key at ``cut``, from the full distance matrix."""
     if len(vectors) == 1:
         return np.zeros(1, dtype=np.int64)
-    z = linkage(condensed_cosine_distance(vectors), method='average')
-    return np.asarray(fcluster(z, cut, 'distance'), dtype=np.int64) - 1
+    return cut_dendrogram(dense_average_linkage(vectors), cut)
+
+
+def cluster_shape(part: Ints) -> dict[str, float | int]:
+    """Number of clusters and the share of the key that sits in the largest one."""
+    sizes = np.bincount(part)
+    return {'clusters': len(sizes), 'largest_cluster_share': float(sizes.max() / len(part))}
 
 
 def mutual_knn_graph(vectors: Floats, k: int = NEIGHBOURS, chunk: int = CHUNK) -> sp.csr_matrix:

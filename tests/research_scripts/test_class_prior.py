@@ -428,12 +428,19 @@ def test_the_scale_timing_run_records_cost_and_the_largest_cluster(tmp_path: Pat
 
     stem, _, _, _ = _project(tmp_path, per_class=20)
     for mode in ('dense', 'sparse'):
-        out = run.run_scale_time(Namespace(bundle=stem, key='car', mode=mode, cut=0.3))
+        out = run.run_scale_time(
+            Namespace(bundle=stem, key='car', mode=mode, cut=0.3, sweep=[0.00001])
+        )
         assert out['key_crops'] == 20
         assert out['clusters'] == 1  # one tight blob: a cut of 0.3 keeps it whole
         assert out['largest_cluster_share'] == 1.0
         assert out['crops_per_key'] == {'bus': 20, 'car': 20, 'dog': 20}
         assert out['fit_seconds'] >= 0
+        if mode == 'dense':  # a cut below every merge height leaves every crop alone
+            assert out['cut_sweep_same_dendrogram']['1e-05'] == {
+                'clusters': 20,
+                'largest_cluster_share': 1 / 20,
+            }
         assert not math.isnan(out['peak_rss_gb'])
 
 
