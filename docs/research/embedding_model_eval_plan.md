@@ -1,13 +1,18 @@
 # EmbeddingGemma 2 evaluation plan (issue #347)
 
-Status: research and plan, written 2026-10-28. **No measurement of the model was made for this note**
-(no GPU, no Docker, no weights downloaded). Everything about the model is read from public pages;
-each fact is tagged **[vendor]** (Google's own model card, blog or guide, not independently
-reproduced), **[community]** (a third party measured it), or **[repo]** (read from this
-repository). Part 3 is a plan an agent can execute later; part 5 is where results get recorded.
+Status: research and plan, written 2026-10-28, extended 2026-10-29 with the owner decisions of that
+date (optional off-by-default model, CPU or GPU text encoder, Qwen3-VL-Embedding and an NVIDIA
+embedding model as reference arms, TensorRT for every arm, one decode per image, shared-GPU
+scheduling, a metrics schema and a results ledger). **No measurement of any model was made for this
+note** (no GPU, no Docker, no weights downloaded). Everything about the models is read from public
+pages; each fact is tagged **[vendor]** (the maker's own model card, blog or guide, not independently
+reproduced), **[community]** (a third party measured it), **[repo]** (read from this repository) or
+**[inference]** (my reasoning, not a source). Part 3 is the quality benchmark an agent can execute
+later; parts 5 to 9 are the TensorRT track, scheduling protocol, metrics schema, ledger and the
+single-decode integration; part 10 is where results get recorded.
 
-The model's public name appears in this file by design (it is a research note about that model);
-generic plumbing must not hardcode it. See the entry in
+The Google model's public name appears in this file by design (it is a research note about that
+model); generic plumbing must not hardcode it. The other arms are named only in this note too. See the entry in
 `scripts/codegen/naming_leak_allowlist.txt`.
 
 ## 1. What the model is
@@ -182,8 +187,11 @@ $HOME/eval_work/envs/eg2/venv/bin/pip install "transformers>=5" "sentence-transf
 # the export scripts for the image encoders). Do not use a different checkpoint than production.
 ```
 
-* Work dir `$HOME/eval_work/data/eg2/` (datasets, vectors, results); scripts in
-  `$HOME/eval_work/scripts/eg2/`. Keep both out of git. Results summarized back into this file (part 5).
+* Work dir `$HOME/eval_work/data/eg2/` (datasets, vectors); scripts in
+  `$HOME/eval_work/scripts/eg2/`. Keep both out of git. **Per-run result JSON, logs and engines go to the
+  ledger (part 8), not the work dir.** Results are summarized back into this file (part 10).
+* Every GPU command in this plan is wrapped as described in part 6 (`flock` on the GPU 0 lock plus
+  host and GPU telemetry). The `CUDA_VISIBLE_DEVICES=0` rule below stands.
   The model download here is the explicit, later execution step, not part of this note.
 * Precision: candidate in **bfloat16** (fp32 as the reference), never fp16. Baselines in the precision
   production uses (PE image TensorRT FP16 is the production reference; the eager PyTorch bf16 or fp16 run
@@ -200,7 +208,14 @@ $HOME/eval_work/envs/eg2/venv/bin/pip install "transformers>=5" "sentence-transf
 | EG2-T | EmbeddingGemma 2 text only (270M), query/document prefixes per card | n/a | 768, 512, 256, 128 |
 | EG2-TV | EmbeddingGemma 2 text+vision (440M, `audio_config=None`), default 280 image tokens; also 140 and 560 for the budget sweep | same | 768, 512, 256, 128 |
 | Lexical baselines | BM25 (rank-bm25) and the repo's current `item_text_tokens` token match | n/a | n/a |
-| Optional reference | Qwen3-VL-Embedding-2B, only if time allows, because the community repo above also lists it; not a required baseline | | |
+| QW-2B (reference) | Qwen3-VL-Embedding-2B, text and image through one decoder (section 5.1) | same model | 2048 (Matryoshka 64 to 2048) |
+| QW-8B (reference) | Qwen3-VL-Embedding-8B | same model | 4096 (Matryoshka 64 to 4096) |
+| NV-OMNI (reference) | NVIDIA `omni-embed-nemotron-3b` (section 5.2) | same model | 2048 |
+| NV-35 (optional reference) | NVIDIA Nemotron 3.5 Embed 1B (and 8B if it fits), the license-compatible NVIDIA alternative (section 5.2) | same model | 2048 (1B; truncate to 1024/512), 4096 (8B) |
+
+Reference arms are measured on the same data and protocol as the others but are **not candidates to ship
+unless their license and size pass the hard gates in 3.6**: they bound what a much larger model buys.
+Size honesty: report quality per GB of VRAM and per ms next to raw quality.
 
 Verify before running that the text-only 270M and the 440M load produce the same text vectors (the
 developer guide claims one shared space); if not, record the difference and use the 440M text path for
@@ -229,12 +244,13 @@ and throughput at batch 1, 4, 8, 16, 32, with pre-processing time reported separ
 
 | Id | Owner scenario | Task and pairing | Compared arms | Extra metrics |
 |---|---|---|---|---|
-| S1 | Speed | Encode latency and throughput. Text: 1,000 real queries (COCO captions, 5 to 20 tokens) and 1,000 long strings (D2 narratives, up to 512 tokens) on **GPU 0 and on CPU** (CPU threads fixed to 8, pinned; the PE text tower runs on CPU in production). Image: 1,000 D1 images, batch sweep. Also image budget sweep 70/140/280/560 tokens for EG2-TV | PE text/image, MobileCLIP, EG2-T, EG2-TV | per-component latency, GPU util, CPU % ; compare to production TensorRT references in sections 2.1 only as context, not as equal-footing rows |
+| S1 | Speed | Encode latency and throughput. Text: 1,000 real queries (COCO captions, 5 to 20 tokens) and 1,000 long strings (D2 narratives, up to 512 tokens) on **GPU 0 and on CPU** (CPU threads fixed to 8, pinned; the PE text tower runs on CPU in production). Image: 1,000 D1 images, batch sweep. Also image budget sweep 70/140/280/560 tokens for EG2-TV | PE text/image, MobileCLIP, EG2-T, EG2-TV, QW-2B/8B, NV-OMNI, NV-35 (PyTorch bf16 here; TensorRT rows come from part 5) | per-component latency, GPU util, CPU % ; compare to production TensorRT references in sections 2.1 only as context, not as equal-footing rows |
 | S2 | OCR text | (a) Meaning search over OCR strings: query = TextCaps caption (or a question) of an image, document = concatenated OCR strings of that image, relevant = same image. (b) Noisy-string match: query = deterministic perturbation (case, dropped characters, a word reordering; seed fixed) of an OCR line, relevant = its source line. (c) Exact-match comparison: the repo's token match and BM25 on the same pairs | EG2-T at 768/256/128, BM25, token match, PE text tower (as a naive text-to-text arm) | hit rate where exact match returns nothing; recall@k per query type |
-| S3 | Image summaries | Caption-embedding search vs direct image search. Index A: EG2-T embeddings of one held-out caption per image. Index B: image embeddings (PE, MobileCLIP, EG2-TV). Query: a different human caption of the same image. Optional second pass with VLM-generated captions from the repo's own VLM on GPU 0, only if that VLM fits; report which VLM and prompt | EG2-T caption index, EG2-TV image index, PE image index, MobileCLIP image index, BM25 on captions | recall@k, and overlap of top-10 sets between A and B (does captioning add recall) |
+| S3 | Image summaries | Caption-embedding search vs direct image search. Index A: EG2-T embeddings of one held-out caption per image. Index B: image embeddings (PE, MobileCLIP, EG2-TV). Query: a different human caption of the same image. Second pass with VLM-generated captions from the repo's catalog VLM on GPU 0 (owner-approved; run under the lock, before the latency runs, part 6); report which VLM, revision and prompt | EG2-T caption index, EG2-TV image index, PE image index, MobileCLIP image index, BM25 on captions | recall@k, and overlap of top-10 sets between A and B (does captioning add recall) |
 | S4 | Cross-modal | Text to image, image to image, image to caption. Text-to-image and image-to-text use the standard protocol (the 5 captions of an image are its relevants). Image-to-image has no ground truth: use COCO instance-category set overlap (Jaccard at least 0.5) as relevance and state that it is a proxy in the one space | PE-Core, MobileCLIP, EG2-TV at all four dims | text-to-image recall@1/5/10, image-to-text recall@1/5/10, mean rank; fusion row: reciprocal-rank fusion of PE and EG2-TV result lists (post-retrieval) |
 | S5 | Clustering | Cluster the D4 crops with the model's vectors using the same method and settings as the PE run (FAISS k-means IVF K and AHC distance 0.25 as in the current pipeline, via the #341 harness), score against the same ground-truth labels | PE-Core vectors vs EG2-TV vectors | the harness's own metrics and strata (low resolution, rare class, similar classes, mixed scene); agreement (adjusted Rand index) between the two partitions; which strata each wins |
 | S6 | Storage | Matryoshka cut: every retrieval metric above re-scored at 768/512/256/128 with re-normalization, queries and documents at the same dim; also int8 scalar-quantized vectors at 256-d. Index size: vector bytes per 100k items and the OpenSearch on-disk size of a k-NN index for 100k x {1024, 768, 256, 128} (the repo's field mapping, Lucene engine) | EG2-T, EG2-TV; PE as the size reference | metric loss versus 768 in absolute points and percent, bytes per item, index size, k-NN query p50/p95/p99 at each dim on the 100k pool |
+| S7 | Multilingual (optional, owner: only if not hard) | Text-to-image recall@k on public XM3600 captions per language (part 5.6) | EG2-TV, QW, NV-35 vs the PE text tower | per-language recall@k, languages supported |
 
 ### 3.5 Step-by-step commands (for the executing agent)
 
@@ -328,22 +344,410 @@ Risks
    execution.
 
 Open questions for the owner
-1. Is the target a replacement or a complement? This plan assumes complement only (new field).
-2. Is CPU-only text encoding a hard requirement for any new text encoder (the PE text tower is CPU by
-   design)? It decides whether a 270M model is acceptable at all.
-3. Which languages matter? The model advertises 100+; the public benchmark above is English COCO and
-   Open Images, so multilingual value is not tested unless added (for example XM3600).
-4. May the benchmark use the repo's local VLM (GPU 0) to produce captions for S3, or are human captions
-   enough?
-5. Should Qwen3-VL-Embedding-2B or SigLIP 2 be added as extra reference arms?
-6. Is a production TensorRT/ONNX export of this model wanted if it wins, or is PyTorch/onnxruntime
-   acceptable?
 
-## 5. Results (to be filled in at execution)
+Decided on 2026-10-29 (issue #347 comment): complement only, optional and off by default, never
+replacing PE-Core; text encoder CPU or GPU selectable; multilingual optional (S7); the local catalog VLM
+may caption on GPU 0; Qwen3-VL-Embedding and an NVIDIA embedding model are reference arms; TensorRT for
+all arms. Still open:
+1. Which NVIDIA model is meant (section 5.2)? The plan assumes `omni-embed-nemotron-3b` as the literal
+   "omni embedding" release, plus Nemotron 3.5 Embed as an optional arm because the first is research-only.
+2. The `omni-embed-nemotron-3b` license is research and development only; it can be measured but never
+   shipped in this AGPL repo. Is a measurement-only arm acceptable?
+3. How much agent time may one TensorRT conversion take before it is recorded as blocked (proposal in 5.5:
+   one working day per arm and tier)?
+4. Is a VRAM budget for the optional embedder wanted (proposal in 5.5: at most 2 GiB text, 4 GiB vision)?
+5. May `ledger` raw dmon and host files of runs made under a shared-host load be kept as-is (yes by default,
+   labeled `noisy`)?
+
+## 5. Reference arms and the TensorRT build-and-benchmark track
+
+Owner decision: TensorRT engines for all arms as the production target, built so the models run on the
+GPUs as fast as possible. The PyTorch bf16 runs of part 3 are the quality and parity reference; the
+TensorRT track here produces the speed numbers that count. A TensorRT result never replaces the parity
+gate: an engine is only benchmarked after it passes it.
+
+### 5.1 Qwen3-VL-Embedding (reference arm)
+
+| Item | Value | Source |
+|---|---|---|
+| Official sizes | **2B** (28 layers, 2048-d, Matryoshka 64 to 2048) and **8B** (36 layers, 4096-d, Matryoshka 64 to 4096); 32K context; paper also describes a reranker series (not used) | [vendor] [GitHub](https://github.com/QwenLM/Qwen3-VL-Embedding), [2B card](https://huggingface.co/Qwen/Qwen3-VL-Embedding-2B), [paper arXiv 2601.04720](https://arxiv.org/abs/2601.04720) |
+| License | Apache-2.0 (repo page, 2B card, 8B card metadata). The repo lists one license and no per-model text, so read each card's license file at download time | [vendor] |
+| Inputs | Text, images, screenshots, video; instruction-aware (default instruction "Represent the user's input"); 30+ languages | [vendor] |
+| Pooling | Last-token (EOS hidden state of the last layer) | [vendor] GitHub |
+| Image token settings | `min_pixels=4096`, `max_pixels=1843200` (1280x1440), default `max_length=8192` | [vendor] GitHub |
+| Reported quality | MMEB-V2 overall 77.8 (8B, the vendor's claim of first place at release) and 73.2 (2B); MMTEB mean (task) 63.87 (2B) | [vendor] |
+| Runtimes named | transformers, sentence-transformers, vLLM 0.14.0 or newer, SGLang. **TensorRT is not mentioned.** FlashAttention-2 and bfloat16 recommended; the card examples also load float16 | [vendor] |
+| In this repo | Not related to the catalog's generative `qwen3-vl-4b` (a VLM served by vLLM); the embedder is a different checkpoint | [repo] `examples/vlm/catalog.tsv` |
+| Fit on GPU 0 (RTX A6000, 48 GB) | 2B bf16 about 4 GB of weights; 8B bf16 about 16 GB of weights; both fit alone. Estimates, to be measured | [inference] |
+
+Quality numbers above are vendor claims. The benchmark measures its own.
+
+### 5.2 NVIDIA embedding model: what is meant
+
+"NVIDIA's omni embedding model" most plausibly means **`nvidia/omni-embed-nemotron-3b`** (Omni-Embed-Nemotron),
+the only NVIDIA embedding release with "omni" in its name. No other release by that name was found.
+Related NVIDIA multimodal embedders exist and are listed so the owner can redirect the arm.
+
+| Model | Facts | Source |
+|---|---|---|
+| **`nvidia/omni-embed-nemotron-3b`** (the match) | Released 2025-10-01 (paper arXiv 2510.03458, 2025-10-03). Built on the Qwen2.5-Omni-3B "Thinker"; text, image, audio, video, alone or combined, one shared space; bi-encoder. The name says 3B; the card says **4.7B parameters** (HF metadata 5B, BF16). **2048-d**, 32,768-token context. Image token settings not stated on the card (video bounds are: `min_pixels` 32*14*14, `max_pixels` 64*28*28, 2 fps). Needs transformers 4.51.3 or the sentence-transformers loader. **License: research and development only.** The card names the "NVIDIA OneWay Noncommercial License" together with the Qwen Research License, and elsewhere cites other NVIDIA licenses, so the card is internally inconsistent. Runtimes listed on the card: "TensorRT, Triton" (software integration field), hardware A100 and H100 on Linux. **No engine, export recipe, NIM or Triton model was found.** | [vendor] [HF card](https://huggingface.co/nvidia/omni-embed-nemotron-3b), [paper](https://arxiv.org/abs/2510.03458) |
+| `nvidia/llama-nemotron-embed-vl-1b-v2` | Released 2025-12-18. About 1.7B parameters (Llama 3.2 1B plus a SigLIP 2 400M image encoder), 2048-d, image or text or both; 256 tokens per image tile, up to 6 tiles plus a thumbnail (about 1,792 visual tokens), context 10,240. BF16. License: NVIDIA Open Model License plus the Llama 3.2 Community License. Runtimes: transformers 4.56 or newer, vLLM 0.17.0 or newer; "TensorRT, Triton" are listed as software integration; a NeMo Retriever NIM was listed as upcoming. Aimed at document-page retrieval | [vendor] [HF card](https://huggingface.co/nvidia/llama-nemotron-embed-vl-1b-v2) |
+| `nvidia/Nemotron-3.5-Embed-1B-BF16` and `-8B-BF16` (plus a `1B-NVFP4` variant) | Released 2026-10-20. Multimodal (text query, document as text, image or both), 34 text languages and 18 image languages evaluated. 1B: about 1.55B parameters, 2048-d (truncate to 1024 or 512 and re-normalize), image longest edge 1,120 px default, up to 1,540; 8B: 8.38B parameters, 4096-d. Context 32,768. **License: OpenMDW-1.1**, stated usable commercially and non-commercially (Apache-2.0 Ministral base). Runtimes on the 1B card: transformers 5.20, sentence-transformers, vLLM 0.32; TensorRT is **not** mentioned | [vendor] [1B card](https://huggingface.co/nvidia/Nemotron-3.5-Embed-1B-BF16), [8B card](https://huggingface.co/nvidia/Nemotron-3.5-Embed-8B-BF16), [NVIDIA blog](https://huggingface.co/blog/nvidia/nemotron-retriever-world-class-agentic-retrieval) |
+| NIM container `nemotron-embed` | NeMo Retriever multimodal embedding NIM for the 3.5 family: 1B in BF16 and NVFP4, 8B in BF16. NVIDIA proprietary license (NVIDIA Software License Agreement and product-specific terms). A closed container, so it is a service to call, not a TensorRT plan this repo can load into its own Triton | [vendor] [NGC](https://catalog.ngc.nvidia.com/orgs/nim/nvidia/containers/nemotron-embed/-) |
+
+Answers to the owner's question: exact name `omni-embed-nemotron-3b`; one size (the card's 4.7B);
+research-only license; **no TensorRT or NIM path is documented for it** (the card lists TensorRT and Triton as
+integration targets only). A TensorRT path for it would be our own conversion of the Qwen2.5-Omni Thinker
+trunk (a Qwen2.5-style decoder with a ViT image tower), so it shares the Qwen3-VL tier ladder in 5.4. Because
+the license forbids shipping, NV-OMNI is a measurement arm only; NV-35 1B is the arm to carry forward if an
+NVIDIA model is wanted for shipping. FP8 and NVFP4 engines of the 3.5 family are not testable on our
+cards (5.3).
+
+### 5.3 Hardware and software facts that constrain the track
+
+| Fact | Value | Source |
+|---|---|---|
+| GPUs | GPU 0 and GPU 2: RTX A6000 (sm_86, 48 GB); GPU 1: RTX 3080 Ti (sm_86). Driver 615.71.10 (read on 2026-10-28) | [repo] host `nvidia-smi` |
+| TensorRT version used in production | `tensorrt-cu13==11.1.0.106` pinned in `requirements.txt`, asserted against the Triton 26.06 image in `Dockerfile.triton` (the TensorRT version build argument). `dali_gpu_decode_lessons.md` describes the stock 26.08 image with TensorRT 11.2.1; engines must be built by the TensorRT that the serving Triton loads, so build in the same image the serving stack uses and record `trtexec --version` | [repo] |
+| Strong typing | TensorRT 11 builds are strongly typed: no `--fp16`, `--bf16`, `--int8`, `--fp8` builder flags; the precision comes from the ONNX graph's tensor types. The repo's `export/trt_utils.bake_fp16_onnx` therefore converts the ONNX to FP16 before `trtexec` | [repo] `export/build_pe_trt.sh`, [vendor] [TensorRT 10 to 11 trtexec migration](https://docs.nvidia.com/deeplearning/tensorrt/latest/api/migration/tensorrt-10x-to-11x-trtexec.html) |
+| BF16 | Supported on Ampere and newer in TensorRT; with strong typing, give an ONNX whose tensors are bfloat16 (exported from a bf16 PyTorch model, or converted with a ModelOpt precision-conversion tool) | [vendor] TensorRT docs, [inference] for the conversion route |
+| FP8 | Needs Ada (sm_89) or newer. **Not testable on any card here (all sm_86).** Record FP8 cells as `skipped: hardware`, not failed | [vendor] [NVIDIA blog](https://developer.nvidia.com/blog/model-quantization-turn-fp8-checkpoints-into-high-performance-inference-engines-with-nvidia-tensorrt/) |
+| NVFP4 | Blackwell only; same treatment as FP8 | [vendor] NVIDIA model cards |
+| INT8 | Works on sm_86 with Q/DQ nodes (ModelOpt PTQ then ONNX, then `trtexec`) | [vendor] NVIDIA blog above |
+| Why fp16 breaks Gemma-family models | The residual stream grows past the fp16 maximum of 65,504; reports show NaN from the last layers in fp16 ONNX exports, and that forcing only the layer norms to fp32 is probably not enough because the residual adds overflow too. bf16 or fp32 avoids it | [community] [ORT #26732](https://github.com/microsoft/onnxruntime/issues/26732), [transformers PR 37226](https://github.com/huggingface/transformers/pull/37226) |
+
+### 5.4 Per-model TensorRT path (tiers, stop at the first that passes)
+
+Every arm uses the same ladder. Record the tier reached and, for a failure, the exact error and the ONNX
+op or layer in `notes` (a blocked tier is a result, not a skip).
+
+* **Tier 1: ONNX then `trtexec`.** One ONNX per component (text, vision), then one plan each.
+* **Tier 2: split the model.** Vision tower plan, decoder trunk plan, and a thin host or Triton BLS step
+  for the glue (patch merge, position ids, pooling). Used for the Qwen-family arms, whose decoder takes a
+  variable image-token count and 3D rotary positions.
+* **Tier 3: a TensorRT-based LLM runtime.** TensorRT-LLM or NVIDIA's ModelOpt export path, only if its
+  docs list the architecture. I did not verify that any of TensorRT-LLM's support matrices list these
+  embedding checkpoints; check before spending time. If no tier passes within the time box (5.5) the arm
+  is served for the benchmark with PyTorch bf16 or vLLM and flagged `no_trt`.
+
+| Arm | Component engines | Precisions to build and test | Specific risks |
+|---|---|---|---|
+| PE-Core text/image, MobileCLIP | Existing builds (`export/build_pe_trt.sh`, `models/pe_image_encoder`): rebuild into the ledger with the same commands for a like-for-like baseline | FP16 (production), BF16, FP32, optional INT8 | None new; this is the control |
+| EG2-T (text) | `eg2_text`: tokens in, 768-d out | FP32 (reference), **BF16**, FP16 (expected to fail, document), FP16 with FP32 islands for residual adds and norms (only if the tooling allows per-layer types), INT8 | Per-layer embeddings and a 262k vocabulary table (about 140M parameters): the embedding gather may dominate engine size; 5:1 local/global attention with a 1024 window; sequence-dependent masks. The community fp16 ONNX claims cosine 0.9998 against the vendor warning: test, do not assume |
+| EG2-TV (vision) | `eg2_vision` for the 170M tower; the 440M configuration reuses `eg2_text` | same as above, per token budget 70/140/280/560/1120 | Patch-embedding input layout (read from the community vision ONNX: three separate graphs exist), variable token count |
+| QW-2B, QW-8B | Tier 2: `qwen_vision` and `qwen_trunk` | BF16, FP16 (the card loads fp16), INT8 | Variable image resolution to variable token count, multimodal rotary positions, 8B engine memory (check against 48 GB); last-token pooling needs the sequence length per row |
+| NV-OMNI | Tier 2 as Qwen (Qwen2.5-Omni Thinker) | BF16 | No vendor recipe; image path only (skip audio and video towers); research license, measurement only |
+| NV-35 1B | Tier 2 | BF16; NVFP4 `skipped: hardware` | Vision encoder from a Ministral-based tower; 1,120 px longest edge means many tokens |
+
+Build commands (a template; names of flags must be checked with `trtexec --help` in the pinned image
+before the first run, since TensorRT 11 removed the precision flags and renamed some options). Run them
+under the lock from part 6, in the Triton or SDK image of the serving stack:
+
+```bash
+# 0. versions and environment (record all in the run's metrics JSON)
+trtexec --version; nvidia-smi --query-gpu=index,name,driver_version --format=csv
+
+# 1. ONNX per component, one precision per file. Export from the PyTorch model loaded in that
+#    dtype (bf16 or fp32), opset 18 or newer so layer norm maps to one fused layer.
+$E $S/export_onnx.py --arm eg2-t --dtype bf16 --opset 18 --out $LEDGER/engines/eg2-t/bf16/model.onnx
+sha256sum $LEDGER/engines/eg2-t/bf16/model.onnx > $LEDGER/engines/eg2-t/bf16/model.onnx.sha256
+
+# 2. inspect and sanitize (constant folding) before building
+polygraphy inspect model model.onnx --mode=basic
+polygraphy surgeon sanitize model.onnx --fold-constants -o model.folded.onnx
+
+# 3. parity of the ONNX against PyTorch fp32 first (ONNX Runtime on CPU, so GPU 0 is not needed)
+polygraphy run model.folded.onnx --onnxrt --input-shapes input_ids:[8,32] attention_mask:[8,32]
+
+# 4. build (dynamic shapes; precision comes from the ONNX types; the first build of a model uses
+#    detailed profiling verbosity so layer precisions can be read back)
+trtexec --onnx=model.folded.onnx --saveEngine=model.plan \
+  --minShapes=input_ids:1x8,attention_mask:1x8 \
+  --optShapes=input_ids:8x32,attention_mask:8x32 \
+  --maxShapes=input_ids:32x512,attention_mask:32x512 \
+  --memPoolSize=workspace:8192MiB --timingCacheFile=timing.cache \
+  --profilingVerbosity=detailed --exportLayerInfo=layers.json \
+  2>&1 | tee build.log                                    # build wall time = engine build time
+
+# 5. engine parity: run the plan and the ONNX Runtime fp32 reference on the SAME real inputs
+polygraphy run model.folded.onnx --trt --onnxrt --load-inputs real_inputs.json \
+  --atol 1e-2 --rtol 1e-2   # plus the cosine gate in 5.5 on 1,000 real inputs, from our own script
+
+# 6. speed: per batch, with the exact shapes the service sends
+trtexec --loadEngine=model.plan --shapes=input_ids:8x32,attention_mask:8x32 \
+  --warmUp=500 --iterations=200 --duration=10 --useCudaGraph --noDataTransfers \
+  --dumpProfile --separateProfileRun --exportTimes=times.json
+# repeat for batch 1,4,8,16,32 and for the text lengths 16 / 32 / 128 / 512 and image budgets
+
+# 7. serving-level numbers through Triton (queueing, dynamic batching, HTTP/gRPC), with perf_analyzer
+perf_analyzer -m eg2_text -b 1 --concurrency-range 1:32:4 --shape input_ids:32 --shape attention_mask:32
+```
+
+Dynamic shapes and batching:
+
+* One optimization profile per workload, not one wide profile: text queries (sequence 8 to 64, opt 32 like the PE
+  text tower) and text documents (up to 512, or 2048 for long captions if S3 needs it) are separate profiles of
+  one plan, or separate plans when the fused kernels differ. Batch min 1, opt 8, max 32, matching
+  `pe_image_encoder`.
+* Image token budget is a shape: build one plan per budget in {70, 140, 280, 560, 1120} for EG2-TV (a
+  fixed token count lets TensorRT pick better kernels; padding to the budget keeps the batcher simple), or
+  one plan with a token-count axis if the profile is fast enough. Decide from the S1 sweep. For the Qwen
+  and NVIDIA arms the equivalents are `max_pixels` and tile count; benchmark the vendor default and one
+  smaller setting.
+* Triton: `dynamic_batching` with `preferred_batch_size [4, 8, 16, 32]` and a short queue delay for text
+  (2 ms like `pe_text_encoder`), 15 ms for images (like `pe_image_encoder`); `max_batch_size: 32`;
+  `GPU_MIB_PER_INSTANCE` measured at max batch and recorded as in the existing configs.
+* Integer inputs: build the plans with INT32 token ids (TensorRT narrows INT64 and warns) and have the
+  client send INT32. The vector output is L2-normalized in the graph at full width; Matryoshka slicing and
+  re-normalization stay on the client (one plan serves every dimension).
+
+Triton repository layout, mirroring the existing models (`models/pe_image_encoder`, `models/pe_text_encoder`):
+
+```
+models/<embedder>_text_trt/   config.pbtxt  (platform: tensorrt_plan, KIND_GPU)    1/model.plan
+models/<embedder>_text_ort/   config.pbtxt  (platform: onnxruntime_onnx, KIND_CPU) 1/model.onnx
+models/<embedder>_image/      config.pbtxt  (platform: tensorrt_plan, KIND_GPU)    1/model.plan
+```
+
+The two text directories expose identical tensor names, dtypes and output dimension, so the client selects
+CPU or GPU by model name (the owner's selectable text encoder). The CPU variant keeps search working with
+the GPU or Triton down, as the PE text tower does. Both are not in Triton's default load list while the
+feature is off. The tensor names are a contract with the client; write them into each config header as
+the PE configs do. Naming in the real tree must be generic (no vendor name in plumbing); only this
+note may carry model names.
+
+### 5.5 Decision criteria for the TensorRT track
+
+Evaluate in this order; the first failed gate stops that (arm, precision) pair.
+
+1. **Builds and runs.** Engine builds without error; no NaN or Inf in 100,000 encodes of real inputs.
+   Time box: one working day per arm and tier; after that, record `blocked` with the log and move down
+   the ladder (the box is a proposal, open question 3).
+2. **Parity with fp32 PyTorch.** On 1,000 real texts and 1,000 real images: mean cosine at least 0.999 and
+   minimum at least 0.99. Then the retrieval metric (S4 text-to-image recall@5, S2 recall@10) within the
+   95 percent bootstrap interval of the fp32 PyTorch value. Quantized (INT8) engines must additionally lose
+   at most 1 point of recall@10 relative.
+3. **Speed.** Among the precisions that pass 1 and 2, pick the one with the lowest p50 at opt batch.
+   The engine is worth shipping over ONNX Runtime or PyTorch bf16 only if it is at least 1.5 times faster
+   (p50, same batch, same host load class) or halves VRAM; otherwise the simpler runtime wins for an
+   optional model. Production references for context: PE image TensorRT FP16 about 90 crops/s at batch 4;
+   PE text encode through Triton about 32 ms on a cache miss (section 2.1).
+4. **Memory.** Peak VRAM at max batch 32, proposed budget for an optional embedder: at most 2 GiB (text) and
+   4 GiB (vision), so it fits beside the detector and PE encoders. Reference arms (QW-8B, NV-OMNI) are
+   exempt and reported only.
+5. **Build cost.** Engine build wall time and plan size are recorded; a build over 30 minutes or a plan over
+   2 GiB for the small arms is flagged (not a fail).
+6. **CPU/GPU text.** The `_ort` CPU variant must reach p95 at most 50 ms for a 20-token query at 8
+   pinned threads (go) or at most 150 ms (conditional), matching 3.6; the GPU variant must be at least
+   2 times faster at batch 32 to justify a TensorRT plan for text.
+7. **License and ship rules** are unchanged from 3.6; they bound what ships, not what is measured.
+
+Output of the track: for each (arm, component) one row in the speed table (part 9) per precision and batch,
+and one line stating the shipped runtime (TensorRT plan, ONNX Runtime, or none).
+
+### 5.6 Optional multilingual check (S7)
+
+Not required. Cheap if the arm is already encoded: text-to-image recall@k on the public XM3600
+multilingual captions for the languages the arm advertises (EG2: 100+, Qwen3-VL-Embedding: 30+, Nemotron
+3.5: 34 text and 18 image), against the PE-Core text tower, which is, I believe, English-only
+([inference], verify in the PE repo before claiming it). Confirm the dataset license at download. A
+language that the production use does not need is dropped from the table, not argued.
+
+## 6. GPU and host scheduling protocol
+
+The host is shared: other agents and other users run jobs, GPU 2 hosts a live test stack, GPU 1 belongs to
+other users, and the CPU load average was 8 to 33 during earlier measurement sessions
+(`v070_measurement_log.md`). Rules:
+
+1. **GPU 0 only.** Every GPU command runs with `CUDA_VISIBLE_DEVICES=0`. Never use GPU 1 (other users) or GPU
+   2 (live test stack). Do not start or restart the live stack from this work.
+2. **Every GPU-0 job runs under the lock**, so jobs from different agents never overlap:
+
+```bash
+flock /mnt/nvm/scratch/locks/gpu0.lock bash $S/measured_run.sh <run_id> <command...>
+```
+
+   The lock directory exists (`/mnt/nvm/scratch/locks`). Hold the lock per job, not per session: no
+   interactive shells, no downloads, no waiting for input while holding it. Add `-w <seconds>` to give up
+   cleanly rather than queue forever, and log the wait time in the run's `notes`. This covers engine builds
+   (a build times kernels and is sensitive to a busy GPU), the VLM caption pass, latency runs and encodes.
+   CPU-only runs (ONNX Runtime CPU latency, scoring, k-NN) need no GPU lock but still record host load.
+3. **One job on GPU 0 at a time means VRAM is yours, so measure it.** Before each run assert no foreign
+   process on GPU 0: `nvidia-smi -i 0 --query-compute-apps=pid,used_memory --format=csv` must be empty at
+   start (the run fails closed otherwise).
+4. **Caption pass before benchmarks, never concurrent.** The catalog VLM (`examples/vlm/catalog.tsv`) serves
+   S3 captions on GPU 0 in its own compose project (`-p <name>`, VLM GPU set to 0), writes the captions to
+   the ledger, and is stopped before any latency run. Record the VLM id, revision and prompt. This runs
+   under the same lock.
+5. **Telemetry next to every run**, written into the run directory by `measured_run.sh`:
+   * `dmon.csv`: `nvidia-smi dmon -i 0 -s pucvmet -d 1 -o T` for the whole run (power, clocks, utilization,
+     memory, throttling); start before the command, stop after.
+   * `host_start.txt` and `host_end.txt`: `/proc/loadavg`, `uptime`, `nproc`, `free -m`, top 10 processes by CPU,
+     `nvidia-smi -i 0` full output, `nvidia-smi --query-compute-apps` list, `numactl --hardware` summary if
+     present.
+   * `host_load.csv`: `vmstat 1` for the run, so CPU contention during the run is visible.
+6. **Noisy host label.** If the 1-minute load average at start exceeds 16 (the host has 48 threads; earlier
+   sessions ran at 8 to 16 as normal), the run is stored but marked `host_load.noisy = true`. Latency and
+   throughput runs are repeated 3 times and reported as median with range, as the measurement log does; a
+   noisy run is never silently dropped and never used for a go/no-go number unless a repeat at lower load
+   agrees.
+7. **CPU latency runs** pin threads (`taskset` to a fixed core set, 8 threads) and record which cores.
+8. **Thermals/power:** read throttle reasons in `dmon.csv`; a run with throttling is flagged.
+9. **Ordering:** quality scoring (CPU, vectors on disk) is scheduled during GPU runs of other arms; GPU time
+   is spent only on encodes, builds and latency.
+
+`measured_run.sh` (to be written in `$S/`, outside the repo) does, in order: create
+`$LEDGER/runs/<run_id>/`; refuse if `nvidia-smi` shows a foreign process on GPU 0; snapshot host state; start
+`dmon` and `vmstat` in the background; run the command with `CUDA_VISIBLE_DEVICES=0`, tee stdout and stderr
+to `stdout.log`, save the exit code; stop the samplers; snapshot again; write the command line to
+`cmd.txt`. The benchmark script itself writes `metrics.json` (part 7) and fills the host fields from those
+snapshots.
+
+## 7. Metrics schema (one JSON per run)
+
+Every run, including failed and blocked ones, writes `metrics.json` into its run directory. One run is one
+(arm, component, runtime, precision, batch, input shape) cell with its repetitions. Fields marked
+nullable are `null` when not applicable; no field is omitted.
+
+```json
+{
+  "schema_version": 1,
+  "run_id": "20261030T0915_eg2-t_trt-bf16_b8_s32",
+  "started_utc": "2026-10-30T09:15:02Z",
+  "status": "ok",
+  "model": {"arm": "eg2-t", "name": "google/embeddinggemma-2", "revision": "<hf commit sha>",
+            "component": "text"},
+  "runtime": {"kind": "tensorrt", "version": "11.1.0.106", "container": "<image digest>",
+              "torch": null, "transformers": null},
+  "precision": "bf16",
+  "engine": {"build_time_s": 412.7, "plan_bytes": 0, "plan_sha256": "", "onnx_sha256": "",
+             "profile": {"min": "1x8", "opt": "8x32", "max": "32x512"},
+             "build_cmd": "", "timing_cache": true},
+  "input": {"batch": 8, "seq_len": 32, "image_px": null, "image_tokens": null, "dataset": "coco_val"},
+  "latency_ms": {"p50": 0.0, "p95": 0.0, "p99": 0.0, "mean": 0.0, "min": 0.0, "max": 0.0,
+                 "n": 200, "warmup": 3, "includes": "model_only"},
+  "preprocess_ms": {"p50": 0.0, "p95": 0.0, "p99": 0.0},
+  "throughput": {"items_per_s": 0.0, "batches_per_s": 0.0},
+  "vram_mib": {"peak_nvidia_smi": 0, "peak_torch_allocated": null, "engine_device_memory": 0},
+  "vector": {"dim": 768, "matryoshka_dim": 768, "dtype": "float32", "bytes_per_item": 3072},
+  "quality": {"dataset": "coco_val", "n_queries": 5000, "protocol": "S4",
+              "metrics": {"text_to_image_recall@5": {"value": 0.0, "ci95": [0.0, 0.0]}},
+              "parity_vs_fp32": {"cosine_mean": 0.0, "cosine_min": 0.0, "n": 1000, "nan_count": 0}},
+  "hardware": {"gpu_index": 0, "gpu_name": "NVIDIA RTX A6000", "sm": "8.6", "driver": "615.71.10",
+               "cuda": "13.x", "cpu": "2x E5-2680 v3", "cpu_threads_used": 8, "cpu_affinity": ""},
+  "host_load": {"load1_start": 0.0, "load5_start": 0.0, "load1_end": 0.0, "nproc": 48,
+                "noisy": false, "foreign_gpu_procs_at_start": 0, "gpu_lock_wait_s": 0.0},
+  "artifacts": {"dir": "runs/<run_id>", "dmon": "dmon.csv", "host": ["host_start.txt", "host_end.txt"],
+                "vmstat": "host_load.csv", "log": "stdout.log", "cmd": "cmd.txt"},
+  "commit": {"repo": "<git rev-parse HEAD>", "scripts": "<git rev-parse HEAD of eval scripts, or sha256>"},
+  "notes": ""
+}
+```
+
+Rules: `status` is one of `ok`, `failed`, `blocked`, `skipped` (with `notes` giving the reason, for
+example `skipped: hardware (fp8 needs sm_89)`); `latency_ms.includes` states whether the number is model
+only, with preprocessing, or end to end through Triton; times are wall-clock with CUDA synchronized;
+`vram_mib.peak_nvidia_smi` is the maximum of `nvidia-smi` used memory sampled during the run minus the
+pre-run baseline; vectors are stored float32 and `bytes_per_item` is for the stored dtype. The quality
+fields use the metrics of 3.4 and the bootstrap intervals of 3.6. The schema is a single file in the ledger
+(`SCHEMA.json`, JSON Schema form) and a small validator script rejects any run directory whose
+`metrics.json` does not conform, so no row reaches the write-up unvalidated.
+
+## 8. Results ledger
+
+Gitignored directory `artifacts_local/embedding_eval/` in the main checkout
+(`/mnt/nvm/repos/OpenProcessor/artifacts_local/embedding_eval/`, already covered by `.gitignore`). All
+worktrees and agents write to this one path (`LEDGER` below) so results do not scatter. Append only; never
+bulk-delete (the same rule as the bake-off outputs).
+
+```
+artifacts_local/embedding_eval/
+  SCHEMA.json                      JSON Schema for metrics.json (part 7)
+  ledger.csv                       one row per run: run_id, arm, component, runtime, precision, batch, shape,
+                                   status, p50, p95, p99, items_per_s, vram_mib, dim, headline_quality,
+                                   noisy, commit  (generated from the metrics.json files by a script)
+  runs/<run_id>/                   metrics.json, cmd.txt, stdout.log, dmon.csv, host_start.txt,
+                                   host_end.txt, host_load.csv
+  engines/<arm>/<precision>/       model.onnx(.sha256), model.plan, build.log, layers.json, timing.cache
+  captions/<vlm_id>/               VLM captions for S3 (with the prompt and revision)
+  manifests/                       dataset file lists with sha256 (public data only)
+```
+
+Large dataset downloads and encoded vectors stay in `$HOME/eval_work/data/eg2/` (not in the ledger);
+`manifests/` points at them. `<run_id>` is `YYYYMMDDTHHMM_<arm>_<runtime>-<precision>_b<batch>_<what>`.
+
+Write-up tables are generated from `ledger.csv`, never typed by hand. Templates (fill from the ledger,
+one table per section 10 scenario; `n` = repetitions, a row marked `noisy` carries a flag):
+
+Speed and cost, per (arm, component, runtime, precision):
+
+| Arm | Component | Runtime | Precision | Batch | Shape | p50 ms | p95 ms | p99 ms | Items/s | VRAM MiB | Dim | Bytes/item | Engine build s | Plan MiB | Load1 | Status |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| PE-Core | image | tensorrt | fp16 | 4 | 336 px | | | | | | 1024 | 4096 | | | | not run |
+
+Quality, per (scenario, arm, dimension):
+
+| Scenario | Dataset, n | Arm | Runtime, precision | Dim | Metric | Value | 95% CI | Parity cosine (mean / min) | Status |
+|---|---|---|---|---|---|---|---|---|---|
+| S4 text-to-image | COCO val, 5,000 | PE-Core | tensorrt, fp16 | 1024 | recall@5 | | | | not run |
+
+TensorRT track outcome, per arm:
+
+| Arm | Tier reached | Precisions passing parity | Fastest passing | Speedup vs PyTorch bf16 | Peak VRAM MiB | Ship runtime | Blocker (if any) |
+|---|---|---|---|---|---|---|---|
+| EG2-T | | | | | | | not run |
+
+## 9. One decode per image: plugging an embedder into `gpu_image_prep`
+
+Rule (owner, #40/#259/#362): an image is decoded once per request and its GPU-resident frame is reused.
+Facts from the repo: `models/gpu_image_prep/1/model.py` decodes the upload with nvJPEG into a CuPy frame
+(`im.frame`), runs the detector on a letterbox resampled from that frame, builds the PE squares with
+`kernels.resample_into(im.frame, ...)` (`_embed`), and calls `pe_image_encoder` through BLS with the
+CuPy tensor, so the pixels never go back to the host. The stored-box mode (`_embed_stored`, the reprocess
+pass) decodes once and embeds the whole frame and each stored box.
+
+Proposal for an optional second embedding (design only, to build after a go decision):
+
+1. **Add a model-specific resample step beside `_embed`, reading the same `im.frame`.** A function
+   `_embed_alt(im)` that, for the configured embedder only, derives its input geometry from the frame with
+   the existing `resample_into` kernel (bilinear, GPU): for EG2-TV an aspect-preserving resize to the token
+   budget and patchify; for the Qwen and NVIDIA arms the vendor's resize rule (a multiple-of-28 resize
+   within `max_pixels`, or tiles). Patchify, mean/std and dtype conversion happen in a GPU kernel or
+   inside the engine (UINT8 in, the trick `pe_image_encoder` uses via `export/uint8_input.py`), so the
+   input to the plan is a GPU tensor. No JPEG decode, no host round trip, no PIL.
+2. **Call the embedder plan through the same `_bls` helper**, with the frame-derived tensor, and return a new
+   optional output tensor (for example an alternate whole-frame embedding and, when requested, per-box
+   rows) in the model config. The tensors are named generically (not by vendor), declared `optional`,
+   and absent from the response when the feature is off.
+3. **Off by default means no cost**: when no embedder is configured, `_embed_alt` is not constructed, no
+   plan is loaded, no VRAM is reserved, and the response carries nothing new. A misconfigured or missing
+   embedder fails closed for that field only (the PE path is untouched, and the field's embedding state
+   reads as not computed rather than silently falling back to another model).
+4. **Fusion at the plan level**: the new vector is a new field next to `pe_embedding` (section 2.3). The
+   same frame-reuse applies to the reprocess embed pass (#259) so a backfill of the new field decodes each
+   image once, in the same pass that may refresh PE vectors, never in a second pass over the library.
+5. **Text queries** (the CPU or GPU text encoder of 5.4) need no image and are unrelated to the decode rule.
+
+Checks that prove the rule, to run as part of the track (after a prototype exists):
+
+* A counter of nvJPEG decodes per request; with the embedder on and a mixed set of 200 images, the count
+  equals the number of images, and the host-to-device copy count for pixels equals one per image.
+* Parity: embeddings from the frame-derived tensor versus the vendor reference processor (PIL path) on
+  the same 1,000 images; mean cosine at least 0.99 (resize differences are expected; DALI and cv2 versus PIL
+  differ the same way, see `dali_gpu_decode_lessons.md` section 3). Document which reference is chosen.
+* Marginal cost: ingest images/s and p99 with the embedder on versus off at the same concurrency
+  (`gpu_image_prep` two-instance configuration), plus the VRAM added per instance
+  (`GPU_MIB_PER_INSTANCE`).
+
+In the benchmark itself, quality numbers use the vendor processor (reference), the engine-only speed rows
+use pre-prepared tensors, and one end-to-end row per shipped candidate goes through the prototype above, so
+the decode-once path is measured and not assumed.
+
+## 10. Results (to be filled in at execution)
 
 One row per scenario S1 to S6 and per arm, with: date, hardware, library versions, model revision,
 dataset ids, n queries, metric values with 95 percent intervals, latency p50/p95/p99, VRAM, vector
-bytes. Then the go/no-go per placement from section 3.6 and the single recommendation.
+bytes. Generate the rows from the ledger (part 8). Then the go/no-go per placement from section 3.6 and the single recommendation.
 
 | Scenario | Arm | Result | Status |
 |---|---|---|---|
@@ -353,6 +757,8 @@ bytes. Then the go/no-go per placement from section 3.6 and the single recommend
 | S4 cross-modal | | | not run |
 | S5 clustering | | | not run |
 | S6 storage | | | not run |
+| S7 multilingual (optional) | | | not run |
+| TensorRT track (part 5) | | | not run |
 
 ## Sources
 
@@ -368,4 +774,11 @@ bytes. Then the go/no-go per placement from section 3.6 and the single recommend
 * vLLM issues: https://github.com/vllm-project/vllm/issues/60847, /60977, /63945
 * Ollama issue: https://github.com/ollama/ollama/issues/18825
 * Secondary summary (no measurements of its own): https://www.unite.ai/deepmind-debuts-embeddinggemma-2-mapping-five-modalities-into-one-space/
+* Qwen3-VL-Embedding (GitHub, 2B and 8B cards, paper): https://github.com/QwenLM/Qwen3-VL-Embedding, https://huggingface.co/Qwen/Qwen3-VL-Embedding-2B, https://arxiv.org/abs/2601.04720
+* NVIDIA Omni-Embed-Nemotron-3B (card and paper): https://huggingface.co/nvidia/omni-embed-nemotron-3b, https://arxiv.org/abs/2510.03458
+* NVIDIA llama-nemotron-embed-vl-1b-v2: https://huggingface.co/nvidia/llama-nemotron-embed-vl-1b-v2
+* NVIDIA Nemotron 3.5 Embed: https://huggingface.co/nvidia/Nemotron-3.5-Embed-1B-BF16, https://huggingface.co/nvidia/Nemotron-3.5-Embed-8B-BF16, https://huggingface.co/blog/nvidia/nemotron-retriever-world-class-agentic-retrieval, NIM: https://catalog.ngc.nvidia.com/orgs/nim/nvidia/containers/nemotron-embed/-
+* TensorRT 10 to 11 trtexec migration (no precision flags, strong typing): https://docs.nvidia.com/deeplearning/tensorrt/latest/api/migration/tensorrt-10x-to-11x-trtexec.html
+* FP8 needs Ada or newer: https://developer.nvidia.com/blog/model-quantization-turn-fp8-checkpoints-into-high-performance-inference-engines-with-nvidia-tensorrt/
+* Gemma-family fp16 overflow: https://github.com/microsoft/onnxruntime/issues/26732, https://github.com/huggingface/transformers/pull/37226
 * Issue: https://github.com/davidamacey/OpenProcessor/issues/347

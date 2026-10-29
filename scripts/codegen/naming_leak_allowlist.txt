@@ -39,6 +39,7 @@ tests/installer/installer_harness.py:gemma # fake images.lock for the installer 
 tests/installer/shims/docker:gemma # test double echoes the compose file's public vLLM gemma4 image default, not a leak
 tests/installer/test_gpu_plan.py:gemma # asserts the public, tested gemma-4-e4b catalog entry is picked (installer plan 2.2), not a leak
 docs/research/embedding_model_eval_plan.md:(?i)gemma # public Google model name (EmbeddingGemma 2, Apache-2.0, issue #347) in this one research note only; generic plumbing must not hardcode it, and any other spelling in other files still fails
+docs/research/embedding_model_eval_plan.md:/mnt/nvm/(scratch/locks|repos/OpenProcessor/artifacts_local) # the shared GPU 0 lock file and the gitignored results ledger of the embedding evaluation protocol: host-local paths an executing agent must type, in this one research note only (issue #347)
 tests/installer/test_setup_env_and_flags.py:gemma # asserts VLM_IMAGE equals the lock's public vlm_gemma4 key (installer plan 2.2), not a leak
 
 # The retired-env guard and its test spell every retired name on purpose:
