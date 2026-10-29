@@ -13,6 +13,7 @@ on what it was measured, and every result that matters has a reproduce command.
 |---|---|
 | [v070_measurement_log.md](v070_measurement_log.md) | The running 0.7.0 log: cluster pass size ladder to 1M crops, ingest and decode-instance sweeps, NVMe versus HDD, contention, search latency, live checks of the embedding fixes. Each section has setup, method, results and reproduce commands. |
 | [cluster_eval_baseline.md](cluster_eval_baseline.md) | First cluster-quality baseline from the evaluation harness on public COCO crops. |
+| [installer_drive_log.md](installer_drive_log.md) | Installer drives (fresh, re-run, interrupt, control-plane-only, branch mode, upgrade and rollback, edge cases): results and the fixes they led to. |
 | [ingest_concurrency_tuning.md](ingest_concurrency_tuning.md) | Batch and concurrency sweep for bulk ingest. |
 | [pe_encoder_batching_benchmark.md](pe_encoder_batching_benchmark.md) | Batched TensorRT PE-Core-L14-336: parity and throughput. |
 | [detector_quantization_results.md](detector_quantization_results.md) | Detector precision, runtime and hardware matrix. |
@@ -35,7 +36,7 @@ on what it was measured, and every result that matters has a reproduce command.
 | [triton_deep_research_2026-09.md](triton_deep_research_2026-09.md) | External references, production lessons and a performance architecture review for Triton-based vision serving (basis for #40). |
 | [dali_gpu_decode_lessons.md](dali_gpu_decode_lessons.md) | GPU decode inside Triton: traps and lessons. |
 | [vlm_serving_sizing.md](vlm_serving_sizing.md) | vLLM sizing, flag recon, profile sweep and VLM-versus-VLM comparison. |
-| `embedding_model_eval_plan.md` | Evaluation design for an optional multimodal embedding model and reference arms, with a TensorRT track (added with #347). |
+| [embedding_model_eval_plan.md](embedding_model_eval_plan.md) | Evaluation design for an optional multimodal embedding model and reference arms (LLM-based arms served, encoders on TensorRT), scheduling protocol and metrics schema (#347). |
 
 ## Long-term
 
