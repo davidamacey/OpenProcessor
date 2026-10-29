@@ -46,9 +46,15 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
 
+def image_name(row: dict[str, Any]) -> str:
+    """File name the annotations are keyed by: the uploader's identifier when there is one."""
+    return str(row.get('source_identifier') or row['image_path']).rsplit('/', 1)[-1]
+
+
 def load_bundle(stem: Path, labels: Path, coco_gt: Path) -> Bundle:
     """``stem.npy`` and ``stem.meta.jsonl`` from ``fetch_vectors``; ``labels`` rows carry
-    ``item_id`` (the crop id), ``label`` and ``stratum``; ``coco_gt`` is the public annotation
+    ``item_id`` (the crop id), ``label``, ``stratum`` and optionally ``group`` (the source image;
+    the image id when absent); ``coco_gt`` is the public annotation
     file, used only for the pixel size of each source image.
     """
     vectors = l2_normalize(np.load(stem.with_suffix('.npy')))
@@ -61,7 +67,7 @@ def load_bundle(stem: Path, labels: Path, coco_gt: Path) -> Bundle:
     rows = [i for i, m in enumerate(meta) if m['crop_id'] in label_of]
     aspect, side = [], []
     for i in rows:
-        w, h = dims[meta[i]['image_path'].rsplit('/', 1)[-1]]
+        w, h = dims[image_name(meta[i])]
         x1, y1, x2, y2 = meta[i]['bbox_norm']
         bw, bh = max(1e-6, (x2 - x1) * w), max(1e-6, (y2 - y1) * h)
         aspect.append(bw / bh)
@@ -72,7 +78,7 @@ def load_bundle(stem: Path, labels: Path, coco_gt: Path) -> Bundle:
         labelled=np.array(rows, dtype=np.int64),
         truth=np.array([label_of[meta[i]['crop_id']]['label'] for i in rows]),
         stratum=np.array([label_of[meta[i]['crop_id']]['stratum'] for i in rows]),
-        group=[str(meta[i]['image_id']) for i in rows],
+        group=[str(label_of[meta[i]['crop_id']].get('group', meta[i]['image_id'])) for i in rows],
         aspect=np.array(aspect),
         side=np.array(side),
     )

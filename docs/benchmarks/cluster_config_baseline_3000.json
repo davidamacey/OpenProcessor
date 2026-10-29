@@ -1,0 +1,902 @@
+{
+ "measured": "2026-10-29",
+ "set": "cluster_eval_3000 (944 images, 3,961 crops, 2,950 labelled, 86 classes)",
+ "split": "scripts/datasets/manifests/splits/cluster_eval_3000.json (calibration 1,456 / heldout 1,494 labelled crops)",
+ "host_load_average_during_runs": "5 to 44 (shared host; no timing claimed)",
+ "raw": "artifacts_local/cluster_search/w0b/e1_3000/ (gitignored)",
+ "production_partition_scorecard_3_identical_reps": {
+  "full": {
+   "items": 2950,
+   "clusters": 485,
+   "mixed_clusters": 228,
+   "pair_precision": 0.6771,
+   "pair_recall": 0.0214,
+   "bcubed_precision": 0.7322,
+   "bcubed_recall": 0.1406,
+   "bcubed_f": 0.2358,
+   "ami": 0.4114,
+   "unassigned_fraction": 0.0,
+   "minority_item_rate": 0.2081
+  },
+  "calibration": {
+   "items": 1456,
+   "clusters": 364,
+   "mixed_clusters": 129,
+   "pair_precision": 0.6759,
+   "pair_recall": 0.0244,
+   "bcubed_precision": 0.7667,
+   "bcubed_recall": 0.1659,
+   "bcubed_f": 0.2728,
+   "ami": 0.3828,
+   "unassigned_fraction": 0.0,
+   "minority_item_rate": 0.1834
+  },
+  "heldout": {
+   "items": 1494,
+   "clusters": 377,
+   "mixed_clusters": 133,
+   "pair_precision": 0.7157,
+   "pair_recall": 0.0272,
+   "bcubed_precision": 0.7836,
+   "bcubed_recall": 0.1864,
+   "bcubed_f": 0.3011,
+   "ami": 0.4025,
+   "unassigned_fraction": 0.0,
+   "minority_item_rate": 0.1747
+  }
+ },
+ "e1_fold1_cut_on_calibration_scored_on_heldout": {
+  "ivf_current(K=min(512,n//6))": {
+   "0.0": {
+    "parameter": "fixed",
+    "calibration_precision": 0.7063,
+    "calibration_recall": 0.0241,
+    "heldout_precision": 0.7337,
+    "heldout_recall": 0.0291,
+    "heldout_unassigned": 0.0
+   }
+  },
+  "minibatch_kmeans_2b": {
+   "0.0": {
+    "parameter": "fixed",
+    "calibration_precision": 0.2038,
+    "calibration_recall": 0.2589,
+    "heldout_precision": 0.1865,
+    "heldout_recall": 0.2735,
+    "heldout_unassigned": 0.0
+   }
+  },
+  "ahc_average": {
+   "0.05": {
+    "parameter": 0.307,
+    "calibration_precision": 0.4142,
+    "calibration_recall": 0.0725,
+    "heldout_precision": 0.3994,
+    "heldout_recall": 0.0732,
+    "heldout_unassigned": 0.0
+   },
+   "0.1": {
+    "parameter": 0.3612,
+    "calibration_precision": 0.3521,
+    "calibration_recall": 0.1329,
+    "heldout_precision": 0.3299,
+    "heldout_recall": 0.1264,
+    "heldout_unassigned": 0.0
+   },
+   "0.15": {
+    "parameter": 0.3814,
+    "calibration_precision": 0.2832,
+    "calibration_recall": 0.1602,
+    "heldout_precision": 0.2663,
+    "heldout_recall": 0.1514,
+    "heldout_unassigned": 0.0
+   },
+   "0.2": {
+    "parameter": 0.4102,
+    "calibration_precision": 0.2571,
+    "calibration_recall": 0.2309,
+    "heldout_precision": 0.2576,
+    "heldout_recall": 0.2598,
+    "heldout_unassigned": 0.0
+   },
+   "0.3": {
+    "parameter": 0.4605,
+    "calibration_precision": 0.1997,
+    "calibration_recall": 0.3735,
+    "heldout_precision": 0.2009,
+    "heldout_recall": 0.3868,
+    "heldout_unassigned": 0.0
+   },
+   "0.5": {
+    "parameter": 0.5226,
+    "calibration_precision": 0.1608,
+    "calibration_recall": 0.5109,
+    "heldout_precision": 0.1676,
+    "heldout_recall": 0.5214,
+    "heldout_unassigned": 0.0
+   }
+  },
+  "ahc_complete": {
+   "0.05": {
+    "parameter": 0.5204,
+    "calibration_precision": 0.4243,
+    "calibration_recall": 0.0598,
+    "heldout_precision": 0.3949,
+    "heldout_recall": 0.0745,
+    "heldout_unassigned": 0.0
+   },
+   "0.1": {
+    "parameter": 0.622,
+    "calibration_precision": 0.3086,
+    "calibration_recall": 0.1036,
+    "heldout_precision": 0.3102,
+    "heldout_recall": 0.1276,
+    "heldout_unassigned": 0.0
+   },
+   "0.15": {
+    "parameter": 0.7621,
+    "calibration_precision": 0.1997,
+    "calibration_recall": 0.2545,
+    "heldout_precision": 0.1987,
+    "heldout_recall": 0.271,
+    "heldout_unassigned": 0.0
+   },
+   "0.2": {
+    "parameter": 0.7621,
+    "calibration_precision": 0.1997,
+    "calibration_recall": 0.2545,
+    "heldout_precision": 0.1987,
+    "heldout_recall": 0.271,
+    "heldout_unassigned": 0.0
+   },
+   "0.3": null,
+   "0.5": null
+  },
+  "leiden_cpm_mknn30": {
+   "0.05": {
+    "parameter": 0.05,
+    "calibration_precision": 0.6251,
+    "calibration_recall": 0.0557,
+    "heldout_precision": 0.6373,
+    "heldout_recall": 0.0659,
+    "heldout_unassigned": 0.0368
+   },
+   "0.1": null,
+   "0.15": null,
+   "0.2": null,
+   "0.3": null,
+   "0.5": null
+  },
+  "ecg_mknn30(once)": {
+   "0.0": {
+    "parameter": "fixed",
+    "calibration_precision": 0.4191,
+    "calibration_recall": 0.2101,
+    "heldout_precision": 0.3756,
+    "heldout_recall": 0.2,
+    "heldout_unassigned": 0.0107
+   }
+  }
+ },
+ "e1_heldout_curves": {
+  "ahc_average": [
+   {
+    "parameter": 0.1843,
+    "heldout_precision": 0.8322,
+    "heldout_recall": 0.0135,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.1869,
+    "heldout_precision": 0.8285,
+    "heldout_recall": 0.0138,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.1898,
+    "heldout_precision": 0.8185,
+    "heldout_recall": 0.0141,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.1916,
+    "heldout_precision": 0.8168,
+    "heldout_recall": 0.0143,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.1938,
+    "heldout_precision": 0.8113,
+    "heldout_recall": 0.0145,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.1957,
+    "heldout_precision": 0.786,
+    "heldout_recall": 0.0158,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.1976,
+    "heldout_precision": 0.7884,
+    "heldout_recall": 0.0161,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.1997,
+    "heldout_precision": 0.7842,
+    "heldout_recall": 0.0162,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.202,
+    "heldout_precision": 0.7504,
+    "heldout_recall": 0.0168,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2043,
+    "heldout_precision": 0.7454,
+    "heldout_recall": 0.0171,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2067,
+    "heldout_precision": 0.7481,
+    "heldout_recall": 0.0175,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2087,
+    "heldout_precision": 0.7529,
+    "heldout_recall": 0.018,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2116,
+    "heldout_precision": 0.6958,
+    "heldout_recall": 0.0192,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2149,
+    "heldout_precision": 0.7022,
+    "heldout_recall": 0.0199,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2181,
+    "heldout_precision": 0.6962,
+    "heldout_recall": 0.0205,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2211,
+    "heldout_precision": 0.7114,
+    "heldout_recall": 0.0222,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2236,
+    "heldout_precision": 0.7086,
+    "heldout_recall": 0.0227,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2259,
+    "heldout_precision": 0.7073,
+    "heldout_recall": 0.0235,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2281,
+    "heldout_precision": 0.6193,
+    "heldout_recall": 0.025,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2312,
+    "heldout_precision": 0.6169,
+    "heldout_recall": 0.0253,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2338,
+    "heldout_precision": 0.5939,
+    "heldout_recall": 0.0263,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2366,
+    "heldout_precision": 0.6056,
+    "heldout_recall": 0.0277,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2397,
+    "heldout_precision": 0.6039,
+    "heldout_recall": 0.0281,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2429,
+    "heldout_precision": 0.6167,
+    "heldout_recall": 0.0301,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.245,
+    "heldout_precision": 0.6218,
+    "heldout_recall": 0.0328,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2475,
+    "heldout_precision": 0.6198,
+    "heldout_recall": 0.0362,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2506,
+    "heldout_precision": 0.5924,
+    "heldout_recall": 0.0376,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2543,
+    "heldout_precision": 0.5944,
+    "heldout_recall": 0.0381,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.258,
+    "heldout_precision": 0.5652,
+    "heldout_recall": 0.039,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2612,
+    "heldout_precision": 0.5455,
+    "heldout_recall": 0.0393,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2649,
+    "heldout_precision": 0.464,
+    "heldout_recall": 0.0412,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2686,
+    "heldout_precision": 0.4637,
+    "heldout_recall": 0.0415,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2729,
+    "heldout_precision": 0.3948,
+    "heldout_recall": 0.0504,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2758,
+    "heldout_precision": 0.385,
+    "heldout_recall": 0.0523,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2813,
+    "heldout_precision": 0.3845,
+    "heldout_recall": 0.0529,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2852,
+    "heldout_precision": 0.3866,
+    "heldout_recall": 0.0536,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2886,
+    "heldout_precision": 0.3833,
+    "heldout_recall": 0.0591,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2937,
+    "heldout_precision": 0.3874,
+    "heldout_recall": 0.0613,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.2974,
+    "heldout_precision": 0.3927,
+    "heldout_recall": 0.0631,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.3026,
+    "heldout_precision": 0.391,
+    "heldout_recall": 0.0683,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.307,
+    "heldout_precision": 0.3994,
+    "heldout_recall": 0.0732,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.3139,
+    "heldout_precision": 0.3847,
+    "heldout_recall": 0.074,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.3194,
+    "heldout_precision": 0.3821,
+    "heldout_recall": 0.0817,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.3255,
+    "heldout_precision": 0.3309,
+    "heldout_recall": 0.0979,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.3312,
+    "heldout_precision": 0.3383,
+    "heldout_recall": 0.1034,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.3394,
+    "heldout_precision": 0.3221,
+    "heldout_recall": 0.105,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.3462,
+    "heldout_precision": 0.3168,
+    "heldout_recall": 0.11,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.3517,
+    "heldout_precision": 0.3281,
+    "heldout_recall": 0.1192,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.3612,
+    "heldout_precision": 0.3299,
+    "heldout_recall": 0.1264,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.3702,
+    "heldout_precision": 0.2778,
+    "heldout_recall": 0.1431,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.3814,
+    "heldout_precision": 0.2663,
+    "heldout_recall": 0.1514,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.3895,
+    "heldout_precision": 0.2549,
+    "heldout_recall": 0.1564,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.4008,
+    "heldout_precision": 0.2656,
+    "heldout_recall": 0.1709,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.4102,
+    "heldout_precision": 0.2576,
+    "heldout_recall": 0.2598,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.425,
+    "heldout_precision": 0.2,
+    "heldout_recall": 0.2925,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.4379,
+    "heldout_precision": 0.1894,
+    "heldout_recall": 0.3332,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.4605,
+    "heldout_precision": 0.2009,
+    "heldout_recall": 0.3868,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.4872,
+    "heldout_precision": 0.1589,
+    "heldout_recall": 0.4127,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.5226,
+    "heldout_precision": 0.1676,
+    "heldout_recall": 0.5214,
+    "heldout_unassigned": 0.0
+   },
+   {
+    "parameter": 0.593,
+    "heldout_precision": 0.1431,
+    "heldout_recall": 0.7708,
+    "heldout_unassigned": 0.0
+   }
+  ],
+  "leiden_cpm_mknn30": [
+   {
+    "parameter": 0.02,
+    "heldout_precision": 0.5196,
+    "heldout_recall": 0.0873,
+    "heldout_unassigned": 0.0254
+   },
+   {
+    "parameter": 0.05,
+    "heldout_precision": 0.6373,
+    "heldout_recall": 0.0659,
+    "heldout_unassigned": 0.0368
+   },
+   {
+    "parameter": 0.1,
+    "heldout_precision": 0.7066,
+    "heldout_recall": 0.054,
+    "heldout_unassigned": 0.0469
+   },
+   {
+    "parameter": 0.2,
+    "heldout_precision": 0.7576,
+    "heldout_recall": 0.0418,
+    "heldout_unassigned": 0.073
+   },
+   {
+    "parameter": 0.3,
+    "heldout_precision": 0.7901,
+    "heldout_recall": 0.0364,
+    "heldout_unassigned": 0.1098
+   },
+   {
+    "parameter": 0.4,
+    "heldout_precision": 0.7927,
+    "heldout_recall": 0.031,
+    "heldout_unassigned": 0.1365
+   },
+   {
+    "parameter": 0.5,
+    "heldout_precision": 0.8274,
+    "heldout_recall": 0.0278,
+    "heldout_unassigned": 0.1714
+   },
+   {
+    "parameter": 0.6,
+    "heldout_precision": 0.8473,
+    "heldout_recall": 0.0256,
+    "heldout_unassigned": 0.1914
+   },
+   {
+    "parameter": 0.7,
+    "heldout_precision": 0.8485,
+    "heldout_recall": 0.0221,
+    "heldout_unassigned": 0.2062
+   },
+   {
+    "parameter": 0.8,
+    "heldout_precision": 0.8342,
+    "heldout_recall": 0.0183,
+    "heldout_unassigned": 0.2323
+   },
+   {
+    "parameter": 0.9,
+    "heldout_precision": 0.8594,
+    "heldout_recall": 0.0162,
+    "heldout_unassigned": 0.2697
+   },
+   {
+    "parameter": 1.0,
+    "heldout_precision": 0.8574,
+    "heldout_recall": 0.013,
+    "heldout_unassigned": 0.3922
+   },
+   {
+    "parameter": 1.2,
+    "heldout_precision": 0.9448,
+    "heldout_recall": 0.0015,
+    "heldout_unassigned": 0.909
+   },
+   {
+    "parameter": 1.5,
+    "heldout_precision": null,
+    "heldout_recall": 0.0,
+    "heldout_unassigned": 1.0
+   }
+  ]
+ },
+ "e1_row_permutation_ari": {
+  "ivf_current_exported_order": 0.3242017030725166,
+  "ivf_current_sorted_by_id(#372 fix)": 1.0,
+  "minibatch_kmeans_2b": 0.5527974302875783,
+  "ahc_average_fixed_cut": 1.0,
+  "leiden_cpm_fraction_0.3": 0.6749590748147978,
+  "ecg_once": 0.6407985530934296
+ },
+ "e1_leiden_seed_ari": [
+  0.6417724334586825,
+  0.6711082133111067,
+  0.6883635242499971
+ ],
+ "arm_scorecards_heldout": {
+  "ahc_average_0.307": {
+   "items": 1494,
+   "clusters": 347,
+   "mixed_clusters": 84,
+   "pair_precision": 0.3994,
+   "pair_recall": 0.0732,
+   "bcubed_precision": 0.7406,
+   "bcubed_recall": 0.2849,
+   "bcubed_f": 0.4115,
+   "ami": 0.4564,
+   "unassigned_fraction": 0.0,
+   "minority_item_rate": 0.2021
+  },
+  "ahc_average_0.41": {
+   "items": 1494,
+   "clusters": 141,
+   "mixed_clusters": 53,
+   "pair_precision": 0.2576,
+   "pair_recall": 0.2598,
+   "bcubed_precision": 0.5202,
+   "bcubed_recall": 0.4861,
+   "bcubed_f": 0.5026,
+   "ami": 0.5001,
+   "unassigned_fraction": 0.0,
+   "minority_item_rate": 0.3594
+  },
+  "ahc_complete_0.762": {
+   "items": 1494,
+   "clusters": 21,
+   "mixed_clusters": 19,
+   "pair_precision": 0.1987,
+   "pair_recall": 0.271,
+   "bcubed_precision": 0.2726,
+   "bcubed_recall": 0.5377,
+   "bcubed_f": 0.3618,
+   "ami": 0.4281,
+   "unassigned_fraction": 0.0,
+   "minority_item_rate": 0.5797
+  },
+  "ecg": {
+   "items": 1494,
+   "clusters": 26,
+   "mixed_clusters": 24,
+   "pair_precision": 0.3756,
+   "pair_recall": 0.2,
+   "bcubed_precision": 0.4158,
+   "bcubed_recall": 0.5187,
+   "bcubed_f": 0.4616,
+   "ami": 0.5468,
+   "unassigned_fraction": 0.0107,
+   "minority_item_rate": 0.4709
+  },
+  "ivf": {
+   "items": 1494,
+   "clusters": 374,
+   "mixed_clusters": 135,
+   "pair_precision": 0.7337,
+   "pair_recall": 0.0291,
+   "bcubed_precision": 0.7923,
+   "bcubed_recall": 0.1868,
+   "bcubed_f": 0.3023,
+   "ami": 0.4155,
+   "unassigned_fraction": 0.0,
+   "minority_item_rate": 0.166
+  },
+  "kmeans2b": {
+   "items": 1494,
+   "clusters": 8,
+   "mixed_clusters": 8,
+   "pair_precision": 0.1865,
+   "pair_recall": 0.2735,
+   "bcubed_precision": 0.2026,
+   "bcubed_recall": 0.5122,
+   "bcubed_f": 0.2904,
+   "ami": 0.3473,
+   "unassigned_fraction": 0.0,
+   "minority_item_rate": 0.6814
+  },
+  "leiden_0.05": {
+   "items": 1494,
+   "clusters": 164,
+   "mixed_clusters": 97,
+   "pair_precision": 0.6373,
+   "pair_recall": 0.0659,
+   "bcubed_precision": 0.6958,
+   "bcubed_recall": 0.354,
+   "bcubed_f": 0.4692,
+   "ami": 0.5169,
+   "unassigned_fraction": 0.0368,
+   "minority_item_rate": 0.2432
+  },
+  "leiden_0.3": {
+   "items": 1494,
+   "clusters": 314,
+   "mixed_clusters": 99,
+   "pair_precision": 0.7901,
+   "pair_recall": 0.0364,
+   "bcubed_precision": 0.8396,
+   "bcubed_recall": 0.251,
+   "bcubed_f": 0.3864,
+   "ami": 0.4304,
+   "unassigned_fraction": 0.1098,
+   "minority_item_rate": 0.1459
+  }
+ },
+ "e5_fold1": {
+  "detector_confidence<0.5": {
+   "subset_crops": 1351,
+   "subset_labelled": 707,
+   "detector_class_agrees_with_label": 0.7242,
+   "methods": {
+    "global_average_ahc": {
+     "0.15": {
+      "parameter": 0.2961,
+      "calibration_precision": 0.2124,
+      "calibration_recall": 0.1508,
+      "heldout_precision": 0.2013,
+      "heldout_recall": 0.1727,
+      "heldout_unassigned": 0.0
+     },
+     "0.2": {
+      "parameter": 0.3618,
+      "calibration_precision": 0.2115,
+      "calibration_recall": 0.2976,
+      "heldout_precision": 0.164,
+      "heldout_recall": 0.2663,
+      "heldout_unassigned": 0.0
+     },
+     "0.3": {
+      "parameter": 0.3707,
+      "calibration_precision": 0.2036,
+      "calibration_recall": 0.3016,
+      "heldout_precision": 0.1609,
+      "heldout_recall": 0.3081,
+      "heldout_unassigned": 0.0
+     },
+     "0.5": {
+      "parameter": 0.4217,
+      "calibration_precision": 0.1266,
+      "calibration_recall": 0.5036,
+      "heldout_precision": 0.1379,
+      "heldout_recall": 0.4632,
+      "heldout_unassigned": 0.0
+     }
+    },
+    "within_detector_class_average_ahc": {
+     "0.15": {
+      "parameter": 0.3707,
+      "calibration_precision": 0.9197,
+      "calibration_recall": 0.4618,
+      "heldout_precision": 0.9659,
+      "heldout_recall": 0.4214,
+      "heldout_unassigned": 0.0
+     },
+     "0.2": {
+      "parameter": 0.3707,
+      "calibration_precision": 0.9197,
+      "calibration_recall": 0.4618,
+      "heldout_precision": 0.9659,
+      "heldout_recall": 0.4214,
+      "heldout_unassigned": 0.0
+     },
+     "0.3": {
+      "parameter": 0.3707,
+      "calibration_precision": 0.9197,
+      "calibration_recall": 0.4618,
+      "heldout_precision": 0.9659,
+      "heldout_recall": 0.4214,
+      "heldout_unassigned": 0.0
+     },
+     "0.5": {
+      "parameter": 0.3938,
+      "calibration_precision": 0.9136,
+      "calibration_recall": 0.5213,
+      "heldout_precision": 0.96,
+      "heldout_recall": 0.4446,
+      "heldout_unassigned": 0.0
+     }
+    }
+   }
+  },
+  "detector_confidence<0.7": {
+   "subset_crops": 2136,
+   "subset_labelled": 1282,
+   "detector_class_agrees_with_label": 0.7293,
+   "methods": {
+    "global_average_ahc": {
+     "0.15": {
+      "parameter": 0.3193,
+      "calibration_precision": 0.2654,
+      "calibration_recall": 0.1866,
+      "heldout_precision": 0.2344,
+      "heldout_recall": 0.2187,
+      "heldout_unassigned": 0.0
+     },
+     "0.2": {
+      "parameter": 0.3512,
+      "calibration_precision": 0.2587,
+      "calibration_recall": 0.2181,
+      "heldout_precision": 0.2318,
+      "heldout_recall": 0.229,
+      "heldout_unassigned": 0.0
+     },
+     "0.3": {
+      "parameter": 0.3631,
+      "calibration_precision": 0.2274,
+      "calibration_recall": 0.3144,
+      "heldout_precision": 0.2104,
+      "heldout_recall": 0.2603,
+      "heldout_unassigned": 0.0
+     },
+     "0.5": {
+      "parameter": 0.4225,
+      "calibration_precision": 0.1478,
+      "calibration_recall": 0.6323,
+      "heldout_precision": 0.1721,
+      "heldout_recall": 0.5964,
+      "heldout_unassigned": 0.0
+     }
+    },
+    "within_detector_class_average_ahc": {
+     "0.15": {
+      "parameter": 0.3135,
+      "calibration_precision": 0.9341,
+      "calibration_recall": 0.1848,
+      "heldout_precision": 0.9561,
+      "heldout_recall": 0.1876,
+      "heldout_unassigned": 0.0
+     },
+     "0.2": {
+      "parameter": 0.3512,
+      "calibration_precision": 0.9325,
+      "calibration_recall": 0.3517,
+      "heldout_precision": 0.9688,
+      "heldout_recall": 0.3462,
+      "heldout_unassigned": 0.0
+     },
+     "0.3": {
+      "parameter": 0.3512,
+      "calibration_precision": 0.9325,
+      "calibration_recall": 0.3517,
+      "heldout_precision": 0.9688,
+      "heldout_recall": 0.3462,
+      "heldout_unassigned": 0.0
+     },
+     "0.5": {
+      "parameter": 0.4396,
+      "calibration_precision": 0.9284,
+      "calibration_recall": 0.7117,
+      "heldout_precision": 0.9603,
+      "heldout_recall": 0.7923,
+      "heldout_unassigned": 0.0
+     }
+    }
+   }
+  }
+ }
+}
