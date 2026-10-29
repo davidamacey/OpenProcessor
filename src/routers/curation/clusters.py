@@ -9,7 +9,7 @@ from fastapi import HTTPException, Query
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, items_index, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
-from src.schemas.curation.clusters import ClusterListResponse
+from src.schemas.curation.clusters import ClusterFacets, ClusterListResponse
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.services.curation.cluster_cards import (
     ClusterListParams,
@@ -18,6 +18,7 @@ from src.services.curation.cluster_cards import (
     fetch_representatives,
     list_cluster_cards,
 )
+from src.services.curation.cluster_facets import cluster_facets
 from src.services.curation.cluster_purity import (
     PROMOTE_MIN_MEMBERS,
     PROMOTE_MIN_PRECISION,
@@ -114,6 +115,19 @@ async def list_clusters(
             needs_review=needs_review,
         ),
     )
+
+
+@router.get(
+    '/clusters/{cluster_id}/facets',
+    response_model=None,
+    responses={200: {'model': ClusterFacets}},
+)
+async def cluster_facets_endpoint(cluster_id: int, opensearch: OpenSearchDep) -> ClusterFacets:
+    """Counts of one cluster's members by detector class, class source, validation,
+    review tab and detector confidence, for filter chips. Each count is the ``total`` of
+    the filtered ``GET /crops`` call named in :class:`ClusterFacets`. A cluster with no
+    members answers zeros."""
+    return await cluster_facets(opensearch, cluster_id)
 
 
 @router.get('/clusters/representatives')

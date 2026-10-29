@@ -139,7 +139,7 @@ def _candidate_dominant_name(cls_buckets: list[dict[str, Any]], labelled: int) -
     return None
 
 
-def _review_aggs() -> dict[str, Any]:
+def review_aggs() -> dict[str, Any]:
     """One ``filters`` agg holding a filter per tab in :data:`CLUSTER_REVIEW_TABS`,
     built by the same clause builder ``GET /review/{tab}`` uses (holdout hidden,
     as there)."""
@@ -197,7 +197,7 @@ def aggregation_body(params: ClusterListParams) -> dict[str, Any]:
         'latest_update': {'max': {'field': 'updated_at'}},
         'detector_top': {'terms': {'field': 'detector_class_name', 'size': 1}},
         'detector_conf': {'avg': {'field': 'detector_confidence'}},
-        **_review_aggs(),
+        **review_aggs(),
     }
     terms = {
         'terms': {'field': 'cluster_id', 'size': params.max_clusters, 'order': {'_count': 'desc'}},

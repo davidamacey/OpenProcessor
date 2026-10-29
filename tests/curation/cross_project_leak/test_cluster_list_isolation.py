@@ -53,3 +53,24 @@ def test_cluster_list_serves_only_the_bound_projects_data(leak_env: LeakEnv, slu
     assert touched, 'the route reached OpenSearch'
     assert touched <= own, f'touched foreign indexes: {touched - own}'
     assert {bound for bound, *_ in leak_env.accesses} == {slug}
+
+
+@pytest.mark.parametrize('slug', SLUGS)
+def test_cluster_facets_serve_only_the_bound_projects_data(leak_env: LeakEnv, slug: str) -> None:
+    client = TestClient(leak_env.app, raise_server_exceptions=False)
+    leak_env.accesses.clear()
+
+    resp = client.get(f'{SCOPED.format(project=slug)}/clusters/1/facets')
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body['total'] > 0, 'the seeded project has members in cluster 1'
+    text = json.dumps(body)
+    for other in (s for s in SLUGS if s != slug):
+        assert CLASS_NAMES[other] not in text
+        assert f'{other}-item' not in text
+    own = {str(i) for i in leak_env.records[slug].resources.indexes.values()}
+    touched = {idx for _b, _m, _u, idx in leak_env.accesses if idx} - {'op_global_configs'}
+    assert touched
+    assert touched <= own, f'touched foreign indexes: {touched - own}'
+    assert {bound for bound, *_ in leak_env.accesses} == {slug}

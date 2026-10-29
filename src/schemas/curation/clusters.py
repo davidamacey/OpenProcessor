@@ -107,3 +107,50 @@ class ClusterListResponse(TypedDict):
             )
         ),
     ]
+
+
+class FacetCount(TypedDict):
+    value: str
+    count: int
+
+
+class ValidationCounts(TypedDict):
+    validated: int
+    unvalidated: int
+
+
+class ConfidenceBin(TypedDict):
+    min: Annotated[float, Field(description='Send as `detector_conf_min` (inclusive).')]
+    max: Annotated[
+        float | None,
+        Field(
+            description='Send as `detector_conf_max` (exclusive); null on the last bin: no upper bound.'
+        ),
+    ]
+    count: int
+
+
+class ClusterFacets(TypedDict):
+    """What a cluster's members look like, to render filter chips with counts.
+
+    Every count is the ``total`` of the matching filtered ``GET /crops`` call:
+    ``detector_classes[].value`` is ``detector_class_name``, ``class_sources[].value`` is
+    ``class_source``, ``validation`` is ``label_validated`` true or false,
+    ``review_tabs[tab]`` is ``review_tab``, and a ``detector_confidence`` bin is
+    ``detector_conf_min`` / ``detector_conf_max``.
+    """
+
+    cluster_id: int
+    total: Annotated[
+        int, Field(description='Members, without the test holdout and excluded items.')
+    ]
+    detector_classes: Annotated[list[FacetCount], Field(description='Top 20 by count.')]
+    class_sources: list[FacetCount]
+    validation: ValidationCounts
+    review_tabs: dict[str, int]
+    detector_confidence: Annotated[
+        list[ConfidenceBin], Field(description='Ten fixed bins of 0.1; members with a confidence.')
+    ]
+    detector_confidence_missing: Annotated[
+        int, Field(description='Members with no detector confidence (in no bin).')
+    ]

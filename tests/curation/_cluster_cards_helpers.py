@@ -71,4 +71,21 @@ async def cards_by_id(*buckets: dict[str, Any], **over: Any) -> dict[int, dict[s
     return {c['cluster_id']: c for c in resp['items']}
 
 
-__all__ = ['bucket', 'cards_by_id', 'list_cards', 'os_returning', 'params']
+def curation_client(fake: Any, monkeypatch: Any) -> Any:
+    """The real curation routers over ``fake`` (a query-capable OpenSearch double)."""
+    from _curation_app import mount_curation_routers
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from src.routers.curation import _raw_opensearch_dep, router as curation_router
+
+    monkeypatch.setattr(
+        'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
+    )
+    app = FastAPI()
+    mount_curation_routers(app, curation_router)
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
+    return TestClient(app)
+
+
+__all__ = ['bucket', 'cards_by_id', 'curation_client', 'list_cards', 'os_returning', 'params']
