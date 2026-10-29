@@ -35,6 +35,7 @@ from src.services.config_store.profile_issues import BYPASSABLE_CODES
 if TYPE_CHECKING:
     from src.schemas.curation.config_common import ValidationIssue, ValidationReport
     from src.services.config_store.profile_dependency_checks import (
+        ModelConfigFn,
         RepositoryIndexFn,
         SegmenterHealthFn,
     )
@@ -47,6 +48,7 @@ async def validate_profile(
     existing_names: frozenset[str] = frozenset(),
     for_activation: bool = False,
     get_repository_index: RepositoryIndexFn | None = None,
+    get_model_config: ModelConfigFn | None = None,
     segmenter_health: SegmenterHealthFn | None = None,
     active_pack: Any | None = None,
     class_names: frozenset[str] | None = None,
@@ -72,7 +74,8 @@ async def validate_profile(
         *_check_candidate_source(profile),
     ]
 
-    resolved_get_index = get_repository_index or TritonControlService().get_repository_index
+    control = TritonControlService()
+    resolved_get_index = get_repository_index or control.get_repository_index
     triton_reachable, states = (
         await _triton_state(resolved_get_index)
         if profile.detector_model or _needs_ocr_models(profile)
@@ -85,6 +88,7 @@ async def validate_profile(
             states=states,
             for_activation=for_activation,
             project_slug=project_slug,
+            get_model_config=get_model_config or control.get_model_config,
         )
     )
     all_issues.extend(
