@@ -105,7 +105,7 @@ def oi_metadata(images_csv: str, split: str) -> dict[str, dict[str, Any]]:
     }
 
 
-def _fetch_one(row: dict[str, Any], images_dir: Path) -> None:
+def fetch_one(row: dict[str, Any], images_dir: Path) -> None:
     if row['source'] == 'coco':
         url = IMAGE_URL_TMPL[row['split']].format(file_name=row['file_name'])
     else:
@@ -134,7 +134,7 @@ def _make_variant(parent: Path, plan: dict[str, Any], dest: Path) -> dict[str, A
     }
 
 
-def _gt(
+def ground_truth(
     base: list[dict[str, Any]],
     near_dups: list[dict[str, Any]],
     coco_val: dict[str, Any],
@@ -306,13 +306,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     images_dir = args.out / 'images'
     images_dir.mkdir(parents=True, exist_ok=True)
     with ThreadPoolExecutor(WORKERS) as pool:
-        list(pool.map(lambda r: _fetch_one(r, images_dir), base))
+        list(pool.map(lambda r: fetch_one(r, images_dir), base))
     for nd in near_dups:
         nd['variants'] = [
             _make_variant(images_dir / nd['parent'], v, images_dir / v['file_name'])
             for v in nd['variants']
         ]
-    gt = _gt(base, near_dups, chosen['val'], chosen['boxes'])
+    gt = ground_truth(base, near_dups, chosen['val'], chosen['boxes'])
     write_json(args.out / 'coco_gt.json', gt)
     ann_sha = sha256_file(args.out / 'coco_gt.json')
     pin = sel.build_pin(base, near_dups, chosen['rare'], args.seed, args.scale, ann_sha)
