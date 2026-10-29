@@ -1,0 +1,32 @@
+{
+  "project": "default",
+  "crops_in_project": 1364,
+  "crops_labelled": 539,
+  "crops_without_annotation": 825,
+  "min_iou": 0.5,
+  "class_counts": {
+    "bicycle": 35,
+    "bus": 46,
+    "car": 119,
+    "cat": 27,
+    "cow": 81,
+    "dog": 26,
+    "horse": 37,
+    "motorcycle": 55,
+    "sheep": 78,
+    "truck": 35
+  },
+  "rare_classes": [
+    "bicycle",
+    "cat",
+    "dog",
+    "truck"
+  ],
+  "strata": {
+    "low_res": 112,
+    "rare": 113,
+    "similar_classes": 314
+  },
+  "protected": 0,
+  "unassigned_in_project": 0
+}

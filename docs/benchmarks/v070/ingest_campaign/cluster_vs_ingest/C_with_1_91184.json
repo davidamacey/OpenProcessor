@@ -1,0 +1,119 @@
+{
+  "size": 91184,
+  "data_sha256": "d9e2479986b5c5a8b160571feba1169539d8a6f4112bb79fe62b689f60d7a1d5",
+  "knn": {
+    "filter_class_share": 0.0304,
+    "unfiltered": {
+      "p50_ms": 5.83,
+      "p95_ms": 6.63,
+      "p99_ms": 7.11
+    },
+    "filtered": {
+      "p50_ms": 5.13,
+      "p95_ms": 5.83,
+      "p99_ms": 8.06
+    }
+  },
+  "load_s": 33.0,
+  "index_before": {
+    "store_bytes": 435503257,
+    "docs": 91184
+  },
+  "index_after": {
+    "store_bytes": 1563601966,
+    "docs": 91184
+  },
+  "runs": [
+    {
+      "kind": "full",
+      "method": "ivf",
+      "size": 91184,
+      "rep": 0,
+      "status": "success",
+      "n_residuals": 91184,
+      "n_clusters": 512,
+      "wall_s": 241.542,
+      "fetch_s": 17.856,
+      "fit_s": 192.536,
+      "distance_s": 0.0,
+      "write_s": 30.756,
+      "refresh_s": 0.323,
+      "tail_s": 0.069,
+      "ivf_train_s": null,
+      "ivf_assign_s": null,
+      "load_before": {
+        "loadavg": [
+          9.46,
+          11.18,
+          12.63
+        ],
+        "cpus": 48
+      },
+      "load_after": {
+        "loadavg": [
+          15.28,
+          14.08,
+          13.6
+        ],
+        "cpus": 48
+      },
+      "other_s": 0.002,
+      "rss_mb": {
+        "VmHWM": 3178.6,
+        "VmRSS": 2277.9
+      },
+      "rss_base_mb": 1847.2,
+      "attempt": 1,
+      "project": "lm-clus1-91184-b98d38",
+      "load_s": 33.0,
+      "index_before": {
+        "store_bytes": 435503257,
+        "docs": 91184
+      },
+      "index_after": {
+        "store_bytes": 1563601966,
+        "docs": 91184
+      }
+    }
+  ],
+  "discarded_partial_passes": 0,
+  "summary": {
+    "wall_s": {
+      "median": 241.542,
+      "min": 241.542,
+      "max": 241.542
+    },
+    "fetch_s": {
+      "median": 17.856,
+      "min": 17.856,
+      "max": 17.856
+    },
+    "fit_s": {
+      "median": 192.536,
+      "min": 192.536,
+      "max": 192.536
+    },
+    "distance_s": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "write_s": {
+      "median": 30.756,
+      "min": 30.756,
+      "max": 30.756
+    },
+    "refresh_s": {
+      "median": 0.323,
+      "min": 0.323,
+      "max": 0.323
+    },
+    "tail_s": {
+      "median": 0.069,
+      "min": 0.069,
+      "max": 0.069
+    }
+  },
+  "tool": "scripts/bench/cluster_ladder.py",
+  "commit": "5406ff80"
+}

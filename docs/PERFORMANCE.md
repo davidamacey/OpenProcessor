@@ -3154,9 +3154,15 @@ latency-bound on one loop thread and the 64-image chunk boundary (read, process,
 on the engine. The fix (0.7.0) is output-preserving: the embed pass runs every crop, frame and
 JPEG step on the CPU pool whatever its size (`offload_always` in `src/utils/cpu_pool.py`; ingest keeps the
 4 MiB in-place rule it was measured with), and the next 64-image chunk is read while the current one is
-processed and written. **The throughput gain is not yet measured**: acceptance is at least 20 images/s on set A
-(500 and 800 images, 16 at a time, one card), encoder busy above 80 percent, API CPU at most 0.047 CPU-s per
-image, three repetitions, re-embedded vectors bit-identical to the pre-change pass.
+processed and written. The acceptance bars were: at least 20 images/s on set A (500 and 800 images, 16 at a time, one card),
+encoder busy above 80 percent, API CPU at most 0.047 CPU-s per image, three repetitions, re-embedded vectors
+identical to the pre-change pass. **Measured live on release/0.7.0**
+(`docs/research/v070_measurement_log.md`, raw files in `docs/benchmarks/v070/`): the offload and read-ahead
+alone moved COCO (set A, 1,500 images) from 15.7 to 16.6 images/s at 0.065 API CPU-s per image (0.052 before),
+so **the bar is not met on set A** (E1, F3). On set P (about 21 MP) the GPU decode route below raised the pass
+to 28 images/s (F1) and the two-chunk window to 51 images/s at 0.025 CPU-s per image and 85 to 92 percent
+encoder busy (G3), which meets all three bars on that set; vectors agree with the pre-change pass to a
+median cosine of 0.9999965, not bit for bit (G4).
 
 Re-embedded crop vectors against the ingest vectors (same project, 3,166 and 5,133 crops): median cosine
 0.999997 (identical), first percentile 0.9981 and 0.99992, minimum 0.9728 and 0.9337; 35 and 44 crops are
@@ -3231,8 +3237,10 @@ time (the embed must see the items those scopes changed). Measured: 51 img/s (se
 **Model files.** The change touches `models/gpu_image_prep/config.pbtxt`, `1/model.py` and
 `1/prep_geometry.py`. Triton reads them at load: copy the three files into the model repository the stack
 mounts (in a checkout that is `models/` itself) and reload the model (unload and load through Triton model
-control, or restart `triton-server`). Ingest requests do not send `boxes`, so ingest is unchanged by the
-model change.
+control, or restart `triton-server`). In an installed directory `./openprocessor upgrade` copies the files
+(`export/sync_model_seed.py` replaces a model directory whose `MODEL_VERSION` is older than the release's;
+the installer used to keep the old files with `cp -rn`), and `./openprocessor restart triton-server` reloads
+them. Ingest requests do not send `boxes`, so ingest is unchanged by the model change.
 
 **Live procedure (run in the measurement log, sections F and G).** On the test stack (own compose project name, GPU 0 or 2, quiet host), for
 set P (300 photos, 16 to 24 MP) and COCO 1,500 as in E1, three repetitions each, a fresh project per set:
