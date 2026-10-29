@@ -167,3 +167,33 @@ The rows above were measured on all labelled crops, before any split existed and
 COCO-run settings chosen on the same labels. They are not held-out numbers. The held-out BCubed
 rows for the 3,000-item partition and the 200-image COCO partitions are not in this note yet:
 the partitions come from a running stack and none was up when the scorer was built.
+
+### BCubed rows on the 200-image COCO sample (measured 2026-10-29)
+
+Project `cocotest` (1,364 crops, production pipeline, nothing re-clustered), labelled from the
+full COCO val2017 instances file rather than the 10-class sample file used above, so it labels
+1,005 crops in 57 classes (people and other classes included) and is not comparable row for row
+with the 539-crop table. Split: `splits/coco_sample_200.json`, seed 20261029, by source image
+(88 calibration, 91 heldout images). Nothing was tuned on this set, so the heldout half is
+clean for any later tuning on `calibration`. Three scoring repetitions are identical (the scorer is
+deterministic; 0.03 to 0.05 s each). Host load average was 41 to 62 during the run, so only the
+metrics, not the timings, are meaningful.
+
+| Metric | All (1,005) | Heldout (519) |
+|---|---|---|
+| Pair precision | 0.576 | 0.627 |
+| Pair recall | 0.029 | 0.042 |
+| BCubed precision | 0.677 | 0.732 |
+| BCubed recall | 0.148 | 0.203 |
+| BCubed F | 0.242 | 0.318 |
+| AMI | 0.336 | 0.344 |
+| Risk (accepted items outside their cluster majority) | 0.256 | 0.222 |
+| ARI against the `default` project's independent run | 0.33 | 0.41 |
+
+Heldout strata (pair precision): low_res 0.62 (152), mixed_scene 0.72 (151), similar_classes 0.94
+(189), rare 0.17 (15, too few to read). Raw JSON and scorecards:
+`artifacts_local/cluster_search/w0/rescore/cocotest_{full,heldout}_r{1,2,3}.json` and `.card.json`
+(gitignored). Not run: the 3,000-item partition. No project holds that set. It needs
+`scripts/datasets/fetch_cluster_eval.py` and an ingest into a new throwaway project, then
+`cluster_eval_set.py build --eval-manifest` and the heldout score with
+`splits/cluster_eval_3000.json`.
