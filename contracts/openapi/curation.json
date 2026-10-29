@@ -502,8 +502,11 @@
             "type": "boolean"
           },
           "label_source": {
-            "const": "human",
             "default": "human",
+            "enum": [
+              "human",
+              "propagated"
+            ],
             "title": "Label Source",
             "type": "string"
           }

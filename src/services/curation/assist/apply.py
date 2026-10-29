@@ -1,8 +1,10 @@
 """Apply a run's proposed class to the scope: the one path from a suggestion to labels.
 
-An explicit user action with a dry-run count first. The write is the human
-relabel service ``PUT /crops/batch_label`` uses (one writer), so the items become
-human-validated, as if the user had labelled them. It acts on the scope's
+An explicit user action with a dry-run count first. By default the write is the
+human relabel service ``PUT /crops/batch_label`` uses (one writer), so the items
+become human-validated, as if the user had labelled them. ``label_source:
+"propagated"`` writes the machine kind instead (unvalidated, the run id in the
+provenance), the same document the auto-label loop writes. It acts on the scope's
 *current* members, refuses when the scope is not the one the run saw
 (``scope_changed``), and leaves every member whose class is locked, validated,
 holdout or excluded alone.
@@ -52,6 +54,19 @@ def _registry_class(class_name: str) -> tuple[int, str]:
     )
 
 
+def _label(body: AssistApplyRequest, run_id: str, class_id: int, class_name: str) -> ItemLabel:
+    if body.label_source == 'propagated':
+        return ItemLabel.propagated(
+            class_id=class_id,
+            class_name=class_name,
+            run_id=run_id,
+            writer=f'assist_loop:{run_id}',
+        )
+    return ItemLabel.human(
+        class_id=class_id, class_name=class_name, label_source=body.label_source, writer=WRITER
+    )
+
+
 async def apply_proposal(
     opensearch: AsyncOpenSearch, run_id: str, state: AssistRunState, body: AssistApplyRequest
 ) -> AssistApplyResponse:
@@ -80,6 +95,7 @@ async def apply_proposal(
     skipped = len(members) - len(eligible)
     if body.dry_run or not eligible:
         return _response(body, class_name, eligible, skipped, now, written=None)
+    label = _label(body, run_id, class_id, class_name)
     locked_at_write: set[str] = set()
 
     def merge(current: dict[str, Any]) -> dict[str, Any]:
@@ -87,17 +103,9 @@ async def apply_proposal(
         if class_write_locked(current):
             locked_at_write.add(str(current.get('crop_id', '')))
             return {}
-        return class_label_update(
-            current,
-            ItemLabel.human(
-                class_id=class_id,
-                class_name=class_name,
-                label_source=body.label_source,
-                writer=WRITER,
-            ),
-        )
+        return class_label_update(current, label)
 
-    written = await occ_bulk_human_relabel(opensearch, eligible, merge, writer_id=WRITER)
+    written = await occ_bulk_human_relabel(opensearch, eligible, merge, writer_id=label.writer)
     written['updated_ids'] = [i for i in written['updated_ids'] if i not in locked_at_write]
     written['updated'] = len(written['updated_ids'])
     return _response(body, class_name, eligible, skipped + len(locked_at_write), now, written)

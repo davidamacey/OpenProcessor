@@ -36,6 +36,10 @@ OPEN_VOCAB_CLASS_SOURCE = 'open_vocab_proposal'
 # word for what the prompt finds, so the VLM never relabels it (its answer
 # is kept as a suggestion, see ``keep_target_class``).
 OPEN_VOCAB_TARGET_CLASS_SOURCE = 'open_vocab_target'
+# A class carried from VLM-sampled members to the rest of their cluster node by
+# the auto-label loop (or an explicit apply asking for the same kind): machine
+# output, never validated, so it stays reviewable and out of the export.
+PROPAGATED_CLASS_SOURCE = 'assist_propagated'
 # Label import's default (callers may pass their own).
 LABEL_IMPORT_CLASS_SOURCE = 'external_label'
 # ``label_source`` (not ``class_source``) value stamped by dataset import.
@@ -72,13 +76,18 @@ def is_classifier_class_source(source: object) -> bool:
 
 
 def confident_class_sources() -> tuple[str, ...]:
-    """Classifier + VLM + human + imported-label sources: labels trusted
+    """Classifier + VLM + human + imported-label + propagated sources: labels trusted
     enough to keep an item out of the residual clustering pool. Sorted
     for stable queries."""
     return tuple(
         sorted(
             classifier_class_sources()
-            | {VLM_CLASS_SOURCE, HUMAN_CLASS_SOURCE, LABEL_IMPORT_CLASS_SOURCE}
+            | {
+                VLM_CLASS_SOURCE,
+                HUMAN_CLASS_SOURCE,
+                LABEL_IMPORT_CLASS_SOURCE,
+                PROPAGATED_CLASS_SOURCE,
+            }
         )
     )
 
@@ -93,6 +102,7 @@ __all__ = [
     'LABEL_SOURCE_IMPORT',
     'OPEN_VOCAB_CLASS_SOURCE',
     'OPEN_VOCAB_TARGET_CLASS_SOURCE',
+    'PROPAGATED_CLASS_SOURCE',
     'VLM_CLASS_SOURCE',
     'classifier_class_sources',
     'confident_class_sources',
