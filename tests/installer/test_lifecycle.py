@@ -6,6 +6,7 @@ what the installer actually tells Docker to do, in order.
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import shutil
@@ -112,6 +113,24 @@ def test_unhealthy_stack_exits_8_and_never_claims_success(shimmed: Shimmed) -> N
     assert result.returncode == 8
     assert 'installed and healthy' not in result.stdout
     assert 'health: ' in result.stderr
+
+
+def test_control_plane_only_health_accepts_a_503_with_opensearch_up(shimmed: Shimmed) -> None:
+    # Without Triton /health answers 503 by design; the install must still pass.
+    shimmed.gpus(None)
+    shimmed.flag('api_not_ready')
+    result = install(shimmed, '--cpu', '--control-plane-only')
+    assert result.returncode == 0, result.stderr
+    assert 'expected without Triton' in result.stderr
+
+
+def test_control_plane_only_health_fails_when_opensearch_is_down(shimmed: Shimmed) -> None:
+    shimmed.gpus(None)
+    shimmed.flag('api_not_ready')
+    (shimmed.state / 'os_down').touch()
+    result = install(shimmed, '--cpu', '--control-plane-only')
+    assert result.returncode == 8
+    assert 'API /health' in result.stderr
 
 
 def test_wrong_vlm_model_served_fails_health(shimmed: Shimmed) -> None:
@@ -366,7 +385,7 @@ def test_purge_refuses_root_and_home(shimmed: Shimmed, target: str) -> None:
 def test_secrets_need_their_own_confirmation(shimmed: Shimmed) -> None:
     assert install(shimmed).returncode == 0
     inst = shimmed.root / 'inst'
-    (inst / 'secrets' / 'vlm').mkdir(parents=True)
+    (inst / 'secrets' / 'vlm').mkdir(parents=True, exist_ok=True)
     (inst / 'secrets' / 'vlm' / 'k').write_text('x')
     result = shimmed.run(
         ['--uninstall', '--purge-data', '--unattended', '--dir', 'inst'], OP_CONFIRM_PURGE=PROJECT
@@ -513,3 +532,49 @@ def test_third_party_images_are_pinned_and_verified(shimmed: Shimmed) -> None:
     assert 'digest mismatch for opensearchproject/opensearch:3.6.0@sha256:' in result.stderr
     pulls = [ln for ln in shimmed.mutating_docker_calls() if ln.startswith('docker pull')]
     assert pulls == [f'docker pull opensearchproject/opensearch:3.6.0@{fake_digest("opensearch")}']
+
+
+def test_upgrade_and_rollback_replace_running_scripts_by_rename(
+    shimmed: Shimmed, tmp_path: Path
+) -> None:
+    # A bash script that is rewritten in place while it runs continues from its
+    # old byte offset in the new text and executes a fragment of it (a rollback
+    # to another release once started the whole stack that way). Replacing the
+    # file by rename leaves the running copy intact.
+    _add_release(shimmed, tmp_path, 'v9.9.10')
+    assert install(shimmed).returncode == 0
+    inst = shimmed.root / 'inst'
+    scripts = [inst / 'setup-openprocessor.sh', inst / 'openprocessor']
+
+    def inodes() -> list[int]:
+        return [p.stat().st_ino for p in scripts]
+
+    before = inodes()
+    assert install(shimmed, '--version', 'v9.9.10', '--yes').returncode == 0
+    after_upgrade = inodes()
+    assert all(a != b for a, b in zip(before, after_upgrade, strict=True))
+    result = shimmed.run(['--rollback', '--unattended', '--dir', 'inst'])
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert all(a != b for a, b in zip(after_upgrade, inodes(), strict=True))
+
+
+def test_rollback_with_no_start_restores_files_and_starts_nothing(shimmed: Shimmed) -> None:
+    assert install(shimmed).returncode == 0
+    assert install(shimmed, '--port-base', '4970').returncode == 0
+    reset_mutations(shimmed)
+    result = shimmed.run(['--rollback', '--unattended', '--no-start', '--dir', 'inst'])
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert not [ln for ln in shimmed.mutating_docker_calls() if ' up ' in f'{ln} ']
+
+
+def test_second_installer_run_in_the_same_dir_is_refused(shimmed: Shimmed) -> None:
+    assert install(shimmed).returncode == 0
+    inst = shimmed.root / 'inst'
+    reset_mutations(shimmed)
+    with (inst / '.install' / 'lock').open('a') as held:
+        fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        result = shimmed.run(['--repair', '--unattended', '--dir', 'inst'])
+    assert result.returncode == 3
+    assert 'another installer run' in result.stderr
+    assert not shimmed.mutating_docker_calls()
+    assert shimmed.run(['--repair', '--unattended', '--dir', 'inst']).returncode == 0
