@@ -233,6 +233,14 @@ def _region_boxes_mapping() -> dict[str, Any]:
     }
 
 
+# The UMAP-visualization overlay (src/services/curation/embedding_viz.py writes it).
+ITEMS_VIZ_MAPPING: dict[str, Any] = {
+    'viz_x': {'type': 'float'},
+    'viz_y': {'type': 'float'},
+    'viz_projection_version': {'type': 'keyword'},
+}
+
+
 def _items_body() -> dict[str, Any]:
     return {
         'settings': _knn_settings(),
@@ -425,6 +433,7 @@ def _items_body() -> dict[str, Any]:
                 **_EXCLUSION_MAPPING,
                 **OPEN_VOCAB_ITEM_MAPPING,
                 **ASSIST_ITEM_MAPPING,
+                **ITEMS_VIZ_MAPPING,
             }
         },
     }

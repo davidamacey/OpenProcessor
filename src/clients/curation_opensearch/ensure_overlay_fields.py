@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.base import _is_recoverable_mapping_conflict, config, logger
-from src.clients.curation_opensearch.bodies_core import IMAGES_WRITE_ID_MAPPING
+from src.clients.curation_opensearch.bodies_core import IMAGES_WRITE_ID_MAPPING, ITEMS_VIZ_MAPPING
 
 
 if TYPE_CHECKING:
@@ -41,18 +41,30 @@ async def ensure_items_inner_result_window(
         # No `name=`: the project guard allowlists `GET /{index}/_settings` only.
         resp = await client.indices.get_settings(index=index)
         per_index: dict[str, Any] = next(iter(resp.values()), {})
-        raw: dict[str, Any] = per_index.get('settings', {}).get('index', {})
-        current = int(raw.get('max_inner_result_window', 100))
-        if current < wanted:
+        if not adopt_inner_result_window(index, per_index.get('settings', {})):
             await client.indices.put_settings(
                 index=index, body={'index': {'max_inner_result_window': wanted}}
             )
-            current = wanted
+            _INNER_RESULT_WINDOWS[index] = wanted
     except Exception as exc:
         logger.warning('curation_inner_result_window_failed', index=index, error=str(exc))
         return {'acknowledged': False, 'index': index, 'error': str(exc)}
+    return {
+        'acknowledged': True,
+        'index': index,
+        'max_inner_result_window': _INNER_RESULT_WINDOWS[index],
+    }
+
+
+def adopt_inner_result_window(index: str, settings: dict[str, Any]) -> bool:
+    """Record the ``index.max_inner_result_window`` a settings read of ``index`` shows
+    (``settings`` is that index's ``settings`` object); True when it already reaches
+    ``region_max_boxes_per_write``, False (nothing recorded) when it must be raised."""
+    current = int(settings.get('index', {}).get('max_inner_result_window', 100))
+    if current < int(config.region_max_boxes_per_write):
+        return False
     _INNER_RESULT_WINDOWS[index] = current
-    return {'acknowledged': True, 'index': index, 'max_inner_result_window': current}
+    return True
 
 
 async def ensure_images_upload_fields(
@@ -337,14 +349,8 @@ async def ensure_items_viz_fields(
     Additive ``PUT <index>/_mapping`` — idempotent.
     """
     index = config.items_index
-    fields = ['viz_x', 'viz_y', 'viz_projection_version']
-    body = {
-        'properties': {
-            'viz_x': {'type': 'float'},
-            'viz_y': {'type': 'float'},
-            'viz_projection_version': {'type': 'keyword'},
-        }
-    }
+    fields = list(ITEMS_VIZ_MAPPING)
+    body = {'properties': ITEMS_VIZ_MAPPING}
     try:
         resp = await client.indices.put_mapping(index=index, body=body)
         ack = bool(resp.get('acknowledged', False))

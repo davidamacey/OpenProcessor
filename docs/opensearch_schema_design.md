@@ -130,6 +130,13 @@ registry is the separate `op_projects` index (`OP_PROJECTS_INDEX`), and VLM
 endpoints live in `op_global_configs` (`OP_GLOBAL_CONFIGS_INDEX`). Bodies are in
 `src/clients/curation_opensearch/` (`bodies_core.py` for images and items, `bodies_other.py` for the rest).
 
+An index created before a field existed gets it from an additive `PUT _mapping`
+migration (`src/services/curation/index_bootstrap.py`), run by each API worker the
+first time it serves a project. After a full run every index's mapping `_meta` holds
+`op_schema`, a fingerprint of the bodies and the migration list; a later worker reads
+the markers in one request and skips the migrations when all are current. A new body
+field or migration changes the fingerprint, so every project migrates once more.
+
 Embedding dimensions: `embedding` 512, `pe_embedding` 1024 (PE-Core),
 `backbone_embedding` 1024. HNSW on the Lucene engine (new projects; earlier projects keep faiss), defaults `ef_construction` 128 and `m` 16
 (`OP_HNSW_EF_CONSTRUCTION`, `OP_HNSW_M`).
