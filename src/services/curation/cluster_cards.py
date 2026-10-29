@@ -80,10 +80,6 @@ ClusterKindFilter = Literal['class', 'candidate', 'all']
 ValidationFilter = Literal['none', 'partial', 'complete']
 
 
-def review_agg_name(tab: str) -> str:
-    return f'review__{tab}'
-
-
 def _script(source: str) -> dict[str, Any]:
     return {'script': {'script': {'lang': 'painless', 'source': source}}}
 
@@ -144,15 +140,16 @@ def _candidate_dominant_name(cls_buckets: list[dict[str, Any]], labelled: int) -
 
 
 def _review_aggs() -> dict[str, Any]:
-    """One filter agg per tab in :data:`CLUSTER_REVIEW_TABS`, built by the same
-    clause builder ``GET /review/{tab}`` uses (holdout hidden, as there)."""
-    aggs: dict[str, Any] = {}
+    """One ``filters`` agg holding a filter per tab in :data:`CLUSTER_REVIEW_TABS`,
+    built by the same clause builder ``GET /review/{tab}`` uses (holdout hidden,
+    as there)."""
+    named: dict[str, Any] = {}
     for tab in CLUSTER_REVIEW_TABS:
         must, must_not, _reason = review_queries.build_tab_query(
             tab, include_test=False, text=None, max_rank=None
         )
-        aggs[review_agg_name(tab)] = {'filter': {'bool': {'must': must, 'must_not': must_not}}}
-    return aggs
+        named[tab] = {'bool': {'must': must, 'must_not': must_not}}
+    return {'review': {'filters': {'filters': named}}}
 
 
 def aggregation_body(params: ClusterListParams) -> dict[str, Any]:
@@ -199,7 +196,6 @@ def aggregation_body(params: ClusterListParams) -> dict[str, Any]:
         'geometry_fits': {'filter': {'bool': {'filter': [_MEASURED, _FITS]}}},
         'latest_update': {'max': {'field': 'updated_at'}},
         'detector_top': {'terms': {'field': 'detector_class_name', 'size': 1}},
-        'detector_labelled': {'filter': {'exists': {'field': 'detector_class_name'}}},
         'detector_conf': {'avg': {'field': 'detector_confidence'}},
         **_review_aggs(),
     }
@@ -235,13 +231,19 @@ def bucket_to_card(bucket: dict[str, Any]) -> ClusterCard:
         members=size, labelled=labelled_total, purity=label_agreement
     )
     det_buckets = bucket.get('detector_top', {}).get('buckets', [])
-    det_total = int(bucket.get('detector_labelled', {}).get('doc_count') or 0)
+    detector = bucket.get('detector_top', {})
+    # Members with a detector class: the top bucket plus everything the size-1 terms agg left out.
+    det_total = (
+        int(det_buckets[0]['doc_count']) + int(detector.get('sum_other_doc_count') or 0)
+        if det_buckets
+        else 0
+    )
     det_share = (
         (int(det_buckets[0]['doc_count']) / det_total) if det_buckets and det_total else None
     )
+    review = bucket.get('review', {}).get('buckets', {})
     review_counts = {
-        tab: int(bucket.get(review_agg_name(tab), {}).get('doc_count') or 0)
-        for tab in CLUSTER_REVIEW_TABS
+        tab: int(review.get(tab, {}).get('doc_count') or 0) for tab in CLUSTER_REVIEW_TABS
     }
     state: ValidationState = validation_state(size, validated_count)
     tier = purity_tier(purity)

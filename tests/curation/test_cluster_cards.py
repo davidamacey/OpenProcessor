@@ -272,13 +272,12 @@ def test_review_tabs_are_real_simple_tabs() -> None:
 
 
 @pytest.mark.asyncio
-async def test_the_aggregation_adds_one_filter_agg_per_review_tab() -> None:
+async def test_the_aggregation_counts_each_review_tab_and_hides_the_holdout() -> None:
     client = os_returning()
     await list_cards(client)
     body = client.search.await_args.kwargs['body']
     sub = body['aggs']['clusters']['aggs']
-    for tab in cc.CLUSTER_REVIEW_TABS:
-        assert 'filter' in sub[cc.review_agg_name(tab)]
+    assert set(sub['review']['filters']['filters']) == set(cc.CLUSTER_REVIEW_TABS)
     assert {'test_holdout': True} in [
         m['term'] for m in body['query']['bool']['must_not'] if 'term' in m
     ]

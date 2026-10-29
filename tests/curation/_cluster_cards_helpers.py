@@ -9,7 +9,6 @@ from src.services.curation.cluster_cards import (
     CLUSTER_REVIEW_TABS,
     ClusterListParams,
     list_cluster_cards,
-    review_agg_name,
 )
 
 
@@ -36,12 +35,15 @@ def bucket(
         'validated': {'doc_count': validated},
         'subclusters': {'value': 0},
         'latest_update': {'value_as_string': updated} if updated else {},
-        'detector_top': {'buckets': [{'key': k, 'doc_count': n} for k, n in detector[:1]]},
-        'detector_labelled': {'doc_count': sum(n for _k, n in detector)},
+        'detector_top': {
+            'buckets': [{'key': k, 'doc_count': n} for k, n in detector[:1]],
+            'sum_other_doc_count': sum(n for _k, n in detector[1:]),
+        },
         'detector_conf': {'value': detector_conf},
     }
-    for tab in CLUSTER_REVIEW_TABS:
-        out[review_agg_name(tab)] = {'doc_count': (review or {}).get(tab, 0)}
+    out['review'] = {
+        'buckets': {tab: {'doc_count': (review or {}).get(tab, 0)} for tab in CLUSTER_REVIEW_TABS}
+    }
     return out
 
 
