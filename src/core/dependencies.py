@@ -142,13 +142,16 @@ async def bootstrap_opensearch_indexes() -> 'asyncio.Task[None] | None':
         await os_client.create_all_indexes(force_recreate=False)
         logger.info('core_visual_search_indexes_bootstrapped')
         for slug in for_each_project():
-            # The full bootstrap (exists checks + mapping migrations), not just
-            # index creation: it costs 380-470 ms cold and is cached per
-            # (worker, project), so paying it here keeps it off the first
-            # request of every recycled worker (#356). A failure is logged
-            # inside and leaves the project uncached, so a request retries.
-            await ensure_indexes(os_client.client)
-            logger.info(f'curation_indexes_bootstrapped project={slug}')
+            # The full bootstrap (index creation, mapping migrations, classes
+            # self-heal) is cached per (worker, project), so paying it here keeps
+            # it off the first request of every recycled worker (#356). Indexes
+            # already stamped with the current schema cost one read (#376). A
+            # failure is logged inside and leaves the project uncached, so a
+            # request retries.
+            if await ensure_indexes(os_client.client):
+                logger.info(f'curation_indexes_bootstrapped project={slug}')
+            else:
+                logger.warning(f'curation_indexes_bootstrap_deferred project={slug}')
 
         async def _warm_every_project() -> None:
             for _slug in for_each_project():

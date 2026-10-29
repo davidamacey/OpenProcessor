@@ -39,6 +39,13 @@ from src.services.curation.clustering.cluster_geometry import DISTANCE_REF_FIELD
 from src.services.curation.clustering.last_run import record_last_run
 from src.services.curation.clustering.page_rows import hits_to_rows
 from src.services.curation.clustering.pit_pages import iter_pages
+from src.services.curation.clustering.pool_coverage import (
+    count_pool,
+    coverage_fields,
+    covers_pool,
+    short_read_result,
+    write_outcome,
+)
 from src.services.curation.clustering.pool_size import MIN_RESIDUALS_FOR_CLUSTERING
 from src.services.curation.clustering.residual_gate import (
     _park_gated_residuals,
@@ -62,6 +69,7 @@ async def cluster_residuals(
     gate_max_rank: int | None = None,
     gate_min_blur_ratio: float | None = None,
     n_clusters: int | None = None,
+    expected_pool: int | None = None,
     progress: Any = None,
 ) -> dict[str, Any]:
     """Cluster the residual pool of unvalidated PE embeddings.
@@ -107,6 +115,13 @@ async def cluster_residuals(
        must be a derived sort (e.g. by cluster size, computed from the
        live data) rather than baked into the id itself.
     4. Bulk-write back to OpenSearch in chunks, several requests at a time.
+
+    A pass that did not cover its pool returns ``status: 'partial'`` and is not a success
+    (#357): it read fewer than ``POOL_COVERAGE_MIN`` of ``expected_pool`` (default: the
+    pool counted just before the read, so items another writer assigned meanwhile are
+    caught; pass the pool the caller knows to also catch items taken before the call), or
+    some write-back items failed. A short read stops before the fit, so no centroids are
+    saved and nothing is written; no run is recorded for either.
     """
     from src.services.curation.clustering import residual_fetch
     from src.services.curation.clustering.backend import detect_cluster_backend
@@ -163,6 +178,12 @@ async def cluster_residuals(
     # PIT + sliced parallel fetch by default (~8x faster than scroll
     # on n=347k). Falls back internally to the sequential scroll
     # variant if PIT isn't available on the cluster.
+    pool_query = residual_fetch.residual_pool_query(
+        include_candidate_clusters=recluster_unvalidated,
+        candidate_cluster_id_min=RESIDUAL_CLUSTER_ID_OFFSET,
+        extra_must=gate_clauses or None,
+    )
+    expected_pool = await count_pool(client, pool_query, expected_pool)
     t_fetch = time.perf_counter()
     ids, embeddings = await residual_fetch.fetch_residual_embeddings_parallel(
         client,
@@ -184,6 +205,15 @@ async def cluster_residuals(
             'backend': backend_info.name,
             'backend_detail': backend_info.detail,
         }
+
+    if not covers_pool(len(ids), expected_pool):
+        return short_read_result(
+            n_fetched=len(ids),
+            expected_pool=expected_pool,
+            method=method_name,
+            mode=mode_label,
+            backend_info=backend_info,
+        )
 
     if progress is not None:
         progress.update(processed=0, total=0)
@@ -244,16 +274,7 @@ async def cluster_residuals(
         )
         for crop_id, label, dist in zip(ids, relabeled.tolist(), dist_list, strict=True)
     ]
-    if progress is not None:
-        progress.update(processed=0, total=len(rows))
-    async with AssignmentWriter(client, 'cluster_residuals') as writer:
-        for batch in batches(rows, batch_size(len(rows))):
-            await writer.submit(batch)
-            if progress is not None:
-                progress.update(processed=writer.n_written, total=len(rows))
-                progress.raise_if_cancelled()
-    if progress is not None:
-        progress.update(processed=writer.n_written, total=len(rows))
+    n_failed_writes = await _write_assignments(client, rows, progress)
     if rows:
         try:
             await client.indices.refresh(index=items_index())
@@ -283,11 +304,14 @@ async def cluster_residuals(
     except Exception as exc:
         logger.warning('curation_cluster_save_gate_failed', error=str(exc))
 
+    status, extra_fields = write_outcome(n_failed_writes)
+
     summary = {
-        'status': 'success',
+        'status': status,
+        **extra_fields,
         'method': result.method,
         'mode': mode_label,
-        'n_residuals': len(ids),
+        **coverage_fields(len(ids), expected_pool),
         'n_clusters': n_clusters,
         'n_noise': n_noise,
         'n_parked': n_parked,
@@ -308,8 +332,29 @@ async def cluster_residuals(
             'write_back': round(write_back_s, 3),
         },
     }
-    record_last_run(summary)
+    _record_if_success(summary)
     return summary
+
+
+def _record_if_success(summary: dict[str, Any]) -> None:
+    """Only a pass that covered its pool is the "last clustering" the dashboard shows."""
+    if summary['status'] == 'success':
+        record_last_run(summary)
+
+
+async def _write_assignments(client: AsyncOpenSearch, rows: list[Assignment], progress: Any) -> int:
+    """Bulk-write ``rows`` with progress and cancel checks; returns the items that failed."""
+    if progress is not None:
+        progress.update(processed=0, total=len(rows))
+    async with AssignmentWriter(client, 'cluster_residuals') as writer:
+        for batch in batches(rows, batch_size(len(rows))):
+            await writer.submit(batch)
+            if progress is not None:
+                progress.update(processed=writer.n_written, total=len(rows))
+                progress.raise_if_cancelled()
+    if progress is not None:
+        progress.update(processed=writer.n_written, total=len(rows))
+    return writer.n_failed
 
 
 def _already_assigned(stored: dict[str, Any], cid: int, dist: float) -> bool:

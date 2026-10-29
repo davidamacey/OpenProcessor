@@ -241,6 +241,62 @@ def test_detector_model_not_ready_errors_on_activation_unless_force() -> None:
     assert report.force_allowed is True
 
 
+def _config_with_outputs(*names: str) -> Any:
+    async def _config(_model: str) -> dict[str, Any] | None:
+        return {'name': 'my_detector', 'output': [{'name': n} for n in names]}
+
+    return _config
+
+
+def test_detector_without_output0_is_rejected_at_activation() -> None:
+    body = _body(detector_model='my_detector', text_reader='none')
+    report = _run(
+        validate_profile(
+            None,
+            body,
+            get_repository_index=_always_reachable,
+            get_model_config=_config_with_outputs('end2end_boxes'),
+            for_activation=True,
+        )
+    )
+    assert not report.ok
+    issue = next(e for e in report.errors if e.code == 'detector_model_unusable')
+    assert 'output0' in issue.message
+    assert issue.bypassable is False
+    assert report.force_allowed is False
+
+
+def test_detector_with_output0_activates() -> None:
+    body = _body(detector_model='my_detector', text_reader='none')
+    report = _run(
+        validate_profile(
+            None,
+            body,
+            get_repository_index=_always_reachable,
+            get_model_config=_config_with_outputs('output0'),
+            for_activation=True,
+        )
+    )
+    assert not any(e.code == 'detector_model_unusable' for e in report.errors)
+
+
+def test_detector_config_unreadable_fails_closed_at_activation() -> None:
+    async def _none(_model: str) -> None:
+        return None
+
+    body = _body(detector_model='my_detector', text_reader='none')
+    report = _run(
+        validate_profile(
+            None,
+            body,
+            get_repository_index=_always_reachable,
+            get_model_config=_none,
+            for_activation=True,
+        )
+    )
+    assert any(e.code == 'detector_model_unusable' for e in report.errors)
+
+
 def test_triton_unreachable_warns_on_save_errors_on_activation() -> None:
     body = _body(detector_model='my_detector')
     report = _run(validate_profile(None, body, get_repository_index=_always_unreachable))

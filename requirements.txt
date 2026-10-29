@@ -1,5 +1,5 @@
 # Core Web Framework
-fastapi
+fastapi==0.143.0  # same pin as requirements-test.txt: the OpenAPI contract and the route warm-up are tested against it
 uvicorn[standard]
 python-multipart
 orjson  # 2-3x faster JSON encoding/decoding vs stdlib json

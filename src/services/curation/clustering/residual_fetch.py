@@ -69,7 +69,7 @@ def _normalize_rows(matrix: np.ndarray) -> np.ndarray:
     return matrix / norms
 
 
-def _residual_pool_query(
+def residual_pool_query(
     *,
     include_candidate_clusters: bool,
     candidate_cluster_id_min: int | None,
@@ -164,7 +164,7 @@ async def fetch_residual_embeddings(
     operator-initiated cancel takes effect within a single scroll
     batch (~50 ms) instead of waiting for the full fetch to finish.
     """
-    query = _residual_pool_query(
+    query = residual_pool_query(
         include_candidate_clusters=include_candidate_clusters,
         candidate_cluster_id_min=candidate_cluster_id_min,
         extra_must=extra_must,
@@ -327,7 +327,7 @@ async def fetch_residual_embeddings_parallel(
     (older OpenSearch, missing _shard_doc sort support, etc.) so the
     pipeline never breaks on a fetch-layer issue.
     """
-    query = _residual_pool_query(
+    query = residual_pool_query(
         include_candidate_clusters=include_candidate_clusters,
         candidate_cluster_id_min=candidate_cluster_id_min,
         extra_must=extra_must,
