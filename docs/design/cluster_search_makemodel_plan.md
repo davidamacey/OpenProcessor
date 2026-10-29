@@ -27,6 +27,19 @@ Unmerged inputs, read with `git show <branch>:<path>`:
 | Retrieval baseline | uncommitted in worktree `OpenProcessor-wt-ret` (`scripts/bench/retrieval_eval*.py`, `docs/benchmarks/retrieval_baseline/`) | Text and image search quality and latency on 2,000 COCO val images (section 1.2) |
 | Program plan | branch `docs/program-plan`, `docs/design/program_plan.md` | Phase C (clustering) items C0 to C6, model tiers, DoD, measurement rules |
 | Clustering research of 9 October | `docs/cluster_research_9oct.md`, untracked in the main checkout (not in git) | The refinement-engine design that #346 to #345 were filed from |
+| **Consolidated clustering research** (primary method reference) | branch `docs/cluster-methods-review`, `docs/research/clustering_research_consolidated.md` | Real-data diagnosis (section 4), recommended stack per kind (section 7), experiments E0 to E10 on real data with a held-out split (section 8), missing evidence (section 9). Where this plan and that note differ, the note's real-data findings win |
+
+**Real-data facts this plan is held to** (consolidated note sections 1 and 4): production pair
+precision/recall is 0.696 / 0.022 on the 3,000-item set and 0.905 / 0.088 on the 539-crop COCO
+project; any "precision about 0.95" figure is synthetic. Most fragmentation is configuration (IVF
+K = n // 6 gives 6 to 8 crops per cluster and row-order dependence); one global average-linkage
+AHC on raw vectors reaches 0.92 / 0.20 on COCO, matching the in-sample tuned Leiden + CHAMELEON
+(0.944 / 0.195, which leaves 9.8 % unassigned). Above recall about 0.3 the neighbourhoods are the
+limit (P@10 0.82; 0.78 under 32 px; 0.74 for crops longer than 2:1). The PE crop preprocessing
+resizes then centre-crops (`src/utils/pe_preprocess.py`), so elongated crops lose their ends. The
+space is anisotropic (mean random-pair cosine 0.50 COCO, 0.63 set P; effective rank 104 to 122),
+so a fixed cosine threshold means different things per project: every threshold is calibrated per
+project and space.
 
 ### Prior research this plan builds on (not redone)
 
@@ -155,12 +168,16 @@ verifies it on 3.6 before relying on it.
    `identity` level groups one physical person or object (K4 faces, a future same-vehicle kind).
    Identity graphs add the free cannot-link "two detections in one image are two identities";
    class graphs must never use it (cross-domain lessons, section 6.1).
-3. **Mutual-kNN graph + Leiden CPM + CHAMELEON validation** is the default batch method
-   (Traag et al. 2019, [Leiden](https://www.nature.com/articles/s41598-019-41695-z)), carried
-   forward from #342 with its calibration caveat; cuGraph ECG on GPU 2 is the candidate challenger
-   and replaces it only if it wins on real held-out data (W5). Single linkage (union-find) and modularity are
-   banned for identity work; HDBSCAN and FINCH are not used (no density gaps, no granularity knob;
-   #342 results).
+3. **Fix the configuration and input first, then the algorithm** (consolidated note sections 4 and
+   7). Baseline batch method: sparse mutual kNN graph (k 30) and **average-linkage graph HAC** with
+   a cut calibrated on the dev split (largest recall whose dev precision meets the target). IVF
+   stays only as the coarse index for streaming assignment and kNN candidates, with K chosen for the
+   index, not for clusters. Comparison arms: Leiden CPM (Traag et al. 2019,
+   [Leiden](https://www.nature.com/articles/s41598-019-41695-z); keeps more precision at high
+   recall, 0.776 at 0.51 against 0.40 at 0.59), CHAMELEON validation only if it adds held-out
+   precision, and cuGraph ECG on GPU 2 (synthetic evidence only so far). An arm replaces the
+   baseline only if it wins on real held-out data. Single linkage (union-find) and modularity are
+   banned for identity work; HDBSCAN, FINCH and UMAP are rejected on real data.
 4. **Multi-prototype clusters.** A cluster keeps up to 8 prototypes: medoids (real members) of its
    sub-communities, each with count, dispersion and an optional mode tag (a view for vehicles, a
    pose for faces). Assignment, merge scores and naming samples use the best prototype pair,
@@ -222,7 +239,7 @@ is calibrated; wave W5 calibrates on labelled pairs.
 | Concern | Design | Improves on Immich by |
 |---|---|---|
 | Neighbour search | kNN (k = 30) from OpenSearch k-NN on `visual_search_faces.embedding` for incremental work; FAISS flat/IVF over a point-in-time export for batch, blocked so memory is O(n k), never n x n | same idea, bounded memory proven by test |
-| Batch grouping | mutual-kNN graph, edges above a calibrated similarity floor, Leiden CPM, CHAMELEON merge test; same-image cannot-link; quality-gated faces cannot bridge | Immich chains through any core point (single linkage); we refuse bridges and same-photo merges |
+| Batch grouping | mutual-kNN graph (k-reciprocal weights as a WB option), edges above a calibrated similarity floor, average or complete graph HAC or Leiden CPM (whichever wins E6 held out), CHAMELEON merge test only if it adds precision; same-image cannot-link; quality-gated faces cannot bridge | Immich chains through any core point (single linkage); we refuse bridges and same-photo merges |
 | Incremental assignment of a new face | nearest **prototype** of each person (up to 8 per person, by pose mode); accept if calibrated score >= t_accept and margin to the second person >= m; between t_review and t_accept -> `suggested_person_id` (review); below -> unassigned, re-tried by the next batch (Immich's deferred pass) | per-person multi-prototype instead of "any member within distance"; an explicit review band; never silently attaches a look-alike |
 | Core point rule | a new person needs at least `min_faces` (default 3, as Immich) mutually linked faces of acceptable quality | same, plus quality |
 | Stable ids, corrections | person records keep their id when membership overlap (Jaccard) with the previous run's person is at least 0.5; named and merged persons are anchors: their faces are must-link, cannot move by a machine run; a human split writes a cannot-link between the two sides | Immich loses corrections on a forced re-run |
@@ -356,7 +373,7 @@ same person". Sources of real identity labels:
 |---|---|---|---|
 | Same person | LFW and CPLFW / CFP-FP identity labels | public, labelled by the dataset authors; pose-stratified pairs from CPLFW / CFP-FP | licence check (O2) |
 | Same person, unlabelled real faces (Open Images, COCO person crops) | judged by a person or by the **local** VLM only (faces never go to Haiku) | sample-scale check of chaining and false merges | |
-| Same vehicle, set P | **session bursts linked by the plate**: photos of one session taken seconds apart whose plate crops read the same text through the existing OCR route (PP-OCRv5) give same-vehicle groups; different plate text in the same burst gives a hard negative. A person confirms a seeded 200-group sample | real, multi-view (a passing vehicle is shot front, side and rear in one burst), large and free | plate text, crops and timestamps stay in `artifacts_local/`; only counts and rates are committed; owner approval (O7) |
+| Same vehicle, set P | **session bursts linked by the plate**: photos of one session taken seconds apart (EXIF burst, 6.7) whose plates give the same `confident` key through the product's identity-text feature (6.8, wave W12) form same-vehicle groups; different confident keys in one burst give hard negatives. A person confirms a seeded 200-group sample. Until W12 lands, the same rule runs as a local research script over the existing region text fields | real, multi-view (a passing vehicle is shot front, side and rear in one burst), large and free | decided (O7, section 14): local only; plate text, crops and timestamps stay in `artifacts_local/`; only counts and rates are committed; never sent to a hosted model |
 | Same vehicle, set P without a legible plate | burst adjacency plus embedding similarity, confirmed by a person on a sample | weaker, labelled "burst-linked" | |
 | Same vehicle, public | CO3D v2 car and motorcycle sequences (identity = sequence, multi-view with camera poses, CC BY-NC 4.0), VeRi-776 (on request, non-commercial), VehicleID (academic agreement) | real multi-view identity with view angles (CO3D) or surveillance re-ID (VeRi) | as in cross-domain lessons E4 and E5; licences per O2 |
 | Same image content | #341 near-duplicate stratum (jittered copies of real images) and `/query/duplicates` | weak: augmentation, not a second photo | exists |
@@ -387,7 +404,7 @@ with orientation modes. Nothing in code says "vehicle".
 ```text
 photos -> detection (all boxes) -> quality score -> PE crop vector (exists)
        -> coarse class (detector class / registry group)
-       -> fine graph per coarse class (mutual-kNN + Leiden CPM, high resolution) = fine groups
+       -> fine graph per coarse class (mutual kNN + graph HAC or Leiden, per W0b and W5) = fine groups
        -> prototypes per group (sub-community medoids, optional view tag)
        -> link groups across modes (set-to-set prototype score + verification) = entity candidates
        -> naming on samples (person; local VLM; loop gate) -> taxonomy labels (make > model > generation)
@@ -401,7 +418,7 @@ photos -> detection (all boxes) -> quality score -> PE crop vector (exists)
 | Detection | primary detector, every box stored | none | low detector confidence is fine for embedding; gating happens later (prior-art lesson: raw detector confidence was badly under-calibrated) |
 | Quality score | `blur_lap_ratio`, `crop_rank_in_image` | `crop_quality` in [0, 1] from box side, blur ratio, truncation (box touches the frame edge), occlusion (max IoU with another box); thresholds in the region profile | gates prototypes and merge evidence (principle 6) |
 | Embedding | PE-Core 1024 `pe_embedding` | none at first | W5 measures whether frozen PE separates models; if not, the adapter of 6.5 |
-| Fine groups | #342 graph library, #343 partition records when landed | a `fine_group` run per coarse class (level `class`) | CPM resolution calibrated per class on the proxy; CHAMELEON floors recalibrated (the 128-d floors were wrong at 1024-d, #342 section 4) |
+| Fine groups | #342 graph library, #343 partition records when landed | a `fine_group` run per coarse class (level `class`) | the method W0b and W5 pick (average-linkage graph HAC baseline, Leiden CPM arm); cut or resolution calibrated per class on the dev split; CHAMELEON floors only if they add held-out precision (the 128-d floors were wrong at 1024-d, #342 section 4) |
 | Prototypes | AHC `refine_members` / Leiden sub-communities | up to 8 medoids per group, with count and dispersion | each prototype is a real crop: inspectable and a natural VLM sample |
 | Cross-mode linking | | set-to-set score over the top prototype pairs, cohort-normalized; merge proposal only when the CHAMELEON test passes and no cannot-link exists; at most one hop per run | front vs rear of one model may never link by embedding alone: accepted; a person or the naming step links them ("linked by a person" vs "linked by evidence") |
 | Naming | Cropwright cluster page, `review/raw_label_clusters`, VLM attributes, loop (#286) | representatives per group: one per prototype plus typical members (TypiClust-style typicality, [Hacohen et al. 2022](https://arxiv.org/abs/2202.02794)) | a group is named, not each crop |
@@ -482,6 +499,93 @@ Run bulk passes only when GPU 2 is free of the Triton ingest: they share the car
 slowdown with a resident VLM has not been measured on GPU 2 (measure it in W5 item 7 before
 overlapping the two).
 
+### 6.7 Attribute signals layer (applies to every kind)
+
+Embeddings are one signal. Other signals often decide what embeddings cannot (a plate links the
+front and rear of one car; a burst links frames of one moment). Each signal has a type, a
+confidence and a role, and enters the graph and the merge validator as **evidence with a
+confidence**, recorded on the cluster link (`links[]` evidence type `attribute:<name>`,
+cross-domain lessons 6.2). **Rule: no single attribute decides a merge or a split alone.** A
+must-link also needs embedding similarity above a calibrated floor (the embedding does not
+contradict it); a veto also needs weak embedding similarity (cross-domain T11), except where stated
+for plates at identity level. Human corrections are the only signal that acts alone.
+
+| Signal | Type | Stored today? | Confidence from | Role | Level | Cost |
+|---|---|---|---|---|---|---|
+| Detector class | category | yes (`class_name`, detector score) | detector score, calibrated | soft prior: partition within class (consolidated E5); veto across coarse classes only when both are confident | class | free |
+| Near-duplicate group | group id | yes (`duplicate_group_id`, `dup_is_representative`) | dedup threshold | must-link; one vote per group in gates and statistics | both | free |
+| Viewpoint tag | category | no; zero-shot from stored vectors (6.2) | text-prompt margin | assigns members to prototypes; strata; **never** a veto (views differ inside one class) | both | cheap, no pixels |
+| Plate text | identifier | partly: plate region boxes already carry `text*` fields; the key and rules are new (6.8) | OCR and VLM agreement, per-character confidence, format gate | must-link when confident and equal; cannot-link when confident and different (identity level) | identity; class must-link only | region stage cost |
+| Dominant colour | colour histogram / name | no; computed from the decoded crop at ingest (one decode) or a pack attribute | histogram peakedness | soft veto at identity level only, with weak embedding similarity (colour shifts with light) | identity | cheap at ingest; backfill re-reads pixels |
+| Scene / sign OCR text | text | core OCR index only (`/ocr`); region text in curation | OCR confidence | feature for whole-image events and places; never a must-link alone | K1 | existing OCR pass |
+| EXIF capture time | timestamp | no; header read at ingest | camera clock (unsynced clocks across cameras) | defines bursts with camera id: frames within a few seconds are same-object candidates; must-link only with high embedding similarity or a plate match | both | cheap (header only) |
+| EXIF GPS | coordinates | no | EXIF presence and DOP | feature for K1 events and places; **never served by default** (privacy) | K1 | cheap |
+| Camera / burst id | id (camera model + serial, hashed; sequence number) | no | EXIF presence | scopes bursts; same-image and same-burst rules | both | cheap |
+| Face-identity link | person id | core faces index only | calibrated assignment score (3.2) | must-link for images or person crops holding the same named person; feature for events | identity, K1 | existing face pass |
+| VLM pack attributes (make if legible, body type) | category | yes when a pack declares them | VLM confidence level | soft feature and soft veto, both-signals rule (cross-domain E8) | class | VLM time |
+
+New extraction (EXIF time, GPS, camera id, colour, view tag, plate key) lands with the W6 mapping
+change as a typed `signals` object on items and images docs (one migration, `make contracts`), so
+it is designed once. **EXIF time and burst grouping also feed the spatial work (#348)**: date
+sessions and same-place shoots are the candidate sets for scene discovery and photogrammetry, so
+W6 stores them in the form #348 needs (session id per images doc, burst id, GPS only in the
+project and never in exports by default).
+
+### 6.8 Registration-plate reading as an identification signal (product feature)
+
+Plates are one instance of a generic **identity text** region: a region whose text identifies one
+physical object (plates; serial numbers, bib or jersey numbers in other domains). The code says
+"identity text"; the example plate region profile turns it on for vehicles.
+
+What exists: the example plate profile in `examples/region_profiles/` (SAM 3 text-prompted
+segmenter plus an OCR text-hint re-pass, optional detector leg), the region text reader
+(`src/services/detection/region_text.py`: tallest-line selection, charset, length, stopwords,
+placeholders), OCR and VLM readers with reconciliation fields on each box (`text`, `text_ocr`,
+`text_vlm`, `text_confidence`, `text_choice`, `text_disagreement`), PP-OCRv5 in Triton, the pinned
+Open Images plate sample (`scripts/datasets/manifests/oi_plates_300.json`, CC BY 2.0 images), the
+plate bake-off example under `examples/bakeoff/` and the false-positive region bucket
+(`src/routers/curation/regions_fp.py`). No permissively licensed plate detector ships; an operator
+may plug in their own through the profile's detector leg.
+
+Lessons from the private prior plate-reading work (generic; no names or data copied): a small detector
+trained on curated, deduplicated data clearly beat public baselines, while the text-prompted
+segmenter was the throughput wall; detecting on the vehicle crop inherits the vehicle detector's
+recall ceiling, and some public detectors change accuracy sharply between full-frame and crop
+inputs; many vehicle photos show no plate at all (side and three-quarter views), so plates are a
+**minority** signal and never a precondition; in-plane rotation (leaning motorcycles) hurts
+detection and reading; OCR needs a small border inset, letterboxed (not stretched) recognition
+input, and a confidence from the per-character maximum logit rather than a mean softmax; a
+permanent false-positive bucket with sub-centroids keeps non-plates out; whole-frame near-duplicates
+(cosine >= 0.98 on the frame vector) must not straddle train and test.
+
+Design:
+
+| Part | Rule |
+|---|---|
+| Key | normalized identity text: uppercase, profile charset, stopwords and placeholders removed; a profile **confusable map** (for plates O/0, I/1, B/8, S/5, Z/2) applied for matching only; a profile format gate (`identity_text_formats`: optional regex list, else length bounds) |
+| Confidence tiers | `confident`: format passes and either OCR and VLM agree or the OCR minimum per-character confidence is above a calibrated `c_hi`; `partial`: short, occluded or low-confidence characters (stored as a pattern with unknown positions); `none` |
+| Must-link | two `confident` equal keys **and** crop embedding similarity above a calibrated low floor **and** compatible coarse class: identity-level must-link; at class level the same edge joins the two crops' view prototypes (the front and rear of one vehicle end up in one make/model group, the link embeddings cannot make) |
+| Veto | two `confident` keys at edit distance >= 2 (after confusable folding): identity-level cannot-link (graph penalty, hard in the merge validator); overridden only by a person. No veto at class level (two cars of one model are one class) |
+| Near match | edit distance 1, or a `partial` key compatible with a `confident` one: a review suggestion, never an edge |
+| Ambiguity | several plates inside one item: only the plate box inside the item and dominant by area counts, else `none`; the same confident key on two items of one image: flag for review (reflection or double detection); the same key on visually incompatible vehicles (similarity below the floor): no edge, flagged (dealer or moved plates, misreads) |
+| Privacy | project setting `identity_text_mode`: `off` (no text read or stored for identity regions, edges refused), `hash_only` (default: matching uses `text_key` = HMAC-SHA256 of the key with a per-project secret held in the project state directory; raw text fields are not stored), `raw` (raw text stored for review, owner opt-in). Plate text never appears in logs (a redaction filter plus a test), never in exports unless the operator opts in, never in committed files (tests use made-up strings), never sent to a hosted model. Purge: dry run returns counts, then deletes every identity-text field and key in the project, rotates the secret (old keys become meaningless) and writes an audit event; a count query must return 0 |
+
+Evaluation (real data only):
+
+- Public: Open Images plate sample (detection recall and precision at IoU 0.5 per input regime and
+  per rotation stratum; a person transcribes the 300 plates locally for reading accuracy, text not
+  committed), the OpenALPR benchmark images ([openalpr/benchmarks](https://github.com/openalpr/benchmarks),
+  licence to verify), UFPR-ALPR ([Laroca et al.](https://arxiv.org/abs/1802.09567), research use on
+  request) and CCPD ([detectRecog/CCPD](https://github.com/detectRecog/CCPD), research use) as
+  optional local reading sets.
+- Set P (numbers only): a person transcribes a seeded 500-plate sample; 200 plate-linked pairs and
+  100 vetoed pairs checked by a person or the local VLM.
+- Metrics: exact-match read accuracy, character error rate, `confident`-key precision (target
+  >= 0.99), coverage (share of vehicle crops with a confident key), plate-link precision (target
+  >= 0.99), identity-level same-vehicle recall by view bin with and without plate edges at a fixed
+  false-merge rate, class-level make/model purity and propagation precision with and without plate
+  edges, false merges blocked by the veto against true merges lost, region-stage cost per crop.
+
 ## 7. Visual verification protocol (Haiku as judge)
 
 Purpose: a check, in testing, that clusters, search results and pairs are similar the way a person
@@ -504,12 +608,18 @@ labels into a project.
 
 ### 7.2 Data rules
 
+- **Spot checks only.** Haiku and the VLMs used for verification are development and spot-check
+  tools on small, seeded samples. No verification run ever sends all images of a set or project.
+  A bulk local-VLM pass (section 6.6) is a separate, explicit choice made per run by the operator,
+  never part of verification.
 - Public images only by default (COCO, Open Images, Commons sets B and C, the local-only vehicle
   sets).
 - Set P: only a sample the owner approves explicitly, identified by a manifest of content hashes
   stored in `artifacts_local/`; committed text holds aggregate numbers only.
 - **Faces are never sent** (biometric data). Face clusters are verified against identity labels
   only.
+- **Plate crops and plate text are never sent** to a hosted model (section 6.8); plate
+  verification uses the local VLM or a person.
 
 ### 7.3 Sampling
 
@@ -527,15 +637,20 @@ randomizes panel order; seed and order are recorded.
 ### 7.4 Budget and recording
 
 - Per-run hard caps (`max_calls`, `max_input_tokens`), reserved write-ahead before each call as
-  the loop's budgets are; default 1,000 calls per run, 3,000 per wave, the owner may change them.
+  the loop's budgets are. Per owner decision O3 (section 14) the samples are small: per wave at most
+  20 cluster panels of at most 12 members, 100 pairs and 20 search panels for Haiku (about 140
+  calls); the agreement run of W8 (E0) at most 100 panels and 300 pairs per kind for Haiku, with the
+  local VLM judging the full E0 sample (200 panels, 500 pairs). Larger budgets need the owner's yes.
 - Raw JSON per verdict under `artifacts_local/bench/cluster_search/<wave>/judge/<run_id>.jsonl`:
   `{run_id, model, prompt_version, unit, item ids or content hashes, panel order, verdict,
   unsure, input_tokens, output_tokens, latency_ms, request_id}`, plus a run header with the
   sampling seed, budget, git sha and dataset manifest hash.
-- **Agreement first**: before the judge is trusted on any kind, it is run on a labelled public
-  sample of that kind (500 pairs and 100 panels) and its agreement with ground truth is reported
-  (accuracy, Cohen's kappa, false-"same" rate). A judge with kappa < 0.6 on a kind is not used for
-  that kind; its verdicts are reported but carry no weight.
+- **Agreement first** (consolidated note E0): before the judge is trusted on any kind, it is run
+  on a labelled public sample of that kind (the 3,000-item set for crops) and its agreement with
+  ground truth is reported (accuracy, Cohen's kappa on pairs, precision and recall of the "does not
+  belong" flags, false-"same" rate, cost per judgement). Proposed bars, to be agreed with the
+  owner: pair kappa >= 0.7 and flag precision >= 0.8. Below them the judge only ranks clusters for
+  human review and its verdicts carry no weight.
 - Output: judge-estimated purity and false-merge rate with Wilson 95 % intervals, next to the
   ground-truth metrics where they exist; disagreements are listed for a person to look at (a
   20-item human spot check per run).
@@ -576,6 +691,7 @@ peak memory. Strata: low resolution, near-duplicate, similar classes, view diffe
 | K3 region boxes | a box-level set built like #341 on the public car-wheel example plus Open Images parts; set P region boxes with validated classes | as K2 per box | same bars as K2, scored per box |
 | K4 faces | LFW, CPLFW / CFP-FP pose pairs (quality); Open Images faces checked by a person or the local VLM; synthetic 100k for the memory bound only | persons per true identity (fragmentation), identities per person (contamination), chaining incidents, incremental assignment precision at coverage, names/merges preserved | BCubed precision >= 0.97; accepted incremental assignments precision >= 0.99; 100 % of names, merges and cannot-links preserved across a re-run; peak RSS at 100k synthetic faces O(n k), under 2 GB; purge leaves 0 vectors |
 | Make/model (fine-grained) | CompCars, Stanford Cars, Commons set C; set P projects (class level) and plate-linked bursts (identity level, 5.4) | kNN top-1/top-5 at make and model level; cluster purity at each taxonomy level; view-stratified same-model recall; open-set AUROC; GCD All/Old/New; labels per correctly labelled crop | measurement first (W5 sets the baseline); product bars: groups offered for naming have model-level purity >= 0.90 (judge and ground truth); propagated-label precision >= 0.95 (audit lower bound, matches the loop's theta 0.9 / alpha 0.05 gate) |
+| Plate identity signal (6.8) | Open Images plate sample, OpenALPR benchmark (licence permitting); set P 500 transcribed plates and 300 checked pairs (numbers only) | exact-match read accuracy, character error rate, coverage, link precision, veto blocks vs losses, recall lift by view bin | confident-key precision >= 0.99; plate-link precision >= 0.99; identity-level same-vehicle recall at fixed false-merge rate higher with plate edges than without in every view bin that has plates; purge leaves 0 identity-text fields and keys; no plate text in logs (test) |
 | Search (all) | section 4.4 | recall@1/5/10, MRR@10, nDCG@10 with CI95, precision@10, mAP@100; p50/p95/p99 client and server, QPS at concurrency 1 and 8, ANN recall vs exact | latency targets of 4.3; crop-target text search recall@10 on crop-level queries not below the item target's; ANN recall@100 >= 0.98 |
 
 Visual-judge results (section 7) are reported beside, never instead of, ground-truth metrics.
@@ -625,8 +741,11 @@ Per-wave content of G1 to G3:
 | W5 | all experiments on held-out halves | cluster panels per arm (ECG, CPM, AHC) | research note read-through; a sample of make/model groups per arm in a throwaway project |
 | W6 | export by name equality, import refusal cases | none (no clustering output) | taxonomy tree, export at make and model level, re-import |
 | W7 | fine groups on held out, public and set P | cluster panels and naming checks | make/model groups, prototypes, new-candidate queue, loop per-prototype sampling |
-| W8 | judge agreement per kind on 500 labelled public pairs and 100 panels per kind | the protocol itself | read disagreements; decide whether the judge is trusted per kind |
+| W8 | judge agreement per kind (E0): local VLM on 200 panels and 500 pairs, Haiku on at most 100 panels and 300 pairs | the protocol itself | read disagreements; decide whether the judge is trusted per kind |
 | W-UI | frontend `npm run check` and `npm run build`; backend routes' tests | none | every 8.4 screen opened in a browser on the public projects, desktop and 430 px |
+| W0b | E1 raw arms and E5 on held-out halves; #372 permutation test | judge panels: current IVF vs the new default | the same 20 clusters before and after |
+| WB | the WB decision rules per variable and kind, held out | old-vs-new variant on the same sampled panels | the results note; 20 clusters per kind, old and new variant side by side |
+| W12 | plate metrics of 8.2 on public plates and the set P sample | local VLM (never Haiku) on plate-linked and vetoed pairs | plate-linked groups with their evidence, the near-match queue, a `hash_only` project shows no plate text, purge dry run and run on a test project |
 | W9 | adapter lift on held out | panels before/after | compare groups before and after the adapter |
 | W10 | set P pilot, numbers only | approved set P sample | the pilot project, local only |
 
@@ -651,7 +770,10 @@ Built in wave W-UI (section 9), in step with the backend waves:
    this" on every card, image upload, group-by-image.
 6. **Make/model**: taxonomy tree in the class panel, group naming with level choice, the
    new-candidate queue.
-7. **Review mode**: a page that opens the clusters, persons and queries a review package lists,
+7. **Link evidence** (6.7, 6.8): on a cluster or a pair, why members are linked ("by embedding",
+   "by plate (confident)", "by burst", "by a person"), the near-match review queue, and the project's
+   identity-text mode and purge dry run in project settings.
+8. **Review mode**: a page that opens the clusters, persons and queries a review package lists,
    in order, from a list the backend serves (the package's ids imported into the project state
    directory); the owner's verdict stays in the review file.
 
@@ -666,6 +788,19 @@ conventional commits, `.venv/bin/pre-commit run --all-files` before each commit,
 same commit, CHANGELOG `[Unreleased]` entry, no push without the owner's yes, merged `--no-ff`.
 **Every wave ends with gates G1, G2 and G3 of section 8.3, in that order, using the row of the
 8.3 table for that wave; it is not done until the owner's G3 verdict is recorded as a pass.**
+
+The consolidated note's experiments map onto the waves (its split rules apply: split by image,
+50 % dev / 50 % test, test read once per method family, 1,000-resample bootstrap intervals,
+class-disjoint splits for open-set):
+
+| Experiment (consolidated note section 8) | Wave |
+|---|---|
+| E0 judge calibration | W8 (runs right after W0, W0b and W1) |
+| E1 reproduce at 3,000 items (re-ingest), raw-vector arms; E5 detector-class prior | W0b |
+| E1 representation arms (whitened, k-reciprocal), E2 crop preprocessing, E3 frozen embedding alternatives | WB (embedding and processing benchmark) |
+| E4 adapter, E8 viewpoint, E9 fine-grained, E10 scale on real vectors | W5 (E4 feeds W9) |
+| E6 faces | W2 (method) and W5 (calibration) |
+| E7 whole image | W5 |
 
 Shorthands:
 
@@ -706,6 +841,39 @@ containers, timed `curl` of `/health` of your own stack only. Stack env: `TRITON
   held-out half; the new BCubed rows are appended to `cluster_eval_baseline.md`.
 - Issues: comment on #341 (extension, held-out split), #342 (re-score held out).
 
+### W0b: configuration and input baseline before heavier methods (CPU, GPU 2 for one re-encode) [Sonnet; Opus review of the kill rules and the #372 fix]
+
+Why first: the consolidated note shows most fragmentation is configuration and input (section
+"Real-data facts" above). Heavier methods are judged against the fixed baseline, not against IVF
+at K = n // 6.
+
+- Land the diagnostics: the scratch scripts `fetch.py`, `diag.py`, `heldout.py` (currently only in
+  `$SCRATCH/cm-review/`) move to `scripts/research/cluster_diag/` as `fetch_vectors.py`,
+  `diagnostics.py` (P@k by stratum, effective rank, hubness skew, PCA whitening fit/apply,
+  k-reciprocal re-ranking, linkage curves) and `heldout.py`, with
+  `tests/research_scripts/test_cluster_diag.py` (hand-computed small cases for every metric and
+  transform). Reproduce the consolidated note section 4 numbers within the stated folds; the note's
+  Reproduce section then points at the repo scripts.
+- E1: re-ingest the pinned 3,000-item set into a throw-away project (`-p op-cs-e1`, GPU 2) and score,
+  on the held-out half: IVF (current), global average-linkage AHC, complete-linkage AHC, Leiden
+  CPM, ECG once, on the stored raw vectors; plus the 2b MiniBatchKMeans partition. Kill rule from
+  the note: Leiden is not the default unless it beats average linkage at the chosen recall.
+  Representation arms (whitening, k-reciprocal, preprocessing, other models) belong to WB.
+- E5: detector-class prior on the residual-like low-confidence subset.
+- #372 (product, red first): sort the pool by document id before sampling and fitting, seed from a
+  stable key; test that a permuted fetch gives the identical partition.
+- Product default (only if E1 confirms): the residual partition becomes the sparse kNN
+  average-linkage graph HAC with a dev-calibrated cut; IVF keeps streaming assignment with K sized
+  for the index; the cut is calibrated per project (anisotropy differs per project). sklearn AHC does
+  not scale (about an hour and 124 GB at 347k, [clustering_methods.md](../research/clustering_methods.md)
+  2.2), so above about 100k the method runs per coarse class or as approximate graph HAC; W5 E10
+  measures it on real vectors.
+- Gates: G1 on the 3,000-item and COCO held-out halves and the set P inventory projects; G2 judge
+  panels on the baseline vs the new default; G3 package: browse the same 20 clusters before and
+  after in Cropwright.
+- Issues: #372 (close), #342 and #341 (comment), new `research(clustering): configuration
+  baseline (E1 raw arms, E5) with the diagnostics in the repo`.
+
 ### W1: public proxy datasets (CPU, network) [Sonnet; Haiku collects manifests]
 
 - Files: `scripts/datasets/fetch_vehicle_proxy.py` (Stanford Cars from a local mirror path given
@@ -721,6 +889,68 @@ containers, timed `curl` of `/health` of your own stack only. Stack env: `TRITON
 - Verify: `T0`; fetch dry run prints counts per class and licence.
 - Owner gate: O2 (licences, publication of aggregates).
 - Issues: new `research(datasets): public face and vehicle make/model proxies with licences`.
+
+### WB: embedding and processing benchmark (GPU 2) [Sonnet runs; Opus review of protocol and the go/no-go per variable]
+
+Runs right after W0 (scorecard), W1 (datasets) and W8 (judge calibration). **Rule: no change to
+production pre- or post-processing, or to the embedding model, without a recorded WB result that
+shows the gain on held-out real data, and an owner G3 pass.** The text-retrieval side of model
+choice reuses [embedding_model_eval_plan.md](../research/embedding_model_eval_plan.md) (#347); WB
+covers neighbour and cluster quality.
+
+Protocol (written at the top of the results note `docs/research/embedding_processing_benchmark.md`):
+
+- One factor at a time against the production reference (PE-Core-L14-336, resize then centre-crop,
+  L2, raw cosine; MobileCLIP2-S2 for whole images; SCRFD + ArcFace R50 for faces). Same held-out
+  real data for every variant (W0 split manifests); fixed seeds; 3 reps for headline rows.
+- Metrics per variant: P@1/P@10 and 10-NN vote by stratum (size, aspect, class, view); the W0
+  scorecard (BCubed, pairwise, false-merge) for the baseline clustering method of W0b at its
+  dev-calibrated cut; retrieval recall@10 where the kind has queries.
+- Cost per variant: encode throughput (crops/s or images/s) and peak GPU memory on GPU 2 (A6000),
+  vector size, and the ingest-path change: whether it keeps decode-once (a variant must consume the
+  frame or crop the pass already decoded), whether stored vectors must be recomputed (a re-embed of
+  every item through the #365 dual-field migration, with its time at 100k and 1M estimated from the
+  measured throughput), and the stored-box rule (the vector is computed from exactly the stored,
+  clamped box; a margin or letterbox variant stamps its policy with the vector so the staleness check
+  on `bbox_norm` still holds).
+- Visual cross-check: for each variant that wins G1, the judge (Haiku on public panels, local VLM
+  for faces and plates) compares cluster purity of the old and the new variant **on the same
+  sampled panels** (same seeds, both partitions), within the 7.4 budgets.
+- Raw JSON per run under `artifacts_local/bench/cluster_search/wb/<kind>/<variable>/<variant>/`;
+  the small public result files that back the note's tables go to
+  `docs/benchmarks/embedding_processing/` for the paper.
+
+Variables (each a row group in the results note; kinds: whole images, crops/items, vehicles, faces):
+
+| Variable | Variants | Kinds |
+|---|---|---|
+| Crop preprocessing | centre-crop (current), letterbox/pad to square, aspect-bucketed resize | crops, vehicles |
+| Context | 0 %, 10 %, 20 % margin around the stored box | crops, vehicles, faces (alignment margin) |
+| Input resolution and minimum size | model native vs one step up where the model allows; size gate at 24 / 32 / 48 px (gated crops join but never form clusters) | all |
+| Embedding model (frozen) | PE-Core (current), MobileCLIP2-S2, DINOv2-L, SigLIP 2 (L or So400m), the #347 candidates; PE-Core-G if it fits | images, crops, vehicles |
+| Faces | 5-point alignment (current) vs alignment plus margin; quality gate: detector score 0.5 / 0.7, minimum face size, yaw bins from landmarks, blur | faces |
+| Post-processing | L2 only (current), centring, PCA-256 whitening fitted on the project pool or a reference pool, k-reciprocal re-ranking (k1 20, k2 6, lambda 0.3), per-project calibrated thresholds | all |
+| Multi-crop / test-time augmentation | single view (current), horizontal flip average, two-scale average | crops, vehicles |
+
+Decision rules (from the consolidated note, made stricter where it says so): a preprocessing
+variant ships only if elongated-crop P@10 rises by >= 0.03 with no loss elsewhere (E2); a second
+embedding model only if it beats PE-Core by >= 0.03 P@10 on the low-res and person strata or on
+model-level vehicle P@10 (E3); whitening only if held-out precision at matched recall rises by
+>= 0.02 (E1); TTA only if the gain covers its encode cost; a face variant only if BCubed
+precision at equal recall improves on LFW and CPLFW held out. Ties keep the current path.
+
+- Files: `scripts/research/embed_bench/` (`variants.py` preprocessing and post-processing variants
+  as pure functions over decoded crops or stored vectors, `encode_variant.py` re-encode driver
+  against Triton or a research venv model, `run_bench.py` per variable), unit tests in
+  `tests/research_scripts/test_embed_bench_variants.py` (letterbox geometry, margin clamping to
+  the frame, whitening fit/apply round trip, k-reciprocal on a hand-computed case).
+- GPU: GPU 2 under `$GPU2`; reference models other than the shipped encoders run in the research
+  venv or Docker, never installed into the product.
+- Gates: G1 the decision rules above on held-out data; G2 old-vs-new panels; G3 package: the
+  results note, plus the same 20 clusters per kind browsed in two throw-away projects (old and new
+  variant) side by side.
+- Issues: new `research(embed): embedding and processing benchmark for clustering (preprocessing,
+  models, faces, post-processing, TTA)`; comment on #347, #365.
 
 ### W2: persons fixes #354 and FAISS reload #353 [Opus DR-F0 short review of the id-stability rule; Sonnet implements; Opus review of delete/merge writes]
 
@@ -796,8 +1026,8 @@ containers, timed `curl` of `/health` of your own stack only. Stack env: `TRITON
   through a throwaway project on a stack bound to GPU 2 (`$GPU2`), or with
   `scripts/bench/export_project_embeddings.py` from that project.
 - Experiments (one factor at a time, 3 seeds):
-  1. kNN top-1/top-5 at make and model level: PE-Core vs MobileCLIP (frozen); reference arms
-     DINOv2 and SigLIP 2 in the research venv only (not shipped).
+  1. Representation: the WB result (PE-Core unless a WB variant passed G3); kNN top-1/top-5 at make
+     and model level reported for it; E9 seeds (1, 3, 5 per class) and label propagation.
   2. Fine graph: mutual-kNN + Leiden CPM (+ CHAMELEON) vs current IVF+AHC vs average-linkage AHC
      vs **cuGraph ECG on GPU 2**, per coarse class, CPM gamma log-grid 0.0003 to 0.01; purity at
      make and model level. ECG enters as a candidate only: its synthetic 20k 128-d result (below)
@@ -812,6 +1042,12 @@ containers, timed `curl` of `/health` of your own stack only. Stack env: `TRITON
   8. Identity level on real data: same-vehicle recall by view difference on set P plate-linked
      bursts and CO3D sequences at a fixed false-merge rate (does frozen PE link a front view to a
      rear view at all; cross-domain E4), numbers only for set P.
+  9. Whole images (E7): hierarchical k-means vs flat IVF vs average-linkage HAC on MobileCLIP,
+     label-set Jaccard purity on COCO val and the Open Images val sample, judge-rated coherence.
+  10. Scale on real vectors (E10): kNN (FAISS GPU or CAGRA, PCA 256 vs 1024), graph HAC and Leiden
+     at the set P inventory size and on about 860k COCO train2017 objects; wall time, memory, kNN
+     recall, precision on COCO train labels. This replaces the synthetic 1M runs for any quality
+     claim.
 - Files: `scripts/research/fine_grained_eval.py`, `scripts/research/view_tag_eval.py` (research
   scripts; unit tests in `tests/research_scripts/` for any metric code).
 - Output: `docs/research/fine_grained_grouping_eval.md` with the decisions: adapter needed (6.5
@@ -901,12 +1137,46 @@ containers, timed `curl` of `/health` of your own stack only. Stack env: `TRITON
 - Issues: new `feat(cropwright): review screens for clustering and search (verification panel,
   people view, prototypes, search panel, taxonomy, review mode)`.
 
-Ordering and parallelism: W0 and W1 first (CPU, parallel). **W8 (the judge tool and its
-agreement runs) right after them, because every later G2 uses it.** W2 next (it fixes shipped
-bugs). W4 and W5 in parallel after W0/W1/W8 (W5 holds GPU 2 in blocks; W4's GPU need is short).
-W3 after W2 and DR-F1. W6 after DR-M1, parallel with W5. W7 after W5 and W6. W-UI slices follow
-each backend wave so its G3 can be reviewed in Cropwright. W9 only on W5's rule. W10 after W7.
-W11 last.
+### W12: identity text (registration plates) as a clustering signal [Opus DR-L1 (key, tiers, privacy modes, edge rules); Sonnet; Opus review of privacy, purge and logging]
+
+- Depends on: W6 (the `signals` mapping change and the DR for it), W7 (fine groups and the merge
+  validator consume the edges). The reading-quality half (detection, OCR, key, tiers, privacy) can
+  start after W6.
+- Files: `src/services/detection/identity_text.py` (pure: normalization, confusable folding,
+  format gate, tiers, edit distance, partial patterns; thresholds from the region profile: new
+  profile fields `identity_text`, `identity_text_formats`, `identity_text_confusables`, with the
+  example plate profile updated); `src/services/curation/identity_text_store.py`
+  (per-project HMAC secret in the project state directory, `text_key` writes through the OCC
+  helpers, purge with dry run and audit event); project setting `identity_text_mode`
+  (`off`/`hash_only`/`raw`, fail closed when unset for an identity-text profile);
+  `src/services/curation/clustering/attribute_edges.py` (must-link, cannot-link, near-match
+  suggestions from 6.7 signals, embedding-floor rule, level rules); a log redaction filter in
+  `src/core/logging.py` for identity-text fields; OCR checks from the prior work (letterboxed
+  recognition input, border inset, per-character max-logit confidence) verified in the existing
+  reader and fixed where they differ; proposed route `{P}/identity_text/purge`; wire models and
+  `contracts/`; Cropwright link evidence and settings (8.4 item 7).
+- Tests (made-up plate strings only): normalization and confusable table; tiering (confident,
+  partial, none); a confident equal key with embedding similarity below the floor makes **no**
+  edge; a veto applies at identity level and never at class level; edit distance 1 gives a review
+  suggestion, not an edge; two plates in one item give `none`; `hash_only` stores no raw text;
+  keys differ across projects; `off` refuses edge building; purge leaves 0 identity-text fields and
+  keys and rotates the secret; caplog shows no fixture plate text in any log line of a full region
+  pass.
+- Measurement: 6.8 evaluation on GPU 2 (region stage), held-out halves, numbers only for set P;
+  the plate-linked burst labels of 5.4 rebuilt through the product path and compared with the
+  research-script version.
+- Gates: the W12 rows of 8.2 and 8.3.
+- Issues: new `feat(curation): identity text (registration plates) as a clustering signal with privacy
+  modes and purge`; comment on #343 (link evidence), #348 (bursts), #379 (shared purge pattern).
+
+Ordering and parallelism: W0 and W1 first (CPU, parallel), with W0b (configuration baseline)
+right after W0. **W8 (the judge tool and its agreement runs) next, because every later G2 uses
+it, then WB (embedding and processing benchmark), whose results fix the representation every
+later wave uses.** W2 can run in parallel with WB (it fixes shipped bugs; faces have their own WB
+rows). W4 and W5 after WB (W5 holds GPU 2 in blocks; W4's GPU need is short). W3 after W2 and
+DR-F1. W6 after DR-M1, parallel with W5. W7 after W5 and W6. W12 after W6, its edge half after
+W7. W-UI slices follow each backend wave so its G3 can be reviewed in Cropwright. W9 only on W5's
+rule. W10 after W7 and W12. W11 last.
 
 ## 10. Issues to create or update
 
@@ -919,7 +1189,11 @@ W11 last.
 | create | `feat(curation): taxonomy as data and a classification-crop export by class name` (W6) |
 | create | `feat(clustering): fine groups with multi-prototype clusters and a new-candidate queue` (W7) |
 | create | `research(eval): visual verification protocol with a judge model` (W8) |
-| create | `feat(cropwright): review screens for clustering and search (verification panel, people view, prototypes, search panel, taxonomy, review mode)` (W-UI) |
+| create | `feat(cropwright): review screens for clustering and search (verification panel, people view, prototypes, search panel, taxonomy, link evidence, review mode)` (W-UI) |
+| create | `research(clustering): configuration baseline (E1 raw arms, E5) with the diagnostics in the repo` (W0b) |
+| create | `research(embed): embedding and processing benchmark for clustering (preprocessing, models, faces, post-processing, TTA)` (WB) |
+| create | `feat(curation): identity text (registration plates) as a clustering signal with privacy modes and purge` (W12) |
+| update | #348 (EXIF sessions, bursts and GPS stored in the form the spatial work needs, 6.7) |
 | create | `fix(search): object search runs Triton on the event loop and queries crops against the whole-image index` (W4) |
 | update | #341 (BCubed, AMI, abstention, identity/view strata), #342 (re-score, fine-grained calibration), #343 (level, prototypes, links), #344 (abstention, microclusters), #345 (adapter rule), #347 (scorecard frame), #353, #354 (design here), #356, #365, #371, #372 (order independence everywhere), #379, #286 (per-prototype sampling) |
 
@@ -934,6 +1208,9 @@ W11 last.
 | Proxy licences (CompCars, Stanford Cars, VMMRdb, LFW) | local only; aggregates published only with owner approval; Commons set C for anything shown |
 | Judge bias or drift | agreement measured per kind before use; verdicts never weigh as ground truth; prompt versioned |
 | Biometric leakage | faces never sent to an external model; purge and fail-closed switch ship with the first face identity change |
+| Plate text leakage | `hash_only` default, no plate text in logs, exports or committed files, never sent to a hosted model, purge with secret rotation, tests that fail on a leak |
+| One strong attribute forces a wrong merge (shared or misread plate, burst with two vehicles) | the 6.7 rule: no attribute decides alone; embedding floor on every must-link; near matches only to review |
+| A preprocessing or model change looks good on one stratum and hurts another | WB decision rules require no loss elsewhere; old-vs-new judge panels; owner G3 before any production change |
 | GPU 2 contention (shared with ingest and the VLM) | one job at a time under the lock; bulk VLM passes only when ingest is idle |
 | Scope creep into a vehicle-specific product | every vehicle term is project data; a test project with a non-vehicle taxonomy (Open Images animals) runs through W6/W7 |
 
@@ -947,7 +1224,9 @@ W11 last.
 | O4 | Should Haiku (or another hosted model) ever be a product-side verifier, behind the external-endpoint consent? | no for now; revisit after W8 |
 | O5 | Set P pilot size and composition (20k crops, seeded across sessions) | yes |
 | O6 | Make/model labels from the loop (`assist_propagated`) in the training export? | only after audit precision >= 0.95 on that class |
-| O7 | May plate OCR on set P bursts be used locally to build same-vehicle labels (plate text never leaves `artifacts_local/`)? | yes; it is the only large real identity-level source |
+| O7 | May plate OCR on set P bursts be used locally to build same-vehicle labels (plate text never leaves `artifacts_local/`)? | **decided yes** (section 14). Extended: plates are also a product signal (6.8, W12) with `hash_only` as the default mode, a project switch and purge; the test labels of 5.4 are rebuilt through that product path |
+| O9 | Default `identity_text_mode` for new projects with an identity-text profile: `hash_only` (recommended) or `off`? | `hash_only` |
+| O10 | Store EXIF GPS in curation projects (never served by default, never exported by default) for the spatial work (#348)? | yes, project-scoped |
 | O8 | Is the review-package format (8.3) and a G3 verdict per wave the right amount of owner time? | yes; the package lists at most about 25 clusters and 12 queries |
 
 ## 13. Sources
@@ -988,6 +1267,10 @@ Search: [nested k-NN](https://docs.opensearch.org/latest/vector-search/specializ
 [RegionCLIP](https://arxiv.org/abs/2112.09106).
 Data: [Open Images V7](https://storage.googleapis.com/openimages/web/factsfigures_v7.html).
 Judge: [Claude vision docs](https://platform.claude.com/docs/en/build-with-claude/vision).
+Plates: [OpenALPR benchmarks](https://github.com/openalpr/benchmarks),
+[UFPR-ALPR](https://arxiv.org/abs/1802.09567), [CCPD](https://github.com/detectRecog/CCPD).
+Methods consolidated (real-data evidence, recommended stack, E0 to E10): branch
+`docs/cluster-methods-review`, `docs/research/clustering_research_consolidated.md`.
 
 ## 14. Owner decisions (2026-10-29)
 
