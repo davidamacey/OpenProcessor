@@ -33,6 +33,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - Docs: the published site is linked from the README and the repository homepage; first-run steps corrected after a new-user review.
 
 ### Fixed
+- Installer: a control-plane-only install now passes its health wait (the API's `/health` is 503 without Triton) and `./openprocessor start` no longer starts Triton after one; upgrade and rollback replace release files by rename so a running installer is never rewritten in place; concurrent installer runs are serialized by a lock; `--rollback` honors `--no-start`; `secrets/vlm` and `data/source` are created as the installing user instead of root-owned by Docker; several confusing messages corrected (`docs/research/installer_drive_log.md`).
 - An empty or idle project no longer queues an `auto_label` job on every refresh cycle (#350).
 - Identical content in concurrent ingest batches is stored once (#358).
 - Ingest and the embed pass embed the stored, image-clamped box instead of an unclamped one (#259).

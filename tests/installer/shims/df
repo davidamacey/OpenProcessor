@@ -1,4 +1,5 @@
 #!/bin/bash
-# Test double for df: always ~2 TB free (the disk check is not under test).
+# Test double for df: ~2 TB free, or 4 GB when $SHIM_STATE/low_disk exists.
+[[ -e "${SHIM_STATE:-/nonexistent}/low_disk" ]] && { printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\nshimfs 100000000 96000000 4194304 96%% /\n'; exit 0; }
 printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
 printf 'shimfs 4000000000 1000000000 2000000000 33%% /\n'
