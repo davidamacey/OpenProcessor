@@ -1,0 +1,540 @@
+{
+ "schema_version": 1,
+ "started_utc": "2026-10-29T02:49:41+00:00",
+ "finished_utc": "2026-10-29T02:51:47+00:00",
+ "api": "http://127.0.0.1:5603",
+ "sample_seed": 20261028,
+ "host_load_start": {
+  "load1": 101.91845703125,
+  "load5": 87.49755859375,
+  "load15": 60.9169921875,
+  "nproc": 48
+ },
+ "host_load_end": {
+  "load1": 47.0634765625,
+  "load5": 70.6474609375,
+  "load15": 58.04248046875,
+  "nproc": 48
+ },
+ "route": "POST /search/image (MobileCLIP, visual_search_global); leave-one-out, self hit removed",
+ "params": {
+  "n_queries": 1982,
+  "relevance": "category-set Jaccard >= 0.5 (proxy)",
+  "pool": 2000
+ },
+ "load1_samples": [
+  101.91845703125,
+  92.25732421875,
+  88.072265625,
+  83.7421875,
+  76.40185546875,
+  72.84619140625,
+  73.65966796875,
+  67.7890625,
+  64.5224609375,
+  61.27734375,
+  57.8916015625,
+  55.33740234375,
+  52.98779296875,
+  51.7919921875,
+  49.326171875,
+  50.18115234375,
+  48.32470703125,
+  49.037109375,
+  46.71142578125,
+  44.892578125
+ ],
+ "precision@10": {
+  "mean": 0.47628657921291623,
+  "zero_precision_queries": 217
+ },
+ "precision@10_over_ceiling_mean": 0.5066683260079486,
+ "chance_precision@10": 0.015404776050992197,
+ "mean_relevant_in_pool": 30.7941473259334,
+ "queries_with_no_relevant_in_pool": 21,
+ "self_hit_at_rank1": 1982,
+ "latency_ms": {
+  "n": 1982,
+  "p50": 60.86007898557,
+  "p95": 71.73142497777008,
+  "p99": 89.93720301077701,
+  "mean": 61.81075729256861,
+  "min": 50.79791200114414,
+  "max": 176.55517600360326
+ },
+ "failure_examples": [
+  {
+   "query": 139,
+   "categories": [
+    "book",
+    "chair",
+    "clock",
+    "dining table",
+    "microwave",
+    "person",
+    "potted plant",
+    "refrigerator",
+    "tv",
+    "vase"
+   ],
+   "top3": [
+    {
+     "coco_id": 13923,
+     "categories": [
+      "bottle",
+      "bowl",
+      "chair",
+      "couch",
+      "dining table",
+      "potted plant",
+      "tv",
+      "vase"
+     ]
+    },
+    {
+     "coco_id": 570456,
+     "categories": [
+      "book",
+      "bowl",
+      "chair",
+      "couch",
+      "dining table",
+      "sink"
+     ]
+    },
+    {
+     "coco_id": 36844,
+     "categories": [
+      "bicycle",
+      "chair",
+      "couch",
+      "cup",
+      "potted plant",
+      "refrigerator",
+      "remote",
+      "tv"
+     ]
+    }
+   ]
+  },
+  {
+   "query": 1268,
+   "categories": [
+    "backpack",
+    "bird",
+    "boat",
+    "cell phone",
+    "handbag",
+    "person"
+   ],
+   "top3": [
+    {
+     "coco_id": 506004,
+     "categories": [
+      "boat",
+      "clock"
+     ]
+    },
+    {
+     "coco_id": 374052,
+     "categories": [
+      "bench",
+      "bird",
+      "cup",
+      "person"
+     ]
+    },
+    {
+     "coco_id": 463849,
+     "categories": [
+      "boat",
+      "car",
+      "motorcycle",
+      "person"
+     ]
+    }
+   ]
+  },
+  {
+   "query": 5001,
+   "categories": [
+    "bicycle",
+    "handbag",
+    "person",
+    "scissors"
+   ],
+   "top3": [
+    {
+     "coco_id": 509451,
+     "categories": [
+      "bottle",
+      "cup",
+      "person",
+      "tie"
+     ]
+    },
+    {
+     "coco_id": 530162,
+     "categories": [
+      "person",
+      "umbrella"
+     ]
+    },
+    {
+     "coco_id": 363188,
+     "categories": [
+      "backpack",
+      "bottle",
+      "car",
+      "cell phone",
+      "person"
+     ]
+    }
+   ]
+  },
+  {
+   "query": 7386,
+   "categories": [
+    "bicycle",
+    "dog",
+    "motorcycle",
+    "truck"
+   ],
+   "top3": [
+    {
+     "coco_id": 462756,
+     "categories": [
+      "car",
+      "motorcycle",
+      "truck"
+     ]
+    },
+    {
+     "coco_id": 455716,
+     "categories": [
+      "backpack",
+      "handbag",
+      "motorcycle"
+     ]
+    },
+    {
+     "coco_id": 308631,
+     "categories": [
+      "backpack",
+      "motorcycle",
+      "person"
+     ]
+    }
+   ]
+  },
+  {
+   "query": 13774,
+   "categories": [
+    "frisbee",
+    "person"
+   ],
+   "top3": [
+    {
+     "coco_id": 186042,
+     "categories": [
+      "person",
+      "skis"
+     ]
+    },
+    {
+     "coco_id": 74646,
+     "categories": [
+      "chair",
+      "cup",
+      "kite",
+      "person"
+     ]
+    },
+    {
+     "coco_id": 515445,
+     "categories": [
+      "person",
+      "surfboard"
+     ]
+    }
+   ]
+  },
+  {
+   "query": 16228,
+   "categories": [
+    "bench",
+    "horse",
+    "person",
+    "tie",
+    "train",
+    "umbrella"
+   ],
+   "top3": [
+    {
+     "coco_id": 227898,
+     "categories": [
+      "bench",
+      "car",
+      "horse",
+      "person"
+     ]
+    },
+    {
+     "coco_id": 82846,
+     "categories": [
+      "bus",
+      "stop sign"
+     ]
+    },
+    {
+     "coco_id": 227686,
+     "categories": [
+      "horse"
+     ]
+    }
+   ]
+  },
+  {
+   "query": 17182,
+   "categories": [
+    "apple",
+    "book",
+    "chair"
+   ],
+   "top3": [
+    {
+     "coco_id": 471893,
+     "categories": [
+      "book",
+      "chair",
+      "dining table",
+      "person",
+      "remote"
+     ]
+    },
+    {
+     "coco_id": 183049,
+     "categories": [
+      "book",
+      "clock"
+     ]
+    },
+    {
+     "coco_id": 24610,
+     "categories": [
+      "backpack",
+      "book",
+      "bottle",
+      "chair",
+      "couch",
+      "laptop"
+     ]
+    }
+   ]
+  },
+  {
+   "query": 25386,
+   "categories": [
+    "chair",
+    "hot dog",
+    "person",
+    "sandwich"
+   ],
+   "top3": [
+    {
+     "coco_id": 394677,
+     "categories": [
+      "cell phone",
+      "couch",
+      "handbag",
+      "person"
+     ]
+    },
+    {
+     "coco_id": 226147,
+     "categories": [
+      "backpack",
+      "cell phone",
+      "chair",
+      "clock",
+      "cup",
+      "dining table",
+      "fork",
+      "handbag",
+      "knife",
+      "person",
+      "sandwich",
+      "spoon",
+      "vase"
+     ]
+    },
+    {
+     "coco_id": 38678,
+     "categories": [
+      "cup",
+      "donut",
+      "person",
+      "sandwich"
+     ]
+    }
+   ]
+  },
+  {
+   "query": 25560,
+   "categories": [
+    "cat",
+    "cup",
+    "person",
+    "tv"
+   ],
+   "top3": [
+    {
+     "coco_id": 357941,
+     "categories": [
+      "cat",
+      "cell phone",
+      "tv"
+     ]
+    },
+    {
+     "coco_id": 350054,
+     "categories": [
+      "cat",
+      "teddy bear",
+      "tv"
+     ]
+    },
+    {
+     "coco_id": 416256,
+     "categories": [
+      "cat",
+      "keyboard"
+     ]
+    }
+   ]
+  },
+  {
+   "query": 32941,
+   "categories": [
+    "bus",
+    "car",
+    "person",
+    "traffic light",
+    "truck"
+   ],
+   "top3": [
+    {
+     "coco_id": 565563,
+     "categories": [
+      "bed",
+      "car",
+      "person"
+     ]
+    },
+    {
+     "coco_id": 175438,
+     "categories": [
+      "car",
+      "clock",
+      "potted plant",
+      "traffic light"
+     ]
+    },
+    {
+     "coco_id": 11197,
+     "categories": [
+      "backpack",
+      "bicycle",
+      "car",
+      "person",
+      "traffic light"
+     ]
+    }
+   ]
+  },
+  {
+   "query": 34873,
+   "categories": [
+    "apple",
+    "bowl",
+    "chair",
+    "cup",
+    "dining table",
+    "sink",
+    "tv"
+   ],
+   "top3": [
+    {
+     "coco_id": 97022,
+     "categories": [
+      "microwave",
+      "oven",
+      "sink",
+      "toaster",
+      "tv"
+     ]
+    },
+    {
+     "coco_id": 165257,
+     "categories": [
+      "sink"
+     ]
+    },
+    {
+     "coco_id": 74209,
+     "categories": [
+      "apple",
+      "banana",
+      "bottle",
+      "bowl",
+      "chair",
+      "clock",
+      "cup",
+      "dining table",
+      "orange",
+      "oven",
+      "refrigerator",
+      "sink"
+     ]
+    }
+   ]
+  },
+  {
+   "query": 60899,
+   "categories": [
+    "book",
+    "chair",
+    "horse",
+    "person"
+   ],
+   "top3": [
+    {
+     "coco_id": 414034,
+     "categories": [
+      "bed",
+      "bottle",
+      "cup",
+      "person",
+      "remote"
+     ]
+    },
+    {
+     "coco_id": 66886,
+     "categories": [
+      "person"
+     ]
+    },
+    {
+     "coco_id": 559543,
+     "categories": [
+      "chair",
+      "couch",
+      "person",
+      "remote",
+      "vase"
+     ]
+    }
+   ]
+  }
+ ]
+}

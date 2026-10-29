@@ -1,0 +1,336 @@
+{
+ "schema_version": 1,
+ "started_utc": "2026-10-29T03:16:48+00:00",
+ "finished_utc": "2026-10-29T03:50:24+00:00",
+ "api": "http://127.0.0.1:5603",
+ "sample_seed": 20261028,
+ "host_load_start": {
+  "load1": 27.83251953125,
+  "load5": 35.89990234375,
+  "load15": 41.7236328125,
+  "nproc": 48
+ },
+ "host_load_end": {
+  "load1": 30.240234375,
+  "load5": 50.5703125,
+  "load15": 53.7373046875,
+  "nproc": 48
+ },
+ "route": "GET /curation/projects/{project}/search/text",
+ "params": {
+  "captions": 5,
+  "n_queries": 10000,
+  "page_size": 200,
+  "ranking": "distinct images by first appearance of any of their crops"
+ },
+ "load1_samples": [
+  27.83251953125,
+  25.46533203125,
+  25.01904296875,
+  30.302734375,
+  29.80712890625,
+  31.19287109375,
+  30.6728515625,
+  33.07470703125,
+  32.24658203125,
+  31.74658203125,
+  32.32421875,
+  32.7578125,
+  31.8466796875,
+  35.77587890625,
+  34.73681640625,
+  37.67333984375,
+  38.283203125,
+  35.6005859375,
+  38.365234375,
+  44.55224609375,
+  46.63330078125,
+  53.1728515625,
+  53.10009765625,
+  52.29345703125,
+  57.19580078125,
+  56.318359375,
+  60.58447265625,
+  61.15966796875,
+  58.1201171875,
+  60.962890625,
+  62.16650390625,
+  61.9052734375,
+  55.37255859375,
+  67.92529296875,
+  64.0517578125,
+  53.65673828125,
+  51.861328125,
+  54.53564453125,
+  50.66162109375,
+  48.72900390625,
+  53.56689453125,
+  52.68017578125,
+  49.2548828125,
+  51.21630859375,
+  53.5146484375,
+  51.6640625,
+  55.06494140625,
+  49.29931640625,
+  54.37353515625,
+  52.880859375,
+  49.74853515625,
+  58.109375,
+  56.4833984375,
+  62.94775390625,
+  59.1171875,
+  53.1845703125,
+  53.875,
+  68.92724609375,
+  58.9716796875,
+  55.0625,
+  51.2216796875,
+  49.64111328125,
+  47.23193359375,
+  47.0693359375,
+  46.63330078125,
+  48.20166015625,
+  46.298828125,
+  49.3720703125,
+  47.80078125,
+  57.36962890625,
+  52.22607421875,
+  51.55615234375,
+  62.50439453125,
+  64.5869140625,
+  68.37255859375,
+  75.119140625,
+  81.5439453125,
+  84.85009765625,
+  89.255859375,
+  81.39697265625,
+  74.2744140625,
+  81.88916015625,
+  80.57958984375,
+  71.48095703125,
+  63.80029296875,
+  58.9052734375,
+  50.81005859375,
+  48.48681640625,
+  49.21240234375,
+  49.5859375,
+  48.10693359375,
+  46.11865234375,
+  60.6953125,
+  72.140625,
+  70.02490234375,
+  67.75341796875,
+  61.54296875,
+  56.3740234375,
+  59.109375,
+  55.8232421875
+ ],
+ "quality": {
+  "recall@1": {
+   "value": 0.401,
+   "ci95": [
+    0.3915,
+    0.4108
+   ]
+  },
+  "recall@5": {
+   "value": 0.642,
+   "ci95": [
+    0.6324,
+    0.6512
+   ]
+  },
+  "recall@10": {
+   "value": 0.7379,
+   "ci95": [
+    0.7289,
+    0.746
+   ]
+  },
+  "mrr@10": {
+   "value": 0.5040074206349207,
+   "ci95": [
+    0.49526611111111113,
+    0.5127193253968254
+   ]
+  },
+  "ndcg@10": {
+   "value": 0.5598192871716712,
+   "ci95": [
+    0.5518431986270974,
+    0.5678045912460953
+   ]
+  },
+  "not_found_in_depth": 333,
+  "median_rank_found": 2
+ },
+ "latency_ms": {
+  "n": 10000,
+  "p50": 155.52707001916133,
+  "p95": 258.9830069919117,
+  "p99": 324.3819510098547,
+  "mean": 165.61978212982066,
+  "min": 41.615110996644944,
+  "max": 1919.639551982982
+ },
+ "server_total_time_ms": {
+  "n": 10000,
+  "p50": 143.6,
+  "p95": 243.89,
+  "p99": 307.5,
+  "mean": 153.802232,
+  "min": 33.77,
+  "max": 1902.97
+ },
+ "crop_level_rank_quality": {
+  "recall@1": {
+   "value": 0.401,
+   "ci95": [
+    0.3915,
+    0.4108
+   ]
+  },
+  "recall@5": {
+   "value": 0.6111,
+   "ci95": [
+    0.6013,
+    0.6204
+   ]
+  },
+  "recall@10": {
+   "value": 0.702,
+   "ci95": [
+    0.6931,
+    0.7105
+   ]
+  },
+  "mrr@10": {
+   "value": 0.4911923412698413,
+   "ci95": [
+    0.48220853174603173,
+    0.5001767063492063
+   ]
+  },
+  "ndcg@10": {
+   "value": 0.5413678726581784,
+   "ci95": [
+    0.5331231971207546,
+    0.5497692167297903
+   ]
+  },
+  "not_found_in_depth": 333,
+  "median_rank_found": 2
+ },
+ "distinct_images_in_first_page_mean": 113.8865,
+ "extra_pages_fetched": 1656,
+ "failure_examples": [
+  {
+   "gt": 139,
+   "query": "A room with chairs, a table, and a woman in it.",
+   "rank": 40,
+   "top1": 36494,
+   "top_score": 0.6200763,
+   "gt_score": 0.6011,
+   "top1_caption": "the people are all in a restaurant some are sitting"
+  },
+  {
+   "gt": 139,
+   "query": "A person standing at a table in a room.",
+   "rank": 15,
+   "top1": 458410,
+   "top_score": 0.6257176,
+   "gt_score": 0.6065468,
+   "top1_caption": "A living room with an old fashioned TV and a couch."
+  },
+  {
+   "gt": 139,
+   "query": "A living area with a television and a table",
+   "rank": 34,
+   "top1": 39477,
+   "top_score": 0.6140884,
+   "gt_score": 0.59170866,
+   "top1_caption": "Someones living room with a sewing machine and plants."
+  },
+  {
+   "gt": 632,
+   "query": "A bed and a mirror in a small room.",
+   "rank": 11,
+   "top1": 415741,
+   "top_score": 0.63055736,
+   "gt_score": 0.6035679,
+   "top1_caption": "a hallway next to a bedroom doorway and a blue padded chair."
+  },
+  {
+   "gt": 785,
+   "query": "A woman posing for the camera standing on skis.",
+   "rank": 19,
+   "top1": 41990,
+   "top_score": 0.63635623,
+   "gt_score": 0.6175138,
+   "top1_caption": "A group of people on snow shoes posing for a photo."
+  },
+  {
+   "gt": 785,
+   "query": "a woman standing on skiis while posing for the camera",
+   "rank": 17,
+   "top1": 64462,
+   "top_score": 0.6325151,
+   "gt_score": 0.6160169,
+   "top1_caption": "A skier posing on a steep snowy hill."
+  },
+  {
+   "gt": 785,
+   "query": "a person on skis makes her way through the snow",
+   "rank": 22,
+   "top1": 341719,
+   "top_score": 0.62497103,
+   "gt_score": 0.613178,
+   "top1_caption": "A group of people riding skis across a snow covered slope."
+  },
+  {
+   "gt": 872,
+   "query": "A couple of baseball player standing on a field.",
+   "rank": 27,
+   "top1": 65798,
+   "top_score": 0.62918836,
+   "gt_score": 0.61388654,
+   "top1_caption": "A baseball team playing a baseball game in front of a crowd."
+  },
+  {
+   "gt": 885,
+   "query": "This woman has just returned a volley in tennis",
+   "rank": 41,
+   "top1": 515828,
+   "top_score": 0.6269406,
+   "gt_score": 0.60707885,
+   "top1_caption": "A woman prepares to serve a tennis ball."
+  },
+  {
+   "gt": 885,
+   "query": "A man holding a tennis racket playing tennis.",
+   "rank": 35,
+   "top1": 55950,
+   "top_score": 0.6373219,
+   "gt_score": 0.62064654,
+   "top1_caption": "a man is playing tennis and is going to return the ball"
+  },
+  {
+   "gt": 885,
+   "query": "Someone playing in a tennis tournament with a crowd looking on.",
+   "rank": 70,
+   "top1": 410496,
+   "top_score": 0.63578594,
+   "gt_score": 0.6035253,
+   "top1_caption": "A man plays tennis during a competition while a crowd looks on."
+  },
+  {
+   "gt": 1000,
+   "query": "The people are posing for a group photo.",
+   "rank": 59,
+   "top1": 546219,
+   "top_score": 0.6045127,
+   "gt_score": 0.58191735,
+   "top1_caption": "A large group is sitting together and eating at a restaurant."
+  }
+ ]
+}
