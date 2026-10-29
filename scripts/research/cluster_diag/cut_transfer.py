@@ -30,6 +30,7 @@ PER_KEY_COUNTS = (5, 10, 20, 50)
 TOTAL_COUNTS = (100, 200, 400, 800)
 SEEDS = tuple(range(10))
 TOLERANCE = 0.02
+ROUNDING = 1e-9  # cut heights on a 0.005 grid differ by 0.02 up to float rounding
 SEEDS_REQUIRED = 9
 TRANSFER_BCUBED_PRECISION_BAR = 0.90
 
@@ -62,6 +63,13 @@ def cut_from_sample(
     return None if chosen is None else float(chosen['parameter'])
 
 
+def within_tolerance(cut: float | None, reference: float | None) -> bool:
+    """True if both cuts exist and differ by at most the tolerance (float rounding allowed)."""
+    return (
+        cut is not None and reference is not None and abs(cut - reference) <= TOLERANCE + ROUNDING
+    )
+
+
 def sample_size_table(
     cands: Sequence[tuple[float, Ints]],
     truth: Any,
@@ -82,7 +90,7 @@ def sample_size_table(
             cut_from_sample(cands, truth, sampler(first_half, n, s), ~first_half, target)
             for s in seeds
         ]
-        near = [c is not None and full is not None and abs(c - full) <= TOLERANCE for c in cuts]
+        near = [within_tolerance(c, full) for c in cuts]
         rows[str(n)] = {'cuts': cuts, 'within_tolerance': int(sum(near)), 'seeds': len(cuts)}
     enough = [int(n) for n, r in rows.items() if r['within_tolerance'] >= SEEDS_REQUIRED]
     return {

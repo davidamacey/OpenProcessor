@@ -346,6 +346,14 @@ def test_sample_size_table_finds_the_smallest_count_that_reproduces_the_cut() ->
     assert table['smallest_count_within_tolerance'] == 4
 
 
+def test_a_cut_exactly_the_tolerance_away_counts_as_within_it() -> None:
+    # on a 0.005 grid 0.37 and 0.35 differ by 0.02000000000000002 in floats
+    assert ct.within_tolerance(0.37000000000000016, 0.35000000000000014)
+    assert not ct.within_tolerance(0.371, 0.35)
+    assert not ct.within_tolerance(None, 0.35)
+    assert not ct.within_tolerance(0.35, None)
+
+
 def test_subsample_total_keeps_the_requested_number_of_eligible_crops() -> None:
     eligible = np.array([True] * 6 + [False] * 4)
     got = ct.subsample_total(eligible, 3, seed=1)
