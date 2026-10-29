@@ -123,3 +123,11 @@ def test_load_pool_round_trip(tmp_path: Path) -> None:
     assert [i.item_id for i in pool['x']] == ['a', 'b']
     assert pool['x'][0].bbox_norm == (0, 0, 1, 1)
     assert pool['x'][1].bbox_norm is None
+
+
+def test_load_pool_can_restrict_to_some_labels(tmp_path: Path) -> None:
+    (tmp_path / 'pool.jsonl').write_text(
+        '{"item_id": "a", "label": "x", "path": "/p/a.png"}\n'
+        '{"item_id": "b", "label": "y", "path": "/p/b.png"}\n'
+    )
+    assert sorted(jc.load_pool(tmp_path / 'pool.jsonl', {'y'})) == ['y']

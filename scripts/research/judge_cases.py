@@ -18,7 +18,7 @@ from src.services.labeling.contact_sheet import SheetMember, member_key
 
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Collection, Mapping, Sequence
 
 SIMILAR_GROUPS: tuple[frozenset[str], ...] = (
     frozenset({'car', 'truck', 'bus', 'train', 'van'}),
@@ -58,10 +58,12 @@ class Case:
     bad_kind: str
 
 
-def load_pool(path: Path) -> dict[str, list[PoolItem]]:
+def load_pool(path: Path, only: Collection[str] | None = None) -> dict[str, list[PoolItem]]:
     by_label: dict[str, list[PoolItem]] = {}
     for line in path.read_text().splitlines():
         doc = json.loads(line)
+        if only is not None and doc['label'] not in only:
+            continue
         box = doc.get('bbox_norm')
         item = PoolItem(
             doc['item_id'],

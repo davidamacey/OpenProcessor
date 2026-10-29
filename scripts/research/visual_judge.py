@@ -63,12 +63,16 @@ def _spec(args: argparse.Namespace, **extra: Any) -> dict[str, Any]:
     }
 
 
+def _only(args: argparse.Namespace) -> set[str] | None:
+    return set(args.labels.split(',')) if args.labels else None
+
+
 def _bad_count(rng: random.Random) -> int:
     return 0 if rng.random() < CLEAN_FRACTION else rng.choice(BAD_COUNTS)
 
 
 def make_e0(args: argparse.Namespace) -> None:
-    pool = jc.load_pool(Path(args.pool))
+    pool = jc.load_pool(Path(args.pool), _only(args))
     rng = random.Random(f'{args.seed}:e0')
     out = Path(args.out)
     labels: dict[str, str] = {}
@@ -121,7 +125,7 @@ def make_e0(args: argparse.Namespace) -> None:
 
 
 def make_calibration(args: argparse.Namespace) -> None:
-    pool = jc.load_pool(Path(args.pool))
+    pool = jc.load_pool(Path(args.pool), _only(args))
     rng = random.Random(f'{args.seed}:cal')
     out = Path(args.out)
     labels: dict[str, str] = {}
@@ -342,6 +346,7 @@ def _common(p: argparse.ArgumentParser) -> None:
     p.add_argument('--rows', type=int, default=cs.DEFAULT_GRID[1])
     p.add_argument('--thumb', type=int, default=cs.DEFAULT_THUMB_PX)
     p.add_argument('--size', type=int, default=24, help='members per synthetic cluster')
+    p.add_argument('--labels', help='comma-separated labels to draw from (default: all)')
 
 
 def build_parser() -> argparse.ArgumentParser:
