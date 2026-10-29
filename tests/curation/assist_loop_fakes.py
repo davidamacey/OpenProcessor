@@ -22,6 +22,7 @@ from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config.curation_accessors import base_curation_config
 from src.services.curation.assist.slot_write import RunMeta
+from src.services.curation.assist_loop.audit import AuditJudge, Auditor, AuditParams
 from src.services.curation.assist_loop.budget import BudgetLimits, LoopBudget
 from src.services.curation.assist_loop.driver import LoopDeps, LoopOutcome, LoopParams, run_loop
 from src.services.curation.assist_loop.evaluate import VlmAsker
@@ -233,6 +234,9 @@ async def drive(
     clock: Callable[[], float] | None = None,
     store: LoopStore | None = None,
     reader: PartitionReader | None = None,
+    audit: AuditParams | None = None,
+    judge: FakeVlm | None = None,
+    audit_max_crops: int = 500,
     **params: Any,
 ) -> Run:
     """Run one loop (or resume the one in ``directory``) to its end."""
@@ -244,7 +248,7 @@ async def drive(
         max_wall_s=max_wall_s,
         images_per_call=lp.images_per_call,
         vlm_concurrency=vlm_concurrency,
-        audit_max_crops=500,
+        audit_max_crops=audit_max_crops,
     )
     budget = LoopBudget(store, limits, **({'clock': clock} if clock else {}))
     ctx = class_context(vlm, ClassWriteGuard('assist_run'), revision=None)
@@ -267,6 +271,19 @@ async def drive(
             semaphore=asyncio.Semaphore(vlm_concurrency),
         ),
     )
+    if audit is not None and judge is not None:
+        deps.auditor = Auditor(
+            store,
+            budget,
+            AuditJudge(
+                world.os,  # type: ignore[arg-type]
+                class_context(judge, ClassWriteGuard('assist_loop_audit'), revision=None),
+                images_per_call=lp.images_per_call,
+                semaphore=asyncio.Semaphore(vlm_concurrency),
+            ),
+            audit,
+            seed=lp.seed,
+        )
     outcome = await run_loop(
         store, lp, deps, budget, scope or PartitionScope(cluster_ids=None, min_root_size=40)
     )

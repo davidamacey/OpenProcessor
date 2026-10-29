@@ -8,8 +8,9 @@ per VLM call, in an order fixed for a given tree. Up to ``node_concurrency`` nod
 worked on at once; their VLM requests share one semaphore.
 
 The loop stops when the queue is empty (``completed``, ``stop_reason`` ``done``, or the
-budget that left nodes unvisited), on ``cancel.flag`` (``cancelled``) or ``pause.flag``
-(``paused``, ``pause_reason`` ``user``). Requests in flight finish and their answers are
+budget that left nodes unvisited), on ``cancel.flag`` (``cancelled``), ``pause.flag``
+(``paused``, ``pause_reason`` ``user``) or a failing audit batch (``paused``,
+``pause_reason`` ``audit``; see :mod:`~src.services.curation.assist_loop.audit`). Requests in flight finish and their answers are
 kept; nodes they belong to stay open for a resume. ``state.json`` carries the per-level
 record and the budget after every node step.
 """
@@ -33,6 +34,7 @@ from src.services.curation.assist_loop.evaluate import EvalContext, GateParams
 from src.services.curation.assist_loop.node_step import LoopRun, advance, finished
 from src.services.curation.assist_loop.partition import read_snapshot, write_snapshot
 from src.services.curation.assist_loop.progress import level_rows, totals
+from src.services.curation.assist_loop.rollback import rollback_loop
 from src.services.curation.assist_loop.store import replay
 from src.services.curation.file_job import heartbeat_ticker
 from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError
@@ -42,6 +44,7 @@ from src.utils.timeutil import now_iso
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
+    from src.services.curation.assist_loop.audit import Auditor
     from src.services.curation.assist_loop.budget import LoopBudget
     from src.services.curation.assist_loop.evaluate import VlmAsker
     from src.services.curation.assist_loop.partition import PartitionReader, PartitionScope, RootRef
@@ -86,6 +89,8 @@ class LoopDeps:
     opensearch: AsyncOpenSearch
     reader: PartitionReader
     asker: VlmAsker
+    auditor: Auditor | None = None
+    """``None``: the audit is off (no audit endpoint), which the record states."""
 
 
 @dataclass(frozen=True)
@@ -179,7 +184,9 @@ def _halt_reason(run: LoopRun) -> str | None:
 
 def write_progress(run: LoopRun, **fields: object) -> None:
     """Rewrite the loop's record in ``state.json`` (and touch the heartbeat)."""
+    auditor = run.deps.auditor
     run.store.job.update(
+        audit=auditor.summary(run.tree) if auditor is not None else {'status': 'off'},
         levels=level_rows(run.tree),
         totals=totals(run.tree, run.states.values()),
         budget={**run.budget.snapshot(), 'wall_s': round(run.budget.wall_s(), 3)},
@@ -187,6 +194,22 @@ def write_progress(run: LoopRun, **fields: object) -> None:
         **fields,
     )
     run.store.job.touch_heartbeat()
+
+
+async def _audit(run: LoopRun, *, final: bool) -> None:
+    """Audit the propagated nodes no batch covered yet when a batch is due (or, at the
+    end, whatever is left); a failing batch pauses the loop."""
+    auditor = run.deps.auditor
+    if auditor is None or auditor.exhausted(run.tree):
+        return
+    if not (auditor.pending(run.tree) if final else auditor.due(run.tree)):
+        return
+    result = await auditor.run_batch(run.tree)
+    if not result.failing:
+        return
+    if auditor.params.on_fail == 'rollback':
+        await rollback_loop(run.deps.opensearch, run.store, node_paths=result.nodes, dry_run=False)
+    run.halt = 'audit'
 
 
 async def _drain(running: dict[asyncio.Task[list[str]], str]) -> None:
@@ -214,7 +237,10 @@ async def schedule(run: LoopRun) -> LoopOutcome:
                 for child in children:
                     if not finished(run.tree.nodes.get(child)):
                         heapq.heappush(heap, (best_first_key(sizes.get(child, 0), child), child))
+                await _audit(run, final=False)
                 write_progress(run)
+        if _halt_reason(run) is None:
+            await _audit(run, final=True)
     except BaseException:
         await _drain(running)
         raise
