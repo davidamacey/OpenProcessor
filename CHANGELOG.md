@@ -22,6 +22,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - The installer's tier prompt is a numbered menu; `--tiers` is unchanged.
 
 ### Added
+- Self-seeding docs screenshots (#335): `capture_docs_screenshots.py --seeded` seeds its own public projects on an isolated GPU-less stack (`docker/test/compose.docs-shots.yml`, with a stand-in segmenter) and captures 17 states in one run; the harness host ports are `VERIFY_*_PORT` variables.
 - Cluster-quality evaluation harness: `scripts/bench/cluster_eval.py`, `cluster_eval_metrics.py` and `cluster_eval_set.py` (pair precision and recall, false-merge and false-split rates, stability, protected-item moves) and a recorded baseline (#341, `docs/research/cluster_eval_baseline.md`).
 - Host IO-pressure sampling in `scripts/bench/scale_run.py` (#337).
 - The embed reprocess pass sends photos of at least 3 MP to the GPU decode model with the stored boxes (28 img/s against 12 on the CPU route for about 21 MP photos, API CPU 0.03 against 0.50 s per image) and counts routes in `op_reprocess_decode_total` (#259).
@@ -33,6 +34,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - Docs: the published site is linked from the README and the repository homepage; first-run steps corrected after a new-user review.
 
 ### Fixed
+- A dataset import job page crashed when the import had any issue: `issues_summary` served only code, count and severity where Cropwright renders id, message and samples. The job now serves the same issue shape as the preview (#335).
 - An empty or idle project no longer queues an `auto_label` job on every refresh cycle (#350).
 - Identical content in concurrent ingest batches is stored once (#358).
 - Ingest and the embed pass embed the stored, image-clamped box instead of an unclamped one (#259).

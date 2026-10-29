@@ -12,9 +12,15 @@ import urllib.request
 from urllib.parse import urlsplit
 
 from docs_screenshots.ctx import (
+    EDITORS_PROJECT,
+    IMPORT_PREVIEW_PATH,
     IMPORT_PROJECT,
+    MAIN_PROJECT,
+    PACK_NAME,
+    PROFILE_NAME,
     SHARE_MODEL,
     SHARE_OWNER,
+    VEHICLES_PROFILE,
     VEHICLES_PROJECT,
     Ctx,
     _settle,
@@ -115,9 +121,8 @@ def state_reprocess_dialog(page, ctx: Ctx) -> None:
 
 
 def state_prompt_pack_editor(page, ctx: Ctx) -> None:
-    pack = os.environ.get("PACK_NAME", "cwlife_pack")
     page.goto(
-        f"{ctx.base}/p/cwlife-editors/settings/prompt-packs/{pack}",
+        f"{ctx.base}/p/{EDITORS_PROJECT}/settings/prompt-packs/{PACK_NAME}",
         wait_until="domcontentloaded",
         timeout=30_000,
     )
@@ -131,7 +136,8 @@ def state_prompt_pack_editor(page, ctx: Ctx) -> None:
 
 
 def state_prompt_pack_test(page, ctx: Ctx) -> None:
-    ids = [c["crop_id"] for c in ctx.api("/crops?page_size=3")["crops"][:3]]
+    # The stand-in VLM answers "car" to every crop, so test on cars big enough to see.
+    ids = [c["crop_id"] for c in ctx.api("/crops?class_name=car&min_area=0.1&page_size=3")["crops"][:3]]
     page.goto(
         ctx.url("/settings/prompt-packs/generic_item_v1"),
         wait_until="domcontentloaded",
@@ -146,9 +152,8 @@ def state_prompt_pack_test(page, ctx: Ctx) -> None:
 
 
 def state_region_profile_editor(page, ctx: Ctx) -> None:
-    prof = os.environ.get("PROFILE_NAME", "cwlife_profile")
     page.goto(
-        f"{ctx.base}/p/cwlife-editors/settings/region-profiles/{prof}",
+        f"{ctx.base}/p/{EDITORS_PROJECT}/settings/region-profiles/{PROFILE_NAME}",
         wait_until="domcontentloaded",
         timeout=30_000,
     )
@@ -162,23 +167,33 @@ def state_vlm_endpoint_editor(page, ctx: Ctx) -> None:
     _settle(page)
 
 
-def _multibox_crop_id(base: str) -> str:
-    """A wheel item whose boxes are in different states (accepted + rejected)."""
-    d = api_get(base, f"/curation/projects/{VEHICLES_PROJECT}/review/regions?page_size=60")
-    best = None
-    for it in d["items"]:
-        states = {b.get("state") for b in it["region_boxes"]}
-        if len(it["region_boxes"]) >= 3 and {"accepted", "rejected"} <= states:
-            return it["id"]
-        if best is None and len(it["region_boxes"]) >= 3:
-            best = it["id"]
-    if best is None:
-        raise RuntimeError("no multi-box item found")
-    return best
+def _side_on_car_distance(item: dict) -> float:
+    """How far an item's box is from a side-on car (about 2.3:1 in pixels, fully inside the
+    frame): the stand-in segmenter draws wheels where a side-on car has them. COCO
+    images are mostly 4:3, which is what the pixel aspect assumes."""
+    x1, y1, x2, y2 = item["bbox_norm"]
+    if x1 < 0.02 or x2 > 0.98 or y1 < 0.02 or y2 > 0.98 or x2 - x1 < 0.4:
+        return float("inf")
+    return abs((x2 - x1) / (y2 - y1) * (4 / 3) - 2.3)
+
+
+def _multibox_item_id(base: str) -> str:
+    """The side-on car among the reviewable items whose boxes are in different states
+    (accepted + rejected)."""
+    d = api_get(base, f"/curation/projects/{VEHICLES_PROJECT}/review/regions?page_size=100")
+    mixed = [
+        it
+        for it in d["items"]
+        if len(it["region_boxes"]) >= 3
+        and {"accepted", "rejected"} <= {b.get("state") for b in it["region_boxes"]}
+    ]
+    if not mixed:
+        raise RuntimeError("no multi-box item with accepted and rejected boxes found")
+    return min(mixed, key=_side_on_car_distance)["id"]
 
 
 def _open_multibox_review(page, ctx: Ctx) -> None:
-    cid = _multibox_crop_id(ctx.base)
+    cid = _multibox_item_id(ctx.base)
     page.goto(
         f"{ctx.base}/p/{VEHICLES_PROJECT}/review?tab=regions&crop_id={cid}",
         wait_until="domcontentloaded",
@@ -201,13 +216,9 @@ def state_box_editor(page, ctx: Ctx) -> None:
 
 
 def state_region_profile_test(page, ctx: Ctx) -> None:
-    ids = [
-        api_get(ctx.base, f"/curation/projects/{VEHICLES_PROJECT}/review/regions?page_size=1")[
-            "items"
-        ][0]["id"]
-    ]  # the profile test takes exactly one crop id
+    ids = [_multibox_item_id(ctx.base)]  # the profile test takes exactly one crop id
     page.goto(
-        f"{ctx.base}/p/{VEHICLES_PROJECT}/settings/region-profiles/coco_vehicle_wheels",
+        f"{ctx.base}/p/{VEHICLES_PROJECT}/settings/region-profiles/{VEHICLES_PROFILE}",
         wait_until="domcontentloaded",
         timeout=30_000,
     )
@@ -222,7 +233,7 @@ def state_region_profile_test(page, ctx: Ctx) -> None:
 
 
 def state_import_wizard(page, ctx: Ctx) -> None:
-    path = os.environ["IMPORT_PREVIEW_PATH"]  # a server path under an allowed root
+    path = IMPORT_PREVIEW_PATH
     page.goto(
         f"{ctx.base}/p/{IMPORT_PROJECT}/datasets/import", wait_until="domcontentloaded", timeout=30_000
     )
@@ -331,7 +342,7 @@ def state_models_unshare_force(page, ctx: Ctx) -> None:
 
 def state_vlm_run_picker(page, ctx: Ctx) -> None:
     """The assist bar expanded with the per-run VLM select opened; no run is started."""
-    page.goto(f"{ctx.base}/p/{SHARE_OWNER}/dashboard", wait_until="domcontentloaded", timeout=30_000)
+    page.goto(f"{ctx.base}/p/{MAIN_PROJECT}/dashboard", wait_until="domcontentloaded", timeout=30_000)
     page.get_by_role("button", name=re.compile("assist:")).first.click()
     page.wait_for_selector("[data-testid='vlm-run-picker']", timeout=15_000)
     page.get_by_role("heading", name="Dashboard").click()  # close the class list
