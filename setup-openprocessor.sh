@@ -707,9 +707,12 @@ _triton_need_gb() {
     esac
 }
 
-# The GPU decode (gpu_image_prep, about 8.5 GB more on the Triton card per instance). Mirrors
-# "ingest_gpu_decode" in config_templates/profiles/*.json (tests/installer keeps them equal):
-# only the full profile (48 GB+) has room beside the profile's own Triton budget.
+# Least free VRAM on the Triton card for the full profile: its models (17,408 MiB) plus the 2
+# gpu_image_prep instances it turns on (2 x 8,704 MiB) is 34,816 MiB, so 32 GB cards get standard (#373).
+_profile_min_free_gb() { case "$1" in full) echo 40 ;; *) echo 12 ;; esac; }
+_profile_for_free_gb() { if (( $1 >= $(_profile_min_free_gb full) )); then echo full; elif (( $1 >= 12 )); then echo standard; else echo minimal; fi; }
+
+# GPU decode per profile; mirrors "ingest_gpu_decode" in config_templates/profiles/*.json.
 _ingest_gpu_decode_for_profile() {
     case "$1" in
         full) echo 1 ;;
@@ -801,9 +804,7 @@ recommend_plan() {
                 trn=$b
             fi
         fi
-        if (( free[tri] >= 24 )); then profile=full
-        elif (( free[tri] >= 12 )); then profile=standard
-        else profile=minimal; fi
+        profile=$(_profile_for_free_gb "${free[tri]}")
     else
         # Triton: the smallest card that is >= 12 GB (fixed, latency-bound).
         tri=""
@@ -831,9 +832,7 @@ recommend_plan() {
         done
         trn=$seg
         (( free[seg] >= 24 )) && inst=2
-        if (( free[tri] >= 24 )); then profile=full
-        elif (( free[tri] >= 12 )); then profile=standard
-        else profile=minimal; fi
+        profile=$(_profile_for_free_gb "${free[tri]}")
     fi
 
     # Explicit --gpu-plan wins over the automatic placement.

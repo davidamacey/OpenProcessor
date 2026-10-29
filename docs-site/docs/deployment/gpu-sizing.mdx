@@ -24,8 +24,14 @@ GPU and pick one from its VRAM.
 | Profile | VRAM | Example GPUs | Triton instances per model | Max batch | `ocr_pipeline` instances | GPU decode written to `.env` |
 |---|---|---|---|---|---|---|
 | `minimal` | 6-8 GB | RTX 3060, RTX 4060 | 1 | 16 | 1 | `OP_INGEST_GPU_DECODE=0` |
-| `standard` | 12-24 GB | RTX 3080, RTX 4090 | 2 | 32 | 2 | `0` |
-| `full` | 48 GB+ | A6000, A100 | 4 | 64 | 4 | `1` |
+| `standard` | 12-39 GB | RTX 3080, RTX 4090, 32 GB cards | 2 | 32 | 2 | `0` |
+| `full` | 40 GB+ | A6000, A100 | 4 | 64 | 4 | `1` |
+
+The installer picks `full` only when the Triton card has **40 GB or more free**: the profile's
+models take 17,408 MiB and its two `gpu_image_prep` instances take 2 x 8,704 MiB more, 34,816 MiB
+in all. A 24 or 32 GB Triton card gets `standard` with the GPU decode off (the Triton models
+alone take 12,288 MiB). You can still set `GPU_PROFILE=full` by hand; `./openprocessor gpu plan`
+warns when the card cannot hold it.
 
 The values are in `config_templates/profiles/*.json`. We have not measured a throughput
 figure per profile; the measured rows are in [Measured performance](#measured-performance)

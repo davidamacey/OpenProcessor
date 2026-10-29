@@ -31,13 +31,28 @@ GPU_IMAGE_PREP_MIB = int(
         (REPO_ROOT / 'models' / 'gpu_image_prep' / 'config.pbtxt').read_text(),
     ).group(1)  # type: ignore[union-attr]
 )
-# Lowest VRAM each profile is for (its description) and the free memory its own models need
+# The free memory each profile's own models need
 # (setup-openprocessor.sh _triton_need_gb, the same figures `gpu plan` checks the primary against).
-VRAM_FLOOR_MIB = {'minimal': 6 * 1024, 'standard': 12 * 1024, 'full': 48 * 1024}
 MODELS_MIB = {'minimal': 8192, 'standard': 12288, 'full': 17408}
 EXPECTED = {'minimal': False, 'standard': False, 'full': True}
 A6000 = '0, NVIDIA RTX A6000, 49140, 100, 8.6\n'
 TI_12GB = '0, NVIDIA GeForce RTX 3080 Ti, 12288, 100, 8.6\n'
+
+
+def _installer_floor_mib(name: str) -> int:
+    """The least free VRAM the installer plans the profile for (``_profile_min_free_gb``)."""
+    done = subprocess.run(
+        [
+            'bash',
+            '-c',
+            f'OP_SOURCE_ONLY=1 source "{REPO_ROOT}/setup-openprocessor.sh"; _profile_min_free_gb {name}',
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    return int(done.stdout.strip()) * 1024
 
 
 def _profile(name: str) -> dict:
@@ -48,7 +63,9 @@ def _profile(name: str) -> dict:
 def test_profile_turns_the_gpu_decode_on_only_where_the_card_has_room(name: str) -> None:
     flag = _profile(name)['ingest_gpu_decode']
     assert flag is EXPECTED[name]
-    fits = MODELS_MIB[name] + GPU_IMAGE_PREP_MIB <= VRAM_FLOOR_MIB[name]
+    instances = _profile(name)['gpu_image_prep_instances']
+    floor = _installer_floor_mib(name)
+    fits = MODELS_MIB[name] + instances * GPU_IMAGE_PREP_MIB <= floor
     # The GPU decode is on only when the profile's smallest card holds it beside the models.
     assert flag == fits
 
@@ -102,6 +119,8 @@ def test_a_forced_regeneration_keeps_an_explicit_choice(tmp_path: Path) -> None:
         ([(0, gb(8), 0)], 'minimal'),
         ([(0, gb(20), 0)], 'standard'),
         ([(0, gb(48), 0), (1, gb(48), 0)], 'full'),
+        ([(0, gb(24), 0), (1, gb(24), 0)], 'standard'),
+        ([(0, gb(32), 0), (1, gb(32), 0)], 'standard'),
     ],
 )
 def test_installer_plan_matches_the_profile_file(
