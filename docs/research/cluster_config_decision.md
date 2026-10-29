@@ -278,6 +278,14 @@ hour. Rules for every one:
 Order: X0 and X1 first (they make the evidence reproducible from committed code), then X2, X3, X4,
 X5, X6 and X9 in any order, X7 when the set P export is available, and X8 after W8 E0.
 
+Results of the CPU experiments (2026-10-29), each against its bar, in
+[cluster_config_experiments.md](cluster_config_experiments.md): X0 pass, X1 pass (three non-person cells of the
+section 2 table differ by up to 0.003, see that note), X2 **fail** (BCubed recall 0.357 against 0.37; every
+precision bar passes), X3 **fail** for all three arms, X4 **fail**, X5 transfer pass and sample size **fail**
+as specified, X6 **fail** (marginal), X7 dense method fits (172 s, 12.7 GiB for the 40,016-crop person key) and
+the sparse variant fails equivalence, X9 reopen rule fires on fold 2 only. X8 is not run. The verdicts above and
+the plan in section 8 are unchanged by this entry.
+
 ## 7. Question 5: faces and whole images
 
 **What transfers:**

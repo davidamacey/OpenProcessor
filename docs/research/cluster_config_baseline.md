@@ -266,15 +266,24 @@ labelled crops are 74 percent of the project (unlabelled objects are invisible) 
 
 ### E5 on the 3,000-item set
 
+Correction (wave W0c, X0): the first run of this section compared the detector's registry-slug class
+name (`traffic_light`) with the ground-truth label in COCO form (`traffic light`) as raw strings, so
+the agreement figures were low (72.4 %, 72.9 % and 75 %). Names now compare through
+`normalize_class_name`, the product's one name rule. Re-run on the same bundle: 0.812 (confidence
+under 0.5), 0.810 (under 0.7) and 0.820 (all labelled crops); raw output in
+`artifacts_local/cluster_search/w0c/x0/e5.json`. The partitions and every precision and recall below
+are unchanged, because the partition key is the slug and was consistent. The COCO sample's 11 class
+names are single words, so its 87 % figures are unaffected.
+
 Same method and split rule as above (average-linkage AHC inside each detector class against the same
 method over the whole subset; one distance cut for all classes; fold 1 = cut chosen on calibration,
 scored on heldout).
 
 | Subset | Crops (labelled) | Detector class = label | Method, target recall >= 0.3 | Heldout P / R |
 |---|---|---|---|---|
-| confidence < 0.5 | 1,351 (707) | 72.4 % | global | 0.161 / 0.308 |
+| confidence < 0.5 | 1,351 (707) | 81.2 % | global | 0.161 / 0.308 |
 | | | | within detector class | **0.966 / 0.421** |
-| confidence < 0.7 | 2,136 (1,282) | 72.9 % | global | 0.210 / 0.260 |
+| confidence < 0.7 | 2,136 (1,282) | 81.0 % | global | 0.210 / 0.260 |
 | | | | within detector class | **0.969 / 0.346** |
 
 Across the eight cells of fold 1 (two subsets, four targets) partitioning inside the detector class has
@@ -283,7 +292,7 @@ global recall in six cells; it is lower in two (0.445 against 0.463 at target 0.
 0.188 against 0.219 at target 0.15 on the 0.7 subset). Fold 2 (cut chosen on heldout, scored on
 calibration) agrees: 0.885 to 0.932 against 0.121 to 0.253 (`e5.json`). Adoption rule (precision rises at equal recall on the residual-like subset): **met**, by a far
 larger margin than on the COCO sample, because the global cut collapses at 86 classes. The caveats stand:
-the detector class is a soft prior that agrees with the label for 72 to 73 percent of the subset, it caps
+the detector class is a soft prior that agrees with the label for 81 percent of the subset, it caps
 recall for crops whose detector class is wrong, and the detector is trained on the COCO label space (the
 class agrees less for the Open Images animals it has no class for).
 
@@ -298,7 +307,7 @@ re-representation moves P@10 by under 0.015, and the strata with the lowest puri
 raw: low resolution 0.607, mixed scene 0.606, elongated boxes 0.645, short side under 32 px 0.604;
 near-duplicates 0.807, rare 0.777). Hub skew falls from 2.78 to 0.75 (k-reciprocal) and 1.4 to 1.5
 (CSLS, DBA) without a matching gain in purity, as on the COCO sample. The detector class equals the
-label for 75 % of the labelled crops (88 % on the COCO sample).
+label for 82 % of the labelled crops (88 % on the COCO sample).
 
 Oracle ceilings (cut chosen on the scored labels, so an upper bound and not a held-out figure), best
 pair precision at recall at least 0.1 / 0.2 / 0.3 / 0.5: raw average linkage 0.331 / 0.253 / 0.198 /

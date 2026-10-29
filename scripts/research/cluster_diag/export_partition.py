@@ -3,7 +3,9 @@
     export_partition.py --bundle STEM --arm ahc_average --param 0.41 --out DIR/partition.jsonl
 
 ``--param`` is the AHC cut height or the Leiden resolution fraction, as printed in the ``e1``
-output (``parameter``); the IVF, ECG and 2b arms take none. Rows are ``item_id``, ``cluster_id``
+output (``parameter``); the IVF, ECG, 2b and detector-class arms take none. ``ahc_average_within_class``
+cuts one average-linkage dendrogram per detector class at ``--param``; ``detector_class`` is that
+class alone, with no clustering (the trivial baseline). Rows are ``item_id``, ``cluster_id``
 (``null`` for an unassigned crop), over every crop of the export, so the scorer applies the
 labels and any held-out split itself.
 """
@@ -28,20 +30,33 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from scripts.research.cluster_diag import diagnostics as dg, partitions as pt
-from scripts.research.cluster_diag.dataset import read_jsonl
+from scripts.research.cluster_diag import class_prior as cp, diagnostics as dg, partitions as pt
+from scripts.research.cluster_diag.dataset import detector_keys, read_jsonl
 
 
-ARMS = ('ivf', 'ahc_average', 'ahc_complete', 'leiden', 'ecg', 'kmeans2b')
+ARMS = (
+    'ivf',
+    'ahc_average',
+    'ahc_complete',
+    'leiden',
+    'ecg',
+    'kmeans2b',
+    'detector_class',
+    'ahc_average_within_class',
+)
 
 
-def partition_of(arm: str, vectors: Any, param: float | None) -> Any:
+def partition_of(arm: str, vectors: Any, param: float | None, keys: Any = None) -> Any:
     if arm == 'ivf':
         return pt.ivf_current(vectors)
     if arm == 'kmeans2b':
         return pt.region_kmeans(vectors)
-    if param is None and arm != 'ecg':
+    if arm == 'detector_class':
+        return cp.key_only_partition(keys)
+    if param is None and arm not in ('ecg',):
         raise SystemExit(f'--param is required for {arm}')
+    if arm == 'ahc_average_within_class':
+        return cp.WithinKeyClusterer(vectors, keys).partition(float(param or 0.0))
     sim = vectors @ vectors.T
     if arm == 'ecg':
         return pt.ecg_partition(sim)
@@ -61,8 +76,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument('--out', type=Path, required=True)
     args = ap.parse_args(argv)
     vectors = dg.l2_normalize(np.load(args.bundle.with_suffix('.npy')))
-    ids = [m['crop_id'] for m in read_jsonl(args.bundle.with_suffix('.meta.jsonl'))]
-    part = partition_of(args.arm, vectors, args.param)
+    meta = read_jsonl(args.bundle.with_suffix('.meta.jsonl'))
+    ids = [m['crop_id'] for m in meta]
+    part = partition_of(args.arm, vectors, args.param, detector_keys(meta))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(
         ''.join(
