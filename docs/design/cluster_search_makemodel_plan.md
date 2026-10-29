@@ -988,3 +988,13 @@ Search: [nested k-NN](https://docs.opensearch.org/latest/vector-search/specializ
 [RegionCLIP](https://arxiv.org/abs/2112.09106).
 Data: [Open Images V7](https://storage.googleapis.com/openimages/web/factsfigures_v7.html).
 Judge: [Claude vision docs](https://platform.claude.com/docs/en/build-with-claude/vision).
+
+## 14. Owner decisions (2026-10-29)
+
+- O3: Haiku may judge public-data clusters. The 3,000-call default is too many images per wave: judge
+  small subsets (few clusters, few members per cluster, small pair samples) and size the budget per
+  wave from that. A set P sample is asked again before use.
+- O7: plate OCR on set P bursts may run locally to build same-vehicle labels. Plate text stays in the
+  gitignored local artifacts folder and never reaches the repo or any hosted model.
+- O2, O5, O6, O8 follow the recommendations in section 12; O1 and O4 stay as recommended (core-only
+  faces, no product-side hosted verifier).
