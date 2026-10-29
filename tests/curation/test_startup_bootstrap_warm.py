@@ -27,8 +27,9 @@ async def test_startup_runs_full_bootstrap_for_every_active_project(
             bound.append(slug)
             yield slug
 
-    async def fake_ensure_indexes(_os: object) -> None:
+    async def fake_ensure_indexes(_os: object) -> bool:
         index_bootstrap._INDEXES_BOOTSTRAPPED.add(bound[-1])
+        return True
 
     wrapper = AsyncMock()
     wrapper.client = AsyncMock()
@@ -45,6 +46,40 @@ async def test_startup_runs_full_bootstrap_for_every_active_project(
         await task
 
     assert {'alpha', 'beta'} == index_bootstrap._INDEXES_BOOTSTRAPPED
+
+
+@pytest.mark.asyncio
+async def test_startup_logs_a_failed_bootstrap_as_deferred_not_done(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_for_each_project(*_a: object, **_kw: object):
+        yield 'alpha'
+
+    logged: list[tuple[str, str]] = []
+
+    class _Log:
+        def info(self, msg: str, *_a: object, **_kw: object) -> None:
+            logged.append(('info', msg))
+
+        def warning(self, msg: str, *_a: object, **_kw: object) -> None:
+            logged.append(('warning', msg))
+
+    wrapper = AsyncMock()
+    wrapper.client = AsyncMock()
+    monkeypatch.setattr(
+        dependencies.OpenSearchClientFactory, 'get_client', AsyncMock(return_value=wrapper)
+    )
+    monkeypatch.setattr('src.services.projects.bootstrap.for_each_project', fake_for_each_project)
+    monkeypatch.setattr(index_bootstrap, 'ensure_indexes', AsyncMock(return_value=False))
+    monkeypatch.setattr(index_bootstrap, 'warm_knn_indexes', AsyncMock())
+    monkeypatch.setattr(dependencies, 'logger', _Log())
+
+    task = await dependencies.bootstrap_opensearch_indexes()
+    if task is not None:
+        await task
+
+    assert ('warning', 'curation_indexes_bootstrap_deferred project=alpha') in logged
+    assert not any('curation_indexes_bootstrapped' in m for _, m in logged)
 
 
 @pytest.mark.asyncio
