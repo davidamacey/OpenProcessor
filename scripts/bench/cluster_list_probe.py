@@ -209,8 +209,10 @@ def _pct(values: list[float], q: float) -> float:
     return ordered[min(len(ordered) - 1, round(q * (len(ordered) - 1)))]
 
 
-def probe(api: str, project: str, reps: int, calls: int, params: dict[str, str]) -> dict[str, Any]:
-    url = f'{api}{PREFIX}/projects/{project}/clusters'
+def probe(
+    api: str, project: str, reps: int, calls: int, params: dict[str, str], endpoint: str
+) -> dict[str, Any]:
+    url = f'{api}{PREFIX}/projects/{project}/{endpoint}'
     runs: list[dict[str, Any]] = []
     with httpx.Client(timeout=300) as client:
         client.get(url, params=params).raise_for_status()  # warm caches
@@ -262,14 +264,23 @@ def main() -> None:
             p.add_argument('--reps', type=int, default=3)
             p.add_argument('--calls', type=int, default=30)
             p.add_argument('--param', action='append', default=[], metavar='K=V')
+            p.add_argument(
+                '--endpoint',
+                default='clusters',
+                help='path under the project, e.g. clusters/10001/facets (no default query)',
+            )
             p.add_argument('--out')
     args = parser.parse_args()
     if args.cmd == 'seed':
         seed(args.api, args.opensearch, args.project, args.items, args.seed)
     elif args.cmd == 'probe':
-        params = {'limit': '50', 'per_cluster': '4', 'max_clusters': '1000'}
+        params = (
+            {'limit': '50', 'per_cluster': '4', 'max_clusters': '1000'}
+            if args.endpoint == 'clusters'
+            else {}
+        )
         params.update(dict(kv.split('=', 1) for kv in args.param))
-        result = probe(args.api, args.project, args.reps, args.calls, params)
+        result = probe(args.api, args.project, args.reps, args.calls, params, args.endpoint)
         text = json.dumps(result, indent=2)
         if args.out:
             Path(args.out).write_text(text)
