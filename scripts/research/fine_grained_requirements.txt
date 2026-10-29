@@ -1,0 +1,16 @@
+# Research-only dependencies for the fine-grained benchmark (wave WB). Not part of the product.
+# Install into a venv outside the repo.
+torch
+torchvision
+timm
+open_clip_torch
+transformers
+safetensors
+numpy
+scipy
+scikit-learn
+pillow
+python-igraph
+leidenalg
+pytest
+ultralytics

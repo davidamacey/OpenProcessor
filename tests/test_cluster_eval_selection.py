@@ -168,3 +168,54 @@ def test_open_images_parsing_filters_group_depiction_licence_and_rotation() -> N
 def test_missing_oi_class_name_refuses() -> None:
     with pytest.raises(fce.FetchError, match='not found'):
         fce.oi_class_ids('LabelName,DisplayName\n/m/1,Car\n')
+
+
+def test_excluded_names_are_never_drawn() -> None:
+    coco, oi = _rows()
+    first = sel.select_base(coco, oi, {'toaster'}, seed=1, scale=0.2)
+    banned = frozenset(r['file_name'] for r in first)
+    second = sel.select_base(coco, oi, {'toaster'}, seed=1, scale=0.2, exclude=banned)
+    assert second
+    assert not banned & {r['file_name'] for r in second}
+
+
+def test_backfill_hands_a_coco_shortfall_to_open_images_of_the_same_group() -> None:
+    coco, oi = _rows()
+    all_coco_similar = frozenset(
+        r['file_name'] for r in coco if r['primary'] in sel.SIMILAR
+    )  # COCO has nothing left to draw for the similar group
+    plain = sel.select_base(coco, oi, {'toaster'}, seed=1, scale=0.1, exclude=all_coco_similar)
+    topped = sel.select_base(
+        coco, oi, {'toaster'}, seed=1, scale=0.1, exclude=all_coco_similar, backfill=True
+    )
+
+    def similar_oi(rows: list[dict[str, Any]]) -> int:
+        return sum(r['source'] == 'openimages' and r['group'] == 'similar' for r in rows)
+
+    assert similar_oi(topped) > similar_oi(plain)
+    assert not any(r['source'] == 'coco' and r['group'] == 'similar' for r in topped)
+
+
+def test_excluded_names_reads_pins_lists_and_split_manifests(tmp_path: Any) -> None:
+    import json
+
+    pin = tmp_path / 'pin.json'
+    pin.write_text(
+        json.dumps(
+            {
+                'images': [{'file_name': 'a.jpg'}],
+                'near_duplicates': [{'parent': 'a.jpg', 'variants': [{'file_name': 'nd_a_1.jpg'}]}],
+            }
+        )
+    )
+    rows = tmp_path / 'rows.json'
+    rows.write_text(json.dumps([{'file_name': 'b.jpg'}]))
+    split = tmp_path / 'split.json'
+    split.write_text(json.dumps({'calibration': ['c.jpg'], 'heldout': ['d.jpg']}))
+    assert fce.excluded_names([pin, rows, split]) == {
+        'a.jpg',
+        'nd_a_1.jpg',
+        'b.jpg',
+        'c.jpg',
+        'd.jpg',
+    }

@@ -32,13 +32,19 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
+from scripts.bench.eval_split import load_manifest, split_groups_of
 from scripts.bench.parity_metrics import adjusted_rand_index
 from scripts.research.cluster_diag import diagnostics as dg, heldout as ho, partitions as pt
-from scripts.research.cluster_diag.dataset import Bundle, load_bundle
+from scripts.research.cluster_diag.dataset import (
+    Bundle,
+    class_agreement,
+    detector_keys,
+    load_bundle,
+)
 
 
 SEED = 20261029
-RECALL_TARGETS = (0.15, 0.2, 0.3, 0.5)
+RECALL_TARGETS = (0.05, 0.1, 0.15, 0.2, 0.3, 0.5)
 LEIDEN_FRACTIONS = (0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.5)
 
 
@@ -84,14 +90,7 @@ def run_diag(args: argparse.Namespace) -> dict[str, Any]:
             'elongated_frac': float(strata['elongated>2:1'].mean()),
             'aspect_gt3_frac': float((np.abs(np.log(b.aspect)) > np.log(3)).mean()),
             'side_lt32_frac': float(strata['side<32px'].mean()),
-            'detector_class_agrees_with_label': float(
-                np.mean(
-                    [
-                        b.meta[i]['detector_class_name'] == t
-                        for i, t in zip(b.labelled, b.truth, strict=False)
-                    ]
-                )
-            ),
+            'detector_class_agrees_with_label': class_agreement(b.meta, b.labelled, b.truth),
         },
     }
     lab = b.labelled
@@ -170,16 +169,34 @@ def _permutation_ari(fit: Callable[[Any], Any], b: Bundle, *, sort_by_id: bool =
     return float(adjusted_rand_index(base, fitted))
 
 
+def calibration_mask(b: Bundle, split_manifest: Path | None) -> NDArray[np.bool_]:
+    """True for the labelled crops of the first half, the half the cut is chosen on first.
+
+    With an eval-split manifest the first half is its ``calibration`` set, so fold 1 (cut chosen
+    on calibration, scored on heldout) is the acceptance number; without one the groups are
+    halved by a seeded hash.
+    """
+    if split_manifest is None:
+        first, _ = ho.split_groups(b.group, SEED)
+        return ho.half_mask(b.group, first)
+    manifest = load_manifest(split_manifest)
+    unknown = sorted(set(b.group) - split_groups_of(manifest, 'full'))
+    if unknown:
+        raise SystemExit(f'{len(unknown)} label group(s) not in {split_manifest}: {unknown[:3]}')
+    return ho.half_mask(b.group, split_groups_of(manifest, 'calibration'))
+
+
 def run_e1(args: argparse.Namespace) -> dict[str, Any]:
     b = load_bundle(args.bundle, args.labels, args.coco_gt)
-    first, _ = ho.split_groups(b.group, SEED)
-    half = ho.half_mask(b.group, first)
+    half = calibration_mask(b, args.split_manifest)
     out: dict[str, Any] = {
         'seed': SEED,
+        'split_manifest': str(args.split_manifest) if args.split_manifest else None,
         'n_crops': len(b.vectors),
         'n_labelled': len(b.truth),
         'labelled_per_half': [int(half.sum()), int((~half).sum())],
         'arms': {},
+        'curves': {},
     }
     for name, cands in _arm_candidates(b).items():
         lookup = dict(cands)
@@ -193,6 +210,27 @@ def run_e1(args: argparse.Namespace) -> dict[str, Any]:
                     fold['strata'] = _strata_at(lookup[fold['parameter']], b, held)
             rows[f'target_recall>={target}'] = folds
         out['arms'][name] = rows
+        if len(cands) > 1:
+            out['curves'][name] = [
+                {
+                    'parameter': param,
+                    'calibration': dict(
+                        zip(
+                            ('precision', 'recall', 'unassigned'),
+                            ho.score_on(part, b.truth, half),
+                            strict=True,
+                        )
+                    ),
+                    'heldout': dict(
+                        zip(
+                            ('precision', 'recall', 'unassigned'),
+                            ho.score_on(part, b.truth, ~half),
+                            strict=True,
+                        )
+                    ),
+                }
+                for param, part in cands
+            ]
     sim = b.vectors @ b.vectors.T
     n_cuts = pt.ahc_cuts(sim, 'average')
     cut = n_cuts[int(0.8 * len(n_cuts))][0]
@@ -220,11 +258,14 @@ def run_e1(args: argparse.Namespace) -> dict[str, Any]:
 
 def run_e5(args: argparse.Namespace) -> dict[str, Any]:
     b = load_bundle(args.bundle, args.labels, args.coco_gt)
-    first, _ = ho.split_groups(b.group, SEED)
-    half_all = ho.half_mask(b.group, first)
+    half_all = calibration_mask(b, args.split_manifest)
     conf = np.array([m.get('detector_confidence') or 0.0 for m in b.meta])
-    det = np.array([m['detector_class_name'] for m in b.meta])
-    out: dict[str, Any] = {'seed': SEED, 'cuts': {}}
+    det = detector_keys(b.meta)
+    out: dict[str, Any] = {
+        'seed': SEED,
+        'split_manifest': str(args.split_manifest) if args.split_manifest else None,
+        'cuts': {},
+    }
     for cut in args.confidence_cuts:
         rows = np.nonzero(conf < cut)[0]
         pos = {int(r): k for k, r in enumerate(rows)}
@@ -245,7 +286,7 @@ def run_e5(args: argparse.Namespace) -> dict[str, Any]:
                 (float(t), pt.cut_groups(len(rows), per_class, float(t))[sub_lab]) for t in cuts
             ],
         }
-        agree = float(np.mean([det[b.labelled[k]] == b.truth[k] for k in lab_in]))
+        agree = class_agreement(b.meta, b.labelled[lab_in], b.truth[lab_in])
         entry: dict[str, Any] = {
             'subset_crops': len(rows),
             'subset_labelled': len(lab_in),
@@ -276,6 +317,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         if name == 'diag':
             p.add_argument('--fit-pool', type=Path, required=True)
             p.add_argument('--pool-geometry-rows', type=int, default=20_000)
+        if name != 'diag':
+            p.add_argument(
+                '--split-manifest',
+                type=Path,
+                default=None,
+                help='eval-split manifest: the cut is chosen on calibration, scored on heldout',
+            )
         if name == 'e5':
             p.add_argument('--confidence-cuts', type=float, nargs='+', default=[0.5, 0.7])
     args = ap.parse_args(argv)
