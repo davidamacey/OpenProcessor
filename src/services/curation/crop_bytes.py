@@ -19,6 +19,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.services.curation.source_image_cache import crop_cache_file
+from src.services.detection.geometry import crop_rect
 
 
 if TYPE_CHECKING:
@@ -102,7 +103,10 @@ def crop_jpeg_from_disk(image_path: str, bbox: tuple[float, float, float, float]
     """A JPEG of the item crop cut from the source image on disk.
 
     The slow path: re-opens the source, EXIF-transposes, crops and
-    re-encodes. ``None`` when the image is missing or unreadable.
+    re-encodes. ``None`` when the image is missing or unreadable. The
+    rectangle is the one ingest cut the cached crop from
+    (:func:`~src.services.detection.geometry.crop_rect`), so the pixels match;
+    the JPEG bytes need not (another encoder for a GPU-route crop).
     """
     img = decode_source_rgb(image_path)
     if img is None:
@@ -110,13 +114,8 @@ def crop_jpeg_from_disk(image_path: str, bbox: tuple[float, float, float, float]
 
     full_w, full_h = img.size
     x1, y1, x2, y2 = bbox
-    x1i = max(0, round(x1 * full_w))
-    y1i = max(0, round(y1 * full_h))
-    x2i = max(x1i + 1, round(x2 * full_w))
-    y2i = max(y1i + 1, round(y2 * full_h))
-    if x2i <= x1i or y2i <= y1i:
-        return None
-    crop = img.crop((x1i, y1i, x2i, y2i))
+    rect = crop_rect((x1 * full_w, y1 * full_h, x2 * full_w, y2 * full_h), full_w, full_h)
+    crop = img.crop(rect)
     buf = io.BytesIO()
     crop.save(buf, format='JPEG', quality=CROP_JPEG_QUALITY)
     return buf.getvalue()
