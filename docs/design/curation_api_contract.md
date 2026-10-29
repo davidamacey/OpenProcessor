@@ -2082,7 +2082,7 @@ classes are reported.
 | POST | `/probe/run` | `{job_id, architecture, gpu, resume}`. Runs the active-learning probe from a finished training job (`409` when that job is unknown, not `finished`, has no checkpoint, or the GPU cannot be claimed; one job at a time) |
 | GET | `/probe/status` | `ProbeStatusResponse` (`status`, `job_id`, `train_job_id`, `model_path`, `gpu`, `updated_count`, `error`, `actionable_min_confidence`) |
 | POST | `/probe/cancel` | |
-| GET | `/search/text` | `q` (required), `page`, `page_size`, `cluster_id`, `tab`, `date_from`, `date_to`, `max_rank`, `min_blur_ratio`, `hide_near_duplicates`, `min_score`, `include_test`. Items plus `semantic_score`. `400` when `OP_SEMANTIC_SEARCH_ENABLED` is off, `503` while the text encoder is not ready |
+| GET | `/search/text` | `q` (required), `page`, `page_size`, `cluster_id`, `tab`, `date_from`, `date_to`, `max_rank`, `min_blur_ratio`, `hide_near_duplicates`, `min_score`, `include_test`. Items plus `semantic_score`. `400` when `OP_SEMANTIC_SEARCH_ENABLED` is set off (it is on by default), `503` while the text encoder is not ready |
 | GET | `/stats` | project counts, indexes, disk, jobs |
 | GET | `/stats/classes` | per-class counts with `thresholds`, `adequacy`, `trainable`, `trainable_gap`, `aug_target`, `aug_gap` |
 | GET | `/stats/dataset` | the dashboard roll-up |

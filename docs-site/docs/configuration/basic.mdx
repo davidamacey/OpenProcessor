@@ -147,7 +147,8 @@ curation deployment actually sets:
 | `OP_VLM_URL`, `OP_VLM_MODEL`, `OP_VLM_API_KEY` | An OpenAI-compatible `/v1/chat/completions` endpoint. This defines the built-in `env` VLM endpoint, which a project uses only after it activates it; `OP_VLM_MODEL` is required whenever `OP_VLM_URL` is set. More endpoints are registered through the API; see [VLM selection](../guides/vlm-selection.mdx) |
 | `OP_SEGMENTER_URL` | e.g. `http://segmenter:8000`; empty makes the cascade's segmenter leg a clean no-op |
 | `HF_TOKEN` | Needed by the segmenter (gated SAM 3 weights) and for gated VLM weights |
-| `OP_SEMANTIC_SEARCH_ENABLED`, `OP_SCORES_ENABLED`, `OP_SELECT_DIVERSE_ENABLED`, `OP_VIZ_PROJECTION_ENABLED` | Feature flags, off by default (set to `1`) |
+| `OP_SEMANTIC_SEARCH_ENABLED` | Text search, on by default (set `0` to turn it off) |
+| `OP_SCORES_ENABLED`, `OP_SELECT_DIVERSE_ENABLED`, `OP_VIZ_PROJECTION_ENABLED` | Feature flags, off by default (set to `1`) |
 | `OP_MLFLOW_PUBLIC_URL` | Browser-reachable MLflow URL, so served run links work |
 
 Classes are not set here. Each project has its own class registry, created

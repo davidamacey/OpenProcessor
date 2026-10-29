@@ -19,6 +19,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - **`gpu_image_prep` runs two Triton instances on the `full` profile** (#268), about 7 GB more card memory; `minimal` and `standard` stay at one. Existing installs keep their old count until the model config is regenerated: `./openprocessor upgrade` does it, or run `./openprocessor models install --only preflight` (`./openprocessor profile` needs a checkout).
 - **`gpu_image_prep` gained an optional `boxes` input.** The installer used to seed models with `cp -rn`, so an upgraded install kept the old model files and the GPU embed route stayed off. The seed step now replaces a model directory whose `MODEL_VERSION` is older than the release's (`export/sync_model_seed.py`) and then regenerates the profile values (#377). After an upgrade run `./openprocessor restart triton-server`; in a checkout `git pull` supplies the files.
 - **Index bootstrap and route warm-up run at API worker start** (#356), so a worker's first request no longer pays about 0.4 s plus 0.9 s.
+- **Semantic text search is on by default** (#371). A fresh install answers `GET /curation/projects/{project}/search/text` with 200 instead of 400. Set `OP_SEMANTIC_SEARCH_ENABLED=0` to turn it off. The text encoder warm-up already ran at every API start, so there is no new startup cost.
 - The installer's tier prompt is a numbered menu; `--tiers` is unchanged.
 
 ### Added
