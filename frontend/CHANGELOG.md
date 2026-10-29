@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- An axe-core accessibility check in the stubbed e2e suite (`e2e/stubbed/test_a11y_axe.py`) on projects, clusters, cluster detail, review, classes, settings, prompt packs and open-vocab sets; it fails on any violation.
+
 ### Fixed
 
 - An unknown URL shows a not-found page instead of the "Something went wrong / Reload" prompt.
@@ -17,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The blocked-start screen no longer repeats its title as the reason.
 - A project that is still building opens by itself once it becomes selectable.
 - `/projects` no longer probes a combine job id on every load (a logged 404); "Combine projects…" is always offered because the backend always mounts the combine router.
+- A crop card in the cluster grid is a container with one select button (the thumbnail) and sibling action buttons, so no interactive control nests inside another; the class list in the sidebar no longer inherits a list-item role on its buttons; every empty table header (scores, prompt packs, region profiles, open-vocab sets, VLM tables, config, deprecated classes) has a visually hidden label.
 - The docs screenshot seeding binds a project (`--project`) like the other scripts.
 
 ## [0.6.0] - 2026-10-16

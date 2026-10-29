@@ -222,35 +222,36 @@
   });
 </script>
 
+<!-- The card is a container, not a button: its actions are real buttons and
+     buttons cannot nest. Selection is the one real control, the thumbnail
+     button (Enter and Space work natively). -->
 <div
-  role="button"
-  tabindex="0"
   style="content-visibility:auto;contain-intrinsic-size:auto 260px"
-  class="group relative flex flex-col rounded-md border bg-zinc-900 text-left transition focus:outline-none {selected
+  class="group relative flex flex-col rounded-md border bg-zinc-900 text-left transition {selected
     ? 'border-blue-500 ring-2 ring-blue-500/40'
     : 'border-zinc-800 hover:border-zinc-600'}"
-  onclick={(e) => onclick?.(crop, e)}
-  onkeydown={(e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onclick?.(crop, e as unknown as MouseEvent);
-    }
-  }}
-  aria-pressed={selected}
 >
   <div class="relative aspect-square w-full overflow-hidden rounded-t-md bg-zinc-950">
-    <img
-      src={getThumbUrl(crop.id)}
-      alt="crop {crop.id}"
-      loading="lazy"
-      draggable="false"
-      class="h-full w-full object-contain [-webkit-user-drag:none]"
-      onload={onImgLoad}
-      onerror={(e) => {
-        const t = e.currentTarget as HTMLImageElement;
-        t.style.opacity = '0.2';
-      }}
-    />
+    <button
+      type="button"
+      class="block h-full w-full focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-400"
+      aria-pressed={selected}
+      aria-label="Select crop {crop.id}"
+      onclick={(e) => onclick?.(crop, e)}
+    >
+      <img
+        src={getThumbUrl(crop.id)}
+        alt=""
+        loading="lazy"
+        draggable="false"
+        class="h-full w-full object-contain [-webkit-user-drag:none]"
+        onload={onImgLoad}
+        onerror={(e) => {
+          const t = e.currentTarget as HTMLImageElement;
+          t.style.opacity = '0.2';
+        }}
+      />
+    </button>
 
     {#if noSlot}
       <span

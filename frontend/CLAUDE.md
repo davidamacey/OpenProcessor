@@ -252,6 +252,10 @@ Under `src/lib/contract/`:
     and the whole group is stopped on exit; never leave one running.
   - A failed test writes a screenshot, console, request log, stub lists and DOM to
     `artifacts_local/e2e-failures/<test id>/`; read those first when a test flakes.
+  - `test_a11y_axe.py` runs axe-core (devDependency, injected from `node_modules`) on the main
+    pages and fails on any violation. A new page or page state adds a row to its `PAGES` list.
+    Controls need accessible names, no interactive element nests inside another, and an
+    empty table header carries a visually hidden label (`tableHeaders.scan.test.ts`).
   - A `py_compile` hook and CI step gate `scripts/*.py` and `e2e/**/*.py` syntax.
 - **Live read-only tier (`e2e/live/`):** drives the real deployed build against a real
   backend (`OP_CROPWRIGHT_LIVE_URL=... npm run test:live`; skipped when unset, never in CI).

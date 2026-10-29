@@ -124,10 +124,8 @@ def test_cropcard_pencil_opens_multibox_editor_and_saves_with_no_region_status(
 
     thumbnail = page.locator("img").first
     thumbnail.hover()
-    # `button[aria-label="Edit ..."]`, not get_by_role("Edit", exact=False) —
-    # the card's own outer role="button" wrapper's computed accessible name
-    # also matches a loose "Edit" substring, so a fuzzy role query picks the
-    # card (toggling selection) instead of the nested pencil button.
+    # An exact aria-label selector: a fuzzy role query must not pick another
+    # control (toggling selection) instead of the pencil button.
     pencil = page.locator('button[aria-label="Edit widget tag"]')
     pencil.wait_for(timeout=ACTION_TIMEOUT_MS, state="visible")
     # The pencil must never share pixels with the card's other hover controls
