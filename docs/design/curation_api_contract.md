@@ -1252,6 +1252,8 @@ Common filters: `include_test`, `max_rank`, `min_blur_ratio`,
 `min_mistakenness`, `hide_near_duplicates`, `class_name` and
 `exclude_class_name` (repeatable), `source`, `conf_min`, `conf_max`, `min_area`, `max_area`,
 `origin`, `embedding_state`, `review_status` (`400` if `conf_min` is above `conf_max`),
+`detector_class_name` (repeatable), `detector_conf_min`, `detector_conf_max` and `review_tab`
+(see the shared filter below),
 `combine_conflict`, `on_negative_frame`, `sort`, `page`, `page_size` (max
 200). Tab-only filters: `text` and `region_status` on `regions`; `import_id`
 and `dataset_split` on `imported`.
@@ -1367,36 +1369,64 @@ Cluster ids partition into ranges:
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/clusters` | cluster cards. Query: `per_cluster`, `max_clusters`, `kind` (`class`, `candidate`, `all`), `cluster_id`, `max_rank`, `min_blur_ratio`, `class_source`, `offset`, `limit` |
+| GET | `/clusters` | cluster cards, typed (`ClusterListResponse`). Query: `per_cluster`, `max_clusters`, `kind` (`class`, `candidate`, `all`), `cluster_id`, `max_rank`, `min_blur_ratio`, `class_source`, `offset`, `limit`, and the server-side order and filters `sort`, `dominant_class` (repeatable), `detector_class` (repeatable), `min_size`, `max_size`, `validation_state`, `flag` (repeatable, any of), `needs_review` |
+| GET | `/clusters/{cluster_id}/facets` | counts of one cluster's members for filter chips, typed `ClusterFacets`: `detector_classes` (top 20), `class_sources`, `validation`, `review_tabs`, `detector_confidence` (ten bins of 0.1, the last open-ended) and `detector_confidence_missing`. Each count is the `total` of the matching filtered `GET /crops` call; the test holdout and excluded items are not members. A cluster with no members answers zeros |
 | GET | `/clusters/representatives` | `per_cluster`, `max_clusters`, `class_id`, `offset` |
 | POST | `/clusters/auto_promote` | `min_purity` (default 0.85), `min_members` (default 4), `dry_run`, `promote_min_precision` (default 0.95), `force`. Validates classifier-labelled members of pure clusters. Refused with `409 audit_required` / `audit_precision_low` (and `classes`) unless every class it would promote has enough audited crops at the required detector precision, or `force=true`; a dry run is never gated |
 | POST | `/clusters/refine/{cluster_id}` | AHC refine of one cluster. `distance_threshold`, `max_members`. Writes `cluster_subid` |
 | POST | `/cluster/umap/rebuild` | refit the UMAP reducer on the residual pool and re-cluster it. Returns the clustering summary |
 
 Cards. `labelled_count` counts members with any `class_name`. `dominant_count`
-and `label_purity` describe the top class among them. For a candidate,
-`dominant_class_name` is set only for a unique top class with at least 3
-members and half of the labelled ones, else `null`, and `dominant_class_id`
-is `null`.
+and `label_agreement` describe the top class among them: `label_agreement` is
+that class's share of the labelled members (`null` with none labelled). For a
+candidate, `dominant_class_name` is set only for a unique top class with at
+least 3 members and half of the labelled ones, else `null`, and
+`dominant_class_id` is `null`. Frozen test-holdout and excluded items are never
+counted in any card number.
 
-`label_agreement` is the same value as `label_purity` (the top class's share
-of the labelled members, `null` with none labelled) under the name a UI should
-read for label quality; `label_purity` stays for existing callers.
+Quality fields, all from the one aggregation: `detector_top_class` (the
+detector's most common class among the members), `detector_top_share` (that
+class as a share of the members that have a detector class),
+`detector_conf_mean`, `validation_state` (`none`, `partial` or `complete`),
+`review_counts` (members each of `all`, `detector_disagreements`, `outliers`,
+`vlm_low_conf` and `mismatches` would show, built from the same clauses as
+`GET /review/{tab}`), `needs_review_count` (`review_counts.all`) and `flags`.
+The response serves `flag_vocabulary` (`id`, `label`, `description`):
+`mixed_detector_classes`, `low_geometry_purity`, `label_disagreement`,
+`promotable`, `needs_review`, `unvalidated`.
+
+`sort` is one of `needs_review_desc`, `size_desc` (default), `size_asc`,
+`label_agreement_asc`, `purity_asc`, `purity_desc`, `detector_conf_asc`,
+`unvalidated_desc`, `updated_desc`, `dominant_class`; the response serves the
+applied `sort` and `sort_options` (`id`, `label`). A card with no value for the
+sort key comes after every card that has one, and ties break on `cluster_id`.
+The filters apply to the aggregated cards; `total` counts the cards left.
+`truncated` is true when the aggregation returned `max_clusters` buckets, so
+the list may be incomplete: raise `max_clusters` or narrow the filters.
 
 `purity` is geometric and independent of labels: the share of members whose
 nearest cluster centroid is their own cluster. `purity_n` is how many members
 it covers and `purity_basis` is `nearest_centroid`; with `purity_n` of `0`
 both `purity` and `purity_tier` are `null`. `purity_tier` is `pure`, `mixed`
 or `noisy`. `promotable` is the auto-promote gate on labels (enough members,
-enough of them labelled, `label_purity` at or above `pure_min`); never true
+enough of them labelled, `label_agreement` at or above `pure_min`); never true
 for a class cluster. The response serves `purity_thresholds` (`pure_min`
 0.85, `mixed_min` 0.6, `promote_min_members` 4, `promote_min_labelled_share`
 0.5) and `core_similarity_min` (0.75).
 
+The shared item filter (every route that takes it, such as `GET /crops`, `GET /review/{tab}` and
+`GET /clusters`) also takes the detector's view of an item: `detector_class_name` (repeatable,
+matched by name like `class_name`), `detector_conf_min` (inclusive) and `detector_conf_max`
+(exclusive, so adjacent bands never overlap), and `review_tab`, which keeps only the items that review
+tab would show (any tab id except `regions`; the clauses are the ones `GET /review/{tab}` runs, with
+the test holdout hidden). `GET /crops` `sort` accepts `detector_confidence`. On `GET /clusters` these
+narrow the members every card counts, whereas `detector_class` (without `_name`) keeps the cards whose
+detector top class matches.
+
 Representatives are paged. Every card is returned with `size`, `purity` and
 the rest, but `representatives` is filled only for cards in the
-`[offset, offset + limit)` window of the kind-filtered, member-count-descending
-list (`limit` default 50, max 500). Other cards carry `representatives: []`.
+`[offset, offset + limit)` window of the served list (after the filters and the
+`sort`) (`limit` default 50, max 500). Other cards carry `representatives: []`.
 Each card carries `n_subclusters` (the exact count) and `subcluster_ids` (the sorted ids, at most 200), which the Cropwright sub-cluster tabs use. `per_cluster=0` skips representatives. `GET /clusters/representatives`
 pages the same way by `offset` and `max_clusters`.
 

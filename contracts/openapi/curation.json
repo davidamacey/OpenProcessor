@@ -4351,6 +4351,491 @@
         "title": "CloneSettingsRequest",
         "type": "object"
       },
+      "ClusterCard": {
+        "properties": {
+          "cluster_id": {
+            "title": "Cluster Id",
+            "type": "integer"
+          },
+          "cluster_kind": {
+            "enum": [
+              "class",
+              "candidate",
+              "unassigned"
+            ],
+            "title": "Cluster Kind",
+            "type": "string"
+          },
+          "detector_conf_mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector Conf Mean"
+          },
+          "detector_top_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The detector's most common class among the members.",
+            "title": "Detector Top Class"
+          },
+          "detector_top_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "That class as a share of the members that have a detector class.",
+            "title": "Detector Top Share"
+          },
+          "dominant_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dominant Class Id"
+          },
+          "dominant_class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dominant Class Name"
+          },
+          "dominant_count": {
+            "title": "Dominant Count",
+            "type": "integer"
+          },
+          "flags": {
+            "description": "Quality flag codes, see flag_vocabulary.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Flags",
+            "type": "array"
+          },
+          "is_unlabeled": {
+            "title": "Is Unlabeled",
+            "type": "boolean"
+          },
+          "label_agreement": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The top class's share of the labelled members.",
+            "title": "Label Agreement"
+          },
+          "labelled_count": {
+            "title": "Labelled Count",
+            "type": "integer"
+          },
+          "labelled_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Labelled Share"
+          },
+          "n_subclusters": {
+            "title": "N Subclusters",
+            "type": "integer"
+          },
+          "needs_review_count": {
+            "description": "review_counts['all']: the review queue sort key.",
+            "title": "Needs Review Count",
+            "type": "integer"
+          },
+          "promotable": {
+            "title": "Promotable",
+            "type": "boolean"
+          },
+          "purity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Share of measured members whose nearest centroid is their own cluster.",
+            "title": "Purity"
+          },
+          "purity_basis": {
+            "title": "Purity Basis",
+            "type": "string"
+          },
+          "purity_n": {
+            "title": "Purity N",
+            "type": "integer"
+          },
+          "purity_tier": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pure",
+                  "mixed",
+                  "noisy"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purity Tier"
+          },
+          "representatives": {
+            "items": {
+              "$ref": "#/components/schemas/ClusterRepresentative"
+            },
+            "title": "Representatives",
+            "type": "array"
+          },
+          "review_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Members each review tab would show for this cluster, by tab id.",
+            "title": "Review Counts",
+            "type": "object"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "subcluster_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Subcluster Ids",
+            "type": "array"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "validated_count": {
+            "title": "Validated Count",
+            "type": "integer"
+          },
+          "validation_state": {
+            "enum": [
+              "none",
+              "partial",
+              "complete"
+            ],
+            "title": "Validation State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cluster_id",
+          "cluster_kind",
+          "size",
+          "validated_count",
+          "labelled_count",
+          "dominant_class_id",
+          "dominant_class_name",
+          "dominant_count",
+          "purity",
+          "purity_n",
+          "purity_basis",
+          "purity_tier",
+          "label_agreement",
+          "labelled_share",
+          "promotable",
+          "is_unlabeled",
+          "n_subclusters",
+          "subcluster_ids",
+          "updated_at",
+          "representatives",
+          "detector_top_class",
+          "detector_top_share",
+          "detector_conf_mean",
+          "validation_state",
+          "review_counts",
+          "needs_review_count",
+          "flags"
+        ],
+        "title": "ClusterCard",
+        "type": "object"
+      },
+      "ClusterFacets": {
+        "description": "What a cluster's members look like, to render filter chips with counts.\n\nEvery count is the ``total`` of the matching filtered ``GET /crops`` call:\n``detector_classes[].value`` is ``detector_class_name``, ``class_sources[].value`` is\n``class_source``, ``validation`` is ``label_validated`` true or false,\n``review_tabs[tab]`` is ``review_tab``, and a ``detector_confidence`` bin is\n``detector_conf_min`` / ``detector_conf_max``.",
+        "properties": {
+          "class_sources": {
+            "items": {
+              "$ref": "#/components/schemas/FacetCount"
+            },
+            "title": "Class Sources",
+            "type": "array"
+          },
+          "cluster_id": {
+            "title": "Cluster Id",
+            "type": "integer"
+          },
+          "detector_classes": {
+            "description": "Top 20 by count.",
+            "items": {
+              "$ref": "#/components/schemas/FacetCount"
+            },
+            "title": "Detector Classes",
+            "type": "array"
+          },
+          "detector_confidence": {
+            "description": "Ten fixed bins of 0.1; members with a confidence.",
+            "items": {
+              "$ref": "#/components/schemas/ConfidenceBin"
+            },
+            "title": "Detector Confidence",
+            "type": "array"
+          },
+          "detector_confidence_missing": {
+            "description": "Members with no detector confidence (in no bin).",
+            "title": "Detector Confidence Missing",
+            "type": "integer"
+          },
+          "review_tabs": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Review Tabs",
+            "type": "object"
+          },
+          "total": {
+            "description": "Members, without the test holdout and excluded items.",
+            "title": "Total",
+            "type": "integer"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/ValidationCounts"
+          }
+        },
+        "required": [
+          "cluster_id",
+          "total",
+          "detector_classes",
+          "class_sources",
+          "validation",
+          "review_tabs",
+          "detector_confidence",
+          "detector_confidence_missing"
+        ],
+        "title": "ClusterFacets",
+        "type": "object"
+      },
+      "ClusterFlag": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description"
+        ],
+        "title": "ClusterFlag",
+        "type": "object"
+      },
+      "ClusterListResponse": {
+        "properties": {
+          "cluster_id_offset": {
+            "title": "Cluster Id Offset",
+            "type": "integer"
+          },
+          "core_similarity_min": {
+            "title": "Core Similarity Min",
+            "type": "number"
+          },
+          "flag_vocabulary": {
+            "items": {
+              "$ref": "#/components/schemas/ClusterFlag"
+            },
+            "title": "Flag Vocabulary",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ClusterCard"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "purity_thresholds": {
+            "$ref": "#/components/schemas/PurityThresholds"
+          },
+          "representatives_limit": {
+            "title": "Representatives Limit",
+            "type": "integer"
+          },
+          "representatives_offset": {
+            "title": "Representatives Offset",
+            "type": "integer"
+          },
+          "sort": {
+            "description": "The sort applied.",
+            "title": "Sort",
+            "type": "string"
+          },
+          "sort_options": {
+            "items": {
+              "$ref": "#/components/schemas/ClusterSortOption"
+            },
+            "title": "Sort Options",
+            "type": "array"
+          },
+          "total": {
+            "description": "Cards after the filters, before representatives paging.",
+            "title": "Total",
+            "type": "integer"
+          },
+          "total_candidate_clusters": {
+            "title": "Total Candidate Clusters",
+            "type": "integer"
+          },
+          "total_class_clusters": {
+            "title": "Total Class Clusters",
+            "type": "integer"
+          },
+          "truncated": {
+            "description": "The aggregation returned max_clusters buckets, so the list may be incomplete: raise max_clusters or narrow the filters.",
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "total_class_clusters",
+          "total_candidate_clusters",
+          "cluster_id_offset",
+          "purity_thresholds",
+          "core_similarity_min",
+          "representatives_offset",
+          "representatives_limit",
+          "sort",
+          "sort_options",
+          "flag_vocabulary",
+          "truncated"
+        ],
+        "title": "ClusterListResponse",
+        "type": "object"
+      },
+      "ClusterRepresentative": {
+        "properties": {
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Name"
+          },
+          "cluster_distance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Distance"
+          },
+          "cluster_subid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Subid"
+          },
+          "crop_id": {
+            "title": "Crop Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "crop_id",
+          "cluster_distance",
+          "class_name",
+          "cluster_subid"
+        ],
+        "title": "ClusterRepresentative",
+        "type": "object"
+      },
+      "ClusterSortOption": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "ClusterSortOption",
+        "type": "object"
+      },
       "ClusterStats": {
         "properties": {
           "cluster_count": {
@@ -5289,6 +5774,38 @@
           "model"
         ],
         "title": "CompletedTask",
+        "type": "object"
+      },
+      "ConfidenceBin": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Send as `detector_conf_max` (exclusive); null on the last bin: no upper bound.",
+            "title": "Max"
+          },
+          "min": {
+            "description": "Send as `detector_conf_min` (inclusive).",
+            "title": "Min",
+            "type": "number"
+          }
+        },
+        "required": [
+          "min",
+          "max",
+          "count"
+        ],
+        "title": "ConfidenceBin",
         "type": "object"
       },
       "ConfigErrorDetail": {
@@ -9785,6 +10302,24 @@
         "title": "ExportYoloRequest",
         "type": "object"
       },
+      "FacetCount": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "count"
+        ],
+        "title": "FacetCount",
+        "type": "object"
+      },
       "FailedModel": {
         "properties": {
           "error": {
@@ -12635,6 +13170,39 @@
             ],
             "title": "Dataset Split"
           },
+          "detector_class_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Detector Class Names",
+            "type": "array"
+          },
+          "detector_conf_max": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector Conf Max"
+          },
+          "detector_conf_min": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector Conf Min"
+          },
           "embedding_state": {
             "items": {
               "enum": [
@@ -12841,6 +13409,17 @@
             },
             "title": "Review Status",
             "type": "array"
+          },
+          "review_tab": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Tab"
           },
           "source": {
             "anyOf": [
@@ -19275,6 +19854,34 @@
         "title": "Proposal",
         "type": "object"
       },
+      "PurityThresholds": {
+        "properties": {
+          "mixed_min": {
+            "title": "Mixed Min",
+            "type": "number"
+          },
+          "promote_min_labelled_share": {
+            "title": "Promote Min Labelled Share",
+            "type": "number"
+          },
+          "promote_min_members": {
+            "title": "Promote Min Members",
+            "type": "integer"
+          },
+          "pure_min": {
+            "title": "Pure Min",
+            "type": "number"
+          }
+        },
+        "required": [
+          "pure_min",
+          "mixed_min",
+          "promote_min_members",
+          "promote_min_labelled_share"
+        ],
+        "title": "PurityThresholds",
+        "type": "object"
+      },
       "QuantizeRequest": {
         "additionalProperties": false,
         "description": "Export a run to ONNX variants and score them in the same job.",
@@ -23087,6 +23694,39 @@
             "title": "Detector",
             "type": "array"
           },
+          "detector_class_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Detector Class Names",
+            "type": "array"
+          },
+          "detector_conf_max": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector Conf Max"
+          },
+          "detector_conf_min": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detector Conf Min"
+          },
           "embedding_state": {
             "items": {
               "enum": [
@@ -23358,6 +23998,17 @@
             },
             "title": "Review Status",
             "type": "array"
+          },
+          "review_tab": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Tab"
           },
           "source": {
             "anyOf": [
@@ -29518,6 +30169,24 @@
         "title": "UnmappedModelClass",
         "type": "object"
       },
+      "ValidationCounts": {
+        "properties": {
+          "unvalidated": {
+            "title": "Unvalidated",
+            "type": "integer"
+          },
+          "validated": {
+            "title": "Validated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "validated",
+          "unvalidated"
+        ],
+        "title": "ValidationCounts",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -35027,7 +35696,7 @@
     },
     "/curation/projects/{project}/clusters": {
       "get": {
-        "description": "Authoritative per-cluster card payload for the labeler.\n\nSingle OpenSearch aggregation that returns, for every cluster_id:\n\n* ``size`` (total members), ``validated_count`` (class_validated=true),\n* ``dominant_class_{id,name,count}`` and ``label_purity``\n  (largest-class share among labelled members) with\n  ``labelled_share``. A candidate cluster only gets a\n  ``dominant_class_name`` when a unique top class has at least\n  ``CANDIDATE_DOMINANT_MIN_COUNT`` members and\n  ``CANDIDATE_DOMINANT_MIN_SHARE`` of the labelled ones;\n  ``dominant_count``/``labelled_count``/``label_purity`` are always\n  reported,\n* ``purity`` / ``purity_n`` / ``purity_basis`` / ``purity_tier``\n  : the share of the ``purity_n`` members the cluster-geometry\n  pass measured for this cluster whose nearest cluster centroid is\n  this cluster's own — independent of the labels that placed them, so\n  a class cluster is no longer 1.0 by construction; ``null`` when no\n  member has been measured,\n* ``is_unlabeled`` (true when no class_name has any signal at all),\n* ``cluster_kind`` (``class`` | ``candidate`` | ``unassigned``),\n* ``n_subclusters`` (distinct cluster_subid values), ``subcluster_ids``\n  (those ids, at most ``MAX_SUBCLUSTER_IDS``), and\n* ``representatives`` (top ``per_cluster`` crops sorted by\n  cluster_distance asc).\n\nThis endpoint exists so the frontend can stop computing dominant\nclass / purity from a 4-crop sample (it was getting wrong answers\non candidate clusters where all reps were null-class). The\naggregation is cheap because ``cluster_id`` is a low-cardinality\ninteger field; ``class_name``/``class_source``/``cluster_subid`` are\nall mapped ``keyword`` directly on the live index (no ``.keyword``\nsubfield).",
+        "description": "Authoritative per-cluster card list for the labeler.\n\nOne OpenSearch aggregation yields every card input (size, validation,\ndominant class, label agreement, geometry purity, detector agreement and\nconfidence, per-tab review counts, sub-clusters); the server then applies\nthe filters and the ``sort`` and sets the quality ``flags``. A candidate\ncluster only gets a ``dominant_class_name`` when a unique top class has at\nleast ``CANDIDATE_DOMINANT_MIN_COUNT`` members and\n``CANDIDATE_DOMINANT_MIN_SHARE`` of the labelled ones. ``truncated`` is\ntrue when the aggregation returned ``max_clusters`` buckets: the list may\nthen be incomplete. Frozen test-holdout and excluded items are never counted.",
         "operationId": "list_clusters_curation_projects__project__clusters_get",
         "parameters": [
           {
@@ -35054,11 +35723,13 @@
             }
           },
           {
+            "description": "Clusters the aggregation returns; `truncated` says when it was cut here.",
             "in": "query",
             "name": "max_clusters",
             "required": false,
             "schema": {
               "default": 1000,
+              "description": "Clusters the aggregation returns; `truncated` says when it was cut here.",
               "maximum": 10000,
               "minimum": 1,
               "title": "Max Clusters",
@@ -35132,13 +35803,173 @@
             }
           },
           {
-            "description": "Offset into the card list for representatives",
+            "description": "Order of the served cards.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "size_desc",
+              "description": "Order of the served cards.",
+              "enum": [
+                "needs_review_desc",
+                "size_desc",
+                "size_asc",
+                "label_agreement_asc",
+                "purity_asc",
+                "purity_desc",
+                "detector_conf_asc",
+                "unvalidated_desc",
+                "updated_desc",
+                "dominant_class"
+              ],
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Dominant class name, repeatable.",
+            "in": "query",
+            "name": "dominant_class",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Dominant class name, repeatable.",
+              "title": "Dominant Class"
+            }
+          },
+          {
+            "description": "The detector's top class in the cluster, repeatable.",
+            "in": "query",
+            "name": "detector_class",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The detector's top class in the cluster, repeatable.",
+              "title": "Detector Class"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_size",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Size"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_size",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Max Size"
+            }
+          },
+          {
+            "in": "query",
+            "name": "validation_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "none",
+                    "partial",
+                    "complete"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Validation State"
+            }
+          },
+          {
+            "description": "Cards carrying any of these flags.",
+            "in": "query",
+            "name": "flag",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Cards carrying any of these flags.",
+              "title": "Flag"
+            }
+          },
+          {
+            "description": "True: cards with members in the review queue; false: those without.",
+            "in": "query",
+            "name": "needs_review",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "True: cards with members in the review queue; false: those without.",
+              "title": "Needs Review"
+            }
+          },
+          {
+            "description": "Offset into the served cards for representatives",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
-              "description": "Offset into the card list for representatives",
+              "description": "Offset into the served cards for representatives",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
@@ -35300,6 +36131,85 @@
             }
           },
           {
+            "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+            "in": "query",
+            "name": "detector_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+              "title": "Detector Class Name"
+            }
+          },
+          {
+            "description": "Detector confidence, inclusive lower bound.",
+            "in": "query",
+            "name": "detector_conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, inclusive lower bound.",
+              "title": "Detector Conf Min"
+            }
+          },
+          {
+            "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+            "in": "query",
+            "name": "detector_conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+              "title": "Detector Conf Max"
+            }
+          },
+          {
+            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "in": "query",
+            "name": "review_tab",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "title": "Review Tab"
+            }
+          },
+          {
             "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
             "in": "query",
             "name": "origin",
@@ -35386,9 +36296,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Clusters Curation Projects  Project  Clusters Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ClusterListResponse"
                 }
               }
             },
@@ -35709,6 +36617,58 @@
           }
         },
         "summary": "Cluster Representatives",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/clusters/{cluster_id}/facets": {
+      "get": {
+        "description": "Counts of one cluster's members by detector class, class source, validation,\nreview tab and detector confidence, for filter chips. Each count is the ``total`` of\nthe filtered ``GET /crops`` call named in :class:`ClusterFacets`. A cluster with no\nmembers answers zeros.",
+        "operationId": "cluster_facets_endpoint_curation_projects__project__clusters__cluster_id__facets_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cluster_id",
+            "required": true,
+            "schema": {
+              "title": "Cluster Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClusterFacets"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cluster Facets Endpoint",
         "tags": [
           "Curation"
         ]
@@ -36346,6 +37306,85 @@
               ],
               "description": "The N largest boxes per image (crop_rank_in_image <= N).",
               "title": "Max Rank"
+            }
+          },
+          {
+            "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+            "in": "query",
+            "name": "detector_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+              "title": "Detector Class Name"
+            }
+          },
+          {
+            "description": "Detector confidence, inclusive lower bound.",
+            "in": "query",
+            "name": "detector_conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, inclusive lower bound.",
+              "title": "Detector Conf Min"
+            }
+          },
+          {
+            "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+            "in": "query",
+            "name": "detector_conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+              "title": "Detector Conf Max"
+            }
+          },
+          {
+            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "in": "query",
+            "name": "review_tab",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "title": "Review Tab"
             }
           },
           {
@@ -39034,6 +40073,85 @@
               ],
               "description": "The N largest boxes per image (crop_rank_in_image <= N).",
               "title": "Max Rank"
+            }
+          },
+          {
+            "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+            "in": "query",
+            "name": "detector_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+              "title": "Detector Class Name"
+            }
+          },
+          {
+            "description": "Detector confidence, inclusive lower bound.",
+            "in": "query",
+            "name": "detector_conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, inclusive lower bound.",
+              "title": "Detector Conf Min"
+            }
+          },
+          {
+            "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+            "in": "query",
+            "name": "detector_conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+              "title": "Detector Conf Max"
+            }
+          },
+          {
+            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "in": "query",
+            "name": "review_tab",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "title": "Review Tab"
             }
           },
           {
@@ -43668,6 +44786,85 @@
             }
           },
           {
+            "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+            "in": "query",
+            "name": "detector_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+              "title": "Detector Class Name"
+            }
+          },
+          {
+            "description": "Detector confidence, inclusive lower bound.",
+            "in": "query",
+            "name": "detector_conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, inclusive lower bound.",
+              "title": "Detector Conf Min"
+            }
+          },
+          {
+            "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+            "in": "query",
+            "name": "detector_conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+              "title": "Detector Conf Max"
+            }
+          },
+          {
+            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "in": "query",
+            "name": "review_tab",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "title": "Review Tab"
+            }
+          },
+          {
             "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
             "in": "query",
             "name": "origin",
@@ -46232,6 +47429,85 @@
             }
           },
           {
+            "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+            "in": "query",
+            "name": "detector_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+              "title": "Detector Class Name"
+            }
+          },
+          {
+            "description": "Detector confidence, inclusive lower bound.",
+            "in": "query",
+            "name": "detector_conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, inclusive lower bound.",
+              "title": "Detector Conf Min"
+            }
+          },
+          {
+            "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+            "in": "query",
+            "name": "detector_conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+              "title": "Detector Conf Max"
+            }
+          },
+          {
+            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "in": "query",
+            "name": "review_tab",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "title": "Review Tab"
+            }
+          },
+          {
             "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
             "in": "query",
             "name": "origin",
@@ -48072,6 +49348,85 @@
             }
           },
           {
+            "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+            "in": "query",
+            "name": "detector_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+              "title": "Detector Class Name"
+            }
+          },
+          {
+            "description": "Detector confidence, inclusive lower bound.",
+            "in": "query",
+            "name": "detector_conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, inclusive lower bound.",
+              "title": "Detector Conf Min"
+            }
+          },
+          {
+            "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+            "in": "query",
+            "name": "detector_conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+              "title": "Detector Conf Max"
+            }
+          },
+          {
+            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "in": "query",
+            "name": "review_tab",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "title": "Review Tab"
+            }
+          },
+          {
             "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
             "in": "query",
             "name": "origin",
@@ -48567,6 +49922,85 @@
               ],
               "description": "The N largest boxes per image (crop_rank_in_image <= N).",
               "title": "Max Rank"
+            }
+          },
+          {
+            "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+            "in": "query",
+            "name": "detector_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+              "title": "Detector Class Name"
+            }
+          },
+          {
+            "description": "Detector confidence, inclusive lower bound.",
+            "in": "query",
+            "name": "detector_conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, inclusive lower bound.",
+              "title": "Detector Conf Min"
+            }
+          },
+          {
+            "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+            "in": "query",
+            "name": "detector_conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+              "title": "Detector Conf Max"
+            }
+          },
+          {
+            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "in": "query",
+            "name": "review_tab",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "title": "Review Tab"
             }
           },
           {
@@ -49183,6 +50617,85 @@
             }
           },
           {
+            "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+            "in": "query",
+            "name": "detector_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+              "title": "Detector Class Name"
+            }
+          },
+          {
+            "description": "Detector confidence, inclusive lower bound.",
+            "in": "query",
+            "name": "detector_conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, inclusive lower bound.",
+              "title": "Detector Conf Min"
+            }
+          },
+          {
+            "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+            "in": "query",
+            "name": "detector_conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+              "title": "Detector Conf Max"
+            }
+          },
+          {
+            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "in": "query",
+            "name": "review_tab",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "title": "Review Tab"
+            }
+          },
+          {
             "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
             "in": "query",
             "name": "origin",
@@ -49746,6 +51259,85 @@
             }
           },
           {
+            "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+            "in": "query",
+            "name": "detector_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+              "title": "Detector Class Name"
+            }
+          },
+          {
+            "description": "Detector confidence, inclusive lower bound.",
+            "in": "query",
+            "name": "detector_conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, inclusive lower bound.",
+              "title": "Detector Conf Min"
+            }
+          },
+          {
+            "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+            "in": "query",
+            "name": "detector_conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+              "title": "Detector Conf Max"
+            }
+          },
+          {
+            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "in": "query",
+            "name": "review_tab",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "title": "Review Tab"
+            }
+          },
+          {
             "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
             "in": "query",
             "name": "origin",
@@ -50010,6 +51602,85 @@
               ],
               "description": "The N largest boxes per image (crop_rank_in_image <= N).",
               "title": "Max Rank"
+            }
+          },
+          {
+            "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+            "in": "query",
+            "name": "detector_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+              "title": "Detector Class Name"
+            }
+          },
+          {
+            "description": "Detector confidence, inclusive lower bound.",
+            "in": "query",
+            "name": "detector_conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, inclusive lower bound.",
+              "title": "Detector Conf Min"
+            }
+          },
+          {
+            "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+            "in": "query",
+            "name": "detector_conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+              "title": "Detector Conf Max"
+            }
+          },
+          {
+            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "in": "query",
+            "name": "review_tab",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "title": "Review Tab"
             }
           },
           {

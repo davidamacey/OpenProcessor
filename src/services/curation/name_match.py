@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 
 NAME_FIELDS: tuple[str, ...] = ('class_name', 'proposal_name')
+DETECTOR_NAME_FIELDS: tuple[str, ...] = ('detector_class_name',)
 
 
 def normalized_names(names: Iterable[str]) -> set[str]:
@@ -46,9 +47,12 @@ def _spellings(name: str) -> set[str]:
     return {slug, slug.replace('_', ' '), slug.replace('_', '-')} if slug else set()
 
 
-def name_clause(names: Iterable[str]) -> dict[str, Any] | None:
-    """OpenSearch clause matching items whose class or proposal name is one of
-    ``names`` (case-insensitive), or ``None`` for an empty list (no filter)."""
+def name_clause(
+    names: Iterable[str], fields: tuple[str, ...] = NAME_FIELDS
+) -> dict[str, Any] | None:
+    """OpenSearch clause matching items whose class or proposal name (or, with
+    ``fields``, the named stored fields) is one of ``names`` (case-insensitive),
+    or ``None`` for an empty list (no filter)."""
     spellings = sorted({s for n in names for s in _spellings(n)})
     if not spellings:
         return None
@@ -56,7 +60,7 @@ def name_clause(names: Iterable[str]) -> dict[str, Any] | None:
         'bool': {
             'should': [
                 {'term': {field: {'value': spelling, 'case_insensitive': True}}}
-                for field in NAME_FIELDS
+                for field in fields
                 for spelling in spellings
             ],
             'minimum_should_match': 1,

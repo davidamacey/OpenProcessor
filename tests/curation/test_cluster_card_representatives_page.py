@@ -11,8 +11,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.routers.curation.clusters import list_clusters
-from src.services.curation.item_filter import ItemFilter
+from curation._cluster_cards_helpers import list_cards
 
 
 def _bucket(cid: int, size: int = 5) -> dict[str, Any]:
@@ -43,15 +42,12 @@ async def _call(
     offset: int = 0,
     limit: int = 50,
 ) -> dict[str, Any]:
-    return await list_clusters(
+    return await list_cards(
         os_client,
         per_cluster=per_cluster,
         max_clusters=100,
         kind='all',
         cluster_id=None,
-        item_filter=ItemFilter(),
-        min_blur_ratio=None,
-        class_source=None,
         offset=offset,
         limit=limit,
     )

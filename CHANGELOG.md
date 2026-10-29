@@ -22,6 +22,8 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - The installer's tier prompt is a numbered menu; `--tiers` is unchanged.
 
 ### Added
+- `GET /clusters` is typed (`ClusterListResponse`) and sorts and filters on the server: `sort`, `dominant_class`, `detector_class`, `min_size`, `max_size`, `validation_state`, `flag`, `needs_review`. Cards gain `detector_top_class`, `detector_top_share`, `detector_conf_mean`, `validation_state`, `review_counts`, `needs_review_count` and `flags`; the response gains `sort`, `sort_options`, `flag_vocabulary` and `truncated`.
+- The shared item filter takes `detector_class_name`, `detector_conf_min`, `detector_conf_max` (exclusive) and `review_tab`; `GET /crops` sorts by `detector_confidence`; new `GET /clusters/{cluster_id}/facets` counts a cluster's members by detector class, class source, validation, review tab and detector confidence for filter chips.
 - Self-seeding docs screenshots (#335): `capture_docs_screenshots.py --seeded` seeds its own public projects on an isolated GPU-less stack (`docker/test/compose.docs-shots.yml`, with a stand-in segmenter) and captures 17 states in one run; the harness host ports are `VERIFY_*_PORT` variables.
 - Cluster scoring: BCubed, AMI, risk-coverage and view/size pair strata in `scripts/bench/cluster_eval_metrics.py`; a scorecard envelope (`scripts/bench/scorecard.py`) that refuses quality fields on a synthetic dataset; seeded calibration/heldout splits by source image or identity (`scripts/bench/eval_split.py`, 3,000-item split under `scripts/datasets/manifests/splits/`) with a refusal to score on what was tuned on; `scripts/bench/setp_inventory.py`.
 - Cluster-quality evaluation harness: `scripts/bench/cluster_eval.py`, `cluster_eval_metrics.py` and `cluster_eval_set.py` (pair precision and recall, false-merge and false-split rates, stability, protected-item moves) and a recorded baseline (#341, `docs/research/cluster_eval_baseline.md`).
@@ -32,6 +34,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - `/health/pe_text` reports `pid` and `cache_scope`.
 
 ### Changed
+- `GET /clusters` no longer serves `label_purity`; read `label_agreement` (same value). Test-holdout items are no longer counted in cluster cards.
 - Docs: the published site is linked from the README and the repository homepage; first-run steps corrected after a new-user review.
 
 ### Fixed
