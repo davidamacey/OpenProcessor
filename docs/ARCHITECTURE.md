@@ -81,6 +81,7 @@ checkout. GPU placement comes from `.env` keys, not from the compose files.
 | `curation-detection-worker` | `curation` | | Region cascade over pending items, every active project in turn |
 | `curation-vlm-worker` | `curation` | | VLM class and verification loop |
 | `curation-auto-label-worker` | `curation` | | Drives the auto-label job protocol |
+| `curation-assist-loop-worker` | `curation` | | Runs auto-label loops (cluster-sampled VLM labeling), one per project |
 | `curation-cluster-refresh` | `curation` | | Schedules the residual-clustering retrain as an auto-label job, when ingest is quiet |
 | `curation-evaluator` | `evaluator` | | Runs bake-off job specs |
 | `segmenter` | `segmenter` | 4611 | Region proposals from a text prompt, `docker/segmenter/` |
@@ -154,9 +155,10 @@ design rationale is in
 | VLM | `src/services/labeling/` | Transport, endpoints and probes, prompts, class and region labelers |
 | Reprocess | `src/services/curation/reprocess*.py` | One selection and lock rule behind every re-run |
 | Assist runs | `src/services/curation/assist/` | Scope, seeded sampling, the VLM call and the `assist` slot of an item; one file-backed run per project |
+| Auto-label loops | `src/services/curation/assist_loop/` | Pinned partition, exact sample gate, propagate or split, budgets, audit and rollback; one file-backed loop per project, run by `curation-assist-loop-worker` |
 | Export and training | `src/services/curation/export*.py`, `src/services/training/` | YOLO export, job lifecycle, preflight, promotion |
 | Routers | `src/routers/curation/` (including `images.py`, `umap.py`, `train/`) | HTTP surface |
-| Workers | `scripts/curation/` | Detection, VLM, auto-label, cluster refresh, evaluator |
+| Workers | `scripts/curation/` | Detection, VLM, auto-label, auto-label loop, cluster refresh, evaluator |
 
 The wire uses one vocabulary (`region_*`, `vlm_*`, ...) that does not change
 with storage names; one serializer, `src/services/curation/wire.py`, maps

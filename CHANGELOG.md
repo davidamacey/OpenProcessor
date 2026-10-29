@@ -13,6 +13,9 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Upgrade notes / behaviour changes
 
+- **A running auto-label loop holds the cluster retrain** (#286): `POST /pipeline/auto_label/start` and `POST /pipeline/auto_label` with `train_clusters=true` answer `409 assist_loop_running`, and the cluster-refresh daemon and the auto-label worker's idle retrain skip that project, until the loop ends or is cancelled.
+- **The compose stack has a new service**, `curation-assist-loop-worker` (profile `curation`); `./openprocessor curation up` and `make curation-up` start it. The cluster-refresh daemon now needs the loops route of the same API version.
+
 - **Re-embed existing vectors before a large ingest.** Crop vectors of items touching the right or bottom image edge were made from a zero-padded crop, and region vectors were made after a JPEG round trip (#259, #360). New data is embedded from the stored box's decoded pixels on every route. For old projects run `POST /curation/projects/{project}/reprocess` with `scopes: ["embed"]` (parts `crop` and `region`). See `docs-site/docs/operations/upgrade-and-backup.mdx`.
 - **Image document ids are now derived from the content hash** (#358). Existing images keep their ids; new images get content ids. Re-ingesting identical content reports `duplicate` even when a lookup would have missed it.
 - **The crop cache is per project** (`<cache>/<slug>/<crop_id>.jpg`) and a project delete removes its directory (#359). Old flat cache files age out.
@@ -22,6 +25,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - The installer's tier prompt is a numbered menu; `--tiers` is unchanged.
 
 ### Added
+- Auto-label loop (#286): `POST /assist/loops` (a dry-run plan by default, then a start), `GET /assist/loops`, `GET /assist/loops/{loop_id}`, `GET .../nodes`, `GET .../nodes/{node_path}/members`, `POST .../cancel`, `POST .../resume` and `POST .../rollback`. It samples each cluster, asks the VLM, writes the top class to the cluster's other free members when an exact bound shows the cluster homogeneous (`class_source: assist_propagated`, a machine label kept out of the training export until reviewed), splits what fails and recurses, within a hard crop, request and time budget, with an optional second-model audit that pauses the loop below its floor and a rollback that keeps anything changed since. It runs in the new `curation-assist-loop-worker` service (profile `curation`, `OP_ASSIST_LOOP_JOBS_DIR`) and never overwrites a human, validated, excluded or holdout item. See `docs-site/docs/guides/auto-label-loop.mdx`.
 - Cluster-quality evaluation harness: `scripts/bench/cluster_eval.py`, `cluster_eval_metrics.py` and `cluster_eval_set.py` (pair precision and recall, false-merge and false-split rates, stability, protected-item moves) and a recorded baseline (#341, `docs/research/cluster_eval_baseline.md`).
 - Host IO-pressure sampling in `scripts/bench/scale_run.py` (#337).
 - The embed reprocess pass sends photos of at least 3 MP to the GPU decode model with the stored boxes (28 img/s against 12 on the CPU route for about 21 MP photos, API CPU 0.03 against 0.50 s per image) and counts routes in `op_reprocess_decode_total` (#259).

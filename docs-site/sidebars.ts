@@ -37,6 +37,7 @@ const sidebars: SidebarsConfig = {
             'guides/pipeline-modes',
             'guides/vlm-selection',
             'guides/selective-assist',
+            'guides/auto-label-loop',
             'guides/region-profiles',
             'guides/prompt-packs',
             'guides/open-vocabulary',
