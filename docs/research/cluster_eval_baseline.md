@@ -20,44 +20,57 @@ out of the labels rather than guessed. Strata (first match wins): low resolution
 32 px), rare class (least frequent third of the annotated classes), similar classes (car, truck,
 bus, train; bicycle, motorcycle; cat, dog; horse, cow, sheep), mixed scene, other.
 
-Commands (`artifacts_local/` is gitignored):
+The scored partition, the labels and the second project's partition are committed in
+`docs/benchmarks/cluster_eval/` (checksums in `SHA256SUMS`), so the numbers below reproduce from a clean
+checkout with no stack. They were exported from the stack by `cluster_eval_set.py build`:
 
 ```bash
+# Export (needs the stack that held the project; already done, the outputs are committed):
 .venv/bin/python scripts/bench/cluster_eval_set.py build --api http://127.0.0.1:5603 \
-    --project cocotest --coco-gt <sample dir>/coco_gt.json --out-dir artifacts_local/cluster_eval/cocotest
+    --project cocotest --coco-gt <sample dir>/coco_gt.json --out-dir <out>/cocotest
+# Reproduce the table below from the committed files (offline, under a second):
+cd docs/benchmarks/cluster_eval && sha256sum -c SHA256SUMS && cd -
 .venv/bin/python scripts/bench/cluster_eval.py score \
-    --labels artifacts_local/cluster_eval/cocotest/labels.jsonl \
-    --partition artifacts_local/cluster_eval/cocotest/partition.jsonl \
-    --second-partition artifacts_local/cluster_eval/default/partition.jsonl \
-    --out artifacts_local/cluster_eval/score.json
+    --labels docs/benchmarks/cluster_eval/cocotest/labels.jsonl \
+    --partition docs/benchmarks/cluster_eval/cocotest/partition.jsonl \
+    --second-partition docs/benchmarks/cluster_eval/default/partition.jsonl \
+    --out /tmp/score.json     # same numbers as docs/benchmarks/cluster_eval/score.json
 ```
 
-## Results (539 labelled crops, 134 clusters over them, 10 classes)
+An earlier version of this note gave 134 clusters, pair precision 0.893, recall 0.079, low-res
+precision 0.846, 32 mixed clusters and an ARI of 0.41. Those came from a scoring run on a partition
+that the stack's refresh daemon changed afterwards; that run's partition and score file were not
+kept, so they could not be reproduced and are withdrawn. The table below is re-scored from the
+partition and labels committed here, which a second run of the same command reproduces exactly.
+
+## Results (539 labelled crops, 128 clusters over them, 10 classes)
 
 | Metric | All | Low res | Rare | Similar classes |
 |---|---|---|---|---|
 | Items | 539 | 112 | 113 | 314 |
-| Pair precision | 0.893 | 0.846 | 0.921 | 0.979 |
-| False-merge rate | 0.107 | 0.154 | 0.079 | 0.021 |
-| Pair recall | 0.079 | 0.079 | 0.229 | 0.090 |
-| False-split rate | 0.921 | 0.921 | 0.771 | 0.910 |
-| Correct-split recovery | 0.9986 | 0.9938 | 0.9935 | 0.9996 |
-| Items outside their cluster's majority class | 0.080 | 0.098 | 0.018 | 0.022 |
-| Mixed clusters | 32 | 9 | 2 | 6 |
+| Pair precision | 0.905 | 0.945 | 0.924 | 0.971 |
+| False-merge rate | 0.095 | 0.055 | 0.076 | 0.029 |
+| Pair recall | 0.088 | 0.136 | 0.139 | 0.107 |
+| False-split rate | 0.912 | 0.864 | 0.861 | 0.893 |
+| Correct-split recovery | 0.9987 | 0.9965 | 0.9962 | 0.9993 |
+| Items outside their cluster's majority class | 0.065 | 0.062 | 0.035 | 0.019 |
+| Mixed clusters | 28 | 7 | 4 | 6 |
 | Unassigned fraction | 0 | 0 | 0 | 0 |
 
 Protected items (holdout, locked, validated): 0, so the moved-items count is not exercised on
 this data.
 
 Reading it: the clusters are small and fine grained (about 4 labelled crops each), so same-class
-pairs are mostly split across clusters (false-split rate 0.92). That is the cheap error for
+pairs are mostly split across clusters (false-split rate 0.91). That is the cheap error for
 curation, because a split cluster only means more review. The costly error is the false merge:
-about 8 percent of assigned crops sit in a cluster whose majority class is a different one, and
-that share is highest among low-resolution crops (9.8 percent). A label propagated through a
-cluster would be wrong for those.
+about 6.5 percent of assigned crops sit in a cluster whose majority class is a different one (6.2
+percent among low-resolution crops, 3.5 among rare classes, 1.9 among similar classes). A label
+propagated through a cluster would be wrong for those. (The earlier version of this note called low
+resolution the clear weak stratum, from the withdrawn numbers; on the re-scored partition its pair
+precision is the second highest, so that reading is withdrawn until a larger set is scored.)
 
 Stability: the same images were clustered independently in two projects (`cocotest` and
-`default`). The ARI between the two partitions over the 531 shared labelled crops is 0.41, and
+`default`). The ARI between the two partitions over the 531 shared labelled crops is 0.37, and
 the grouping is not identical. The two projects ran the unmodified pipeline and detector, so the
 crop sets differ slightly (1,350 of 1,364 crop ids are shared) and part of the spread is that,
 not clustering alone. This is a spread to record, not the "same seed, same vectors" comparison:
@@ -76,7 +89,7 @@ stability / protected-moved, seconds on one CPU core):
 ## Caveats
 
 - Small and easy: 539 crops from 200 images, all ten classes are common COCO classes. It
-  separates the metrics and exposes the weak stratum (low resolution); it is not a final
+  separates the metrics; it does not show a clearly weak stratum yet and is not a final
   evaluation set. The planned 3,000-item set with near-duplicate and Open Images strata is not
   built yet; the near-duplicate and mixed-scene strata are empty here (every labelled class is in
   a similar-class group, so mixed scenes fall into that stratum first).

@@ -537,8 +537,8 @@ not choose which models exist.
 | Profile | VRAM Range | Triton instances per model | Max batch | `ocr_pipeline` instances | Example GPUs |
 |---------|------------|----------------------------|-----------|--------------------------|--------------|
 | **minimal** | 6-8GB | 1 | 16 | 1 | RTX 3060, RTX 4060 |
-| **standard** | 12-24GB | 2 | 32 | 2 | RTX 3080, RTX 4090 |
-| **full** | 48GB+ | 4 | 64 | 4 | A6000, A100 |
+| **standard** | 12-39GB | 2 | 32 | 2 | RTX 3080, RTX 4090 |
+| **full** | 40GB+ | 4 | 64 | 4 | A6000, A100 |
 
 The values come from `config_templates/profiles/*.json`. No per-profile throughput has
 been measured; measured numbers (one RTX A6000) are in `docs/PERFORMANCE.md`.

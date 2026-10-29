@@ -31,7 +31,7 @@ cmd_profile() {
         echo "Available profiles:"
         echo "  minimal   - 6-8GB VRAM (RTX 3060, RTX 4060)"
         echo "  standard  - 12-24GB VRAM (RTX 3080, RTX 4090)"
-        echo "  full      - 48GB+ VRAM (A6000, A100)"
+        echo "  full      - 40GB+ VRAM (A6000, A100)"
         return 0
     fi
 

@@ -169,7 +169,7 @@ already claims -- see env.template's "Isolation" section.
 GPU Profiles:
   minimal   6-8GB VRAM (RTX 3060, RTX 4060) - core models only
   standard  12-24GB VRAM (RTX 3080, RTX 4090) - all models, balanced
-  full      48GB+ VRAM (A6000, A100) - maximum parallelism
+  full      40GB+ VRAM (A6000, A100) - maximum parallelism
 EOF
 }
 

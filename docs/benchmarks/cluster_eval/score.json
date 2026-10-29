@@ -1,0 +1,66 @@
+{
+  "partition": "docs/benchmarks/cluster_eval/cocotest/partition.jsonl",
+  "labels": "docs/benchmarks/cluster_eval/cocotest/labels.jsonl",
+  "partition_rows_without_label": 825,
+  "classes": 10,
+  "items": 539,
+  "assigned": 539,
+  "unassigned_fraction": 0.0,
+  "clusters": 128,
+  "mixed_clusters": 28,
+  "pair_precision": 0.9051383399209486,
+  "pair_recall": 0.0875191089757589,
+  "false_merge_rate": 0.09486166007905138,
+  "false_split_rate": 0.9124808910242411,
+  "correct_split_recovery": 0.9986737714624038,
+  "minority_item_rate": 0.06493506493506493,
+  "strata": {
+    "low_res": {
+      "items": 112,
+      "assigned": 112,
+      "unassigned_fraction": 0.0,
+      "clusters": 40,
+      "mixed_clusters": 7,
+      "pair_precision": 0.9446494464944649,
+      "pair_recall": 0.13588110403397027,
+      "false_merge_rate": 0.055350553505535055,
+      "false_split_rate": 0.8641188959660298,
+      "correct_split_recovery": 0.9965373961218836,
+      "minority_item_rate": 0.0625
+    },
+    "rare": {
+      "items": 113,
+      "assigned": 113,
+      "unassigned_fraction": 0.0,
+      "clusters": 44,
+      "mixed_clusters": 4,
+      "pair_precision": 0.923728813559322,
+      "pair_recall": 0.13876511775938893,
+      "false_merge_rate": 0.07627118644067797,
+      "false_split_rate": 0.8612348822406111,
+      "correct_split_recovery": 0.9962161025856633,
+      "minority_item_rate": 0.035398230088495575
+    },
+    "similar_classes": {
+      "items": 314,
+      "assigned": 314,
+      "unassigned_fraction": 0.0,
+      "clusters": 77,
+      "mixed_clusters": 6,
+      "pair_precision": 0.9708939708939709,
+      "pair_recall": 0.10749223155714122,
+      "false_merge_rate": 0.029106029106029108,
+      "false_split_rate": 0.8925077684428588,
+      "correct_split_recovery": 0.9993078216157422,
+      "minority_item_rate": 0.01910828025477707
+    }
+  },
+  "stability": {
+    "compared_items": 531,
+    "ari": 0.36888228815525337,
+    "identical_grouping": false
+  },
+  "producer_runtime_s": null,
+  "producer_peak_rss_mb": null,
+  "scoring_s": 0.027046869974583387
+}

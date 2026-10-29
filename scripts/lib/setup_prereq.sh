@@ -141,7 +141,7 @@ detect_and_select_gpu() {
             echo "Available profiles:"
             echo "  minimal  - 6-8GB VRAM, core models only"
             echo "  standard - 12-24GB VRAM, all models"
-            echo "  full     - 48GB+ VRAM, maximum parallelism"
+            echo "  full     - 40GB+ VRAM, maximum parallelism"
             echo ""
             read -r -p "Enter profile name: " SELECTED_PROFILE
         fi
