@@ -44,6 +44,7 @@ from src.services.curation.autolabel.selection import (
 from src.services.curation.autolabel.vlm_stage import run_vlm_stage
 from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, ClassWriteGuard
 from src.services.curation.cluster_purity import PROMOTE_MIN_MEMBERS, PROMOTE_MIN_PURITY
+from src.services.curation.clustering.pool_coverage import PARTIAL
 from src.services.curation.item_filter import ItemFilter
 
 
@@ -166,6 +167,9 @@ async def _cluster_residuals_stage(
     except Exception as exc:
         logger.warning('pipeline_cluster_residuals_failed', error=str(exc))
         result = {'status': 'error', 'error': str(exc)}
+    if result.get('status') == PARTIAL:
+        # The pass did not cover its pool (#357): geometry of a half-clustered pool is noise.
+        return result
     # Every cluster (class ones too) gets centroid geometry.
     result['cluster_geometry'] = await with_elapsed_tick(
         run.progress, cluster_geometry_stage(run.opensearch)
@@ -314,6 +318,10 @@ async def run_auto_label(
             gate_min_blur_ratio=gate_min_blur_ratio,
             n_clusters=n_clusters,
         )
+    if stages.get('cluster_residuals', {}).get('status') == PARTIAL:
+        # Fail closed (#357): nothing downstream runs on a pool that was not fully
+        # clustered; the worker ends the job as failed (``failed_stages``).
+        return summary
     stages['auto_promote'] = await _auto_promote_stage(
         run,
         run_auto_promote=run_auto_promote,
