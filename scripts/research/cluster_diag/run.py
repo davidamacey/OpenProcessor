@@ -35,7 +35,12 @@ if str(_REPO_ROOT) not in sys.path:
 from scripts.bench.eval_split import load_manifest, split_groups_of
 from scripts.bench.parity_metrics import adjusted_rand_index
 from scripts.research.cluster_diag import diagnostics as dg, heldout as ho, partitions as pt
-from scripts.research.cluster_diag.dataset import Bundle, load_bundle
+from scripts.research.cluster_diag.dataset import (
+    Bundle,
+    class_agreement,
+    detector_keys,
+    load_bundle,
+)
 
 
 SEED = 20261029
@@ -85,14 +90,7 @@ def run_diag(args: argparse.Namespace) -> dict[str, Any]:
             'elongated_frac': float(strata['elongated>2:1'].mean()),
             'aspect_gt3_frac': float((np.abs(np.log(b.aspect)) > np.log(3)).mean()),
             'side_lt32_frac': float(strata['side<32px'].mean()),
-            'detector_class_agrees_with_label': float(
-                np.mean(
-                    [
-                        b.meta[i]['detector_class_name'] == t
-                        for i, t in zip(b.labelled, b.truth, strict=False)
-                    ]
-                )
-            ),
+            'detector_class_agrees_with_label': class_agreement(b.meta, b.labelled, b.truth),
         },
     }
     lab = b.labelled
@@ -262,7 +260,7 @@ def run_e5(args: argparse.Namespace) -> dict[str, Any]:
     b = load_bundle(args.bundle, args.labels, args.coco_gt)
     half_all = calibration_mask(b, args.split_manifest)
     conf = np.array([m.get('detector_confidence') or 0.0 for m in b.meta])
-    det = np.array([m['detector_class_name'] for m in b.meta])
+    det = detector_keys(b.meta)
     out: dict[str, Any] = {
         'seed': SEED,
         'split_manifest': str(args.split_manifest) if args.split_manifest else None,
@@ -288,7 +286,7 @@ def run_e5(args: argparse.Namespace) -> dict[str, Any]:
                 (float(t), pt.cut_groups(len(rows), per_class, float(t))[sub_lab]) for t in cuts
             ],
         }
-        agree = float(np.mean([det[b.labelled[k]] == b.truth[k] for k in lab_in]))
+        agree = class_agreement(b.meta, b.labelled[lab_in], b.truth[lab_in])
         entry: dict[str, Any] = {
             'subset_crops': len(rows),
             'subset_labelled': len(lab_in),
