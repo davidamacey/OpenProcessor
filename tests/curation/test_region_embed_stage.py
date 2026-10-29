@@ -272,3 +272,157 @@ def test_decode_concurrency_is_cpu_and_memory_bounded(monkeypatch: pytest.Monkey
     assert stage.decode_concurrency() == 64 // 2
     monkeypatch.setattr(stage.os, 'cpu_count', lambda: 1)
     assert stage.decode_concurrency() == 1
+
+
+def _malformed_exif_jpeg(path: Path) -> str:
+    """A JPEG whose EXIF rotates it (Orientation 6) and carries a NaN FLOAT tag:
+    ``ImageOps.exif_transpose`` re-serializes the EXIF and raises ``ValueError``, not
+    ``OSError`` (Pillow 12). A GPU-route photo is never opened by Pillow at ingest, so
+    the region stage is the first to meet it (#374)."""
+    import struct
+
+    entries = [(0x0112, 3, 1, struct.pack('<I', 6)), (0x011A, 11, 1, struct.pack('<f', np.nan))]
+    ifd = struct.pack('<H', len(entries))
+    for tag, typ, count, val in entries:
+        ifd += struct.pack('<HHI', tag, typ, count) + val
+    exif = b'Exif\x00\x00' + b'II*\x00' + struct.pack('<I', 8) + ifd + struct.pack('<I', 0)
+    out = path / 'bad_exif.jpg'
+    Image.new('RGB', (64, 48), (1, 2, 3)).save(out, 'JPEG', exif=exif)
+    return str(out)
+
+
+@pytest.mark.asyncio
+class TestOneBadPhotoNeverFailsTheFlush:
+    async def test_a_decoder_raising_value_error_skips_only_that_photo(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        good, bad = _noise_photo(tmp_path, 'good'), _noise_photo(tmp_path, 'bad')
+        tasks = [_task_on(bad, 'c-bad', [_box('b1')]), _task_on(good, 'c-good', [_box('b2')])]
+        real = stage.decode_source_rgb
+
+        def _decode(p: str) -> Image.Image | None:
+            if p == bad:
+                msg = 'malformed EXIF'
+                raise ValueError(msg)
+            return real(p)
+
+        monkeypatch.setattr(stage, 'decode_source_rgb', _decode)
+
+        await stage.embed_written_regions(tasks, _FakePE())
+
+        assert tasks[0].box_vectors == {}
+        assert set(tasks[1].box_vectors) == {'b2'}
+
+    async def test_a_memory_error_on_one_photo_is_contained(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        good = _noise_photo(tmp_path, 'good')
+        tasks = [
+            _task_on('/huge/photo.jpg', 'c-huge', [_box('b1')]),
+            _task_on(good, 'c-good', [_box('b2')]),
+        ]
+        real = stage.decode_source_rgb
+
+        def _decode(p: str) -> Image.Image | None:
+            if p == '/huge/photo.jpg':
+                raise MemoryError
+            return real(p)
+
+        monkeypatch.setattr(stage, 'decode_source_rgb', _decode)
+
+        await stage.embed_written_regions(tasks, _FakePE())
+
+        assert tasks[0].box_vectors == {}
+        assert set(tasks[1].box_vectors) == {'b2'}
+
+    async def test_a_crop_failure_skips_only_that_photo(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        good, bad = _noise_photo(tmp_path, 'good'), _noise_photo(tmp_path, 'bad', (100, 80))
+        tasks = [_task_on(bad, 'c-bad', [_box('b1')]), _task_on(good, 'c-good', [_box('b2')])]
+        real_crop = stage.crop_arrays
+
+        def _crop(img: Image.Image, boxes: list[tuple[float, ...]]) -> list[np.ndarray]:
+            if img.size == (100, 80):
+                msg = 'bad geometry'
+                raise IndexError(msg)
+            return real_crop(img, boxes)
+
+        monkeypatch.setattr(stage, 'crop_arrays', _crop)
+
+        await stage.embed_written_regions(tasks, _FakePE())
+
+        assert tasks[0].box_vectors == {}
+        assert set(tasks[1].box_vectors) == {'b2'}
+
+    async def test_cancellation_is_not_swallowed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import asyncio
+
+        def _decode(_p: str) -> Image.Image | None:
+            raise asyncio.CancelledError
+
+        monkeypatch.setattr(stage, 'decode_source_rgb', _decode)
+        task = _task_on(_noise_photo(tmp_path, 'p'), 'c1', [_box('b1')])
+
+        with pytest.raises(asyncio.CancelledError):
+            await stage.embed_written_regions([task], _FakePE())
+
+    async def test_an_encoder_answer_of_the_wrong_length_does_not_raise(self) -> None:
+        class _Short(_FakePE):
+            async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:
+                return (await super().embed_crops(crops, max_batch))[:-1]
+
+        t = _make_task(boxes=[_box('b1'), _box('b2', x=0.5)])
+
+        await stage.embed_written_regions([t], _Short())
+
+        assert t.box_vectors == {}
+
+    async def test_a_photo_with_malformed_exif_leaves_its_boxes_without_a_vector(
+        self, tmp_path: Path
+    ) -> None:
+        good = _noise_photo(tmp_path, 'good')
+        tasks = [
+            _task_on(_malformed_exif_jpeg(tmp_path), 'c-bad', [_box('b1')]),
+            _task_on(good, 'c-good', [_box('b2')]),
+        ]
+
+        await stage.embed_written_regions(tasks, _FakePE())
+
+        assert tasks[0].box_vectors == {}
+        assert set(tasks[1].box_vectors) == {'b2'}
+
+
+class TestDecodeSourceRgb:
+    def test_malformed_exif_is_unreadable_not_an_exception(self, tmp_path: Path) -> None:
+        from src.services.curation.crop_bytes import decode_source_rgb
+
+        assert decode_source_rgb(_malformed_exif_jpeg(tmp_path)) is None
+
+    def test_any_decoder_exception_is_unreadable(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.services.curation import crop_bytes
+
+        path = _noise_photo(tmp_path, 'p')
+        for exc in (ValueError('x'), TypeError('x'), SyntaxError('x'), MemoryError()):
+
+            def _raise(*_a: object, _e: BaseException = exc, **_k: object) -> None:
+                raise _e
+
+            monkeypatch.setattr(crop_bytes.ImageOps, 'exif_transpose', _raise)
+            assert crop_bytes.decode_source_rgb(path) is None
+
+    def test_keyboard_interrupt_propagates(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.services.curation import crop_bytes
+
+        def _raise(*_a: object, **_k: object) -> None:
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(crop_bytes.ImageOps, 'exif_transpose', _raise)
+        with pytest.raises(KeyboardInterrupt):
+            crop_bytes.decode_source_rgb(_noise_photo(tmp_path, 'p'))

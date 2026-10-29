@@ -62,7 +62,13 @@ def crop_jpeg_from_cache(crop_id: str) -> bytes | None:
 
 def decode_source_rgb(image_path: str) -> Image.Image | None:
     """The EXIF-transposed RGB source image at ``image_path``, ``None`` when it is missing or
-    unreadable."""
+    unreadable.
+
+    Unreadable means any exception of the decode, not only ``OSError``: Pillow raises
+    ``ValueError``, ``TypeError`` or ``SyntaxError`` on malformed EXIF,
+    ``DecompressionBombError`` on a huge frame and ``MemoryError`` when the frame does not
+    fit, and a photo ingested on the GPU route is first opened by Pillow here (#374).
+    ``KeyboardInterrupt`` and ``SystemExit`` are not ``Exception`` and still propagate."""
     p = Path(image_path)
     if not p.is_file():
         logger.warning('image_missing', path=image_path)
@@ -79,6 +85,15 @@ def decode_source_rgb(image_path: str) -> Image.Image | None:
         return None
     except OSError as exc:
         logger.warning('image_io_error', path=image_path, error=str(exc))
+        return None
+    except Exception as exc:
+        logger.warning(
+            'image_decode_failed',
+            path=image_path,
+            error_type=type(exc).__name__,
+            error=str(exc),
+            exc_info=True,
+        )
         return None
     return img
 

@@ -70,13 +70,26 @@ async def _photo_crops(
     image_path: str, boxes: list[RegionBox], slots: asyncio.Semaphore
 ) -> list[np.ndarray] | None:
     """The pixels of ``boxes`` cut from one decode of ``image_path``; ``None`` when the source
-    cannot be decoded (those boxes carry no vector; the backfill picks them up). The slot is
-    held while the decoded frame is alive."""
+    cannot be decoded or cut (those boxes carry no vector; the backfill picks them up). Any
+    exception of one photo stays with that photo, so one bad source never fails the flush
+    or the writer behind it (#374); cancellation still propagates. The slot is held while
+    the decoded frame is alive."""
     async with slots:
-        img = await asyncio.to_thread(decode_source_rgb, image_path)
-        if img is None:
+        try:
+            img = await asyncio.to_thread(decode_source_rgb, image_path)
+            if img is None:
+                return None
+            return await run_cpu(crop_arrays, img, [b.bbox_norm for b in boxes])
+        except Exception as exc:
+            logger.warning(
+                'region_embed_photo_failed',
+                path=image_path,
+                n_boxes=len(boxes),
+                error_type=type(exc).__name__,
+                error=str(exc),
+                exc_info=True,
+            )
             return None
-        return await run_cpu(crop_arrays, img, [b.bbox_norm for b in boxes])
 
 
 async def _task_crops(tasks: list[_ItemTask]) -> list[tuple[_ItemTask, RegionBox, np.ndarray]]:
@@ -117,6 +130,13 @@ async def embed_written_regions(tasks: list[_ItemTask], pe: PEEncoder | Any) -> 
             embeddings = await pe.embed_crops([arr for _, _, arr in batch])
         except Exception as exc:
             logger.warning('region_embed_batch_failed', error=str(exc), batch_size=len(batch))
+            continue
+        if len(embeddings) != len(batch):
+            logger.warning(
+                'region_embed_batch_failed',
+                error=f'the encoder answered {len(embeddings)} vectors',
+                batch_size=len(batch),
+            )
             continue
         for (t, b, _), emb in zip(batch, embeddings, strict=True):
             t.box_vectors[b.box_id] = np.asarray(emb, dtype=float).tolist()
