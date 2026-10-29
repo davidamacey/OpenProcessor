@@ -197,3 +197,10 @@ frontend/src/lib/stores/regionVocabulary.svelte.test.ts:gemma|Gemma # fixture us
 .github/workflows/docs.yml:uses: actions/[a-z-]+@v6 # action version tag matches the v6 pattern; not vocabulary
 .github/workflows/frontend-mutation.yml:uses: actions/[a-z-]+@v6 # action version tag matches the v6 pattern; not vocabulary
 .github/workflows/frontend.yml:uses: actions/[a-z-]+@v6 # action version tag matches the v6 pattern; not vocabulary
+
+# ---------------------------------------------------------------------------
+# Public vehicle make/model proxy data (cluster-evaluation datasets)
+# ---------------------------------------------------------------------------
+
+scripts/datasets/manifests/commons_set_c.json # public Wikimedia Commons file titles, category names and licences of real car models (engine names such as V6, makes such as Honda); not private vocabulary
+scripts/datasets/manifests/commons_set_c_categories.json # public Wikimedia Commons category names of real car models; not private vocabulary

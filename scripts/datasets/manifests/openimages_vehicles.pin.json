@@ -1,0 +1,14 @@
+{
+  "count": 746,
+  "dataset": "openimages_vehicles",
+  "licence": {
+    "name": "images CC BY 2.0, annotations CC BY 4.0",
+    "note": "Attribution required; ATTRIBUTION.csv lists author and source per image.",
+    "redistributable": true,
+    "url": "https://creativecommons.org/licenses/by/2.0/"
+  },
+  "manifest_sha256": "b7aa52d0295badeef1c52211bc1dd069b9aea338fd29d978067afc51f4c6f261",
+  "schema": "proxy-dataset-manifest/1-pin",
+  "source_url": "https://storage.googleapis.com/openimages/v5/validation-annotations-bbox.csv",
+  "total_bytes": 248300708
+}
