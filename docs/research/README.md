@@ -25,6 +25,7 @@ on what it was measured, and every result that matters has a reproduce command.
 | Note | What it holds |
 |---|---|
 | [cluster_types.md](cluster_types.md) | The three kinds of clustering (whole image, detection crops, faces), their embedding spaces and code paths. |
+| [cluster_config_baseline.md](cluster_config_baseline.md) | Configuration baseline on stored COCO vectors: raw-vector arms (IVF now, 2b k-means, average and complete AHC, Leiden CPM, ECG) on a held-out half, the detector-class prior, the row-order fix, and the diagnostics scripts that reproduce the consolidated note. |
 | [clustering_methods.md](clustering_methods.md) | UMAP, AHC, HDBSCAN and IVF for the residual pool; the IVF-then-refine design. |
 | [gpu_clustering.md](gpu_clustering.md) | cuML UMAP backend detection and VRAM budget. |
 | `leiden_refinement_prototype.md` | Graph-based global refinement (kNN graph, Leiden, split/merge validation) against the current pipeline; CPU and GPU (added when the prototype lands, epic #346). |
