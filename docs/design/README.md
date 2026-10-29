@@ -63,6 +63,7 @@ how it was measured and whether the design is implemented.
 | [vlm_serving_sizing.md](../research/vlm_serving_sizing.md) | vLLM sizing, flag recon, profile sweep and the VLM-versus-segmenter bottleneck finding |
 | [pe_encoder_batching_benchmark.md](../research/pe_encoder_batching_benchmark.md) | Perception encoder batched TensorRT parity and throughput |
 | [ingest_concurrency_tuning.md](../research/ingest_concurrency_tuning.md) | Batch and concurrency sweep for bulk ingest |
+| [embedding_model_eval_plan.md](../research/embedding_model_eval_plan.md) | Plan (not yet measured) to evaluate Google's newest open multimodal embedding model for text and image search, with benchmark design and go/no-go rubric (#347) |
 | [cluster_eval_baseline.md](../research/cluster_eval_baseline.md) | Baseline of the cluster-quality harness (false merges and false splits scored separately) on the current IVF + AHC partition of a public COCO project (#341) |
 | [v070_measurement_log.md](../research/v070_measurement_log.md) | Paper-ready log of the IVF cluster pass size ladder (10k to 1M crops): stage split, memory, index size, k-NN latency, and the super-linear k-means fit (#337, #356, #45) |
 | [clustering_methods.md](../research/clustering_methods.md) | UMAP, AHC, HDBSCAN and IVF methods, the IVF-then-refine hierarchy and the ablation |
