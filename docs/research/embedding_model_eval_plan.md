@@ -361,10 +361,18 @@ all arms. Still open:
 
 ## 5. Reference arms and the TensorRT build-and-benchmark track
 
-Owner decision: TensorRT engines for all arms as the production target, built so the models run on the
-GPUs as fast as possible. The PyTorch bf16 runs of part 3 are the quality and parity reference; the
-TensorRT track here produces the speed numbers that count. A TensorRT result never replaces the parity
-gate: an engine is only benchmarked after it passes it.
+Owner decision (revised 2026-10-29): TensorRT is the target for the encoder-style arms (the
+Gemma-family text and vision encoders, and the existing PE-Core and MobileCLIP baselines). The
+LLM-based arms (Qwen3-VL-Embedding, the NVIDIA Nemotron and omni embedders) do not have to be
+converted: they are served as LLMs, through vLLM or transformers, like the local catalog VLM, and
+their TensorRT tiers below are optional experiments, run only if time allows after the serving
+numbers are in. A model that cannot be converted is not a blocker. The PyTorch bf16 runs of part 3
+are the quality and parity reference; where a TensorRT engine is built it must pass the parity gate
+before it is benchmarked, and it never replaces that gate.
+
+Serving path for the LLM-based arms: vLLM (pooling/embedding mode) or sentence-transformers on one
+GPU, measured with the same metrics schema (latency p50/p95/p99, throughput, VRAM, vector size) and
+the same quality scenarios, so they are comparable with the TensorRT-served encoders.
 
 ### 5.1 Qwen3-VL-Embedding (reference arm)
 
