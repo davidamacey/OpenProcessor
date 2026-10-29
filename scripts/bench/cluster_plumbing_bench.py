@@ -116,24 +116,53 @@ async def load_items(client: Any, vectors: np.ndarray, truth: np.ndarray) -> flo
     return time.perf_counter() - t0
 
 
+CLUSTER_FIELDS = ('cluster_id', 'cluster_subid', 'cluster_distance', 'cluster_distance_cluster_id')
+# Seconds between polls of the reset task.
+RESET_POLL_S = 5.0
+
+
+class ResetError(RuntimeError):
+    """The reset did not leave every document without cluster fields."""
+
+
 async def reset_clusters(client: Any) -> None:
-    """Return every document to "fresh from ingest" (no cluster fields)."""
-    await client.update_by_query(
-        index=items_index(),
+    """Return every document to "fresh from ingest" (no cluster fields).
+
+    The rewrite runs as a node task that is polled, not as one request held open: a
+    request that lived 34 minutes at 250,000 rows died with ``Too many headers received``
+    (its single response carried more headers than the client accepts). Only documents that
+    still hold a cluster field are rewritten, and the reset fails unless none does after it.
+    """
+    index = items_index()
+    holds_cluster = {'bool': {'should': [{'exists': {'field': f}} for f in CLUSTER_FIELDS]}}
+    started = await client.update_by_query(
+        index=index,
         body={
-            'query': {'match_all': {}},
+            'query': holds_cluster,
             'script': {
                 'lang': 'painless',
-                'source': "ctx._source.remove('cluster_id'); ctx._source.remove('cluster_subid');"
-                " ctx._source.remove('cluster_distance');"
-                " ctx._source.remove('cluster_distance_cluster_id');",
+                'source': ' '.join(f"ctx._source.remove('{f}');" for f in CLUSTER_FIELDS),
             },
         },
-        refresh=True,
-        wait_for_completion=True,
+        wait_for_completion=False,
         conflicts='proceed',
-        request_timeout=1800,
+        slices='auto',
     )
+    task_id = started['task']
+    while True:
+        task = await client.tasks.get(task_id=task_id)
+        if task.get('completed'):
+            break
+        await asyncio.sleep(RESET_POLL_S)
+    if task.get('error'):
+        raise ResetError(f'reset task {task_id} failed: {task["error"]}')
+    outcome = task.get('response') or {}
+    if outcome.get('failures'):
+        raise ResetError(f'reset task {task_id} reported failures: {outcome["failures"][:3]}')
+    await client.indices.refresh(index=index)
+    left = (await client.count(index=index, body={'query': holds_cluster}))['count']
+    if left:
+        raise ResetError(f'{left} documents still hold a cluster field after the reset')
 
 
 class StageClock:
@@ -221,7 +250,7 @@ async def one_run(client: Any, method: str, size: int, rep: int) -> dict[str, An
     load_before = host_load()
     with StageClock(client) as clock:
         t0 = time.perf_counter()
-        summary = await cluster_residuals(client, clustering_method=method)
+        summary = await cluster_residuals(client, clustering_method=method, expected_pool=size)
         t_end = time.perf_counter()
     c = clock.t
     after_fit = c.get('distance_s_end', c.get('fit_s_end', t0))

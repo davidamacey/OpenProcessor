@@ -182,15 +182,18 @@ assign of the whole prefix to the 512 centroids took 0.14 s, 0.35 s and 0.71 s: 
 * **#45** (scale rows): the synthetic ladder to 1,000,000 fits in 11 minutes per pass on this host
   and 14 GB of index, so the 1M row of the cluster stage is cheap; the real-crop 1M row still
   needs real data (synthetic planted structure has a different fit time, finding 3).
-* Measurement tooling:
-  * `cluster_plumbing_bench.reset_clusters` (a whole-index `update_by_query` that rewrites every
-    document with its vector) ran past 30 minutes at 250,000 rows and then failed with
-    `ConnectionError(400, 'Too many headers received')` from the async client; the cause was not
-    investigated, the ladder avoids it with a fresh project per repetition.
-  * A pass can report `status: success` with `n_residuals` smaller than the pool when the refresh
-    daemon assigns a new project's items first (seen as 5,117 of 25,000 and 62,760 of 91,184 in
-    the first, discarded version of the ladder, which reset in place). The benches check
-    `n_residuals`; a caller that does not would take a partial pass for a full one.
+* Measurement tooling (both fixed in #357):
+  * `cluster_plumbing_bench.reset_clusters` ran one `update_by_query` for the whole reset and
+    failed after about 30 minutes at 250,000 rows with `ConnectionError(400, 'Too many headers
+    received')`. The client refuses a response with more than 128 headers; the node's `Warning`
+    headers accumulate over a request that long (the header flood is reproduced offline against
+    a stand-in server, the node's side of it is not). The reset is now a polled node task over
+    documents that hold a cluster field, and fails unless none is left.
+  * A pass could report `status: success` with `n_residuals` smaller than the pool when the
+    refresh daemon assigned a new project's items first (5,117 of 25,000 and 62,760 of 91,184
+    in the first, discarded version of the ladder). `cluster_residuals` now returns
+    `status: partial` when it read less than 99 percent of the pool it expected (or a write
+    failed), without fitting or writing; the auto-label job fails on it.
 
 ## Reproduce
 

@@ -164,7 +164,8 @@ class _FakeMethod:
 
 
 class _FakeBulkOnlyOS:
-    def __init__(self) -> None:
+    def __init__(self, pool: int = 0) -> None:
+        self.pool = pool
         self.bulk_calls: list[list[dict[str, Any]]] = []
 
         class _Indices:
@@ -172,6 +173,9 @@ class _FakeBulkOnlyOS:
                 pass
 
         self.indices = _Indices()
+
+    async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        return {'count': self.pool}
 
     async def bulk(self, *, body: list[dict[str, Any]], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
         self.bulk_calls.append(body)
@@ -204,7 +208,7 @@ async def _run_cluster_residuals(
         lambda _name, **_kw: _FakeMethod(labels),
     )
 
-    client = _FakeBulkOnlyOS()
+    client = _FakeBulkOnlyOS(len(pool_ids))
     result = await orch.cluster_residuals(
         client, recluster_unvalidated=recluster_unvalidated, clustering_method='ivf'
     )
