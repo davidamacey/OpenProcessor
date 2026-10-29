@@ -143,3 +143,94 @@ def test_cmd_build_pages_through_the_api_read_only(tmp_path: Path) -> None:
     manifest = json.loads((tmp_path / 'o' / 'manifest.json').read_text())
     assert manifest['project'] == 'p'
     assert manifest['crops_labelled'] == ces.PAGE_SIZE + 3
+
+
+def _nd_gt(tmp_path: Path) -> Path:
+    gt = _coco()
+    gt['images'].append(
+        {'id': 12, 'file_name': 'nd_a_1.jpg', 'width': W, 'height': H, 'near_duplicate_of': 'a.jpg'}
+    )
+    gt['annotations'].append(
+        {'id': 6, 'image_id': 12, 'category_id': 1, 'bbox': [100, 100, 200, 100], 'iscrowd': 0}
+    )
+    path = tmp_path / 'nd_gt.json'
+    path.write_text(json.dumps(gt))
+    return path
+
+
+def test_near_duplicate_images_form_their_own_stratum_first(tmp_path: Path) -> None:
+    coco = ces.load_coco(_nd_gt(tmp_path))
+    crops = [
+        _crop('orig', 'a.jpg', (100, 100, 300, 200)),
+        _crop('variant', 'nd_a_1.jpg', (100, 100, 300, 200)),
+        _crop('tiny_variant', 'nd_a_1.jpg', (400, 300, 420, 320)),
+        _crop('other', 'b.jpg', (300, 10, 400, 110)),
+    ]
+    coco['annotations'][12].append(
+        {'id': 7, 'image_id': 12, 'name': 'cat', 'bbox': [400, 300, 20, 20], 'iscrowd': 0}
+    )
+    labels, _, manifest = ces.build(crops, coco)
+    by = {r['item_id']: r['stratum'] for r in labels}
+    # the source image is a member of the near-duplicate group too
+    assert by == {
+        'orig': 'near_duplicate',
+        'variant': 'near_duplicate',
+        'tiny_variant': 'near_duplicate',
+        'other': 'similar_classes',
+    }
+    assert manifest['strata']['near_duplicate'] == 3
+
+
+def test_pinned_rare_classes_replace_the_frequency_rule(coco: dict[str, Any]) -> None:
+    crops = [
+        _crop('car1', 'a.jpg', (100, 100, 300, 200)),
+        _crop('car2', 'b.jpg', (300, 10, 400, 110)),
+        _crop('cow1', 'b.jpg', (10, 10, 110, 110)),
+    ]
+    labels, _, manifest = ces.build(crops, coco, rare={'cow'})
+    assert manifest['rare_classes'] == ['cow']
+    assert {r['item_id']: r['stratum'] for r in labels}['cow1'] == 'rare'
+
+
+def test_eval_manifest_supplies_rare_classes_and_is_recorded(tmp_path: Path) -> None:
+    pin = tmp_path / 'pin.json'
+    pin.write_text(
+        json.dumps(
+            {
+                'schema': 'cluster-eval-pin/1',
+                'seed': 7,
+                'manifest_sha256': 'ab',
+                'rare_classes': ['cow'],
+            }
+        )
+    )
+    gt = tmp_path / 'gt.json'
+    gt.write_text(json.dumps(_coco()))
+    crops = [
+        _crop('cow1', 'b.jpg', (10, 10, 110, 110)),
+        _crop('car1', 'a.jpg', (100, 100, 300, 200)),
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={'total': 2, 'crops': crops})
+
+    args = ces.build_parser().parse_args(
+        [
+            'build',
+            '--api',
+            'http://x',
+            '--project',
+            'p',
+            '--coco-gt',
+            str(gt),
+            '--out-dir',
+            str(tmp_path / 'o'),
+            '--eval-manifest',
+            str(pin),
+        ]
+    )
+    assert ces.cmd_build(args, transport=httpx.MockTransport(handler)) == 0
+    manifest = json.loads((tmp_path / 'o' / 'manifest.json').read_text())
+    assert manifest['rare_classes'] == ['cow']
+    assert manifest['eval_manifest_sha256'] == 'ab'
+    assert manifest['eval_seed'] == 7
