@@ -1,0 +1,14 @@
+{
+  "count": 1500,
+  "dataset": "openimages_faces",
+  "licence": {
+    "name": "images CC BY 2.0, annotations CC BY 4.0",
+    "note": "Attribution required; ATTRIBUTION.csv lists author and source per image.",
+    "redistributable": true,
+    "url": "https://creativecommons.org/licenses/by/2.0/"
+  },
+  "manifest_sha256": "a76df12a1b5fe7391e4a7b55cbd1b6de847aa1bb538deaece100a025ec88be8c",
+  "schema": "proxy-dataset-manifest/1-pin",
+  "source_url": "https://storage.googleapis.com/openimages/v5/validation-annotations-bbox.csv",
+  "total_bytes": 421230492
+}
