@@ -167,3 +167,25 @@ def test_a_human_write_racing_the_rollback_wins(world: World, tmp_path: Path) ->
 
     assert result.kept_changed == 1
     assert world.doc(racer)['class_source'] == 'human'
+
+
+def test_a_holdout_item_is_kept_and_counted_while_the_rest_are_restored(
+    world: World, tmp_path: Path
+) -> None:
+    """The holdout freeze comes from the shared lock rule, so this pins that rollback
+    honours it end to end (dry run and real), not a copy of the rule inside rollback."""
+    run = _loop(world, tmp_path)
+    written = _propagated(world)
+    frozen = written[0]
+    world.doc(frozen)['test_holdout'] = True
+    world.os._bump(ITEMS, frozen)
+    kept = dict(world.doc(frozen))
+
+    dry = _rollback(world, run, dry_run=True)
+    real = _rollback(world, run, dry_run=False)
+
+    assert (dry.matched, dry.restored, dry.kept_changed) == (len(written), len(written) - 1, 1)
+    assert (real.restored, real.kept_changed) == (len(written) - 1, 1)
+    assert world.doc(frozen) == kept
+    (event,) = [e for e in run.store.events() if e['event'] == 'rollback']
+    assert event['kept_changed'] == 1

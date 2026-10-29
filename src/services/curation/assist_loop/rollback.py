@@ -72,7 +72,6 @@ def as_left(source: dict[str, Any], loop_id: str, class_name: str | None) -> boo
         )
         and not class_write_locked(source)
         and not source.get('class_excluded')
-        and not source.get('test_holdout')
     )
 
 
