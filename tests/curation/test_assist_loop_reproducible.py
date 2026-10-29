@@ -1,22 +1,32 @@
-"""The loop's partition tree is reproducible: the same members, seed and path split the same
-way whatever order the ids arrive in (the split part; the run-level cases come with the driver).
+"""The loop is reproducible: the same members, seed and path split the same way whatever
+order the ids arrive in, and two runs with the same seed and the same VLM write the same
+event log; a different seed draws a different sample.
 """
 
 from __future__ import annotations
 
 import random
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
 
+from curation.assist_loop_fakes import FakeVlm, World, drive, make_world, without_times
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import base_curation_config
 from src.services.curation.assist_loop.splitter import SplitResult, fetch_embeddings, split_node
 
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from src.services.curation.assist_loop.store import LoopStore
+
+
 pytestmark = pytest.mark.asyncio
 
 ITEMS = base_curation_config().items_index
+LOOP = 'alp_20261028T000000Z_000002'
 
 
 def _blobs(per_blob: int = 12, centres: int = 4, dim: int = 8) -> dict[str, list[float]]:
@@ -128,3 +138,79 @@ async def test_fetch_embeddings_reads_the_residual_field() -> None:
     got = await fetch_embeddings(fake, ['a', 'b', 'c', 'missing'])  # type: ignore[arg-type]
 
     assert got == {'a': [1.0, 0.0], 'b': [0.0, 1.0]}
+
+
+# ---------------------------------------------------------------- the whole loop
+
+
+def _loop_world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
+    world = make_world(tmp_path, monkeypatch)
+    world.add_cluster(10001, {'car': 60, 'truck': 60, 'bus': 60, 'van': 60}, prefix='a')
+    world.add_cluster(10002, {'car': 150}, prefix='b')
+    return world
+
+
+def _events(store: LoopStore) -> list[dict[str, Any]]:
+    return [
+        {k: v for k, v in without_times(e).items() if k not in ('seq',)} for e in store.events()
+    ]
+
+
+def _by_node(store: LoopStore) -> dict[str, list[dict[str, Any]]]:
+    out: dict[str, list[dict[str, Any]]] = {}
+    for event in _events(store):
+        event.pop('rid', None)
+        out.setdefault(event.get('path', ''), []).append(event)
+    return out
+
+
+def _sampled(store: LoopStore) -> set[str]:
+    return {
+        crop_id
+        for e in store.events()
+        if e['event'] == 'answers'
+        for crop_id in [*e['answers'], *e['failed']]
+    }
+
+
+@pytest.mark.usefixtures('readable_crops')
+async def test_the_same_seed_gives_the_same_event_log(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    world = _loop_world(tmp_path, monkeypatch)
+    pristine = world.snapshot()
+    serial = {'node_concurrency': 1, 'vlm_concurrency': 1}
+
+    first = await drive(world, tmp_path / 'one' / LOOP, FakeVlm(world.truth), **serial)
+    world.restore(pristine)
+    second = await drive(world, tmp_path / 'two' / LOOP, FakeVlm(world.truth), **serial)
+
+    assert _events(first.store) == _events(second.store)
+
+
+@pytest.mark.usefixtures('readable_crops')
+async def test_the_same_seed_gives_the_same_node_events_under_concurrency(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    world = _loop_world(tmp_path, monkeypatch)
+    pristine = world.snapshot()
+
+    first = await drive(world, tmp_path / 'one' / LOOP, FakeVlm(world.truth))
+    world.restore(pristine)
+    second = await drive(world, tmp_path / 'two' / LOOP, FakeVlm(world.truth))
+
+    assert _by_node(first.store) == _by_node(second.store)
+
+
+@pytest.mark.usefixtures('readable_crops')
+async def test_a_different_seed_draws_a_different_sample(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    world = _loop_world(tmp_path, monkeypatch)
+    pristine = world.snapshot()
+
+    first = await drive(world, tmp_path / 'one' / LOOP, FakeVlm(world.truth), seed=0)
+    world.restore(pristine)
+    second = await drive(world, tmp_path / 'two' / LOOP, FakeVlm(world.truth), seed=1)
+
+    assert _sampled(first.store) != _sampled(second.store)

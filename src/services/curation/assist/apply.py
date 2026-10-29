@@ -23,9 +23,9 @@ from src.services.curation.assist.proposal_models import (
 )
 from src.services.curation.assist.scope_now import current_members, scope_now
 from src.services.curation.class_label import ItemLabel
+from src.services.curation.class_registry_names import registry_item_class
 from src.services.curation.class_write_guard import class_write_locked
 from src.services.rejections import rejection
-from src.utils.class_names import normalize_class_name
 
 
 if TYPE_CHECKING:
@@ -39,13 +39,9 @@ WRITER = 'human:assist_apply'
 
 
 def _registry_class(class_name: str) -> tuple[int, str]:
-    from src.clients.curation_opensearch.registry import get_class_registry
-    from src.services.curation.region_class import item_classes
-
-    wanted = normalize_class_name(class_name)
-    for entry in item_classes(get_class_registry().load().classes):
-        if normalize_class_name(entry.class_name) == wanted:
-            return entry.class_id, entry.class_name
+    found = registry_item_class(class_name)
+    if found is not None:
+        return found
     raise rejection(
         409,
         'class_not_in_registry',

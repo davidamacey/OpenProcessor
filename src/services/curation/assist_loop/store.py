@@ -28,7 +28,7 @@ from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
     from pathlib import Path
 
 VLM = 'vlm'
@@ -68,6 +68,8 @@ class LoopStore:
         self.job = FileJob(directory)
         self._lock = threading.Lock()
         self._seq: int | None = None
+        self.listeners: list[Callable[[dict[str, Any]], None]] = []
+        """Called with each event once it is on disk (the driver keeps its tree in step)."""
 
     @property
     def loop_id(self) -> str:
@@ -137,7 +139,9 @@ class LoopStore:
             finally:
                 os.close(fd)
             self._seq += 1
-            return event
+        for listener in self.listeners:
+            listener(event)
+        return event
 
     # ------------------------------------------------------------------ files
 
@@ -208,6 +212,10 @@ class NodeRecord:
     """Reservations (by id) whose answers are not on record: in flight, or lost in a crash."""
     decision: dict[str, Any] | None = None
     children: list[str] | None = None
+    child_n: dict[str, int] = field(default_factory=dict)
+    """Eligible members of each child, from the ``children`` event."""
+    crops: int = 0
+    """VLM crops reserved for this node."""
     propagate_begun: bool = False
     propagated: dict[str, Any] | None = None
 
@@ -224,6 +232,10 @@ class LoopTree:
         except KeyError:
             msg = f'event for node {path} before it was opened'
             raise ValueError(msg) from None
+
+    def apply(self, event: dict[str, Any]) -> None:
+        """Fold one event into the tree."""
+        _apply(self, event)
 
 
 def parse_answers(raw: dict[str, Any]) -> dict[str, ClassAnswer]:
@@ -251,7 +263,9 @@ def _apply(tree: LoopTree, event: dict[str, Any]) -> None:
         )
     elif kind == 'reserve':
         if event.get('pool') == VLM:
-            tree.node(event['path']).pending[int(event['rid'])] = list(event['ids'])
+            node = tree.node(event['path'])
+            node.pending[int(event['rid'])] = list(event['ids'])
+            node.crops += int(event['crops'])
     elif kind == 'answers':
         node = tree.node(event['path'])
         answers = parse_answers(event.get('answers') or {})
@@ -262,7 +276,9 @@ def _apply(tree: LoopTree, event: dict[str, Any]) -> None:
     elif kind == 'decision':
         tree.node(event['path']).decision = event
     elif kind == 'children':
-        tree.node(event['path']).children = [c['path'] for c in event['children']]
+        node = tree.node(event['path'])
+        node.children = [c['path'] for c in event['children']]
+        node.child_n = {c['path']: int(c['n']) for c in event['children']}
     elif kind == 'propagate_begin':
         tree.node(event['path']).propagate_begun = True
     elif kind == 'propagated':

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from src.clients.curation_opensearch.crops import mget_crops
+from src.clients.occ import is_locked_class
 from src.config.curation_accessors import items_index
 from src.domain.loop_tree import parse_path, root_path
 from src.services.curation.assist.scope import membership_digest
@@ -56,6 +57,9 @@ class MemberState:
     class_name: str | None
     token: tuple[Any, ...]
     """:func:`~src.services.curation.class_write_guard.class_state_token` at snapshot."""
+    truth: bool
+    """A class a person or a validated import set: ground truth for the veto. A class
+    validated by an automated writer is locked but is not evidence."""
 
 
 @dataclass(frozen=True)
@@ -99,6 +103,7 @@ def member_state(crop_id: str, source: dict[str, Any]) -> MemberState:
         state=state,
         class_name=source.get('class_name') or None,
         token=class_state_token(source),
+        truth=state == 'locked' and is_locked_class(source),
     )
 
 
@@ -190,7 +195,13 @@ def write_snapshot(job_dir: Path, root: RootRef) -> dict[str, Any]:
         'cluster_id': root.cluster_id,
         'version': root.version,
         'members': [
-            {'id': m.crop_id, 'state': m.state, 'class_name': m.class_name, 'token': list(m.token)}
+            {
+                'id': m.crop_id,
+                'state': m.state,
+                'class_name': m.class_name,
+                'token': list(m.token),
+                'truth': m.truth,
+            }
             for m in root.members
         ],
     }
@@ -211,7 +222,9 @@ def read_snapshot(job_dir: Path, key: str) -> RootRef:
             cluster_id=int(raw['cluster_id']),
             version=raw['version'],
             members=[
-                MemberState(m['id'], m['state'], m['class_name'], tuple(m['token']))
+                MemberState(
+                    m['id'], m['state'], m['class_name'], tuple(m['token']), bool(m['truth'])
+                )
                 for m in raw['members']
             ],
         )

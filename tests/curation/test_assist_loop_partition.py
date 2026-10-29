@@ -109,6 +109,15 @@ async def test_a_root_snapshots_every_member_with_the_state_the_lock_rule_gives(
     assert human.class_name == 'widget'
 
 
+async def test_only_a_person_or_a_validated_import_is_ground_truth() -> None:
+    reader = ClusterFieldPartition(_world())  # type: ignore[arg-type]
+    (root,) = await reader.roots(PartitionScope(cluster_ids=[10001], min_root_size=1))
+
+    truth = {m.crop_id for m in root.members if m.truth}
+
+    assert truth == {'a-human'}, 'a class an automated writer validated is not evidence'
+
+
 async def test_the_token_is_the_class_state_the_member_was_read_in() -> None:
     world = _world()
     (root,) = await ClusterFieldPartition(world).roots(  # type: ignore[arg-type]
