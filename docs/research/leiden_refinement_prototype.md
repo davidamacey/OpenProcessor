@@ -1,8 +1,8 @@
 # Leiden refinement prototype (phase 1 of the graph refinement epic)
 
 Status: research result, measured 2026-10-28 on synthetic planted partitions and on the 539 labelled
-public COCO crops, CPU only. Issue #342 (epic #346). Every GPU arm was **not run**; section 8 says
-why and what is needed. Nothing here writes to a project or changes the API.
+public COCO crops, CPU only. Issue #342 (epic #346). GPU arms ran at 20k only for Leiden, ECG and kNN
+(section 3c); section 8 lists what is missing. Nothing here writes to a project or changes the API.
 
 ## 1. Question
 
@@ -219,6 +219,50 @@ Reading it, honestly:
   to 0.31).
 * Protected items: none in this project, so the moved-protected-items count is not exercised.
 
+## 3c. GPU results (RTX A6000, partial)
+
+Environment: `cugraph-cu12`, `cuml-cu12`, `cuvs-cu12` 26.10.0, `cupy-cuda12x` 14.2.0,
+`faiss-gpu-cu12` 1.14.1 (plain PyPI; no NVIDIA index needed), run on one A6000 that shared the card
+with a live stack, capped at 18 GB by a memory watchdog (`--gpu-limit-mb`). The host was at load
+average 30 to 65. `CUDA_DEVICE_ORDER=PCI_BUS_ID` is required: without it `CUDA_VISIBLE_DEVICES=2`
+selects a different (12 GB) card.
+
+Install and run problems, all fixed in `scripts/research`:
+
+1. cuGraph Leiden and ECG first failed at every size with `CuSparseError:
+   CUSPARSE_STATUS_EXECUTION_FAILED: kernel launch failure`. Cause: `bench_driver.py` capped each
+   child's address space (`RLIMIT_AS`, 36 GB default) for the CPU methods, and CUDA cannot run under
+   an address-space cap. The same command run directly worked. Fix: the driver never caps `gpu_*`
+   methods. (The mutual-graph build on the GPU with cupy sparse was not at fault; it reproduces the
+   CPU edge count exactly, 146,685 at 20k.)
+2. `cugraph.ecg` returns a `(partition, modularity)` tuple in this version; handled.
+3. cuGraph Leiden is modularity only (no CPM, no initial partition), so it was run at resolution 1.0.
+
+| 20k points (128-d) | Precision | Recall | False merge | Unassigned | Clusters | Stability ARI | Wall s | GPU MB |
+|---|---|---|---|---|---|---|---|---|
+| cuGraph Leiden (modularity, res 1.0) | 0.776 | 0.910 | 0.224 | 0.035 | 115 | 0.993 | 6.5 | 1,825 |
+| cuGraph ECG (16 members, res 1.0) | 0.953 | 0.899 | 0.047 | 0.046 | 288 | 1.000 | 7.2 | 1,825 |
+| GPU kNN + CPU CPM Leiden (g 0.003) | 0.925 | 0.863 | 0.075 | 0.047 | 172 | 0.991 | 4.3 | 1,825 |
+| cuML HDBSCAN leaf | 0.485 | 0.150 | 0.515 | 0.730 | 84 | 1.000 | 10.0 | 323 |
+
+| cuML HDBSCAN leaf | Precision | Recall | Unassigned | Clusters | Wall s | GPU MB |
+|---|---|---|---|---|---|---|
+| 100k | 0.723 | 0.188 | 0.711 | 403 | 4.3 | 533 |
+| 500k | 0.634 | 0.234 | 0.695 | 1,999 | 20.1 | 767 |
+
+* GPU Leiden is modularity: false merge 0.224, in line with the CPU modularity Leiden (0.236), so
+  as predicted it is not a drop-in for CPM.
+* **cuGraph ECG is the surprise**: precision 0.953 and recall 0.899 at 20k, on par with the best
+  CPU variant (Leiden init + CHAMELEON 0.953 / 0.861), with stability 1.000, and no CHAMELEON
+  filter or threshold calibration. It is one 20k, 128-d synthetic result, not yet checked at larger
+  sizes or on the real COCO vectors, where the CPU pass lost precision.
+* GPU kNN (exact) took 0.8 s at 20k against 0.6 s for the CPU FAISS flat index; no gain at this size.
+  The 100k, 500k, 1M and 1024-d GPU runs were prepared (same commands as section 9) but not
+  completed in this session because the permission system denied the foreground launch of the 100k
+  run; **there are no GPU numbers above 20k for Leiden, ECG or kNN**, and no 1M run.
+* HDBSCAN on the GPU is fast (20 s at 500k) but, like the CPU version, unusable: 63 to 72 percent
+  precision and about 70 percent noise at 100k and 500k.
+
 ## 4. Higher dimension (1024-d, the real PE-Core width)
 
 The synthetic generator at 1024-d with the same sigma behaves differently, and that matters for
@@ -344,16 +388,11 @@ If it proceeds, carry forward:
 
 ## 8. Not done, and what is needed
 
-* **GPU arms (cuGraph Leiden and ECG, cuML HDBSCAN, GPU kNN) on GPU 0.** A second environment was
-  built (`venv-cluster-gpu` outside the repo) and installed cleanly from plain PyPI (the NVIDIA
-  index was not needed): `cugraph-cu12` 26.10.0, `cuml-cu12` 26.10.0, `cuvs-cu12` 26.10.0,
-  `cupy-cuda12x` 14.2.0, `faiss-gpu-cu12` 1.14.1; `import cugraph, cuml, cupy, faiss` and device
-  detection (RTX A6000 on `CUDA_VISIBLE_DEVICES=0`) succeeded. Launching the first GPU job was
-  blocked by the permission system twice, the second time after the owner's approval was relayed
-  through the coordinator (the classifier denied `flock ... python` on GPU 0), so there are no GPU timings, GPU memory figures or GPU quality
-  numbers. `scripts/research/gpu_methods.py` (`gpu_leiden`, `gpu_ecg`, `gpu_hdbscan`, GPU kNN with
-  faiss-gpu or cuVS, a memory watchdog that aborts above 40,000 MB) is written but **untested**.
-* 1M points and HDBSCAN above 20k were not run.
+* **GPU arms above 20k.** cuGraph Leiden and ECG, GPU kNN at 100k, 500k, 1M, and the 1024-d GPU kNN +
+  CPU Leiden pipeline are not measured (only cuML HDBSCAN has all three sizes). Several launches were
+  blocked by the permission system. a scratch-directory script outside the repo (the loop over the remaining sizes with the same bench_driver commands as section 9) runs the rest
+  (GPU 2, PCI order, 18 GB watchdog, nvidia-smi and load samples).
+* 1M points were not run; CPU HDBSCAN above 20k was not run.
 
 ## 9. Reproduce
 
@@ -407,17 +446,18 @@ $PY scripts/research/leiden_refine_proto.py run --vectors $D/cocotest_vectors.np
     --partition $D/cocotest/leiden_chameleon.jsonl --out $D/cocotest/score.json
 ```
 
-GPU arms (second environment, one GPU only, for example `CUDA_VISIBLE_DEVICES=0`):
+GPU arms (second environment, one GPU only; always set the PCI order so the index matches
+`nvidia-smi`, and never cap the address space of a CUDA process):
 
 ```bash
 python3 -m venv $SCRATCH/venv-cluster-gpu
 $SCRATCH/venv-cluster-gpu/bin/pip install numpy scipy scikit-learn cugraph-cu12 cuml-cu12 \
     cuvs-cu12 cupy-cuda12x faiss-gpu-cu12 httpx
-CUDA_VISIBLE_DEVICES=0 nice -n 19 $SCRATCH/venv-cluster-gpu/bin/python scripts/research/bench_driver.py \
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2 OP_NVML_INDEX=2 nice -n 10 $SCRATCH/venv-cluster-gpu/bin/python scripts/research/bench_driver.py \
     --python $SCRATCH/venv-cluster-gpu/bin/python --vectors $D/synth_20k.npz \
     --labels $D/synth_20k.labels.jsonl --work-dir $D/gpu --tag 20k \
     --run gpu_leiden:gpu_leiden:--gamma=1.0 --run gpu_ecg:gpu_ecg:--gamma=1.0,--consensus-runs=16 \
-    --run gpu_hdbscan:gpu_hdbscan
+    --run gpu_knn_leiden:gpu_knn_leiden:--gamma=0.003 --run gpu_hdbscan:gpu_hdbscan
 ```
 
 Unit tests for the graph construction, the CHAMELEON merge and the generator:

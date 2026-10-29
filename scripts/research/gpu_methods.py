@@ -177,6 +177,8 @@ def _run(method: str, vectors: np.ndarray, args: Any, tm: Any, info: dict[str, A
         parts = cugraph.ecg(
             graph, ensemble_size=args.consensus_runs, resolution=args.gamma, random_state=args.seed
         )
+        if isinstance(parts, tuple):  # (partition frame, modularity) in recent cuGraph
+            parts = parts[0]
     else:
         raise SystemExit(f'unknown GPU method {method}')
     tm.stages['cluster_s'] = round(time.perf_counter() - t, 3)

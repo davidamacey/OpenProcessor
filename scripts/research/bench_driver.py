@@ -73,7 +73,8 @@ def one_run(
     if base:
         cmd += ['--partition', str(base)]
     try:
-        res = sh(cmd, args.timeout_s, args.mem_limit_gb)
+        # an address-space cap breaks CUDA (cuSPARSE fails with a kernel launch error), so GPU methods run uncapped
+        res = sh(cmd, args.timeout_s, 0.0 if method.startswith('gpu_') else args.mem_limit_gb)
     except subprocess.TimeoutExpired:
         return {'name': name, 'seed': seed, 'error': f'timeout {args.timeout_s}s'}
     if res.returncode:
