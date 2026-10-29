@@ -64,6 +64,13 @@ _ITEMS_IMPORT_MAPPING: dict[str, Any] = {
 }
 
 
+# The ingest writer's per-write id (src/services/curation/ingest_writer.py): read
+# back from _source only, to tell its own retried create from another copy's (#375).
+IMAGES_WRITE_ID_MAPPING: dict[str, Any] = {
+    'ingest_write_id': {'type': 'keyword', 'index': False, 'doc_values': False},
+}
+
+
 def _images_body() -> dict[str, Any]:
     return {
         'settings': _knn_settings(),
@@ -78,6 +85,7 @@ def _images_body() -> dict[str, Any]:
                 'source_identifier': {'type': 'keyword'},
                 # BA-4: optional client-supplied tag for one upload call.
                 'ingest_run_id': {'type': 'keyword'},
+                **IMAGES_WRITE_ID_MAPPING,
                 'source': {'type': 'keyword'},
                 'width': {'type': 'integer'},
                 'height': {'type': 'integer'},

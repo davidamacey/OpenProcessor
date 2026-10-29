@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.base import _is_recoverable_mapping_conflict, config, logger
+from src.clients.curation_opensearch.bodies_core import IMAGES_WRITE_ID_MAPPING
 
 
 if TYPE_CHECKING:
@@ -58,13 +59,19 @@ async def ensure_images_upload_fields(
     client: AsyncOpenSearch,
 ) -> dict[str, Any]:
     """PUT the BA-1/BA-4 ``source_identifier`` / ``ingest_run_id`` keyword
-    fields onto the existing images mapping.
+    fields and the ingest write id onto the existing images mapping.
 
     Additive ``PUT <index>/_mapping`` — idempotent.
     """
     index = config.images_index
-    fields = ['source_identifier', 'ingest_run_id']
-    body = {'properties': {f: {'type': 'keyword'} for f in fields}}
+    body = {
+        'properties': {
+            'source_identifier': {'type': 'keyword'},
+            'ingest_run_id': {'type': 'keyword'},
+            **IMAGES_WRITE_ID_MAPPING,
+        }
+    }
+    fields = list(body['properties'])
     try:
         resp = await client.indices.put_mapping(index=index, body=body)
         ack = bool(resp.get('acknowledged', False))

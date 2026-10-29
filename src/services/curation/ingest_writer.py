@@ -26,7 +26,12 @@ Safety rules kept from the per-image path:
   (:func:`~src.services.curation.ingest_index.content_image_id`), so a second copy of the
   same content that got past the imohash lookup (the lookup cannot see an unrefreshed
   write) is answered 409. That unit is the ``duplicate`` and none of its items are written
-  (#358).
+  (#358). Each images doc carries a fresh write id (:data:`WRITE_ID_FIELD`): a 409
+  whose stored doc holds this unit's own write id answers a create an earlier attempt of the
+  same request applied (a transport retry after a lost response), so the image counts as
+  written and its items are written (#375).
+- Items are written only under an images doc this unit wrote, never under another copy's
+  or a refused one.
 - A document the store refuses is reported in its own image's result (``refused``) and does
   not touch the others, as before.
 """
@@ -36,6 +41,7 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import time
+import uuid
 import weakref
 from dataclasses import dataclass, field
 from functools import cached_property
@@ -52,14 +58,15 @@ MAX_WRITERS = 4
 LINGER_S = 0.02
 # HTTP 429 (write queue full) is retried with a growing pause; anything else is final.
 RETRY_429_PAUSES_S = (0.1, 0.25, 0.5, 1.0, 2.0)
+WRITE_ID_FIELD = 'ingest_write_id'
 
 
 @dataclass
 class UnitResult:
     """What one image's documents did; ``refused`` lists the reasons for any the store refused.
 
-    ``duplicate``: the images doc already existed (another copy of the content won the
-    ``create``), so nothing of this unit was written."""
+    ``duplicate``: the images doc already existed, written by another copy of the content
+    (its write id is not this unit's), so nothing of this unit was written."""
 
     images_indexed: int = 0
     duplicate: bool = False
@@ -135,7 +142,7 @@ class IngestWriter:
     ) -> UnitResult:
         """Queue one image's documents and wait for their own result."""
         unit = _Unit(
-            image_doc,
+            {**image_doc, WRITE_ID_FIELD: uuid.uuid4().hex} if image_doc else None,
             crop_docs,
             images_index,
             items_index,
@@ -258,10 +265,18 @@ class IngestWriter:
                 unit.future.set_result(results[id(unit)])
 
     async def _write_images(self, units: list[_Unit], results: dict[int, UnitResult]) -> None:
-        todo = [u for u in units if u.image_doc]
+        conflicted = await self._create_images([u for u in units if u.image_doc], results)
+        if conflicted:
+            await self._settle_conflicts(conflicted, results)
+
+    async def _create_images(
+        self, todo: list[_Unit], results: dict[int, UnitResult]
+    ) -> list[_Unit]:
+        """``create`` the images docs; the units answered 409 are returned unsettled."""
+        conflicted: list[_Unit] = []
         for pause in (*RETRY_429_PAUSES_S, None):
             if not todo:
-                return
+                break
             body: list[dict[str, Any]] = []
             for u in todo:
                 assert u.image_doc is not None
@@ -277,7 +292,7 @@ class IngestWriter:
             if not resp.get('errors'):
                 for unit in todo:
                     results[id(unit)].images_indexed = 1
-                return
+                break
             retry: list[_Unit] = []
             for unit, item in zip(todo, resp.get('items', []), strict=False):
                 op = item.get('create') or {}
@@ -285,18 +300,45 @@ class IngestWriter:
                 if status < 300:
                     results[id(unit)].images_indexed = 1
                 elif status == 409:
-                    results[id(unit)].duplicate = True
+                    conflicted.append(unit)
                 elif status == 429 and pause is not None:
                     retry.append(unit)
                 else:
                     results[id(unit)].refused.append(f'images doc: {_reason(op)}')
-            if not retry:
-                return
             todo = retry
-            await asyncio.sleep(pause or 0)
+            if todo:
+                await asyncio.sleep(pause or 0)
+        return conflicted
+
+    async def _settle_conflicts(self, units: list[_Unit], results: dict[int, UnitResult]) -> None:
+        """Tell a 409 that answers another copy of the content from one that answers this
+        writer's own create. The transport re-sends a bulk whose response it lost (a
+        connection error, a 502/503/504), so a create an earlier attempt applied comes back
+        409; the stored doc then carries this unit's write id (#375). One realtime
+        ``mget`` reads the stored write ids; a missing doc (deleted since) is refused."""
+        resp = await self._client.mget(
+            index=units[0].images_index,
+            body={'ids': [u.image_doc['image_id'] for u in units if u.image_doc]},
+            _source_includes=[WRITE_ID_FIELD],
+        )
+        stored = {d['_id']: d for d in resp.get('docs', [])}
+        for unit in units:
+            assert unit.image_doc is not None
+            image_id, own_id = unit.image_doc['image_id'], unit.image_doc[WRITE_ID_FIELD]
+            doc = stored.get(image_id) or {}
+            result = results[id(unit)]
+            if not doc.get('found'):
+                result.refused.append('images doc: 409, and no stored doc to compare')
+            elif (doc.get('_source') or {}).get(WRITE_ID_FIELD) == own_id:
+                logger.info('ingest_image_create_was_own', image_id=image_id)
+                result.images_indexed = 1
+            else:
+                result.duplicate = True
 
     async def _write_items(self, units: list[_Unit], results: dict[int, UnitResult]) -> None:
-        units = [u for u in units if not results[id(u)].duplicate]
+        # Items only under an images doc this unit wrote (or, items-only, one that exists):
+        # never under another copy's doc, nor under one that was refused.
+        units = [u for u in units if u.image_doc is None or results[id(u)].images_indexed]
         remaining = [d for u in units for d in u.crop_docs]
         if not remaining:
             return

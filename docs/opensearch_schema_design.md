@@ -149,7 +149,11 @@ Ingest and dataset import name the document by its content: `image_id` (also the
 `_id`) is `sha256(imohash)[:32]`, written with `create`. The imohash lookup before
 the write cannot see a copy another request wrote but the index has not yet
 refreshed, so the `create` is what keeps one image per content: the copy that gets
-409 is reported `duplicate` and stores no items or crops. Images written before this
+409 is reported `duplicate` and stores no items or crops. The writer stamps each
+images document with a fresh `ingest_write_id` (stored, not indexed): when a
+transport retry re-sends a bulk whose first attempt was applied, the 409 finds the
+writer's own write id and the image counts as written, so its items are written instead
+of being dropped as a duplicate. Images written before this
 rule keep their path-and-hash ids; the lookup still finds them, so they need no
 migration. A combine target names its images by target path and hash instead.
 

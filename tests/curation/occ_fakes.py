@@ -201,13 +201,34 @@ class FakeIngestOpenSearch:
         self,
         *,
         body: dict[str, Any],
-        index: str | None = None,  # noqa: ARG002
+        index: str | None = None,
         _source_excludes: list[str] | None = None,
+        _source_includes: list[str] | None = None,
     ) -> dict[str, Any]:
         # Two shapes land here: occ_upsert_bulk's own {'ids': [...]} calls,
         # and mget_crops' {'docs': [{'_id':..., '_index':...}, ...]} shape
-        # (occ_update_bulk).
+        # (occ_update_bulk). An ``index`` other than the items index reads the
+        # images docs (the ingest writer settling a create conflict).
+        from src.config import get_curation_config
+
         ids = body['ids'] if 'ids' in body else [d['_id'] for d in body['docs']]
+        if index is not None and index != get_curation_config().items_index:
+            return {
+                'docs': [
+                    {
+                        '_id': i,
+                        'found': True,
+                        '_source': {
+                            k: v
+                            for k, v in self.images[i].items()
+                            if _source_includes is None or k in _source_includes
+                        },
+                    }
+                    if i in self.images
+                    else {'_id': i, 'found': False}
+                    for i in ids
+                ]
+            }
         docs = []
         for doc_id in ids:
             if doc_id in self.items:
