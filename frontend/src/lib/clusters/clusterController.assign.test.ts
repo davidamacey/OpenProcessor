@@ -98,6 +98,33 @@ describe('assignClassToSelected', () => {
     expect(successSpy).toHaveBeenCalledWith('Labeled 2 crops.');
   });
 
+  it("re-reads the served first page after a successful assign, so the footer count is the server's", async () => {
+    vi.mocked(bulkLabel).mockResolvedValue({
+      updated: 2,
+      updated_ids: ['a', 'b'],
+      conflicts: [],
+    });
+    vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'widget_a' } as never);
+    const { sel, controller, loadFirst } = setup([crop('a'), crop('b')]);
+    sel.ids = new Set(['a', 'b']);
+
+    await controller.assignClassToSelected(3);
+
+    expect(loadFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not re-read the page when the assign fails', async () => {
+    vi.mocked(bulkLabel).mockRejectedValue(new Error('network down'));
+    vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'widget_a' } as never);
+    vi.spyOn(toastStore, 'error').mockImplementation(() => 'x');
+    const { sel, controller, loadFirst } = setup([crop('a'), crop('b')]);
+    sel.ids = new Set(['a', 'b']);
+
+    await controller.assignClassToSelected(3);
+
+    expect(loadFirst).not.toHaveBeenCalled();
+  });
+
   it('rolls back every optimistically-labeled crop when the write fails', async () => {
     vi.mocked(bulkLabel).mockRejectedValue(new Error('network down'));
     vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'widget_a' } as never);

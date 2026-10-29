@@ -12,6 +12,7 @@
   import DeleteProjectDialog from '$components/projects/DeleteProjectDialog.svelte';
   import { createCombineJob } from '$lib/combine/combineJobController.svelte';
   import { combineLabel, reportCell } from '$lib/combine/combineText';
+  import { formatTimestamp } from '$lib/format/date';
   import { formatCount } from '$lib/format/count';
   import { projectHref } from '$lib/projectPaths';
   import { createProjectsAdmin } from '$lib/projects/projectsAdminController.svelte';
@@ -143,9 +144,9 @@
             {(served.sources ?? []).join(', ') || '—'}
           </dd>
           <dt class="text-zinc-500">Started</dt>
-          <dd class="text-zinc-300">{served.started_at ?? '—'}</dd>
+          <dd class="text-zinc-300">{formatTimestamp(served.started_at)}</dd>
           <dt class="text-zinc-500">Finished</dt>
-          <dd class="text-zinc-300">{served.finished_at ?? '—'}</dd>
+          <dd class="text-zinc-300">{formatTimestamp(served.finished_at)}</dd>
         </dl>
 
         {#if served.error}

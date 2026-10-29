@@ -106,7 +106,7 @@ def test_crop_card_class_name_is_readable_at_800(stub, page, app_url):
     assert chip.get_attribute("title") == "Label source: VLM suggestion — not yet validated"
 
     card_width = page.locator('[data-testid="class-name"]').first.evaluate(
-        "el => el.closest('[aria-pressed]').getBoundingClientRect().width"
+        "el => el.closest('div.group').getBoundingClientRect().width"
     )
     assert card_width >= 140, f"crop cards too narrow at 800px: {card_width}px"
     _no_page_errors(stub)

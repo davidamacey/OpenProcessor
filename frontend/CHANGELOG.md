@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A project that is still building opens by itself once it becomes selectable.
 - `/projects` no longer probes a combine job id on every load (a logged 404); "Combine projects…" is always offered because the backend always mounts the combine router.
 - A crop card in the cluster grid is a container with one select button (the thumbnail) and sibling action buttons, so no interactive control nests inside another; the class list in the sidebar no longer inherits a list-item role on its buttons; every empty table header (scores, prompt packs, region profiles, open-vocab sets, VLM tables, config, deprecated classes) has a visually hidden label.
+- After a bulk assign on a cluster page the grid and the footer count are re-read from the server, so the footer no longer reads `60 / 3 listed`.
+- The review page shows the `Proposed` row only when the server served a proposal.
+- One timestamp format everywhere (`YYYY-MM-DD HH:MM:SS UTC`, as on Settings): the dashboard's clustering run and export finish, the export page's last run, the combine job's start and finish, and the ingest sources' poll and scan times.
+- The default search hint is short enough not to be clipped on a phone-width screen.
 - The docs screenshot seeding binds a project (`--project`) like the other scripts.
 
 ## [0.6.0] - 2026-10-16
