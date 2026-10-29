@@ -99,7 +99,12 @@ def load_coco(path: Path) -> dict[str, Any]:
     for a in gt['annotations']:
         if not a.get('iscrowd'):
             anns.setdefault(a['image_id'], []).append({**a, 'name': cats[a['category_id']]})
-    return {'images': images, 'annotations': anns, 'near_duplicate': near_dup}
+    parent = {
+        n: PurePosixPath(i['near_duplicate_of']).name
+        for n, i in images.items()
+        if i.get('near_duplicate_of')
+    }
+    return {'images': images, 'annotations': anns, 'near_duplicate': near_dup, 'parent': parent}
 
 
 def match_class(
@@ -176,11 +181,14 @@ def build(
     labels, partition = [], []
     near_dup = coco.get('near_duplicate', set())
     for c, (name, _, side) in matched:
-        is_nd = PurePosixPath(c['image_path']).name in near_dup
+        image_name = PurePosixPath(c['image_path']).name
+        is_nd = image_name in near_dup
         labels.append(
             {
                 'item_id': c['crop_id'],
                 'label': name,
+                # a near-duplicate variant is grouped with its parent so a split never separates them
+                'group': coco.get('parent', {}).get(image_name, image_name),
                 'stratum': stratum(name, side, rare, len(per_image[c['image_id']]), near_dup=is_nd),
                 'protected': is_protected(c),
             }
