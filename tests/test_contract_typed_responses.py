@@ -41,7 +41,6 @@ LEGACY_DICT = frozenset(
         'POST /classes/sync_to_opensearch',
         'PUT /classes/{class_id}',
         'POST /cluster/umap/rebuild',
-        'GET /clusters',
         'POST /clusters/auto_promote',
         'POST /clusters/refine/{cluster_id}',
         'GET /clusters/representatives',

@@ -6,7 +6,7 @@ top class's share of their labels is always 1.0 — every class cluster read
 of the members the cluster-geometry pass measured for that cluster whose
 nearest cluster centroid is their own (``purity_basis:
 'nearest_centroid'``), over ``purity_n`` members. The label purity (the
-auto-promote gate's input) is served separately as ``label_purity`` with
+auto-promote gate's input) is served separately as ``label_agreement`` with
 ``labelled_share``.
 """
 
@@ -19,15 +19,15 @@ from unittest.mock import AsyncMock
 import numpy as np
 import pytest
 
+from curation._cluster_cards_helpers import list_cards
 from curation.query_fakes import matches
-from src.routers.curation.clusters import PURITY_BASIS, list_clusters
+from src.services.curation.cluster_cards import PURITY_BASIS
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.clustering.cluster_geometry import (
     DISTANCE_REF_FIELD,
     NEAREST_FIELD,
     write_cluster_geometry,
 )
-from src.services.curation.item_filter import ItemFilter
 from src.services.curation.wire import serialize_item
 
 
@@ -109,15 +109,12 @@ async def _cards(*buckets: dict[str, Any]) -> tuple[dict[int, dict[str, Any]], d
     os_client.search = AsyncMock(
         return_value={'aggregations': {'clusters': {'buckets': list(buckets)}}}
     )
-    resp = await list_clusters(
+    resp = await list_cards(
         os_client,
         per_cluster=0,
         max_clusters=100,
         kind='all',
         cluster_id=None,
-        item_filter=ItemFilter(),
-        min_blur_ratio=None,
-        class_source=None,
     )
     assert os_client.search.await_args is not None
     body = os_client.search.await_args.kwargs['body']
@@ -130,7 +127,7 @@ async def test_mixed_class_cluster_no_longer_reads_pure() -> None:
     # only 5 of the 87 measured members sit nearest their own centroid.
     cards, _body = await _cards(_bucket(43, 87, [('motard', 87)], measured=87, fits=5))
     card = cards[43]
-    assert card['label_purity'] == 1.0
+    assert card['label_agreement'] == 1.0
     assert card['purity'] == pytest.approx(5 / 87)
     assert card['purity_n'] == 87
     assert card['purity_basis'] == PURITY_BASIS == 'nearest_centroid'
@@ -138,12 +135,12 @@ async def test_mixed_class_cluster_no_longer_reads_pure() -> None:
 
 
 @pytest.mark.asyncio
-async def test_candidate_serves_label_purity_and_share_next_to_purity() -> None:
+async def test_candidate_serves_label_agreement_and_share_next_to_purity() -> None:
     cid = RESIDUAL_CLUSTER_ID_OFFSET + 13
     # 8 of 79 labelled, all one class: label purity 1.0 over a 10% minority.
     cards, _body = await _cards(_bucket(cid, 79, [('motard', 8)], measured=79, fits=70))
     card = cards[cid]
-    assert card['label_purity'] == 1.0
+    assert card['label_agreement'] == 1.0
     assert card['labelled_share'] == pytest.approx(8 / 79)
     assert card['purity'] == pytest.approx(70 / 79)
     # The gate still needs half the members labelled.

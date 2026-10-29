@@ -26,6 +26,7 @@ evaluates the subset of the query DSL those paths use:
   unless a test sets it through ``indices.put_settings`` -- raises like
   OpenSearch's 400), and ``top_hits`` inside a nested aggregation with
   ``docvalue_fields`` (parent ``_id`` + the requested ``fields``);
+- ``avg`` / ``max`` / ``min`` metric aggregations (null when no value);
 - ``count``, ``get``, ``update`` (``if_seq_no`` honoured), ``mget``,
   ``bulk`` (``update`` with ``if_seq_no``, ``index``, ``create`` and
   ``delete`` with ``if_seq_no``), ``indices.refresh``.
@@ -252,6 +253,13 @@ def _aggregate(docs: list[dict[str, Any]], aggs: dict[str, Any]) -> dict[str, An
             field = spec['cardinality']['field']
             distinct = {v for d in docs for v in _values(d, field)}
             out[name] = {'value': len(distinct)}
+            continue
+        metric = next((m for m in ('avg', 'max', 'min') if m in spec), None)
+        if metric is not None:
+            nums = [v for d in docs for v in _values(d, spec[metric]['field'])]
+            reduce = {'avg': lambda xs: sum(xs) / len(xs), 'max': max, 'min': min}[metric]
+            # A metric over no values is null, as in OpenSearch.
+            out[name] = {'value': reduce(nums) if nums else None}
             continue
         if 'reverse_nested' in spec:
             # The distinct PARENT docs the current group's nested elements
