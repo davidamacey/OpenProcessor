@@ -1,0 +1,528 @@
+{
+ "schema_version": 1,
+ "started_utc": "2026-10-29T03:51:58+00:00",
+ "finished_utc": "2026-10-29T03:53:02+00:00",
+ "api": "http://127.0.0.1:5603",
+ "sample_seed": 20261028,
+ "host_load_start": {
+  "load1": 23.6708984375,
+  "load5": 42.68994140625,
+  "load15": 50.6083984375,
+  "nproc": 48
+ },
+ "host_load_end": {
+  "load1": 25.05029296875,
+  "load5": 39.33154296875,
+  "load15": 48.90673828125,
+  "nproc": 48
+ },
+ "route": "GET /curation/projects/{project}/search/text with class_name / cluster_id",
+ "class_name": [
+  {
+   "class_name": "person",
+   "queries": 30,
+   "filtered_latency_ms": {
+    "n": 30,
+    "p50": 83.96265999181196,
+    "p95": 94.74078900530003,
+    "p99": 1313.6182870075572,
+    "mean": 125.36202333479498,
+    "min": 75.9756240004208,
+    "max": 1313.6182870075572
+   },
+   "unfiltered_latency_ms": {
+    "n": 30,
+    "p50": 17.617120989598334,
+    "p95": 20.757880003657192,
+    "p99": 20.885573991108686,
+    "mean": 18.000536097679287,
+    "min": 15.372245979961008,
+    "max": 20.885573991108686
+   },
+   "items_returned_mean": 10.0,
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0,
+   "top10_agreement_with_filtered_unfiltered_deep_list": {
+    "queries_with_comparable_deep_list": 29,
+    "mean_overlap@10": 0.9793103448275862
+   }
+  },
+  {
+   "class_name": "car",
+   "queries": 30,
+   "filtered_latency_ms": {
+    "n": 30,
+    "p50": 84.05026901164092,
+    "p95": 102.0234250172507,
+    "p99": 106.79070997866802,
+    "mean": 81.4497626988062,
+    "min": 18.58978101518005,
+    "max": 106.79070997866802
+   },
+   "unfiltered_latency_ms": {
+    "n": 30,
+    "p50": 19.225488998927176,
+    "p95": 22.3869509936776,
+    "p99": 24.399537011049688,
+    "mean": 19.272208702750504,
+    "min": 16.792310983873904,
+    "max": 24.399537011049688
+   },
+   "items_returned_mean": 10.0,
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0,
+   "top10_agreement_with_filtered_unfiltered_deep_list": {
+    "queries_with_comparable_deep_list": 22,
+    "mean_overlap@10": 0.9818181818181819
+   }
+  },
+  {
+   "class_name": "chair",
+   "queries": 30,
+   "filtered_latency_ms": {
+    "n": 30,
+    "p50": 78.89227601117454,
+    "p95": 98.33211699151434,
+    "p99": 136.04151501203887,
+    "mean": 76.2803502031602,
+    "min": 15.803343005245551,
+    "max": 136.04151501203887
+   },
+   "unfiltered_latency_ms": {
+    "n": 30,
+    "p50": 17.38565697451122,
+    "p95": 23.908228991786018,
+    "p99": 26.105608005309477,
+    "mean": 18.50782489733926,
+    "min": 15.438505011843517,
+    "max": 26.105608005309477
+   },
+   "items_returned_mean": 10.0,
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0,
+   "top10_agreement_with_filtered_unfiltered_deep_list": {
+    "queries_with_comparable_deep_list": 21,
+    "mean_overlap@10": 0.9761904761904762
+   }
+  },
+  {
+   "class_name": "dog",
+   "queries": 30,
+   "filtered_latency_ms": {
+    "n": 30,
+    "p50": 84.44049599347636,
+    "p95": 114.11248499643989,
+    "p99": 136.9520770094823,
+    "mean": 82.86473916959949,
+    "min": 17.374948016367853,
+    "max": 136.9520770094823
+   },
+   "unfiltered_latency_ms": {
+    "n": 30,
+    "p50": 18.313175009097904,
+    "p95": 22.007510997354984,
+    "p99": 41.54085100162774,
+    "mean": 19.246984265434246,
+    "min": 16.369390999898314,
+    "max": 41.54085100162774
+   },
+   "items_returned_mean": 10.0,
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0,
+   "top10_agreement_with_filtered_unfiltered_deep_list": {
+    "queries_with_comparable_deep_list": 18,
+    "mean_overlap@10": 0.9555555555555555
+   }
+  },
+  {
+   "class_name": "cup",
+   "queries": 30,
+   "filtered_latency_ms": {
+    "n": 30,
+    "p50": 81.37544200872071,
+    "p95": 101.58556097303517,
+    "p99": 109.86450398922898,
+    "mean": 66.9560746299491,
+    "min": 17.392289999406785,
+    "max": 109.86450398922898
+   },
+   "unfiltered_latency_ms": {
+    "n": 30,
+    "p50": 17.859601008240134,
+    "p95": 21.09924898832105,
+    "p99": 26.29311301279813,
+    "mean": 18.496747134486213,
+    "min": 15.886969020357355,
+    "max": 26.29311301279813
+   },
+   "items_returned_mean": 10.0,
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0,
+   "top10_agreement_with_filtered_unfiltered_deep_list": {
+    "queries_with_comparable_deep_list": 2,
+    "mean_overlap@10": 1.0
+   }
+  },
+  {
+   "class_name": "bottle",
+   "queries": 30,
+   "filtered_latency_ms": {
+    "n": 30,
+    "p50": 23.263289011083543,
+    "p95": 93.553869985044,
+    "p99": 95.61829001177102,
+    "mean": 46.50083673089588,
+    "min": 16.044288990087807,
+    "max": 95.61829001177102
+   },
+   "unfiltered_latency_ms": {
+    "n": 30,
+    "p50": 19.27624299423769,
+    "p95": 25.402882980415598,
+    "p99": 25.649959017755464,
+    "mean": 19.812587832954403,
+    "min": 15.628040011506528,
+    "max": 25.649959017755464
+   },
+   "items_returned_mean": 10.0,
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0,
+   "top10_agreement_with_filtered_unfiltered_deep_list": {
+    "queries_with_comparable_deep_list": 9,
+    "mean_overlap@10": 0.9888888888888889
+   }
+  },
+  {
+   "class_name": "bus",
+   "queries": 30,
+   "filtered_latency_ms": {
+    "n": 30,
+    "p50": 80.31648298492655,
+    "p95": 109.78772802627645,
+    "p99": 138.78761499654502,
+    "mean": 70.8523082343163,
+    "min": 17.798534012399614,
+    "max": 138.78761499654502
+   },
+   "unfiltered_latency_ms": {
+    "n": 30,
+    "p50": 17.710612009977922,
+    "p95": 26.971980987582356,
+    "p99": 82.37236898276024,
+    "mean": 21.094118729039717,
+    "min": 14.987617003498599,
+    "max": 82.37236898276024
+   },
+   "items_returned_mean": 10.0,
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0,
+   "top10_agreement_with_filtered_unfiltered_deep_list": {
+    "queries_with_comparable_deep_list": 21,
+    "mean_overlap@10": 0.9952380952380951
+   }
+  },
+  {
+   "class_name": "clock",
+   "queries": 30,
+   "filtered_latency_ms": {
+    "n": 30,
+    "p50": 92.30081201530993,
+    "p95": 130.02651202259585,
+    "p99": 138.65850202273577,
+    "mean": 84.46942550266006,
+    "min": 16.408102004788816,
+    "max": 138.65850202273577
+   },
+   "unfiltered_latency_ms": {
+    "n": 30,
+    "p50": 18.26147999963723,
+    "p95": 23.600892018293962,
+    "p99": 26.21764299692586,
+    "mean": 19.44161103456281,
+    "min": 16.279339004540816,
+    "max": 26.21764299692586
+   },
+   "items_returned_mean": 10.0,
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0,
+   "top10_agreement_with_filtered_unfiltered_deep_list": {
+    "queries_with_comparable_deep_list": 15,
+    "mean_overlap@10": 1.0
+   }
+  },
+  {
+   "class_name": "cat",
+   "queries": 30,
+   "filtered_latency_ms": {
+    "n": 30,
+    "p50": 93.76769300433807,
+    "p95": 128.85693399584852,
+    "p99": 152.94920501764864,
+    "mean": 89.26817306297987,
+    "min": 17.17481599189341,
+    "max": 152.94920501764864
+   },
+   "unfiltered_latency_ms": {
+    "n": 30,
+    "p50": 19.190027989679947,
+    "p95": 22.046775004127994,
+    "p99": 23.46025299630128,
+    "mean": 19.183793434058316,
+    "min": 15.685143996961415,
+    "max": 23.46025299630128
+   },
+   "items_returned_mean": 10.0,
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0,
+   "top10_agreement_with_filtered_unfiltered_deep_list": {
+    "queries_with_comparable_deep_list": 27,
+    "mean_overlap@10": 0.9962962962962962
+   }
+  },
+  {
+   "class_name": "bowl",
+   "queries": 30,
+   "filtered_latency_ms": {
+    "n": 30,
+    "p50": 23.057452985085547,
+    "p95": 120.5253159860149,
+    "p99": 123.50800100830384,
+    "mean": 54.26348946251286,
+    "min": 16.767269000411034,
+    "max": 123.50800100830384
+   },
+   "unfiltered_latency_ms": {
+    "n": 30,
+    "p50": 19.996193004772067,
+    "p95": 25.01077498891391,
+    "p99": 26.465159986400977,
+    "mean": 20.381147633694734,
+    "min": 15.61716798460111,
+    "max": 26.465159986400977
+   },
+   "items_returned_mean": 10.0,
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0,
+   "top10_agreement_with_filtered_unfiltered_deep_list": {
+    "queries_with_comparable_deep_list": 14,
+    "mean_overlap@10": 0.9785714285714285
+   }
+  }
+ ],
+ "cluster_id": [
+  {
+   "cluster_id": 10307,
+   "latency_ms": {
+    "n": 30,
+    "p50": 17.178520996822044,
+    "p95": 35.81574998679571,
+    "p99": 72.1143150003627,
+    "mean": 19.544794264947996,
+    "min": 13.542278989916667,
+    "max": 72.1143150003627
+   },
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0
+  },
+  {
+   "cluster_id": 10049,
+   "latency_ms": {
+    "n": 30,
+    "p50": 17.181424977025017,
+    "p95": 23.68733801995404,
+    "p99": 40.4261949879583,
+    "mean": 18.58483376854565,
+    "min": 14.69776700832881,
+    "max": 40.4261949879583
+   },
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0
+  },
+  {
+   "cluster_id": 10143,
+   "latency_ms": {
+    "n": 30,
+    "p50": 19.722613011253998,
+    "p95": 22.414586012018844,
+    "p99": 28.588558023329824,
+    "mean": 19.722654598687466,
+    "min": 13.820848980685696,
+    "max": 28.588558023329824
+   },
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0
+  },
+  {
+   "cluster_id": 10271,
+   "latency_ms": {
+    "n": 30,
+    "p50": 19.37173801707104,
+    "p95": 23.82527501322329,
+    "p99": 34.1324680193793,
+    "mean": 19.991893631716568,
+    "min": 15.107946994248778,
+    "max": 34.1324680193793
+   },
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0
+  },
+  {
+   "cluster_id": 10503,
+   "latency_ms": {
+    "n": 30,
+    "p50": 17.69176300149411,
+    "p95": 21.334032993763685,
+    "p99": 22.165105998283252,
+    "mean": 17.79230280177823,
+    "min": 14.236287010135129,
+    "max": 22.165105998283252
+   },
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0
+  },
+  {
+   "cluster_id": 10336,
+   "latency_ms": {
+    "n": 30,
+    "p50": 21.17595900199376,
+    "p95": 23.193175002234057,
+    "p99": 29.489124979590997,
+    "mean": 20.70627326805455,
+    "min": 14.63350499398075,
+    "max": 29.489124979590997
+   },
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0
+  },
+  {
+   "cluster_id": 10013,
+   "latency_ms": {
+    "n": 30,
+    "p50": 16.464927000924945,
+    "p95": 20.44977099285461,
+    "p99": 20.51349400426261,
+    "mean": 17.00012746829695,
+    "min": 13.499099004548043,
+    "max": 20.51349400426261
+   },
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0
+  },
+  {
+   "cluster_id": 10014,
+   "latency_ms": {
+    "n": 30,
+    "p50": 17.33237100415863,
+    "p95": 21.90232399152592,
+    "p99": 23.12652999535203,
+    "mean": 17.903398437192664,
+    "min": 14.796018018387258,
+    "max": 23.12652999535203
+   },
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0
+  },
+  {
+   "cluster_id": 10327,
+   "latency_ms": {
+    "n": 30,
+    "p50": 17.258609004784375,
+    "p95": 22.327997023239732,
+    "p99": 22.407071985071525,
+    "mean": 17.700541501593154,
+    "min": 14.720979990670457,
+    "max": 22.407071985071525
+   },
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0
+  },
+  {
+   "cluster_id": 10247,
+   "latency_ms": {
+    "n": 30,
+    "p50": 18.458384001860395,
+    "p95": 21.62582299206406,
+    "p99": 22.543450992088765,
+    "mean": 18.467032996704802,
+    "min": 14.705442008562386,
+    "max": 22.543450992088765
+   },
+   "empty_result_queries": 0,
+   "items_violating_filter": 0,
+   "score_order_violations": 0
+  }
+ ],
+ "pagination": {
+  "queries": 20,
+  "overlap_between_pages": 0,
+  "differs_from_single_page": 0,
+  "score_rise_across_pages": 0,
+  "total_equals_page_size_times_page": 20
+ },
+ "min_score_0.3": {
+  "returned": 200,
+  "below_threshold": 0
+ },
+ "request_validation": {
+  "page_size_201": {
+   "http": 422,
+   "items": null,
+   "detail": "[{'type': 'less_than_equal', 'loc': ['query', 'page_size'], 'msg': 'Input should be less than or equal to 200', 'input':"
+  },
+  "empty_q": {
+   "http": 422,
+   "items": null,
+   "detail": "[{'type': 'string_too_short', 'loc': ['query', 'q'], 'msg': 'String should have at least 1 character', 'input': '', 'ctx"
+  },
+  "page_0": {
+   "http": 422,
+   "items": null,
+   "detail": "[{'type': 'greater_than_equal', 'loc': ['query', 'page'], 'msg': 'Input should be greater than or equal to 1', 'input': "
+  },
+  "class_name_unknown": {
+   "http": 200,
+   "items": 0,
+   "detail": null
+  },
+  "cluster_id_unknown": {
+   "http": 200,
+   "items": 0,
+   "detail": null
+  },
+  "min_score_1.5": {
+   "http": 422,
+   "items": null,
+   "detail": "[{'type': 'less_than_equal', 'loc': ['query', 'min_score'], 'msg': 'Input should be less than or equal to 1', 'input': '"
+  },
+  "page_beyond_k_cap": {
+   "http": 200,
+   "items": 0,
+   "detail": null
+  }
+ },
+ "filter_violations_examples": [],
+ "load1_samples": [
+  23.6708984375,
+  24.6767578125,
+  24.96728515625
+ ]
+}

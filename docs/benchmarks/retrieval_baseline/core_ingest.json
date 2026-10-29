@@ -1,0 +1,19 @@
+{
+ "n": 2000,
+ "http": {
+  "201": 2000
+ },
+ "status": {
+  "success": 2000
+ },
+ "near_duplicate_flagged_among_distinct_images": 1,
+ "flagged_examples": [
+  {
+   "image_id": "rq481404",
+   "action": "created_group",
+   "group_id": "dup_ea25d750e0a9",
+   "similarity": 0.9924062,
+   "matched_image": "rq471991"
+  }
+ ]
+}
