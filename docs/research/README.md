@@ -45,6 +45,8 @@ on what it was measured, and every result that matters has a reproduce command.
 
 ## Related material elsewhere
 
+- A domain-specific bake-off paper (curated, cluster-stratified training data and a detector comparison) is maintained privately outside this repository; its data-engine section corresponds to the ingest, clustering and split work measured in these notes. The public write-up of the systems work is planned from the measurement logs (see "Writing up" in [CLAUDE.md](CLAUDE.md)).
+
 - Raw benchmark JSON used by the docs: [`docs/benchmarks/`](../benchmarks/).
 - Performance numbers and acceptance bars: [`docs/PERFORMANCE.md`](../PERFORMANCE.md).
 - Market and competitor analysis: [`docs/market/`](../market/).
