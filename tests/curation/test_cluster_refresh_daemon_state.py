@@ -67,6 +67,8 @@ class _Api:
     def _handle(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
         self.calls.append(f'{request.method} {path.rsplit("/", 2)[-2]}/{path.rsplit("/", 1)[-1]}')
+        if path.endswith('/assist/loops'):
+            return httpx.Response(200, json={'loops': []})
         if path.endswith('/clusters/auto_promote'):
             return httpx.Response(self.promote_status, json={'promoted': 0, 'detail': 'gate'})
         if path.endswith('/auto_label/start'):
@@ -204,7 +206,7 @@ def test_without_the_persisted_state_a_restart_would_start_early() -> None:
     """The schedule alone, to show what the persisted ``prev_count`` buys: a fresh
     schedule has no previous count and calls a growing ingest quiet."""
     fresh = ProjectSchedule(last_trained_count=1000)
-    obs = Observation(count=1600, unfinished=0, tracked_status=None, busy=False)
+    obs = Observation(count=1600, unfinished=0, tracked_status=None, busy=False, loop_live=False)
     assert step(fresh, obs, 0.0, POLICY) is Action.START
     restored = ProjectSchedule(last_trained_count=1000, prev_count=1300)
     assert step(restored, obs, 0.0, POLICY) is Action.DEFER

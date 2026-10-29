@@ -185,7 +185,7 @@ _vlm_recreate_targets() {
     echo vlm
     [[ "$clients" == 1 ]] || return 0
     running="$(dc ps --services --status running 2>/dev/null || true)"
-    for svc in api curation-detection-worker curation-vlm-worker curation-auto-label-worker; do
+    for svc in api curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-assist-loop-worker; do
         [[ $'\n'"$running"$'\n' == *$'\n'"$svc"$'\n'* ]] && echo "$svc"
     done
     return 0

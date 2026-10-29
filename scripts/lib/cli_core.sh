@@ -163,12 +163,12 @@ cmd_download() {
 # =============================================================================
 # Mirrors the `curation-*` Makefile targets. The curation worker services
 # (curation-detection-worker, curation-vlm-worker, curation-auto-label-worker,
-# curation-cluster-refresh) all carry `profiles: [curation]` in
+# curation-assist-loop-worker, curation-cluster-refresh) all carry `profiles: [curation]` in
 # docker-compose.yml, so `start`/`stop` above never touch them.
 
 # Every service in the curation profile, plus the on-demand evaluator (profile
 # `evaluator`, so a bare `curation up` leaves it alone).
-CURATION_SERVICES="curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-cluster-refresh curation-evaluator"
+CURATION_SERVICES="curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-assist-loop-worker curation-cluster-refresh curation-evaluator"
 
 cmd_curation() {
     local subcommand="${1:-status}"
@@ -205,12 +205,12 @@ cmd_curation() {
         logs)
             dc --profile curation logs -f \
                 curation-detection-worker curation-vlm-worker \
-                curation-auto-label-worker curation-cluster-refresh
+                curation-auto-label-worker curation-assist-loop-worker curation-cluster-refresh
             ;;
         status)
             dc --profile curation ps \
                 curation-detection-worker curation-vlm-worker \
-                curation-auto-label-worker curation-cluster-refresh curation-evaluator
+                curation-auto-label-worker curation-assist-loop-worker curation-cluster-refresh curation-evaluator
             ;;
         seed)
             log_warn "curation seed: not yet implemented."

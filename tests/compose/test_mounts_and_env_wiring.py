@@ -143,7 +143,12 @@ def test_source_root_mounted_at_the_same_path_on_api_and_detection_worker() -> N
     detection_failed/reason=image_unavailable."""
     services = _services()
     target = '/data/source'
-    for name in ('api', 'curation-detection-worker', 'curation-auto-label-worker'):
+    for name in (
+        'api',
+        'curation-detection-worker',
+        'curation-auto-label-worker',
+        'curation-assist-loop-worker',
+    ):
         mounts = [str(v) for v in (services[name].get('volumes') or [])]
         matching = [m for m in mounts if m.endswith((f':{target}:ro', f':{target}'))]
         assert matching, f'{name} has no source-root mount at {target}: {mounts}'
@@ -174,7 +179,12 @@ def test_examples_reachable_on_api_and_detection_worker() -> None:
     dev_compose = _load_yaml(REPO_ROOT / 'docker-compose.dev.yml')
     dev_services = dev_compose['services']
     target = '/app/examples'
-    for name in ('api', 'curation-detection-worker', 'curation-auto-label-worker'):
+    for name in (
+        'api',
+        'curation-detection-worker',
+        'curation-auto-label-worker',
+        'curation-assist-loop-worker',
+    ):
         mounts = [str(v) for v in (dev_services.get(name, {}).get('volumes') or [])]
         assert any(m.endswith(f':{target}:ro') for m in mounts), (
             f'{name} has no ./examples mount at {target} in docker-compose.dev.yml: {mounts}'
@@ -195,6 +205,7 @@ _IN_PROCESS_PIPELINE_SERVICES = (
     'api',
     'curation-detection-worker',
     'curation-auto-label-worker',
+    'curation-assist-loop-worker',
 )
 _HTTP_CLIENT_ONLY_CURATION_SERVICES = ('curation-vlm-worker', 'curation-cluster-refresh')
 
@@ -210,7 +221,7 @@ def test_class_registry_data_mounted_where_needed() -> None:
     (it only ever writes unlabeled `*_proposal` detections)."""
     services = _services()
     target = '/app/data'
-    for name in ('api', 'curation-auto-label-worker'):
+    for name in ('api', 'curation-auto-label-worker', 'curation-assist-loop-worker'):
         mounts = [str(v) for v in (services[name].get('volumes') or [])]
         assert any(m.endswith((f':{target}', f':{target}:ro')) for m in mounts), (
             f'{name} has no ./data mount at {target}: {mounts}'

@@ -184,7 +184,12 @@ def test_the_api_and_workers_get_the_local_endpoint_and_the_read_only_secrets_mo
         env = ' '.join(services[name]['environment'])
         assert 'OP_LOCAL_VLM_ENDPOINT=${OP_LOCAL_VLM_ENDPOINT:-}' in env, name
         assert 'OP_LOCAL_VLM_GPU_TOTAL_MIB=${VLM_GPU_TOTAL_MIB:-}' in env, name
-    for name in ('api', 'curation-detection-worker', 'curation-auto-label-worker'):
+    for name in (
+        'api',
+        'curation-detection-worker',
+        'curation-auto-label-worker',
+        'curation-assist-loop-worker',
+    ):
         assert './secrets/vlm:/run/secrets/op_vlm:ro' in services[name]['volumes'], name
 
 

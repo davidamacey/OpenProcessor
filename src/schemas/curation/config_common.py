@@ -136,6 +136,9 @@ ErrorCode = Literal[
     'invalid_request',
     'assist_too_large',
     'assist_busy',
+    'assist_loop_busy',
+    'assist_loop_running',
+    'assist_loop_not_resumable',
     'scope_changed',
     'class_not_in_registry',
     'run_has_no_scope',
@@ -386,6 +389,8 @@ class ConfigErrorDetail(BaseModel):
     import_id: str | None = None
     # bulk ingest: the run a 404/409 names.
     run_id: str | None = None
+    # auto-label loop: the loop a 404/409 names.
+    loop_id: str | None = None
     limit: int | None = None
     # 422 too_few_items: the smallest pool the clustering route accepts.
     min_items: int | None = None

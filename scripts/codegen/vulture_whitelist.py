@@ -99,5 +99,3 @@ _.ALL_STEPS  # the registry the next-steps completeness test enumerates
 # Auto-label loop (#286): built and tested before the worker and routes that call them.
 # Delete each name here in the commit that adds its first production caller.
 _.resolve_audit_vlm  # assist_loop/audit.py: the loop start pins the audit endpoint through the run gate
-_.from_request  # BudgetLimits.from_request in assist_loop/budget.py: the loop worker builds the caps from the request
-_.read_json  # LoopStore.read_json in assist_loop/store.py: the loop worker reads request.json on resume

@@ -54,7 +54,7 @@ logger = get_logger(__name__)
 
 # What ends a loop as ``failed`` with its message: a refused or unreachable VLM, a
 # datastore error, an unreadable job file. Anything else is a bug and propagates.
-_RUN_ERRORS = (
+RUN_ERRORS = (
     RuntimeError,
     ValueError,
     OSError,
@@ -285,7 +285,7 @@ async def run_loop(
         run = await _prepare(store, params, deps, budget, scope)
         outcome = await schedule(run)
         write_progress(run, **_final_fields(outcome))
-    except _RUN_ERRORS as exc:
+    except RUN_ERRORS as exc:
         logger.error('assist_loop_failed', loop=store.loop_id, error=str(exc))
         outcome = LoopOutcome('failed', error=str(exc))
         store.job.update(**_final_fields(outcome), updated_at=now_iso())
@@ -296,4 +296,12 @@ async def run_loop(
     return outcome
 
 
-__all__ = ['LoopDeps', 'LoopOutcome', 'LoopParams', 'run_loop', 'schedule', 'write_progress']
+__all__ = [
+    'RUN_ERRORS',
+    'LoopDeps',
+    'LoopOutcome',
+    'LoopParams',
+    'run_loop',
+    'schedule',
+    'write_progress',
+]

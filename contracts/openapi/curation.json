@@ -5563,6 +5563,9 @@
               "invalid_request",
               "assist_too_large",
               "assist_busy",
+              "assist_loop_busy",
+              "assist_loop_running",
+              "assist_loop_not_resumable",
               "scope_changed",
               "class_not_in_registry",
               "run_has_no_scope",
@@ -5654,6 +5657,17 @@
               }
             ],
             "title": "Limit"
+          },
+          "loop_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loop Id"
           },
           "message": {
             "title": "Message",

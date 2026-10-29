@@ -29,6 +29,7 @@ from src.routers.curation.pipeline_params import (
     VLM_DESC,
     VLM_SCOPE_DESC as _VLM_SCOPE_DESC,
 )
+from src.services.curation.assist_loop.job import require_no_live_loop
 from src.services.curation.auto_label_run import run_auto_label
 from src.services.curation.cluster_purity import PROMOTE_MIN_MEMBERS, PROMOTE_MIN_PURITY
 from src.services.curation.vlm_policy import VlmScope  # noqa: TC001 - FastAPI
@@ -96,6 +97,8 @@ async def pipeline_auto_label(
     For a background job with progress polling, see ``POST
     /pipeline/auto_label/start`` instead.
     """
+    if train_clusters:
+        require_no_live_loop()
     return await run_auto_label(
         opensearch=opensearch,
         train_clusters=train_clusters,

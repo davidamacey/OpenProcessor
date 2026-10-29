@@ -360,3 +360,24 @@ def test_delete_removes_bulk_ingest_and_reprocess_job_dirs(tmp_path, monkeypatch
     for root in (bulk, reprocess):
         assert not (root / 'projects' / 'alpha').exists()
         assert (root / 'projects' / 'beta' / 'sources' / 'queue.sqlite').exists()
+
+
+def test_delete_removes_the_assist_loop_job_dirs(tmp_path, monkeypatch) -> None:
+    """Loops keep their event logs, snapshots and budgets under their own jobs root; a
+    deleted project must not leave them behind, and a sibling's must stay."""
+    loops = tmp_path / 'assist_loop'
+    monkeypatch.setenv('OP_ASSIST_LOOP_JOBS_DIR', str(loops))
+    for slug in ('alpha', 'beta'):
+        (loops / 'projects' / slug / 'alp_x').mkdir(parents=True)
+        (loops / 'projects' / slug / 'alp_x' / 'events.jsonl').write_bytes(b'x')
+
+    client = FakeLifecycleOpenSearch()
+    registry = _registry_for(client)
+    asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
+    asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
+    asyncio.run(registry.ensure_fresh())
+    asyncio.run(lifecycle.delete_project(client, slug='alpha', confirm='alpha'))
+    asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
+
+    assert not (loops / 'projects' / 'alpha').exists()
+    assert (loops / 'projects' / 'beta' / 'alp_x' / 'events.jsonl').exists()

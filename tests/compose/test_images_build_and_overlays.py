@@ -83,6 +83,7 @@ _CUSTOM_IMAGE_OVERRIDE_VARS = {
     'curation-detection-worker': 'OP_API_IMAGE',
     'curation-vlm-worker': 'OP_API_IMAGE',
     'curation-auto-label-worker': 'OP_API_IMAGE',
+    'curation-assist-loop-worker': 'OP_API_IMAGE',
     'curation-cluster-refresh': 'OP_API_IMAGE',
     'curation-evaluator': 'OP_EVALUATOR_IMAGE',
     'segmenter': 'OP_SEGMENTER_IMAGE',
