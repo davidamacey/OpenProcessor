@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Auto-label loop panel on `/clusters`: a served dry run (clusters, eligible items, root-level cost, budget fit) before a start, then live status, VLM and audit budget meters, per-level counts, totals, the second-opinion result (or that it was off), cancel and resume, the node table with votes and member crops, and a two-step rollback (served dry run, then confirm), whole or per node. The panel is absent when the backend does not serve `/assist/loops`.
+
 ### Fixed
 
 - An unknown URL shows a not-found page instead of the "Something went wrong / Reload" prompt.
