@@ -31,6 +31,7 @@ class Bundle:
     group: list[str]  # source image of each labelled crop
     aspect: NDArray[np.float64]  # box width / height in pixels, per labelled crop
     side: NDArray[np.float64]  # short box side in pixels, per labelled crop
+    protected: NDArray[np.bool_]  # human- or import-validated, locked or holdout, per labelled crop
 
     def strata_masks(self) -> dict[str, NDArray[np.bool_]]:
         """Boolean masks over the labelled crops: label strata plus shape and size strata."""
@@ -102,4 +103,7 @@ def load_bundle(stem: Path, labels: Path, coco_gt: Path) -> Bundle:
         group=[str(label_of[meta[i]['crop_id']].get('group', meta[i]['image_id'])) for i in rows],
         aspect=np.array(aspect),
         side=np.array(side),
+        protected=np.array(
+            [bool(label_of[meta[i]['crop_id']].get('protected', False)) for i in rows], dtype=bool
+        ),
     )
