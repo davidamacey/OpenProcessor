@@ -103,7 +103,7 @@ services:
     image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
     container_name: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api
     # NOTE: no `env_file: ./.env` — the harness is hermetic on purpose.
-    volumes:
+    volumes: &api-volumes
       - ../../src:/app/src:ro
       - ../../scripts:/app/scripts:ro
       - ../../VERSION:/app/VERSION:ro
@@ -114,7 +114,7 @@ services:
       # write / export vanished into the container layer.
       - ./verify-data:/verify-data
       - ./verify-data/jobs:/jobs
-    environment:
+    environment: &api-env
       # The app reads `opensearch_url` (src/config/settings.py, env_prefix
       # ''), NOT OPENSEARCH_HOSTS — that one is the dashboards variable.
       - OPENSEARCH_URL=http://opensearch:9200
@@ -192,6 +192,31 @@ services:
         condition: service_healthy
       verify-data-init:
         condition: service_completed_successfully
+    networks:
+      - verify_net
+
+  # The auto-label loop runs here, not in the API: the same image, mounts and
+  # environment as `api`, so it reads the same indexes, registry and job files.
+  assist-loop-worker:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
+    container_name: ${VERIFY_CONTAINER_PREFIX:-op-verify}-assist-loop-worker
+    volumes: *api-volumes
+    environment: *api-env
+    command: ["python", "-m", "scripts.curation.assist_loop_worker"]
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "python /app/src/services/curation/worker_liveness.py check assist_loop_worker --max-age 120"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
     networks:
       - verify_net
 

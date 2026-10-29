@@ -1,6 +1,8 @@
 # Cluster-sampled VLM auto-labeling loop over assist runs
 
-Status: plan, nothing implemented. Issue #286, milestone v0.7.0, wave W3 of
+Status: S1 to S8 (engine, worker, routes, contracts, docs) and S10 (fake VLM modes, live test) are
+implemented on `feat/v070-assist-loop`; S0, S9 (Cropwright panel, owned by the UI lane as UI5) and
+S11 (acceptance runs) are open. Issue #286, milestone v0.7.0, wave W3 of
 [`v070_wave_plan.md`](v070_wave_plan.md) (that file calls this doc `assist_loop_plan.md`; this is
 the same plan under the name the issue thread settled on). Audience: a fresh implementation agent
 with no conversation memory. Paths were checked with `rg` on `release/0.7.0` at `5f596793`;
