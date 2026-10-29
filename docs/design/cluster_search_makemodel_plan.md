@@ -249,7 +249,7 @@ is calibrated; wave W5 calibrates on labelled pairs.
 | Singletons (#354) | a face that is not in a person has `person_id` null and `person_state` `unassigned` or `suggested`; no synthetic `person_<face_id>` ids; the route description says so | fixes the documented-vs-actual bug |
 | Deletion (#354) | `DELETE /persons/{person_id}` with `delete_faces=false` sets the faces to unassigned (not new fake persons) and keeps a cannot-link so the next run does not rebuild the same person | |
 | Privacy and purge (#379) | a per-scope face setting (`faces_enabled`, default on for the core API, off by default for curation projects, see 3.3); when off, `/faces/*` writes, `/persons/*` and face ingest refuse with a typed error (fail closed); a purge operation deletes every face vector, face crop reference and person record in the scope, requires a confirmation token (the count it will delete, returned by a dry run first), writes an audit event, and is verified by a count query that must return 0 | Immich has no purge of biometrics short of deleting assets |
-| Haiku | **never** sees a face (biometric data); face judging is done against public identity labels only (section 7.4) | |
+| Haiku | **never** sees a face (biometric data); face judging uses public identity labels, and face contact sheets go to the local VLM only (sections 7.2, 7.4) | |
 
 Calibration of t_accept, t_review, m and the graph floor: isotonic fit of same-identity
 probability against cosine on labelled pairs (section 5.1), chosen so that accepted assignments
@@ -597,8 +597,10 @@ labels into a project.
 - Model `claude-haiku-5-5` (current Haiku; $0.10 per million input tokens and $0.50 per million
   output tokens for prompts up to 100k tokens). Images cost about width x height / 750 tokens
   ([vision docs](https://platform.claude.com/docs/en/build-with-claude/vision); verify with
-  `messages.count_tokens` in W8), so a 384 x 384 crop is about 200 tokens and a 12-crop cluster
-  panel about 2,500 tokens. Offline runs use the Message Batches API (50 % of the price).
+  `messages.count_tokens` in W8). The judge sees **contact sheets** (7.4), not single images: a
+  6 x 4 sheet of 160 px thumbnails is 960 x 640 px, about 820 tokens for 24 members (128 px: about
+  520; 192 px: about 1,180), against about 200 tokens for one 384 px crop. Offline runs use the
+  Message Batches API (50 % of the price).
 - Client: the official `anthropic` Python SDK in a research script
   (`scripts/research/visual_judge.py`, proposed), installed into the throwaway research venv, not
   into the product's requirements. Not routed through the product's OpenAI-compatible VLM client.
@@ -625,24 +627,64 @@ labels into a project.
 
 | Unit | Sample | Question |
 |---|---|---|
-| Cluster purity | seeded: clusters stratified by size decile; per cluster up to 12 members (all prototypes, then members nearest to and farthest from their prototype, then random) rendered as one numbered panel | "Which numbered images do not show the same {kind} as the majority? Answer with numbers or none." |
-| Pair (merge/split audit, false-merge estimate) | positives and negatives in equal numbers: proposed merges, cross-cluster nearest pairs, within-cluster farthest pairs | "Same {level} (category / model / object)? yes, no or unsure." |
-| Search result | top-10 for a query; one panel per query | "Which results match the query '{text}' / the query image?" |
-| Naming check | cluster panel + proposed name | "Does '{name}' describe these images? yes, no, partly." |
+| Cluster sheet (purity and naming) | seeded: clusters stratified by size decile; one sheet per cluster (7.4 member selection) | "Do all numbered cells show the same {level}? List the cells that do not. Name what the majority shows." |
+| Pair sheet (merge/split audit, false-merge estimate) | positives and negatives in equal numbers (proposed merges, cross-cluster nearest pairs, within-cluster farthest pairs); 12 pairs per sheet, one pair per row, labelled A1/B1 ... A12/B12 | "For each row: same {level}? yes, no or unsure." |
+| Search sheet | the query (text in the prompt, or the query image in cell 0) and the top 23 results; one sheet per query | "Which numbered cells match the query?" |
 
 `{kind}` and `{level}` come from the project (e.g. "car model", "animal species", "scene"). The
-prompt asks for a strict JSON reply (structured outputs), shows no labels or cluster ids, and
-randomizes panel order; seed and order are recorded.
+prompt asks for a strict JSON reply (structured outputs), shows no labels, cluster ids or roles,
+and the cell order is shuffled by the seed; seed and order are recorded in the sheet manifest.
 
-### 7.4 Budget and recording
+### 7.4 Contact sheets
+
+Every judge and every sheet-based labeling call (Haiku and the local VLMs) receives contact
+sheets: grid montages of small thumbnails, one sheet per cluster, per pair batch or per query.
+
+- **Layout.** Default grid 6 x 4 (24 cells) at 160 px per cell (range 128 to 192 px, chosen in
+  calibration below); each thumbnail is letterboxed into its cell on neutral grey (no
+  stretching), with its cell index (1 to 24) drawn in a corner box; a 4 px gutter. The default
+  bitmap font is used so rendering needs no font files and is identical on every host.
+- **Member selection** (seeded by `{seed}:{sheet_id}` over member ids sorted by id): all cluster
+  prototypes (up to 8), then members nearest to the prototypes, then 2 to 3 far or outlier members
+  (largest distance to their best prototype), then random members to fill the grid; a cluster
+  with fewer members gets a smaller grid. Roles are recorded in the manifest, never drawn on the
+  sheet.
+- **Builder.** `src/services/labeling/contact_sheet.py` (pure: selection, layout and rendering
+  with Pillow from crop bytes the caller supplies; no OpenSearch, no network), so the research
+  judge and the W7 group-naming step use one implementation. Output: a PNG written without
+  timestamps or other varying metadata, and a manifest JSON
+  `{sheet_id, builder_version, seed, grid, thumb_px, cells: [{cell, item_id, box_id, bbox_norm,
+  content_hash, role}], png_sha256}`. Verdicts carry `sheet_id` and cell numbers, which the
+  manifest maps back to item and box ids.
+- **Reproducibility test.** `tests/test_contact_sheet.py`: building twice from the same inputs
+  gives byte-identical PNGs; rebuilding from a saved manifest reproduces `png_sha256`; a changed
+  source `content_hash` makes the rebuild refuse; cell-to-item mapping round-trips; the selection
+  is independent of input order; letterbox geometry of an elongated crop is correct.
+- **One sheet, two answers.** The cluster prompt asks for the same/different verdict, the odd
+  cells and a name for the majority (from the project's registry names at the requested level if
+  one fits, else free text or `unknown`), with a confidence level. The name is a suggestion: from
+  Haiku it is only a verification signal; from the local VLM it may feed the W7 naming step, which
+  writes only through the loop gate (#286).
+- **Calibration (part of E0 in W8).** The same clusters rendered at 3 x 3, 4 x 4 and 6 x 4 and at
+  128 and 192 px: verdict stability across grid sizes (kappa on same/different, overlap of the
+  flagged cells for the members shown in both); agreement between Haiku, each tested local catalog
+  VLM and ground truth (pairwise Cohen's kappa, Fleiss' kappa across judges). The default is the
+  smallest grid and thumbnail whose kappa with ground truth is within 0.05 of the best setting.
+- **Privacy.** Face sheets and plate sheets are built only for the local VLM; the sender refuses
+  to pass a sheet whose kind is `face` or identity text to a hosted model (tested).
+
+### 7.5 Budget and recording
 
 - Per-run hard caps (`max_calls`, `max_input_tokens`), reserved write-ahead before each call as
-  the loop's budgets are. Per owner decision O3 (section 14) the samples are small: per wave at most
-  20 cluster panels of at most 12 members, 100 pairs and 20 search panels for Haiku (about 140
-  calls); the agreement run of W8 (E0) at most 100 panels and 300 pairs per kind for Haiku, with the
-  local VLM judging the full E0 sample (200 panels, 500 pairs). Larger budgets need the owner's yes.
+  the loop's budgets are. Per owner decision O3 (section 14) the samples are small and counted in
+  sheets (one call per sheet): per wave at most 20 cluster sheets, 10 pair sheets (120 pairs) and
+  20 search sheets for Haiku, 50 calls and about 50,000 input tokens at the default layout; the
+  agreement run of W8 (E0) at most 100 cluster sheets and 25 pair sheets (300 pairs) per kind for
+  Haiku, plus the grid-size calibration on 30 of those clusters at 5 layouts (150 sheets), with the
+  local VLMs judging the full E0 sample (200 cluster sheets, 42 pair sheets). Larger budgets need
+  the owner's yes.
 - Raw JSON per verdict under `artifacts_local/bench/cluster_search/<wave>/judge/<run_id>.jsonl`:
-  `{run_id, model, prompt_version, unit, item ids or content hashes, panel order, verdict,
+  `{run_id, model, prompt_version, unit, sheet_id, manifest path, verdict, odd cells, name,
   unsure, input_tokens, output_tokens, latency_ms, request_id}`, plus a run header with the
   sampling seed, budget, git sha and dataset manifest hash.
 - **Agreement first** (consolidated note E0): before the judge is trusted on any kind, it is run
@@ -741,7 +783,7 @@ Per-wave content of G1 to G3:
 | W5 | all experiments on held-out halves | cluster panels per arm (ECG, CPM, AHC) | research note read-through; a sample of make/model groups per arm in a throwaway project |
 | W6 | export by name equality, import refusal cases | none (no clustering output) | taxonomy tree, export at make and model level, re-import |
 | W7 | fine groups on held out, public and set P | cluster panels and naming checks | make/model groups, prototypes, new-candidate queue, loop per-prototype sampling |
-| W8 | judge agreement per kind (E0): local VLM on 200 panels and 500 pairs, Haiku on at most 100 panels and 300 pairs | the protocol itself | read disagreements; decide whether the judge is trusted per kind |
+| W8 | judge agreement per kind (E0) on contact sheets: local VLMs on 200 cluster sheets and 42 pair sheets, Haiku on at most 100 cluster sheets and 25 pair sheets, plus the grid-size calibration (7.4) | the protocol itself | read disagreements; decide whether the judge is trusted per kind |
 | W-UI | frontend `npm run check` and `npm run build`; backend routes' tests | none | every 8.4 screen opened in a browser on the public projects, desktop and 430 px |
 | W0b | E1 raw arms and E5 on held-out halves; #372 permutation test | judge panels: current IVF vs the new default | the same 20 clusters before and after |
 | WB | the WB decision rules per variable and kind, held out | old-vs-new variant on the same sampled panels | the results note; 20 clusters per kind, old and new variant side by side |
@@ -915,7 +957,7 @@ Protocol (written at the top of the results note `docs/research/embedding_proces
   on `bbox_norm` still holds).
 - Visual cross-check: for each variant that wins G1, the judge (Haiku on public panels, local VLM
   for faces and plates) compares cluster purity of the old and the new variant **on the same
-  sampled panels** (same seeds, both partitions), within the 7.4 budgets.
+  sampled panels** (same seeds, both partitions), within the 7.5 budgets.
 - Raw JSON per run under `artifacts_local/bench/cluster_search/wb/<kind>/<variable>/<variant>/`;
   the small public result files that back the note's tables go to
   `docs/benchmarks/embedding_processing/` for the paper.
@@ -1089,11 +1131,17 @@ precision at equal recall improves on LFW and CPLFW held out. Ties keep the curr
 
 ### W8: visual judge (research) [Sonnet; Haiku is the judge under test]
 
-- Files: `scripts/research/visual_judge.py` (panels, pairs, search results; budgets; JSONL
-  recording; Message Batches), `scripts/research/judge_agreement.py`.
-- Steps: agreement runs per kind on labelled public samples (7.4); then judge the W2, W4, W5 and
-  W7 outputs; report beside the ground truth.
-- Tests: budget never exceeded (unit, with a fake client), panel order seeded, JSON schema.
+- Files: `src/services/labeling/contact_sheet.py` (the sheet builder of 7.4),
+  `scripts/research/visual_judge.py` (cluster, pair and search sheets; Haiku through the
+  `anthropic` SDK and the local VLMs through the existing OpenAI-compatible endpoint; budgets;
+  JSONL recording; Message Batches), `scripts/research/judge_agreement.py` (kappa per judge, grid
+  stability, Fleiss' kappa).
+- Steps: build sheets and manifests; the 7.4 calibration (grid sizes, thumbnail sizes, Haiku vs
+  each local VLM vs ground truth) on labelled public samples per kind; fix the default layout;
+  then judge the W2, W4, W5 and W7 outputs; report beside the ground truth.
+- Tests: `tests/test_contact_sheet.py` (7.4), budget never exceeded (unit, with a fake client),
+  a face or identity-text sheet is refused for a hosted model, verdict JSON schema, verdicts map
+  back to item ids through the manifest.
 - Output: section in `docs/research/fine_grained_grouping_eval.md` and the retrieval note.
 - Owner gates: O3 (API spend and set P sample approval).
 - Issues: new `research(eval): visual verification protocol with a judge model`.
