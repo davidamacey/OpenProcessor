@@ -143,3 +143,27 @@ stability / protected-moved, seconds on one CPU core):
   but `--verify-only` checks only their presence. Base images are verified by SHA-256.
 - The stack's detector and PE encoder are the production ones at 0.6.0; a different engine or
   vector space gives different numbers. Test-only: no GPU benchmark was run for this note.
+
+## Held-out scoring and the BCubed rows
+
+The scorer now also reports BCubed precision, recall and F, AMI, risk-coverage (abstentions
+lower coverage, never risk) and, when the labels carry `view` or `size_bin`, same-class pair
+recall and false-merge rate for pairs that share or differ in that value. `identity` labels are
+scored as a separate block. Unassigned items count as singleton clusters for BCubed and AMI.
+
+The 3,000-item pin has a seeded split by source image (near-duplicate variants follow their
+parent), balanced within each pin group:
+`scripts/datasets/manifests/splits/cluster_eval_3000.json` (372 calibration and 372 heldout
+source images). Anything tuned uses `calibration` only; the acceptance numbers come from
+`heldout`:
+
+```bash
+.venv/bin/python scripts/bench/cluster_eval.py score --labels <labels.jsonl> --partition <partition.jsonl> \
+    --split-manifest scripts/datasets/manifests/splits/cluster_eval_3000.json --split heldout \
+    --scorecard-out <card.json> --kind K2 --level items --dataset-name cluster_eval_3000 --seed 1
+```
+
+The rows above were measured on all labelled crops, before any split existed and with the
+COCO-run settings chosen on the same labels. They are not held-out numbers. The held-out BCubed
+rows for the 3,000-item partition and the 200-image COCO partitions are not in this note yet:
+the partitions come from a running stack and none was up when the scorer was built.

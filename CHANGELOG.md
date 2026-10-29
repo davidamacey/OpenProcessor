@@ -22,6 +22,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - The installer's tier prompt is a numbered menu; `--tiers` is unchanged.
 
 ### Added
+- Cluster scoring: BCubed, AMI, risk-coverage and view/size pair strata in `scripts/bench/cluster_eval_metrics.py`; a scorecard envelope (`scripts/bench/scorecard.py`) that refuses quality fields on a synthetic dataset; seeded calibration/heldout splits by source image or identity (`scripts/bench/eval_split.py`, 3,000-item split under `scripts/datasets/manifests/splits/`) with a refusal to score on what was tuned on; `scripts/bench/setp_inventory.py`.
 - Cluster-quality evaluation harness: `scripts/bench/cluster_eval.py`, `cluster_eval_metrics.py` and `cluster_eval_set.py` (pair precision and recall, false-merge and false-split rates, stability, protected-item moves) and a recorded baseline (#341, `docs/research/cluster_eval_baseline.md`).
 - Host IO-pressure sampling in `scripts/bench/scale_run.py` (#337).
 - The embed reprocess pass sends photos of at least 3 MP to the GPU decode model with the stored boxes (28 img/s against 12 on the CPU route for about 21 MP photos, API CPU 0.03 against 0.50 s per image) and counts routes in `op_reprocess_decode_total` (#259).
