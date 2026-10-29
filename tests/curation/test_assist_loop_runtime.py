@@ -223,3 +223,24 @@ def test_a_loop_with_no_pinned_prompt_pack_fails_closed(
 
     assert outcome.status == 'failed'
     assert 'prompt pack' in (outcome.error or '')
+
+
+def test_a_loop_the_worker_has_is_running_with_a_heartbeat_before_anything_is_resolved(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A worker that dies while setting a loop up must leave one a stale heartbeat can
+    repair to ``interrupted``, not a ``queued`` loop nobody will ever claim."""
+    seen: dict[str, Any] = {}
+
+    async def look(_os: Any, **_kw: Any) -> Any:
+        loop = job.open_job(loop_id)
+        seen.update(status=loop.read()['status'], beat=loop.heartbeat_file.exists())
+        msg = 'stop here'
+        raise ValueError(msg)
+
+    monkeypatch.setattr(runtime, 'job_endpoint', look)
+    loop_id = _queue(world)
+
+    _run(world, loop_id)
+
+    assert seen == {'status': 'running', 'beat': True}

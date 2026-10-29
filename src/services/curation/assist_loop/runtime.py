@@ -157,6 +157,9 @@ async def run_job(opensearch: AsyncOpenSearch, loop_id: str) -> LoopOutcome:
     """Run (or resume) the loop ``loop_id`` of the bound project to a stop; its state file
     carries the outcome."""
     store = LoopStore(job.open_job(loop_id).directory)
+    # From here a worker that dies leaves a stale heartbeat, which reads as `interrupted`.
+    store.job.update(status='running', updated_at=now_iso())
+    store.job.touch_heartbeat()
     try:
         request = _request(store)
         pinned = store.job.read().get('pinned') or {}

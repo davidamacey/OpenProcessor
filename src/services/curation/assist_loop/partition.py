@@ -38,6 +38,20 @@ if TYPE_CHECKING:
 
 MemberStateName = Literal['eligible', 'locked', 'holdout', 'excluded']
 _PAGE = 500
+_ELIGIBLE: dict[str, Any] = {
+    'filter': {
+        'bool': {
+            'must_not': [
+                {'term': {'test_holdout': True}},
+                {'term': {'class_excluded': True}},
+                {'term': {'class_validated': True}},
+                {'wildcard': {'class_source': '*human*'}},
+            ]
+        }
+    }
+}
+"""The query form of :func:`member_state`'s ``eligible``: not frozen, not shelved, not validated
+by anyone and not a person's class (a validated import is ``class_validated``)."""
 _SNAPSHOT_DIR = 'members'
 
 
@@ -46,6 +60,16 @@ class PartitionScope:
     cluster_ids: Sequence[int] | None
     """``None`` = every candidate cluster."""
     min_root_size: int
+
+
+@dataclass(frozen=True)
+class RootSize:
+    """A candidate root counted in the store, without reading its members."""
+
+    cluster_id: int
+    members: int
+    eligible: int
+    """Members the loop could ask about and write (the snapshot's ``eligible`` ones)."""
 
 
 @dataclass(frozen=True)
@@ -81,6 +105,10 @@ class RootRef:
 
 
 class PartitionReader(Protocol):
+    async def survey(self, scope: PartitionScope) -> list[RootSize]:
+        """The roots of ``scope`` with their sizes (what a plan shows); reads no members."""
+        ...
+
     async def roots(self, scope: PartitionScope) -> list[RootRef]: ...
 
     async def root_of(self, ids: Sequence[str]) -> dict[str, str]:
@@ -113,12 +141,12 @@ class ClusterFieldPartition:
     def __init__(self, opensearch: AsyncOpenSearch) -> None:
         self._os = opensearch
 
-    async def _sizes(self, scope: PartitionScope) -> list[tuple[int, int]]:
+    async def survey(self, scope: PartitionScope) -> list[RootSize]:
         if scope.cluster_ids is None:
             query: dict[str, Any] = {'range': {'cluster_id': {'gte': RESIDUAL_CLUSTER_ID_OFFSET}}}
         else:
             query = {'terms': {'cluster_id': list(scope.cluster_ids)}}
-        sizes: list[tuple[int, int]] = []
+        sizes: list[RootSize] = []
         after: dict[str, Any] | None = None
         while True:
             composite: dict[str, Any] = {
@@ -129,14 +157,25 @@ class ClusterFieldPartition:
                 composite['after'] = after
             resp = await self._os.search(
                 index=items_index(),
-                body={'size': 0, 'query': query, 'aggs': {'roots': {'composite': composite}}},
+                body={
+                    'size': 0,
+                    'query': query,
+                    'aggs': {'roots': {'composite': composite, 'aggs': {'eligible': _ELIGIBLE}}},
+                },
             )
             agg = resp['aggregations']['roots']
             buckets = agg.get('buckets') or []
-            sizes.extend((int(b['key']['cluster_id']), int(b['doc_count'])) for b in buckets)
+            sizes.extend(
+                RootSize(
+                    int(b['key']['cluster_id']),
+                    int(b['doc_count']),
+                    int(b['eligible']['doc_count']),
+                )
+                for b in buckets
+            )
             after = agg.get('after_key')
             if not buckets or after is None:
-                return [(cid, n) for cid, n in sizes if n >= scope.min_root_size]
+                return [s for s in sizes if s.members >= scope.min_root_size]
 
     async def _snapshot(self, cluster_id: int) -> RootRef:
         found = await scan_items(
@@ -154,7 +193,7 @@ class ClusterFieldPartition:
         )
 
     async def roots(self, scope: PartitionScope) -> list[RootRef]:
-        return [await self._snapshot(cid) for cid, _ in await self._sizes(scope)]
+        return [await self._snapshot(size.cluster_id) for size in await self.survey(scope)]
 
     async def root_of(self, ids: Sequence[str]) -> dict[str, str]:
         docs = await mget_crops(self._os, list(ids), source_includes=['cluster_id'])
@@ -239,6 +278,7 @@ __all__ = [
     'PartitionReader',
     'PartitionScope',
     'RootRef',
+    'RootSize',
     'member_state',
     'read_snapshot',
     'snapshot_line',

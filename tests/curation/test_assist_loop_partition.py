@@ -172,3 +172,39 @@ async def test_a_missing_snapshot_fails_closed(tmp_path: Any) -> None:
 async def test_a_root_key_cannot_name_another_path(tmp_path: Any, bad: str) -> None:
     with pytest.raises(ValueError, match='path'):
         read_snapshot(tmp_path, bad)
+
+
+async def test_the_survey_counts_exactly_what_a_snapshot_would_make_eligible() -> None:
+    from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
+
+    world = _world()
+    world.docs(ITEMS)['a-import-suggestion'] = _item(
+        'a-import-suggestion', 10001, class_source=LABEL_IMPORT_CLASS_SOURCE, class_name='widget'
+    )
+    world.docs(ITEMS)['a-import-valid'] = _item(
+        'a-import-valid',
+        10001,
+        class_source=LABEL_IMPORT_CLASS_SOURCE,
+        class_name='widget',
+        class_validated=True,
+    )
+    reader = ClusterFieldPartition(world)  # type: ignore[arg-type]
+    scope = PartitionScope(cluster_ids=[10001, 10002, 4], min_root_size=1)
+
+    survey = await reader.survey(scope)
+    roots = await reader.roots(scope)
+
+    assert [(s.cluster_id, s.members, s.eligible) for s in survey] == [
+        (r.cluster_id, len(r.members), len(r.eligible_ids)) for r in roots
+    ]
+    assert [s.cluster_id for s in survey] == [4, 10001, 10002]
+    assert [s.eligible for s in survey] == [6, 6, 3]
+    assert [s.members for s in survey] == [6, 11, 3]
+
+
+async def test_the_survey_drops_clusters_under_the_minimum_size() -> None:
+    reader = ClusterFieldPartition(_world())  # type: ignore[arg-type]
+
+    survey = await reader.survey(PartitionScope(cluster_ids=None, min_root_size=4))
+
+    assert [s.cluster_id for s in survey] == [10001]

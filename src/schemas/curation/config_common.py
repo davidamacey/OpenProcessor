@@ -139,6 +139,8 @@ ErrorCode = Literal[
     'assist_loop_busy',
     'assist_loop_running',
     'assist_loop_not_resumable',
+    'no_roots',
+    'clustering_running',
     'scope_changed',
     'class_not_in_registry',
     'run_has_no_scope',

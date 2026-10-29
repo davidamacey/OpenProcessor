@@ -95,7 +95,3 @@ _.read_liveness  # reads back the heartbeat file write_liveness wrote; the per-p
 _._guard_condition_matches  # plain-Python twin of the painless guard, the oracle the parity tests compare against
 _.CHOICE_SOURCES  # the choices_from table the config vocabulary contract test checks against the vocabulary
 _.ALL_STEPS  # the registry the next-steps completeness test enumerates
-
-# Auto-label loop (#286): built and tested before the worker and routes that call them.
-# Delete each name here in the commit that adds its first production caller.
-_.resolve_audit_vlm  # assist_loop/audit.py: the loop start pins the audit endpoint through the run gate

@@ -62,6 +62,19 @@ def live_loop_ids() -> list[str]:
     return [p.name for p in _loop_dirs() if FileJob(p).is_live(ACTIVE)]
 
 
+def list_states(*, active_only: bool, limit: int) -> list[dict[str, Any]]:
+    """The newest loops' states, newest first (ids sort by creation time)."""
+    out: list[dict[str, Any]] = []
+    for path in reversed(_loop_dirs()):
+        state = read_state(path.name)
+        if state is None or (active_only and state.get('status') not in ACTIVE):
+            continue
+        out.append(state)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def loop_live() -> bool:
     return bool(live_loop_ids())
 
@@ -75,6 +88,17 @@ def require_no_live_loop() -> None:
             'assist_loop_running',
             f'auto-label loop {live[0]} is running; cancel it before retraining the clusters',
             loop_id=live[0],
+        )
+
+
+def require_stopped(loop_id: str) -> None:
+    """A loop that is live is still writing: nothing may roll it back meanwhile."""
+    if loop_id in live_loop_ids():
+        raise rejection(
+            409,
+            'assist_loop_running',
+            f'auto-label loop {loop_id} is running; cancel it before rolling it back',
+            loop_id=loop_id,
         )
 
 
@@ -227,6 +251,7 @@ __all__ = [
     'claim_trigger',
     'create_loop',
     'jobs_root',
+    'list_states',
     'live_loop_ids',
     'loop_live',
     'open_job',
@@ -234,5 +259,6 @@ __all__ = [
     'read_state',
     'reconcile_orphaned_jobs',
     'require_no_live_loop',
+    'require_stopped',
     'resume_loop',
 ]
