@@ -37,6 +37,13 @@ describe('/settings deployment-defaults page', () => {
     expect(src).not.toMatch(/tab === 'sort'/);
   });
 
+  it('every axis select is named by the axis label (a bare select has no accessible name)', () => {
+    const idx = src.indexOf('<select');
+    expect(idx).toBeGreaterThan(-1);
+    expect(src.slice(idx, src.indexOf('>', idx))).toMatch(/aria-label=\{copy\.label\}/);
+    expect(src.match(/<select/g)).toHaveLength(1);
+  });
+
   it('contains no inline status filter', () => {
     expect(src).not.toMatch(/status === 'stable'/);
   });
