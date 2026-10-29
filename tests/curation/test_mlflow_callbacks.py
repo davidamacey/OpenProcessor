@@ -146,3 +146,53 @@ def test_on_train_end_registry_metadata_is_byte_identical_to_lineage(
     assert metadata['api_sha'] == lineage['api_sha']
     assert metadata['git_sha'] == lineage['trainer_sha']
     assert metadata['docker_digest_trainer'] == lineage['trainer_image_id']
+
+
+class _FakeRegistryClient:
+    """Records registry calls; any stage API raises like a removed MLflow API."""
+
+    instances: list[_FakeRegistryClient] = []
+
+    def __init__(self) -> None:
+        self.aliases: list[tuple[str, str, Any]] = []
+        self.versions: list[dict[str, Any]] = []
+        _FakeRegistryClient.instances.append(self)
+
+    def get_registered_model(self, _name: str) -> None:
+        return None
+
+    def create_model_version(self, **kwargs: Any) -> Any:
+        self.versions.append(kwargs)
+
+        class _Version:
+            version = '7'
+
+        return _Version()
+
+    def set_registered_model_alias(self, name: str, alias: str, version: Any) -> None:
+        self.aliases.append((name, alias, version))
+
+    def transition_model_version_stage(self, *_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError('registry stages are deprecated; use an alias (#154)')
+
+
+def test_register_model_sets_the_staging_alias_and_never_a_stage(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, lineage: dict[str, Any]
+) -> None:
+    import types
+
+    fake_tracking = types.ModuleType('mlflow.tracking')
+    fake_tracking.MlflowClient = _FakeRegistryClient  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, 'mlflow', types.ModuleType('mlflow'))
+    monkeypatch.setitem(sys.modules, 'mlflow.tracking', fake_tracking)
+    _FakeRegistryClient.instances.clear()
+    model = _FakeModel()
+    _register(model, tmp_path, lineage)
+    callbacks = model.callbacks['on_train_end']
+    # the callback object owning _register_model is the bound method's instance
+    owner = callbacks[0].__self__
+
+    owner._register_model('run-abc', {'dataset_sha': 'x'})
+
+    (client,) = _FakeRegistryClient.instances
+    assert client.aliases == [(owner.registry_name, 'staging', '7')]

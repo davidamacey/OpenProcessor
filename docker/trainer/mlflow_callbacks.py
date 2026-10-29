@@ -312,14 +312,10 @@ class _RunHooks:
                 run_id=run_id,
                 tags={k: str(v) for k, v in metadata.items() if not isinstance(v, dict)},
             )
-            # Auto-promote to Staging only. Production is a manual step.
-            client.transition_model_version_stage(
-                name=self.registry_name,
-                version=mv.version,
-                stage='Staging',
-                archive_existing_versions=False,
-            )
-            log.info('registered %s v%s in stage Staging', self.registry_name, mv.version)
+            # Point the `staging` alias at the new version (registry stages are
+            # deprecated). Production is a manual step.
+            client.set_registered_model_alias(self.registry_name, 'staging', mv.version)
+            log.info('registered %s v%s with alias staging', self.registry_name, mv.version)
         except Exception as exc:  # registry push is best-effort
             log.warning('model registry push failed: %s', exc)
 
