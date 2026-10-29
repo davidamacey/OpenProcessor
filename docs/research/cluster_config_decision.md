@@ -1,4 +1,4 @@
-# Cluster configuration decision after the 3,000-item baseline (revised after W0c)
+# Cluster configuration decision after the 3,000-item baseline (revised after W0c and W0d)
 
 Status: decision note, first written 2026-10-29 and revised the same day after the CPU experiments
 of wave W0c ([cluster_config_experiments.md](cluster_config_experiments.md), branch
@@ -18,6 +18,210 @@ Inputs:
 
 Naming: the consolidated note numbers the kinds K1 whole image, K2 crops, K3 faces, K4
 fine-grained; the plan numbers K3 region boxes and K4 faces. This note uses names, not numbers.
+
+## 0. Current state after W0d (supersedes sections 1, 7 and 8 where they differ)
+
+Second revision, 2026-10-29, after wave W0d. Inputs:
+
+- [cluster_config_fresh_set.md](cluster_config_fresh_set.md): branch `feat/cluster-w0d-experiments`
+  at `360f6667`, merged into this branch.
+- The Haiku half of the judge agreement run E0: `docs/research/visual_judge_e0.md` on branch
+  `feat/cluster-w8-judge`. The local-VLM half is still running.
+
+Sections 1 to 11 below are kept as the record of the W0c revision. The bars of section 6 were not
+changed after any result.
+
+### 0.1 What the evidence supports
+
+**The pre-registered acceptance failed, twice.** Within-detector-class average linkage failed A1 to
+A7 on the pinned set (section 6) and again on the fresh, disjoint set Y1. That set has 3,355 crops,
+2,334 of them labelled, in 80 classes; 706 of its 847 base images are Open Images.
+
+On Y1, fold 1:
+
+| Bar | Result | Verdict |
+|---|---|---|
+| A1 BCubed precision | 0.927, against IVF refit 0.821 | pass |
+| A2 non-person precision | 0.909 | pass |
+| A3 low-resolution precision | 0.951 | pass |
+| A4 BCubed recall, bar 0.329 | 0.288 | **fail** |
+| A5 pair recall, bar 0.115 | 0.128 | pass |
+| A6 `rare` stratum, tolerance -0.02 | -0.054 | **fail** |
+| A7 permutation ARI | 1.000 | pass |
+
+Across all eight split-and-fold cells, A4 fails in 8 (best 0.316 against 0.341) and A6 in 6. The
+reopen rule fires.
+
+The label-free cut rule (Y2) failed too, and descent splitting (Y4) failed (71 % and 9 % of impure
+clusters made pure, against the 80 % bar).
+
+**The honest reading.**
+
+- **What the method is.** A precision-first partition. On data it had not seen, it raises BCubed
+  precision from 0.82 to 0.93 and BCubed recall 1.75 times (0.165 to 0.288).
+- **The cut transfers between public sets.** The operating-point rule picked 0.345 on Y1 against
+  0.346 on the pinned set. It does not transfer to set P (section 2).
+- **It misses the recall bar it was given.** It is worse than IVF on one stratum.
+- **It is not accepted on its bars.** It does not become the default. The bars stay as they were.
+
+**Not behind a switch on `main` either.** A non-default method that no set P key can use would be
+dead code under the project's rules: set P has no cut source, and every key would be refused. The
+WC branch keeps the method, selectable there, for two uses only:
+
+- the use-case test of 0.2;
+- an owner G3 look at real clusters in a throwaway project.
+
+It merges only on the decision of 0.2.
+
+**What the A6 failure is (diagnostic on Y1's held-out half, read after the fact; not acceptance).**
+
+- 239 of the 251 `rare` crops (95 %) belong to the 12 Open Images animals the detector has no class
+  for. The detector files them under sheep, bird, dog, bear, horse, cat and cow.
+- On the 12 nameable `rare` crops, both partitions score precision 1.000.
+- On the open-set crops, IVF scores 0.987 at BCubed recall 0.224; within-class scores 0.930 at
+  0.407.
+
+The failure is therefore open-set species mixing inside a borrowed key (camel, goat and alpaca
+under "sheep"; penguin and owl under "bird"). IVF avoids it only by keeping clusters tiny.
+
+**What would and would not fix it:**
+
+- **A `none` or unknown-key policy cannot.** The detector names these crops confidently (median
+  confidence 0.80 on the 3,000-item set, section 2), so they never reach a `none` key.
+- **Per-key minimum sizes cannot.** The problem is purity, not size.
+- **A lower cut on the animal keys would.** It would trade the recall back. Choosing it needs per-key
+  labels or the judge, and the descent rule that would do it automatically failed Y4.
+- **The defensible handling is the loop gate.** A 0.93-pure mixed cluster either fails the gate
+  (theta 0.9, so it costs decisions) or passes with at most the 10 % impurity the gate is designed
+  to accept. Section 0.2 turns that into a measured bar instead of an argument.
+
+Script and log of the diagnostic: `artifacts_local/cluster_search/w0d/decision_checks/rare_y1.py`
+and `.log` (gitignored).
+
+### 0.2 What the recall bar was protecting, and a use-case bar registered now
+
+A4 (BCubed recall at least 2 times IVF's) was a proxy. The owner's use is labelling vehicle and
+other detector training data with the auto-label loop (#286) and human review. In that use, recall
+matters only through **labelling effort**.
+
+How the loop works (branch `feat/v070-assist-loop`, `src/domain/loop_stats.py`):
+
+- It labels a cluster from a sample. The gate defaults are theta 0.9, alpha 0.05 and max_dissent 1.
+  Each look is tested at alpha / 2, so a large cluster needs about 35 agreeing answers.
+- A cluster too small to ever prove theta is asked whole: every member costs one decision.
+- Two pure clusters of the same class both end up labelled; splitting them only costs a second
+  sample.
+
+Precision matters through **wrong propagated labels**, which become training noise.
+
+So the bar the use case implies is about decisions per labelled item at a propagated-label precision
+floor, not BCubed recall. This is a **new bar for a new decision**, registered here before any data it
+will be read on. It does not re-score Y1, and it does not retire A1 to A7. Both results go to the
+owner side by side.
+
+**Simulation (fixed now).**
+
+- **Gate.** The #286 gate exactly as `required_sample` and `homogeneity_lower_bound` implement it,
+  with the defaults (theta 0.9, alpha 0.05, max_dissent 1).
+- **Labeler.** The ground-truth label is the labeler's answer (oracle).
+- **Failures.** A cluster that fails the gate, and every item in a cluster smaller than its required
+  sample, is labelled item by item (one decision each).
+- **Same rules for every arm.** The loop's own recursion is not simulated. It would help every arm,
+  and its effect is a later measurement.
+- **A second row**, reported but not barred: a labeler that answers wrong independently with
+  probability 0.10.
+- **Arms:**
+  - IVF, the incumbent;
+  - the detector key alone (one cluster per key), the trivial arm;
+  - within-key average linkage at the calibration-chosen cut, using section 6's operating-point
+    rule unchanged.
+
+**Metrics.**
+
+- U1 = labeler decisions / items in the pool.
+- U2 = precision of propagated labels (items whose class came from a passing cluster, not from being
+  asked).
+- U3 = share of items labelled by propagation.
+- U2 restricted to open-set items.
+
+**Bars**, on the held-out half of the data in 0.4 (Z2), fold 1, read once:
+
+| ID | Bar | Why |
+|---|---|---|
+| U-a | U2 >= 0.95 | The plan's propagated-label bar (plan 8.2), the audit floor the loop is held to |
+| U-b | U1 <= 0.5 x IVF's U1 on the same pool | "At least twice the reach per decision": A4's intent, measured on what it protects. The factor is the one the owner already accepted, not a new number |
+| U-c | U1 <= 0.9 x the detector-key-alone arm's U1, at U2 >= 0.95 for both | If gating each detector key directly is as cheap and as precise, the clustering is not needed for the loop. The 10 % margin is the smallest effort difference worth a method change; if this fails, that simpler design is the recommendation |
+| U-d | U2 on open-set items >= 0.90 | The gate's own guarantee (theta 0.9). Lower means the partition defeats the gate on the crops A6 flagged |
+
+Human review time is reported as decisions, not minutes. No seconds-per-decision figure has been
+measured. If the owner wants minutes, time 20 contact sheets in G3 and multiply; that is not a bar.
+
+**Rule.** If U-a to U-d pass, the owner decides on adoption with A1 to A7 (failed on A4 and A6)
+shown beside them. If any fails, the within-key method is not adopted for the loop, and the result
+says which simpler design wins: IVF, or one gate per detector key.
+
+### 0.3 Second-stage merge with the judge or a person
+
+The open question is whether recall can be recovered without giving up precision. A merge stage only
+pays through the loop's decision cost: each merged pair saves one roughly 35-answer gate sample, at
+the price of one pair check. The candidate design differs from X4 (cross-key novelty suggestions,
+which failed): it stays **inside one key**.
+
+- Propose the next merges of the key's own dendrogram above the cut.
+- Check each on a pair sheet: medoids of the two clusters, "same kind of object?".
+- Accept a merge only on a judge "same", or a person's.
+
+The judge evidence supports exactly this one-sided use. On COCO crops Haiku's pair false-"same" rate
+is 0.030 and its pair kappa 0.821. On the Open Images vehicle labels its false-"same" rate is 0.015,
+but its "different" is unreliable (0.765 of clean sheets rejected; pair kappa 0.611). So a judge
+"same" is trustworthy. A judge "different" only leaves the clusters apart, which is the safe default.
+
+**Measured in Z3 (0.4); not built until then.**
+
+### 0.4 Next experiments, cheapest first
+
+| ID | What | Data | Use or bar | Cost |
+|---|---|---|---|---|
+| Z1 | The 0.2 simulator, tested by hand-computed cases, run on the pinned set and Y1 | Already read; **direction and code check only**, never acceptance | Shows whether clusters on 3,000-crop sets are ever larger than the about 35 a gate needs (mostly person). If not, small sets cannot measure U1 and Z2 must be large | minutes, CPU |
+| Z2 | **Fresh vehicle-heavy public set**: Open Images V7 validation images with the vehicle classes and the animals, disjoint from every earlier pin (file and content hash), about 8,000 images so that keys are large enough for the gate; split by source image. One ingest on GPU 2 (own `-p` name) | New | **U-a to U-d once**; A1 to A7 reported beside them | about 10 min ingest plus CPU |
+| Z3 | Judge-gated within-key merge, simulated with ground truth and the measured E0 pair rates (COCO pairs: false "same" 0.030, accuracy 0.910 on decided rows, 6.9 % unsure) | Z2's calibration half for the design, held-out half once | Adopt only if, at the same cut, U1 including the pair checks falls by >= 10 % and U2 stays >= 0.95 | CPU |
+| X8 | **Set P judge** at class level ("same kind of object as cell 1?"), member-weighted sheets as in section 7. Candidate cuts from Y3, in order: person 0.30 then 0.25; motorcycle 0.25 then 0.20; car 0.346 then 0.30; truck 0.25 | Set P, numbers only | Section 7 bar (Wilson 95 % lower bound >= 0.85 on >= 35 sheets per key and cut). Valid only for a judge that passed E0 at class level | judge budget |
+
+How X8 is judged:
+
+- **Which judge.** Haiku passed E0 at class level on COCO crops (pair kappa 0.82, flag precision
+  0.83). It failed at vehicle-type level (0.61, 0.45). The question X8 asks inside a key is class
+  level, so the COCO result is the relevant one.
+- **Bias.** The judge's "different" over-fires on vehicles, so its purity estimate on vehicle keys is
+  biased low. A pass is trustworthy; a fail on a vehicle key goes to a person (20-sheet spot check),
+  not to a lower cut.
+- **Set P sheets.** They go to the local VLM first (its E0 is running on GPU 0). Haiku sees set P
+  only on an owner-approved sample (O3).
+- **Feeding the use case.** X8's purities per cut also feed the gate pass rate in the use-case
+  reading for set P.
+
+**Order:** Z1, then Z2 and Z3 (one GPU 2 ingest), and X8 when the local-VLM E0 finishes. Nothing here
+changes product code.
+
+### 0.5 Wave plan
+
+1. **W0d: done.** Y1 failed, Y2 failed, Y3 gave sizes, Y4 failed.
+2. **W0e (new): Z1 to Z3.** CPU plus one GPU 2 ingest. Gate: the 0.2 bars.
+3. **W8:** finish the local-VLM E0, then X8 on set P.
+4. **WC.** The branch continues with the parts section 8 lists as sound now: region-box id sort,
+   within-key method, cut store and per-key refusal, tests.
+   - The region-box sort is an order-independence bug fix that does not depend on any of this. It may
+     merge on its own with the owner's yes.
+   - The rest merges only if W0e passes 0.2 and the owner accepts it with the A4 and A6 failures shown.
+     Stable ids (#343) stay a prerequisite for any default change.
+   - If W0e fails, the branch is reduced to the region-box fix, and the method is deleted. No dead
+     code is kept.
+5. **WB can start now on GPU 2.** It does not depend on the clustering default.
+   - Its preprocessing, model, TTA and face rows use method-independent neighbour metrics (P@k by
+     stratum).
+   - Its cluster rows report both the incumbent IVF and the within-key partition on the fresh sets.
+   - The crop post-processing rows stay closed (X3).
+   - It runs one job at a time under the GPU 2 lock, and never at the same time as Z2's ingest.
 
 ## 1. Decision
 
