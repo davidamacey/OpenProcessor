@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dim text and the labels on filled buttons and the LIVE badge meet WCAG AA contrast.
 - The blocked-start screen no longer repeats its title as the reason.
 - A project that is still building opens by itself once it becomes selectable.
+- `/projects` no longer probes a combine job id on every load (a logged 404); "Combine projects…" is always offered because the backend always mounts the combine router.
 - The docs screenshot seeding binds a project (`--project`) like the other scripts.
 
 ## [0.6.0] - 2026-10-16

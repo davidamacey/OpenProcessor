@@ -9,7 +9,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import Page from './+page.svelte';
 import { API_PREFIX } from '$lib/api';
-import { combineAvailability } from '$lib/combine/combineAvailability.svelte';
 import { projectPauseStore } from '$stores/projectPause.svelte';
 import { projectsStore } from '$stores/projects.svelte';
 import { toastStore } from '$stores/toast.svelte';
@@ -52,7 +51,6 @@ let writes: { method: string; url: string; body: unknown }[] = [];
 /** The served per-project pause flag, carried on the `GET /projects` rows. */
 let paused: Record<string, boolean> = {};
 /** What `GET /projects/combine/<sentinel>` answers (the P4 gate probe). */
-let combineMounted = false;
 let combineProbes = 0;
 /** Served `limits.cloneable_axes` override (null = the fixture's own). */
 let cloneAxes: string[] | null = null;
@@ -118,10 +116,8 @@ beforeEach(() => {
   handler = () => undefined;
   writes = [];
   paused = {};
-  combineMounted = false;
   combineProbes = 0;
   cloneAxes = null;
-  combineAvailability.reset();
   projectPauseStore.reset();
   toastStore.toasts = [];
   vi.stubGlobal(
@@ -144,12 +140,7 @@ beforeEach(() => {
       }
       if (method === 'GET' && /\/projects\/combine\/[^/?]+$/.test(u)) {
         combineProbes += 1;
-        return combineMounted
-          ? json(
-              { detail: { error: 'combine_not_found', message: 'no combine job' } },
-              404,
-            )
-          : json({ detail: 'Not Found' }, 404);
+        return json({ detail: 'Not Found' }, 404);
       }
       writes.push({
         method,
@@ -495,21 +486,11 @@ describe('pipeline pause', () => {
 });
 
 describe('combine entry points (P4)', () => {
-  it('offers Combine projects only when the combine router answers the probe', async () => {
-    await render();
-    await vi.waitFor(() => expect(combineProbes).toBe(1));
-    await vi.waitFor(() => expect(combineAvailability.available).toBe(false));
-    flushSync();
-    expect(q('projects-combine')).toBeNull();
-    unmount(instance!);
-    instance = null;
-    target.remove();
-
-    combineMounted = true;
-    combineAvailability.reset();
+  it('offers Combine projects without probing a combine job id', async () => {
     await render();
     await vi.waitFor(() => expect(q('projects-combine')).not.toBeNull());
     expect(q('projects-combine')!.getAttribute('href')).toBe('/projects/combine');
+    expect(combineProbes).toBe(0);
   });
 
   it('links a project made by a combine to its job and labels its delete "Undo combine"', async () => {

@@ -10,7 +10,6 @@
   import { resolve } from '$app/paths';
   import ConfirmDialog from '$components/ConfirmDialog.svelte';
   import DeleteProjectDialog from '$components/projects/DeleteProjectDialog.svelte';
-  import { combineAvailability } from '$lib/combine/combineAvailability.svelte';
   import { createCombineJob } from '$lib/combine/combineJobController.svelte';
   import { combineLabel, reportCell } from '$lib/combine/combineText';
   import { formatCount } from '$lib/format/count';
@@ -35,10 +34,6 @@
   const admin = createProjectsAdmin();
 
   $effect(() => {
-    void combineAvailability.init();
-  });
-  $effect(() => {
-    if (combineAvailability.available !== true) return;
     const j = job;
     j.start();
     return () => j.stop();
@@ -90,11 +85,7 @@
   </header>
 
   <main class="mx-auto w-full max-w-4xl flex-1 space-y-4 p-4">
-    {#if combineAvailability.available === false}
-      <p class="text-sm text-zinc-400" data-testid="combine-unavailable">
-        Combining projects isn't available on this backend.
-      </p>
-    {:else if job.notFound}
+    {#if job.notFound}
       <p class="text-sm text-red-300" data-testid="combine-job-not-found">
         {job.notFound}
       </p>
