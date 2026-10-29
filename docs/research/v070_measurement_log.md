@@ -652,3 +652,148 @@ accepts a `[0, 4]` boxes tensor.
 After the runs the three model files were restored (diff against the backup identical), the model reloaded with
 the original two inputs, the overlays removed, the API and four workers recreated on the v0.6.0 images with no
 branch mounts, and the three `lw-` projects deleted (default, cocotest, hiresp and nas20k untouched).
+
+# Live tuning and parity of the embed pass, region vectors and the worker region stage (2026-10-28, night)
+
+Same test stack (compose project `optest1`, v0.6.0 images, Triton on one RTX A6000, 32 API workers). Branch
+`perf/v070-259c-tuning` (release/0.7.0 plus the change below) bind-mounted read-only over the API and the four
+curation workers; the three `gpu_image_prep` files of the branch copied into the model repository (two instances,
+inputs `jpeg`, `embed_crops`, `boxes`) and the model reloaded through Triton model control. Photos: set P (private;
+16 to 26 MP baseline JPEGs), hard links on NVMe, read through the source alias. Fresh throw-away projects with the
+prefix `lx-`, deleted at the end. GPU util = `nvidia-smi` of the Triton card every 500 ms over the pass (the 5 s
+samples of section F read 14 points lower for the same pass, they alias the pass). API CPU = cgroup `usage_usec` of
+the API container over the pass divided by images. The host was shared: the 1-minute load average was 4 to 10 in
+every run below except the final group (G5), which ran at 20 to 80 because other users' jobs started.
+
+## G1. #360 live parity: region vectors, GPU route against CPU route (project of 1,499 photos, 3,559 crops, 5,339 synthetic accepted boxes)
+
+The synthetic boxes are those of F2 (the first inset 15 percent in the item box, the second at the top-left half on
+every second item), written into the items; the box geometry is identical for both routes. CPU route =
+`OP_INGEST_GPU_DECODE=0` on the API. 3 passes per route, every vector rewritten (parts crop, frame, region).
+
+| Route | img/s (3 runs) | API CPU-s / image | Load avg during |
+|---|---|---|---|
+| GPU | 14.61, 12.91, 12.47 | 0.0453, 0.0482, 0.0493 | 5.5 to 6.4 |
+| CPU, no round trip (branch) | 7.65, 7.67, 7.71 | 0.571, 0.574, 0.575 | 7.2 to 8.2 |
+
+Region vector cosine, GPU pass against CPU pass (pass k against pass k; the 3 pairs agree to 5 digits):
+
+| Set | n | Min | p01 | Median |
+|---|---|---|---|---|
+| All boxes (pass 1 / 2 / 3) | 5,339 | 0.98345 / 0.98348 / 0.98344 | 0.99699 / 0.99698 / 0.99698 | 0.999275 / 0.999274 / 0.999274 |
+| Area under 2 percent of the frame | 1,235 | 0.98345 | 0.99540 | 0.999044 |
+| 2 to 5 percent | 1,235 | 0.99540 | 0.99736 | 0.999245 |
+| 5 to 10 percent | 1,352 | 0.99329 | 0.99802 | 0.999359 |
+| 10 to 30 percent | 1,469 | 0.99601 | 0.99788 | 0.999366 |
+| Over 30 percent | 48 | 0.99816 | 0.99834 | 0.999286 |
+| GPU pass 1 against GPU pass 2 (repeat) | 5,339 | 0.99986 | 0.99997 | 0.999997 |
+| CPU pass 1 against CPU pass 2 (repeat) | 5,339 | 0.99964 | 0.99991 | 0.999997 |
+
+Gate of #360 (p01 at least 0.99): **met**, p01 0.9970 overall and at least 0.9954 in every area bucket (F2 before the
+fix: p01 0.886, median 0.965). Two boxes are under 0.99 (min 0.9835, both under 2 percent of the frame).
+
+**Worker-written vector against the CPU pass** (the detection worker's region stage, `embed_written_regions`, run
+in a worker container on the 1,208 items of 500 photos with 2 accepted boxes each, 2,416 boxes, the same box
+geometry stored in the project; then one CPU-route pass and one GPU-route pass over the project). Branch worker
+against CPU pass: n 2,416, min 0.99937, p01 0.99992, median 0.999997 (3 worker runs agree). Branch worker against
+GPU pass: min 0.99110, p01 0.99649, median 0.999229. v0.6.0 worker (item-crop JPEG round trip) against the CPU
+pass: min 0.811, p01 0.872, median 0.940. The branch worker and the CPU pass cut and embed the same pixels; the
+v0.6.0 worker is where the old divergence lived.
+
+## G2. Worker region-stage cost (#360)
+
+Not a region-profile ingest: the stack has no segmenter and the one detector leg that loads here (the demo
+car model) finds no box inside the set-P item crops (profile `detector_model` tried: the YOLO end-to-end model is
+rejected by the region detector for its output names, the non-end-to-end one has no engine in the model
+repository, the demo model timed out and found nothing; every item ended `no_region_box`). The stage is therefore
+measured directly: `embed_written_regions` (branch) and its v0.6.0 version on 1,208 items of 500 set-P photos with
+2 accepted boxes each, in flushes of 32 items as the worker does, a worker container each, the crop JPEGs from the
+crop cache as the worker has them, one warm-up flush excluded, 3 runs each (load average 4 to 6). This is the
+embed stage alone; the detector, the verify call and the write are not in it.
+
+| Code | Wall s / 1,208 items (3 runs) | Wall ms / item | Worker CPU-s / item |
+|---|---|---|---|
+| v0.6.0 (box cut from the item-crop JPEG) | 103.1, 103.9, 103.4 | 85.4, 86.0, 85.6 | 0.0770, 0.0776, 0.0773 |
+| branch (box cut from the decoded source) | 266.2, 266.4, 263.0 | 220.4, 220.5, 217.7 | 0.2121, 0.2122, 0.2094 |
+
+The branch costs 0.135 CPU-s and 133 ms more per item (2.7 times): each item decodes its full 16 to 26 MP source
+once (about 0.13 CPU-s), and a photo with 2.4 items is decoded 2.4 times. The stage decodes the items of a flush
+one after another (`_task_crops` awaits each in turn), so a flush of 32 items takes about 7 s of wall in that
+stage. Whether that is a problem depends on the rest of the worker: the stage runs once per flush after the box
+list is final, and in this stack's profile runs the worker's measured end-to-end rate was about 5 items/s
+(`session_avg_cps` 4.9 in the logs of the failed detector attempt), the same order as the stage alone (4.5
+items/s). On a worker that is bound by the segmenter and the VLM verify call the stage adds a fraction; on a
+detector-only profile on large photos it becomes the limit. Not changed here; options if it matters: decode the
+items of a flush concurrently on the CPU pool with a bound of a few photos (the decoded 21 MP frame is 63 MB), or
+decode each photo once for all its items.
+
+## G3. #259 tuning: in-flight bound and chunk barrier (project of 1,499 photos, 3,559 crops, no region boxes; parts crop, frame and region; GPU route)
+
+Each configuration: API recreated, one warm-up pass, then 3 passes. `_IMAGES_IN_FLIGHT` is the photos embedded at
+once, `CHUNK` the photos per read/embed/write unit, window = chunks embedded at once (the change below).
+
+| Configuration | img/s (3 runs) | Median | API CPU-s / image | GPU util % (500 ms mean) | Load avg during |
+|---|---|---|---|---|---|
+| in flight 16, chunk 64 (shipped) | 27.66, 27.96, 27.63 | 27.66 | 0.0325, 0.0318, 0.0320 | 48.3 to 49.1 | 6.0 to 7.8 |
+| in flight 16, chunk 64, window 1 (after the refactor) | 27.87, 27.84, 28.03 | 27.87 | 0.0319, 0.0320, 0.0309 | 47.4 to 50.0 | 7.2 to 8.0 |
+| in flight 24 | 27.06, 27.84, 27.55 | 27.55 | 0.0319, 0.0320, 0.0318 | 46.5 to 47.0 | 5.5 to 6.5 |
+| in flight 32 | 27.24, 27.62, 26.56 | 27.24 | 0.0328, 0.0321, 0.0344 | 45.8 to 46.2 | 5.4 to 7.2 |
+| in flight 48 | 25.49, 26.43, 25.91 | 25.91 | 0.0355, 0.0342, 0.0336 | 42.2 to 44.8 | 5.6 to 6.2 |
+| in flight 16, chunk 256 | 32.91, 33.19, 33.10 | 33.10 | 0.0293, 0.0295, 0.0300 | 55.3 to 59.0 | 6.3 to 7.2 |
+| in flight 16, one chunk of all 1,499 (no barrier) | 34.59, 33.23, 34.85 | 34.59 | 0.0295, 0.0294, 0.0289 | 58.1 to 60.9 | 6.7 to 8.7 |
+| in flight 16, chunk 64, **window 2** | 51.12, 48.16, 51.84 | 51.12 | 0.0250, 0.0260, 0.0259 | 84.5 to 92.1 | 6.8 to 7.7 |
+| in flight 16, chunk 64, window 3 | 51.47, 51.57, 51.19 | 51.47 | 0.0265, 0.0251, 0.0258 | 89.8 to 91.2 | 8.9 to 10.0 |
+| in flight 24, chunk 64, window 2 | 51.01, 50.48, 50.36 | 50.48 | 0.0264, 0.0272, 0.0263 | 83.8 to 85.1 | 8.5 |
+
+More photos in flight do not help and 48 hurts (a bigger tail at every chunk end); the limit is the barrier. The
+single event-loop thread of the job was 42 percent busy during a pass (per-thread CPU from `/proc`, every other
+thread about 1 percent), so it is not CPU bound. Overlapping two chunks gives 1.85 times the images per second,
+more than removing the barrier by one big chunk (1.25 times), because the next chunk's reads and the previous
+chunk's bulk writes now also overlap with the photos being decoded. A third chunk adds nothing (51.5 against 51.1).
+
+**Change kept** (#259): `EMBED_CHUNKS_IN_FLIGHT = 2` in `src/services/curation/reprocess_images.py`: a pure
+`embed` pass runs two chunks at once under one shared in-flight bound of 16 photos (`new_image_gate`,
+`reembed_items(..., gate=)`). Progress is reported in chunk order, a failed chunk fails only its images, a cancel
+waits for the chunks already started, a cancelled job cancels the chunks in flight, and a pass that also runs
+`detect` or `open_vocab` is unchanged (one chunk at a time). Gain 27.7 to 51.1 img/s (+85 percent, bar +10 percent),
+API CPU per image 0.032 to 0.025 (bar: not above 0.047). Tests (failing before the change): the next chunk embeds
+while the previous one is held, a cancelled job leaves no chunk running, two calls share one in-flight bound.
+
+## G4. Results identical
+
+Same 1,499 photos, crop, frame and region vectors, the window-1 code against the window-2 code (3 passes) and the
+region vectors of the earlier window-1 passes of G1 against 3 window-2 passes: the per-pass counters (`items`,
+`crop_written`, `frame_written`, `region_written`, `queued`, `failed`) are identical string for string; crop vectors
+n 3,559: min 0.99963 to 0.99976, p01 0.99993, median 0.9999965; frame n 1,499: min 0.99987, median 0.9999964; region
+vectors n 5,339: min 0.99985, p01 0.99997, median 0.9999967 (the repeat-pass noise of the GPU route, G1). Every
+image and item id appears in the same order in the dumps.
+
+## G5. Final configuration, set P 1,499 photos, with and without region boxes (host load 20 to 80, other users)
+
+| Project | img/s (3 runs) | API CPU-s / image | GPU util % (500 ms) | `op_reprocess_decode_total` |
+|---|---|---|---|---|
+| Crop + frame + region, no region boxes | 48.05, 47.84, 47.98 | 0.0230, 0.0244, 0.0231 | 81.6 to 82.8 | gpu +1,497 per pass, cpu_small +3 |
+| Same with 5,339 region boxes (3.6 vectors per photo more) | 22.68, 21.88, 20.45 | 0.0355, 0.0357, 0.0377 | 68.4 to 77.5 | (all gpu) |
+
+The box-heavy pass was 12.5 to 14.6 img/s before (G1) and is 1.6 times faster now; 0.0355 to 0.0377 CPU-s per image
+is under the 0.047 bar (F1 measured 0.0482 for the box-heavy pass before the change). The runs of this group are
+under heavy foreign load and are lower bounds. A COCO re-run was not made (all COCO photos take the unchanged CPU
+route below the 3 MP gate, but the chunk window also applies to them; not measured).
+
+After the helper-class refactor that the complexity ratchet asked for, the final code was re-run on the same project (load
+average 13 to 18, other users): 42.12, 47.74, 51.48 img/s, API CPU 0.0262, 0.0258, 0.0246 CPU-s per image, GPU util 74.8,
+82.0, 88.6 percent.
+
+## G6. Findings
+
+1. The 24 "missing" region vectors seen in one first GPU dump were a read before the index refresh (a second pass
+   and dump with a refresh found 2,416 of 2,416); not a defect.
+2. Per-pass GPU utilisation from 5 s `nvidia-smi` samples (F1) under-reads by about 14 points; use 500 ms samples.
+3. The worker's per-item region embedding now decodes the full source per item (G2); see the options there.
+4. The region detector rejects a Triton model whose output is not named `output0` (the YOLO end-to-end models),
+   and a profile pointing at it activates without error; every item then ends `no_region_box` after one logged
+   exception per item. Not changed here.
+
+#259 acceptance bars on this stack (set P, 21 MP): at least 20 img/s (51, met), API CPU at most 0.047 (0.025,
+met), vectors against ingest p01 at least 0.995 (0.9999, F2) and the encoder busy above 80 percent (85 to 92
+percent, met). #360: region parity p01 0.997, worker and CPU pass agree at 0.999997.
