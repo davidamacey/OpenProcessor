@@ -138,6 +138,11 @@ async def scroll_box_rows(
 
     A box whose vector is missing or stale (the box moved since it was
     computed) is not a row: the backfill / worker re-embeds it first.
+
+    Rows come back sorted by (crop id, box id), not in scroll order: the scroll
+    order is the shard and ingest order, and a k-means fit picks its start by row
+    position, so the same boxes in another order gave another partition (ARI 0.553
+    on the 3,000-item set). The fit is a function of the box set.
     """
     F = get_region_fields()
     query = {
@@ -185,6 +190,7 @@ async def scroll_box_rows(
                 await client.clear_scroll(scroll_id=scroll_id)
             except Exception as exc:
                 logger.warning('curation_clear_scroll_failed', error=str(exc))
+    rows.sort(key=lambda r: (r.crop_id, r.box_id))
     return rows
 
 
