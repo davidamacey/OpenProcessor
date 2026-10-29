@@ -20,7 +20,7 @@ one of them touches real clustering:
 fetched in (1) directly — that's also what makes the AHC
 ``distance_threshold=0.25`` cosine cut dimensionally correct against
 the source vectors, not a reduced projection. The only caller of the
-UMAP-reduce path is ``POST /curation/cluster/umap/rebuild``
+UMAP-reduce path is ``POST /curation/projects/{project}/cluster/umap/rebuild``
 (:mod:`src.routers.curation.umap`), which exists purely to feed the
 labeler's 2D/3D scatter visualization. Any design note claiming "UMAP
 feeds the clustering pipeline" is wrong; correct it if you find one.
@@ -205,7 +205,7 @@ async def get_or_fit_reducer(
 async def umap_rebuild(client: AsyncOpenSearch) -> dict[str, Any]:
     """Force a UMAP refit over the current residual pool.
 
-    Exposed via ``POST /curation/cluster/umap/rebuild``. This is
+    Exposed via ``POST /curation/projects/{project}/cluster/umap/rebuild``. This is
     visualization-only -- it refits the manifold cache the labeler's
     scatter view reads, and has no effect on the next auto-label run.
     AHC/IVF cluster the raw 1024-d embeddings directly and never
