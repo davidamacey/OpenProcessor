@@ -26,7 +26,9 @@ FIELD = 'pe_embedding'
 CLASS_FIELD = 'detector_class_name'
 
 
-def export(url: str, index: str, page: int) -> tuple[np.ndarray, np.ndarray]:
+def export(url: str, index: str, page: int) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    """Vectors, class names and document ids (the crop ids), in point-in-time order."""
+    ids: list[str] = []
     vectors: list[np.ndarray] = []
     classes: list[str] = []
     with httpx.Client(
@@ -51,13 +53,14 @@ def export(url: str, index: str, page: int) -> tuple[np.ndarray, np.ndarray]:
                 if not hits:
                     break
                 vectors.append(np.array([h['_source'][FIELD] for h in hits], dtype=np.float32))
+                ids.extend(str(h['_id']) for h in hits)
                 classes.extend(str(h['_source'].get(CLASS_FIELD) or 'unknown') for h in hits)
                 body['search_after'] = hits[-1]['sort']
         finally:
             http.request(
                 'DELETE', '/_search/point_in_time', content=orjson.dumps({'pit_id': pit['pit_id']})
             )
-    return np.vstack(vectors), np.asarray(classes)
+    return np.vstack(vectors), np.asarray(classes), ids
 
 
 def main() -> int:
@@ -69,7 +72,7 @@ def main() -> int:
     ap.add_argument('--page', type=int, default=2000)
     args = ap.parse_args()
     t0 = time.perf_counter()
-    vectors, classes = export(args.opensearch_url, args.index, args.page)
+    vectors, classes, _ = export(args.opensearch_url, args.index, args.page)
     vectors /= np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), 1e-12)
     order = np.random.default_rng(args.seed).permutation(len(vectors))
     args.out.parent.mkdir(parents=True, exist_ok=True)
