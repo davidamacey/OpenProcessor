@@ -95,3 +95,15 @@ _.read_liveness  # reads back the heartbeat file write_liveness wrote; the per-p
 _._guard_condition_matches  # plain-Python twin of the painless guard, the oracle the parity tests compare against
 _.CHOICE_SOURCES  # the choices_from table the config vocabulary contract test checks against the vocabulary
 _.ALL_STEPS  # the registry the next-steps completeness test enumerates
+
+# Auto-label loop (#286): domain rules built and tested before the driver that calls them (stage S6).
+# Delete each name here in the commit that adds its first production caller.
+_.required_sample  # src/domain/loop_stats.py, the loop gate's sample size
+_.homogeneity_lower_bound  # src/domain/loop_stats.py, the loop's reported node bound
+_.wilson_lower_bound  # src/domain/loop_stats.py, the audit pause rule
+_.root_path  # src/domain/loop_tree.py, node path grammar
+_.child_path  # src/domain/loop_tree.py, node path grammar
+_.path_level  # src/domain/loop_tree.py, node path grammar
+_.parent_path  # src/domain/loop_tree.py, node path grammar
+_.child_sample  # src/domain/loop_tree.py, seeded child draw with answer reuse
+_.best_first_key  # src/domain/loop_tree.py, the scheduler's priority order
