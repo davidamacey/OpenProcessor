@@ -270,9 +270,9 @@
            about. -->
       <span
         class="rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide"
-        class:bg-emerald-500={connected && !error}
+        class:bg-emerald-700={connected && !error}
         class:text-emerald-50={connected && !error}
-        class:bg-amber-600={connected && !!error}
+        class:bg-amber-700={connected && !!error}
         class:text-amber-50={connected && !!error}
         class:bg-zinc-700={!connected}
         class:text-zinc-300={!connected}

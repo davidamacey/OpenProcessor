@@ -46,3 +46,17 @@ describe('dim text contrast', () => {
     expect(contrast(themeColor(name), CARD_SURFACE)).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+describe('filled button contrast', () => {
+  it.each(['btn-primary-bg', 'btn-danger-bg'])('white on --%s reaches 4.5:1', (name) => {
+    const m = css.match(new RegExp(`--${name}:\\s*(\\d+) (\\d+) (\\d+);`));
+    expect(m, `app.css must define --${name}`).not.toBeNull();
+    const hex =
+      '#' +
+      m!
+        .slice(1, 4)
+        .map((n) => Number(n).toString(16).padStart(2, '0'))
+        .join('');
+    expect(contrast('#ffffff', hex)).toBeGreaterThanOrEqual(4.5);
+  });
+});
