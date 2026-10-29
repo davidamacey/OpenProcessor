@@ -1,391 +1,353 @@
-# Cluster configuration decision after the 3,000-item baseline
+# Cluster configuration decision after the 3,000-item baseline (revised after W0c)
 
-Status: decision note, 2026-10-29. No product code changed. Written on branch
-`docs/cluster-config-decision` from `feat/cluster-w0b-baseline` at `619a3012`. Inputs:
-[cluster_config_baseline.md](cluster_config_baseline.md) (E1, E5 and diagnostics on the 3,000-item
-set), [cluster_eval_baseline.md](cluster_eval_baseline.md) (production baselines A and B),
-[`cluster_config_baseline_3000.json`](../benchmarks/cluster_config_baseline_3000.json), the
-consolidated research (`git show docs/cluster-methods-review:docs/research/clustering_research_consolidated.md`),
-the program plan (`git show docs/cluster-search-plan:docs/design/cluster_search_makemodel_plan.md`),
-the raw W0b outputs (`artifacts_local/cluster_search/w0b/e1_3000/`, gitignored) and the clustering
-code under `src/services/curation/clustering/`.
+Status: decision note, first written 2026-10-29 and revised the same day after the CPU experiments
+of wave W0c ([cluster_config_experiments.md](cluster_config_experiments.md), branch
+`feat/cluster-w0c-experiments` at `602dbdb7`, merged into this branch). No product code changed.
 
-Hardware for the new checks in this note: CPU only, shared host, 1-minute load average 50 to 60, so
-nothing here is a timing. The scorer is deterministic.
+Inputs:
+
+- [cluster_config_baseline.md](cluster_config_baseline.md): E1, E5 and the diagnostics on the
+  3,000-item set.
+- [cluster_eval_baseline.md](cluster_eval_baseline.md): the production baselines.
+- [`cluster_config_baseline_3000.json`](../benchmarks/cluster_config_baseline_3000.json).
+- The consolidated research:
+  `git show docs/cluster-methods-review:docs/research/clustering_research_consolidated.md`.
+- The program plan: `git show docs/cluster-search-plan:docs/design/cluster_search_makemodel_plan.md`.
+- The raw W0b and W0c outputs (`artifacts_local/cluster_search/w0b/`, `.../w0c/`, gitignored).
+- The clustering code under `src/services/curation/clustering/`.
 
 Naming: the consolidated note numbers the kinds K1 whole image, K2 crops, K3 faces, K4
 fine-grained; the plan numbers K3 region boxes and K4 faces. This note uses names, not numbers.
 
-## 1. Decision in one paragraph
+## 1. Decision
 
-Change the residual-pool partition from global IVF cells (K = min(512, n // 6)) to **average-linkage
-AHC inside each detector class**: the partition key is the normalized `detector_class_name`, one
-cosine-distance cut per embedding model and project, chosen on a calibration split. Keep IVF only as
-an index. Add no automatic cross-class merge stage. Instead, give each within-class cluster an
-explicit **novel-candidate state** for review, set when it is far from the class's own validated
-examples. Do not implement it yet. First run the cheap experiments in section 6 on the 3,000-item
-set, and the set P cut-transfer check once the judge has passed its agreement run (E0). Then build
-it in its own wave (section 8). The evidence is one public set and one held-out half. It also leans
-on a detector trained on the same label space as most of that set. Section 9 lists what that does
-not prove.
+**The design stays: average-linkage AHC inside each detector class.** W0c supports it on public data:
 
-## 2. What the evidence says, including three checks added here
+- Held-out BCubed precision is 0.934 to 0.953 overall and at least 0.914 on non-person crops, on
+  every one of four splits and both folds.
+- BCubed recall is 1.9 to 2.2 times IVF's.
+- Permutation ARI is 1.000.
+- Dense linkage fits the largest set P key: 40,016 crops in 172 s and 12.7 GiB.
 
-The W0b result as reported (held-out half, cut chosen on the calibration half):
+**Seven things change from the first version of this note:**
 
-- IVF now: pair precision 0.734, recall 0.029.
-- Global average linkage: 0.40 at 1.7 times that recall and 0.26 at 9 times. It never reaches IVF's
-  precision at a higher recall.
-- Leiden CPM: beats global average linkage only at recall 0.03 to 0.07 (0.64 to 0.79). It never
-  reaches recall 0.1, leaves 4 to 11 % of crops unassigned, and its ARI across seeds and row orders
-  is 0.64 to 0.69.
-- Within the detector class, on the low-confidence subsets: held-out precision 0.956 to 0.969,
-  against 0.14 to 0.23 for the global cut.
+1. **The cut is per (embedding model, field, project, detector key)**, not per model. The public cut
+   0.346 does not carry to set P: there it puts 76.9 % of the person key and 95.3 % of the motorcycle
+   key into one cluster. Each key's cut, and where the cut comes from, is recorded with the run. A key
+   with no valid cut is refused, not clustered with another key's or model's cut. Set P has no
+   validated items, so its per-key cuts come from the judge (X8) or from a label-free rule (Y2). It
+   gets no default.
+2. **Cluster size is not a quality bar.** A 30,000-crop cluster inside a person key can be correct at
+   class level. Size and the shape of the dendrogram select what the judge looks at (Y3). The cut is
+   chosen by judged purity (X8).
+3. **No different linkage for dense keys, and no automatic split by size.** The set P result is a
+   shift in distance scale; set P's vectors are tighter (mean random-pair cosine 0.63 against 0.46).
+   A per-key cut addresses that. No evidence favours another linkage: complete linkage is killed, and
+   Ward was never measured at class level. The dendrogram already gives a recursive split. It is kept
+   for one use: splitting a cluster that the loop's sampled gate rejects. Whether that works is Y4.
+   It is not an automatic size rule.
+4. **Dropped:** the novel-candidate state and the cross-class merge suggestions (X4 failed: AUROC
+   0.84 to 0.85 on the sheep key, no flag precision reaching 0.80, top-10 suggestion precision 0.3
+   to 0.5). Open-set crops stay in their detector's bucket. The loop's sampled gate with an
+   independent labeler (VLM or person) is the only path that renames them.
+5. **No ingest-time assignment in the first version** (X6: 0.946 to 0.948 against the 0.95 bar).
+   New items stay unassigned until the next refit. A refit also moves the partition (ARI 0.65 when
+   20 % of the data is removed), so stable cluster ids must come from membership overlap (#343).
+6. **Representation arms are closed for crops** (X3: whitening, k-reciprocal and DBA all lose
+   precision at matched recall).
+7. **The acceptance bars are corrected (section 6).** They are applied once, to a fresh public set
+   (Y1), because the pinned held-out half has now been read by E1, E5 and W0c and cannot certify a
+   newly chosen operating point.
 
-Reading the raw data for this decision turned up three things the W0b note does not show. All three
-use the same bundle and split. Scripts and logs are in
-`artifacts_local/cluster_search/w0b/decision_checks/` (gitignored; see Reproduce).
+## 2. Evidence (corrected)
 
-**(a) The detector-class agreement figure is understated by a name-format mismatch.** `run.py` (E5
-and the diagnostics' label facts) compares `detector_class_name` (registry slug form, for example
-`traffic_light`) with the ground-truth label in COCO form (`traffic light`) as raw strings. The
-product's one name-equality rule (`normalize_class_name` in `src/utils/class_names.py`) treats them
-as the same class. With that rule:
-
-| Subset | Agreement as reported | Agreement, names normalized | On labels the detector can name |
-|---|---|---|---|
-| all labelled crops (2,950) | 0.755 | **0.820** | 0.954 |
-| confidence < 0.7 (1,282) | 0.729 | **0.810** | 0.932 |
-| confidence < 0.5 (707) | 0.724 | **0.812** | 0.927 |
-
-The real disagreement is about 18 %, not 27 %, and it has two parts:
-
-- **Open set (78 % of it).** 413 of the 530 disagreeing crops are the 12 Open Images animals the
-  COCO detector has no class for (alpaca, camel, fox, goat, kangaroo, lion, owl, penguin, pig,
-  rabbit, squirrel, tiger). The detector files them under bird (85), sheep (84), bear (78), dog (66),
-  cat (48), cow (21) and horse (20).
-- **Closed-set confusion (the other 117).** Mainly truck and car (32), cow and sheep (13), and
-  motorcycle and person (9).
-
-The partitions are unaffected (they group by the slug consistently). Only the reported agreement
-rate and the "73 %" that this task quotes are off. Fixing the comparison is item X0 in section 6.
-
-**(b) Pair metrics on this set mostly measure the person class, and the detector alone already
-scores high on them.**
-
-- Person crops are 28 % of the labelled crops but 78 to 81 % of the same-label pairs in each scored
-  subset.
-- A partition that is nothing but the detector class, with no clustering at all (69 buckets), scores
-  held-out pair precision / recall **0.906 / 0.960**, and BCubed precision / recall / F **0.786 /
-  0.870 / 0.826**. That BCubed precision equals IVF's (0.792), and its recall is 4.7 times IVF's.
-- The E5 within-class row at target recall 0.5 (cut 0.593, held out 0.901 / 0.859) is effectively
-  that bucket partition.
-
-So E5's 0.96 pair precision is mostly the detector's doing. What the clustering itself adds shows
-on BCubed and on the non-person crops:
+Held-out half of the pinned split, fold 1 (cut chosen on calibration). "Non-person" means labelled
+crops whose label is not person. That is one definition for every cell. The first version mixed two
+definitions in three cells (W0c issue 1); the corrected values are below.
 
 | Held-out half (1,494 labelled; 1,084 non-person) | Pair P / R | BCubed P / R / F | Non-person BCubed P / R |
 |---|---|---|---|
 | IVF now (production configuration, refit) | 0.734 / 0.029 | 0.792 / 0.187 / 0.302 | 0.814 / 0.252 |
-| Detector class only (no clustering) | 0.906 / 0.960 | 0.786 / 0.870 / 0.826 | 0.711 / 0.828 |
-| Global average linkage, cut 0.307 | 0.399 / 0.073 | 0.741 / 0.285 / 0.412 | 0.762 / 0.381 |
-| **Within detector class, cut 0.346** (chosen on calibration at target 0.05 and 0.1) | **0.924 / 0.129** | **0.943 / 0.357 / 0.518** | **0.925 / 0.461** |
-| **Within detector class, cut 0.381** (chosen at target 0.2) | **0.919 / 0.241** | **0.920 / 0.457 / 0.611** | **0.895 / 0.561** |
-| Within detector class, cut 0.425 (target 0.3) | 0.906 / 0.312 | not scored | not scored |
+| Detector class only (no clustering) | 0.906 / 0.960 | 0.786 / 0.870 / 0.826 | 0.711 / 0.825 |
+| Global average linkage, cut 0.307 | 0.399 / 0.073 | 0.741 / 0.285 / 0.412 | 0.763 / 0.380 |
+| Within detector class, cut 0.346 (target 0.1) | 0.924 / 0.129 | 0.943 / 0.357 / 0.518 | 0.925 / 0.461 |
+| Within detector class, cut 0.381 (target 0.2) | 0.919 / 0.241 | 0.920 / 0.457 / 0.611 | 0.895 / 0.561 |
+| Within detector class, cut 0.425 (target 0.3) | 0.906 / 0.312 | 0.889 / 0.533 / 0.667 | 0.852 / 0.641 |
 
-Reading the table:
+The committed `class_prior_run.py partition` produces every row (W0c X1).
 
-- **Fold 2 agrees.** Cut chosen on the held-out half and scored on calibration: 0.945 / 0.181 at
-  cut 0.361, and 0.909 / 0.304 at cut 0.425. The chosen cuts stay between 0.35 and 0.43 at every
-  target up to 0.3. The committed `run.py e5 --confidence-cuts 1.01` reproduces every
-  within-class pair cell above.
-- **The gaps hold across subsamples.** Over 300 random halves of the held-out images, BCubed
-  precision ranges 0.805 to 0.864 for IVF, against 0.931 to 0.971 and 0.908 to 0.955 for the two
-  within-class cuts. Pair precision ranges 0.697 to 0.811 for IVF, against 0.868 to 0.968 and 0.840
-  to 0.962. These are spreads, not confidence intervals: BCubed on a smaller set reads high. They
-  show only that the gaps do not close under resampling.
-- **Per stratum** (held-out BCubed precision, IVF against cut 0.346): low resolution 0.803 against
-  0.968 (recall 0.209 against 0.606), mixed scene 0.835 against 0.978, near-duplicate 0.935 against
-  0.972, rare 0.956 against 0.986, similar classes 0.888 against 0.934, elongated more than 2:1 0.895
-  against 0.978. No stratum loses precision.
-- **The clustering's own contribution** is splitting the detector's buckets. On non-person crops,
-  BCubed precision rises from 0.711 (buckets alone) to 0.925, while keeping 1.8 times IVF's recall.
+Facts that still hold from the first version, now reproduced by committed code unless marked:
 
-**(c) The open-set crops behave differently from the closed-set ones, and confidence cannot find
-them.**
+- **Agreement.** Detector-class agreement is 0.820 once names go through `normalize_class_name`
+  (W0c X0; `run.py` now uses it). 78 % of the disagreement is 12 Open Images animals the COCO
+  detector has no class for. On labels it can name, agreement is 0.93 to 0.95.
+- **Person dominance.** Person crops are 28 % of the labelled crops and 81 % of the same-label pairs.
+  Pair metrics alone would reward the detector-only partition, so BCubed and non-person BCubed are
+  the deciding metrics.
+- **Open-set crops** (scratch checks, `artifacts_local/cluster_search/w0b/decision_checks/`):
+  - The hard partition splits 48 % of their same-label pairs, against 3.1 % for labels the detector
+    can name.
+  - Their median detector confidence is 0.801, against 0.759 for correct calls, so 1 minus the
+    confidence finds them with AUROC 0.638.
+  - The crop-level novelty AUROCs reproduce in W0c X4, but the bars on them fail (section 1, item 4).
 
-- **Hard-partition cost.** A hard partition splits only 3.1 % of the same-label held-out pairs among
-  labels the detector can name, but 48.2 % among the open-set labels (4.0 % overall).
-- **Purity.** Inside their (wrong) detector bucket, open-set crops still land in fairly pure
-  sub-clusters at cut 0.381. On average 0.79 of a crop's own cluster shares its label, against 0.94
-  for nameable crops. 4.3 % of open-set crops end up as singletons, against 7.8 % of nameable crops.
-- **Confidence.** The detector is more confident on the open-set crops (median 0.801) than on its
-  correct calls (0.759). Its genuinely confused closed-set calls sit at 0.589. As a score for "this
-  is an unknown class", 1 minus the detector confidence has AUROC 0.638.
-- **Novelty against validated examples.** A score built from same-class examples ranks the open-set
-  crops well: the mean cosine to the 10 nearest calibration-half crops whose label equals the
-  detector class, standing in for validated examples. Per detector class the AUROC is bird 0.986,
-  cat 1.000, cow 0.941, dog 0.998, horse 0.995 and sheep 0.919. Pooled across classes it is 0.852,
-  because the score is not calibrated across classes. These samples are small: bird has 3 own-class
-  query crops, cow 44. Read this as a direction only.
+New since the first version:
 
-## 3. Question 1: the production design change, and what it must not do
+- **The split spread (X9).** Over four splits and both folds, BCubed precision stays at 0.934 to 0.953
+  and non-person precision at 0.914 to 0.946. BCubed recall is 0.304 to 0.382 at the target-0.1 cut.
+- **Set P sizes (X7; numbers only).** The project has 91,184 crops in 37 keys: person 40,016,
+  motorcycle 32,054, car 14,009, truck 2,769. Share of the key in its largest cluster at each cut:
 
-### The change (for a later wave; not implemented here)
+  | Key | 0.346 | 0.30 | 0.25 | 0.20 | 0.15 |
+  |---|---|---|---|---|---|
+  | Person | 76.9 % | 47.5 % | 21.1 % | 7.7 % | 2.0 % |
+  | Motorcycle | 95.3 % | 49.9 % | 41.6 % | 16.8 % | 6.5 % |
 
-1. **Partition key.** The item's `detector_class_name`, normalized with `normalize_class_name`. Never
-   `detector_class_id`: class identity is the name. An item with no detector class gets the explicit
-   key `none`. It is clustered within that key, never dropped and never mixed into a class bucket.
-2. **Method inside each key.** Average-linkage AHC with one cosine-distance cut. The input is sorted
-   by document id (as #372 now does), so the run is a function of the document set (permutation ARI
-   1.000 measured for fixed-cut average linkage).
-3. **The cut** is stored with the run record, together with the embedding model and field
-   (`OP_RESIDUAL_EMBEDDING_FIELD`) and its source:
-   - `default`: the per-model value calibrated on the public set. For PE-Core on this set the
-     calibrated values were 0.35 to 0.38 at operating recall up to 0.2.
-   - `project`: calibrated on the project's own validated items, when it has enough of them. The
-     minimum counts are set by experiment X5.
+  These are sizes, not purity.
+- **Calibration sample (X5).** A random draw of 400 labelled items in the project's own class mix
+  reproduced the calibrated cut in 10 of 10 draws. Per-key capping changes the calibration target
+  (it removes the person share of the pairs) and cannot work.
 
-   The set P projects on the dev stack have 0 validated items (W0 inventory), so `default` is the
-   only source there today. Whether it transfers is open (X5, X8).
-4. **IVF stays as an index.** It stays for streaming assignment and kNN candidates only. Ingest-time
-   assignment must look only at clusters of the item's own partition key, and must abstain when the
-   nearest is beyond the cut or the margin is small (X6). A nearest centroid across classes would
-   undo the partition.
-5. **Novel-candidate state, not an "unknown" bucket.** A within-class cluster far from its class's
-   validated examples is flagged for review. The flag is a cluster state, not a shared cluster id:
-   pooling all unknowns would merge penguins with owls, which today sit in separate, fairly pure
-   sub-clusters.
-6. **Cross-class links only as suggestions.** A second-stage merge is suggested only between
-   novel-candidate clusters from different detector buckets (for example alpaca under sheep and
-   alpaca under dog). A person or the loop gate decides. It ships only if X4 shows its suggestions
-   are precise.
-7. **Scale.** Dense AHC on a 347k pool took about an hour and 124 GB
-   ([clustering_methods.md](clustering_methods.md) 2.2). Partitioning lowers n per bucket, but the
-   largest bucket (person or car) decides the cost. X7 measures that bucket on the 91,184-item set P
-   project. Above the measured limit, the plan's sparse graph-HAC route applies within the bucket.
+## 3. The production design
 
-### What it must not do
+For a later wave; section 8 says which parts can start now.
 
-- **No global cut over all classes.** At 86 classes, global average and complete linkage collapse
-  (held-out precision 0.16 to 0.40 at every target from recall 0.05 up), and Leiden cannot reach
-  recall 0.1.
-- **Never write the detector class as the item's class**, and never treat a within-class cluster's
-  majority as confirming the detector. With the partition keyed on the detector class, "cluster
-  majority agrees with the detector" holds by construction. Any rule that counts it as independent
-  evidence becomes circular: `auto_promote.py` (`cluster_majority_agreement`), or a loop gate fed by
-  detector-derived names.
+1. **Partition key.** The item's stored `detector_class_name`, which ingest already writes through
+   `normalize_class_name`. Never `detector_class_id`. Items with no detector class get the explicit
+   key `none`. They are clustered within it, never dropped and never mixed into a class key.
+2. **Method.** Dense average-linkage AHC per key, on input sorted by document id.
+   - This replaces the residual `ahc` method: complete linkage on scikit-learn's connectivity graph,
+     which is both a killed linkage and the over-merging graph form X7 measured.
+   - It also replaces the residual `hdbscan` method (killed). Both are deleted in the same change.
+   - IVF stays only as an index.
+3. **Cut store.** One record per (embedding model, embedding field, project, key) holding the cut
+   and its source:
+   - `validated_sample`: chosen on at least about 400 validated items in the project's own mix (X5).
+     The exact minimum is a WC parameter, from X5's 400.
+   - `judge`: X8.
+   - `rule`: Y2, only if it passes.
+   - `public_default`: allowed only for a project whose vector geometry matches the public set it
+     was calibrated on. Until Y2 defines that match, no project uses it.
 
-  The concrete risk is open-set crops: 0.79-pure clusters of penguins inside "bird" would be stamped
-  "bird". Auto-promote stays disabled (its default). Class writes stay behind the loop's sampled gate
-  with an independent labeler (VLM or person) and the lock rule.
-- **Do not use detector confidence to find unknowns** (AUROC 0.638; open-set crops are the more
-  confident ones).
-- **No Leiden, ECG or 2b k-means** as the residual partition (section 5), and no whitening in the
-  product before WB.
-- **No calibration on the held-out half, and no claim beyond this set** until X5, X8 and X9 pass.
+   The run record lists every key's cut and source. A key without a record is refused with a typed
+   error naming the key, model and field. Its items stay unassigned and the run continues for the
+   other keys. Refusal is per key, never a silent fallback.
+4. **Memory guard.** Dense linkage needs about n squared times 8 bytes: 12.7 GiB at 40,016 crops,
+   measured. A key above a configured size limit is refused with a typed error. Extrapolated from X7,
+   the limit is about 60,000 crops on a 32 GiB budget; this is not measured. The approximate average
+   linkage needed above that is future work. scikit-learn's connectivity-constrained form is not it:
+   it treats missing pairs as close (X7).
+5. **Loop and lock rule.**
+   - Clustering writes `cluster_id` only, through the existing guarded writer.
+   - Class writes stay behind the loop's sampled gate with an independent labeler, and the lock rule.
+   - "Cluster majority equals detector class" is true by construction under this key, so it is
+     never evidence. Auto-promote stays off.
+   - Region boxes are a separate pool (one class per profile) and are not changed by this.
+6. **What is not built:** ingest-time assignment, the novelty state, cross-class suggestions, a
+   sparse path, an automatic split by size, and per-key cut values for set P before X8.
 
-## 4. Question 2: the crops where the detector class disagrees with the label
+## 4. The crops where the detector class disagrees with the label
 
-**Size.** About 18 % of labelled crops, not 27 % (finding (a)). On labels the detector can name it is
-5 to 7 %. The rest are classes the detector cannot output.
+This is unchanged from the first version, except that the suggestion stage is gone.
 
-**Soft prior or hard partition: hard for grouping, soft for decisions.**
+- **Hard partition for grouping; never a label, a lock or a veto.** A person can move any item. The
+  plan's veto across confident classes is not supported, because confidence does not separate the
+  detector's right calls from its wrong ones on open-set objects.
+- **What happens to open-set objects.** Crops of a class the detector cannot name form fairly pure
+  sub-clusters inside a wrong key (0.79 item purity). The loop's VLM labeler is what renames them.
+  This depends on the loop's gate never accepting the detector name by default.
+- **Fail-closed rules:** the `none` key; per-key refusal without a cut; per-key refusal above the
+  memory limit; the run reports each key's share of the pool.
+  - A single dominant key over many true classes (a class-agnostic detector) degenerates to the
+    global cut that collapsed here.
+  - The run reports it. A project whose largest key holds most of the pool and has no `judge` cut is
+    refused, not clustered globally.
 
-- **Why hard for grouping.** The hard partition is what produced the precision. It costs 3.1 % of the
-  same-label pairs among nameable labels. A soft version (a distance penalty for crossing classes)
-  adds a second calibrated parameter with no evidence that it beats the hard key plus the suggestion
-  stage. The cost is concentrated in the open-set labels (48 % of their pairs split). Those are
-  exactly the crops the novel-candidate state and the cross-class suggestions target.
-- **What soft for decisions means.**
-  - The detector class is never a label, never locks anything, and never vetoes a human or loop
-    move across classes.
-  - A person can move an item to any class.
-  - Cross-class merges exist only as suggestions.
-  - The plan's veto across coarse classes "only when both are confident" is not supported here.
-    Confidence does not separate right from wrong calls on open-set objects (median 0.80 for wrong
-    calls against 0.76 for right ones). Do not add a veto.
+## 5. Kill rules, arm by arm (updated with W0c)
 
-**Fail-closed behaviour:**
+| Arm | Result | Verdict |
+|---|---|---|
+| Average linkage, global | 0.40 at recall 0.073; never matches IVF at higher recall | Killed as default |
+| Average linkage within the detector class | Precision bars hold on four splits and both folds; recall bar fails narrowly at the target-0.1 cut (section 6) | **The design**; acceptance moves to the fresh set Y1 |
+| Complete linkage | Below average linkage everywhere at class level | Killed for crops (still an arm for faces) |
+| Leiden CPM | Below recall 0.1 only; ARI 0.64 to 0.69 | Killed as default; within-class Leiden not scheduled |
+| ECG | 0.376 / 0.200 | Killed |
+| HDBSCAN, FINCH | Rejected earlier on real data | Kill stands; delete the residual `hdbscan` method in WC |
+| PCA whitening 256 | X3: -0.033 / -0.065 BCubed precision at matched recall | **Closed for crops** |
+| k-reciprocal | X3: -0.014 (fold 2 unmatched, best -0.034) | **Closed for crops** |
+| DBA | X3: -0.011 (fold 2 unmatched, best -0.007) | **Closed for crops** |
+| CSLS, centring | At or below raw | Killed |
+| 2b MiniBatchKMeans | 0.187 / 0.273 on items; ARI 0.553 | Killed as clusters; region boxes need their own box-level set |
+| Connectivity-constrained average linkage (scikit-learn, mutual 30-NN) | X7: -0.064 BCubed precision against dense; ARI 0.27 | Killed (not average linkage over missing pairs) |
+| Novelty state, cross-class suggestions | X4: AUROC 0.84 to 0.85 on sheep, flag precision at most 0.76 on the fit half, top-10 suggestion precision 0.3 to 0.5 | **Dropped** |
+| IVF, K = n // 6 | 0.734 / 0.029 | Index only |
 
-- **Missing detector class.** It goes to the explicit `none` key. The key is recorded in the run, and
-  the count is reported.
-- **No calibrated cut** for the run's embedding model or field: refuse the run, with a typed error
-  naming the field. Never fall back to another model's cut. A cut is meaningful only in its own space:
-  set P's mean random-pair cosine is 0.63, against 0.46 to 0.50 on public crops.
-- **A project whose detector cannot split the pool.** Examples: a single-class or class-agnostic
-  detector, or a pool where one key holds most items across many true classes. Within-class then
-  degenerates into the global cut that collapsed here. The run must report the largest-key share. A
-  threshold for warning or refusing comes from X5 and X7, not from this note.
-- **Mixed detectors.** Projects whose items come from several detector profiles stay keyed by name
-  (by-name rule). The run record lists the profiles present.
+## 6. Acceptance bars, corrected
 
-**Lock rule and the stores:**
+### What was wrong in the first version
 
-- The residual pool already excludes validated, confidently sourced and excluded items
-  (`residual_fetch.py`, `residual_gate.py`).
-- `cluster_write_guard.py` allows cluster-id writes on unvalidated holdout items, because a cluster
-  id is not a class. Nothing in this change writes `class_name`, so the lock rule is untouched.
-- Writes stay on the existing guarded bulk path.
-- Region boxes are a separate pool: regions of one profile are one class
-  (`region_box_clustering.py`), so the detector-class key does not apply to them. They are not
-  changed by this decision (question 5).
+These are W0c's nine issues and what each becomes.
 
-## 5. Question 3: the kill rules, arm by arm
+1. **Non-person defined two ways.** Now one definition: labelled crops whose label is not person
+   (section 2).
+2. **"Pair recall >= 3 x 0.022" matched no measured value.** The bar now reads: three times the
+   incumbent's pair recall measured on the same half and fold.
+3. **The BCubed recall bar (>= 2 x incumbent).** It failed at the cut the note named, and the note's
+   X9 text wrongly said the X2 bars held.
+   - The bar is kept unchanged. It was not moved after it failed, and the pinned result stays a FAIL.
+   - What changes is how the operating point is chosen: by a rule fixed before the fresh set is read
+     (below).
+4. **Per-key subsampling cannot calibrate this cut, and the COCO-200 set overlaps the 3,000-item
+   set.** Calibration now uses random draws in the project's own mix (X5). Transfer to COCO-200 no
+   longer certifies anything; Y1 replaces it.
+5. **The sparse variant was under-specified.** Dense linkage is the method. Any sparse replacement
+   must reproduce dense BCubed within 0.01 on the same keys.
+6. **The stratum rule used exact comparison.** Now: strata with at least 100 labelled crops in the
+   half may not fall more than 0.02 below the incumbent; smaller strata are reported only. This does
+   not rescue the pinned result: `rare` (187 crops) is 0.0235 below in fold 2.
+7. **X4 was under-specified.** Moot: the state and the stage are dropped.
+8. **X6 seeding.** The arrivals now use their own hash namespace, as W0c did.
+9. **The 10 % size rule and a global set P default.** Size is reported, not barred. Set P cuts are
+   per key and come from judged purity (X8).
 
-"Confirmed" means the kill rule (or adoption rule) of the consolidated note or plan holds on the
-3,000-item held-out half. "Killed" means the rule fired against the arm.
+Also: "0 protected items moved" is vacuous on these labels (no item is protected). It moves to WC's
+product tests, with protected items planted.
 
-| Arm | Rule (source) | Result on the 3,000-item set | Verdict |
+### Bars, fixed before Y1 is read
+
+The incumbent is the production configuration (IVF, K = min(512, n // 6)), refit on the same vectors.
+The stored production partition is reported beside it.
+
+**The operating point**, chosen on the calibration half only: the largest target recall in {0.05,
+0.1, 0.2, 0.3} whose calibration-half BCubed precision is at least 0.90 both overall and on
+non-person crops. If no target qualifies, the method fails.
+
+| ID | Bar (held-out half of Y1, fold 1 is the acceptance direction) | Source |
+|---|---|---|
+| A1 | BCubed precision >= 0.90 | plan 8.2 |
+| A2 | BCubed precision >= 0.90 on non-person crops | person-dominance guard. This replaces the unsourced 0.88 and is stricter |
+| A3 | BCubed precision >= 0.85 on low-resolution crops | plan 8.2 |
+| A4 | BCubed recall >= 2 x the incumbent's (same half, same fold) | first version, unchanged |
+| A5 | Pair recall >= 3 x the incumbent's (same half, same fold) | plan 8.2, incumbent measured |
+| A6 | Strata with >= 100 labelled crops: BCubed precision not below the incumbent's by more than 0.02 | issue 6 |
+| A7 | Permutation ARI = 1.000 on identical vectors | plan principle 9 |
+
+**Reopen rule.** Fold 2 and three further seeded splits are reported. The decision is reopened if
+any of them misses any bar by more than 0.03.
+
+**Under these corrected bars the pinned 3,000-item result is:** fold 1 fails A4 (0.357 against
+0.374, twice IVF's 0.187); fold 2 passes A4 (0.352 against twice IVF's 0.165, which is 0.330)
+but fails A6 (`rare` 0.0235 below). It is recorded as a FAIL, not re-scored into a pass.
+
+**Other bars kept:**
+
+- Streaming assignment: accepted precision >= 0.95 on all labels. Unchanged. It is not needed until
+  ingest-time assignment is proposed again.
+- The X8 judge bars: section 7.
+
+## 7. Next minimal experiments (wave W0d)
+
+| ID | Experiment | Bar or use | Cost |
 |---|---|---|---|
-| Average-linkage AHC, global | Candidate default; adopt as the residual partition "only if E1 confirms" (plan W0b) | Held out 0.40 at recall 0.073 and 0.26 at 0.26, against IVF 0.734 at 0.029; no cut matches IVF at higher recall | **Global default killed.** The 11-class COCO sample misled |
-| Average-linkage AHC within the detector class | E5 adoption: precision rises at equal recall on the residual-like subset | Held out 0.956 to 0.969 against 0.14 to 0.23 (low-confidence subsets); all confidences, cut 0.346, BCubed P 0.943 against 0.792 at 1.9 times IVF's BCubed recall; fold 2 agrees | **Confirmed**, with the person-dominance and detector caveats of section 2(b) |
-| Complete-linkage AHC | Dominated by average linkage at class level (consolidated note 4.2) | Below average linkage in every oracle cell; held out 0.395 / 0.075 at best; no cut reaches recall 0.3 | **Kill confirmed** for crops. The identity-level question (faces) stays open in E6 |
-| Leiden CPM, mutual 30-NN | Not default unless it beats average linkage at the chosen recall | Beats global average linkage only at recall under 0.07 (0.64 to 0.79), never reaches 0.1, 4 to 11 % unassigned, ARI 0.64 to 0.69 under seed or row order (fails plan principle 9). Within-class Leiden not run | **Killed as default.** Within-class Leiden is not scheduled: its instability fails principle 9 whatever its precision, and within-class average linkage is already at 0.92 to 0.95 |
-| ECG, once | Run once on real data (consolidated E1) | 0.376 / 0.200, 26 clusters, best AMI (0.547) but pair precision far below IVF; ARI 0.641 | **Killed.** The synthetic 0.953 / 0.899 does not transfer |
-| HDBSCAN | Rejected on real data (COCO sample, about 350k crops) | Not re-run; nothing in the new data argues for density gaps in PE-Core crop space | **Kill stands** for crops. Core-point rules stay valid for faces (Immich-style) |
-| FINCH | Rejected on the COCO sample | Not re-run | **Kill stands** |
-| PCA whitening 256 | Kill if held-out precision gain at matched recall is under 0.02 | P@10 0.686 against 0.679 raw; oracle curves at or below raw at every recall (global average linkage). Held-out within-class not run | **Killed for the global representation.** One within-class held-out check (X3) closes it; ship only through WB's rule |
-| k-reciprocal re-ranking | High-recall arm, test with Leiden on the 3,000 set (consolidated table 6) | P@10 +0.012; hub skew 2.78 to 0.75; oracle at recall 0.1 and 0.2: 0.425 and 0.367, against raw 0.331 and 0.253; at 0.3 below raw (0.145 against 0.198); none at 0.5 | **Survives, unproven.** The lift is on the global frontier, which is no longer the design; batch only (no incremental form). Test within class held out (X3) |
-| DBA / alpha-QE | Drop (consolidated: no clustering gain on COCO) | Oracle 0.402 at recall 0.1 (raw 0.331), below raw at 0.2 (0.215 against 0.253) | **Drop decision contradicted at recall 0.1 only.** Include in X3 at no extra cost; drop unless held out within class it gains 0.02 |
-| CSLS, centring | Optional / drop | At or below raw in every oracle cell; P@10 +0.010 | **Killed** |
-| 2b MiniBatchKMeans, k = max(8, round(n / 800)) | Score it (consolidated E1) | Held out 0.187 / 0.273 on items, 8 clusters, ARI 0.553 | **Killed as a cluster set** (it is a bucket index). Its real job, region boxes of one class, is not what E1 scored: replacing it needs a box-level set (question 5) |
-| IVF, K = n // 6 | Keep as index, stop treating cells as clusters | Held out 0.734 / 0.029; BCubed recall 0.187; ARI 1.000 after the #372 sort | **Confirmed**: index only |
+| Y3 | **Set P chaining check by size**, label-free, on the dendrograms X7 already built plus car and truck. Per key and cut (0.346, 0.30, 0.25, 0.20, 0.15): clusters, share of the largest cluster, share of crops in clusters of at least 3, and the merge profile of the largest cluster (merge heights over its last 20 merges, and the size of the two children it is made from). A long run of small additions just under the cut is the chaining signature; two large compact children is a real group | No bar. Size is not purity. Picks the clusters and cuts X8 judges | minutes, CPU |
+| Y2 | **Label-free per-key cut rule.** The cut is factor alpha times the median within-key distance to the 10th nearest neighbour. Alpha is chosen on the 3,000 calibration half. Then check: (i) on the pinned held-out half (direction only) and on Y1 (acceptance), the rule's cut meets A1 to A7 as the calibrated cut does; (ii) on set P, the cut it gives per key (to Y3 and X8) | Adopted as cut source `rule` only if (i) passes on Y1 | under 1 h, CPU |
+| Y1 | **Fresh public acceptance set.** A second seeded pin built like the 3,000-item one (COCO val2017 and Open Images, same strata quotas), with images disjoint from the 3,000-item pin and the COCO-200 project. Ingested on the test stack (own `-p` name, GPU 2), split by source image. Bars A1 to A7 applied once | The acceptance of the method | about 1 h GPU 2 ingest, then CPU |
+| Y4 | **Split by descent** (optional, with Y1). On the calibration half, for clusters at the target-0.3 cut whose majority share is under 0.9: does descending one or two levels of the key's dendrogram give children of item-weighted purity at least 0.90? | Fixed beforehand: adopt the descent split for gate-rejected clusters only if at least 80 % of such clusters reach it within two levels | minutes |
+| X8 | **Set P judge, contact sheets** (after W8's E0 passes for crop sheets: pair kappa >= 0.7, flag precision >= 0.8, bars to be agreed with the owner). For each key with at least 1,000 crops, try the candidate cuts from largest to smallest: 0.346, the Y2 cut, then 0.25 and 0.20. Sheets are member-weighted: pick a crop uniformly from the key, and fill its sheet with 23 seeded members of that crop's cluster. Question: "same kind of object as cell 1? flag the cells that are not". Local VLM for set P. Haiku only on an owner-approved sample, at most 20 sheets per wave (O3) | A key's cut is the largest candidate whose judged member purity has a Wilson 95 % lower bound >= 0.85 on >= 35 sheets. Stop at the first pass. Below 35 sheets: "insufficient sample", and the key stays refused. Numbers only in committed text | judge budget only |
 
-## 6. Question 4: the cheapest next experiments, with acceptance bars
+Order: Y3 and Y2 (CPU, now). Then Y1 (one GPU 2 ingest) and Y4. Then X8 once W8's E0 has passed.
+None of these needs product code.
 
-All of these run on CPU on the stored 3,000-item vectors unless marked. Each is minutes to about an
-hour. Rules for every one:
+## 8. Can WC start now?
 
-- The cut and every parameter are chosen on `calibration`, scored on `heldout`, and both folds are
-  reported.
-- Every table carries the detector-only row and the non-person columns, beside pair and BCubed.
-- Scorecards come from `scripts/bench/cluster_eval.py`, with three identical repetitions.
+**Yes, on a branch, for the parts that are correct whatever the open cut question decides.** No
+default flip and no merge to `main` until Y1 passes and, for set P, X8 has produced per-key cuts.
+That gives one PR for the feature, as the owner prefers.
 
-| ID | Experiment | Acceptance bar (all on held out, both folds unless stated) | Cost |
-|---|---|---|---|
-| X0 | Compare names with `normalize_class_name` in `run.py` (E5 agreement, diagnostics label facts) and add a hand-computed test; re-state the 3,000-set agreement in [cluster_config_baseline.md](cluster_config_baseline.md) | Agreement reproduces 0.820 / 0.810 / 0.812 | minutes |
-| X1 | Land the within-class arm in the committed scripts: an `export_partition.py` arm for within-detector-class average linkage, plus a detector-only arm, scored with `cluster_eval.py` (BCubed, AMI, strata, non-person block). Replaces the scratch checks of section 2 | Reproduces section 2 to three decimals | under 1 h |
-| X2 | Product bar, on the X1 output, at the cut chosen for target recall 0.1 | All of: BCubed precision >= 0.90 overall, >= 0.88 on non-person and >= 0.85 on low resolution; BCubed recall >= 2 x IVF's (>= 0.37); pair recall >= 3 x 0.022; no stratum's BCubed precision below IVF's; permutation ARI 1.000; 0 protected items moved. The section-2 cuts pass the precision, stratum and pair-recall bars; cut 0.346 misses the BCubed-recall bar (0.357 against 0.37), and permutation ARI and protected moves are not yet measured for the within-class arm | minutes |
-| X3 | Representation arms inside the detector class: raw, PCA-whitened 256 (fit on the independent set P pool), k-reciprocal (k1 20, k2 6, lambda 0.3), DBA | An arm passes only if BCubed precision at matched BCubed recall (within 0.02) rises by >= 0.02 in both folds and no stratum loses more than 0.02. Otherwise it is closed for crops and WB does not re-test it | about 1 h |
-| X4 | Novelty and cross-class suggestions: score each within-class cluster by its distance to the class's validated examples (calibration-half crops whose label equals the detector class); suggest a merge between novel clusters of different keys by best member-pair cosine | Novelty: per-class AUROC >= 0.90 on every key with >= 20 examples and >= 10 novel crops, and flag precision >= 0.80 at the threshold chosen on calibration. Suggestions: precision of the top suggestions >= 0.90, and pair recall among open-set labels improves without lowering overall BCubed precision by more than 0.01. Below either bar the matching state or stage is not built | about 1 h |
-| X5 | Cut transfer: apply the per-model cut chosen on the 3,000 calibration half, unchanged, to the 200-image COCO project's held-out half (`splits/coco_sample_200.json`); also find how many validated items per key a project-level calibration needs (subsample the calibration half to 5, 10, 20 and 50 per key) | COCO held out BCubed precision >= 0.90 at the transferred cut; the minimum per-key count is the smallest whose chosen cut stays within 0.02 of the full-calibration cut in 9 of 10 seeded subsamples | under 1 h |
-| X6 | Streaming assignment: treat 20 % of the images (seeded, by image) as late arrivals; assign each to the nearest cluster of its own key (centroid, and best member) with abstention beyond the cut or below a margin; compare with a full refit | Accepted assignments' label precision >= 0.95; abstain share reported; ARI of incremental against full refit reported (no bar yet) | minutes |
-| X7 | Scale on real vectors: per-key counts of the 91,184-item set P project (read-only export, numbers only); time and peak RSS of dense within-key average linkage for the largest key, and of connectivity-constrained average linkage on a mutual 30-NN graph | Dense within-key AHC is the product method only if the largest key fits in 30 min and 32 GB on one host; otherwise the sparse variant is used, and it must reproduce the 3,000-set held-out row within 0.01 BCubed | 1 to 2 h |
-| X8 | Set P, numbers only, after W8's E0 has passed (pair kappa >= 0.7, flag precision >= 0.8) and with an owner-approved sample: on the same seeded items, contact sheets of their cluster under IVF now and under the within-class default cut. Local VLM on up to 40 cluster sheets per arm; Haiku on at most 20 per wave (O3) | Judge purity of within-class clusters not below IVF's, with a Wilson 95 % lower bound >= 0.75 on >= 35 sheets; largest cluster <= 10 % of its key unless the judge rates it pure; a run below 35 sheets is reported as "insufficient sample", not a pass | judge budget only |
-| X9 | Split spread: three more seeded splits of the 3,000-item pin by source image (the pinned split stays the acceptance split) | The X2 bars hold on the pinned split; the spread across the four splits is reported beside them. If any split fails a bar by more than 0.03, the decision is reopened | under 1 h |
+Sound now:
 
-Order: X0 and X1 first (they make the evidence reproducible from committed code), then X2, X3, X4,
-X5, X6 and X9 in any order, X7 when the set P export is available, and X8 after W8 E0.
+1. **Region-box order independence.** Today `scroll_box_rows` reads in scroll order, and 2b's ARI
+   under a row permutation is 0.553. Sort by (crop id, box id) before the fit, with a red-first test
+   like the #372 one. This is a bug fix that is valid under any method; it may merge separately if
+   the owner wants.
+2. **The within-key dense average-linkage method**, with the `none` key and the partition key read
+   from the stored normalized `detector_class_name`. Delete the killed residual `ahc` (complete
+   linkage) and `hdbscan` methods in the same change. Run `make contracts` if a method name is on the
+   wire.
+3. **The cut store, and refusal per key** (no cut; cut for another model or field; key above the
+   memory limit), with typed errors and a run record of cuts, sources and key sizes.
+4. **Tests:**
+   - A permuted fetch gives the identical partition.
+   - No item joins another key's cluster.
+   - Refusal in each case.
+   - `none` items are clustered.
+   - No class or box field is written.
+   - Planted protected items are untouched.
+   - The product pass on the 3,000-item vectors reproduces the research partition exactly at the
+     same cut.
 
-Results of the CPU experiments (2026-10-29), each against its bar, in
-[cluster_config_experiments.md](cluster_config_experiments.md): X0 pass, X1 pass (three non-person cells of the
-section 2 table differ by up to 0.003, see that note), X2 **fail** (BCubed recall 0.357 against 0.37; every
-precision bar passes), X3 **fail** for all three arms, X4 **fail**, X5 transfer pass and sample size **fail**
-as specified, X6 **fail** (marginal), X7 dense method fits (172 s, 12.7 GiB for the 40,016-crop person key) and
-the sparse variant fails equivalence, X9 reopen rule fires on fold 2 only. X8 is not run. The verdicts above and
-the plan in section 8 are unchanged by this entry.
+Wait for results before:
 
-## 7. Question 5: faces and whole images
+- Making the method the default, or deleting the IVF-as-clusters path (needs Y1).
+- Any set P cut value (needs X8).
+- The `rule` cut source (needs Y2).
+- Split by descent (needs Y4).
+- Ingest-time assignment (needs a fresh X6 above 0.95).
+- Stable ids by overlap (#343). This is a prerequisite for the default flip, because a refit moves
+  the partition.
 
-**What transfers:**
+**Wave order.**
 
-- **Protocol.** Calibration-chosen cut, held-out score, both folds. Large-class dominance must be
-  checked: in pair metrics the largest class can carry 80 % of the positive pairs. Report BCubed and
-  a free-prior or trivial baseline row next to any method row, because the detector alone matched
-  IVF's BCubed precision here.
-- **Diagnosis.** A single global cut collapses when many groups share a space with weak density
-  gaps. The fix comes from structure the pipeline already has, not from a cleverer global algorithm.
-- **Engineering rules.** Order independence by id sort, cuts stored per model and field, and no
-  shared "unknown" bucket.
+1. W0c is done.
+2. W0d runs Y3, Y2, Y1 and Y4.
+3. W8 (judge, E0).
+4. X8 on set P.
+5. WC: default flip and merge.
 
-**What does not transfer, and must be measured separately:**
+WC coding runs in parallel from now. WB runs after Y1:
 
-- **Faces.** Identity level, with ArcFace, a space trained for identity with real density gaps. There
-  is no class prior: every face is "face". The analogous free signals are the same-image cannot-link
-  and named persons as anchors, not a partition key. The method question (union-find at 0.7 against
-  Immich-style core points at 0.5 / 3, average or complete graph HAC, Leiden) is E6 on LFW and a pose
-  set, held out, as planned. Nothing in this note changes E6's bars. Complete linkage, killed here
-  for crops, is still a live arm for identity. Faces never go to a hosted judge.
-- **Whole images** (MobileCLIP 512, scene or topic level). No detector class exists per image. A
-  possible analogue is the set of detected classes, or a scene tag, as a soft key. It is unmeasured,
-  and it is the only new arm this result suggests for E7. E7 otherwise stays as planned (hierarchical
-  k-means against flat IVF against average linkage, label-set Jaccard on COCO and Open Images).
-- **Region boxes (2b).** One class per profile, so "within class" is the whole pool. What might
-  transfer is "average linkage with a calibrated cut instead of k-means at n / 800". That needs the
-  box-level set of the plan's region-box row. E1's item numbers do not decide it.
-- **Fine-grained groups** (make/model). This result supports the plan's structure: a fine graph per
-  coarse class. It says nothing about whether PE-Core separates sub-classes inside a class. That is
-  E9 on Stanford Cars or CompCars, held out and class-disjoint.
+- It scores representation variants with the within-key method at its calibrated cut, on Y1's
+  held-out half.
+- It drops the crop post-processing rows X3 closed (whitening, k-reciprocal, DBA). Its
+  preprocessing, model, TTA and face rows stay.
+- If WB changes the representation, every cut is recalibrated.
 
-## 8. Question 6: changes to the plan's waves
+## 9. Faces and whole images
 
-1. **Close W0b as research only.** Its clause "product default (only if E1 confirms): sparse kNN
-   average-linkage graph HAC" did not hold as written (the global form failed). W0b gives no product
-   default.
-2. **New research wave W0c (CPU, before any implementation).** Runs X0 to X7 and X9 of section 6.
-   - Model split: Sonnet runs, Opus reviews the bars.
-   - Output: a results section in [cluster_config_baseline.md](cluster_config_baseline.md) and an
-     update of this note's verdicts.
-   - Gates: G1 is X2 on the held-out half. G2 and G3 move to WC, because the judge does not exist
-     yet.
-3. **W8 (judge and E0) is unchanged and stays next.** X8 needs it.
-4. **WB runs after W0c,** with two changes:
-   - WB scores every representation variant with the W0c method (within-detector-class average
-     linkage at its calibrated cut) on the 3,000-item set, not with global average linkage and not
-     on the COCO sample.
-   - WB drops the representation rows W0c's X3 closes.
-5. **New implementation wave WC: class-partitioned residual clustering.**
-   - Entry conditions: W0c's X2 passes, X7 has fixed the method form for the largest key, and X8 has
-     passed on set P.
-   - Model split: Opus reviews the run-record and cluster-state design (novel-candidate state, cut
-     source) before code; Sonnet implements.
-   - Scope:
-     - a within-key partition method beside IVF in `methods/`;
-     - the partition key and the `none` key;
-     - cut lookup with fail-closed refusal;
-     - ingest-time assignment restricted to the item's key, with abstention;
-     - the novel-candidate state and cross-class suggestions, only if X4 passes;
-     - deletion of the superseded IVF-as-clusters path in the same change (no shims).
-   - Tests: red first. A permuted fetch gives the identical partition. An item never joins another
-     key's cluster. A missing cut refuses. A `none` key item is clustered, not dropped. No class or
-     box field is written (lock rule untouched). The product pass on the 3,000-item set reproduces
-     W0c's held-out row within 0.01.
-   - Gates: G1 is that reproduction. G2 is the X8 panels. G3 is the same 20 clusters before and after,
-     in Cropwright.
-   - Timing: WC is CPU code and can run in parallel with WB's GPU work. If WB changes the
-     representation, WC re-calibrates the per-model cut before its G1; the method is unchanged.
-6. **Later waves.** W5 (fine-grained) and W7 (fine groups) keep their per-coarse-class structure,
-   which this result supports. W2 and E6 (faces) are unaffected.
+Unchanged. What transfers:
 
-## 9. Limits
+- The protocol: calibration-chosen cut, held-out score, BCubed beside pair metrics, a free-prior or
+  trivial baseline row, and a fresh set for acceptance once a half has been read repeatedly.
+- The rules: order independence, cuts stored per model, field and key, and refusal without a cut.
+- The X7 lesson: a threshold calibrated in one project's geometry does not carry to another.
 
-- **One public set and one held-out half.** 944 images, 1,494 held-out labelled crops, 86 classes.
-  Folds and subsamples agree on the direction. Values can move by a few hundredths: fold 2 recall
-  0.181 against fold 1's 0.129 at nearly the same cut.
-- **Person dominance.** Person makes up 78 to 81 % of the same-label pairs. Pair metrics alone would
-  overstate any partition that keeps the person bucket together. Hence the BCubed and non-person
-  columns.
-- **The detector's label space.** The detector is trained on COCO's label space, and about half the
-  images are COCO val. Agreement on nameable labels (0.93 to 0.95) is therefore optimistic for other
-  domains. A project whose detector has few classes, or none, gets little or nothing from the key
-  (section 4).
-- **Residual-pool realism.** All crops of this project were in the residual pool. With a
-  class-assigning detector, confident items leave the pool. The open-set crops are among the
-  confident ones (median 0.80), so they would leave it with a wrong class before clustering sees
-  them. That is a pipeline hazard outside this decision; it belongs on the auto-label loop's open-set
-  work.
-- **Unlabelled crops.** 1,011 of 3,961 crops carry no label, so merges involving them are invisible.
-- **Weak spots of the new checks.** The novelty AUROCs rest on very small per-class samples. The
-  half-subsample ranges are spreads, not intervals. The section-2 checks are scratch scripts until X1
-  lands them.
-- **Set P.** No set P number exists for any of this, and set P has 0 validated items. The default cut
-  is unproven there (X5, X8).
+What must be measured separately:
 
-## 10. Reproduce
+- **Faces:** E6. Identity level, ArcFace, no class prior; complete linkage is still an arm; faces
+  never go to a hosted judge.
+- **Whole images:** E7. The only new arm this note suggests is the set of detected classes as a soft
+  key.
+- **Region boxes:** a box-level set.
+- **Fine-grained groups:** E9. This result supports a graph per coarse class; it says nothing about
+  separating sub-classes.
 
-The committed path reproduces the within-class and global pair rows (public data; bundle and labels
-as built in [cluster_config_baseline.md](cluster_config_baseline.md)):
+## 10. Limits
+
+- **One public set.** The pinned held-out half has now been read by three waves; hence Y1. The four
+  splits share images and are not independent.
+- **Person dominance.** Person is 28 % of the labelled crops and 81 % of the same-label pairs.
+- **The detector's label space.** The detector is trained on COCO's label space, which most of the
+  set uses.
+- **Set P.** The only set P figures are sizes; no quality figure exists. Set P has 0 validated items.
+- **Unlabelled crops.** 1,011 crops are never scored.
+- **Scale.** The memory limit above 40,016 crops is extrapolated, not measured.
+- **The judge.** X8 depends on a judge whose agreement on crops is not measured yet.
+
+## 11. Reproduce
+
+W0c's committed commands reproduce section 2 and every W0c figure
+([cluster_config_experiments.md](cluster_config_experiments.md), Reproduce). The pair rows also
+come from:
 
 ```bash
 .venv/bin/python scripts/research/cluster_diag/run.py e5 --bundle <out>/vecs \
@@ -394,18 +356,11 @@ as built in [cluster_config_baseline.md](cluster_config_baseline.md)):
     --confidence-cuts 1.01 --out <out>/e5_all_confidences.json
 ```
 
-The section-2 checks are scratch scripts. They import the committed `scripts/research/cluster_diag`
-and `scripts/bench/cluster_eval_metrics.py`, plus `src/utils/class_names.py`. Each script and its log
-are in `artifacts_local/cluster_search/w0b/decision_checks/` (gitignored; X1 replaces them with
-committed arms):
+Some figures come only from scratch scripts in `artifacts_local/cluster_search/w0b/decision_checks/`
+(gitignored), run as `.venv/bin/python <script>`:
 
-| Script | What it produced |
+| Script | Figures |
 |---|---|
-| `check.py` and `check2.py` | Agreement (raw and normalized), detector-only and global rows, the confusion list |
-| `check3.py` | Calibrated within-class cuts, BCubed rows, open-set purity and pair split, confidences |
-| `check4.py` | Half-subsample ranges |
-| `check5.py` | Strata and non-person BCubed |
-| `check6.py` | Novelty AUROCs |
-
-Run each as `.venv/bin/python <script>` from any directory. The paths to the bundle, the split
-manifest and the scratch COCO ground truth are written at the top of each script.
+| `check3.py` | The open-set pair split (48 %) and the confidence medians |
+| `check6.py` | The confidence AUROC (0.638) |
+| `check4.py` | The half-subsample ranges of the first version |
