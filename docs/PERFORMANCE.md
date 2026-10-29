@@ -3151,8 +3151,12 @@ itself because both preprocess calls declare under 4 MiB (`OFFLOAD_MIN_BYTES`) a
 resize 21 percent of all samples, whole-frame decode and resize 15 percent, tensor packing 6 percent, gRPC
 serialization 9 percent, bulk-update JSON 3 percent. The encoder is 57 to 60 percent busy, so the pass is
 latency-bound on one loop thread and the 64-image chunk boundary (read, process, write in sequence), not
-on the engine. A fix that overlaps chunks or moves the preprocess to the pool is output-preserving but was
-**not measured** (the confirmation runs were cut); follow-up issue.
+on the engine. The fix (0.7.0) is output-preserving: the embed pass runs every crop, frame and
+JPEG step on the CPU pool whatever its size (`offload_always` in `src/utils/cpu_pool.py`; ingest keeps the
+4 MiB in-place rule it was measured with), and the next 64-image chunk is read while the current one is
+processed and written. **The throughput gain is not yet measured**: acceptance is at least 20 images/s on set A
+(500 and 800 images, 16 at a time, one card), encoder busy above 80 percent, API CPU at most 0.047 CPU-s per
+image, three repetitions, re-embedded vectors bit-identical to the pre-change pass.
 
 Re-embedded crop vectors against the ingest vectors (same project, 3,166 and 5,133 crops): median cosine
 0.999997 (identical), first percentile 0.9981 and 0.99992, minimum 0.9728 and 0.9337; 35 and 44 crops are
@@ -3160,7 +3164,105 @@ below 0.999. Crops whose box touches the right or bottom edge are 5 percent of t
 of those below 0.999 (20 of 35 and 25 of 44; 20 of 153 edge crops, 13 percent, against 15 of 3,013 others, 0.5 percent). Cause:
 ingest crops the detector's pixel box, which can extend past the frame, and Pillow pads the outside with
 black; the stored `bbox_norm` is clamped to the frame, so the re-embed crops less. The padding cannot be
-recovered from the stored box, so matching ingest would change stored vectors: reported, not changed.
+recovered from the stored box. **Decision (0.7.0, owner, #259): the vector is computed from the box that is
+stored.** Ingest now cuts the image-clamped rectangle on both decode paths (`geometry.crop_rect`, repeated in
+`models/gpu_image_prep/1/prep_geometry.py` and held equal by `tests/curation/test_crop_is_stored_box.py`), so
+a crop touching the right or bottom edge is embedded without the black padding, and the crop-cache JPEG is the
+stored box too. Interior boxes are bit-identical to 0.6.0. Vectors ingested before this change keep the padded
+input; re-embed them (`reprocess` scope `embed`, parts `crop`) to move them into the stored-box space. The
+reprocess embed and the region-box refresh already cut the stored box. The P-pe parity capture against the 0.6.0
+reference (crop cosine p01 at least 0.995) is still to run.
+
+#### Embed pass on the GPU decode (#259, 0.7.0)
+
+The offload and read-ahead above moved the work, they did not remove it: live on release/0.7.0
+(`docs/research/v070_measurement_log.md`, E1) COCO went from 15.7 to 16.6 images/s at 0.065 API CPU-s per
+image, and set P (about 21 MP) stayed at 10.5 to 11.9 images/s with the GPU 10 to 16 percent busy, because
+the pass decoded every 21 MP photo in the API (0.52 CPU-s per image) while ingest sends the same photos to
+`gpu_image_prep`. The pass now takes the same route for large photos.
+
+**What runs.** When the ingest GPU decode is usable (`OP_INGEST_GPU_DECODE` on, the model loaded for the
+ingest profile, no secondary detector: the same readiness rule as ingest) and the loaded model files declare
+the new optional `boxes` input, a photo at or above `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0) is sent to
+`gpu_image_prep` as its stored bytes plus its stored boxes: the item's `bbox_norm` (part `crop`) and its
+embeddable region boxes (part `region`), as FP64 rows so the model cuts exactly the rectangle the CPU pass
+cuts. A box asked for both parts is sent once. In this stored-box mode the model decodes once (nvJPEG, EXIF
+orientation), skips the detector, the blur sums and the crop JPEGs, and returns the whole-frame vector and
+one vector per box; the API only reads the file, sends it and writes vectors. Photos below the gate stay on
+the CPU path unchanged (a COCO frame decodes in 5 ms on one core), so the COCO rows above do not move.
+Code: `src/services/curation/reprocess_gpu_embed.py`, `reembed_items(..., gpu=...)` in
+`reprocess_embed.py`, stored-box mode in `models/gpu_image_prep/1/model.py`, the rectangle in
+`prep_geometry.stored_box_rects` (held equal to the CPU pass by `tests/models/test_gpu_image_prep_geometry.py`).
+
+**Fallback (fail closed, the same cases as ingest).** Below the gate, an unreadable header, any status other
+than `ok` (progressive, truncated, decoder, ...), a failed call, or an answer with a row count other than the
+boxes sent: that photo is decoded in the API as before. Each photo is counted in
+`op_reprocess_decode_total{route}` (`gpu` or `cpu_<reason>`) while the route is usable. Model files older
+than the API (no `boxes` input) disable the route for the run (log `reprocess_gpu_embed_model_outdated`), with
+no call per photo. The single-item region refresh after a box edit, the backfill script and the auto-label
+embed stage keep the CPU path.
+
+**Numerics against the CPU pass.** Same rectangle (exact, tested). Crop part: the GPU square is plain
+bilinear as `resize_crop_rgb` (within one grey level in the host model of the kernel), frame part: Pillow
+`BILINEAR` antialiased (within one grey level); nvJPEG's IDCT differs from libjpeg by a grey level here and
+there. This is the parity ingest's GPU decode already has against its CPU path (#217,
+`docs/design/gpu_decode_plan.md`: same boxes, crop cosine p01 0.996 to 0.998 on every set). Region part (#360): every route embeds the decoded pixels of the stored box. The CPU pass, the
+backfill script and the detection worker's per-box stage used to embed each region crop after a JPEG round
+trip at quality 92 (the worker cut it from the item-crop JPEG). On a 21 MP photo that moved the vector of a
+small box a lot (live check on 5,177 boxes: cosine against the GPU vector median 0.965, p01 0.886, min 0.842;
+median 0.933 for boxes under 2 percent of the frame), because the encoder client shrinks a large crop by a
+large factor and so turns the JPEG noise into a vector change. The GPU vector agreed with the raw-pixel CPU
+vector at a median of 0.9993. The CPU paths now cut the box from the decoded source (`crop_pil`, the same
+rectangle as the crop vectors) and embed it without re-encoding, so a region box equal to the item box gets the
+same vector as the crop. Vectors of a photo are not bit-identical between the two routes (decoder and resize
+differences, as for crops); within one route repeated passes agree. The old "cosine above 0.99 for region
+vectors" expectation held only for small photos and is withdrawn.
+
+**Chunk window.** The first live run of the GPU route reached 28 img/s with the GPU about half busy while ingest
+of the same photos reached 45 to 49. The in-flight bound was not the limit (16, 24, 32 and 48 photos gave 27.6,
+27.5, 27.1 and 26.0 img/s); the barrier between 64-photo chunks was (a chunk of 256 gave 33.1, one chunk of all 1,500
+photos 34.2). A pure `embed` pass now embeds two chunks at once (`EMBED_CHUNKS_IN_FLIGHT` in `reprocess_images.py`):
+the next chunk starts on its photos while the last ones of this chunk finish and its vectors are written. The two
+chunks share one in-flight bound of 16 photos, so decoded pixels in memory do not grow. A chunk is still read,
+embedded and written as a unit: a failed chunk fails only its own images, progress is reported in chunk order, and
+a cancel waits for the chunks already started. A pass that also runs `detect` or `open_vocab` keeps one chunk at a
+time (the embed must see the items those scopes changed). Measured: 51 img/s (see the measurement log, section G).
+
+**Model files.** The change touches `models/gpu_image_prep/config.pbtxt`, `1/model.py` and
+`1/prep_geometry.py`. Triton reads them at load: copy the three files into the model repository the stack
+mounts (in a checkout that is `models/` itself) and reload the model (unload and load through Triton model
+control, or restart `triton-server`). Ingest requests do not send `boxes`, so ingest is unchanged by the
+model change.
+
+**Live procedure (run in the measurement log, sections F and G).** On the test stack (own compose project name, GPU 0 or 2, quiet host), for
+set P (300 photos, 16 to 24 MP) and COCO 1,500 as in E1, three repetitions each, a fresh project per set:
+
+```bash
+P=<project>; API=http://127.0.0.1:4603; TRITON=http://127.0.0.1:4600; API_CTR=<api container>
+# 1. the model declares the input (expect "boxes" in the list) after the reload
+curl -s "$TRITON/v2/models/gpu_image_prep" | python3 -c 'import json,sys; print([i["name"] for i in json.load(sys.stdin)["inputs"]])'
+# 2. counters, API CPU and GPU before the pass
+curl -s "$API/metrics" | grep '^op_reprocess_decode_total'
+docker exec "$API_CTR" cat /sys/fs/cgroup/cpu.stat | grep usage_usec
+nvidia-smi -i <triton gpu> --query-gpu=utilization.gpu --format=csv,noheader,nounits -lms 500 > gpu.log &
+# 3. the pass (every vector rewritten, as E1); poll the job until it finishes
+curl -s -X POST "$API/curation/projects/$P/reprocess" -H 'content-type: application/json' \
+  -d '{"targets":{"filter":{"all_images":true}},"scopes":["embed"],"embed":{"parts":["crop","frame","region"]},"dry_run":false}'
+curl -s "$API/curation/projects/$P/reprocess/jobs/<job_id>"   # images_done, started_at, finished_at
+# 4. the same three readings after; img/s = images / (finished_at - started_at)
+```
+
+Expected on set P: `op_reprocess_decode_total{route="gpu"}` grows by the photo count (any `cpu_*` growth is
+a finding), at least 20 images/s (ingest reaches 31.8 with one `gpu_image_prep` instance and 48.0 with two on
+the same photos, E4, while doing more per photo), API CPU at most 0.047 CPU-s per image (the API now reads,
+sends and writes only) and GPU busy above 50 percent. Then the vectors: crop and frame vectors after the pass
+against the same project's ingest vectors (median 0.99999 or better, p01 at least 0.995, as the GPU-decode
+ingest parity), and region vectors after the pass against those of a no-round-trip CPU pass on the same project (GPU decode
+off: the API restarted with `OP_INGEST_GPU_DECODE=0` for that run, on the build with the #360 fix; p01 at least
+0.99; a CPU pass from before the fix is not a valid reference). COCO must reproduce the E1 release/0.7.0 row
+(all photos counted `cpu_small`). If set P stays under 20 images/s with the GPU under 50 percent, the
+in-flight bound of the pass (16 photos, `_IMAGES_IN_FLIGHT` in `reprocess_embed.py`) or the 64-photo chunk
+barrier is the next limit to test (the chunk barrier was the limit, see "Chunk window").
 
 #### Parity (final configuration against `ref-u8fp16` and `ref-u8fp16-repeat`, `precision` profile)
 
@@ -3221,7 +3323,8 @@ or above `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0). The CPU single decode alone does 
 ingest (the next binders are elsewhere); it is the CPU path the GPU decode falls back to.
 
 The GPU decode is the default, sized by hardware. It adds about 8.5 GB (8,704 MiB, loaded on first use)
-to the Triton card, on top of the profile's own models (about 8, 12 and 17 GB for `minimal`,
+per model instance to the Triton card (`full` runs two instances, 17,408 MiB, #268; the other profiles
+run one if you turn the GPU decode on), on top of the profile's own models (about 8, 12 and 17 GB for `minimal`,
 `standard` and `full`). Only `full` (48 GB+) has room, so the installer writes
 `OP_INGEST_GPU_DECODE=1` for it and `0` for `minimal` and `standard`; a 12 GB card does not hold
 the full model set beside other projects' resident processes, let alone the GPU decode. A checkout
@@ -3229,6 +3332,14 @@ whose `.env` has no such line gets the code default (on), and an explicit value 
 `openprocessor gpu plan` prints whether it is on and why, and warns (never refuses) when it is on
 for a card without room. If the model cannot load, Triton leaves the other models serving and
 every photo is ingested on the CPU path, as with a declined file.
+
+Instance count (#268, one RTX A6000, 3,275 photos of about 18 MP, three runs each): one
+`gpu_image_prep` instance 31.8 images/s, two 48.0 (+51 percent; GPU utilization 70-75 to 78-87
+percent, Triton CPU 610 to 865 percent), three adds 0.6 percent over two for another 6 to 7 GB. The
+single instance is one Python process: its worker threads share one GIL. `gpu_image_prep_instances`
+in `config_templates/profiles/*.json` sets the count (`full` 2, `minimal` and `standard` 1), the
+installer writes it into `models/gpu_image_prep/config.pbtxt`, and `openprocessor gpu plan` sizes the
+GPU decode as count times 8,704 MiB. The committed config carries 2, the `full` value.
 
 ### Stage 4: coalesced ingest writes, Lucene engine, write ceiling on the final mapping (#248, #254, #230)
 

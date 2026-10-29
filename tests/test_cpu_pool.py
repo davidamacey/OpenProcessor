@@ -11,7 +11,7 @@ import time
 import numpy as np
 import pytest
 
-from src.utils.cpu_pool import InflightGate, cpu_executor, run_cpu
+from src.utils.cpu_pool import InflightGate, cpu_executor, offload_always, run_cpu
 
 
 def test_run_cpu_runs_off_the_loop_thread() -> None:
@@ -182,6 +182,17 @@ def test_small_work_runs_in_place_and_large_or_unknown_work_runs_on_the_pool() -
     assert small == here
     assert large != here
     assert unknown != here
+
+
+def test_offload_always_sends_small_work_to_the_pool_inside_its_block_only() -> None:
+    async def go() -> tuple[int, int, int]:
+        with offload_always():
+            inside = await asyncio.create_task(run_cpu(threading.get_ident, nbytes=1))
+        return inside, await run_cpu(threading.get_ident, nbytes=1), threading.get_ident()
+
+    inside, after, loop_thread = asyncio.run(go())
+    assert inside != loop_thread
+    assert after == loop_thread
 
 
 def test_a_failure_in_place_propagates_like_one_on_the_pool() -> None:

@@ -335,11 +335,22 @@ class AsyncTritonPool:
         backbone feature map) only when the loaded model actually has it.
         Raises on any Triton error — callers decide how to degrade.
         """
+        return await self._metadata_names(model_name, 'outputs', timeout)
+
+    async def get_model_input_names(self, model_name: str, timeout: float = 10.0) -> list[str]:
+        """Input tensor names from the model's Triton metadata, optional inputs included.
+
+        Lets callers send an optional input only when the loaded model files declare it.
+        Raises on any Triton error.
+        """
+        return await self._metadata_names(model_name, 'inputs', timeout)
+
+    async def _metadata_names(self, model_name: str, key: str, timeout: float) -> list[str]:
         if not self._initialized:
             raise RuntimeError('AsyncTritonPool not initialized. Call initialize() first.')
         client = self._clients[await self._get_client_index()]
         metadata = await client.get_model_metadata(model_name, as_json=True, client_timeout=timeout)
-        return [str(out.get('name', '')) for out in metadata.get('outputs', [])]
+        return [str(t.get('name', '')) for t in metadata.get(key, [])]
 
     def get_stats(self) -> dict[str, Any]:
         """Get pool statistics."""

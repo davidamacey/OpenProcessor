@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
@@ -44,6 +43,7 @@ from src.services.curation.class_write_guard import (
 )
 from src.services.curation.crop_bytes import load_vlm_item_jpeg
 from src.services.curation.label_batch_write import label_batch_merge, label_batch_update
+from src.services.curation.source_image_cache import crop_cache_file
 from src.services.labeling.detector_hint import DETECTOR_HINT_FIELDS, hinted_crop
 from src.services.labeling.run_labeler import get_vlm_labeler, resolve_pack, vlm_stamp
 from src.utils.timeutil import now_iso
@@ -195,7 +195,7 @@ async def vlm_label_batch(
         bbox = src.get('bbox_norm')
         if not image_path or not bbox or len(bbox) != 4:
             continue
-        cache_path = Path(crop_cache_dir) / f'{crop_id}.jpg' if crop_cache_dir else None
+        cache_path = crop_cache_file(crop_cache_dir, crop_id) if crop_cache_dir else None
         if cache_path and cache_path.exists():
             cache_hits += 1
         else:

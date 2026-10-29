@@ -105,7 +105,7 @@ class TestGeometry:
         self, box: tuple[float, float, float, float]
     ) -> None:
         img = Image.new('RGB', (120, 90))
-        x1, y1, x2, y2 = fg.crop_rect(box)
+        x1, y1, x2, y2 = fg.crop_rect(box, 120, 90)
         assert crop_pil(img, box).size == (x2 - x1, y2 - y1)
         rgb = np.random.default_rng(1).integers(0, 256, (90, 120, 3), dtype=np.uint8)
         rect = fg.blur_rect(box, 120, 90)
@@ -120,6 +120,56 @@ class TestGeometry:
     def test_variance_from_sums_is_the_cpu_rounding(self) -> None:
         assert fg.lap_var(10, 10, 30) == variance_from_sums(10, 10, 30) == 2.0
         assert fg.lap_var(0, 0, 0) is None
+
+
+class TestStoredBoxes:
+    """The embed pass sends stored ``bbox_norm`` boxes (#259); the model cuts the rectangle the
+    CPU embed pass cuts (``reprocess_embed``: the box scaled to pixels, then ``crop_pil``)."""
+
+    BOXES = [
+        (0.1, 0.1, 0.6, 0.6),
+        (0.0, 0.0, 1.0, 1.0),
+        (0.83, 0.9, 1.0, 1.0),  # touches the right and bottom edge
+        (0.123456789, 0.5, 0.123456790, 0.5000001),  # under a pixel: one pixel kept
+        (0.99999, 0.99999, 1.0, 1.0),
+        (0.3051, 0.0049, 0.6949, 0.4951),
+    ]
+
+    def _boxes(self, seed: int) -> list[tuple[float, ...]]:
+        rng = np.random.default_rng(seed)
+        out = list(self.BOXES)
+        for _ in range(300):
+            x1, x2 = sorted(float(v) for v in rng.random(2))
+            y1, y2 = sorted(float(v) for v in rng.random(2))
+            out.append((x1, y1, x2, y2))
+        return out
+
+    @pytest.mark.parametrize('size', [(5472, 3648), (3648, 5472), (120, 90), (1001, 999)])
+    def test_each_stored_box_is_the_cpu_embed_pass_rectangle(self, size: tuple[int, int]) -> None:
+        from src.services.curation.reprocess_embed import _pixel_box
+
+        w, h = size
+        # Edges stored at half-pixel positions: rounding them in float32 instead of float64
+        # moves some by a pixel, so the input must carry the stored floats exactly.
+        halves = [((k + 0.5) / w, (k + 0.5) / h) for k in range(0, min(w, h) - 1, 7)]
+        boxes = [*self._boxes(w), *((x, y, 1.0, 1.0) for x, y in halves)]
+        rects = fg.stored_box_rects(np.array(boxes, np.float64), w, h)
+        assert rects == [fg.crop_rect(_pixel_box(b, w, h), w, h) for b in boxes]
+
+    def test_the_pixels_are_the_cpu_crop(self) -> None:
+        from src.services.curation.reprocess_embed import _pixel_box
+
+        rgb = np.random.default_rng(3).integers(0, 256, (90, 120, 3), dtype=np.uint8)
+        pil = Image.fromarray(rgb)
+        boxes = self._boxes(9)
+        for box, (x1, y1, x2, y2) in zip(
+            boxes, fg.stored_box_rects(np.array(boxes, np.float64), 120, 90), strict=True
+        ):
+            cpu = np.asarray(crop_pil(pil, _pixel_box(box, 120, 90)))
+            np.testing.assert_array_equal(cpu, rgb[y1:y2, x1:x2])
+
+    def test_no_boxes_is_no_rectangles(self) -> None:
+        assert fg.stored_box_rects(np.zeros((0, 4), np.float64), 640, 480) == []
 
 
 class TestWeights:

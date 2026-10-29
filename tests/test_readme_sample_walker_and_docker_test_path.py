@@ -87,7 +87,10 @@ def test_requirements_test_txt_exists() -> None:
 
 def test_readme_docker_only_test_path_installs_test_deps_first() -> None:
     section = README[README.index('Docker-only path') :][:600]
-    assert 'pip install -r requirements-test.txt' in section, (
+    assert 'cp requirements-test.txt api:/tmp/requirements-test.txt' in section, (
+        f'README must copy requirements-test.txt into the container (the image does not ship it):\n{section}'
+    )
+    assert 'pip install -r /tmp/requirements-test.txt' in section, (
         f"F-31: README's Docker-only test path must install test deps into "
         f'the running container first -- the production image ships '
         f'without pytest:\n{section}'

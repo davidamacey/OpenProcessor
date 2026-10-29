@@ -6,13 +6,18 @@
 # Inputs:
 #   - jpeg:          [-1] UINT8, the encoded image as uploaded
 #   - embed_crops:   [1] BOOL (optional, default true), also embed every detection's square
+#   - boxes:         [-1, 4] FP64 (optional), stored bbox_norm rows (x1, y1, x2, y2 in [0, 1] of
+#                    the oriented frame). Stored-box mode, the reprocess embed pass (#259): no
+#                    detector, blur sums or JPEGs; the answer is status, size, whole_embedding and
+#                    crop_embeddings with one row per box, in order
 # Outputs (status "ok"; any other status is the reason the API decodes this image on the CPU):
 #   - status:          [1] STRING
 #   - size:            [2] INT32, width and height after EXIF orientation
 #   - letterbox:       [3] FP64, scale, pad_w, pad_h of the detector letterbox
 #   - det_boxes:       [-1, 4] FP32, det_scores [-1] FP32, det_classes [-1] INT32 (end2end rows)
 #   - whole_embedding: [-1] FP32, PE embedding of the whole-frame square (not normalized)
-#   - crop_embeddings: [-1, -1] FP32, one per detection when embed_crops (not normalized)
+#   - crop_embeddings: [-1, -1] FP32, one per detection when embed_crops, or one per stored box
+#                      (not normalized)
 #   - blur_sums:       [-1, 3] INT64, (pixels, Laplacian sum, sum of squares): the frame, then
 #                      each detection's clamped rectangle (pixels 0: empty)
 #   - crop_jpegs:      [-1] STRING, each detection's crop, JPEG quality 90
@@ -24,7 +29,8 @@ model_transaction_policy { decoupled: true }
 
 input [
   { name: "jpeg", data_type: TYPE_UINT8, dims: [ -1 ] },
-  { name: "embed_crops", data_type: TYPE_BOOL, dims: [ 1 ], optional: true }
+  { name: "embed_crops", data_type: TYPE_BOOL, dims: [ 1 ], optional: true },
+  { name: "boxes", data_type: TYPE_FP64, dims: [ -1, 4 ], optional: true }
 ]
 output [
   { name: "status", data_type: TYPE_STRING, dims: [ 1 ] },
@@ -41,15 +47,20 @@ output [
 
 instance_group [
   {
-    count: 1  # one process owns the decoder; its worker threads give the concurrency
+    count: 2  # per-profile value (config_templates/profiles/*.json, gpu_image_prep_instances)
     kind: KIND_GPU
     gpus: [ 0 ]
   }
 ]
 
-# GPU memory: the CuPy pool is capped at POOL_MIB (frames in flight, letterbox and squares), plus
-# the CUDA context, the nvJPEG lane buffers and the BLS tensors: 8.2 GB measured at 32 streams of
-# 12-24 MP photos. Not in Triton's default load list (loaded on first use).
+# Two instances raised ingest from 31.8 to 48.0 images/s on one A6000 (#268); a third added 0.6
+# percent. Each instance runs its own worker threads, so the count removes the single-process limit.
+#
+# GPU memory, per instance: the CuPy pool is capped at POOL_MIB (frames in flight, letterbox and
+# squares), plus the CUDA context, the nvJPEG lane buffers and the BLS tensors: 8.2 GB measured at
+# 32 streams of 12-24 MP photos. The installer sets the count per profile (minimal and standard 1,
+# full 2), so the card holds count x GPU_MIB_PER_INSTANCE. Not in Triton's default load list
+# (loaded on first use).
 parameters { key: "GPU_MIB_PER_INSTANCE" value: { string_value: "8704" } }
 parameters { key: "POOL_MIB" value: { string_value: "4096" } }
 

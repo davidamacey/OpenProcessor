@@ -80,6 +80,8 @@ def _project_scoped_dirs(record: ProjectRecord) -> list[tuple[Path, Path]]:
         (bulk_ingest_projects_root / record.slug, bulk_ingest_projects_root),
         (reprocess_projects_root / record.slug, reprocess_projects_root),
         (assist_projects_root / record.slug, assist_projects_root),
+        # The tmpfs crop cache keys its files per project (<crop_cache_dir>/<slug>).
+        (base.crop_cache_dir / record.slug, base.crop_cache_dir),
     ]
 
 

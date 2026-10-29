@@ -11,8 +11,11 @@ ingest path and a downstream reader of the same bytes:
   cache (``CurationConfig.crop_cache_dir``). The curation ingest
   service writes each item's JPEG bytes here at ingest time; downstream
   readers (the detection worker, the VLM router) read
-  ``<crop_cache_dir>/<crop_id>.jpg`` before falling back to re-cropping
-  from the source image. Before this, the cache had readers and no
+  ``<crop_cache_dir>/<slug>/<crop_id>.jpg`` (:func:`crop_cache_file`)
+  before falling back to re-cropping from the source image. Crop ids are
+  content-derived, so two projects can hold the same id; the per-project
+  directory keeps their files apart and lets a project delete remove
+  exactly its own. Before this, the cache had readers and no
   writer (100% miss rate out of the box).
 
 ``prefetch_paths`` / ``release_after_decode`` tolerate missing files
@@ -28,10 +31,12 @@ import contextlib
 import fcntl
 import logging
 import os
+import stat
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from src.config.project_context import current_project
 from src.utils.stage_timing import add_stage_bytes, stage_timer
 
 
@@ -52,6 +57,20 @@ DEFAULT_PRUNE_TARGET_FRACTION = 0.9
 _TMP_FILE_MIN_AGE_S = 60.0
 
 
+def project_crop_cache_dir(cache_root: str | Path | None) -> Path | None:
+    """The bound project's directory under ``cache_root`` (``<root>/<slug>``), or ``None``
+    when the cache is disabled. Resolve it where the project is bound and hand it to
+    :func:`write_crop_cache`, which may run on a thread that carries no binding."""
+    if not cache_root:
+        return None
+    return Path(cache_root) / current_project().record.slug
+
+
+def crop_cache_file(cache_root: str | Path, crop_id: str) -> Path:
+    """The bound project's cache file for ``crop_id``."""
+    return Path(cache_root) / current_project().record.slug / f'{crop_id}.jpg'
+
+
 def write_crop_cache(
     crop_id: str,
     crop: Image.Image | bytes,
@@ -69,7 +88,7 @@ def write_crop_cache(
         crop_id: The item's stable id; the cache key is ``<crop_id>.jpg``.
         crop: A decoded PIL crop, already in the desired orientation, or that crop already
             encoded as JPEG (the GPU decode's), written as is.
-        cache_dir: Root cache directory (``CurationConfig.crop_cache_dir``).
+        cache_dir: The project's cache directory (:func:`project_crop_cache_dir`).
             A falsy value disables the cache entirely (no-op).
         quality: JPEG encode quality.
     """
@@ -91,6 +110,33 @@ def write_crop_cache(
         add_stage_bytes('jpeg_encode', out.stat().st_size)
     except Exception as exc:
         logger.warning('write_crop_cache failed for crop_id=%s: %s', crop_id, exc)
+
+
+def _scan_crop_cache(cache_root: Path) -> tuple[list[tuple[float, int, Path]], int]:
+    """``([(mtime, size, path)] of every cached .jpg, total bytes)`` over the whole cache:
+    every project's directory counts toward the one cap. Dot entries and in-flight
+    ``.tmp.`` writes younger than ``_TMP_FILE_MIN_AGE_S`` are left out."""
+    now = time.time()
+    entries: list[tuple[float, int, Path]] = []
+    total_bytes = 0
+    for dirpath, dirnames, filenames in os.walk(cache_root):
+        dirnames[:] = [d for d in dirnames if not d.startswith('.')]
+        for name in filenames:
+            if name.startswith('.'):
+                continue
+            path = Path(dirpath) / name
+            try:
+                st = path.lstat()
+            except OSError:
+                continue
+            if not stat.S_ISREG(st.st_mode):
+                continue
+            if '.tmp.' in name and (now - st.st_mtime) < _TMP_FILE_MIN_AGE_S:
+                continue
+            total_bytes += st.st_size
+            if name.endswith('.jpg'):
+                entries.append((st.st_mtime, st.st_size, path))
+    return entries, total_bytes
 
 
 def prune_crop_cache(
@@ -139,25 +185,7 @@ def prune_crop_cache(
             # an error; the holder is already pruning.
             return (0, 0)
 
-        now = time.time()
-        entries: list[tuple[float, int, Path]] = []
-        total_bytes = 0
-        with os.scandir(cache_root) as it:
-            for entry in it:
-                if not entry.is_file(follow_symlinks=False):
-                    continue
-                name = entry.name
-                if name.startswith('.'):
-                    continue
-                try:
-                    st = entry.stat(follow_symlinks=False)
-                except OSError:
-                    continue
-                if '.tmp.' in name and (now - st.st_mtime) < _TMP_FILE_MIN_AGE_S:
-                    continue
-                total_bytes += st.st_size
-                if name.endswith('.jpg'):
-                    entries.append((st.st_mtime, st.st_size, Path(entry.path)))
+        entries, total_bytes = _scan_crop_cache(cache_root)
 
         if total_bytes <= max_bytes:
             return (0, 0)

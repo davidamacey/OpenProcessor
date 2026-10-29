@@ -67,7 +67,8 @@ def stack(vlm_api, tmp_path, monkeypatch: pytest.MonkeyPatch, reference_region_p
     Image.new('RGB', (32, 32), (1, 2, 3)).save(buf, format='JPEG')
     docs = {}
     for cid in ('c1', 'c2', 'c3', 'c4'):
-        (tmp_path / f'{cid}.jpg').write_bytes(buf.getvalue())
+        (tmp_path / 'default').mkdir(exist_ok=True)
+        (tmp_path / 'default' / f'{cid}.jpg').write_bytes(buf.getvalue())
         docs[cid] = {
             'crop_id': cid,
             'image_path': f'/data/{cid}.jpg',

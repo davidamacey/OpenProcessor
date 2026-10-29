@@ -11,6 +11,34 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ## [Unreleased]
 
+### Upgrade notes / behaviour changes
+
+- **Re-embed existing vectors before a large ingest.** Crop vectors of items touching the right or bottom image edge were made from a zero-padded crop, and region vectors were made after a JPEG round trip (#259, #360). New data is embedded from the stored box's decoded pixels on every route. For old projects run `POST /curation/projects/{project}/reprocess` with `scopes: ["embed"]` (parts `crop` and `region`). See `docs-site/docs/operations/upgrade-and-backup.mdx`.
+- **Image document ids are now derived from the content hash** (#358). Existing images keep their ids; new images get content ids. Re-ingesting identical content reports `duplicate` even when a lookup would have missed it.
+- **The crop cache is per project** (`<cache>/<slug>/<crop_id>.jpg`) and a project delete removes its directory (#359). Old flat cache files age out.
+- **`gpu_image_prep` runs two Triton instances on the `full` profile** (#268), about 7 GB more card memory; `minimal` and `standard` stay at one. Existing installs keep their old count until the model config is regenerated (`./openprocessor profile`).
+- **`gpu_image_prep` gained an optional `boxes` input**; copy the new model files into the Triton model repository and reload the model.
+- **Index bootstrap and route warm-up run at API worker start** (#356), so a worker's first request no longer pays about 0.4 s plus 0.9 s.
+- The installer's tier prompt is a numbered menu; `--tiers` is unchanged.
+
+### Added
+- Cluster-quality evaluation harness: `scripts/bench/cluster_eval.py`, `cluster_eval_metrics.py` and `cluster_eval_set.py` (pair precision and recall, false-merge and false-split rates, stability, protected-item moves) and a recorded baseline (#341, `docs/research/cluster_eval_baseline.md`).
+- Host IO-pressure sampling in `scripts/bench/scale_run.py` (#337).
+- The embed reprocess pass sends photos of at least 3 MP to the GPU decode model with the stored boxes (28 img/s against 12 on the CPU route for about 21 MP photos, API CPU 0.03 against 0.50 s per image) and counts routes in `op_reprocess_decode_total` (#259).
+- The embed reprocess pass embeds two 64-photo chunks at once, so no chunk boundary idles the encoder: 51 against 28 img/s on about 21 MP photos with the GPU decode, 85 to 92 percent GPU busy, API CPU 0.025 s per image (#259).
+- Measurement log for the 0.7.0 work: `docs/research/v070_measurement_log.md`; research notes on the three clustering kinds and on spatial memory; the 0.7.0 wave plan in `docs/design/`.
+- `/health/pe_text` reports `pid` and `cache_scope`.
+
+### Changed
+- Docs: the published site is linked from the README and the repository homepage; first-run steps corrected after a new-user review.
+
+### Fixed
+- An empty or idle project no longer queues an `auto_label` job on every refresh cycle (#350).
+- Identical content in concurrent ingest batches is stored once (#358).
+- Ingest and the embed pass embed the stored, image-clamped box instead of an unclamped one (#259).
+- Region vectors no longer depend on a JPEG round trip, so CPU and GPU routes agree (#360).
+- Project delete leaves no crop-cache files behind (#359).
+
 ## [0.6.0] - 2026-10-16
 
 ### Highlights

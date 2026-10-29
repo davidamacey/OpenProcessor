@@ -131,8 +131,9 @@ async def test_label_batch_skips_item_restored_during_vlm_call(
 
     buf = io.BytesIO()
     Image.new('RGB', (32, 32), (1, 2, 3)).save(buf, format='JPEG')
+    (tmp_path / 'default').mkdir()
     for cid in ('undone', 'plain'):
-        (tmp_path / f'{cid}.jpg').write_bytes(buf.getvalue())
+        (tmp_path / 'default' / f'{cid}.jpg').write_bytes(buf.getvalue())
     monkeypatch.setattr(
         vlm_mod, 'get_curation_config', lambda: SimpleNamespace(crop_cache_dir=tmp_path)
     )

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hashlib
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -19,7 +20,6 @@ from src.config.curation_roles import IndexRole
 from src.config.project_context import bind_project
 from src.services.curation.dataset_import.mapping import norm_class_name
 from src.services.curation.dataset_import.project_source import item_class_name
-from src.services.curation.ingest_index import image_id_for
 from src.services.projects.combine.copy_docs import (
     link_or_copy,
     target_image_path,
@@ -82,7 +82,7 @@ def _target_location(
         target_upload_root=ctx.target.resources.upload_root,
     )
     key = tpath if ctx.request.dedup == 'content_hash' else f'{source.slug}:{tpath}'
-    return tpath, image_id_for(key, imohash), link_src
+    return tpath, hashlib.sha256(f'{key}|{imohash}'.encode()).hexdigest()[:32], link_src
 
 
 def map_negative_for(names: list[str], ctx: CopyContext, project: str) -> list[str]:

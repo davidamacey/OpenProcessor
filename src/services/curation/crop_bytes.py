@@ -1,7 +1,7 @@
 """The item-crop JPEG a worker (and a test run) sees, from one function.
 
 Cache first, source image second: the ingest-time RAM crop cache
-(``<crop_cache_dir>/<crop_id>.jpg``) when it has the crop, else open the
+(``<crop_cache_dir>/<slug>/<crop_id>.jpg``) when it has the crop, else open the
 source image, EXIF-transpose, crop and re-encode. The detection worker's
 ``_crop_jpeg_for_task`` delegates here, and so do the test-on-crop routes
 , so a preview crop is byte-for-byte the crop the worker would send to
@@ -18,6 +18,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from src.config import get_curation_config
 from src.core.logging import get_logger
+from src.services.curation.source_image_cache import crop_cache_file
 
 
 if TYPE_CHECKING:
@@ -45,7 +46,7 @@ def crop_jpeg_from_cache(crop_id: str) -> bytes | None:
     if not cache_dir:
         _cache_misses += 1
         return None
-    path = Path(cache_dir) / f'{crop_id}.jpg'
+    path = crop_cache_file(cache_dir, crop_id)
     try:
         data = path.read_bytes()
     except FileNotFoundError:
@@ -59,12 +60,9 @@ def crop_jpeg_from_cache(crop_id: str) -> bytes | None:
     return data
 
 
-def crop_jpeg_from_disk(image_path: str, bbox: tuple[float, float, float, float]) -> bytes | None:
-    """A JPEG of the item crop cut from the source image on disk.
-
-    The slow path: re-opens the source, EXIF-transposes, crops and
-    re-encodes. ``None`` when the image is missing or unreadable.
-    """
+def decode_source_rgb(image_path: str) -> Image.Image | None:
+    """The EXIF-transposed RGB source image at ``image_path``, ``None`` when it is missing or
+    unreadable."""
     p = Path(image_path)
     if not p.is_file():
         logger.warning('image_missing', path=image_path)
@@ -81,6 +79,18 @@ def crop_jpeg_from_disk(image_path: str, bbox: tuple[float, float, float, float]
         return None
     except OSError as exc:
         logger.warning('image_io_error', path=image_path, error=str(exc))
+        return None
+    return img
+
+
+def crop_jpeg_from_disk(image_path: str, bbox: tuple[float, float, float, float]) -> bytes | None:
+    """A JPEG of the item crop cut from the source image on disk.
+
+    The slow path: re-opens the source, EXIF-transposes, crops and
+    re-encodes. ``None`` when the image is missing or unreadable.
+    """
+    img = decode_source_rgb(image_path)
+    if img is None:
         return None
 
     full_w, full_h = img.size
@@ -139,7 +149,7 @@ def load_vlm_item_jpeg(
 
     if cache_dir:
         try:
-            img = Image.open(io.BytesIO((Path(cache_dir) / f'{crop_id}.jpg').read_bytes()))
+            img = Image.open(io.BytesIO(crop_cache_file(cache_dir, crop_id).read_bytes()))
             img.thumbnail((VLM_CROP_SIZE, VLM_CROP_SIZE))
             buf = io.BytesIO()
             img.convert('RGB').save(buf, format='JPEG', quality=CROP_JPEG_QUALITY)
@@ -173,6 +183,7 @@ __all__ = [
     'cache_stats',
     'crop_jpeg_from_cache',
     'crop_jpeg_from_disk',
+    'decode_source_rgb',
     'load_item_crop_jpeg',
     'load_region_jpeg',
     'load_vlm_item_jpeg',

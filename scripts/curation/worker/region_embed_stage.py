@@ -8,9 +8,10 @@ accepted before this stage existed). Region clustering and
 (:mod:`src.services.curation.clustering.region_box_clustering`) key off
 these vectors.
 
-Shares the crop-to-vector step
-(:func:`src.services.detection.region_embed.embed_region_crops`) with the
-backfill script, so both write the exact same vector for the same crop.
+The crop of a box is its stored pixels cut from the decoded source image, the cut the
+``embed`` reprocess scope and the GPU route make (``reprocess_embed.crop_arrays``), never
+the item-crop JPEG: a JPEG round trip moves the vector of a small box (#360). The source
+is decoded once per item for all of its boxes.
 
 Box ids are only final inside the write-time merge
 (:func:`~scripts.curation.worker.bulk_writer._merge` mints them against the
@@ -22,11 +23,15 @@ them after the box list landed.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
-from scripts.curation.worker.cascade import _crop_region_jpeg, _source_to_crop
+import numpy as np
+
 from src.core.logging import get_logger
-from src.services.detection.region_embed import embed_region_crops
+from src.services.curation.crop_bytes import decode_source_rgb
+from src.services.curation.reprocess_embed import crop_arrays
+from src.utils.cpu_pool import run_cpu
 
 
 if TYPE_CHECKING:
@@ -48,6 +53,19 @@ def _accepted_boxes(task: _ItemTask) -> list[RegionBox]:
     return [b for b in task.pending_boxes if b.state == 'accepted']
 
 
+async def _task_crops(task: _ItemTask) -> list[tuple[RegionBox, np.ndarray]]:
+    """``(box, pixels)`` of every accepted box of ``task``; empty when the source cannot be
+    decoded (those boxes carry no vector; the backfill picks them up)."""
+    boxes = _accepted_boxes(task)
+    if not boxes:
+        return []
+    img = await asyncio.to_thread(decode_source_rgb, task.image_path)
+    if img is None:
+        return []
+    arrays = await run_cpu(crop_arrays, img, [b.bbox_norm for b in boxes])
+    return list(zip(boxes, arrays, strict=True))
+
+
 async def embed_written_regions(tasks: list[_ItemTask], pe: PEEncoder | Any) -> None:
     """Set ``task.box_vectors[box_id]`` for every accepted box of every task,
     in batches of :data:`ENCODE_BATCH`.
@@ -57,21 +75,16 @@ async def embed_written_regions(tasks: list[_ItemTask], pe: PEEncoder | Any) -> 
     picks them up on its next run), but the flush this stage feeds into
     must never fail because of it.
     """
-    pairs = [(t, b) for t in tasks for b in _accepted_boxes(t)]
+    pairs = [(t, b, arr) for t in tasks for b, arr in await _task_crops(t)]
     for start in range(0, len(pairs), ENCODE_BATCH):
         batch = pairs[start : start + ENCODE_BATCH]
-        jpegs = [
-            _crop_region_jpeg(t.crop_jpeg, _source_to_crop(b.bbox_norm, t.item_bbox_norm))  # type: ignore[arg-type]
-            for t, b in batch
-        ]
         try:
-            embeddings = await embed_region_crops(pe, jpegs)
+            embeddings = await pe.embed_crops([arr for _, _, arr in batch])
         except Exception as exc:
             logger.warning('region_embed_batch_failed', error=str(exc), batch_size=len(batch))
             continue
-        for (t, b), emb in zip(batch, embeddings, strict=True):
-            if emb is not None:
-                t.box_vectors[b.box_id] = emb
+        for (t, b, _), emb in zip(batch, embeddings, strict=True):
+            t.box_vectors[b.box_id] = np.asarray(emb, dtype=float).tolist()
 
 
 __all__ = ['ENCODE_BATCH', 'embed_written_regions']

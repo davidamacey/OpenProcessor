@@ -540,7 +540,8 @@ not choose which models exist.
 The values come from `config_templates/profiles/*.json`. No per-profile throughput has
 been measured; measured numbers (one RTX A6000) are in `docs/PERFORMANCE.md`.
 
-The profile also decides the GPU decode (about 8.5 GB more on the Triton card):
+The profile also decides the GPU decode (about 8.5 GB more on the Triton card per `gpu_image_prep`
+instance; **full** runs two, 17,408 MiB, **minimal** and **standard** one):
 `setup.sh` and the installer write `OP_INGEST_GPU_DECODE=1` for **full** and `0` for **minimal**
 and **standard**. Set it yourself in `.env` to override; `openprocessor gpu plan` shows the result.
 

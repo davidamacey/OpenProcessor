@@ -34,9 +34,17 @@ from src.services.curation.item_doc import (
     build_item_doc,
     region_seed_status,
 )
-from src.services.curation.source_image_cache import maybe_prune_crop_cache, write_crop_cache
+from src.services.curation.source_image_cache import (
+    maybe_prune_crop_cache,
+    project_crop_cache_dir,
+    write_crop_cache,
+)
 from src.services.detection.crop_quality import blur_ratio, crop_lap_var, image_lap_var
-from src.services.detection.geometry import bbox_norm as _bbox_norm_fn, crop_id as _crop_id
+from src.services.detection.geometry import (
+    bbox_norm as _bbox_norm_fn,
+    crop_id as _crop_id,
+    crop_rect,
+)
 from src.utils.cpu_pool import run_cpu
 from src.utils.stage_timing import stage_timer
 
@@ -101,13 +109,11 @@ class IndexOutcome:
 
 
 def crop_pil(img: Image.Image, bbox_pixel: tuple[float, float, float, float]) -> Image.Image:
-    x1, y1, x2, y2 = bbox_pixel
-    x1i = max(0, round(x1))
-    y1i = max(0, round(y1))
-    x2i = max(x1i + 1, round(x2))
-    y2i = max(y1i + 1, round(y2))
+    """The pixels of the box that is stored: ``bbox_pixel`` cut to the frame, so the crop (and its
+    PE vector) never carries the zero padding Pillow adds past the edge (#259)."""
+    rect = crop_rect(bbox_pixel, *img.size)
     with stage_timer('crop'):
-        return img.crop((x1i, y1i, x2i, y2i))
+        return img.crop(rect)
 
 
 def _box_bytes(items: list[DetectedItem]) -> int:
@@ -192,6 +198,30 @@ async def embed_items(
         logger.warning('ingest_embed_crops_failed', path=image_path, error=str(exc))
     for i in wanted:
         items[i].embedding_state = EMBEDDED if items[i].pe_embedding is not None else FAILED
+
+
+async def _cache_crops(
+    service: CurationIngestService, cids: list[str], crops: Sequence[Image.Image | bytes]
+) -> None:
+    """Fill the crop cache for the items just written. After the write, so a copy that
+    lost the images-doc ``create`` leaves no crops behind; a reader that comes first
+    re-crops from the source, as on any cache miss."""
+    project_dir = project_crop_cache_dir(service.config.crop_cache_dir)
+    await asyncio.gather(
+        *(
+            run_cpu(
+                write_crop_cache,
+                cid,
+                crop,
+                project_dir,
+                nbytes=len(crop) if isinstance(crop, bytes) else crop.width * crop.height * 3,
+            )
+            for cid, crop in zip(cids, crops, strict=True)
+        )
+    )
+    await asyncio.to_thread(
+        maybe_prune_crop_cache, service.config.crop_cache_dir, service.config.crop_cache_max_bytes
+    )
 
 
 async def _whole_frame_vector(service: CurationIngestService, ctx: ImageContext) -> Any:
@@ -295,19 +325,6 @@ async def index_items(
         )
     else:
         box_vars = [None] * len(items)
-    await asyncio.gather(
-        *(
-            run_cpu(
-                write_crop_cache,
-                cid,
-                crop,
-                service.config.crop_cache_dir,
-                nbytes=len(crop) if isinstance(crop, bytes) else crop.width * crop.height * 3,
-            )
-            for cid, crop in zip(cids, crop_items, strict=True)
-        )
-    )
-
     crop_docs: list[dict[str, Any]] = []
     for idx, item in enumerate(items):
         bn = bnorms[idx]
@@ -347,10 +364,6 @@ async def index_items(
                 doc['dataset_split'] = ctx.dataset_split
         crop_docs.append(doc)
 
-    await asyncio.to_thread(
-        maybe_prune_crop_cache, service.config.crop_cache_dir, service.config.crop_cache_max_bytes
-    )
-
     created_ids: list[str] = []
     try:
         bulk_result = await service._bulk_index(
@@ -368,6 +381,19 @@ async def index_items(
                 error_kind=ERROR_KIND_BULK_INDEX,
             )
         )
+    if bulk_result.get('duplicate'):
+        # Another copy of this content created the images doc first (#358): this copy
+        # wrote nothing, so it answers as the dedup lookup would have.
+        return IndexOutcome(
+            result=IngestResult(
+                status='duplicate',
+                image_id=ctx.image_id,
+                image_path=image_path,
+                source_identifier=ctx.source_identifier,
+                imohash=ctx.imohash,
+            )
+        )
+    await _cache_crops(service, cids, crop_items)
     service._publish_created(created_ids, image_path)
 
     return IndexOutcome(
@@ -393,18 +419,20 @@ async def index_items(
     )
 
 
-def image_id_for(image_path: str, imohash: str) -> str:
-    """``sha256(path|imohash)[:32]``: the images-doc id every ingest path
-    (detector ingest and dataset import) derives."""
-    return hashlib.sha256(f'{image_path}|{imohash}'.encode()).hexdigest()[:32]
+def content_image_id(imohash: str) -> str:
+    """``sha256(imohash)[:32]``: the images-doc id every ingest path (detector
+    ingest and dataset import) derives. It names the content, not the path, so
+    the ``create`` of the images doc is what keeps one image per content when
+    copies race past the imohash lookup (#358)."""
+    return hashlib.sha256(imohash.encode()).hexdigest()[:32]
 
 
 __all__ = [
     'PARKED_CLUSTER_ID',
     'ImageContext',
     'IndexOutcome',
+    'content_image_id',
     'crop_pil',
-    'image_id_for',
     'index_items',
     'residual_placement',
 ]

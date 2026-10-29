@@ -40,7 +40,7 @@ Notes:
 - **`curation-evaluator` runs on demand.** It watches the bake-off job
   directories, has no restart policy, and reserves the card named by
   `EVALUATOR_GPU_ID`, so it has its own `evaluator` profile and
-  `--profile curation up -d` does not start it. Start it with
+  `docker compose --profile curation up -d` does not start it. Start it with
   `./openprocessor curation up curation-evaluator`, or run it in the
   foreground with `docker compose run --rm curation-evaluator`.
 - **Starting only some curation services.** Name them:

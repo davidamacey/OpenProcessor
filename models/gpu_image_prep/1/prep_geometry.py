@@ -6,7 +6,8 @@ Every function reproduces the arithmetic of the CPU ingest path it stands in for
 * :func:`letterbox_geometry`  ``geometry.letterbox_to_square``
 * :func:`whole_square_geometry`  ``pe_preprocess.whole_frame_rgb_from_image`` and
   ``pe_preprocess.resize_crop_rgb`` (shorter edge to 336, centre crop)
-* :func:`crop_rect`  ``ingest_index.crop_pil`` (zeros outside the frame)
+* :func:`crop_rect`  ``ingest_index.crop_pil`` cut to the frame, the stored box (#259)
+* :func:`stored_box_rects`  the embed pass's ``crop_pil`` of a stored ``bbox_norm`` (#259)
 * :func:`blur_rect`  ``crop_quality.crop_lap_var``'s clamped rectangle
 * :func:`filter_weights`  Pillow ``BILINEAR`` (antialiased: the support widens with the
   downscale factor) or, with ``antialias=False``, plain bilinear as OpenCV ``INTER_LINEAR``
@@ -163,11 +164,26 @@ def undo_letterbox(
     return ((x1 - lb.pad_w) / s, (y1 - lb.pad_h) / s, (x2 - lb.pad_w) / s, (y2 - lb.pad_h) / s)
 
 
-def crop_rect(bbox: tuple[float, float, float, float]) -> tuple[int, int, int, int]:
+def crop_rect(bbox: tuple[float, float, float, float], w: int, h: int) -> tuple[int, int, int, int]:
     x1, y1, x2, y2 = bbox
-    x1i = max(0, round(x1))
-    y1i = max(0, round(y1))
-    return x1i, y1i, max(x1i + 1, round(x2)), max(y1i + 1, round(y2))
+    x1i = min(max(0, round(x1)), max(w, 1) - 1)
+    y1i = min(max(0, round(y1)), max(h, 1) - 1)
+    return (
+        x1i,
+        y1i,
+        min(max(x1i + 1, round(x2)), max(w, 1)),
+        min(max(y1i + 1, round(y2)), max(h, 1)),
+    )
+
+
+def stored_box_rects(boxes_norm: np.ndarray, w: int, h: int) -> list[tuple[int, int, int, int]]:
+    """The rectangle of each stored ``bbox_norm`` (rows ``x1, y1, x2, y2`` in ``[0, 1]`` of the
+    oriented frame): scaled to pixels in float64 as the CPU embed pass does, then :func:`crop_rect`."""
+    rows = np.asarray(boxes_norm, np.float64).reshape(-1, 4)
+    return [
+        crop_rect((float(x1) * w, float(y1) * h, float(x2) * w, float(y2) * h), w, h)
+        for x1, y1, x2, y2 in rows
+    ]
 
 
 def blur_rect(

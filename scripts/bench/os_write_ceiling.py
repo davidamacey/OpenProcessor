@@ -43,6 +43,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from scripts.bench.baseline_report import percentile
+from scripts.bench.host_pressure import pressure_io
 from scripts.bench.suite_lib import SCHEMA, summarize_runs
 from scripts.bench.suite_probes import cgroup_cpu_s
 
@@ -209,15 +210,6 @@ def node_counters(client: httpx.Client, url: str) -> dict[str, float]:
         'index_throttle_ms': ind['indexing']['throttle_time_in_millis'],
         'gc_ms': sum(c['collection_time_in_millis'] for c in gc.values()),
     }
-
-
-def pressure_io() -> tuple[float, float]:
-    """Cumulative (some, full) IO stall microseconds of the host (/proc/pressure/io)."""
-    vals = {}
-    for line in Path('/proc/pressure/io').read_text().splitlines():
-        kind, *rest = line.split()
-        vals[kind] = float(dict(kv.split('=') for kv in rest)['total'])
-    return vals['some'], vals['full']
 
 
 def run_arm(

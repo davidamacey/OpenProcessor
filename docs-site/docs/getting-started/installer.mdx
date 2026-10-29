@@ -149,7 +149,8 @@ remote endpoints:
 ./openprocessor vlm apply                # apply a model chosen through the API
 ./openprocessor vlm probe                # re-probe the in-compose endpoint
 ./openprocessor vlm key set <slug>       # store an API key as secrets/vlm/<slug>
-./openprocessor train-mode on|off        # stop/start the VLM around training
+./openprocessor train-mode on        # stop the VLM around training
+./openprocessor train-mode off       # start it again
 ```
 
 `vlm use` checks the model fits the card, refuses while a training run
@@ -213,7 +214,7 @@ project.
 | 8 | health check or model setup failed: check `./openprocessor logs`, then `--repair` |
 | 9 | consent not given: re-run with `--yes` or the consent variable |
 
-There is no CPU inference path. `--cpu --control-plane-only` is an optional
+There is no CPU inference path for the detection, face and image-embedding models (the small text encoders run on CPU). `--cpu --control-plane-only` is an optional
 mode (never the default) for a machine with no usable GPU. It starts only
 OpenSearch and the API, plus Cropwright if requested. It does not start Triton,
 the curation workers, the VLM, the segmenter, the trainer or monitoring. Use it

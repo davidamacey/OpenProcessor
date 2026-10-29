@@ -151,3 +151,29 @@ def test_book_forget_drops_state() -> None:
     book.get('alpha').job_id = 'x'
     book.forget('alpha')
     assert book.get('alpha').job_id is None
+
+
+def test_empty_project_never_requests_a_train() -> None:
+    """#350: zero crops with nothing trained must not read as 'never trained'."""
+    s = ProjectSchedule()
+    for cycle in range(5):
+        assert step(s, obs(0), cycle * 120.0, POLICY) is Action.NONE
+    assert s.pending_since is None
+
+
+def test_idle_project_queues_one_train_then_nothing() -> None:
+    s = ProjectSchedule()
+    assert step(s, obs(50), 0.0, POLICY) is Action.START
+    s.on_started(50, 'job-1', previous_trained=0)
+    for cycle in range(1, 6):
+        assert step(s, obs(50, tracked='completed'), cycle * 120.0, POLICY) is Action.NONE
+
+
+def test_growth_past_the_threshold_from_empty_triggers_exactly_once() -> None:
+    s = ProjectSchedule()
+    assert step(s, obs(0), 0.0, POLICY) is Action.NONE
+    assert step(s, obs(300), 120.0, POLICY) is Action.DEFER
+    assert step(s, obs(300), 240.0, POLICY) is Action.START
+    s.on_started(300, 'job-1', previous_trained=0)
+    for cycle in range(3, 7):
+        assert step(s, obs(300, tracked='completed'), cycle * 120.0, POLICY) is Action.NONE

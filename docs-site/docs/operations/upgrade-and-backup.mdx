@@ -33,6 +33,28 @@ installed directory `update` is the same as `upgrade`.
    The upgrade backs up release files and `.env`; it does not copy the
    OpenSearch volume or `data/`.
 
+## Release-specific steps
+
+### Re-embed region vectors when upgrading to 0.7.0
+
+Before 0.7.0 the CPU paths embedded each region (per-box) crop after a JPEG
+round trip, so on large photos the stored region vectors of small boxes differ
+from the vectors of the box pixels (and from the GPU route). From 0.7.0 every
+route embeds the decoded pixels of the stored box. Vectors written by an older
+release stay as they were until you re-embed them, so region neighbor search
+and region clustering mix two spaces for small boxes. Re-embed the region
+vectors of every project that has region boxes, before a large ingest:
+
+```bash
+curl -s -X POST "http://127.0.0.1:4603/curation/projects/<project>/reprocess" \
+  -H 'content-type: application/json' \
+  -d '{"targets":{"filter":{"all_images":true}},"scopes":["embed"],"embed":{"parts":["region"]},"dry_run":false}'
+```
+
+Poll `GET /curation/projects/<project>/reprocess/jobs/<job_id>` until it
+finishes. Crop and whole-frame vectors are not touched by `parts: ["region"]`.
+Class fields and locks are never written by this scope.
+
 ## Upgrade an installed directory
 
 ```bash

@@ -114,23 +114,23 @@ def test_without_a_terminal_the_prompt_fails_with_the_flag_to_use(shimmed: Shimm
 
 
 TIER_ARGS = ['--dry-run', '--dir', 'inst', '--project', PROJECT, '--version', RELEASE]
-TIER_PROMPT = b'Tiers to install ['
+TIER_PROMPT = b'Choice ['
 
 
-def test_invalid_tier_answer_reprompts_instead_of_installing_the_default(shimmed: Shimmed) -> None:
-    rc, tty_out, err = run_with_tty(shimmed, TIER_ARGS, ['core,curaton', 'core'], TIER_PROMPT)
+def test_out_of_range_menu_answer_reprompts_instead_of_installing_the_default(
+    shimmed: Shimmed,
+) -> None:
+    rc, tty_out, err = run_with_tty(shimmed, TIER_ARGS, ['9', '2'], TIER_PROMPT)
     assert tty_out.count(TIER_PROMPT) == 2
-    assert 'unknown tier: curaton' in err
+    assert 'Enter a number from 1 to 5.' in err
     assert rc == 0, err[-2000:]
 
 
-def test_three_invalid_tier_answers_exit_2(shimmed: Shimmed) -> None:
-    rc, tty_out, err = run_with_tty(
-        shimmed, TIER_ARGS, ['bogus', 'core,curaton', 'nope'], TIER_PROMPT
-    )
+def test_three_invalid_menu_answers_exit_2(shimmed: Shimmed) -> None:
+    rc, tty_out, err = run_with_tty(shimmed, TIER_ARGS, ['bogus', '0', 'nope'], TIER_PROMPT)
     assert tty_out.count(TIER_PROMPT) == 3
     assert rc == 2
-    assert 'no valid tier list after 3 tries' in err
+    assert 'no valid selection after 3 tries' in err
 
 
 def test_exported_token_is_used_interactively_without_a_prompt(

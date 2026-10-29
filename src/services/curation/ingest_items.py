@@ -70,9 +70,10 @@ class IngestItemsMixin:
         *,
         seed_region: bool = True,
     ) -> dict[str, int]:
-        """Write 1 images doc (blind) + N items docs (OCC upsert) through the process's
+        """Write 1 images doc (create) + N items docs (OCC upsert) through the process's
         coalescing writer (:mod:`~src.services.curation.ingest_writer`), which batches them
-        with other images' documents and answers for this image alone.
+        with other images' documents and answers for this image alone. ``duplicate`` is 1
+        when the images doc already existed: then nothing was written.
 
         ``created_ids`` (optional out-list) receives the crop_id of every
         items doc this call newly created. A flush that fails as a whole
@@ -98,6 +99,7 @@ class IngestItemsMixin:
             seeded = {d['crop_id'] for d in crop_docs if d.get(status_field) is not None}
             queued = len(seeded.intersection(unit.created_ids)) + unit.filled_absent
         return {
+            'duplicate': int(unit.duplicate),
             'images_indexed': unit.images_indexed,
             'crops_created': unit.created,
             'crops_updated': unit.updated,

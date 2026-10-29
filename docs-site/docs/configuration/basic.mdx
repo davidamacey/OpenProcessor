@@ -67,7 +67,7 @@ acts on). The API runs 32 uvicorn workers and every service that sets
 |---|---|---|
 | `GPU_PROFILE` | `standard` | `minimal` (6-8 GB), `standard` (12-24 GB), `full` (48 GB+). Read by `./openprocessor gpu plan` and the model setup, not by compose |
 | `GPU_ID` | `0` | GPU the setup scripts measure for the profile |
-| `OP_INGEST_GPU_DECODE` | `1` for `full`, `0` for `minimal` and `standard` | Decode large photos on the GPU; costs about 8.5 GB more VRAM on the Triton card |
+| `OP_INGEST_GPU_DECODE` | `1` for `full`, `0` for `minimal` and `standard` | Decode large photos on the GPU; costs about 8.5 GB more VRAM on the Triton card per `gpu_image_prep` instance (`full`: two) |
 | `OPENSEARCH_HEAP` | `2g` in `env.template` | OpenSearch JVM heap. The installer sets it to half of host RAM, between 2 and 30 GB, and never overwrites a value you set. Raise it for more projects: about 1 GB per 20 shards |
 
 Choose the profile at install time: pass `--profile NAME` to the installer,

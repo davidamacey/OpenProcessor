@@ -20,10 +20,15 @@ Safety rules kept from the per-image path:
   read-merge-write), so the lock rule and human-label preservation are unchanged.
 - Units are grouped by project index names and each group is flushed in the context its
   caller was in, so the project guard sees the bound project of the documents it writes.
-- Two images that share an item id (the same image ingested twice at once) never share a
+- Two writes that share an item id (labels added to one image twice at once) never share a
   flush, so the second sees the first as already created.
-- An images doc is written before its items. A document the store refuses is reported in
-  its own image's result (``refused``) and does not touch the others, as before.
+- An images doc is written before its items, with ``create``: its id names the content
+  (:func:`~src.services.curation.ingest_index.content_image_id`), so a second copy of the
+  same content that got past the imohash lookup (the lookup cannot see an unrefreshed
+  write) is answered 409. That unit is the ``duplicate`` and none of its items are written
+  (#358).
+- A document the store refuses is reported in its own image's result (``refused``) and does
+  not touch the others, as before.
 """
 
 from __future__ import annotations
@@ -51,9 +56,13 @@ RETRY_429_PAUSES_S = (0.1, 0.25, 0.5, 1.0, 2.0)
 
 @dataclass
 class UnitResult:
-    """What one image's documents did; ``refused`` lists the reasons for any the store refused."""
+    """What one image's documents did; ``refused`` lists the reasons for any the store refused.
+
+    ``duplicate``: the images doc already existed (another copy of the content won the
+    ``create``), so nothing of this unit was written."""
 
     images_indexed: int = 0
+    duplicate: bool = False
     created: int = 0
     updated: int = 0
     preserved_human: int = 0
@@ -256,7 +265,7 @@ class IngestWriter:
             body: list[dict[str, Any]] = []
             for u in todo:
                 assert u.image_doc is not None
-                body += [{'index': {'_index': u.images_index, '_id': u.image_doc['image_id']}}]
+                body += [{'create': {'_index': u.images_index, '_id': u.image_doc['image_id']}}]
                 body.append(u.image_doc)
             try:
                 resp = await self._client.bulk(body=body, refresh=False)
@@ -271,10 +280,12 @@ class IngestWriter:
                 return
             retry: list[_Unit] = []
             for unit, item in zip(todo, resp.get('items', []), strict=False):
-                op = item.get('index') or {}
+                op = item.get('create') or {}
                 status = op.get('status', 500)
                 if status < 300:
                     results[id(unit)].images_indexed = 1
+                elif status == 409:
+                    results[id(unit)].duplicate = True
                 elif status == 429 and pause is not None:
                     retry.append(unit)
                 else:
@@ -285,6 +296,7 @@ class IngestWriter:
             await asyncio.sleep(pause or 0)
 
     async def _write_items(self, units: list[_Unit], results: dict[int, UnitResult]) -> None:
+        units = [u for u in units if not results[id(u)].duplicate]
         remaining = [d for u in units for d in u.crop_docs]
         if not remaining:
             return

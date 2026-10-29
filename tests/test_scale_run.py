@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 from scripts.bench import scale_run as sr
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_stop_count_is_absolute_from_final_total() -> None:
@@ -50,6 +56,8 @@ def test_summarize_combines_legs_and_peaks() -> None:
             'os_store_bytes': 1_000,
             'os_segments': 10,
             'os_heap_pct': 30,
+            'io_some_stall_s': 10.0,
+            'io_full_stall_s': 2.0,
         },
         {
             'gpu_util': [20, 95],
@@ -59,6 +67,8 @@ def test_summarize_combines_legs_and_peaks() -> None:
             'os_store_bytes': 4_000,
             'os_segments': 40,
             'os_heap_pct': 55,
+            'io_some_stall_s': 16.5,
+            'io_full_stall_s': 3.0,
         },
     ]
     s = sr.summarize(legs, samples, total=10_000, baseline_img_s=None)
@@ -70,6 +80,17 @@ def test_summarize_combines_legs_and_peaks() -> None:
     assert s['peak_host_cpu_pct'] == 90.0
     assert s['peak_os_heap_pct'] == 55
     assert s['os_store_bytes'] == 4_000
+    assert s['io_some_stall_s'] == 6.5
+    assert s['io_full_stall_s'] == 1.0
+
+
+def test_io_stall_fields_read_cumulative_seconds_from_the_pressure_file(tmp_path: Path) -> None:
+    f = tmp_path / 'io'
+    f.write_text(
+        'some avg10=1.00 avg60=0.50 avg300=0.10 total=2500000\n'
+        'full avg10=0.00 avg60=0.00 avg300=0.00 total=500000\n'
+    )
+    assert sr.io_stall_fields(f) == {'io_some_stall_s': 2.5, 'io_full_stall_s': 0.5}
 
 
 def test_markdown_table_has_the_run_numbers() -> None:

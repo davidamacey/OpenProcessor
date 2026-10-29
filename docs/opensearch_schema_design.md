@@ -145,6 +145,14 @@ One document per ingested source image: `image_id`, `image_path`,
 `import_label_state`, `negative_for`. Combine provenance: `origin_project`,
 `origin_image_id`, `origin_split`.
 
+Ingest and dataset import name the document by its content: `image_id` (also the
+`_id`) is `sha256(imohash)[:32]`, written with `create`. The imohash lookup before
+the write cannot see a copy another request wrote but the index has not yet
+refreshed, so the `create` is what keeps one image per content: the copy that gets
+409 is reported `duplicate` and stores no items or crops. Images written before this
+rule keep their path-and-hash ids; the lookup still finds them, so they need no
+migration. A combine target names its images by target path and hash instead.
+
 ### `items`
 
 One document per crop. Field groups:

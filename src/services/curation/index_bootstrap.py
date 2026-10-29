@@ -55,6 +55,11 @@ logger = get_logger(__name__)
 _INDEXES_BOOTSTRAPPED: set[str] = set()
 
 
+def forget_bootstrapped(slug: str) -> None:
+    """Drop a project from this process's bootstrap cache (its indexes are gone)."""
+    _INDEXES_BOOTSTRAPPED.discard(slug)
+
+
 async def warm_knn_indexes(opensearch: Any) -> None:
     """Warm the kNN native-engine graph cache for the items + images indexes.
 
