@@ -18,6 +18,10 @@ if TYPE_CHECKING:
 
     RepositoryIndexFn = Callable[[], Awaitable[list[dict[str, Any]]]]
     SegmenterHealthFn = Callable[[], Awaitable[tuple[str, str | None]]]
+    ModelConfigFn = Callable[[str], Awaitable[dict[str, Any] | None]]
+
+# The tensor the region and ingest detectors read; a model without it yields no box.
+DETECTOR_OUTPUT = 'output0'
 
 
 async def _triton_state(
@@ -37,6 +41,7 @@ async def _check_detector(
     states: dict[str, str],
     for_activation: bool,
     project_slug: str | None,
+    get_model_config: ModelConfigFn,
 ) -> list[ValidationIssue]:
     name = profile.detector_model
     if not name:
@@ -120,7 +125,26 @@ async def _check_detector(
                 field='detector_model',
             )
         )
+    elif name in states:
+        issues.extend(await _check_detector_output(name, for_activation, get_model_config))
     return issues
+
+
+async def _check_detector_output(
+    name: str, for_activation: bool, get_model_config: ModelConfigFn
+) -> list[ValidationIssue]:
+    """A loaded detector must declare the ``output0`` tensor the detectors request; otherwise
+    every item would end ``no_region_box`` (#362). Unreadable config fails closed."""
+    config = await get_model_config(name)
+    severity = 'error' if for_activation else 'warning'
+    if config is None:
+        message = f'the configuration of {name!r} could not be read from Triton'
+    else:
+        outputs = [str(o.get('name', '')) for o in config.get('output', [])]
+        if DETECTOR_OUTPUT in outputs:
+            return []
+        message = f'{name!r} has no {DETECTOR_OUTPUT!r} output (outputs: {outputs}); the region detector reads {DETECTOR_OUTPUT!r}'
+    return [_issue('detector_model_unusable', severity, message, field='detector_model')]
 
 
 async def _check_ocr_models(

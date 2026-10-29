@@ -163,3 +163,112 @@ class TestEmbedWrittenRegions:
         assert pe.calls == [stage.ENCODE_BATCH, 5]
         for t in tasks:
             assert 'b1' in t.box_vectors
+
+
+def _noise_photo(path: Path, name: str, size: tuple[int, int] = (200, 150)) -> str:
+    rng = np.random.default_rng(abs(hash(name)) % 2**32)
+    arr = rng.integers(0, 256, (size[1], size[0], 3), dtype=np.uint8)
+    out = path / f'{name}.png'
+    Image.fromarray(arr).save(out)
+    return str(out)
+
+
+def _task_on(path: str, crop_id: str, boxes: list[RegionBox]) -> _ItemTask:
+    t = _make_task(crop_id=crop_id, boxes=boxes)
+    t.image_path = path
+    return t
+
+
+class _RecordingPE:
+    def __init__(self) -> None:
+        self.crops: list[np.ndarray] = []
+
+    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
+        self.crops.extend(crops)
+        return np.tile(np.array([1.0, 0.0], dtype=np.float32), (len(crops), 1))
+
+
+@pytest.mark.asyncio
+class TestDecodeOncePerPhoto:
+    async def test_two_items_of_one_photo_decode_it_once(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        photo = _noise_photo(tmp_path, 'a')
+        other = _noise_photo(tmp_path, 'b')
+        tasks = [
+            _task_on(photo, 'c1', [_box('b1')]),
+            _task_on(other, 'c2', [_box('b2')]),
+            _task_on(photo, 'c3', [_box('b3', x=0.5)]),
+        ]
+        decoded: list[str] = []
+        real = stage.decode_source_rgb
+        monkeypatch.setattr(stage, 'decode_source_rgb', lambda p: (decoded.append(p), real(p))[1])
+
+        await stage.embed_written_regions(tasks, _FakePE())
+
+        assert sorted(decoded) == sorted([photo, other])
+        assert all(set(t.box_vectors) == {t.pending_boxes[0].box_id} for t in tasks)
+
+    async def test_concurrent_decodes_are_bounded(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import threading
+        import time
+
+        tasks = [
+            _task_on(_noise_photo(tmp_path, f'p{i}'), f'c{i}', [_box(f'b{i}')]) for i in range(8)
+        ]
+        live = peak = 0
+        lock = threading.Lock()
+        real = stage.decode_source_rgb
+
+        def _spy(p: str) -> Image.Image | None:
+            nonlocal live, peak
+            with lock:
+                live += 1
+                peak = max(peak, live)
+            time.sleep(0.05)
+            try:
+                return real(p)
+            finally:
+                with lock:
+                    live -= 1
+
+        monkeypatch.setattr(stage, 'decode_source_rgb', _spy)
+        monkeypatch.setattr(stage, 'decode_concurrency', lambda: 2)
+
+        await stage.embed_written_regions(tasks, _FakePE())
+
+        assert peak == 2
+        assert all(t.box_vectors for t in tasks)
+
+    async def test_vectors_match_the_per_item_decode(self, tmp_path: Path) -> None:
+        photo = _noise_photo(tmp_path, 'm', (320, 240))
+        boxes_a = [_box('a1'), _box('a2', x=0.5)]
+        boxes_b = [_box('b1', x=0.3)]
+        tasks = [_task_on(photo, 'c1', boxes_a), _task_on(photo, 'c2', boxes_b)]
+        pe = _RecordingPE()
+
+        await stage.embed_written_regions(tasks, pe)
+
+        from src.services.curation.crop_bytes import decode_source_rgb
+        from src.services.curation.reprocess_embed import crop_arrays
+
+        expected: list[np.ndarray] = []
+        for boxes in (boxes_a, boxes_b):
+            img = decode_source_rgb(photo)
+            assert img is not None
+            expected.extend(crop_arrays(img, [b.bbox_norm for b in boxes]))
+        assert len(pe.crops) == len(expected)
+        for got, want in zip(pe.crops, expected, strict=True):
+            assert np.array_equal(got, want)
+
+
+def test_decode_concurrency_is_cpu_and_memory_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(stage.os, 'cpu_count', lambda: 64)
+    monkeypatch.setenv('OP_INGEST_INFLIGHT_MB', '256')
+    assert stage.decode_concurrency() == 256 // stage.DECODED_MB_21MP
+    monkeypatch.setenv('OP_INGEST_INFLIGHT_MB', '100000')
+    assert stage.decode_concurrency() == 64 // 2
+    monkeypatch.setattr(stage.os, 'cpu_count', lambda: 1)
+    assert stage.decode_concurrency() == 1
