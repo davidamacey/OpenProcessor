@@ -231,7 +231,34 @@ def verify(out: Path, pin: dict[str, Any]) -> list[str]:
     return problems
 
 
-def select(cache_dir: Path, seed: int, scale: float) -> dict[str, Any]:
+def excluded_names(paths: list[Path]) -> frozenset[str]:
+    """Image file names listed by earlier pins or manifests, so a new pin is disjoint from them.
+
+    Understands a pin (``images`` and ``near_duplicates``), a plain list of rows with
+    ``file_name``, and a split manifest (``calibration`` and ``heldout`` name lists).
+    """
+    names: set[str] = set()
+    for path in paths:
+        doc = json.loads(path.read_text())
+        if isinstance(doc, list):
+            names |= {r['file_name'] for r in doc}
+            continue
+        names |= {r['file_name'] for r in doc.get('images', [])}
+        for nd in doc.get('near_duplicates', []):
+            names.add(nd['parent'])
+            names |= {v['file_name'] for v in nd['variants']}
+        for half in ('calibration', 'heldout'):
+            names |= set(doc.get(half, []))
+    return frozenset(names)
+
+
+def select(
+    cache_dir: Path,
+    seed: int,
+    scale: float,
+    exclude: frozenset[str] = frozenset(),
+    backfill: bool = False,
+) -> dict[str, Any]:
     val, train = ensure_annotations(cache_dir)
     rare = sel.rarest_coco_classes(train)
     del train
@@ -245,7 +272,9 @@ def select(cache_dir: Path, seed: int, scale: float) -> dict[str, Any]:
             fetch_csv_text(IMAGES_URL[split], cache_dir, f'oi_{split}_images.csv'), split
         )
     oi_rows = sel.openimages_images(boxes, meta)
-    base = sel.select_base(coco_rows, oi_rows, {r['class'] for r in rare}, seed, scale)
+    base = sel.select_base(
+        coco_rows, oi_rows, {r['class'] for r in rare}, seed, scale, exclude, backfill
+    )
     return {
         'val': val,
         'rare': rare,
@@ -256,7 +285,13 @@ def select(cache_dir: Path, seed: int, scale: float) -> dict[str, Any]:
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
-    chosen = select(args.cache_dir, args.seed, args.scale)
+    chosen = select(
+        args.cache_dir,
+        args.seed,
+        args.scale,
+        excluded_names(args.exclude_manifest),
+        args.backfill_from_openimages,
+    )
     base, near_dups = chosen['base'], chosen['near_dups']
     pinned = json.loads(args.manifest.read_text()) if args.manifest.is_file() else None
     if pinned is not None:
@@ -309,6 +344,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--cache-dir', type=Path, default=Path('cache/datasets'))
     p.add_argument('--seed', type=int, default=sel.SEED)
     p.add_argument('--scale', type=float, default=1.0, help='multiplier on the per-group quotas')
+    p.add_argument(
+        '--exclude-manifest',
+        type=Path,
+        action='append',
+        default=[],
+        help='earlier pin or manifest whose images the new selection must not contain',
+    )
+    p.add_argument(
+        '--backfill-from-openimages',
+        action='store_true',
+        help='give a COCO quota shortfall to the Open Images draw of the same group',
+    )
     p.add_argument('--verify-only', action='store_true')
     return p
 
