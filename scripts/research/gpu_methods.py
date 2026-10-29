@@ -6,7 +6,8 @@ pynvml). cuGraph Leiden optimises modularity (``resolution`` 1.0 is the usual va
 CPM objective and takes no initial partition, so it is a "plain" method, compared against the CPU
 modularity Leiden for like-for-like quality.
 
-A watchdog thread polls the GPU's used memory; it records the peak above the starting level and
+Set CUDA_DEVICE_ORDER=PCI_BUS_ID so CUDA_VISIBLE_DEVICES matches nvidia-smi indices, and
+OP_NVML_INDEX to the same physical index for the watchdog. A watchdog thread polls the GPU's used memory; it records the peak above the starting level and
 aborts the process if the run exceeds ``--gpu-limit-mb`` so a shared card is never filled.
 """
 
@@ -121,7 +122,9 @@ def _labels_from(df: Any, n: int, vertex: str = 'vertex', part: str = 'partition
 def run(method: str, vectors: np.ndarray, args: Any, tm: Any, info: dict[str, Any]) -> np.ndarray:
     import cupy as cp
 
-    watch = GpuWatch(getattr(args, 'gpu_limit_mb', 40_000))
+    watch = GpuWatch(
+        getattr(args, 'gpu_limit_mb', 40_000), int(os.environ.get('OP_NVML_INDEX', '0'))
+    )
     try:
         labels = _run(method, vectors, args, tm, info)
         cp.cuda.Device().synchronize()
@@ -154,6 +157,12 @@ def _run(method: str, vectors: np.ndarray, args: Any, tm: Any, info: dict[str, A
     info['knn_backend'] = backend
     knn = knn_faiss_gpu if backend == 'faiss' else knn_cuvs
     sims, idx = tm.run('knn_s', knn, vectors, args.k)
+    if method == 'gpu_knn_leiden':  # GPU kNN, then the CPU graph and CPM Leiden
+        import graph_lib as gl
+
+        graph = tm.run('graph_s', gl.mutual_graph, sims, idx)
+        info['edges'] = int(graph.nnz // 2)
+        return np.asarray(tm.run('cluster_s', gl.leiden_cpm, graph, args.gamma, seed=args.seed))
     src, dst, wt = tm.run('graph_s', mutual_edges_gpu, sims, idx)
     info['edges'] = len(src)
     graph = _to_graph(src, dst, wt)
