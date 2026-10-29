@@ -286,3 +286,28 @@ larger margin than on the COCO sample, because the global cut collapses at 86 cl
 the detector class is a soft prior that agrees with the label for 72 to 73 percent of the subset, it caps
 recall for crops whose detector class is wrong, and the detector is trained on the COCO label space (the
 class agrees less for the Open Images animals it has no class for).
+
+### Diagnostics (`run.py diag`) on the 3,000-item set
+
+3,961 crops, 2,950 labelled, statistics fitted on the same independent 40,000-crop pool as the COCO
+run. Raw vector geometry: mean random-pair cosine 0.464, effective rank 157, hub skew 2.78 (the COCO
+sample gave 122, 2.57 and 0.50). Neighbour purity over the labelled crops (precision of the 10 nearest
+labelled neighbours, P@10): raw 0.679, centred 0.682, PCA-whitened 256 0.686 (128: 0.646), CSLS k = 10
+0.689 (centred 0.690), k-reciprocal 0.691, DBA 0.688; 1-NN precision 0.77 to 0.79 for all. Every
+re-representation moves P@10 by under 0.015, and the strata with the lowest purity do not change (P@10
+raw: low resolution 0.607, mixed scene 0.606, elongated boxes 0.645, short side under 32 px 0.604;
+near-duplicates 0.807, rare 0.777). Hub skew falls from 2.78 to 0.75 (k-reciprocal) and 1.4 to 1.5
+(CSLS, DBA) without a matching gain in purity, as on the COCO sample. The detector class equals the
+label for 75 % of the labelled crops (88 % on the COCO sample).
+
+Oracle ceilings (cut chosen on the scored labels, so an upper bound and not a held-out figure), best
+pair precision at recall at least 0.1 / 0.2 / 0.3 / 0.5: raw average linkage 0.331 / 0.253 / 0.198 /
+0.163; k-reciprocal 0.425 / 0.367 / 0.145 / none; DBA 0.402 / 0.215 / 0.189 / 0.159; whitened,
+centred and CSLS variants are at or below the raw figures; complete linkage is below average linkage in
+every cell. Leiden CPM reaches recall 0.1 in none of the nine similarity variants. Only k-reciprocal and
+DBA lift the low-recall ceiling (0.40 to 0.43 against 0.33 at recall 0.1), on a precision scale that is
+a fraction of the 0.87 to 0.91 the COCO sample showed at recall 0.14 to 0.38: the embeddings, not only the
+algorithm, are the limit at 86 classes with 28 percent person crops and a quarter of the crops under
+32 px. The embedding and processing benchmark should therefore be run on this set, not on the COCO
+sample. Raw: `artifacts_local/cluster_search/w0b/e1_3000/diag.json` (it took 4 h 8 min of one core;
+the Leiden curves dominate).
