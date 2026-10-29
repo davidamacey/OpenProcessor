@@ -12,8 +12,9 @@ holdout or excluded alone.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
+from src.services.curation.assist.apply_write import ClassWrite, write_class_to_ids
 from src.services.curation.assist.proposal_models import (
     ApplyConflict,
     AssistApplyRequest,
@@ -21,9 +22,8 @@ from src.services.curation.assist.proposal_models import (
     ScopeNow,
 )
 from src.services.curation.assist.scope_now import current_members, scope_now
-from src.services.curation.class_label import ItemLabel, class_label_update
+from src.services.curation.class_label import ItemLabel
 from src.services.curation.class_write_guard import class_write_locked
-from src.services.curation.crop_bulk import occ_bulk_human_relabel
 from src.services.rejections import rejection
 from src.utils.class_names import normalize_class_name
 
@@ -95,20 +95,12 @@ async def apply_proposal(
     skipped = len(members) - len(eligible)
     if body.dry_run or not eligible:
         return _response(body, class_name, eligible, skipped, now, written=None)
-    label = _label(body, run_id, class_id, class_name)
-    locked_at_write: set[str] = set()
-
-    def merge(current: dict[str, Any]) -> dict[str, Any]:
-        # A human or an import got there between the read and the write.
-        if class_write_locked(current):
-            locked_at_write.add(str(current.get('crop_id', '')))
-            return {}
-        return class_label_update(current, label)
-
-    written = await occ_bulk_human_relabel(opensearch, eligible, merge, writer_id=label.writer)
-    written['updated_ids'] = [i for i in written['updated_ids'] if i not in locked_at_write]
-    written['updated'] = len(written['updated_ids'])
-    return _response(body, class_name, eligible, skipped + len(locked_at_write), now, written)
+    written = await write_class_to_ids(
+        opensearch, eligible, _label(body, run_id, class_id, class_name)
+    )
+    return _response(
+        body, class_name, eligible, skipped + len(written.skipped_locked), now, written
+    )
 
 
 def _response(
@@ -117,17 +109,16 @@ def _response(
     eligible: list[str],
     skipped: int,
     now: ScopeNow,
-    written: dict[str, Any] | None,
+    written: ClassWrite | None,
 ) -> AssistApplyResponse:
-    written = written or {}
     return AssistApplyResponse(
         dry_run=body.dry_run,
         class_name=class_name,
         selected=len(eligible),
         skipped_locked=skipped,
-        updated=int(written.get('updated', 0)),
-        updated_ids=list(written.get('updated_ids', [])),
-        conflicts=[ApplyConflict(**c) for c in written.get('conflicts', [])],
+        updated=len(written.updated_ids) if written else 0,
+        updated_ids=list(written.updated_ids) if written else [],
+        conflicts=[ApplyConflict(**c) for c in written.conflicts] if written else [],
         scope_now=now,
     )
 
