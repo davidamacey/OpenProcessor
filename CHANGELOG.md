@@ -25,6 +25,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - Cluster-quality evaluation harness: `scripts/bench/cluster_eval.py`, `cluster_eval_metrics.py` and `cluster_eval_set.py` (pair precision and recall, false-merge and false-split rates, stability, protected-item moves) and a recorded baseline (#341, `docs/research/cluster_eval_baseline.md`).
 - Host IO-pressure sampling in `scripts/bench/scale_run.py` (#337).
 - The embed reprocess pass sends photos of at least 3 MP to the GPU decode model with the stored boxes (28 img/s against 12 on the CPU route for about 21 MP photos, API CPU 0.03 against 0.50 s per image) and counts routes in `op_reprocess_decode_total` (#259).
+- The embed reprocess pass embeds two 64-photo chunks at once, so no chunk boundary idles the encoder: 51 against 28 img/s on about 21 MP photos with the GPU decode, 85 to 92 percent GPU busy, API CPU 0.025 s per image (#259).
 - Measurement log for the 0.7.0 work: `docs/research/v070_measurement_log.md`; research notes on the three clustering kinds and on spatial memory; the 0.7.0 wave plan in `docs/design/`.
 - `/health/pe_text` reports `pid` and `cache_scope`.
 

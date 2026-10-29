@@ -3218,13 +3218,23 @@ same vector as the crop. Vectors of a photo are not bit-identical between the tw
 differences, as for crops); within one route repeated passes agree. The old "cosine above 0.99 for region
 vectors" expectation held only for small photos and is withdrawn.
 
+**Chunk window.** The first live run of the GPU route reached 28 img/s with the GPU about half busy while ingest
+of the same photos reached 45 to 49. The in-flight bound was not the limit (16, 24, 32 and 48 photos gave 27.6,
+27.5, 27.1 and 26.0 img/s); the barrier between 64-photo chunks was (a chunk of 256 gave 33.1, one chunk of all 1,500
+photos 34.2). A pure `embed` pass now embeds two chunks at once (`EMBED_CHUNKS_IN_FLIGHT` in `reprocess_images.py`):
+the next chunk starts on its photos while the last ones of this chunk finish and its vectors are written. The two
+chunks share one in-flight bound of 16 photos, so decoded pixels in memory do not grow. A chunk is still read,
+embedded and written as a unit: a failed chunk fails only its own images, progress is reported in chunk order, and
+a cancel waits for the chunks already started. A pass that also runs `detect` or `open_vocab` keeps one chunk at a
+time (the embed must see the items those scopes changed). Measured: 51 img/s (see the measurement log, section G).
+
 **Model files.** The change touches `models/gpu_image_prep/config.pbtxt`, `1/model.py` and
 `1/prep_geometry.py`. Triton reads them at load: copy the three files into the model repository the stack
 mounts (in a checkout that is `models/` itself) and reload the model (unload and load through Triton model
 control, or restart `triton-server`). Ingest requests do not send `boxes`, so ingest is unchanged by the
 model change.
 
-**Live procedure (not yet run).** On the test stack (own compose project name, GPU 0 or 2, quiet host), for
+**Live procedure (run in the measurement log, sections F and G).** On the test stack (own compose project name, GPU 0 or 2, quiet host), for
 set P (300 photos, 16 to 24 MP) and COCO 1,500 as in E1, three repetitions each, a fresh project per set:
 
 ```bash
@@ -3252,7 +3262,7 @@ off: the API restarted with `OP_INGEST_GPU_DECODE=0` for that run, on the build 
 0.99; a CPU pass from before the fix is not a valid reference). COCO must reproduce the E1 release/0.7.0 row
 (all photos counted `cpu_small`). If set P stays under 20 images/s with the GPU under 50 percent, the
 in-flight bound of the pass (16 photos, `_IMAGES_IN_FLIGHT` in `reprocess_embed.py`) or the 64-photo chunk
-barrier is the next limit to test.
+barrier is the next limit to test (the chunk barrier was the limit, see "Chunk window").
 
 #### Parity (final configuration against `ref-u8fp16` and `ref-u8fp16-repeat`, `precision` profile)
 

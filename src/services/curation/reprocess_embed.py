@@ -63,6 +63,11 @@ _IMAGES_IN_FLIGHT = 16
 their decoded pixels stay small."""
 
 
+def new_image_gate() -> asyncio.Semaphore:
+    """The in-flight bound of a pass. A pass that embeds several chunks at once shares one."""
+    return asyncio.Semaphore(_IMAGES_IN_FLIGHT)
+
+
 @dataclass
 class EmbedTarget:
     """One image and the items on it to re-embed."""
@@ -291,18 +296,20 @@ async def reembed_items(
     only_missing: bool = False,
     place_in_clusters: bool = True,
     gpu: GpuEmbedRoute | None = None,
+    gate: asyncio.Semaphore | None = None,
 ) -> dict[str, int]:
     """Recompute the vectors named by ``parts`` (``crop``, ``frame``,
     ``region``) for every target; ``only_missing`` limits the region part to
     boxes with no valid stored vector; ``place_in_clusters`` false leaves the
     newly embedded crops out of the clusters; ``gpu`` sends photos at or above
-    the ingest size gate to the GPU decode. Returns counters:
+    the ingest size gate to the GPU decode; ``gate`` bounds the images in flight (default: its own, one
+    per call). Returns counters:
     ``images``, ``items``, ``crop_written``, ``frame_written``,
     ``region_written`` and ``missing_image`` (path unservable or unreadable).
     """
     cfg = get_curation_config()
     writes = _Writes(get_ivf_ingest_store() if 'crop' in parts and place_in_clusters else None)
-    gate = asyncio.Semaphore(_IMAGES_IN_FLIGHT)
+    gate = gate or new_image_gate()
 
     async def embed_target(target: EmbedTarget) -> None:
         if not target_has_work(target, parts, only_missing=only_missing):
@@ -348,4 +355,4 @@ async def reembed_items(
     return writes.counts
 
 
-__all__ = ['ALL_PARTS', 'EmbedTarget', 'reembed_items', 'target_has_work']
+__all__ = ['ALL_PARTS', 'EmbedTarget', 'new_image_gate', 'reembed_items', 'target_has_work']
