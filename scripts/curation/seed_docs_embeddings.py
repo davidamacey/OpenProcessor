@@ -28,6 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from src.domain.embedding_state import not_embedded_clause  # noqa: E402  # import follows the sys.path setup above
 from src.services.projects.guard import make_script_opensearch  # noqa: E402  # import follows the sys.path setup above
 from src.services.projects.script_binding import add_project_argument, bind_script_project  # noqa: E402  # import follows the sys.path setup above
 
@@ -58,6 +59,14 @@ def vector_for(class_name: str, crop_id: str, dim: int) -> list[float]:
     ]
 
 
+def pending_query() -> dict[str, Any]:
+    return {
+        'size': CHUNK,
+        'query': not_embedded_clause(),
+        '_source': ['class_name'],
+    }
+
+
 async def _seed(args: argparse.Namespace) -> int:
     from src.config import get_curation_config
 
@@ -68,11 +77,7 @@ async def _seed(args: argparse.Namespace) -> int:
     client = make_script_opensearch([args.opensearch_url], timeout=60, max_retries=3)
     done = 0
     try:
-        query: dict[str, Any] = {
-            'size': CHUNK,
-            'query': {'bool': {'must_not': [{'exists': {'field': 'pe_embedding'}}]}},
-            '_source': ['class_name'],
-        }
+        query = pending_query()
         while True:
             hits = (await client.search(index=cfg.items_index, body=query))['hits']['hits']
             if not hits:
@@ -100,13 +105,17 @@ async def _seed(args: argparse.Namespace) -> int:
     return 0
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         '--opensearch-url', default=os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
     )
     add_project_argument(parser)
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
     bind_script_project(args.project, opensearch_url=args.opensearch_url)
     return asyncio.run(_seed(args))
 

@@ -15,9 +15,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from src.services.projects.script_binding import add_project_argument, bind_script_project  # noqa: E402  # import follows the sys.path setup above
 
 
 def confusion_counts(supports: list[int], accuracy: float = 0.9) -> list[list[int]]:
@@ -117,14 +125,23 @@ def apply(jobs_dir: Path, job_id: str, names: list[str], supports: list[int]) ->
     status_path.write_text(json.dumps(status, indent=2, sort_keys=True))
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        '--opensearch-url', default=os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
+    )
+    add_project_argument(parser)
     parser.add_argument('--jobs-dir', type=Path, required=True, help="the project's jobs directory")
     parser.add_argument('--job-id', required=True)
     parser.add_argument(
         '--class', dest='classes', action='append', required=True, help='NAME=SUPPORT'
     )
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    bind_script_project(args.project, opensearch_url=args.opensearch_url)
     names, supports = [], []
     for spec in args.classes:
         name, _, support = spec.partition('=')

@@ -136,3 +136,22 @@ def test_the_stand_in_segmenter_honours_the_request_limits() -> None:
     assert capped['candidates'][0]['mask_polygon'] is None
     floor = fake_segmenter.segment({'max_candidates': 4, 'min_score': 0.5})
     assert [c['score'] for c in floor['candidates']] == [0.91, 0.86]
+
+
+def test_the_seed_scripts_take_a_project_defaulting_to_the_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scripts.curation import seed_docs_embeddings as embeddings
+
+    monkeypatch.setenv('OP_CURATION_PROJECT', 'from-env')
+    run = ['--jobs-dir', 'j', '--job-id', 'x', '--class', 'a=1']
+    assert embeddings.build_parser().parse_args([]).project == 'from-env'
+    assert results.build_parser().parse_args(run).project == 'from-env'
+    assert results.build_parser().parse_args([*run, '--project', 'p']).project == 'p'
+
+
+def test_the_embedding_seed_selects_items_through_the_embedding_state_helper() -> None:
+    from scripts.curation import seed_docs_embeddings as embeddings
+    from src.domain.embedding_state import not_embedded_clause
+
+    assert embeddings.pending_query()['query'] == not_embedded_clause()

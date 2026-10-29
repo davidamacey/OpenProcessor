@@ -292,7 +292,7 @@ def seed_training_run(call: Call, container: str, slug: str, jobs_root: Path) ->
     args = [f"--class={name}={count}" for name, count in support.items() if count]
     subprocess.run(  # noqa: S603  # argv list, container name from the operator
         ["docker", "exec", container, "python", "scripts/curation/seed_docs_run_results.py",
-         "--jobs-dir", str(jobs_root / "projects" / slug), "--job-id", job_id, *args],
+         "--project", slug, "--jobs-dir", str(jobs_root / "projects" / slug), "--job-id", job_id, *args],
         check=True, capture_output=True, text=True, timeout=120,
     )
 
