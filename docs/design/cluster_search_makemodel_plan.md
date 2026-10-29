@@ -697,6 +697,36 @@ sheets: grid montages of small thumbnails, one sheet per cluster, per pair batch
   ground-truth metrics where they exist; disagreements are listed for a person to look at (a
   20-item human spot check per run).
 
+### 7.6 Best practices for efficient local checking (built into W8)
+
+- **Which sheets.** Half of each budget goes to targeted strata: borderline merges, the largest
+  clusters, clusters with many low-margin members, judge or method disagreements. The other half
+  is a seeded uniform random control, so purity estimates stay unbiased (targeted sheets are
+  reported separately, never pooled into the estimate).
+- **Position bias.** LLM judges favour positions ([Zheng et al. 2023](https://arxiv.org/abs/2306.05685),
+  [Wang et al. 2023](https://arxiv.org/abs/2305.17926)); multimodal judges show similar biases
+  ([MLLM-as-a-Judge](https://arxiv.org/abs/2402.04788)). Cell order is shuffled per sheet by the
+  seed, pair sides are swapped at random, and 10 % of sheets are re-rendered in a second order to
+  measure the residual effect.
+- **Planted controls.** Every batch carries known-same and known-different sheets from labelled
+  public data (about 10 %), giving false-accept and false-reject rates per run; a batch whose
+  controls fail is discarded. (Gold questions are standard crowdsourcing practice; no single source
+  is cited here, unverified.)
+- **Ensemble.** Haiku plus two local VLMs (local only for faces and plates); a panel of smaller
+  judges can match one larger judge at lower cost ([Verga et al. 2024](https://arxiv.org/abs/2404.18796)).
+  Unanimous verdicts are accepted; any disagreement goes into the owner's G3 review list.
+- **Enough sheets.** Purity is reported with a Wilson interval
+  ([Wilson 1927](https://doi.org/10.1080/01621459.1927.10502953)) and a cluster-level bootstrap,
+  because members of one sheet are correlated: the effective sample is sheets, not cells. At a
+  purity near 0.9, a half-width of 0.05 needs about 140 independent judgements and 0.10 about 35;
+  the bars in 8.2 state the interval, and a run that cannot reach it within budget reports
+  "insufficient sample", not a pass.
+- **Cache.** Verdicts are keyed by `(png_sha256, model, prompt_version)`; a re-run with an
+  unchanged sheet reuses the verdict at no cost, and a changed prompt or model invalidates it.
+- **Human audit.** The owner or a delegate re-judges a seeded 5 % of verdicts (at least 20 per
+  run) blind to the judge's answer; judge-vs-human kappa is tracked per kind and a drop below the
+  7.5 bar suspends that judge for that kind.
+
 ## 8. Measurement standard (every wave reports against this)
 
 ### 8.1 Protocol
