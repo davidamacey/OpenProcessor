@@ -148,3 +148,29 @@ def test_excluded_hashes_reads_pins_and_variants(tmp_path: Path) -> None:
     listed = tmp_path / 'list.json'
     listed.write_text(json.dumps([{'file_name': 'c.jpg', 'sha256': 'h3'}]))
     assert fve.excluded_hashes([pin, listed], tmp_path) == {'h1', 'h2', 'h3'}
+
+
+def test_select_base_takes_its_own_quotas_and_target() -> None:
+    rows = [_row(i, 'dog') for i in range(40)] + [_row(100 + i, 'car') for i in range(40)]
+    base = ves.select_base(rows, quotas={'openset': 0, 'animal': 5, 'vehicle': 7}, target=20)
+    by = {g: sum(r['group'] == g for r in base) for g in ves.GROUP_ORDER}
+    assert by == {'openset': 0, 'animal': 5, 'vehicle': 7, 'rest': 8}
+    # the default quotas are untouched by a call with its own
+    assert ves.QUOTAS == {'openset': 1200, 'animal': 1200, 'vehicle': 5200}
+
+
+def test_the_pin_records_the_quotas_and_target_it_was_drawn_with() -> None:
+    row = _row(1, 'car') | {'group': 'vehicle', 'width': 1, 'height': 1, 'bytes': 1, 'sha256': 'x'}
+    pin = ves.build_pin([row], 1, 1.0, 'h', quotas={'vehicle': 3}, target=9)
+    assert (pin['quotas'], pin['target_images']) == ({'vehicle': 3}, 9)
+    assert ves.build_pin([row], 1, 1.0, 'h')['target_images'] == ves.TARGET_IMAGES
+
+
+def test_quota_options_are_parsed_and_bad_ones_refused() -> None:
+    assert fve.parse_quotas(['openset=10', 'animal=3']) == {'openset': 10, 'animal': 3}
+    for bad in ('nogroup=3', 'animal=x', 'animal'):
+        try:
+            fve.parse_quotas([bad])
+        except fve.FetchError:
+            continue
+        raise AssertionError(f'{bad!r} was accepted')

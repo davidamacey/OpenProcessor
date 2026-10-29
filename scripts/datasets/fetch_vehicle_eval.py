@@ -52,6 +52,19 @@ logger = logging.getLogger('fetch_vehicle_eval')
 SPLIT = 'validation'
 
 
+def parse_quotas(items: list[str]) -> dict[str, int]:
+    """``group=count`` options to a quota map; a group that is not drawn is refused."""
+    out: dict[str, int] = {}
+    for item in items:
+        group, _, count = item.partition('=')
+        if group not in ves.GROUP_ORDER or not count.isdigit():
+            raise FetchError(
+                f'bad --quota {item!r}: want <group>=<count>, group in {ves.GROUP_ORDER}'
+            )
+        out[group] = int(count)
+    return out
+
+
 def excluded_hashes(paths: list[Path], cache_dir: Path) -> set[str]:
     """SHA-256 of every image the excluded manifests list.
 
@@ -92,20 +105,37 @@ def disjointness_report(
     }
 
 
-def select(cache_dir: Path, seed: int, scale: float, exclude: frozenset[str]) -> dict[str, Any]:
+def select(
+    cache_dir: Path,
+    seed: int,
+    scale: float,
+    exclude: frozenset[str],
+    split: str = SPLIT,
+    quotas: dict[str, int] | None = None,
+    target: int = ves.TARGET_IMAGES,
+) -> dict[str, Any]:
     mids = fce.oi_class_ids(fetch_csv_text(CLASS_DESC_URL, cache_dir, 'oi_class_descriptions.csv'))
-    boxes = fce.oi_boxes(fetch_csv_text(BBOX_URL[SPLIT], cache_dir, f'oi_{SPLIT}_bbox.csv'), mids)
+    boxes = fce.oi_boxes(fetch_csv_text(BBOX_URL[split], cache_dir, f'oi_{split}_bbox.csv'), mids)
     meta = fce.oi_metadata(
-        fetch_csv_text(IMAGES_URL[SPLIT], cache_dir, f'oi_{SPLIT}_images.csv'), SPLIT
+        fetch_csv_text(IMAGES_URL[split], cache_dir, f'oi_{split}_images.csv'), split
     )
     rows = openimages_images(boxes, meta)
-    return {'base': ves.select_base(rows, seed, scale, exclude), 'boxes': boxes, 'rows': len(rows)}
+    return {
+        'base': ves.select_base(rows, seed, scale, exclude, quotas, target),
+        'boxes': boxes,
+        'rows': len(rows),
+    }
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
     names = fce.excluded_names(args.exclude_manifest)
-    chosen = select(args.cache_dir, args.seed, args.scale, names)
+    quotas = ves.QUOTAS | parse_quotas(args.quota)
+    chosen = select(
+        args.cache_dir, args.seed, args.scale, names, args.split, quotas, args.target_images
+    )
     base = chosen['base']
+    if not base:
+        raise FetchError('the selection is empty; nothing to fetch or pin')
     images_dir = args.out / 'images'
     images_dir.mkdir(parents=True, exist_ok=True)
     with ThreadPoolExecutor(fce.WORKERS) as pool:
@@ -124,7 +154,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         raise FetchError(f'not disjoint or duplicated, see {args.out / "disjointness.json"}')
     gt = fce.ground_truth(base, [], {'categories': [], 'annotations': []}, chosen['boxes'])
     write_json(args.out / 'coco_gt.json', gt)
-    pin = ves.build_pin(base, args.seed, args.scale, sha256_file(args.out / 'coco_gt.json'))
+    pin = ves.build_pin(
+        base,
+        args.seed,
+        args.scale,
+        sha256_file(args.out / 'coco_gt.json'),
+        quotas,
+        args.target_images,
+    )
     write_json(args.manifest, pin)
     write_csv(
         args.out / 'ATTRIBUTION.csv',
@@ -144,6 +181,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument('--cache-dir', type=Path, default=Path('cache/datasets'))
     p.add_argument('--seed', type=int, default=ves.SEED)
     p.add_argument('--scale', type=float, default=1.0, help='multiplier on the group quotas')
+    p.add_argument('--split', choices=sorted(BBOX_URL), default=SPLIT)
+    p.add_argument(
+        '--quota',
+        action='append',
+        default=[],
+        help='group=count, overrides the Z2 quota of a group',
+    )
+    p.add_argument('--target-images', type=int, default=ves.TARGET_IMAGES)
     p.add_argument('--exclude-manifest', type=Path, action='append', default=[])
     args = p.parse_args(argv)
     try:
