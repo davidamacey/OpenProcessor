@@ -38,6 +38,8 @@ tests/installer/test_vlm_catalog.py # exercises examples/vlm/catalog.tsv's publi
 tests/installer/installer_harness.py:gemma # fake images.lock for the installer tests uses the release's public vlm_gemma4 image key (installer plan 3.1), not a leak
 tests/installer/shims/docker:gemma # test double echoes the compose file's public vLLM gemma4 image default, not a leak
 tests/installer/test_gpu_plan.py:gemma # asserts the public, tested gemma-4-e4b catalog entry is picked (installer plan 2.2), not a leak
+docs/research/embedding_model_eval_plan.md:(?i)gemma # public Google model name (EmbeddingGemma 2, Apache-2.0, issue #347) in this one research note only; generic plumbing must not hardcode it, and any other spelling in other files still fails
+docs/research/embedding_model_eval_plan.md:/mnt/nvm/(scratch/locks|repos/OpenProcessor/artifacts_local) # the shared GPU 0 lock file and the gitignored results ledger of the embedding evaluation protocol: host-local paths an executing agent must type, in this one research note only (issue #347)
 tests/installer/test_setup_env_and_flags.py:gemma # asserts VLM_IMAGE equals the lock's public vlm_gemma4 key (installer plan 2.2), not a leak
 
 # The retired-env guard and its test spell every retired name on purpose:
@@ -195,3 +197,10 @@ frontend/src/lib/stores/regionVocabulary.svelte.test.ts:gemma|Gemma # fixture us
 .github/workflows/docs.yml:uses: actions/[a-z-]+@v6 # action version tag matches the v6 pattern; not vocabulary
 .github/workflows/frontend-mutation.yml:uses: actions/[a-z-]+@v6 # action version tag matches the v6 pattern; not vocabulary
 .github/workflows/frontend.yml:uses: actions/[a-z-]+@v6 # action version tag matches the v6 pattern; not vocabulary
+
+# ---------------------------------------------------------------------------
+# Public vehicle make/model proxy data (cluster-evaluation datasets)
+# ---------------------------------------------------------------------------
+
+scripts/datasets/manifests/commons_set_c.json # public Wikimedia Commons file titles, category names and licences of real car models (engine names such as V6, makes such as Honda); not private vocabulary
+scripts/datasets/manifests/commons_set_c_categories.json # public Wikimedia Commons category names of real car models; not private vocabulary

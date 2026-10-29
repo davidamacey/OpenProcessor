@@ -2,9 +2,36 @@
 
 Measured 2026-10-28 (one session, 06:30 to 10:30 local). Groundwork for #337 (super-linear cluster
 pass) and the scale rows of #45. Every number below is a median of 3 repetitions unless a range is
-shown; raw per-repetition rows are in the JSON files the tools write (kept outside the repository).
+shown; raw per-repetition rows are in the JSON files the tools write (the small ones are in
+`docs/benchmarks/v070/`, see the Raw-data index below; the rest is kept outside the repository).
 Only the IVF cluster pass (`cluster_residuals`, method `ivf`) was measured. The geometry stage, AHC
 refinement, UMAP and the refresh daemon's assign-only pass were not.
+
+## Raw-data index
+
+Small raw files are committed under [`docs/benchmarks/v070/`](../benchmarks/v070/README.md) (paths below
+are relative to it). Everything else stays in the artifact root `$SCRATCH` (the host's scratch volume, outside
+the repository); `MANIFEST.sha256` there lists the checksums of the vector dumps. Use this table to find the
+file behind any number in this log.
+
+| Log section | Committed (`docs/benchmarks/v070/`) | Artifact root only (`$SCRATCH/...`) |
+|---|---|---|
+| Ladder: wall and stage split, memory, k-NN, isolated fit | `cluster_ladder/{setP,synth}_*.json` (3 repetitions each, `rss_mb`, `index_*`, `knn`), `cluster_ladder/fit_scaling_*.json` | `op-data/cluster_ladder/setP.npz`, `synth1m.npz` (inputs, checksums in the manifest), `logs_*.txt`, `results_v1_reset/` |
+| A and B (source device, concurrency, batch) | `ingest_campaign/results.jsonl` (labels `A_*`, `B_*`: img/s, stage sums, `gpu2_util_mean`, `triton_cpu_pct_mean`, load) | `op-data/lm/B_*.out`, `A_*`; 5 s samples `op-data/lm/samples_A_*.csv`, `samples_B_*.csv`; `triton_top_ingest_alone.txt` |
+| C (cluster pass against an ingest) | `ingest_campaign/cluster_vs_ingest/C_*_91184.json`, `ingest_campaign/results.jsonl` (labels `C_ingest_*`) | `op-data/lm/C_ingest_*.out`, `C_ladder_*.log`, `samples_C_*.csv` |
+| D (text search latency) | `ingest_campaign/D_summary.jsonl` (one summary per row) | per-request lists `op-data/lm/q_D_*.jsonl` (the 400-request new-connection row is `q_D_idle_nokeep_unique.jsonl`, the second project is `q_D_nokeep_otherproject_cocotest.jsonl`) |
+| E1 (embed pass, 0.6.0 against branch) | `live_e/exp1.jsonl` | `lv/out/samples_exp1_*.csv`, `vec_a_*.npz`, `vec_p_ingest.npz` |
+| E2 (#358 duplicates) | `live_e/exp2.jsonl`, `live_e/exp2_capped_probe.jsonl` | `lv/out/samples_lv-358*.csv`. The distinct-`imohash` and orphan counts of the table have no retained file: those projects were deleted after the counts were read. |
+| E3 (#356 restart and recycle) | `live_e/exp3.jsonl` | per-request lists `lv/out/q_restart_*.jsonl`, `q_recycle_*.jsonl`, `q_probe*_cocotest*.jsonl`. **No raw data** for the `ensure_indexes` timing (380 to 470 ms cold, 0.01 ms warm) or the cProfile figures: they were read from a shell in the API container and the output was not kept. Re-time with `ensure_indexes(client, project)` twice in a fresh worker before relying on them. |
+| E4 (#268 instances) | `live_e/exp4.jsonl` | `lv/out/samples_lv-268-*.csv` |
+| F1 to F4 | `live_f/exp1.jsonl`, `live_f/gpu500.log` | `lw/out/samples_exp1_*.csv`, `vec_*.npz`, `reg_cpu.npz`, `reg_gpu.npz` (F2 region parity), `m_*.txt` (route counters) |
+| G1 (region parity) | `live_g/exp1.jsonl` (labels `gpuR*`, `cpuR*`, `gpuW*`, `cpuW`) | `lx/out/reg_{cpu,gpu}*.npz` (region vectors per pass, checksums in the manifest), compared with `lx/cos.py`; dumped by `lx/dumpreg.py` |
+| G2 (worker region-stage cost) | none | **No raw data.** The stdout of the two stage runs (86 against 220 ms per item, CPU 0.077 against 0.212 s) was not saved; only the GPU sample file `lx/out/samples_wk_lx-p2_branch.csv` and the input list `lx/wk_in.json` remain. The CPU ratio is 2.7; the wall ratio is 2.57 (220 / 85.6). Re-run `lx/wk.py` against the stage before quoting these as a baseline for #362. |
+| G3 to G5 (tuning, final configuration) | `live_g/exp1.jsonl` (`gpu500_mean` is the 500 ms mean), `live_g/final.log`, `live_g/g500_*.log` (500 ms samples, one value per line), `live_g/tune*.log`, `live_g/cpu_run.log` | `lx/out/samples_exp1_*.csv` |
+
+Where a table in this log disagrees with the file named here, the file is right; the corrections made on
+2026-10-28 (memory table statistic, GPU and Triton CPU columns of A to C, the section D count) are noted at
+their tables.
 
 ## Setup
 
@@ -86,22 +113,30 @@ pass was 11 minutes) or disk (the whole session used 4.4 GB of result files plus
 OpenSearch indexes, which peaked near 14 GB for the 1,000,000 project and were deleted after each
 repetition).
 
-### Memory and index size
+### Memory and index size (median of 3 repetitions; range in brackets; recomputed from the per-repetition rows)
 
-| Data | Crops | Resident before pass MB | Peak resident MB | Pass overhead MB | Index after load MB | Index after pass MB | Bulk load s |
+Memory is `VmHWM`/`VmRSS` in MiB as the bench wrote it; index sizes are `_stats` store bytes in MiB.
+
+| Data | Crops | Resident before pass | Peak resident | Pass overhead (peak minus before, per repetition) | Index after load | Index after pass | Bulk load s |
 |---|---|---|---|---|---|---|---|
-| P | 10,000 | 980 | 1,165 | about 190 | 54 | 40 | 4.8 |
-| P | 25,000 | 1,179 | 1,640 | about 460 | 99 | 211 | 9.4 |
-| P | 50,000 | 1,445 | 2,123 | about 680 | 98 | 784 | 18.3 |
-| P | 91,184 | 2,084 | 3,069 | about 985 | 439 | 1,494 | 32.4 |
-| S | 250,000 | 4,372 | 6,389 | about 2,020 | 2,094 | 4,536 | 89.1 |
-| S | 500,000 | 7,376 | 11,284 | about 3,910 | 2,783 | 7,826 | 199.5 |
-| S | 1,000,000 | 13,241 | 21,137 | about 7,900 | 7,899 | 14,028 | 390.2 |
+| P | 10,000 | 980 | 1,043 (1,015-1,165) | 114 | 63 (54-98) | 40 (40-40) | 4.8 |
+| P | 25,000 | 1,179 | 1,554 (1,511-1,640) | 453 | 99 (84-163) | 211 (162-234) | 9.5 |
+| P | 50,000 | 1,445 | 2,057 (1,937-2,123) | 612 | 247 (98-268) | 784 (690-908) | 18.3 |
+| P | 91,184 | 2,084 | 3,002 (2,974-3,069) | 950 | 456 (439-458) | 1,447 (1,426-1,494) | 33.1 |
+| S | 250,000 | 4,372 | 6,382 (6,341-6,389) | 2,017 | 2,099 (2,094-2,193) | 4,315 (4,174-4,536) | 89.6 |
+| S | 500,000 | 7,376 | 11,278 (11,172-11,284) | 3,908 | 2,783 (2,618-2,865) | 7,701 (7,691-7,826) | 199.5 |
+| S | 1,000,000 | 13,241 | 21,120 (21,001-21,137) | 7,882 | 5,182 (4,979-7,899) | 14,133 (14,028-19,479) | 390.2 |
+
+An earlier version of this table was headed "median" but showed the maximum peak of the three
+repetitions and the index sizes of repetition 0 (for example 7,899 MiB after load at 1,000,000, which
+is the high outlier of the three; the other two read about 5,000 MiB). The repetition-to-repetition
+spread of the small sizes' "before" column is large because the first repetition of a rung started
+with a smaller resident base (612 MiB at 10,000).
 
 The resident set before the pass is the bench's own copy of the vectors plus Python; the pass
-overhead (peak minus before) is about 8 KB per crop at every size from 91,184 up: linear. The index
-sizes are snapshots (see Method); only the order of magnitude, about 5 to 8 KB per document after the
-load and roughly double after the write-back, should be read from them.
+overhead is about 8 KB per crop from 250,000 up (2,017 MiB, 3,908 MiB and 7,882 MiB; 10 KB at 91,184):
+linear. The index sizes are snapshots (see Method); only the order of magnitude, about 5 to 8 KB per
+document after the load and roughly double after the write-back, should be read from them.
 
 ### k-NN query latency (OpenSearch Lucene HNSW, ms, 200 queries)
 
@@ -182,15 +217,18 @@ assign of the whole prefix to the 512 centroids took 0.14 s, 0.35 s and 0.71 s: 
 * **#45** (scale rows): the synthetic ladder to 1,000,000 fits in 11 minutes per pass on this host
   and 14 GB of index, so the 1M row of the cluster stage is cheap; the real-crop 1M row still
   needs real data (synthetic planted structure has a different fit time, finding 3).
-* Measurement tooling:
-  * `cluster_plumbing_bench.reset_clusters` (a whole-index `update_by_query` that rewrites every
-    document with its vector) ran past 30 minutes at 250,000 rows and then failed with
-    `ConnectionError(400, 'Too many headers received')` from the async client; the cause was not
-    investigated, the ladder avoids it with a fresh project per repetition.
-  * A pass can report `status: success` with `n_residuals` smaller than the pool when the refresh
-    daemon assigns a new project's items first (seen as 5,117 of 25,000 and 62,760 of 91,184 in
-    the first, discarded version of the ladder, which reset in place). The benches check
-    `n_residuals`; a caller that does not would take a partial pass for a full one.
+* Measurement tooling (both fixed in #357):
+  * `cluster_plumbing_bench.reset_clusters` ran one `update_by_query` for the whole reset and
+    failed after about 30 minutes at 250,000 rows with `ConnectionError(400, 'Too many headers
+    received')`. The client refuses a response with more than 128 headers; the node's `Warning`
+    headers accumulate over a request that long (the header flood is reproduced offline against
+    a stand-in server, the node's side of it is not). The reset is now a polled node task over
+    documents that hold a cluster field, and fails unless none is left.
+  * A pass could report `status: success` with `n_residuals` smaller than the pool when the
+    refresh daemon assigned a new project's items first (5,117 of 25,000 and 62,760 of 91,184
+    in the first, discarded version of the ladder). `cluster_residuals` now returns
+    `status: partial` when it read less than 99 percent of the pool it expected (or a write
+    failed), without fitting or writing; the auto-label job fails on it.
 
 ## Reproduce
 
@@ -247,8 +285,12 @@ Data: **set P** photographs (private, 16 to 24 MP baseline JPEGs, GPU decode on)
 Method notes: before every ingest the input files' page-cache pages were dropped
 (`posix_fadvise(DONTNEED)`; verified: a cold sequential read of 100 files ran at 185 MB/s, the second read
 at 2,500 MB/s), so every run reads from the device. GPU utilisation is `nvidia-smi` every 5 s on the
-Triton GPU, averaged over the run window only. Triton CPU is `docker stats` (100 percent = one core),
-mean over the run. **Stage seconds are summed over all batches in flight, not wall time** (concurrency x
+Triton GPU, the mean of the samples taken during the ingest command (`gpu2_util_mean` in
+`results.jsonl`, 18 to 22 samples per run, so the idle samples at the start and end of the command are
+included). Triton CPU is `docker stats` (100 percent = one core), the mean of the same samples
+(`triton_cpu_pct_mean`); the table gives the mean of the three runs. An earlier version of these
+columns was 3 to 7 points (GPU) and 70 to 100 points (Triton CPU) off these values and did not state
+its method; they were recomputed from `results.jsonl`. **Stage seconds are summed over all batches in flight, not wall time** (concurrency x
 batch images are in flight at once, so `gpu_decode` is mostly queueing time inside Triton); they are
 compared across runs, not added up to the wall. Default ingest settings are batch size 16, concurrency
 16. Reference: 17.9 MP per image on folder F, so 37.5 img/s is about 670 MP/s.
@@ -257,8 +299,8 @@ compared across runs, not added up to the wall. Default ingest settings are batc
 
 | Source | img/s (3 runs) | Run s | GPU util % (3 runs) | Triton CPU % | `file_read` stage s (sum) | `opensearch_write` stage s (sum) | Load avg during |
 |---|---|---|---|---|---|---|---|
-| HDD RAID (cold cache) | 37.2, 38.3, 38.9 | 88, 86, 84 | 58, 58, 65 | 690 | 84, 97, 110 | 1,477 to 1,978 | 10.7 to 20.5 |
-| NVMe (cold cache) | 37.3, 33.9, 37.2 | 88, 96, 88 | 62, 70, 77 | 665 | 14 to 17 | 873 to 1,088 | 14.4 to 25.8 |
+| HDD RAID (cold cache) | 37.2, 38.3, 38.9 | 88, 86, 84 | 52, 52, 58 | 603 | 84, 97, 110 | 1,477 to 1,978 | 10.7 to 20.5 |
+| NVMe (cold cache) | 37.3, 33.9, 37.2 | 88, 96, 88 | 56, 63, 70 | 563 | 14 to 17 | 873 to 1,088 | 14.4 to 25.8 |
 
 The device does not matter: the median is 38.3 img/s from HDD and 37.2 from NVMe (the NVMe low run, 33.9,
 ran at a load average of 25.8). The read stage is 5 to 7 times faster on NVMe (about 5 ms against 30 ms per
@@ -269,22 +311,22 @@ image summed over workers) but it is not on the critical path at 37 img/s (a 6.6
 
 | Setting | img/s (3 runs) | Median | GPU util % (3 runs) | Triton CPU % | `gpu_decode` stage s (sum, first run) | Load avg during |
 |---|---|---|---|---|---|---|
-| concurrency 4 (batch 16) | 33.0, 33.1, 33.9 | 33.1 | 65, 65, 58 | 588 | 2,964 | 9.4 to 11.4 |
-| concurrency 8 | 37.2, 38.0, 37.6 | 37.6 | 69, 67, 64 | 667 | 6,586 | 11.6 to 13.0 |
-| concurrency 16 (default, from A) | 37.3, 33.9, 37.2 | 37.2 | 62, 70, 77 | 665 | 16,278 | 14.4 to 25.8 |
-| concurrency 32 (maximum) | 37.7, 37.0, 37.7 | 37.7 | 63, 63, 68 | 673 | 33,702 | 13.7 to 14.8 |
-| batch 8 (concurrency 16) | 38.6, 39.0, 40.9 | 39.0 | 76, 64, 76 | 740 | 6,962 | 14.2 to 16.9 |
-| batch 16 (default, from A) | 37.3, 33.9, 37.2 | 37.2 | 62, 70, 77 | 665 | 16,278 | 14.4 to 25.8 |
-| batch 32 | 38.0, 39.2, 39.1 | 39.1 | 62, 76, 67 | 678 | 28,714 | 15.0 to 17.9 |
-| batch 64 (maximum) | 37.3, 36.4, 36.8 | 36.8 | 56, 57, 69 | 664 | 41,382 | 13.2 to 17.1 |
+| concurrency 4 (batch 16) | 33.0, 33.1, 33.9 | 33.1 | 59, 59, 52 | 510 | 2,964 | 9.4 to 11.4 |
+| concurrency 8 | 37.2, 38.0, 37.6 | 37.6 | 62, 60, 58 | 606 | 6,586 | 11.6 to 13.0 |
+| concurrency 16 (default, from A) | 37.3, 33.9, 37.2 | 37.2 | 56, 63, 70 | 563 | 16,278 | 14.4 to 25.8 |
+| concurrency 32 (maximum) | 37.7, 37.0, 37.7 | 37.7 | 57, 56, 61 | 610 | 33,702 | 13.7 to 14.8 |
+| batch 8 (concurrency 16) | 38.6, 39.0, 40.9 | 39.0 | 68, 57, 67 | 649 | 6,962 | 14.2 to 16.9 |
+| batch 16 (default, from A) | 37.3, 33.9, 37.2 | 37.2 | 56, 63, 70 | 563 | 16,278 | 14.4 to 25.8 |
+| batch 32 | 38.0, 39.2, 39.1 | 39.1 | 55, 68, 60 | 613 | 28,714 | 15.0 to 17.9 |
+| batch 64 (maximum) | 37.3, 36.4, 36.8 | 36.8 | 51, 52, 62 | 611 | 41,382 | 13.2 to 17.1 |
 
 Throughput saturates at about 37 to 39 img/s from concurrency 8 on. Four batches in flight (64 images) cost
 12 percent; 8, 16 and 32 batches in flight, and batches from 8 to 64 images, are all within the spread of
 a loaded host (36.8 to 39.1 medians). What grows with in-flight images is latency: the `gpu_decode`
 stage sum rises 5.7 times from concurrency 4 to 32 (and 5.8 times from batch 8 to 64) at the same
 throughput, i.e. the extra images wait in Triton's queue. At saturation the GPU is **not** busy: mean
-utilisation is 56 to 77 percent (single samples reach 100 and drop to 0 between bursts), while Triton
-uses about 6.7 cores (about 180 CPU-ms per photo) and the 48-thread host is 70 percent idle. Triton's
+utilisation is 51 to 70 percent (single samples reach 100 and drop to 0 between bursts), while Triton
+uses about 6 cores (about 160 CPU-ms per photo) and the 48-thread host is 70 percent idle. Triton's
 `top -H` during a 5k ingest shows about 30 `triton_python_b` threads at 5 to 60 percent each and no
 single thread pegged, so the limit is not one saturated thread. The `gpu_image_prep` model has
 `instance_group count: 1` (one Python-backend process owns the decoder); the data are consistent with
@@ -309,8 +351,8 @@ started), so the whole ingest ran inside the pass's fetch and fit stages. 3 runs
 
 | Ingest of the 5k set | img/s (3 runs) | Run s | GPU util % | Triton CPU % | Crops stored | Load avg during |
 |---|---|---|---|---|---|---|
-| Alone | 28.0, 27.6, 27.7 | 179 to 181 | 60, 62, 65 | 613 | 11,723 / 11,724 / 11,723 | 14.2 to 17.4 |
-| During the cluster pass | 28.8, 28.6, 28.2 | 174 to 177 | 71, 63, 69 | 622 to 636 | 11,723 / 11,724 / 11,724 | 13.5 to 17.1 |
+| Alone | 28.0, 27.6, 27.7 | 179 to 181 | 56, 59, 61 | 573 | 11,723 / 11,724 / 11,723 | 14.2 to 17.4 |
+| During the cluster pass | 28.8, 28.6, 28.2 | 174 to 177 | 67, 60, 65 | 590 | 11,723 / 11,724 / 11,724 | 13.5 to 17.1 |
 
 The cluster pass alone today reproduces the winter log (median wall 224.6 s against 231.2 s; fit 178 s
 against 182 s). **A concurrent ingest slows the cluster pass by about 8 percent** (median wall 241.5 s,
@@ -354,14 +396,14 @@ Findings:
 * **During an ingest the tail grows**: p95 150 to 165 ms, p99 350 to 460 ms, maximum 748 to 978 ms (idle:
   p99 under 110 ms apart from the cold-start rows). No request reached 1 s.
 * **The ~0.5 s and ~1.4 s outliers are a per-worker, per-project first-request cost.** With a new
-  connection per request (which lands on any of the 32 uvicorn workers) 7 of the first 400 requests
-  took 445 to 586 ms and one took 1,383 ms; server time was within 10 ms of client time, so the time is
+  connection per request (which lands on any of the 32 uvicorn workers) 9 of the first 400 requests
+  took 445 to 586 ms (6 of them over 500 ms) and one took 1,383 ms; server time was within 10 ms of client time, so the time is
   spent inside the handler. After 600 more requests (every worker touched) the same 400 requests had a
   maximum of 258 ms. On a second project the 13 slow requests (445 to 515 ms) were all among the
   first 120, a constant about 480 ms, although every worker was warm for the first project. Timing the
   call directly in the API container: `ensure_indexes` (the first-request bootstrap of
   `src/services/curation/index_bootstrap.py`: index-exists checks plus 22 mapping migrations) takes
-  **380 to 470 ms cold and 0.01 ms warm**, for both projects. That is the constant outlier: it is paid
+  **380 to 470 ms cold and 0.01 ms warm**, for both projects. (One timing run in the API container; its output was not kept, so there is no raw file. Unverified; see the raw-data index.) That is the constant outlier: it is paid
   once per (uvicorn worker, project), and again after a worker is recycled (`--limit-max-requests=10000`
   in the image command). The 1.38 s request fell on a worker with 27 earlier queries in its cache
   statistics, i.e. a barely used worker; its extra 0.9 s was not decomposed (host load 10.9, other
@@ -401,7 +443,7 @@ Findings:
 ## What this changes in the plan, and what to measure next
 
 * The ingest ceiling on this card is about 37 to 39 img/s for 18 MP photos (28 img/s at 2.35 crops per
-  image), with the GPU 35 percent idle and Triton at 6.7 cores. The 34 img/s floor of the rehearsal
+  image), with the GPU about 40 percent idle and Triton at about 6 cores. The 34 img/s floor of the rehearsal
   table (stage 1) is for 0.7 MP images and is not comparable; the stage 2 floor for set P of 27 img/s is
   met by this measurement only at 2.35 crops per image (27.6 to 28.8), without margin.
 * More concurrency or bigger batches will not raise throughput; do not spend sweep time there. The
@@ -716,7 +758,7 @@ embed stage alone; the detector, the verify call and the write are not in it.
 | v0.6.0 (box cut from the item-crop JPEG) | 103.1, 103.9, 103.4 | 85.4, 86.0, 85.6 | 0.0770, 0.0776, 0.0773 |
 | branch (box cut from the decoded source) | 266.2, 266.4, 263.0 | 220.4, 220.5, 217.7 | 0.2121, 0.2122, 0.2094 |
 
-The branch costs 0.135 CPU-s and 133 ms more per item (2.7 times): each item decodes its full 16 to 26 MP source
+The stdout of these runs was not kept (see the raw-data index), so the figures cannot be re-derived from retained data. The branch costs 0.135 CPU-s and 133 ms more per item (2.7 times in CPU; 2.57 times in wall): each item decodes its full 16 to 26 MP source
 once (about 0.13 CPU-s), and a photo with 2.4 items is decoded 2.4 times. The stage decodes the items of a flush
 one after another (`_task_crops` awaits each in turn), so a flush of 32 items takes about 7 s of wall in that
 stage. Whether that is a problem depends on the rest of the worker: the stage runs once per flush after the box

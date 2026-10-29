@@ -53,10 +53,10 @@ import os
 import sys
 from pathlib import Path
 
-from docs_screenshots import public_data
-from docs_screenshots.ctx import Ctx, _settle, api_get
+from docs_screenshots import public_data, seed
+from docs_screenshots.ctx import MAIN_PROJECT, SEEDED_PROJECTS, Ctx, _settle, api_get
 from docs_screenshots.guard import _read_only
-from docs_screenshots.registry import STATE_HEIGHT, STATES
+from docs_screenshots.registry import SEEDED_STATES, STATE_HEIGHT, STATES
 from playwright.sync_api import sync_playwright
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -110,6 +110,16 @@ def main() -> int:
         help="Capture only these route/state `name`s, for a quick re-run.",
     )
     parser.add_argument(
+        "--seeded",
+        action="store_true",
+        help="Seed an isolated, empty stack (docker/test/compose.docs-shots.yml) with its own public "
+        "projects, then capture exactly the SEEDED_STATES. Needs --container; --project and "
+        "--public-projects are set for you.",
+    )
+    parser.add_argument(
+        "--container", help="--seeded: name of the stack's API container (the detection worker runs in it)"
+    )
+    parser.add_argument(
         "--widths",
         nargs="*",
         type=int,
@@ -121,6 +131,19 @@ def main() -> int:
     )
     args = parser.parse_args()
     args.out = args.out.resolve()
+    if args.seeded:
+        if not args.container:
+            sys.exit("--seeded needs --container <the stack's API container>")
+        if args.skip_routes:
+            sys.exit("--seeded captures only states; drop --skip-routes")
+        args.project = MAIN_PROJECT
+        args.public_projects = ",".join(("default", *SEEDED_PROJECTS))
+        args.skip_routes = True
+        print("Seeding the isolated stack...")
+        try:
+            seed.seed(args.base_url, args.container)
+        except seed.SeedError as e:
+            sys.exit(str(e))
     try:
         allowed = public_data.parse_allowlist(args.public_projects)
         public_data.require_allowlisted_project(args.project, allowed)
@@ -128,7 +151,7 @@ def main() -> int:
         sys.exit(str(e))
 
     routes = [] if args.skip_routes else load_routes()
-    states = dict(STATES)
+    states = {k: v for k, v in STATES.items() if k in SEEDED_STATES} if args.seeded else dict(STATES)
     if args.only:
         routes = [r for r in routes if r["name"] in args.only]
         states = {k: v for k, v in states.items() if k in args.only}
@@ -164,6 +187,7 @@ def main() -> int:
             page.screenshot(path=str(out_path), full_page=True)
         print(f"  wrote {out_path}")
 
+    failed: list[str] = []
     with sync_playwright() as p:
         browser = p.chromium.launch(args=["--disable-gpu"])
         try:
@@ -191,10 +215,14 @@ def main() -> int:
                 try:
                     finish(page, name, 1600, fn(page, ctx))
                 except Exception as e:  # keep going; a failed state is reported, not faked
+                    failed.append(name)
                     print(f"  FAILED state {name}: {type(e).__name__}: {str(e)[:300]}")
                 page.close()
         finally:
             browser.close()
+    if failed:
+        print(f"\nFAILED states: {failed}")
+        return 1
 
     print(
         "\nDone. Review every PNG for leaked hostnames/paths before committing, "

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- An unknown URL shows a not-found page instead of the "Something went wrong / Reload" prompt.
+- A thumbnail the server cannot serve shows a dimmed empty tile instead of spilling its alt text across the cluster grid.
+- On search results the cluster badge no longer runs under the MATCH chip.
+- Accessible names for the settings axis selects and the class table's group select, hotkey input and actions header; the bake-off page no longer nests a second `main`; the review page has an `h1`.
+- Dim text and the labels on filled buttons and the LIVE badge meet WCAG AA contrast.
+- The blocked-start screen no longer repeats its title as the reason.
+- A project that is still building opens by itself once it becomes selectable.
+- The docs screenshot seeding binds a project (`--project`) like the other scripts.
+
 ## [0.6.0] - 2026-10-16
 
 ### Highlights

@@ -37,6 +37,7 @@ def _embeddings() -> np.ndarray:
 
 def _client() -> Any:
     client = MagicMock()
+    client.count = AsyncMock(return_value={'count': len(_embeddings())})
     client.bulk = AsyncMock(return_value={'errors': False})
     client.indices = MagicMock()
     client.indices.refresh = AsyncMock(return_value=None)

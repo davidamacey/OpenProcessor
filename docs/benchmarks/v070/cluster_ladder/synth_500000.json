@@ -1,0 +1,221 @@
+{
+  "size": 500000,
+  "data_sha256": "1b1f4c6a95d547d72032ecfd4278722d8872e680e098aab83770bfb36cdc9142",
+  "knn": {
+    "filter_class_share": 0.0075,
+    "unfiltered": {
+      "p50_ms": 7.18,
+      "p95_ms": 8.0,
+      "p99_ms": 9.82
+    },
+    "filtered": {
+      "p50_ms": 7.47,
+      "p95_ms": 8.32,
+      "p99_ms": 9.21
+    }
+  },
+  "load_s": 199.5,
+  "index_before": {
+    "store_bytes": 2918384217,
+    "docs": 500000
+  },
+  "index_after": {
+    "store_bytes": 8206102495,
+    "docs": 500000
+  },
+  "runs": [
+    {
+      "kind": "full",
+      "method": "ivf",
+      "size": 500000,
+      "rep": 0,
+      "status": "success",
+      "n_residuals": 500000,
+      "n_clusters": 512,
+      "wall_s": 322.594,
+      "fetch_s": 76.172,
+      "fit_s": 88.73,
+      "distance_s": 0.0,
+      "write_s": 157.301,
+      "refresh_s": 0.167,
+      "tail_s": 0.218,
+      "ivf_train_s": null,
+      "ivf_assign_s": null,
+      "load_before": {
+        "loadavg": [
+          13.44,
+          13.24,
+          13.58
+        ],
+        "cpus": 48
+      },
+      "load_after": {
+        "loadavg": [
+          20.52,
+          14.91,
+          13.87
+        ],
+        "cpus": 48
+      },
+      "other_s": 0.006,
+      "rss_mb": {
+        "VmHWM": 11172.5,
+        "VmRSS": 7231.7
+      },
+      "rss_base_mb": 6755.4,
+      "attempt": 1,
+      "project": "clusladder-500000-eebce7",
+      "load_s": 199.5,
+      "index_before": {
+        "store_bytes": 2918384217,
+        "docs": 500000
+      },
+      "index_after": {
+        "store_bytes": 8206102495,
+        "docs": 500000
+      }
+    },
+    {
+      "kind": "full",
+      "method": "ivf",
+      "size": 500000,
+      "rep": 1,
+      "status": "success",
+      "n_residuals": 500000,
+      "n_clusters": 512,
+      "wall_s": 307.433,
+      "fetch_s": 78.8,
+      "fit_s": 74.577,
+      "distance_s": 0.0,
+      "write_s": 152.541,
+      "refresh_s": 1.368,
+      "tail_s": 0.146,
+      "ivf_train_s": null,
+      "ivf_assign_s": null,
+      "load_before": {
+        "loadavg": [
+          15.98,
+          14.02,
+          13.6
+        ],
+        "cpus": 48
+      },
+      "load_after": {
+        "loadavg": [
+          21.08,
+          14.77,
+          13.71
+        ],
+        "cpus": 48
+      },
+      "other_s": 0.001,
+      "rss_mb": {
+        "VmHWM": 11284.1,
+        "VmRSS": 7331.8
+      },
+      "rss_base_mb": 7376.5,
+      "attempt": 1,
+      "project": "clusladder-500000-13b47a",
+      "load_s": 194.4,
+      "index_before": {
+        "store_bytes": 2744894706,
+        "docs": 500000
+      },
+      "index_after": {
+        "store_bytes": 8065082742,
+        "docs": 500000
+      }
+    },
+    {
+      "kind": "full",
+      "method": "ivf",
+      "size": 500000,
+      "rep": 2,
+      "status": "success",
+      "n_residuals": 500000,
+      "n_clusters": 512,
+      "wall_s": 378.787,
+      "fetch_s": 128.888,
+      "fit_s": 93.948,
+      "distance_s": 0.0,
+      "write_s": 155.683,
+      "refresh_s": 0.127,
+      "tail_s": 0.14,
+      "ivf_train_s": null,
+      "ivf_assign_s": null,
+      "load_before": {
+        "loadavg": [
+          32.77,
+          21.88,
+          16.56
+        ],
+        "cpus": 48
+      },
+      "load_after": {
+        "loadavg": [
+          22.35,
+          26.96,
+          21.98
+        ],
+        "cpus": 48
+      },
+      "other_s": 0.001,
+      "rss_mb": {
+        "VmHWM": 11277.6,
+        "VmRSS": 7331.7
+      },
+      "rss_base_mb": 7377.4,
+      "attempt": 1,
+      "project": "clusladder-500000-07a1e5",
+      "load_s": 215.2,
+      "index_before": {
+        "store_bytes": 3004013743,
+        "docs": 500000
+      },
+      "index_after": {
+        "store_bytes": 8075337960,
+        "docs": 500000
+      }
+    }
+  ],
+  "discarded_partial_passes": 0,
+  "summary": {
+    "wall_s": {
+      "median": 322.594,
+      "min": 307.433,
+      "max": 378.787
+    },
+    "fetch_s": {
+      "median": 78.8,
+      "min": 76.172,
+      "max": 128.888
+    },
+    "fit_s": {
+      "median": 88.73,
+      "min": 74.577,
+      "max": 93.948
+    },
+    "distance_s": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "write_s": {
+      "median": 155.683,
+      "min": 152.541,
+      "max": 157.301
+    },
+    "refresh_s": {
+      "median": 0.167,
+      "min": 0.127,
+      "max": 1.368
+    },
+    "tail_s": {
+      "median": 0.146,
+      "min": 0.14,
+      "max": 0.218
+    }
+  },
+  "tool": "scripts/bench/cluster_ladder.py",
+  "commit": "9a42180c"
+}

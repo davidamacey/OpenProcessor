@@ -1,0 +1,256 @@
+{
+ "schema_version": 1,
+ "started_utc": "2026-10-29T03:11:36+00:00",
+ "finished_utc": "2026-10-29T03:16:48+00:00",
+ "api": "http://127.0.0.1:5603",
+ "sample_seed": 20261028,
+ "host_load_start": {
+  "load1": 37.2412109375,
+  "load5": 40.97119140625,
+  "load15": 44.681640625,
+  "nproc": 48
+ },
+ "host_load_end": {
+  "load1": 27.83251953125,
+  "load5": 35.89990234375,
+  "load15": 41.7236328125,
+  "nproc": 48
+ },
+ "route": "GET /curation/projects/{project}/search/text",
+ "params": {
+  "captions": 1,
+  "n_queries": 2000,
+  "page_size": 200,
+  "ranking": "distinct images by first appearance of any of their crops"
+ },
+ "load1_samples": [
+  37.2412109375,
+  38.84765625,
+  38.59326171875,
+  37.4482421875,
+  38.7958984375,
+  39.2666015625,
+  44.826171875,
+  40.29541015625,
+  41.7109375,
+  42.21875,
+  36.3369140625,
+  34.94921875,
+  36.802734375,
+  33.82177734375,
+  34.001953125,
+  32.208984375,
+  29.79443359375,
+  30.1337890625,
+  36.39208984375,
+  34.14013671875
+ ],
+ "quality": {
+  "recall@1": {
+   "value": 0.383,
+   "ci95": [
+    0.3605,
+    0.4025
+   ]
+  },
+  "recall@5": {
+   "value": 0.628,
+   "ci95": [
+    0.607,
+    0.648
+   ]
+  },
+  "recall@10": {
+   "value": 0.733,
+   "ci95": [
+    0.7145,
+    0.7515
+   ]
+  },
+  "mrr@10": {
+   "value": 0.48834781746031747,
+   "ci95": [
+    0.46863373015873017,
+    0.5053573412698412
+   ]
+  },
+  "ndcg@10": {
+   "value": 0.5465256831113935,
+   "ci95": [
+    0.5284001026679414,
+    0.5632606787915538
+   ]
+  },
+  "not_found_in_depth": 67,
+  "median_rank_found": 2
+ },
+ "latency_ms": {
+  "n": 2000,
+  "p50": 116.50406901026145,
+  "p95": 163.24516202439554,
+  "p99": 197.8967909817584,
+  "mean": 122.26085099745251,
+  "min": 58.83728197659366,
+  "max": 607.4699359887745
+ },
+ "server_total_time_ms": {
+  "n": 2000,
+  "p50": 106.73,
+  "p95": 151.22,
+  "p99": 185.22,
+  "mean": 112.36623,
+  "min": 47.77,
+  "max": 598.42
+ },
+ "crop_level_rank_quality": {
+  "recall@1": {
+   "value": 0.383,
+   "ci95": [
+    0.3605,
+    0.4025
+   ]
+  },
+  "recall@5": {
+   "value": 0.597,
+   "ci95": [
+    0.5755,
+    0.616
+   ]
+  },
+  "recall@10": {
+   "value": 0.695,
+   "ci95": [
+    0.6745,
+    0.7145
+   ]
+  },
+  "mrr@10": {
+   "value": 0.4753156746031746,
+   "ci95": [
+    0.4558049603174603,
+    0.49230416666666665
+   ]
+  },
+  "ndcg@10": {
+   "value": 0.5274744976179931,
+   "ci95": [
+    0.508260758930093,
+    0.5441429423154244
+   ]
+  },
+  "not_found_in_depth": 67,
+  "median_rank_found": 3
+ },
+ "distinct_images_in_first_page_mean": 113.7345,
+ "extra_pages_fetched": 328,
+ "failure_examples": [
+  {
+   "gt": 785,
+   "query": "A woman posing for the camera standing on skis.",
+   "rank": 19,
+   "top1": 41990,
+   "top_score": 0.63635623,
+   "gt_score": 0.6175138,
+   "top1_caption": "A group of people on snow shoes posing for a photo."
+  },
+  {
+   "gt": 872,
+   "query": "A couple of baseball player standing on a field.",
+   "rank": 27,
+   "top1": 65798,
+   "top_score": 0.62918836,
+   "gt_score": 0.61388654,
+   "top1_caption": "A baseball team playing a baseball game in front of a crowd."
+  },
+  {
+   "gt": 1000,
+   "query": "The people are posing for a group photo.",
+   "rank": 59,
+   "top1": 546219,
+   "top_score": 0.6045127,
+   "gt_score": 0.58191735,
+   "top1_caption": "A large group is sitting together and eating at a restaurant."
+  },
+  {
+   "gt": 1425,
+   "query": "A meal is lying on a plate on a table.",
+   "rank": 140,
+   "top1": 485844,
+   "top_score": 0.629238,
+   "gt_score": 0.5894473,
+   "top1_caption": "a lady that has a bowl in her hand"
+  },
+  {
+   "gt": 1532,
+   "query": "A street scene with focus on the street signs on an overpass.",
+   "rank": 42,
+   "top1": 336232,
+   "top_score": 0.63297105,
+   "gt_score": 0.60201097,
+   "top1_caption": "A city street filled with lots of traffic and people."
+  },
+  {
+   "gt": 2685,
+   "query": "A group of people standing around each other.",
+   "rank": 26,
+   "top1": 353180,
+   "top_score": 0.60979676,
+   "gt_score": 0.5980113,
+   "top1_caption": "A group of people that are behind a bus."
+  },
+  {
+   "gt": 3255,
+   "query": "a group of people riding skis on a snowy surface",
+   "rank": 43,
+   "top1": 430377,
+   "top_score": 0.62285817,
+   "gt_score": 0.6000581,
+   "top1_caption": "a lady that is on some skies on some snow"
+  },
+  {
+   "gt": 4765,
+   "query": "A man riding a surfboard on a wave in the ocean.",
+   "rank": 15,
+   "top1": 334530,
+   "top_score": 0.627695,
+   "gt_score": 0.61665106,
+   "top1_caption": "A man riding a surfboard inside of a wave."
+  },
+  {
+   "gt": 5037,
+   "query": "A passenger bus pulling up to the side of a street.",
+   "rank": 16,
+   "top1": 423519,
+   "top_score": 0.63100433,
+   "gt_score": 0.6220968,
+   "top1_caption": "a public transit bus on a city street"
+  },
+  {
+   "gt": 6213,
+   "query": "A shower curtain sits open in an empty and clean bathroom.",
+   "rank": 76,
+   "top1": 357567,
+   "top_score": 0.63240296,
+   "gt_score": 0.577031,
+   "top1_caption": "A small bathroom with a white toilet next to a shower curtain covered bath tub."
+  },
+  {
+   "gt": 6818,
+   "query": "a couple of buckets in a white room",
+   "rank": null,
+   "top1": 226147,
+   "top_score": 0.61705166,
+   "gt_score": null,
+   "top1_caption": "A woman is taking a picture of food with a mobile device."
+  },
+  {
+   "gt": 7278,
+   "query": "there is a male surfer that is riding in the wave",
+   "rank": 12,
+   "top1": 515350,
+   "top_score": 0.62535363,
+   "gt_score": 0.61956346,
+   "top1_caption": "A man riding a wave on top of a surfboard."
+  }
+ ]
+}

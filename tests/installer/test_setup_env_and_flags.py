@@ -248,5 +248,63 @@ def test_control_plane_only_starts_api_and_opensearch_only(shimmed: Shimmed) -> 
     assert not any('triton-server' in ln for ln in dry_compose)
     assert all('docker-compose.cpu.yml' in ln for ln in dry_compose)
     assert configure(shimmed, '--cpu', '--control-plane-only').returncode == 0
-    assert '!reset' in (shimmed.root / 'inst' / 'docker-compose.cpu.yml').read_text()
+    overlay = (shimmed.root / 'inst' / 'docker-compose.cpu.yml').read_text()
+    assert '!reset' in overlay
+    # `./openprocessor start` runs a plain `up -d`: Triton must stay off and the
+    # API must not wait for it or be marked unhealthy by its own /health 503.
+    assert 'triton-server' in overlay
+    assert 'depends_on: !override' in overlay
+    assert 'localhost:8000/health' not in overlay
     assert 'NOT a functional inference install' in result.stdout + result.stderr
+
+
+# --- messages a first-time user reads -----------------------------------------------
+
+
+def test_cpu_alone_says_so_instead_of_claiming_no_gpu(shimmed: Shimmed) -> None:
+    result = dry(shimmed, '--cpu')
+    assert result.returncode == 4
+    assert '--cpu on its own' in result.stderr
+    assert 'No usable NVIDIA GPU' not in result.stderr
+
+
+def test_bad_version_is_refused_before_any_preflight(shimmed: Shimmed) -> None:
+    result = dry(shimmed, '--version', '1.2')
+    assert result.returncode == 2
+    assert 'Preflight' not in result.stdout
+
+
+def test_control_plane_only_install_does_not_mention_gpu_or_triton_downloads(
+    shimmed: Shimmed,
+) -> None:
+    shimmed.gpus(None)
+    result = dry(shimmed, '--cpu', '--control-plane-only')
+    assert result.returncode == 0, result.stderr
+    assert 'nvidia runtime' not in result.stdout + result.stderr
+    assert 'Triton image alone' not in result.stdout
+
+
+def test_no_start_hint_skips_model_install_for_control_plane_only(shimmed: Shimmed) -> None:
+    shimmed.gpus(None)
+    result = configure(shimmed, '--cpu', '--control-plane-only')
+    assert result.returncode == 0, result.stderr
+    assert 'run ./openprocessor start' in result.stdout
+    assert 'models install' not in result.stdout
+
+
+def test_low_disk_error_names_the_install_dir_even_in_a_dry_run(shimmed: Shimmed) -> None:
+    shimmed.flag('low_disk')
+    result = dry(shimmed)
+    assert result.returncode != 0
+    assert str(shimmed.root / 'inst') in result.stderr
+    assert 'have 4 GB' in result.stderr
+
+
+def test_install_creates_every_bind_mount_source_as_the_user(shimmed: Shimmed) -> None:
+    # Docker creates a missing bind source root-owned on the first `up`, which
+    # later blocks `openprocessor vlm key set` and removing the install dir.
+    assert configure(shimmed).returncode == 0
+    inst = shimmed.root / 'inst'
+    assert (inst / 'secrets' / 'vlm').is_dir()
+    assert oct((inst / 'secrets').stat().st_mode & 0o777) == '0o700'
+    assert (inst / 'data' / 'source').is_dir()

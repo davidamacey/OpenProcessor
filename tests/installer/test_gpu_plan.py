@@ -5,7 +5,9 @@ GPUs are given the way gpu_normalize emits them: "index total_mib used_mib".
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import subprocess
 from collections import Counter
 
@@ -325,3 +327,83 @@ def test_one_gpu_stays_a_plain_id() -> None:
     rc, kv, _ = plan(THREE_GPUS, 'core curation', 'gpu_plan=triton=2')
     assert rc == 0
     assert kv['TRITON_GPU_ID'] == kv['API_GPU_ID'] == '2'
+
+
+def _decode_mib() -> int:
+    """Per-instance footprint of gpu_image_prep, read from its Triton config."""
+    text = (REPO_ROOT / 'models' / 'gpu_image_prep' / 'config.pbtxt').read_text()
+    return int(
+        re.search(r'GPU_MIB_PER_INSTANCE"\s*value:\s*{\s*string_value:\s*"(\d+)"', text).group(1)
+    )  # type: ignore[union-attr]
+
+
+def _profile_json(name: str) -> dict:
+    return json.loads((REPO_ROOT / 'config_templates' / 'profiles' / f'{name}.json').read_text())
+
+
+def _planned_triton_mib(kv: dict[str, str]) -> int:
+    """Models plus the GPU decode the plan turns on, on the Triton card (#373)."""
+    profile = kv['GPU_PROFILE']
+    models = {'minimal': 8192, 'standard': 12288, 'full': 17408}[profile]
+    data = _profile_json(profile)
+    decode = (
+        _decode_mib() * data['gpu_image_prep_instances'] if kv['OP_INGEST_GPU_DECODE'] == '1' else 0
+    )
+    return models + decode
+
+
+HOSTS = {
+    '1x16': [(0, gb(16), 0)],
+    '1x24': [(0, gb(24), 0)],
+    '1x32': [(0, gb(32), 0)],
+    '1x40': [(0, 40960, 0)],
+    '1x48': [(0, 49140, 0)],
+    '2x24': [(0, gb(24), 0), (1, gb(24), 0)],
+    '2x32': [(0, gb(32), 0), (1, gb(32), 0)],
+    '2x48': [(0, 49140, 0), (1, 49140, 0)],
+    '3x24': [(0, gb(24), 0), (1, gb(24), 0), (2, gb(24), 0)],
+    '3x(48,12,48)': [(0, 49140, 0), (1, 12288, 0), (2, 49140, 0)],
+}
+
+
+@pytest.mark.parametrize('host', sorted(HOSTS))
+def test_the_planned_triton_footprint_fits_the_triton_card(host: str) -> None:
+    rc, kv, _ = plan(HOSTS[host])
+    assert rc == 0
+    tri = int(kv['TRITON_GPU_ID'])
+    free_mib = next(t - u for i, t, u in HOSTS[host] if i == tri)
+    assert _planned_triton_mib(kv) <= free_mib, (kv['GPU_PROFILE'], kv['OP_INGEST_GPU_DECODE'])
+
+
+@pytest.mark.parametrize(
+    ('host', 'profile', 'decode'),
+    [
+        ('1x24', 'standard', '0'),
+        ('1x32', 'standard', '0'),
+        ('1x40', 'standard', '0'),
+        ('1x48', 'standard', '0'),
+        ('2x24', 'standard', '0'),
+        ('2x32', 'standard', '0'),
+        ('2x48', 'full', '1'),
+        ('3x24', 'standard', '0'),
+    ],
+)
+def test_full_needs_the_card_that_holds_two_decode_instances(
+    host: str, profile: str, decode: str
+) -> None:
+    rc, kv, _ = plan(HOSTS[host])
+    assert rc == 0
+    assert (kv['GPU_PROFILE'], kv['OP_INGEST_GPU_DECODE']) == (profile, decode)
+
+
+def test_the_full_threshold_is_the_models_plus_two_decode_instances() -> None:
+    done = subprocess.run(
+        ['bash', '-c', f'OP_SOURCE_ONLY=1 source "{SCRIPT}"; _profile_min_free_gb full'],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    floor_mib = int(done.stdout.strip()) * 1024
+    need = 17408 + _profile_json('full')['gpu_image_prep_instances'] * _decode_mib()
+    assert need <= floor_mib

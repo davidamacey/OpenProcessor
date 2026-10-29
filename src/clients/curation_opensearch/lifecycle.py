@@ -89,23 +89,33 @@ async def create_curation_indexes(
     Returns:
         Dict of index name -> creation success.
     """
-    active_cfg = cfg or config
-    # A project may fold several roles onto one index name (shard folding,
-    # owner D4 -- SETTINGS / UMAP_VIZ_STATE onto CONFIGS for a project
-    # created with the config store). Merge their mapping properties into one body per
-    # distinct name rather than creating the name once with only
-    # whichever role's body happened to be seen first.
+    results: dict[str, bool] = {}
+    for name, body in _bodies_by_name(cfg or config).items():
+        results[name] = await _create_one(client, name, body, force_recreate)
+    return results
+
+
+def _bodies_by_name(cfg: CurationConfig) -> dict[str, dict[str, Any]]:
+    """The body of each distinct index name of ``cfg``'s project.
+
+    A project may fold several roles onto one index name (shard folding,
+    owner D4 -- SETTINGS / UMAP_VIZ_STATE onto CONFIGS for a project
+    created with the config store). Their mapping properties are merged into
+    one body per distinct name rather than creating the name once with only
+    whichever role's body happened to be seen first."""
     bodies_by_name: dict[str, dict[str, Any]] = {}
     for role, body in INDEX_BODIES.items():
-        name = index_name(active_cfg, role)
+        name = index_name(cfg, role)
         if name in bodies_by_name:
             bodies_by_name[name] = _merge_index_bodies(bodies_by_name[name], body)
         else:
             bodies_by_name[name] = body
-    results: dict[str, bool] = {}
-    for name, body in bodies_by_name.items():
-        results[name] = await _create_one(client, name, body, force_recreate)
-    return results
+    return bodies_by_name
+
+
+def curation_index_names(cfg: CurationConfig | None = None) -> list[str]:
+    """The distinct index names of the bound project (or of ``cfg``), in creation order."""
+    return list(_bodies_by_name(cfg or config))
 
 
 def _merge_index_bodies(first: dict[str, Any], second: dict[str, Any]) -> dict[str, Any]:

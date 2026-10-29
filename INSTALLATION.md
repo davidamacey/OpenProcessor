@@ -329,8 +329,9 @@ Run these from the install directory.
   re-run or a repair) are skipped, so after upgrading v1 to v2 and re-running
   v2, rollback lands on v1. With no other version on record it restores the
   newest backup (a config rollback). The files it replaces are kept in
-  `.install/rollback-undo/`. If the Triton image changed, rebuild engines
-  with `./openprocessor models install`.
+  `.install/rollback-undo/`. It restarts the stack unless you add
+  `--no-start`. If the Triton image changed, rebuild engines with
+  `./openprocessor models install`.
 - **Uninstall**: stops and removes the containers of this install only.
   Volumes, `data/`, models and caches are kept unless you add
   `--purge-volumes` (the named volumes), `--purge-data` (`models/`,
@@ -339,8 +340,10 @@ Run these from the install directory.
   that nothing else uses). Every purge makes you type the project name
   (unattended: `OP_CONFIRM_PURGE=<project>`).
 
-All of these act only on a directory this installer created, and only on its
-own compose project; a git checkout or another install's dir is refused.
+Only one installer run works in a directory at a time; a second one exits
+with code 3. All of these act only on a directory this installer created, and
+only on its own compose project; a git checkout or another install's dir is
+refused.
 
 ### Offline installs from a local bundle
 
@@ -534,8 +537,8 @@ not choose which models exist.
 | Profile | VRAM Range | Triton instances per model | Max batch | `ocr_pipeline` instances | Example GPUs |
 |---------|------------|----------------------------|-----------|--------------------------|--------------|
 | **minimal** | 6-8GB | 1 | 16 | 1 | RTX 3060, RTX 4060 |
-| **standard** | 12-24GB | 2 | 32 | 2 | RTX 3080, RTX 4090 |
-| **full** | 48GB+ | 4 | 64 | 4 | A6000, A100 |
+| **standard** | 12-39GB | 2 | 32 | 2 | RTX 3080, RTX 4090 |
+| **full** | 40GB+ | 4 | 64 | 4 | A6000, A100 |
 
 The values come from `config_templates/profiles/*.json`. No per-profile throughput has
 been measured; measured numbers (one RTX A6000) are in `docs/PERFORMANCE.md`.

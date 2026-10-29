@@ -82,7 +82,7 @@
             Total (in cluster)
           </th>
           <th class="hidden px-2 py-2 lg:px-3 font-medium lg:table-cell">Added</th>
-          <th class="px-2 py-2 lg:px-3"></th>
+          <th class="px-2 py-2 lg:px-3"><span class="sr-only">Actions</span></th>
         </tr>
       </thead>
       <tbody>
@@ -127,6 +127,7 @@
             <td class="px-2 py-1.5 lg:px-3">
               <select
                 class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs focus:border-blue-500 focus:outline-none"
+                aria-label="Group for {cls.name}"
                 value={cls.group ?? ''}
                 onchange={(e) =>
                   void changeGroup(cls, (e.currentTarget as HTMLSelectElement).value)}
@@ -146,6 +147,7 @@
                 maxlength="1"
                 value={cls.hotkey_letter ?? ''}
                 placeholder="—"
+                aria-label="Hotkey for {cls.name}"
                 title="Single char keyboard shortcut for this class. Empty to clear."
                 class="w-10 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-center font-mono text-xs uppercase focus:border-blue-500 focus:outline-none"
                 onchange={(e) =>

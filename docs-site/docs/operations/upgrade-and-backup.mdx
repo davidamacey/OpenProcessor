@@ -35,25 +35,57 @@ installed directory `update` is the same as `upgrade`.
 
 ## Release-specific steps
 
-### Re-embed region vectors when upgrading to 0.7.0
+### Re-embed crop and region vectors when upgrading to 0.7.0
 
-Before 0.7.0 the CPU paths embedded each region (per-box) crop after a JPEG
-round trip, so on large photos the stored region vectors of small boxes differ
-from the vectors of the box pixels (and from the GPU route). From 0.7.0 every
-route embeds the decoded pixels of the stored box. Vectors written by an older
-release stay as they were until you re-embed them, so region neighbor search
-and region clustering mix two spaces for small boxes. Re-embed the region
-vectors of every project that has region boxes, before a large ingest:
+Before 0.7.0 two kinds of stored vectors were made from slightly wrong pixels:
+
+- **Crop vectors** of items that touch the right or bottom image edge came from a
+  zero-padded crop (#259).
+- **Region vectors** (per-box) came from a crop after a JPEG round trip, so on large
+  photos the vectors of small boxes differ from the vectors of the box pixels and
+  from the GPU route (#360).
+
+From 0.7.0 every route embeds the decoded pixels of the stored box. Vectors written
+by an older release stay as they were until you re-embed them, so neighbor search
+and region clustering mix two spaces. Re-embed both parts for every project, before
+a large ingest:
 
 ```bash
 curl -s -X POST "http://127.0.0.1:4603/curation/projects/<project>/reprocess" \
   -H 'content-type: application/json' \
-  -d '{"targets":{"filter":{"all_images":true}},"scopes":["embed"],"embed":{"parts":["region"]},"dry_run":false}'
+  -d '{"targets":{"filter":{"all_images":true}},"scopes":["embed"],"embed":{"parts":["crop","region"]},"dry_run":false}'
 ```
 
 Poll `GET /curation/projects/<project>/reprocess/jobs/<job_id>` until it
-finishes. Crop and whole-frame vectors are not touched by `parts: ["region"]`.
-Class fields and locks are never written by this scope.
+finishes. `parts: ["region"]` alone leaves the edge-crop vectors unfixed. Whole-frame
+vectors are not touched. Class fields and locks are never written by this scope.
+
+### New `gpu_image_prep` files and the GPU embed route (0.7.0)
+
+0.7.0 changes the `gpu_image_prep` Triton model (an optional `boxes` input and two
+instances on the `full` profile). The GPU embed route stays off, with only a
+`reprocess_gpu_embed_model_outdated` log line, while the installed model still has the
+old files.
+
+- **Installed directory:** `./openprocessor upgrade` copies the changed model files
+  for you. Each model directory that carries a `MODEL_VERSION` file is replaced when the
+  release's version is newer than the installed one; engines and files the release does
+  not ship are never touched, and the profile step then rewrites the instance count and
+  GPU id in `config.pbtxt`. To run just that step without a full upgrade:
+
+  ```bash
+  ./openprocessor models install --only preflight
+  ```
+
+- **Checkout:** `git pull` is enough for the files (they are bind-mounted); apply the
+  profile's instance count with `./openprocessor profile`.
+
+Then restart Triton so it reloads the model, and check the route:
+
+```bash
+./openprocessor restart triton-server
+./openprocessor gpu plan
+```
 
 ## Upgrade an installed directory
 

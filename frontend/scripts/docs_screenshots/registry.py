@@ -116,3 +116,25 @@ STATES = {
     "region-profiles-list": state_region_profiles_list,
     "open-vocab-list": state_open_vocab_list,
 }
+
+
+# The states the seeded stack (docs_screenshots/seed.py) can produce on its own, in one run.
+SEEDED_STATES = (
+    "prompt-pack-editor",
+    "prompt-pack-test",
+    "region-profile-editor",
+    "review-regions-multibox",
+    "box-editor",
+    "region-profile-test",
+    "import-wizard",
+    "import-job",
+    "review-imported",
+    "vlm-run-picker",
+    "resources-menu",
+    "import-job-actions",
+    "locked-item-badge",
+    "reprocess-served-scopes",
+    "run-results-confusion",
+    "ingest-bulk-panel",
+    "vlm-endpoint-off",
+)

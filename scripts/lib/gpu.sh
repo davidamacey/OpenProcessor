@@ -89,7 +89,7 @@ check_gpu_memory() {
 # Profiles based on VRAM
 # minimal:  <10GB  (6-8GB GPUs like RTX 3060, RTX 4060)
 # standard: 10-40GB (12-24GB GPUs like RTX 3080, RTX 4090)
-# full:     >40GB  (A6000, A100, etc.)
+# full:     >=40GB (A6000, A100, etc.)
 
 # Auto-select profile based on detected GPU VRAM
 select_profile() {
@@ -119,7 +119,7 @@ get_profile_description() {
             echo "12-24GB VRAM (RTX 3080, RTX 4090) - All models"
             ;;
         full)
-            echo "48GB+ VRAM (A6000, A100) - All models, max parallelism"
+            echo "40GB+ VRAM (A6000, A100) - All models, max parallelism"
             ;;
         *)
             echo "Unknown profile"

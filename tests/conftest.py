@@ -240,6 +240,19 @@ def _no_real_dns(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _detector_config_is_usable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Profile validation reads a loaded detector's output names from Triton (#362); no test
+    reaches a real server, and a stubbed repository lists usable detectors. A test of the
+    unusable case passes ``get_model_config`` to ``validate_profile``."""
+    from src.services.triton_control import TritonControlService
+
+    async def _config(_self: object, _model: str) -> dict[str, object]:
+        return {'output': [{'name': 'output0'}]}
+
+    monkeypatch.setattr(TritonControlService, 'get_model_config', _config)
+
+
+@pytest.fixture(autouse=True)
 def _ephemeral_worker_metrics_port(monkeypatch: pytest.MonkeyPatch) -> None:
     """Tests that run ``worker.run()`` start its real /metrics HTTP server. On the
     default fixed port, two of them running at once (xdist workers, or two suites on

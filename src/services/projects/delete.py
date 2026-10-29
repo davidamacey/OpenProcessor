@@ -507,10 +507,6 @@ async def delete_project_finish(client: Any, *, slug: str) -> DeleteFinished:
                 project=slug,
             )
 
-        from src.services.curation.index_bootstrap import forget_bootstrapped
-
-        forget_bootstrapped(slug)
-
         await _delete_dirs(record)
         mlflow_cleanup = await delete_experiment(record.resources.mlflow_experiment)
 

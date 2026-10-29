@@ -6,6 +6,7 @@
    * default project when there is one — instead of a wall of scoped
    * errors. Everything shown is served: the status label, the default.
    */
+  import { invalidateAll } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
   import { projectsStore, type ProjectResolution } from '$stores/projects.svelte';
@@ -16,6 +17,27 @@
   let { resolution }: Props = $props();
 
   const fallback = $derived(projectsStore.defaultProject);
+
+  const POLL_MS = 3000;
+  const building = $derived(
+    resolution.kind === 'unavailable' && resolution.project.status === 'building',
+  );
+  const nowSelectable = $derived(
+    resolution.kind === 'unavailable' &&
+      projectsStore.list.find((p) => p.slug === resolution.project.slug)?.selectable ===
+        true,
+  );
+
+  // A project that is still building opens by itself: keep the served list
+  // fresh, and re-run the route load as soon as the server calls it selectable.
+  $effect(() => {
+    if (!building) return;
+    const id = setInterval(() => void projectsStore.refresh(), POLL_MS);
+    return () => clearInterval(id);
+  });
+  $effect(() => {
+    if (nowSelectable) void invalidateAll();
+  });
 </script>
 
 <div

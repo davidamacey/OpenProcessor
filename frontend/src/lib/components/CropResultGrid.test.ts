@@ -50,6 +50,16 @@ describe('CropResultGrid.svelte', () => {
     expect(src).toMatch(/@render cornerBadge/);
   });
 
+  it('bounds the corner badge so a long cluster label never runs under the match chip', () => {
+    // 9rem cards: the match chip takes the left ~4.5rem, the badge gets the
+    // rest and truncates (its title carries the full text).
+    expect(src).toMatch(
+      /absolute right-1 top-1 z-10 flex max-w-\[calc\(100%-5\.25rem\)\] justify-end/,
+    );
+    const badge = read('./ClusterBadge.svelte');
+    expect(badge.match(/block max-w-full truncate/g)?.length).toBe(2);
+  });
+
   it('p7 (2026-09-24 interactive pass): renders a top scrim behind the chip row whenever either chip can appear', () => {
     // Must be gated on the SAME condition the two chips use
     // (scoreOf?.(crop) != null || cornerBadge), not a narrower one that

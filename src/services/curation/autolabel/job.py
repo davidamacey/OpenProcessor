@@ -62,6 +62,7 @@ from collections.abc import Callable, Coroutine
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from src.services.curation.clustering.pool_coverage import PARTIAL
 from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob
 
 
@@ -223,13 +224,15 @@ def reconcile_orphaned_jobs() -> bool:
 
 
 def failed_stages(result: Any) -> list[str]:
-    """Names of the stages a finished run reported as ``status: error``; the
-    run goes on past a failed stage, but must not end as a success."""
+    """Names of the stages a finished run reported as ``status: error`` or ``partial``
+    (a cluster pass that did not cover its pool); such a run must not end as a success."""
     stages = result.get('stages') if isinstance(result, dict) else None
     if not isinstance(stages, dict):
         return []
     return [
-        name for name, s in stages.items() if isinstance(s, dict) and s.get('status') == 'error'
+        name
+        for name, s in stages.items()
+        if isinstance(s, dict) and s.get('status') in ('error', PARTIAL)
     ]
 
 

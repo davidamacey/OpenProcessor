@@ -121,7 +121,9 @@ async def test_put_new_cluster_default_changes_real_cluster_residuals_call(
         'src.services.curation.clustering.residual_fetch.fetch_residual_embeddings_parallel',
         new=AsyncMock(return_value=([], [])),
     ):
-        result = await orchestrator.cluster_residuals(app_client.fake_os, clustering_method=None)
+        result = await orchestrator.cluster_residuals(
+            app_client.fake_os, clustering_method=None, expected_pool=0
+        )
 
     assert result['method'] == non_default
 

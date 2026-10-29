@@ -1,0 +1,284 @@
+{
+ "schema_version": 1,
+ "started_utc": "2026-10-29T02:53:24+00:00",
+ "finished_utc": "2026-10-29T03:01:15+00:00",
+ "api": "http://127.0.0.1:5603",
+ "sample_seed": 20261028,
+ "host_load_start": {
+  "load1": 35.66845703125,
+  "load5": 60.03662109375,
+  "load15": 55.4609375,
+  "nproc": 48
+ },
+ "host_load_end": {
+  "load1": 26.76708984375,
+  "load5": 37.73974609375,
+  "load15": 46.18798828125,
+  "nproc": 48
+ },
+ "route": "POST /search/text (MobileCLIP, visual_search_global)",
+ "params": {
+  "captions": 5,
+  "n_queries": 10000,
+  "top_k": 100,
+  "min_score": 0.0
+ },
+ "load1_samples": [
+  35.66845703125,
+  34.33349609375,
+  32.9453125,
+  31.98828125,
+  31.98828125,
+  30.46728515625,
+  29.62890625,
+  37.02587890625,
+  36.22265625,
+  35.64404296875,
+  34.71142578125,
+  33.693359375,
+  33.693359375,
+  32.5166015625,
+  31.11376953125,
+  29.9033203125,
+  28.70947265625,
+  28.70947265625,
+  27.69140625,
+  26.5947265625,
+  26.38671875,
+  26.38671875,
+  25.955078125,
+  26.359375,
+  25.85009765625,
+  26.1826171875,
+  26.1826171875,
+  25.607421875,
+  25.87939453125,
+  28.69189453125,
+  28.69189453125,
+  27.99560546875,
+  27.27490234375,
+  27.01220703125,
+  31.65576171875,
+  30.88232421875,
+  30.97216796875,
+  30.97216796875,
+  30.09326171875,
+  29.44482421875,
+  30.45068359375,
+  30.09423828125,
+  29.92626953125,
+  29.92626953125,
+  29.69189453125,
+  28.75537109375,
+  28.935546875,
+  28.3798828125,
+  28.34912109375,
+  28.34912109375,
+  27.43994140625,
+  27.00390625,
+  26.84326171875,
+  26.6953125,
+  26.6953125,
+  26.63916015625,
+  26.5078125,
+  30.47119140625,
+  34.037109375,
+  36.3564453125,
+  38.650390625,
+  41.4814453125,
+  41.12255859375,
+  43.51513671875,
+  43.51513671875,
+  46.19677734375,
+  47.94287109375,
+  47.2265625,
+  47.2265625,
+  48.16943359375,
+  45.83349609375,
+  43.8447265625,
+  42.33544921875,
+  42.33544921875,
+  41.58740234375,
+  39.9384765625,
+  39.0625,
+  38.17626953125,
+  37.6015625,
+  40.9970703125,
+  40.9970703125,
+  39.8759765625,
+  38.4443359375,
+  36.96728515625,
+  35.2880859375,
+  34.6240234375,
+  34.41357421875,
+  33.57958984375,
+  33.45263671875,
+  37.18017578125,
+  36.52490234375,
+  35.921875,
+  38.89111328125,
+  37.9384765625,
+  38.10400390625,
+  38.10400390625,
+  36.73388671875,
+  35.0732421875,
+  33.86572265625,
+  33.23583984375
+ ],
+ "quality": {
+  "recall@1": {
+   "value": 0.5909,
+   "ci95": [
+    0.5814,
+    0.6003
+   ]
+  },
+  "recall@5": {
+   "value": 0.8243,
+   "ci95": [
+    0.8165,
+    0.8321
+   ]
+  },
+  "recall@10": {
+   "value": 0.8956,
+   "ci95": [
+    0.8896,
+    0.9018
+   ]
+  },
+  "mrr@10": {
+   "value": 0.690846111111111,
+   "ci95": [
+    0.6833161904761905,
+    0.6983273809523809
+   ]
+  },
+  "ndcg@10": {
+   "value": 0.7402476709883581,
+   "ci95": [
+    0.7334199774131227,
+    0.7470624381883749
+   ]
+  },
+  "not_found_in_depth": 37,
+  "median_rank_found": 1
+ },
+ "latency_ms": {
+  "n": 10000,
+  "p50": 41.344048018800095,
+  "p95": 54.08401298336685,
+  "p99": 65.57084000087343,
+  "mean": 41.971206776355395,
+  "min": 21.842631977051497,
+  "max": 536.2706689920742
+ },
+ "server_search_time_ms": {
+  "n": 10000,
+  "p50": 36.06,
+  "p95": 46.24,
+  "p99": 52.86,
+  "mean": 36.117071,
+  "min": 17.72,
+  "max": 484.4
+ },
+ "empty_result_queries": 0,
+ "failure_examples": [
+  {
+   "gt": 139,
+   "query": "A person standing at a table in a room.",
+   "rank": 11,
+   "top1": 565853,
+   "top_score": 0.64990383,
+   "top1_caption": "A man playing Wii on a large flat screen tv"
+  },
+  {
+   "gt": 872,
+   "query": "A couple of baseball player standing on a field.",
+   "rank": 13,
+   "top1": 448263,
+   "top_score": 0.6474073,
+   "top1_caption": "A baseball player kneeling to speak to a child"
+  },
+  {
+   "gt": 885,
+   "query": "a male tennis player in white shorts is playing tennis",
+   "rank": 28,
+   "top1": 25424,
+   "top_score": 0.6664586,
+   "top1_caption": "A man hitting a tennis ball with a tennis racquet."
+  },
+  {
+   "gt": 885,
+   "query": "This woman has just returned a volley in tennis",
+   "rank": 61,
+   "top1": 475191,
+   "top_score": 0.67009854,
+   "top1_caption": "A blurry woman is holding a tennis racquet in the air"
+  },
+  {
+   "gt": 885,
+   "query": "A man holding a tennis racket playing tennis.",
+   "rank": 43,
+   "top1": 328601,
+   "top_score": 0.6591091,
+   "top1_caption": "A tennis players concentrates as he prepares to smack the ball."
+  },
+  {
+   "gt": 885,
+   "query": "The man balances on one leg after serving a tennis ball.",
+   "rank": 41,
+   "top1": 106912,
+   "top_score": 0.66402,
+   "top1_caption": "A young boy riding a skateboard across a parking lot."
+  },
+  {
+   "gt": 885,
+   "query": "Someone playing in a tennis tournament with a crowd looking on.",
+   "rank": 23,
+   "top1": 39405,
+   "top_score": 0.67087805,
+   "top1_caption": "Spectators watching as competitors play a double tennis game."
+  },
+  {
+   "gt": 1000,
+   "query": "A group of young children standing next to each other.",
+   "rank": 11,
+   "top1": 518770,
+   "top_score": 0.6487425,
+   "top1_caption": "Some kids standing up playing wii with each other"
+  },
+  {
+   "gt": 1268,
+   "query": "A beautiful woman taking a picture with her smart phone.",
+   "rank": 66,
+   "top1": 151000,
+   "top_score": 0.65652883,
+   "top1_caption": "A woman taking pictures on a busy street."
+  },
+  {
+   "gt": 1268,
+   "query": "A girl is taking a picture of people fishing.",
+   "rank": 11,
+   "top1": 259597,
+   "top_score": 0.65000546,
+   "top1_caption": "A little kid pointing his camera at a stage where people are dressed up."
+  },
+  {
+   "gt": 1425,
+   "query": "A meal is lying on a plate on a table.",
+   "rank": 30,
+   "top1": 66817,
+   "top_score": 0.6409078,
+   "top1_caption": "A white plate topped with meat veggies and rice with sauce."
+  },
+  {
+   "gt": 1993,
+   "query": "A simple modern bedroom sheets on the bed",
+   "rank": 12,
+   "top1": 213422,
+   "top_score": 0.6508284,
+   "top1_caption": "The bed and desk in a modern hotel room"
+  }
+ ]
+}

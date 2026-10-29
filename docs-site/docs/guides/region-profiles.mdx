@@ -141,6 +141,7 @@ response is `{ok, errors, warnings, force_allowed}`.
 | `segmenter_prompt_too_long`, `segmenter_prompt_too_many_phrases`, `segmenter_prompt_multiline` | error | Prompt over the limits above |
 | `detector_model_not_found` | error | Model is not in the Triton repository |
 | `detector_model_not_ready` | warning, error for activation; bypassable | Model is not READY |
+| `detector_model_unusable` | warning on save, error for activation | The loaded model has no `output0` tensor (for example a YOLO end-to-end model), or its configuration cannot be read from Triton; every item would end `no_region_box` |
 | `detector_model_not_shared`, `detector_model_other_project` | error, warning | The model belongs to another project and is not shared, or is shared |
 | `detector_model_classes_unmapped` | warning | A shared model has classes with no match by name in this project |
 | `triton_unreachable`, `segmenter_unreachable`, `ocr_model_not_ready` | warning, error for activation; bypassable | Dependency down |

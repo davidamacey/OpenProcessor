@@ -313,7 +313,7 @@ describe('DatasetStats', () => {
       (s) => s.textContent?.trim() === 'live',
     );
     expect(badgeBefore).toBeTruthy();
-    expect(badgeBefore?.className).toContain('bg-emerald-500');
+    expect(badgeBefore?.className).toContain('bg-emerald-700');
 
     capturedOpts?.onStats?.({ error: 'opensearch unavailable' });
     flushSync();
@@ -326,7 +326,7 @@ describe('DatasetStats', () => {
     );
     expect(liveBadgeAfter).toBeUndefined();
     expect(degradedBadge).toBeTruthy();
-    expect(degradedBadge?.className).not.toContain('bg-emerald-500');
+    expect(degradedBadge?.className).not.toContain('bg-emerald-700');
   });
 
   it('m29: truncates a long raw error in the banner text but keeps it available via title', () => {

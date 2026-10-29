@@ -160,6 +160,22 @@ async def producer(
                 )
 
 
+async def _embed_regions_best_effort(flushing: list[_ItemTask], pe: Any) -> None:
+    """Region vectors for a flush, never at the cost of the flush: ``pending`` is already
+    cleared, so an exception here would kill the writer with these items never marked
+    done (#374). Their boxes then go without a vector and the backfill picks them up."""
+    try:
+        await embed_written_regions(flushing, pe)
+    except Exception as exc:
+        logger.warning(
+            'region_embed_stage_failed',
+            n=len(flushing),
+            error_type=type(exc).__name__,
+            error=str(exc),
+            exc_info=True,
+        )
+
+
 async def writer(ctx: PipelineContext) -> None:
     """Drain out_q, bulk-update OpenSearch every WRITE_FLUSH_INTERVAL or full.
 
@@ -206,7 +222,7 @@ async def writer(ctx: PipelineContext) -> None:
         t0 = time.monotonic()
         batch_request_ids = [t.request_id for t in flushing]
         if region_embed_pe is not None:
-            await embed_written_regions(flushing, region_embed_pe)
+            await _embed_regions_best_effort(flushing, region_embed_pe)
         try:
             n_written, n_skipped = await _bulk_update(opensearch, flushing)
         except Exception as exc:

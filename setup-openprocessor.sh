@@ -88,9 +88,7 @@ EXIT_CONSENT=9
 TIER_LIST=(core curation segmenter vlm trainer cropwright)
 COMPOSE_MIN_OVERRIDE="2.24.4"
 
-# -----------------------------------------------------------------------------
-# Logging (self-contained: nothing is sourced before the release is verified)
-# -----------------------------------------------------------------------------
+# --- Logging (self-contained: nothing is sourced before the release is verified) ---
 log_info()    { echo "[INFO] $*"; }
 log_warn()    { echo "[WARN] $*" >&2; }
 log_error()   { echo "[ERROR] $*" >&2; }
@@ -117,9 +115,7 @@ _op_redact() {
         -e 's/(^|[^A-Za-z0-9_])([A-Z0-9_]*(_API_KEY|_TOKEN|_SECRET|_PASSWORD))=[^[:space:]]*/\1\2=***REDACTED***/g'
 }
 
-# -----------------------------------------------------------------------------
-# 5.1 Compose invocation rule: every compose call goes through dc().
-# -----------------------------------------------------------------------------
+# --- 5.1 Compose invocation rule: every compose call goes through dc(). ---
 # _dc_is_readonly ARGS... -> 0 if the compose subcommand never changes state
 _dc_is_readonly() {
     while (( $# > 0 )); do
@@ -165,9 +161,7 @@ docker_mut() {
     docker "$@"
 }
 
-# -----------------------------------------------------------------------------
-# Prompts: always /dev/tty, because under `curl | bash` stdin is the script.
-# -----------------------------------------------------------------------------
+# --- Prompts: always /dev/tty, because under `curl | bash` stdin is the script. ---
 tty_usable() {
     { : </dev/tty; } 2>/dev/null
 }
@@ -202,9 +196,7 @@ confirm_yes() {
     [[ -z "$reply" || "${reply,,}" == y || "${reply,,}" == yes ]]
 }
 
-# -----------------------------------------------------------------------------
-# Validation
-# -----------------------------------------------------------------------------
+# --- Validation ---
 validate_project_name() {
     [[ "$1" =~ ^[a-z0-9][a-z0-9_-]{0,62}$ ]]
 }
@@ -252,9 +244,7 @@ is_loopback_ipv4() {
     is_ipv4 "$1" && [[ "$1" == 127.* ]]
 }
 
-# -----------------------------------------------------------------------------
-# Downloads: https only, no protocol downgrade on redirect
-# -----------------------------------------------------------------------------
+# --- Downloads: https only, no protocol downgrade on redirect ---
 _dl() {
     local url="$1" out="$2"
     # file:// only ever comes from --release-dir (never from a user URL).
@@ -308,9 +298,7 @@ _raw_url() {
     printf '%s/%s/%s' "${OP_RAW_BASE_URL:-https://raw.githubusercontent.com/${OP_GH_REPO}}" "$1" "$2"
 }
 
-# -----------------------------------------------------------------------------
-# 3.2 Version pinning
-# -----------------------------------------------------------------------------
+# --- 3.2 Version pinning ---
 # resolve_branch_sha BRANCH -> the full 40-hex head SHA, or fails
 resolve_branch_sha() {
     local branch="$1" body sha
@@ -354,9 +342,7 @@ resolve_install_ref() {
     RESOLVED_MODE=release
 }
 
-# -----------------------------------------------------------------------------
-# 3.3 One-liner bootstrap
-# -----------------------------------------------------------------------------
+# --- 3.3 One-liner bootstrap ---
 # needs_bootstrap SELF_PATH -> 0 when this copy was read from a pipe
 needs_bootstrap() {
     local self="$1"
@@ -419,9 +405,7 @@ _op_cleanup() {
     return 0
 }
 
-# -----------------------------------------------------------------------------
-# 3.1 Release artifacts
-# -----------------------------------------------------------------------------
+# --- 3.1 Release artifacts ---
 # manifest_entries MANIFEST -> "path<TAB>flags" lines (comments dropped)
 manifest_entries() {
     awk 'NF && $1 !~ /^#/ { print $1 "\t" (NF > 1 ? $2 : "") }' "$1"
@@ -547,6 +531,9 @@ manifest_installed_files() {
     done < <(manifest_entries "${dir}/release-manifest.txt")
 }
 
+# _place_file SRC DEST -- replace by rename: a running bash script keeps its old inode
+_place_file() { cp -p "$1" "$2.op-new" && mv -f "$2.op-new" "$2"; }
+
 # backup_install -> copies the current release files, .env and state into
 # backups/<UTC timestamp>/ and prints that directory
 backup_install() {
@@ -581,7 +568,7 @@ install_staged() {
             continue
         fi
         mkdir -p "${OP_DIR}/$(dirname "$rel")"
-        cp -f "$f" "${OP_DIR}/${rel}"
+        _place_file "$f" "${OP_DIR}/${rel}"
         # Release files are not secret, and several are bind-mounted into
         # containers running as other users (Prometheus, Grafana, Loki).
         if [[ "${flag_of[$rel]:-}" == *exec* ]]; then
@@ -593,9 +580,7 @@ install_staged() {
     rm -rf "$staging"
 }
 
-# -----------------------------------------------------------------------------
-# 2. Install tiers
-# -----------------------------------------------------------------------------
+# --- 2. Install tiers ---
 tier_implies() {
     case "$1" in
         curation) echo "core" ;;
@@ -642,9 +627,7 @@ _has_tier() {
     [[ " ${SELECTED_TIERS} " == *" $1 "* ]]
 }
 
-# -----------------------------------------------------------------------------
-# 2.1 GPU detection and recommendation
-# -----------------------------------------------------------------------------
+# --- 2.1 GPU detection and recommendation ---
 # gpu_query -> raw nvidia-smi rows (index, name, total MiB, used MiB, cc)
 gpu_query() {
     command -v nvidia-smi >/dev/null 2>&1 || return 1
@@ -724,9 +707,12 @@ _triton_need_gb() {
     esac
 }
 
-# The GPU decode (gpu_image_prep, about 8.5 GB more on the Triton card per instance). Mirrors
-# "ingest_gpu_decode" in config_templates/profiles/*.json (tests/installer keeps them equal):
-# only the full profile (48 GB+) has room beside the profile's own Triton budget.
+# Least free VRAM on the Triton card for the full profile: its models (17,408 MiB) plus the 2
+# gpu_image_prep instances it turns on (2 x 8,704 MiB) is 34,816 MiB, so 32 GB cards get standard (#373).
+_profile_min_free_gb() { case "$1" in full) echo 40 ;; *) echo 12 ;; esac; }
+_profile_for_free_gb() { if (( $1 >= $(_profile_min_free_gb full) )); then echo full; elif (( $1 >= 12 )); then echo standard; else echo minimal; fi; }
+
+# GPU decode per profile; mirrors "ingest_gpu_decode" in config_templates/profiles/*.json.
 _ingest_gpu_decode_for_profile() {
     case "$1" in
         full) echo 1 ;;
@@ -818,9 +804,7 @@ recommend_plan() {
                 trn=$b
             fi
         fi
-        if (( free[tri] >= 24 )); then profile=full
-        elif (( free[tri] >= 12 )); then profile=standard
-        else profile=minimal; fi
+        profile=$(_profile_for_free_gb "${free[tri]}")
     else
         # Triton: the smallest card that is >= 12 GB (fixed, latency-bound).
         tri=""
@@ -848,9 +832,7 @@ recommend_plan() {
         done
         trn=$seg
         (( free[seg] >= 24 )) && inst=2
-        if (( free[tri] >= 24 )); then profile=full
-        elif (( free[tri] >= 12 )); then profile=standard
-        else profile=minimal; fi
+        profile=$(_profile_for_free_gb "${free[tri]}")
     fi
 
     # Explicit --gpu-plan wins over the automatic placement.
@@ -1089,9 +1071,7 @@ plan_get() {
     printf '%s\n' "$1" | awk -v k="$2" 'index($0, k "=") == 1 { print substr($0, length(k) + 2); exit }'
 }
 
-# -----------------------------------------------------------------------------
-# 5.2 / 7 .env handling: pure-bash rewrite, value never in any argv
-# -----------------------------------------------------------------------------
+# --- 5.2 / 7 .env handling: pure-bash rewrite, value never in any argv ---
 # _env_write FILE KEY VARNAME -- writes KEY=<value of $VARNAME> atomically
 _env_write() {
     local file="$1" key="$2" __name="$3"
@@ -1309,9 +1289,7 @@ ensure_hf_token() {
     log_success "HuggingFace token verified and stored in .env (mode 600)"
 }
 
-# -----------------------------------------------------------------------------
-# 5.6 Ports
-# -----------------------------------------------------------------------------
+# --- 5.6 Ports ---
 PORT_DEFAULTS=(
     "TRITON_HTTP_PORT 4600 core"
     "TRITON_GRPC_PORT 4601 core"
@@ -1414,9 +1392,7 @@ plan_ports() {
     done
 }
 
-# -----------------------------------------------------------------------------
-# 5.1 Project / container-name collision guards (fail closed)
-# -----------------------------------------------------------------------------
+# --- 5.1 Project / container-name collision guards (fail closed) ---
 docker_reachable() {
     command -v docker >/dev/null 2>&1 || return 1
     docker info >/dev/null 2>&1
@@ -1516,9 +1492,7 @@ assert_compose_config() {
     log_success "compose config: ${#names[@]} containers, all '${OP_PROJECT}-*', network ${OP_PROJECT}_triton_net"
 }
 
-# -----------------------------------------------------------------------------
-# 7. Security: bind address and external VLM consent
-# -----------------------------------------------------------------------------
+# --- 7. Security: bind address and external VLM consent ---
 require_bind_consent() {
     local addr="$1" reply
     is_loopback_ipv4 "$addr" && return 0
@@ -1583,9 +1557,7 @@ require_external_vlm_consent() {
     [[ "$reply" == "external" ]] || die "external VLM not confirmed" "$EXIT_CONSENT"
 }
 
-# -----------------------------------------------------------------------------
-# 3.2 Images: images.lock digests, or an explicit tag for local-only builds
-# -----------------------------------------------------------------------------
+# --- 3.2 Images: images.lock digests, or an explicit tag for local-only builds ---
 _lock_line_valid() {
     [[ "$1" =~ ^[a-z0-9_-]+=[a-z0-9][a-z0-9._/-]*(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$ && "$1" != *:latest@* ]]
 }
@@ -1714,7 +1686,7 @@ pull_images() {
         log_info "all ${#images[@]} images are already present"
         return 0
     fi
-    log_info "pulling ${#missing[@]} image(s); the Triton image alone is ~30 GB"
+    log_info "pulling ${#missing[@]} image(s)$([[ "$OP_CONTROL_PLANE_ONLY" == 1 ]] || echo "; the Triton image alone is ~30 GB")"
     for img in "${missing[@]}"; do
         if [[ "$IMAGE_MODE" == tag && "$RESOLVED_MODE" != branch && "$img" == "${OP_IMAGE_REPO}/openprocessor"*":${OP_IMAGE_TAG}" ]]; then
             die "${img} is not present locally: --image-tag runs local builds only and never pulls an unpinned image (build it, or install a release)" "$EXIT_VERIFY"
@@ -1785,9 +1757,7 @@ gpu_container_probe() {
     done
 }
 
-# -----------------------------------------------------------------------------
-# 5.2 State (.install/state.json, mode 600, atomic)
-# -----------------------------------------------------------------------------
+# --- 5.2 State (.install/state.json, mode 600, atomic) ---
 _json_str() {
     local s="$1"
     s="${s//\\/\\\\}"
@@ -1838,9 +1808,7 @@ state_write() {
     mv -f "$tmp" "$STATE_FILE"
 }
 
-# -----------------------------------------------------------------------------
-# 7. Cropwright tier (the `cropwright` profile of the main compose project)
-# -----------------------------------------------------------------------------
+# --- 7. Cropwright tier (the `cropwright` profile of the main compose project) ---
 _version_ge() {
     [[ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" == "$2" ]]
 }
@@ -1889,20 +1857,18 @@ setup_cropwright() {
     log_success "Cropwright configured on ${OP_CROPWRIGHT_BIND}:${port}"
 }
 
-# -----------------------------------------------------------------------------
-# 6.1 Health
-# -----------------------------------------------------------------------------
+# --- 6.1 Health ---
 _health_host() {
     if [[ "$OP_BIND_ADDRESS" == 0.0.0.0 ]]; then echo 127.0.0.1; else echo "$OP_BIND_ADDRESS"; fi
 }
 
-# wait_http URL SECONDS [GREP_FIXED] -- until 200 (and body contains GREP)
+# wait_http URL SECONDS [GREP_FIXED [CURL_FLAGS]] -- until 200 (and body contains GREP); -sS accepts any status
 wait_http() {
-    local url="$1" secs="$2" want="${3:-}" waited=0 body
+    local url="$1" secs="$2" want="${3:-}" waited=0 body curlf="${4:--fsS}"
     local cap="${OP_HEALTH_TIMEOUT:-}"
     [[ -n "$cap" ]] && (( cap < secs )) && secs=$cap
     while :; do
-        if body="$(curl -fsS --max-time 10 "$url" 2>/dev/null)"; then
+        if body="$(curl "$curlf" --max-time 10 "$url" 2>/dev/null)"; then
             body="${body//[[:space:]]/}"
             if [[ -z "$want" || "$body" == *"$want"* ]]; then
                 return 0
@@ -1996,13 +1962,14 @@ run_health() {
             fails+=("vlm not serving local-vlm (${vlm_repo}): ./openprocessor logs vlm")
         fi
     fi
-    if ! wait_http "http://${h}:${p}/health" 240 '"status":"ready"'; then
-        if [[ "$OP_CONTROL_PLANE_ONLY" == 1 ]] && wait_http "http://${h}:${p}/health" 5; then
-            log_warn "API is up but not ready (expected without Triton in control-plane-only mode)"
-        else
-            fails+=("API /health not ready: ./openprocessor logs api")
-        fi
-    elif [[ "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
+    if [[ "$OP_CONTROL_PLANE_ONLY" == 1 ]]; then
+        # Without Triton /health is 503 by design; its body still shows OpenSearch is up.
+        wait_http "http://${h}:${p}/health" 240 '"opensearch":{"ok":true' -sS \
+            && log_warn "API is up but not ready (expected without Triton in control-plane-only mode)" \
+            || fails+=("API /health not ready: ./openprocessor logs api")
+    elif ! wait_http "http://${h}:${p}/health" 240 '"status":"ready"'; then
+        fails+=("API /health not ready: ./openprocessor logs api")
+    else
         local cur=0 vlm_on=0
         _has_tier curation && cur=1
         { _has_tier vlm || [[ -n "${OP_VLM_URL:-}" ]]; } && vlm_on=1
@@ -2050,9 +2017,7 @@ run_health() {
     log_success "all health checks passed"
 }
 
-# -----------------------------------------------------------------------------
-# 5.3 Uninstall / purge
-# -----------------------------------------------------------------------------
+# --- 5.3 Uninstall / purge ---
 require_purge_confirmation() {
     local project="$1" what="$2" envvar="$3" reply
     if [[ "$OP_UNATTENDED" == 1 ]] || ! tty_usable; then
@@ -2251,9 +2216,7 @@ remove_install_images() {
     done
 }
 
-# -----------------------------------------------------------------------------
-# 5.2 Rollback
-# -----------------------------------------------------------------------------
+# --- 5.2 Rollback ---
 do_rollback() {
     require_owned_install
     local newest="" env_project rel current b bver
@@ -2295,7 +2258,7 @@ do_rollback() {
             cp -p "${OP_DIR}/${rel}" "${undo}/${rel}"
         fi
         mkdir -p "${OP_DIR}/$(dirname "$rel")"
-        cp -p "${newest}/${rel}" "${OP_DIR}/${rel}"
+        _place_file "${newest}/${rel}" "${OP_DIR}/${rel}"
     done < <(find "$newest" -type f -print0)
 
     IMAGE_MODE=lock
@@ -2318,13 +2281,12 @@ do_rollback() {
         validate_images_lock "${OP_DIR}/images.lock" || die "restored images.lock is not digest-pinned" "$EXIT_VERIFY"
     fi
     verify_image_digests
-    dc up -d --remove-orphans || die "compose up failed after restoring $(basename "$newest")"
+    if [[ "$OP_NO_START" == 1 ]]; then log_info "--no-start: nothing was restarted"
+    else dc up -d --remove-orphans || die "compose up failed after restoring $(basename "$newest")"; fi
     log_success "rolled back to $(basename "$newest"); run ./openprocessor health (engines rebuild with ./openprocessor models install if the Triton image changed)"
 }
 
-# -----------------------------------------------------------------------------
-# 6.2 Summary
-# -----------------------------------------------------------------------------
+# --- 6.2 Summary ---
 print_summary() {
     local h="$1" api tri seg vlmp ml failed degraded
     api="$(read_env_var "$ENV_FILE" API_PORT || true)"
@@ -2393,13 +2355,11 @@ print_summary() {
     echo ""
     echo "  Manage: cd ${OP_REAL_DIR} && ./openprocessor status|logs|health|stop|start"
     echo "          ./setup-openprocessor.sh --repair   (also --rollback, --uninstall)"
-    [[ "$OP_NO_START" == 1 ]] && echo "  Nothing was started (--no-start): run ./openprocessor start, then ./openprocessor models install"
+    [[ "$OP_NO_START" == 1 ]] && echo "  Nothing was started (--no-start): run ./openprocessor start$([[ "$OP_CONTROL_PLANE_ONLY" == 1 ]] || echo ", then ./openprocessor models install")"
     return 0
 }
 
-# -----------------------------------------------------------------------------
-# Flags (section 5.4)
-# -----------------------------------------------------------------------------
+# --- Flags (section 5.4) ---
 usage() {
     cat <<'EOF'
 Usage: setup-openprocessor.sh [options]
@@ -2570,6 +2530,7 @@ parse_args() {
     local b
     b="$(normalize_bind "$OP_BIND_ADDRESS")" || exit "$EXIT_USAGE"
     OP_BIND_ADDRESS="$b"
+    [[ -z "$OP_VERSION" ]] || validate_version "$OP_VERSION" || die "--version must look like v1.2.3 (got '${OP_VERSION}')" "$EXIT_USAGE"
     local base
     for base in "${OP_ARTIFACT_BASE_URL:-}" "${OP_RAW_BASE_URL:-}"; do
         [[ -z "$base" ]] && continue
@@ -2581,9 +2542,7 @@ parse_args() {
     fi
 }
 
-# -----------------------------------------------------------------------------
-# Install / repair
-# -----------------------------------------------------------------------------
+# --- Install / repair ---
 # classify_install_dir -> DIR_STATE = fresh | owned | forced
 # owned: .install/state.json written by this installer for this very dir.
 # A non-empty dir without it (a git checkout, another tool's dir) is refused
@@ -2733,8 +2692,9 @@ do_install() {
         state_write
     fi
     local rt
-    rt="$(docker_runtime_has_nvidia)"
+    rt="$([[ "$OP_CONTROL_PLANE_ONLY" == 1 ]] && echo skip || docker_runtime_has_nvidia)"
     case "$rt" in
+        skip) ;;
         1) log_info "Docker has the nvidia runtime registered" ;;
         0) log_warn "Docker lists no nvidia runtime; relying on the --gpus container probe" ;;
         *) log_warn "could not determine Docker's runtimes; relying on the --gpus container probe" ;;
@@ -2769,7 +2729,7 @@ do_install() {
         require_destructive_consent "Upgrade ${OP_PROJECT} from ${prev} to ${INSTALL_REF} (files are backed up first)"
     fi
     fetch_release_artifacts "$INSTALL_REF" "$RESOLVED_MODE" "${OP_DIR}/.install/staging"
-    log_success "release ${INSTALL_REF} downloaded and verified"
+    log_success "release ${INSTALL_REF} downloaded$([[ "$RESOLVED_MODE" == branch ]] || echo " and verified")"
     if (( existing )); then
         local bdir
         bdir="$(backup_install)" || die "could not back up the current install; nothing was changed"
@@ -2844,7 +2804,7 @@ do_install() {
     fi
     if [[ "$OP_FORCE_CPU" == 1 || -z "$gpus" ]]; then
         if [[ "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
-            log_error "No usable NVIDIA GPU. There is no CPU inference path today."
+            log_error "$([[ "$OP_FORCE_CPU" == 1 ]] && echo "--cpu on its own cannot work" || echo "No usable NVIDIA GPU"). There is no CPU inference path today."
             log_error "Re-run with --cpu --control-plane-only to install OpenSearch, the API"
             log_error "and Cropwright without Triton (inference routes will return 503)."
             exit "$EXIT_GPU"
@@ -2860,12 +2820,18 @@ do_install() {
         SELECTED_TIERS="core"
         if [[ ",${OP_TIERS}," == *",cropwright,"* ]]; then SELECTED_TIERS="core cropwright"; fi
         # api reserves a GPU in the base compose; without one it could
-        # never start, so the control-plane install drops that reservation.
+        # never start, so the control-plane install drops that reservation, turns
+        # Triton off for every later `up` and probes / (the API's /health is 503).
         local cver
         cver="$(dc version --short 2>/dev/null || true)"
         _version_ge "${cver#v}" "$COMPOSE_MIN_OVERRIDE" \
             || die "Docker Compose ${COMPOSE_MIN_OVERRIDE}+ is needed for --control-plane-only (found '${cver:-unknown}')"
-        ( umask 022; printf 'services:\n  api:\n    deploy: !reset {}\n' > "${OP_DIR}/docker-compose.cpu.yml" )
+        ( umask 022; cat > "${OP_DIR}/docker-compose.cpu.yml" <<'YAML'
+services:
+  api: {deploy: !reset {}, depends_on: !override {opensearch: {condition: service_healthy}}, healthcheck: {test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/')\""]}}
+  triton-server: {profiles: !override [no-gpu]}
+YAML
+        )
         GPU_PLAN_SUMMARY="none (control-plane-only)"
     else
         if [[ -n "$OP_TIERS" ]]; then
@@ -2989,7 +2955,8 @@ do_install() {
     fi
 
     local d
-    for d in models pytorch_models data data/samples cache cache/huggingface cache/vllm; do
+    ( umask 077; mkdir -p "${OP_DIR}/secrets/vlm" )  # else Docker creates it root-owned
+    for d in models pytorch_models data data/samples data/source cache cache/huggingface cache/vllm; do
         mkdir -p "${OP_DIR}/${d}"
     done
     assert_compose_config
@@ -3006,7 +2973,7 @@ do_install() {
     root="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true)"
     if [[ "$free_kib" =~ ^[0-9]+$ ]]; then
         if (( free_kib / 1024 / 1024 < need )) && [[ "$OP_FORCE" != 1 ]]; then
-            die "need ~${need} GB free on ${OP_DIR}'s filesystem, have $(( free_kib / 1024 / 1024 )) GB (use --force to try anyway)"
+            die "need ~${need} GB free on ${OP_REAL_DIR}'s filesystem, have $(( free_kib / 1024 / 1024 )) GB (use --force to try anyway)"
         fi
     else
         log_warn "could not check free disk space on ${OP_DIR}"
@@ -3114,9 +3081,7 @@ do_install() {
     log_success "OpenProcessor ${INSTALL_REF} is installed and healthy"
 }
 
-# -----------------------------------------------------------------------------
-# Main
-# -----------------------------------------------------------------------------
+# --- Main ---
 main() {
     # Nothing below may ever be traced: the HF token passes through here.
     { set +x; } 2>/dev/null
@@ -3198,6 +3163,10 @@ main() {
             exec > >(_op_redact | tee -a "${OP_DIR}/.install/install.log") \
                 2> >(_op_redact | tee -a "${OP_DIR}/.install/install.log" >&2)
         fi
+    fi
+    if [[ "$OP_DRY_RUN" != 1 ]] && command -v flock >/dev/null 2>&1; then
+        exec {_OP_LOCK_FD}>>"${OP_DIR}/.install/lock" && { flock -n "$_OP_LOCK_FD" \
+            || die "another installer run is working in ${OP_REAL_DIR}; wait for it to finish" "$EXIT_COLLISION"; }
     fi
     [[ "$OP_DRY_RUN" == 1 ]] && log_info "DRY-RUN: nothing is written, pulled, started or removed; state-changing commands are printed"
     log_info "setup-openprocessor ${SCRIPT_VERSION}: action ${OP_ACTION}, dir ${OP_REAL_DIR}"

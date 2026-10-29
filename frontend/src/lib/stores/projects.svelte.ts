@@ -109,7 +109,8 @@ class ProjectsStore {
         // timeout / network error — retry within the budget
       }
     }
-    this.error = "Can't reach the backend's project list.";
+    this.error =
+      'The API did not answer after several tries. Check that it is running, then retry.';
   }
 
   /** Re-reads the list (after a lifecycle action, or on a global

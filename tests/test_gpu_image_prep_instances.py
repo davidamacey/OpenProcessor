@@ -22,8 +22,23 @@ PROFILES = ROOT / 'config_templates' / 'profiles'
 NAMES = ('minimal', 'standard', 'full')
 KEY = 'gpu_image_prep_instances'
 EXPECTED = {'minimal': 1, 'standard': 1, 'full': 2}
-VRAM_FLOOR_MIB = {'minimal': 6 * 1024, 'standard': 12 * 1024, 'full': 48 * 1024}
 MODELS_MIB = {'minimal': 8192, 'standard': 12288, 'full': 17408}
+
+
+def _installer_floor_mib(name: str) -> int:
+    """The least free VRAM the installer plans the profile for (``_profile_min_free_gb``)."""
+    done = subprocess.run(
+        [
+            'bash',
+            '-c',
+            f'OP_SOURCE_ONLY=1 source "{ROOT}/setup-openprocessor.sh"; _profile_min_free_gb {name}',
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    return int(done.stdout.strip()) * 1024
 
 
 def _profile(name: str) -> dict:
@@ -54,7 +69,7 @@ def test_profile_with_the_gpu_decode_on_fits_its_smallest_card(name: str) -> Non
     profile = _profile(name)
     if profile['ingest_gpu_decode']:
         used = MODELS_MIB[name] + profile[KEY] * _mib_per_instance()
-        assert used <= VRAM_FLOOR_MIB[name]
+        assert used <= _installer_floor_mib(name)
 
 
 def test_committed_config_is_the_full_profile_value() -> None:
