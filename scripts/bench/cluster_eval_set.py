@@ -13,7 +13,12 @@ annotations ignored). A crop that overlaps no annotation is left out of the labe
 because inventing a label for it would score the pipeline against itself. ``protected`` is
 read from the project (holdout, locked or validated crops).
 
-A crop falls in one stratum, first match wins: ``low_res`` (box under 32x32 px), ``rare`` (its
+``--eval-manifest`` points at the pinned ``cluster_eval_3000.json``: its ``rare_classes`` replace
+the frequency rule (rare means rare in COCO, not rare in this sample) and its seed and hash are
+recorded. An image whose ground-truth entry carries ``near_duplicate_of`` (a seeded re-encode
+and crop jitter of another image, or that image itself) puts all its crops in ``near_duplicate``.
+
+A crop falls in one stratum, first match wins: ``near_duplicate``, ``low_res`` (box under 32x32 px), ``rare`` (its
 class is among the least frequent third of annotated classes), ``similar_classes`` (a class from
 a visually confusable group), ``mixed_scene`` (its image has annotations of two or more classes),
 else ``other``.
@@ -84,11 +89,17 @@ def load_coco(path: Path) -> dict[str, Any]:
     gt = json.loads(path.read_text())
     cats = {c['id']: c['name'] for c in gt['categories']}
     images = {PurePosixPath(i['file_name']).name: i for i in gt['images']}
+    near_dup = {n for n, i in images.items() if i.get('near_duplicate_of')}
+    near_dup |= {
+        PurePosixPath(i['near_duplicate_of']).name
+        for i in images.values()
+        if i.get('near_duplicate_of')
+    }
     anns: dict[int, list[dict[str, Any]]] = {}
     for a in gt['annotations']:
         if not a.get('iscrowd'):
             anns.setdefault(a['image_id'], []).append({**a, 'name': cats[a['category_id']]})
-    return {'images': images, 'annotations': anns}
+    return {'images': images, 'annotations': anns, 'near_duplicate': near_dup}
 
 
 def match_class(
@@ -123,7 +134,11 @@ def rare_classes(class_counts: Counter[str]) -> set[str]:
     return set(ranked[: -(-len(ranked) // 3)])
 
 
-def stratum(label: str, side_px: float, rare: set[str], image_classes: int) -> str:
+def stratum(
+    label: str, side_px: float, rare: set[str], image_classes: int, *, near_dup: bool = False
+) -> str:
+    if near_dup:
+        return 'near_duplicate'
     if side_px < LOW_RES_PX:
         return 'low_res'
     if label in rare:
@@ -144,24 +159,29 @@ def is_protected(crop: dict[str, Any]) -> bool:
 
 
 def build(
-    crops: Sequence[dict[str, Any]], coco: dict[str, Any], min_iou: float = MIN_IOU
+    crops: Sequence[dict[str, Any]],
+    coco: dict[str, Any],
+    min_iou: float = MIN_IOU,
+    rare: set[str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     """Label rows, partition rows and manifest for the crops that match an annotation."""
     matched = [(c, m) for c in crops if (m := match_class(c, coco, min_iou))]
     if not matched:
         raise EvalSetError('no crop overlaps a COCO annotation; refusing to invent labels')
     class_counts = Counter(m[0] for _, m in matched)
-    rare = rare_classes(class_counts)
+    rare = set(rare) if rare is not None else rare_classes(class_counts)
     per_image: dict[str, set[str]] = {}
     for c, m in matched:
         per_image.setdefault(c['image_id'], set()).add(m[0])
     labels, partition = [], []
+    near_dup = coco.get('near_duplicate', set())
     for c, (name, _, side) in matched:
+        is_nd = PurePosixPath(c['image_path']).name in near_dup
         labels.append(
             {
                 'item_id': c['crop_id'],
                 'label': name,
-                'stratum': stratum(name, side, rare, len(per_image[c['image_id']])),
+                'stratum': stratum(name, side, rare, len(per_image[c['image_id']]), near_dup=is_nd),
                 'protected': is_protected(c),
             }
         )
@@ -188,7 +208,16 @@ def cmd_build(args: argparse.Namespace, *, transport: httpx.BaseTransport | None
     base = scoped_url(args.api.rstrip('/'), curation_api_prefix(), args.project, '')
     with httpx.Client(timeout=httpx.Timeout(120.0), transport=transport) as client:
         crops = list(fetch_crops(client, base))
-    labels, partition, manifest = build(crops, load_coco(Path(args.coco_gt)), args.min_iou)
+    pin = json.loads(Path(args.eval_manifest).read_text()) if args.eval_manifest else None
+    labels, partition, manifest = build(
+        crops,
+        load_coco(Path(args.coco_gt)),
+        args.min_iou,
+        set(pin['rare_classes']) if pin else None,
+    )
+    if pin:
+        manifest['eval_manifest_sha256'] = pin['manifest_sha256']
+        manifest['eval_seed'] = pin['seed']
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     for name, rows in (('labels', labels), ('partition', partition)):
@@ -207,6 +236,7 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument('--project', required=True)
     b.add_argument('--coco-gt', required=True)
     b.add_argument('--out-dir', required=True)
+    b.add_argument('--eval-manifest', help='pinned cluster_eval_3000.json (rare classes, seed)')
     b.add_argument('--min-iou', type=float, default=MIN_IOU)
     return p
 
