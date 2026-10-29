@@ -13,6 +13,7 @@ import httpx
 
 from scripts.bench import retrieval_eval_data as data
 from scripts.bench.retrieval_eval_metrics import jaccard, latency_summary, rank_of, with_ci
+from scripts.curation._project_worker_utils import curation_api_prefix, scoped_url
 
 
 if TYPE_CHECKING:
@@ -39,7 +40,7 @@ def core_id(coco_id: int) -> str:
 
 
 def curation_base(a: argparse.Namespace) -> str:
-    return f'{a.api}/curation/projects/{a.project}'
+    return scoped_url(a.api, curation_api_prefix(), a.project, '')
 
 
 def ingest_curation(
@@ -62,7 +63,9 @@ def ingest_curation(
                 'source': 'rq_retrieval',
             }
             resp = client.post(
-                f'{api}/curation/projects/{project}/ingest/upload', files=files, data=form
+                scoped_url(api, curation_api_prefix(), project, '/ingest/upload'),
+                files=files,
+                data=form,
             )
             resp.raise_for_status()
             by_name = {r['file_name']: r['coco_id'] for r in rows}

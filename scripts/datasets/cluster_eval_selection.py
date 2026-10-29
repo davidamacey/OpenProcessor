@@ -25,8 +25,17 @@ import random
 from collections import Counter
 from typing import Any
 
-from scripts.bench.cluster_eval_set import LOW_RES_PX, SIMILAR, SIMILAR_GROUPS
 
+# The stratum rules the scorer and the selection share (the container image carries
+# scripts/datasets, not scripts/bench, so the definitions live here).
+LOW_RES_PX = 32
+SIMILAR_GROUPS = (
+    {'car', 'truck', 'bus', 'train'},
+    {'bicycle', 'motorcycle'},
+    {'cat', 'dog'},
+    {'horse', 'cow', 'sheep'},
+)
+SIMILAR = frozenset().union(*SIMILAR_GROUPS)
 
 SCHEMA = 'cluster-eval-pin/1'
 SEED = 20261028
