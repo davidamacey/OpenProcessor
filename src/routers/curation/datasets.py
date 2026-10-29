@@ -297,7 +297,9 @@ async def start_dataset_import(
         store.job.update(status='failed', error=str(exc)[:300], finished_at=now_iso())
         raise api_error(422, 'class_mapping_invalid', f'could not create a class: {exc}') from None
     runner.persist_pinned(store, prepared)
-    runner.persist_scan_summary(store, prepared)
+    runner.persist_scan_summary(
+        store, prepared, [i.model_dump() for i in issues_to_wire(prepared.issues)]
+    )
     freeze = runner.freeze_default(prepared, body)
     store.job.update(freeze_test=freeze)
     ctx = await _context(
