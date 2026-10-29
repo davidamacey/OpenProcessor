@@ -1,8 +1,8 @@
 # Leiden refinement prototype (phase 1 of the graph refinement epic)
 
-Status: research result, measured 2026-10-28 on synthetic planted partitions, CPU only. Issue #342
-(epic #346). The real-data comparison on the public COCO crops and every GPU arm were **not run**;
-section 8 says why and what is needed. Nothing here writes to a project or changes the API.
+Status: research result, measured 2026-10-28 on synthetic planted partitions and on the 539 labelled
+public COCO crops, CPU only. Issue #342 (epic #346). Every GPU arm was **not run**; section 8 says
+why and what is needed. Nothing here writes to a project or changes the API.
 
 ## 1. Question
 
@@ -171,6 +171,54 @@ Adaptive per-node floor, beta 1.0: recall 0.841 (no gain); beta 0.0: recall 0.59
 unassigned (harmful); global `--min-sim 0.5`: essentially the same as no floor (recall 0.861, 131 clusters against 132). No evidence in these data for an
 adaptive threshold.
 
+## 3b. Results on the real COCO crops (539 labelled, 1,364 vectors)
+
+Project `cocotest`: 1,364 PE-Core vectors (1024-d, read-only point-in-time export), graph built
+over all 1,364 crops (825 unlabelled crops are graph nodes, scored only through the 539 labelled
+ones), initial partition = the project's current clusters (128 over the labelled crops). Labels,
+strata and scoring as in `cluster_eval_baseline.md`. Two seeds; stability is their ARI (for the
+current row it is the ARI against the second COCO project, 0.369). k = 30 exact kNN.
+
+| Method | Clusters | Precision | Recall | False merge | Unassigned | Stability ARI |
+|---|---|---|---|---|---|---|
+| Current pipeline | 128 | 0.905 | 0.088 | 0.095 | 0.000 | 0.369 |
+| Leiden init, g=0.03 | 40 | 0.842 | 0.445 | 0.158 | 0.022 | 0.909 |
+| Leiden init, g=0.1 | 68 | 0.905 | 0.234 | 0.095 | 0.032 | 0.950 |
+| Leiden init, g=0.2 | 84 | 0.908 | 0.165 | 0.092 | 0.063 | 0.946 |
+| Leiden init, g=0.3 | 100 | 0.922 | 0.108 | 0.078 | 0.093 | 0.885 |
+| Leiden init + CHAMELEON (RI 0.3, RC 0.9), g=0.03 | 47 | 0.867 | 0.340 | 0.133 | 0.061 | 0.867 |
+| Leiden init + CHAMELEON (RI 0.3, RC 0.9), g=0.1 | 54 | 0.881 | 0.330 | 0.119 | 0.072 | 0.793 |
+| Leiden init + CHAMELEON (RI 0.5, RC 0.95), g=0.03 | 77 | 0.944 | 0.195 | 0.056 | 0.098 | 0.974 |
+| Leiden init + CHAMELEON (RI 0.5, RC 0.95), g=0.1 | 79 | 0.939 | 0.170 | 0.061 | 0.124 | 0.928 |
+| Leiden plain (singletons), g=0.01 | 24 | 0.745 | 0.524 | 0.255 | 0.020 | 0.955 |
+| Consensus Leiden, g=0.01 | 27 | 0.758 | 0.526 | 0.242 | 0.019 | 0.995 |
+| Leiden modularity, res 1.0 | 17 | 0.709 | 0.579 | 0.291 | 0.009 | 0.982 |
+| HDBSCAN leaf | 15 | 0.920 | 0.031 | 0.080 | 0.766 | 1.000 |
+| FINCH level 0 | 133 | 0.852 | 0.041 | 0.148 | 0.178 | 1.000 |
+| FINCH level 1 | 42 | 0.695 | 0.251 | 0.305 | 0.000 | 1.000 |
+
+Other gammas: g=0.001 gives 8 clusters, precision 0.350; g=0.003 precision 0.521; g=0.01 precision
+0.779 recall 0.537 (initialised).
+
+Reading it, honestly:
+
+* Unlike the synthetic data, a Leiden pass that gains recall **loses precision** on real
+  crops, at every resolution with recall above about 0.25. Leiden init at g=0.1 matches the
+  current precision (0.905) with 2.7 times the recall (0.234); the low-resolution stratum is the
+  weak one (precision 0.891, 0.895 at g=0.2).
+* The 128-d floors (RI 0.3, RC 0.9) do not rescue precision here (0.867 at g=0.03). Raising them
+  to RI 0.5 and RC 0.95 gives the best result: g=0.03 reaches precision 0.944 and recall 0.195
+  against 0.905 and 0.088 (both better), with strata low-res 0.933 / 0.298, rare 0.932 / 0.252,
+  similar classes 0.986 / 0.239, and two-seed stability 0.974. **Those floors were chosen after
+  seeing these 539 labels, on the same labels they are scored on**, so this is an optimistic,
+  in-sample figure and needs a held-out set (the planned 3,000-item set does not exist yet).
+* Cost is trivial at this size (seconds). Seed stability of the Leiden variants (0.79 to 0.97)
+  is far above the pipeline's 0.369 between two projects, though the latter is a different
+  comparison.
+* HDBSCAN, FINCH and modularity Leiden are again unusable (noise 77 percent; false merge 0.15
+  to 0.31).
+* Protected items: none in this project, so the moved-protected-items count is not exercised.
+
 ## 4. Higher dimension (1024-d, the real PE-Core width)
 
 The synthetic generator at 1024-d with the same sigma behaves differently, and that matters for
@@ -254,10 +302,12 @@ classes, so the baseline is no longer fragmented.
 
 ## 6. Recommendation for phase 2 (#343)
 
-**Conditional go.** The mechanism works where the current partition is fragmented, and the
-evidence is clear on the synthetic regime that matches the real baseline's fragmentation. Two gates
-are not yet closed and should be closed before committing phase-2 design (section 8): the
-real-data run on the 539 labelled COCO crops, and a decision on the GPU arm.
+**Conditional go, with a weaker case than the synthetic runs alone suggest.** Synthetic data show
+the mechanism recovers fragments at baseline precision. On the 539 real crops the unfiltered pass
+trades precision for recall; only a stricter validation (RI 0.5, RC 0.95, tuned in-sample) beat
+the current pipeline on both axes (precision 0.944, recall 0.195 against 0.905 and 0.088). Phase 2
+should therefore start with a held-out evaluation set and threshold calibration, not with
+product code. The GPU arm (section 8) is still open.
 
 If it proceeds, carry forward:
 
@@ -294,23 +344,13 @@ If it proceeds, carry forward:
 
 ## 8. Not done, and what is needed
 
-* **Real COCO crops (539 labelled).** Labels and the current partition were built through the
-  read-only API exactly as in `cluster_eval_baseline.md` (class set, IoU rule and strata match: 539
-  labelled crops, 128 clusters, 10 classes; low-res 112, rare 113, similar classes 314). Today
-  this gives pair precision 0.905, recall 0.087, false-merge 0.095, false-split 0.913, 28 mixed
-  clusters, and 0.369 ARI between the two COCO projects over 531 shared crops (the numbers differ a
-  little from the 2026-10-28 baseline: 0.893 and 134 clusters, because the stack's partition has
-  since changed). The PE vectors for those crops are only in the project's OpenSearch index; the
-  curation API does not return vectors. A read-only export was blocked by the permission system in
-  this session, so no Leiden or baseline method was run on real vectors. To finish: export the
-  `cocotest` item vectors with `scripts/research/fetch_project_vectors.py` (read-only search),
-  then run the commands in section 9 with `--labels` and `--partition` from the COCO build.
 * **GPU arms (cuGraph Leiden and ECG, cuML HDBSCAN, GPU kNN) on GPU 0.** A second environment was
   built (`venv-cluster-gpu` outside the repo) and installed cleanly from plain PyPI (the NVIDIA
   index was not needed): `cugraph-cu12` 26.10.0, `cuml-cu12` 26.10.0, `cuvs-cu12` 26.10.0,
   `cupy-cuda12x` 14.2.0, `faiss-gpu-cu12` 1.14.1; `import cugraph, cuml, cupy, faiss` and device
   detection (RTX A6000 on `CUDA_VISIBLE_DEVICES=0`) succeeded. Launching the first GPU job was
-  blocked by the permission system, so there are no GPU timings, GPU memory figures or GPU quality
+  blocked by the permission system twice, the second time after the owner's approval was relayed
+  through the coordinator (the classifier denied `flock ... python` on GPU 0), so there are no GPU timings, GPU memory figures or GPU quality
   numbers. `scripts/research/gpu_methods.py` (`gpu_leiden`, `gpu_ecg`, `gpu_hdbscan`, GPU kNN with
   faiss-gpu or cuVS, a memory watchdog that aborts above 40,000 MB) is written but **untested**.
 * 1M points and HDBSCAN above 20k were not run.

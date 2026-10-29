@@ -26,7 +26,7 @@ def export(url: str, index: str, page: int = 500) -> dict[str, np.ndarray]:
         pit = http.post(f'/{index}/_search/point_in_time', params={'keep_alive': '5m'}).json()
         body: dict[str, object] = {
             'size': page,
-            'pit': {'id': pit['id'], 'keep_alive': '5m'},
+            'pit': {'id': pit['pit_id'], 'keep_alive': '5m'},
             'sort': [{'_shard_doc': 'asc'}],
             'query': {'exists': {'field': 'pe_embedding'}},
             '_source': ['pe_embedding', 'cluster_id'],
@@ -44,7 +44,7 @@ def export(url: str, index: str, page: int = 500) -> dict[str, np.ndarray]:
                     clusters.append(-1 if cid is None else int(cid))
                 body['search_after'] = hits[-1]['sort']
         finally:
-            http.request('DELETE', '/_search/point_in_time', json={'id': pit['id']})
+            http.request('DELETE', '/_search/point_in_time', json={'id': pit['pit_id']})
     arr = np.asarray(vecs, dtype=np.float32)
     arr /= np.linalg.norm(arr, axis=1, keepdims=True)
     return {'item_id': np.array(ids), 'vectors': arr, 'cluster_id': np.array(clusters)}
