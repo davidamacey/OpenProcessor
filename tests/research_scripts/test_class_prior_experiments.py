@@ -482,9 +482,11 @@ def test_condensed_distance_orders_the_upper_triangle_row_major() -> None:
 
 
 def test_identical_rows_never_give_a_negative_distance() -> None:
-    v = np.repeat(_unit_at(37)[:1], 3, axis=0)  # cos(37 deg)^2 + sin^2 rounds off 1 in float32
-    assert (sc.condensed_cosine_distance(v) >= 0).all()
+    # rows a hair longer than 1, as float32 rounding leaves them: 1 - 1.001 * 1.001 < 0
+    v = np.array([[1.001, 0.0], [1.001, 0.0], [1.001, 0.0]], dtype=np.float32)
+    assert sc.condensed_cosine_distance(v).tolist() == [0.0, 0.0, 0.0]
     assert sc.dense_average_partition(v, 0.01).tolist() == [0, 0, 0]
+    assert (ra.distance_fn('raw', None)(v) >= 0).all()
 
 
 def test_dense_partition_cuts_at_the_height_and_handles_one_crop() -> None:

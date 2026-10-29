@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import resource
 import sys
 import time
@@ -443,7 +444,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     t.add_argument('--cut', type=float, required=True)
     args = ap.parse_args(argv)
     run = run_scale_time if args.cmd == 'scale-time' else COMMANDS[args.cmd][0]
-    result = run(args)
+    load_start = os.getloadavg()
+    result = {
+        'command': args.cmd,
+        'git_sha': scorecard.current_git_sha(),
+        'load_avg_start': load_start,
+        **run(args),
+        'load_avg_end': os.getloadavg(),
+    }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=1, default=float) + '\n')
     return 0

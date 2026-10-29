@@ -435,3 +435,18 @@ def test_the_scale_timing_run_records_cost_and_the_largest_cluster(tmp_path: Pat
         assert out['crops_per_key'] == {'bus': 20, 'car': 20, 'dog': 20}
         assert out['fit_seconds'] >= 0
         assert not math.isnan(out['peak_rss_gb'])
+
+
+def test_every_result_file_names_the_commit_and_the_host_load(tmp_path: Path) -> None:
+    from scripts.bench import scorecard
+    from scripts.research.cluster_diag import class_prior_run as run
+
+    stem, _, _, _ = _project(tmp_path, per_class=5)
+    out = tmp_path / 'sub' / 'r.json'
+    argv = ['scale-time', '--bundle', str(stem), '--out', str(out)]
+    assert run.main([*argv, '--key', 'dog', '--mode', 'dense', '--cut', '0.3']) == 0
+    got = json.loads(out.read_text())
+    assert got['command'] == 'scale-time'
+    assert got['git_sha'] == scorecard.current_git_sha()
+    assert len(got['load_avg_start']) == len(got['load_avg_end']) == 3
+    assert got['key'] == 'dog'
