@@ -1,0 +1,53 @@
+# Research notes
+
+Measured snapshots, literature reviews and evaluation plans behind OpenProcessor's design and
+performance work. Design decisions live in [`docs/design/`](../design/README.md); this folder holds
+the evidence. Conventions for adding or changing a note are in [`CLAUDE.md`](CLAUDE.md).
+
+Notes are dated snapshots. Numbers drift as the code changes, so each note states where, when and
+on what it was measured, and every result that matters has a reproduce command.
+
+## Measurement logs (the source for any write-up)
+
+| Note | What it holds |
+|---|---|
+| [v070_measurement_log.md](v070_measurement_log.md) | The running 0.7.0 log: cluster pass size ladder to 1M crops, ingest and decode-instance sweeps, NVMe versus HDD, contention, search latency, live checks of the embedding fixes. Each section has setup, method, results and reproduce commands. |
+| [cluster_eval_baseline.md](cluster_eval_baseline.md) | First cluster-quality baseline from the evaluation harness on public COCO crops. |
+| [ingest_concurrency_tuning.md](ingest_concurrency_tuning.md) | Batch and concurrency sweep for bulk ingest. |
+| [pe_encoder_batching_benchmark.md](pe_encoder_batching_benchmark.md) | Batched TensorRT PE-Core-L14-336: parity and throughput. |
+| [detector_quantization_results.md](detector_quantization_results.md) | Detector precision, runtime and hardware matrix. |
+| [triton_perf_crossvalidation.md](triton_perf_crossvalidation.md) | Batch size versus output payload on a live Triton. |
+| [curation_scores.md](curation_scores.md) | Validation of the uniqueness, mistakenness and diversity scores. |
+
+## Clustering
+
+| Note | What it holds |
+|---|---|
+| [cluster_types.md](cluster_types.md) | The three kinds of clustering (whole image, detection crops, faces), their embedding spaces and code paths. |
+| [clustering_methods.md](clustering_methods.md) | UMAP, AHC, HDBSCAN and IVF for the residual pool; the IVF-then-refine design. |
+| [gpu_clustering.md](gpu_clustering.md) | cuML UMAP backend detection and VRAM budget. |
+| `leiden_refinement_prototype.md` | Graph-based global refinement (kNN graph, Leiden, split/merge validation) against the current pipeline; CPU and GPU (added when the prototype lands, epic #346). |
+
+## Serving, decode and models
+
+| Note | What it holds |
+|---|---|
+| [triton_deep_research_2026-09.md](triton_deep_research_2026-09.md) | External references, production lessons and a performance architecture review for Triton-based vision serving (basis for #40). |
+| [dali_gpu_decode_lessons.md](dali_gpu_decode_lessons.md) | GPU decode inside Triton: traps and lessons. |
+| [vlm_serving_sizing.md](vlm_serving_sizing.md) | vLLM sizing, flag recon, profile sweep and VLM-versus-VLM comparison. |
+| `embedding_model_eval_plan.md` | Evaluation design for an optional multimodal embedding model and reference arms, with a TensorRT track (added with #347). |
+
+## Long-term
+
+| Note | What it holds |
+|---|---|
+| [OpenProcessor_Spatial_Memory_Photogrammetry_Research_README.md](OpenProcessor_Spatial_Memory_Photogrammetry_Research_README.md) | Discovering same-place photo groups, photogrammetry and a dated spatial timeline (issue #348, milestone v0.9.0). Not implemented. |
+
+## Related material elsewhere
+
+- A domain-specific bake-off paper (curated, cluster-stratified training data and a detector comparison) is maintained privately outside this repository; its data-engine section corresponds to the ingest, clustering and split work measured in these notes. The public write-up of the systems work is planned from the measurement logs (see "Writing up" in [CLAUDE.md](CLAUDE.md)).
+
+- Raw benchmark JSON used by the docs: [`docs/benchmarks/`](../benchmarks/).
+- Performance numbers and acceptance bars: [`docs/PERFORMANCE.md`](../PERFORMANCE.md).
+- Market and competitor analysis: [`docs/market/`](../market/).
+- Bench and evaluation tooling: `scripts/bench/` (`cluster_eval*.py`, `cluster_ladder.py`, `scale_run.py`).
