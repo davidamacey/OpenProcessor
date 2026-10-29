@@ -74,5 +74,6 @@ how it was measured and whether the design is implemented.
 | [OpenProcessor_Spatial_Memory_Photogrammetry_Research_README.md](../research/OpenProcessor_Spatial_Memory_Photogrammetry_Research_README.md) | Long-term research: discovering same-place photo groups, COLMAP and Gaussian-splat reconstruction, a dated spatial timeline. Not implemented; scheduled after 0.7.0 |
 | [installer_drive_log.md](../research/installer_drive_log.md) | Hand-driven runs of the one-line installer (control-plane-only, no-start, branch mode, upgrade and rollback, edge cases) with the defects they found |
 | [gpu_clustering.md](../research/gpu_clustering.md) | cuML UMAP backend detection and VRAM budget (#66) |
+| [clustering_research_consolidated.md](../research/clustering_research_consolidated.md) | Consolidated clustering research for the four kinds (whole image, crops, faces, fine-grained): sources, real-data diagnostics, recommended method stack and real-data experiments (#346) |
 | [curation_scores.md](../research/curation_scores.md) | Uniqueness, mistakenness, near-duplicate and diversity score validation |
 | [detector_quantization_results.md](../research/detector_quantization_results.md) | Detector precision, runtime and hardware matrix |
