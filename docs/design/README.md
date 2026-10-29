@@ -68,6 +68,7 @@ how it was measured and whether the design is implemented.
 | [clustering_methods.md](../research/clustering_methods.md) | UMAP, AHC, HDBSCAN and IVF methods, the IVF-then-refine hierarchy and the ablation |
 | [cluster_types.md](../research/cluster_types.md) | The three kinds of clustering (visual-search IVF, curation item and region-box clustering, face clustering): embedding spaces, algorithms, triggers, storage, routes, limits, and how the graph refinement epic (#346) applies to each |
 | [OpenProcessor_Spatial_Memory_Photogrammetry_Research_README.md](../research/OpenProcessor_Spatial_Memory_Photogrammetry_Research_README.md) | Long-term research: discovering same-place photo groups, COLMAP and Gaussian-splat reconstruction, a dated spatial timeline. Not implemented; scheduled after 0.7.0 |
+| [installer_drive_log.md](../research/installer_drive_log.md) | Hand-driven runs of the one-line installer (control-plane-only, no-start, branch mode, upgrade and rollback, edge cases) with the defects they found |
 | [gpu_clustering.md](../research/gpu_clustering.md) | cuML UMAP backend detection and VRAM budget (#66) |
 | [curation_scores.md](../research/curation_scores.md) | Uniqueness, mistakenness, near-duplicate and diversity score validation |
 | [detector_quantization_results.md](../research/detector_quantization_results.md) | Detector precision, runtime and hardware matrix |

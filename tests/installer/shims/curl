@@ -12,6 +12,7 @@
 #                                                  probe_fail: POST .../probe answers 422,
 #                                                  $SHIM_VLM_ROOT: the vLLM root at /v1/models,
 #                                                  $SHIM_STATE/health_down: refused,
+#                                                  api_not_ready: /health 503 (no Triton), OpenSearch ok,
 #                                                  monitoring_bad: Prometheus has no config)
 set -u
 printf 'curl %s\n' "$*" >> "${SHIM_LOG:?}"
@@ -46,7 +47,10 @@ case "$url" in
         path="/${url#http://*/}"
         case "$path" in
             /v1/models) body="{\"data\": [{\"id\": \"local-vlm\", \"root\": \"${SHIM_VLM_ROOT:-}\"}]}" ;;
-            /health) body='{"status": "ready", "loaded": true}' ;;
+            /health)
+                if [[ -e "${state}/api_not_ready" ]]; then code=503; os_ok=true; [[ -e "${state}/os_down" ]] && os_ok=false
+                    body="{\"status\":\"not_ready\",\"services\":{\"triton\":{\"ok\":false},\"opensearch\":{\"ok\":${os_ok}}}}"
+                else body='{"status": "ready", "loaded": true}'; fi ;;
             /curation/health) body='{"status": "ok"}' ;;
             /curation/vlm/local) body="$(cat "${state}/vlm_local.json" 2>/dev/null || echo '{}')" ;;
             /curation/vlm/endpoints/*/probe)
