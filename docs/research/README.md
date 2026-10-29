@@ -27,6 +27,7 @@ on what it was measured, and every result that matters has a reproduce command.
 | [cluster_types.md](cluster_types.md) | The three kinds of clustering (whole image, detection crops, faces), their embedding spaces and code paths. |
 | [clustering_methods.md](clustering_methods.md) | UMAP, AHC, HDBSCAN and IVF for the residual pool; the IVF-then-refine design. |
 | [gpu_clustering.md](gpu_clustering.md) | cuML UMAP backend detection and VRAM budget. |
+| [clustering_research_consolidated.md](clustering_research_consolidated.md) | Consolidated clustering reference for whole images, crops, faces and fine-grained groups: internal notes, apps (Immich, PhotoPrism), literature, real-data geometry and whitening diagnostics, recommended stack per kind, real-data experiment plan. |
 | `leiden_refinement_prototype.md` | Graph-based global refinement (kNN graph, Leiden, split/merge validation) against the current pipeline; CPU and GPU (added when the prototype lands, epic #346). |
 
 ## Serving, decode and models
