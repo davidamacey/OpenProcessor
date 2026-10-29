@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pytest
 
-from scripts.bench import cluster_eval
+from scripts.bench import cluster_eval, eval_split, scorecard
 
 
 if TYPE_CHECKING:
@@ -140,3 +140,175 @@ def test_duplicate_partition_item_fails_closed(tmp_path: Path) -> None:
     part = _write(tmp_path / 'p.jsonl', [{'item_id': 'a', 'cluster_id': 1}] * 2)
     with pytest.raises(SystemExit, match='duplicate item_id'):
         cluster_eval.read_partition(part, ['a'])
+
+
+# --- BCubed/AMI rows, view and size pair strata, identity labels, splits, scorecard ---
+
+
+def _two_class_set(tmp_path: Path, **extra: Any) -> tuple[Path, Path]:
+    """Six items from three source images; cluster 'a' mixes one bus into the cars."""
+    groups = ['g0', 'g0', 'g1', 'g1', 'g2', 'g2']
+    labels = _write(
+        tmp_path / 'l.jsonl',
+        [
+            {
+                'item_id': f'i{k}',
+                'label': 'car' if k < 3 else 'bus',
+                'group': groups[k],
+                'view': 'front' if k % 2 else 'side',
+                'size_bin': 'big' if k < 4 else 'small',
+                'identity': f'veh{k // 2}',
+                **{key: val[k] for key, val in extra.items()},
+            }
+            for k in range(6)
+        ],
+    )
+    part = _write(
+        tmp_path / 'p.jsonl',
+        [
+            {'item_id': f'i{k}', 'cluster_id': c}
+            for k, c in enumerate(['a', 'a', 'a', 'a', 'b', None])
+        ],
+    )
+    return labels, part
+
+
+def test_score_adds_bcubed_ami_risk_and_label_field_blocks(tmp_path: Path) -> None:
+    labels, part = _two_class_set(tmp_path)
+    s = _run(tmp_path, labels=labels, partition=part)
+    # cluster a = {car, car, car, bus}; b = {bus}; i5 abstained (a singleton for BCubed)
+    assert s['bcubed_precision'] == pytest.approx((3 * 3 / 4 + 1 / 4 + 1 + 1) / 6)
+    assert s['bcubed_recall'] == pytest.approx((3 * 3 / 3 + 1 / 3 + 1 / 3 + 1 / 3) / 6)
+    assert 0.0 < s['ami'] < 1.0
+    assert s['risk_coverage']['coverage'] == pytest.approx(5 / 6)
+    assert s['risk_coverage']['risk'] == pytest.approx(1 / 5)
+    assert set(s['view_pairs']) == {'same', 'different'}
+    assert set(s['size_pairs']) == {'same', 'different'}
+    # identity labels are scored on their own, never folded into the class metrics
+    assert s['identity']['pair_recall'] == pytest.approx(2 / 3)  # (i4,i5) lost to the abstention
+    assert s['identity']['pair_precision'] == pytest.approx(2 / 6)
+    assert 'bcubed_f' in s['identity']
+
+
+def test_score_without_optional_label_fields_has_no_such_blocks(tmp_path: Path) -> None:
+    labels = _write(
+        tmp_path / 'l.jsonl', [{'item_id': 'a', 'label': 'x'}, {'item_id': 'b', 'label': 'x'}]
+    )
+    part = _write(
+        tmp_path / 'p.jsonl', [{'item_id': 'a', 'cluster_id': 1}, {'item_id': 'b', 'cluster_id': 1}]
+    )
+    s = _run(tmp_path, labels=labels, partition=part)
+    for absent in ('view_pairs', 'size_pairs', 'identity'):
+        assert absent not in s
+    assert s['bcubed_f'] == 1.0
+
+
+def test_confidence_in_the_partition_gives_a_risk_coverage_curve(tmp_path: Path) -> None:
+    labels, _ = _two_class_set(tmp_path)
+    part = _write(
+        tmp_path / 'pc.jsonl',
+        [
+            {'item_id': f'i{k}', 'cluster_id': c, 'confidence': conf}
+            for k, (c, conf) in enumerate(
+                [('a', 0.9), ('a', 0.8), ('a', 0.7), ('a', 0.1), ('b', 0.6), (None, None)]
+            )
+        ],
+    )
+    s = _run(tmp_path, labels=labels, partition=part)
+    curve = s['risk_coverage']['curve']
+    assert curve[-1] == [pytest.approx(5 / 6), pytest.approx(1 / 5)]
+    assert curve[0] == [pytest.approx(1 / 6), 0.0]
+    assert s['risk_coverage']['aurc'] is not None
+
+
+def _split(tmp_path: Path, groups: list[str], seed: int = 1) -> tuple[Path, dict[str, Any]]:
+    manifest = eval_split.build_manifest('toy', seed, 'source_image', groups)
+    path = tmp_path / 'split.json'
+    eval_split.write_manifest(path, manifest)
+    return path, manifest
+
+
+def test_split_flags_score_only_the_chosen_half(tmp_path: Path) -> None:
+    labels, part = _two_class_set(tmp_path)
+    path, manifest = _split(tmp_path, ['g0', 'g1', 'g2'])
+    half = set(manifest['heldout'])
+    s = _run(
+        tmp_path, '--split-manifest', str(path), '--split', 'heldout', labels=labels, partition=part
+    )
+    assert s['items'] == 2 * len(half)
+    assert s['split'] == {'name': 'heldout', 'manifest_sha256': manifest['manifest_sha256']}
+    full = _run(tmp_path, labels=labels, partition=part)
+    assert full['items'] == 6
+    assert 'split' not in full
+
+
+def test_split_needs_a_group_on_every_label(tmp_path: Path) -> None:
+    labels = _write(tmp_path / 'l.jsonl', [{'item_id': 'a', 'label': 'x'}])
+    part = _write(tmp_path / 'p.jsonl', [{'item_id': 'a', 'cluster_id': 1}])
+    path, _ = _split(tmp_path, ['g0', 'g1'])
+    with pytest.raises(SystemExit, match='group'):
+        _run(
+            tmp_path,
+            '--split-manifest',
+            str(path),
+            '--split',
+            'heldout',
+            labels=labels,
+            partition=part,
+        )
+
+
+def test_scoring_on_what_was_tuned_on_is_refused(tmp_path: Path) -> None:
+    labels, part = _two_class_set(tmp_path)
+    path, _ = _split(tmp_path, ['g0', 'g1', 'g2'])
+    args = ['--split-manifest', str(path), '--split', 'heldout', '--tuning-manifest', str(path)]
+    with pytest.raises(SystemExit, match='overlap'):
+        _run(tmp_path, *args, '--tuning-split', 'heldout', labels=labels, partition=part)
+    with pytest.raises(SystemExit, match='overlap'):
+        _run(tmp_path, *args, '--tuning-split', 'full', labels=labels, partition=part)
+    ok = _run(tmp_path, *args, '--tuning-split', 'calibration', labels=labels, partition=part)
+    assert ok['tuning'] == {
+        'split': 'calibration',
+        'manifest_sha256': _split(tmp_path, ['g0', 'g1', 'g2'])[1]['manifest_sha256'],
+    }
+
+
+def test_scorecard_out_writes_the_envelope_with_acceptance(tmp_path: Path) -> None:
+    labels, part = _two_class_set(tmp_path)
+    path, manifest = _split(tmp_path, ['g0', 'g1', 'g2'])
+    card_path = tmp_path / 'card.json'
+    _run(
+        tmp_path,
+        '--split-manifest', str(path), '--split', 'heldout',
+        '--scorecard-out', str(card_path), '--kind', 'K2', '--level', 'items',
+        '--dataset-name', 'toy', '--seed', '5', '--git-sha', 'abc123',
+        '--bar', 'bcubed_precision=0.01',
+        labels=labels, partition=part,
+    )  # fmt: skip
+    card = json.loads(card_path.read_text())
+    assert card['schema_version'] == scorecard.SCHEMA_VERSION
+    assert card['dataset'] == {
+        'name': 'toy',
+        'synthetic': False,
+        'split': 'heldout',
+        'manifest_sha256': manifest['manifest_sha256'],
+    }
+    assert card['run_meta']['git_sha'] == 'abc123'
+    assert card['run_meta']['seed'] == 5
+    assert card['metrics']['bcubed_precision'] is not None
+    assert card['acceptance']['pass'] is True
+    assert card['acceptance']['value'] == card['metrics']['bcubed_precision']
+
+
+def test_a_bar_on_a_calibration_run_is_refused(tmp_path: Path) -> None:
+    labels, part = _two_class_set(tmp_path)
+    path, _ = _split(tmp_path, ['g0', 'g1', 'g2'])
+    with pytest.raises(scorecard.ScorecardError, match='heldout'):
+        _run(
+            tmp_path,
+            '--split-manifest', str(path), '--split', 'calibration',
+            '--scorecard-out', str(tmp_path / 'c.json'), '--kind', 'K2', '--level', 'items',
+            '--dataset-name', 'toy', '--seed', '1', '--git-sha', 'x',
+            '--bar', 'bcubed_precision=0.5',
+            labels=labels, partition=part,
+        )  # fmt: skip

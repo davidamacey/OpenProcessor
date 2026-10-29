@@ -234,3 +234,24 @@ def test_eval_manifest_supplies_rare_classes_and_is_recorded(tmp_path: Path) -> 
     assert manifest['rare_classes'] == ['cow']
     assert manifest['eval_manifest_sha256'] == 'ab'
     assert manifest['eval_seed'] == 7
+
+
+def test_every_label_carries_its_source_image_as_group(
+    tmp_path: Path, coco: dict[str, Any]
+) -> None:
+    labels, _, _ = ces.build(
+        [_crop('a1', 'a.jpg', (100, 100, 300, 200)), _crop('b1', 'b.jpg', (10, 10, 110, 110))], coco
+    )
+    assert {r['item_id']: r['group'] for r in labels} == {'a1': 'a.jpg', 'b1': 'b.jpg'}
+
+
+def test_a_near_duplicate_variant_shares_its_parents_group(tmp_path: Path) -> None:
+    coco = ces.load_coco(_nd_gt(tmp_path))
+    labels, _, _ = ces.build(
+        [
+            _crop('orig', 'a.jpg', (100, 100, 300, 200)),
+            _crop('variant', 'nd_a_1.jpg', (100, 100, 300, 200)),
+        ],
+        coco,
+    )
+    assert {r['group'] for r in labels} == {'a.jpg'}  # the pair can never straddle a split
