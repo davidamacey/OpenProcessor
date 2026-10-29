@@ -299,5 +299,5 @@ Heldout strata (pair precision): low_res 0.62 (152), mixed_scene 0.72 (151), sim
 (189), rare 0.17 (15, too few to read). Raw JSON and scorecards:
 `artifacts_local/cluster_search/w0/rescore/cocotest_{full,heldout}_r{1,2,3}.json` and `.card.json`
 (gitignored). Not run here: the heldout score of Baseline A's partition. Its
-partition and labels were exported after this section was written; scoring them needs
+is not scored on the heldout half in this note; scoring it needs
 `--split-manifest scripts/datasets/manifests/splits/cluster_eval_3000.json --split heldout`.
