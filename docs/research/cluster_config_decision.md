@@ -1,4 +1,4 @@
-# Cluster configuration decision after the 3,000-item baseline (revised after W0c and W0d)
+# Cluster configuration decision after the 3,000-item baseline (revised after W0c, W0d and W0e)
 
 Status: decision note, first written 2026-10-29 and revised the same day after the CPU experiments
 of wave W0c ([cluster_config_experiments.md](cluster_config_experiments.md), branch
@@ -19,7 +19,115 @@ Inputs:
 Naming: the consolidated note numbers the kinds K1 whole image, K2 crops, K3 faces, K4
 fine-grained; the plan numbers K3 region boxes and K4 faces. This note uses names, not numbers.
 
-## 0. Current state after W0d (supersedes sections 1, 7 and 8 where they differ)
+## 0A. Current conclusion after W0e (supersedes section 0 and sections 1 to 11 where they differ)
+
+Third revision, 2026-10-29. Input: [cluster_config_loop_cost.md](cluster_config_loop_cost.md)
+(branch `feat/cluster-w0e-experiments` at `1fe6c040`, merged here). Its bars were registered in a
+commit before any score was computed, and none was moved.
+
+### 0A.1 Class-level labelling: one gate per detector key does about as well as clustering
+
+Z2 used a fresh, vehicle-heavy Open Images set: 33,580 crops, 7,476 labelled crops in the held-out
+half. Means over 20 seeds, oracle labeler, the loop's gate (#286), no recursion:
+
+| Arm | Decisions per item (U1) | Propagated precision (U2) | Open-set items propagated per run (all wrong / all right) |
+|---|---|---|---|
+| IVF now (incumbent) | 0.776 | 0.988 | 10 (all right) |
+| One cluster per detector key | 0.374 | 0.989 | 15.8 (**all wrong**) |
+| Average linkage within the key, cut 0.515 | 0.326 | 0.996 | 0 |
+
+**What can be said:**
+
+- **Effort.** Both key-based arms cut labelling decisions by about 2.1 to 2.4 times against IVF. Both
+  clear the registered precision floor (U-a) and IVF bar (U-b).
+- **No effort gain from the clustering itself.** Within-key against key alone passes U-c on the
+  registered mean (0.326 against the bar of 0.337), but not robustly. Paired by seed it is cheaper
+  in only 12 of 20 seeds, and the medians are 0.313 against 0.323.
+- **The cost is in the large clusters that fail the gate.** Both arms pay it. A judge-gated merge of
+  small neighbours (Z3) adds 2.2 % instead of saving the 10 % bar, so it fails.
+- **The cut does not hold still.** It was 0.346, 0.345 and 0.515 on the three public sets, and does
+  not transfer to set P at all. A6 (`rare`) fails again (-0.399).
+
+**The open-set safety property.** The gate certifies that a cluster is at least theta (0.9)
+homogeneous. By design, a minority of up to 10 % inside a passing cluster gets the majority's label.
+
+- So the risk is minority exposure: few unknown objects inside a large, otherwise pure cluster.
+- Key alone mislabels about 16 open-set animals per run this way: a 0.959-pure dog key cluster that
+  holds 26 of them passes in some seeds.
+- Within-key propagates none: the smaller clusters that hold them fail the gate and are asked item by
+  item.
+- That protection comes from the gate, not from precision on open-set items. U-d (open-set precision)
+  cannot be read, because no open-set item reached a passing cluster.
+- Within-key's real advantage is therefore lower minority exposure, not effort. Wrong labels on rare
+  unknowns are training noise in a detector class (dog, sheep, bird), which matters for the owner's
+  goal.
+
+### 0A.2 What to ship: no new class-level clustering method
+
+The simplest robust option is the **detector key as the loop's root node**, with the loop's own
+splitter for roots that fail the gate (`splitter.py` on the loop branch: complete-linkage AHC into
+4 groups, depth 3, minimum node 40). That needs no new residual-clustering method, no cut store and
+no per-project cut calibration.
+
+Its open gap is minority exposure. It is not adopted until Z4 below measures it, together with a
+label-free guard: before propagating a passing cluster, hold back any member whose cosine distance to
+the sample centroid exceeds the 95th percentile of the sampled members' own distances. Those members
+go to review. This is the gate's own evidence boundary, and needs no labels.
+
+Until Z4 reads, nothing changes in what ships: IVF stays as it is.
+
+**WC is reduced to the region-box id-sort fix** (order independence, valid under any method; it
+merges with the owner's yes):
+
+- The within-key method, the cut store and per-key refusal are removed from the WC branch, so no dead
+  code is kept.
+- The research scripts keep the within-key method. It may come back in W7 as the fine-group method
+  inside a coarse key, if the fine-grained benchmark supports it.
+
+**Z4 (small, class level), registered now.**
+
+- **Data.** A fresh Open Images set from the **test** split, rich in the 12 animals outside COCO's
+  label space (at least 2,000 open-set crops, so that at least 30 are propagated per run), disjoint
+  from every earlier pin.
+- **Arms.**
+  - Key roots plus the loop's recursion (its splitter, simulated exactly).
+  - The same plus the hold-back guard.
+  - Within-key roots plus recursion.
+  - IVF.
+- **Bars** (held-out half, fold 1, read once):
+  - U2 >= 0.95.
+  - U1 <= 0.5 x IVF's.
+  - Open-set U2 >= 0.90, with at least 30 propagated per run.
+- **Rule.** Key roots (with or without the guard, the cheaper one that passes) are adopted if they
+  pass. Otherwise within-key roots are, if they pass. Otherwise IVF stays.
+
+### 0A.3 None of this transfers to fine-grained grouping
+
+The owner's real targets are vehicle make and model, and faces.
+
+- Inside the `car` key the detector class gives no help: every crop has the same key.
+- Every number above is class level. That covers the precision of the key partition, the gate's
+  effort, the cut and the open-set exposure.
+- The class-level results say nothing about whether any embedding separates models of one make, or
+  makes from each other.
+
+The fine-grained suite is a separate plan:
+[fine_grained_benchmark_plan.md](fine_grained_benchmark_plan.md). Its data, embeddings, clustering
+arms, metrics, bars (registered before any data is read), judge use, and the ordering of WB as that
+benchmark are all there.
+
+### 0A.4 Wave plan after W0e
+
+1. **W0e: done.** U-a and U-b pass; U-c passes on the mean only; U-d is unreadable; A6 fails; Z3
+   fails.
+2. **WC:** the region-box id-sort fix only.
+3. **Z4:** the class-level root choice above. Small: one ingest on GPU 2 plus CPU.
+4. **WB is now the fine-grained embedding benchmark** (the plan file above), on GPU 2. It includes
+   E0 at make and model level on set C (the judge's local-VLM half is running on GPU 0).
+5. **W5 and W7** follow WB's decisions.
+6. **Faces (E6, W2)** run in parallel, at identity level, with the local judge only.
+
+## 0. Current state after W0d (superseded by 0A where they differ)
 
 Second revision, 2026-10-29, after wave W0d. Inputs:
 
