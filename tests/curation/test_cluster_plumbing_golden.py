@@ -135,9 +135,9 @@ def test_the_golden_run_covers_every_registered_method_but_ivf() -> None:
     assert set(available_methods()) - {'ivf'} <= set(json.loads(GOLDEN.read_text()))
 
 
-def _fetch_order(n: int, n_slices: int = 8) -> list[int]:
-    """Row order of the parallel fetch: slice by slice, document order inside a slice."""
-    return [p for s in range(n_slices) for p in range(n) if p % n_slices == s]
+def _fetch_order(ids: list[str]) -> list[int]:
+    """Row order the fetch delivers: sorted by document id (#372)."""
+    return sorted(range(len(ids)), key=ids.__getitem__)
 
 
 @pytest.mark.asyncio
@@ -152,7 +152,7 @@ async def test_ivf_stores_what_the_method_returns_for_the_fetched_rows(ivf_state
     from src.services.curation.clustering.residual_fetch import _normalize_rows
 
     ids, vectors = _load_embeddings()
-    order = _fetch_order(len(ids))
+    order = _fetch_order(ids)
     rows = _normalize_rows(vectors[order])
     client = FakeItemsClient(ids, vectors)
     await cluster_residuals(client, clustering_method='ivf')
