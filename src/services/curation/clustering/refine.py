@@ -198,6 +198,24 @@ def _compute_purity(class_names: list[str | None]) -> float:
     return top / len(labelled)
 
 
+def _fit_labels(
+    embeddings: np.ndarray, *, n_clusters: int | None, distance_threshold: float
+) -> np.ndarray:
+    """Complete-linkage cosine AHC: cut at ``distance_threshold``, or into exactly
+    ``n_clusters`` groups when given."""
+    # sklearn import is local to keep startup fast and avoid a hard dep for
+    # callers that never touch clustering.
+    from sklearn.cluster import AgglomerativeClustering
+
+    clusterer = AgglomerativeClustering(
+        n_clusters=n_clusters,
+        distance_threshold=None if n_clusters is not None else distance_threshold,
+        linkage=AHC_LINKAGE,
+        metric=AHC_METRIC,
+    )
+    return np.asarray(clusterer.fit_predict(embeddings))
+
+
 async def refine_members(
     cluster_id: int,
     *,
@@ -207,6 +225,7 @@ async def refine_members(
     unit: Literal['items', 'boxes'],
     distance_threshold: float = AHC_DISTANCE_THRESHOLD,
     max_members: int = MAX_REFINE_MEMBERS,
+    n_clusters: int | None = None,
 ) -> dict[str, Any]:
     """The AHC refine core shared by item clusters and region-box clusters.
 
@@ -223,13 +242,18 @@ async def refine_members(
     2. Skip if < MIN_REFINE_MEMBERS (4) members (too small) or
        > ``max_members`` (default 8000) members (too expensive).
     3. ``AgglomerativeClustering(linkage='complete', distance_threshold=0.25,
-       metric='cosine')`` over the embeddings.
+       metric='cosine')`` over the embeddings; with ``n_clusters`` the tree is cut
+       into exactly that many groups instead and ``distance_threshold`` is not
+       used (fewer members than groups is ``skipped_too_small``).
     4. ``write_subids`` the ``"47a"``, ``"47b"`` ... labels; every current
        member gets a fresh one, so re-running overwrites a previous partition.
     5. Purity (largest-class share among labelled members) in the summary.
 
     Returns ``{cluster_id, n_<unit>, n_subclusters, purity, action, ...}``.
     """
+    if n_clusters is not None and n_clusters < 2:
+        msg = 'n_clusters must be at least 2'
+        raise ValueError(msg)
     log = logger.bind(cluster_id=cluster_id)
     log.info('curation_refine_cluster_start')
     n_key = f'n_{unit}'
@@ -259,11 +283,12 @@ async def refine_members(
     members = await fetch_members()
     n_members = len(members)
 
-    if n_members < MIN_REFINE_MEMBERS:
+    min_required = max(MIN_REFINE_MEMBERS, n_clusters or 0)
+    if n_members < min_required:
         log.info(
             'curation_refine_cluster_skipped_too_small',
             n_members=n_members,
-            min_required=MIN_REFINE_MEMBERS,
+            min_required=min_required,
         )
         return {
             'cluster_id': cluster_id,
@@ -271,7 +296,7 @@ async def refine_members(
             'n_subclusters': 0,
             'purity': _compute_purity([m.get('class_name') for m in members]),
             'action': 'skipped_too_small',
-            'reason': f'< {MIN_REFINE_MEMBERS} members; AHC offers no benefit',
+            'reason': f'< {min_required} members; AHC offers no benefit',
         }
 
     if n_members > max_members:
@@ -298,21 +323,13 @@ async def refine_members(
         log.error('curation_refine_cluster_embedding_load_failed', error=str(e))
         raise
 
-    # sklearn import is local to keep startup fast and avoid a hard dep for
-    # callers that never touch clustering.
-    from sklearn.cluster import AgglomerativeClustering
-
-    clusterer = AgglomerativeClustering(
-        n_clusters=None,
-        distance_threshold=distance_threshold,
-        linkage=AHC_LINKAGE,
-        metric=AHC_METRIC,
-    )
     # Off-load to a worker thread so a large cluster (close to
     # MAX_REFINE_MEMBERS) doesn't block the FastAPI event loop -- refine runs
     # in the api process, so a sync fit here would starve every other
     # request.
-    sub_labels = await asyncio.to_thread(clusterer.fit_predict, embeddings)
+    sub_labels = await asyncio.to_thread(
+        _fit_labels, embeddings, n_clusters=n_clusters, distance_threshold=distance_threshold
+    )
     n_subclusters = int(sub_labels.max() + 1) if len(sub_labels) > 0 else 0
 
     updates = [
@@ -336,7 +353,7 @@ async def refine_members(
         'purity': _compute_purity([m.get('class_name') for m in members]),
         'subcluster_weighted_purity': weighted_purity,
         f'n_{unit}_updated': n_updated,
-        'distance_threshold': distance_threshold,
+        'distance_threshold': None if n_clusters is not None else distance_threshold,
         'linkage': AHC_LINKAGE,
         'metric': AHC_METRIC,
         'action': 'refined',

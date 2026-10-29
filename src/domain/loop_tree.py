@@ -6,6 +6,7 @@ third child, ``r10042.2.0`` that child's first child."""
 
 from __future__ import annotations
 
+import hashlib
 import random
 import re
 from dataclasses import dataclass
@@ -80,3 +81,9 @@ def best_first_key(n: int, path: str) -> tuple[int, int, tuple[int, ...]]:
     goes to the nodes that label the most items per call."""
     root, indices = parse_path(path)
     return (-n, root, indices)
+
+
+def seed_int(seed: int, path: str) -> int:
+    """A stable 32-bit integer for ``(seed, path)``, for libraries that take an integer
+    random state (the same node always gets the same one)."""
+    return int(hashlib.sha256(f'{seed}:{path}'.encode()).hexdigest()[:8], 16)

@@ -14,6 +14,7 @@ from src.domain.loop_tree import (
     parse_path,
     path_level,
     root_path,
+    seed_int,
 )
 
 
@@ -119,3 +120,11 @@ def test_best_first_orders_by_size_then_numeric_path() -> None:
         (900, 'r10.10'),
         (50, 'r2'),
     ]
+
+
+def test_seed_int_is_stable_and_depends_on_seed_and_path() -> None:
+    first = seed_int(5, 'r1.2')
+    assert first == seed_int(5, 'r1.2')
+    assert 0 <= first < 2**32
+    assert seed_int(6, 'r1.2') != first
+    assert seed_int(5, 'r1.3') != first

@@ -107,3 +107,5 @@ _.path_level  # src/domain/loop_tree.py, node path grammar
 _.parent_path  # src/domain/loop_tree.py, node path grammar
 _.child_sample  # src/domain/loop_tree.py, seeded child draw with answer reuse
 _.best_first_key  # src/domain/loop_tree.py, the scheduler's priority order
+_.root_of  # PartitionReader.root_of in assist_loop/partition.py: the driver's drift check
+_.member_ids  # RootRef.member_ids in assist_loop/partition.py: the driver's membership digest
