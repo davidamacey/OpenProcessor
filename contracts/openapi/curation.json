@@ -7124,8 +7124,7 @@
           },
           "issues_summary": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/DatasetIssueWire"
             },
             "title": "Issues Summary",
             "type": "array"

@@ -189,7 +189,7 @@ class DatasetImportJob(BaseModel):
     mapping: list[ResolvedMapTarget] = Field(default_factory=list)
     options: DatasetImportOptions
     source: DatasetImportSource
-    issues_summary: list[dict[str, Any]] = Field(default_factory=list)
+    issues_summary: list[DatasetIssueWire] = Field(default_factory=list)
     undo: DatasetUndoReportWire | None = None
     actions: ImportActions
     next_steps: list[NextStep] = Field(default_factory=list)

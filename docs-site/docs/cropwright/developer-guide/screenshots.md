@@ -45,7 +45,7 @@ exactly these calls, each of which writes nothing server-side:
 
 Fixtures that need a write are described in
 [Screenshots and image credits](../../developer-guide/screenshots.mdx#states-that-need-data-you-write-first).
-The import, multi-box and region-profile-test slots come from the `sample-coco-import` and `sample-coco-vehicles` projects (`IMPORT_PREVIEW_PATH` names a server path under an allowed source root, e.g. the project's uploaded archive). The region-profile test reads "not eligible" because the sample items carry no vehicle parent class; the candidates are still drawn. Every slot has its image; a slot added later renders as "pending" until it is captured. Capture them against a backend holding public sample
+The import, multi-box and region-profile-test slots come from the `coco-import` and `coco-vehicles` projects of the seeded stack (see [Seeded capture](../../developer-guide/screenshots.mdx#seeded-capture-on-an-isolated-stack)); the wizard previews the fixture's YOLO layout under `/data/source`. The candidates the region-profile test draws come from a stand-in segmenter. Every slot has its image; a slot added later renders as "pending" until it is captured. Capture them against a backend holding public sample
 data (never from a real deployment). Rows marked **route** are in
 `frontend/scripts/screenshot_routes.json` and the script captures them as-is. Rows marked
 **state** need the page put into a particular state first (a dialog open, an
@@ -104,19 +104,19 @@ stack does not have.
 These sixteen slots are scripted states
 (`--only <name>`) in `frontend/scripts/capture_docs_screenshots.py`, 1600px only (none of
 these layouts is narrow-sensitive). Two environment variables pick the projects:
-`IMPORT_PROJECT=sample-coco-import-v2` and `LIFE_PROJECT=<the throwaway cwlife- project>`.
+`LIFE_PROJECT=<the throwaway cwlife- project>`.
 
 | File (`-1600.png`) | Project | What it shows |
 | --- | --- | --- |
-| `resources-menu` | `sample-coco-2k-v3` | The open Resources menu: bundled docs plus the served service links |
+| `resources-menu` | `coco-sample` | The open Resources menu: bundled docs plus the served service links |
 | `wheels-inventory-card` | throwaway | The pinned Wheels inventory card on `/clusters` |
 | `region-gallery-boxes` | throwaway | The gallery toolbar's "N / M boxes listed (K items)" |
-| `import-job-actions` | `sample-coco-import-v2` | A completed import: Undo offered, Cancel and Resume with the served reason |
-| `reprocess-served-scopes` | `sample-coco-import-v2` | The Reprocess dialog's served scope labels and the dry-run counts (dry run only, never applied) |
-| `locked-item-badge` | `sample-coco-import-v2` | The lock glyph on imported items |
+| `import-job-actions` | `coco-import` | A completed import: Undo offered, Cancel and Resume with the served reason |
+| `reprocess-served-scopes` | `coco-import` | The Reprocess dialog's served scope labels and the dry-run counts (dry run only, never applied) |
+| `locked-item-badge` | `coco-import` | The lock glyph on imported items |
 | `region-profile-testable` | throwaway | "Test on a crop": each leg's served status and reason, candidates drawn |
 | `segmenter-prompt-check` | throwaway | The result of "Check segmenter prompt" |
-| `clone-from-project` | `sample-coco-2k-v3` | The clone dialog's "Copy from another project" list (never submitted) |
+| `clone-from-project` | `coco-sample` | The clone dialog's "Copy from another project" list (never submitted) |
 | `ingest-policy-preview` | throwaway | The ingest policy editor in `selected` mode with the served cost preview |
 | `open-vocab-editor` | throwaway | The open-vocabulary editor with three targets |
 | `open-vocab-test` | throwaway | "Test a target": hits, scores and dropped reasons |
@@ -125,7 +125,7 @@ these layouts is narrow-sensitive). Two environment variables pick the projects:
 | `ingest-source-card` | throwaway | One source card with its served counts, triggers, webhook path and last run (cropped to the card) |
 | `dashboard-embedding` | throwaway | The dashboard Embedding card with a `not_selected` count |
 | `crop-embedding-row` | throwaway | A crop's detail panel with the Embedding row |
-| `run-results-confusion` | `model-demo-owner` | A finished run's Results with the confusion matrix image |
+| `run-results-confusion` | `coco-import` | A finished run's Results with the confusion matrix image (illustrative numbers from the stand-in trainer) |
 
 Notes on how they were made:
 

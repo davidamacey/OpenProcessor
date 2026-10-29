@@ -15,7 +15,7 @@ from docs_screenshots.ctx import (
 # --- Slots for the large-folder ingest guide, pipeline modes, audit and the settings lists ----
 # Read-only pages use ctx.project (a public sample project). The slots that need a run in
 # progress, a failed run or a deactivated VLM read throwaway cwlife-* projects that
-# docs_screenshot_fixtures.py (`bulk`, `vlm-off`) creates; the browser itself never writes.
+# docs_screenshot_fixtures.py (`bulk`) creates; the browser itself never writes.
 
 
 def _bulk_section(page, ctx: Ctx, slug: str, wait: str):
@@ -29,7 +29,7 @@ def _bulk_section(page, ctx: Ctx, slug: str, wait: str):
 
 def state_ingest_bulk_panel(page, ctx: Ctx):
     # A throwaway project with no run yet, so the panel shows only the roots and the form.
-    return _bulk_section(page, ctx, _cwlife(VLM_OFF_PROJECT), "[data-testid='bulk-roots']")
+    return _bulk_section(page, ctx, VLM_OFF_PROJECT, "[data-testid='bulk-roots']")
 
 
 def state_ingest_bulk_run(page, ctx: Ctx):
@@ -54,7 +54,7 @@ def state_vlm_endpoint_off(page, ctx: Ctx):
     # Crop to the active-VLM card: the endpoint table below lists every project of the
     # deployment under "Used by", which must not reach a screenshot.
     page.goto(
-        f"{ctx.base}/p/{_cwlife(VLM_OFF_PROJECT)}/settings/models", wait_until="domcontentloaded", timeout=30_000
+        f"{ctx.base}/p/{VLM_OFF_PROJECT}/settings/models", wait_until="domcontentloaded", timeout=30_000
     )
     page.wait_for_selector("section#active", timeout=20_000)
     _settle(page, 2500)

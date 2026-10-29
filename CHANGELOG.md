@@ -22,6 +22,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - The installer's tier prompt is a numbered menu; `--tiers` is unchanged.
 
 ### Added
+- Self-seeding docs screenshots (#335): `capture_docs_screenshots.py --seeded` seeds its own public projects on an isolated GPU-less stack (`docker/test/compose.docs-shots.yml`, with a stand-in segmenter) and captures 17 states in one run; the harness host ports are `VERIFY_*_PORT` variables.
 - Cluster-quality evaluation harness: `scripts/bench/cluster_eval.py`, `cluster_eval_metrics.py` and `cluster_eval_set.py` (pair precision and recall, false-merge and false-split rates, stability, protected-item moves) and a recorded baseline (#341, `docs/research/cluster_eval_baseline.md`).
 - Host IO-pressure sampling in `scripts/bench/scale_run.py` (#337).
 - The embed reprocess pass sends photos of at least 3 MP to the GPU decode model with the stored boxes (28 img/s against 12 on the CPU route for about 21 MP photos, API CPU 0.03 against 0.50 s per image) and counts routes in `op_reprocess_decode_total` (#259).
@@ -34,6 +35,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Fixed
 - Installer: a control-plane-only install now passes its health wait (the API's `/health` is 503 without Triton) and `./openprocessor start` no longer starts Triton after one; upgrade and rollback replace release files by rename so a running installer is never rewritten in place; concurrent installer runs are serialized by a lock; `--rollback` honors `--no-start`; `secrets/vlm` and `data/source` are created as the installing user instead of root-owned by Docker; several confusing messages corrected (`docs/research/installer_drive_log.md`).
+- A dataset import job page crashed when the import had any issue: `issues_summary` served only code, count and severity where Cropwright renders id, message and samples. The job now serves the same issue shape as the preview (#335).
 - An empty or idle project no longer queues an `auto_label` job on every refresh cycle (#350).
 - Installer: the `full` profile (models plus two `gpu_image_prep` instances, 34,816 MiB) is chosen only for a Triton card with 40 GB or more free; 24 and 32 GB cards get `standard` with the GPU decode off, so the plan no longer puts more on a card than it has (#373).
 - A cluster pass that did not cover its pool is `partial`, not `success`: it reads under 99 percent of the pool it expected, or write-back items failed. It records no last run, and an auto-label job ends as failed on a `partial` stage and skips geometry, promotion and the VLM (#357). A pass called without an expected pool (the daemon's own refresh) still cannot see a pool that shrank before it started, so #357 stays open.

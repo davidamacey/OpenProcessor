@@ -80,16 +80,13 @@ directory first, look at the result, then copy the files you want to keep.
 
 ### States that need data you write first
 
-The browser never writes. A state that needs a run in progress, a failed
-run or a project with its VLM off reads throwaway projects named
+The browser never writes. A state that needs a run in progress or a failed
+run reads throwaway projects named
 `cwlife-*`, which `frontend/scripts/docs_screenshot_fixtures.py` creates
 with plain API calls (every write asserts the `cwlife-` prefix).
 
 ```bash
 cd frontend
-# VLM switched off for a throwaway project (state vlm-endpoint-off).
-python3 scripts/docs_screenshot_fixtures.py vlm-off --base-url http://localhost:<api-port>
-
 # Two throwaway projects: a bulk run in progress and a finished run with two
 # missing paths. <api-container> is the API container name; the folder is a
 # container path with public images. The run takes about half a minute, so
@@ -107,6 +104,65 @@ screenshot is therefore not a throughput figure; quote only
 [`docs/PERFORMANCE.md`](https://github.com/davidamacey/OpenProcessor/blob/main/docs/PERFORMANCE.md).
 A deleted project slug is retired for good, so each `bulk` call uses fresh
 slugs. `teardown` deletes every `cwlife-*` project.
+
+### Seeded capture on an isolated stack
+
+Seventeen states need data that a shared stack does not reliably hold: the
+prompt-pack and region-profile editors and tests, multi-box review and the box
+editor, the import wizard, job and review, the Reprocess dialog's served
+scopes, the lock badge, the VLM run picker, the Resources menu, a finished run's
+confusion matrix, the bulk-ingest panel and the VLM-off card. The capture script
+seeds all of it itself on a throw-away stack that holds nothing else, so no
+screenshot depends on a host's projects, paths or banners (the list is
+`SEEDED_STATES` in `frontend/scripts/docs_screenshots/registry.py`).
+
+The stack is the live harness (`docker/test/compose.yml`) plus the
+`compose.docs-shots.yml` overlay: OpenSearch, the API, Cropwright, and stand-ins
+for the VLM, the segmenter and the trainer. It needs no GPU and no Triton. Use
+your own compose project name and ports so it cannot touch another stack:
+
+```bash
+# Once: the public data, and the capture venv.
+make sample-coco-import sample-coco-readme
+(cd frontend && npm run test:e2e)
+
+export VERIFY_COMPOSE_PROJECT=shots VERIFY_CONTAINER_PREFIX=shots \
+  VERIFY_API_PORT=14711 VERIFY_OPENSEARCH_PORT=14712 \
+  VERIFY_FAKE_VLM_PORT=14714 VERIFY_CROPWRIGHT_PORT=14715
+COMPOSE="docker compose -p shots -f docker/test/compose.yml -f docker/test/compose.docs-shots.yml"
+rm -rf docker/test/verify-data          # an empty stack starts from empty directories too
+$COMPOSE up -d --build --wait
+
+cd frontend && e2e/.venv/bin/python scripts/capture_docs_screenshots.py \
+  --base-url http://localhost:14715 --seeded --container shots-api \
+  --out ../artifacts_local/screens_seeded   # omit --out to write the committed directory
+
+$COMPOSE down -v --remove-orphans
+```
+
+`--seeded` refuses a stack that holds any project beyond `default` (a stack it
+already seeded is reused, so a re-run only captures again), seeds five public
+projects (`coco-sample`, `coco-vehicles`, `coco-import`, `coco-editors`,
+`coco-vlm-off`) through the curation API, and writes the same 17 files on every
+run. It exits non-zero if any state fails. `--only <state>...` narrows a re-run.
+
+What is real and what is a stand-in, so nobody reads a number off these images:
+
+- Real: the public COCO images and their labels (a YOLO and a COCO dataset
+  import through `/datasets/imports`), the region profile, the detection
+  worker's region stage and the prompt-pack test run (both against the
+  stand-ins below), classes, clusters, the export and the training-run
+  bookkeeping.
+- Stand-ins: the VLM (`docker/test/fake_vlm.py`) answers `car` and a fixed
+  accept, accept, reject verdict per box; the segmenter
+  (`docker/test/fake_segmenter.py`) returns the same wheel-shaped boxes for every
+  crop, so the wheel boxes are geometry, not detections; the trainer
+  (`docker/test/fake_trainer.sh`) runs no model, and the per-class table and
+  confusion matrix of the results screenshot are illustrative numbers written by
+  `scripts/curation/seed_docs_run_results.py`; the cluster grid's embedding
+  vectors are synthetic (`scripts/curation/seed_docs_embeddings.py`). Triton is
+  absent, so the status chip and the Resources menu show monitoring services as
+  not running.
 
 ### Slots added for the ingest, pipeline and audit pages
 

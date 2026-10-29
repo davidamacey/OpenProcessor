@@ -60,7 +60,13 @@ DEFAULTS: dict[str, Any] = {
     # Region-visibility pre-filter. Defaults to an explicit negative: that
     # endpoint fails open to True, so only a negative reply distinguishes
     # "the fake was understood" from "the fake was ignored".
-    'region_visible': False,
+    'region_visible': os.environ.get('FAKE_VLM_REGION_VISIBLE', '') == 'true',
+    # Per-box `region_bbox_correct` of a combined reply, cycled over the boxes
+    # offered (e.g. [True, True, False]). None leaves every box without a
+    # verdict, which the worker records as `verifier_no_verdict`.
+    'combined_box_verdicts': [v == 'true' for v in os.environ['FAKE_VLM_BOX_VERDICTS'].split(',')]
+    if os.environ.get('FAKE_VLM_BOX_VERDICTS')
+    else None,
 }
 
 _state: dict[str, Any] = dict(DEFAULTS)
@@ -155,6 +161,11 @@ def _n_region_boxes(text: str) -> int:
     return max(nums) if nums else 1
 
 
+def _box_verdict(box: int) -> bool | None:
+    verdicts = _state['combined_box_verdicts']
+    return verdicts[(box - 1) % len(verdicts)] if verdicts else None
+
+
 def _reply_for(kind: str, n_images: int, text: str = '') -> str:
     if kind == 'region_visible':
         results = [{'img': i, 'visible': _state['region_visible']} for i in range(1, n_images + 1)]
@@ -176,7 +187,7 @@ def _reply_for(kind: str, n_images: int, text: str = '') -> str:
                 'region_boxes': [
                     {
                         'box': b,
-                        'region_bbox_correct': None,
+                        'region_bbox_correct': _box_verdict(b),
                         'region_text': None,
                         'region_confidence': None,
                     }

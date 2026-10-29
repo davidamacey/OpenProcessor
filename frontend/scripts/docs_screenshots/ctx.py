@@ -36,18 +36,25 @@ def _settle(page, ms: int = 1500) -> None:
     page.wait_for_timeout(ms)
 
 
-# Fixed public-sample projects the newer states read from (override via env).
-VEHICLES_PROJECT = os.environ.get("VEHICLES_PROJECT", "sample-coco-vehicles")
-IMPORT_PROJECT = os.environ.get("IMPORT_PROJECT", "sample-coco-import")
+# The throwaway public projects docs_screenshots/seed.py creates on an isolated stack.
+MAIN_PROJECT = "coco-sample"  # the 200-image COCO sample, class-labelled
+VEHICLES_PROJECT = "coco-vehicles"  # COCO cars with a wheel region profile and worker-made boxes
+IMPORT_PROJECT = "coco-import"  # the labeled-dataset import fixture, imported
+EDITORS_PROJECT = "coco-editors"  # holds the editable prompt pack and region profile
+VLM_OFF_PROJECT = "coco-vlm-off"  # VLM explicitly off, no run yet
+SEEDED_PROJECTS = (MAIN_PROJECT, VEHICLES_PROJECT, IMPORT_PROJECT, EDITORS_PROJECT, VLM_OFF_PROJECT)
+PACK_NAME = "docs_pack"
+PROFILE_NAME = "docs_wheels"
+VEHICLES_PROFILE = "coco_vehicle_wheels"
+# Server path of the dataset the import wizard previews (under the stack's source root).
+IMPORT_PREVIEW_PATH = "/data/source/import_fixture/yolo"
 
 SHARE_OWNER = os.environ.get("SHARE_OWNER_PROJECT", "model-demo-owner")
 SHARE_CONSUMER = os.environ.get("SHARE_CONSUMER_PROJECT", "model-demo-consumer")
 SHARE_MODEL = os.environ.get("SHARE_MODEL", "model-demo-owner__model_demo_car")
 
 
-# MAIN_PROJECT holds the full public COCO sample (VLM labels, embeddings); LIFE_PROJECT is
-# a throwaway `cwlife-<epoch>-x` project (see states_region_embedding.py).
-MAIN_PROJECT = os.environ.get("MAIN_PROJECT", "sample-coco-2k-v3")
+# LIFE_PROJECT is a throwaway `cwlife-<epoch>-x` project (see states_region_embedding.py).
 LIFE_PROJECT = os.environ.get("LIFE_PROJECT", "")
 
 
@@ -60,7 +67,6 @@ def _life() -> str:
 # Throwaway cwlife-* projects docs_screenshot_fixtures.py creates (see states_ingest.py).
 BULK_RUN_PROJECT = os.environ.get("BULK_RUN_PROJECT", "")
 BULK_FAIL_PROJECT = os.environ.get("BULK_FAIL_PROJECT", "")
-VLM_OFF_PROJECT = os.environ.get("VLM_OFF_PROJECT", "cwlife-vlm-off")
 
 
 def _cwlife(slug: str) -> str:

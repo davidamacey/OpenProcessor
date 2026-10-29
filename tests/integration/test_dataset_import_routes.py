@@ -124,6 +124,20 @@ def test_start_runs_to_completion_and_is_idempotent(
     assert job['report']['items_created'] == 2
     assert job['report']['negatives'] == 1
     assert job['report']['unlabeled'] == 1
+    # The issues a job serves are the same wire issues the preview serves: Cropwright
+    # renders each one's id, message, blocking flag and samples.
+    summary = {i['code']: i for i in job['issues_summary']}
+    assert 'label_file_missing' in summary
+    assert set(summary['label_file_missing']) >= {
+        'id',
+        'code',
+        'severity',
+        'blocking',
+        'bypassable',
+        'message',
+        'count',
+        'samples',
+    }
     assert {m['dataset_class']: m['class_name'] for m in job['mapping']} == {
         'Car': 'car',
         'truck': 'truck',
