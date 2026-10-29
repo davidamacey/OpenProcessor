@@ -1,5 +1,12 @@
 @import 'tailwindcss';
 
+/* Stock zinc-500/600 fail WCAG AA (4.5:1) as text on the dark surfaces
+   (3.7:1 and 2.6:1 on zinc-900); lifted so dim captions stay readable. */
+@theme {
+  --color-zinc-500: #8a8a94;
+  --color-zinc-600: #82828c;
+}
+
 /* Apple system color palette — dark theme baseline.
    These are the canonical Apple HIG dark-mode RGBs, exposed as CSS vars
    so we can re-theme without touching component code. */
