@@ -94,15 +94,6 @@ async def test_warmed_project_request_does_no_opensearch_work(
     assert client.method_calls == []
 
 
-def test_forget_bootstrapped_makes_next_request_rebootstrap(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', {'gone', 'kept'})
-    index_bootstrap.forget_bootstrapped('gone')
-    assert {'kept'} == index_bootstrap._INDEXES_BOOTSTRAPPED
-    index_bootstrap.forget_bootstrapped('never-seen')  # no error
-
-
 def test_text_status_labels_cache_as_per_process(tmp_path) -> None:
     from src.clients.pe_encoder import PEEncoder
 

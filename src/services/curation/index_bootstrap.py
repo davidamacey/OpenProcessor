@@ -69,11 +69,6 @@ logger = get_logger(__name__)
 _INDEXES_BOOTSTRAPPED: set[str] = set()
 
 
-def forget_bootstrapped(slug: str) -> None:
-    """Drop a project from this process's bootstrap cache (its indexes are gone)."""
-    _INDEXES_BOOTSTRAPPED.discard(slug)
-
-
 # The mapping ``_meta`` key holding the schema an index was last fully migrated to.
 SCHEMA_META_KEY = 'op_schema'
 
