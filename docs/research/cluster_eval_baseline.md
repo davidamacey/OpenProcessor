@@ -270,8 +270,7 @@ source images). Anything tuned uses `calibration` only; the acceptance numbers c
 
 The rows above were measured on all labelled crops, before any split existed and with the
 COCO-run settings chosen on the same labels. They are not held-out numbers. The held-out BCubed
-rows for the 3,000-item partition and the 200-image COCO partitions are not in this note yet:
-the partitions come from a running stack and none was up when the scorer was built.
+rows for the 200-image COCO partitions and the 3,000-item partition are at the end of this note.
 
 ### BCubed rows on the 200-image COCO sample (measured 2026-10-29)
 
@@ -298,6 +297,36 @@ metrics, not the timings, are meaningful.
 Heldout strata (pair precision): low_res 0.62 (152), mixed_scene 0.72 (151), similar_classes 0.94
 (189), rare 0.17 (15, too few to read). Raw JSON and scorecards:
 `artifacts_local/cluster_search/w0/rescore/cocotest_{full,heldout}_r{1,2,3}.json` and `.card.json`
-(gitignored). Not run here: the heldout score of Baseline A's partition. Its
-is not scored on the heldout half in this note; scoring it needs
-`--split-manifest scripts/datasets/manifests/splits/cluster_eval_3000.json --split heldout`.
+(gitignored). The 3,000-item partition is scored in the next section.
+
+### BCubed rows on the 3,000-item set (measured 2026-10-29)
+
+Project of 944 images (744 base plus 200 near-duplicate variants; public COCO and Open Images),
+3,961 crops, 2,950 labelled in 86 classes, uploaded through `ingest_upload.py` into a throw-away
+project, clustered by the production refresh pass (512 clusters), labels from
+`scripts/research/cluster_diag/build_labels.py` (same matching rules as `cluster_eval_set.py build`;
+an uploaded image is named by its client path, not its hash file name). Split:
+`splits/cluster_eval_3000.json` (calibration 1,456, heldout 1,494 labelled crops). Nothing was tuned
+on the heldout half. Scoring is deterministic: three repetitions per row are identical (0.06 to 0.2 s
+each; host load average 5 to 22, so the times are not meaningful).
+
+| Metric | All (2,950) | Calibration (1,456) | Heldout (1,494) |
+|---|---|---|---|
+| Clusters | 485 | 364 | 377 |
+| Pair precision | 0.677 | 0.676 | 0.716 |
+| Pair recall | 0.021 | 0.024 | 0.027 |
+| BCubed precision | 0.732 | 0.767 | 0.784 |
+| BCubed recall | 0.141 | 0.166 | 0.186 |
+| BCubed F | 0.236 | 0.273 | 0.301 |
+| AMI | 0.411 | 0.383 | 0.403 |
+| Items outside their cluster's majority class | 0.208 | 0.183 | 0.175 |
+| Mixed clusters | 228 | 129 | 133 |
+
+Heldout pair precision by stratum: low_res 0.685 (397 items), mixed_scene 0.645 (391),
+near_duplicate 0.884 (221), rare 0.938 (187), similar_classes 0.875 (271), other 1.000 (27). The all-items
+row differs from the 944-image table above (0.696) because this project's refresh pass trained its
+k-means on the 3,772 crops present when it fired during the upload and assigned the other 189 by
+nearest centroid, so it is a different partition of the same images. BCubed and AMI rows of the
+alternative methods (average linkage, Leiden, ECG) are in `cluster_config_baseline.md`.
+Raw JSON and scorecards: `artifacts_local/cluster_search/w0b/e1_3000/score/` (gitignored); summary
+`docs/benchmarks/cluster_config_baseline_3000.json`.
