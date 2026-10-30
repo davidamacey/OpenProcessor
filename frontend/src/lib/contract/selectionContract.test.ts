@@ -56,10 +56,7 @@ describe('selection responses', () => {
       updated_ids: true,
       conflicts: true,
       op_id: true,
-    } satisfies Record<
-      keyof BulkLabelResult,
-      true
-    >;
+    } satisfies Record<keyof BulkLabelResult, true>;
     expect(Object.keys(local).sort()).toEqual(props('BatchRelabelResponse'));
   });
 
