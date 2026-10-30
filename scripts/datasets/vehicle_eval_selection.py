@@ -85,13 +85,21 @@ def select_base(
     seed: int = SEED,
     scale: float = 1.0,
     exclude: frozenset[str] = frozenset(),
+    quotas: dict[str, int] | None = None,
+    target: int = TARGET_IMAGES,
 ) -> list[dict[str, Any]]:
-    """Base images of every group; none in ``exclude`` and none in two groups."""
+    """Base images of every group; none in ``exclude`` and none in two groups.
+
+    ``quotas`` (group to image count, default ``QUOTAS``) and ``target`` (total images, default
+    ``TARGET_IMAGES``) let a later set reuse the draw with its own sizes; a group without a quota
+    is the filler up to ``target``.
+    """
+    quotas = QUOTAS if quotas is None else quotas
     taken: set[str] = set(exclude)
     out: list[dict[str, Any]] = []
     for group in GROUP_ORDER:
         pool = _group_pool(group, rows)
-        want = round(QUOTAS[group] * scale) if group in QUOTAS else round(TARGET_IMAGES * scale)
+        want = round(quotas[group] * scale) if group in quotas else round(target * scale)
         if group == 'rest':
             want -= len(out)
         pick = balanced_draw(pool, want, f'{seed}:{group}', taken)
@@ -104,7 +112,14 @@ def select_base(
 
 # The pin omits the author column: the original URL identifies the source, and the authors stay in
 # ATTRIBUTION.csv next to the images, outside git.
-def build_pin(base: list[dict[str, Any]], seed: int, scale: float, annotations_sha256: str) -> dict:
+def build_pin(
+    base: list[dict[str, Any]],
+    seed: int,
+    scale: float,
+    annotations_sha256: str,
+    quotas: dict[str, int] | None = None,
+    target: int = TARGET_IMAGES,
+) -> dict:
     keep = [
         'source',
         'image_id',
@@ -124,8 +139,8 @@ def build_pin(base: list[dict[str, Any]], seed: int, scale: float, annotations_s
         'scale': scale,
         'rare_classes': sorted(OPENSET),
         'vehicle_classes': sorted(VEHICLES),
-        'quotas': {g: round(q * scale) for g, q in QUOTAS.items()},
-        'target_images': round(TARGET_IMAGES * scale),
+        'quotas': {g: round(q * scale) for g, q in (QUOTAS if quotas is None else quotas).items()},
+        'target_images': round(target * scale),
         'annotations_sha256': annotations_sha256,
         'images': [{k: r.get(k) for k in keep} for r in base],
         'near_duplicates': [],
