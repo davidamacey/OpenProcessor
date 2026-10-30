@@ -14,3 +14,4 @@ index; `MANIFEST.sha256` has the checksums of the vector dumps.
 | `live_f/` | F1 to F4 (embed pass on the GPU decode) |
 | `live_g/` | G1 to G5 (region parity, chunk window tuning, final configuration) |
 | `sp0/` | SP0 stage profile: per-repetition reports and summaries of every row, the two rendered tables (log "SP0: stage profile", PERFORMANCE "0.7.0 stage profile"); set P rows hold numbers only |
+| `sp0/gpu_prep_concurrency/` | SP0.7 (log "SP0.7"): headroom against full model set, instance count and in-flight settings, thread samples; `metrics.api.counters` cut to the `op_ingest_*` series; set P rows hold numbers only |

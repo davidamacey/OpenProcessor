@@ -43,3 +43,11 @@ Not run: E-b (CUDA MPS on and off). It needs a root MPS daemon; owner decision p
 Success bar (plan section 5, SP4): set P at least 29 img/s with GPU 0 utilisation above 75 percent at `--clients 4`.
 A configuration is a "clear win" when its set B median at 4 or 8 clients beats C0 with non-overlapping min-to-max ranges,
 and the set P confirmation holds the direction.
+
+## As run (added with the results)
+
+The run followed the matrix with these changes, all listed in the log's SP0.7: E1 (fresh stack, unused models unloaded, 8 batches
+first, from the design review `docs/design/sp_gpu_prep_concurrency.md`) ran first; the variants then ran on set P at 4 batches
+on the headroom stack instead of set B (set B ran for C0, count 1 and 3, MAX_IN_FLIGHT 32 and 16 only, on the full-model stack);
+E-d used per-thread `/proc` CPU samples instead of py-spy; E-b not run. The success bar was met on the headroom stack and not
+on the full default stack.

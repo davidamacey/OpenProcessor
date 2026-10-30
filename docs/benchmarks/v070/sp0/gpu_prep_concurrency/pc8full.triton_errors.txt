@@ -1,0 +1,2 @@
+    320 gpu_image_prep decode: OutOfMemoryError: Out of memory allocating N bytes (allocated so far: N bytes, limit set to: N bytes).
+     82 gpu_image_prep decode: NvJpegError: TransferToDevice returned nvjpegStatus 5

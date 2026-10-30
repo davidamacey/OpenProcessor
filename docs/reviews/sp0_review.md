@@ -94,6 +94,18 @@ What the run changed:
   The owner decides the order (gate: the SP review package).
 - **Not reproduced:** the earlier set P rates (45 to 49 img/s, E4 and F1). Best repetition here 33.1, median 25.0 at 4 batches.
 
+Update after the concurrency experiments (log section SP0.7, issue #392): **the "Ranking" bullet above and the fall past 4 batches are superseded.**
+The throughput fall was device-memory exhaustion: the default Triton load list leaves 36.5 GB resident, the card (49.1 GB) fills, and CuPy and
+nvJPEG allocations fail inside `gpu_image_prep`; the API then decodes those photos on the CPU (`cpu_call_failed`, `cpu_decoder`: 0.6 to 23 percent
+of the photos at 4 and 8 batches on a fresh stack, growing with session age; 60 to 72 percent in the SP0 rows). With the eight unused models unloaded
+(card peak 26 GB instead of 48.5 GB) set P gives, with 0 fallbacks, 38.5 to 41.6 img/s at 4 batches (GPU 80 to 90 percent) and 48.5 at 8 batches
+(GPU 96 percent), the SP4 bar met; on the full default stack 30.7 (22.5 to 32.1) at 4 batches and 40.4 (29.8 to 43.0) at 8. GIL, API-side limits and
+a third instance were not the cause (stub processes use 3 to 4.5 cores with no saturated thread; API CPU 0.06 CPU-s per image without fallbacks).
+Config result: `WORKERS` 16 or `MAX_IN_FLIGHT` 16 raises 4 batches from about 40 to 45 to 47 img/s at no memory cost; `LANES`, `ENCODE_THREADS` and the
+Python-backend shm sizes do nothing; count 1 gives about 32 img/s at 18 to 19 GiB (the 24 GB option), count 3 adds nothing. CUDA MPS was not run
+(needs root; owner decision pending). The CUDA-call stage growth of the SP0 rows was mostly allocation failure and retry plus too many images in flight
+in one instance. Recommendations are in SP0.7.8 of the log.
+
 Issues filed (milestone v0.7.0): #390 (counter constraints, fixed on the branch), #391 (`/health` ready with a startup
 model failed to load), #392 (throughput falls past 4 batches, API CPU growth).
 
