@@ -5,7 +5,8 @@ Provides liveness/readiness probes, service info, and connection pool
 statistics.
 
 - /live   — process responsive, no dependency probing (livenessProbe)
-- /ready  — Triton + OpenSearch actively probed (readinessProbe / LB drain)
+- /ready  — Triton, its required models and OpenSearch actively probed
+            (readinessProbe / LB drain)
 - /health — backward-compat alias for /ready
 """
 
@@ -23,6 +24,8 @@ from fastapi.responses import JSONResponse, Response
 from src.clients.triton_client_manager import get_async_triton_client, get_client_pool_stats
 from src.config import get_settings
 from src.core.metrics import render_metrics
+from src.services.model_readiness import models_not_ready, required_model_names
+from src.services.triton_control import TritonControlService
 
 
 logger = logging.getLogger(__name__)
@@ -93,10 +96,34 @@ async def _probe_triton() -> tuple[bool, str]:
     return True, 'is_server_live OK'
 
 
+async def _probe_required_models() -> tuple[bool, str, list[dict[str, str]]]:
+    """Check that every required model is READY in Triton's repository index.
+
+    Triton runs with ``--exit-on-error=false``, so a model that failed to load
+    leaves the server live; only the index shows it. An unreadable index counts
+    as not ready (fail closed).
+    """
+    required = required_model_names()
+    try:
+        index = await asyncio.wait_for(
+            TritonControlService().get_repository_index(),
+            timeout=_READY_PROBE_TIMEOUT_S,
+        )
+    except TimeoutError:
+        reason = f'repository index timeout after {_READY_PROBE_TIMEOUT_S}s'
+        return False, reason, [{'name': n, 'state': 'UNKNOWN', 'reason': reason} for n in required]
+    bad = models_not_ready(index, required)
+    if bad:
+        names = ', '.join(f'{b["name"]} ({b["state"]})' for b in bad)
+        return False, f'required models not READY: {names}', bad
+    return True, f'{len(required)} required models READY', []
+
+
 async def _readiness_payload() -> tuple[int, dict[str, Any]]:
     """Probe Triton and OpenSearch concurrently; build the payload.
 
-    Returns the HTTP status code (200 if every dep is ready, 503 otherwise)
+    Returns the HTTP status code (200 if every dep and required model is
+    ready, 503 otherwise)
     and a JSON-serializable body listing per-service status + detail.
     """
     settings = get_settings()
@@ -115,6 +142,12 @@ async def _readiness_payload() -> tuple[int, dict[str, Any]]:
         },
     }
     all_ok = triton_ok and opensearch_ok
+    if triton_ok:
+        # Without a reachable Triton the models cannot be judged; the triton
+        # entry already fails the probe.
+        models_ok, models_detail, not_ready = await _probe_required_models()
+        services['models'] = {'ok': models_ok, 'detail': models_detail, 'not_ready': not_ready}
+        all_ok = all_ok and models_ok
     payload: dict[str, Any] = {
         'status': 'ready' if all_ok else 'not_ready',
         'version': settings.api_version,
@@ -184,7 +217,7 @@ def live() -> dict[str, str]:
 
 @router.get('/ready')
 async def ready() -> JSONResponse:
-    """Readiness probe — Triton + OpenSearch both reachable.
+    """Readiness probe — Triton, its required models and OpenSearch.
 
     Returns 200 with ``status='ready'`` when every dep responds; 503
     with per-service detail when at least one is unreachable. Designed

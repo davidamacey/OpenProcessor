@@ -2839,7 +2839,7 @@ YAML
                 env_set_default "$key" "$val"
             fi
         done
-        env_set OP_GPU_LABELS "$(printf '%s\n' "$raw_gpus" | gpu_labels)"
+        env_set OP_GPU_LABELS "$(printf '%s\n' "$raw_gpus" | gpu_labels)"; env_set OP_REQUIRED_MODELS "$(model_setup_required_models "$SELECTED_TIERS")"
         GPU_PROFILE="$(read_env_var "$ENV_FILE" GPU_PROFILE)"
         GPU_PLAN_SUMMARY="triton=$(read_env_var "$ENV_FILE" TRITON_GPU_ID),segmenter=$(read_env_var "$ENV_FILE" SEGMENTER_GPU_ID),vlm=$(read_env_var "$ENV_FILE" VLM_GPU_ID),trainer=$(read_env_var "$ENV_FILE" OP_TRAIN_GPU_ORDER),profile=${GPU_PROFILE}"
         if _has_tier vlm; then
