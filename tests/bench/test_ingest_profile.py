@@ -31,7 +31,7 @@ def test_the_protocol_values_are_fixed(manifest: Path, tmp_path: Path) -> None:
     assert args.drop_cache is True
     assert args.stages == 'ingest'
     assert args.out == tmp_path / 'setB' / 'setB'
-    assert args.slug_prefix == 'sp0-setB'
+    assert args.slug_prefix == 'sp0-setb'  # project slugs are lower case
     assert args.path_map == ['/h=/c']
     assert args.triton_metrics_url == 'http://tr.test/metrics'
 

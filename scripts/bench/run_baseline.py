@@ -353,8 +353,10 @@ def run(
     paths = read_manifest(args.manifest)
     sizes = [Path(p).stat().st_size for p in paths]
     sent = [map_path(p, args.path_map) for p in paths]
-    stamp = datetime.now(UTC).strftime('%Y%m%d%H%M%S')
+    stamp = datetime.now(UTC).strftime('%m%d%H%M%S')
     slug = f'{args.slug_prefix}-r{rep}-{stamp}' if args.reps > 1 else f'{args.slug_prefix}-{stamp}'
+    if len(slug) > 32 or slug != slug.lower():
+        sys.exit(f'project slug {slug!r} must be lower case and at most 32 characters')
     out = _rep_out(args.out, rep, args.reps)
     load_start = loadavg()
     watch = observer or NoObserver()

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import TYPE_CHECKING
 
 import httpx
@@ -48,6 +49,17 @@ def _reps(args, stack, *, drops, loads, gpu=lambda: None):
         drop_cache=lambda paths: drops.append(list(paths)),
         loadavg=lambda: loads.pop(0),
     )
+
+
+def test_every_protocol_row_name_makes_a_valid_project_slug(manifest: Path, tmp_path: Path) -> None:
+    from src.config.projects import PROJECT_SLUG_MAX_LEN, PROJECT_SLUG_RE
+
+    for row in ('setA', 'setB', 'setP3000', 'setB-sync', 'setP3000-sync', 'setB-nometrics'):
+        stack = FakeStack()
+        args = _args(manifest, tmp_path, ['--reps', '3', '--slug-prefix', f'sp0-{row.lower()}'])
+        slug = _reps(args, stack, drops=[], loads=[(1.0, 1.0, 1.0)] * 6)[0]['config']['project']
+        assert re.fullmatch(PROJECT_SLUG_RE, slug), slug
+        assert len(slug) <= PROJECT_SLUG_MAX_LEN, slug
 
 
 def test_each_rep_gets_its_own_project_and_report_file(manifest: Path, tmp_path: Path) -> None:

@@ -104,7 +104,7 @@ def build_run_args(ns: argparse.Namespace) -> argparse.Namespace:
     argv = [
         str(ns.manifest),
         '--api-url', ns.api_url,
-        '--slug-prefix', f'sp0-{ns.row}',
+        '--slug-prefix', f'sp0-{ns.row.lower()}',
         '--policy', PROTOCOL['policy'],
         '--stages', PROTOCOL['stages'],
         '--reps', str(ns.reps),
