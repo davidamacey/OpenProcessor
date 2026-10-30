@@ -6,11 +6,13 @@ backend: the control flow, the metric counters and the response tensors are the 
 
 from __future__ import annotations
 
+import gc
 import importlib
 import io
 import json
 import sys
 import threading
+import time
 import types
 from pathlib import Path
 from typing import Any
@@ -124,17 +126,51 @@ class _BlsRequest:
 def _fake_pb(counters: dict[tuple[str, str], list[float]]) -> types.ModuleType:
     pb = types.ModuleType('triton_python_backend_utils')
 
+    violations: list[str] = []
+    overlaps: list[int] = []
+    gate = {'busy': False}
+
     class _Family:
         COUNTER = 'counter'
 
         def __init__(self, name: str, description: str, kind: str) -> None:
             self.name, self.description, self.kind = name, description, kind
+            self.state = {'deleted': False, 'live': 0}
+
+        def __del__(self) -> None:
+            # Triton deletes a family when its Python object is collected: its metrics then
+            # vanish from /metrics and increment() raises, and a family that dies before its
+            # metrics crashes the Python backend (both seen on Triton 2.70).
+            self.state['deleted'] = True
+            if self.state['live']:
+                violations.append(self.name)
 
         def Metric(self, labels: dict[str, str]) -> Any:  # noqa: N802  Triton's name
             series = counters.setdefault((self.name, labels['stage']), [])
-            return types.SimpleNamespace(increment=series.append)
+            return _Metric(self.state, series)
+
+    class _Metric:
+        def __init__(self, state: dict[str, Any], series: list[float]) -> None:
+            self.state, self.series = state, series
+            state['live'] += 1
+
+        def __del__(self) -> None:
+            self.state['live'] -= 1
+
+        def increment(self, value: float) -> None:
+            if self.state['deleted']:
+                raise RuntimeError('the MetricFamily has been deleted')
+            # Triton 2.70 aborts the server when two threads increment at once
+            if gate['busy']:
+                overlaps.append(1)
+            gate['busy'] = True
+            time.sleep(0.0005)
+            self.series.append(value)
+            gate['busy'] = False
 
     pb.MetricFamily = _Family  # type: ignore[attr-defined]
+    pb.family_order_violations = violations  # type: ignore[attr-defined]
+    pb.increment_overlaps = overlaps  # type: ignore[attr-defined]
     pb.Tensor = _Tensor  # type: ignore[attr-defined]
     pb.InferenceResponse = _Response  # type: ignore[attr-defined]
     pb.InferenceRequest = _BlsRequest  # type: ignore[attr-defined]
@@ -244,12 +280,15 @@ def _run(model: Any, request: _Request) -> dict[str, np.ndarray]:
     assert request.done.wait(10)
     assert request.response is not None
     assert not request.response.has_error()
+    model.metrics.flush()
     return {t.name: t.arr for t in request.response.output_tensors}
 
 
 def _seen(counters: dict[tuple[str, str], list[float]]) -> dict[str, int]:
     return {
-        s: len(v) for (fam, s), v in counters.items() if fam == 'op_gpu_prep_stage_observations'
+        s: int(sum(v))
+        for (fam, s), v in counters.items()
+        if fam == 'op_gpu_prep_stage_observations'
     }
 
 
@@ -286,6 +325,30 @@ def test_outputs_are_identical_with_metrics_and_with_a_synchronising_clock(
             assert np.array_equal(arr, other[name]), name
 
 
+def test_only_one_thread_increments_at_a_time(
+    make_model: Any, counters: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(make_model.module.StageMetrics, 'FLUSH_SECONDS', 0.001)
+    model = make_model(WORKERS='8')
+    requests = [_Request(_jpeg()) for _ in range(24)]
+    model.execute(requests)
+    assert all(r.done.wait(20) for r in requests)
+    model.metrics.flush()
+
+    assert sys.modules['triton_python_backend_utils'].increment_overlaps == []
+    assert _seen(counters)['queue'] == 24
+    assert _seen(counters)['detect'] == 24
+
+
+def test_finalize_drops_the_metrics_before_their_families(make_model: Any) -> None:
+    model = make_model()
+    _run(model, _Request(_jpeg()))
+    model.finalize()
+    del model
+    gc.collect()
+    assert sys.modules['triton_python_backend_utils'].family_order_violations == []
+
+
 def test_no_sync_by_default(make_model: Any) -> None:
     _run(make_model(), _Request(_jpeg()))
     assert make_model.cp.syncs == 0
@@ -316,6 +379,7 @@ def test_the_queue_stage_counts_the_wait_for_a_free_slot(make_model: Any, counte
     model.execute([first, second])
     assert first.done.wait(10)
     assert second.done.wait(10)
+    model.metrics.flush()
     assert _seen(counters)['queue'] == 2
 
 

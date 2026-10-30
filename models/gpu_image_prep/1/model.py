@@ -129,6 +129,9 @@ class TritonPythonModel:
         self.metrics = StageMetrics(pb_utils)
         self.stage_sync = p.get('STAGE_SYNC', '0') == '1'
 
+    def finalize(self) -> None:
+        self.metrics.close()
+
     def execute(self, requests: list[Any]) -> None:
         for r in requests:
             arrived = time.perf_counter()
