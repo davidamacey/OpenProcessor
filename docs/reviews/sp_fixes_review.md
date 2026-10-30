@@ -2,7 +2,7 @@
 
 Branch `perf/v070-ingest-speed`, merged with `origin/main` (PR #389 included). Evidence: log sections SP0.7 and
 SPF in [`../research/v070_measurement_log.md`](../research/v070_measurement_log.md), design
-`docs/design/sp_gpu_prep_concurrency.md` (branch `docs/sp-gpu-prep-design`). **Status: code, tests and the GPU 0
+`docs/design/sp_gpu_prep_concurrency.md`. **Status: code, tests and the GPU 0
 acceptance run are done; nothing is pushed.**
 
 ## What changed
