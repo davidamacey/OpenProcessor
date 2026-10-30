@@ -73,7 +73,7 @@ how it was measured and whether the design is implemented.
 | [cluster_config_loop_cost.md](../research/cluster_config_loop_cost.md) | Loop-cost bars U-a to U-d on a fresh vehicle-heavy set (U-a to U-c pass on their means, U-c not robust by seed, U-d unreadable; A6 still fails) and a judge-gated within-key merge that does not pay |
 | [cluster_config_decision.md](../research/cluster_config_decision.md) | Residual-pool clustering decision from the 3,000-item held-out baseline: average linkage inside the detector class with per-key cuts, kill-rule verdicts per arm (updated with W0c), corrected acceptance bars, next experiments, wave order (W0d, W8, WC) |
 | [fine_grained_benchmark_plan.md](../research/fine_grained_benchmark_plan.md) | Fine-grained (make and model) embedding and grouping benchmark, wave WB: data, arms, metrics and pre-registered bars |
-| [wb2_standard_benchmarks.md](../research/wb2_standard_benchmarks.md) | Wave WB re-run on CARS196, CUB-200-2011 and SOP: registered protocol, sanity check and bars |
+| [wb2_standard_benchmarks.md](../research/wb2_standard_benchmarks.md) | Wave WB re-run on CARS196, CUB-200-2011 and SOP: registered protocol, sanity check, bars and results |
 | [cluster_proxy_datasets.md](../research/cluster_proxy_datasets.md) | Public face and vehicle make/model proxy datasets for cluster evaluation: licences, counts, skipped sets |
 | [v070_measurement_log.md](../research/v070_measurement_log.md) | Paper-ready log of the IVF cluster pass size ladder (10k to 1M crops): stage split, memory, index size, k-NN latency, and the super-linear k-means fit (#337, #356, #45) |
 | [clustering_methods.md](../research/clustering_methods.md) | UMAP, AHC, HDBSCAN and IVF methods, the IVF-then-refine hierarchy and the ablation |
