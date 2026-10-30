@@ -125,8 +125,13 @@ def main() -> None:
     fg0 = _load(res, 'fg0_report.json')
     if fg0:
         out['FG-0'] = fg0['score']['fg0_verdict']
-    variants = _load(res, 'screen_variants.json')
-    if variants:
+    merged: dict[str, Any] = {}
+    for p in sorted(res.glob('screen_variants*.json')) + sorted(
+        res.glob('screen_peg_variants.json')
+    ):
+        merged.update(json.loads(p.read_text())['models'])
+    variants = {'models': merged}
+    if merged:
         out['FG-1_variants'] = fg1_variants(variants, _load(res, 'class_p10.json'))
     screen = _load(res, 'screen_centre.json') or {}
     out['FG-2_FG-5'] = fg2_and_fg5(res, screen.get('fg1_challengers', {}))

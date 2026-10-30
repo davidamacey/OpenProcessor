@@ -41,6 +41,21 @@ class Universe:
         return (cal, held) if n == 1 else (held, cal)
 
 
+def restrict(u: Universe, vec: np.ndarray, distractors: int) -> tuple[Universe, np.ndarray]:
+    """Set C plus the first ``distractors`` distractor rows (they come sorted by crop id)."""
+    lab = np.nonzero(u.labelled)[0]
+    keep = np.concatenate([lab, np.nonzero(~u.labelled)[0][:distractors]])
+    sub = Universe(
+        [u.meta[i] for i in keep],
+        u.half[keep],
+        u.make[keep],
+        u.model[keep],
+        u.generation[keep],
+        u.new_model[keep],
+    )
+    return sub, vec[keep]
+
+
 def env_path(name: str) -> Path:
     """A required directory or file path from the environment; the tree holds no machine paths."""
     value = os.environ.get(name)

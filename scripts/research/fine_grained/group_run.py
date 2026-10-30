@@ -18,7 +18,7 @@ from scipy.cluster.hierarchy import fcluster
 from scripts.bench.cluster_eval_metrics import assignment_stability
 from scripts.research.cluster_diag.diagnostics import linkage_of
 from scripts.research.fine_grained import bars, group_eval as ge, methods
-from scripts.research.fine_grained.data import load_universe, load_vectors, run_info
+from scripts.research.fine_grained.data import load_universe, load_vectors, restrict, run_info
 
 
 def _ahc_at(sim: np.ndarray, height: float) -> np.ndarray:
@@ -90,11 +90,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     emb = Path(args.emb)
     u = load_universe(emb)
     vec = load_vectors(emb, args.model, args.variant)
+    if args.distractors is not None:
+        u, vec = restrict(u, vec, args.distractors)
     out: dict[str, Any] = {
         **run_info(),
         'model': args.model,
         'variant': args.variant,
         'rows': len(vec),
+        'distractors': args.distractors,
         'methods': {},
     }
     curves: dict[int, list[dict[str, Any]]] | None = None
@@ -113,6 +116,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     t['r1'],
                     res.get('stability', {}).get('permutation_ari'),
                 )
+        Path(args.out).write_text(json.dumps(out, indent=1, sort_keys=True, default=float))
     return out
 
 
@@ -122,6 +126,9 @@ def main() -> None:
     ap.add_argument('--out', required=True)
     ap.add_argument('--model', required=True)
     ap.add_argument('--variant', default='centre')
+    ap.add_argument(
+        '--distractors', type=int, default=None, help='cap on distractor rows (graph methods)'
+    )
     ap.add_argument('--methods', nargs='+', default=['ahc'])
     args = ap.parse_args()
     result = run(args)
