@@ -112,25 +112,20 @@ async def ensure_images_upload_fields(
         }
 
 
-async def ensure_items_request_id_field(
-    client: AsyncOpenSearch,
-) -> dict[str, Any]:
-    """PUT the ``request_id`` keyword field onto the existing items mapping.
-
-    Additive ``PUT <index>/_mapping`` — idempotent.
-    """
+async def _put_items_keyword_field(client: AsyncOpenSearch, field: str) -> dict[str, Any]:
+    """Additive, idempotent ``PUT <index>/_mapping`` of one keyword field."""
     index = config.items_index
-    body = {'properties': {'request_id': {'type': 'keyword'}}}
+    body = {'properties': {field: {'type': 'keyword'}}}
     try:
         resp = await client.indices.put_mapping(index=index, body=body)
         ack = bool(resp.get('acknowledged', False))
         logger.info(
             'curation_mapping_migration',
             index=index,
-            fields=['request_id'],
+            fields=[field],
             acknowledged=ack,
         )
-        return {'acknowledged': ack, 'index': index, 'fields_added': ['request_id']}
+        return {'acknowledged': ack, 'index': index, 'fields_added': [field]}
     except Exception as exc:
         msg = str(exc)
         is_field_conflict = _is_recoverable_mapping_conflict(msg)
@@ -144,9 +139,19 @@ async def ensure_items_request_id_field(
         return {
             'acknowledged': False,
             'index': index,
-            'fields_added': ['request_id'],
+            'fields_added': [field],
             'error': msg,
         }
+
+
+async def ensure_items_request_id_field(client: AsyncOpenSearch) -> dict[str, Any]:
+    """PUT the ``request_id`` keyword field onto the existing items mapping."""
+    return await _put_items_keyword_field(client, 'request_id')
+
+
+async def ensure_items_label_op_field(client: AsyncOpenSearch) -> dict[str, Any]:
+    """PUT the ``label_op_id`` keyword field onto the existing items mapping."""
+    return await _put_items_keyword_field(client, 'label_op_id')
 
 
 async def ensure_items_quality_fields(

@@ -7,7 +7,7 @@
 - ``GET /clusters`` serves ``purity_tier`` and ``promotable`` per card
   from the same thresholds, plus the thresholds themselves and the
   core-member similarity cut line. ``promotable`` reads the label purity
-  (``label_purity``); the tier reads the card's geometry ``purity``
+  (``label_agreement``); the tier reads the card's geometry ``purity``
   (see ``test_cluster_purity_geometry.py``).
 """
 
@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.routers.curation.clusters import list_clusters
+from curation._cluster_cards_helpers import list_cards
 from src.services.curation.cluster_ids import CORE_SIMILARITY_MIN, RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.cluster_purity import (
     PROMOTE_MIN_MEMBERS,
@@ -28,7 +28,6 @@ from src.services.curation.cluster_purity import (
     purity_tier,
 )
 from src.services.curation.clustering.auto_promote import auto_promote_clusters
-from src.services.curation.item_filter import ItemFilter
 
 
 @pytest.mark.asyncio
@@ -79,15 +78,12 @@ async def _cards(*buckets: dict[str, Any]) -> dict[str, Any]:
     os_client.search = AsyncMock(
         return_value={'aggregations': {'clusters': {'buckets': list(buckets)}}}
     )
-    return await list_clusters(
+    return await list_cards(
         os_client,
         per_cluster=0,
         max_clusters=100,
         kind='all',
         cluster_id=None,
-        item_filter=ItemFilter(),
-        min_blur_ratio=None,
-        class_source=None,
     )
 
 
@@ -145,6 +141,6 @@ async def test_cluster_cards_never_mark_a_class_cluster_promotable() -> None:
     )
     card = resp['items'][0]
     assert card['cluster_kind'] == 'class'
-    assert card['label_purity'] == 1.0
+    assert card['label_agreement'] == 1.0
     assert card['purity_tier'] == 'pure'
     assert card['promotable'] is False

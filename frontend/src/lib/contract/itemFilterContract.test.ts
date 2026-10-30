@@ -92,6 +92,9 @@ describe('item-filter body schemas', () => {
       conf_max: true,
       conf_min: true,
       dataset_split: true,
+      detector_class_names: true,
+      detector_conf_max: true,
+      detector_conf_min: true,
       embedding_state: true,
       exclude_class_names: true,
       import_id: true,
@@ -110,6 +113,7 @@ describe('item-filter body schemas', () => {
       region_gate_skipped: true,
       review_dismissed: true,
       review_status: true,
+      review_tab: true,
       source: true,
       source_prompt: true,
     } satisfies Record<keyof T.ItemFilter, true>);

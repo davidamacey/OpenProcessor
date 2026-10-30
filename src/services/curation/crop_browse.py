@@ -14,6 +14,7 @@ CROP_SORT_FIELDS: dict[str, str] = {
     'updated_at': 'date',
     'created_at': 'date',
     'confidence': 'float',
+    'detector_confidence': 'float',
     'crop_rank_in_image': 'integer',
     'crop_area_norm': 'float',
     'blur_lap_ratio': 'float',

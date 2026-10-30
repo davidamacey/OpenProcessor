@@ -216,3 +216,14 @@ def readable_crops(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         image_serving, 'THUMBNAIL_CACHE', SimpleNamespace(get_or_compute=lambda *_a, **_k: b'jpeg')
     )
+
+
+@pytest.fixture
+def label_ops_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> Any:
+    """A temp state dir for a test whose bulk label or move records an operation
+    (the record is written under the bound project's ``project_state_dir``)."""
+    import src.config.curation_accessors as curation_config_mod
+
+    monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
+    monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
+    return tmp_path / 'state'

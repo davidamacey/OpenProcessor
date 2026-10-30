@@ -31,7 +31,7 @@ describe('class-for-cluster lookup uses the served cluster_kind, not an id-equal
 describe('the core cut line uses the served cluster_is_core, not a 0.75 constant', () => {
   it('cutLine is computed from filteredCrops via computeCutLine, which reads cluster_is_core', () => {
     expect(src).toMatch(
-      /const cutLine = \$derived\.by\(\(\) =>\s*computeCutLine\(filteredCrops, orderMode === 'default'\),?\s*\);/,
+      /const cutLine = \$derived\.by\(\(\) =>\s*computeCutLine\(\s*filteredCrops,\s*orderMode === 'default' && detectorSort === 'default',?\s*\),?\s*\);/,
     );
     expect(src).not.toMatch(/similarity_to_centroid/);
   });

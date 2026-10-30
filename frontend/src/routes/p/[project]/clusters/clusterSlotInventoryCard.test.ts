@@ -54,7 +54,7 @@ describe('the synthetic slot inventory card invents nothing and never hides a re
     // `sorted.filter((c) => c.id !== slotInventoryCard!.id)`.
     expect(gridItemsFn).not.toMatch(/filter\(\(c\) => c\.id !== slotInventoryCard/);
     expect(gridItemsFn).toMatch(
-      /return \[\.\.\.slotInventory\.slotInventoryCards, \.\.\.sorted\];/,
+      /return \[\.\.\.slotInventory\.slotInventoryCards, \.\.\.cards\];/,
     );
   });
 

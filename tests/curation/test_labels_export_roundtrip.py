@@ -31,6 +31,9 @@ from src.config.curation_accessors import base_curation_config
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 
 
+pytestmark = pytest.mark.usefixtures('label_ops_state')
+
+
 CFG = base_curation_config()
 ITEMS = CFG.items_index
 IMAGES = CFG.images_index

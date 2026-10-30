@@ -58,7 +58,7 @@
     <!-- DQ-M2 fix (dq-queues cutover, 2026-09-24): purity is now the
          nearest-centroid geometry share — purity_tier stays the badge
          elsewhere (the sidebar/card border), this is the number + its
-         basis/n, with label_purity/labelled_share in the tooltip so an
+         basis/n, with label_agreement/labelled_share in the tooltip so an
          operator can tell "geometrically coherent" from "the labels we
          have agree with each other". -->
     {#if view.cluster.purity != null}

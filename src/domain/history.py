@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.domain.audit_math import AUDIT_HUMAN, AUDIT_OUTCOME, AUDIT_SAMPLE
 from src.utils.timeutil import now_iso
 
 
@@ -123,6 +124,11 @@ REVIEW_DISMISS_FIELDS: tuple[str, ...] = ('review_dismissed_at', 'review_dismiss
 """Recorded only by the discard writer (the one human write that can change
 them), and restored only from an entry that carries them."""
 
+AUDIT_VERDICT_FIELDS: tuple[str, ...] = (AUDIT_OUTCOME, AUDIT_HUMAN)
+"""The accuracy audit's verdict, stamped by a human class write on an audit-sampled
+item. Recorded (even as ``None``) when the item is a sample, and restored only from an
+entry that carries them, so an undo returns the item to the audit queue."""
+
 HUMAN_UNLABEL_WRITER = 'human:unlabel_crop'
 
 CLASS_STATE_FIELDS: tuple[str, ...] = (
@@ -138,6 +144,7 @@ CLASS_STATE_FIELDS: tuple[str, ...] = (
     'class_validated',
     'cluster_id',
     'cluster_subid',
+    'label_op_id',
 )
 """The item's full class/label/provenance/cluster state. A restorable
 history entry carries every one of these so an undo can put the item back
@@ -157,6 +164,7 @@ def record_class_snapshot(
     *,
     writer: str,
     restorable: bool,
+    op_id: str | None = None,
     now: str | None = None,
 ) -> list[dict[str, Any]]:
     """Append a full :data:`CLASS_STATE_FIELDS` snapshot of the pre-write doc.
@@ -171,6 +179,9 @@ def record_class_snapshot(
     ``restorable=True`` marks an entry written by a human label write
     (the state that write replaced); the unlabel writer records its own
     snapshot with ``restorable=False`` for the audit trail.
+
+    ``op_id`` names the label operation that made the write (or, on an unlabel
+    entry, the operation whose write it cancels); ``None`` for a single write.
     """
     history = list(current_source.get('class_id_history') or [])
     entry: dict[str, Any] = {f: current_source.get(f) for f in CLASS_STATE_FIELDS}
@@ -179,6 +190,10 @@ def record_class_snapshot(
     entry['class_validated'] = bool(entry['class_validated'])
     if writer == HUMAN_DISCARD_WRITER:
         entry.update({f: current_source.get(f) for f in REVIEW_DISMISS_FIELDS})
+    if current_source.get(AUDIT_SAMPLE) is True:
+        entry.update({f: current_source.get(f) for f in AUDIT_VERDICT_FIELDS})
+    if op_id is not None:
+        entry['op_id'] = op_id
     entry['restorable'] = restorable
     entry['writer'] = writer
     entry['at'] = now or now_iso()
@@ -234,10 +249,20 @@ def restore_class_state(entry: dict[str, Any] | None) -> dict[str, Any]:
         if out['cluster_id'] != out['class_id']:
             out['cluster_subid'] = None
         out['cluster_id'] = out['class_id']
-    for f in REVIEW_DISMISS_FIELDS:
+    for f in (*REVIEW_DISMISS_FIELDS, *AUDIT_VERDICT_FIELDS):
         if f in snap:
             out[f] = snap[f]
     return out
+
+
+def op_write_undone(history: list[dict[str, Any]] | None, op_id: str) -> bool:
+    """Whether the operation's write on this item has been undone: an unlabel
+    entry carrying ``op_id`` sits after the operation's newest label entry."""
+    for entry in reversed(history or []):
+        if entry.get('op_id') != op_id:
+            continue
+        return bool(entry.get('writer') == HUMAN_UNLABEL_WRITER)
+    return False
 
 
 def region_chain_entry(actor: str, event: str) -> str:
@@ -287,6 +312,7 @@ def merge_region_chain(existing: list[str] | None, new_entries: list[str] | None
 
 
 __all__ = [
+    'AUDIT_VERDICT_FIELDS',
     'CLASS_STATE_FIELDS',
     'HUMAN_DISCARD_WRITER',
     'HUMAN_LABEL_WRITERS',
@@ -297,6 +323,7 @@ __all__ = [
     'find_undo_snapshot',
     'merge_region_chain',
     'normalize_region_chain_entry',
+    'op_write_undone',
     'record_class_history',
     'record_class_snapshot',
     'region_chain_entry',

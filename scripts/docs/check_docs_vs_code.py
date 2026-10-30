@@ -444,9 +444,11 @@ def check_envfiles() -> list[str]:
         )
     errors: list[str] = []
     for doc in _user_docs():
-        for block in _FENCE_RE.findall(doc.read_text(encoding='utf-8', errors='replace')):
+        doc_text = doc.read_text(encoding='utf-8', errors='replace')
+        for block in _FENCE_RE.findall(doc_text):
             for name in sorted(set(_SHELL_ASSIGN_RE.findall(block))):
-                local = re.search(rf'\$\{{?{name}\b', block)
+                # A shell variable the page itself assigns and then uses, in this or a later block.
+                local = re.search(rf'\$\{{?{name}\b', doc_text)
                 if (
                     not name.startswith('OP_')
                     and not local
@@ -460,9 +462,9 @@ def check_envfiles() -> list[str]:
 
 _NAME_SPAN_RE = re.compile(r'`([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)(?:=[^`\n]*)?`')
 _ENV_CONTEXT_RE = re.compile(r'\benv(?:ironment)?\b|\.env\b|variable|\bexport\b|=', re.I)
-# Roots beyond _CODE_ENV_ROOTS that read variables (the export scripts, the monitoring stack, the
-# frontend build config).
-_NAME_EXTRA_ROOTS = ('export', 'monitoring', 'frontend/src', 'frontend/static')
+# Roots beyond _CODE_ENV_ROOTS that read variables (the export scripts, the Triton model parameters,
+# the monitoring stack, the frontend build config).
+_NAME_EXTRA_ROOTS = ('export', 'models', 'monitoring', 'frontend/src', 'frontend/static')
 # Variables that belong to a tool the code does not read itself.
 _FOREIGN_ENV_NAMES = frozenset({'LD_LIBRARY_PATH'})
 
@@ -484,7 +486,19 @@ def check_env_names() -> list[str]:
             if p.is_file()
             and not set(p.relative_to(REPO_ROOT).parts) & _SKIP_DIR_NAMES
             and p.suffix
-            in {'.py', '.sh', '.ts', '.js', '.mjs', '.svelte', '.yml', '.yaml', '.json', ''}
+            in {
+                '.py',
+                '.sh',
+                '.ts',
+                '.js',
+                '.mjs',
+                '.svelte',
+                '.yml',
+                '.yaml',
+                '.json',
+                '.pbtxt',
+                '',
+            }
         )
     corpus = '\n'.join(parts)
     errors: list[str] = []

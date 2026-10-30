@@ -30,6 +30,6 @@ describe('DQ-p2: the status bar reads the pager that actually backs the visible 
     expect(slice).toMatch(
       /\{slotGallery\.pager\.items\.length\} \/ \{slotGallery\.pager\.total\}/,
     );
-    expect(slice).toMatch(/clusterPager\.total/);
+    expect(slice).toMatch(/list\.total/);
   });
 });
