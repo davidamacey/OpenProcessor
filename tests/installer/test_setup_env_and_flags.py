@@ -284,6 +284,26 @@ def test_control_plane_only_install_does_not_mention_gpu_or_triton_downloads(
     assert 'Triton image alone' not in result.stdout
 
 
+def test_control_plane_only_summary_points_at_the_liveness_url_not_the_503(
+    shimmed: Shimmed,
+) -> None:
+    shimmed.gpus(None)
+    result = configure(shimmed, '--cpu', '--control-plane-only')
+    assert result.returncode == 0, result.stderr
+    urls = [ln for ln in result.stdout.splitlines() if ln.startswith('    API ')]
+    health = [ln for ln in urls if '/health' in ln]
+    assert all('503' in ln for ln in health), urls
+    assert any(ln.rstrip().split()[2].endswith('/') for ln in urls if 'live' in ln), urls
+
+
+def test_a_default_install_summary_keeps_the_plain_health_url(shimmed: Shimmed) -> None:
+    result = configure(shimmed)
+    assert result.returncode == 0, result.stderr
+    health = [ln for ln in result.stdout.splitlines() if ln.startswith('    API health')]
+    assert health
+    assert '503' not in health[0]
+
+
 def test_no_start_hint_skips_model_install_for_control_plane_only(shimmed: Shimmed) -> None:
     shimmed.gpus(None)
     result = configure(shimmed, '--cpu', '--control-plane-only')
@@ -295,6 +315,23 @@ def test_no_start_hint_skips_model_install_for_control_plane_only(shimmed: Shimm
 def test_low_disk_error_names_the_install_dir_even_in_a_dry_run(shimmed: Shimmed) -> None:
     shimmed.flag('low_disk')
     result = dry(shimmed)
+    assert result.returncode != 0
+    assert str(shimmed.root / 'inst') in result.stderr
+    assert 'have 4 GB' in result.stderr
+
+
+def test_a_dry_run_checks_free_disk_on_the_target_filesystem(shimmed: Shimmed) -> None:
+    # The dry run works on a scratch copy under TMPDIR; the free space that
+    # matters is the install dir's own filesystem (#363).
+    import shutil
+    import tempfile
+
+    scratch_parent = tempfile.mkdtemp(prefix='op-dry-tmp-')
+    try:
+        (shimmed.state / 'low_disk_path').write_text(str(shimmed.root))
+        result = dry(shimmed, TMPDIR=scratch_parent)
+    finally:
+        shutil.rmtree(scratch_parent, ignore_errors=True)
     assert result.returncode != 0
     assert str(shimmed.root / 'inst') in result.stderr
     assert 'have 4 GB' in result.stderr

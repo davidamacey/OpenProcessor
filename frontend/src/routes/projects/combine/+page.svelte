@@ -2,9 +2,7 @@
   /**
    * `/projects/combine` — the combine-projects wizard (OpenProcessor P4;
    * projects_plan.md §8). Global, like `/projects`: the target project does
-   * not exist yet. Gated by `combineAvailability` (a one-shot probe): when
-   * the backend has no combine router the page says so and fires nothing
-   * else. State lives in `combineWizardController`; every count, error and
+   * not exist yet. State lives in `combineWizardController`; every count, error and
    * verdict on screen is the served preview's.
    */
   import { onMount } from 'svelte';
@@ -16,7 +14,6 @@
   import CombineOptions from '$components/combine/CombineOptions.svelte';
   import CombinePreviewSummary from '$components/combine/CombinePreviewSummary.svelte';
   import CombineSourcesStep from '$components/combine/CombineSourcesStep.svelte';
-  import { combineAvailability } from '$lib/combine/combineAvailability.svelte';
   import { createCombineWizard } from '$lib/combine/combineWizardController.svelte';
   import { formatBytes } from '$lib/format/bytes';
   import { formatCount } from '$lib/format/count';
@@ -33,7 +30,6 @@
   let confirmOpen = $state(false);
 
   onMount(() => {
-    void combineAvailability.init();
     return () => wizard.destroy();
   });
 
@@ -68,114 +64,95 @@
   </header>
 
   <main class="mx-auto w-full max-w-5xl flex-1 space-y-6 p-4">
-    {#if combineAvailability.available === true}
-      <p class="text-xs text-zinc-400">
-        Merge several projects into a new one. The sources are left untouched; the target
-        is created and filled by a background job.
+    <p class="text-xs text-zinc-400">
+      Merge several projects into a new one. The sources are left untouched; the target is
+      created and filled by a background job.
+    </p>
+
+    <CombineSourcesStep
+      {wizard}
+      {candidates}
+      slugPattern={projectsStore.limits?.slug_pattern ?? null}
+    />
+
+    {#if wizard.previewError}
+      <p class="text-sm text-red-300" data-testid="combine-preview-error">
+        {wizard.previewError}
       </p>
-
-      <CombineSourcesStep
-        {wizard}
-        {candidates}
-        slugPattern={projectsStore.limits?.slug_pattern ?? null}
-      />
-
-      {#if wizard.previewError}
-        <p class="text-sm text-red-300" data-testid="combine-preview-error">
-          {wizard.previewError}
-        </p>
-      {/if}
-
-      {#if preview}
-        <section class="space-y-3" data-testid="combine-step-mapping">
-          <div class="flex items-center gap-3">
-            <h2 class="text-sm font-semibold text-zinc-200">2. Class mapping</h2>
-            <span class="grow"></span>
-            <button
-              type="button"
-              class="btn btn-sm"
-              data-testid="combine-reset-suggestions"
-              onclick={() => wizard.resetToSuggestions()}>Reset to suggestions</button
-            >
-          </div>
-          <p class="text-xs text-zinc-500">
-            Untouched rows follow the server's suggestions. A class is its name: a
-            <em>create</em> row defines a target class and a <em>map</em> row points at one.
-          </p>
-          {#each preview.sources as s (s.project)}
-            <CombineMappingTable {wizard} source={s} />
-          {/each}
-        </section>
-      {/if}
-
-      <CombineOptions {wizard} />
-
-      {#if wizard.previewing && !preview}
-        <p class="text-xs text-zinc-500" data-testid="combine-previewing">Previewing…</p>
-      {/if}
-      {#if preview}
-        <CombinePreviewSummary {preview} stale={wizard.stale || wizard.previewing} />
-      {/if}
-
-      <section class="space-y-2" data-testid="combine-step-start">
-        {#if wizard.refusal}
-          <div
-            class="space-y-1 rounded border border-red-900 bg-red-950/30 p-2 text-xs text-red-200"
-            data-testid="combine-start-refusal"
-            data-code={wizard.refusal.code ?? ''}
-          >
-            <p>{wizard.refusal.message}</p>
-            {#if wizard.refusal.report}
-              <CombineIssueList
-                testid="combine-refusal-report"
-                issues={[
-                  ...wizard.refusal.report.errors,
-                  ...wizard.refusal.report.warnings,
-                ].map((i) => ({
-                  code: i.code,
-                  id: i.id,
-                  severity: i.severity === 'warning' ? 'warning' : 'error',
-                  project: i.field,
-                  message: i.message,
-                  detail: i.detail,
-                }))}
-              />
-            {/if}
-            {#if wizard.refusal.jobs.length > 0}
-              <ul class="list-inside list-disc">
-                {#each wizard.refusal.jobs as j (j.id)}
-                  <li>{j.kind_label}: {j.label}</li>
-                {/each}
-              </ul>
-            {/if}
-          </div>
-        {/if}
-        <button
-          type="button"
-          class="btn btn-primary"
-          data-testid="combine-start"
-          disabled={!wizard.canStart}
-          onclick={() => (confirmOpen = true)}>Start combine…</button
-        >
-      </section>
-    {:else if combineAvailability.available === false}
-      <p class="text-sm text-zinc-400" data-testid="combine-unavailable">
-        Combining projects isn't available on this backend.
-      </p>
-    {:else if combineAvailability.error}
-      <div class="space-y-2 text-sm">
-        <p class="text-red-300">
-          Could not check combine support: {combineAvailability.error}
-        </p>
-        <button
-          type="button"
-          class="btn btn-sm"
-          onclick={() => void combineAvailability.retry()}>Retry</button
-        >
-      </div>
-    {:else}
-      <p class="text-sm text-zinc-500">Loading…</p>
     {/if}
+
+    {#if preview}
+      <section class="space-y-3" data-testid="combine-step-mapping">
+        <div class="flex items-center gap-3">
+          <h2 class="text-sm font-semibold text-zinc-200">2. Class mapping</h2>
+          <span class="grow"></span>
+          <button
+            type="button"
+            class="btn btn-sm"
+            data-testid="combine-reset-suggestions"
+            onclick={() => wizard.resetToSuggestions()}>Reset to suggestions</button
+          >
+        </div>
+        <p class="text-xs text-zinc-500">
+          Untouched rows follow the server's suggestions. A class is its name: a
+          <em>create</em> row defines a target class and a <em>map</em> row points at one.
+        </p>
+        {#each preview.sources as s (s.project)}
+          <CombineMappingTable {wizard} source={s} />
+        {/each}
+      </section>
+    {/if}
+
+    <CombineOptions {wizard} />
+
+    {#if wizard.previewing && !preview}
+      <p class="text-xs text-zinc-500" data-testid="combine-previewing">Previewing…</p>
+    {/if}
+    {#if preview}
+      <CombinePreviewSummary {preview} stale={wizard.stale || wizard.previewing} />
+    {/if}
+
+    <section class="space-y-2" data-testid="combine-step-start">
+      {#if wizard.refusal}
+        <div
+          class="space-y-1 rounded border border-red-900 bg-red-950/30 p-2 text-xs text-red-200"
+          data-testid="combine-start-refusal"
+          data-code={wizard.refusal.code ?? ''}
+        >
+          <p>{wizard.refusal.message}</p>
+          {#if wizard.refusal.report}
+            <CombineIssueList
+              testid="combine-refusal-report"
+              issues={[
+                ...wizard.refusal.report.errors,
+                ...wizard.refusal.report.warnings,
+              ].map((i) => ({
+                code: i.code,
+                id: i.id,
+                severity: i.severity === 'warning' ? 'warning' : 'error',
+                project: i.field,
+                message: i.message,
+                detail: i.detail,
+              }))}
+            />
+          {/if}
+          {#if wizard.refusal.jobs.length > 0}
+            <ul class="list-inside list-disc">
+              {#each wizard.refusal.jobs as j (j.id)}
+                <li>{j.kind_label}: {j.label}</li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+      {/if}
+      <button
+        type="button"
+        class="btn btn-primary"
+        data-testid="combine-start"
+        disabled={!wizard.canStart}
+        onclick={() => (confirmOpen = true)}>Start combine…</button
+      >
+    </section>
   </main>
 </div>
 

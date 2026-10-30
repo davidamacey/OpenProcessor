@@ -149,7 +149,7 @@ design rationale is in
 | OCC | `src/clients/occ.py`, `occ_locks.py` | Optimistic-concurrency writes, the lock rule |
 | Ingest and import | `src/services/curation/ingest*.py`, `dataset_import/` | Item creation, duplicate detection, labeled-dataset import |
 | Regions | `src/services/curation/region_*.py`, `src/services/detection/` | Box list, edits, verification, text, embeddings, detector and segmenter cascade |
-| Clustering | `src/services/curation/clustering/` | FAISS/IVF and AHC clustering, per-box clustering, auto-promote |
+| Clustering | `src/services/curation/clustering/` | IVF k-means (FAISS) and AHC item clustering, per-box clustering (sklearn `MiniBatchKMeans`), auto-promote |
 | Scoring, selection, search | `src/services/curation/item_scores/`, `selection/`, `semantic_search.py` | Mistakenness and uniqueness, diverse sampling, PE-Core text-to-image search |
 | Review | `src/services/curation/review_*.py`, `holdout.py` | Queue queries, sorts, the frozen test set |
 | VLM | `src/services/labeling/` | Transport, endpoints and probes, prompts, class and region labelers |

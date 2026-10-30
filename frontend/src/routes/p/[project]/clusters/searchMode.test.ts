@@ -108,7 +108,7 @@ describe('/clusters search mode', () => {
   });
 
   it('batches cluster metadata via getClusters() rather than recomputing dominant class client-side (D-4: no representatives needed for badge lookup)', () => {
-    expect(src).toMatch(/await getClusters\(\{ representatives_limit: 0 \}\)/);
+    expect(src).toMatch(/await getClusters\(\{ per_cluster: 0 \}\)/);
     expect(src).not.toMatch(/dominant_class_name\s*=.*\.filter\(/);
   });
 

@@ -51,6 +51,7 @@ import src.routers.curation.ingest_policy
 import src.routers.curation.ingest_sources
 import src.routers.curation.ingest_upload
 import src.routers.curation.keymap
+import src.routers.curation.label_ops
 import src.routers.curation.label_undo
 import src.routers.curation.methods
 import src.routers.curation.models

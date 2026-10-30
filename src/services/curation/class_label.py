@@ -78,15 +78,25 @@ class ItemLabel:
     import_id: str | None = None
     labeled_at: str | None = None
     run_id: str | None = None
+    op_id: str | None = None
 
     @classmethod
-    def human(cls, *, class_id: int, class_name: str, label_source: str, writer: str) -> ItemLabel:
+    def human(
+        cls,
+        *,
+        class_id: int,
+        class_name: str,
+        label_source: str,
+        writer: str,
+        op_id: str | None = None,
+    ) -> ItemLabel:
         return cls(
             class_id=class_id,
             class_name=class_name,
             source='human',
             writer=writer,
             label_source=label_source,
+            op_id=op_id,
         )
 
     @classmethod
@@ -138,6 +148,8 @@ def class_label_fields(label: ItemLabel) -> dict[str, Any]:
             'label_source': label.label_source or 'human',
             'cluster_id': label.class_id,
             'cluster_subid': None,
+            # Always written for a human label: a single label clears a stale tag.
+            'label_op_id': label.op_id,
             **human_class_provenance(),
         }
     elif label.source == 'propagated':
@@ -185,7 +197,9 @@ def class_label_update(current: dict[str, Any], label: ItemLabel) -> dict[str, A
     """
     from src.domain.history import record_class_snapshot
 
-    history = record_class_snapshot(current, writer=label.writer, restorable=True)
+    history = record_class_snapshot(
+        current, writer=label.writer, restorable=True, op_id=label.op_id
+    )
     fields = class_label_fields(label)
     fields['class_id_history'] = history
     fields['updated_at'] = now_iso()
@@ -195,14 +209,21 @@ def class_label_update(current: dict[str, Any], label: ItemLabel) -> dict[str, A
 
 
 def human_move_class_update(
-    current: dict[str, Any], *, class_id: int, class_name: str, now: str
+    current: dict[str, Any],
+    *,
+    class_id: int,
+    class_name: str,
+    now: str,
+    op_id: str | None = None,
 ) -> dict[str, Any]:
     """Merge body for ``move_crops`` into a CLASS cluster: relabel via
     ``class_source='human_move'`` (crops.py's ``move_crops`` docstring:
     "move this to the X cluster" means "this is an X")."""
     from src.domain.history import record_class_snapshot
 
-    history = record_class_snapshot(current, writer='human:move_crops', restorable=True)
+    history = record_class_snapshot(
+        current, writer='human:move_crops', restorable=True, op_id=op_id
+    )
     return {
         'cluster_id': class_id,
         'class_id': class_id,
@@ -212,13 +233,16 @@ def human_move_class_update(
         'label_source': 'human',
         'class_id_history': history,
         'cluster_subid': None,
+        'label_op_id': op_id,
         **human_class_provenance(),
         **audit_outcome_fields(current, class_name),
         'updated_at': now,
     }
 
 
-def candidate_move_update(current: dict[str, Any], *, cluster_id: int, now: str) -> dict[str, Any]:
+def candidate_move_update(
+    current: dict[str, Any], *, cluster_id: int, now: str, op_id: str | None = None
+) -> dict[str, Any]:
     """Merge body for ``move_crops`` into a candidate cluster: placement only.
 
     The item joins the group unvalidated. A locked (human- or
@@ -231,7 +255,7 @@ def candidate_move_update(current: dict[str, Any], *, cluster_id: int, now: str)
 
     update: dict[str, Any] = {
         'class_id_history': record_class_snapshot(
-            current, writer='human:move_crops', restorable=True
+            current, writer='human:move_crops', restorable=True, op_id=op_id
         ),
     }
     if is_locked_class(current):
@@ -241,6 +265,7 @@ def candidate_move_update(current: dict[str, Any], *, cluster_id: int, now: str)
             'cluster_id': cluster_id,
             'cluster_subid': None,
             'class_validated': False,
+            'label_op_id': op_id,
             'updated_at': now,
         }
     )

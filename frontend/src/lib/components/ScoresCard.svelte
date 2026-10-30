@@ -238,7 +238,7 @@
     <table class="w-full text-left text-sm">
       <thead>
         <tr class="border-b border-zinc-800 text-xs text-zinc-500">
-          <th class="w-8 py-1.5 font-normal"></th>
+          <th class="w-8 py-1.5 font-normal"><span class="sr-only">Select</span></th>
           <th class="py-1.5 font-normal">Scorer</th>
           <th class="py-1.5 font-normal">Field</th>
           <th class="py-1.5 font-normal">Scored / total</th>

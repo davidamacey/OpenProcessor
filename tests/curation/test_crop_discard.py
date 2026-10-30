@@ -34,6 +34,9 @@ if TYPE_CHECKING:
     from fastapi.testclient import TestClient
 
 
+pytestmark = pytest.mark.usefixtures('label_ops_state')
+
+
 def _state(doc: dict[str, Any]) -> dict[str, Any]:
     return {**_class_state(doc), 'review_dismissed_at': doc.get('review_dismissed_at')}
 

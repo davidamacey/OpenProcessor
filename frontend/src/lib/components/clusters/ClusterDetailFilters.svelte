@@ -10,6 +10,12 @@
 
   // The label-source filter and the search / subject / clarity / order row.
   let { view }: { view: ClusterDetailController } = $props();
+
+  // The served per-source member count, when the facets have loaded.
+  function sourceCount(id: string): string {
+    const n = view.facets?.class_sources.find((s) => s.value === id)?.count;
+    return n == null ? '' : ` (${n.toLocaleString()})`;
+  }
 </script>
 
 <!-- class_source filter chips. Narrows the grid to one source bucket
@@ -32,7 +38,7 @@
     >
       <option value="">All sources</option>
       {#each view.classSourceOptions as opt (opt.id)}
-        <option value={opt.id}>{opt.label}</option>
+        <option value={opt.id}>{opt.label}{sourceCount(opt.id)}</option>
       {/each}
     </select>
   </label>
@@ -130,7 +136,7 @@
     onapplied={() => void view.loadFirst()}
   />
 
-  {#if view.subjectScope !== 0 || view.minBlurRatio !== null || !view.strategyBar.isDefault}
+  {#if view.subjectScope !== 0 || view.minBlurRatio !== null || !view.strategyBar.isDefault || view.facetFilterActive}
     <button
       type="button"
       class="btn-sm ml-auto bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
@@ -139,6 +145,7 @@
         view.blurSlider = 0;
         view.minBlurRatio = null;
         view.strategyBar.reset();
+        view.resetFacetFilters();
       }}
     >
       reset

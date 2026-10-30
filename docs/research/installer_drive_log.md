@@ -62,14 +62,23 @@ control-plane-only install; a branch install says "downloaded" rather than "down
 (branch files are not checksum-verified); the `--no-start` hint omits `models install` when there are
 no models; the low-disk error names the install dir, not the dry-run scratch copy.
 
-## Messages a first-time user may find confusing (not changed)
+## Messages a first-time user found confusing (fixed in 0.7.0, #363)
 
-- Summary and `status` print `API health http://...:<port>/health` for a control-plane-only install,
-  where it is 503 by design (the NOTE line explains it below the URLs).
-- `./openprocessor status` probes the default Triton (4600) and Grafana (4605) ports regardless of
-  the install's tiers or `--port-base`, so on a shared host it can report another stack's service;
-  a failed probe prints `HTTP 000000`.
-- The 0.5.0 installer, when run through `./openprocessor upgrade`, logs `action install`.
-- Branch installs print the 40-hex SHA as the release name.
-- A dry run checks free disk on its temporary scratch copy, not on the target filesystem.
-- Ctrl-C prints nothing; the next run resumes.
+- The control-plane-only summary now prints `API alive http://...:<port>/` and says that `/health`
+  answers 503 by design; a default install keeps `API health`.
+- `./openprocessor status` probes the ports in the install's own `.env`, skips the services that
+  the install's tiers do not run ("not part of this install", decided from `docker compose config
+  --services`), and a refused probe prints `HTTP 000`, not `HTTP 000000`.
+- The installer logs `action install (this directory already holds an install: a re-run or an
+  upgrade)` when it finds its own state in the directory.
+- Branch installs print the first 12 hex digits of the SHA; `state.json` keeps the full one.
+- A dry run checks free disk on the target filesystem (the nearest existing parent of the install
+  dir), not on its temporary scratch copy.
+- Ctrl-C or SIGTERM prints `interrupted ... re-run the same command to continue` and exits 130 or
+  143; nothing is rolled back and the next run resumes.
+- Branch mode needs images tagged `sha-<first 12 hex of the commit>`. The repository's CI does not
+  publish those tags, so a branch install needs either a local image with that tag or
+  `--image-tag` pointing at a local build; this is now written in `INSTALLATION.md`.
+- Existing control-plane-only installs keep the overlay they were installed with, so
+  `./openprocessor start` still starts Triton until `./openprocessor upgrade` (or the installer
+  with `--repair`) rewrites it; this is in the 0.7.0 upgrade notes.

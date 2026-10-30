@@ -140,7 +140,7 @@
               <th class="py-1 pr-3 font-normal">Targets</th>
               <th class="py-1 pr-3 font-normal">Runs on ingest</th>
               <th class="py-1 pr-3 font-normal">Updated</th>
-              <th class="py-1 font-normal"></th>
+              <th class="py-1 font-normal"><span class="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>

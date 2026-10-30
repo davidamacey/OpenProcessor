@@ -29,6 +29,8 @@ while (( $# > 0 )); do
     esac
 done
 
+# a scheme-less localhost URL is how the deploy CLI probes its own ports
+[[ "$url" == localhost:* ]] && url="http://127.0.0.1:${url#localhost:}"
 code=200 body="" file=""
 case "$url" in
     https://release.test/assets/*) file="${SHIM_RELEASE:?}/assets/${url#https://release.test/assets/}" ;;
@@ -42,6 +44,8 @@ case "$url" in
     https://huggingface.co/api/models/*) code="$(cat "${state}/hf_code" 2>/dev/null || echo 200)"; body="{}" ;;
     http://127.0.0.1:*|http://0.0.0.0:*)
         if [[ -e "${state}/health_down" ]]; then
+            # real curl still prints 000 for -w http_code when the connection is refused
+            [[ -n "$wfmt" ]] && printf '%s' "${wfmt//%\{http_code\}/000}"
             exit 7
         fi
         path="/${url#http://*/}"

@@ -23,6 +23,7 @@
    *     residual_count, noise_count)
    */
   import { onDestroy } from 'svelte';
+  import { formatTimestamp } from '$lib/format/date';
   import { formatDuration } from '$lib/format/duration';
   import type { DatasetStats } from '$lib/api_stats';
   import { subscribePipelineEvents, type CurationEventSubscription } from '$lib/sse';
@@ -237,15 +238,6 @@
     return (n ?? 0).toLocaleString();
   }
 
-  function fmtTimestamp(iso: string | null): string {
-    if (!iso) return '—';
-    try {
-      return new Date(iso).toLocaleString();
-    } catch {
-      return iso;
-    }
-  }
-
   function fmtRelative(ms: number | null): string {
     if (ms == null) return '—';
     const secs = Math.max(0, Math.round((Date.now() - ms) / 1000));
@@ -394,7 +386,7 @@
           <div class="flex justify-between">
             <dt class="text-zinc-400">When</dt>
             <dd class="text-zinc-300" title={stats.clusters.last_run_at ?? '—'}>
-              {fmtTimestamp(stats.clusters.last_run_at)}
+              {formatTimestamp(stats.clusters.last_run_at)}
             </dd>
           </div>
           <div class="flex justify-between">

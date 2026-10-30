@@ -7,9 +7,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.routers.curation.clusters import list_clusters
+from curation._cluster_cards_helpers import list_cards
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
-from src.services.curation.item_filter import ItemFilter
 
 
 CANDIDATE = RESIDUAL_CLUSTER_ID_OFFSET
@@ -34,15 +33,12 @@ async def _cards(*buckets: dict[str, Any]) -> dict[int, dict[str, Any]]:
     os_client.search = AsyncMock(
         return_value={'aggregations': {'clusters': {'buckets': list(buckets)}}}
     )
-    resp = await list_clusters(
+    resp = await list_cards(
         os_client,
         per_cluster=0,
         max_clusters=100,
         kind='all',
         cluster_id=None,
-        item_filter=ItemFilter(),
-        min_blur_ratio=None,
-        class_source=None,
     )
     return {c['cluster_id']: c for c in resp['items']}
 
@@ -78,8 +74,8 @@ async def test_labelled_count_includes_classes_beyond_top_buckets() -> None:
     cards = await _cards(_bucket(CANDIDATE + 2, 40, classes))
     card = cards[CANDIDATE + 2]
     assert card['labelled_count'] == 8
-    # The top class's share of the labels is label_purity.
-    assert card['label_purity'] == pytest.approx(0.5)
+    # The top class's share of the labels is label_agreement.
+    assert card['label_agreement'] == pytest.approx(0.5)
 
 
 @pytest.mark.asyncio
@@ -103,15 +99,12 @@ async def test_class_cluster_keeps_its_dominant_class() -> None:
 async def test_kind_class_pushes_a_cluster_id_range_filter_into_the_query() -> None:
     os_client = AsyncMock()
     os_client.search = AsyncMock(return_value={'aggregations': {'clusters': {'buckets': []}}})
-    await list_clusters(
+    await list_cards(
         os_client,
         per_cluster=0,
         max_clusters=100,
         kind='class',
         cluster_id=None,
-        item_filter=ItemFilter(),
-        min_blur_ratio=None,
-        class_source=None,
     )
     assert os_client.search.await_args is not None
     body = os_client.search.await_args.kwargs['body']
@@ -123,15 +116,12 @@ async def test_kind_class_pushes_a_cluster_id_range_filter_into_the_query() -> N
 async def test_kind_candidate_pushes_a_cluster_id_range_filter_into_the_query() -> None:
     os_client = AsyncMock()
     os_client.search = AsyncMock(return_value={'aggregations': {'clusters': {'buckets': []}}})
-    await list_clusters(
+    await list_cards(
         os_client,
         per_cluster=0,
         max_clusters=100,
         kind='candidate',
         cluster_id=None,
-        item_filter=ItemFilter(),
-        min_blur_ratio=None,
-        class_source=None,
     )
     assert os_client.search.await_args is not None
     body = os_client.search.await_args.kwargs['body']
@@ -155,25 +145,14 @@ async def test_kind_class_returns_every_class_bucket_even_with_far_more_candidat
     os_client.search = AsyncMock(
         return_value={'aggregations': {'clusters': {'buckets': class_buckets}}}
     )
-    resp = await list_clusters(
+    resp = await list_cards(
         os_client,
         per_cluster=0,
         max_clusters=100,
         kind='class',
         cluster_id=None,
-        item_filter=ItemFilter(),
-        min_blur_ratio=None,
-        class_source=None,
     )
     assert {c['cluster_id'] for c in resp['items']} == set(range(80))
-
-
-@pytest.mark.asyncio
-async def test_label_agreement_is_served_and_equals_label_purity() -> None:
-    cards = await _cards(_bucket(CANDIDATE, 10, [('a', 3), ('b', 3)]))
-    card = cards[CANDIDATE]
-    assert card['label_agreement'] == pytest.approx(0.5)
-    assert card['label_agreement'] == card['label_purity']
 
 
 @pytest.mark.asyncio

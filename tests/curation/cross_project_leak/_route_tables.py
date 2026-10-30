@@ -37,6 +37,10 @@ NO_WRITE: dict[tuple[str, str], str] = {
         'POST',
         '/ingest/objects/presign',
     ): 'the sweep names a bucket outside OP_S3_ALLOWED (422); it writes nothing',
+    ('POST', '/label_ops/{op_id}/undo'): (
+        "the sweep has no such operation (404); another project's operation id is covered in "
+        'test_label_ops_isolation'
+    ),
     ('POST', '/events/publish'): 'publishes an event (checked separately), writes no data',
     ('POST', '/ingest/path_lookup'): 'read-only lookup under POST',
     (

@@ -72,6 +72,11 @@ ErrorCode = Literal[
     # record's own path pointed outside its expected root -- distinct
     # from internal_isolation_error (an OpenSearch-guard refusal).
     'path_escape',
+    # A bulk label or move recorded as an operation that is unknown, malformed or pruned.
+    'label_op_not_found',
+    'already_undone',
+    'label_op_busy',
+    'label_op_in_progress',
     # P3F pass-3 MA1: a second delete_project_finish for the same slug
     # was refused because a first finish for it is still in flight --
     # distinct from project_busy (a step *inside* one finish failed).

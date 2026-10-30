@@ -9,13 +9,18 @@
     dominantShareTitle,
     cohesionText,
     COHESION_TOOLTIP,
+    DETECTOR_TOOLTIP,
+    VALIDATION_TEXT,
+    detectorText,
+    reviewCountsTitle,
   } from '$lib/clusters/clusterCardText';
   import { projectHref } from '$lib/projectPaths';
   import type { Cluster } from '$lib/types';
+  import type { ClusterFlag } from '$lib/types_clusterList';
 
   // One card of the /clusters grid (a real cluster or a synthetic slot
   // inventory card); a click opens the cluster or the slot's inventory.
-  let { c, unlabeledOnly }: { c: Cluster; unlabeledOnly: boolean } = $props();
+  let { c, flagVocabulary }: { c: Cluster; flagVocabulary: ClusterFlag[] } = $props();
 
   // Purity banding is served (`purity_tier`, `{API_PREFIX}/clusters`'
   // `purity_thresholds`) — no client 0.8/0.6 threshold. `has_subclusters`
@@ -65,6 +70,8 @@
   }
 
   const pb = $derived(purityBadge(c));
+  const detector = $derived(c.isSlotCard ? null : detectorText(c));
+  const flagById = $derived(new Map(flagVocabulary.map((f) => [f.id, f])));
 </script>
 
 <li style="content-visibility:auto;contain-intrinsic-size:auto 280px">
@@ -111,7 +118,7 @@
                  nearest-centroid geometry purity, not the tautological
                  label-based number (always 1.0 for a class cluster) —
                  shown with its basis and n (it's noisy at low n), plus
-                 label_purity/labelled_share in the tooltip so an
+                 label_agreement/labelled_share in the tooltip so an
                  operator can tell the two apart. -->
             <span
               class="rounded px-1.5 py-0.5 text-[10px] font-medium {pb.color}"
@@ -155,9 +162,7 @@
       </div>
       <div
         class="truncate text-sm text-zinc-300"
-        title={unlabeledOnly
-          ? `Unlabeled cluster #${c.id}`
-          : (c.dominant_class_name ?? `Unlabeled cluster #${c.id}`)}
+        title={c.dominant_class_name ?? `Unlabeled cluster #${c.id}`}
       >
         {#if c.isSlotCard}
           <!-- M4: dominant_pct is meaningless for the inventory
@@ -167,7 +172,7 @@
                so this line names the class once, as a class. -->
           <span class="text-zinc-500">class</span>
           <span class="font-mono">{c.dominant_class_name}</span>
-        {:else if c.dominant_class_name && !unlabeledOnly}
+        {:else if c.dominant_class_name}
           {c.dominant_class_name}
           {#if dominantShareText(c)}
             <span class="text-zinc-500" title={dominantShareTitle(c)}>
@@ -179,6 +184,40 @@
           <span class="text-zinc-500">· needs label</span>
         {/if}
       </div>
+      {#if !c.isSlotCard}
+        <div class="mt-1.5 flex flex-wrap items-center gap-1 text-[10px]">
+          {#if detector}
+            <span
+              class="rounded border border-zinc-700 px-1.5 py-0.5 text-zinc-300"
+              data-testid="cluster-detector"
+              title={DETECTOR_TOOLTIP}>detector {detector}</span
+            >
+          {/if}
+          {#if c.validation_state}
+            <span
+              class="rounded border border-zinc-700 px-1.5 py-0.5 text-zinc-300"
+              data-testid="cluster-validation"
+              title="{c.validated_count} of {c.size} members have a human-validated class"
+              >{VALIDATION_TEXT[c.validation_state]}</span
+            >
+          {/if}
+          {#if c.needs_review_count}
+            <span
+              class="rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-amber-200"
+              data-testid="cluster-needs-review"
+              title={reviewCountsTitle(c.review_counts)}
+              >{c.needs_review_count.toLocaleString()} to review</span
+            >
+          {/if}
+          {#each c.flags ?? [] as id (id)}
+            <span
+              class="rounded border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-red-200"
+              data-testid="cluster-flag"
+              title={flagById.get(id)?.description}>{flagById.get(id)?.label ?? id}</span
+            >
+          {/each}
+        </div>
+      {/if}
     </div>
   </button>
 </li>

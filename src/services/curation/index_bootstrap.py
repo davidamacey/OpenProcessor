@@ -34,6 +34,7 @@ from src.clients.curation_opensearch.ensure_overlay_fields import (
     adopt_inner_result_window,
     ensure_images_upload_fields,
     ensure_items_inner_result_window,
+    ensure_items_label_op_field,
     ensure_items_probe_fields,
     ensure_items_quality_fields,
     ensure_items_request_id_field,
@@ -176,6 +177,7 @@ def _migrations() -> tuple[tuple[str, Callable[[Any], Awaitable[Any]]], ...]:
         ('open_vocab_fields', ensure_open_vocab_fields),
         ('assist_fields', ensure_assist_fields),
         ('labels_confirmed_fields', ensure_labels_confirmed_fields),
+        ('label_op_field', ensure_items_label_op_field),
     )
 
 

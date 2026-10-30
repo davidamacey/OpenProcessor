@@ -195,6 +195,7 @@ class World:
             'cluster_id': 7,
             'cluster_subid': '7a',
             'class_id_history': [{'class_id': 99, 'at': NOW}],
+            'label_op_id': 'lop_20260101T000000000000_abcdef',
         }
         if cls is not None:
             doc['class_id'] = names[cls]

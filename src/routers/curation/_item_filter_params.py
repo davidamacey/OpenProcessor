@@ -50,6 +50,39 @@ def item_filter_query(
         int | None,
         Query(ge=1, description='The N largest boxes per image (crop_rank_in_image <= N).'),
     ] = None,
+    detector_class_name: Annotated[
+        list[str] | None,
+        Query(
+            description=(
+                "The detector's own class by NAME, repeatable (OR); same normalization as "
+                '`class_name`.'
+            )
+        ),
+    ] = None,
+    detector_conf_min: Annotated[
+        float | None,
+        Query(ge=0.0, le=1.0, description='Detector confidence, inclusive lower bound.'),
+    ] = None,
+    detector_conf_max: Annotated[
+        float | None,
+        Query(
+            ge=0.0,
+            le=1.0,
+            description=(
+                'Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins '
+                'never overlap).'
+            ),
+        ),
+    ] = None,
+    review_tab: Annotated[
+        str | None,
+        Query(
+            description=(
+                'Only items this review tab would show (a `GET /review/tabs` id such as '
+                '`outliers` or `detector_disagreements`; `regions` is not accepted).'
+            )
+        ),
+    ] = None,
     origin: Annotated[
         list[Origin] | None,
         Query(
@@ -75,6 +108,10 @@ def item_filter_query(
         min_area=min_area,
         max_area=max_area,
         max_rank=max_rank,
+        detector_class_names=detector_class_name or [],
+        detector_conf_min=detector_conf_min,
+        detector_conf_max=detector_conf_max,
+        review_tab=review_tab,
         origin=origin or [],
         embedding_state=embedding_state or [],
         review_status=review_status or [],

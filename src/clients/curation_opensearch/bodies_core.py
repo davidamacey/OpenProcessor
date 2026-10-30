@@ -417,8 +417,11 @@ def _items_body() -> dict[str, Any]:
                 # Secondary image-encoder embedding for semantic search
                 # (e.g. "white RV", "ford f150").
                 'pe_embedding': _knn_field(dim=config.encoder_embedding_dim),
-                # Backbone RoI-pool embedding used for residual AHC
-                # clustering + intra-class similarity refinement.
+                # Backbone RoI-pool embedding written at ingest when a dual-head
+                # detector is the secondary model (export/export_detector_dual_head.py).
+                # No clustering path reads it: residual clustering reads
+                # pe_embedding (clustering/residual_fetch.py). Kept as the stored
+                # output of that documented export, not as a clustering input.
                 BACKBONE_EMBEDDING_FIELD: _knn_field(dim=config.backbone_embedding_dim),
                 **_region_boxes_mapping(),
                 # History: nested array recording every class write so
@@ -426,6 +429,9 @@ def _items_body() -> dict[str, Any]:
                 # model drift investigation. Cap at MAX_HISTORY_ENTRIES (32,
                 # see src/domain/history.py).
                 'class_id_history': _CLASS_HISTORY_MAPPING,
+                # The bulk label/move operation that wrote the item's current
+                # label (src/domain/label_ops.py); cleared by the next human write.
+                'label_op_id': {'type': 'keyword'},
                 **_ITEMS_IMPORT_MAPPING,
                 # Label Ignore/Undo: exclusion flag + provenance, and the
                 # pre-exclusion validation/cluster placement un-exclude

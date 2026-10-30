@@ -956,8 +956,8 @@ applies to automated writers.
 | Method | Path | Body | Response | Notes |
 |---|---|---|---|---|
 | PUT | `/crops/{crop_id}/label` | `CropLabelRequest`: `class_id`, `label_source` (`human` default, `human_confirmed`, `new_class_proposal`) | `{crop_id, class_id, class_name}` | `400` for an unknown `class_id`, `404` for an unknown crop. The server always writes `class_source: "human"` and `class_validated: true` |
-| PUT | `/crops/batch_label` | `CropBatchLabelRequest`: `crop_ids`, `class_id`, `label_source` | `{updated, updated_ids, conflicts[]}` | `conflicts` is `[{crop_id, current_source}]`, not written. `updated_ids` are the ids to pass to `undo_batch` |
-| POST | `/crops/move` | `CropMoveRequest`: `crop_ids`, `cluster_id` | `{updated, updated_ids, conflicts[]}` | a class cluster is also a relabel (`class_source: human_move`, validated); a candidate cluster is placement only (a human-owned class is cleared, a machine suggestion is kept, nothing is validated). `400` for an unassigned (negative) target, an unknown class id or a candidate with no members |
+| PUT | `/crops/batch_label` | `CropBatchLabelRequest`: `crop_ids`, `class_id`, `label_source` | `{updated, updated_ids, conflicts[], op_id}` | `conflicts` is `[{crop_id, current_source}]`, not written. `op_id` names the recorded [label operation](#label-operations) (`null` when nothing was selected; a dry run has no `op_id`) |
+| POST | `/crops/move` | `CropMoveRequest`: `crop_ids`, `cluster_id` | `{updated, updated_ids, conflicts[], op_id}` | a class cluster is also a relabel (`class_source: human_move`, validated); a candidate cluster is placement only (a human-owned class is cleared, a machine suggestion is kept, nothing is validated). `400` for an unassigned (negative) target, an unknown class id or a candidate with no members |
 | POST | `/crops/flag_new_class` | `{crop_ids, note}` | `{flagged, errors}` | sets `needs_new_class` |
 | POST | `/crops/batch_exclude` | `{crop_ids, reason}` or a `selection`; `dry_run` | `{excluded, updated_ids, errors}` (dry run: `{dry_run, selected}`) | sets `class_excluded`, moves the item to cluster `-2`, clears `class_validated` and records the prior state |
 | POST | `/crops/batch_unexclude` | `{crop_ids}` or a `selection`; `dry_run` | `{unexcluded, updated_ids, errors}` | `updated_ids` are the items actually restored (an item that was not excluded is in neither the count nor the ids). Restores the recorded state: a validated item returns to `cluster_id == class_id`, an unvalidated one to the residual pool. Items that are not excluded are untouched |
@@ -972,7 +972,7 @@ applies to automated writers.
 | Method | Path | Body | Response | Errors |
 |---|---|---|---|---|
 | POST | `/crops/{crop_id}/label/undo` | | the restored item | `404` unknown crop, `409` nothing to undo |
-| POST | `/crops/label/undo_batch` | `{crop_ids}` | `{items[], undone, nothing_to_undo, conflicts, not_found}` | `409` when no crop had anything to undo |
+| POST | `/crops/label/undo_batch` | `{crop_ids}` (at most 5,000) | `CropUndoBatchResponse`: `{items[], undone, nothing_to_undo, conflicts, not_found}` | `409` when no crop had anything to undo. Paged conditional bulk writes, one in flight. To undo a whole bulk label or move use `POST /label_ops/{op_id}/undo` |
 | DELETE | `/crops/{crop_id}/label` | | `{crop_id, reset}` | the same restore. With nothing on record it resets the crop to unlabeled instead of `409`. It is itself an undo, so it is not recorded |
 | POST | `/crops/{crop_id}/region/undo` | | the restored item | `404`, `409` nothing to undo |
 | POST | `/crops/region/undo_batch` | `{crop_ids}` | `{items[], undone, nothing_to_undo, conflicts, not_found}` | `409` when no crop had anything to undo |
@@ -990,12 +990,40 @@ applies to automated writers.
   `region_status`, `region_verified*`, `region_verifier*`,
   `region_validated`, `region_label_source`, `region_detected_at` and
   `region_rejection_reason`. Class fields are untouched.
-- History entries (`GET /crops/{crop_id}/history`) add `writer` (for example
+- A snapshot also holds `label_op_id` (the operation tag before the write), and, for an item drawn into the accuracy audit, the audit verdict (`audit_outcome`, `audit_human_name`); an undo puts both back, so the item returns to the audit queue.
+- History entries (`GET /crops/{crop_id}/history`) add `op_id` (the label operation that made the write, or whose write an undo entry cancelled), `writer` (for example
   `human:label_crop`, `human:discard_crop`, `class_merge`, `vlm_pipeline`) and
   `at`. Keys that were not recorded are `null`.
 - Which route to call: label or confirm with `PUT /crops/{crop_id}/label`;
   hide or clear with `POST /crops/{crop_id}/discard`; revert with the undo
   routes.
+
+### Label operations
+
+`PUT /crops/batch_label` and `POST /crops/move` (explicit ids or a `selection`) are recorded as
+operations: a record under the project's state dir (the newest 200 kept; a pruned one answers
+`404`), a `label_op_id` tag on each written item and an `op_id` on its class history entry. Undoing
+an operation restores each item that still carries its label and nothing else; a later edit always
+wins.
+
+| Method | Path | Body | Response | Errors |
+|---|---|---|---|---|
+| GET | `/label_ops` | query `limit` (1 to 50, default 20), `undoable` | `LabelOpList`: `{items[], limit, retention}`, newest first. Each `LabelOp`: `op_id`, `kind` (`label` or `move`), `at`, `finished_at`, `class_name` (the name written; class ids are never served), `target_cluster_id`, `target_kind` (`class` or `candidate`), `label_source`, `target` (`crop_ids` or `selection`), `selected`, `count`, `conflicts`, `current` (items still carrying the label), `status`, `undone`, `undoable`, `last_undo` | `422` for `limit` above 50 |
+| POST | `/label_ops/{op_id}/undo` | `{dry_run}` (default `true`) | `LabelOpUndoResponse`: `{op_id, dry_run, status, members_known, matched, restored, already_undone, kept_changed, kept_holdout, kept_stale_class, conflicts, conflict_ids[]}` | `404 label_op_not_found`; `409 already_undone`, `label_op_busy` (another undo is running in the project), `label_op_in_progress` (the operation is still being written) |
+
+- `status` is `writing`, `interrupted` (the writer died; its items are found through the tag),
+  `written`, `undoing`, `undo_interrupted` (re-send the undo to resume) or `undone`. `undoable` is
+  true while `current` is above zero and the operation is not being written or undone, so an
+  operation stays undoable after some of its items were edited, and again after undoing a later
+  operation hands items back.
+- Per item, the outcome is one of: `restored`; `already_undone` (undone by an earlier pass or one by
+  one); `kept_changed` (relabelled, moved, excluded after the operation, class merged, deleted, or a
+  later operation sits on top); `kept_holdout` (frozen in the test holdout, never touched by a bulk
+  undo); `kept_stale_class` (the class to restore was renamed since). `matched` equals the sum of
+  the six counts. `conflict_ids` lists at most 100 items a concurrent write kept from restoring.
+- The undo runs inside the request, one paged conditional bulk (500 documents) at a time, and takes
+  no ids: it works from the stored operation, so an operation larger than 5,000 items is undoable.
+  A dry run reads the same pages and writes nothing.
 
 ## Regions: multi-box edits and queues
 
@@ -1252,6 +1280,8 @@ Common filters: `include_test`, `max_rank`, `min_blur_ratio`,
 `min_mistakenness`, `hide_near_duplicates`, `class_name` and
 `exclude_class_name` (repeatable), `source`, `conf_min`, `conf_max`, `min_area`, `max_area`,
 `origin`, `embedding_state`, `review_status` (`400` if `conf_min` is above `conf_max`),
+`detector_class_name` (repeatable), `detector_conf_min`, `detector_conf_max` and `review_tab`
+(see the shared filter below),
 `combine_conflict`, `on_negative_frame`, `sort`, `page`, `page_size` (max
 200). Tab-only filters: `text` and `region_status` on `regions`; `import_id`
 and `dataset_split` on `imported`.
@@ -1367,36 +1397,64 @@ Cluster ids partition into ranges:
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/clusters` | cluster cards. Query: `per_cluster`, `max_clusters`, `kind` (`class`, `candidate`, `all`), `cluster_id`, `max_rank`, `min_blur_ratio`, `class_source`, `offset`, `limit` |
+| GET | `/clusters` | cluster cards, typed (`ClusterListResponse`). Query: `per_cluster`, `max_clusters`, `kind` (`class`, `candidate`, `all`), `cluster_id`, `max_rank`, `min_blur_ratio`, `class_source`, `offset`, `limit`, and the server-side order and filters `sort`, `dominant_class` (repeatable), `detector_class` (repeatable), `min_size`, `max_size`, `validation_state`, `flag` (repeatable, any of), `needs_review` |
+| GET | `/clusters/{cluster_id}/facets` | counts of one cluster's members for filter chips, typed `ClusterFacets`: `detector_classes` (top 20), `class_sources`, `validation`, `review_tabs`, `detector_confidence` (ten bins of 0.1, the last open-ended) and `detector_confidence_missing`. Each count is the `total` of the matching filtered `GET /crops` call; the test holdout and excluded items are not members. A cluster with no members answers zeros |
 | GET | `/clusters/representatives` | `per_cluster`, `max_clusters`, `class_id`, `offset` |
 | POST | `/clusters/auto_promote` | `min_purity` (default 0.85), `min_members` (default 4), `dry_run`, `promote_min_precision` (default 0.95), `force`. Validates classifier-labelled members of pure clusters. Refused with `409 audit_required` / `audit_precision_low` (and `classes`) unless every class it would promote has enough audited crops at the required detector precision, or `force=true`; a dry run is never gated |
 | POST | `/clusters/refine/{cluster_id}` | AHC refine of one cluster. `distance_threshold`, `max_members`. Writes `cluster_subid` |
 | POST | `/cluster/umap/rebuild` | refit the UMAP reducer on the residual pool and re-cluster it. Returns the clustering summary |
 
 Cards. `labelled_count` counts members with any `class_name`. `dominant_count`
-and `label_purity` describe the top class among them. For a candidate,
-`dominant_class_name` is set only for a unique top class with at least 3
-members and half of the labelled ones, else `null`, and `dominant_class_id`
-is `null`.
+and `label_agreement` describe the top class among them: `label_agreement` is
+that class's share of the labelled members (`null` with none labelled). For a
+candidate, `dominant_class_name` is set only for a unique top class with at
+least 3 members and half of the labelled ones, else `null`, and
+`dominant_class_id` is `null`. Frozen test-holdout and excluded items are never
+counted in any card number.
 
-`label_agreement` is the same value as `label_purity` (the top class's share
-of the labelled members, `null` with none labelled) under the name a UI should
-read for label quality; `label_purity` stays for existing callers.
+Quality fields, all from the one aggregation: `detector_top_class` (the
+detector's most common class among the members), `detector_top_share` (that
+class as a share of the members that have a detector class),
+`detector_conf_mean`, `validation_state` (`none`, `partial` or `complete`),
+`review_counts` (members each of `all`, `detector_disagreements`, `outliers`,
+`vlm_low_conf` and `mismatches` would show, built from the same clauses as
+`GET /review/{tab}`), `needs_review_count` (`review_counts.all`) and `flags`.
+The response serves `flag_vocabulary` (`id`, `label`, `description`):
+`mixed_detector_classes`, `low_geometry_purity`, `label_disagreement`,
+`promotable`, `needs_review`, `unvalidated`.
+
+`sort` is one of `needs_review_desc`, `size_desc` (default), `size_asc`,
+`label_agreement_asc`, `purity_asc`, `purity_desc`, `detector_conf_asc`,
+`unvalidated_desc`, `updated_desc`, `dominant_class`; the response serves the
+applied `sort` and `sort_options` (`id`, `label`). A card with no value for the
+sort key comes after every card that has one, and ties break on `cluster_id`.
+The filters apply to the aggregated cards; `total` counts the cards left.
+`truncated` is true when the aggregation returned `max_clusters` buckets, so
+the list may be incomplete: raise `max_clusters` or narrow the filters.
 
 `purity` is geometric and independent of labels: the share of members whose
 nearest cluster centroid is their own cluster. `purity_n` is how many members
 it covers and `purity_basis` is `nearest_centroid`; with `purity_n` of `0`
 both `purity` and `purity_tier` are `null`. `purity_tier` is `pure`, `mixed`
 or `noisy`. `promotable` is the auto-promote gate on labels (enough members,
-enough of them labelled, `label_purity` at or above `pure_min`); never true
+enough of them labelled, `label_agreement` at or above `pure_min`); never true
 for a class cluster. The response serves `purity_thresholds` (`pure_min`
 0.85, `mixed_min` 0.6, `promote_min_members` 4, `promote_min_labelled_share`
 0.5) and `core_similarity_min` (0.75).
 
+The shared item filter (every route that takes it, such as `GET /crops`, `GET /review/{tab}` and
+`GET /clusters`) also takes the detector's view of an item: `detector_class_name` (repeatable,
+matched by name like `class_name`), `detector_conf_min` (inclusive) and `detector_conf_max`
+(exclusive, so adjacent bands never overlap), and `review_tab`, which keeps only the items that review
+tab would show (any tab id except `regions`; the clauses are the ones `GET /review/{tab}` runs, with
+the test holdout hidden). `GET /crops` `sort` accepts `detector_confidence`. On `GET /clusters` these
+narrow the members every card counts, whereas `detector_class` (without `_name`) keeps the cards whose
+detector top class matches.
+
 Representatives are paged. Every card is returned with `size`, `purity` and
 the rest, but `representatives` is filled only for cards in the
-`[offset, offset + limit)` window of the kind-filtered, member-count-descending
-list (`limit` default 50, max 500). Other cards carry `representatives: []`.
+`[offset, offset + limit)` window of the served list (after the filters and the
+`sort`) (`limit` default 50, max 500). Other cards carry `representatives: []`.
 Each card carries `n_subclusters` (the exact count) and `subcluster_ids` (the sorted ids, at most 200), which the Cropwright sub-cluster tabs use. `per_cluster=0` skips representatives. `GET /clusters/representatives`
 pages the same way by `offset` and `max_clusters`.
 
@@ -2204,7 +2262,7 @@ classes are reported.
 | POST | `/probe/run` | `{job_id, architecture, gpu, resume}`. Runs the active-learning probe from a finished training job (`409` when that job is unknown, not `finished`, has no checkpoint, or the GPU cannot be claimed; one job at a time) |
 | GET | `/probe/status` | `ProbeStatusResponse` (`status`, `job_id`, `train_job_id`, `model_path`, `gpu`, `updated_count`, `error`, `actionable_min_confidence`) |
 | POST | `/probe/cancel` | |
-| GET | `/search/text` | `q` (required), `page`, `page_size`, `cluster_id`, `tab`, `date_from`, `date_to`, `max_rank`, `min_blur_ratio`, `hide_near_duplicates`, `min_score`, `include_test`. Items plus `semantic_score`. `400` when `OP_SEMANTIC_SEARCH_ENABLED` is off, `503` while the text encoder is not ready |
+| GET | `/search/text` | `q` (required), `page`, `page_size`, `cluster_id`, `tab`, `date_from`, `date_to`, `max_rank`, `min_blur_ratio`, `hide_near_duplicates`, `min_score`, `include_test`. Items plus `semantic_score`. `400` when `OP_SEMANTIC_SEARCH_ENABLED` is set off (it is on by default), `503` while the text encoder is not ready |
 | GET | `/stats` | project counts, indexes, disk, jobs |
 | GET | `/stats/classes` | per-class counts with `thresholds`, `adequacy`, `trainable`, `trainable_gap`, `aug_target`, `aug_gap` |
 | GET | `/stats/dataset` | the dashboard roll-up |
