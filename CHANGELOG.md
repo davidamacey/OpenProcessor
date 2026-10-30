@@ -22,6 +22,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - The installer's tier prompt is a numbered menu; `--tiers` is unchanged.
 
 ### Added
+- Bulk label and move are recorded as label operations (`op_id` on `PUT /crops/batch_label` and `POST /crops/move`, a `label_op_id` tag on each written item, `op_id` on its class history entry), and `GET /label_ops` lists them with how many items still carry each label. Records are files under the project's state dir, the newest 200 kept.
 - `GET /clusters` is typed (`ClusterListResponse`) and sorts and filters on the server: `sort`, `dominant_class`, `detector_class`, `min_size`, `max_size`, `validation_state`, `flag`, `needs_review`. Cards gain `detector_top_class`, `detector_top_share`, `detector_conf_mean`, `validation_state`, `review_counts`, `needs_review_count` and `flags`; the response gains `sort`, `sort_options`, `flag_vocabulary` and `truncated`.
 - The shared item filter takes `detector_class_name`, `detector_conf_min`, `detector_conf_max` (exclusive) and `review_tab`; `GET /crops` sorts by `detector_confidence`; new `GET /clusters/{cluster_id}/facets` counts a cluster's members by detector class, class source, validation, review tab and detector confidence for filter chips.
 - Self-seeding docs screenshots (#335): `capture_docs_screenshots.py --seeded` seeds its own public projects on an isolated GPU-less stack (`docker/test/compose.docs-shots.yml`, with a stand-in segmenter) and captures 17 states in one run; the harness host ports are `VERIFY_*_PORT` variables.

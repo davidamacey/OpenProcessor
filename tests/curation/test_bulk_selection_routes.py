@@ -15,6 +15,9 @@ from src.routers.curation import _common
 from src.services.curation import index_bootstrap
 
 
+pytestmark = pytest.mark.usefixtures('label_ops_state')
+
+
 P = f'{_common.config.api_prefix}/projects/default'
 
 
