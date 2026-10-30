@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Cluster list: the sort and filters are the server's. The toolbar renders the served sort options and flag vocabulary and filters by dominant class, detector class, size range, validation state, flags and needs review; the choice goes out as query parameters, lives in the URL and in session storage, and "Clear filters" resets it. Cards show the detector's top class with its share and mean confidence, the validation state, the review count (per-tab counts as the tooltip) and the flags (served label, served description as tooltip). A truncated list says so; load and error states have a Retry.
+- Cluster page: facet chips from the served facets (detector class, validation, review tab, detector-confidence band, each with the served count; label-source options carry their count) that send the matching crop-list parameter, and a sort by detector confidence. The panel folds on a narrow screen.
 - An axe-core accessibility check in the stubbed e2e suite (`e2e/stubbed/test_a11y_axe.py`) on projects, clusters, cluster detail, review, classes, settings, prompt packs and open-vocab sets; it fails on any violation.
 
 ### Changed
