@@ -18,6 +18,14 @@ import httpx
 import numpy as np
 
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+# ruff: noqa: E402
+from src.domain.embedding_state import embedded_clause
+
+
 def export(url: str, index: str, page: int = 500) -> dict[str, np.ndarray]:
     ids: list[str] = []
     vecs: list[list[float]] = []
@@ -28,7 +36,7 @@ def export(url: str, index: str, page: int = 500) -> dict[str, np.ndarray]:
             'size': page,
             'pit': {'id': pit['pit_id'], 'keep_alive': '5m'},
             'sort': [{'_shard_doc': 'asc'}],
-            'query': {'exists': {'field': 'pe_embedding'}},
+            'query': embedded_clause(),
             '_source': ['pe_embedding', 'cluster_id'],
             'track_total_hits': False,
         }
