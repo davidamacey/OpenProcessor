@@ -4,8 +4,8 @@
 curation semantic search. No other ``/search/*`` prefix is used
 anywhere in this module.
 
-Gated end-to-end by ``OP_SEMANTIC_SEARCH_ENABLED`` (default off, read with
-``env_bool`` like ``scores.py``'s and ``select.py``'s flags): disabled returns ``400`` with a message telling
+Gated end-to-end by ``OP_SEMANTIC_SEARCH_ENABLED`` (default on since #371; set
+``0`` to turn it off, read with ``env_bool``): disabled returns ``400`` with a message telling
 the operator which flag to flip, same shape ``scores.py`` uses.
 """
 
@@ -29,7 +29,7 @@ def _semantic_search_enabled() -> bool:
     ``OP_SCORES_ENABLED``/``OP_SELECT_DIVERSE_ENABLED`` live-read
     convention ``strategy_registry.py`` documents, so tests can
     ``monkeypatch.setenv`` without reimporting."""
-    return env_bool('OP_SEMANTIC_SEARCH_ENABLED')
+    return env_bool('OP_SEMANTIC_SEARCH_ENABLED', default=True)
 
 
 def _get_pe_encoder(request: Request) -> Any:
@@ -81,7 +81,7 @@ async def search_text(
     if not _semantic_search_enabled():
         raise HTTPException(
             status_code=400,
-            detail='semantic search is disabled (set OP_SEMANTIC_SEARCH_ENABLED=1 to enable)',
+            detail='semantic search is disabled (OP_SEMANTIC_SEARCH_ENABLED is set off; unset it or set 1 to enable)',
         )
 
     try:

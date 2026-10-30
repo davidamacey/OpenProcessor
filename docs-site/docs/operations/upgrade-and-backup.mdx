@@ -87,6 +87,13 @@ Then restart Triton so it reloads the model, and check the route:
 ./openprocessor gpu plan
 ```
 
+### Control-plane-only installs
+
+An install made with `--cpu --control-plane-only` before 0.7.0 keeps the overlay it was
+installed with, so `./openprocessor start` still tries to start Triton. Run
+`./openprocessor upgrade` once (or the installer with `--repair`) to rewrite
+`docker-compose.cpu.yml`.
+
 ## Upgrade an installed directory
 
 ```bash

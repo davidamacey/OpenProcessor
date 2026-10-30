@@ -96,6 +96,8 @@ tags (`dataset_sha`, `frozen_test_sha`, `test_label_sha`, `profile`,
 `seed`), the training plots and `run_metadata.json` as artifacts, and a
 model version registered under `OP_MLFLOW_MODEL_NAME` (default
 `openprocessor_detector`).
+The new version gets the registry alias `staging` (MLflow's deprecated
+registry stages are not used); promoting to production stays a manual step.
 
 <Screenshot
   name="backend-mlflow-experiments.png"

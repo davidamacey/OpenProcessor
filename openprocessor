@@ -270,6 +270,26 @@ cmd_logs() {
     fi
 }
 
+# status_probe LABEL ACTIVE_SERVICES SERVICE URL DOWN_COLOR -- one health line.
+# curl prints 000 for a refused connection and then exits non-zero, so the
+# status is never appended a second time.
+status_probe() {
+    local label="$1" active="$2" service="$3" url="$4" down_color="$5" code
+    if [[ -n "$active" ]] && ! grep -qx -- "$service" <<<"$active"; then
+        echo -e "  ${label}not part of this install"
+        return 0
+    fi
+    code="$(curl -s -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || true)"
+    code="${code:-000}"
+    if [[ "$code" == "200" ]]; then
+        echo -e "  ${label}${GREEN}healthy${NC}"
+    elif [[ "$down_color" == "$YELLOW" ]]; then
+        echo -e "  ${label}${YELLOW}unavailable${NC}"
+    else
+        echo -e "  ${label}${down_color}unavailable${NC} (HTTP $code)"
+    fi
+}
+
 cmd_status() {
     print_header "OpenProcessor Status"
 
@@ -282,44 +302,20 @@ cmd_status() {
 
     echo ""
 
-    # Health checks
+    # Health checks. Only services this install runs are probed: compose lists
+    # the services of the active profiles and overlays, so a control-plane-only
+    # install has no Triton and a core install has no Grafana. If compose cannot
+    # say, probe everything rather than hide a service.
     echo -e "${BOLD}Health Checks:${NC}"
 
-    # API health
-    local api_status
-    api_status=$(curl -s -o /dev/null -w "%{http_code}" "localhost:${API_PORT}/health" 2>/dev/null || echo "000")
-    if [[ "$api_status" == "200" ]]; then
-        echo -e "  API (${API_PORT}):       ${GREEN}healthy${NC}"
-    else
-        echo -e "  API (${API_PORT}):       ${RED}unavailable${NC} (HTTP $api_status)"
-    fi
+    local active
+    active="$(dc config --services 2>/dev/null || true)"
 
-    # Triton health
-    local triton_status
-    triton_status=$(curl -s -o /dev/null -w "%{http_code}" "localhost:${TRITON_HTTP_PORT}/v2/health/ready" 2>/dev/null || echo "000")
-    if [[ "$triton_status" == "200" ]]; then
-        echo -e "  Triton (${TRITON_HTTP_PORT}):    ${GREEN}healthy${NC}"
-    else
-        echo -e "  Triton (${TRITON_HTTP_PORT}):    ${RED}unavailable${NC} (HTTP $triton_status)"
-    fi
-
-    # OpenSearch health
-    local opensearch_status
-    opensearch_status=$(curl -s -o /dev/null -w "%{http_code}" "localhost:${OPENSEARCH_PORT}" 2>/dev/null || echo "000")
-    if [[ "$opensearch_status" == "200" ]]; then
-        echo -e "  OpenSearch (${OPENSEARCH_PORT}): ${GREEN}healthy${NC}"
-    else
-        echo -e "  OpenSearch (${OPENSEARCH_PORT}): ${RED}unavailable${NC} (HTTP $opensearch_status)"
-    fi
-
-    # Grafana health
-    local grafana_status
-    grafana_status=$(curl -s -o /dev/null -w "%{http_code}" "localhost:${GRAFANA_PORT}/api/health" 2>/dev/null || echo "000")
-    if [[ "$grafana_status" == "200" ]]; then
-        echo -e "  Grafana (${GRAFANA_PORT}):   ${GREEN}healthy${NC}"
-    else
-        echo -e "  Grafana (${GRAFANA_PORT}):   ${YELLOW}unavailable${NC}"
-    fi
+    status_probe "API (${API_PORT}):       " "$active" api "localhost:${API_PORT}/health" "$RED"
+    status_probe "Triton (${TRITON_HTTP_PORT}):    " "$active" triton-server \
+        "localhost:${TRITON_HTTP_PORT}/v2/health/ready" "$RED"
+    status_probe "OpenSearch (${OPENSEARCH_PORT}): " "$active" opensearch "localhost:${OPENSEARCH_PORT}" "$RED"
+    status_probe "Grafana (${GRAFANA_PORT}):   " "$active" grafana "localhost:${GRAFANA_PORT}/api/health" "$YELLOW"
 
     echo ""
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import io
 import threading
-import time
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 
@@ -115,25 +114,27 @@ def test_batch_decode_runs_off_the_loop_thread(monkeypatch: pytest.MonkeyPatch) 
 
     monkeypatch.setattr(cpu_pool, 'OFFLOAD_MIN_BYTES', 0)  # these frames are tiny
     threads: list[int] = []
+    problems: list[str] = []
+    loop_ran = threading.Event()
     real = ingest_helpers._decode_image
 
     def spy(data: bytes):
         threads.append(threading.get_ident())
-        time.sleep(0.05)
+        # Ordering, not elapsed time (#383): a decode on the loop thread would
+        # block the heartbeat, so this wait would time out. The timeout bounds
+        # a hang only; it is never the assertion.
+        if not problems and not loop_ran.wait(timeout=10):
+            problems.append('event loop did not run during a decode')
         return real(data)
 
     monkeypatch.setattr(ingest_helpers, '_decode_image', spy)
     service = _Service()
 
-    async def main() -> tuple[int, float]:
-        gaps: list[float] = []
-
+    async def main() -> int:
         async def heartbeat() -> None:
-            last = time.perf_counter()
-            for _ in range(8):
-                await asyncio.sleep(0.01)
-                gaps.append(time.perf_counter() - last)
-                last = time.perf_counter()
+            for _ in range(3):
+                await asyncio.sleep(0)
+            loop_ran.set()
 
         beat = asyncio.create_task(heartbeat())
         await _ingest(
@@ -142,12 +143,12 @@ def test_batch_decode_runs_off_the_loop_thread(monkeypatch: pytest.MonkeyPatch) 
             list('abcd'),
         )
         await beat
-        return threading.get_ident(), max(gaps)
+        return threading.get_ident()
 
-    loop_thread, worst_gap = asyncio.run(main())
+    loop_thread = asyncio.run(main())
     assert threads
     assert loop_thread not in threads
-    assert worst_gap < 0.04  # four 50 ms decodes ran in parallel, none on the loop
+    assert problems == []
 
 
 def test_an_undecodable_image_is_left_for_ingest_one_to_report(

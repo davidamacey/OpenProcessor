@@ -479,8 +479,9 @@ What follows from the list:
   `region_set_complete` records the VLM's "all of them are here" answer. The
   profile test route returns every candidate with its drop reason so the cap
   is tunable.
-- **Per-box embeddings and clustering.** Boxes are embedded and clustered, not
-  items. A box carries `bbox_norm` in its embedding entry so a moved box is
+- **Per-box embeddings and clustering.** Boxes are embedded and clustered in
+  addition to items (item-level residual clustering still runs and writes the
+  top-level `cluster_id`; per-box clustering writes the box's `cluster_*`). A box carries `bbox_norm` in its embedding entry so a moved box is
   recognised as stale and re-embedded. False-positive sub-typing works on
   boxes: a matching box flips to `false_positive` and the item status is
   re-derived, so a sibling accepted box keeps the item `detected`.

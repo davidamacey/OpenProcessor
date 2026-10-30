@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import threading
-import time
 from typing import TYPE_CHECKING
 
 from src.utils import file_read
@@ -36,39 +35,46 @@ def test_files_come_back_in_order_and_a_missing_one_is_an_error_value(tmp_path: 
 def test_slow_reads_overlap_and_leave_the_loop_free(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Ordering, not elapsed time (#383): eight reads must be in flight at once
+    # (a barrier only opens when all eight threads arrive), and the event loop
+    # must run while they are (the reads wait for a tick the loop makes). A
+    # generous timeout only bounds a hang; it is never the assertion.
     monkeypatch.setenv('OP_INGEST_READ_THREADS', '8')
     file_read.shutdown_read_executor()
     threads: set[int] = set()
+    problems: list[str] = []
+    barrier = threading.Barrier(8)
+    loop_ran = threading.Event()
 
     def slow(path: str) -> bytes:
         threads.add(threading.get_ident())
-        time.sleep(0.1)
+        if problems:
+            return b'x'
+        try:
+            barrier.wait(timeout=10)
+        except threading.BrokenBarrierError:
+            problems.append('reads did not overlap')
+        if not loop_ran.wait(timeout=10):
+            problems.append('event loop did not run during the reads')
         return b'x'
 
     monkeypatch.setattr(file_read, '_read_one', slow)
 
-    async def main() -> tuple[float, float]:
-        gaps: list[float] = []
-
+    async def main() -> None:
         async def heartbeat() -> None:
-            last = time.perf_counter()
-            for _ in range(8):
-                await asyncio.sleep(0.01)
-                gaps.append(time.perf_counter() - last)
-                last = time.perf_counter()
+            for _ in range(3):
+                await asyncio.sleep(0)
+            loop_ran.set()
 
         beat = asyncio.create_task(heartbeat())
-        started = time.perf_counter()
         await file_read.read_files([str(tmp_path / f'{i}.jpg') for i in range(16)])
-        elapsed = time.perf_counter() - started
         await beat
-        return elapsed, max(gaps)
 
-    elapsed, worst_gap = asyncio.run(main())
+    asyncio.run(main())
     file_read.shutdown_read_executor()
+    assert problems == []
     assert threading.get_ident() not in threads
-    assert elapsed < 0.6  # 16 x 0.1 s one after another is 1.6 s; 8 threads is about 0.2 s
-    assert worst_gap < 0.05
+    assert len(threads) == 8
 
 
 def test_the_read_is_timed_as_its_own_stage(tmp_path: Path) -> None:

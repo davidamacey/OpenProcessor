@@ -38,7 +38,7 @@ def _semantic_search_enabled() -> bool:
     """Mirrors the semantic-search module's own flag check — same "don't import a
     router module just to read one env var" reasoning as
     ``_select_diverse_enabled``/``_viz_projection_enabled``."""
-    return env_bool('OP_SEMANTIC_SEARCH_ENABLED')
+    return env_bool('OP_SEMANTIC_SEARCH_ENABLED', default=True)
 
 
 def _viz_projection_enabled() -> bool:

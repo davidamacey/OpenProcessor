@@ -303,7 +303,7 @@ class ClusteringService(IndexPersistenceMixin):
         Check if clusters need rebalancing.
 
         Rebalancing is recommended when:
-        - Max cluster > 10x average cluster size
+        - Largest non-empty cluster > 10x the smallest non-empty cluster
         - Empty clusters > 10% of total
         - More than rebalance_threshold new data since training
         """
