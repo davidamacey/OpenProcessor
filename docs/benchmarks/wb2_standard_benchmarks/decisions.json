@@ -1,0 +1,281 @@
+{
+ "git_sha": "3f13fb686b091b3cce35210d2beb5f83fa281ad7",
+ "load_avg": [
+  37.60302734375,
+  50.419921875,
+  53.576171875
+ ],
+ "selected_variant": {
+  "dinov2_l14": "centre",
+  "mobileclip2_s2": "centre",
+  "pe_core_g14_448": "letterbox",
+  "pe_core_l14_336": "letterbox",
+  "siglip2_so400m_p16_256": "letterbox"
+ },
+ "B1": {
+  "dinov2_l14": {
+   "variant": "centre",
+   "intervals": {
+    "sop": {
+     "delta": -0.22033982347690986,
+     "lo": -0.22400912366533338,
+     "hi": -0.2166692836600443
+    },
+    "cars196": {
+     "delta": -0.13516172672488008,
+     "lo": -0.14327880949452712,
+     "hi": -0.126795597097528
+    },
+    "cub200": {
+     "delta": 0.02548953409858204,
+     "lo": 0.01738268062120189,
+     "hi": 0.03393399729912219
+    }
+   },
+   "verdict": "FAIL",
+   "text_tower": false
+  },
+  "mobileclip2_s2": {
+   "variant": "centre",
+   "intervals": {
+    "sop": {
+     "delta": -0.1221612508677399,
+     "lo": -0.12533511288883012,
+     "hi": -0.11912002908994744
+    },
+    "cars196": {
+     "delta": 0.0034436108719714674,
+     "lo": -0.0006149305128520477,
+     "hi": 0.007625138359365392
+    },
+    "cub200": {
+     "delta": -0.11512491559756921,
+     "lo": -0.12576384199864957,
+     "hi": -0.10448598919648888
+    }
+   },
+   "verdict": "FAIL",
+   "text_tower": true
+  },
+  "pe_core_g14_448": {
+   "variant": "letterbox",
+   "intervals": {
+    "sop": {
+     "delta": 0.023635582294800173,
+     "lo": 0.021436894648110806,
+     "hi": 0.025933440216852333
+    },
+    "cars196": {
+     "delta": 0.00836305497478785,
+     "lo": 0.005042430205386791,
+     "hi": 0.011929651949329725
+    },
+    "cub200": {
+     "delta": 0.039837947332883185,
+     "lo": 0.03241053342336259,
+     "hi": 0.047096556380823766
+    }
+   },
+   "verdict": "FAIL",
+   "text_tower": true
+  },
+  "siglip2_so400m_p16_256": {
+   "variant": "letterbox",
+   "intervals": {
+    "sop": {
+     "delta": -0.006132028693266338,
+     "lo": -0.008595170407589833,
+     "hi": -0.003751528875078512
+    },
+    "cars196": {
+     "delta": 0.014512360103308326,
+     "lo": 0.01082277702619604,
+     "hi": 0.018328003935555268
+    },
+    "cub200": {
+     "delta": -0.12305874409182985,
+     "lo": -0.1338664753544902,
+     "hi": -0.11242403781228899
+    }
+   },
+   "verdict": "FAIL",
+   "text_tower": true
+  }
+ },
+ "B2": {
+  "dinov2_l14": {
+   "intervals": {
+    "sop": {
+     "delta": 0.006826220620805924,
+     "lo": 0.004726703249479356,
+     "hi": 0.00879309774883475
+    },
+    "cars196": {
+     "delta": -0.02951666461689829,
+     "lo": -0.03640388636084123,
+     "hi": -0.022875415078096175
+    },
+    "cub200": {
+     "delta": -0.013166779203241054,
+     "lo": -0.01975016880486158,
+     "hi": -0.006747974341661063
+    }
+   },
+   "verdict": "FAIL"
+  },
+  "mobileclip2_s2": {
+   "intervals": {
+    "sop": {
+     "delta": 0.00542130838649962,
+     "lo": 0.0031569204323824004,
+     "hi": 0.007619582823708307
+    },
+    "cars196": {
+     "delta": -0.005042430205386791,
+     "lo": -0.008732013282499078,
+     "hi": -0.0012298610257040954
+    },
+    "cub200": {
+     "delta": -0.04507089804186361,
+     "lo": -0.05537221471978393,
+     "hi": -0.035280216070222824
+    }
+   },
+   "verdict": "FAIL"
+  },
+  "pe_core_g14_448": {
+   "intervals": {
+    "sop": {
+     "delta": 0.006677465207761727,
+     "lo": 0.004694059700505768,
+     "hi": 0.008611698786816962
+    },
+    "cars196": {
+     "delta": 0.01328249907760423,
+     "lo": 0.009469929897921534,
+     "hi": 0.017218054359857335
+    },
+    "cub200": {
+     "delta": -0.00033760972316002703,
+     "lo": -0.005908170155300473,
+     "hi": 0.005064145847400405
+    }
+   },
+   "verdict": "FAIL"
+  },
+  "pe_core_l14_336": {
+   "intervals": {
+    "sop": {
+     "delta": 0.011487223562857427,
+     "lo": 0.009751743744008463,
+     "hi": 0.013354930415523453
+    },
+    "cars196": {
+     "delta": 0.006272291231090887,
+     "lo": 0.00270569425654901,
+     "hi": 0.009961874308203174
+    },
+    "cub200": {
+     "delta": -0.003713706954760297,
+     "lo": -0.010301316677920324,
+     "hi": 0.003038487508440243
+    }
+   },
+   "verdict": "FAIL"
+  },
+  "siglip2_so400m_p16_256": {
+   "intervals": {
+    "sop": {
+     "delta": 0.019205976661928532,
+     "lo": 0.016908118739876368,
+     "hi": 0.021553006512181415
+    },
+    "cars196": {
+     "delta": 0.007502152256794982,
+     "lo": 0.004181527487393925,
+     "hi": 0.011068749231336859
+    },
+    "cub200": {
+     "delta": -0.028528021607022284,
+     "lo": -0.04034436191762323,
+     "hi": -0.017218095881161376
+    }
+   },
+   "verdict": "FAIL"
+  }
+ },
+ "B4": {
+  "pe_core_l14_336": true,
+  "pe_core_g14_448": true,
+  "mobileclip2_s2": true,
+  "siglip2_so400m_p16_256": true,
+  "dinov2_l14": false
+ },
+ "weak_ordering": {
+  "siglip2": 0.9750338211782069,
+  "dinov2": 0.8253597343500184,
+  "consistent": true
+ },
+ "set_c_contradictions": [
+  {
+   "set_c_higher": "mobileclip2_s2",
+   "cars_higher": "siglip2_so400m_p16_256",
+   "delta": -0.011068749231336859,
+   "lo": -0.014758332308449145,
+   "hi": -0.007256180051654163,
+   "recall1": {
+    "mobileclip2_s2": 0.96396507194687,
+    "siglip2_so400m_p16_256": 0.9750338211782069
+   }
+  },
+  {
+   "set_c_higher": "pe_core_g14_448",
+   "cars_higher": "siglip2_so400m_p16_256",
+   "delta": -0.006149305128520477,
+   "lo": -0.009592916000491945,
+   "hi": -0.00270569425654901,
+   "recall1": {
+    "pe_core_g14_448": 0.9688845160496864,
+    "siglip2_so400m_p16_256": 0.9750338211782069
+   }
+  }
+ ],
+ "sanity": {
+  "dinov2_l14": {
+   "control_is_chance": false,
+   "recall_monotone": true,
+   "nmi_in_range": true,
+   "rows_match": true,
+   "recall1_plausible": true
+  },
+  "mobileclip2_s2": {
+   "control_is_chance": false,
+   "recall_monotone": true,
+   "nmi_in_range": true,
+   "rows_match": true,
+   "recall1_plausible": false
+  },
+  "pe_core_g14_448": {
+   "control_is_chance": false,
+   "recall_monotone": true,
+   "nmi_in_range": true,
+   "rows_match": true,
+   "recall1_plausible": false
+  },
+  "pe_core_l14_336": {
+   "control_is_chance": false,
+   "recall_monotone": true,
+   "nmi_in_range": true,
+   "rows_match": true,
+   "recall1_plausible": false
+  },
+  "siglip2_so400m_p16_256": {
+   "control_is_chance": false,
+   "recall_monotone": true,
+   "nmi_in_range": true,
+   "rows_match": true,
+   "recall1_plausible": false
+  },
+  "all_pass": false
+ }
+}
