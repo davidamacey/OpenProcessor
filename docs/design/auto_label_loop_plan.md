@@ -1,12 +1,16 @@
 # Cluster-sampled VLM auto-labeling loop over assist runs
 
 Status: S1 to S8 (engine, worker, routes, contracts, docs) and S10 (fake VLM modes, live test) are
-implemented on `feat/v070-assist-loop`; S0, S9 (Cropwright panel, owned by the UI lane as UI5) and
-S11 (acceptance runs) are open. Issue #286, milestone v0.7.0, wave W3 of
+implemented on `feat/v070-assist-loop`; S9 (the Cropwright panel, on the clusters page, with the gaps below) is
+implemented; S0 and S11 (acceptance runs) are open. Issue #286, milestone v0.7.0, wave W3 of
 [`v070_wave_plan.md`](v070_wave_plan.md) (that file calls this doc `assist_loop_plan.md`; this is
 the same plan under the name the issue thread settled on). Audience: a fresh implementation agent
 with no conversation memory. Paths were checked with `rg` on `release/0.7.0` at `5f596793`;
 symbols are named instead of line numbers, re-find them with `rg`.
+
+Known S9 gaps: the panel has no pause button and no event log because the API serves neither (a
+loop pauses only for the audit; the routes are cancel, resume and rollback), and no route was added
+for them.
 
 Notation: `{P}` = `/curation/projects/{project}`. Planned routes are written `{P}/assist/loops...`
 because `scripts/docs/check_docs_vs_code.py` rejects a doc that names a route the app does not

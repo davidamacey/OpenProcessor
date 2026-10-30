@@ -17,6 +17,7 @@ from playwright.sync_api import expect
 
 from fixtures.wire import project, projects_response
 from test_cluster_discard import CLASSES, CLUSTERS, crop
+from test_assist_loop_panel import serve_loop, serve_plan_form, show_finished_loop, show_plan_form
 from test_cluster_facets import serve_cluster
 from test_cluster_list_filters import serve as serve_filtered_clusters
 from test_fresh_run_cosmetics import EMPTY_PROPOSALS
@@ -92,11 +93,26 @@ def serve_cluster_with_facets(stub) -> None:
     serve_cluster(stub, [])
 
 
-# (id, path, stub setup, selector that proves the data loaded)
+# (id, path, stub setup, selector that proves the data loaded[, step that opens a panel])
 PAGES = [
     ("projects", "/projects", serve_projects_page, '[data-testid="project-row-widgets-a"]'),
     ("clusters", "/p/default/clusters", serve_clusters, "li button"),
     ("clusters-with-filters", "/p/default/clusters?flag=unvalidated", serve_clusters_with_filters, "li button"),
+    ("clusters-loop-plan", "/p/default/clusters", serve_plan_form, '[data-testid="loop-panel-toggle"]', show_plan_form),
+    (
+        "clusters-loop-finished",
+        "/p/default/clusters",
+        lambda stub: serve_loop(stub, "completed"),
+        '[data-testid="loop-panel-toggle"]',
+        show_finished_loop,
+    ),
+    (
+        "clusters-loop-live",
+        "/p/default/clusters",
+        lambda stub: serve_loop(stub, "running"),
+        '[data-testid="loop-panel-toggle"]',
+        lambda page: expect(page.get_by_test_id("loop-cancel")).to_be_visible(timeout=ACTION_TIMEOUT_MS),
+    ),
     ("cluster-detail", "/p/default/clusters/1", serve_clusters, '[data-testid="class-name"]'),
     ("cluster-detail-facets", "/p/default/clusters/2", serve_cluster_with_facets, '[data-testid="cluster-facets"]'),
     ("review", "/p/default/review", serve_review, "main"),
@@ -107,11 +123,13 @@ PAGES = [
 ]
 
 
-@pytest.mark.parametrize("path,setup,ready", [p[1:] for p in PAGES], ids=[p[0] for p in PAGES])
-def test_page_has_no_axe_violations(stub, page, app_url, path, setup, ready):
+@pytest.mark.parametrize("path,setup,ready,reveal", [(*p[1:4], p[4] if len(p) > 4 else None) for p in PAGES], ids=[p[0] for p in PAGES])
+def test_page_has_no_axe_violations(stub, page, app_url, path, setup, ready, reveal):
     setup(stub)
     page.goto(f"{app_url}{path}")
     expect(page.locator(ready).first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    if reveal is not None:
+        reveal(page)
     page.wait_for_load_state("networkidle")
     page.add_script_tag(path=str(AXE_JS))
     result = page.evaluate("axe.run(document, { resultTypes: ['violations'] })")

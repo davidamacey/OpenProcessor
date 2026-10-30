@@ -209,6 +209,9 @@ def readable_crops(monkeypatch: pytest.MonkeyPatch) -> None:
     behind them but must reach the VLM (a stage whose crops are all unreadable fails)."""
     from types import SimpleNamespace
 
+    # The images router binds THUMBNAIL_CACHE by name at import; import it first so a first
+    # import under the patch cannot keep the stand-in for every later test in the process.
+    import src.routers.curation.images  # noqa: F401 -- imported for its binding, not used
     from src.services.curation import image_serving
 
     monkeypatch.setattr(image_serving, 'resolve_crop_root', lambda _p: '/data')

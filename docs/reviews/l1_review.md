@@ -68,7 +68,7 @@ Not a quality claim: the fake answers by rule. Precision, coverage and cost rati
   answers `source: off`; restarting the API container makes it `env` and `label_batch` works.
   No issue was filed (owner gate); one should be.
 - `answers` is keyed by image hash, not crop id, as the plan words it: the VLM wire carries no crop
-  id. `GET /__seen` lets a test learn the hash the product sends for a crop (ask about one crop,
+  id. The fake VLM's `__seen` endpoint lets a test learn the hash the product sends for a crop (ask about one crop,
   read the last entry). Z5-I has to use that or ask for a product change.
 - The plan's "one root fails and splits" in a single loop is not possible with a fake that sees only
   image bytes: concurrent calls interleave roots. The live test runs two loops instead (all pass, all
