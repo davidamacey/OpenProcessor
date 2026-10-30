@@ -79,7 +79,7 @@ are described there. `make scan` and `make clone-refs-*` wrap two of them.
 Shell libraries sourced by the installer and the CLI: `colors.sh`, `gpu.sh`,
 `ports.sh`, `config.sh` (with `config_models.sh`, the per-model generators),
 `download.sh`, `export.sh` (with `export_steps.sh`, the per-model exports),
-`model_setup.sh` (model groups), `opensearch_heap.sh` (heap sizing),
+`model_setup.sh` (model groups; tables in `model_groups.sh`), `opensearch_heap.sh` (heap sizing),
 `image_keys.sh` (the `images.lock` key table), `vlm_catalog.sh` (reads
 `examples/vlm/catalog.tsv`) and `vlm_switch.sh` (`openprocessor vlm
 use|apply|status|probe`). The CLI loads its command groups on demand from

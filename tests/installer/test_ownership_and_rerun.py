@@ -473,6 +473,27 @@ def test_fresh_install_sets_a_working_primary_ingest_detector(shimmed: Shimmed) 
     )
 
 
+CORE_REQUIRED_MODELS = (
+    'yolov11_small_trt_end2end,mobileclip2_s2_image_encoder,mobileclip2_s2_text_encoder,'
+    'scrfd_10g_bnkps,arcface_w600k_r50'
+)
+
+
+def test_core_only_install_does_not_require_the_pe_encoder(shimmed: Shimmed) -> None:
+    """The PE models belong to the curation tier; /health must not wait on them."""
+    assert install(shimmed, '--no-start', '--tiers', 'core').returncode == 0
+    inst = shimmed.root / 'inst'
+    assert env_value(inst / '.env', 'OP_REQUIRED_MODELS') == CORE_REQUIRED_MODELS
+
+
+def test_curation_install_requires_the_pe_image_encoder_too(shimmed: Shimmed) -> None:
+    assert install(shimmed, '--no-start', '--tiers', 'core,curation').returncode == 0
+    inst = shimmed.root / 'inst'
+    assert (
+        env_value(inst / '.env', 'OP_REQUIRED_MODELS') == f'{CORE_REQUIRED_MODELS},pe_image_encoder'
+    )
+
+
 def test_rerun_from_inside_the_install_dir_needs_no_dir_flag(shimmed: Shimmed) -> None:
     assert install(shimmed, '--no-start').returncode == 0
     inst = shimmed.root / 'inst'
