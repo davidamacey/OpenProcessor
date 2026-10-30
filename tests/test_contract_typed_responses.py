@@ -46,7 +46,6 @@ LEGACY_DICT = frozenset(
         'GET /clusters/representatives',
         'POST /crops/discard_batch',
         'POST /crops/flag_new_class',
-        'POST /crops/label/undo_batch',
         'POST /crops/region/undo_batch',
         'POST /crops/{crop_id}/discard',
         'GET /crops/{crop_id}/history',

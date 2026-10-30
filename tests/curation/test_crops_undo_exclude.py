@@ -29,6 +29,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+pytestmark = pytest.mark.usefixtures('label_ops_state')
+
+
 ITEMS = base_curation_config().items_index
 
 # The class / label / provenance / cluster state an undo must restore.

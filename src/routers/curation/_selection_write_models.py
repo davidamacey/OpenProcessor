@@ -27,6 +27,9 @@ class BatchRelabelResponse(BaseModel):
     updated: int
     updated_ids: list[str] = Field(description='The items actually written (the undo target).')
     conflicts: list[BatchConflict]
+    op_id: str | None = Field(
+        description='The recorded operation (undo it by id); null when nothing was selected.'
+    )
 
 
 class BatchExcludeResponse(BaseModel):

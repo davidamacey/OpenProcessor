@@ -53,6 +53,7 @@ def route_params(slug: str) -> dict[str, str]:
         'import_id': 'imp_20260101T000000_0123abcd',
         'run_id': 'bulk_20260101T000000_0123abcd',
         'source_id': 'src_unknown00',
+        'op_id': 'lop_20260101T000000000000_abcdef',
     }
 
 
@@ -73,6 +74,7 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('PUT', '/crops/{crop_id}/label'): {'json': {'class_id': 1}},
         ('PUT', '/crops/batch_label'): {'json': {'crop_ids': [proposal], 'class_id': 1}},
         ('POST', '/crops/move'): {'json': {'crop_ids': [proposal], 'cluster_id': 1}},
+        ('POST', '/label_ops/{op_id}/undo'): {'json': {'dry_run': False}},
         ('POST', '/crops/flag_new_class'): {'json': {'crop_ids': [item], 'note': 'n'}},
         ('POST', '/crops/batch_exclude'): {'json': {'crop_ids': [proposal], 'reason': 'r'}},
         ('POST', '/crops/batch_unexclude'): {'json': {'crop_ids': [proposal]}},

@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-pytestmark = pytest.mark.usefixtures('vlm_env_active')
+pytestmark = pytest.mark.usefixtures('vlm_env_active', 'label_ops_state')
 
 
 @pytest.fixture

@@ -51,7 +51,7 @@ error for the facets module):
 - `tests/curation/test_item_filter_detector.py`: clause shapes (name spellings, inclusive minimum and
   exclusive maximum, an empty band refused, `review_tab` equal to the review queue's own clause,
   `regions` and unknown ids refused); end to end through `GET /crops` (class filter, band, `review_tab`
-  returning the same ids as `GET /review/outliers`, combinations, the 400s); the `detector_confidence`
+  returning the same ids as the review queue (`GET /review/{tab}`), combinations, the 400s); the `detector_confidence`
   sort clause the route sends.
 - `tests/curation/test_cluster_facets.py`: shape validated strictly against `ClusterFacets`; holdout,
   excluded and other clusters' values never appear; per facet value the count equals the `total` of the
