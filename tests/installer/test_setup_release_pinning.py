@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 from typing import TYPE_CHECKING
@@ -216,6 +217,27 @@ def test_branch_mode_uses_the_full_sha_and_a_sha_image_tag(
     )
     assert env_file(shimmed)['OP_IMAGE_TAG'] == f'sha-{sha[:12]}'
     assert 'TESTING install' in result.stderr
+
+
+def test_branch_mode_prints_the_short_sha_but_records_the_full_one(
+    shimmed: Shimmed, tmp_path: Path
+) -> None:
+    sha = 'cd' * 20
+    _release_copy(shimmed, tmp_path)
+    shutil.copytree(shimmed.release / 'raw' / RELEASE, shimmed.release / 'raw' / sha)
+    shimmed.flag('allow_mutations')
+    result = shimmed.run(
+        [
+            *('--no-start', '--unattended', '--dir', 'inst', '--project', PROJECT),
+            *('--branch', 'main', '--tiers', 'core'),
+        ],
+        SHIM_BRANCH_SHA=sha,
+    )
+    assert result.returncode == 0, result.stderr
+    assert sha not in result.stdout + result.stderr
+    assert sha[:12] in result.stdout
+    state = json.loads((shimmed.root / 'inst' / '.install' / 'state.json').read_text())
+    assert state['version'] == sha
 
 
 def test_branch_mode_refuses_an_unparseable_api_answer(shimmed: Shimmed) -> None:

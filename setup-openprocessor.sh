@@ -405,6 +405,28 @@ _op_cleanup() {
     return 0
 }
 
+# _short_ref REF -> a 40-hex branch SHA shortened to 12 for display; a release
+# tag is unchanged. State and URLs keep the full value.
+_short_ref() {
+    if [[ "$1" =~ ^[0-9a-f]{40}$ ]]; then printf '%s' "${1:0:12}"; else printf '%s' "$1"; fi
+}
+
+# _op_on_signal NAME NUMBER -- Ctrl-C or SIGTERM: say so and how to continue,
+# then exit with the shell convention 128+N (the EXIT trap still cleans up).
+# Nothing is rolled back: every step is re-run safe and a run resumes.
+# The logging pipe's tee gets the same signal as the installer (one process
+# group), so the message goes to the terminal saved before the redirect.
+_op_on_signal() {
+    trap - INT TERM
+    local msg="[WARN] interrupted (${1}): nothing was rolled back; re-run the same command to continue where it stopped"
+    if [[ -n "${_OP_TTY_FD:-}" ]]; then
+        printf '%s\n' "$msg" >&"$_OP_TTY_FD"
+    else
+        printf '%s\n' "$msg" >&2
+    fi
+    exit $((128 + $2))
+}
+
 # --- 3.1 Release artifacts ---
 # manifest_entries MANIFEST -> "path<TAB>flags" lines (comments dropped)
 manifest_entries() {
@@ -2286,79 +2308,6 @@ do_rollback() {
     log_success "rolled back to $(basename "$newest"); run ./openprocessor health (engines rebuild with ./openprocessor models install if the Triton image changed)"
 }
 
-# --- 6.2 Summary ---
-print_summary() {
-    local h="$1" api tri seg vlmp ml failed degraded
-    api="$(read_env_var "$ENV_FILE" API_PORT || true)"
-    tri="$(read_env_var "$ENV_FILE" TRITON_HTTP_PORT || true)"
-    log_step "Summary"
-    echo "  install dir : ${OP_REAL_DIR}"
-    echo "  release     : ${INSTALL_REF} (${RESOLVED_MODE}; images: ${IMAGE_MODE})"
-    echo "  project     : ${OP_PROJECT}"
-    echo "  tiers       : ${SELECTED_TIERS}"
-    echo "  GPU plan    : ${GPU_PLAN_SUMMARY:-none}"
-    echo "  health      : ${HEALTH_RESULT}"
-    local heap per_gb budget
-    heap="$(read_env_var "$ENV_FILE" OPENSEARCH_HEAP || true)"
-    per_gb="$(read_env_var "$ENV_FILE" OP_SHARDS_PER_HEAP_GB || true)"
-    [[ "$per_gb" =~ ^[0-9]+$ ]] || per_gb=20
-    budget="$(opensearch_shard_budget "$heap" "$per_gb" || echo unknown)"
-    echo "  OpenSearch  : heap ${heap:-unset}, soft shard budget ${budget} (${per_gb} shards per heap GB)"
-    echo ""
-    echo "  URLs:"
-    echo "    API docs    http://${h}:${api}/docs"
-    echo "    API health  http://${h}:${api}/health"
-    [[ "$OP_CONTROL_PLANE_ONLY" == 1 ]] || echo "    Triton      http://${h}:${tri}/v2/health/ready"
-    if _has_tier segmenter; then seg="$(read_env_var "$ENV_FILE" SEGMENTER_PORT)"; echo "    Segmenter   http://${h}:${seg}/health"; fi
-    if _has_tier vlm; then vlmp="$(read_env_var "$ENV_FILE" VLM_PORT)"; echo "    VLM         http://${h}:${vlmp}/v1/models (${VLM_PICK})"; fi
-    if _has_tier trainer; then ml="$(read_env_var "$ENV_FILE" MLFLOW_PORT)"; echo "    MLflow      http://${h}:${ml}"; fi
-    if _has_tier cropwright; then
-        echo "    Cropwright  http://${h}:${OP_CROPWRIGHT_PORT}"
-        if ! is_loopback_ipv4 "${OP_CROPWRIGHT_BIND:-127.0.0.1}"; then
-            local lan="$OP_CROPWRIGHT_BIND"
-            [[ "$lan" == 0.0.0.0 ]] && lan="$(hostname -I 2>/dev/null | awk '{ print $1 }' || true)"
-            echo "    Cropwright on your LAN: http://${lan:-<this-computer-ip>}:${OP_CROPWRIGHT_PORT}"
-            log_warn "Cropwright is reachable from your LAN and has NO login: use it only on a trusted network,"
-            log_warn "never port-forward it to the internet, and put a reverse proxy with authentication in front"
-            log_warn "for anything wider (SECURITY.md). Re-run with --local-only to keep it on this computer."
-        fi
-    fi
-    if [[ "$OP_WITH_MONITORING" == 1 ]]; then
-        echo "    Grafana     http://${h}:$(read_env_var "$ENV_FILE" GRAFANA_PORT) (default admin/admin: change it)"
-    fi
-    [[ -n "$OP_DOCS_URL" ]] && echo "    Docs        ${OP_DOCS_URL}"
-    echo ""
-    if [[ "$OP_CONTROL_PLANE_ONLY" == 1 ]]; then
-        echo "  NOTE: control-plane-only install: NOT a functional inference install (no Triton)."
-    fi
-    if ! is_loopback_ipv4 "$OP_BIND_ADDRESS"; then
-        log_warn "SECURITY: services are published on ${OP_BIND_ADDRESS} with NO authentication. See SECURITY.md."
-    elif _has_tier cropwright && ! is_loopback_ipv4 "${OP_CROPWRIGHT_BIND:-127.0.0.1}"; then
-        echo "  Security: every OpenProcessor API port is bound to ${OP_BIND_ADDRESS}; Cropwright is the exception (your LAN, above)."
-        echo "            The API has no auth; use a reverse proxy before exposing it."
-    else
-        echo "  Security: every port is bound to ${OP_BIND_ADDRESS} only. The API has no auth; use a reverse proxy before exposing it."
-    fi
-    failed="$(awk -F'\t' '$2 != "ok" && $2 != "skipped" && $2 != "planned" && $2 != "degraded" { printf "%s ", $1 }' "${OP_DIR}/.install/groups.tsv" 2>/dev/null || true)"
-    if [[ -n "$failed" ]]; then
-        echo ""
-        echo "  Failed model groups: ${failed}"
-        for g in $failed; do echo "    re-run: ./openprocessor models install --only ${g}"; done
-    fi
-    degraded="$(awk -F'\t' '$2 == "degraded" { printf "%s ", $1 }' "${OP_DIR}/.install/groups.tsv" 2>/dev/null || true)"
-    if [[ -n "$degraded" ]]; then
-        echo ""
-        echo "  DEGRADED model groups (an FP32 fallback engine was built instead of FP16): ${degraded}"
-        echo "    details: ./openprocessor models status"
-        for g in $degraded; do echo "    retry FP16: ./openprocessor models install --only ${g}"; done
-    fi
-    echo ""
-    echo "  Manage: cd ${OP_REAL_DIR} && ./openprocessor status|logs|health|stop|start"
-    echo "          ./setup-openprocessor.sh --repair   (also --rollback, --uninstall)"
-    [[ "$OP_NO_START" == 1 ]] && echo "  Nothing was started (--no-start): run ./openprocessor start$([[ "$OP_CONTROL_PLANE_ONLY" == 1 ]] || echo ", then ./openprocessor models install")"
-    return 0
-}
-
 # --- Flags (section 5.4) ---
 usage() {
     cat <<'EOF'
@@ -2725,11 +2674,11 @@ do_install() {
     local prev
     prev="$(state_get version || true)"
     if (( existing )) && [[ -n "$prev" && "$prev" != "$INSTALL_REF" && "$mode" != repair ]]; then
-        log_info "upgrade: ${prev} -> ${INSTALL_REF}"
-        require_destructive_consent "Upgrade ${OP_PROJECT} from ${prev} to ${INSTALL_REF} (files are backed up first)"
+        log_info "upgrade: $(_short_ref "$prev") -> $(_short_ref "$INSTALL_REF")"
+        require_destructive_consent "Upgrade ${OP_PROJECT} from $(_short_ref "$prev") to $(_short_ref "$INSTALL_REF") (files are backed up first)"
     fi
     fetch_release_artifacts "$INSTALL_REF" "$RESOLVED_MODE" "${OP_DIR}/.install/staging"
-    log_success "release ${INSTALL_REF} downloaded$([[ "$RESOLVED_MODE" == branch ]] || echo " and verified")"
+    log_success "release $(_short_ref "$INSTALL_REF") downloaded$([[ "$RESOLVED_MODE" == branch ]] || echo " and verified")"
     if (( existing )); then
         local bdir
         bdir="$(backup_install)" || die "could not back up the current install; nothing was changed"
@@ -2748,6 +2697,8 @@ do_install() {
     source "${OP_DIR}/scripts/lib/opensearch_heap.sh"
     # shellcheck source=scripts/lib/retired_env.sh
     source "${OP_DIR}/scripts/lib/retired_env.sh"
+    # shellcheck source=scripts/lib/install_summary.sh
+    source "${OP_DIR}/scripts/lib/install_summary.sh"
     refuse_retired_env "$ENV_FILE"
 
     env_create_or_merge
@@ -2969,14 +2920,18 @@ YAML
     _has_tier vlm && need=$((need + 34))
     _has_tier trainer && need=$((need + 29))
     need=$((need + 20))
-    free_kib="$(df -Pk "$OP_DIR" 2>/dev/null | awk 'NR==2 { print $4 }')" || free_kib=""
+    # The target filesystem, not the dry run's scratch copy: the nearest
+    # existing ancestor of the real install dir (it may not exist yet).
+    local df_target="$OP_REAL_DIR"
+    while [[ ! -e "$df_target" && "$df_target" != / ]]; do df_target="$(dirname -- "$df_target")"; done
+    free_kib="$(df -Pk "$df_target" 2>/dev/null | awk 'NR==2 { print $4 }')" || free_kib=""
     root="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true)"
     if [[ "$free_kib" =~ ^[0-9]+$ ]]; then
         if (( free_kib / 1024 / 1024 < need )) && [[ "$OP_FORCE" != 1 ]]; then
             die "need ~${need} GB free on ${OP_REAL_DIR}'s filesystem, have $(( free_kib / 1024 / 1024 )) GB (use --force to try anyway)"
         fi
     else
-        log_warn "could not check free disk space on ${OP_DIR}"
+        log_warn "could not check free disk space on ${df_target}"
     fi
     if [[ -n "$root" ]] && free_kib="$(df -Pk "$root" 2>/dev/null | awk 'NR==2 { print $4 }')" && [[ "$free_kib" =~ ^[0-9]+$ ]]; then
         (( free_kib / 1024 / 1024 < need )) && log_warn "Docker's data root ${root} has $(( free_kib / 1024 / 1024 )) GB free; images need ~${need} GB"
@@ -3078,7 +3033,7 @@ YAML
         log_error "install finished with failures (see above); fix and run ./setup-openprocessor.sh --repair"
         exit "$EXIT_HEALTH"
     fi
-    log_success "OpenProcessor ${INSTALL_REF} is installed and healthy"
+    log_success "OpenProcessor $(_short_ref "$INSTALL_REF") is installed and healthy"
 }
 
 # --- Main ---
@@ -3094,6 +3049,8 @@ main() {
     _OP_SCRATCH=""
     bootstrap_child_setup
     trap _op_cleanup EXIT
+    trap '_op_on_signal INT 2' INT
+    trap '_op_on_signal TERM 15' TERM
 
     parse_args "$@"
     if needs_bootstrap "${_OP_SELF_PATH:-}"; then
@@ -3160,6 +3117,7 @@ main() {
         if [[ "$OP_DRY_RUN" != 1 ]]; then
             : >> "${OP_DIR}/.install/install.log"
             chmod 600 "${OP_DIR}/.install/install.log"
+            exec {_OP_TTY_FD}>&2
             exec > >(_op_redact | tee -a "${OP_DIR}/.install/install.log") \
                 2> >(_op_redact | tee -a "${OP_DIR}/.install/install.log" >&2)
         fi
@@ -3169,7 +3127,7 @@ main() {
             || die "another installer run is working in ${OP_REAL_DIR}; wait for it to finish" "$EXIT_COLLISION"; }
     fi
     [[ "$OP_DRY_RUN" == 1 ]] && log_info "DRY-RUN: nothing is written, pulled, started or removed; state-changing commands are printed"
-    log_info "setup-openprocessor ${SCRIPT_VERSION}: action ${OP_ACTION}, dir ${OP_REAL_DIR}"
+    log_info "setup-openprocessor ${SCRIPT_VERSION}: action ${OP_ACTION}$([[ "$OP_ACTION" == install && "$DIR_STATE" == owned ]] && echo " (this directory already holds an install: a re-run or an upgrade)"), dir ${OP_REAL_DIR}"
 
     case "$OP_ACTION" in
         install|repair) do_install "$OP_ACTION" ;;

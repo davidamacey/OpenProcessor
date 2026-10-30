@@ -71,6 +71,31 @@ def test_search_text_disabled_returns_400(monkeypatch: pytest.MonkeyPatch, app_c
     assert 'OP_SEMANTIC_SEARCH_ENABLED' in resp.json()['detail']
 
 
+def test_search_text_is_on_when_the_flag_is_unset(
+    monkeypatch: pytest.MonkeyPatch, app_client: TestClient
+):
+    # A fresh install sets nothing: text search must answer, not 400 (#371).
+    monkeypatch.delenv('OP_SEMANTIC_SEARCH_ENABLED', raising=False)
+    app_client.fake_os.search = AsyncMock(
+        return_value={'hits': {'hits': [], 'total': {'value': 0}}}
+    )
+    resp = app_client.get(
+        '/curation/projects/default/search/text', params={'q': 'white pickup truck'}
+    )
+    assert resp.status_code == 200
+
+
+@pytest.mark.parametrize('off', ['0', 'false'])
+def test_search_text_explicit_off_still_returns_400(
+    monkeypatch: pytest.MonkeyPatch, app_client: TestClient, off: str
+):
+    monkeypatch.setenv('OP_SEMANTIC_SEARCH_ENABLED', off)
+    resp = app_client.get(
+        '/curation/projects/default/search/text', params={'q': 'white pickup truck'}
+    )
+    assert resp.status_code == 400
+
+
 def test_search_text_encoder_not_ready_returns_503(app_client: TestClient):
     app_client.fake_encoder.text_ready = False
     resp = app_client.get(

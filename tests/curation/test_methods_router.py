@@ -103,13 +103,14 @@ def test_score_entries_shadow_when_enabled_and_shadow(
     assert VALIDATED_SCORERS  # sanity: at least one scorer has been validated
     # Phase 4/5/P2-14 additive flags (OP_SELECT_DIVERSE_ENABLED,
     # OP_VIZ_PROJECTION_ENABLED, OP_SEMANTIC_SEARCH_ENABLED) joined this
-    # envelope; unset here so this test's env matches its own setup above.
+    # envelope; unset here so this test's env matches its own setup above
+    # (semantic search defaults on, #371).
     assert body['flags'] == {
         'scores_enabled': True,
         'scores_shadow': True,
         'select_diverse_enabled': False,
         'viz_projection_enabled': False,
-        'semantic_search_enabled': False,
+        'semantic_search_enabled': True,
     }
 
 

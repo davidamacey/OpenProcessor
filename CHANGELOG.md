@@ -19,6 +19,8 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - **`gpu_image_prep` runs two Triton instances on the `full` profile** (#268), about 7 GB more card memory; `minimal` and `standard` stay at one. Existing installs keep their old count until the model config is regenerated: `./openprocessor upgrade` does it, or run `./openprocessor models install --only preflight` (`./openprocessor profile` needs a checkout).
 - **`gpu_image_prep` gained an optional `boxes` input.** The installer used to seed models with `cp -rn`, so an upgraded install kept the old model files and the GPU embed route stayed off. The seed step now replaces a model directory whose `MODEL_VERSION` is older than the release's (`export/sync_model_seed.py`) and then regenerates the profile values (#377). After an upgrade run `./openprocessor restart triton-server`; in a checkout `git pull` supplies the files.
 - **Index bootstrap and route warm-up run at API worker start** (#356), so a worker's first request no longer pays about 0.4 s plus 0.9 s.
+- **Semantic text search is on by default** (#371). A fresh install answers `GET /curation/projects/{project}/search/text` with 200 instead of 400. Set `OP_SEMANTIC_SEARCH_ENABLED=0` to turn it off. The text encoder warm-up already ran at every API start, so there is no new startup cost.
+- **Existing control-plane-only installs keep their old overlay** (#363): `./openprocessor start` still starts Triton until `./openprocessor upgrade` (or `./setup-openprocessor.sh --repair`) rewrites `docker-compose.cpu.yml`.
 - The installer's tier prompt is a numbered menu; `--tiers` is unchanged.
 
 ### Added
@@ -44,6 +46,9 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 ### Fixed
 - Undo and discard of many items ran one conditional update per id with no concurrency limit (`undo_batch`, `discard_batch`, and the region `undo_batch` now bounded at 32 in flight).
 - Undoing a class label left the accuracy-audit verdict the label had stamped; the undo now restores it, so the item returns to the audit queue.
+- Installer rough edges from the 0.7.0 drives (#363): Ctrl-C prints how to continue (exit 130 or 143); `./openprocessor status` skips services the install's tiers do not run and prints `HTTP 000`, not `HTTP 000000`; a dry run checks free disk on the target filesystem; the control-plane-only summary names the liveness URL; branch installs print a 12-character SHA; branch mode's `sha-<12 hex>` image tag is documented.
+- The model registry push in the trainer sets a `staging` alias instead of calling the deprecated `transition_model_version_stage` (#154).
+- Two ingest timing tests no longer fail on a loaded host; they assert ordering and thread identity (#383).
 - Installer: a control-plane-only install now passes its health wait (the API's `/health` is 503 without Triton) and `./openprocessor start` no longer starts Triton after one; upgrade and rollback replace release files by rename so a running installer is never rewritten in place; concurrent installer runs are serialized by a lock; `--rollback` honors `--no-start`; `secrets/vlm` and `data/source` are created as the installing user instead of root-owned by Docker; several confusing messages corrected (`docs/research/installer_drive_log.md`).
 - A dataset import job page crashed when the import had any issue: `issues_summary` served only code, count and severity where Cropwright renders id, message and samples. The job now serves the same issue shape as the preview (#335).
 - An empty or idle project no longer queues an `auto_label` job on every refresh cycle (#350).
