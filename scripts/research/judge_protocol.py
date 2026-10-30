@@ -49,6 +49,7 @@ class RawReply:
     output_tokens: int | None = None
     latency_ms: float | None = None
     request_id: str | None = None
+    truncated: bool = False
 
 
 def assert_may_send(kind: str, *, hosted: bool) -> None:

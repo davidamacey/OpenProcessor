@@ -1,8 +1,7 @@
 # Visual judge: harness and the first agreement run (E0, Haiku subagents only)
 
-Measured 2026-10-29 on branch `feat/cluster-w8-judge` (harness commit `5a332a23`). CPU only; the
-judge was a Haiku model reached through the sheet-file backend (below). The local-VLM half of E0
-was **not run** (see Open issues). Design: `docs/design/cluster_search_makemodel_plan.md`,
+Measured 2026-10-29 on branch `feat/cluster-w8-judge` (harness commit `5a332a23`). Haiku through the
+sheet-file backend (CPU only) and local VLMs on one A6000. Design: `docs/design/cluster_search_makemodel_plan.md`,
 sections 7 and W8.
 
 ## What was built
@@ -88,6 +87,52 @@ every layout and the rule "smallest layout within 0.05 of the best" selects the 
 vacuously. This run does not choose a default layout. Flag overlap between layouts for members
 shown in both was 0.82 to 1.00 against the 6 x 4 at 192 px sheet.
 
+## Local VLM runs (served by the repo's vLLM image, one A6000 card)
+
+Qwen3-VL-4B judged every sheet of five sets with 0 invalid replies: 252 COCO, 259 vehicle and 262
+face sheets (about 210 to 220 cluster sheets and 42 pair sheets each) and the 150-sheet
+calibration sets for COCO and vehicles. "Haiku" below is the 55 + 12 sheet subsample of the
+table above. Reports: `report_qwen_haiku.json` in each set directory.
+
+| | COCO crops | Vehicles | Faces (identity, local only) |
+|---|---|---|---|
+| Cluster sheets scored | 210 | 217 | 220 |
+| Accuracy (Wilson 95 %) | 0.700 (0.635 to 0.758) | 0.645 (0.579 to 0.706) | 0.755 (0.694 to 0.807) |
+| Kappa with truth | 0.400 | -0.009 | 0.519 |
+| "Different" precision / recall | 0.697 / 0.717 | 0.648 / 0.993 | 1.000 / 0.530 |
+| False-"same" / false-"different" | 0.283 / 0.317 | 0.007 / 1.000 | 0.470 / 0.000 |
+| Odd-cell flag precision / recall | 0.167 / 0.735 | 0.110 / 0.963 | 0.298 / 0.578 |
+| Name matches label | 0.752 | 0.733 | 0.273 |
+| Purity: truth vs judge (bootstrap 95 %) | 0.914 vs 0.620 (0.561 to 0.680) | 0.902 vs 0.143 (0.110 to 0.178) | 0.915 vs 0.835 (0.787 to 0.877) |
+| Pair accuracy / kappa (decided rows) | 0.510 / 0.031 | 0.499 / 0.000 | 0.525 / 0.051 |
+| Pair unsure rate | 0.137 | 0.026 | 0.002 |
+| Re-ordered twins: verdict flips | 0 of 10 | 0 of 17 | 1 of 20 |
+
+On the 55 sheets Haiku also judged, kappa between the two judges is 0.312 on COCO and 0.000 on
+vehicles; Fleiss' kappa with truth as no rater is 0.301 and -0.038. Kappa with truth on those 55:
+Haiku 0.697 and 0.298, Qwen3-VL-4B 0.400 and -0.009.
+
+Layout calibration (Qwen3-VL-4B, 30 clusters x 5 layouts, `cal_coco`): kappa with truth 0.52
+(3 x 3), 0.76 (4 x 4), 0.67 (6 x 4 at 128 px), 0.76 (6 x 4 at 160 px), 0.59 (6 x 4 at 192 px);
+accuracy 0.87 to 0.93. The rule (smallest layout within 0.05 of the best) picks 4 x 4 at 160 px
+for this judge. Same/different kappa against the 6 x 4 at 192 px reference: 0.79, 0.79, 0.90,
+0.79; flag overlap on shared members 0.69 to 0.74 (so the flagged cells are not stable across
+layouts even where the verdict is). One judge on one set; do not fix the default from this alone.
+`cal_oi`: Qwen3-VL-4B, like Haiku, said "different" for all 30 clusters at every layout, so
+kappa is 0 and nothing can be chosen from it.
+
+## Why the second local model returned invalid verdicts
+
+255 of 259 vehicle, 154 of 252 COCO and 122 of 158 face replies were invalid, and every invalid reply
+has `output_tokens` equal to 600, the old `--max-output-tokens` default. The model writes a long
+cell-by-cell analysis ("The user wants me to analyze ... Image 1: ...") before the JSON, so the cap
+cut it off before the JSON began or inside it (243 "no JSON object", 12 malformed JSON). It was not
+the reasoning parser eating the answer and not a format problem: the three sheets rerun with a
+4,096-token cap all returned valid verdicts using 762 to 1,062 output tokens (12 to 18 s each).
+Fixes: the local default is now 2,048 output tokens, and a reply cut off by the server (finish
+reason `length`) is recorded as `reply truncated at max_tokens` rather than as a JSON error.
+Qwen3-VL-4B was unaffected (0 invalid) because it answers directly.
+
 ## Findings
 
 - On COCO classes Haiku is a usable judge on contact sheets: pair kappa 0.82, flag precision
@@ -97,18 +142,21 @@ shown in both was 0.82 to 1.00 against the 6 x 4 at 192 px sheet.
   not crisply visual, so part of this is label noise, not judge error; the set is a poor
   stand-in for make/model until labels at that level exist. The false-"same" rate stays near zero,
   so the judge is conservative: its "same" is trustworthy, its "different" needs a person.
-- The calibration needs a set where the judge says "same" at all; rerun it on COCO crops.
+- The small local VLM is not a trustworthy judge on these sheets: on COCO crops kappa 0.40, flag
+  precision 0.17, and its pair answers are close to chance (accuracy 0.51, it says "no" to almost
+  every pair row). It over-flags cells (purity estimate 0.62 against a true 0.91). On faces it
+  never accepts a wrong identity as same-person but misses about half of the contaminated clusters.
+  Below the proposed bars, so by the protocol it may rank clusters for a person to review and its
+  verdicts carry no weight. The tall 2 x 12 pair sheet may be a poor fit for it; a smaller pair
+  sheet is untested.
+- The calibration needs a set where the judge says "same" at all; Qwen3-VL-4B on COCO crops does.
 - The order-effect sample (5 twins) is too small to say anything.
 
 ## Open issues
 
-- **Local-VLM judging (E0 for the local catalog models) was not run.** No VLM service was up. Starting
-  one (a vLLM container pinned to GPU 0 or 2, models already cached under `cache/vllm`) was
-  declined by this session's permission layer, so it needs an explicit go-ahead. Needed: one
-  container per tested catalog entry (`examples/vlm/catalog.tsv`, budgets 17 GB and 23 GB), then for each of the
-  prepared sample directories `visual_judge.py run --backend local --endpoint http://127.0.0.1:<port>/v1
-  --model <served name>`. Sample directories already exist for COCO, vehicles and (local only)
-  LFW faces: `e0_*` hold 200 cluster and 42 pair sheets each, `cal_*` 30 clusters at 5 layouts.
+- Local-VLM judging covers one model (Qwen3-VL-4B, below). The second tested catalog entry has no scored run: its
+  verdicts were truncated (cause and fix below) and a 4,096-token rerun was cut short to free the GPU
+  after 3 sheets, so it needs a rerun with the new default (2,048 output tokens).
 - Haiku was run on 184 sheets, not the plan's full allowance (100 cluster and 25 pair sheets per
   kind, plus 150 calibration sheets); no face or plate sheet was sent.
 - Sheet-file runs record no token counts (the budget reserves the PNG estimate at width x height

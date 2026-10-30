@@ -403,7 +403,7 @@ def build_parser() -> argparse.ArgumentParser:
     rn.add_argument('--budget-file')
     rn.add_argument('--max-calls', type=int, required=True)
     rn.add_argument('--max-input-tokens', type=int, required=True)
-    rn.add_argument('--max-output-tokens', type=int, default=600)
+    rn.add_argument('--max-output-tokens', type=int, default=2048)
     rn.set_defaults(fn=run)
     return ap
 

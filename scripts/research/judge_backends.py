@@ -24,6 +24,13 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+def _finish_reason(doc: dict[str, Any]) -> str | None:
+    try:
+        return str(doc['choices'][0]['finish_reason'])
+    except (KeyError, IndexError, TypeError):
+        return None
+
+
 class LocalVlmBackend:
     """A VLM served by this stack's vLLM (or any local OpenAI-compatible server)."""
 
@@ -37,7 +44,7 @@ class LocalVlmBackend:
         model: str,
         api_key: str = '',
         timeout_s: float = 300.0,
-        max_tokens: int = 600,
+        max_tokens: int = 2048,
         post: Callable[..., Any] = httpx.post,
     ) -> None:
         if sends_images_externally(compute_locality(base_url)):
@@ -86,6 +93,7 @@ class LocalVlmBackend:
             output_tokens=usage.get('completion_tokens'),
             latency_ms=(time.monotonic() - started) * 1000,
             request_id=resp.headers.get('x-request-id'),
+            truncated=_finish_reason(doc) == 'length',
         )
 
 
