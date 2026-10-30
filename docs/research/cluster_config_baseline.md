@@ -27,7 +27,7 @@ done
 ```
 
 The Leiden and ECG arms need `igraph` and `leidenalg`, which `requirements-test.txt` does not carry;
-those tests skip without them. The fit pool is an independent set of 40,000 set P crop vectors (used
+those tests skip without them. Install them with `pip install -r scripts/research/requirements.txt`. The fit pool is an independent set of 40,000 set P crop vectors (used
 only to fit the centring, whitening and CSLS statistics, never scored).
 
 ## The diagnostics reproduce the consolidated note
