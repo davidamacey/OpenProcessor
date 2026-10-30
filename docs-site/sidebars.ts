@@ -53,6 +53,8 @@ const sidebars: SidebarsConfig = {
             'guides/reprocess',
             'guides/test-on-crop',
             'guides/combine-projects',
+            'guides/label-operations-and-undo',
+            'guides/cluster-list-and-filters',
           ],
         },
         {
@@ -87,6 +89,7 @@ const sidebars: SidebarsConfig = {
         'operations/exports-and-retention',
         'operations/training-and-promote',
         'operations/monitoring',
+        'operations/ingest-stage-timing',
         'operations/release-acceptance',
         'operations/storage',
         'operations/upgrade-and-backup',
