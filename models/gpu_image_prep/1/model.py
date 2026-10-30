@@ -15,6 +15,8 @@ concurrent images are batched by those models' own dynamic batchers. Per image:
 5. Blur sums of the frame and of every detection's clamped rectangle (exact integers).
 6. Every detection's crop as a JPEG (quality 90) for the crop cache, encoded on host threads.
 
+Every request times its stages (``stage_metrics``) and publishes them once as Triton counters.
+
 Only boxes, vectors, sums and the crop JPEGs leave the GPU. Requests beyond ``MAX_IN_FLIGHT``
 wait in ``execute``, which holds Triton's queue: back-pressure instead of unbounded memory.
 
@@ -31,6 +33,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -50,6 +53,7 @@ from prep_geometry import (
     whole_square_geometry,
 )
 from prep_kernels import PrepKernels
+from stage_metrics import StageClock, StageMetrics
 
 
 DET_OUTPUTS = ('num_dets', 'det_boxes', 'det_scores', 'det_classes')
@@ -122,23 +126,29 @@ class TritonPythonModel:
         self.in_flight = threading.BoundedSemaphore(int(p.get('MAX_IN_FLIGHT', '96')))
         self.device = device
         self.local = threading.local()
+        self.metrics = StageMetrics(pb_utils)
+        self.stage_sync = p.get('STAGE_SYNC', '0') == '1'
 
     def execute(self, requests: list[Any]) -> None:
         for r in requests:
+            arrived = time.perf_counter()
             self.in_flight.acquire()
-            self.workers.submit(self._run, r)
+            self.workers.submit(self._run, r, arrived)
 
-    def _run(self, request: Any) -> None:
+    def _run(self, request: Any, arrived: float) -> None:
+        clock = StageClock(self._sync_stream if self.stage_sync else None)
+        clock.add('queue', time.perf_counter() - arrived)
         try:
             stream = getattr(self.local, 'stream', None)
             if stream is None:
                 cp.cuda.Device(self.device).use()
                 stream = self.local.stream = cp.cuda.Stream(non_blocking=True)
             with stream:
-                response = self._process(request)
+                response = self._process(request, clock)
         except Exception as exc:  # one failed image must not take the model down
             err = pb_utils.TritonError(f'gpu_image_prep: {exc}')
             response = pb_utils.InferenceResponse(output_tensors=[], error=err)
+        self.metrics.publish(clock)
         try:
             request.get_response_sender().send(
                 response, flags=pb_utils.TRITONSERVER_RESPONSE_COMPLETE_FINAL
@@ -147,6 +157,10 @@ class TritonPythonModel:
             self.in_flight.release()
 
     # ------------------------------------------------------------------ stages
+
+    @staticmethod
+    def _sync_stream() -> None:
+        cp.cuda.get_current_stream().synchronize()
 
     def _decode(self, data: bytes, embed: bool) -> _Image:
         reason, header = route(data, self.min_mp, self.max_mp)
@@ -182,49 +196,54 @@ class TritonPythonModel:
             out.append(t.as_numpy() if t.is_cpu() else cp.from_dlpack(t.to_dlpack()).get())
         return out
 
-    def _detect(self, im: _Image) -> None:
+    def _detect(self, im: _Image, clock: StageClock) -> None:
         w, h = im.size
         lb = letterbox_geometry(w, h, self.net)
         im.lb = lb
-        canvas = cp.full((1, 3, self.net, self.net), self.fill, cp.uint8)
-        dst = canvas[0, :, lb.top : lb.top + lb.new_h, lb.left : lb.left + lb.new_w]
-        self.kernels.resample_into(im.frame, (0, 0, w, h), (lb.new_w, lb.new_h), dst)
-        num, boxes, scores, classes = self._bls(self.det_model, canvas, DET_OUTPUTS)
-        im.num = int(num[0][0])
-        im.boxes = boxes[0][: im.num].astype(np.float32).reshape(-1, 4)
-        im.scores = scores[0][: im.num].astype(np.float32)
-        im.classes = classes[0][: im.num].astype(np.int32)
-        im.rects = [crop_rect(undo_letterbox(tuple(b), self.net, lb), w, h) for b in im.boxes]
+        with clock.stage('letterbox'):
+            canvas = cp.full((1, 3, self.net, self.net), self.fill, cp.uint8)
+            dst = canvas[0, :, lb.top : lb.top + lb.new_h, lb.left : lb.left + lb.new_w]
+            self.kernels.resample_into(im.frame, (0, 0, w, h), (lb.new_w, lb.new_h), dst)
+        with clock.stage('detect'):
+            num, boxes, scores, classes = self._bls(self.det_model, canvas, DET_OUTPUTS)
+            im.num = int(num[0][0])
+            im.boxes = boxes[0][: im.num].astype(np.float32).reshape(-1, 4)
+            im.scores = scores[0][: im.num].astype(np.float32)
+            im.classes = classes[0][: im.num].astype(np.int32)
+            im.rects = [crop_rect(undo_letterbox(tuple(b), self.net, lb), w, h) for b in im.boxes]
 
-    def _embed(self, im: _Image) -> np.ndarray:
+    def _embed(self, im: _Image, clock: StageClock) -> np.ndarray:
         """PE vectors of the whole-frame square and, when asked, of every detection's square."""
         t = self.pe_size
         rects = im.rects if im.embed else []
         sq = cp.empty((1 + len(rects), 3, t, t), cp.uint8)
         w, h = im.size
-        g = whole_square_geometry(w, h, t)
-        self.kernels.resample_into(
-            im.frame, (0, 0, w, h), (g.new_w, g.new_h), sq[0], (g.left, g.top, t, t)
-        )
-        for k, (x1, y1, x2, y2) in enumerate(rects, start=1):
-            g = whole_square_geometry(x2 - x1, y2 - y1, t)
+        with clock.stage('embed_frame'):
+            g = whole_square_geometry(w, h, t)
             self.kernels.resample_into(
-                im.frame,
-                (x1, y1, x2 - x1, y2 - y1),
-                (g.new_w, g.new_h),
-                sq[k],
-                (g.left, g.top, t, t),
-                antialias=False,
+                im.frame, (0, 0, w, h), (g.new_w, g.new_h), sq[0], (g.left, g.top, t, t)
             )
-        rows = [
-            self._bls(
-                self.pe_model,
-                cp.ascontiguousarray(sq[s : s + self.pe_batch]),
-                ('image_embeddings',),
-            )[0]
-            for s in range(0, int(sq.shape[0]), self.pe_batch)
-        ]
-        return np.concatenate(rows, axis=0).astype(np.float32)
+        with clock.stage('embed_crops'):
+            for k, (x1, y1, x2, y2) in enumerate(rects, start=1):
+                g = whole_square_geometry(x2 - x1, y2 - y1, t)
+                self.kernels.resample_into(
+                    im.frame,
+                    (x1, y1, x2 - x1, y2 - y1),
+                    (g.new_w, g.new_h),
+                    sq[k],
+                    (g.left, g.top, t, t),
+                    antialias=False,
+                )
+        with clock.stage('embed_pe'):
+            rows = [
+                self._bls(
+                    self.pe_model,
+                    cp.ascontiguousarray(sq[s : s + self.pe_batch]),
+                    ('image_embeddings',),
+                )[0]
+                for s in range(0, int(sq.shape[0]), self.pe_batch)
+            ]
+            return np.concatenate(rows, axis=0).astype(np.float32)
 
     def _blur_sums(self, im: _Image) -> np.ndarray:
         """``[1 + detections, 3]`` (pixels, sum, sum of squares): the frame, then each box."""
@@ -245,18 +264,20 @@ class TritonPythonModel:
             cp.ascontiguousarray(im.frame[y1:y2, x1:x2, ::-1]).get() for x1, y1, x2, y2 in im.rects
         ]
 
-    def _encode(self, pixels: np.ndarray) -> bytes:
+    def _encode(self, pixels: np.ndarray) -> tuple[bytes, float]:
+        """The JPEG and the seconds the encode took on its host thread."""
+        start = time.perf_counter()
         ok, buf = cv2.imencode('.jpg', pixels, [cv2.IMWRITE_JPEG_QUALITY, self.quality])
         if not ok:
             raise RuntimeError('crop JPEG encode failed')
-        return buf.tobytes()
+        return buf.tobytes(), time.perf_counter() - start
 
-    def _embed_stored(self, im: _Image, boxes: np.ndarray) -> Any:
+    def _embed_stored(self, im: _Image, boxes: np.ndarray, clock: StageClock) -> Any:
         """Stored-box mode: the whole-frame vector and one vector per stored box, in order."""
         w, h = im.size
         im.rects = stored_box_rects(boxes, w, h)
         im.embed = True
-        vectors = self._embed(im)
+        vectors = self._embed(im, clock)
         im.frame = None
         return pb_utils.InferenceResponse(
             output_tensors=[
@@ -267,22 +288,29 @@ class TritonPythonModel:
             ]
         )
 
-    def _process(self, request: Any) -> Any:
+    def _process(self, request: Any, clock: StageClock) -> Any:
         data = pb_utils.get_input_tensor_by_name(request, 'jpeg').as_numpy().tobytes()
         flag = pb_utils.get_input_tensor_by_name(request, 'embed_crops')
         stored = pb_utils.get_input_tensor_by_name(request, 'boxes')
-        im = self._decode(data, True if flag is None else bool(flag.as_numpy().reshape(-1)[0]))
+        with clock.stage('decode'):
+            im = self._decode(data, True if flag is None else bool(flag.as_numpy().reshape(-1)[0]))
         if im.reason != 'ok':
             return pb_utils.InferenceResponse(
                 output_tensors=[_tensor('status', np.array([im.reason], np.object_))]
             )
         if stored is not None:
-            return self._embed_stored(im, stored.as_numpy())
-        self._detect(im)
-        jpegs = [self.encode_pool.submit(self._encode, px) for px in self._crop_pixels(im)]
-        vectors = self._embed(im)
-        sums = self._blur_sums(im)
+            return self._embed_stored(im, stored.as_numpy(), clock)
+        self._detect(im, clock)
+        with clock.stage('crop_copy'):
+            pixels = self._crop_pixels(im)
+        jpegs = [self.encode_pool.submit(self._encode, px) for px in pixels]
+        vectors = self._embed(im, clock)
+        with clock.stage('blur'):
+            sums = self._blur_sums(im)
         im.frame = None
+        done = [f.result() for f in jpegs]
+        encoded = [data for data, _ in done]
+        clock.add('crop_jpeg', sum(secs for _, secs in done))
         w, h = im.size
         return pb_utils.InferenceResponse(
             output_tensors=[
@@ -295,6 +323,6 @@ class TritonPythonModel:
                 _tensor('whole_embedding', vectors[0]),
                 _tensor('crop_embeddings', vectors[1:].reshape(-1, vectors.shape[1])),
                 _tensor('blur_sums', sums),
-                _tensor('crop_jpegs', np.array([f.result() for f in jpegs], dtype=np.object_)),
+                _tensor('crop_jpegs', np.array(encoded, dtype=np.object_)),
             ]
         )
