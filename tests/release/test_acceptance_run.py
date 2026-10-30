@@ -8,8 +8,7 @@ import subprocess
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-
-import pytest
+from urllib.parse import parse_qs, urlsplit
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -25,7 +24,16 @@ GOOD_DOCS = '<html><script src="/docs-assets/swagger-ui-bundle.js"></script></ht
 
 def _happy_routes() -> dict[tuple[str, str], tuple[int, object]]:
     return {
-        ('GET', '/health'): (200, {'status': 'healthy', 'version': '9.9.9'}),
+        ('GET', '/health'): (
+            200,
+            {
+                'status': 'ready',
+                'version': '9.9.9',
+                'services': {'triton': {'ok': True}, 'models': {'ok': True, 'detail': '6 READY'}},
+            },
+        ),
+        ('GET', '/live'): (200, {'status': 'alive'}),
+        ('GET', '/'): (200, {'service': 'openprocessor'}),
         ('GET', '/curation/health'): (200, {'status': 'ok'}),
         ('GET', '/curation/projects/default/settings'): (
             200,
@@ -49,6 +57,7 @@ class Fake:
         self.routes = routes
         self.requests: list[tuple[str, str]] = []
         self.raw: list[tuple[str, str, str]] = []  # method, path?query, body
+        self.query: dict[str, list[str]] = {}  # the query of the request being answered
         fake = self
 
         class H(BaseHTTPRequestHandler):
@@ -58,9 +67,11 @@ class Fake:
                 path = self.path.split('?')[0]
                 fake.requests.append((self.command, path))
                 fake.raw.append((self.command, self.path, payload))
+                fake.query = parse_qs(urlsplit(self.path).query)
                 code, body = fake.routes.get((self.command, path), (404, {'detail': 'nf'}))
-                if callable(body):
-                    code, body = body(payload)
+                if callable(body):  # (payload) or (payload, query)
+                    wants_query = body.__code__.co_argcount == 2
+                    code, body = body(payload, fake.query) if wants_query else body(payload)
                 raw = body if isinstance(body, str) else json.dumps(body)
                 self.send_response(code)
                 self.send_header('Content-Length', str(len(raw.encode())))
@@ -78,20 +89,6 @@ class Fake:
 
     def count(self, method: str, path: str) -> int:
         return sum(1 for r in self.requests if r == (method, path))
-
-
-@pytest.fixture
-def fake():
-    made: list[Fake] = []
-
-    def make(routes=None) -> Fake:
-        f = Fake(routes if routes is not None else _happy_routes())
-        made.append(f)
-        return f
-
-    yield make
-    for f in made:
-        f.srv.shutdown()
 
 
 def run(fake: Fake, tmp_path: Path, *args: str) -> tuple[subprocess.CompletedProcess, dict]:
@@ -226,6 +223,8 @@ def test_list_prints_every_phase():
         'vlm_label',
         'confirm_labels',
         'holdout',
+        'label_ops',
+        'loop',
         'export',
         'train',
         'bakeoff',
@@ -318,7 +317,10 @@ def test_cluster_seeds_classes_for_real(fake, tmp_path):
     routes[('POST', f'{P}/classes/seed_from_detector')] = (200, {'created': [{'class_id': 0}]})
     routes[('POST', f'{P}/pipeline/auto_label')] = (200, {'stages': {}})
     routes[('GET', f'{P}/pipeline/auto_label/status')] = (200, {'status': 'idle'})
-    routes[('GET', f'{P}/clusters')] = (200, {'clusters': []})
+    routes[('GET', f'{P}/clusters')] = (
+        200,
+        {'items': [], 'total': 0, 'truncated': False, 'sort_options': [{'id': 'size_desc'}]},
+    )
     f = fake(routes)
     proc, data = run(f, tmp_path, '--only', 'cluster')
     assert by_name(data)['cluster']['status'] == 'pass', proc.stdout

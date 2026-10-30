@@ -7,7 +7,8 @@ title: Release acceptance run
 
 `scripts/release/acceptance_run.sh` proves an installed stack works end to end:
 health, self-hosted API docs, a throwaway project, ingest of public COCO images,
-clustering, VLM labeling, human confirmation, test holdout, YOLO export, a short
+clustering, VLM labeling, human confirmation, test holdout, bulk label operations
+with undo, YOLO export, a short
 training run, promote, inference with the promoted model, delete, metrics and
 log-noise checks, and the installer lifecycle hooks. It needs only `bash`, `curl`
 and `jq`.
@@ -23,8 +24,19 @@ scripts/release/acceptance_run.sh \
   --project acc-run --images-dir data/samples/coco_va --report acceptance.json
 ```
 
+## What the 0.7.0 phases check
+
+| Phase | Checks |
+|---|---|
+| `health` | `/health` serves `services.models.ok == true`; `/live` and `/` answer 200. The models entry is absent when Triton is unreachable, which only `--control-plane-only` accepts |
+| `cluster` | After clustering, `/curation/projects/{project}/clusters` serves the requested `sort` in order, honours a `flag` filter taken from `flag_vocabulary`, reports `total`, and every card has `label_agreement` and no `label_purity`. `/curation/projects/{project}/clusters/{cluster_id}/facets` counts equal the matching filtered `/curation/projects/{project}/crops` totals |
+| `label_ops` | Batch-labels a few unvalidated crops, finds the `op_id` in `/curation/projects/{project}/label_ops`, runs a dry-run undo (nothing written), a real undo (items back to their earlier class), and a second undo that answers 409 `already_undone`. Holdout and validated items must be identical before and after. Skips when the route is absent or there are fewer than 2 candidate crops |
+| `loop` | Optional. Dry-runs the auto-label loop and checks that it queues nothing and serves the plan shape. Skips with no active VLM or when the loop routes are not in the build |
+| `metrics` | After ingest, `op_ingest_decode_total` shows the GPU route with CPU fallbacks at or under `--decode-fallback-max` percent (default 0.5; `cpu_off` and `cpu_small` are policy, not fallbacks). With `--triton-metrics-url` it also requires `op_gpu_prep_stage_seconds` and `op_gpu_prep_stage_observations` on Triton's metrics port. Without the counters, or when the GPU route took no images, this part is skipped and the evidence says so |
+
 Useful flags: `--only a,b` and `--skip a,b` (see `--list` for phase names),
-`--train-gpu`, `--vlm-switch-id <id>`, `--upgrade-version vX.Y.Z`, `--strict`.
+`--train-gpu`, `--control-plane-only`, `--triton-metrics-url <url>`,
+`--decode-fallback-max <percent>`, `--label-ops-crops <n>`, `--vlm-switch-id <id>`, `--upgrade-version vX.Y.Z`, `--strict`.
 The JSON report records, per phase, pass/fail/skip, seconds and evidence; the exit
 status is non-zero when a required phase fails. A cleanup trap always removes the
 throwaway project and any model the run promoted.
