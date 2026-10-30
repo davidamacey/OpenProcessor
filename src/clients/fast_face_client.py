@@ -21,6 +21,7 @@ import cv2
 import numpy as np
 from tritonclient.grpc import InferInput, InferRequestedOutput
 
+from src.clients.model_residency import ensure_loaded_sync
 from src.clients.triton_client_manager import TritonClientManager
 from src.config.settings import TritonModelConfig
 from src.utils.face_align import align_faces_batch, preprocess_for_arcface
@@ -65,6 +66,7 @@ class FastFaceClient:
 
         outputs = [InferRequestedOutput(name) for name in ALL_OUTPUT_NAMES]
 
+        ensure_loaded_sync(self.client, self.scrfd_model)
         response = retry_sync(
             self.client.infer,
             model_name=self.scrfd_model,
@@ -84,6 +86,7 @@ class FastFaceClient:
 
         outputs = [InferRequestedOutput('output')]
 
+        ensure_loaded_sync(self.client, self.arcface_model)
         response = retry_sync(
             self.client.infer,
             model_name=self.arcface_model,

@@ -28,6 +28,8 @@ file behind any number in this log.
 | G1 (region parity) | `live_g/exp1.jsonl` (labels `gpuR*`, `cpuR*`, `gpuW*`, `cpuW`) | `lx/out/reg_{cpu,gpu}*.npz` (region vectors per pass, checksums in the manifest), compared with `lx/cos.py`; dumped by `lx/dumpreg.py` |
 | G2 (worker region-stage cost) | none | **No raw data.** The stdout of the two stage runs (86 against 220 ms per item, CPU 0.077 against 0.212 s) was not saved; only the GPU sample file `lx/out/samples_wk_lx-p2_branch.csv` and the input list `lx/wk_in.json` remain. The CPU ratio is 2.7; the wall ratio is 2.57 (220 / 85.6). Re-run `lx/wk.py` against the stage before quoting these as a baseline for #362. |
 | G3 to G5 (tuning, final configuration) | `live_g/exp1.jsonl` (`gpu500_mean` is the 500 ms mean), `live_g/final.log`, `live_g/g500_*.log` (500 ms samples, one value per line), `live_g/tune*.log`, `live_g/cpu_run.log` | `lx/out/samples_exp1_*.csv` |
+| SP0.7 (why throughput fell past 4 batches) | `sp0/gpu_prep_concurrency/<row>/` (per-repetition reports with the route counters and stage counters, summaries), `*.call_failed.txt`, `*.triton_errors.txt`, `e1_per_process_peaks.md`, `threads/`; tables `sp0/sp0_tables_headroom.md` | 500 ms per-process memory and route-counter series `artifacts_local/bench/v070/sp0/e1/*.apps.log`, `*.routes.log`; set B rows `artifacts_local/bench/v070/sp0/exp/` (main checkout) |
+| SPF (ingest-speed fixes: memory budget, config, load profile, acceptance) | `spf/<row>/` per-repetition reports (`metrics.api.counters` cut to `op_ingest_*`), `spf/<row>.stages.prom`, `*.call_failed.txt`, `*.triton_errors.txt`, `spf/model_memory.txt`, `spf/parity.txt`, `spf/endpoints_*.txt` | 500 ms per-process memory and route series `artifacts_local/bench/v070/sp0/spf/*.apps.log`, `*.routes.log`; parity captures `par_*.npz` (same directory, main checkout) |
 
 Where a table in this log disagrees with the file named here, the file is right; the corrections made on
 2026-10-28 (memory table statistic, GPU and Triton CPU columns of A to C, the section D count) are noted at
@@ -839,3 +841,408 @@ average 13 to 18, other users): 42.12, 47.74, 51.48 img/s, API CPU 0.0262, 0.025
 #259 acceptance bars on this stack (set P, 21 MP): at least 20 img/s (51, met), API CPU at most 0.047 (0.025,
 met), vectors against ingest p01 at least 0.995 (0.9999, F2) and the encoder busy above 80 percent (85 to 92
 percent, met). #360: region parity p01 0.997, worker and CPU pass agree at 0.999997.
+
+## SP0: stage profile (ship-track plan section 5; `perf/v070-ingest-speed`)
+
+Measured 2026-10-30 at commit `6224897f` (branch `perf/v070-ingest-speed`, merged with `origin/main` at `d46dadc2`),
+one RTX A6000 (GPU 0, PCI 03:00) shared by Triton and the API, driver 615.71.10 (CUDA 13.4), Triton 2.70.0
+(release 26.06), TensorRT 11.1.0.106, release 0.6.0 images with this worktree's `src/`, `scripts/` and `gpu_image_prep`
+mounted over them, `gpu_image_prep` with two instances (`count: 2`, the full profile), `OP_CROP_CACHE_MAX_BYTES=0`,
+policy `all`, stage `ingest`, 100 warm-up images per repetition excluded, input page cache dropped before every
+repetition, GPU sampled every 500 ms, 3 repetitions per row, batches of 32 photos through `POST .../ingest/batch`.
+Host: 48 logical CPUs shared with other sessions; the 1-minute load average at the start of each repetition is in the
+JSON (above 16 is marked noisy; most rows contain noisy repetitions, see SP0.5). Sets: A = 1,946 of the pinned 2,000
+COCO images (the selector keeps 1,946; 1,846 measured), B = 500 public high-resolution photos (400 measured, 10.35 MB
+each), P = 3,000 seeded NVMe copies of the private photo set (2,900 measured, 6.71 MB each; numbers only).
+Reproduce: `docs/reviews/sp0_review.md`, "Runbook: SP0 measurement", plus `--clients N` for the concurrent rows.
+Raw per-repetition JSON: `artifacts_local/bench/v070/sp0/<row>/` in the main checkout; the same files and the rendered
+tables are committed in `docs/benchmarks/v070/sp0/`.
+
+**Driver finding that shapes everything below.** `run_baseline.py` posted its batches one after another, so the API never
+had more than its per-batch limit of 16 photos in flight (`OP_MAX_INGEST_CONCURRENCY`). The rows named "1 batch" are
+that driver; the rows named "4 batches" and "8 batches" use the new `--clients N` (N batches at once). The 1-batch rows
+describe per-image latency; they under-drive the stack (GPU 15 to 35 percent) and must not be quoted as throughput.
+
+### SP0.1 Headline
+
+| Row | img/s median (min to max) | Crops / image | GPU 0 util mean / p50 % | Triton cores | API CPU-s / image | Load at start (max) | Noisy reps |
+|---|---|---|---|---|---|---|---|
+| A, COCO, 1 batch (CPU route) | 13.14 (13.12 to 13.47) | 6.42 | 45 / 30 | 0.23 | 0.078 | 27.0 | 1, 2 |
+| B, 1 batch (GPU route) | 9.88 (9.63 to 9.96) | 1.65 | 15 / 0 | 1.90 | 0.262 | 10.2 | none |
+| P, 1 batch (GPU route) | 14.80 (11.92 to 16.47) | 2.41 | 35 / 0 | 2.53 | 0.078 | 20.2 | 2, 3 |
+| B, 4 batches | 26.64 (25.21 to 29.00) | 1.65 | 49 / 43 | 2.54 | 0.303 | 21.0 | 2, 3 |
+| P, 4 batches | 24.98 (23.50 to 33.08) | 2.41 | 58 / 60 | 4.36 | 0.200 | 26.4 | 1 |
+| P, 8 batches | 20.13 (19.20 to 21.91) | 2.41 | 39 / 19 | 2.87 | 0.701 | 23.0 | 2, 3 |
+| B, 1 batch, STAGE_SYNC set to 1 (attribution) | 10.61 (9.76 to 10.86) | 1.65 | 21 / 0 | 1.83 | 0.252 | 17.3 | 3 |
+| P, 1 batch, STAGE_SYNC set to 1 (attribution) | 15.47 (14.82 to 16.15) | 2.41 | 35 / 0 | 2.92 | 0.079 | 17.9 | 1, 2 |
+
+Route counts (`op_ingest_decode_total`, one repetition): set A 1,846 `cpu_small` (all below the 3 MP gate); set B 351
+`gpu`, 47 `cpu_progressive`, 2 `cpu_truncated`; set P 2,882 `gpu`, 10 `cpu_decoder`, 6 `cpu_small`. The 49 CPU-decoded
+photos of set B explain its API CPU of 0.25 to 0.30 CPU-s per image against 0.07 to 0.08 for set P at one batch.
+No row had a failed image.
+
+### SP0.2 Per-stage tables
+
+Stage times are sums over concurrent work divided by images, compared across rows, never added to wall time. The share
+column is the median of the per-repetition shares, so a column of shares need not add to exactly 100.
+
+`gpu_image_prep` internal stages, host wall ms per image that ran the stage:
+
+| Stage | B, 1 batch | P, 1 batch | B, 4 | P, 4 | P, 8 | P, 1 batch, SYNC |
+|---|---|---|---|---|---|---|
+| decode (nvJPEG, EXIF) | 86.8 (39.5%) | 89.9 (19.3%) | 121.2 (26.2%) | 159.7 (10.8%) | 469.5 (30.5%) | 91.8 (19.2%) |
+| embed_pe (wait for the PE calls) | 56.4 (22.3%) | 126.2 (27.6%) | 79.2 (15.4%) | 203.2 (11.3%) | 196.1 (4.3%) | 125.3 (26.1%) |
+| letterbox (detector canvas) | 5.4 (2.2%) | 21.5 (4.5%) | 97.6 (17.9%) | 183.5 (11.2%) | 475.2 (14.3%) | 24.2 (5.1%) |
+| embed_crops (crop squares) | 4.9 (2.0%) | 53.3 (12.0%) | 29.4 (5.0%) | 325.2 (21.3%) | 683.0 (14.2%) | 61.4 (12.9%) |
+| crop_copy (device to host) | 6.5 (2.6%) | 28.8 (5.8%) | 24.7 (4.4%) | 186.5 (10.8%) | 382.2 (9.1%) | 28.9 (6.1%) |
+| crop_jpeg (sum over the crops) | 29.7 (12.0%) | 70.6 (15.8%) | 31.1 (5.1%) | 81.0 (4.8%) | 94.7 (2.0%) | 74.1 (15.5%) |
+| detect (detector call) | 39.7 (15.5%) | 52.1 (11.5%) | 50.4 (8.9%) | 68.3 (4.2%) | 111.5 (2.6%) | 50.7 (10.6%) |
+| embed_frame (whole-frame square) | 5.2 (2.1%) | 6.8 (1.4%) | 45.7 (7.8%) | 96.3 (5.7%) | 227.7 (4.9%) | 9.1 (1.9%) |
+| blur | 4.6 (1.9%) | 10.6 (2.2%) | 20.4 (3.6%) | 49.6 (3.0%) | 122.3 (2.5%) | 11.3 (2.4%) |
+| queue (wait for a slot and a thread) | 0.35 (0.2%) | 0.80 (0.2%) | 21.8 (4.3%) | 180.8 (14.0%) | 328.7 (18.6%) | 0.71 (0.1%) |
+
+API stages (`op_pipeline_stage_seconds`, ms per image, share of the API stage total):
+
+| Stage | A, 1 batch | B, 1 batch | P, 1 batch | B, 4 | P, 4 |
+|---|---|---|---|---|---|
+| embed (PE crop embedding, CPU route) | 434.3 (54.5%) | 6.7 (0.5%) | 0.2 (0.0%) | 16.8 (1.0%) | 29.6 (1.3%) |
+| gpu_decode (the call into `gpu_image_prep`) | 0 | 929.9 (70.0%) | 818.0 (72.1%) | 1150.0 (70.4%) | 1757.8 (77.4%) |
+| opensearch_write | 335.3 (42.1%) | 276.4 (20.8%) | 312.3 (27.5%) | 269.2 (16.5%) | 332.6 (14.7%) |
+| decode (CPU decode, fallback or small) | 4.7 (0.6%) | 70.9 (5.3%) | 0.4 (0.0%) | 105.4 (6.5%) | 49.5 (2.2%) |
+| everything else | 2.8% | 3.4% | 0.4% | 5.6% | 4.4% |
+
+Triton per model, ms per request (queue / compute): set A `pe_image_encoder` 16.79 / 17.96, detector 0.03 / 0.62;
+B, 1 batch: PE 4.83 / 11.85, detector 16.43 / 12.02; P, 1 batch: PE 7.39 / 16.98, detector 17.35 / 17.62; P, 4 batches:
+PE 17.37 / 21.80, detector 15.35 / 16.11, `gpu_image_prep` queue 74.9; P, 8 batches: PE 38.80 / 35.75, detector
+7.30 / 10.85, `gpu_image_prep` queue 1079.8. The `gpu_image_prep` compute column (6 to 34 ms) covers only the hand-off:
+the model is decoupled and works after `execute` returns.
+
+### SP0.3 Findings
+
+1. **The one-batch driver under-drives the stack.** At one batch the API holds on average 12 (set P) and 9 (set B)
+   photos in flight (rate times `gpu_decode` wait: 14.8 x 0.818 and 9.9 x 0.930) out of 16. Posting 4 batches at once
+   raises set B from 9.9 to 26.6 img/s and set P from 14.8 to 25.0 img/s (GPU 15 to 49 and 35 to 58 percent). The 100 MB/s
+   input rate that both one-batch rows share (99.7 to 103.1 on B, 80.0 to 110.6 on P) was therefore the driver's, not a
+   stack ceiling; at 4 batches it is 261 to 300 (B) and 158 to 222 (P).
+2. **Past about 4 batches the stack gets slower.** Set P at 8 batches: 20.1 img/s (19.2 to 21.9), GPU 39 percent,
+   `gpu_image_prep` queue 1,080 ms per request, API CPU 0.70 CPU-s per image (0.07 to 0.25 at 4 batches). The stages that
+   only issue CUDA launches and copies from the model's worker threads grow with the load: letterbox 21 / 183 / 475 ms,
+   embed_crops 53 / 325 / 683, crop_copy 29 / 186 / 382, embed_frame 7 / 96 / 228, blur 11 / 50 / 122 (set P at 1 / 4 / 8
+   batches), 11 to 33 times for the same work; nvJPEG decode grows 5 times (90 / 160 / 470). The stages that wait on another
+   model or encode JPEG on host threads grow 1.3 to 2 times (embed_pe 126 / 203 / 196, detect 52 / 68 / 111, crop_jpeg
+   71 / 81 / 95). STAGE_SYNC set to 1 moved only 1 to 8 ms per image into the launch stages, so those stages are host-side
+   launch and serialisation time, not kernel time. Candidate causes, not isolated here: the GIL and per-call overhead of
+   32 worker threads in one Python process, or two instances time-slicing one GPU without MPS.
+3. **Bottleneck on the GPU route (ranked by evidence).** (1) The Python process hosting `gpu_image_prep` under concurrency:
+   CUDA-call stages (letterbox, embed_crops, embed_frame, crop_copy, blur) are 52 percent of the model's stage time at 4
+   batches on set P (66 with the queue), against 26 percent at one batch, and the GPU is at 39 to 58 percent. (2) nvJPEG decode: 10.8 to 39.5 percent of the stage time in every GPU row, part of it host-side work inside nvJPEG; it grows 5 times
+   at 8 batches. (3) The PE embedding wait `embed_pe`: 4 to 28 percent, a hop into `pe_image_encoder` (17 to 36 ms compute and
+   7 to 39 ms queue per request). (4) Crop JPEG encode and copy: 14.6 to 21.6 percent at one batch, 9.5 to 15.6 percent at 4
+   batches on set P. OpenSearch writes (14.7 to 27.5 percent of the API stage time) overlap the model's work. At one batch
+   44 percent (P) to 74 percent (B) of the API's `gpu_decode` wait lies outside the model's stage clock (stages add to 461 and 240
+   ms against 818 and 930 ms); the clock starts at `execute`, and Triton's request duration for the model was not captured.
+4. **CPU route (set A).** The PE crop embedding is first (54.5 percent of the API stage time at 6.4 crops per image, PE
+   queue 16.8 ms plus compute 18.0 ms per request), OpenSearch writes second (42.1 percent). 13.1 img/s at one batch with the
+   GPU at 45 percent and 0.23 Triton cores; not re-run at 4 batches.
+5. **The counters cost nothing measurable.** Set B at one batch: 9.88 img/s (9.63 to 9.96) with, 10.10 (10.06 to 10.59)
+   without (merge-base `model.py`), median ratio 0.978. At 4 batches: with 28.5 (25.2 to 31.8, nine runs in three groups) against
+   without 29.2 (25.6 to 30.3, three runs), ratio 0.977, well inside the run-to-run spread (host load 10 to 59 across
+   these runs). Keep the counters. STAGE_SYNC set to 1 did not lower throughput either (B 10.61 against 9.88, P 15.47
+   against 14.80, one batch).
+6. **Not reproduced: the earlier set P rates.** Log E4 and F1 recorded 45 to 49 img/s of set P ingest with two instances
+   (E4: concurrency 16, batch 16; GPU 78 to 87 percent, Triton CPU about 8.5 cores). The best repetition here is 33.1 img/s
+   (4 batches, first repetition), the median 25.0, GPU 73 and 58 percent, Triton 4.4 cores, under host load of 14 to 26. The
+   repetitions fall within a session (33.1, 25.0, 23.5; API CPU 0.07, 0.20, 0.25), so a state that builds up in the API or
+   the shared host is possible; it was not isolated. Compare stage shares across rows, not these img/s with the old log.
+   Set A (13.1 img/s at one batch) is likewise below log F3 (16.2) and E1's 16.6 for the same reason (one batch, load 27).
+
+### SP0.4 Ranking for the ingest lane (SP1 and later)
+
+**Superseded by SP0.7:** the fall past 4 batches was device-memory exhaustion (CuPy and nvJPEG out-of-memory, images falling back to the CPU decode), not CUDA-call overhead. The ranking below is kept as measured; read it together with SP0.7.
+
+The data ranks, by measured share on the GPU route: (1) host-side CUDA-call overhead and serialisation inside
+`gpu_image_prep` under concurrency (SP-new, below); (2) nvJPEG decode; (3) the PE embedding wait; (4) crop JPEG encode and copy
+(the item SP3 targets, whose planned gain is bounded by its 9.5 to 21.6 percent of the model's stage time); then OpenSearch writes.
+On the CPU route: the PE crop embedding, then OpenSearch writes. SP1 (cluster pass) does not touch ingest throughput; SP2 (region
+stage and embed-pass measurements) and SP3 follow the data only partly. The plan's order is not contradicted for SP3, but a
+new first item ahead of it is: cut the number of small CUDA calls per image in `gpu_image_prep` (one fused letterbox and
+square kernel set, one device-to-host copy for all of an image's crops) and measure CUDA MPS and the instance count at 4
+batches, gated by the SP4 bar (set P at least 29 img/s, GPU above 75 percent) at `--clients 4`. See `docs/reviews/sp0_review.md`.
+
+### SP0.5 What the numbers do not say
+
+- Every row ran under foreign load. Noisy repetitions (load above 16 at the start) were not repeated: set A repetitions 1
+  and 2, set P (1 batch) 2 and 3, set B (4 batches) 2 and 3, set P (4 batches) 1, set P (8 batches) 2 and 3. The conclusions use
+  shares, the 4-versus-8 batch reversal and the counters on/off ratio, which hold across quiet and noisy repetitions; the
+  absolute img/s are not release numbers.
+- Four batches is one setting; 2, 3 and 6 batches were not measured, so the peak is somewhere between 4 and 8.
+- The STAGE_SYNC rows are attribution only, at one batch only. Sync rows at 4 batches and the CPU route at 4 batches were not run.
+- Set A selects 1,946 of 2,000 pinned images (`select_baseline_set.py local` keeps what decodes above its minimum size).
+
+### SP0.6 Bugs found by this run (all in the SP0 code, fixed on the branch except the two issues)
+
+1. The stage counters never reached Triton's metrics port and could stall the model: issue #390 (three Triton 2.70
+   Python-backend facts, each reproduced on a toy model; fix `77500a12`).
+2. `ingest_profile.py table` took the median GPU utilisation over every sampled GPU and missed Triton's `_total` series
+   names (GPU row 0, empty Triton table); the row names made project slugs the API refuses; `run_baseline.py` posted
+   batches one after another (fixes `553ade23`, `6224897f`).
+3. The reused install had an empty `pe_image_encoder/1/` and `/health` still answered `ready`: issue #391.
+4. The throughput fall past 4 batches and the API CPU growth: issue #392.
+
+### SP0.7 Why throughput fell past 4 batches: device memory, not CUDA calls (issue #392; run 2026-10-30, GPU 0)
+
+Same stack and protocol as SP0 (`optest2`, GPU 0 only, release 0.6.0 images, this branch's `gpu_image_prep`, set P 3,000 sample
+copies, 3 repetitions, cache drop, 500 ms GPU samples; row names below are the project-slug rows). Pre-registered in
+`docs/benchmarks/v070/sp0/gpu_prep_concurrency_matrix.md` (commit `dc522051`) before any run. GPU placement was checked at runtime
+(`nvidia-smi --query-compute-apps` against the container pids): the Triton and API processes sat on GPU 0 only. Raw JSON, error
+strings and per-process memory: `docs/benchmarks/v070/sp0/gpu_prep_concurrency/` (set P rows; the `metrics.api.counters` of
+each report is cut to the three `op_ingest_*` series, everything else is as written), tables
+`docs/benchmarks/v070/sp0/sp0_tables_headroom.md`. Host load was 5 to 147 (other sessions); noisy repetitions are marked.
+
+**Deviations from the pre-registered matrix.** (1) Order changed after the design review found fallbacks in the SP0 counters:
+E1 (headroom A/B, fresh stack, 8 batches first) ran first; the variants then ran on set P at 4 batches, not on set B, on the
+headroom stack. The set B matrix ran only for the first rows (C0, instance count 1 and 3, MAX_IN_FLIGHT 32 and 16 at 4
+batches) on the full-model stack, where it is confounded by memory (below), and was stopped. (2) E-b (CUDA MPS) not run: it needs a
+root MPS daemon, owner decision pending. (3) E-d used per-thread CPU from `/proc/<pid>/task/*/stat` (6 s windows), not py-spy.
+(4) `Dynamic batching` is not available for this model (`max_batch_size: 0`, decoupled).
+
+#### SP0.7.1 E1: headroom against full model set (fresh Triton per phase, 8 batches first)
+
+"Headroom" = the eight models ingest does not call unloaded (`arcface`, both MobileCLIP towers, `scrfd`, the three OCR models, one
+demo model); "full" = the default load list. Fallback = `cpu_decoder` + `cpu_call_failed` over photos sent to the model.
+
+| Row | img/s median (min to max) | GPU util mean % | Fallback % per repetition | API CPU-s / image | Card peak (MiB) |
+|---|---|---|---|---|---|
+| 8 batches, headroom | 48.5 (47.2 to 48.7) | 96 | 0 / 0 / 0 | 0.062 | 26,372 |
+| 4 batches, headroom | 38.5 (36.0 to 39.1) | 80 | 0 / 0 / 0 | 0.059 | 26,404 |
+| 8 batches, full | 40.4 (29.8 to 43.0) | 83 | 0.6 / 3.1 / 17.3 | 0.128 | 48,558 |
+| 4 batches, full | 30.7 (22.5 to 32.1) | 63 | 1.4 / 6.6 / 22.9 | 0.154 | 48,558 |
+
+- Card memory after startup: `tritonserver` 36,486 MiB with the default list, 8,864 to 8,896 MiB with the eight models unloaded
+  (27.6 GB freed in total; per model not measured). Each `gpu_image_prep` stub holds 268 MiB idle and peaks at 8.5 to 9.1 GB under load
+  with headroom (the config budgets 8,704 MiB), 6.9 to 7.5 GB when the card is full. Sum of peaks: 26.5 GB with headroom, 50.3 to 51.2 GB
+  (over the 49.1 GB card) with the full set. Table: `e1_per_process_peaks.md`.
+- Error strings, full set, 8 batches: 208 `cpu_call_failed`, all CuPy `Out of memory allocating N bytes (allocated so far ~2 GB, limit
+  set to 4 GB)`, that is a device OOM below the pool limit; 320 decode exceptions `OutOfMemoryError` and 82 `NvJpegError: TransferToDevice
+  returned nvjpegStatus 5` (nvJPEG's device allocation failing). 4 batches, full: 415 call failures, 383 + 93 decode ones, and four
+  Triton `BackendMemory::Create ... failed to allocate GPU memory: out of memory` lines. With headroom: none of these, in either row.
+- Session age: on the full set the fallback share grows within one fresh stack (0.6, 3.1, 17.3 percent; 1.4, 6.6, 22.9) and the rate
+  falls with it (43 to 30, 32 to 23 img/s). With headroom the repetitions are flat (47.3, 48.5, 48.7).
+- The "fall past 4 batches" of SP0 is the session-age effect plus the full card, not a property of 8 batches: with headroom 8 batches is
+  faster than 4 (48.5 against 38.5 to 41.6), GPU 96 percent. API CPU is 0.06 CPU-s per image with no fallbacks, and rises with the
+  fallback fraction (0.88 at 70 percent): the API-side growth of #392 is the CPU decode of the fallen-back photos, nothing else.
+
+Verdict: the memory hypothesis is confirmed. Set P at `--clients 4` with headroom meets the SP4 bar (29 img/s, GPU above 75
+percent, fallbacks 0): see the controls below (39.6 to 41.6 img/s, GPU 83 to 90 percent). On the full default stack it does not.
+
+#### SP0.7.2 Controls and load scaling (headroom stack, `count: 2`, defaults)
+
+| Row | img/s median (min to max) | GPU util mean % | Notes |
+|---|---|---|---|
+| 4 batches, control, four fresh-stack runs | 41.6 (40.7 to 41.9), 39.7 (33.8 to 41.6), 39.9 (38.9 to 40.9), 39.6 (37.6 to 43.0) | 83 to 88 | fallbacks 0 |
+| 1 batch at a time (1 repetition) | 16.9 | 35 | |
+| 2 batches | 23.0 | 51 | |
+| 8 batches | 48.5 (47.2 to 48.7) and 48.2 (46.2 to 48.3) | 96 | |
+| 12 batches | 48.4 | 97 | GPU-bound ceiling about 48 img/s |
+
+Per-image `gpu_image_prep` stage time with headroom at 8 batches: letterbox 22 ms, embed_crops 89, crop_copy 35, against 21, 53, 29 at one
+batch in SP0: the "5 to 33 times" growth of SP0.3 is gone, except `queue` (53 percent of stage time: callers outrun the GPU). At 4 batches the
+inflation is smaller than in SP0 but still there (letterbox 41 to 51, embed_crops 173 to 205 ms), see SP0.7.4.
+
+#### SP0.7.3 E-a: instance count and in-flight limits
+
+Set P, headroom stack, 3 repetitions. Count 1 and 3 and the MAX_IN_FLIGHT, WORKERS rows of the first pass ran after one stub that the
+reload left resident (below), so their card peak is up to 8 GB too high; none of their repetitions fell back.
+
+| Row | img/s median (min to max) | GPU util mean % | Card peak GiB | Reps noisy |
+|---|---|---|---|---|
+| count 1, 4 batches | 32.1 (30.9 to 32.4) | 74 | 18.1 | 2 |
+| count 1, 8 batches | 31.5 (30.3 to 31.7) | 75 | 19.1 | 2 |
+| count 2 (control), 4 / 8 batches | 39.6 to 41.6 / 48.2 to 48.5 | 83 to 88 / 96 | 25.5 | 0 to 3 |
+| count 3, 4 batches | 38.7 (37.5 to 43.5) | 82 | 33.0 | 1 |
+| count 3, 8 batches | 46.2 (45.6 to 47.1) | 95 | 35.4 | 3 |
+| MAX_IN_FLIGHT 32, 4 batches | 39.2 (38.5 to 40.9) | 83 | 25.7 | 3 |
+| MAX_IN_FLIGHT 16, 4 batches | 45.1 (44.7 to 45.8) and 46.8 (46.4 to 47.1) | 93 to 95 | 25.6 | 3 |
+| MAX_IN_FLIGHT 16, 8 batches | 48.0 (47.8 to 48.2) | 97 | 25.5 | 0 |
+
+- A single instance caps near 32 img/s with the GPU 75 percent busy; two reach the GPU ceiling (about 48) at 8 batches; a third adds nothing
+  (46.2 against 48.2) and costs 8 GB. Count 1 still passes the plan's bar (29 img/s) with a 18 to 19 GiB card peak, which is the
+  24 GB card option (with the unused models unloaded).
+- MAX_IN_FLIGHT 16 beats the default 96 at 4 batches by 13 percent (45.1 against 39.6 to 41.6; the ranges do not overlap with the
+  three controls of the same session) and ties at 8 batches. The pre-registered "clear win" test is met.
+
+#### SP0.7.4 E-c: other Python-backend settings (set P, 4 batches, headroom)
+
+| Row | img/s median (min to max) | GPU util mean % | Card peak GiB | Reps noisy |
+|---|---|---|---|---|
+| WORKERS 16 | 46.8 (46.0 to 46.9) and 46.3 (45.5 to 47.5) | 94 to 95 | 25.8 | 0 to 1 |
+| WORKERS 8 | 44.3 (41.3 to 46.2) | 95 | 33.3 (stale stub) | 3 |
+| LANES 8 | 39.2 (38.1 to 42.6) | 85 | 22.5 | 0 |
+| ENCODE_THREADS 16 | 39.9 (38.1 to 41.0) | 86 | 25.6 | 0 |
+| Python backend shm 64 MiB default and growth | 40.2 (38.9 to 40.8) | 82 | 25.6 | 3 |
+
+WORKERS 16 gives the same gain as MAX_IN_FLIGHT 16 (+13 to +17 percent at 4 batches, GPU 94 to 95 percent); LANES, ENCODE_THREADS and the shm
+sizes do nothing. Stage times with WORKERS 16 against the control at 4 batches: letterbox 5 against 41 ms, embed_crops 51 against 173, crop_copy 24
+against 57 (`queue` 325 against 86 ms, the wait moved in front of the workers). So at 4 batches the earlier inflation of the "CUDA-call"
+stages comes from more concurrent images than the GPU and the allocator can interleave; limiting the images in flight inside the process to
+16 removes it. At 8 batches the GPU is the limit either way.
+
+#### SP0.7.5 E-d: threads of the Triton Python stubs (set P, 4 batches, headroom, 19 windows of 6 s)
+
+While a repetition ran, each of the two `gpu_image_prep` stub processes used 3.0 to 4.5 cores (about 40 threads each), the Triton server process
+about 1.0 core, and the busiest single thread 20 to 25 percent of a core. No thread is saturated and a stub is not confined to one core, so
+the Python process is not GIL-bound at this load. (py-spy was not used.) Raw samples: `gpu_prep_concurrency/threads/`.
+
+#### SP0.7.6 E-e: API CPU per image against clients
+
+0.088, 0.084, 0.064, 0.062, 0.066 CPU-s per image at 1, 2, 4, 8 and 12 batches with headroom (no fallbacks): flat, so the API is not the limit.
+With fallbacks it is 0.06 + about 0.9 times the fallback fraction (set B count 3, 8 batches: 70 percent fallbacks, 0.88).
+
+#### SP0.7.7 Set B, full-model stack (first rows only)
+
+Set B (400 photos measured, 47 of them progressive and 2 truncated, which take the CPU decode by design, so the GPU-route denominator is 351):
+control 32.4 (29.2 to 33.1) at 4 and 33.5 (29.8 to 35.5) at 8 batches with 1.7 to 10.8 percent fallbacks; count 1: 28.8 and 34.0 with 0
+fallbacks (card peak 43.8 GiB); count 3: 23.1 and 23.0 img/s with 29 to 76 percent fallbacks (peak 47.4 GiB, API CPU 0.51 to 0.88);
+MAX_IN_FLIGHT 32: 29.2 and 35.0 (2 to 5 percent); MAX_IN_FLIGHT 16: 27.7 at 4 batches. These are the fallback-confounded numbers the
+set B matrix would have produced; they confirm that adding a third instance on a full card makes things worse by exactly the
+fallback fraction. Raw: `artifacts_local/bench/v070/sp0/exp/` (main checkout).
+
+#### SP0.7.8 What it means, and what to change
+
+Supported: memory exhaustion (device OOM in CuPy and nvJPEG, silent fallback to the API's CPU decode, growing with session age).
+Not supported as the cause of the collapse: GIL (no saturated thread, 3 to 4.5 cores per stub), API-side limits (0.06 CPU-s per image without
+fallbacks), instance count above 2. Real but secondary: too many images in flight inside one instance (letterbox and crop stages inflate
+4 to 10 times at 4 batches with the default 32 workers and 96 in flight). Untested: CUDA MPS (E-b), combinations of the settings.
+
+Changes, with memory cost on this 48 GB card (A6000):
+
+1. Acceptance stack: do not keep models ingest does not call resident next to `gpu_image_prep`. Unloading eight of them frees 27.6 GB
+   (`tritonserver` 36.5 to 8.9 GB) and moves set P at 4 batches from 22.5 to 32.1 img/s with 1 to 23 percent fallbacks to about 40 with none,
+   and at 8 batches from 29.8 to 43.0 to 48.5. No config.pbtxt change; this is a load-list or profile decision (issue #393).
+2. `models/gpu_image_prep/config.pbtxt`: `WORKERS` 32 to 16 (or `MAX_IN_FLIGHT` 96 to 16): +13 to +17 percent at 4 batches (about 46 against 40),
+   no change at 8 batches, no change in memory (card peak 25.5 to 25.8 GiB, stubs 8.5 to 9.2 GB each). Not tested together or at other values
+   between 8 and 32 with quiet host load; confirm WORKERS 16 against 8 and 24 on a quiet host before committing.
+3. Keep `count: 2` on a 48 GB card. On 24 GB: count 1 (about 32 img/s, GPU 75 percent, card peak 18 to 19 GiB with the unused models
+   unloaded) meets the 29 img/s bar; two instances need about 26 GiB. A 12 GB card (#42) cannot hold the detector, the PE encoder and one stub
+   (about 9 GB): GPU decode stays off there.
+4. Fail closed (design C1): the 8,704 MiB budget per instance is exceeded by up to 5 percent (9,144 MiB seen); a memory-pressure wait
+   or a load-time reservation would turn the silent fallback into a counted wait.
+
+SP4 bar on set P at `--clients 4`: met on the headroom stack (39.6 to 41.6 img/s, GPU 83 to 90 percent, 0 fallbacks; 45 to 47 img/s, 93 to 95 percent
+with `MAX_IN_FLIGHT` or `WORKERS` 16); not met on the full default stack (30.7, GPU 63 percent, fallbacks up to 23 percent).
+
+#### SP0.7.9 Harness notes
+
+- `unload` then `load` of `gpu_image_prep` once left the previous load's stub process resident (8,024 MiB for the next five configurations,
+  card peak up to 33.5 GiB); recreating the Triton container cleared it. Rows affected: MAX_IN_FLIGHT 16 (first pass), WORKERS 16 and 8 (first pass), LANES 8
+  (first pass) and ENCODE_THREADS 16 (first pass). Their repetitions had 8 GB less headroom and still had no fallback.
+- The first-pass LANES 8 (29.4) and ENCODE_THREADS 16 (26.6) rows ran at host load 45 to 147 and are not usable; the repeats in the second session (load 14 to 17)
+  gave 39.2 and 39.9.
+- All Triton restarts used `docker compose -p optest2 restart` or `up -d` (no `pkill`).
+
+
+
+### SPF Ingest-speed fixes: memory budget, config, load profile (issues #392, #393; run 2026-10-30, GPU 0)
+
+Same stack and protocol as SP0.7 (`optest2`, GPU 0 only, release 0.6.0 images, this branch's `gpu_image_prep` and API code mounted,
+set P 3,000 sample copies, 3 repetitions unless noted, page cache dropped, 500 ms GPU samples, load average recorded). The host was
+never quiet: the 1-minute load was 13 to 138 (other sessions' test suites), so every repetition is marked noisy by the harness's
+load-16 rule and the same configuration varied by up to 40 percent between sessions (32/96: 38.2, 35.6 and 21.2 img/s at load 43, 73 and
+138). Rows are therefore compared only inside one session. Fallback % = `cpu_decoder` + `cpu_call_failed` + `cpu_gpu_memory` +
+`cpu_over_budget` over the photos sent to the model. Raw files: `docs/benchmarks/v070/spf/`.
+
+#### SPF.1 C1: byte budget, new statuses, fail at load
+
+Offline tests (fail first against the SP0.7 model: 18 of 27 stage-metrics tests failed): budget FIFO and no deadlock with 64 threads,
+`gpu_memory` at every allocating stage including stored-box mode, `over_budget`, the wait and its timeout, no output change under a tight
+budget, reservation at load and the load refusal. Live parity of the whole model (200 public images, set A and set B, direct
+`gpu_image_prep` captures, `scripts/bench/gpu_prep_parity.py`): old model against old model at concurrency 1 differs in 8 of 193 images
+(the detector's run-to-run variation), old against new differs in 11; in every one of those images the detector boxes differ, and where the
+boxes are equal every output (sizes, letterbox, classes, blur sums, crop JPEG bytes) is byte-identical. Whole-frame embedding cosine at least
+0.99999999 at concurrency 1. Concurrency 8: old against old 11 differing images, old against new 8. The arithmetic is unchanged
+(`spf/parity.txt`).
+
+Default model set (36.5 GB resident), shipped config of SP0.7 (32 workers, 96 in flight), two instances:
+
+| Row | img/s median (min to max) | GPU % | Fallback % per rep | API CPU-s/img | Card peak GiB |
+|---|---|---|---|---|---|
+| 8 batches | 23.5 (23.2 to 24.0) | 59 | 2.5 / 8.2 / 9.4 | 0.133 | 47.4 |
+| 4 batches | 25.5 (18.5 to 27.6) | 57 | 1.9 / 6.5 / 23.2 | 0.159 | 47.4 |
+| 4 batches, one instance | 32.8 (30.8 to 34.4) | 75 | 0 / 0 / 0 | 0.058 | 45.0 |
+
+On the default stack the budget does not remove the fallbacks, it names them: the card has 12.6 GB left after Triton's 36.5 GB, two
+instances reserve 2 x 2.3 GB at load and need about 6 to 7 GB more each under load (nvJPEG buffers, CuPy scratch, BLS tensors), which is
+more than is left. The failures now arrive as `cpu_gpu_memory` (2.5 to 9 percent) instead of `cpu_decoder` and `cpu_call_failed`, still
+decaying with session age. Both instances loaded, so the load-time refusal did not fire: the reservation covers the frames, not the
+nvJPEG buffers. One instance fits (32.8 img/s, GPU 75 percent, no fallback).
+
+Ingest load profile (SPF.3), two instances, same config:
+
+| Row | img/s median (min to max) | GPU % | Fallback % | API CPU-s/img | Card peak GiB |
+|---|---|---|---|---|---|
+| 8 batches | 47.9 (47.5 to 48.4) | 96 | 0 | 0.053 | 25.6 |
+| 4 batches | 42.0 (41.3 to 42.7) | 88 | 0 | 0.057 | 25.7 |
+
+The wait for the budget is not binding there: `op_gpu_prep_stage_seconds{stage="budget"}` is 0.2 s over 8,976 photos at 16 workers
+(13.8 s over 8,978 at 32 workers on the full card).
+
+#### SPF.2 Config: WORKERS and MAX_IN_FLIGHT (ingest profile, set P, 4 batches)
+
+| Session | Row (workers/in flight) | img/s median (min to max) | GPU % | Load max |
+|---|---|---|---|---|
+| screening, 2 reps | 32/96 | 38.2 (37.9 to 38.5) | 80 | 43 |
+| | 24/96 | 40.5 (40.4 to 40.6) | 83 | 53 |
+| | 16/96 | 40.4 (37.5 to 43.3) | 86 | 62 |
+| | 12/96 | 42.0 (41.1 to 43.0) | 86 | 54 |
+| | 16/32 | 41.8 (38.4 to 45.3) | 87 | 59 |
+| | 16/16 | 37.5 (36.4 to 38.6) | 80 | 52 |
+| | 24/24 | 43.5 (42.8 to 44.3) | 89 | 99 |
+| | 12/12 (1 rep) | 44.2 | 90 | 28 |
+| confirmation, 3 reps | 32/96 | 35.6 (34.6 to 38.2) | 80 | 73 |
+| | 16/32 | 40.5 (37.0 to 41.3) | 86 | 63 |
+| | 24/24, 12/12, 32/96 repeat | 31.9, 30.7, 21.2 | 70, 70, 49 | 120, 110, 138 (unusable) |
+
+16/32 beat 32/96 in all three comparisons that ran at similar load (+9, +14 percent here, +13 to +17 percent for 16/96 in SP0.7.4); the
+lower values (12/12, 24/24) sometimes looked better and sometimes collapsed with the host load, so no ranking among them is claimed.
+Default set to 16 workers, 32 in flight (no memory change: card peak 23.4 to 25.8 GiB in every row).
+
+#### SPF.3 The load list (issue #393): memory per model and the profile
+
+GPU 0 memory after loading each model on top of the three-model ingest profile (8,813 MiB; unloading each returned it to within 18 MiB):
+
+| Model | Used by | Delta MiB |
+|---|---|---|
+| `scrfd_10g_bnkps` | /faces, /analyze, core /ingest, /search/face | 6,846 |
+| `arcface_w600k_r50` | same | 2,754 |
+| `mobileclip2_s2_image_encoder` | /embed image routes, /search image and object, /analyze, core /ingest | 3,454 |
+| `mobileclip2_s2_text_encoder` | /embed/text, /search/text | 1,430 |
+| `paddleocr_det_trt` | /ocr, /search/ocr, /analyze, curation text reading | 1,642 |
+| `paddleocr_rec_trt` | same | 11,572 |
+| `ocr_pipeline` | /ocr (calls the two above) | 0 |
+| total | | 27,698 |
+
+The 36.5 GB of the default list is therefore the three needed models (8.8 GB) plus 27.7 GB, of which the OCR recognizer alone is 11.6 GB
+(its dynamic-shape engine). This answers #393's 36.5 against 23.1 GB: optest1 holds fewer of these.
+
+Profile check: every public endpoint of the core API (38 routes with a body or no path parameter, `spf/endpoints_*.txt`) was called with
+three public COCO images on the default list and on the profile. The status codes are identical (200, except the face routes' 400 "no face
+detected" on photos without faces) with one difference, and it is the card, not the profile: on the default list with two instances the
+card is full and `/ocr/predict` fails with "Failed to open the cudaIpcHandle: out of memory"; on the profile it answers 200. The first run
+of the sweep found a real bug in this work (`ocr_pipeline` loaded without the OCR models it calls, `/ocr/predict` 502), fixed in
+`efe067ca`. First calls on the profile cost 2.3 s (`/embed/text`) and 17.8 s (`/analyze`, five models) once.
+
+#### SPF.4 Acceptance, set P (config 16/32, `--clients` 4 and 8, 3 reps, host load 13 to 35 during these rows)
+
+| Stack | Clients | img/s median (min to max) | GPU % | Fallback % per rep | API CPU-s/img | Card peak GiB |
+|---|---|---|---|---|---|---|
+| ingest profile, 2 instances | 4 | 48.3 (45.3 to 49.0) | 94 | 0 / 0 / 0 | 0.052 | 25.4 |
+| ingest profile, 2 instances | 8 | 48.3 (40.8 to 48.8) | 93 | 0 / 0 / 0 | 0.056 | 25.8 |
+| default list, 1 instance | 4 | 38.9 (32.9 to 39.4) | 83 | 0 / 0 / 0 | 0.060 | 45.3 |
+| default list, 1 instance | 8 | 38.6 (38.4 to 40.2) | 86 | 0 / 0 / 0 | 0.059 | 44.9 |
+| default list, 2 instances | 4 | 35.9 (32.4 to 39.3) | 72 | 0.6 / 2.2 / 5.6 | 0.081 | 47.4 |
+| 24 GiB emulation (ballast 24.8 GiB), ingest profile, 1 instance | 4 | 38.1 (35.1 to 39.1) | 84 | 0 / 0 / 0 | 0.059 | 42.1 total with ballast |
+
+Bars (SP4: at least 29 img/s with GPU above 75 percent at 4 clients; fallbacks at most 0.5 percent; API CPU at most 0.08; no drop at 8):
+met on the ingest profile with two instances, and on the default list with one instance. Not met on the default list with two instances
+(fallbacks up to 5.6 percent, GPU 72, card at 47.4 of 48.0 GiB, i.e. full): that is the shipped `full` profile, see the review. The 24 GB case
+passes with the ingest profile and one instance. C2 (batched kernels) is deferred: the bar is met without it.

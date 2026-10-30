@@ -1,0 +1,16 @@
+{
+  "images_per_s": {
+    "max": 10.859709261022605,
+    "median": 10.61266709388355,
+    "min": 9.755392500700315
+  },
+  "noisy_reps": [
+    3
+  ],
+  "projects": [
+    "sp0-setb-sync-r1-1030061052",
+    "sp0-setb-sync-r2-1030061156",
+    "sp0-setb-sync-r3-1030061259"
+  ],
+  "reps": 3
+}

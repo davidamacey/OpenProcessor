@@ -84,6 +84,7 @@ const sidebars: SidebarsConfig = {
         'operations/curation-workflow',
         'operations/health-and-stalls',
         'operations/workers',
+        'operations/ingest-load-profile',
         'operations/exports-and-retention',
         'operations/training-and-promote',
         'operations/monitoring',

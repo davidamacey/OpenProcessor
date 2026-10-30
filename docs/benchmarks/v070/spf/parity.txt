@@ -1,0 +1,44 @@
+## old vs old, concurrency 1 (floor)
+images               200
+status_differs       0
+detections_differ    0
+bytes_equal          185
+blur_differs         6
+jpeg_differs         6
+box_max_abs          0.19677734375
+whole_cos_min        0.9999999999999998
+crop_cos_min         0.8595644107843762
+compared             193
+## old vs new, concurrency 1
+images               200
+status_differs       0
+detections_differ    0
+bytes_equal          182
+blur_differs         9
+jpeg_differs         9
+box_max_abs          0.7261962890625
+whole_cos_min        0.9999999999999998
+crop_cos_min         0.5727622362386995
+compared             193
+## old vs old, concurrency 8 (floor)
+images               200
+status_differs       0
+detections_differ    0
+bytes_equal          180
+blur_differs         11
+jpeg_differs         11
+box_max_abs          0.7261962890625
+whole_cos_min        0.9999553927962864
+crop_cos_min         0.5727007198956396
+compared             193
+## old vs new, concurrency 8
+images               200
+status_differs       0
+detections_differ    0
+bytes_equal          183
+blur_differs         8
+jpeg_differs         8
+box_max_abs          0.7261962890625
+whole_cos_min        0.9999619273417594
+crop_cos_min         0.572822757479567
+compared             193

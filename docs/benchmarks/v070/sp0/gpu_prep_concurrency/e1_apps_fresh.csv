@@ -1,0 +1,10 @@
+GPU-2ca96ee7-c611-0ddb-8797-36b18f42f6d5, 3780837, tritonserver, 36486 MiB
+GPU-272aeadc-8082-a45f-3932-2624df4ec687, 2384470, diar-server, 1216 MiB
+GPU-272aeadc-8082-a45f-3932-2624df4ec687, 2383243, /usr/local/bin/python3.13, 788 MiB
+GPU-272aeadc-8082-a45f-3932-2624df4ec687, 2383419, /usr/local/bin/python3.13, 1798 MiB
+GPU-5933f022-fb6f-4f45-adf9-43fb24237516, 2747913, tritonserver, 23118 MiB
+GPU-5933f022-fb6f-4f45-adf9-43fb24237516, 2886014, /opt/tritonserver/backends/python/triton_python_backend_stub, 262 MiB
+GPU-5933f022-fb6f-4f45-adf9-43fb24237516, 2886021, /opt/tritonserver/backends/python/triton_python_backend_stub, 262 MiB
+GPU-5933f022-fb6f-4f45-adf9-43fb24237516, 2886025, /opt/tritonserver/backends/python/triton_python_backend_stub, 262 MiB
+GPU-5933f022-fb6f-4f45-adf9-43fb24237516, 2886023, /opt/tritonserver/backends/python/triton_python_backend_stub, 262 MiB
+GPU-5933f022-fb6f-4f45-adf9-43fb24237516, 1124060, /opt/tritonserver/backends/python/triton_python_backend_stub, 4974 MiB

@@ -10,7 +10,8 @@
 #                    the oriented frame). Stored-box mode, the reprocess embed pass (#259): no
 #                    detector, blur sums or JPEGs; the answer is status, size, whole_embedding and
 #                    crop_embeddings with one row per box, in order
-# Outputs (status "ok"; any other status is the reason the API decodes this image on the CPU):
+# Outputs (status "ok"; any other status is the reason the API decodes this image on the CPU, among
+# them gpu_memory and over_budget, see DEVICE_BUDGET_MIB below):
 #   - status:          [1] STRING
 #   - size:            [2] INT32, width and height after EXIF orientation
 #   - letterbox:       [3] FP64, scale, pad_w, pad_h of the detector letterbox
@@ -47,7 +48,7 @@ output [
 
 instance_group [
   {
-    count: 2  # per-profile value (config_templates/profiles/*.json, gpu_image_prep_instances)
+    count: 1  # per-profile value (config_templates/profiles/*.json, gpu_image_prep_instances)
     kind: KIND_GPU
     gpus: [ 0 ]
   }
@@ -64,6 +65,16 @@ instance_group [
 parameters { key: "GPU_MIB_PER_INSTANCE" value: { string_value: "8704" } }
 parameters { key: "POOL_MIB" value: { string_value: "4096" } }
 
+# Device-memory admission (1/prep_budget.py). Every photo reserves its decoded frame (and the
+# re-oriented copy of a rotated one) from DEVICE_BUDGET_MIB before it decodes and waits for it, at
+# most BUDGET_WAIT_SECONDS, instead of failing a CUDA or nvJPEG allocation. The budget is reserved
+# once at load: an instance that cannot hold it fails to load (Triton shows the model UNAVAILABLE,
+# ingest decodes on the CPU path, visibly). A wait that times out, an allocation that fails anyway
+# and a photo larger than the budget are answered with the statuses gpu_memory and over_budget; the
+# API counts them as the routes cpu_gpu_memory and cpu_over_budget. Must not exceed POOL_MIB.
+parameters { key: "DEVICE_BUDGET_MIB" value: { string_value: "2048" } }
+parameters { key: "BUDGET_WAIT_SECONDS" value: { string_value: "20" } }
+
 parameters { key: "FORCE_CPU_ONLY_INPUT_TENSORS" value: { string_value: "yes" } }
 parameters { key: "DETECTOR_MODEL" value: { string_value: "yolov11_small_trt_end2end" } }
 parameters { key: "PE_MODEL" value: { string_value: "pe_image_encoder" } }
@@ -72,8 +83,14 @@ parameters { key: "LETTERBOX_FILL" value: { string_value: "114" } }
 parameters { key: "MIN_MEGAPIXELS" value: { string_value: "0" } }
 parameters { key: "MAX_MEGAPIXELS" value: { string_value: "100" } }
 parameters { key: "LANES" value: { string_value: "16" } }
-parameters { key: "WORKERS" value: { string_value: "32" } }
-parameters { key: "MAX_IN_FLIGHT" value: { string_value: "96" } }
+# WORKERS and MAX_IN_FLIGHT: more images in flight than the GPU and the allocator can interleave
+# inflate the launch-bound stages (letterbox 41 to 5 ms, embed_crops 173 to 51 ms per image at 4
+# batches) and slow ingest. Set P, 4 batches, ingest load profile, A6000, same host: WORKERS 16 gave
+# +13 to +17 percent over 32 on a quiet host, and 16 workers with 32 in flight gave +9 to +14 percent
+# over 32 and 96 in two later sessions on a busy one (38.2 to 41.8 and 35.6 to 40.5 img/s). Lower
+# values (12/12, 24/24) could not be told apart from the load of the host. No memory change.
+parameters { key: "WORKERS" value: { string_value: "16" } }
+parameters { key: "MAX_IN_FLIGHT" value: { string_value: "32" } }
 parameters { key: "ENCODE_THREADS" value: { string_value: "8" } }
 
 # Per-stage wall timing is always on (counters op_gpu_prep_stage_seconds and

@@ -44,6 +44,38 @@ def test_without_a_local_file_the_file_list_is_unchanged(shimmed: Shimmed, inst:
     assert all('docker-compose.local.yml' not in ln for ln in shimmed.mutating_docker_calls())
 
 
+def _stop_line(shimmed: Shimmed, inst: Path) -> str:
+    done = cli(shimmed, inst, 'stop')
+    assert done.returncode == 0, done.stderr
+    down = [ln for ln in shimmed.mutating_docker_calls() if ln.endswith(' down')]
+    assert down, shimmed.mutating_docker_calls()
+    return down[0]
+
+
+def test_the_ingest_load_profile_adds_its_overlay_before_the_local_file(
+    shimmed: Shimmed, inst: Path
+) -> None:
+    shimmed.flag('allow_mutations')
+    (inst / 'docker-compose.ingest-focus.yml').write_text('services: {}\n')
+    (inst / 'docker-compose.local.yml').write_text('services: {}\n')
+    with (inst / '.env').open('a') as fh:
+        fh.write('\nOP_LOAD_PROFILE=ingest\n')
+    line = _stop_line(shimmed, inst)
+    assert f'-f {inst}/docker-compose.ingest-focus.yml' in line
+    assert line.index('docker-compose.ingest-focus.yml') < line.index('docker-compose.local.yml')
+
+
+@pytest.mark.parametrize('env_line', ['', 'OP_LOAD_PROFILE=full', '# OP_LOAD_PROFILE=ingest'])
+def test_without_the_ingest_profile_the_overlay_is_not_loaded(
+    shimmed: Shimmed, inst: Path, env_line: str
+) -> None:
+    shimmed.flag('allow_mutations')
+    (inst / 'docker-compose.ingest-focus.yml').write_text('services: {}\n')
+    with (inst / '.env').open('a') as fh:
+        fh.write(f'\n{env_line}\n')
+    assert 'ingest-focus' not in _stop_line(shimmed, inst)
+
+
 def test_a_fresh_checkout_without_a_project_name_uses_the_documented_default(
     shimmed: Shimmed, inst: Path
 ) -> None:

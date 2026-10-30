@@ -1,0 +1,17 @@
+{
+  "images_per_s": {
+    "max": 10.589363944466285,
+    "median": 10.102772853486078,
+    "min": 10.059508495971917
+  },
+  "noisy_reps": [
+    2,
+    3
+  ],
+  "projects": [
+    "sp0-setb-nometrics-r1-1030062453",
+    "sp0-setb-nometrics-r2-1030062600",
+    "sp0-setb-nometrics-r3-1030062706"
+  ],
+  "reps": 3
+}

@@ -1,0 +1,18 @@
+{
+  "images_per_s": {
+    "max": 28.84098306971416,
+    "median": 28.525831612744902,
+    "min": 26.22813164975886
+  },
+  "noisy_reps": [
+    1,
+    2,
+    3
+  ],
+  "projects": [
+    "sp0-setb-c4-again-r1-1030065737",
+    "sp0-setb-c4-again-r2-1030065825",
+    "sp0-setb-c4-again-r3-1030065905"
+  ],
+  "reps": 3
+}

@@ -39,3 +39,9 @@ eab17540d646c4e6f56b329fbaa408570db412d928acea520f5de46f2839507f  lx/out/wk_vec_
 eab17540d646c4e6f56b329fbaa408570db412d928acea520f5de46f2839507f  lx/out/wk_vec_v060_2.npz
 eab17540d646c4e6f56b329fbaa408570db412d928acea520f5de46f2839507f  lx/out/wk_vec_v060_3.npz
 6e6e3d0b13973c2df193d4ee322a91b6305c268c07e1c25b74f35e6c521e3bc3  lx/out/wk_vec_v060_dbg.npz
+
+# docs/benchmarks/v070/sp0/ (SP0 stage profile) is committed as written; the manifests that list the input
+# copies stay in the artifact root (artifacts_local/bench/v070/sp0/, relative paths below).
+04aeaa1bcc185ba7359af3f6b0554cae54d9812cc4644709eae3be80301da8d5  artifacts_local/bench/v070/sp0/setA.txt
+9ba2aa6bcc0bf725a196534798cb4d8507332b08e1925b78941431079d21f2ed  artifacts_local/bench/v070/sp0/setB.txt
+958007154aa9ebdadc16cc54cb983e42210e03698ca8a3836ad527dbe8951d20  artifacts_local/bench/v070/sp0/setP3000.txt

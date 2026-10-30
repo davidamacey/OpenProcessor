@@ -46,17 +46,22 @@ fi
 if [[ -f "$PROJECT_DIR/docker-compose.cpu.yml" ]]; then
     DC_FILES+=(-f "$PROJECT_DIR/docker-compose.cpu.yml")
 fi
-# The user's own overrides (extra bind mounts, a second source root), last so
-# they win. docker-compose.override.yml is not read: the file name is yours.
-if [[ -f "$PROJECT_DIR/docker-compose.local.yml" ]]; then
-    DC_FILES+=(-f "$PROJECT_DIR/docker-compose.local.yml")
-fi
-
 _env_value() {
     local key="$1" file="${2:-$PROJECT_DIR/.env}"
     [[ -f "$file" ]] || return 0
     awk -v k="$key" '{ i = index($0, "=") } i > 1 && substr($0, 1, i - 1) == k { v = substr($0, i + 1) } END { print v }' "$file"
 }
+
+# The opt-in ingest load profile (OP_LOAD_PROFILE=ingest in .env): Triton preloads only the models
+# photo ingest calls.
+if [[ -f "$PROJECT_DIR/docker-compose.ingest-focus.yml" && "$(_env_value OP_LOAD_PROFILE)" == "ingest" ]]; then
+    DC_FILES+=(-f "$PROJECT_DIR/docker-compose.ingest-focus.yml")
+fi
+# The user's own overrides (extra bind mounts, a second source root), last so
+# they win. docker-compose.override.yml is not read: the file name is yours.
+if [[ -f "$PROJECT_DIR/docker-compose.local.yml" ]]; then
+    DC_FILES+=(-f "$PROJECT_DIR/docker-compose.local.yml")
+fi
 
 # B3: the project name comes from this directory's own .env (and must match
 # .install/state.json), never from a default. With nothing resolvable the

@@ -36,6 +36,7 @@ from tritonclient.grpc import InferInput, InferRequestedOutput
 from ultralytics.data.augment import LetterBox
 
 from src.clients.model_adapters import DetectionAdapter, resolve_adapter
+from src.clients.model_residency import ensure_loaded_sync
 from src.clients.triton_client_manager import TritonClientManager
 from src.clients.triton_ocr import infer_ocr
 from src.clients.triton_pool_core import uint8_images_input
@@ -90,6 +91,7 @@ class TritonClient:
 
     def _infer_with_retry(self, model_name: str, inputs: list, outputs: list) -> Any:
         """Execute Triton inference with automatic retry on transient failures."""
+        ensure_loaded_sync(self.client, model_name)
         return retry_sync(
             self.client.infer,
             model_name=model_name,
@@ -110,6 +112,7 @@ class TritonClient:
         cached = self._model_info.get(model_name)
         if cached is not None and cached[0] > now:
             return cached[1], cached[2]
+        ensure_loaded_sync(self.client, model_name)
         metadata = self.client.get_model_metadata(model_name)
         adapter = resolve_adapter(metadata)
         size = self.input_size
