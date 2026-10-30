@@ -163,8 +163,8 @@ audit passes. (issue #280). See
   recorded in `GET /crops/{crop_id}/history`. A human label is
   **locked**: no worker, VLM pass, re-ingest or reprocess overwrites it.
 - **Keyboard.** Each project has its own [keymap](../guides/keymaps.mdx).
-- **Semantic search** (`GET /search/text`, with
-  `OP_SEMANTIC_SEARCH_ENABLED=1`) finds items by description, e.g. "blurry
+- **Semantic search** (`GET /search/text`, on by
+  default; `OP_SEMANTIC_SEARCH_ENABLED=0` turns it off) finds items by description, e.g. "blurry
   close-up".
 
 ## 6. Regions of interest (optional)

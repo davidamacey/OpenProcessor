@@ -1,7 +1,7 @@
 """Per-cluster AHC refinement of item clusters (and the shared refine core).
 
 Public surface: :func:`refine_cluster` (``POST
-/curation/clusters/refine/{cluster_id}``) and :func:`refine_members`, the
+/curation/projects/{project}/clusters/refine/{cluster_id}``) and :func:`refine_members`, the
 AHC core shared with region-box clusters.
 
 Why complete + cosine + threshold:

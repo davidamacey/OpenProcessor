@@ -65,7 +65,7 @@ Every flag also has an environment variable (the flag wins).
 | `--dir PATH` | `OP_INSTALL_DIR` | install directory (default `./openprocessor`) |
 | `--project NAME` | `OP_PROJECT` | compose project name and container prefix (`[a-z0-9][a-z0-9_-]*`, default `openprocessor`) |
 | `--version vX.Y.Z` | `OP_VERSION` | pinned release (default: latest published release) |
-| `--branch REF` | `OP_BRANCH` | testing install from a branch head: not checksum-verified, not reproducible |
+| `--branch REF` | `OP_BRANCH` | testing install from a branch head: not checksum-verified, not reproducible. Images run by the tag `sha-<first 12 hex of the commit>`; CI does not publish those tags, so tag a local build with it or pass `--image-tag` |
 | `--release-dir DIR` | `OP_RELEASE_DIR` | install from release assets built locally by `scripts/release/build_deploy_bundle.sh` (still checksum-verified; needs `--version`) |
 | `--image-tag TAG` | `OP_IMAGE_TAG` | run images by tag (prefix `OP_IMAGE_REPO`) instead of `images.lock` digests; local builds only, never pulled |
 | `--tiers LIST` / `--all` | `OP_TIERS` | comma list of `core,curation,segmenter,vlm,trainer,cropwright`, or all of them |

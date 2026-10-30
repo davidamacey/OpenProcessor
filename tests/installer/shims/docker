@@ -11,6 +11,7 @@
 #   pull_bad_digest     present -> a pull records the wrong RepoDigest
 #   images/<ref>        a "local" image: its RepoDigests, one per line
 #   compose_version     `docker compose version --short` output
+#   services            `compose config --services` output (default: opensearch, triton-server, api)
 #   running_services    `compose ps --services --status running` output
 #   training_lock       present -> `compose exec ... lock-check` finds the GPU lock
 #   pause_sentinel      the shared pause sentinel: `compose exec ... pause-create`
@@ -119,6 +120,10 @@ cmd_compose() {
             cat "${state}/compose_version" 2>/dev/null || echo "2.29.7"
             ;;
         config)
+            if [[ " ${args[*]:-} " == *" --services "* ]]; then
+                if [[ -f "${state}/services" ]]; then cat "${state}/services"; else printf 'opensearch\ntriton-server\napi\n'; fi
+                return 0
+            fi
             local cpn="${COMPOSE_PROJECT_NAME:-}"
             [[ -z "$cpn" ]] && cpn="$(env_val "$envfile" COMPOSE_PROJECT_NAME)"
             [[ -z "$cpn" ]] && cpn=openprocessor

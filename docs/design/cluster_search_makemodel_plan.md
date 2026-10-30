@@ -132,7 +132,7 @@ Further defects found while reading, to fix in the waves that touch the code:
 | image -> whole image (core) | `POST /search/image` | MobileCLIP 512, global | precision@10 0.476 (category-overlap proxy); p50 61 ms, p95 72 ms | proxy relevance only |
 | image -> object crop (core) | `POST /search/object` | MobileCLIP 512, vehicles / people / global | not measured | blocking Triton call; other classes hit the image index |
 | face -> face (core) | `POST /search/face`, `POST /faces/search`, `POST /faces/identify` | ArcFace 512, faces | not measured | global only |
-| text -> item (curation) | `GET /curation/projects/{project}/search/text` | PE-Core text tower -> item `pe_embedding`, Lucene HNSW cosine | recall@10 0.733 (images ranked by their best crop); server p50 110 ms, p95 161 ms; filtered p50 84 ms against unfiltered 18 ms; a 1.5 s outlier on about 1 in 10 queries at 91k items (#356) | off by default (`OP_SEMANTIC_SEARCH_ENABLED`, #371) |
+| text -> item (curation) | `GET /curation/projects/{project}/search/text` | PE-Core text tower -> item `pe_embedding`, Lucene HNSW cosine | recall@10 0.733 (images ranked by their best crop); server p50 110 ms, p95 161 ms; filtered p50 84 ms against unfiltered 18 ms; a 1.5 s outlier on about 1 in 10 queries at 91k items (#356) | on by default since 0.7.0 (`OP_SEMANTIC_SEARCH_ENABLED=0` turns it off, #371) |
 | crop -> crop, image -> crop, text -> region box, text/image -> whole frame (curation) | none | vectors exist (`pe_embedding` on items and images docs, nested `region_box_embeddings`) | n/a | **not built**: the only curation kNN query is text -> item (`rg "'knn'" src` finds one curation call site) |
 
 The OpenSearch fields are already right for the missing searches: Lucene HNSW cosine

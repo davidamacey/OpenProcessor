@@ -74,13 +74,13 @@ async def test_flag_enabled_agrees_between_router_and_methods(
 async def test_flag_disabled_agrees_between_router_and_methods(
     monkeypatch, capability_id, env_var, router_gate, enabled_statuses
 ) -> None:
-    monkeypatch.delenv(env_var, raising=False)
+    monkeypatch.setenv(env_var, '0')
 
     assert router_gate() is False
 
     registry = await get_registry(None)
     assert _entry_status(registry, capability_id) == 'disabled', (
-        f'router gate for {capability_id!r} reads {env_var} as unset/disabled, but '
+        f'router gate for {capability_id!r} reads {env_var}=0 as disabled, but '
         f'GET /curation/methods reports status={_entry_status(registry, capability_id)!r} '
         '-- the router and the registry are reading different env vars again'
     )
