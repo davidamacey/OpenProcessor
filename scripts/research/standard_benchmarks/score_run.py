@@ -142,6 +142,9 @@ def score_dataset(args: argparse.Namespace) -> None:
     protocol_rows = [protocol.Row(r['path'], r['label'], r['part']) for r in rows]
     sub_test = np.array(protocol.cluster_subset(protocol_rows, args.dataset, 'test'))
     sub_calib = np.array(protocol.cluster_subset(protocol_rows, args.dataset, 'calib'))
+    copies = np.array(protocol.file_groups(env_path('WB2_DATA_ROOT'), args.dataset, protocol_rows))[
+        test
+    ]
     rng = np.random.default_rng(0)
     shuffled = labels[test][rng.permutation(len(test))]
     result: dict[str, Any] = {
@@ -159,10 +162,19 @@ def score_dataset(args: argparse.Namespace) -> None:
         t_hits = metrics.recall_hits(vecs[test], labels[test], ks, args.device)
         c_hits = metrics.recall_hits(vecs[calib], labels[calib], (1,), args.device)
         hits[name] = t_hits[:, 0]
+        dedup = metrics.recall_hits(vecs[test], labels[test], ks, args.device, copies=copies)
+        top1 = metrics.top1_similarity(vecs[test], args.device)
         km = kmeans_reading(vecs[test], labels[test], args.device)
         first = km.pop('first_assign')
         entry: dict[str, Any] = {
             'recall': {str(k): float(t_hits[:, j].mean()) for j, k in enumerate(ks)},
+            'recall_without_identical_files': {
+                str(k): float(dedup[:, j].mean()) for j, k in enumerate(ks)
+            },
+            'top1_similarity': {
+                'quantiles': {str(q): float(np.quantile(top1, q)) for q in (0.5, 0.9, 0.99, 0.999)},
+                'share_above_0.98': float((top1 > 0.98).mean()),
+            },
             'calibration_recall1': float(c_hits[:, 0].mean()),
             'kmeans': km,
             'control': {

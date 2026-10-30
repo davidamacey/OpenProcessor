@@ -308,3 +308,32 @@ def test_best_variant_follows_calibration_and_ties_keep_centre() -> None:
     }
     assert score_run.best_variant(combos, 'm') == 'letterbox'
     assert score_run.best_variant(combos, 'n') == 'centre'
+
+
+def test_recall_copies_mask_hides_identical_files_only() -> None:
+    x = np.array([[1.0, 0], [1.0, 0], [0.9, 0.436], [0, 1.0]], dtype=np.float32)
+    x /= np.linalg.norm(x, axis=1, keepdims=True)
+    y = np.array([0, 0, 1, 1])
+    assert metrics.recall_hits(x, y, (1,))[:, 0].tolist() == [True, True, False, True]
+    masked = metrics.recall_hits(x, y, (1,), copies=np.array([7, 7, 8, 9]))[:, 0]
+    assert masked.tolist() == [
+        False,
+        False,
+        False,
+        True,
+    ]  # rows 0 and 1 lose each other; row 3 is unaffected
+
+
+def test_file_groups_reads_manifest_hashes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    spec = protocol.SetSpec('d', 'item_id', 'split', 'test', 'train', 1, 1, 2)
+    monkeypatch.setitem(protocol.SETS, 'toy', spec)
+    (tmp_path / 'd').mkdir()
+    files = [{'path': 'a.jpg', 'sha256': 'h1'}, {'path': 'b.jpg', 'sha256': 'h1'}]
+    (tmp_path / 'd' / 'manifest.json').write_text(json.dumps({'files': files}))
+    rows = [protocol.Row('b.jpg', 'x', 'test'), protocol.Row('a.jpg', 'x', 'test')]
+    assert protocol.file_groups(tmp_path, 'toy', rows) == ['h1', 'h1']
+
+
+def test_top1_similarity_finds_the_nearest_other_row() -> None:
+    x = np.array([[1.0, 0], [1.0, 0], [0, 1.0]], dtype=np.float32)
+    assert metrics.top1_similarity(x).tolist() == [1.0, 1.0, 0.0]

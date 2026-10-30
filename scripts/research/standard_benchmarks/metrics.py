@@ -17,14 +17,27 @@ KMEANS_CHUNK = 8192
 
 
 def recall_hits(
-    emb: np.ndarray, labels: np.ndarray, ks: tuple[int, ...], device: str = 'cpu'
+    emb: np.ndarray,
+    labels: np.ndarray,
+    ks: tuple[int, ...],
+    device: str = 'cpu',
+    copies: np.ndarray | None = None,
 ) -> np.ndarray:
-    """Boolean ``(n, len(ks))``: query ``i`` has a same-class row among its ``ks[j]`` nearest others."""
+    """Boolean ``(n, len(ks))``: query ``i`` has a same-class row among its ``ks[j]`` nearest others.
+
+    ``copies`` (optional) gives each row a group id; rows of the query's own group are never its
+    neighbours, which removes byte-identical files from the gallery (a diagnostic, not the protocol).
+    """
     x = torch.as_tensor(emb, dtype=torch.float32, device=device)
     y = torch.as_tensor(np.unique(labels, return_inverse=True)[1], device=device)
     n, kmax = len(x), max(ks)
     if kmax >= n:
         raise ValueError(f'max K {kmax} needs more than {n} rows')
+    g = (
+        None
+        if copies is None
+        else torch.as_tensor(np.unique(copies, return_inverse=True)[1], device=device)
+    )
     out = torch.zeros((n, len(ks)), dtype=torch.bool, device=device)
     for s in range(0, n, CHUNK):
         sim = x[s : s + CHUNK] @ x.T
@@ -32,11 +45,27 @@ def recall_hits(
             torch.arange(sim.shape[0], device=device),
             torch.arange(s, s + sim.shape[0], device=device),
         ] = -torch.inf
+        if g is not None:
+            sim[g[s : s + CHUNK, None] == g[None, :]] = -torch.inf
         order = torch.sort(sim, dim=1, descending=True, stable=True).indices[:, :kmax]
         same = y[order] == y[s : s + CHUNK, None]
         for j, k in enumerate(ks):
             out[s : s + CHUNK, j] = same[:, :k].any(1)
     return np.asarray(out.cpu().numpy())
+
+
+def top1_similarity(emb: np.ndarray, device: str = 'cpu') -> np.ndarray:
+    """Cosine similarity of each row to its nearest other row (a near-duplicate diagnostic)."""
+    x = torch.as_tensor(emb, dtype=torch.float32, device=device)
+    out = []
+    for s in range(0, len(x), CHUNK):
+        sim = x[s : s + CHUNK] @ x.T
+        sim[
+            torch.arange(sim.shape[0], device=device),
+            torch.arange(s, s + sim.shape[0], device=device),
+        ] = -torch.inf
+        out.append(sim.max(1).values.cpu())
+    return np.asarray(torch.cat(out).numpy())
 
 
 def kmeans(

@@ -97,3 +97,11 @@ def cluster_subset(rows: list[Row], name: str, part: str) -> list[int]:
         [{'k': rows[i].label} for i in idx], 'k', SOP_CLUSTER_PRODUCTS, SAMPLE_SEED + 1
     )
     return [i for i in idx if rows[i].label in keep]
+
+
+def file_groups(data_root: Path, name: str, rows: list[Row]) -> list[str]:
+    """Per row, the SHA-256 of its file from the set's manifest: equal values are byte-identical copies."""
+    spec = SETS[name]
+    manifest = json.loads((Path(data_root) / spec.directory / 'manifest.json').read_text())
+    sha = {f['path']: f['sha256'] for f in manifest['files']}
+    return [sha[r.path] for r in rows]
