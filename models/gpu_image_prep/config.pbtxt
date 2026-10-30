@@ -10,7 +10,8 @@
 #                    the oriented frame). Stored-box mode, the reprocess embed pass (#259): no
 #                    detector, blur sums or JPEGs; the answer is status, size, whole_embedding and
 #                    crop_embeddings with one row per box, in order
-# Outputs (status "ok"; any other status is the reason the API decodes this image on the CPU):
+# Outputs (status "ok"; any other status is the reason the API decodes this image on the CPU, among
+# them gpu_memory and over_budget, see DEVICE_BUDGET_MIB below):
 #   - status:          [1] STRING
 #   - size:            [2] INT32, width and height after EXIF orientation
 #   - letterbox:       [3] FP64, scale, pad_w, pad_h of the detector letterbox
@@ -63,6 +64,16 @@ instance_group [
 # (loaded on first use).
 parameters { key: "GPU_MIB_PER_INSTANCE" value: { string_value: "8704" } }
 parameters { key: "POOL_MIB" value: { string_value: "4096" } }
+
+# Device-memory admission (1/prep_budget.py). Every photo reserves its decoded frame (and the
+# re-oriented copy of a rotated one) from DEVICE_BUDGET_MIB before it decodes and waits for it, at
+# most BUDGET_WAIT_SECONDS, instead of failing a CUDA or nvJPEG allocation. The budget is reserved
+# once at load: an instance that cannot hold it fails to load (Triton shows the model UNAVAILABLE,
+# ingest decodes on the CPU path, visibly). A wait that times out, an allocation that fails anyway
+# and a photo larger than the budget are answered with the statuses gpu_memory and over_budget; the
+# API counts them as the routes cpu_gpu_memory and cpu_over_budget. Must not exceed POOL_MIB.
+parameters { key: "DEVICE_BUDGET_MIB" value: { string_value: "2048" } }
+parameters { key: "BUDGET_WAIT_SECONDS" value: { string_value: "20" } }
 
 parameters { key: "FORCE_CPU_ONLY_INPUT_TENSORS" value: { string_value: "yes" } }
 parameters { key: "DETECTOR_MODEL" value: { string_value: "yolov11_small_trt_end2end" } }

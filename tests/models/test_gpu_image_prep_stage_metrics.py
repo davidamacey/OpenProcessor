@@ -25,6 +25,7 @@ from PIL import Image
 MODEL_DIR = Path(__file__).resolve().parents[2] / 'models' / 'gpu_image_prep'
 FULL_STAGES = {
     'queue',
+    'budget',
     'decode',
     'letterbox',
     'detect',
@@ -70,12 +71,30 @@ def _fake_cupy() -> types.ModuleType:
 
     cp.syncs = 0  # type: ignore[attr-defined]
     cp.uint8 = np.uint8  # type: ignore[attr-defined]
+    out_of_memory = type('OutOfMemoryError', (RuntimeError,), {})
     cp.cuda = types.SimpleNamespace(  # type: ignore[attr-defined]
-        Device=_Ctx, Stream=_Ctx, get_current_stream=_Ctx
+        Device=_Ctx,
+        Stream=_Ctx,
+        get_current_stream=_Ctx,
+        memory=types.SimpleNamespace(OutOfMemoryError=out_of_memory),
+        runtime=types.SimpleNamespace(
+            memGetInfo=lambda: (3 << 30, 8 << 30),
+            CUDARuntimeError=type('CUDARuntimeError', (RuntimeError,), {}),
+        ),
     )
     cp.get_default_memory_pool = lambda: types.SimpleNamespace(set_limit=lambda **_k: None)  # type: ignore[attr-defined]
     cp.full = lambda shape, v, dt: _dev(np.full(shape, v, dt))  # type: ignore[attr-defined]
-    cp.empty = lambda shape, dt: _dev(np.zeros(shape, dt))  # type: ignore[attr-defined]
+    cp.alloc_limit = None  # type: ignore[attr-defined]
+    cp.allocated = []  # type: ignore[attr-defined]
+
+    def _empty(shape: Any, dt: Any) -> _Dev:
+        n = int(np.prod(shape)) * np.dtype(dt).itemsize
+        if cp.alloc_limit is not None and n > cp.alloc_limit:
+            raise out_of_memory(f'Out of memory allocating {n} bytes')
+        cp.allocated.append(n)
+        return _dev(np.zeros(shape, dt))
+
+    cp.empty = _empty  # type: ignore[attr-defined]
     cp.ascontiguousarray = _dev  # type: ignore[attr-defined]
     cp.asnumpy = np.asarray  # type: ignore[attr-defined]
     return cp
@@ -188,14 +207,25 @@ class _Lanes:
     def __init__(self, **_k: Any) -> None:
         pass
 
-    def decode(self, data: bytes) -> tuple[_Dev, str]:
+    fail_with: Exception | None = None
+    seen_streams: list[Any] = []
+
+    def decode(self, data: bytes, alloc_stream: Any = None) -> tuple[_Dev, str]:
+        _Lanes.seen_streams.append(alloc_stream)
+        if _Lanes.fail_with is not None:
+            raise _Lanes.fail_with
         rng = np.random.default_rng(len(data))
         return _dev(rng.integers(0, 256, (H, W, 3), dtype=np.uint8)), 'fake'
 
 
 class _Kernels:
+    fail_on_call: tuple[int, Exception] | None = None
+    calls = 0
+
     def resample_into(self, *_a: Any, **_k: Any) -> None:
-        return None
+        _Kernels.calls += 1
+        if _Kernels.fail_on_call and _Kernels.calls == _Kernels.fail_on_call[0]:
+            raise _Kernels.fail_on_call[1]
 
     def lap_sums(self, _frame: Any, rects: list[tuple[int, int, int, int]]) -> np.ndarray:
         return np.arange(2 * len(rects), dtype=np.int64).reshape(-1, 2)
@@ -239,7 +269,11 @@ def make_model(
     }.items():
         monkeypatch.setitem(sys.modules, name, mod)
     monkeypatch.syspath_prepend(str(MODEL_DIR / '1'))
-    for name in ('model', 'prep_geometry', 'stage_metrics'):
+    _Lanes.fail_with = None
+    _Lanes.seen_streams = []
+    _Kernels.fail_on_call = None
+    _Kernels.calls = 0
+    for name in ('model', 'prep_geometry', 'stage_metrics', 'prep_budget'):
         monkeypatch.delitem(sys.modules, name, raising=False)
     model_mod = importlib.import_module('model')
     created: list[Any] = []
@@ -360,6 +394,7 @@ def test_stored_box_mode_observes_only_the_stages_it_runs(make_model: Any, count
     assert out['crop_embeddings'].shape[0] == 1
     assert {s for s, n in _seen(counters).items() if n} == {
         'queue',
+        'budget',
         'decode',
         'embed_frame',
         'embed_crops',
@@ -398,3 +433,171 @@ def test_an_unknown_stage_is_refused() -> None:
 def test_the_config_declares_the_attribution_switch_off() -> None:
     text = (MODEL_DIR / 'config.pbtxt').read_text()
     assert 'key: "STAGE_SYNC" value: { string_value: "0" }' in text
+
+
+# ------------------------------------------------------------------ device-memory budget
+
+
+def _status(model: Any, request: _Request) -> str:
+    model.execute([request])
+    assert request.done.wait(10)
+    assert request.response is not None
+    assert not request.response.has_error(), 'a memory failure is a status, not an error'
+    model.metrics.flush()
+    tensors = {t.name: t.arr for t in request.response.output_tensors}
+    return str(tensors['status'][0])
+
+
+def _mem_error(make_model: Any) -> Exception:
+    return make_model.cp.cuda.memory.OutOfMemoryError('Out of memory allocating 63 MB')
+
+
+def test_a_failed_decode_allocation_answers_gpu_memory_not_decoder(make_model: Any) -> None:
+    model = make_model()
+    _Lanes.fail_with = _mem_error(make_model)
+    assert _status(model, _Request(_jpeg())) == 'gpu_memory'
+    assert model.budget.in_use == 0
+
+
+def test_a_decode_failure_that_is_not_memory_stays_decoder(make_model: Any) -> None:
+    model = make_model()
+    _Lanes.fail_with = ValueError('bad stream')
+    assert _status(model, _Request(_jpeg())) == 'decoder'
+    assert model.budget.in_use == 0
+
+
+@pytest.mark.parametrize('call', [1, 2, 3, 4])
+def test_a_failed_allocation_at_any_kernel_stage_answers_gpu_memory(
+    make_model: Any, call: int
+) -> None:
+    """Calls 1 to 4: the letterbox, the frame square and the two crop squares."""
+    model = make_model()
+    _Kernels.fail_on_call = (call, _mem_error(make_model))
+    assert _status(model, _Request(_jpeg())) == 'gpu_memory'
+    assert model.budget.in_use == 0
+    # the next image is unaffected
+    _Kernels.fail_on_call = None
+    assert _status(model, _Request(_jpeg())) == 'ok'
+
+
+def test_a_failed_allocation_in_stored_box_mode_answers_gpu_memory(make_model: Any) -> None:
+    model = make_model()
+    _Kernels.fail_on_call = (1, _mem_error(make_model))
+    boxes = np.array([[0.1, 0.1, 0.5, 0.6]], np.float64)
+    assert _status(model, _Request(_jpeg(), boxes)) == 'gpu_memory'
+    assert model.budget.in_use == 0
+
+
+def test_another_exception_is_still_an_error_response(make_model: Any) -> None:
+    model = make_model()
+    _Kernels.fail_on_call = (1, ValueError('kernel bug'))
+    request = _Request(_jpeg())
+    model.execute([request])
+    assert request.done.wait(10)
+    assert request.response is not None
+    assert request.response.has_error()
+    assert model.budget.in_use == 0
+
+
+def test_a_photo_larger_than_the_whole_budget_answers_over_budget(make_model: Any) -> None:
+    model = make_model(DEVICE_BUDGET_MIB='0.01')  # 10,485 bytes against a 96 x 64 x 3 frame
+    assert _status(model, _Request(_jpeg())) == 'over_budget'
+    assert _Lanes.seen_streams == []  # never decoded
+
+
+def test_requests_wait_for_the_budget_and_never_exceed_it(make_model: Any) -> None:
+    """Budget for one 96 x 64 frame at a time: four concurrent images queue, all succeed."""
+    model = make_model(WORKERS='4', DEVICE_BUDGET_MIB=str(20000 / 2**20))
+    peak = [0]
+    real = _Lanes.decode
+
+    def watching(self: Any, data: bytes, alloc_stream: Any = None) -> Any:
+        peak[0] = max(peak[0], model.budget.in_use)
+        time.sleep(0.02)
+        return real(self, data, alloc_stream)
+
+    _Lanes.decode = watching  # type: ignore[method-assign]
+    try:
+        requests = [_Request(_jpeg()) for _ in range(4)]
+        model.execute(requests)
+        assert all(r.done.wait(20) for r in requests)
+    finally:
+        _Lanes.decode = real  # type: ignore[method-assign]
+    statuses = [
+        str({t.name: t.arr for t in r.response.output_tensors}['status'][0])
+        for r in requests
+        if r.response
+    ]
+    assert statuses == ['ok'] * 4
+    assert 0 < peak[0] <= model.budget.total
+    assert model.budget.in_use == 0
+
+
+def test_a_wait_that_outlasts_its_limit_answers_gpu_memory(make_model: Any) -> None:
+    model = make_model(WORKERS='2', DEVICE_BUDGET_MIB=str(20000 / 2**20), BUDGET_WAIT_SECONDS='0.2')
+    gate = threading.Event()
+    real = _Lanes.decode
+
+    def stuck(self: Any, data: bytes, alloc_stream: Any = None) -> Any:
+        gate.wait(5)
+        return real(self, data, alloc_stream)
+
+    _Lanes.decode = stuck  # type: ignore[method-assign]
+    try:
+        first, second = _Request(_jpeg()), _Request(_jpeg())
+        model.execute([first])
+        time.sleep(0.05)
+        model.execute([second])
+        assert second.done.wait(5)
+        gate.set()
+        assert first.done.wait(5)
+    finally:
+        gate.set()
+        _Lanes.decode = real  # type: ignore[method-assign]
+    assert second.response is not None
+    assert {t.name: t.arr for t in second.response.output_tensors}['status'][0] == 'gpu_memory'
+    assert first.response is not None
+    assert {t.name: t.arr for t in first.response.output_tensors}['status'][0] == 'ok'
+    assert model.budget.in_use == 0
+
+
+def test_the_budget_changes_no_output(make_model: Any) -> None:
+    wide = make_model()
+    tight = make_model(WORKERS='4', DEVICE_BUDGET_MIB=str(20000 / 2**20))
+    for _ in range(3):
+        a = _run(wide, _Request(_jpeg()))
+        b = _run(tight, _Request(_jpeg()))
+        assert a.keys() == b.keys()
+        for name in a:
+            assert np.array_equal(a[name], b[name]), name
+
+
+def test_frames_are_allocated_on_the_shared_arena_stream(make_model: Any) -> None:
+    model = make_model()
+    _run(model, _Request(_jpeg()))
+    assert _Lanes.seen_streams == [model.alloc_stream]
+
+
+def test_the_budget_is_reserved_at_load(make_model: Any) -> None:
+    make_model(DEVICE_BUDGET_MIB='2048')
+    assert 2048 * 2**20 in make_model.cp.allocated
+
+
+def test_an_instance_that_cannot_reserve_its_budget_fails_to_load(make_model: Any) -> None:
+    make_model.cp.alloc_limit = 1 << 20
+    with pytest.raises(make_model.module.pb_utils.TritonModelException) as err:
+        make_model(DEVICE_BUDGET_MIB='2048')
+    text = str(err.value)
+    assert 'DEVICE_BUDGET_MIB' in text
+    assert '2048' in text
+
+
+def test_a_budget_above_the_pool_limit_fails_to_load(make_model: Any) -> None:
+    with pytest.raises(make_model.module.pb_utils.TritonModelException, match='POOL_MIB'):
+        make_model(DEVICE_BUDGET_MIB='5000', POOL_MIB='4096')
+
+
+def test_the_config_declares_the_budget_parameters() -> None:
+    text = (MODEL_DIR / 'config.pbtxt').read_text()
+    assert 'key: "DEVICE_BUDGET_MIB"' in text
+    assert 'key: "BUDGET_WAIT_SECONDS"' in text

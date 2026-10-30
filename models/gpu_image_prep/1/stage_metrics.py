@@ -10,6 +10,7 @@ few ``perf_counter`` calls and one addition per stage per image (the counters ar
 batches, see :class:`StageMetrics`). Stages:
 
 ``queue``        wait for a free slot and a worker thread (``execute`` receipt to the first stage)
+``budget``       wait for device memory (``prep_budget``); only photos that route to the GPU
 ``decode``       header routing, nvJPEG decode, EXIF orientation
 ``letterbox``    detector letterbox canvas
 ``detect``       detector call (BLS), box decoding
@@ -41,6 +42,7 @@ if TYPE_CHECKING:
 
 STAGES = (
     'queue',
+    'budget',
     'decode',
     'letterbox',
     'detect',
