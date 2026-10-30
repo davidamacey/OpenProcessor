@@ -1,0 +1,6 @@
+# Research-only dependencies for the clustering scripts in scripts/research/. Not part of the
+# product and not in requirements.txt. Install into a venv outside the repo, on top of
+# requirements-test.txt:  pip install -r scripts/research/requirements.txt
+# (The fine-grained benchmark has its own list: fine_grained_requirements.txt.)
+igraph
+leidenalg

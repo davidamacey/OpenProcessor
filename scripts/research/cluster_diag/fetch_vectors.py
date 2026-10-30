@@ -4,7 +4,8 @@
         [--limit N]
 
 Writes ``NAME.npy`` (float32, one row per item, ordered by ``crop_id``) and
-``NAME.meta.jsonl`` (the same rows' metadata). The project is only searched, through the
+``NAME.meta.jsonl`` (the same rows' metadata; a byte-upload project's rows also carry
+``source_identifier``, the client's file path, because its ``image_path`` is a hash name). The project is only searched, through the
 guarded script client bound to the project, so the guard refuses any other index. Rows are
 sorted by the unique ``crop_id`` so the export is the same for any shard layout or ingest
 order.
@@ -30,7 +31,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from src.config.curation_accessors import items_index
+from src.config.curation_accessors import images_index, items_index
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import abind_script_project, add_project_argument
 
@@ -46,6 +47,7 @@ META_FIELDS = (
     'blur_lap_var',
     'crop_area_norm',
     'crop_rank_in_image',
+    'cluster_id',
 )
 PAGE = 1000
 
@@ -76,6 +78,21 @@ async def fetch(
     return np.asarray(vectors, dtype=np.float32), meta
 
 
+async def fetch_identifiers(client: Any, index: str) -> dict[str, str]:
+    """``image_id -> source_identifier`` of the images a byte upload named (empty otherwise)."""
+    body: dict[str, Any] = {
+        'size': PAGE,
+        '_source': ['image_id', 'source_identifier'],
+        'sort': [{'image_id': 'asc'}],
+        'query': {'exists': {'field': 'source_identifier'}},
+    }
+    out: dict[str, str] = {}
+    while hits := (await client.search(index=index, body=body))['hits']['hits']:
+        out |= {h['_source']['image_id']: h['_source']['source_identifier'] for h in hits}
+        body['search_after'] = hits[-1]['sort']
+    return out
+
+
 def write_export(out: Path, vectors: np.ndarray, meta: Sequence[dict[str, Any]]) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     np.save(out.with_suffix('.npy'), vectors)
@@ -87,6 +104,10 @@ async def run(args: argparse.Namespace) -> int:
     client = make_script_opensearch([args.opensearch_url], timeout=600)
     try:
         vectors, meta = await fetch(client, items_index(), args.limit)
+        identifiers = await fetch_identifiers(client, images_index())
+        for row in meta:
+            if row['image_id'] in identifiers:
+                row['source_identifier'] = identifiers[row['image_id']]
     finally:
         await client.close()
     write_export(args.out, vectors, meta)

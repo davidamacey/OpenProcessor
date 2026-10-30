@@ -213,14 +213,23 @@ def select_base(
     rare_coco: set[str],
     seed: int = SEED,
     scale: float = 1.0,
+    exclude: frozenset[str] = frozenset(),
+    backfill: bool = False,
 ) -> list[dict[str, Any]]:
-    """Base images of every group, each image in one group (similar, rare, lowres, mixed)."""
+    """Base images of every group, each image in one group (similar, rare, lowres, mixed).
+
+    ``exclude`` lists file names that must not be drawn (a second pin disjoint from the first).
+    With ``backfill``, a COCO group that the exclusion leaves short of its quota hands the
+    shortfall to the Open Images draw of the same group (COCO val2017 has 5,000 images and is the
+    only COCO split the detector was not trained on).
+    """
     rare = {'coco': rare_coco, 'openimages': set(OI_RARE.values())}
     pools = {'coco': coco, 'openimages': oi}
-    taken: set[str] = set()
+    taken: set[str] = set(exclude)
     out: list[dict[str, Any]] = []
+    short: dict[str, int] = {}
     for (source, group), quota in QUOTAS.items():
-        n = round(quota * scale)
+        n = round(quota * scale) + (short.get(group, 0) if source == 'openimages' else 0)
         rows = pools[source]
         if group == 'similar':
             pool = [dict(r, key=r['primary']) for r in rows if r['primary'] in SIMILAR]
@@ -244,6 +253,8 @@ def select_base(
                 f'{seed}:{source}:{group}',
                 taken,
             )
+        if backfill and source == 'coco':
+            short[group] = n - len(pick)
         for r in pick:
             r.pop('key', None)
             out.append({**r, 'group': group})

@@ -243,6 +243,7 @@ def _synthetic_project(tmp_path: Path, per_class: int = 40) -> tuple[Path, Path,
 def _args(stem: Path, lab: Path, gt: Path, out: Path, **extra: Any) -> Any:
     from argparse import Namespace
 
+    extra.setdefault('split_manifest', None)
     return Namespace(bundle=stem, labels=lab, coco_gt=gt, out=out, **extra)
 
 
@@ -281,3 +282,197 @@ def test_e1_scores_every_arm_and_the_pre_and_post_fix_permutation_ari(tmp_path: 
     ari = out['row_permutation_ari']
     assert ari['ivf_current_sorted_by_id(#372 fix)'] == pytest.approx(1.0)
     assert ari['ahc_average_fixed_cut'] == pytest.approx(1.0)
+
+
+# ---------------------------------------------------------------- uploaded images and the eval split
+
+
+def test_load_bundle_keys_annotations_by_the_uploader_identifier_and_label_group(
+    tmp_path: Path,
+) -> None:
+    stem, labels, gt = _write_project(tmp_path)
+    rows = [json.loads(x) for x in stem.with_suffix('.meta.jsonl').read_text().splitlines()]
+    for r, ident in zip(rows, ['/data/a.jpg', '/data/a.jpg', '/data/b.jpg'], strict=True):
+        r['image_path'] = (
+            f'/uploads/{r["crop_id"]}hash.jpg'  # an upload's hash name matches nothing
+        )
+        r['source_identifier'] = ident
+    stem.with_suffix('.meta.jsonl').write_text(''.join(json.dumps(r) + '\n' for r in rows))
+    labels.write_text(
+        json.dumps({'item_id': 'c0', 'label': 'car', 'stratum': 'low_res', 'group': 'a.jpg'})
+        + '\n'
+        + json.dumps({'item_id': 'c2', 'label': 'bus', 'stratum': 'rare', 'group': 'b.jpg'})
+        + '\n'
+    )
+    b = load_bundle(stem, labels, gt)
+    assert b.side.tolist() == [25.0, 100.0]
+    assert b.group == ['a.jpg', 'b.jpg']
+
+
+class _IdentifierClient:
+    def __init__(self) -> None:
+        self.docs = [{'image_id': f'im{i}', 'source_identifier': f'/d/{i}.jpg'} for i in range(5)]
+
+    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
+        assert index == 'op_prj_x__images'
+        assert body['query'] == {'exists': {'field': 'source_identifier'}}
+        start = 0 if 'search_after' not in body else int(body['search_after'][0][2:]) + 1
+        page = self.docs[start : start + body['size']]
+        return {'hits': {'hits': [{'_source': d, 'sort': [d['image_id']]} for d in page]}}
+
+
+@pytest.mark.asyncio
+async def test_fetch_identifiers_pages_through_every_named_image(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(fv, 'PAGE', 2)
+    got = await fv.fetch_identifiers(_IdentifierClient(), 'op_prj_x__images')
+    assert got == {f'im{i}': f'/d/{i}.jpg' for i in range(5)}
+
+
+def test_calibration_mask_follows_the_split_manifest_and_refuses_unknown_groups(
+    tmp_path: Path,
+) -> None:
+    from scripts.bench.eval_split import build_manifest, write_manifest
+    from scripts.research.cluster_diag import run
+
+    stem, lab, gt = _synthetic_project(tmp_path)
+    rows = [json.loads(x) for x in lab.read_text().splitlines()]
+    for r in rows:
+        r['group'] = 'g0.jpg' if int(r['item_id'][1:]) % 2 else 'g1.jpg'
+    lab.write_text(''.join(json.dumps(r) + '\n' for r in rows))
+    b = load_bundle(stem, lab, gt)
+    manifest = build_manifest('t', 1, 'source_image', ['g0.jpg', 'g1.jpg'])
+    path = tmp_path / 'split.json'
+    write_manifest(path, manifest)
+    calibration = manifest['calibration'][0]
+    mask = run.calibration_mask(b, path)
+    assert mask.tolist() == [g == calibration for g in b.group]
+    write_manifest(path, build_manifest('t', 1, 'source_image', ['g0.jpg']))
+    with pytest.raises(SystemExit):
+        run.calibration_mask(b, path)
+
+
+def test_build_labels_matches_uploaded_images_by_identifier(tmp_path: Path) -> None:
+    from scripts.research.cluster_diag import build_labels
+
+    stem = tmp_path / 'proj'
+    meta = [
+        {
+            'crop_id': 'c0',
+            'image_id': 'i0',
+            'image_path': '/uploads/zz/hash0.jpg',
+            'source_identifier': '/data/a.jpg',
+            'bbox_norm': [0.0, 0.0, 0.5, 0.5],
+            'cluster_id': 3,
+        }
+    ]
+    stem.with_suffix('.meta.jsonl').write_text(''.join(json.dumps(m) + '\n' for m in meta))
+    gt = tmp_path / 'gt.json'
+    gt.write_text(
+        json.dumps(
+            {
+                'images': [{'id': 1, 'file_name': 'a.jpg', 'width': 100, 'height': 100}],
+                'categories': [{'id': 1, 'name': 'car'}],
+                'annotations': [{'image_id': 1, 'category_id': 1, 'bbox': [0, 0, 50, 50]}],
+            }
+        )
+    )
+    pin = tmp_path / 'pin.json'
+    pin.write_text(json.dumps({'rare_classes': [], 'manifest_sha256': 'x', 'seed': 1}))
+    out = tmp_path / 'out'
+    assert (
+        build_labels.main(
+            [
+                '--bundle',
+                str(stem),
+                '--coco-gt',
+                str(gt),
+                '--eval-manifest',
+                str(pin),
+                '--out-dir',
+                str(out),
+            ]
+        )
+        == 0
+    )
+    label = json.loads((out / 'labels.jsonl').read_text())
+    assert (label['item_id'], label['label'], label['group']) == ('c0', 'car', 'a.jpg')
+    assert json.loads((out / 'partition.jsonl').read_text()) == {'item_id': 'c0', 'cluster_id': 3}
+
+
+def test_export_partition_cuts_the_dendrogram_at_the_given_height(tmp_path: Path) -> None:
+    from scripts.research.cluster_diag import export_partition
+
+    stem, _, _ = _synthetic_project(tmp_path)
+    out = tmp_path / 'p.jsonl'
+    argv = ['--bundle', str(stem), '--arm', 'ahc_average', '--param', '0.5', '--out', str(out)]
+    assert export_partition.main(argv) == 0
+    rows = [json.loads(x) for x in out.read_text().splitlines()]
+    ids = [r['item_id'] for r in rows]
+    assert ids == sorted(ids)  # the export's crop-id order
+    # three well-separated classes of 40 crops each -> three clusters, one per class
+    by_class = {c: {r['cluster_id'] for r in rows[c * 40 : (c + 1) * 40]} for c in range(3)}
+    assert all(len(v) == 1 for v in by_class.values())
+    assert len(set().union(*by_class.values())) == 3
+    with pytest.raises(SystemExit):
+        export_partition.main(['--bundle', str(stem), '--arm', 'leiden', '--out', str(out)])
+
+
+# ---------------------------------------------------------------- X0: names compare by the product rule
+
+
+def _slug_project(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """Detector names in registry slug form, ground-truth labels in COCO form, same classes."""
+    stem, lab, gt = _synthetic_project(tmp_path, per_class=12)
+    names = {'car': 'traffic light', 'bus': 'fire hydrant', 'dog': 'Hot Dog'}
+    meta = [json.loads(r) for r in stem.with_suffix('.meta.jsonl').read_text().splitlines()]
+    for m in meta:
+        m['detector_class_name'] = names[m['detector_class_name']].lower().replace(' ', '_')
+    stem.with_suffix('.meta.jsonl').write_text(''.join(json.dumps(m) + '\n' for m in meta))
+    rows = [json.loads(r) for r in lab.read_text().splitlines()]
+    for r in rows:
+        r['label'] = names[r['label']]
+    lab.write_text(''.join(json.dumps(r) + '\n' for r in rows))
+    return stem, lab, gt
+
+
+def test_e5_agreement_treats_a_slug_and_its_coco_spelling_as_one_class(tmp_path: Path) -> None:
+    from scripts.research.cluster_diag import run
+
+    stem, lab, gt = _slug_project(tmp_path)
+    out = run.run_e5(_args(stem, lab, gt, tmp_path / 'o.json', confidence_cuts=[1.01]))
+    # the slug and the COCO spelling of each class name are one class
+    assert out['cuts']['detector_confidence<1.01']['detector_class_agrees_with_label'] == 1.0
+
+
+def test_diag_label_facts_use_the_same_name_rule(tmp_path: Path) -> None:
+    pytest.importorskip('igraph')
+    pytest.importorskip('leidenalg')
+    from scripts.research.cluster_diag import run
+
+    stem, lab, gt = _slug_project(tmp_path)
+    pool = np.random.default_rng(1).standard_normal((60, 16)).astype(np.float32)
+    np.save(tmp_path / 'pool.npy', pool)
+    out = run.run_diag(
+        _args(
+            stem,
+            lab,
+            gt,
+            tmp_path / 'o.json',
+            fit_pool=tmp_path / 'pool.npy',
+            pool_geometry_rows=60,
+        )
+    )
+    assert out['label_facts']['detector_class_agrees_with_label'] == 1.0
+
+
+def test_agreement_still_counts_a_different_class_as_a_disagreement() -> None:
+    from scripts.research.cluster_diag.dataset import class_agreement
+
+    meta = [{'detector_class_name': n} for n in ('traffic_light', 'bus', 'dog', None)]
+    # rows 0..3 vs labels: same class (spelled differently), different, same, no detector class
+    got = class_agreement(
+        meta, np.array([0, 1, 2, 3]), np.array(['traffic light', 'car', 'DOG', 'cat'])
+    )
+    assert got == pytest.approx(2 / 4)

@@ -224,6 +224,8 @@ def _one(
         verdict, error = parse_verdict(m, raw.text), None
     except VerdictError as exc:
         verdict, error = None, str(exc)
+        if raw.truncated:
+            error = f'reply truncated at max_tokens: {exc}'
         out.invalid.append(sheet_id)
     record = _record(run_id, backend, req, raw, verdict, error)
     _append(out_path, record)

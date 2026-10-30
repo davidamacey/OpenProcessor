@@ -304,3 +304,32 @@ def test_local_backend_builds_an_openai_request_with_the_image(
 def test_local_backend_refuses_an_external_endpoint() -> None:
     with pytest.raises(jp.PrivacyRefusalError, match='external'):
         jb.LocalVlmBackend('https://api.example.org/v1', model='m')
+
+
+def test_a_reply_cut_off_at_max_tokens_is_recorded_as_truncated(tmp_path: Path) -> None:
+    class Cut(FakeBackend):
+        def judge(self, _request: jp.JudgeRequest) -> jp.RawReply:
+            return jp.RawReply(text='The user wants me to', output_tokens=2048, truncated=True)
+
+    budget = jr.Budget(tmp_path / 'b.json', max_calls=2, max_input_tokens=100_000)
+    out = tmp_path / 'r.jsonl'
+    jr.run_requests([_request()], Cut([]), budget, None, out, run_id='r')
+    rec = json.loads(out.read_text().splitlines()[-1])
+    assert rec['error'].startswith('reply truncated at max_tokens')
+
+
+def test_local_backend_marks_a_length_finish_as_truncated() -> None:
+    class Resp:
+        headers: dict[str, str] = {}
+
+        def raise_for_status(self) -> None: ...
+
+        def json(self) -> dict[str, Any]:
+            return {'choices': [{'message': {'content': 'x'}, 'finish_reason': 'length'}]}
+
+    def post(*_args: Any, **_kw: Any) -> Resp:
+        return Resp()
+
+    backend = jb.LocalVlmBackend('http://127.0.0.1:4612/v1', model='m', post=post)
+    raw = backend.judge(_request())
+    assert raw.truncated is True
