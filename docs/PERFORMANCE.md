@@ -3331,8 +3331,8 @@ or above `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0). The CPU single decode alone does 
 ingest (the next binders are elsewhere); it is the CPU path the GPU decode falls back to.
 
 The GPU decode is the default, sized by hardware. It adds about 8.5 GB (8,704 MiB, loaded on first use)
-per model instance to the Triton card (`full` runs two instances, 17,408 MiB, #268; the other profiles
-run one if you turn the GPU decode on), on top of the profile's own models (about 8, 12 and 17 GB for `minimal`,
+per model instance to the Triton card (every profile runs one instance, 8,704 MiB; two instances, #268, are 48.3 against 38.9 img/s
+but only fit next to the ingest load profile's three models), on top of the profile's own models (about 8, 12 and 17 GB for `minimal`,
 `standard` and `full`). Only `full` (48 GB+) has room, so the installer writes
 `OP_INGEST_GPU_DECODE=1` for it and `0` for `minimal` and `standard`; a 12 GB card does not hold
 the full model set beside other projects' resident processes, let alone the GPU decode. A checkout
@@ -3345,9 +3345,9 @@ Instance count (#268, one RTX A6000, 3,275 photos of about 18 MP, three runs eac
 `gpu_image_prep` instance 31.8 images/s, two 48.0 (+51 percent; GPU utilization 70-75 to 78-87
 percent, Triton CPU 610 to 865 percent), three adds 0.6 percent over two for another 6 to 7 GB. The
 single instance is one Python process: its worker threads share one GIL. `gpu_image_prep_instances`
-in `config_templates/profiles/*.json` sets the count (`full` 2, `minimal` and `standard` 1), the
+in `config_templates/profiles/*.json` sets the count (1 in every profile; 2 with `OP_LOAD_PROFILE=ingest`), the
 installer writes it into `models/gpu_image_prep/config.pbtxt`, and `openprocessor gpu plan` sizes the
-GPU decode as count times 8,704 MiB. The committed config carries 2, the `full` value.
+GPU decode as count times 8,704 MiB. The committed config carries 1, the `full` value. Two instances fit a 48 GB card only with the ingest load profile (set the count by hand in `models/gpu_image_prep/config.pbtxt`).
 
 ### Stage 4: coalesced ingest writes, Lucene engine, write ceiling on the final mapping (#248, #254, #230)
 
@@ -3808,7 +3808,7 @@ python scripts/bench/ingest_profile.py table "set B=<dir>/setB"
 
 ### GPU memory and the ingest load profile (0.7.0)
 
-With every default model loaded, `gpu_image_prep` shares a 48 GB card with 36.5 GB of other models, and two instances do not fit: photos then
+With every default model loaded, `gpu_image_prep` shares a 48 GB card with 36.5 GB of other models, and two instances do not fit (the `full` profile therefore ships one instance): photos then
 decode on the API's CPU (counted as `cpu_gpu_memory`, `cpu_decoder`, `cpu_call_failed` in `op_ingest_decode_total`) and throughput falls with
 session age. Two ways out, both measured on one RTX A6000 with a private set of 3,000 photos of about 21 MP (ratios, not public data):
 

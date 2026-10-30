@@ -64,10 +64,8 @@ recognizer 11,572, ocr_pipeline 0; total 27,698 MiB. Every public endpoint answe
 
 ## Decisions needed from the owner
 
-1. **Default for the `full` tier on 48 GB cards.** Options: (a) make `OP_LOAD_PROFILE=ingest` the `full` default; (b) `gpu_image_prep_instances` 1 for `full`
-   (38.9 img/s, meets the bar); (c) leave as is (not recommended: fallbacks). Recommended: (b) now, (a) after a release of use.
-2. Whether on-demand loading may stay in the API clients (small, no effect when the profile is off).
-3. Push and PR once the full suite has been run.
+1. Decided by the main session after this review: `full` ships one `gpu_image_prep` instance (38.9 img/s, bar met); two instances stay the documented option with the ingest profile (48.3 img/s). On-demand loading stays in the API clients.
+2. Push and PR once the full suite has been run.
 
 ## Five-minute check
 

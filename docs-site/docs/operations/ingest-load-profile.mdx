@@ -43,7 +43,8 @@ status and decoded on the CPU, counted in `op_ingest_decode_total` as `cpu_gpu_m
 `op_gpu_prep_stage_seconds{stage="budget"}` is the time spent waiting.
 
 A non-zero `cpu_gpu_memory` rate means the card is too full: use the profile below, lower the
-`gpu_image_prep` instance count, or unload models you do not use.
+`gpu_image_prep` instance count, or unload models you do not use. The `full` installer profile
+ships one instance for this reason.
 
 ## The opt-in profile
 
@@ -54,7 +55,9 @@ OP_LOAD_PROFILE=ingest
 ```
 
 The CLI then adds `docker-compose.ingest-focus.yml`, which preloads only the detector and the
-PE models. With plain Compose add `-f docker-compose.ingest-focus.yml` yourself. The default
+PE models. With the profile on, set `count: 2` in `models/gpu_image_prep/config.pbtxt` for the
+second instance (48.3 against 38.9 img/s measured; 2 x 2.3 GB reserved plus working memory fits
+because 27.7 GB are free). With plain Compose add `-f docker-compose.ingest-focus.yml` yourself. The default
 (`OP_LOAD_PROFILE=full`) is unchanged.
 
 Every other endpoint still answers. The first call that needs a model Triton does not hold

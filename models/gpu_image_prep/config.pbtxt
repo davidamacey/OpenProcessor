@@ -48,7 +48,7 @@ output [
 
 instance_group [
   {
-    count: 2  # per-profile value (config_templates/profiles/*.json, gpu_image_prep_instances)
+    count: 1  # per-profile value (config_templates/profiles/*.json, gpu_image_prep_instances)
     kind: KIND_GPU
     gpus: [ 0 ]
   }
