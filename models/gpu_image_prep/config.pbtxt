@@ -75,3 +75,9 @@ parameters { key: "LANES" value: { string_value: "16" } }
 parameters { key: "WORKERS" value: { string_value: "32" } }
 parameters { key: "MAX_IN_FLIGHT" value: { string_value: "96" } }
 parameters { key: "ENCODE_THREADS" value: { string_value: "8" } }
+
+# Per-stage wall timing is always on (counters op_gpu_prep_stage_seconds and
+# op_gpu_prep_stage_observations on Triton's metrics port, see 1/stage_metrics.py). "1" makes a
+# kernel stage wait for its stream so the GPU time lands in the stage that ran it: use it for
+# attribution runs only, it removes the overlap inside one image.
+parameters { key: "STAGE_SYNC" value: { string_value: "0" } }
