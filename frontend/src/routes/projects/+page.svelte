@@ -15,8 +15,8 @@
    *   state (`GET {prefix}/pause`, read for every `selectable` row) has
    *   loaded; the button offered is the opposite of the served `paused`
    * - Create: disabled only by a served `capacity.status === 'blocked'`
-   * - Combine projects: only when `combineAvailability` says the backend
-   *   mounts the combine router (one-shot probe)
+   * - Combine projects: always offered; the backend mounts the combine router
+   *   unconditionally, so there is nothing to probe
    * - A project the server says came from a combine (`origin.kind ===
    *   'combine'` with a `job_id`) links to that job, and its delete is
    *   labelled "Undo combine" (undoing a combine is deleting the target)
@@ -30,7 +30,6 @@
   import DeleteProjectDialog from '$components/projects/DeleteProjectDialog.svelte';
   import EditProjectDialog from '$components/projects/EditProjectDialog.svelte';
   import PauseProjectDialog from '$components/projects/PauseProjectDialog.svelte';
-  import { combineAvailability } from '$lib/combine/combineAvailability.svelte';
   import { formatBytes } from '$lib/format/bytes';
   import { formatCount } from '$lib/format/count';
   import { projectHref } from '$lib/projectPaths';
@@ -58,7 +57,6 @@
   onMount(() => {
     admin.start();
     void admin.load();
-    void combineAvailability.init();
     // A served project.* event (deleted, created, ...) re-reads the list
     // at once; the controller's poll covers a missed event.
     const sub = subscribeGlobalEvents({ onEvent: () => void admin.load() });
@@ -153,11 +151,9 @@
         Show archived
       </label>
       <span class="grow"></span>
-      {#if combineAvailability.available === true}
-        <a href={resolve('/projects/combine')} class="btn" data-testid="projects-combine"
-          >Combine projects…</a
-        >
-      {/if}
+      <a href={resolve('/projects/combine')} class="btn" data-testid="projects-combine"
+        >Combine projects…</a
+      >
       <button
         type="button"
         class="btn btn-primary"

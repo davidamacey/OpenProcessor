@@ -13,8 +13,8 @@ that a test did not expect fails the test.
   3. `test_preview_stale_re_previews` — a 409 `preview_stale` shows the
      served message and fires a fresh preview; the retry carries the new sha.
   4. `test_failed_job_undo_opens_the_delete_dry_run`.
-  5. `test_feature_absent_on_a_plain_404` — the harness stub's default 404: no
-     button, the route says so, no other combine request fires.
+  5. `test_projects_page_offers_combine_without_a_probe` — `/projects` shows
+     the entry point, fires no combine request and logs no console error.
 """
 
 from __future__ import annotations
@@ -157,7 +157,7 @@ def serve_projects(stub: Any, *, merged: dict[str, Any] | None = None) -> None:
 
 
 def serve_combine(stub: Any, *, jobs: list[dict[str, Any]] | None = None) -> list[int]:
-    """The combine router: the probe's structured 404, and the job reads."""
+    """The combine router's job reads."""
     reads = [0]
 
     def handler(request: Any, m: Any):
@@ -462,25 +462,16 @@ def test_failed_job_undo_opens_the_delete_dry_run(stub, page, app_url):
     expect(page.get_by_test_id("projects-combine")).to_be_visible()
 
 
-def test_feature_absent_on_a_plain_404(stub, page, app_url):
-    # the harness stub's default: GET {prefix}/projects/combine/<id> -> plain 404.
+def test_projects_page_offers_combine_without_a_probe(stub, page, app_url):
     serve_projects(stub)
 
-    with page.expect_response(lambda r: "/projects/combine/" in r.url):
-        page.goto(f"{app_url}/projects")
+    page.goto(f"{app_url}/projects")
     page.get_by_test_id("project-row-widgets-a").wait_for(timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_test_id("projects-combine")).to_have_count(0)
-
-    page.goto(f"{app_url}/projects/combine")
-    expect(page.get_by_test_id("combine-unavailable")).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_test_id("combine-add-source")).to_have_count(0)
-
-    page.goto(f"{app_url}/projects/combine/{JOB_ID}")
-    expect(page.get_by_test_id("combine-unavailable")).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id("projects-combine")).to_be_visible()
 
     seen = stub.handled + stub.unhandled
-    combine = [(m, p) for (m, p) in seen if "/projects/combine" in p]
-    assert combine and all(m == "GET" and p.endswith("/projects/combine/__probe__") for (m, p) in combine), combine
+    assert [p for (_m, p) in seen if "/projects/combine" in p] == []
+    assert [m for m in stub.console_errors if m.startswith(("error", "pageerror"))] == []
 
 
 def test_conflict_review_link_leads_to_a_review_that_sends_the_filter(stub, page, app_url):

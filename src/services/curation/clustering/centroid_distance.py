@@ -12,10 +12,18 @@ from __future__ import annotations
 import numpy as np
 
 
+# Stored precision: the float64 result is rounded so the last-bit noise of different
+# hardware cannot change what is written; 1e-6 of cosine distance is far below any sort or
+# cut-line use.
+_DECIMALS = 6
+
+
 def member_centroid_distances(embeddings: np.ndarray, labels: np.ndarray) -> list[float | None]:
     """Per-row distance to the mean of its label's rows; ``None`` for noise
     (label ``-1``)."""
-    x = np.asarray(embeddings, dtype=np.float32)
+    # float64: float32 sums and gemv round differently per CPU (SIMD width, BLAS kernel), which
+    # moved the stored distance in the 7th decimal between machines.
+    x = np.asarray(embeddings, dtype=np.float64)
     norms = np.linalg.norm(x, axis=1, keepdims=True)
     x = x / np.where(norms == 0, 1.0, norms)
     labels = np.asarray(labels, dtype=np.int64)
@@ -30,7 +38,7 @@ def member_centroid_distances(embeddings: np.ndarray, labels: np.ndarray) -> lis
             continue
         dists = np.clip(1.0 - x[rows] @ (centroid / norm), 0.0, 2.0)
         for row, dist in zip(rows.tolist(), dists.tolist(), strict=True):
-            out[row] = float(dist)
+            out[row] = round(float(dist), _DECIMALS)
     return out
 
 

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Cluster list: the sort and filters are the server's. The toolbar renders the served sort options and flag vocabulary and filters by dominant class, detector class, size range, validation state, flags and needs review; the choice goes out as query parameters, lives in the URL and in session storage, and "Clear filters" resets it. Cards show the detector's top class with its share and mean confidence, the validation state, the review count (per-tab counts as the tooltip) and the flags (served label, served description as tooltip). A truncated list says so; load and error states have a Retry.
+- Cluster page: facet chips from the served facets (detector class, validation, review tab, detector-confidence band, each with the served count; label-source options carry their count) that send the matching crop-list parameter, and a sort by detector confidence. The panel folds on a narrow screen.
+- An axe-core accessibility check in the stubbed e2e suite (`e2e/stubbed/test_a11y_axe.py`) on projects, clusters, cluster detail, review, classes, settings, prompt packs and open-vocab sets; it fails on any violation.
+
+### Changed
+
+- The cluster list no longer sorts or narrows on the client and no longer fetches thumbnails one request per card: the first screen is one list request that also carries its thumbnails, and each further window is one more. The "Unlabeled only" toggle is gone (use the validation and dominant-class filters). Readers of `label_purity` moved to `label_agreement`.
+
 ### Fixed
 
 - An unknown URL shows a not-found page instead of the "Something went wrong / Reload" prompt.
@@ -16,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dim text and the labels on filled buttons and the LIVE badge meet WCAG AA contrast.
 - The blocked-start screen no longer repeats its title as the reason.
 - A project that is still building opens by itself once it becomes selectable.
+- `/projects` no longer probes a combine job id on every load (a logged 404); "Combine projects…" is always offered because the backend always mounts the combine router.
+- A crop card in the cluster grid is a container with one select button (the thumbnail) and sibling action buttons, so no interactive control nests inside another; the class list in the sidebar no longer inherits a list-item role on its buttons; every empty table header (scores, prompt packs, region profiles, open-vocab sets, VLM tables, config, deprecated classes) has a visually hidden label.
+- After a bulk assign on a cluster page the grid and the footer count are re-read from the server, so the footer no longer reads `60 / 3 listed`.
+- The review page shows the `Proposed` row only when the server served a proposal.
+- One timestamp format everywhere (`YYYY-MM-DD HH:MM:SS UTC`, as on Settings): the dashboard's clustering run and export finish, the export page's last run, the combine job's start and finish, and the ingest sources' poll and scan times.
+- The default search hint is short enough not to be clipped on a phone-width screen.
+- The cluster list's badge lookup for search results no longer asks for a zero-size representatives window (the server refuses it).
 - The docs screenshot seeding binds a project (`--project`) like the other scripts.
 
 ## [0.6.0] - 2026-10-16

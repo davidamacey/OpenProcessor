@@ -8,8 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.routers.curation.clusters import list_clusters
-from src.services.curation.item_filter import ItemFilter
+from curation._cluster_cards_helpers import list_cards
 
 
 def _bucket(cid: int, subids: list[str] | None) -> dict[str, Any]:
@@ -32,15 +31,12 @@ async def _list(*buckets: dict[str, Any]) -> tuple[dict[str, Any], AsyncMock]:
     os_client.search = AsyncMock(
         return_value={'aggregations': {'clusters': {'buckets': list(buckets)}}}
     )
-    resp = await list_clusters(
+    resp = await list_cards(
         os_client,
         per_cluster=0,
         max_clusters=100,
         kind='all',
         cluster_id=None,
-        item_filter=ItemFilter(),
-        min_blur_ratio=None,
-        class_source=None,
     )
     return resp, os_client
 

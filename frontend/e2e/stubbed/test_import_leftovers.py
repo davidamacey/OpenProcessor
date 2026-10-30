@@ -249,7 +249,7 @@ def test_image_reprocess_from_a_cluster_card(stub, page, app_url):
     names = page.get_by_test_id("class-name")
     expect(names).to_have_text(["widget", "widget", "widget"], timeout=ACTION_TIMEOUT_MS)
 
-    card = page.locator('[role="button"][aria-pressed]').first
+    card = page.locator("div.group").filter(has=page.locator("button[aria-pressed]")).first
     card.hover()
     card.get_by_role("button", name="Expand").click()
     page.get_by_test_id("card-reprocess-image").get_by_test_id("reprocess-open").click()
@@ -303,7 +303,7 @@ def test_import_provenance_rows_in_details(stub, page, app_url):
 
     page.goto(f"{app_url}/p/default/clusters/2")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
-    card = page.locator('[role="button"][aria-pressed]').first
+    card = page.locator("div.group").filter(has=page.locator("button[aria-pressed]")).first
     card.hover()
     card.get_by_role("button", name="Show crop details").click()
     expect(page.get_by_test_id("import-label-locked")).to_have_text("Locked", timeout=ACTION_TIMEOUT_MS)

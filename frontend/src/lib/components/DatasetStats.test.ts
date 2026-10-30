@@ -115,6 +115,30 @@ describe('DatasetStats', () => {
     expect(rows).toContain('Made by last run 1');
   });
 
+  it('writes the last clustering run time in the one shared timestamp format', () => {
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    instance = mount(DatasetStats, { target, props: {} });
+    flushSync();
+
+    capturedOpts?.onSnapshot?.(
+      {},
+      goodStats({
+        clusters: {
+          last_run_at: '2026-10-01T12:34:56.789012+00:00',
+          cluster_count: 3,
+          last_run_cluster_count: 3,
+          residual_count: 0,
+          noise_count: 0,
+          method: null,
+        },
+      }) as unknown as Record<string, unknown>,
+    );
+    flushSync();
+
+    expect(target.textContent).toContain('2026-10-01 12:34:56 UTC');
+  });
+
   it('#36 item 2 (D1): renders unlabeled.vlm_no_class in the Unlabeled block', () => {
     target = document.createElement('div');
     document.body.appendChild(target);

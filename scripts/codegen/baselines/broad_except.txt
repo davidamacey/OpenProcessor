@@ -87,7 +87,6 @@ src/routers/curation/edit_undo.py	1	triage every return-empty handler in PR 3; r
 src/routers/curation/global_status.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/curation/health.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/curation/keymap.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/curation/label_undo.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/curation/methods.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/curation/pipeline_events.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/auto_label_run.py	3	triage every return-empty handler in PR 3; ratchet: may only go down

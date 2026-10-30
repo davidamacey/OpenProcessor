@@ -229,6 +229,7 @@ describe('acceptAllVlmOnPage', () => {
       updated: ids.length,
       updated_ids: ids,
       conflicts: [],
+      op_id: null,
     }));
     const successSpy = vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
     const recordWritesSpy = vi.spyOn(undoStore, 'recordWrites');
@@ -265,6 +266,7 @@ describe('acceptAllVlmOnPage', () => {
       updated: ids.length,
       updated_ids: ids,
       conflicts: [],
+      op_id: null,
     }));
     const a = crop('a', {
       vlm_suggested_class_id: 42,
@@ -294,7 +296,7 @@ describe('acceptAllVlmOnPage', () => {
   it('rolls back only the crops in a failed group, leaving the succeeded group moved out of the grid', async () => {
     vi.mocked(bulkLabel).mockImplementation(async (ids, classId) => {
       if (classId === 2) throw new Error('group 2 failed');
-      return { updated: ids.length, updated_ids: ids, conflicts: [] };
+      return { updated: ids.length, updated_ids: ids, conflicts: [], op_id: null };
     });
     const errorSpy = vi.spyOn(toastStore, 'error').mockImplementation(() => 'x');
     const a = crop('a', { vlm_suggested_class_id: 1, vlm_suggested_class_name: 'x1' });

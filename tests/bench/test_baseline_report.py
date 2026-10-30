@@ -45,7 +45,12 @@ def test_parse_nvidia_smi_and_summary() -> None:
         rep.parse_nvidia_smi('0, 80, 3000\n1, 30, 250\n'),
     ]
     summary = rep.summarize_gpu(samples)
-    assert summary['0'] == {'util_mean_pct': 60.0, 'mem_peak_mb': 3000.0, 'samples': 2}
+    assert summary['0'] == {
+        'util_mean_pct': 60.0,
+        'util_p50_pct': 60.0,
+        'mem_peak_mb': 3000.0,
+        'samples': 2,
+    }
     assert summary['1']['util_mean_pct'] == 20.0
     assert rep.summarize_gpu([]) == {}
 

@@ -4,7 +4,7 @@
  *
  * - `purity` — nearest-centroid GEOMETRY purity (share of measured
  *   members whose nearest centroid is this cluster's own).
- * - `label_purity` (mapped onto `Cluster.dominant_pct`) — the dominant
+ * - `label_agreement` (mapped onto `Cluster.dominant_pct`) — the dominant
  *   class's share of the LABELLED members.
  *
  * The card subtitle used to print the geometry number as if it were the
@@ -12,6 +12,7 @@
  * cluster). Every surface now names which one it is showing.
  */
 import type { Cluster } from '$lib/types';
+import type { ValidationState } from '$lib/types_clusterList';
 
 function pct(v: number): string {
   return `${Math.round(v * 100)}%`;
@@ -48,4 +49,31 @@ export function cohesionText(c: Pick<Cluster, 'purity' | 'purity_n'>): string | 
   if (c.purity == null) return null;
   const base = `cohesion ${pct(c.purity)}`;
   return c.purity_n != null ? `${base} · n=${c.purity_n}` : base;
+}
+
+/** "widget_x 62% · conf 0.81", or null when the detector served no class. */
+export function detectorText(
+  c: Pick<Cluster, 'detector_top_class' | 'detector_top_share' | 'detector_conf_mean'>,
+): string | null {
+  if (!c.detector_top_class) return null;
+  const share = c.detector_top_share == null ? '' : ` ${pct(c.detector_top_share)}`;
+  const conf =
+    c.detector_conf_mean == null ? '' : ` · conf ${c.detector_conf_mean.toFixed(2)}`;
+  return `${c.detector_top_class}${share}${conf}`;
+}
+
+export const DETECTOR_TOOLTIP =
+  "The detector's most common class among the members, its share of the members that have one, and the mean detector confidence.";
+
+/** The words for the three served validation states. */
+export const VALIDATION_TEXT: Record<ValidationState, string> = {
+  none: 'not validated',
+  partial: 'partly validated',
+  complete: 'validated',
+};
+
+/** "all: 7 · outliers: 3": the served per-tab review counts. */
+export function reviewCountsTitle(counts: Record<string, number> | undefined): string {
+  const parts = Object.entries(counts ?? {}).map(([tab, n]) => `${tab}: ${n}`);
+  return parts.length > 0 ? `Members in each review tab. ${parts.join(' · ')}` : '';
 }

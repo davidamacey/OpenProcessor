@@ -220,6 +220,8 @@ def test_envfiles_check_rejects_an_assigned_name_nothing_reads(tmp_path: Path) -
     assert _check_one(tmp_path, ok, 'envfiles') == []
     local = '```bash\nBK=~/backup\nmkdir -p "$BK"\n```\n'
     assert _check_one(tmp_path, local, 'envfiles') == []
+    later = '```bash\nBK=~/backup\n```\n\n```bash\nmkdir -p "$BK"\n```\n'
+    assert _check_one(tmp_path, later, 'envfiles') == []  # assigned in one block, used in another
     bad = _check_one(tmp_path, '```bash\nNOT_A_REAL_SETTING=1\n```\n', 'envfiles')
     assert len(bad) == 1
     assert 'NOT_A_REAL_SETTING' in bad[0]
@@ -233,3 +235,8 @@ def test_envnames_check_rejects_a_named_variable_nothing_reads(tmp_path: Path) -
     bad = _check_one(tmp_path, 'Set the variable `NOT_A_REAL_SETTING` to 1.\n', 'envnames')
     assert len(bad) == 1
     assert 'NOT_A_REAL_SETTING' in bad[0]
+
+
+def test_envnames_check_reads_triton_model_parameters(tmp_path: Path) -> None:
+    ok = 'Set the variable `MAX_IN_FLIGHT` in the model config.\n'
+    assert _check_one(tmp_path, ok, 'envnames') == []

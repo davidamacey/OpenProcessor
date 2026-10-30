@@ -24,19 +24,28 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - The installer's tier prompt is a numbered menu; `--tiers` is unchanged.
 
 ### Added
+- Bulk label and move are recorded as label operations (`op_id` on `PUT /crops/batch_label` and `POST /crops/move`, a `label_op_id` tag on each written item, `op_id` on its class history entry), and `GET /label_ops` lists them with how many items still carry each label. `POST /label_ops/{op_id}/undo` undoes one by id, item by item: a later edit, an exclusion, a class merge or the test holdout keeps the item, a renamed restore target is refused, a dry run is the default, and an operation of up to 20,000 items is undone in one request. Records are files under the project's state dir, the newest 200 kept.
+- `GET /clusters` is typed (`ClusterListResponse`) and sorts and filters on the server: `sort`, `dominant_class`, `detector_class`, `min_size`, `max_size`, `validation_state`, `flag`, `needs_review`. Cards gain `detector_top_class`, `detector_top_share`, `detector_conf_mean`, `validation_state`, `review_counts`, `needs_review_count` and `flags`; the response gains `sort`, `sort_options`, `flag_vocabulary` and `truncated`.
+- The shared item filter takes `detector_class_name`, `detector_conf_min`, `detector_conf_max` (exclusive) and `review_tab`; `GET /crops` sorts by `detector_confidence`; new `GET /clusters/{cluster_id}/facets` counts a cluster's members by detector class, class source, validation, review tab and detector confidence for filter chips.
 - Self-seeding docs screenshots (#335): `capture_docs_screenshots.py --seeded` seeds its own public projects on an isolated GPU-less stack (`docker/test/compose.docs-shots.yml`, with a stand-in segmenter) and captures 17 states in one run; the harness host ports are `VERIFY_*_PORT` variables.
 - Cluster scoring: BCubed, AMI, risk-coverage and view/size pair strata in `scripts/bench/cluster_eval_metrics.py`; a scorecard envelope (`scripts/bench/scorecard.py`) that refuses quality fields on a synthetic dataset; seeded calibration/heldout splits by source image or identity (`scripts/bench/eval_split.py`, 3,000-item split under `scripts/datasets/manifests/splits/`) with a refusal to score on what was tuned on; `scripts/bench/setp_inventory.py`.
 - Cluster-quality evaluation harness: `scripts/bench/cluster_eval.py`, `cluster_eval_metrics.py` and `cluster_eval_set.py` (pair precision and recall, false-merge and false-split rates, stability, protected-item moves) and a recorded baseline (#341, `docs/research/cluster_eval_baseline.md`).
 - Host IO-pressure sampling in `scripts/bench/scale_run.py` (#337).
+- Stage timing inside `gpu_image_prep`: Triton counters `op_gpu_prep_stage_seconds` and `op_gpu_prep_stage_observations` per stage (queue, decode, letterbox, detect, embed_frame, embed_crops, embed_pe, crop_copy, crop_jpeg, blur) on the Triton metrics port; `STAGE_SYNC=1` attributes asynchronous kernel time for profiling runs.
+- `scripts/bench/run_baseline.py --reps N --drop-cache` (fresh project per repetition, page cache dropped, load average and a `gpu_prep_stages` block in the report); `scripts/bench/ingest_profile.py` (the stage profile protocol and per-stage table) and `scripts/bench/sample_copy.py` (seeded NVMe sample copies under neutral names).
 - The embed reprocess pass sends photos of at least 3 MP to the GPU decode model with the stored boxes (28 img/s against 12 on the CPU route for about 21 MP photos, API CPU 0.03 against 0.50 s per image) and counts routes in `op_reprocess_decode_total` (#259).
 - The embed reprocess pass embeds two 64-photo chunks at once, so no chunk boundary idles the encoder: 51 against 28 img/s on about 21 MP photos with the GPU decode, 85 to 92 percent GPU busy, API CPU 0.025 s per image (#259).
 - Measurement log for the 0.7.0 work: `docs/research/v070_measurement_log.md`; research notes on the three clustering kinds and on spatial memory; the 0.7.0 wave plan in `docs/design/`.
 - `/health/pe_text` reports `pid` and `cache_scope`.
 
 ### Changed
+- `POST /crops/label/undo_batch` is typed (`CropUndoBatchResponse`) and writes in paged conditional bulks instead of one update per id; `POST /crops/discard_batch` does the same.
+- `GET /clusters` no longer serves `label_purity`; read `label_agreement` (same value). Test-holdout items are no longer counted in cluster cards.
 - Docs: the published site is linked from the README and the repository homepage; first-run steps corrected after a new-user review.
 
 ### Fixed
+- Undo and discard of many items ran one conditional update per id with no concurrency limit (`undo_batch`, `discard_batch`, and the region `undo_batch` now bounded at 32 in flight).
+- Undoing a class label left the accuracy-audit verdict the label had stamped; the undo now restores it, so the item returns to the audit queue.
 - Installer rough edges from the 0.7.0 drives (#363): Ctrl-C prints how to continue (exit 130 or 143); `./openprocessor status` skips services the install's tiers do not run and prints `HTTP 000`, not `HTTP 000000`; a dry run checks free disk on the target filesystem; the control-plane-only summary names the liveness URL; branch installs print a 12-character SHA; branch mode's `sha-<12 hex>` image tag is documented.
 - The model registry push in the trainer sets a `staging` alias instead of calling the deprecated `transition_model_version_stage` (#154).
 - Two ingest timing tests no longer fail on a loaded host; they assert ordering and thread identity (#383).

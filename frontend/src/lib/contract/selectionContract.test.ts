@@ -50,11 +50,13 @@ describe('selection responses', () => {
     expect(Object.keys(local).sort()).toEqual(props('SelectionDryRunResponse'));
   });
 
-  it('the relabel / move response carries updated, updated_ids, conflicts', () => {
-    const local = { updated: true, updated_ids: true, conflicts: true } satisfies Record<
-      keyof BulkLabelResult,
-      true
-    >;
+  it('the relabel / move response carries updated, updated_ids, conflicts, op_id', () => {
+    const local = {
+      updated: true,
+      updated_ids: true,
+      conflicts: true,
+      op_id: true,
+    } satisfies Record<keyof BulkLabelResult, true>;
     expect(Object.keys(local).sort()).toEqual(props('BatchRelabelResponse'));
   });
 

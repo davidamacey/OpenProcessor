@@ -7,6 +7,7 @@ is unit-tested. A report never holds image content or image paths.
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -78,7 +79,7 @@ def parse_nvidia_smi(text: str) -> dict[str, tuple[float, float]]:
 
 
 def summarize_gpu(samples: list[dict[str, tuple[float, float]]]) -> dict[str, dict[str, float]]:
-    """Mean utilization and peak memory per GPU over the sampled run."""
+    """Mean and median utilization and peak memory per GPU over the sampled run."""
     per_gpu: dict[str, list[tuple[float, float]]] = {}
     for sample in samples:
         for gpu, reading in sample.items():
@@ -86,6 +87,7 @@ def summarize_gpu(samples: list[dict[str, tuple[float, float]]]) -> dict[str, di
     return {
         gpu: {
             'util_mean_pct': sum(u for u, _ in readings) / len(readings),
+            'util_p50_pct': percentile([u for u, _ in readings], 50),
             'mem_peak_mb': max(m for _, m in readings),
             'samples': len(readings),
         }
@@ -102,6 +104,37 @@ def percentile(values: list[float], pct: float) -> float:
     low = math.floor(rank)
     high = math.ceil(rank)
     return ordered[low] + (ordered[high] - ordered[low]) * (rank - low)
+
+
+GPU_PREP_SERIES = re.compile(r'op_gpu_prep_stage_(seconds|observations)(?:_total)?\{stage=(\w+)\}')
+
+
+def gpu_prep_stages(counters: dict[str, float]) -> dict[str, dict[str, float]]:
+    """Per-stage seconds, images, mean seconds per image and share of the stage seconds.
+
+    Input is the Triton metrics counter delta of a run (the Prometheus parser appends ``_total``
+    to counter names, Triton does not). Stage seconds are sums over concurrent requests, so the
+    share compares stages with each other and says nothing about wall time.
+    """
+    by_kind: dict[str, dict[str, float]] = {'seconds': {}, 'observations': {}}
+    for key, value in counters.items():
+        if m := GPU_PREP_SERIES.fullmatch(key):
+            by_kind[m.group(1)][m.group(2)] = value
+    seconds, seen = by_kind['seconds'], by_kind['observations']
+    total = sum(seconds.values())
+    return {
+        stage: {
+            'seconds': secs,
+            'observations': seen.get(stage, 0.0),
+            'mean_s': secs / seen[stage] if seen.get(stage) else 0.0,
+            'share': secs / total if total else 0.0,
+        }
+        for stage, secs in sorted(seconds.items())
+    }
+
+
+def median_range(values: list[float]) -> dict[str, float]:
+    return {'median': percentile(values, 50), 'min': min(values), 'max': max(values)}
 
 
 @dataclass(frozen=True)
@@ -216,12 +249,44 @@ def to_markdown(report: dict[str, Any]) -> str:
     storage = report.get('storage', {})
     lines += ['### Storage after settle', '']
     lines += _table(('measure', 'value'), [(k, _fmt(float(v))) for k, v in storage.items()])
+    prep = report.get('gpu_prep_stages', {})
+    if prep:
+        lines += ['### gpu_image_prep stages', '']
+        lines += _table(
+            ('stage', 'images', 'sum s', 'mean ms / image', 'share'),
+            [
+                (
+                    stage,
+                    _fmt(v['observations']),
+                    _fmt(v['seconds']),
+                    _fmt(v['mean_s'] * 1000),
+                    f'{v["share"] * 100:.1f}%',
+                )
+                for stage, v in prep.items()
+            ],
+        )
+    host = report.get('host', {})
+    if host:
+        lines += [
+            f'Load average (1, 5, 15 min) at start {host["loadavg_start"]}, '
+            f'end {host["loadavg_end"]}'
+            + ('. **Noisy run: repeat it before it decides anything.**' if host['noisy'] else '.'),
+            '',
+        ]
     gpu = report.get('gpu', {})
     if gpu:
         lines += ['### GPU', '']
         lines += _table(
-            ('gpu', 'mean util %', 'peak mem MB'),
-            [(g, _fmt(v['util_mean_pct']), _fmt(v['mem_peak_mb'])) for g, v in sorted(gpu.items())],
+            ('gpu', 'mean util %', 'p50 util %', 'peak mem MB'),
+            [
+                (
+                    g,
+                    _fmt(v['util_mean_pct']),
+                    _fmt(v.get('util_p50_pct', 0.0)),
+                    _fmt(v['mem_peak_mb']),
+                )
+                for g, v in sorted(gpu.items())
+            ],
         )
     for source, block in sorted(report.get('metrics', {}).items()):
         hist = block.get('histograms', {})

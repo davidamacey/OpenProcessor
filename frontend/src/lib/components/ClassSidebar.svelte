@@ -207,39 +207,43 @@
               onconsider={makeConsider(cls)}
               onfinalize={makeFinalize(cls)}
             >
-              <button
-                type="button"
-                class="flex min-h-9 grow items-center justify-between gap-2 px-3 py-2 text-left text-sm {selectedId ===
-                cls.id
-                  ? 'text-white'
-                  : 'text-zinc-300'}"
-                onclick={() => onselect(cls)}
-                title={cls.group ? `${cls.group} / ${cls.name}` : cls.name}
-              >
-                <span class="flex grow items-center gap-1.5 truncate">
-                  {#if cls.hotkey_letter}
-                    <kbd
-                      class="rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] uppercase
-                             text-blue-300"
-                      title="Press '{cls.hotkey_letter}' to assign selected crops to {cls.name}"
-                    >
-                      {cls.hotkey_letter}
-                    </kbd>
-                  {/if}
-                  <span class="truncate">{cls.name}</span>
-                </span>
-                <span
-                  class="rounded-md border px-1.5 py-0.5 font-mono text-xs {adequacyChipClass(
-                    cls.adequacy,
-                  )}"
-                  title="Cluster bucket size — total crops on /clusters/{cls.id}.&#10;{cls.validated_count ??
-                    0} of {cls.count ??
-                    0} labeled crops are human-validated.&#10;Chip color reflects the server's adequacy tier ({cls.adequacy ??
-                    'unknown'})."
+              <!-- The dnd action stamps role="listitem" on the zone's child; a wrapper
+                   keeps that role off the button. -->
+              <div class="flex min-w-0 grow">
+                <button
+                  type="button"
+                  class="flex min-h-9 grow items-center justify-between gap-2 px-3 py-2 text-left text-sm {selectedId ===
+                  cls.id
+                    ? 'text-white'
+                    : 'text-zinc-300'}"
+                  onclick={() => onselect(cls)}
+                  title={cls.group ? `${cls.group} / ${cls.name}` : cls.name}
                 >
-                  {(cls.cluster_size ?? 0).toLocaleString()}
-                </span>
-              </button>
+                  <span class="flex grow items-center gap-1.5 truncate">
+                    {#if cls.hotkey_letter}
+                      <kbd
+                        class="rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] uppercase
+                             text-blue-300"
+                        title="Press '{cls.hotkey_letter}' to assign selected crops to {cls.name}"
+                      >
+                        {cls.hotkey_letter}
+                      </kbd>
+                    {/if}
+                    <span class="truncate">{cls.name}</span>
+                  </span>
+                  <span
+                    class="rounded-md border px-1.5 py-0.5 font-mono text-xs {adequacyChipClass(
+                      cls.adequacy,
+                    )}"
+                    title="Cluster bucket size — total crops on /clusters/{cls.id}.&#10;{cls.validated_count ??
+                      0} of {cls.count ??
+                      0} labeled crops are human-validated.&#10;Chip color reflects the server's adequacy tier ({cls.adequacy ??
+                      'unknown'})."
+                  >
+                    {(cls.cluster_size ?? 0).toLocaleString()}
+                  </span>
+                </button>
+              </div>
             </div>
           </li>
         {/each}

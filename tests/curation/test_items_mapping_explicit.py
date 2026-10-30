@@ -121,3 +121,11 @@ def test_class_history_is_an_unindexed_object() -> None:
 )
 def test_exclusion_fields_are_mapped(field: str, expected: str) -> None:
     assert _PROPS.get(field, {}).get('type') == expected
+
+
+def test_label_op_tag_is_a_keyword_and_its_migration_is_registered() -> None:
+    from src.clients.curation_opensearch.ensure_overlay_fields import ensure_items_label_op_field
+    from src.services.curation import index_bootstrap
+
+    assert _PROPS['label_op_id'] == {'type': 'keyword'}
+    assert ensure_items_label_op_field in [m for _, m in index_bootstrap._migrations()]

@@ -7,11 +7,12 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pytest
 
-from scripts.bench import parity_store as ps
+from scripts.bench import parity_store as ps, select_baseline_set as sel
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
 DIM = 16
 N_IMAGES = 60
@@ -100,3 +101,17 @@ def make_capture() -> Callable[..., ps.Capture]:
         return ps.Capture(_meta(tag, engine, manifest), arrays)
 
     return build
+
+
+@pytest.fixture
+def manifest(tmp_path: Path) -> Path:
+    from PIL import Image
+
+    cands = []
+    for i in range(10):
+        p = tmp_path / f'{i}.jpg'
+        Image.new('RGB', (400, 400)).save(p, 'JPEG')
+        cands.append(sel.Candidate(p, p.stat().st_size, 'unit'))
+    out = tmp_path / 'm.txt'
+    sel.write_manifest(out, cands, seed=1, today='2026-10-03')
+    return out
