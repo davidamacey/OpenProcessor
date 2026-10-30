@@ -590,3 +590,51 @@ async def test_fp_candidate_pool_is_accepted_unlocked_boxes_with_vectors() -> No
     rows = await rbc.fp_candidate_rows(os_)
 
     assert [(r.crop_id, r.box_id) for r in rows] == [('ok', 'b1')]
+
+
+# ---------------------------------------------------------------------------
+# order independence (the fit is a function of the box set, not the read order)
+# ---------------------------------------------------------------------------
+
+
+def _random_box_items(n: int = 120) -> dict[str, dict[str, Any]]:
+    rng = np.random.default_rng(7)
+    centres = rng.standard_normal((6, 8))
+    docs: dict[str, dict[str, Any]] = {}
+    for i in range(n):
+        v = centres[i % 6] + 0.9 * rng.standard_normal(8)
+        two = [(_box('b1'), tuple(v[:3] + 4.0)), (_box('a0', x=0.5), tuple(v[3:6] + 4.0))]
+        docs[f'c{i:03d}'] = _item(f'c{i:03d}', two)
+    return docs
+
+
+def _permuted_insertion(docs: dict[str, dict[str, Any]], seed: int) -> dict[str, dict[str, Any]]:
+    order = np.random.default_rng(seed).permutation(len(docs))
+    keys = list(docs)
+    return {keys[i]: copy.deepcopy(docs[keys[i]]) for i in order}
+
+
+async def test_scroll_box_rows_come_back_sorted_by_crop_then_box_id() -> None:
+    os_ = _OS({INDEX: _permuted_insertion(_random_box_items(), 1)})
+
+    rows = await scroll_box_rows(os_, index=INDEX, states=('accepted',))
+
+    ids = [(r.crop_id, r.box_id) for r in rows]
+    assert ids == sorted(ids)
+    assert len(ids) == 240
+
+
+async def test_the_region_partition_is_the_same_for_any_read_order() -> None:
+    stored: list[dict[str, tuple[int | None, float | None]]] = []
+    for seed in (11, 12, 13):
+        os_ = _OS({INDEX: _permuted_insertion(_random_box_items(), seed)})
+        result = await rbc.cluster_region_residuals(os_)
+        assert result['status'] == 'success'
+        stored.append(
+            {
+                f'{crop}/{box.box_id}': (box.cluster_id, box.cluster_distance)
+                for crop in os_.docs(INDEX)
+                for box in read_boxes(os_.docs(INDEX)[crop], F)
+            }
+        )
+    assert stored[0] == stored[1] == stored[2]

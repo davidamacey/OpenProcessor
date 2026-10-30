@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.domain.embedding_state import EMBEDDED, EmbeddingState, embedded_clause, state_clause
 from src.domain.item_text import item_text_query
 from src.services.curation.crop_browse import classifier_low_confidence_clause, confidence_band
-from src.services.curation.name_match import name_clause
+from src.services.curation.name_match import DETECTOR_NAME_FIELDS, name_clause
 
 
 Origin = Literal['detector', 'sam3', 'human', 'import']
@@ -71,6 +71,15 @@ class ItemFilter(BaseModel):
     min_blur_ratio: float | None = Field(default=None, ge=0.0)
     classifier_conf_lt: float | None = Field(default=None, ge=0.0, le=1.0)
     item_text: str | None = Field(default=None, max_length=200)
+    # The detector's own class (``detector_class_name``, by NAME like ``class_names``).
+    detector_class_names: list[str] = Field(default_factory=list)
+    # The detector's confidence: ``detector_conf_min`` inclusive, ``detector_conf_max``
+    # exclusive, so adjacent bands (the cluster facets' histogram bins) never overlap.
+    detector_conf_min: float | None = Field(default=None, ge=0.0, le=1.0)
+    detector_conf_max: float | None = Field(default=None, ge=0.0, le=1.0)
+    # A review tab id (one of ``review_tab_clauses.SIMPLE_TABS``): only the items that
+    # tab's queue matches, the same clauses ``GET /review/{tab}`` runs.
+    review_tab: str | None = None
     # Provenance of an item a full-image SAM 3 pass wrote.
     open_vocab_set: str | None = None
     source_prompt: str | None = None
@@ -162,6 +171,34 @@ def _size_clauses(f: ItemFilter) -> list[dict[str, Any]]:
     if f.max_rank is not None:
         out.append({'range': {'crop_rank_in_image': {'lte': f.max_rank}}})
     return out
+
+
+def _detector_clauses(f: ItemFilter) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    names = name_clause(f.detector_class_names, DETECTOR_NAME_FIELDS)
+    if names is not None:
+        out.append(names)
+    lo, hi = f.detector_conf_min, f.detector_conf_max
+    if lo is not None and hi is not None and lo >= hi:
+        msg = f'detector_conf_min ({lo}) must be below detector_conf_max ({hi})'
+        raise ValueError(msg)
+    bounds = {k: v for k, v in (('gte', lo), ('lt', hi)) if v is not None}
+    if bounds:
+        out.append({'range': {'detector_confidence': bounds}})
+    if f.review_tab is not None:
+        out.append(_review_tab_clause(f.review_tab))
+    return out
+
+
+def _review_tab_clause(tab: str) -> dict[str, Any]:
+    from src.services.curation.review_queries import build_tab_query
+    from src.services.curation.review_tab_clauses import SIMPLE_TABS
+
+    if tab not in SIMPLE_TABS:
+        msg = f'unknown review_tab {tab!r}; choose from {sorted(SIMPLE_TABS)}'
+        raise ValueError(msg)
+    must, must_not, _reason = build_tab_query(tab, include_test=False, text=None, max_rank=None)
+    return {'bool': {'must': must, 'must_not': must_not}}
 
 
 def _state_clauses(f: ItemFilter) -> list[dict[str, Any]]:
@@ -259,6 +296,7 @@ def item_filter_clauses(f: ItemFilter) -> list[dict[str, Any]]:
     return [
         *_name_clauses(f),
         *_size_clauses(f),
+        *_detector_clauses(f),
         *_state_clauses(f),
         *_term_clauses(f),
         *_flag_clauses(f),

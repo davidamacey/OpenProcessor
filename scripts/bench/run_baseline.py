@@ -13,9 +13,16 @@ The batch route reads files by path inside the API container, so the manifest
 paths must be visible there; ``--path-map HOST=CONTAINER`` rewrites a prefix.
 The first ``--warmup`` images are ingested but excluded from rates and deltas.
 
+``--reps N`` repeats the whole run N times, each in a fresh project, writing ``<out>-rep<i>``
+files and ``<out>-summary.json`` (median and range of images/s). ``--drop-cache`` advises the
+kernel to drop the page cache of every manifest file before each repetition, so each reads from
+the device. The report records the load average at the start and end of a run and marks the run
+noisy when the 1-minute average at the start was above 16 (repeat it before it decides anything).
+
     run_baseline.py MANIFEST --api-url URL --slug-prefix NAME --policy all|selected|lazy \\
         --out PATH_NO_SUFFIX [--stages ingest,embed,region,vlm,cluster] \\
-        [--opensearch-url URL] [--worker-metrics-url URL] [--triton-metrics-url URL]
+        [--opensearch-url URL] [--worker-metrics-url URL] [--triton-metrics-url URL] \\
+        [--reps N] [--drop-cache] [--gpu-interval 0.5]
     run_baseline.py --compare before.json after.json
 """
 
@@ -30,7 +37,7 @@ import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 import httpx
 
@@ -47,7 +54,9 @@ from scripts.bench.baseline_report import (
     SCHEMA,
     BatchOutcome,
     compare_reports,
+    gpu_prep_stages,
     ingest_summary,
+    median_range,
     metrics_delta,
     parse_nvidia_smi,
     parse_prometheus,
@@ -60,7 +69,10 @@ from scripts.bench.select_baseline_set import read_manifest
 
 STAGE_ORDER = ('ingest', 'region', 'embed', 'vlm', 'cluster')
 API_METRIC_PREFIXES = ('op_', 'http_request_duration_seconds')
+NOISY_LOADAVG_1MIN = 16.0
+LOADAVG = Path('/proc/loadavg')
 TRITON_METRIC_PREFIXES = (
+    'op_gpu_prep_stage',
     'nv_inference_compute_input_duration_us',
     'nv_inference_compute_infer_duration_us',
     'nv_inference_compute_output_duration_us',
@@ -88,6 +100,42 @@ def read_nvidia_smi(
         return parse_nvidia_smi(run(NVIDIA_SMI))
     except (FileNotFoundError, subprocess.SubprocessError, ValueError, OSError):
         return None
+
+
+class Observer(Protocol):
+    """Extra host measurements around a run; ``stop`` returns what to add to the report's host block."""
+
+    def start(self) -> None: ...
+
+    def stop(self) -> dict[str, float]: ...
+
+
+class NoObserver:
+    def start(self) -> None:
+        return None
+
+    def stop(self) -> dict[str, float]:
+        return {}
+
+
+def read_loadavg(path: Path = LOADAVG) -> tuple[float, float, float]:
+    """The 1, 5 and 15 minute load averages."""
+    one, five, fifteen = path.read_text(encoding='ascii').split()[:3]
+    return float(one), float(five), float(fifteen)
+
+
+def drop_page_cache(
+    paths: Sequence[str],
+    advise: Callable[[int, int, int, int], None] = os.posix_fadvise,
+) -> int:
+    """Ask the kernel to drop the cached pages of every file; a missing file is an error."""
+    for path in paths:
+        fd = os.open(path, os.O_RDONLY)
+        try:
+            advise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+        finally:
+            os.close(fd)
+    return len(paths)
 
 
 class GpuSampler:
@@ -270,7 +318,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         '--crop-cache-dir', type=Path, help='host directory of the crop cache, sized at the end'
     )
-    p.add_argument('--gpu-interval', type=float, default=1.0)
+    p.add_argument(
+        '--gpu-interval',
+        type=float,
+        default=1.0,
+        help='seconds between GPU samples (the measurement protocol passes 0.5)',
+    )
+    p.add_argument('--reps', type=int, default=1, help='repetitions, each in a fresh project')
+    p.add_argument(
+        '--drop-cache', action='store_true', help='drop the manifest files from the page cache'
+    )
     p.add_argument('--poll-s', type=float, default=5.0)
     p.add_argument('--timeout-s', type=float, default=7200.0)
     return p
@@ -283,6 +340,9 @@ def run(
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
     gpu_reader: Callable[[], dict[str, tuple[float, float]] | None] = read_nvidia_smi,
+    loadavg: Callable[[], tuple[float, float, float]] = read_loadavg,
+    rep: int = 1,
+    observer: Observer | None = None,
 ) -> dict[str, Any]:
     stages = set(args.stages.split(','))
     unknown = stages - set(STAGE_ORDER)
@@ -293,7 +353,12 @@ def run(
     paths = read_manifest(args.manifest)
     sizes = [Path(p).stat().st_size for p in paths]
     sent = [map_path(p, args.path_map) for p in paths]
-    slug = f'{args.slug_prefix}-{datetime.now(UTC).strftime("%Y%m%d%H%M%S")}'
+    stamp = datetime.now(UTC).strftime('%Y%m%d%H%M%S')
+    slug = f'{args.slug_prefix}-r{rep}-{stamp}' if args.reps > 1 else f'{args.slug_prefix}-{stamp}'
+    out = _rep_out(args.out, rep, args.reps)
+    load_start = loadavg()
+    watch = observer or NoObserver()
+    watch.start()
     api_base = args.api_url.rstrip('/') + args.api_prefix.rstrip('/')
     wait = {'poll': args.poll_s, 'timeout': args.timeout_s, 'sleep': sleep, 'clock': clock}
 
@@ -336,6 +401,7 @@ def run(
             if name in stages and (name != 'embed' or args.policy == 'lazy'):
                 stage_wall[name] = {'wall_s': _run_autolabel(client, slug, params, **wait)}
         sampler.stop()
+        extra = watch.stop()
 
         after = {name: _scrape(client, url) for name, (url, _) in sources.items()}
         total_ok = sum(b.ok for b in batches)
@@ -348,10 +414,11 @@ def run(
                 crop_cache_bytes=cache,
             )
 
+    load_end = loadavg()
     measured_bytes = sum(sizes[warm:])
     manifest_lines = args.manifest.read_text(encoding='utf-8').splitlines()
     sha = next((ln.split(': ', 1)[1] for ln in manifest_lines if ln.startswith('# sha256: ')), '')
-    report = {
+    report: dict[str, Any] = {
         'schema': SCHEMA,
         'manifest': {
             'name': args.manifest.name,
@@ -370,18 +437,64 @@ def run(
         'stages': stage_wall,
         'storage': storage,
         'gpu': sampler.summary(),
+        'host': {
+            'loadavg_start': list(load_start),
+            'loadavg_end': list(load_end),
+            'noisy': load_start[0] > NOISY_LOADAVG_1MIN,
+            **extra,
+        },
         'metrics': {
             name: metrics_delta(before[name], after[name], prefixes)
             for name, (url, prefixes) in sources.items()
             if url
         },
     }
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.with_suffix('.json').write_text(
+    triton = report['metrics'].get('triton')
+    if triton and (prep := gpu_prep_stages(triton['counters'])):
+        report['gpu_prep_stages'] = prep
+    _write_report(out, report)
+    return report
+
+
+def _rep_out(out: Path, rep: int, reps: int) -> Path:
+    return out.with_name(f'{out.name}-rep{rep}') if reps > 1 else out
+
+
+def _write_report(out: Path, report: dict[str, Any]) -> None:
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.with_suffix('.json').write_text(
         json.dumps(report, indent=2, sort_keys=True) + '\n', encoding='utf-8'
     )
-    args.out.with_suffix('.md').write_text(to_markdown(report) + '\n', encoding='utf-8')
-    return report
+    out.with_suffix('.md').write_text(to_markdown(report) + '\n', encoding='utf-8')
+
+
+def run_reps(
+    args: argparse.Namespace,
+    *,
+    drop_cache: Callable[[Sequence[str]], int] = drop_page_cache,
+    **kwargs: Any,
+) -> list[dict[str, Any]]:
+    """``--reps`` runs, each in a fresh project, the page cache dropped first when asked."""
+    if args.reps < 1:
+        sys.exit('--reps must be at least 1')
+    paths = read_manifest(args.manifest)
+    reports = []
+    for rep in range(1, args.reps + 1):
+        if args.drop_cache:
+            drop_cache(paths)
+        reports.append(run(args, rep=rep, **kwargs))
+    if args.reps > 1:
+        summary = {
+            'reps': args.reps,
+            'images_per_s': median_range([r['ingest']['images_per_s'] for r in reports]),
+            'noisy_reps': [i for i, r in enumerate(reports, 1) if r['host']['noisy']],
+            'projects': [r['config']['project'] for r in reports],
+        }
+        summary_path = args.out.with_name(f'{args.out.name}-summary.json')
+        summary_path.write_text(
+            json.dumps(summary, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+        )
+    return reports
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -394,8 +507,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         before, after = (json.loads(p.read_text(encoding='utf-8')) for p in (ns.before, ns.after))
         print(compare_reports(before, after))
         return 0
-    report = run(build_parser().parse_args(argv))
-    print(to_markdown(report))
+    for report in run_reps(build_parser().parse_args(argv)):
+        print(to_markdown(report))
     return 0
 
 

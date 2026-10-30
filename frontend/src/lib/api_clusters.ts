@@ -13,6 +13,12 @@ import type {
   PaginatedResponse,
 } from '$lib/types';
 import type { ReprocessRequest } from '$lib/types_import';
+import type {
+  ClusterFacets,
+  ClusterFlag,
+  ClusterSortOption,
+  ValidationState,
+} from '$lib/types_clusterList';
 
 /** Raw cluster card from `{API_PREFIX}/clusters`. The backend is the single
  *  source of truth for every field — the frontend must never recompute
@@ -41,14 +47,8 @@ type RawCluster = {
   purity_basis: string | null;
   /** Server-banded purity (see `purity_thresholds` below) — 'pure' | 'mixed' | 'noisy'. */
   purity_tier: 'pure' | 'mixed' | 'noisy' | null;
-  /** Largest-class share among LABELLED members (the old label-based
-   *  "purity" — always 1.0 for a class cluster by construction, which is
-   *  exactly why it stopped being called `purity`). `promotable` uses
-   *  this, not the geometry-based `purity` above. */
-  label_purity: number | null;
-  /** #61: the same value as `label_purity` under the name a UI reads for
-   *  label quality. Absent on a backend older than 0.4.1. */
-  label_agreement?: number | null;
+  /** The top class's share of the LABELLED members. */
+  label_agreement: number | null;
   /** Share of this cluster's members that have any label at all. */
   labelled_share: number | null;
   /** Server's auto-promote eligibility gate for this cluster. */
@@ -63,6 +63,13 @@ type RawCluster = {
     class_name: string | null;
     cluster_subid: string | null;
   }>;
+  detector_top_class?: string | null;
+  detector_top_share?: number | null;
+  detector_conf_mean?: number | null;
+  validation_state?: ValidationState;
+  review_counts?: Record<string, number>;
+  needs_review_count?: number;
+  flags?: string[];
 };
 
 type RawClustersResp = {
@@ -87,13 +94,17 @@ type RawClustersResp = {
    *  exactly what it got, not what it asked for. */
   representatives_offset?: number;
   representatives_limit?: number;
+  sort?: string;
+  sort_options?: ClusterSortOption[];
+  flag_vocabulary?: ClusterFlag[];
+  truncated?: boolean;
 };
 
 function _rawClusterToCluster(
   c: RawCluster,
   coreSimilarityMin: number | null = null,
 ): Cluster {
-  const label_agreement = c.label_agreement ?? c.label_purity ?? null;
+  const label_agreement = c.label_agreement ?? null;
   return {
     id: c.cluster_id,
     cluster_kind: c.cluster_kind,
@@ -113,7 +124,6 @@ function _rawClusterToCluster(
     purity_n: c.purity_n,
     purity_basis: c.purity_basis,
     purity_tier: c.purity_tier ?? null,
-    label_purity: c.label_purity,
     label_agreement,
     labelled_share: c.labelled_share,
     promotable: !!c.promotable,
@@ -124,6 +134,13 @@ function _rawClusterToCluster(
     n_subclusters: c.n_subclusters,
     subcluster_ids: c.subcluster_ids,
     updated_at: c.updated_at,
+    detector_top_class: c.detector_top_class ?? null,
+    detector_top_share: c.detector_top_share ?? null,
+    detector_conf_mean: c.detector_conf_mean ?? null,
+    validation_state: c.validation_state,
+    review_counts: c.review_counts ?? {},
+    needs_review_count: c.needs_review_count ?? 0,
+    flags: c.flags ?? [],
   };
 }
 
@@ -133,28 +150,23 @@ export interface ClustersResponse extends PaginatedResponse<Cluster> {
    *  windows advances by this, not by what it asked for. */
   representatives_offset: number;
   representatives_limit: number;
+  /** The sort the server applied, the sorts it offers, the flag
+   *  vocabulary, and whether the list was cut at `max_clusters`. */
+  sort: string | null;
+  sort_options: ClusterSortOption[];
+  flag_vocabulary: ClusterFlag[];
+  truncated: boolean;
 }
 
 export async function getClusters(
   filter: ClusterFilter = {},
   signal?: AbortSignal,
 ): Promise<ClustersResponse> {
-  // Single round-trip for the full (size-desc, size-capped-by-max_clusters)
-  // card list — the backend's {API_PREFIX}/clusters aggregation already
-  // returns dominant class, purity, purity_tier, promotable,
-  // validated_count, n_subclusters, cluster_kind, and is_unlabeled for
-  // EVERY card regardless of the representatives window. The frontend
-  // ONLY shapes the result into the labeler's Cluster type — no semantic
-  // compute here.
-  //
-  // D-4 (docs/design/curation_query_performance_audit.md): representatives
-  // (the per-card thumbnail crops, one `_msearch` each) are windowed by
-  // `offset`/`limit` — cards outside `[offset, offset+limit)` of the
-  // returned card list come back with `representatives: []`. The caller
-  // is responsible for requesting only the window it's actually going to
-  // render (see /clusters' `loadMoreRepresentatives`), not every card, so
-  // scrolling past the first screenful doesn't re-run the aggregation's
-  // representative lookup for clusters nobody has scrolled to yet.
+  // One round-trip returns every card (up to max_clusters) already sorted and
+  // filtered by the server, with the quality fields on each card. The
+  // frontend only shapes the result into the Cluster type. Representative
+  // crops are served for the `offset`/`limit` window of that list only, so
+  // a caller asks for the window it is about to render.
   const raw = await apiFetch<RawClustersResp>(
     `${scoped()}/clusters${qs({
       per_cluster: filter.per_cluster ?? 4,
@@ -167,15 +179,18 @@ export async function getClusters(
       origin: filter.origin,
       embedding_state: filter.embedding_state,
       review_status: filter.review_status,
-      // DQ-M4: lets the caller fetch one card's representatives directly
-      // by id, independent of the size-desc `offset`/`limit` window —
-      // see ClusterFilter.cluster_id's doc comment.
       cluster_id: filter.cluster_id ?? undefined,
-      // Pull enough buckets that the 512 IVF candidate clusters (+ class
-      // clusters) all come back in one call — the endpoint returns them
-      // ordered by size, not paginated, so a low cap would silently drop
-      // the smaller candidate buckets from the "Unlabeled only" view.
+      // Enough buckets that the 512 IVF candidate clusters and the class
+      // clusters all come back in one call; `truncated` says when not.
       max_clusters: 2000,
+      sort: filter.sort,
+      dominant_class: filter.dominant_class,
+      detector_class: filter.detector_class,
+      min_size: filter.min_size ?? undefined,
+      max_size: filter.max_size ?? undefined,
+      validation_state: filter.validation_state ?? undefined,
+      flag: filter.flag,
+      needs_review: filter.needs_review ? true : undefined,
       // Primary-subject grid filters — card stats reflect only passing crops.
       max_rank: filter.max_rank ?? undefined,
       min_blur_ratio: filter.min_blur_ratio ?? undefined,
@@ -194,11 +209,23 @@ export async function getClusters(
     page: 1,
     page_size: items.length,
     purity_thresholds: raw.purity_thresholds ?? null,
+    sort: raw.sort ?? null,
+    sort_options: raw.sort_options ?? [],
+    flag_vocabulary: raw.flag_vocabulary ?? [],
+    truncated: raw.truncated === true,
     representatives_offset:
       raw.representatives_offset ?? filter.representatives_offset ?? 0,
     representatives_limit:
       raw.representatives_limit ?? filter.representatives_limit ?? 50,
   };
+}
+
+/** One cluster's facet counts (`GET {P}/clusters/{id}/facets`). */
+export function getClusterFacets(
+  id: number,
+  signal?: AbortSignal,
+): Promise<ClusterFacets> {
+  return apiFetch<ClusterFacets>(`${scoped()}/clusters/${id}/facets`, {}, signal);
 }
 
 export async function getCluster(
@@ -231,6 +258,17 @@ export async function getCluster(
      * value; the caller (`/clusters/[id]`) only sets it in diverse mode.
      */
     k?: number | null;
+    /** The facet filters, each sent as the served `GET /crops` parameter of
+     *  the same name: the detector's class (repeatable), a confidence band
+     *  (`detector_conf_min` inclusive, `detector_conf_max` exclusive), a
+     *  review tab id, and the validated flag. */
+    detectorClassName?: string[];
+    detectorConfMin?: number | null;
+    detectorConfMax?: number | null;
+    reviewTab?: string | null;
+    labelValidated?: boolean | null;
+    /** `GET /crops` `sort`, e.g. `detector_confidence:desc`. */
+    sort?: string | null;
   } = {},
 ): Promise<{
   cluster: Cluster;
@@ -276,6 +314,13 @@ export async function getCluster(
   if (opts.clusterSubid) cropQuery.cluster_subid = opts.clusterSubid;
   if (opts.order) cropQuery.order = opts.order;
   if (opts.k != null) cropQuery.k = opts.k;
+  if (opts.detectorClassName?.length)
+    cropQuery.detector_class_name = opts.detectorClassName;
+  if (opts.detectorConfMin != null) cropQuery.detector_conf_min = opts.detectorConfMin;
+  if (opts.detectorConfMax != null) cropQuery.detector_conf_max = opts.detectorConfMax;
+  if (opts.reviewTab) cropQuery.review_tab = opts.reviewTab;
+  if (opts.labelValidated != null) cropQuery.label_validated = opts.labelValidated;
+  if (opts.sort) cropQuery.sort = opts.sort;
   let cardError: string | null = null;
   const [cropPage, clustersResp] = await Promise.all([
     apiFetch<CropPage>(`${scoped()}/crops${qs(cropQuery)}`, {}, signal),

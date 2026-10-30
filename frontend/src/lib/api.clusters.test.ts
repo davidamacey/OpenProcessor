@@ -95,7 +95,7 @@ describe('getClusters purity_tier/promotable/core_similarity_min', () => {
     expect(res.purity_thresholds).toMatchObject({ pure_min: 0.85, mixed_min: 0.6 });
   });
 
-  it('C1: dominant_pct is the served label_purity, never the geometry purity', async () => {
+  it('C1: dominant_pct is the served label_agreement, never the geometry purity', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -114,7 +114,7 @@ describe('getClusters purity_tier/promotable/core_similarity_min', () => {
               purity_n: 616,
               purity_basis: 'nearest_centroid',
               purity_tier: 'noisy',
-              label_purity: 1.0,
+              label_agreement: 1.0,
               labelled_share: 1.0,
               promotable: false,
               is_unlabeled: false,
@@ -166,12 +166,11 @@ describe('getClusters purity_tier/promotable/core_similarity_min', () => {
       vi.fn().mockResolvedValue(
         jsonResponse({
           items: [
-            card({ label_agreement: 0.9, label_purity: 0.9 }),
-            card({ cluster_id: 65, label_agreement: null, label_purity: null }),
-            card({ cluster_id: 66, label_purity: 0.7 }),
+            card({ label_agreement: 0.9 }),
+            card({ cluster_id: 65, label_agreement: null }),
           ],
-          total: 3,
-          total_class_clusters: 3,
+          total: 2,
+          total_class_clusters: 2,
           total_candidate_clusters: 0,
           cluster_id_offset: 10000,
         }),
@@ -185,8 +184,6 @@ describe('getClusters purity_tier/promotable/core_similarity_min', () => {
       purity_tier: 'noisy',
     });
     expect(res.items[1]).toMatchObject({ label_agreement: null, dominant_pct: null });
-    // An older backend that only serves label_purity still renders.
-    expect(res.items[2]).toMatchObject({ label_agreement: 0.7, dominant_pct: 0.7 });
   });
 
   it('maps the served sub-cluster ids onto the cluster', async () => {
@@ -208,7 +205,7 @@ describe('getClusters purity_tier/promotable/core_similarity_min', () => {
               purity_n: 0,
               purity_basis: 'nearest_centroid',
               purity_tier: null,
-              label_purity: null,
+              label_agreement: null,
               labelled_share: null,
               promotable: false,
               is_unlabeled: true,
@@ -315,11 +312,11 @@ describe('getClusters purity_tier/promotable/core_similarity_min', () => {
 /**
  * DQ-M2 fix (dq-queues cutover, 2026-09-24): `purity` is now
  * nearest-centroid geometry purity (`purity_basis: 'nearest_centroid'`,
- * `purity_n` members measured), independent of `label_purity`
+ * `purity_n` members measured), independent of `label_agreement`
  * (the old label-based number, always 1.0 for a class cluster) and
  * `labelled_share`. `getClusters` must map all four verbatim.
  */
-describe('getClusters purity_n/purity_basis/label_purity/labelled_share (DQ-M2)', () => {
+describe('getClusters purity_n/purity_basis/label_agreement/labelled_share (DQ-M2)', () => {
   const jsonResponse = (body: unknown) =>
     new Response(JSON.stringify(body), {
       status: 200,
@@ -330,7 +327,7 @@ describe('getClusters purity_n/purity_basis/label_purity/labelled_share (DQ-M2)'
     vi.unstubAllGlobals();
   });
 
-  it('maps purity_n/purity_basis/label_purity/labelled_share verbatim', async () => {
+  it('maps purity_n/purity_basis/label_agreement/labelled_share verbatim', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         items: [
@@ -347,7 +344,7 @@ describe('getClusters purity_n/purity_basis/label_purity/labelled_share (DQ-M2)'
             purity_n: 24,
             purity_basis: 'nearest_centroid',
             purity_tier: 'noisy',
-            label_purity: 1.0,
+            label_agreement: 1.0,
             labelled_share: 1.0,
             promotable: false,
             is_unlabeled: false,
@@ -371,12 +368,12 @@ describe('getClusters purity_n/purity_basis/label_purity/labelled_share (DQ-M2)'
       purity: 0.29,
       purity_n: 24,
       purity_basis: 'nearest_centroid',
-      label_purity: 1.0,
+      label_agreement: 1.0,
       labelled_share: 1.0,
     });
-    // The whole point of DQ-M2: purity and label_purity must be able to
+    // The whole point of DQ-M2: purity and label_agreement must be able to
     // disagree (a class cluster is no longer 1.0-purity by construction).
-    expect(res.items[0].purity).not.toBe(res.items[0].label_purity);
+    expect(res.items[0].purity).not.toBe(res.items[0].label_agreement);
   });
 
   it('leaves the new fields null when the server omits them (older backend)', async () => {
@@ -412,7 +409,7 @@ describe('getClusters purity_n/purity_basis/label_purity/labelled_share (DQ-M2)'
     const res = await getClusters();
     expect(res.items[0].purity_n ?? null).toBeNull();
     expect(res.items[0].purity_basis ?? null).toBeNull();
-    expect(res.items[0].label_purity ?? null).toBeNull();
+    expect(res.items[0].label_agreement ?? null).toBeNull();
     expect(res.items[0].labelled_share ?? null).toBeNull();
   });
 });

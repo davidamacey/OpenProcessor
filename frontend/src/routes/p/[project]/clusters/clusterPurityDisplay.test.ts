@@ -1,7 +1,7 @@
 /**
  * `/clusters` and `/clusters/[id]` render the served nearest-centroid
  * geometry purity (`purity`, `purity_basis`, `purity_n`) alongside the
- * label-based `label_purity`/`labelled_share`, instead of only the
+ * label-based `label_agreement`/`labelled_share`, instead of only the
  * (tautological, always-1.0-for-a-class-cluster) label-based number.
  * `purity_tier` stays the pure/mixed/noisy badge, and cluster cards use the
  * served `purity_tier`/`promotable` rather than a client-side threshold.
@@ -29,7 +29,7 @@ const detailSrc = readFileSync(
   'utf-8',
 );
 
-describe('/clusters cards show purity_n/purity_basis and label_purity/labelled_share', () => {
+describe('/clusters cards show purity_n/purity_basis and label_agreement/labelled_share', () => {
   it('the chip reads "<served tier> · cohesion NN% · n=N" (cohesionText)', () => {
     expect(gridSrc).toContain("{pb.text} · {cohesionText(c) ?? 'cohesion —'}");
   });
@@ -49,7 +49,7 @@ describe('/clusters cards show purity_n/purity_basis and label_purity/labelled_s
   });
 });
 
-describe('/clusters/[id] header shows purity with basis/n and label_purity/labelled_share', () => {
+describe('/clusters/[id] header shows purity with basis/n and label_agreement/labelled_share', () => {
   it('renders cluster.purity gated on non-null, with purity_basis and purity_n', () => {
     const idx = detailSrc.indexOf('{#if view.cluster.purity != null}');
     expect(idx).toBeGreaterThan(-1);

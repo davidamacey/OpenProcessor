@@ -70,7 +70,7 @@
           <th class="py-1 pr-3 font-normal">Connection</th>
           <th class="py-1 pr-3 font-normal">Last probe</th>
           <th class="py-1 pr-3 font-normal">Used by</th>
-          <th class="py-1 font-normal"></th>
+          <th class="py-1 font-normal"><span class="sr-only">Actions</span></th>
         </tr>
       </thead>
       <tbody>

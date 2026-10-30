@@ -120,13 +120,15 @@
        the same confirmable
        yellow style as a real proposal, though Enter opens the
        picker instead of confirming it — the row now says so. -->
-  <dt class="text-zinc-500">Proposed</dt>
-  {#if current.proposed_class_name && current.proposed_class_id == null}
-    <dd class="text-zinc-400" title="Not a registry class — Enter opens the picker">
-      {current.proposed_class_name} <span class="text-[10px]">(hint only)</span>
-    </dd>
-  {:else}
-    <dd class="text-yellow-200">{current.proposed_class_name ?? '—'}</dd>
+  {#if current.proposed_class_name}
+    <dt class="text-zinc-500">Proposed</dt>
+    {#if current.proposed_class_id == null}
+      <dd class="text-zinc-400" title="Not a registry class — Enter opens the picker">
+        {current.proposed_class_name} <span class="text-[10px]">(hint only)</span>
+      </dd>
+    {:else}
+      <dd class="text-yellow-200">{current.proposed_class_name}</dd>
+    {/if}
   {/if}
 
   {#if opinion.kind === 'no_opinion'}

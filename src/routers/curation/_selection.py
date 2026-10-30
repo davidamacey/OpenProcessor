@@ -11,15 +11,12 @@ from pydantic import BaseModel, Field, model_validator
 
 from src.config import get_curation_config
 from src.services.curation.item_selection import (
+    MAX_BULK_SELECTION,
     MAX_SELECTION_IDS,
     ItemSelection,
     SelectionError,
     resolve_selection,
 )
-
-
-# A filter selection above this is refused, not truncated: add a limit or a tighter filter.
-MAX_BULK_SELECTION = 20_000
 
 
 class SelectionTargets(BaseModel):

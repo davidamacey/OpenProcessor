@@ -38,6 +38,9 @@ from src.services.curation.edit_history import (
 from src.utils.timeutil import now_iso
 
 
+_REGION_UNDO_CONCURRENCY = 32
+
+
 class CropRegionUndoBatchRequest(BaseModel):
     """Undo the most recent human region write on each crop."""
 
@@ -119,9 +122,13 @@ async def undo_crop_regions(
     if not crop_ids:
         return {'items': [], 'undone': 0, 'nothing_to_undo': [], 'conflicts': [], 'not_found': []}
 
+    # Edit history has no bulk merger yet: bound the per-item undos instead.
+    gate = asyncio.Semaphore(_REGION_UNDO_CONCURRENCY)
+
     async def _one(crop_id: str) -> str:
         try:
-            await undo_edit(opensearch, crop_id, EditKind.REGION, REGION_UNDO_WRITER)
+            async with gate:
+                await undo_edit(opensearch, crop_id, EditKind.REGION, REGION_UNDO_WRITER)
         except NothingToUndoError:
             return 'nothing_to_undo'
         except OCCFinalConflictError:

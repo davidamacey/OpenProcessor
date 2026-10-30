@@ -63,6 +63,11 @@ CASES: dict[str, dict[str, Any]] = {
     'blur': {'min_blur_ratio': 0.4},
     'classifier_low': {'classifier_conf_lt': 0.5},
     'item_text': {'item_text': 'red car'},
+    'detector_class_names': {'detector_class_names': ['car', 'hot dog']},
+    'detector_conf_min': {'detector_conf_min': 0.3},
+    'detector_conf_max': {'detector_conf_max': 0.8},
+    'detector_conf_band': {'detector_conf_min': 0.3, 'detector_conf_max': 0.8},
+    'review_tab': {'review_tab': 'uncertainty'},
     'everything': {
         'class_names': ['person'],
         'exclude_class_names': ['car'],

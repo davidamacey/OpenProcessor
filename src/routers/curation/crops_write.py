@@ -32,7 +32,8 @@ from src.services.curation.class_label import (
     human_move_class_update,
 )
 from src.services.curation.cluster_ids import cluster_kind
-from src.services.curation.crop_bulk import occ_bulk_human_relabel
+from src.services.curation.label_ops.record import recorded_relabel
+from src.services.curation.label_ops.store import NewLabelOp
 from src.utils.timeutil import now_iso
 
 
@@ -103,26 +104,38 @@ async def batch_label_crops(
     if payload.dry_run:
         return {'dry_run': True, 'selected': len(ids)}
     if not ids:
-        return {'updated': 0, 'updated_ids': [], 'conflicts': []}
+        return {'updated': 0, 'updated_ids': [], 'conflicts': [], 'op_id': None}
 
-    def _merge(current: dict[str, Any]) -> dict[str, Any]:
-        return class_label_update(
-            current,
-            ItemLabel.human(
-                class_id=payload.class_id,
-                class_name=class_name,
-                label_source=payload.label_source,
-                writer='human:batch_label_crops',
-            ),
-        )
+    def _merger_for(op_id: str) -> Any:
+        def _merge(current: dict[str, Any]) -> dict[str, Any]:
+            return class_label_update(
+                current,
+                ItemLabel.human(
+                    class_id=payload.class_id,
+                    class_name=class_name,
+                    label_source=payload.label_source,
+                    writer='human:batch_label_crops',
+                    op_id=op_id,
+                ),
+            )
 
-    # One mget page + one bulk call (regardless of batch size) via
-    # occ_update_bulk, instead of one occ_update_one round-trip per crop.
-    return await occ_bulk_human_relabel(
+        return _merge
+
+    # One mget page + one bulk call per page of ids, recorded as an operation
+    # so it can be undone by id.
+    return await recorded_relabel(
         opensearch,
         ids,
-        _merge,
-        writer_id='human:batch_label_crops',
+        op=NewLabelOp(
+            kind='label',
+            writer='human:batch_label_crops',
+            class_name=class_name,
+            class_id=payload.class_id,
+            label_source=payload.label_source,
+            target='crop_ids' if payload.crop_ids is not None else 'selection',
+            selected=len(ids),
+        ),
+        merger_for=_merger_for,
     )
 
 
@@ -172,26 +185,39 @@ async def move_crops(
     if payload.dry_run:
         return {'dry_run': True, 'selected': len(ids)}
     if not ids:
-        return {'updated': 0, 'updated_ids': [], 'conflicts': []}
+        return {'updated': 0, 'updated_ids': [], 'conflicts': [], 'op_id': None}
 
     target_name = target.class_name if target is not None else ''
 
-    def _merge(current: dict[str, Any]) -> dict[str, Any]:
-        if kind == 'candidate':
-            return candidate_move_update(current, cluster_id=target_id, now=now_iso())
-        # Move-from-cluster is a class gesture ("move this to the X
-        # cluster" means "this is an X") — routed through class_label.py,
-        # the single class-label writer (tests/test_class_label_single_writer.py).
-        return human_move_class_update(
-            current, class_id=target_id, class_name=target_name, now=now_iso()
-        )
+    def _merger_for(op_id: str) -> Any:
+        def _merge(current: dict[str, Any]) -> dict[str, Any]:
+            if kind == 'candidate':
+                return candidate_move_update(
+                    current, cluster_id=target_id, now=now_iso(), op_id=op_id
+                )
+            # Move-from-cluster is a class gesture ("move this to the X
+            # cluster" means "this is an X") — routed through class_label.py,
+            # the single class-label writer (tests/test_class_label_single_writer.py).
+            return human_move_class_update(
+                current, class_id=target_id, class_name=target_name, now=now_iso(), op_id=op_id
+            )
 
-    # Batched via occ_update_bulk — see batch_label_crops above.
-    return await occ_bulk_human_relabel(
+        return _merge
+
+    return await recorded_relabel(
         opensearch,
         ids,
-        _merge,
-        writer_id='human:move_crops',
+        op=NewLabelOp(
+            kind='move',
+            writer='human:move_crops',
+            class_name=target_name if kind == 'class' else None,
+            class_id=target_id if kind == 'class' else None,
+            target_cluster_id=target_id,
+            target_kind='class' if kind == 'class' else 'candidate',
+            target='crop_ids' if payload.crop_ids is not None else 'selection',
+            selected=len(ids),
+        ),
+        merger_for=_merger_for,
     )
 
 
