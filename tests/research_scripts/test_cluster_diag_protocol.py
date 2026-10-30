@@ -447,6 +447,8 @@ def test_e5_agreement_treats_a_slug_and_its_coco_spelling_as_one_class(tmp_path:
 
 
 def test_diag_label_facts_use_the_same_name_rule(tmp_path: Path) -> None:
+    pytest.importorskip('igraph')
+    pytest.importorskip('leidenalg')
     from scripts.research.cluster_diag import run
 
     stem, lab, gt = _slug_project(tmp_path)

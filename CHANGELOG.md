@@ -25,6 +25,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Added
 - Self-seeding docs screenshots (#335): `capture_docs_screenshots.py --seeded` seeds its own public projects on an isolated GPU-less stack (`docker/test/compose.docs-shots.yml`, with a stand-in segmenter) and captures 17 states in one run; the harness host ports are `VERIFY_*_PORT` variables.
+- Research notes for the cluster program (outcome summary, decision per arm, fine-grained and standard-benchmark results, Leiden prototype, judge harness) under `docs/research/`, with their research scripts and tests. No product behaviour changes.
 - Cluster scoring: BCubed, AMI, risk-coverage and view/size pair strata in `scripts/bench/cluster_eval_metrics.py`; a scorecard envelope (`scripts/bench/scorecard.py`) that refuses quality fields on a synthetic dataset; seeded calibration/heldout splits by source image or identity (`scripts/bench/eval_split.py`, 3,000-item split under `scripts/datasets/manifests/splits/`) with a refusal to score on what was tuned on; `scripts/bench/setp_inventory.py`.
 - Cluster-quality evaluation harness: `scripts/bench/cluster_eval.py`, `cluster_eval_metrics.py` and `cluster_eval_set.py` (pair precision and recall, false-merge and false-split rates, stability, protected-item moves) and a recorded baseline (#341, `docs/research/cluster_eval_baseline.md`).
 - Host IO-pressure sampling in `scripts/bench/scale_run.py` (#337).

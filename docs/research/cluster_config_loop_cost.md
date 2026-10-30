@@ -316,7 +316,7 @@ Z=scripts/research/cluster_diag/z_run.py
     tests/research_scripts/test_merge_stage.py tests/test_vehicle_eval_selection.py -q --no-cov
 ```
 
-The delete of the throwaway project is `DELETE /curation/projects/<slug>?confirm=<slug>`. The pin omits the
+The throwaway project is deleted through the project delete route of the curation API, with the confirm query parameter set to the slug. The pin omits the
 Open Images author column (the authors stay in `ATTRIBUTION.csv` next to the images, outside git).
 
 ## Tests
