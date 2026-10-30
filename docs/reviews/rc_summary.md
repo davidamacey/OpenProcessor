@@ -63,4 +63,19 @@ Conflicts were limited to `CHANGELOG.md` (kept both sides each time). Contracts 
 
 ## Gate results on this branch
 
-See the pull request description; the totals are recorded at the end of this file by the commit that adds them.
+Run once on the merged branch, with the main checkout's virtualenv, no GPU, on a shared host (load 7 to 120).
+
+| Gate | Result |
+|---|---|
+| `pre-commit run --all-files` | 35 hooks passed, 0 failed (the rest skipped: no matching files) |
+| `scripts/docs/check_docs_vs_code.py` | 0 problems in all ten categories |
+| `make contracts-check` | in sync |
+| docs-site build | success |
+| frontend `check`, `lint`, `knip`, `vitest`, `build` | 0 errors; 478 files, 4,998 tests passed; build ok |
+| offline pytest (`-m 'not live'`) | 10,717 passed, 26 skipped, 104 deselected, 10 failed (75 minutes); the 10 failures had one cause and are fixed (below) |
+| stubbed e2e | 307 passed, 12 failed under host load (45 s click timeouts); the four files re-run on their own: all pass |
+
+The 10 pytest failures were an integration defect: `docker-compose.ingest-focus.yml` (wave 2) was never committed
+because `.gitignore` excludes `docker-compose.*.yml`. The compose, overlay-render and installer manifest tests
+failed on the missing file. The file is now tracked and un-ignored; `tests/compose` and `tests/installer/test_static.py`
+pass (100 passed).
