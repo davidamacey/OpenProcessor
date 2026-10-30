@@ -108,6 +108,7 @@ def test_verify_reports_missing_unlisted_and_changed_files(tmp_path: Path) -> No
     (root / 'extra.jpg').write_bytes(b'x')
     (root / 'img2.jpg').write_bytes(b'two?')  # same size, different content
     problems = prep.verify(root)
+    (root / 'extra2.jpg').unlink(missing_ok=True)
     assert any(p == 'missing: img1.jpg' for p in problems)
     assert any(p == 'unlisted: extra.jpg' for p in problems)
     assert not any('img2' in p for p in problems if p.startswith('size'))
@@ -121,3 +122,9 @@ def test_verify_flags_label_rows_without_a_listed_file(tmp_path: Path) -> None:
     (root / 'manifest.json').write_text(json.dumps(manifest))
     problems = prep.verify(root)
     assert 'label row without file: ghost.jpg' in problems
+
+
+def test_verify_flags_a_changed_size_without_hashing(tmp_path: Path) -> None:
+    root = _prepared(tmp_path)
+    (root / 'img2.jpg').write_bytes(b'much longer than before')
+    assert 'size differs: img2.jpg' in prep.verify(root)
