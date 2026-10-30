@@ -35,6 +35,7 @@ import subprocess
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
@@ -227,6 +228,20 @@ def _ingest_batch(
     )
 
 
+def _ingest_batches(
+    client: httpx.Client,
+    slug: str,
+    batches: list[list[str]],
+    clock: Callable[[], float],
+    clients: int,
+) -> list[BatchOutcome]:
+    """Post the batches one after another, or ``clients`` of them at a time."""
+    if clients <= 1:
+        return [_ingest_batch(client, slug, paths, clock) for paths in batches]
+    with ThreadPoolExecutor(clients) as pool:
+        return list(pool.map(lambda paths: _ingest_batch(client, slug, paths, clock), batches))
+
+
 def _wait_region_drain(
     client: httpx.Client,
     slug: str,
@@ -309,6 +324,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--stages', default='ingest', help=f'comma list from {",".join(STAGE_ORDER)}')
     p.add_argument('--batch-size', type=int, default=32)
     p.add_argument(
+        '--clients',
+        type=int,
+        default=1,
+        help='batches posted at once (1 sends them one after another, which caps the API at its per-batch in-flight limit)',
+    )
+    p.add_argument(
         '--warmup', type=int, default=100, help='leading images excluded from rates and deltas'
     )
     p.add_argument('--path-map', action='append', default=[], metavar='HOST=CONTAINER')
@@ -384,10 +405,16 @@ def run(
         sampler = GpuSampler(gpu_reader, args.gpu_interval)
         sampler.start()
         started = clock()
-        measured = [
-            _ingest_batch(client, slug, sent[start : start + args.batch_size], clock)
-            for start in range(warm, len(sent), args.batch_size)
-        ]
+        measured = _ingest_batches(
+            client,
+            slug,
+            [
+                sent[start : start + args.batch_size]
+                for start in range(warm, len(sent), args.batch_size)
+            ],
+            clock,
+            args.clients,
+        )
         ingest_wall = clock() - started
         batches.extend(measured)
 

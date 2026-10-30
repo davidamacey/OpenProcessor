@@ -110,6 +110,7 @@ def build_run_args(ns: argparse.Namespace) -> argparse.Namespace:
         '--reps', str(ns.reps),
         '--gpu-interval', PROTOCOL['gpu_interval'],
         '--warmup', str(ns.warmup),
+        '--clients', str(ns.clients),
         '--drop-cache',
         '--out', str(ns.out_root / ns.row / ns.row),
     ]  # fmt: skip
@@ -134,8 +135,12 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument('--out-root', type=Path, required=True)
     run.add_argument('--reps', type=int, default=int(PROTOCOL['reps']))
     run.add_argument('--warmup', type=int, default=100)
+    run.add_argument('--clients', type=int, default=1)
     table = sub.add_parser('table')
     table.add_argument('rows', nargs='+', metavar='NAME=DIR')
+    table.add_argument(
+        '--gpu', default='0', help='sampler index of the stack GPU (nvidia-smi order)'
+    )
     return p
 
 
@@ -143,8 +148,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ns = _parser().parse_args(argv)
     if ns.cmd == 'table':
         for spec in ns.rows:
-            name, _, directory = spec.partition('=')
-            print(render_row(name, load_reps(Path(directory))))
+            name, _, directory = spec.rpartition('=')
+            print(render_row(name, load_reps(Path(directory)), ns.gpu))
         return 0
     observer = ContainerObserver(ns.api_container, ns.triton_container)
     rb.run_reps(build_run_args(ns), observer=observer)

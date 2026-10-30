@@ -195,3 +195,20 @@ def test_an_observer_wraps_each_rep_and_lands_in_the_host_block(
     )
     assert observer.calls == ['start', 'stop', 'start', 'stop']
     assert all(r['host']['api_cpu_s'] == 4.0 for r in reports)
+
+
+def test_clients_post_batches_at_the_same_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    import threading
+
+    both_in = threading.Barrier(2, timeout=5)
+
+    def batch(_client, _slug, paths, _clock):
+        both_in.wait()  # only returns when a second batch is in flight
+        return rb.BatchOutcome(len(paths), len(paths), 0, 0, 0, 0, 0.1)
+
+    monkeypatch.setattr(rb, '_ingest_batch', batch)
+    out = rb._ingest_batches(None, 's', [['a'], ['b']], lambda: 0.0, 2)  # type: ignore[arg-type]
+    assert [o.images for o in out] == [1, 1]
+    both_in.reset()
+    with pytest.raises(threading.BrokenBarrierError):
+        rb._ingest_batches(None, 's', [['a'], ['b']], lambda: 0.0, 1)  # type: ignore[arg-type]
