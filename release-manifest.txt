@@ -2,6 +2,7 @@ release-manifest.txt
 setup-openprocessor.sh	exec
 docker-compose.yml
 docker-compose.gpu-arbiter.yml	optional
+docker-compose.ingest-focus.yml	optional
 env.template
 images.lock
 openprocessor	exec

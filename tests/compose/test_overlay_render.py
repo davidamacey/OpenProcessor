@@ -25,6 +25,8 @@ COMBINATIONS = {
     'dev': (DEV, ALL_PROFILES),
     'cluster-gpu': ([*DEV, 'docker-compose.gpu-clustering.yml'], ['curation']),
     'cluster-gpu-all-profiles': ([*DEV, 'docker-compose.gpu-clustering.yml'], ALL_PROFILES),
+    'ingest-focus': ([*BASE, 'docker-compose.ingest-focus.yml'], ALL_PROFILES),
+    'dev-ingest-focus': ([*DEV, 'docker-compose.ingest-focus.yml'], ALL_PROFILES),
     'dev-compose-arbiter': (
         [*DEV, 'docker-compose.gpu-arbiter.yml'],
         ['curation', 'segmenter', 'vlm', 'training'],

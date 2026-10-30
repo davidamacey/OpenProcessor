@@ -1,0 +1,45 @@
+---
+sidebar_position: 4
+title: Ingest load profile and GPU memory
+---
+
+# Ingest load profile and GPU memory
+
+Photo ingest calls three Triton models: the detector, the PE image encoder and (for text
+search) the PE text tower. By default Triton also preloads the face, MobileCLIP and OCR models.
+On a 48 GB card they take 27.7 GB, and `gpu_image_prep` (the GPU decode, about 2.3 GB per
+instance plus working memory) then competes for what is left.
+
+## What happens when the card is short of memory
+
+`gpu_image_prep` keeps a byte budget (`DEVICE_BUDGET_MIB`, default 2048). A photo reserves
+its decoded frame from it before decoding and waits its turn (at most `BUDGET_WAIT_SECONDS`)
+instead of failing a CUDA allocation. The budget is reserved when the model loads: an
+instance that cannot hold it fails to load, Triton shows the model unavailable and ingest
+decodes on the CPU, which `GET /health` and the route counters show. A photo that still hits a
+failed allocation, a wait that times out, or a photo larger than the budget is answered with a
+status and decoded on the CPU, counted in `op_ingest_decode_total` as `cpu_gpu_memory` or
+`cpu_over_budget` (embed pass: `op_reprocess_decode_total`). The stage counter
+`op_gpu_prep_stage_seconds{stage="budget"}` is the time spent waiting.
+
+A non-zero `cpu_gpu_memory` rate means the card is too full: use the profile below, lower the
+`gpu_image_prep` instance count, or unload models you do not use.
+
+## The opt-in profile
+
+```bash
+# in .env
+OP_LOAD_PROFILE=ingest
+./openprocessor restart
+```
+
+The CLI then adds `docker-compose.ingest-focus.yml`, which preloads only the detector and the
+PE models. With plain Compose add `-f docker-compose.ingest-focus.yml` yourself. The default
+(`OP_LOAD_PROFILE=full`) is unchanged.
+
+Every other endpoint still answers. The first call that needs a model Triton does not hold
+(`/faces`, `/embed`, `/search`, `/ocr`, `/analyze`, the core `/ingest`, and curation text reading)
+makes the API ask Triton to load it, which takes a few seconds once; the model then stays
+resident. If the card cannot hold it the call fails with Triton's error. Loading a model back
+into a card that `gpu_image_prep` filled can fail: keep the default if you use those endpoints
+regularly.
