@@ -307,7 +307,7 @@ tag. Entries already covered by an internal note give only the delta.
 
 | Note | Claim | Real-data status |
 |---|---|---|
-| Owner literature notes (untracked file `docs/cluster_research_9oct.md` in the main checkout) | Build a global refinement engine: cross-cluster kNN, mutual edges, Leiden CPM at several resolutions, CHAMELEON-style split/merge validation, stability checks, versioned hierarchy, no retraining at first; FINCH, HDBSCAN leaf, ECG and HIT-Leiden worth testing | **Partly confirmed.** Cross-cluster reconsideration is right: the fragments are real. FINCH, HDBSCAN and modularity variants failed on real crops [R]. "Leiden first choice" is not supported over plain global average linkage at low recall [R]. "No retraining first" is right for self-training (confirmation bias), but input fixes and frozen-model swaps are cheaper than graph machinery and come first |
+| Owner literature notes (`docs/research/cluster_research_9oct.md`) | Build a global refinement engine: cross-cluster kNN, mutual edges, Leiden CPM at several resolutions, CHAMELEON-style split/merge validation, stability checks, versioned hierarchy, no retraining at first; FINCH, HDBSCAN leaf, ECG and HIT-Leiden worth testing | **Partly confirmed.** Cross-cluster reconsideration is right: the fragments are real. FINCH, HDBSCAN and modularity variants failed on real crops [R]. "Leiden first choice" is not supported over plain global average linkage at low recall [R]. "No retraining first" is right for self-training (confirmation bias), but input fixes and frozen-model swaps are cheaper than graph machinery and come first |
 | [clustering_methods.md](clustering_methods.md) | IVF default: balanced, streaming, stable; AHC complete 0.25 is "the strongest guard against bleed-over"; UMAP and HDBSCAN unusable | UMAP and HDBSCAN: **agrees** [R]. IVF stability: **conflicts** (ARI 0.306 under permutation). Complete linkage as the best guard: **conflicts**; average linkage dominates it on real crops (4.1). IVF as a streaming index: still valid, as an index rather than as clusters |
 | [gpu_clustering.md](gpu_clustering.md) | cuML AHC is single-linkage only, has no threshold and needs dense connectivity; sklearn AHC stays on CPU | **Agrees**, and it limits the GPU path. Average linkage at scale needs a graph-HAC algorithm (5.3), not cuML |
 | [cluster_types.md](cluster_types.md) | Three kinds, separate spaces, never mixed; K3b chains; 2b runs on demand | **Agrees.** Adds: 2a and 2b are mis-scaled in opposite directions (section 2) |
@@ -652,7 +652,7 @@ Internal:
 - Unmerged branches: `research/v080-342-leiden-prototype` (Leiden prototype, `fe29152c`),
   `research/v080-cross-domain-clustering` (cross-domain lessons, `ceb92674`), `fix/v070-341-work`
   (3,000-item baseline, `6c58acbd`)
-- Untracked owner notes: `docs/cluster_research_9oct.md` (main checkout)
+- Owner notes: `docs/research/cluster_research_9oct.md`
 
 External, by section:
 

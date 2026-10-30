@@ -26,7 +26,7 @@ Unmerged inputs, read with `git show <branch>:<path>`:
 | Auto-label loop (#286) | branch `feat/v070-assist-loop` (S0 to S6a committed) | Propagated machine label kind, exact sampled-agreement gate, splitter, budgets, rollback |
 | Retrieval baseline | uncommitted in worktree `OpenProcessor-wt-ret` (`scripts/bench/retrieval_eval*.py`, `docs/benchmarks/retrieval_baseline/`) | Text and image search quality and latency on 2,000 COCO val images (section 1.2) |
 | Program plan | branch `docs/program-plan`, `docs/design/program_plan.md` | Phase C (clustering) items C0 to C6, model tiers, DoD, measurement rules |
-| Clustering research of 9 October | `docs/cluster_research_9oct.md`, untracked in the main checkout (not in git) | The refinement-engine design that #346 to #345 were filed from |
+| Clustering research of 9 October | `docs/research/cluster_research_9oct.md` | The refinement-engine design that #346 to #345 were filed from |
 | **Consolidated clustering research** (primary method reference) | branch `docs/cluster-methods-review`, `docs/research/clustering_research_consolidated.md` | Real-data diagnosis (section 4), recommended stack per kind (section 7), experiments E0 to E10 on real data with a held-out split (section 8), missing evidence (section 9). Where this plan and that note differ, the note's real-data findings win |
 
 **Real-data facts this plan is held to** (consolidated note sections 1 and 4): production pair

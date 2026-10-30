@@ -1,6 +1,6 @@
 # SPD: `gpu_image_prep` under concurrency, design review (diagnosis first, then code)
 
-Status: **design review only, nothing implemented.** Branch `docs/sp-gpu-prep-design` (from
+Status: **design review only, nothing implemented.** Written on a branch (from
 `perf/v070-ingest-speed` at `2d231652`), 2026-10-30. Issues: #392 (the symptom), #40 (epic, SP4 bar),
 #337 (admission charge on fallbacks), #219 (SP3, crop size), #42 (12 GB cards), #391 (health).
 
