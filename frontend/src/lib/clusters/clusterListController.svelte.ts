@@ -1,20 +1,29 @@
 /**
- * The /clusters card grid: the cluster pager, the persisted sort and
- * unlabeled-only filter, the subject and clarity gates, the client-side
- * display order, and the representatives fetched in that display order.
+ * The /clusters card grid. The server sorts and filters the cards and serves
+ * their quality fields, so this controller sends the choice as query
+ * parameters and renders the served order as it comes. It owns the paging of
+ * the one served list: how many cards are on screen, and the representatives
+ * window that fetches thumbnails for the cards about to appear.
  */
 import { untrack } from 'svelte';
 import { getClusters } from '$lib/api_clusters';
-import { idsNeedingRepresentatives } from '$lib/clusters/displayOrderRepresentatives';
 import {
-  filterPersistKey,
-  parsePersistedFilter,
-  type PersistedClusterFilter,
-} from '$lib/clusters/persistedFilter';
+  EMPTY_CLUSTER_FILTER,
+  clusterFilterFromUrl,
+  clusterFilterToQuery,
+  isClusterFilterActive,
+} from '$lib/clusters/clusterListFilter';
+import { filterPersistKey, parsePersistedFilter } from '$lib/clusters/persistedFilter';
 import type { SlotInventory } from '$lib/clusters/slotInventory.svelte';
 import { createPager } from '$lib/pager.svelte';
 import type { Cluster, ClusterFilter } from '$lib/types';
 import type { ItemFilterQuery } from '$lib/types_itemFilter';
+import type {
+  ClusterFlag,
+  ClusterListFilter,
+  ClusterSortId,
+  ClusterSortOption,
+} from '$lib/types_clusterList';
 import { projectsStore } from '$stores/projects.svelte';
 import { toastStore } from '$stores/toast.svelte';
 
@@ -25,46 +34,90 @@ export interface ClusterListDeps {
   readonly gridFilterKey: string;
   readonly slotInventory: SlotInventory;
   gridItemFilter(): ItemFilterQuery;
+  /** The query string the page was opened with (read once). */
+  readonly initialUrlParams: Pick<URLSearchParams, 'get' | 'getAll' | 'has'>;
+  /** Mirrors the sort and card filter into the page URL. */
+  writeUrl(sort: ClusterSortId | null, filter: ClusterListFilter): void;
 }
+
+/** Cards shown per step, and the size of the representatives window. */
+const PAGE_SIZE = 24;
 
 export function createClusterListController(deps: ClusterListDeps) {
   const { slotInventory } = deps;
 
-  // m7 (2026-09-24 interactive pass): the served purity_thresholds this
-  // response carries, so the border-color legend can render the real
-  // pure_min/mixed_min instead of a hardcoded "≥80% / ≥60%". null until
-  // the first page resolves.
+  // The served purity thresholds, so the border legend renders the real
+  // pure_min/mixed_min. null until the first page resolves.
   let purityThresholds = $state<{ pure_min: number; mixed_min: number } | null>(null);
+  let appliedSort = $state<string | null>(null);
+  let sortOptions = $state<ClusterSortOption[]>([]);
+  let flagVocabulary = $state<ClusterFlag[]>([]);
+  let truncated = $state(false);
+  let total = $state(0);
+  // Detector classes seen on served cards, in served order. Kept across
+  // filters so a picker does not lose the values a filter just hid.
+  let detectorClassOptions = $state<string[]>([]);
+  let optionsSlug = projectsStore.current?.slug ?? '';
 
-  // Cluster grid pager. One params builder (clusterQuery) feeds page 1 and
-  // every later page, so a filter can't be sent on the first request and
-  // silently dropped on the next.
+  // How many served cards are on screen, and how far the representatives
+  // window has been fetched. A generation counter drops a window response
+  // that a reload has outrun.
+  let shown = $state(PAGE_SIZE);
+  let repsCoveredTo = PAGE_SIZE;
+  let repsLoading = $state(false);
+  let generation = 0;
+
+  // One params builder feeds the first request and every window request, so
+  // a filter cannot be sent on one and dropped on the next.
   const clusterPager = createPager<Cluster>({
-    fetchPage: async (page) => {
-      const res = await getClusters(clusterQuery(page));
+    fetchPage: async () => {
+      const res = await getClusters(clusterQuery(0));
       if (res.purity_thresholds) purityThresholds = res.purity_thresholds;
+      appliedSort = res.sort;
+      sortOptions = res.sort_options;
+      flagVocabulary = res.flag_vocabulary;
+      truncated = res.truncated;
+      total = res.total;
+      rememberDetectorClasses(res.items);
       return res;
     },
     keyOf: (c) => String(c.id),
   });
 
-  // Persist the cluster-list filter (sort + unlabeled-only) across
-  // navigation so going into a cluster and back keeps the operator's
-  // last view — they shouldn't have to re-click "Unlabeled only" every
-  // time. sessionStorage survives back-nav + refresh within the session
-  // regardless of how the user returns (back button, link, etc.).
-  const filterPersistKeyForProject = filterPersistKey(projectsStore.current?.slug ?? '');
-  function loadPersistedFilter(): PersistedClusterFilter {
-    if (typeof sessionStorage === 'undefined') return parsePersistedFilter(null);
-    return parsePersistedFilter(sessionStorage.getItem(filterPersistKeyForProject));
+  function rememberDetectorClasses(items: Cluster[]): void {
+    const slug = projectsStore.current?.slug ?? '';
+    if (slug !== optionsSlug) {
+      optionsSlug = slug;
+      detectorClassOptions = [];
+    }
+    const next = [...detectorClassOptions];
+    for (const c of items) {
+      const name = c.detector_top_class;
+      if (name && !next.includes(name)) next.push(name);
+    }
+    if (next.length !== detectorClassOptions.length) detectorClassOptions = next;
   }
-  const _persistedFilter = loadPersistedFilter();
 
-  let sort = $state<NonNullable<ClusterFilter['sort']>>(
-    _persistedFilter.sort ?? 'purity_asc',
-  );
-  let unlabeledOnly = $state<boolean>(_persistedFilter.unlabeledOnly);
-  const pageSize = 24;
+  // The choice starts from the URL when it names one, else from this tab's
+  // session storage, so a trip into a cluster and back keeps the view.
+  const persistKey = filterPersistKey(projectsStore.current?.slug ?? '');
+  const fromUrl = clusterFilterFromUrl(deps.initialUrlParams);
+  const start =
+    fromUrl ??
+    parsePersistedFilter(
+      typeof sessionStorage === 'undefined' ? null : sessionStorage.getItem(persistKey),
+    );
+  let sort = $state<ClusterSortId | null>(start.sort);
+  let filter = $state<ClusterListFilter>({ ...EMPTY_CLUSTER_FILTER, ...start.filter });
+  const filterActive = $derived(isClusterFilterActive(filter));
+  const choiceKey = $derived(JSON.stringify([sort, filter]));
+  // What the URL currently says; the effect below writes when state differs.
+  let urlKey = JSON.stringify([
+    fromUrl?.sort ?? null,
+    fromUrl?.filter ?? EMPTY_CLUSTER_FILTER,
+  ]);
+
+  const pageSize = PAGE_SIZE;
 
   // Primary-subject grid filters: card stats reflect only crops that pass.
   // subjectScope 0=all, 1=largest, 2=largest+2nd → max_rank. Clarity slider
@@ -80,231 +133,105 @@ export function createClusterListController(deps: ClusterListDeps) {
     minBlurRatio = blurSlider > 0 ? blurSlider : null;
   }
 
-  // Write the filter back whenever it changes. Catches every mutation
-  // site (toggle button, sort dropdown) without per-handler bookkeeping.
   $effect(() => {
-    if (typeof sessionStorage === 'undefined') return;
-    sessionStorage.setItem(
-      filterPersistKeyForProject,
-      JSON.stringify({ sort, unlabeledOnly }),
-    );
+    const key = choiceKey;
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(persistKey, JSON.stringify({ sort, filter }));
+    }
+    if (key !== urlKey) {
+      urlKey = key;
+      untrack(() => deps.writeUrl(sort, filter));
+    }
   });
 
-  // One params builder for both pages of the cluster grid. loadMore used
-  // to omit max_rank / min_blur_ratio, so scrolling past page 1 appended
-  // unfiltered clusters over a filtered page 1.
-  function clusterQuery(page: number): ClusterFilter {
+  function clusterQuery(representativesOffset: number): ClusterFilter {
     return {
       ...deps.gridItemFilter(),
-      sort,
-      page,
-      page_size: pageSize,
+      ...clusterFilterToQuery(filter),
+      ...(sort ? { sort } : {}),
       max_rank: maxRank,
       min_blur_ratio: minBlurRatio,
-      // D-4: the card list itself always comes back in full in one call
-      // (the endpoint ignores page/page_size for that). DQ-M4
-      // (docs/design/data-quality-pass-2026-09-24.md): representatives are
-      // no longer requested here at all — the endpoint's `offset`/`limit`
-      // window only ever covers its own size-desc server order, which
-      // doesn't line up with the client-side sort (`sortClusters()`)
-      // actually shown, so representatives are fetched separately, in
-      // DISPLAY order, by loadMoreRepresentatives() below.
-      //
-      // Live-verified follow-up: `limit: 0` 422s ("Input should be
-      // greater than or equal to 1") — the backend's offset/limit window
-      // has a real minimum of 1, unlike `per_cluster`, whose minimum is
-      // genuinely 0. `per_cluster: 0` achieves the same "skip
-      // representative computation" goal without an invalid limit, so
-      // offset/limit are left unset (backend default) rather than forced
-      // to an invalid or wastefully-real window.
-      per_cluster: 0,
+      representatives_offset: representativesOffset,
+      representatives_limit: PAGE_SIZE,
     };
   }
 
-  // DQ-M4's loadFirst()/loadMoreRepresentatives() are declared below
-  // gridItems (further down this file) since they read it — kept as a
-  // forward function reference here would need `gridItems` in the
-  // temporal dead zone otherwise (`const`, not hoisted like `function`).
-
-  // Sort the loaded clusters client-side. The {API_PREFIX}/clusters endpoint only
-  // returns size-descending (it's a terms agg, not a sortable query), and
-  // every cluster comes back in one call — so sorting here is both
-  // correct and complete. Without this the sort dropdown did nothing.
-  function sortClusters(list: Cluster[], mode: typeof sort): Cluster[] {
-    const out = [...list];
-    const purity = (c: Cluster) =>
-      c.purity == null ? Number.POSITIVE_INFINITY : c.purity;
-    switch (mode) {
-      case 'size_desc':
-        out.sort((a, b) => (b.size ?? 0) - (a.size ?? 0));
-        break;
-      case 'size_asc':
-        out.sort((a, b) => (a.size ?? 0) - (b.size ?? 0));
-        break;
-      case 'purity_desc':
-        // null purity (no labelled members) sorts last on a desc view too.
-        out.sort((a, b) => {
-          const pa = a.purity ?? -1;
-          const pb = b.purity ?? -1;
-          return pb - pa;
-        });
-        break;
-      case 'purity_asc':
-        out.sort((a, b) => purity(a) - purity(b));
-        break;
-      case 'dominant_class':
-        out.sort((a, b) =>
-          (a.dominant_class_name ?? '￿').localeCompare(b.dominant_class_name ?? '￿'),
-        );
-        break;
-    }
-    return out;
-  }
-
+  // The cards on screen: the served list cut at `shown`, with the slot
+  // inventory entry points pinned first while no card filter is set.
   const gridItems = $derived.by<Cluster[]>(() => {
-    const filtered = unlabeledOnly
-      ? clusterPager.items.filter((c) => c.cluster_kind !== 'class')
-      : clusterPager.items;
-    const sorted = sortClusters(filtered, sort);
-    // Keep the synthetic slot cards pinned first (entry points to the
-    // slot inventories), unaffected by sort, only on the unfiltered
-    // labelled view. M4: this used to drop the real class-kind cluster
-    // sharing the slot class's id (cluster_id === class_id for class-kind
-    // clusters) on the theory that slotInventoryCard replaces it — but that cluster
-    // (e.g. #80, size 1) is a real, independently-reachable cluster with
-    // its own crops, and hiding it made it permanently unreachable from
-    // this grid. The two now render side by side; the #each key below is
-    // keyed off `isSlotCard` so the synthetic entry never collides with
-    // the real cluster's id.
+    const cards = clusterPager.items.slice(0, shown);
     if (
       deps.classFilter == null &&
       slotInventory.slotInventoryCards.length > 0 &&
-      !unlabeledOnly
+      !filterActive
     ) {
-      return [...slotInventory.slotInventoryCards, ...sorted];
+      return [...slotInventory.slotInventoryCards, ...cards];
     }
-    return sorted;
+    return cards;
   });
+  const hasMoreCards = $derived(shown < clusterPager.items.length);
 
-  // DQ-M4 (docs/design/data-quality-pass-2026-09-24.md): representatives
-  // fetched per-card, in the operator's actual DISPLAY order (gridItems,
-  // just above), not the backend's fixed size-desc order. The `/clusters`
-  // endpoint has no batch-by-id representatives param (checked against
-  // contracts/openapi/curation.json) — only a single
-  // `cluster_id` filter — so each missing card in the window is fetched
-  // individually via that filter, in parallel. See
-  // src/lib/clusters/displayOrderRepresentatives.ts for the full
-  // rationale and the pure id-selection logic.
-  //
-  // `dispOffset` tracks how far into `gridItems` a fetch attempt has been
-  // made; reset to 0 whenever the display order can change (loadFirst, or
-  // the sort/filter effect below) so a resort re-covers its new first
-  // window instead of only ever advancing forward.
-  let dispOffset = $state(0);
-  let repsLoading = $state(false);
-  const repsHasMore = $derived(dispOffset < gridItems.length);
-
-  async function loadMoreRepresentatives(): Promise<void> {
-    if (repsLoading || !repsHasMore) return;
+  // Thumbnails for the next window come from the same list call, asked with
+  // that window's offset: the server fills `representatives` for exactly
+  // those cards, in the order it served them.
+  async function loadRepresentatives(windowStart: number): Promise<void> {
+    if (windowStart < repsCoveredTo) return;
+    repsCoveredTo = windowStart + PAGE_SIZE;
+    const myGeneration = generation;
     repsLoading = true;
-    const windowStart = dispOffset;
     try {
-      const ids = idsNeedingRepresentatives(gridItems, windowStart, pageSize);
-      if (ids.length > 0) {
-        const results = await Promise.allSettled(
-          ids.map((id) => getClusters({ cluster_id: id, representatives_limit: 1 })),
-        );
-        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local merge lookup consumed synchronously within this call, never stored in reactive state
-        const byId = new Map<number, Cluster>();
-        for (const r of results) {
-          if (r.status === 'fulfilled') {
-            const c = r.value.items[0];
-            if (c) byId.set(c.id, c);
-          }
-        }
-        // Merge into the already-loaded cards by id. Mutating in place
-        // (not replacing clusterPager.items) keeps every other bit of
-        // component state (selection, drag, scroll position) untouched.
-        for (const item of clusterPager.items) {
-          const upd = byId.get(item.id);
-          if (upd && upd.representative_crop_ids.length > 0) {
-            item.representative_crop_ids = upd.representative_crop_ids;
-          }
-        }
-        const failed = results.filter((r) => r.status === 'rejected').length;
-        if (failed > 0) {
-          toastStore.warn(
-            `Could not load ${failed} cluster thumbnail${failed === 1 ? '' : 's'}.`,
-          );
-        }
+      const res = await getClusters(clusterQuery(windowStart));
+      if (myGeneration !== generation) return;
+      const repsById: Record<number, string[]> = {};
+      for (const c of res.items) {
+        if (c.representative_crop_ids.length > 0)
+          repsById[c.id] = c.representative_crop_ids;
       }
+      // Merged in place by id so selection, drag and scroll state survive.
+      for (const item of clusterPager.items) {
+        const reps = repsById[item.id];
+        if (reps) item.representative_crop_ids = reps;
+      }
+    } catch {
+      toastStore.warn('Could not load the next cluster thumbnails.');
     } finally {
-      dispOffset = windowStart + pageSize;
       repsLoading = false;
     }
   }
 
   async function loadFirst(): Promise<void> {
-    dispOffset = 0;
+    generation += 1;
+    shown = PAGE_SIZE;
+    repsCoveredTo = PAGE_SIZE;
     await clusterPager.loadFirst();
-    if (clusterPager.error == null) {
-      await slotInventory.loadSlotInventoryCards();
-      // DQ-M4: fetch the first screenful's representatives in DISPLAY
-      // order right away — this is the fix for cards rendering blank on
-      // first paint. loadMoreRepresentatives() below (sentinel-triggered)
-      // continues the same windowing as the operator scrolls.
-      await loadMoreRepresentatives();
-    }
+    if (clusterPager.error == null) await slotInventory.loadSlotInventoryCards();
   }
 
-  const unlabeledCount = $derived(
-    clusterPager.items.filter((c) => c.cluster_kind !== 'class').length,
-  );
+  function loadMore(): void {
+    if (repsLoading || !hasMoreCards) return;
+    const windowStart = shown;
+    shown = Math.min(shown + PAGE_SIZE, clusterPager.items.length);
+    void loadRepresentatives(windowStart);
+  }
 
-  const loadMore = () => {
-    void clusterPager.loadMore();
-    void loadMoreRepresentatives();
-  };
+  function setFilter(next: ClusterListFilter): void {
+    filter = { ...next };
+  }
 
-  // Re-load on class-filter change — but only for the cluster view.
-  // Sort is applied client-side (sortClusters) over the single loaded
-  // batch, so changing it must NOT refetch (the endpoint returns the
-  // same size-ordered data regardless).
-  //
-  // DQ-M4 follow-up: loadFirst()'s synchronous prefix (before its first
-  // await) reads clusterQuery()'s `sort`/`class_id`/etc and WRITES
-  // clusterPager.items — both wrapped in untrack() below. Without it,
-  // this effect's dependency set would pick up every state
-  // loadFirst()/loadMoreRepresentatives() touch (the same trap
-  // _seedViewBox() in review/+page.svelte documents for the identical
-  // reason), and the write-then-reread cycle between this effect and the
-  // sort/unlabeledOnly effect below tripped Svelte's
-  // effect_update_depth_exceeded guard on every /clusters mount.
+  function clearFilter(): void {
+    filter = { ...EMPTY_CLUSTER_FILTER };
+  }
+
+  // Reload when anything the server filters or orders by changes. loadFirst's
+  // synchronous prefix reads query state and writes the pager, so it runs
+  // untracked (otherwise the effect would depend on what it writes).
   $effect(() => {
     void deps.classFilter;
     void maxRank;
     void minBlurRatio;
     void deps.gridFilterKey;
+    void choiceKey;
     if (!deps.isSlotFilter) untrack(() => void loadFirst());
-  });
-
-  // DQ-M4: sort/unlabeledOnly reshuffle DISPLAY order (gridItems) without
-  // a refetch of the card list itself (see the comment above — the
-  // endpoint isn't sortable, sortClusters() is purely client-side). That
-  // reshuffle can put a card that was never in an earlier display window
-  // first, so the representatives window has to restart from 0 and
-  // re-cover the new first screenful — cheap, since
-  // idsNeedingRepresentatives() skips every card that already has
-  // representatives from a prior window. untrack() for the same reason
-  // as the effect above: loadMoreRepresentatives() reads gridItems and
-  // writes clusterPager.items — read that synchronously inside THIS
-  // effect (instead of untracked) and every representative fetch it
-  // triggers would re-fire this same effect, in an unbounded loop.
-  $effect(() => {
-    void sort;
-    void unlabeledOnly;
-    dispOffset = 0;
-    if (!deps.isSlotFilter) untrack(() => void loadMoreRepresentatives());
   });
 
   return {
@@ -317,15 +244,35 @@ export function createClusterListController(deps: ClusterListDeps) {
     get sort() {
       return sort;
     },
-    set sort(v: NonNullable<ClusterFilter['sort']>) {
+    set sort(v: ClusterSortId | null) {
       sort = v;
     },
-    get unlabeledOnly() {
-      return unlabeledOnly;
+    get appliedSort() {
+      return appliedSort;
     },
-    set unlabeledOnly(v: boolean) {
-      unlabeledOnly = v;
+    get sortOptions() {
+      return sortOptions;
     },
+    get flagVocabulary() {
+      return flagVocabulary;
+    },
+    get truncated() {
+      return truncated;
+    },
+    get total() {
+      return total;
+    },
+    get detectorClassOptions() {
+      return detectorClassOptions;
+    },
+    get filter() {
+      return filter;
+    },
+    get filterActive() {
+      return filterActive;
+    },
+    setFilter,
+    clearFilter,
     get subjectScope() {
       return subjectScope;
     },
@@ -347,15 +294,13 @@ export function createClusterListController(deps: ClusterListDeps) {
     get gridItems() {
       return gridItems;
     },
+    get hasMoreCards() {
+      return hasMoreCards;
+    },
     get repsLoading() {
       return repsLoading;
     },
-    get repsHasMore() {
-      return repsHasMore;
-    },
-    get unlabeledCount() {
-      return unlabeledCount;
-    },
+    pageSize,
     BLUR_MAX,
     commitClusterBlur,
     loadFirst,

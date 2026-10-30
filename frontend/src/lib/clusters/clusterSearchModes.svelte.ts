@@ -164,9 +164,9 @@ export function createClusterSearchModes(s: ClusterSearchModesState) {
     const missing = ids.filter((id) => !clusterMetaMap.has(id));
     if (missing.length === 0) return;
     try {
-      // Badge lookup only reads dominant_class_name/purity/etc — no
-      // representatives needed, so skip that window entirely (D-4).
-      const res = await getClusters({ representatives_limit: 0 });
+      // Badge lookup only reads dominant_class_name/purity/etc, so skip the
+      // representatives (`limit` has a minimum of 1; `per_cluster` may be 0).
+      const res = await getClusters({ per_cluster: 0 });
       for (const c of res.items) clusterMetaMap.set(c.id, c);
     } catch (e) {
       toastStore.warn(`Could not load cluster info for badges: ${apiErrorText(e)}`);

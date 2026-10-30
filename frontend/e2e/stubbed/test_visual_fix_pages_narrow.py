@@ -37,7 +37,7 @@ CLUSTERS = {
             "purity_n": 616,
             "purity_basis": "nearest_centroid",
             "purity_tier": "noisy",
-            "label_purity": 1.0,
+            "label_agreement": 1.0,
             "labelled_share": 1.0,
             "promotable": False,
             "is_unlabeled": False,
@@ -179,19 +179,20 @@ def test_ignored_mode_hides_cluster_grid_controls(stub, page, app_url):
     """C5: Sort/subject/clarity stayed live in the Ignored view and the
     footer still read the cluster grid's "107 / 107 all loaded"."""
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
-    stub.on("GET", r"/clusters(\?|$)", CLUSTERS)
+    served = {**CLUSTERS, "sort": "size_desc", "sort_options": [{"id": "size_desc", "label": "Largest first"}]}
+    stub.on("GET", r"/clusters(\?|$)", served)
     stub.on("GET", r"/crops(\?|$)", {"total": 0, "page": 1, "page_size": 60, "crops": []})
 
     stub.on("GET", r"/regions(\?|$)", {"items": [], "total": 0})
 
     page.goto(f"{app_url}/p/default/clusters")
-    sort = page.locator('label:has-text("Sort") select')
+    sort = page.get_by_test_id("cluster-sort")
     sort.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     page.locator("button:has-text('Ignored')").first.click()
     page.get_by_text("Nothing ignored.").wait_for(timeout=10000)
 
-    assert page.locator('label:has-text("Sort") select').count() == 0
+    assert page.get_by_test_id("cluster-sort").count() == 0
     footer = page.locator('[data-testid="clusters-footer-count"]').inner_text()
     assert "ignored crops" in footer, footer
     _no_page_errors(stub)

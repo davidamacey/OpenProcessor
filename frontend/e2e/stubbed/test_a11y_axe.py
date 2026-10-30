@@ -17,6 +17,7 @@ from playwright.sync_api import expect
 
 from fixtures.wire import project, projects_response
 from test_cluster_discard import CLASSES, CLUSTERS, crop
+from test_cluster_list_filters import serve as serve_filtered_clusters
 from test_fresh_run_cosmetics import EMPTY_PROPOSALS
 from test_curation_settings import METHODS_TODAY, SETTINGS_EMPTY
 from test_open_vocab import serve_open_vocab
@@ -82,10 +83,15 @@ def serve_open_vocab_list(stub) -> None:
     stub.on("GET", r"/scores/status(\?|$)", {"status": "idle"})
 
 
+def serve_clusters_with_filters(stub) -> None:
+    serve_filtered_clusters(stub, [])
+
+
 # (id, path, stub setup, selector that proves the data loaded)
 PAGES = [
     ("projects", "/projects", serve_projects_page, '[data-testid="project-row-widgets-a"]'),
     ("clusters", "/p/default/clusters", serve_clusters, "li button"),
+    ("clusters-with-filters", "/p/default/clusters?flag=unvalidated", serve_clusters_with_filters, "li button"),
     ("cluster-detail", "/p/default/clusters/1", serve_clusters, '[data-testid="class-name"]'),
     ("review", "/p/default/review", serve_review, "main"),
     ("classes", "/p/default/classes", serve_classes, "main"),

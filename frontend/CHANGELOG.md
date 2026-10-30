@@ -9,7 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Cluster list: the sort and filters are the server's. The toolbar renders the served sort options and flag vocabulary and filters by dominant class, detector class, size range, validation state, flags and needs review; the choice goes out as query parameters, lives in the URL and in session storage, and "Clear filters" resets it. Cards show the detector's top class with its share and mean confidence, the validation state, the review count (per-tab counts as the tooltip) and the flags (served label, served description as tooltip). A truncated list says so; load and error states have a Retry.
 - An axe-core accessibility check in the stubbed e2e suite (`e2e/stubbed/test_a11y_axe.py`) on projects, clusters, cluster detail, review, classes, settings, prompt packs and open-vocab sets; it fails on any violation.
+
+### Changed
+
+- The cluster list no longer sorts or narrows on the client and no longer fetches thumbnails one request per card: the first screen is one list request that also carries its thumbnails, and each further window is one more. The "Unlabeled only" toggle is gone (use the validation and dominant-class filters). Readers of `label_purity` moved to `label_agreement`.
 
 ### Fixed
 
@@ -26,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The review page shows the `Proposed` row only when the server served a proposal.
 - One timestamp format everywhere (`YYYY-MM-DD HH:MM:SS UTC`, as on Settings): the dashboard's clustering run and export finish, the export page's last run, the combine job's start and finish, and the ingest sources' poll and scan times.
 - The default search hint is short enough not to be clipped on a phone-width screen.
+- The cluster list's badge lookup for search results no longer asks for a zero-size representatives window (the server refuses it).
 - The docs screenshot seeding binds a project (`--project`) like the other scripts.
 
 ## [0.6.0] - 2026-10-16

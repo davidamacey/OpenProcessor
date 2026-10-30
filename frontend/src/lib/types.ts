@@ -11,6 +11,11 @@ import type { SlotData, SlotKey } from '$lib/annotations/types';
 import type { EmbeddingState, ItemFilterQuery } from '$lib/types_itemFilter';
 import type { ReprocessRequest } from '$lib/types_import';
 import type { ItemAssist } from '$lib/types_assist';
+import type {
+  ClusterListFilter,
+  ClusterSortId,
+  ValidationState,
+} from '$lib/types_clusterList';
 
 /** Who wrote a crop's current label. Same vocabulary as `class_source`
  *  (curation_api_contract.md "class_source values"): `human*`, the fixed
@@ -267,7 +272,7 @@ export interface Cluster {
   validated_count: number;
   dominant_class_id: number | null;
   dominant_class_name: string | null;
-  /** Served `label_purity` — the dominant class's share of the
+  /** Served `label_agreement` — the dominant class's share of the
    *  LABELLED members. Not the geometry `purity`. */
   dominant_pct: number | null;
   /** Served member counts behind `dominant_pct` (cluster-scoped, include
@@ -289,13 +294,24 @@ export interface Cluster {
    *  border color. Null only for the client-only "cluster card lookup
    *  failed" stub in `getCluster`. */
   purity_tier: PurityTier | null;
-  /** Largest-class share among labelled members (the pre-cutover
-   *  label-based "purity" — 1.0 for a class cluster by construction).
-   *  `promotable` is gated on this, not the geometry-based `purity`. */
-  label_purity?: number | null;
-  /** #61: served `label_agreement` (same value as `label_purity`) — what
-   *  the UI reads for label quality; `purity` stays geometry-only. */
+  /** Served `label_agreement`: the top class's share of the labelled
+   *  members. What the UI reads for label quality; `purity` stays
+   *  geometry-only. */
   label_agreement?: number | null;
+  /** The detector's most common class among the members, and its share of
+   *  the members that have a detector class. */
+  detector_top_class?: string | null;
+  detector_top_share?: number | null;
+  /** Mean detector confidence over the members that have one. */
+  detector_conf_mean?: number | null;
+  validation_state?: ValidationState;
+  /** Members each review tab would show for this cluster, by tab id. */
+  review_counts?: Record<string, number>;
+  /** `review_counts.all`: the review queue size for this cluster. */
+  needs_review_count?: number;
+  /** Quality flag ids; labels and descriptions are the response's
+   *  `flag_vocabulary`. */
+  flags?: string[];
   /** Share of this cluster's members that carry any label at all. */
   labelled_share?: number | null;
   /** Server's auto-promote eligibility for this cluster (purity +
@@ -463,44 +479,27 @@ export interface CropContextResponse {
   items: Crop[];
 }
 
-export interface ClusterFilter extends Omit<
-  ItemFilterQuery,
-  'open_vocab_set' | 'source_prompt'
-> {
-  /** DQ-M4 (docs/design/data-quality-pass-2026-09-24.md): restrict to
-   *  exactly one cluster, so its representatives can be fetched
-   *  individually in the frontend's own (client-sorted) display order —
-   *  the server has no `cluster_ids`/batch-by-id param, only a
-   *  size-desc-ordered `offset`/`limit` window (see
-   *  representatives_offset/_limit below), which is why representatives
-   *  used to fill in server order regardless of what sort the operator
-   *  picked. */
+export interface ClusterFilter
+  extends
+    Omit<ItemFilterQuery, 'open_vocab_set' | 'source_prompt'>,
+    Partial<ClusterListFilter> {
+  /** Restrict to exactly one cluster (its own card). */
   cluster_id?: number | null;
-  /** DQ-M4 live-verified follow-up: the backend's `offset`/`limit`
-   *  representatives window rejects `limit=0` (422, "Input should be
-   *  greater than or equal to 1") — confirmed live against real data,
-   *  not just the vendored OpenAPI's `minimum: 1`. To genuinely skip
-   *  representative computation on the main card-list call (superseded
-   *  entirely by per-card display-order fetches, see
-   *  displayOrderRepresentatives.ts), set this to 0 instead — `0`
-   *  representative crops per card is valid (`minimum: 0`) and just as
-   *  cheap, without touching offset/limit at all. */
+  /** Representative crops per card. `0` skips them; the representatives
+   *  window (`offset`/`limit`) rejects 0 (the contract's minimum is 1). */
   per_cluster?: number;
-  min_size?: number;
-  sort?: 'purity_asc' | 'purity_desc' | 'size_desc' | 'size_asc' | 'dominant_class';
+  /** The served order; omitted, the server's default applies. */
+  sort?: ClusterSortId;
   page?: number;
   page_size?: number;
   // Primary-subject grid filters: card stats reflect only crops that pass.
   max_rank?: number | null;
   min_blur_ratio?: number | null;
   class_source?: string | null;
-  /** D-4 (docs/design/curation_query_performance_audit.md): which window
-   *  of the (already-fully-returned, size-desc-ordered) card list gets a
-   *  populated `representatives` array — cards outside the window come
-   *  back with `representatives: []`, not omitted. Independent of
-   *  `page`/`page_size` above, which the endpoint ignores entirely (every
-   *  card up to `max_clusters` is always returned in one response); the
-   *  caller windows representatives to whatever's actually visible. */
+  /** Which window of the served card list gets its `representatives`;
+   *  cards outside it come back with `representatives: []`. Independent of
+   *  `page`/`page_size` above, which the endpoint ignores (every card up to
+   *  `max_clusters` is returned in one response). */
   representatives_offset?: number;
   representatives_limit?: number;
 }
