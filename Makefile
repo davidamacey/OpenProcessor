@@ -17,7 +17,7 @@ SHELL := /bin/bash
 # scripts/openprocessor.sh use).
 DEV_DEV_COMPOSE := docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.gpu-arbiter.yml --profile curation --profile segmenter --profile vlm --profile training
 # The curation services `curation-up SERVICES=...` accepts (the evaluator is on demand).
-CURATION_SERVICES := curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-cluster-refresh curation-evaluator
+CURATION_SERVICES := curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-assist-loop-worker curation-cluster-refresh curation-evaluator
 COMPOSE := docker compose $(if $(wildcard src/main.py),-f docker-compose.yml -f docker-compose.dev.yml,-f docker-compose.yml)$(if $(wildcard docker-compose.local.yml), -f docker-compose.local.yml)
 V := .venv/bin
 # Prefer the project venv's interpreter when it exists; fall back to
@@ -137,7 +137,7 @@ dev-down: ## Stop the dev deployment started by 'make dev-up' (keeps volumes)
 
 .PHONY: dev-restart
 dev-restart: ## Restart the code-mounting containers (api + workers) after pulling/merging code; does not recreate or re-read .env
-	$(DEV_COMPOSE) restart api curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-cluster-refresh
+	$(DEV_COMPOSE) restart api curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-assist-loop-worker curation-cluster-refresh
 
 .PHONY: dev-ps
 dev-ps: ## Show the dev deployment's containers
@@ -1176,7 +1176,7 @@ clone-ref: ## Clone a specific reference repo (usage: make clone-ref REPO=ultral
 # Curation subsystem — EXPERIMENTAL, opt-in compose profile
 # ==================================================================================
 # The curation worker services (curation-detection-worker, curation-vlm-worker,
-# curation-auto-label-worker, curation-cluster-refresh) all carry
+# curation-auto-label-worker, curation-assist-loop-worker, curation-cluster-refresh) all carry
 # `profiles: [curation]` in docker-compose.yml, so `make up`/`make down`
 # never touch them. Use the targets below instead.
 
@@ -1197,13 +1197,13 @@ curation-down: ## Stop the curation worker services
 curation-logs: ## Follow logs from the curation worker services
 	$(COMPOSE) --profile curation logs -f \
 		curation-detection-worker curation-vlm-worker \
-		curation-auto-label-worker curation-cluster-refresh
+		curation-auto-label-worker curation-assist-loop-worker curation-cluster-refresh
 
 .PHONY: curation-status
 curation-status: ## Show running curation worker containers
 	$(COMPOSE) --profile curation ps \
 		curation-detection-worker curation-vlm-worker \
-		curation-auto-label-worker curation-cluster-refresh curation-evaluator
+		curation-auto-label-worker curation-assist-loop-worker curation-cluster-refresh curation-evaluator
 
 .PHONY: sample-coco
 sample-coco: ## Fetch the public COCO sample set (800 images, 10 classes + upload/post_promote side sets)

@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 API_STAGE = re.compile(r'op_pipeline_stage_seconds\{stage=(\w+)\}')
 TRITON_SERIES = re.compile(
-    r'(nv_inference_(?:queue_duration_us|compute_infer_duration_us|count))\{[^}]*?model=([^,}]+)'
+    r'(nv_inference_(?:queue_duration_us|compute_infer_duration_us|count))(?:_total)?\{[^}]*?model=([^,}]+)'
 )
 
 
@@ -116,11 +116,11 @@ def _table(header: tuple[str, ...], rows: list[tuple[str, ...]]) -> list[str]:
     return [*lines, '']
 
 
-def render_row(name: str, reports: list[dict[str, Any]]) -> str:
+def render_row(name: str, reports: list[dict[str, Any]], gpu_index: str = '0') -> str:
     """Markdown for one row: headline, API stages, Triton models, gpu_image_prep stages."""
     rates = [r['ingest']['images_per_s'] for r in reports]
     images = reports[0]['ingest']['images']
-    gpu = [g for r in reports for g in r['gpu'].values()]
+    gpu = [r['gpu'][gpu_index] for r in reports]  # the stack's GPU; the sampler logs all of them
     noisy = [i for i, r in enumerate(reports, 1) if r.get('host', {}).get('noisy')]
     host = [r.get('host', {}) for r in reports]
     cpu = [

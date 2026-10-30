@@ -229,6 +229,33 @@ def test_apply_dry_run_counts_and_skips_the_locked(world: Any) -> None:
     assert _doc(world, 'valid1')['class_name'] == 'gadget', 'a validated class is not overwritten'
 
 
+def test_apply_as_propagated_writes_the_machine_kind_and_leaves_the_locked(world: Any) -> None:
+    _seed(world, 'free1')
+    _seed(
+        world, 'human1', class_id=0, class_name='widget', class_source='human', class_validated=True
+    )
+    world.upstream.vlm_content = _reply('gadget', 'gadget', 'gadget')
+    state = _run_cluster(world)
+    url = f'{RUNS}/{state["run_id"]}/apply'
+
+    refused = world.post(url, class_name='widget', label_source='human_confirmed')
+    assert refused.status_code == 422
+
+    done = world.post(url, class_name='widget', label_source='propagated', dry_run=False)
+
+    assert done.status_code == 200, done.text
+    assert done.json()['updated'] == 1
+    free = _doc(world, 'free1')
+    assert (free['class_name'], free['class_source'], free['class_validated']) == (
+        'widget',
+        'assist_propagated',
+        False,
+    )
+    assert free['class_detector_version'] == state['run_id']
+    assert free['cluster_id'] == free['class_id']
+    assert _doc(world, 'human1')['class_source'] == 'human'
+
+
 def test_apply_resolves_the_class_by_name(world: Any) -> None:
     _seed(world, 'free1')
     world.upstream.vlm_content = _reply('gadget')

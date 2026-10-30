@@ -119,9 +119,8 @@ def _check_segment(request: AssistRunRequest, vlm: RunVlm) -> None:
             )
 
 
-def _check_classes(request: AssistRunRequest) -> None:
-    if 'classify' not in request.actions:
-        return
+def require_item_classes() -> None:
+    """422 ``no_class_names`` when the project has no item class to choose from."""
     from src.clients.curation_opensearch.registry import get_class_registry
     from src.services.curation.region_class import item_classes
 
@@ -131,6 +130,11 @@ def _check_classes(request: AssistRunRequest) -> None:
             'no_class_names',
             'classify needs item classes: the project registry has none; create a class first',
         )
+
+
+def _check_classes(request: AssistRunRequest) -> None:
+    if 'classify' in request.actions:
+        require_item_classes()
 
 
 async def prepare_run(opensearch: AsyncOpenSearch, request: AssistRunRequest) -> PreparedRun:
@@ -148,7 +152,6 @@ async def prepare_run(opensearch: AsyncOpenSearch, request: AssistRunRequest) ->
     require_run_vlm(vlm)
     _check_segment(request, vlm)
     scope = await resolve_scope(opensearch, request)
-    limit = _endpoint_images(vlm)
     return PreparedRun(
         request=request,
         scope=scope,
@@ -156,14 +159,16 @@ async def prepare_run(opensearch: AsyncOpenSearch, request: AssistRunRequest) ->
         pack=pack,
         pack_name=pack_name,
         pack_revision=pack_revision,
-        images_per_call=max(1, min(DEFAULT_OPEN_IMAGES_PER_CALL, limit)),
+        images_per_call=images_per_call_for(vlm.endpoint),
     )
 
 
-def _endpoint_images(vlm: RunVlm) -> int:
-    body: Any = vlm.endpoint.body if vlm.endpoint is not None else None
+def images_per_call_for(endpoint: Any) -> int:
+    """Crops per VLM request: the default, or fewer when the endpoint caps its images."""
+    body: Any = endpoint.body if endpoint is not None else None
     value = getattr(body, 'max_images_per_call', None)
-    return int(value) if isinstance(value, int) and value > 0 else DEFAULT_OPEN_IMAGES_PER_CALL
+    limit = int(value) if isinstance(value, int) and value > 0 else DEFAULT_OPEN_IMAGES_PER_CALL
+    return max(1, min(DEFAULT_OPEN_IMAGES_PER_CALL, limit))
 
 
-__all__ = ['PreparedRun', 'prepare_run']
+__all__ = ['PreparedRun', 'images_per_call_for', 'prepare_run', 'require_item_classes']

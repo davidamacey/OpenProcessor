@@ -6,9 +6,11 @@ the mean per image. Stage seconds are sums over concurrent requests, so they are
 runs and never added up to wall time.
 
 A request keeps one :class:`StageClock` and publishes it once when it ends: the hot path costs a
-few ``perf_counter`` calls and one counter increment per stage per image. Stages:
+few ``perf_counter`` calls and one addition per stage per image (the counters are flushed in
+batches, see :class:`StageMetrics`). Stages:
 
 ``queue``        wait for a free slot and a worker thread (``execute`` receipt to the first stage)
+``budget``       wait for device memory (``prep_budget``); only photos that route to the GPU
 ``decode``       header routing, nvJPEG decode, EXIF orientation
 ``letterbox``    detector letterbox canvas
 ``detect``       detector call (BLS), box decoding
@@ -28,6 +30,7 @@ for attribution runs, not for throughput numbers.
 
 from __future__ import annotations
 
+import threading
 import time
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
@@ -39,6 +42,7 @@ if TYPE_CHECKING:
 
 STAGES = (
     'queue',
+    'budget',
     'decode',
     'letterbox',
     'detect',
@@ -80,20 +84,66 @@ class StageClock:
 
 
 class StageMetrics:
-    """The two counter families of one model instance; ``pb_utils`` is the Triton module."""
+    """The two counter families of one model instance; ``pb_utils`` is the Triton module.
+
+    Triton 2.70's Python backend aborts the server when several threads increment custom metrics
+    at once, and deletes a family when its Python object is collected (its series leave /metrics,
+    ``increment`` raises); a family that dies before its series crashes it too. So requests only
+    add to local sums (``publish``), one flusher thread is the sole caller of ``increment`` (every
+    ``FLUSH_SECONDS`` and once at ``close``), and the families live as long as the series.
+    """
+
+    FLUSH_SECONDS = 0.5
 
     def __init__(self, pb_utils: Any) -> None:
         kind = pb_utils.MetricFamily.COUNTER
-        seconds = pb_utils.MetricFamily(
-            name=SECONDS_NAME, description='gpu_image_prep stage wall seconds', kind=kind
+        self._families = (
+            pb_utils.MetricFamily(
+                name=SECONDS_NAME, description='gpu_image_prep stage wall seconds', kind=kind
+            ),
+            pb_utils.MetricFamily(
+                name=OBSERVATIONS_NAME,
+                description='images that ran a gpu_image_prep stage',
+                kind=kind,
+            ),
         )
-        seen = pb_utils.MetricFamily(
-            name=OBSERVATIONS_NAME, description='images that ran a gpu_image_prep stage', kind=kind
-        )
+        seconds, seen = self._families
         self._seconds = {s: seconds.Metric(labels={'stage': s}) for s in STAGES}
         self._seen = {s: seen.Metric(labels={'stage': s}) for s in STAGES}
+        self._pending_seconds = dict.fromkeys(STAGES, 0.0)
+        self._pending_seen = dict.fromkeys(STAGES, 0)
+        self._pending_lock = threading.Lock()
+        self._flush_lock = threading.Lock()
+        self._stop = threading.Event()
+        self._flusher = threading.Thread(target=self._flush_loop, name='stage-metrics', daemon=True)
+        self._flusher.start()
 
     def publish(self, clock: StageClock) -> None:
-        for stage, secs in clock.seconds.items():
-            self._seconds[stage].increment(secs)
-            self._seen[stage].increment(1)
+        with self._pending_lock:
+            for stage, secs in clock.seconds.items():
+                self._pending_seconds[stage] += secs
+                self._pending_seen[stage] += 1
+
+    def flush(self) -> None:
+        with self._flush_lock:
+            with self._pending_lock:
+                seconds, seen = self._pending_seconds, self._pending_seen
+                self._pending_seconds = dict.fromkeys(STAGES, 0.0)
+                self._pending_seen = dict.fromkeys(STAGES, 0)
+            for stage in STAGES:
+                if seen[stage]:
+                    self._seconds[stage].increment(seconds[stage])
+                    self._seen[stage].increment(seen[stage])
+
+    def _flush_loop(self) -> None:
+        while not self._stop.wait(self.FLUSH_SECONDS):
+            self.flush()
+
+    def close(self) -> None:
+        """Flush, then delete the series before their families (the reverse order crashes)."""
+        self._stop.set()
+        self._flusher.join()
+        self.flush()
+        self._seconds = {}
+        self._seen = {}
+        self._families = ()

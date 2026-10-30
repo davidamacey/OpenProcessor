@@ -25,6 +25,7 @@ from src.domain.ingest_class_sources import (
     LABEL_IMPORT_CLASS_SOURCE,
     OPEN_VOCAB_CLASS_SOURCE,
     OPEN_VOCAB_TARGET_CLASS_SOURCE,
+    PROPAGATED_CLASS_SOURCE,
     VLM_CLASS_SOURCE,
     is_classifier_class_source,
 )
@@ -77,6 +78,7 @@ CLASS_SOURCE_ROLES: tuple[str, ...] = (
     'merge',
     'label_import',
     'open_vocab',
+    'propagated',
 )
 
 _FIXED_ENTRIES: tuple[tuple[str, str, str, str], ...] = (
@@ -116,6 +118,12 @@ _FIXED_ENTRIES: tuple[tuple[str, str, str, str], ...] = (
         'Class named by an open-vocabulary target',
         'open_vocab',
         'Target class',
+    ),
+    (
+        PROPAGATED_CLASS_SOURCE,
+        'Carried over from a VLM-labeled sample of its cluster',
+        'propagated',
+        'Propagated',
     ),
 )
 

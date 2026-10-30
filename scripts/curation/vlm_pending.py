@@ -54,6 +54,7 @@ def _build_pending_query(
     from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPTED_AT_FIELD
     from src.domain.ingest_class_sources import (
         OPEN_VOCAB_TARGET_CLASS_SOURCE,
+        PROPAGATED_CLASS_SOURCE,
         classifier_class_sources,
     )
     from src.services.curation.vlm_class_attempt import recent_empty_answer_clause
@@ -99,6 +100,8 @@ def _build_pending_query(
                     'vlm',
                     'classifier_vlm_agreement',
                     'cluster_majority_agreement',
+                    # Carried over from a VLM-labeled sample of its cluster:
+                    PROPAGATED_CLASS_SOURCE,
                     # VLM already failed once — won't help to retry:
                     'vlm_unmatched',
                     'vlm_new_class_pending',

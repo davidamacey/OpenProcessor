@@ -1,0 +1,3 @@
+      5 gpu_image_prep: device memory failure in process (OutOfMemoryError: Out of memory allocating N bytes (allocated so far: N bytes, limit set to: N bytes).); event N budget in use N of N bytes
+      4 gpu_image_prep: device memory failure in decode (OutOfMemoryError: Out of memory allocating N bytes (allocated so far: N bytes, limit set to: N bytes).); event N budget in use N of N bytes
+      2 gpu_image_prep: device memory failure in decode (NvJpegError: TransferToDevice returned nvjpegStatus 5); event 1, budget in use N of N bytes

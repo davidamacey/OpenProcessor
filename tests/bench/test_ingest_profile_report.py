@@ -17,7 +17,11 @@ if TYPE_CHECKING:
 def _report(rate: float, *, jpeg_s: float = 2.0, noisy: bool = False) -> dict[str, Any]:
     return {
         'ingest': {'images': 100, 'items': 235, 'images_per_s': rate},
-        'gpu': {'0': {'util_mean_pct': 80.0, 'util_p50_pct': 84.0, 'mem_peak_mb': 1.0}},
+        'gpu': {
+            '0': {'util_mean_pct': 80.0, 'util_p50_pct': 84.0, 'mem_peak_mb': 1.0},
+            '1': {'util_mean_pct': 0.0, 'util_p50_pct': 0.0, 'mem_peak_mb': 1.0},
+            '2': {'util_mean_pct': 0.0, 'util_p50_pct': 0.0, 'mem_peak_mb': 1.0},
+        },
         'host': {
             'loadavg_start': [3.0, 2.0, 1.0],
             'loadavg_end': [4.0, 2.0, 1.0],
@@ -48,9 +52,9 @@ def _report(rate: float, *, jpeg_s: float = 2.0, noisy: bool = False) -> dict[st
             'triton': {
                 'histograms': {},
                 'counters': {
-                    'nv_inference_count{gpu_uuid=g,model=pe_image_encoder,version=1}': 400.0,
-                    'nv_inference_queue_duration_us{gpu_uuid=g,model=pe_image_encoder,version=1}': 800_000.0,
-                    'nv_inference_compute_infer_duration_us{gpu_uuid=g,model=pe_image_encoder,version=1}': 2_000_000.0,
+                    'nv_inference_count_total{gpu_uuid=g,model=pe_image_encoder,version=1}': 400.0,
+                    'nv_inference_queue_duration_us_total{gpu_uuid=g,model=pe_image_encoder,version=1}': 800_000.0,
+                    'nv_inference_compute_infer_duration_us_total{gpu_uuid=g,model=pe_image_encoder,version=1}': 2_000_000.0,
                 },
             },
         },
@@ -82,6 +86,7 @@ def test_render_names_every_stage_and_the_headline() -> None:
     for needle in ('### set B', 'gpu_decode', 'pe_image_encoder', 'crop_jpeg', 'decode'):
         assert needle in text
     assert '31.00 (30.00 to 32.00)' in text
+    assert 'GPU util mean / p50 % | 80 / 84' in text  # GPU 0 only, not the idle GPUs
     assert 'crops per image | 2.35' in text
     assert 'noisy repetitions | 2' in text
     assert 'Triton cores (docker stats) | 2.50' in text

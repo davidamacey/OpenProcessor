@@ -207,6 +207,8 @@ async def test_a_photo_below_the_gate_keeps_the_cpu_path(
     ('status', 'fail', 'short', 'route'),
     [
         ('progressive', None, False, 'cpu_progressive'),
+        ('gpu_memory', None, False, 'cpu_gpu_memory'),
+        ('over_budget', None, False, 'cpu_over_budget'),
         ('ok', RuntimeError('stream closed'), False, 'cpu_call_failed'),
         ('ok', None, True, 'cpu_box_count'),
     ],

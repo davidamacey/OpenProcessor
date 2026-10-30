@@ -48,6 +48,7 @@ def test_vlm_worker_class_source_exclusions_are_one_terms_clause() -> None:
         'vlm',
         'classifier_vlm_agreement',
         'cluster_majority_agreement',
+        'assist_propagated',
         'vlm_unmatched',
         'vlm_new_class_pending',
     }

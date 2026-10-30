@@ -69,6 +69,7 @@ def _answer(update: dict[str, Any] | None, pred: Any) -> ClassAnswer:
         class_name=resolved or named or None,
         proposed='' if resolved or named else pred.proposed_class,
         attributes={key: a.value for key, a in pred.attributes.items()},
+        crop_id=pred.img_id,
     )
 
 
@@ -164,7 +165,9 @@ async def process_chunk(
                 out.invalid_values += p.invalid_values
                 out.answers.append(
                     ClassAnswer(
-                        class_name=None, attributes={k: a.value for k, a in p.attributes.items()}
+                        class_name=None,
+                        attributes={k: a.value for k, a in p.attributes.items()},
+                        crop_id=p.img_id,
                     )
                 )
     slots = {

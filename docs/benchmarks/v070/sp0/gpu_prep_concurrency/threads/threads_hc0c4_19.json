@@ -1,0 +1,100 @@
+{
+ "procs": {
+  "4072745": {
+   "cpu_pct_sum": 2.3,
+   "threads_over_5pct": 0,
+   "top5": [
+    0.3,
+    0.3,
+    0.3,
+    0.3,
+    0.3
+   ]
+  },
+  "4079994": {
+   "cpu_pct_sum": 0.0,
+   "threads_over_5pct": 0,
+   "top5": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "4079996": {
+   "cpu_pct_sum": 0.2,
+   "threads_over_5pct": 0,
+   "top5": [
+    0.2,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "top_threads": [
+  [
+   0.3,
+   "4072745",
+   "tritonserver"
+  ],
+  [
+   0.3,
+   "4072745",
+   "tritonserver"
+  ],
+  [
+   0.3,
+   "4072745",
+   "tritonserver"
+  ],
+  [
+   0.3,
+   "4072745",
+   "tritonserver"
+  ],
+  [
+   0.3,
+   "4072745",
+   "grpc_global_tim"
+  ],
+  [
+   0.2,
+   "4079996",
+   "cuda-EvtHandlr"
+  ],
+  [
+   0.2,
+   "4072745",
+   "tritonserver"
+  ],
+  [
+   0.2,
+   "4072745",
+   "tritonserver"
+  ],
+  [
+   0.2,
+   "4072745",
+   "cuda-EvtHandlr"
+  ],
+  [
+   0.2,
+   "4072745",
+   "NvmlTaskRunner"
+  ],
+  [
+   0.0,
+   "4079996",
+   "triton_python_b"
+  ],
+  [
+   0.0,
+   "4079996",
+   "triton_python_b"
+  ]
+ ],
+ "loadavg": "13.68 14.05 18.41 4/38183 4106327"
+}

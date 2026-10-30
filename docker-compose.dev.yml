@@ -85,6 +85,13 @@ services:
       - ./scripts:/app/scripts:ro
       - ./examples:/app/examples:ro
 
+  curation-assist-loop-worker:
+    build: *root-build
+    volumes:
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+      - ./examples:/app/examples:ro
+
   curation-cluster-refresh:
     build: *root-build
     volumes:

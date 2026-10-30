@@ -197,7 +197,8 @@ def test_auto_promote_apply_validates_only_the_high_purity_cluster(
     assert promotable, 'precondition: the pure cluster must hold promotable rows'
     assert untouched, 'precondition: the mixed cluster must hold unvalidated rows'
 
-    resp = api_client.post('/clusters/auto_promote')
+    # This checks which clusters qualify by purity; the accuracy-audit gate has its own tests.
+    resp = api_client.post('/clusters/auto_promote', params={'force': True})
     assert resp.status_code == 200, resp.text
     assert resp.json()['promoted'] >= len(promotable)
 

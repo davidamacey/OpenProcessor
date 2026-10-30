@@ -40,6 +40,7 @@ from src.services.curation.clustering.last_run import record_last_run
 from src.services.curation.clustering.page_rows import hits_to_rows
 from src.services.curation.clustering.pit_pages import iter_pages
 from src.services.curation.clustering.pool_coverage import (
+    PARTIAL,
     count_pool,
     coverage_fields,
     covers_pool,
@@ -409,14 +410,11 @@ async def assign_only_residuals(
     ]
     query = {'bool': {'filter': filt, 'must_not': must_not}}
 
-    total_estimate = 0
+    # The pool as it stands when the pass starts: the coverage check below compares what the
+    # pass read against it (#357), so the count is not optional and a failed count raises.
+    expected_pool = await count_pool(client, query)
     if progress is not None:
-        try:
-            cnt = await client.count(index=items_index(), body={'query': query})
-            total_estimate = int(cnt.get('count', 0))
-            progress.update(processed=0, total=total_estimate)
-        except Exception as exc:
-            logger.debug('curation_ivf_assign_count_failed', error=str(exc))
+        progress.update(processed=0, total=expected_pool)
 
     # The pool is read by several point-in-time slices at once (one scroll is one cursor, each
     # page waiting for the last). An assignment depends on the document alone, so the order
@@ -454,7 +452,7 @@ async def assign_only_residuals(
             for batch in batches(page_rows):
                 await writer.submit(batch)
             if progress is not None:
-                progress.update(processed=n_assigned, total=total_estimate or n_assigned)
+                progress.update(processed=n_assigned, total=max(expected_pool, n_assigned))
                 progress.raise_if_cancelled()
     n_written = n_assigned
     if n_written - n_unchanged:
@@ -471,8 +469,21 @@ async def assign_only_residuals(
             client, max_rank=gate_max_rank, min_blur_ratio=gate_min_blur_ratio
         )
 
+    if not covers_pool(n_written, expected_pool):
+        logger.warning(
+            'curation_cluster_pass_partial',
+            reason='short_read',
+            n_residuals=n_written,
+            expected_pool=expected_pool,
+        )
+        status, extra_fields = PARTIAL, {'reason': 'short_read'}
+    else:
+        status, extra_fields = write_outcome(writer.n_failed)
+
     summary = {
-        'status': 'success',
+        'status': status,
+        **extra_fields,
+        **coverage_fields(n_written, expected_pool),
         'method': 'ivf_assign_only',
         'n_assigned': n_written,
         'n_unchanged': n_unchanged,
@@ -482,5 +493,5 @@ async def assign_only_residuals(
         'cluster_id_offset': RESIDUAL_CLUSTER_ID_OFFSET,
         'centroids_trained_at': store.metadata.get('trained_at'),
     }
-    record_last_run(summary)
+    _record_if_success(summary)
     return summary

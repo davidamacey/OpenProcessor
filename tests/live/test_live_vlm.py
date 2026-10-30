@@ -22,7 +22,16 @@ from typing import Any
 
 import pytest
 
-from .conftest import INDEXES, VERIFY_DATA_DIR, compose, crop_ids_in, get_doc, refresh, wait_until
+from .conftest import (
+    API_URL,
+    INDEXES,
+    VERIFY_DATA_DIR,
+    compose,
+    crop_ids_in,
+    get_doc,
+    refresh,
+    wait_until,
+)
 
 
 pytestmark = pytest.mark.live
@@ -257,9 +266,7 @@ def test_state_survives_an_api_container_restart(api_client: Any, opensearch: An
 
     import httpx
 
-    ready = wait_until(
-        lambda: _probe(httpx, 'http://localhost:14701/live'), timeout=180, interval=2.0
-    )
+    ready = wait_until(lambda: _probe(httpx, f'{API_URL}/live'), timeout=180, interval=2.0)
     assert ready, 'the API container did not come back up'
 
     after_classes = api_client.get('/classes').json()['classes']

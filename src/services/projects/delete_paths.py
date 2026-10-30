@@ -66,6 +66,7 @@ def _project_scoped_dirs(record: ProjectRecord) -> list[tuple[Path, Path]]:
     bulk_ingest_projects_root = bulk_ingest_base_dir() / 'projects'
     reprocess_projects_root = env_path('OP_REPROCESS_JOBS_DIR', '/jobs/reprocess') / 'projects'
     assist_projects_root = env_path('OP_ASSIST_JOBS_DIR', '/jobs/assist') / 'projects'
+    loop_projects_root = env_path('OP_ASSIST_LOOP_JOBS_DIR', '/jobs/assist_loop') / 'projects'
     return [
         (record.resources.export_root, data_root),
         (record.resources.class_registry_path.parent, data_root),
@@ -80,6 +81,7 @@ def _project_scoped_dirs(record: ProjectRecord) -> list[tuple[Path, Path]]:
         (bulk_ingest_projects_root / record.slug, bulk_ingest_projects_root),
         (reprocess_projects_root / record.slug, reprocess_projects_root),
         (assist_projects_root / record.slug, assist_projects_root),
+        (loop_projects_root / record.slug, loop_projects_root),
         # The tmpfs crop cache keys its files per project (<crop_cache_dir>/<slug>).
         (base.crop_cache_dir / record.slug, base.crop_cache_dir),
     ]

@@ -42,6 +42,7 @@ import src.routers.curation.export_single_class
 
 import src.routers.curation.vlm  # isort: skip
 import src.routers.curation.assist
+import src.routers.curation.assist_loop
 import src.routers.curation.health
 import src.routers.curation.ingest_bulk
 import src.routers.curation.ingest_bulk_preview

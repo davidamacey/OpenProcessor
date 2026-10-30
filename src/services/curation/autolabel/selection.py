@@ -26,7 +26,7 @@ from opensearchpy.exceptions import OpenSearchException
 
 from src.core.logging import get_logger
 from src.domain.embedding_state import embedded_clause
-from src.domain.ingest_class_sources import classifier_class_sources
+from src.domain.ingest_class_sources import PROPAGATED_CLASS_SOURCE, classifier_class_sources
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 from src.services.curation.vlm_class_attempt import recent_empty_answer_clause
 from src.services.curation.vlm_policy import VlmPolicy
@@ -87,6 +87,8 @@ def vlm_selection_query(
                 },
             },
             {'term': {'class_source': 'vlm_unmatched'}},
+            # Carried over from a VLM-labeled sample: not asked again by default.
+            {'term': {'class_source': PROPAGATED_CLASS_SOURCE}},
             # Classified by the region worker's combined call recently.
             {'range': {'vlm_verify_completed_at': {'gte': recent_cutoff}}},
             # Asked recently and the answer had no class.

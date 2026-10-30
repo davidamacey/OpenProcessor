@@ -121,6 +121,8 @@ class Stub:
         self.on("GET", r"/methods(\?|$)", {"strategies": [], "flags": {}})
         # /clusters/[id] lists the assist runs for the viewed cluster on every visit.
         self.on("GET", r"/assist/runs(\?|$)", {"runs": []})
+        # The clusters page probes the auto-label loop panel on every visit.
+        self.on("GET", r"/assist/loops(\?|$)", {"loops": []})
         # ...and reads its facet counts; a test that checks chips overrides this.
         self.on("GET", r"/clusters/(\d+)/facets$", self._empty_facets)
         # S1 fix (visual audit 2026-09-24): `/review` now reads the

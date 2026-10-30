@@ -1,0 +1,38 @@
+GET / 200 0.04 {"service":"Visual AI API","version":"0.6.0","api_versions":{"current":"v1","sup
+POST /analyze 200 17.79 {"status":"success","image":{"width":640,"height":480},"detections":[{"box":[0.2
+POST /analyze/batch 200 0.45 {"status":"success","total_images":2,"processed_images":2,"failed_images":0,"res
+GET /clusters/albums 200 0.13 {"status":"success","total_albums":0,"albums":[],"error":null}
+GET /connection_pool_info 200 0.04 {"shared_client_pool":{"active":true,"connection_count":1,"triton_urls":["triton
+POST /detect 200 0.11 {"detections":[{"x1":0.21875,"y1":0.4228515625,"x2":0.7451171875,"y2":0.98632812
+POST /detect/batch 200 0.14 {"total_images":2,"processed_images":2,"failed_images":0,"results":[{"filename":
+POST /embed/batch 200 0.17 {"total":2,"successful":2,"failed":0,"results":[{"index":0,"filename":"000000000
+POST /embed/boxes 200 0.11 {"boxes":[{"box":[0.1,0.1,0.5,0.5],"embedding":[0.002628326416015625,0.010223388
+POST /embed/image 200 0.1 {"embedding":[-0.0421142578125,0.00366973876953125,0.0300750732421875,0.02925109
+POST /embed/text 200 2.25 {"embedding":[0.045527033507823944,-0.0037071644328534603,-0.01077999547123909,-
+POST /faces/detect 200 0.13 {"num_faces":0,"faces":[],"image":{"width":640,"height":480},"total_time_ms":55.
+POST /faces/identify 200 0.09 {"num_faces":0,"results":[],"total_time_ms":57.42,"request_id":"ec80b861"}
+POST /faces/recognize 200 0.08 {"num_faces":0,"faces":[],"embeddings":[],"image":{"width":640,"height":480},"to
+POST /faces/search 400 0.06 {"detail":"No faces detected in query image","total_time_ms":28.93,"request_id":
+POST /faces/verify 400 0.12 {"detail":"No face detected in first image","total_time_ms":85.6,"request_id":"9
+GET /health 200 0.07 {"status":"ready","version":"0.6.0","api_version":"v1","services":{"triton":{"ok
+GET /health/pe_text 200 0.04 {"cache_scope":"process","pid":8,"ready":true,"backend":"triton","requested_back
+POST /ingest 200 0.05 {"status":"duplicate","image_id":"74e676a2-8703-42a0-95d1-e340ce6295ab","num_det
+POST /ingest/batch 201 1.25 {"status":"success","total":2,"processed":1,"duplicates":1,"errors_count":0,"ind
+GET /live 200 0.04 {"status":"alive"}
+GET /metrics 200 0.17 # HELP op_queue_depth Items waiting in a pipeline queue (embed, label, segment),
+GET /models/ 200 0.36 {"models":[{"name":"arcface_w600k_r50","status":"UNKNOWN","versions":[],"backend
+GET /models/exports 200 0.05 []
+POST /ocr/batch 200 0.62 {"status":"success","total_images":2,"processed_images":2,"failed_images":0,"res
+POST /ocr/predict 200 0.16 {"status":"success","texts":["03.22.201013:21"],"regions":[{"text":"03.22.201013
+POST /ocr/search 200 0.09 {"status":"success","query":"test","total_results":0,"page":0,"size":20,"results
+GET /persons 200 0.09 {"status":"success","total_persons":0,"persons":[],"error":null}
+POST /persons/cluster 200 0.07 {"status":"success","total_faces":0,"persons_created":0,"faces_assigned":0,"sing
+GET /query/duplicates 200 0.09 {"status":"success","total_groups":2,"total_duplicates":4,"page":0,"size":50,"gr
+GET /query/duplicates/stats 200 0.06 {"status":"success","total_images":4,"grouped_images":4,"ungrouped_images":0,"du
+GET /query/stats 200 0.15 {"status":"success","indexes":[{"name":"visual_search_global","doc_count":4,"siz
+GET /ready 200 0.06 {"status":"ready","version":"0.6.0","api_version":"v1","services":{"triton":{"ok
+POST /search/face 400 0.18 {"detail":"No faces detected","total_time_ms":141.31,"request_id":"c849a74d"}
+POST /search/image 200 0.12 {"status":"success","query_type":"image","results":[{"image_id":"bcce5e55-efeb-4
+POST /search/object 200 0.24 {"status":"success","query_type":"object","query_object":{"box":[0.21875,0.42285
+POST /search/ocr 200 0.04 {"status":"success","query_type":"ocr","query_text":"test","results":[],"total_r
+POST /search/text 200 0.38 {"status":"success","query_type":"text","results":[{"image_id":"184b07eb-cb0d-4a

@@ -269,6 +269,13 @@ def seeded(api: Any, opensearch: Any) -> dict[str, Any]:
     # request after seeding makes sure it has re-read both before the
     # first assertion-bearing call.
     api.get(f'{PROJECT_PREFIX}/classes').raise_for_status()
+    # The wipe leaves the project with no VLM activation, and a project calls no VLM until it
+    # activates one; the harness VLM is the `env` endpoint (OP_VLM_URL in docker/test/compose.yml).
+    activated = api.post(
+        f'{PROJECT_PREFIX}/vlm/endpoints/env/activate',
+        json={'force': True, 'acknowledge_external': True},
+    )
+    assert activated.status_code == 200, activated.text
     return {'items': count, 'stdout': proc.stdout}
 
 

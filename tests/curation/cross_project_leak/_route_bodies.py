@@ -52,6 +52,8 @@ def route_params(slug: str) -> dict[str, str]:
         'revision': '1',
         'import_id': 'imp_20260101T000000_0123abcd',
         'run_id': 'bulk_20260101T000000_0123abcd',
+        'loop_id': 'alp_20260101T000000000000_0123ab',
+        'node_path': 'r10000',
         'source_id': 'src_unknown00',
         'op_id': 'lop_20260101T000000000000_abcdef',
     }
@@ -178,6 +180,12 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
                 'dry_run': True,
             }
         },
+        # auto-label loops: a dry-run plan (the sweep binds no VLM, so it stops at the VLM
+        # gate); the signals name no live loop.
+        ('POST', '/assist/loops'): {'json': {'scope': {'min_root_size': 1}, 'dry_run': True}},
+        ('POST', '/assist/loops/{loop_id}/cancel'): {'json': {}},
+        ('POST', '/assist/loops/{loop_id}/resume'): {'json': {}},
+        ('POST', '/assist/loops/{loop_id}/rollback'): {'json': {'dry_run': False}},
         ('POST', '/assist/runs/{run_id}/cancel'): {'json': {}},
         ('POST', '/assist/runs/{run_id}/apply'): {'json': {'class_name': 'x', 'dry_run': False}},
         ('POST', '/test_holdout/freeze'): {'json': {'percent': 10}},

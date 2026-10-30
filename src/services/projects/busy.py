@@ -249,6 +249,16 @@ def _reprocess_jobs(record: ProjectRecord) -> list[JobRef]:
         ]
 
 
+def _assist_loop_jobs(record: ProjectRecord) -> list[JobRef]:
+    """Live auto-label loops (``src.services.curation.assist_loop``): the loops dir is
+    resolved from the bound project, so this binds ``record`` just for the read."""
+    from src.config.project_context import bind_project
+    from src.services.curation.assist_loop import job
+
+    with bind_project(record, read_only=True):
+        return [JobRef(kind='assist_loop', job_id=loop_id) for loop_id in job.live_loop_ids()]
+
+
 def _detection_worker_inflight(record: ProjectRecord) -> list[JobRef]:
     """The detection worker's per-project ``inflight`` count.
 
@@ -353,6 +363,7 @@ def running_jobs(record: ProjectRecord) -> list[JobRef]:
     jobs.extend(_export_jobs(record))
     jobs.extend(_state_file_jobs(record))
     jobs.extend(_reprocess_jobs(record))
+    jobs.extend(_assist_loop_jobs(record))
     jobs.extend(_detection_worker_inflight(record))
     jobs.extend(_dataset_import_jobs(record))
     jobs.extend(_bulk_ingest_jobs(record))

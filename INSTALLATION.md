@@ -544,7 +544,7 @@ The values come from `config_templates/profiles/*.json`. No per-profile throughp
 been measured; measured numbers (one RTX A6000) are in `docs/PERFORMANCE.md`.
 
 The profile also decides the GPU decode (about 8.5 GB more on the Triton card per `gpu_image_prep`
-instance; **full** runs two, 17,408 MiB, **minimal** and **standard** one):
+instance; every profile runs one, 8,704 MiB; two need `OP_LOAD_PROFILE=ingest`, see [the ingest load profile](docs-site/docs/operations/ingest-load-profile.mdx)):
 `setup.sh` and the installer write `OP_INGEST_GPU_DECODE=1` for **full** and `0` for **minimal**
 and **standard**. Set it yourself in `.env` to override; `openprocessor gpu plan` shows the result.
 

@@ -140,6 +140,28 @@ async def test_a_declined_image_takes_the_cpu_path(tmp_path) -> None:
     assert triton.calls == ['primary_end2end']
 
 
+@pytest.mark.parametrize('status', ['gpu_memory', 'over_budget'])
+@pytest.mark.asyncio
+async def test_a_memory_status_is_counted_and_takes_the_cpu_path(tmp_path, status: str) -> None:
+    from prometheus_client import REGISTRY
+
+    def sample() -> float:
+        return (
+            REGISTRY.get_sample_value('op_ingest_decode_total', {'route': f'cpu_{status}'}) or 0.0
+        )
+
+    svc, os_fake, triton, calls, sizes = _gpu_service(tmp_path, status=status)
+    big = _register(sizes, _jpeg_bytes((640, 480), seed=4), (640, 480))
+    before = sample()
+    result = await svc.ingest_batch([big], ['/x/m.jpg'])
+    assert result.summary.successful == 1
+    assert len(calls) == 1
+    [doc] = list(os_fake.images.values())
+    assert doc['pe_embedding'] == pytest.approx([0.0, 1.0, 0.0])  # the CPU fake's vector
+    assert triton.calls == ['primary_end2end']
+    assert sample() == before + 1
+
+
 @pytest.mark.asyncio
 async def test_a_gpu_decode_built_for_another_detector_is_not_used(tmp_path) -> None:
     params = {'DETECTOR_MODEL': 'other_model', 'NET_SIZE': '320', 'LETTERBOX_FILL': '114'}

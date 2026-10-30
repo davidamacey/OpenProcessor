@@ -24,6 +24,7 @@ import numpy as np
 import tritonclient.grpc as grpcclient
 import tritonclient.grpc.aio as grpcclient_aio
 
+from src.clients.model_residency import ensure_loaded
 from src.utils.stage_timing import stage_timer
 
 
@@ -242,6 +243,8 @@ class AsyncTritonPool:
         if not self._initialized or self._semaphore is None:
             raise RuntimeError('AsyncTritonPool not initialized. Call initialize() first.')
 
+        await ensure_loaded(self._clients[0], model_name)
+
         # Acquire semaphore (backpressure)
         await self._semaphore.acquire()
 
@@ -324,6 +327,7 @@ class AsyncTritonPool:
         if not self._initialized:
             raise RuntimeError('AsyncTritonPool not initialized. Call initialize() first.')
         client = self._clients[await self._get_client_index()]
+        await ensure_loaded(client, model_name)
         config = await client.get_model_config(model_name, as_json=True, client_timeout=timeout)
         params = config.get('config', {}).get('parameters', {})
         return {k: str(v.get('string_value', '')) for k, v in params.items()}
@@ -349,6 +353,7 @@ class AsyncTritonPool:
         if not self._initialized:
             raise RuntimeError('AsyncTritonPool not initialized. Call initialize() first.')
         client = self._clients[await self._get_client_index()]
+        await ensure_loaded(client, model_name)
         metadata = await client.get_model_metadata(model_name, as_json=True, client_timeout=timeout)
         return [str(t.get('name', '')) for t in metadata.get(key, [])]
 

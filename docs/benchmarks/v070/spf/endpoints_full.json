@@ -1,0 +1,268 @@
+[
+ [
+  "GET",
+  "/",
+  200,
+  0.04,
+  "{\"service\":\"Visual AI API\",\"version\":\"0.6.0\",\"api_versions\":{\"current\":\"v1\",\"supported\":[\"v1\"],\"deprecated\":[]},\"status\":\"running\",\"endpoint"
+ ],
+ [
+  "POST",
+  "/analyze",
+  422,
+  0.05,
+  "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"image\"],\"msg\":\"Value error, Expected UploadFile, received: <class 'str'>\",\"input\":\"x\",\"ctx\":"
+ ],
+ [
+  "POST",
+  "/analyze/batch",
+  422,
+  0.05,
+  "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"images\",0],\"msg\":\"Value error, Expected UploadFile, received: <class 'str'>\",\"input\":\"x\",\"ct"
+ ],
+ [
+  "GET",
+  "/clusters/albums",
+  200,
+  0.11,
+  "{\"status\":\"success\",\"total_albums\":0,\"albums\":[],\"error\":null}"
+ ],
+ [
+  "GET",
+  "/connection_pool_info",
+  200,
+  0.04,
+  "{\"shared_client_pool\":{\"active\":true,\"connection_count\":1,\"triton_urls\":[\"triton-server:8001\"]},\"usage_info\":{\"shared_client_enabled\":\"Use ?"
+ ],
+ [
+  "POST",
+  "/detect",
+  422,
+  0.05,
+  "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"image\"],\"msg\":\"Value error, Expected UploadFile, received: <class 'str'>\",\"input\":\"x\",\"ctx\":"
+ ],
+ [
+  "POST",
+  "/detect/batch",
+  422,
+  0.04,
+  "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"images\",0],\"msg\":\"Value error, Expected UploadFile, received: <class 'str'>\",\"input\":\"x\",\"ct"
+ ],
+ [
+  "POST",
+  "/embed/batch",
+  422,
+  0.04,
+  "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"images\",0],\"msg\":\"Value error, Expected UploadFile, received: <class 'str'>\",\"input\":\"x\",\"ct"
+ ],
+ [
+  "POST",
+  "/embed/boxes",
+  422,
+  0.04,
+  "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"image\"],\"msg\":\"Value error, Expected UploadFile, received: <class 'str'>\",\"input\":\"x\",\"ctx\":"
+ ],
+ [
+  "POST",
+  "/embed/image",
+  422,
+  0.05,
+  "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"image\"],\"msg\":\"Value error, Expected UploadFile, received: <class 'str'>\",\"input\":\"x\",\"ctx\":"
+ ],
+ [
+  "POST",
+  "/embed/text",
+  200,
+  0.5,
+  "{\"embedding\":[0.045527033507823944,-0.0037071644328534603,-0.01077999547123909,-0.012415743432939053,0.01775258593261242,0.00809854920953512"
+ ],
+ [
+  "POST",
+  "/faces/detect",
+  422,
+  0.04,
+  "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"image\"],\"msg\":\"Value error, Expected UploadFile, received: <class 'str'>\",\"input\":\"x\",\"ctx\":"
+ ],
+ [
+  "POST",
+  "/faces/identify",
+  422,
+  0.05,
+  "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"image\"],\"msg\":\"Value error, Expected UploadFile, received: <class 'str'>\",\"input\":\"x\",\"ctx\":"
+ ],
+ [
+  "POST",
+  "/faces/recognize",
+  422,
+  0.04,
+  "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"image\"],\"msg\":\"Value error, Expected UploadFile, received: <class 'str'>\",\"input\":\"x\",\"ctx\":"
+ ],
+ [
+  "POST",
+  "/faces/search",
+  422,
+  0.05,
+  "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"image\"],\"msg\":\"Value error, Expected UploadFile, received: <class 'str'>\",\"input\":\"x\",\"ctx\":"
+ ],
+ [
+  "POST",
+  "/faces/verify",
+  422,
+  0.04,
+  "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"image1\"],\"msg\":\"Value error, Expected UploadFile, received: <class 'str'>\",\"input\":\"x\",\"ctx\""
+ ],
+ [
+  "GET",
+  "/health",
+  200,
+  0.11,
+  "{\"status\":\"ready\",\"version\":\"0.6.0\",\"api_version\":\"v1\",\"services\":{\"triton\":{\"ok\":true,\"detail\":\"is_server_live OK\",\"url\":\"triton-server:800"
+ ],
+ [
+  "GET",
+  "/health/pe_text",
+  200,
+  0.04,
+  "{\"cache_scope\":\"process\",\"pid\":36,\"ready\":true,\"backend\":\"triton\",\"requested_backend\":\"auto\",\"onnx_path\":\"/app/pytorch_models/pe_text_encode"
+ ],
+ [
+  "POST",
+  "/ingest",
+  422,
+  0.05,
+  "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"image\"],\"msg\":\"Value error, Expected UploadFile, received: <class 'str'>\",\"input\":\"x\",\"ctx\":"
+ ],
+ [
+  "POST",
+  "/ingest/batch",
+  422,
+  0.04,
+  "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"images\",0],\"msg\":\"Value error, Expected UploadFile, received: <class 'str'>\",\"input\":\"x\",\"ct"
+ ],
+ [
+  "GET",
+  "/live",
+  200,
+  0.04,
+  "{\"status\":\"alive\"}"
+ ],
+ [
+  "GET",
+  "/metrics",
+  200,
+  0.1,
+  "# HELP op_pipeline_stage_bytes_total Bytes handled by an ingest pipeline stage (input or output, see the stage). # TYPE op_pipeline_stage_by"
+ ],
+ [
+  "GET",
+  "/models/",
+  200,
+  0.32,
+  "{\"models\":[{\"name\":\"arcface_w600k_r50\",\"status\":\"READY\",\"versions\":[],\"backend\":\"tensorrt\",\"max_batch_size\":64,\"has_labels\":false,\"num_class"
+ ],
+ [
+  "GET",
+  "/models/exports",
+  200,
+  0.04,
+  "[]"
+ ],
+ [
+  "POST",
+  "/ocr/batch",
+  422,
+  0.05,
+  "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"images\",0],\"msg\":\"Value error, Expected UploadFile, received: <class 'str'>\",\"input\":\"x\",\"ct"
+ ],
+ [
+  "POST",
+  "/ocr/predict",
+  422,
+  0.04,
+  "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"image\"],\"msg\":\"Value error, Expected UploadFile, received: <class 'str'>\",\"input\":\"x\",\"ctx\":"
+ ],
+ [
+  "POST",
+  "/ocr/search",
+  200,
+  0.13,
+  "{\"status\":\"success\",\"query\":\"test\",\"total_results\":0,\"page\":0,\"size\":20,\"results\":[],\"total_time_ms\":87.51,\"request_id\":\"a4eeb7c3\"}"
+ ],
+ [
+  "GET",
+  "/persons",
+  200,
+  0.1,
+  "{\"status\":\"success\",\"total_persons\":0,\"persons\":[],\"error\":null}"
+ ],
+ [
+  "POST",
+  "/persons/cluster",
+  200,
+  0.05,
+  "{\"status\":\"success\",\"total_faces\":0,\"persons_created\":0,\"faces_assigned\":0,\"singletons\":0,\"similarity_threshold\":null,\"error\":null}"
+ ],
+ [
+  "GET",
+  "/query/duplicates",
+  200,
+  0.07,
+  "{\"status\":\"success\",\"total_groups\":0,\"total_duplicates\":0,\"page\":0,\"size\":50,\"groups\":[],\"error\":null}"
+ ],
+ [
+  "GET",
+  "/query/duplicates/stats",
+  200,
+  0.05,
+  "{\"status\":\"success\",\"total_images\":0,\"grouped_images\":0,\"ungrouped_images\":0,\"duplicate_groups\":0,\"average_group_size\":0.0,\"error\":null}"
+ ],
+ [
+  "GET",
+  "/query/stats",
+  200,
+  0.09,
+  "{\"status\":\"success\",\"indexes\":[{\"name\":\"visual_search_global\",\"doc_count\":0,\"size_bytes\":208,\"size_human\":\"208.0 B\",\"exists\":true},{\"name\":\""
+ ],
+ [
+  "GET",
+  "/ready",
+  200,
+  0.08,
+  "{\"status\":\"ready\",\"version\":\"0.6.0\",\"api_version\":\"v1\",\"services\":{\"triton\":{\"ok\":true,\"detail\":\"is_server_live OK\",\"url\":\"triton-server:800"
+ ],
+ [
+  "POST",
+  "/search/face",
+  422,
+  0.04,
+  "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"image\"],\"msg\":\"Value error, Expected UploadFile, received: <class 'str'>\",\"input\":\"x\",\"ctx\":"
+ ],
+ [
+  "POST",
+  "/search/image",
+  422,
+  0.04,
+  "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"image\"],\"msg\":\"Value error, Expected UploadFile, received: <class 'str'>\",\"input\":\"x\",\"ctx\":"
+ ],
+ [
+  "POST",
+  "/search/object",
+  422,
+  0.04,
+  "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"image\"],\"msg\":\"Value error, Expected UploadFile, received: <class 'str'>\",\"input\":\"x\",\"ctx\":"
+ ],
+ [
+  "POST",
+  "/search/ocr",
+  200,
+  0.05,
+  "{\"status\":\"success\",\"query_type\":\"ocr\",\"query_text\":\"test\",\"results\":[],\"total_results\":0,\"search_time_ms\":7.34,\"total_time_ms\":10.92,\"reque"
+ ],
+ [
+  "POST",
+  "/search/text",
+  200,
+  0.45,
+  "{\"status\":\"success\",\"query_type\":\"text\",\"results\":[],\"total_results\":0,\"search_time_ms\":379.27,\"total_time_ms\":382.85,\"request_id\":\"ca1cc1c1"
+ ]
+]

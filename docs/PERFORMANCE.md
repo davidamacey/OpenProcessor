@@ -3331,8 +3331,8 @@ or above `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0). The CPU single decode alone does 
 ingest (the next binders are elsewhere); it is the CPU path the GPU decode falls back to.
 
 The GPU decode is the default, sized by hardware. It adds about 8.5 GB (8,704 MiB, loaded on first use)
-per model instance to the Triton card (`full` runs two instances, 17,408 MiB, #268; the other profiles
-run one if you turn the GPU decode on), on top of the profile's own models (about 8, 12 and 17 GB for `minimal`,
+per model instance to the Triton card (every profile runs one instance, 8,704 MiB; two instances, #268, are 48.3 against 38.9 img/s
+but only fit next to the ingest load profile's three models), on top of the profile's own models (about 8, 12 and 17 GB for `minimal`,
 `standard` and `full`). Only `full` (48 GB+) has room, so the installer writes
 `OP_INGEST_GPU_DECODE=1` for it and `0` for `minimal` and `standard`; a 12 GB card does not hold
 the full model set beside other projects' resident processes, let alone the GPU decode. A checkout
@@ -3345,9 +3345,9 @@ Instance count (#268, one RTX A6000, 3,275 photos of about 18 MP, three runs eac
 `gpu_image_prep` instance 31.8 images/s, two 48.0 (+51 percent; GPU utilization 70-75 to 78-87
 percent, Triton CPU 610 to 865 percent), three adds 0.6 percent over two for another 6 to 7 GB. The
 single instance is one Python process: its worker threads share one GIL. `gpu_image_prep_instances`
-in `config_templates/profiles/*.json` sets the count (`full` 2, `minimal` and `standard` 1), the
+in `config_templates/profiles/*.json` sets the count (1 in every profile; 2 with `OP_LOAD_PROFILE=ingest`), the
 installer writes it into `models/gpu_image_prep/config.pbtxt`, and `openprocessor gpu plan` sizes the
-GPU decode as count times 8,704 MiB. The committed config carries 2, the `full` value.
+GPU decode as count times 8,704 MiB. The committed config carries 1, the `full` value. Two instances fit a 48 GB card only with the ingest load profile (set the count by hand in `models/gpu_image_prep/config.pbtxt`).
 
 ### Stage 4: coalesced ingest writes, Lucene engine, write ceiling on the final mapping (#248, #254, #230)
 
@@ -3770,6 +3770,58 @@ python scripts/datasets/fetch_openimages_bench.py --verify-only --out data/bench
 The driver writes `<label>.jsonl` and a `<label>.md` table; `curl .../curation/projects/<p>/ingest/bulk` returns
 the run record with `stage_s`. It reads the stack only (HTTP, `nvidia-smi`, `docker stats`); it needs `docker`
 on the host for the resource samples.
+
+
+## 0.7.0 stage profile
+
+Where one ingested photo spends its time, per stage, on public data (set A: 1,846 measured COCO images, CPU route;
+set B: 400 measured high-resolution Commons photos, GPU route). Measured 2026-10-30 on one RTX A6000, Triton 2.70.0,
+release 0.6.0 images with the 0.7.0 branch code mounted, `gpu_image_prep` with two instances, policy `all`, input cache
+dropped before each run, GPU sampled every 500 ms, 3 repetitions, host load average 10 to 59 (shared host; most rows
+contain noisy repetitions, so these are stage shares, not release throughput figures). The private set's rows are in
+[the measurement log](research/v070_measurement_log.md#sp0-stage-profile-ship-track-plan-section-5-perfv070-ingest-speed).
+Raw JSON and the rendered tables: `docs/benchmarks/v070/sp0/`.
+
+| Row | img/s median (min to max) | GPU util mean % | Largest stages (share) |
+|---|---|---|---|
+| Set A, 1 batch at a time | 13.14 (13.12 to 13.47) | 45 | PE crop embed 54.5% and OpenSearch write 42.1% of API stage time |
+| Set B, 1 batch at a time | 9.88 (9.63 to 9.96) | 15 | `gpu_image_prep`: decode 39.5%, PE wait 22.3%, detect 15.5%, crop JPEG 12.0% |
+| Set B, 4 batches at once | 26.64 (25.21 to 29.00) | 49 | decode 26.2%, letterbox 17.9%, PE wait 15.4%, detect 8.9% |
+
+"Batches at once" is `run_baseline.py --clients N`; at one batch the API never has more than 16 photos in flight and the
+GPU idles, so use 4 for throughput. Stage seconds are sums over concurrent work and are compared across rows, never
+added to wall time. The counters themselves cost nothing measurable (set B with against without: ratio 0.977 to 0.978).
+
+Reproduce (an isolated stack, Triton and API on one GPU, the pins in `scripts/datasets/manifests/`):
+
+```bash
+python scripts/datasets/fetch_coco_subset.py --out <dir> --bench-set 2000 --seed 20261009 \
+  --manifest scripts/datasets/manifests/coco_bench_2000.json
+python scripts/datasets/fetch_hires_set.py --out <dir> --n 500 --manifest scripts/datasets/manifests/commons_hires_500.json
+python scripts/bench/select_baseline_set.py local --root <dir> --count 500 --seed 20261010 --out setB.txt
+python scripts/bench/ingest_profile.py run setB setB.txt --api-url http://127.0.0.1:<api port> \
+  --triton-metrics-url http://127.0.0.1:<metrics port>/metrics --api-container <api> --triton-container <triton> \
+  --path-map <host dir>=<container dir> --out-root <dir> --clients 4
+python scripts/bench/ingest_profile.py table "set B=<dir>/setB"
+```
+
+
+### GPU memory and the ingest load profile (0.7.0)
+
+With every default model loaded, `gpu_image_prep` shares a 48 GB card with 36.5 GB of other models, and two instances do not fit (the `full` profile therefore ships one instance): photos then
+decode on the API's CPU (counted as `cpu_gpu_memory`, `cpu_decoder`, `cpu_call_failed` in `op_ingest_decode_total`) and throughput falls with
+session age. Two ways out, both measured on one RTX A6000 with a private set of 3,000 photos of about 21 MP (ratios, not public data):
+
+| Stack | Instances | 4 batches at once | 8 batches at once | Fallbacks |
+|---|---|---|---|---|
+| Default load list | 2 | 35.9 img/s, GPU 72 % | 23.5 img/s (older config) | 0.6 to 23 % |
+| Default load list | 1 | 38.9 img/s, GPU 83 % | 38.6 img/s | 0 |
+| Ingest load profile (`OP_LOAD_PROFILE=ingest`) | 2 | 48.3 img/s, GPU 94 % | 48.3 img/s | 0 |
+| Ingest load profile, card limited to 24 GiB | 1 | 38.1 img/s, GPU 84 % | | 0 |
+
+The profile preloads only the detector and the PE encoders and frees 27.7 GB; the other models load on their first call. Per-model memory and
+the endpoint check: [Ingest load profile and GPU memory](../docs-site/docs/operations/ingest-load-profile.mdx); raw rows:
+`docs/benchmarks/v070/spf/`. Host load was 13 to 35 during these rows. The public set A/B rows above were not re-run for this change.
 
 
 ## Benchmarking

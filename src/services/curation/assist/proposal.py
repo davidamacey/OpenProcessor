@@ -33,6 +33,8 @@ class ClassAnswer:
     proposed: str = ''
     """The slug it proposed when nothing fit (`__new__`); not a vote for a class."""
     attributes: dict[str, str] = field(default_factory=dict)
+    crop_id: str = ''
+    """The item that was asked (the auto-label loop keeps answers per crop)."""
 
 
 def compute_proposal(

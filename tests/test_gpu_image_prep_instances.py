@@ -2,7 +2,10 @@
 
 Two instances on one card raised ingest from 31.8 to 48.0 images/s for one more copy of the model
 (GPU_MIB_PER_INSTANCE each); a third added 0.6 percent. The count is a profile value like
-``ocr_pipeline_instances`` so a small card is never given the second copy.
+``ocr_pipeline_instances`` so a small card is never given the second copy. The ``full`` profile
+ships one: with the default load list (36.5 GB resident) a second copy does not fit a 48 GB card
+and photos fall back to the CPU decode (0.6 to 23 percent); two instances are for the opt-in
+ingest load profile (``OP_LOAD_PROFILE=ingest``).
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ CONFIG = ROOT / 'models' / 'gpu_image_prep' / 'config.pbtxt'
 PROFILES = ROOT / 'config_templates' / 'profiles'
 NAMES = ('minimal', 'standard', 'full')
 KEY = 'gpu_image_prep_instances'
-EXPECTED = {'minimal': 1, 'standard': 1, 'full': 2}
+EXPECTED = {'minimal': 1, 'standard': 1, 'full': 1}
 MODELS_MIB = {'minimal': 8192, 'standard': 12288, 'full': 17408}
 
 
@@ -75,7 +78,7 @@ def test_profile_with_the_gpu_decode_on_fits_its_smallest_card(name: str) -> Non
 def test_committed_config_is_the_full_profile_value() -> None:
     # A checkout that never runs the installer (the code default has the GPU decode on) gets the
     # measured best count; the smaller profiles are rewritten by the installer.
-    assert _committed_count() == _profile('full')[KEY] == 2
+    assert _committed_count() == _profile('full')[KEY] == 1
 
 
 def _generate(tmp_path: Path, name: str) -> str:
@@ -105,7 +108,7 @@ def test_generate_all_configs_covers_gpu_image_prep() -> None:
 
 def test_docs_state_the_footprint_the_config_implies() -> None:
     full = _profile('full')[KEY] * _mib_per_instance()
-    assert full == 17408
+    assert full == 8704
     for doc in ('docs/PERFORMANCE.md', 'INSTALLATION.md'):
         text = (ROOT / doc).read_text()
         assert f'{full:,} MiB' in text, f'{doc} does not state {full:,} MiB for the full profile'

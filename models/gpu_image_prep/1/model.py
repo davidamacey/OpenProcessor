@@ -17,6 +17,17 @@ concurrent images are batched by those models' own dynamic batchers. Per image:
 
 Every request times its stages (``stage_metrics``) and publishes them once as Triton counters.
 
+Device memory (``prep_budget``): a request reserves its frame's bytes from ``DEVICE_BUDGET_MIB``
+before it decodes and waits (at most ``BUDGET_WAIT_SECONDS``) when they are not free, so pressure
+queues requests instead of failing a CUDA or nvJPEG allocation. Frames and orientation copies are
+allocated on one dedicated stream (``alloc_stream``), so a block freed by one worker serves any other.
+That is only safe if no kernel of the freeing worker still reads the block: every path that drops a
+frame has waited for its worker stream first (the blur sums read back, ``_orient`` and the stored-box
+path synchronise, the memory-failure path synchronises). The budget is reserved once at load, so an
+instance that cannot hold it fails to load. An allocation that fails anyway, a wait that times out
+and a photo larger than the whole budget are answered with the statuses ``gpu_memory`` and
+``over_budget`` (the API decodes that photo on the CPU and counts it), never with an error.
+
 Only boxes, vectors, sums and the crop JPEGs leave the GPU. Requests beyond ``MAX_IN_FLIGHT``
 wait in ``execute``, which holds Triton's queue: back-pressure instead of unbounded memory.
 
@@ -32,6 +43,7 @@ stages change nothing.
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -42,6 +54,7 @@ import cv2
 import numpy as np
 import triton_python_backend_utils as pb_utils
 from nvjpeg_lanes import NvJpegLanes
+from prep_budget import ByteBudget, is_memory_error, need_bytes
 from prep_geometry import (
     blur_rect,
     crop_rect,
@@ -57,10 +70,16 @@ from stage_metrics import StageClock, StageMetrics
 
 
 DET_OUTPUTS = ('num_dets', 'det_boxes', 'det_scores', 'det_classes')
+MIB = 1024 * 1024
+logger = logging.getLogger('gpu_image_prep')
 
 
-def _orient(frame: Any, orientation: int) -> Any:
-    """Re-orient an HWC frame by its EXIF tag as ``ImageOps.exif_transpose`` does."""
+def _orient(frame: Any, orientation: int, alloc_stream: Any) -> Any:
+    """Re-orient an HWC frame by its EXIF tag as ``ImageOps.exif_transpose`` does.
+
+    The copy lives in the shared arena, is written on the current (worker) stream, and the source
+    block returns to the arena on the caller's next line, so the copy is waited for here.
+    """
     t = frame
     if orientation in (5, 6, 7, 8):
         t = t.transpose(1, 0, 2)
@@ -68,7 +87,13 @@ def _orient(frame: Any, orientation: int) -> Any:
         t = t[:, ::-1]
     if orientation in (3, 4, 7, 8):
         t = t[::-1]
-    return cp.ascontiguousarray(t) if t is not frame else frame
+    if t is frame:
+        return frame
+    with alloc_stream:
+        out = cp.empty(t.shape, cp.uint8)
+    out[...] = t
+    cp.cuda.get_current_stream().synchronize()
+    return out
 
 
 def _tensor(name: str, arr: Any) -> Any:
@@ -116,6 +141,10 @@ class TritonPythonModel:
         # grows past 15 GB. At the cap it frees cached blocks before allocating.
         cp.get_default_memory_pool().set_limit(size=int(p.get('POOL_MIB', '4096')) * 1024 * 1024)
         self.lanes = NvJpegLanes(lanes=int(p.get('LANES', '16')))
+        self.alloc_stream = cp.cuda.Stream(non_blocking=True)
+        self.budget = self._reserve_budget(float(p.get('DEVICE_BUDGET_MIB', '2048')), p)
+        self.budget_wait = float(p.get('BUDGET_WAIT_SECONDS', '20'))
+        self.memory_events = 0
         self.kernels = PrepKernels()
         self.encode_pool = ThreadPoolExecutor(
             int(p.get('ENCODE_THREADS', '8')), thread_name_prefix='fe-jpeg'
@@ -128,6 +157,31 @@ class TritonPythonModel:
         self.local = threading.local()
         self.metrics = StageMetrics(pb_utils)
         self.stage_sync = p.get('STAGE_SYNC', '0') == '1'
+
+    def _reserve_budget(self, budget_mib: float, params: dict[str, str]) -> ByteBudget:
+        """Hold the whole budget in the shared arena once, then hand it back to the pool (which
+        keeps it cached for the frames). A card that cannot spare it fails the load here."""
+        pool_mib = float(params.get('POOL_MIB', '4096'))
+        if budget_mib > pool_mib:
+            raise pb_utils.TritonModelException(
+                f'gpu_image_prep: DEVICE_BUDGET_MIB {budget_mib:g} exceeds POOL_MIB {pool_mib:g}'
+            )
+        total = int(budget_mib * MIB)
+        try:
+            with self.alloc_stream:
+                block = cp.empty(total, cp.uint8)
+        except cp.cuda.memory.OutOfMemoryError as exc:
+            free_mib = cp.cuda.runtime.memGetInfo()[0] // MIB
+            raise pb_utils.TritonModelException(
+                f'gpu_image_prep: cannot reserve DEVICE_BUDGET_MIB {budget_mib:g} MiB on this '
+                f'device ({free_mib} MiB free): {exc}. Lower DEVICE_BUDGET_MIB or unload models; '
+                'ingest then decodes on the CPU.'
+            ) from exc
+        del block
+        return ByteBudget(total)
+
+    def finalize(self) -> None:
+        self.metrics.close()
 
     def execute(self, requests: list[Any]) -> None:
         for r in requests:
@@ -162,17 +216,34 @@ class TritonPythonModel:
     def _sync_stream() -> None:
         cp.cuda.get_current_stream().synchronize()
 
-    def _decode(self, data: bytes, embed: bool) -> _Image:
-        reason, header = route(data, self.min_mp, self.max_mp)
-        im = _Image(reason, embed)
-        if reason != 'gpu':
-            return im
+    def _status(self, reason: str) -> Any:
+        return pb_utils.InferenceResponse(
+            output_tensors=[_tensor('status', np.array([reason], np.object_))]
+        )
+
+    def _note_memory_failure(self, where: str, exc: BaseException) -> None:
+        """Count-worthy but rare once the budget holds: log the first and every hundredth."""
+        self.memory_events += 1
+        if self.memory_events % 100 == 1:
+            logger.warning(
+                'gpu_image_prep: device memory failure in %s (%s: %s); event %d, budget in use '
+                '%d of %d bytes',
+                where, type(exc).__name__, exc, self.memory_events,
+                self.budget.in_use, self.budget.total,
+            )  # fmt: skip
+
+    def _decode(self, data: bytes, header: Any, embed: bool) -> _Image:
+        im = _Image('gpu', embed)
         try:
-            frame, _backend = self.lanes.decode(data)
-        except Exception:
-            im.reason = 'decoder'
+            frame, _backend = self.lanes.decode(data, self.alloc_stream)
+        except Exception as exc:
+            if is_memory_error(exc):
+                self._note_memory_failure('decode', exc)
+                im.reason = 'gpu_memory'
+            else:
+                im.reason = 'decoder'
             return im
-        im.frame = _orient(frame, header.orientation)
+        im.frame = _orient(frame, header.orientation, self.alloc_stream)
         w, h = oriented_size(header)
         if (int(im.frame.shape[1]), int(im.frame.shape[0])) != (w, h):
             im.reason, im.frame = 'decoder', None
@@ -278,6 +349,7 @@ class TritonPythonModel:
         im.rects = stored_box_rects(boxes, w, h)
         im.embed = True
         vectors = self._embed(im, clock)
+        cp.cuda.get_current_stream().synchronize()  # the frame returns to the shared arena
         im.frame = None
         return pb_utils.InferenceResponse(
             output_tensors=[
@@ -292,14 +364,41 @@ class TritonPythonModel:
         data = pb_utils.get_input_tensor_by_name(request, 'jpeg').as_numpy().tobytes()
         flag = pb_utils.get_input_tensor_by_name(request, 'embed_crops')
         stored = pb_utils.get_input_tensor_by_name(request, 'boxes')
+        embed = True if flag is None else bool(flag.as_numpy().reshape(-1)[0])
         with clock.stage('decode'):
-            im = self._decode(data, True if flag is None else bool(flag.as_numpy().reshape(-1)[0]))
-        if im.reason != 'ok':
-            return pb_utils.InferenceResponse(
-                output_tensors=[_tensor('status', np.array([im.reason], np.object_))]
-            )
-        if stored is not None:
-            return self._embed_stored(im, stored.as_numpy(), clock)
+            reason, header = route(data, self.min_mp, self.max_mp)
+        if reason != 'gpu':
+            return self._status(reason)
+        need = need_bytes(header)
+        if need > self.budget.total:
+            return self._status('over_budget')
+        with clock.stage('budget'):
+            admitted = self.budget.acquire(need, self.budget_wait)
+        if not admitted:
+            self._note_memory_failure('budget wait', TimeoutError(f'{need} bytes not free'))
+            return self._status('gpu_memory')
+        im: _Image | None = None
+        try:
+            with clock.stage('decode'):
+                im = self._decode(data, header, embed)
+            if im.reason != 'ok':
+                return self._status(im.reason)
+            if stored is not None:
+                return self._embed_stored(im, stored.as_numpy(), clock)
+            return self._respond(im, clock)
+        except (cp.cuda.memory.OutOfMemoryError, cp.cuda.runtime.CUDARuntimeError) as exc:
+            if not is_memory_error(exc):
+                raise
+            self._note_memory_failure('process', exc)
+            return self._status('gpu_memory')
+        finally:
+            # every path that drops the frame has waited for this stream, a failed one included
+            if im is not None and im.frame is not None:
+                cp.cuda.get_current_stream().synchronize()
+                im.frame = None
+            self.budget.release(need)
+
+    def _respond(self, im: _Image, clock: StageClock) -> Any:
         self._detect(im, clock)
         with clock.stage('crop_copy'):
             pixels = self._crop_pixels(im)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import TYPE_CHECKING
 
 import httpx
@@ -48,6 +49,17 @@ def _reps(args, stack, *, drops, loads, gpu=lambda: None):
         drop_cache=lambda paths: drops.append(list(paths)),
         loadavg=lambda: loads.pop(0),
     )
+
+
+def test_every_protocol_row_name_makes_a_valid_project_slug(manifest: Path, tmp_path: Path) -> None:
+    from src.config.projects import PROJECT_SLUG_MAX_LEN, PROJECT_SLUG_RE
+
+    for row in ('setA', 'setB', 'setP3000', 'setB-sync', 'setP3000-sync', 'setB-nometrics'):
+        stack = FakeStack()
+        args = _args(manifest, tmp_path, ['--reps', '3', '--slug-prefix', f'sp0-{row.lower()}'])
+        slug = _reps(args, stack, drops=[], loads=[(1.0, 1.0, 1.0)] * 6)[0]['config']['project']
+        assert re.fullmatch(PROJECT_SLUG_RE, slug), slug
+        assert len(slug) <= PROJECT_SLUG_MAX_LEN, slug
 
 
 def test_each_rep_gets_its_own_project_and_report_file(manifest: Path, tmp_path: Path) -> None:
@@ -183,3 +195,20 @@ def test_an_observer_wraps_each_rep_and_lands_in_the_host_block(
     )
     assert observer.calls == ['start', 'stop', 'start', 'stop']
     assert all(r['host']['api_cpu_s'] == 4.0 for r in reports)
+
+
+def test_clients_post_batches_at_the_same_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    import threading
+
+    both_in = threading.Barrier(2, timeout=5)
+
+    def batch(_client, _slug, paths, _clock):
+        both_in.wait()  # only returns when a second batch is in flight
+        return rb.BatchOutcome(len(paths), len(paths), 0, 0, 0, 0, 0.1)
+
+    monkeypatch.setattr(rb, '_ingest_batch', batch)
+    out = rb._ingest_batches(None, 's', [['a'], ['b']], lambda: 0.0, 2)  # type: ignore[arg-type]
+    assert [o.images for o in out] == [1, 1]
+    both_in.reset()
+    with pytest.raises(threading.BrokenBarrierError):
+        rb._ingest_batches(None, 's', [['a'], ['b']], lambda: 0.0, 1)  # type: ignore[arg-type]

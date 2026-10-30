@@ -374,9 +374,13 @@ async def _maybe_auto_retrain(opensearch: Any) -> dict[str, Any] | None:
     transient OpenSearch hiccup never crashes the idle loop.
     """
     try:
+        from src.services.curation.assist_loop.job import loop_live
         from src.services.curation.clustering.retrain_policy import should_retrain_centroids
         from src.services.curation.ingest_policy_store import get_ingest_policy
 
+        if loop_live():
+            logger.debug('ivf auto-retrain skipped: an auto-label loop is running')
+            return None
         if not (await get_ingest_policy(opensearch)).clustering.automatic:
             logger.debug('ivf auto-retrain skipped: automatic clustering is off')
             return None

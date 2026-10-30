@@ -180,7 +180,7 @@ def test_gpu_plan_sizes_the_gpu_decode_by_the_installed_instance_count(
     cfg.write_text(
         (REPO_ROOT / 'models' / 'gpu_image_prep' / 'config.pbtxt')
         .read_text()
-        .replace('count: 2', 'count: 3')
+        .replace('count: 1', 'count: 3')
     )
     done = cli(shimmed, inst, 'gpu', 'plan')
     assert f'about {3 * GPU_IMAGE_PREP_MIB} MiB more on the primary card' in done.stdout

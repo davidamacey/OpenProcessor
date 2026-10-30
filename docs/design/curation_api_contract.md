@@ -1600,6 +1600,128 @@ name; create the class first), `409 run_has_no_scope` (a bare selection or a fil
   older run never replaces a newer slot. A restart ends a live run as
   `interrupted`; run it again.
 
+## Auto-label loops
+
+A loop labels whole clusters from a small VLM sample: for each cluster it draws a seeded
+sample of the members the lock rule leaves free, asks the VLM, and when the answers show the
+cluster is homogeneous (a one-sided exact bound, not "3 of 3 agree") it writes the top class
+to the cluster's other free members. A cluster that fails is split by embedding and each
+part is tried again, down to `max_depth`; what is still unlabeled is left for review with its
+vote distribution. It runs in the `curation-assist-loop-worker` service, survives API
+restarts, and is resumable and reversible. Propagated labels are a **machine** kind
+(`class_source: "assist_propagated"`, not validated): they are not locked against later
+fixes and stay out of the training export until reviewed. The loop never overwrites a
+human-, import-validated, validated, excluded or holdout item (the lock rule), and never
+writes a cluster field.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | `/assist/loops` | `AssistLoopRequest` | `AssistLoopState`; `dry_run` (the default) sizes the loop and writes nothing |
+| GET | `/assist/loops` | `active` (bool, default false), `limit` (1 to 100, default 20) | `{loops: AssistLoopState[]}`, newest first; `active=true` keeps `queued` and `running` |
+| GET | `/assist/loops/{loop_id}` | | `AssistLoopState`; `404 not_found` for an unknown id |
+| GET | `/assist/loops/{loop_id}/nodes` | `level`, `decision`, `after`, `limit` (1 to 500, default 100) | `{nodes: LoopNode[], next_after}` by level then path |
+| GET | `/assist/loops/{loop_id}/nodes/{node_path}/members` | `after`, `limit` (1 to 5000, default 500) | `{crop_ids, next_after}` in id order |
+| POST | `/assist/loops/{loop_id}/cancel` | | `AssistLoopState`; the loop stops after the requests in flight, what it wrote stays |
+| POST | `/assist/loops/{loop_id}/resume` | | `AssistLoopState` (`queued`); for an `interrupted`, `paused` or `cancelled` loop |
+| POST | `/assist/loops/{loop_id}/rollback` | `{node_paths: string[] \| null, dry_run: true}` | `{dry_run, matched, restored, kept_changed, conflicts}` |
+
+`AssistLoopRequest` (unknown keys are `422`; the defaults are the ones shown):
+
+```json
+{
+  "scope": {"cluster_ids": null, "min_root_size": 40},
+  "vlm": null, "prompt_pack": null, "acknowledge_external": false,
+  "seed": 0,
+  "gate": {"theta": 0.9, "alpha": 0.05, "max_dissent": 1},
+  "recursion": {"max_depth": 3, "branching": 4, "min_node_size": 40},
+  "budget": {"max_vlm_crops": 30000, "max_vlm_requests": null, "max_wall_s": null},
+  "audit": {"vlm": null, "acknowledge_external": false, "rate": 0.01, "min_per_batch": 30,
+            "max_crops": 500, "floor": 0.85, "on_fail": "pause"},
+  "vlm_concurrency": 16, "node_concurrency": 8,
+  "dry_run": true
+}
+```
+
+- `scope.cluster_ids` null means every candidate cluster (id 10000 and up); named ids are used
+  whatever their kind. Clusters under `min_root_size` members are left alone.
+- `gate.theta` (0.7 to 0.99) is the homogeneity to show, `alpha` (0.001 to 0.1) the chance of
+  passing a cluster below it, `max_dissent` (0 to 3) the sampled answers allowed to disagree.
+  A cluster of 300 free members needs 32 clean answers at the defaults (49 with one dissent);
+  3 answers of 3 agreeing would only show homogeneity above 0.37.
+- `recursion`: `max_depth` 0 to 6, `branching` 2 to 8, `min_node_size` at least 2: a failing
+  node smaller than that is left for review.
+- `budget.max_vlm_crops` has no default and a start without a `budget` is
+  `422 invalid_request`. `max_vlm_requests` null means crops over images per call plus the
+  concurrency; `max_wall_s` null means 6 hours. The loop reserves each request in its log
+  before sending it and never goes past a cap; a crash can waste requests in flight, never
+  exceed a cap.
+- `audit.vlm` null means **no second opinion** (stated in the record). With a model named, a
+  seeded `rate` share of what the loop propagated (at least `min_per_batch` per batch, at most
+  `max_crops` in all, in a pool apart from `budget`) is re-judged by it. The audit writes
+  nothing. Once at least 30 answers are in and the one-sided 95% Wilson lower bound on
+  agreement is under `floor`, the loop pauses (`pause_reason: "audit"`); `on_fail:
+  "rollback"` also restores the failing batch. An external audit endpoint needs the same
+  consent as any run (the deployment policy, the endpoint's `allow_external`, and
+  `audit.acknowledge_external`): `422 vlm_external_not_acknowledged` otherwise.
+
+`AssistLoopState`: `loop_id` (null on a dry run), `status` (`dry_run`, `queued`, `running`,
+`paused`, `completed`, `cancelled`, `failed`, `interrupted`: a loop whose worker died reads
+`interrupted` until resumed), `stop_reason` (`done`, `budget_crops`, `budget_requests`,
+`budget_time`), `pause_reason` (`user`, `audit`), `created_at`, `started_at`, `finished_at`,
+`updated_at`, `error`, `request` (as normalised), `pinned`, `plan`, `partition`, `budget`,
+`levels`, `totals` and `audit`.
+
+- `pinned`: `vlm`, `prompt_pack` and `audit_vlm` (`{name, revision, model}`, `{name,
+  revision}`; `audit_vlm` null when the audit is off). The worker resolves exactly these.
+- `plan`: `roots`, `eligible_items`, `required_sample_table` (`n_members` and
+  `required_by_dissent`, the answers the gate needs at 0, 1, ... allowed dissent, for each
+  distinct cluster size, largest first, 25 rows at most), `estimated_vlm_crops_root_level`
+  and `estimated_vlm_requests_root_level` (every cluster passing with no dissent; splits cost
+  more) and `fits_budget` (null without a `budget`).
+- `partition` (once the worker pinned it): `kind` (`cluster_field`), `digest`, `snapshot_at`,
+  `roots`, `eligible_items`. The loop works on the member ids it snapshotted then; items
+  ingested later are outside it.
+- `budget`: `vlm` and `audit` pools (`max_crops`, `max_requests`, `crops_spent`,
+  `crops_reserved`, `requests_spent`, `requests_reserved`) and `wall_s`.
+- `levels`: per level `nodes`, `passed`, `split`, `review_leaf`, `review_small`, `stale`,
+  `unvisited`, `items_propagated`, `items_direct` (sampled items the VLM labeled) and
+  `crops_spent`. `totals`: `items_propagated`, `items_direct`, `clusters_left_for_review`,
+  `items_left_for_review` and `skipped` (`dissent`, `drifted`, `locked`, `token_changed`,
+  `conflicts`, `holdout`, `excluded`).
+- `audit`: `status` (`off`, `pending`, `ok`, `fail`, `budget_exhausted`), `sampled`, `agreed`,
+  `agreement`, `lower_bound`, `crops_spent`.
+
+`LoopNode`: `path` (`r<cluster_id>`, then `.<index>` per level), `level`, `parent`, `n`
+(free members at the snapshot), `sampled`, `answered`, `decision` (`pass`, `split`,
+`review_leaf`, `review_small`, `stale`, `unvisited`; null while open), `reason`, `class_name`
+(the top voted class), `agree`, `bound` (the exact lower bound on homogeneity),
+`distribution` (`class_name`, `votes`), `new_class_proposals` (`name`, `votes`) and
+`items_propagated`. The nodes with `review_leaf`, `review_small`, `stale` or `unvisited` are
+the ones left for a person; the members route lists their crop ids, every member including
+those the lock rule kept out of the loop.
+
+`POST .../rollback` restores the items the loop propagated to the class state before it wrote
+them (only the nodes in `node_paths` when given). An item is restored only while it is still
+exactly as the loop left it: a later write by anyone, or a lock, validation, exclusion or
+holdout freeze, keeps it and counts it in `kept_changed`. The check runs again inside the write
+(OCC), so a person racing the rollback wins. Items the VLM answered directly keep their answer.
+A second rollback finds nothing. `409 assist_loop_running` while the loop is live.
+
+Refusals of `POST /assist/loops`: `409 assist_loop_busy` (one loop per project; `loop_id` names
+the live one), `409 vlm_not_configured`, `409 clustering_running` (an auto-label job is live),
+`422 invalid_request`, `422 no_class_names`, `422 no_roots` (no cluster is big enough),
+`422 unknown_vlm` and the external-endpoint refusals for the main or the audit endpoint.
+`404 not_found` for an unknown loop or node; `409 assist_loop_not_resumable` for a resume of a
+loop that is not stopped.
+
+**Holds while a loop is live** (`queued` or `running`): `POST /pipeline/auto_label/start` and
+`POST /pipeline/auto_label` with `train_clusters=true` answer `409 assist_loop_running` (`loop_id`
+names the loop; cancel it first), the cluster-refresh daemon neither retrains nor auto-promotes
+that project, and the auto-label worker's idle centroid retrain stays off. Ingest-time
+nearest-centroid assignment continues. A `paused` loop does not hold; if clusters moved by the
+time it resumes, the affected nodes turn `stale` and nothing is written to a member that left its
+cluster.
+
 ## Ingest
 
 | Method | Path | Body | Response |

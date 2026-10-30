@@ -25,9 +25,14 @@ from src.domain.ingest_class_sources import (
     HUMAN_CLASS_SOURCE,
     LABEL_IMPORT_CLASS_SOURCE,
     LABEL_SOURCE_IMPORT,
+    PROPAGATED_CLASS_SOURCE,
 )
 from src.services.detection.cascade_detect.sanity import class_provenance
 from src.utils.timeutil import now_iso
+
+
+ASSIST_LOOP = 'assist_loop'
+"""``label_source``, detector and labeler of a propagated class."""
 
 
 def human_class_provenance() -> dict[str, Any]:
@@ -56,20 +61,23 @@ class ItemLabel:
     ``source`` decides ``class_source``/``label_source``/provenance:
     ``"human"`` -> ``class_source=HUMAN_CLASS_SOURCE``; ``"import"`` ->
     ``class_source=LABEL_IMPORT_CLASS_SOURCE`` (``external_label``),
-    ``label_source=LABEL_SOURCE_IMPORT``. ``validated=False`` is only
-    valid for ``source="import"`` (``options.label_trust: "suggestion"``):
-    the machine pipeline may still relabel it, so it must not be
-    locked (:func:`src.clients.occ.is_locked_class`).
+    ``label_source=LABEL_SOURCE_IMPORT``; ``"propagated"`` ->
+    ``class_source=PROPAGATED_CLASS_SOURCE``, always unvalidated, the run id in
+    ``class_detector_version``. ``validated=False`` is valid for
+    ``source="import"`` (``options.label_trust: "suggestion"``) and implied for
+    ``"propagated"``: the machine pipeline may still relabel it, so it must not
+    be locked (:func:`src.clients.occ.is_locked_class`).
     """
 
     class_id: int
     class_name: str
-    source: Literal['human', 'import']
+    source: Literal['human', 'import', 'propagated']
     writer: str
     label_source: str | None = None
     validated: bool = True
     import_id: str | None = None
     labeled_at: str | None = None
+    run_id: str | None = None
     op_id: str | None = None
 
     @classmethod
@@ -89,6 +97,17 @@ class ItemLabel:
             writer=writer,
             label_source=label_source,
             op_id=op_id,
+        )
+
+    @classmethod
+    def propagated(cls, *, class_id: int, class_name: str, run_id: str, writer: str) -> ItemLabel:
+        return cls(
+            class_id=class_id,
+            class_name=class_name,
+            source='propagated',
+            writer=writer,
+            validated=False,
+            run_id=run_id,
         )
 
     @classmethod
@@ -132,6 +151,19 @@ def class_label_fields(label: ItemLabel) -> dict[str, Any]:
             # Always written for a human label: a single label clears a stale tag.
             'label_op_id': label.op_id,
             **human_class_provenance(),
+        }
+    elif label.source == 'propagated':
+        fields = {
+            'class_id': label.class_id,
+            'class_name': label.class_name,
+            'class_source': PROPAGATED_CLASS_SOURCE,
+            'class_validated': False,
+            'label_source': ASSIST_LOOP,
+            'cluster_id': label.class_id,
+            'cluster_subid': None,
+            **class_provenance(
+                detector=ASSIST_LOOP, detector_version=label.run_id or '', labeler=ASSIST_LOOP
+            ),
         }
     else:
         fields = {

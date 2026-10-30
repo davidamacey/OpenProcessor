@@ -26,13 +26,29 @@ Control surface (test-only, not part of any real API):
   legacy/off-spec key instead of the one the prompt pack actually asks
   for, or ``{"region_visible": true}``.
 * ``POST /__reset``          -> restore defaults and zero the counters.
+* ``GET  /__seen``           -> the sha256 of every image received, oldest first (at most
+  ``SEEN_MAX``), so a test can learn which hash the product sends for a given crop (ask for
+  one crop, read the last entry).
+
+Two classification modes for the auto-label loop (both test-only):
+
+* ``class_cycle``: a list of class names. The n-th image the fake is asked about (counted
+  across calls since the last reset) answers ``class_cycle[n % len]``, so a cluster sampled
+  through it shows dissent and fails the loop's gate. ``null`` restores the fixed answer.
+* ``answers``: ``{sha256-of-the-image-bytes: class name}``. An image whose hash is in the map
+  answers that class, any other image falls back to ``class_cycle`` or the fixed answer. The
+  wire carries no crop id, so the key is the image hash.
 """
 
 from __future__ import annotations
 
+import base64
+import binascii
+import hashlib
 import json
 import os
 import re
+from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
@@ -46,6 +62,9 @@ DEFAULTS: dict[str, Any] = {
     'class_name': os.environ.get('FAKE_VLM_CLASS', 'box'),
     'class_confidence': 'high',
     'proposed_class': '',
+    # Loop modes, see the module docstring.
+    'class_cycle': None,
+    'answers': None,
     # Region verify.
     'region_is_region': True,
     'region_confidence': 'high',
@@ -69,8 +88,12 @@ DEFAULTS: dict[str, Any] = {
     else None,
 }
 
+SEEN_MAX = 5000
+
 _state: dict[str, Any] = dict(DEFAULTS)
 _counts: dict[str, int] = {}
+_seen: deque[str] = deque(maxlen=SEEN_MAX)
+_cycle: dict[str, int] = {'position': 0}
 
 
 def _count(kind: str) -> None:
@@ -84,6 +107,26 @@ def _n_images(messages: list[dict[str, Any]]) -> int:
         if isinstance(content, list):
             n += sum(1 for part in content if part.get('type') == 'image_url')
     return n
+
+
+def _image_hashes(messages: list[dict[str, Any]]) -> list[str]:
+    """sha256 of each image's decoded bytes, in message order ('' for a non data-URL image)."""
+    hashes: list[str] = []
+    for message in messages:
+        content = message.get('content')
+        if not isinstance(content, list):
+            continue
+        for part in content:
+            if part.get('type') != 'image_url':
+                continue
+            url = str((part.get('image_url') or {}).get('url') or '')
+            try:
+                raw = base64.b64decode(url.split(',', 1)[1], validate=False)
+            except (IndexError, binascii.Error):
+                hashes.append('')
+                continue
+            hashes.append(hashlib.sha256(raw).hexdigest())
+    return hashes
 
 
 def _all_text(messages: list[dict[str, Any]]) -> str:
@@ -115,11 +158,25 @@ def _classify_prompt(text: str) -> str:
     return 'unknown'
 
 
-def _class_entries(n_images: int) -> list[dict[str, Any]]:
+def _class_for(image_hash: str) -> str:
+    """The class the next image answers: its posted answer, else the cycle, else the fixed class."""
+    answers = _state['answers']
+    if answers and image_hash in answers:
+        return str(answers[image_hash])
+    cycle = _state['class_cycle']
+    if cycle:
+        name = str(cycle[_cycle['position'] % len(cycle)])
+        _cycle['position'] += 1
+        return name
+    return str(_state['class_name'])
+
+
+def _class_entries(n_images: int, image_hashes: list[str] | None = None) -> list[dict[str, Any]]:
+    hashes = image_hashes or []
     return [
         {
             'img': i,
-            'class': _state['class_name'],
+            'class': _class_for(hashes[i - 1] if i - 1 < len(hashes) else ''),
             'confidence': _state['class_confidence'],
             'proposed_class': _state['proposed_class'],
         }
@@ -166,7 +223,9 @@ def _box_verdict(box: int) -> bool | None:
     return verdicts[(box - 1) % len(verdicts)] if verdicts else None
 
 
-def _reply_for(kind: str, n_images: int, text: str = '') -> str:
+def _reply_for(
+    kind: str, n_images: int, text: str = '', image_hashes: list[str] | None = None
+) -> str:
     if kind == 'region_visible':
         results = [{'img': i, 'visible': _state['region_visible']} for i in range(1, n_images + 1)]
         return json.dumps({'results': results})
@@ -175,7 +234,7 @@ def _reply_for(kind: str, n_images: int, text: str = '') -> str:
     if kind == 'region_single':
         return json.dumps(_region_entry(None))
     if kind in ('class_open', 'class_closed'):
-        return json.dumps(_class_entries(n_images))
+        return json.dumps(_class_entries(n_images, image_hashes))
     if kind == 'combined':
         n_boxes = _n_region_boxes(text)
         results = [
@@ -231,6 +290,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/health':
             self._send(200, {'status': 'ok'})
             return
+        if self.path == '/__seen':
+            self._send(200, {'hashes': list(_seen)})
+            return
         if self.path == '/__stats':
             self._send(200, {'counts': dict(_counts), 'state': dict(_state)})
             return
@@ -250,6 +312,8 @@ class Handler(BaseHTTPRequestHandler):
             _state.clear()
             _state.update(DEFAULTS)
             _counts.clear()
+            _seen.clear()
+            _cycle['position'] = 0
             self._send(200, {'state': dict(_state)})
             return
         if re.fullmatch(r'/v\d+/chat/completions', self.path):
@@ -259,7 +323,9 @@ class Handler(BaseHTTPRequestHandler):
             text = _all_text(messages)
             kind = _classify_prompt(text)
             _count(kind)
-            content = _reply_for(kind, n_images, text)
+            hashes = _image_hashes(messages)
+            _seen.extend(hashes)
+            content = _reply_for(kind, n_images, text, hashes)
             self._send(
                 200,
                 {
