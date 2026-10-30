@@ -72,7 +72,7 @@ Host facts: no `stress-ng` here, so load came from 120 busy-loop Python processe
 - `exec {_OP_TTY_FD}>&2` leaves one extra open fd in child processes of the installer. Harmless; containers started with `up -d` do not inherit it.
 - The default flip changes behaviour for existing installs that never set the flag: text search now answers instead of 400. Cropwright's search box appears for them.
 - The `#346` epic text still says "FAISS IVF, AHC refinement inside one cluster, residual UMAP" and `POST /clusters/refine/{cluster_id}`. GitHub issue bodies are not edited from here; suggested text: "IVF k-means over the item vectors, AHC refinement inside one cluster (`POST /curation/projects/{project}/clusters/refine/{cluster_id}`); UMAP only feeds the 2-d scatter and never clustering".
-- Other docs and comments still name some routes without the `/curation/projects/{project}` prefix (for example `GET /curation/review/*`); only the lines listed in #355 were in scope.
+- Other docs and comments still name some routes without the `/curation/projects/{project}` prefix (for example the `/curation/review/*` paths); only the lines listed in #355 were in scope.
 
 ## Decisions needed from the owner (gate ids)
 
