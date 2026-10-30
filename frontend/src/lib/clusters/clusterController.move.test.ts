@@ -47,6 +47,7 @@ describe('moveCropIds', () => {
       updated: 1,
       updated_ids: ['a'],
       conflicts: [],
+      op_id: null,
     });
     const successSpy = vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
     const a = crop('a');
@@ -68,6 +69,7 @@ describe('moveCropIds', () => {
       updated: 2,
       updated_ids: ['a', 'b'],
       conflicts: [],
+      op_id: null,
     });
     const successSpy = vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
     const a = crop('a');
@@ -84,6 +86,7 @@ describe('moveCropIds', () => {
       updated: 1,
       updated_ids: ['a'],
       conflicts: [{ crop_id: 'b', current_source: 'vlm' }],
+      op_id: null,
     });
     const warnSpy = vi.spyOn(toastStore, 'warn').mockImplementation(() => 'x');
     const a = crop('a');
@@ -105,6 +108,7 @@ describe('moveCropIds', () => {
       updated: 0,
       updated_ids: [],
       conflicts: [{ crop_id: 'a', current_source: 'vlm' }],
+      op_id: null,
     });
     const warnSpy = vi.spyOn(toastStore, 'warn').mockImplementation(() => 'x');
     const a = crop('a');
@@ -122,6 +126,7 @@ describe('moveCropIds', () => {
       updated: 1,
       updated_ids: ['a'],
       conflicts: undefined as unknown as never[],
+      op_id: null,
     });
     const successSpy = vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
     const a = crop('a');
@@ -173,6 +178,7 @@ describe('moveCropIds', () => {
       updated: 1,
       updated_ids: ['a'],
       conflicts: [],
+      op_id: null,
     });
     vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
     const recordWritesSpy = vi.spyOn(undoStore, 'recordWrites');
@@ -189,6 +195,7 @@ describe('moveCropIds', () => {
       updated: 1,
       updated_ids: ['a'],
       conflicts: [{ crop_id: 'b', current_source: 'vlm' }],
+      op_id: null,
     });
     vi.spyOn(toastStore, 'warn').mockImplementation(() => 'x');
     const recordWritesSpy = vi.spyOn(undoStore, 'recordWrites');
@@ -225,6 +232,7 @@ describe('moveCropIds', () => {
       updated: 1,
       updated_ids: ['a'],
       conflicts: [],
+      op_id: null,
     });
     vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
     const restored = crop('a', { cluster_id: 42 });

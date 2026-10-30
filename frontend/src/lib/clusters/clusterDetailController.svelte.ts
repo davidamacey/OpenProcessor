@@ -4,7 +4,7 @@
  * crop query, the sub-cluster grouping and core cut line, and selection.
  */
 import { page } from '$app/state';
-import { getCluster } from '$lib/api_clusters';
+import { getCluster, getClusterFacets } from '$lib/api_clusters';
 import { createExclusionGuard } from '$lib/clusters/clusterController.svelte';
 import { computeCutLine } from '$lib/clusters/cutLine';
 import { SLOW_LOAD_MS } from '$lib/clusters/firstLoad';
@@ -15,6 +15,8 @@ import { isDiverseOverlayAvailable, isSemanticSearchAvailable } from '$lib/strat
 import { createStrategyBar } from '$lib/strategyBar.svelte';
 import type { Cluster, Crop, PaginatedResponse } from '$lib/types';
 import type { ReprocessRequest } from '$lib/types_import';
+import type { ClusterFacets, ConfidenceBin } from '$lib/types_clusterList';
+import { apiErrorText } from '$lib/api_errors';
 import { classesStore } from '$stores/classes.svelte';
 import { classSourcesStore } from '$stores/classSources.svelte';
 import { keyboardStore } from '$stores/keyboard.svelte';
@@ -207,8 +209,71 @@ export function createClusterDetailController() {
     minBlurRatio = blurSlider > 0 ? blurSlider : null;
   }
 
+  // Facet filters: one choice per group, each sent as the matching
+  // `GET /crops` parameter. The counts on the chips are the served facets.
+  let facets = $state<ClusterFacets | null>(null);
+  let facetsError = $state<string | null>(null);
+  let facetDetectorClass = $state<string | null>(null);
+  let facetBand = $state<{ min: number; max: number | null } | null>(null);
+  let facetReviewTab = $state<string | null>(null);
+  let facetValidated = $state<boolean | null>(null);
+  // 'default' leaves the order to the core-first view; the others rank by
+  // the detector's confidence on the server.
+  let detectorSort = $state<'default' | 'desc' | 'asc'>('default');
+  const facetFilterActive = $derived(
+    facetDetectorClass != null ||
+      facetBand != null ||
+      facetReviewTab != null ||
+      facetValidated != null ||
+      detectorSort !== 'default',
+  );
+
+  function pick<T>(current: T | null, next: T): T | null {
+    return current === next ? null : next;
+  }
+  function toggleDetectorClass(value: string): void {
+    facetDetectorClass = pick(facetDetectorClass, value);
+  }
+  function toggleBand(bin: ConfidenceBin): void {
+    const same = facetBand?.min === bin.min && facetBand?.max === bin.max;
+    facetBand = same ? null : { min: bin.min, max: bin.max };
+  }
+  function toggleReviewTab(tab: string): void {
+    facetReviewTab = pick(facetReviewTab, tab);
+  }
+  function toggleValidated(value: boolean): void {
+    facetValidated = pick(facetValidated, value);
+  }
+  function resetFacetFilters(): void {
+    facetDetectorClass = null;
+    facetBand = null;
+    facetReviewTab = null;
+    facetValidated = null;
+    detectorSort = 'default';
+  }
+
+  async function loadFacets(): Promise<void> {
+    const id = clusterId;
+    try {
+      const res = await getClusterFacets(id);
+      if (id !== clusterId) return;
+      facets = res;
+      facetsError = null;
+    } catch (e) {
+      if (id !== clusterId) return;
+      facets = null;
+      facetsError = apiErrorText(e);
+    }
+  }
+
   function cropQuery() {
     return {
+      detectorClassName: facetDetectorClass ? [facetDetectorClass] : [],
+      detectorConfMin: facetBand?.min ?? null,
+      detectorConfMax: facetBand?.max ?? null,
+      reviewTab: facetReviewTab,
+      labelValidated: facetValidated,
+      sort: detectorSort === 'default' ? null : `detector_confidence:${detectorSort}`,
       classSource: classSourceFilter,
       clusterSubid: subTab,
       maxRank,
@@ -216,14 +281,19 @@ export function createClusterDetailController() {
       // Unless the operator picked an explicit order, ask for the server's
       // core-first order: nearest to the centroid first, each item serving
       // its `cluster_is_core`, which is what the cut line reads.
-      order: orderMode === 'default' ? 'core_first' : orderMode,
+      order:
+        orderMode === 'default'
+          ? detectorSort === 'default'
+            ? 'core_first'
+            : 'default'
+          : orderMode,
       k: diverseK,
     };
   }
 
   async function loadFirst(): Promise<void> {
     if (!Number.isFinite(clusterId)) return;
-    await cropPager.loadFirst();
+    await Promise.all([cropPager.loadFirst(), loadFacets()]);
   }
 
   async function loadMore(): Promise<void> {
@@ -260,6 +330,11 @@ export function createClusterDetailController() {
     void minBlurRatio;
     void orderMode;
     void diverseK;
+    void facetDetectorClass;
+    void facetBand;
+    void facetReviewTab;
+    void facetValidated;
+    void detectorSort;
     void loadFirst();
   });
 
@@ -282,6 +357,7 @@ export function createClusterDetailController() {
   // server-ordered list — not a regroup by subid that would scramble it.
   const groupBySubcluster = $derived(
     !outliersFirst &&
+      detectorSort === 'default' &&
       orderMode !== 'diverse' &&
       subTab == null &&
       subClusterIds.length > 0,
@@ -314,7 +390,7 @@ export function createClusterDetailController() {
   // The cut is the first item the server serves as `cluster_is_core === false`,
   // and only in the core-first order requested above.
   const cutLine = $derived.by(() =>
-    computeCutLine(filteredCrops, orderMode === 'default'),
+    computeCutLine(filteredCrops, orderMode === 'default' && detectorSort === 'default'),
   );
   const cutLineIndex = $derived(cutLine.index);
   const cutLineVisible = $derived(cutLine.visible);
@@ -383,6 +459,38 @@ export function createClusterDetailController() {
     set subTab(v: string | null) {
       subTabPick = { cluster: clusterId, subid: v };
     },
+    get facets() {
+      return facets;
+    },
+    get facetsError() {
+      return facetsError;
+    },
+    get facetDetectorClass() {
+      return facetDetectorClass;
+    },
+    get facetBand() {
+      return facetBand;
+    },
+    get facetReviewTab() {
+      return facetReviewTab;
+    },
+    get facetValidated() {
+      return facetValidated;
+    },
+    get detectorSort() {
+      return detectorSort;
+    },
+    set detectorSort(v: 'default' | 'desc' | 'asc') {
+      detectorSort = v;
+    },
+    get facetFilterActive() {
+      return facetFilterActive;
+    },
+    toggleDetectorClass,
+    toggleBand,
+    toggleReviewTab,
+    toggleValidated,
+    resetFacetFilters,
     get classSourceFilter() {
       return classSourceFilter;
     },

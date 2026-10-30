@@ -133,8 +133,7 @@
   <span class="grow"></span>
 
   <!-- C5 (visual audit 2026-09-24): the cluster-grid controls below
-       (purity legend, unlabeled filter, embedding plot, sort, subject,
-       clarity) don't apply to the Ignored bucket's crop list, so they
+       (purity legend, embedding plot, subject, clarity) don't apply to the Ignored bucket's crop list, so they
        are hidden in that mode rather than left live and inert. -->
   {#if !modes.ignoredModeActive}
     <!-- Color legend for the card border. The cluster grid uses border
@@ -169,26 +168,6 @@
       </span>
     </div>
 
-    <!-- Unlabeled-only filter: AHC clusters that didn't reach class-majority
-       consensus surface as "Unlabeled #N". This toggle narrows the grid
-       to just those, so operators can drain the unlabeled backlog in
-       one pass (drag a cluster's reps into a class on the sidebar). -->
-    <button
-      type="button"
-      onclick={() => {
-        list.unlabeledOnly = !list.unlabeledOnly;
-        if (list.unlabeledOnly) list.sort = 'size_desc';
-      }}
-      class="btn-sm border text-xs transition-colors {list.unlabeledOnly
-        ? 'border-amber-500/60 bg-amber-500/20 text-amber-200'
-        : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-amber-500/40'}"
-      title="Show only clusters without a dominant class (need labeling)"
-    >
-      {list.unlabeledOnly ? '✓ ' : ''}Unlabeled only
-      <span class="ml-1 font-mono text-[10px] text-zinc-500">({list.unlabeledCount})</span
-      >
-    </button>
-
     <!-- Embedding-plot toggle (curation-strategy plan §5.6): fully absent
        unless {API_PREFIX}/methods actually reports the overlay, same convention
        as the diverse overlay in <StrategyBar>. Replaces the card grid
@@ -207,17 +186,6 @@
         {showEmbeddingViz ? '✓ ' : ''}Embedding plot
       </button>
     {/if}
-
-    <label class="flex items-center gap-2 text-xs text-zinc-400">
-      Sort
-      <select bind:value={list.sort} class="select-sm">
-        <option value="purity_asc">cohesion asc</option>
-        <option value="purity_desc">cohesion desc</option>
-        <option value="size_desc">size desc</option>
-        <option value="size_asc">size asc</option>
-        <option value="dominant_class">dominant class</option>
-      </select>
-    </label>
 
     <!-- Primary-subject grid filters: scope cards to the largest / clear
        crops. Card size + reps reflect only passing crops, so a filtered

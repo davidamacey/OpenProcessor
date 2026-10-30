@@ -417,6 +417,9 @@ export interface ReprocessFilter {
   conf_min?: number | null;
   dataset_split?: string | null;
   detector?: string[];
+  detector_class_names?: string[];
+  detector_conf_max?: number | null;
+  detector_conf_min?: number | null;
   embedding_state?: EmbeddingState[];
   exclude_class_names?: string[];
   import_id?: string | null;
@@ -443,6 +446,7 @@ export interface ReprocessFilter {
   region_status?: string[];
   review_dismissed?: boolean | null;
   review_status?: ReviewStatus[];
+  review_tab?: string | null;
   source?: string | null;
   source_prompt?: string | null;
 }

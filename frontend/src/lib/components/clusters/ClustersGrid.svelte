@@ -180,17 +180,49 @@
          slotGalleryController.svelte.ts. -->
     <SlotGallery gallery={slotGallery} />
   {:else if list.clusterPager.loading && list.gridItems.length === 0}
-    <p class="text-sm text-zinc-500">Loading...</p>
+    <p class="text-sm text-zinc-500" role="status">Loading clusters…</p>
   {:else if list.clusterPager.error}
-    <p class="text-sm text-red-300">API unavailable: {list.clusterPager.error}</p>
+    <div class="text-sm text-red-300" role="alert" data-testid="clusters-error">
+      <p>Could not load clusters: {list.clusterPager.error}</p>
+      <button
+        type="button"
+        class="btn-sm mt-2 border border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
+        onclick={() => void list.loadFirst()}
+      >
+        Retry
+      </button>
+    </div>
   {:else if list.gridItems.length === 0}
-    <p class="text-sm text-zinc-500">
-      No clusters yet — ingest some images and run the auto-label pipeline.
-    </p>
+    {#if list.filterActive}
+      <div class="text-sm text-zinc-400" data-testid="clusters-filtered-empty">
+        <p>No clusters match these filters.</p>
+        <button
+          type="button"
+          class="btn-sm mt-2 border border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
+          onclick={() => list.clearFilter()}
+        >
+          Clear filters
+        </button>
+      </div>
+    {:else}
+      <p class="text-sm text-zinc-500">
+        No clusters yet — ingest some images and run the auto-label pipeline.
+      </p>
+    {/if}
   {:else}
+    {#if list.truncated}
+      <p
+        class="mb-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+        role="status"
+        data-testid="clusters-truncated"
+      >
+        The server stopped at {list.total.toLocaleString()} clusters, so this list may be incomplete.
+        Narrow the filters to see the rest.
+      </p>
+    {/if}
     <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {#each list.gridItems as c (c.isSlotCard ? `slot-${c.id}` : c.id)}
-        <ClusterGridCard {c} unlabeledOnly={list.unlabeledOnly} />
+        <ClusterGridCard {c} flagVocabulary={list.flagVocabulary} />
       {/each}
     </ul>
     <!-- Sentinel MUST live inside the scroll container so the IntersectionObserver
@@ -199,11 +231,7 @@
     <div
       use:infiniteScroll={{
         onload: list.loadMore,
-        disabled:
-          (list.clusterPager.loadingMore ||
-            !list.clusterPager.hasMore ||
-            list.clusterPager.loading) &&
-          (list.repsLoading || !list.repsHasMore),
+        disabled: !list.hasMoreCards || list.repsLoading,
       }}
       class="mt-4 h-1"
       aria-hidden="true"

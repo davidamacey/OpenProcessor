@@ -63,6 +63,9 @@ export interface ItemFilter {
   conf_max?: number | null;
   conf_min?: number | null;
   dataset_split?: string | null;
+  detector_class_names?: string[];
+  detector_conf_max?: number | null;
+  detector_conf_min?: number | null;
   embedding_state?: EmbeddingState[];
   exclude_class_names?: string[];
   import_id?: string | null;
@@ -81,6 +84,7 @@ export interface ItemFilter {
   region_gate_skipped?: boolean | null;
   review_dismissed?: boolean | null;
   review_status?: ReviewStatus[];
+  review_tab?: string | null;
   source?: string | null;
   source_prompt?: string | null;
 }

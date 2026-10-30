@@ -300,11 +300,6 @@ ALLOWED_4XX_5XX = {
     # expected UI behavior, not a bug — keep this list short and
     # explicit; a route sweep failure should default to "real bug", not
     # "add it to the allow-list".
-    ("GET", r"/projects/combine/__probe__$"): (
-        "P4-1 (combineAvailability): the combine router has no list route, so the gate "
-        "probes a sentinel job id. A 404 with detail.error 'combine_not_found' is the "
-        "served 'router is mounted' answer — a 404 is the expected response here."
-    ),
 }
 
 

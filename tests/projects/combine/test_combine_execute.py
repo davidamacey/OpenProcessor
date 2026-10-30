@@ -115,6 +115,7 @@ async def test_two_sources_combine_into_one_project(world: World) -> None:
         assert doc['origin_project'] in ('cars-a', 'cars-b')
         assert 'cluster_id' not in doc
         assert 'class_id_history' not in doc  # snapshots of source numbering
+        assert 'label_op_id' not in doc  # a source project's operation means nothing here
     # Class identity: B's "sedan" and "lorry" arrive as car and truck.
     assert target_item(world, sc, sc.crops['b1_sedan'], 'cars-b')['class_name'] == 'car'
     assert target_item(world, sc, sc.crops['a2_truck'], 'cars-a')['class_name'] == 'truck'

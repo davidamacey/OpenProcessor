@@ -325,3 +325,28 @@ def test_vlm_dismiss_undo_restores_suggestion(
 
 def test_vlm_dismiss_undo_without_dismissal_is_409(client: TestClient) -> None:
     assert client.post('/curation/projects/default/crops/vlm-1/vlm_dismiss/undo').status_code == 409
+
+
+def test_region_undo_batch_in_flight_at_most_32(
+    client: TestClient, fake_os: QueryFakeOpenSearch, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import asyncio
+
+    from src.routers.curation import edit_undo
+
+    live = 0
+    peak = 0
+
+    async def slow_undo(*_a: Any, **_k: Any) -> None:
+        nonlocal live, peak
+        live += 1
+        peak = max(peak, live)
+        await asyncio.sleep(0.005)
+        live -= 1
+
+    monkeypatch.setattr(edit_undo, 'undo_edit', slow_undo)
+    ids = [f'r{i}' for i in range(100)]
+    resp = client.post('/curation/projects/default/crops/region/undo_batch', json={'crop_ids': ids})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()['undone'] == 100
+    assert 1 < peak <= 32

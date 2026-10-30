@@ -132,3 +132,20 @@ def test_member_centroid_distances_leave_noise_empty() -> None:
     out = member_centroid_distances(emb, labels)
     assert out[3] is None
     assert all(isinstance(d, float) and 0.0 <= d <= 2.0 for i, d in enumerate(out) if i != 3)
+
+
+def test_member_centroid_distances_are_hardware_independent() -> None:
+    """Computed in float64 and rounded to 6 decimals, so float32 SIMD/BLAS rounding differences
+    between CPUs cannot change the stored value (#388)."""
+    from src.services.curation.clustering.centroid_distance import member_centroid_distances
+
+    emb = _embeddings()
+    labels = np.array([0] * 20 + [1] * 18 + [2] * 12)
+    got = member_centroid_distances(emb, labels)
+    x = emb.astype(np.float64)
+    x /= np.linalg.norm(x, axis=1, keepdims=True)
+    for label in (0, 1, 2):
+        rows = np.flatnonzero(labels == label)
+        c = x[rows].mean(axis=0)
+        want = np.clip(1.0 - x[rows] @ (c / np.linalg.norm(c)), 0.0, 2.0)
+        assert [got[r] for r in rows] == [round(float(d), 6) for d in want]

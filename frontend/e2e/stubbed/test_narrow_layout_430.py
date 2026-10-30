@@ -79,5 +79,5 @@ def test_clusters_error_state_shows_no_counts(stub, page, app_url):
     stub.on("GET", r"/clusters(\?|$)", (500, {"detail": "boom"}))
 
     page.goto(f"{app_url}/p/default/clusters")
-    page.get_by_text("API unavailable").wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.get_by_test_id("clusters-error").wait_for(timeout=ACTION_TIMEOUT_MS)
     assert page.locator('[data-testid="clusters-footer-count"]').count() == 0

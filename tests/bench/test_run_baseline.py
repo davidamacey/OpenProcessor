@@ -99,20 +99,6 @@ class FakeStack:
         return httpx.Response(404, json={'detail': path})
 
 
-@pytest.fixture
-def manifest(tmp_path: Path) -> Path:
-    from PIL import Image
-
-    cands = []
-    for i in range(10):
-        p = tmp_path / f'{i}.jpg'
-        Image.new('RGB', (400, 400)).save(p, 'JPEG')
-        cands.append(sel.Candidate(p, p.stat().st_size, 'unit'))
-    out = tmp_path / 'm.txt'
-    sel.write_manifest(out, cands, seed=1, today='2026-10-03')
-    return out
-
-
 def _args(manifest: Path, tmp_path: Path, extra: list[str] | None = None):
     return rb.build_parser().parse_args(
         [

@@ -46,7 +46,7 @@
   let {
     filter = {},
     pageSize = 30,
-    placeholder = 'Search crops (e.g. "blurry closeup", "dark background")…',
+    placeholder = 'Search, e.g. "blurry closeup"',
     initialQuery = null,
     onResults,
     onClear,

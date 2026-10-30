@@ -77,21 +77,21 @@ URL path only. `/` redirects to `/p/<served default_slug>/dashboard`; bare legac
 redirect to the same path under the default project. Links and `goto()` are built with
 `projectHref()` (`$lib/projectPaths`) wrapped in `resolve()`, never hand-assembled.
 
-| Route                                                                                   | Purpose                                                                                                                                                                              |
-| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `/dashboard`                                                                            | Dataset stats (polled), `AutoLabelPanel` (clustering run), detections summary                                                                                                        |
-| `/ingest`                                                                               | Browser upload (chunked, pause/resume/cancel), server-path ingest panels gated by `GET /ingest/config`, status by source, region drain                                               |
-| `/datasets`                                                                             | Labeled-dataset import wizard, imports list, job view; absent without `GET /datasets/formats`                                                                                        |
-| `/clusters`, `/clusters/[id]`                                                           | Cluster grid, slot region gallery, strategy bar, semantic and item-text search, matching-items mode; one cluster with drag-and-drop, bulk ops and Assist (VLM runs, label proposals) |
-| `/review`                                                                               | Review tabs (served by `GET /review/tabs`), filter bar, deep links via `/locate`, region tab with provenance                                                                         |
-| `/classes`                                                                              | Add, rename, merge, deprecate, restore classes; hotkeys; new-class proposals                                                                                                         |
-| `/audit`                                                                                | Label confirmation (VLM scope)                                                                                                                                                       |
-| `/export`                                                                               | YOLO export, balance, test-holdout freeze, registry downloads                                                                                                                        |
-| `/models`                                                                               | Model registry browser, shared models from other projects, VLM endpoint rows                                                                                                         |
-| `/train`                                                                                | Training cockpit: preflight, launch, progress, runs, promote, reproduce, cohorts                                                                                                     |
-| `/bakeoff`                                                                              | Model comparison on the served bake-off wire                                                                                                                                         |
-| `/settings`, `/settings/{prompt-packs,region-profiles,models,open-vocab,ingest-policy}` | Deployment defaults, scores, keymap editor and the config-store editors; each sub-page absent until the backend serves it                                                            |
-| `/projects`                                                                             | The one global page: project lifecycle, capacity, pipeline pause                                                                                                                     |
+| Route                                                                                   | Purpose                                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/dashboard`                                                                            | Dataset stats (polled), `AutoLabelPanel` (clustering run), detections summary                                                                                                                                                                                            |
+| `/ingest`                                                                               | Browser upload (chunked, pause/resume/cancel), server-path ingest panels gated by `GET /ingest/config`, status by source, region drain                                                                                                                                   |
+| `/datasets`                                                                             | Labeled-dataset import wizard, imports list, job view; absent without `GET /datasets/formats`                                                                                                                                                                            |
+| `/clusters`, `/clusters/[id]`                                                           | Cluster grid (served sort and filters, served quality fields, URL-persisted choice), slot region gallery, strategy bar, semantic and item-text search, matching-items mode; one cluster with facet chips, drag-and-drop, bulk ops and Assist (VLM runs, label proposals) |
+| `/review`                                                                               | Review tabs (served by `GET /review/tabs`), filter bar, deep links via `/locate`, region tab with provenance                                                                                                                                                             |
+| `/classes`                                                                              | Add, rename, merge, deprecate, restore classes; hotkeys; new-class proposals                                                                                                                                                                                             |
+| `/audit`                                                                                | Label confirmation (VLM scope)                                                                                                                                                                                                                                           |
+| `/export`                                                                               | YOLO export, balance, test-holdout freeze, registry downloads                                                                                                                                                                                                            |
+| `/models`                                                                               | Model registry browser, shared models from other projects, VLM endpoint rows                                                                                                                                                                                             |
+| `/train`                                                                                | Training cockpit: preflight, launch, progress, runs, promote, reproduce, cohorts                                                                                                                                                                                         |
+| `/bakeoff`                                                                              | Model comparison on the served bake-off wire                                                                                                                                                                                                                             |
+| `/settings`, `/settings/{prompt-packs,region-profiles,models,open-vocab,ingest-policy}` | Deployment defaults, scores, keymap editor and the config-store editors; each sub-page absent until the backend serves it                                                                                                                                                |
+| `/projects`                                                                             | The one global page: project lifecycle, capacity, pipeline pause                                                                                                                                                                                                         |
 
 ## Rules
 
@@ -161,6 +161,15 @@ value that settles after the filter specs load, wait for it to stabilise rather 
 - The served keymap (`GET/PUT {prefix}/keymap`) is loaded once from the root layout; a
   404/501 leaves the store on `FALLBACK_KEYMAP` and hides the editor card. A
   `config.changed axis=keymap` SSE frame refetches and applies live.
+
+### Cluster list and facets
+
+The server sorts, filters and pages `/clusters`: the page sends `sort` and the card filters as query
+parameters and renders the served order as it comes (`clusterList.scan.test.ts` fails on a client
+sort or re-rank). Sort labels, the flag vocabulary and flag descriptions are served. Thumbnails come
+from the list call's representatives window (`offset`/`limit`), never one request per card. The
+cluster page's chips come from `GET {prefix}/clusters/{id}/facets`; a chip sends the matching
+`/crops` parameter and the count it shows is the served one.
 
 ### StrategyBar
 
@@ -252,6 +261,10 @@ Under `src/lib/contract/`:
     and the whole group is stopped on exit; never leave one running.
   - A failed test writes a screenshot, console, request log, stub lists and DOM to
     `artifacts_local/e2e-failures/<test id>/`; read those first when a test flakes.
+  - `test_a11y_axe.py` runs axe-core (devDependency, injected from `node_modules`) on the main
+    pages and fails on any violation. A new page or page state adds a row to its `PAGES` list.
+    Controls need accessible names, no interactive element nests inside another, and an
+    empty table header carries a visually hidden label (`tableHeaders.scan.test.ts`).
   - A `py_compile` hook and CI step gate `scripts/*.py` and `e2e/**/*.py` syntax.
 - **Live read-only tier (`e2e/live/`):** drives the real deployed build against a real
   backend (`OP_CROPWRIGHT_LIVE_URL=... npm run test:live`; skipped when unset, never in CI).

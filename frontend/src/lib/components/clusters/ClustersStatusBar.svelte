@@ -52,12 +52,14 @@
     <!-- A failed load has no honest count; the grid shows the error. -->
   {:else}
     <span class="font-mono text-xs text-zinc-500" data-testid="clusters-footer-count">
-      {list.gridItems.length} / {list.clusterPager.total +
-        (classFilter == null ? slotInventory.slotInventoryCards.length : 0)}
+      {list.gridItems.length} / {list.total +
+        (classFilter == null && !list.filterActive
+          ? slotInventory.slotInventoryCards.length
+          : 0)}
     </span>
     <span class="font-mono text-xs text-zinc-400">
-      {#if list.clusterPager.loadingMore}loading more…{:else if list.clusterPager.hasMore}scroll
-        for more{:else}all loaded{/if}
+      {#if list.repsLoading}loading more…{:else if list.hasMoreCards}scroll for more{:else}all
+        shown{/if}
     </span>
   {/if}
 </div>

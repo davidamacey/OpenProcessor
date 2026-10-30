@@ -9,128 +9,36 @@ from fastapi import HTTPException, Query
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, items_index, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
+from src.schemas.curation.clusters import ClusterFacets, ClusterListResponse
 from src.schemas.curation.config_common import ApiErrorResponse
-from src.services.curation.cluster_ids import (
-    CORE_SIMILARITY_MIN,
-    RESIDUAL_CLUSTER_ID_OFFSET,
-    cluster_kind,
+from src.services.curation.cluster_cards import (
+    ClusterListParams,
+    ClusterSortId,
+    ValidationFilter,
+    fetch_representatives,
+    list_cluster_cards,
 )
+from src.services.curation.cluster_facets import cluster_facets
 from src.services.curation.cluster_purity import (
     PROMOTE_MIN_MEMBERS,
     PROMOTE_MIN_PRECISION,
     PROMOTE_MIN_PURITY,
-    is_promotable,
-    purity_thresholds,
-    purity_tier,
 )
-from src.services.curation.cluster_representatives import representatives_msearch_body
 from src.services.curation.clustering.refine import MAX_REFINE_MEMBERS
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
-from src.services.curation.wire import current_cluster_distance
 
 
-CANDIDATE_DOMINANT_MIN_COUNT = 3
-"""A candidate cluster names a dominant class only when at least this many
-members carry it."""
-
-CANDIDATE_DOMINANT_MIN_SHARE = 0.5
-"""...and that class holds at least this share of the labelled members."""
-
-
-def _candidate_dominant_name(cls_buckets: list[dict[str, Any]], labelled: int) -> str | None:
-    """Dominant class name for a candidate cluster card, or ``None``.
-
-    A candidate cluster is an unnamed residual grouping; naming it after
-    the plurality class of a handful of labelled members (e.g. a 1-1-1
-    tie in a 116-member cluster) overclaims. Require a unique winner that
-    clears both floors.
-    """
-    if not cls_buckets or labelled <= 0:
-        return None
-    top = int(cls_buckets[0]['doc_count'])
-    runner_up = int(cls_buckets[1]['doc_count']) if len(cls_buckets) > 1 else 0
-    if (
-        top >= CANDIDATE_DOMINANT_MIN_COUNT
-        and top / labelled >= CANDIDATE_DOMINANT_MIN_SHARE
-        and top > runner_up
-    ):
-        return str(cls_buckets[0]['key'])
-    return None
-
-
-MAX_SUBCLUSTER_IDS = 200
-"""The most sub-cluster ids one card lists (``n_subclusters`` stays exact)."""
-
-PURITY_BASIS = 'nearest_centroid'
-"""What a card's ``purity`` measures (served per card): see ``_FITS``."""
-
-
-def _script(source: str) -> dict[str, Any]:
-    return {'script': {'script': {'lang': 'painless', 'source': source}}}
-
-
-# Measured by the geometry pass against the item's *current* cluster
-# (an item that moved since carries a reference to its old cluster).
-_MEASURED: dict[str, Any] = {
-    'bool': {
-        'filter': [
-            {'exists': {'field': 'cluster_nearest_id'}},
-            {'exists': {'field': 'cluster_distance_cluster_id'}},
-            _script("doc['cluster_distance_cluster_id'].value == doc['cluster_id'].value"),
-        ]
-    }
-}
-# ...and its nearest cluster centroid is its own cluster's.
-_FITS: dict[str, Any] = _script("doc['cluster_nearest_id'].value == doc['cluster_id'].value")
-
-
-def _reps_from_hits(hits: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    reps: list[dict[str, Any]] = []
-    for h in hits:
-        src = h.get('_source') or {}
-        crop_id = src.get('crop_id') or h.get('_id')
-        if crop_id:
-            reps.append(
-                {
-                    'crop_id': crop_id,
-                    'cluster_distance': current_cluster_distance(src),
-                    'class_name': src.get('class_name'),
-                    'cluster_subid': src.get('cluster_subid'),
-                },
-            )
-    return reps
-
-
-async def _fill_page_representatives(
-    opensearch: Any,
-    page_items: list[dict[str, Any]],
-    per_cluster: int,
-) -> None:
-    """Fetch + fill ``representatives`` in place for ``page_items`` only."""
-    if not page_items:
-        return
-    body_lines: list[dict[str, Any]] = []
-    for item in page_items:
-        body_lines.append({'index': items_index()})
-        body_lines.append(representatives_msearch_body(item['cluster_id'], per_cluster))
-    try:
-        resp = await opensearch.msearch(body=body_lines)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500, detail=f'representatives msearch failed: {exc}'
-        ) from exc
-    responses = resp.get('responses', [])
-    for item, sub in zip(page_items, responses, strict=False):
-        hits = ((sub or {}).get('hits') or {}).get('hits') or []
-        item['representatives'] = _reps_from_hits(hits)
-
-
-@router.get('/clusters')
+@router.get('/clusters', response_model=None, responses={200: {'model': ClusterListResponse}})
 async def list_clusters(
     opensearch: OpenSearchDep,
     item_filter: ItemFilterQuery,
     per_cluster: int = Query(4, ge=0, le=10, description='Representative crops per cluster'),
-    max_clusters: int = Query(1000, ge=1, le=10000),
+    max_clusters: int = Query(
+        1000,
+        ge=1,
+        le=10000,
+        description='Clusters the aggregation returns; `truncated` says when it was cut here.',
+    ),
     kind: Literal['class', 'candidate', 'all'] = Query('all'),
     cluster_id: int | None = Query(
         None,
@@ -145,229 +53,81 @@ async def list_clusters(
         ),
     ),
     # Primary-subject grid filters: every card stat (size, reps, purity)
-    # reflects only crops passing these — so a filtered grid shows clusters
-    # of just the largest/clear crops, ready to drag-drop + AHC-refine.
+    # reflects only crops passing these.
     min_blur_ratio: float | None = Query(None, ge=0.0),
     class_source: str | None = Query(None),
-    # Representatives are only computed for this page of the
-    # ordered (post-kind-filter) card list, not for every bucket the
-    # aggregation returns. offset/limit page *representatives only* —
-    # every card up to max_clusters is still returned, just with an
-    # empty ``representatives`` list outside the page.
-    offset: int = Query(0, ge=0, description='Offset into the card list for representatives'),
+    sort: ClusterSortId = Query('size_desc', description='Order of the served cards.'),
+    dominant_class: list[str] | None = Query(None, description='Dominant class name, repeatable.'),
+    detector_class: list[str] | None = Query(
+        None, description="The detector's top class in the cluster, repeatable."
+    ),
+    min_size: int | None = Query(None, ge=0),
+    max_size: int | None = Query(None, ge=0),
+    validation_state: ValidationFilter | None = Query(None),
+    flag: list[str] | None = Query(None, description='Cards carrying any of these flags.'),
+    needs_review: bool | None = Query(
+        None, description='True: cards with members in the review queue; false: those without.'
+    ),
+    # Representatives are fetched only for this page of the served (filtered,
+    # sorted) card list; every card up to max_clusters is still returned, with
+    # an empty ``representatives`` list outside the page.
+    offset: int = Query(0, ge=0, description='Offset into the served cards for representatives'),
     limit: int = Query(50, ge=1, le=500, description='Cards to compute representatives for'),
-) -> dict[str, Any]:
-    """Authoritative per-cluster card payload for the labeler.
+) -> ClusterListResponse:
+    """Authoritative per-cluster card list for the labeler.
 
-    Single OpenSearch aggregation that returns, for every cluster_id:
-
-    * ``size`` (total members), ``validated_count`` (class_validated=true),
-    * ``dominant_class_{id,name,count}`` and ``label_purity``
-      (largest-class share among labelled members) with
-      ``labelled_share``. A candidate cluster only gets a
-      ``dominant_class_name`` when a unique top class has at least
-      ``CANDIDATE_DOMINANT_MIN_COUNT`` members and
-      ``CANDIDATE_DOMINANT_MIN_SHARE`` of the labelled ones;
-      ``dominant_count``/``labelled_count``/``label_purity`` are always
-      reported,
-    * ``purity`` / ``purity_n`` / ``purity_basis`` / ``purity_tier``
-      : the share of the ``purity_n`` members the cluster-geometry
-      pass measured for this cluster whose nearest cluster centroid is
-      this cluster's own — independent of the labels that placed them, so
-      a class cluster is no longer 1.0 by construction; ``null`` when no
-      member has been measured,
-    * ``is_unlabeled`` (true when no class_name has any signal at all),
-    * ``cluster_kind`` (``class`` | ``candidate`` | ``unassigned``),
-    * ``n_subclusters`` (distinct cluster_subid values), ``subcluster_ids``
-      (those ids, at most ``MAX_SUBCLUSTER_IDS``), and
-    * ``representatives`` (top ``per_cluster`` crops sorted by
-      cluster_distance asc).
-
-    This endpoint exists so the frontend can stop computing dominant
-    class / purity from a 4-crop sample (it was getting wrong answers
-    on candidate clusters where all reps were null-class). The
-    aggregation is cheap because ``cluster_id`` is a low-cardinality
-    integer field; ``class_name``/``class_source``/``cluster_subid`` are
-    all mapped ``keyword`` directly on the live index (no ``.keyword``
-    subfield).
+    One OpenSearch aggregation yields every card input (size, validation,
+    dominant class, label agreement, geometry purity, detector agreement and
+    confidence, per-tab review counts, sub-clusters); the server then applies
+    the filters and the ``sort`` and sets the quality ``flags``. A candidate
+    cluster only gets a ``dominant_class_name`` when a unique top class has at
+    least ``CANDIDATE_DOMINANT_MIN_COUNT`` members and
+    ``CANDIDATE_DOMINANT_MIN_SHARE`` of the labelled ones. ``truncated`` is
+    true when the aggregation returned ``max_clusters`` buckets: the list may
+    then be incomplete. Frozen test-holdout and excluded items are never counted.
     """
-    # Human-ignored crops (class_excluded=true) must not contribute to
-    # any cluster card — they've left their candidate bucket and should
-    # never resurface for the operator to re-sort.
-    _base_match: dict[str, Any]
-    if cluster_id is not None:
-        _base_match = {'term': {'cluster_id': cluster_id}}
-    else:
-        _base_match = {'match_all': {}}
-    # Primary-subject gate (filter context → cached, scopes every sub-agg).
-    # Null-safe blur: crops with no blur score aren't hidden by the slider.
     try:
-        gate_filter = item_filter_clauses(
-            ItemFilter(
-                **item_filter.model_dump(exclude_defaults=True),
-                min_blur_ratio=min_blur_ratio,
-                class_source=class_source,
-            )
+        gate = ItemFilter(
+            **item_filter.model_dump(exclude_defaults=True),
+            min_blur_ratio=min_blur_ratio,
+            class_source=class_source,
         )
+        item_filter_clauses(gate)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    # Pushes `kind` into the query as a bounded cluster_id range filter
-    # *before* aggregating, rather than terms-aggregating every kind
-    # together (size: max_clusters) and dropping mismatched-kind buckets
-    # in Python afterward. Without this, candidate cluster ids (>= the
-    # residual offset, often far more numerous than the ~80 class ids)
-    # can rank ahead of class buckets by _count desc and crowd them out of
-    # the truncated agg entirely -- a kind='class' request could come back
-    # missing real class clusters.
-    if kind == 'class':
-        gate_filter.append({'range': {'cluster_id': {'gte': 0, 'lt': RESIDUAL_CLUSTER_ID_OFFSET}}})
-    elif kind == 'candidate':
-        gate_filter.append({'range': {'cluster_id': {'gte': RESIDUAL_CLUSTER_ID_OFFSET}}})
-    outer_query: dict[str, Any] = {
-        'bool': {
-            'filter': [_base_match, *gate_filter],
-            'must_not': [{'term': {'class_excluded': True}}],
-        }
-    }
-    cluster_terms_agg: dict[str, Any] = {
-        'terms': {
-            'field': 'cluster_id',
-            'size': max_clusters,
-            'order': {'_count': 'desc'},
-        },
-        'aggs': {
-            'top_class': {
-                'terms': {
-                    # `class_name` is already mapped `keyword` on the live
-                    # index (not `text`) — there is no `.keyword` subfield
-                    # to query.
-                    'field': 'class_name',
-                    'size': 3,
-                    'order': {'_count': 'desc'},
-                },
-            },
-            # True labelled count: top_class only returns its top buckets,
-            # so summing them undercounts clusters with many classes.
-            'labelled': {'filter': {'exists': {'field': 'class_name'}}},
-            'validated': {'filter': {'term': {'class_validated': True}}},
-            # cluster_subid is mapped keyword directly on the live index —
-            # no .keyword subfield exists.
-            'subclusters': {'cardinality': {'field': 'cluster_subid'}},
-            'subcluster_ids': {
-                'terms': {
-                    'field': 'cluster_subid',
-                    'size': MAX_SUBCLUSTER_IDS,
-                    'order': {'_key': 'asc'},
-                }
-            },
-            # Purity: members measured against their current cluster
-            # by the geometry pass, and those whose nearest centroid is it.
-            'geometry_measured': {'filter': _MEASURED},
-            'geometry_fits': {'filter': {'bool': {'filter': [_MEASURED, _FITS]}}},
-            'latest_update': {'max': {'field': 'updated_at'}},
-        },
-    }
-    body = {'size': 0, 'query': outer_query, 'aggs': {'clusters': cluster_terms_agg}}
-    try:
-        resp = await opensearch.search(index=items_index(), body=body)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f'clusters query failed: {exc}') from exc
+    return await list_cluster_cards(
+        opensearch,
+        ClusterListParams(
+            item_filter=gate,
+            per_cluster=per_cluster,
+            max_clusters=max_clusters,
+            kind=kind,
+            cluster_id=cluster_id,
+            offset=offset,
+            limit=limit,
+            sort=sort,
+            dominant_class=tuple(dominant_class or ()),
+            detector_class=tuple(detector_class or ()),
+            min_size=min_size,
+            max_size=max_size,
+            validation_state=validation_state,
+            flags=tuple(flag or ()),
+            needs_review=needs_review,
+        ),
+    )
 
-    items: list[dict[str, Any]] = []
-    total_class = 0
-    total_candidate = 0
-    for bucket in resp.get('aggregations', {}).get('clusters', {}).get('buckets', []):
-        cid = int(bucket['key'])
-        ck = cluster_kind(cid) or 'unassigned'
-        if kind not in ('all', ck):
-            continue
-        size = int(bucket['doc_count'])
-        cls_buckets = bucket.get('top_class', {}).get('buckets', [])
-        labelled_total = sum(int(b['doc_count']) for b in cls_buckets)
-        if 'labelled' in bucket:
-            labelled_total = max(labelled_total, int(bucket['labelled'].get('doc_count') or 0))
-        top_name: str | None = None
-        top_count = 0
-        if cls_buckets:
-            top_name = cls_buckets[0]['key']
-            top_count = int(cls_buckets[0]['doc_count'])
-        label_purity = (top_count / labelled_total) if labelled_total else None
-        purity_n = int(bucket.get('geometry_measured', {}).get('doc_count') or 0)
-        fits = int(bucket.get('geometry_fits', {}).get('doc_count') or 0)
-        purity = (fits / purity_n) if purity_n else None
-        if ck == 'candidate':
-            top_name = _candidate_dominant_name(cls_buckets, labelled_total)
-        is_unlabeled = labelled_total == 0
-        validated_count = int(bucket.get('validated', {}).get('doc_count') or 0)
-        n_subclusters = int(bucket.get('subclusters', {}).get('value') or 0)
-        # The dominant class id is the classifier registry id for top_name when the
-        # cluster is a class cluster (cluster_id == class_id by invariant);
-        # candidate clusters have no class id yet so it stays None.
-        dominant_class_id: int | None = cid if ck == 'class' and top_name else None
-        items.append(
-            {
-                'cluster_id': cid,
-                'cluster_kind': ck,
-                'size': size,
-                'validated_count': validated_count,
-                'labelled_count': labelled_total,
-                'dominant_class_id': dominant_class_id,
-                'dominant_class_name': top_name,
-                'dominant_count': top_count,
-                # Share of the purity_n measured members whose
-                # nearest cluster centroid is this cluster's own.
-                'purity': purity,
-                'purity_n': purity_n,
-                'purity_basis': PURITY_BASIS,
-                'purity_tier': purity_tier(purity),
-                # Top class's share of the labelled members (the
-                # auto-promote gate's input), and how many members carry
-                # a label at all.
-                'label_purity': label_purity,
-                # Same value under the name the UI should read for "how
-                # much do the labels agree"; `purity` is geometry only.
-                'label_agreement': label_purity,
-                'labelled_share': (labelled_total / size) if size else None,
-                # Only candidate clusters are ever auto-promote
-                # targets. Class clusters have cluster_id == class_id by
-                # construction, so their label purity is always 1.0 and
-                # they'd otherwise show 'promotable' for a self-referential
-                # reason that has nothing to do with the auto-promote
-                # gate's actual eligibility check.
-                'promotable': ck == 'candidate'
-                and is_promotable(members=size, labelled=labelled_total, purity=label_purity),
-                'is_unlabeled': is_unlabeled,
-                'n_subclusters': n_subclusters,
-                # Sorted so '7a', '7aa', '7b' read in the order the tabs show; capped at
-                # MAX_SUBCLUSTER_IDS (n_subclusters stays the true count).
-                'subcluster_ids': sorted(
-                    str(b['key']) for b in bucket.get('subcluster_ids', {}).get('buckets', [])
-                ),
-                'updated_at': bucket.get('latest_update', {}).get('value_as_string'),
-                # Populated below, only for the [offset, offset+limit) page
-                # — every other card keeps an empty list.
-                'representatives': [],
-            },
-        )
-        if ck == 'candidate':
-            total_candidate += 1
-        elif ck == 'class':
-            total_class += 1
 
-    if per_cluster > 0:
-        await _fill_page_representatives(opensearch, items[offset : offset + limit], per_cluster)
-
-    return {
-        'items': items,
-        'total': len(items),
-        'total_class_clusters': total_class,
-        'total_candidate_clusters': total_candidate,
-        'cluster_id_offset': RESIDUAL_CLUSTER_ID_OFFSET,
-        'purity_thresholds': purity_thresholds(),
-        'core_similarity_min': CORE_SIMILARITY_MIN,
-        'representatives_offset': offset,
-        'representatives_limit': limit,
-    }
+@router.get(
+    '/clusters/{cluster_id}/facets',
+    response_model=None,
+    responses={200: {'model': ClusterFacets}},
+)
+async def cluster_facets_endpoint(cluster_id: int, opensearch: OpenSearchDep) -> ClusterFacets:
+    """Counts of one cluster's members by detector class, class source, validation,
+    review tab and detector confidence, for filter chips. Each count is the ``total`` of
+    the filtered ``GET /crops`` call named in :class:`ClusterFacets`. A cluster with no
+    members answers zeros."""
+    return await cluster_facets(opensearch, cluster_id)
 
 
 @router.get('/clusters/representatives')
@@ -422,13 +182,10 @@ async def cluster_representatives(
     buckets = resp.get('aggregations', {}).get('clusters', {}).get('buckets', [])
     page_cluster_ids: list[int] = [int(b['key']) for b in buckets[offset : offset + max_clusters]]
 
-    page_items: list[dict[str, Any]] = [
-        {'cluster_id': cid, 'representatives': []} for cid in page_cluster_ids
-    ]
-    if page_items:
-        await _fill_page_representatives(opensearch, page_items, per_cluster)
-
-    out: dict[str, Any] = {str(item['cluster_id']): item['representatives'] for item in page_items}
+    reps = await fetch_representatives(opensearch, page_cluster_ids, per_cluster)
+    out: dict[str, Any] = {
+        str(cid): card_reps for cid, card_reps in zip(page_cluster_ids, reps, strict=True)
+    }
 
     return {
         'clusters': out,
