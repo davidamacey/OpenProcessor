@@ -19,6 +19,7 @@ import threading
 from typing import Any, Protocol
 
 from src.config.env import env_str
+from src.config.settings import TritonModelConfig
 
 
 PROFILES = ('full', 'ingest')
@@ -28,6 +29,14 @@ class _SyncClient(Protocol):
     def is_model_ready(self, model_name: str) -> bool: ...
     def load_model(self, model_name: str) -> None: ...
 
+
+# Models that call other models inside Triton (BLS): those must be loaded before the caller.
+_CALLS = {
+    TritonModelConfig.OCR_PIPELINE_MODEL: (
+        TritonModelConfig.OCR_DET_MODEL,
+        TritonModelConfig.OCR_REC_MODEL,
+    ),
+}
 
 _ready: set[str] = set()
 _sync_locks: dict[str, threading.Lock] = {}
@@ -46,6 +55,8 @@ def on_demand() -> bool:
 def ensure_loaded_sync(client: _SyncClient, model_name: str) -> None:
     if model_name in _ready or not on_demand():
         return
+    for dep in _CALLS.get(model_name, ()):
+        ensure_loaded_sync(client, dep)
     with _registry_lock:
         lock = _sync_locks.setdefault(model_name, threading.Lock())
     with lock:
@@ -64,6 +75,8 @@ async def ensure_loaded(client: Any, model_name: str) -> None:
     """``client`` is a ``tritonclient.grpc.aio`` client."""
     if model_name in _ready or not on_demand():
         return
+    for dep in _CALLS.get(model_name, ()):
+        await ensure_loaded(client, dep)
     with _registry_lock:
         lock = _async_locks.setdefault(model_name, asyncio.Lock())
     async with lock:

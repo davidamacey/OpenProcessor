@@ -95,7 +95,12 @@ def test_a_failed_load_fails_the_call_and_is_retried_next_time(
         residency.ensure_loaded_sync(client, 'ocr_pipeline')
     client.fail = None
     residency.ensure_loaded_sync(client, 'ocr_pipeline')
-    assert client.loads == ['ocr_pipeline', 'ocr_pipeline']
+    assert client.loads == [
+        'paddleocr_det_trt',
+        'paddleocr_rec_trt',
+        'ocr_pipeline',
+        'ocr_pipeline',
+    ]
 
 
 def test_a_load_that_raced_another_process_counts_when_the_model_became_ready(
@@ -218,3 +223,22 @@ def test_the_face_client_loads_both_face_models(monkeypatch: pytest.MonkeyPatch)
     )[1]
     ff._call_arcface(np.zeros((1, 3, 112, 112), np.float32))
     assert ff.client.calls[:2] == ['load arcface_w600k_r50', 'infer arcface_w600k_r50']  # type: ignore[attr-defined]
+
+
+def test_a_pipeline_model_loads_the_models_it_calls_first(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ocr_pipeline calls the OCR detector and recognizer inside Triton: loading only the
+    pipeline leaves every OCR request failing with the detector missing."""
+    monkeypatch.setenv('OP_LOAD_PROFILE', 'ingest')
+    client = _SyncClient()
+    residency.ensure_loaded_sync(client, 'ocr_pipeline')
+    assert client.loads == ['paddleocr_det_trt', 'paddleocr_rec_trt', 'ocr_pipeline']
+
+
+@pytest.mark.asyncio
+async def test_the_async_path_loads_pipeline_dependencies_too(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv('OP_LOAD_PROFILE', 'ingest')
+    client = _AioClient()
+    await residency.ensure_loaded(client, 'ocr_pipeline')
+    assert client.loads == ['paddleocr_det_trt', 'paddleocr_rec_trt', 'ocr_pipeline']
