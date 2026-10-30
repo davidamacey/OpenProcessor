@@ -39,11 +39,13 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - `/health/pe_text` reports `pid` and `cache_scope`.
 
 ### Changed
+- The IVF cluster fit runs one k-means restart instead of five (#337): the fit is about eight times cheaper (50 s against 388 s on 91,184 real photo crops, host load about 100) and on real vectors the clusters are as pure and as compact (public COCO set, 7 seeds: purity 0.7962 against 0.7963, false-merge rate 0.3008 against 0.3009). Cluster ids move on the next full recluster, as they do after any retrain.
 - `POST /crops/label/undo_batch` is typed (`CropUndoBatchResponse`) and writes in paged conditional bulks instead of one update per id; `POST /crops/discard_batch` does the same.
 - `GET /clusters` no longer serves `label_purity`; read `label_agreement` (same value). Test-holdout items are no longer counted in cluster cards.
 - Docs: the published site is linked from the README and the repository homepage; first-run steps corrected after a new-user review.
 
 ### Fixed
+- A refresh-daemon (assign-only) cluster pass that read under 99 percent of the pool it counted at its start, or whose write-back failed, reported `success`; it now reports `partial` with `expected_pool` and `coverage` and records no last run (#357). The whole-index cluster reset runs as a polled task: 250,000 rows reset in 592 to 799 s instead of failing after 34 minutes.
 - Undo and discard of many items ran one conditional update per id with no concurrency limit (`undo_batch`, `discard_batch`, and the region `undo_batch` now bounded at 32 in flight).
 - Undoing a class label left the accuracy-audit verdict the label had stamped; the undo now restores it, so the item returns to the audit queue.
 - Installer rough edges from the 0.7.0 drives (#363): Ctrl-C prints how to continue (exit 130 or 143); `./openprocessor status` skips services the install's tiers do not run and prints `HTTP 000`, not `HTTP 000000`; a dry run checks free disk on the target filesystem; the control-plane-only summary names the liveness URL; branch installs print a 12-character SHA; branch mode's `sha-<12 hex>` image tag is documented.
