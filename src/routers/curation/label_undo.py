@@ -26,7 +26,6 @@ from src.domain.history import (
     REVIEW_DISMISS_FIELDS,
     find_undo_snapshot,
     record_class_snapshot,
-    restore_class_state,
 )
 from src.routers.curation._common import OpenSearchDep, is_not_found, items_index, logger, router
 from src.routers.curation._common_models import (
@@ -35,8 +34,8 @@ from src.routers.curation._common_models import (
     CropUndoBatchRequest,
 )
 from src.services.curation.class_sources import vlm_suggestion
+from src.services.curation.class_undo import class_undo_update
 from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
-from src.services.curation.exclusion import park_restored_state_while_excluded
 from src.services.curation.wire import item_source_excludes, serialize_item
 from src.utils.timeutil import now_iso
 
@@ -47,16 +46,9 @@ class NothingToUndoError(Exception):
 
 def _undo_merger(*, require_history: bool) -> Any:
     def _merge(current: dict[str, Any]) -> dict[str, Any]:
-        snapshot = find_undo_snapshot(current.get('class_id_history'))
-        if snapshot is None and require_history:
+        if require_history and find_undo_snapshot(current.get('class_id_history')) is None:
             raise NothingToUndoError
-        restored = restore_class_state(snapshot)
-        if current.get('class_excluded'):
-            # Still excluded: the restored validation/placement is what
-            # un-exclude should bring back, not what applies right now.
-            restored = park_restored_state_while_excluded(restored)
-        history = record_class_snapshot(current, writer=HUMAN_UNLABEL_WRITER, restorable=False)
-        return {**restored, 'class_id_history': history, 'updated_at': now_iso()}
+        return class_undo_update(current)
 
     return _merge
 
@@ -332,7 +324,13 @@ async def dismiss_vlm_suggestion(crop_id: str, opensearch: OpenSearchDep) -> dic
     return items[0]
 
 
-_HISTORY_KEYS: tuple[str, ...] = (*CLASS_STATE_FIELDS, *REVIEW_DISMISS_FIELDS, 'writer', 'at')
+_HISTORY_KEYS: tuple[str, ...] = (
+    *CLASS_STATE_FIELDS,
+    *REVIEW_DISMISS_FIELDS,
+    'op_id',
+    'writer',
+    'at',
+)
 
 
 @router.get('/crops/{crop_id}/history')

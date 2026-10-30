@@ -426,6 +426,9 @@ def _items_body() -> dict[str, Any]:
                 # model drift investigation. Cap at MAX_HISTORY_ENTRIES (32,
                 # see src/domain/history.py).
                 'class_id_history': _CLASS_HISTORY_MAPPING,
+                # The bulk label/move operation that wrote the item's current
+                # label (src/domain/label_ops.py); cleared by the next human write.
+                'label_op_id': {'type': 'keyword'},
                 **_ITEMS_IMPORT_MAPPING,
                 # Label Ignore/Undo: exclusion flag + provenance, and the
                 # pre-exclusion validation/cluster placement un-exclude

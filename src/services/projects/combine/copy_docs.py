@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 # target. ``class_id`` is rewritten, not listed.
 _SOURCE_NUMBERED_FIELDS = (
     'class_id_history',
+    'label_op_id',
     'edit_history',
     'excluded_prior_cluster_id',
     'excluded_prior_cluster_subid',
