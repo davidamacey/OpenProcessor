@@ -11,28 +11,10 @@ encodes the crop JPEGs. Stage timing says where the time of one image goes
 inside it, so a throughput change can be attributed to a stage rather than
 guessed.
 
-:::caution Known fault in the counters on main
-The first version of these counters shipped on `main` can fail on Triton 2.70
-(26.06): the series may not appear, a request may not be answered, and
-incrementing from several threads can abort the server (issue
-[#390](https://github.com/davidamacey/OpenProcessor/issues/390)). The fix is
-on the ingest-speed branch and not on `main` yet. Until it is merged, do not
-rely on these counters in a production Triton, and do not add custom metrics
-to another Python-backend model without the same three rules from that issue
-(keep the metric families alive, drop series before families, increment from
-one thread).
-:::
-
-:::note Throughput numbers are not here yet
-The stage-by-stage throughput measurement (the per-stage tables and the
-concurrency sweep) is being finalised by the ingest-speed pull request. This
-page documents the tools and how to read their output; it carries no
-throughput figures. When that work is merged, its results are added to
-[`docs/research/v070_measurement_log.md`](https://github.com/davidamacey/OpenProcessor/blob/main/docs/research/v070_measurement_log.md)
-under the SP0 headings (there are none on `main` today). Findings that are on
-`main`: sections A, B and E4 of that log (source device, concurrency and batch
-size, and the `gpu_image_prep` instance count).
-:::
+The counters follow three rules that Triton 2.70 (26.06) needs (issue
+[#390](https://github.com/davidamacey/OpenProcessor/issues/390)): keep the metric families alive,
+drop series before families, increment from one thread. Follow the same rules if you add custom
+metrics to another Python-backend model.
 
 ## The counters
 
@@ -112,8 +94,8 @@ stack:
   (`noisy` when the 1-minute load at the start is above 16), a GPU
   utilisation median and a `gpu_prep_stages` block (seconds, images, mean and
   share per stage, from the Triton counter delta; needs
-  `--triton-metrics-url`). A `--clients N` option to run several batches at
-  once is on the ingest-speed branch, not on `main`.
+  `--triton-metrics-url`). `--clients N` posts N batches at once (one batch at a time leaves
+  the API under-driven; use 4 for throughput).
 - `ingest_profile.py` wraps it with the fixed measurement protocol (3
   repetitions, cache dropped, GPU sampled every 0.5 s, policy `all`, stage
   `ingest`) and adds the API container's CPU seconds and the Triton
@@ -144,15 +126,28 @@ Run with the stack's real GPU, and never on a card another job is using.
 
 ## What was measured, and what it meant
 
-On `main`, the live ingest campaign in
+Throughput on one RTX A6000 with a private set of 3,000 photos of about 21 MP (ratios, not public
+data), 3 repetitions, host load 13 to 35. Raw rows are in `docs/benchmarks/v070/spf/`; the table and
+method are in the SPF section of
 [`v070_measurement_log.md`](https://github.com/davidamacey/OpenProcessor/blob/main/docs/research/v070_measurement_log.md)
-showed that the source device does not matter (section A), that ingest
-saturates from 8 concurrent requests and further concurrency
-only adds queue latency while the GPU is not fully busy (section B), and that
-a second `gpu_image_prep` instance raised ingest by about 51 percent for about
-7 GB more card memory while a third added nothing (section E4). That is why
-the `full` profile runs two instances. The stage-level attribution of where
-the remaining time goes is the part still being finalised.
+and in [`PERFORMANCE.md`](https://github.com/davidamacey/OpenProcessor/blob/main/docs/PERFORMANCE.md).
+
+| Stack | Instances | 4 batches at once | GPU | Fallbacks |
+|---|---|---|---|---|
+| Ingest load profile | 2 | 48.3 img/s | 94 % | 0 |
+| Default load list | 1 | 38.9 img/s | 83 % | 0 |
+| Default load list | 2 | 35.9 img/s | 72 % | 0.6 to 5.6 % (card full) |
+| Ingest load profile, card limited to 24 GiB | 1 | 38.1 img/s | 84 % | 0 |
+
+Earlier findings from the same campaign: the source device does not matter, ingest saturates from
+about 8 concurrent requests, and a second `gpu_image_prep` instance raised ingest by about 51 percent
+only while the card had room for it. With every default model loaded two instances do not fit, so the
+`full` profile runs one instance. The stage counters showed that the fall in throughput past four
+batches was device-memory exhaustion (photos falling back to the CPU decode), not CUDA-call overhead
+(issue [#392](https://github.com/davidamacey/OpenProcessor/issues/392)).
+
+How to choose between the profiles, and what each model costs in GPU memory, is in
+[Ingest load profile and GPU memory](./ingest-load-profile.mdx).
 
 Design and review of the instrumentation:
 [SP0 review](https://github.com/davidamacey/OpenProcessor/blob/main/docs/reviews/sp0_review.md).
