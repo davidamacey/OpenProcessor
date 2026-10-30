@@ -9,7 +9,14 @@ set just before the pass). It records:
 * k-NN latency, unfiltered and filtered by one class, p50/p95/p99 over ``--queries``
   queries (client-side wall time, query vectors sampled from the loaded rows),
 * ``--reps`` production IVF cluster passes with the stage split of
-  ``cluster_plumbing_bench.one_run`` (fetch, fit, write-back, refresh, tail), and
+  ``cluster_plumbing_bench.one_run`` (fetch, fit, write-back, refresh, tail),
+* with ``--with-geometry``, the ``cluster_geometry_stage`` the pipeline runs right after the
+  pass (``geometry_s``),
+* with ``--assign-only``, ``--topup`` more rows loaded after the pass and the refresh
+  daemon's ``assign_only_residuals`` over the pool (``assign_only_s``; it reads the whole
+  pool, so its cost is the pool's, not the top-up's),
+* with ``--reset``, the whole-index cluster-field reset after the pass (``reset_s``),
+* ``whole_pass_ms_per_crop``: pass, geometry and assign-only wall over the pool size, and
 * the peak resident set of this process during each pass (``VmHWM`` reset just before).
 
 Each throw-away project is deleted through the product lifecycle after its pass.
@@ -55,6 +62,8 @@ from src.services.projects.script_binding import abind_script_project
 
 
 BULK = 1000
+# The real whole-index reset; ``run`` swaps ``plumbing.reset_clusters`` for a no-op around the passes.
+reset_clusters = plumbing.reset_clusters
 LOAD_CONCURRENCY = 6
 
 
@@ -77,7 +86,9 @@ def rss_mb() -> dict[str, float]:
     return fields
 
 
-async def load_concurrent(client: Any, vectors: np.ndarray, classes: np.ndarray) -> float:
+async def load_concurrent(
+    client: Any, vectors: np.ndarray, classes: np.ndarray, *, first_id: int = 0
+) -> float:
     t0 = time.perf_counter()
     index = items_index()
     sem = asyncio.Semaphore(LOAD_CONCURRENCY)
@@ -85,7 +96,7 @@ async def load_concurrent(client: Any, vectors: np.ndarray, classes: np.ndarray)
     async def send(start: int) -> None:
         body: list[dict[str, Any]] = []
         for i in range(start, min(start + BULK, len(vectors))):
-            body.append({'index': {'_index': index, '_id': f'b{i:07d}'}})
+            body.append({'index': {'_index': index, '_id': f'b{first_id + i:07d}'}})
             body.append({FIELD: vectors[i].tolist(), 'class_name': str(classes[i])})
         async with sem:
             resp = await client.bulk(body=body, refresh=False)
@@ -129,6 +140,12 @@ async def knn_latency(
     return out
 
 
+def whole_pass_ms_per_crop(row: dict[str, Any], size: int) -> float:
+    """Wall of the pass plus the stages that follow it (geometry, assign-only) per crop, in ms."""
+    total = row['wall_s'] + row.get('geometry_s', 0.0) + row.get('assign_only_s', 0.0)
+    return float(round(total / size * 1000, 3))
+
+
 async def no_reset(_client: Any) -> None:
     """A freshly loaded project has no cluster fields: nothing to reset.
 
@@ -139,7 +156,12 @@ async def no_reset(_client: Any) -> None:
 
 
 async def one_rep(
-    args: argparse.Namespace, vectors: np.ndarray, classes: np.ndarray, rep: int, attempt: int
+    args: argparse.Namespace,
+    vectors: np.ndarray,
+    classes: np.ndarray,
+    topup: tuple[np.ndarray, np.ndarray],
+    rep: int,
+    attempt: int,
 ) -> dict[str, Any]:
     slug = f'{args.project_prefix}-{args.size}-{uuid.uuid4().hex[:6]}'
     client = make_script_opensearch([args.opensearch_url], timeout=3600)
@@ -158,6 +180,21 @@ async def one_rep(
         row = await one_run(client, 'ivf', args.size, rep)
         row['rss_mb'] = rss_mb()
         row['rss_base_mb'] = base_mb
+        if args.with_geometry:
+            row['geometry_s'] = (await plumbing.geometry_run(client, 'ivf', args.size))['wall_s']
+        if args.assign_only:
+            row['topup'] = len(topup[0])
+            await load_concurrent(client, *topup, first_id=args.size)
+            again = await plumbing.assign_run(client, args.size, rep, reset=False)
+            row['assign_only_s'] = again['wall_s']
+            row['assign_only_status'] = again['status']
+            row['assign_only_n_assigned'] = again['n_assigned']
+            row['assign_only_n_unchanged'] = again['n_unchanged']
+        row['whole_pass_ms_per_crop'] = whole_pass_ms_per_crop(row, args.size)
+        if args.reset:
+            t0 = time.perf_counter()
+            await reset_clusters(client)
+            row['reset_s'] = round(time.perf_counter() - t0, 1)
         out['row'] = row
         out['index_after'] = index_bytes(args.opensearch_url)
     finally:
@@ -168,15 +205,18 @@ async def one_rep(
 
 
 async def run(args: argparse.Namespace, vectors: np.ndarray, classes: np.ndarray) -> dict[str, Any]:
-    if len(vectors) < args.size:
-        raise SystemExit(f'the dump has only {len(vectors)} rows, {args.size} requested')
+    wanted = args.size + (args.topup if args.assign_only else 0)
+    if len(vectors) < wanted:
+        raise SystemExit(f'the dump has only {len(vectors)} rows, {wanted} needed')
+    topup = (vectors[args.size : wanted], classes[args.size : wanted])
+    vectors, classes = vectors[: args.size], classes[: args.size]
     plumbing.reset_clusters = no_reset  # type: ignore[assignment]  # one_run's reset hook
     result: dict[str, Any] = {'size': args.size, 'data_sha256': fingerprint(vectors)}
     runs: list[dict[str, Any]] = []
     discarded = 0
     for rep in range(args.reps):
         for attempt in range(1, args.attempts + 1):
-            out = await one_rep(args, vectors, classes, rep, attempt)
+            out = await one_rep(args, vectors, classes, topup, rep, attempt)
             row = out['row']
             if row['status'] == 'success' and row['n_residuals'] == args.size:
                 break
@@ -204,7 +244,18 @@ async def run(args: argparse.Namespace, vectors: np.ndarray, classes: np.ndarray
     result['discarded_partial_passes'] = discarded
     result['summary'] = {
         k: spread([r[k] for r in runs])
-        for k in ('wall_s', 'fetch_s', 'fit_s', 'distance_s', 'write_s', 'refresh_s', 'tail_s')
+        for k in (
+            'wall_s',
+            'fetch_s',
+            'fit_s',
+            'distance_s',
+            'write_s',
+            'refresh_s',
+            'tail_s',
+            'whole_pass_ms_per_crop',
+            *(('geometry_s',) if args.with_geometry else ()),
+            *(('assign_only_s',) if args.assign_only else ()),
+        )
     }
     return result
 
@@ -216,6 +267,10 @@ def main() -> int:
     ap.add_argument('--size', type=int, required=True)
     ap.add_argument('--reps', type=int, default=3)
     ap.add_argument('--attempts', type=int, default=3, help='tries per rep (partial pools)')
+    ap.add_argument('--with-geometry', action='store_true', help='time cluster_geometry_stage')
+    ap.add_argument('--assign-only', action='store_true', help='time assign_only_residuals')
+    ap.add_argument('--reset', action='store_true', help='time the whole-index reset (#357)')
+    ap.add_argument('--topup', type=int, default=5000, help='rows loaded before assign-only')
     ap.add_argument('--queries', type=int, default=200)
     ap.add_argument('--seed', type=int, default=11)
     ap.add_argument('--label', default='run')
@@ -226,7 +281,12 @@ def main() -> int:
     os.environ['OPENSEARCH_URL'] = args.opensearch_url
     os.environ['OP_STATE_DIR'] = str(args.state_dir.resolve())
     args.out.mkdir(parents=True, exist_ok=True)
-    result = asyncio.run(run(args, *load_vectors('vecdb', args.data, args.size)))
+    result = asyncio.run(
+        run(
+            args,
+            *load_vectors('vecdb', args.data, args.size + (args.topup if args.assign_only else 0)),
+        )
+    )
     result.update(tool='scripts/bench/cluster_ladder.py', commit=git_commit())
     path = args.out / f'{args.label}_{args.size}.json'
     path.write_text(json.dumps(result, indent=2, default=float) + '\n')

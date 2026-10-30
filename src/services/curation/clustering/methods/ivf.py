@@ -31,13 +31,14 @@ Limitations (documented so we don't re-litigate them later):
   given crop can shift. We re-run only when the residual pool has
   grown substantially.
 
-Knobs match :py:data:`src.services.visual_search.clustering_models.DEFAULT_CONFIGS[ClusterIndex.VEHICLES]`
-(n_clusters=512, niter=50, nredo=5, vectors_per_cluster=6) so this
-method produces results comparable to the existing `vehicles` FAISS
-index that the rest of the system already trusts. This is a
-deliberate constant match, not a shared import — the two clustering
-subsystems (this residual-pool clusterer and the unrelated
-``src/services/visual_search/clustering.py`` visual-search module) stay independent.
+Knobs (n_clusters=512, niter=50, vectors_per_cluster=6) match
+:py:data:`src.services.visual_search.clustering_models.DEFAULT_CONFIGS[ClusterIndex.VEHICLES]`
+as a deliberate constant match, not a shared import: the two clustering subsystems (this
+residual-pool clusterer and the unrelated ``src/services/visual_search/clustering.py``
+module) stay independent. ``nredo`` is 1 here (the visual-search index keeps 5): on real
+vectors one restart matches five in purity, false-merge rate and compactness at one fifth of
+the fit time, and two seeds differ more than one restart and five do
+(``scripts/bench/ivf_nredo_agreement.py``).
 """
 
 from __future__ import annotations
@@ -60,18 +61,19 @@ logger = get_logger(__name__)
 # Matches DEFAULT_CONFIGS[ClusterIndex.VEHICLES] in src/services/visual_search/clustering_models.py.
 IVF_DEFAULT_N_CLUSTERS = 512
 IVF_DEFAULT_NITER = 50
-IVF_DEFAULT_NREDO = 5
+IVF_DEFAULT_NREDO = 1
 IVF_MIN_VECTORS_PER_CLUSTER = 6
 # Below this many residuals we can't fit even one usable centroid per
 # minimum bucket; skip training and fall through to a single bucket.
 IVF_MIN_TRAIN_VECTORS = IVF_MIN_VECTORS_PER_CLUSTER * 32
 
 # Train k-means on at most this many vectors. Above it, a random sample
-# is drawn — k-means centroids converge on a representative sample at
-# n>>k (FAISS docs recommend ~256*k training points; 50k >> 256*512 is
-# already generous), and sampling keeps the training transient bounded
-# (~200 MB for 50k x 1024 f32) regardless of how large the pool grows.
-# The FULL pool is still assigned against the fitted centroids.
+# is drawn and the centroids are fitted on that sample. 50,000 is about 98 training
+# vectors per centroid at 512 clusters: above FAISS's 39-per-centroid floor (it warns below
+# 39 * 512 = 19,968) but below its 256-per-centroid rule of thumb (131,072). The cap
+# trades centroid precision for a flat fit cost and a bounded training transient
+# (~200 MB for 50k x 1024 f32) however large the pool grows. The FULL pool is still
+# assigned against the fitted centroids.
 IVF_MAX_TRAIN_SAMPLE = 50_000
 
 
