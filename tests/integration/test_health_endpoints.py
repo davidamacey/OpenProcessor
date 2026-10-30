@@ -49,6 +49,7 @@ def _patch_probes(
     *,
     triton: tuple[bool, str],
     opensearch: tuple[bool, str],
+    models: tuple[bool, str, list[dict[str, str]]] = (True, 'all required models READY', []),
 ) -> None:
     """Replace each per-service probe with a deterministic stub."""
     from src.routers import health as health_module
@@ -59,8 +60,12 @@ def _patch_probes(
     async def _stub_http(url: str) -> tuple[bool, str]:
         return opensearch
 
+    async def _stub_models() -> tuple[bool, str, list[dict[str, str]]]:
+        return models
+
     monkeypatch.setattr(health_module, '_probe_triton', _stub_triton)
     monkeypatch.setattr(health_module, '_probe_http', _stub_http)
+    monkeypatch.setattr(health_module, '_probe_required_models', _stub_models)
 
 
 def test_live_returns_200_even_when_deps_down(
@@ -149,3 +154,58 @@ def test_cuda_block_is_named_for_what_it_measures(
     assert 'gpu' not in resources
     assert resources['process_cuda_allocated_mb'] == 3.0
     assert resources['process_cuda_reserved_mb'] == 5.0
+
+
+_PE_DOWN = [{'name': 'pe_image_encoder', 'state': 'UNAVAILABLE', 'reason': 'no model.plan'}]
+
+
+@pytest.mark.parametrize('path', ['/ready', '/health'])
+def test_not_ready_and_names_the_model_when_a_required_model_is_not_ready(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, path: str
+) -> None:
+    _patch_probes(
+        monkeypatch,
+        triton=(True, 'is_server_live OK'),
+        opensearch=(True, 'HTTP 200'),
+        models=(False, 'not READY: pe_image_encoder', _PE_DOWN),
+    )
+    response = client.get(path)
+    assert response.status_code == 503
+    payload = response.json()
+    assert payload['status'] == 'not_ready'
+    assert payload['services']['triton']['ok'] is True
+    assert payload['services']['models']['ok'] is False
+    assert payload['services']['models']['not_ready'] == _PE_DOWN
+    assert 'pe_image_encoder' in payload['services']['models']['detail']
+
+
+def test_live_and_root_stay_200_when_a_model_is_not_ready(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_probes(
+        monkeypatch,
+        triton=(True, 'ok'),
+        opensearch=(True, 'ok'),
+        models=(False, 'not READY: pe_image_encoder', _PE_DOWN),
+    )
+    assert client.get('/live').status_code == 200
+    assert client.get('/').status_code == 200
+
+
+def test_models_are_not_checked_when_triton_is_down(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Control-plane-only installs have no Triton: the body must still show
+    OpenSearch up, and carry no model verdict the installer could misread."""
+    from src.routers import health as health_module
+
+    _patch_probes(monkeypatch, triton=(False, 'ConnectError'), opensearch=(True, 'HTTP 200'))
+
+    async def _boom() -> tuple[bool, str, list[dict[str, str]]]:
+        raise AssertionError('models must not be probed without Triton')
+
+    monkeypatch.setattr(health_module, '_probe_required_models', _boom)
+    response = client.get('/health')
+    assert response.status_code == 503
+    assert '"opensearch":{"ok":true' in response.text.replace(' ', '')
+    assert 'models' not in response.json()['services']

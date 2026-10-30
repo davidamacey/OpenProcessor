@@ -432,7 +432,7 @@ All endpoints are on port **4603**. The routes below are also under `/v1`.
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/health` | GET | Service health check |
-| `/ready` | GET | Readiness probe: Triton + OpenSearch reachability |
+| `/ready` | GET | Readiness probe: Triton, its required models and OpenSearch; `503` names any model not `READY` |
 
 The `/curation` routes are **not** mounted under `/v1`; they exist only at
 `/curation` (the prefix is `OP_API_PREFIX`). Every curation route is listed in

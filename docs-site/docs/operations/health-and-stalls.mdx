@@ -10,12 +10,30 @@ title: Health and stall reasons
 | Route | Use | Behavior |
 |---|---|---|
 | `GET /live` | Liveness (container healthcheck, k8s `livenessProbe`) | Always `{"status": "alive"}` while the event loop responds; never probes dependencies, so a degraded Triton or OpenSearch doesn't restart the API |
-| `GET /ready` | Readiness (k8s `readinessProbe`, load balancer drain) | `200` with `status: "ready"` when Triton and OpenSearch both respond; `503` with per-service detail otherwise. Adds a best-effort memory/GPU snapshot that never gates readiness |
+| `GET /ready` | Readiness (k8s `readinessProbe`, load balancer drain) | `200` with `status: "ready"` when Triton responds, every required model is `READY` in Triton, and OpenSearch responds; `503` with per-service detail otherwise. Adds a best-effort memory/GPU snapshot that never gates readiness |
 | `GET /health` | Backward-compatible alias of `/ready` | |
 | `GET /health/pe_text` | PE-Core text encoder (backs semantic search) | `200` with the active backend (`onnx` / `triton` / `torch`) once warm; `503` while cold. Local to one process. `make pe-text-status` calls it |
 | `GET /metrics` | Prometheus exposition | Scraped by the monitoring profile's Prometheus alongside Triton's `:8002` metrics |
 | `GET /connection_pool_info` | Shared Triton gRPC client stats | |
 | `GET /` | Service info | Versions, loaded model names, Triton URL, GPU availability |
+
+### Required models
+
+Triton runs with `--exit-on-error=false`, so a model whose engine is missing
+or fails to load leaves the server live while that model is `UNAVAILABLE`.
+`/ready` and `/health` read Triton's repository index and answer `503` with
+`status: "not_ready"` when a required model has no `READY` version. The
+failing models are named in `services.models.not_ready`
+(`{name, state, reason}`; `state` is `MISSING` for a model Triton does not
+list) and in `services.models.detail`. When Triton itself is unreachable the
+`models` entry is absent: `services.triton` already fails. `/live` and `GET /`
+stay `200` either way.
+
+Required models default to the YOLO detector, SCRFD, ArcFace, the MobileCLIP
+image and text encoders, and the PE image encoder. OCR is not required (the
+minimal profile skips it). Set `OP_REQUIRED_MODELS` to a comma list to replace
+the default; the installer rewrites it on every run from the tiers it installs, so an
+install without the curation tier is not held not-ready by the PE encoder.
 
 `make status`, `make models-list`, `./openprocessor status` and
 `./openprocessor health` wrap these for the terminal.

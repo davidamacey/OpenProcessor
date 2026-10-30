@@ -88,7 +88,8 @@ handled transparently (adapter resolved from Triton model metadata).
 ## 5. Health endpoint semantics
 
 - `/live` — process liveness only (new; used by the container HEALTHCHECK).
-- `/ready` — actively probes Triton (gRPC `is_server_live`) and OpenSearch;
+- `/ready` — actively probes Triton (gRPC `is_server_live`), that its required
+  models are `READY` (since 0.7.0), and OpenSearch;
   returns **503 with per-service detail** while any dependency is down.
 - `/health` — now an alias of `/ready`. If you previously treated `/health`
   as an always-200 liveness signal, point that consumer at `/live`.
