@@ -6037,6 +6037,9 @@
               "hotkey_taken",
               "path_escape",
               "label_op_not_found",
+              "already_undone",
+              "label_op_busy",
+              "label_op_in_progress",
               "finish_in_progress",
               "dataset_not_found",
               "import_not_found",
@@ -6971,6 +6974,53 @@
           "crop_ids"
         ],
         "title": "CropUndoBatchRequest",
+        "type": "object"
+      },
+      "CropUndoBatchResponse": {
+        "description": "``POST /crops/label/undo_batch``.",
+        "properties": {
+          "conflicts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Conflicts",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "not_found": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Not Found",
+            "type": "array"
+          },
+          "nothing_to_undo": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Nothing To Undo",
+            "type": "array"
+          },
+          "undone": {
+            "title": "Undone",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "undone",
+          "nothing_to_undo",
+          "conflicts",
+          "not_found"
+        ],
+        "title": "CropUndoBatchResponse",
         "type": "object"
       },
       "CropUnexcludeRequest": {
@@ -14502,6 +14552,90 @@
           "conflicts"
         ],
         "title": "LabelOpUndoPass",
+        "type": "object"
+      },
+      "LabelOpUndoRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "default": true,
+            "title": "Dry Run",
+            "type": "boolean"
+          }
+        },
+        "title": "LabelOpUndoRequest",
+        "type": "object"
+      },
+      "LabelOpUndoResponse": {
+        "description": "What an undo pass did (or, for a dry run, would do) per item.\n\n``matched`` is the operation's members and equals ``restored + already_undone +\nkept_changed + kept_holdout + kept_stale_class + conflicts``.",
+        "properties": {
+          "already_undone": {
+            "title": "Already Undone",
+            "type": "integer"
+          },
+          "conflict_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Conflict Ids",
+            "type": "array"
+          },
+          "conflicts": {
+            "title": "Conflicts",
+            "type": "integer"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "kept_changed": {
+            "title": "Kept Changed",
+            "type": "integer"
+          },
+          "kept_holdout": {
+            "title": "Kept Holdout",
+            "type": "integer"
+          },
+          "kept_stale_class": {
+            "title": "Kept Stale Class",
+            "type": "integer"
+          },
+          "matched": {
+            "title": "Matched",
+            "type": "integer"
+          },
+          "members_known": {
+            "title": "Members Known",
+            "type": "boolean"
+          },
+          "op_id": {
+            "title": "Op Id",
+            "type": "string"
+          },
+          "restored": {
+            "title": "Restored",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "op_id",
+          "dry_run",
+          "status",
+          "members_known",
+          "matched",
+          "restored",
+          "already_undone",
+          "kept_changed",
+          "kept_holdout",
+          "kept_stale_class",
+          "conflicts",
+          "conflict_ids"
+        ],
+        "title": "LabelOpUndoResponse",
         "type": "object"
       },
       "LabelSummary": {
@@ -38136,9 +38270,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Undo Crop Labels Curation Projects  Project  Crops Label Undo Batch Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CropUndoBatchResponse"
                 }
               }
             },
@@ -43013,6 +43145,74 @@
           }
         },
         "summary": "Get Label Ops",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/label_ops/{op_id}/undo": {
+      "post": {
+        "description": "Undo a bulk label or move, item by item, from the stored operation.\n\nAn item is restored only while it still carries the operation's label and\nnothing changed it since: a later edit, an exclusion, a class merge or the\ntest holdout keeps the item as it is, and a restore target whose class was\nrenamed is refused (``kept_stale_class``). ``dry_run`` (the default) counts\nwhat would happen and writes nothing; send ``{\"dry_run\": false}`` to write.\nThe whole pass runs inside this request, one paged bulk at a time.",
+        "operationId": "undo_op_curation_projects__project__label_ops__op_id__undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "op_id",
+            "required": true,
+            "schema": {
+              "title": "Op Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabelOpUndoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabelOpUndoResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "label_op_not_found: unknown, malformed or pruned operation."
+          },
+          "409": {
+            "description": "already_undone, label_op_busy (another undo is running) or label_op_in_progress (the operation is still being written)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo Op",
         "tags": [
           "Curation"
         ]

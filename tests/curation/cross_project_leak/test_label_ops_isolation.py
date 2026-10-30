@@ -61,3 +61,31 @@ def test_listing_reaches_only_the_bound_projects_indexes(leak_env: LeakEnv) -> N
     assert touched, 'the route reached OpenSearch'
     assert touched <= own, f'touched foreign indexes: {touched - own}'
     assert {bound for bound, *_ in leak_env.accesses} == {'alpha'}
+
+
+def test_another_projects_operation_id_is_404_and_nothing_changes(leak_env: LeakEnv) -> None:
+    client = TestClient(leak_env.app, raise_server_exceptions=False)
+    op_id = _label(client, 'alpha')
+    alpha_history = f'{SCOPED.format(project="alpha")}/crops/alpha-item-0002/history'
+    before = client.get(alpha_history).json()
+    assert before['entries'][-1]['op_id'] == op_id
+    leak_env.accesses.clear()
+
+    for dry_run in (True, False):
+        resp = client.post(
+            f'{SCOPED.format(project="beta")}/label_ops/{op_id}/undo', json={'dry_run': dry_run}
+        )
+        assert resp.status_code == 404, resp.text
+        assert resp.json()['detail']['error'] == 'label_op_not_found'
+
+    own = {str(i) for i in leak_env.records['beta'].resources.indexes.values()}
+    touched = {idx for _b, _m, _u, idx in leak_env.accesses if idx} - {'op_global_configs'}
+    assert touched <= own, f'touched foreign indexes: {touched - own}'
+    assert {bound for bound, *_ in leak_env.accesses} <= {'beta'}
+    assert client.get(alpha_history).json() == before, "alpha's item is unchanged"
+    # Alpha can still undo its own operation, and only alpha's item is restored.
+    dry = client.post(
+        f'{SCOPED.format(project="alpha")}/label_ops/{op_id}/undo', json={'dry_run': True}
+    )
+    assert dry.status_code == 200, dry.text
+    assert dry.json()['restored'] == 1

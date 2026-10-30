@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -38,10 +39,51 @@ def proposal(crop_id: str, **extra: Any) -> dict[str, Any]:
     }
 
 
+class InstrumentedFake(QueryFakeOpenSearch):
+    """The query fake plus what the undo tests assert on: concurrency, bulk sizes,
+    single-doc updates, and ids whose conditional writes always conflict."""
+
+    def __init__(self, *args: Any, **kw: Any) -> None:
+        super().__init__(*args, **kw)
+        self.in_flight = 0
+        self.max_in_flight = 0
+        self.bulk_sizes: list[int] = []
+        self.update_calls = 0
+        self.conflict_ids: set[str] = set()
+        self.fail_mget_on_call: int | None = None
+
+    async def _tracked(self, coro: Any) -> Any:
+        self.in_flight += 1
+        self.max_in_flight = max(self.max_in_flight, self.in_flight)
+        try:
+            await asyncio.sleep(0)
+            return await coro
+        finally:
+            self.in_flight -= 1
+
+    async def mget(self, **kw: Any) -> Any:
+        if self.fail_mget_on_call is not None and self.mget_calls + 1 == self.fail_mget_on_call:
+            raise RuntimeError('simulated crash')
+        return await self._tracked(super().mget(**kw))
+
+    async def bulk(self, *, body: list[dict[str, Any]], **kw: Any) -> Any:
+        self.bulk_sizes.append(len(body) // 2)
+        if self.conflict_ids:
+            for action in body[0::2]:
+                meta = action.get('update')
+                if meta is not None and meta['_id'] in self.conflict_ids:
+                    meta['if_seq_no'] = -1
+        return await self._tracked(super().bulk(body=body, **kw))
+
+    async def update(self, **kw: Any) -> Any:
+        self.update_calls += 1
+        return await super().update(**kw)
+
+
 @dataclass
 class OpsEnv:
     client: TestClient
-    fake: QueryFakeOpenSearch
+    fake: InstrumentedFake
     registry: ClassRegistry
     class_ids: dict[str, int]
     prefix: str
@@ -61,6 +103,10 @@ class OpsEnv:
         )
         assert resp.status_code == 200, resp.text
         return resp.json()
+
+    def undo(self, op_id: str, *, dry_run: bool | None = False) -> Any:
+        body = {} if dry_run is None else {'dry_run': dry_run}
+        return self.client.post(f'{self.prefix}/label_ops/{op_id}/undo', json=body)
 
     def list_ops(self, **params: Any) -> Any:
         return self.client.get(f'{self.prefix}/label_ops', params=params)
@@ -84,8 +130,8 @@ def build_env(
     registry = ClassRegistry(path=tmp_path / 'class_registry.json')
     class_ids = {name: registry.add_class(name) for name in ('widget', 'gadget', 'gizmo')}
     monkeypatch.setattr(crops_write, 'get_class_registry', lambda: registry)
-    fake = QueryFakeOpenSearch({items_index(): docs or {}})
+    fake = InstrumentedFake({items_index(): docs or {}})
     app = mount_curation_routers(FastAPI(), router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     app.dependency_overrides[_common._registry_dep] = lambda: registry
-    return OpsEnv(TestClient(app), fake, registry, class_ids, SCOPED)
+    return OpsEnv(TestClient(app, raise_server_exceptions=False), fake, registry, class_ids, SCOPED)

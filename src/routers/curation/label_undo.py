@@ -13,12 +13,12 @@ machine suggestion — the backend knows what the item looked like.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from fastapi import HTTPException
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
+from src.clients.occ_bulk import occ_update_bulk
 from src.domain.history import (
     CLASS_STATE_FIELDS,
     HUMAN_DISCARD_WRITER,
@@ -27,14 +27,15 @@ from src.domain.history import (
     find_undo_snapshot,
     record_class_snapshot,
 )
-from src.routers.curation._common import OpenSearchDep, is_not_found, items_index, logger, router
+from src.routers.curation._common import OpenSearchDep, is_not_found, items_index, router
 from src.routers.curation._common_models import (
     CropDiscardBatchRequest,
     CropDiscardRequest,
     CropUndoBatchRequest,
 )
+from src.schemas.curation.label_ops import CropUndoBatchResponse
 from src.services.curation.class_sources import vlm_suggestion
-from src.services.curation.class_undo import class_undo_update
+from src.services.curation.class_undo import class_undo_update, undo_class_writes
 from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
 from src.services.curation.wire import item_source_excludes, serialize_item
 from src.utils.timeutil import now_iso
@@ -106,7 +107,7 @@ async def undo_crop_label(crop_id: str, opensearch: OpenSearchDep) -> dict[str, 
     return items[0]
 
 
-@router.post('/crops/label/undo_batch')
+@router.post('/crops/label/undo_batch', response_model=CropUndoBatchResponse)
 async def undo_crop_labels(
     payload: CropUndoBatchRequest, opensearch: OpenSearchDep
 ) -> dict[str, Any]:
@@ -121,30 +122,7 @@ async def undo_crop_labels(
     crop_ids = list(dict.fromkeys(payload.crop_ids))
     if not crop_ids:
         return {'items': [], 'undone': 0, 'nothing_to_undo': [], 'conflicts': [], 'not_found': []}
-
-    async def _one(crop_id: str) -> str:
-        try:
-            await _undo_one(opensearch, crop_id, require_history=True)
-        except NothingToUndoError:
-            return 'nothing_to_undo'
-        except OCCFinalConflictError:
-            return 'conflicts'
-        except HTTPException:
-            return 'not_found'
-        except Exception as exc:
-            logger.warning('undo_label_failed', crop_id=crop_id, error=str(exc))
-            return 'conflicts'
-        return 'undone'
-
-    outcomes = await asyncio.gather(*(_one(cid) for cid in crop_ids))
-    by_outcome: dict[str, list[str]] = {
-        'undone': [],
-        'nothing_to_undo': [],
-        'conflicts': [],
-        'not_found': [],
-    }
-    for crop_id, outcome in zip(crop_ids, outcomes, strict=True):
-        by_outcome[outcome].append(crop_id)
+    by_outcome = await undo_class_writes(opensearch, crop_ids)
     if (
         not by_outcome['undone']
         and by_outcome['nothing_to_undo']
@@ -248,23 +226,19 @@ async def discard_crops(
     passing the discarded ids."""
     _require_effect(payload)
     crop_ids = list(dict.fromkeys(payload.crop_ids))
-
-    async def _one(crop_id: str) -> str:
-        try:
-            await _discard_one(opensearch, crop_id, payload)
-        except OCCFinalConflictError:
-            return 'conflicts'
-        except HTTPException:
-            return 'not_found'
-        except Exception as exc:
-            logger.warning('discard_failed', crop_id=crop_id, error=str(exc))
-            return 'conflicts'
-        return 'discarded'
-
-    outcomes = await asyncio.gather(*(_one(cid) for cid in crop_ids))
+    merge = _discard_merger(payload)
+    status = await occ_update_bulk(
+        opensearch,
+        index=items_index(),
+        ids=crop_ids,
+        merge_fn=lambda _crop_id, source: merge(source),
+        max_retries=5,
+        refresh='wait_for',
+    )
     by: dict[str, list[str]] = {'discarded': [], 'conflicts': [], 'not_found': []}
-    for crop_id, outcome in zip(crop_ids, outcomes, strict=True):
-        by[outcome].append(crop_id)
+    outcome_of = {'updated': 'discarded', 'not-found': 'not_found'}
+    for crop_id in crop_ids:
+        by[outcome_of.get(status.get(crop_id, ''), 'conflicts')].append(crop_id)
     return {
         'items': await _items_by_ids(opensearch, by['discarded']),
         'discarded': len(by['discarded']),

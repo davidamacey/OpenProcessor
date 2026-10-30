@@ -956,8 +956,8 @@ applies to automated writers.
 | Method | Path | Body | Response | Notes |
 |---|---|---|---|---|
 | PUT | `/crops/{crop_id}/label` | `CropLabelRequest`: `class_id`, `label_source` (`human` default, `human_confirmed`, `new_class_proposal`) | `{crop_id, class_id, class_name}` | `400` for an unknown `class_id`, `404` for an unknown crop. The server always writes `class_source: "human"` and `class_validated: true` |
-| PUT | `/crops/batch_label` | `CropBatchLabelRequest`: `crop_ids`, `class_id`, `label_source` | `{updated, updated_ids, conflicts[]}` | `conflicts` is `[{crop_id, current_source}]`, not written. `updated_ids` are the ids to pass to `undo_batch` |
-| POST | `/crops/move` | `CropMoveRequest`: `crop_ids`, `cluster_id` | `{updated, updated_ids, conflicts[]}` | a class cluster is also a relabel (`class_source: human_move`, validated); a candidate cluster is placement only (a human-owned class is cleared, a machine suggestion is kept, nothing is validated). `400` for an unassigned (negative) target, an unknown class id or a candidate with no members |
+| PUT | `/crops/batch_label` | `CropBatchLabelRequest`: `crop_ids`, `class_id`, `label_source` | `{updated, updated_ids, conflicts[], op_id}` | `conflicts` is `[{crop_id, current_source}]`, not written. `op_id` names the recorded [label operation](#label-operations) (`null` when nothing was selected; a dry run has no `op_id`) |
+| POST | `/crops/move` | `CropMoveRequest`: `crop_ids`, `cluster_id` | `{updated, updated_ids, conflicts[], op_id}` | a class cluster is also a relabel (`class_source: human_move`, validated); a candidate cluster is placement only (a human-owned class is cleared, a machine suggestion is kept, nothing is validated). `400` for an unassigned (negative) target, an unknown class id or a candidate with no members |
 | POST | `/crops/flag_new_class` | `{crop_ids, note}` | `{flagged, errors}` | sets `needs_new_class` |
 | POST | `/crops/batch_exclude` | `{crop_ids, reason}` or a `selection`; `dry_run` | `{excluded, updated_ids, errors}` (dry run: `{dry_run, selected}`) | sets `class_excluded`, moves the item to cluster `-2`, clears `class_validated` and records the prior state |
 | POST | `/crops/batch_unexclude` | `{crop_ids}` or a `selection`; `dry_run` | `{unexcluded, updated_ids, errors}` | `updated_ids` are the items actually restored (an item that was not excluded is in neither the count nor the ids). Restores the recorded state: a validated item returns to `cluster_id == class_id`, an unvalidated one to the residual pool. Items that are not excluded are untouched |
@@ -972,7 +972,7 @@ applies to automated writers.
 | Method | Path | Body | Response | Errors |
 |---|---|---|---|---|
 | POST | `/crops/{crop_id}/label/undo` | | the restored item | `404` unknown crop, `409` nothing to undo |
-| POST | `/crops/label/undo_batch` | `{crop_ids}` | `{items[], undone, nothing_to_undo, conflicts, not_found}` | `409` when no crop had anything to undo |
+| POST | `/crops/label/undo_batch` | `{crop_ids}` (at most 5,000) | `CropUndoBatchResponse`: `{items[], undone, nothing_to_undo, conflicts, not_found}` | `409` when no crop had anything to undo. Paged conditional bulk writes, one in flight. To undo a whole bulk label or move use `POST /label_ops/{op_id}/undo` |
 | DELETE | `/crops/{crop_id}/label` | | `{crop_id, reset}` | the same restore. With nothing on record it resets the crop to unlabeled instead of `409`. It is itself an undo, so it is not recorded |
 | POST | `/crops/{crop_id}/region/undo` | | the restored item | `404`, `409` nothing to undo |
 | POST | `/crops/region/undo_batch` | `{crop_ids}` | `{items[], undone, nothing_to_undo, conflicts, not_found}` | `409` when no crop had anything to undo |
@@ -990,12 +990,40 @@ applies to automated writers.
   `region_status`, `region_verified*`, `region_verifier*`,
   `region_validated`, `region_label_source`, `region_detected_at` and
   `region_rejection_reason`. Class fields are untouched.
-- History entries (`GET /crops/{crop_id}/history`) add `writer` (for example
+- A snapshot also holds `label_op_id` (the operation tag before the write), and, for an item drawn into the accuracy audit, the audit verdict (`audit_outcome`, `audit_human_name`); an undo puts both back, so the item returns to the audit queue.
+- History entries (`GET /crops/{crop_id}/history`) add `op_id` (the label operation that made the write, or whose write an undo entry cancelled), `writer` (for example
   `human:label_crop`, `human:discard_crop`, `class_merge`, `vlm_pipeline`) and
   `at`. Keys that were not recorded are `null`.
 - Which route to call: label or confirm with `PUT /crops/{crop_id}/label`;
   hide or clear with `POST /crops/{crop_id}/discard`; revert with the undo
   routes.
+
+### Label operations
+
+`PUT /crops/batch_label` and `POST /crops/move` (explicit ids or a `selection`) are recorded as
+operations: a record under the project's state dir (the newest 200 kept; a pruned one answers
+`404`), a `label_op_id` tag on each written item and an `op_id` on its class history entry. Undoing
+an operation restores each item that still carries its label and nothing else; a later edit always
+wins.
+
+| Method | Path | Body | Response | Errors |
+|---|---|---|---|---|
+| GET | `/label_ops` | query `limit` (1 to 50, default 20), `undoable` | `LabelOpList`: `{items[], limit, retention}`, newest first. Each `LabelOp`: `op_id`, `kind` (`label` or `move`), `at`, `finished_at`, `class_name` (the name written; class ids are never served), `target_cluster_id`, `target_kind` (`class` or `candidate`), `label_source`, `target` (`crop_ids` or `selection`), `selected`, `count`, `conflicts`, `current` (items still carrying the label), `status`, `undone`, `undoable`, `last_undo` | `422` for `limit` above 50 |
+| POST | `/label_ops/{op_id}/undo` | `{dry_run}` (default `true`) | `LabelOpUndoResponse`: `{op_id, dry_run, status, members_known, matched, restored, already_undone, kept_changed, kept_holdout, kept_stale_class, conflicts, conflict_ids[]}` | `404 label_op_not_found`; `409 already_undone`, `label_op_busy` (another undo is running in the project), `label_op_in_progress` (the operation is still being written) |
+
+- `status` is `writing`, `interrupted` (the writer died; its items are found through the tag),
+  `written`, `undoing`, `undo_interrupted` (re-send the undo to resume) or `undone`. `undoable` is
+  true while `current` is above zero and the operation is not being written or undone, so an
+  operation stays undoable after some of its items were edited, and again after undoing a later
+  operation hands items back.
+- Per item, the outcome is one of: `restored`; `already_undone` (undone by an earlier pass or one by
+  one); `kept_changed` (relabelled, moved, excluded after the operation, class merged, deleted, or a
+  later operation sits on top); `kept_holdout` (frozen in the test holdout, never touched by a bulk
+  undo); `kept_stale_class` (the class to restore was renamed since). `matched` equals the sum of
+  the six counts. `conflict_ids` lists at most 100 items a concurrent write kept from restoring.
+- The undo runs inside the request, one paged conditional bulk (500 documents) at a time, and takes
+  no ids: it works from the stored operation, so an operation larger than 5,000 items is undoable.
+  A dry run reads the same pages and writes nothing.
 
 ## Regions: multi-box edits and queues
 

@@ -22,6 +22,10 @@ if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
 MAX_SELECTION_IDS = 5000
+
+MAX_BULK_SELECTION = 20_000
+"""A filter selection above this is refused, not truncated: add a limit or a tighter filter.
+Also the most items one label operation can have written."""
 # A filter that matches more than this cannot be capped or sampled here: narrow it.
 MAX_SELECTION_SCAN = 500_000
 _PAGE = 5000
@@ -149,6 +153,7 @@ async def resolve_selection(
 
 
 __all__ = [
+    'MAX_BULK_SELECTION',
     'MAX_SELECTION_IDS',
     'MAX_SELECTION_SCAN',
     'ItemSelection',

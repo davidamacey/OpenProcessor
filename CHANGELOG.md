@@ -22,7 +22,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - The installer's tier prompt is a numbered menu; `--tiers` is unchanged.
 
 ### Added
-- Bulk label and move are recorded as label operations (`op_id` on `PUT /crops/batch_label` and `POST /crops/move`, a `label_op_id` tag on each written item, `op_id` on its class history entry), and `GET /label_ops` lists them with how many items still carry each label. Records are files under the project's state dir, the newest 200 kept.
+- Bulk label and move are recorded as label operations (`op_id` on `PUT /crops/batch_label` and `POST /crops/move`, a `label_op_id` tag on each written item, `op_id` on its class history entry), and `GET /label_ops` lists them with how many items still carry each label. `POST /label_ops/{op_id}/undo` undoes one by id, item by item: a later edit, an exclusion, a class merge or the test holdout keeps the item, a renamed restore target is refused, a dry run is the default, and an operation of up to 20,000 items is undone in one request. Records are files under the project's state dir, the newest 200 kept.
 - `GET /clusters` is typed (`ClusterListResponse`) and sorts and filters on the server: `sort`, `dominant_class`, `detector_class`, `min_size`, `max_size`, `validation_state`, `flag`, `needs_review`. Cards gain `detector_top_class`, `detector_top_share`, `detector_conf_mean`, `validation_state`, `review_counts`, `needs_review_count` and `flags`; the response gains `sort`, `sort_options`, `flag_vocabulary` and `truncated`.
 - The shared item filter takes `detector_class_name`, `detector_conf_min`, `detector_conf_max` (exclusive) and `review_tab`; `GET /crops` sorts by `detector_confidence`; new `GET /clusters/{cluster_id}/facets` counts a cluster's members by detector class, class source, validation, review tab and detector confidence for filter chips.
 - Self-seeding docs screenshots (#335): `capture_docs_screenshots.py --seeded` seeds its own public projects on an isolated GPU-less stack (`docker/test/compose.docs-shots.yml`, with a stand-in segmenter) and captures 17 states in one run; the harness host ports are `VERIFY_*_PORT` variables.
@@ -35,10 +35,13 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - `/health/pe_text` reports `pid` and `cache_scope`.
 
 ### Changed
+- `POST /crops/label/undo_batch` is typed (`CropUndoBatchResponse`) and writes in paged conditional bulks instead of one update per id; `POST /crops/discard_batch` does the same.
 - `GET /clusters` no longer serves `label_purity`; read `label_agreement` (same value). Test-holdout items are no longer counted in cluster cards.
 - Docs: the published site is linked from the README and the repository homepage; first-run steps corrected after a new-user review.
 
 ### Fixed
+- Undo and discard of many items ran one conditional update per id with no concurrency limit (`undo_batch`, `discard_batch`, and the region `undo_batch` now bounded at 32 in flight).
+- Undoing a class label left the accuracy-audit verdict the label had stamped; the undo now restores it, so the item returns to the audit queue.
 - Installer: a control-plane-only install now passes its health wait (the API's `/health` is 503 without Triton) and `./openprocessor start` no longer starts Triton after one; upgrade and rollback replace release files by rename so a running installer is never rewritten in place; concurrent installer runs are serialized by a lock; `--rollback` honors `--no-start`; `secrets/vlm` and `data/source` are created as the installing user instead of root-owned by Docker; several confusing messages corrected (`docs/research/installer_drive_log.md`).
 - A dataset import job page crashed when the import had any issue: `issues_summary` served only code, count and severity where Cropwright renders id, message and samples. The job now serves the same issue shape as the preview (#335).
 - An empty or idle project no longer queues an `auto_label` job on every refresh cycle (#350).
