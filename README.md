@@ -86,6 +86,24 @@ evaluator has its own `evaluator` profile).
   cluster's members by facet ([guide](docs-site/docs/guides/cluster-list-and-filters.mdx)).
 - **Ingest stage timing.** Per-stage counters inside `gpu_image_prep` and a
   profile driver ([operations page](docs-site/docs/operations/ingest-stage-timing.mdx)).
+- **Auto-label loop.** Sample each cluster, ask the VLM, and label the rest of
+  a homogeneous cluster inside a hard budget; doubtful clusters are split or
+  left for review, and everything can be rolled back
+  ([guide](docs-site/docs/guides/auto-label-loop.mdx)).
+- **Cluster pass about 8x cheaper to fit.** The IVF fit runs one k-means
+  restart behind an agreement gate (50 s against 388 s on 91,184 real crops, same
+  cluster quality), and a pass that did not cover its pool is `partial`, not
+  `success`.
+- **Ingest load profile and memory budget.** `gpu_image_prep` waits for device
+  memory instead of falling back to the CPU; the opt-in `OP_LOAD_PROFILE=ingest`
+  preloads only the models ingest needs (48.3 against 38.9 img/s on a 48 GB card)
+  ([operations page](docs-site/docs/operations/ingest-load-profile.mdx)).
+  The `full` profile now runs one `gpu_image_prep` instance.
+- **Health readiness.** `/health` and `/ready` report not ready when a required
+  Triton model failed to load.
+- **Acceptance phases.** The scripted release run covers the health, cluster,
+  label-operation, GPU-route and loop features
+  ([release acceptance](docs-site/docs/operations/release-acceptance.mdx)).
 - **Cluster research outcome.** Nothing new ships from the clustering
   experiments; IVF and PE-Core-L stay
   ([outcome](docs/research/cluster_program_outcome.md)). What to do next:

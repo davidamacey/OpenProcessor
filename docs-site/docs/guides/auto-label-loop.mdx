@@ -67,6 +67,15 @@ unless a run produced the output.
 `paused` or `cancelled` loop from its log. If the worker dies the loop reads `interrupted`
 until you resume it.
 
+## In the app
+
+The Clusters page has an auto-label loop panel (it is absent when the backend does not serve
+`/assist/loops`). It shows the served dry run before a start, then live status, the VLM and
+audit budget meters, per-level counts, totals and the second-opinion result. It can start,
+cancel and resume a loop, open the node table with votes and member crops, and roll back in two
+steps (a served dry run, then confirm), whole or per node. It has no pause button and no event
+log: the API serves neither yet (tracked in #286). A loop pauses only on a failing audit.
+
 ## The audit
 
 Name a second model in `audit.vlm` and the loop re-checks a sample of what it propagated with
