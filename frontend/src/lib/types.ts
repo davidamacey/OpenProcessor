@@ -511,11 +511,13 @@ export interface BulkLabelConflict {
 
 export interface BulkLabelResult {
   // Matches the FastAPI handler at src/routers/curation/crops.py:
-  //   batch_label_crops -> { updated: int, updated_ids: [...], conflicts: [...] }.
+  //   batch_label_crops -> { updated: int, updated_ids: [...], conflicts: [...], op_id }.
   // `move` (POST {API_PREFIX}/crops/move) returns the same shape.
   updated: number;
   updated_ids: string[];
   conflicts: BulkLabelConflict[];
+  /** Label-operation id recorded for undo; null when nothing was written. */
+  op_id: string | null;
 }
 
 /** `POST {API_PREFIX}/crops/label/undo_batch` response — batch form of

@@ -79,6 +79,7 @@ describe('assignClassToSelected', () => {
       updated: 2,
       updated_ids: ['a', 'b'],
       conflicts: [],
+      op_id: null,
     });
     vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'widget_a' } as never);
     const recordWritesSpy = vi.spyOn(undoStore, 'recordWrites');
@@ -103,6 +104,7 @@ describe('assignClassToSelected', () => {
       updated: 2,
       updated_ids: ['a', 'b'],
       conflicts: [],
+      op_id: null,
     });
     vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'widget_a' } as never);
     const { sel, controller, loadFirst } = setup([crop('a'), crop('b')]);
@@ -209,6 +211,7 @@ describe('handleClassDrop', () => {
       updated: 1,
       updated_ids: ['a'],
       conflicts: [],
+      op_id: null,
     });
     const a = crop('a');
     const b = crop('b');
@@ -227,6 +230,7 @@ describe('handleClassDrop', () => {
       updated: 1,
       updated_ids: ['b'],
       conflicts: [],
+      op_id: null,
     });
     const b = crop('b');
     const { controller } = setup([b]);
@@ -241,6 +245,7 @@ describe('handleClassDrop', () => {
       updated: 1,
       updated_ids: ['a'],
       conflicts: [],
+      op_id: null,
     });
     const a = crop('a');
     const { sel, controller } = setup([a]);
@@ -268,6 +273,7 @@ describe('handleClassDrop', () => {
       updated: number;
       updated_ids: string[];
       conflicts: never[];
+      op_id: null;
     }) => void;
     vi.mocked(bulkLabel).mockReturnValue(
       new Promise((resolve) => {
@@ -283,7 +289,7 @@ describe('handleClassDrop', () => {
     // stale-fetch race a concurrent GET could otherwise win.
     expect(exclusionGuard.accept(a)).toBe(false);
     expect(resetGrid).toHaveBeenCalledTimes(1);
-    resolveBulk({ updated: 1, updated_ids: ['a'], conflicts: [] });
+    resolveBulk({ updated: 1, updated_ids: ['a'], conflicts: [], op_id: null });
     await p;
   });
 
@@ -292,6 +298,7 @@ describe('handleClassDrop', () => {
       updated: 1,
       updated_ids: ['a'],
       conflicts: [],
+      op_id: null,
     });
     const a = crop('a');
     const b = crop('b');
@@ -311,6 +318,7 @@ describe('handleClassDrop', () => {
       updated: 1,
       updated_ids: ['a'],
       conflicts: [],
+      op_id: null,
     });
     const a = crop('a');
     const { cropPager, controller } = setup([a]);
@@ -327,6 +335,7 @@ describe('handleClassDrop', () => {
       updated: undefined as unknown as number,
       updated_ids: ['a'],
       conflicts: [],
+      op_id: null,
     });
     const recordWritesSpy = vi.spyOn(undoStore, 'recordWrites');
     const successSpy = vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
@@ -349,6 +358,7 @@ describe('handleClassDrop', () => {
       updated: 1,
       updated_ids: ['a'],
       conflicts: undefined as unknown as never[],
+      op_id: null,
     });
     const successSpy = vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
     const a = crop('a');
@@ -364,6 +374,7 @@ describe('handleClassDrop', () => {
       updated: 1,
       updated_ids: ['a'],
       conflicts: [{ crop_id: 'b', current_source: 'vlm' }],
+      op_id: null,
     });
     const warnSpy = vi.spyOn(toastStore, 'warn').mockImplementation(() => 'x');
     const a = crop('a');
