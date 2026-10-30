@@ -1,0 +1,123 @@
+---
+sidebar_position: 8
+title: Cluster list, sort and filters
+---
+
+# Cluster list, sort and filters
+
+`GET /curation/projects/{project}/clusters` serves the cluster cards the
+Cropwright cluster page renders. The server computes the numbers, applies the
+filters, orders the cards and raises the quality flags; the client only shows
+what it is served. Frozen test-holdout and excluded items are never counted.
+
+`API=http://localhost:4603` and project `cars` are assumed.
+
+## Sort
+
+`sort` takes one of the ids in the response's `sort_options` (default
+`size_desc`). A card without the sorted value goes last; ties break on
+`cluster_id`.
+
+| `sort` | Orders by |
+|---|---|
+| `needs_review_desc` | Members in the review queue, most first |
+| `size_desc`, `size_asc` | Member count |
+| `label_agreement_asc` | Least label agreement first |
+| `purity_asc`, `purity_desc` | Geometry purity |
+| `detector_conf_asc` | Mean detector confidence, lowest first |
+| `unvalidated_desc` | Members without a human-validated class, most first |
+| `updated_desc` | Most recently updated |
+| `dominant_class` | Dominant class name, alphabetical |
+
+## Filters
+
+All filters are query parameters and combine with AND.
+
+| Parameter | Effect |
+|---|---|
+| `kind` | `class`, `candidate` or `all` (default) |
+| `dominant_class` (repeatable) | Cards whose dominant class name matches |
+| `detector_class` (repeatable) | Cards whose detector top class matches |
+| `min_size`, `max_size` | Member count range |
+| `validation_state` | `none`, `partial` or `complete` |
+| `flag` (repeatable) | Cards carrying any of these flags |
+| `needs_review` | `true`: cards with members in the review queue; `false`: those without |
+| `cluster_id` | Exactly one card, class or candidate |
+| `max_clusters` | Buckets the aggregation returns (default 1000, up to 10000) |
+
+The shared item filter (`class_source`, `min_blur_ratio` and the rest) narrows
+the members every card counts. `detector_class` keeps cards by their top
+class, while `detector_class_name` (an item filter) narrows the members
+inside the cards; use the first for the card list and the second for a grid
+inside one cluster.
+
+`offset` and `limit` page the representative crops only: every card up to
+`max_clusters` is returned, and cards outside the window have an empty
+`representatives` list. `truncated: true` means the aggregation hit
+`max_clusters` and the list may be incomplete.
+
+```bash
+curl -s "$API/curation/projects/cars/clusters?sort=label_agreement_asc&flag=label_disagreement&min_size=20&limit=24"
+```
+
+## Card fields
+
+Beyond size, dominant class and representatives, each card serves
+`label_agreement` (share of the labelled members that name the top class;
+replaces the removed `label_purity`), a geometry purity tier,
+`detector_top_class`, `detector_top_share`, `detector_conf_mean`,
+`validation_state`, `review_counts` per review tab, `needs_review_count` and
+`flags`. The response also carries `sort`, `sort_options`, `flag_vocabulary`
+and `truncated`.
+
+## Quality flags
+
+Flags are decided by the server (`src/domain/cluster_flags.py`); the response's
+`flag_vocabulary` gives each id, label and description.
+
+| Flag | Raised when |
+|---|---|
+| `mixed_detector_classes` | The detector's top class covers under 80 percent of the members that have a detector class, in a cluster of at least 10 members |
+| `low_geometry_purity` | The geometry tier is `noisy`: many members sit closer to another cluster centroid than to their own |
+| `label_disagreement` | The top class covers under 90 percent of the labelled members, with at least 5 labelled |
+| `promotable` | A candidate cluster that clears the auto-promote gate |
+| `needs_review` | At least one member is in the unified review queue |
+| `unvalidated` | No member has a human-validated class |
+
+How to read them: `label_disagreement` and `mixed_detector_classes` mean a
+person should look at the cluster before trusting a bulk label on it;
+`low_geometry_purity` means the cluster boundary is soft (often a split
+candidate); `promotable` is a candidate worth turning into a class;
+`unvalidated` plus `needs_review` is the natural work queue. A flag is a
+prompt to look, not a verdict.
+
+## Facets for one cluster
+
+`GET /curation/projects/{project}/clusters/{cluster_id}/facets` counts one
+cluster's members by detector class (top 20), class source, validation state,
+review tab and detector confidence (ten bins of 0.1, each with the `min` and
+`max` to send; the last has `max: null`), plus the count with no detector
+confidence. Each count equals the `total` of the matching filtered
+`GET /curation/projects/{project}/crops` call (`detector_class_name`,
+`label_validated`, `review_tab`, `detector_conf_min`, `detector_conf_max`;
+`detector_conf_max` is exclusive). An unknown or empty cluster answers zeros.
+`GET .../crops` also sorts by `detector_confidence`.
+
+## In Cropwright
+
+The cluster page sends `sort` and the filters, and shows the served order and
+the served flag labels. Facet chips on the cluster page apply the matching
+crops filter. The sort and filter choice is kept in the page URL (and in
+session storage when the URL has none), so it survives a reload and a trip
+into a cluster and back; "Clear filters" resets it. The user guide is
+[Clusters](../cropwright/user-guide/clusters.md).
+
+## Measured
+
+At 100,000 synthetic items (592 clusters, `limit=50`, `per_cluster=4`) the
+list p95 was about 134 ms, 1.37 times the same call before the change, and
+facets p95 for clusters of 1,900 to 3,000 members was 16 to 22 ms. The host
+was loaded, so these are upper bounds. Details:
+[CQ1](https://github.com/davidamacey/OpenProcessor/blob/main/docs/reviews/cq1_review.md),
+[CQ2](https://github.com/davidamacey/OpenProcessor/blob/main/docs/reviews/cq2_review.md),
+[UI1 and UI2](https://github.com/davidamacey/OpenProcessor/blob/main/docs/reviews/ui1_ui2_review.md).

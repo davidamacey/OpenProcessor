@@ -1,0 +1,112 @@
+---
+sidebar_position: 7
+title: Label operations and undo
+---
+
+# Label operations and undo
+
+A bulk label or move is recorded as a **label operation**. You can list the
+recent ones and undo any of them from the server, item by item, long after the
+browser tab that made it is gone. Undo never reverts a later human edit.
+
+`API=http://localhost:4603` and project `cars` are assumed.
+
+## What is recorded
+
+`PUT /curation/projects/{project}/crops/batch_label` and
+`POST /curation/projects/{project}/crops/move` (both with explicit `crop_ids`
+and with a `selection`) each create one operation. The response carries its
+`op_id` (null when the selection was empty; a dry run has none). Each written
+item is tagged with `label_op_id`, and its class history entry carries the
+same `op_id`.
+
+- The record lives in the project's state directory, written before the first
+  item, and is kept for the newest 200 operations per project. An operation
+  that is being written or undone is never pruned.
+- A crash while writing leaves the status `interrupted`; a crash while
+  undoing leaves `undo_interrupted`. Both can be undone again.
+- Class ids are never served: the operation names the class it wrote, because
+  class identity is the name.
+
+## List operations
+
+```bash
+curl -s "$API/curation/projects/cars/label_ops?limit=20&undoable=true"
+```
+
+`GET /curation/projects/{project}/label_ops` returns newest first
+(`limit` 1 to 50, default 20; `undoable=true` keeps only undoable ones).
+Per operation: `kind` (`label` or `move`), `class_name`, `selected`, `count`,
+`conflicts`, `current` (items that still carry this operation's label),
+`status`, `undone`, `undoable` and `last_undo`. An operation is undoable
+while `current` is above zero and it is not being written or undone.
+
+## Undo (dry run first)
+
+```bash
+# What would happen? Writes nothing (dry_run is true by default).
+curl -s -X POST "$API/curation/projects/cars/label_ops/$OP/undo" \
+  -H 'Content-Type: application/json' -d '{}'
+
+# Do it.
+curl -s -X POST "$API/curation/projects/cars/label_ops/$OP/undo" \
+  -H 'Content-Type: application/json' -d '{"dry_run": false}'
+```
+
+`POST /curation/projects/{project}/label_ops/{op_id}/undo` decides one outcome
+per item, again inside the write, so a person's edit that races the undo wins:
+
+| Outcome | Meaning | Written |
+|---|---|---|
+| `restored` | The item still carries this operation's label and nothing changed it since | the class state from before the operation, exactly |
+| `already_undone` | The operation's write on this item was already undone | nothing |
+| `kept_changed` | A person or import relabelled it, a later operation wrote it, it was excluded, its class was merged, or it was deleted | nothing |
+| `kept_holdout` | The item is in the frozen test holdout | nothing |
+| `kept_stale_class` | The class to restore was renamed, merged or deleted since | nothing |
+
+`matched` equals the sum of these five plus `conflicts` (items whose
+conditional write lost a race; their ids are in `conflict_ids`).
+
+Consequences worth knowing:
+
+- Undo is per item. An operation with some edited items is still undoable for
+  the rest.
+- Operations can be undone in any order. If operation B relabelled part of
+  operation A, undoing A keeps those items; undoing B puts them back under A,
+  and A is undoable for them again.
+- A bulk undo never touches the test holdout. A single item can still be
+  undone with the per-item route.
+- Undoing a label also restores the accuracy-audit verdict, so the item
+  returns to the audit queue.
+- The whole pass runs inside the request, one paged bulk of 500 items at a
+  time. There is no cap on the number of items.
+
+Errors: `404 label_op_not_found` (unknown, malformed or pruned),
+`409 already_undone` (nothing left to restore), `409 label_op_busy` (another
+undo of this project is running), `409 label_op_in_progress` (the operation is
+still being written).
+
+## Scale
+
+Measured on 100,000 synthetic items on one API worker, on a busy host
+(1-minute load 12 to 85; most rows are marked noisy in the raw data), so read
+these as upper bounds ([CQ3 review](https://github.com/davidamacey/OpenProcessor/blob/main/docs/reviews/cq3_review.md)):
+
+| Case | Result |
+|---|---|
+| Undo of a 10,000-item operation | 7.1, 11.1, 11.6 s; no lost or extra writes; 50 edited items kept |
+| Undo of a 20,000-item operation | 20.9, 26.2, 25.0 s; dry run 4.4 to 6.5 s |
+| API worker memory growth during a 20,000 undo | 0.4 to 1.3 MB |
+| `GET label_ops` p95 with 200 retained operations | 21 to 26 ms |
+| Batch label of 20,000 against `main` | median ratio 1.02 over 9 interleaved pairs |
+
+## Related per-item and small-batch undo
+
+`POST /curation/projects/{project}/crops/label/undo_batch` takes up to 5,000
+crop ids and undoes the next step of each; it is typed and uses the same
+paged writes. To undo a whole bulk label or move, use the operation route
+above.
+
+The Cropwright UI for operations is not on `main` yet; the API is the
+interface today. Design and semantics:
+[`docs/design/cq3_label_operations.md`](https://github.com/davidamacey/OpenProcessor/blob/main/docs/design/cq3_label_operations.md).

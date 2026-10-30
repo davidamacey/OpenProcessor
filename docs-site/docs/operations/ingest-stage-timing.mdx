@@ -1,0 +1,158 @@
+---
+sidebar_position: 10
+title: Ingest stage timing
+---
+
+# Ingest stage timing
+
+`gpu_image_prep` is the Triton model that decodes a photo on the GPU, runs the
+detector, builds the crop and frame squares for the embedding model, and
+encodes the crop JPEGs. Stage timing says where the time of one image goes
+inside it, so a throughput change can be attributed to a stage rather than
+guessed.
+
+:::caution Known fault in the counters on main
+The first version of these counters shipped on `main` can fail on Triton 2.70
+(26.06): the series may not appear, a request may not be answered, and
+incrementing from several threads can abort the server (issue
+[#390](https://github.com/davidamacey/OpenProcessor/issues/390)). The fix is
+on the ingest-speed branch and not on `main` yet. Until it is merged, do not
+rely on these counters in a production Triton, and do not add custom metrics
+to another Python-backend model without the same three rules from that issue
+(keep the metric families alive, drop series before families, increment from
+one thread).
+:::
+
+:::note Throughput numbers are not here yet
+The stage-by-stage throughput measurement (the per-stage tables and the
+concurrency sweep) is being finalised by the ingest-speed pull request. This
+page documents the tools and how to read their output; it carries no
+throughput figures. When that work is merged, its results are added to
+[`docs/research/v070_measurement_log.md`](https://github.com/davidamacey/OpenProcessor/blob/main/docs/research/v070_measurement_log.md)
+under the SP0 headings (there are none on `main` today). Findings that are on
+`main`: sections A, B and E4 of that log (source device, concurrency and batch
+size, and the `gpu_image_prep` instance count).
+:::
+
+## The counters
+
+Two Triton counters, both labelled `stage`, on Triton's metrics port (4602 in
+the default compose file, the `triton` job in Prometheus):
+
+| Series | Meaning |
+|---|---|
+| `op_gpu_prep_stage_seconds{stage}` | Summed host wall seconds spent in the stage |
+| `op_gpu_prep_stage_observations{stage}` | Images that ran the stage |
+
+Seconds divided by observations is the mean per image. Stage seconds are sums
+over concurrent requests: compare them across runs and shares, never add them
+up to wall time. The model is loaded on first use, so the series appear after
+the first image.
+
+| Stage | What it covers |
+|---|---|
+| `queue` | Wait for a free slot and a worker thread |
+| `decode` | Header routing, nvJPEG decode, EXIF orientation |
+| `letterbox` | Detector letterbox canvas |
+| `detect` | Detector call and box decoding |
+| `embed_frame` | Whole-frame square for the embedding model |
+| `embed_crops` | One square per detection (or stored box) |
+| `embed_pe` | The embedding model calls over those squares |
+| `crop_copy` | Device-to-host copy of each detection's pixels |
+| `crop_jpeg` | JPEG encode, summed over the image's crops (host threads) |
+| `blur` | Laplacian sums of the frame and every detection |
+
+Stored-box mode (the embed reprocess pass) and the CPU-decode fallback publish
+only the stages they ran.
+
+### Asynchronous kernels and `STAGE_SYNC`
+
+CUDA launches return early, so by default a kernel stage (`letterbox`,
+`embed_frame`, `embed_crops`, `blur`) ends when its launches are queued, and
+its GPU time lands in the next stage that waits (usually `detect` or
+`embed_pe`). The model parameter `STAGE_SYNC` (default `"0"` in
+`models/gpu_image_prep/config.pbtxt`) set to `"1"` waits for the stream at the
+end of those four stages so the time is attributed where the work ran. That
+removes the overlap inside one image, so a `STAGE_SYNC=1` run is attribution
+only, never a throughput number. Keep such runs in separate rows.
+
+## Reading them in Prometheus and Grafana
+
+Prometheus already scrapes Triton's metrics port when the `monitoring` profile
+is up (see [Monitoring](./monitoring.mdx)). Mean milliseconds per image by
+stage over five minutes:
+
+```promql
+1000 * rate(op_gpu_prep_stage_seconds[5m]) / rate(op_gpu_prep_stage_observations[5m])
+```
+
+Depending on the exporter version the series may carry a `_total` suffix; the
+profile tooling accepts both. The shipped Grafana dashboards do not have a
+`gpu_image_prep` panel yet, so use the Explore view or add one. The existing
+`op_pipeline_stage_seconds_*` series (Ingest pipeline dashboard) are the API
+side of the same ingest; read both together.
+
+How to read the result: the stage with the largest share of summed seconds is
+where an image spends its time, not necessarily what limits throughput. A
+large `queue` share means requests wait for the model's worker slots. If
+`decode` or `crop_jpeg` dominate, the work is host CPU. If the launch stages
+(`letterbox`, `embed_crops`, `crop_copy`) grow with the number of batches in
+flight for the same work, suspect host-side launch and thread contention
+rather than GPU kernels, and confirm with a `STAGE_SYNC=1` run at one batch at a time.
+
+## Profiling a run
+
+Two scripts under `scripts/bench/`, run from a checkout against a running
+stack:
+
+- `run_baseline.py` ingests a manifest of images into fresh projects and
+  writes a JSON and markdown report. `--reps N` repeats in a fresh project
+  each time, `--drop-cache` drops the manifest files from the page cache
+  before each repetition, and the report records the host load average
+  (`noisy` when the 1-minute load at the start is above 16), a GPU
+  utilisation median and a `gpu_prep_stages` block (seconds, images, mean and
+  share per stage, from the Triton counter delta; needs
+  `--triton-metrics-url`). A `--clients N` option to run several batches at
+  once is on the ingest-speed branch, not on `main`.
+- `ingest_profile.py` wraps it with the fixed measurement protocol (3
+  repetitions, cache dropped, GPU sampled every 0.5 s, policy `all`, stage
+  `ingest`) and adds the API container's CPU seconds and the Triton
+  container's CPU.
+
+```bash
+.venv/bin/python scripts/bench/ingest_profile.py run setB MANIFEST \
+  --api-url http://127.0.0.1:4603 \
+  --triton-metrics-url http://127.0.0.1:4602/metrics \
+  --path-map HOST_DIR=CONTAINER_DIR \
+  --api-container NAME --triton-container NAME \
+  --out-root artifacts_local/bench/v070/sp0
+
+.venv/bin/python scripts/bench/ingest_profile.py table \
+  setA=artifacts_local/bench/v070/sp0/setA setB=artifacts_local/bench/v070/sp0/setB
+```
+
+`table` prints one block per row: median images per second (with range), GPU
+and CPU use, the API's pipeline stages, Triton queue and compute times, and
+the `gpu_image_prep` stages with mean milliseconds per image and share. It
+holds aggregates only. A row that was `noisy` is an upper bound on time and a
+lower bound on throughput; repeat it on a quiet host before quoting it.
+`scripts/bench/sample_copy.py` makes a seeded, checksummed NVMe copy of a
+photo sample under neutral names, so a private set never has its path in a
+report.
+
+Run with the stack's real GPU, and never on a card another job is using.
+
+## What was measured, and what it meant
+
+On `main`, the live ingest campaign in
+[`v070_measurement_log.md`](https://github.com/davidamacey/OpenProcessor/blob/main/docs/research/v070_measurement_log.md)
+showed that the source device does not matter (section A), that ingest
+saturates from 8 concurrent requests and further concurrency
+only adds queue latency while the GPU is not fully busy (section B), and that
+a second `gpu_image_prep` instance raised ingest by about 51 percent for about
+7 GB more card memory while a third added nothing (section E4). That is why
+the `full` profile runs two instances. The stage-level attribution of where
+the remaining time goes is the part still being finalised.
+
+Design and review of the instrumentation:
+[SP0 review](https://github.com/davidamacey/OpenProcessor/blob/main/docs/reviews/sp0_review.md).
