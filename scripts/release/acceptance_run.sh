@@ -5,8 +5,9 @@
 # Drives an INSTALLED stack through every phase of
 # docs/design/release_acceptance_plan.md that can be scripted: health, docs,
 # a throwaway project, public-COCO ingest, cluster, VLM labeling, human
-# confirm, holdout, export, train, bake-off, promote, inference, delete,
-# metrics, log noise, VLM switch, installer lifecycle, teardown.
+# confirm, holdout, label operations and undo, auto-label loop dry run, export,
+# train, bake-off, promote, inference, delete, metrics, log noise, VLM switch,
+# installer lifecycle, teardown.
 #
 # Needs only bash, curl and jq. Writes a machine-readable JSON report and
 # prints a human summary. Exit status is non-zero when any required phase
@@ -27,7 +28,7 @@
 #     --project-name op-acc --install-dir ~/op-acc --models-dir ~/op-acc/models \
 #     --project acc-v041 --images-dir data/samples/coco_va --report acc.json
 # =============================================================================
-# Option values are read by the sourced acceptance_lib.sh / acceptance_phases.sh.
+# Option values are read by the sourced acceptance_lib.sh / acceptance_phases*.sh.
 # shellcheck disable=SC2034
 set -uo pipefail
 
@@ -36,8 +37,8 @@ SCHEMA_VERSION=1
 # unless they were named in --only or --strict is given.
 PHASES=(
     health:1 resource_links:1 docs_selfhosted:1 project_create:1 ingest:1
-    detect_embed:1 cluster:1 vlm_label:1 confirm_labels:1 holdout:1 export:1
-    train:1 bakeoff:0 promote:1 infer:1 model_delete:1 metrics:1 log_noise:1
+    detect_embed:1 cluster:1 vlm_label:1 confirm_labels:1 holdout:1 label_ops:1
+    loop:0 export:1 train:1 bakeoff:0 promote:1 infer:1 model_delete:1 metrics:1 log_noise:1
     vlm_switch:0 installer_rerun:0 installer_repair:0 installer_upgrade:0
     installer_uninstall:0 teardown:1
 )
@@ -67,6 +68,11 @@ UPGRADE_VERSION=""
 WORKDIR=""
 LOG_REPEAT_MAX=25
 POLL_S="${ACC_POLL_S:-5}"
+CONTROL_PLANE_ONLY=0
+TRITON_METRICS_URL="${OP_TRITON_METRICS_URL:-}"
+DECODE_FALLBACK_MAX_PCT=0.5
+LABEL_OPS_CROPS=10
+LOOP_BUDGET_CROPS=100
 
 usage() {
     sed -n '2,/^# =====.*$/p' "$0" | sed -n '2,32p' | sed 's/^# \{0,1\}//'
@@ -91,6 +97,11 @@ Options:
   --vlm-switch-id ID     enable vlm_switch: `./openprocessor vlm use ID --yes`
   --vlm-switch-force     add --force to vlm use
   --upgrade-version vX   enable installer_upgrade (upgrade to vX, then --rollback)
+  --control-plane-only   the stack runs without Triton: /health may omit services.models
+  --triton-metrics-url U Triton metrics endpoint (default $OP_TRITON_METRICS_URL, e.g. http://127.0.0.1:4602/metrics);
+                         enables the op_gpu_prep_stage_* check when the GPU decode route is active
+  --decode-fallback-max P  max percent of ingest decodes that fall back from the GPU route to the CPU (default 0.5)
+  --label-ops-crops N    crops the label_ops phase relabels and undoes (default 10)
   --strict               optional-phase failures also fail the run
   --report PATH          JSON report path (default acceptance-report.json)
   --workdir DIR          scratch/evidence directory (default: mktemp)
@@ -120,6 +131,10 @@ while (($#)); do
         --vlm-switch-id) VLM_SWITCH_ID="${2:?}"; shift 2 ;;
         --vlm-switch-force) VLM_SWITCH_FORCE=1; shift ;;
         --upgrade-version) UPGRADE_VERSION="${2:?}"; shift 2 ;;
+        --control-plane-only) CONTROL_PLANE_ONLY=1; shift ;;
+        --triton-metrics-url) TRITON_METRICS_URL="${2:?}"; shift 2 ;;
+        --decode-fallback-max) DECODE_FALLBACK_MAX_PCT="${2:?}"; shift 2 ;;
+        --label-ops-crops) LABEL_OPS_CROPS="${2:?}"; shift 2 ;;
         --strict) STRICT=1; shift ;;
         --report) REPORT="${2:?}"; shift 2 ;;
         --workdir) WORKDIR="${2:?}"; shift 2 ;;
@@ -158,6 +173,8 @@ _ACC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${_ACC_DIR}/acceptance_lib.sh"
 # shellcheck source=scripts/release/acceptance_phases.sh
 source "${_ACC_DIR}/acceptance_phases.sh"
+# shellcheck source=scripts/release/acceptance_phases_review.sh
+source "${_ACC_DIR}/acceptance_phases_review.sh"
 
 
 # ===========================================================================

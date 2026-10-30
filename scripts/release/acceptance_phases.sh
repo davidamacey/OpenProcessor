@@ -14,8 +14,23 @@
 ph_health() {
     api GET /health; expect 200
     ev "GET /health -> 200 version=$(jqb '.version // "?"')"
+    local models_ok triton_ok
+    models_ok="$(jqb 'if .services.models == null then "absent" else (.services.models.ok | tostring) end')"
+    triton_ok="$(jqb 'if .services.triton == null then "absent" else (.services.triton.ok | tostring) end')"
+    if [[ "$models_ok" == absent ]]; then
+        # no models entry means Triton was unreachable: only a run without Triton may skip
+        ((CONTROL_PLANE_ONLY)) || fail "/health served no services.models (triton ok=${triton_ok}); pass --control-plane-only for a run without Triton"
+        ev "services.models absent (control-plane-only run): model readiness not asserted"
+    else
+        [[ "$models_ok" == true ]] || fail "services.models.ok=${models_ok}: $(jqb '.services.models.detail // ""')"
+        ev "services.models.ok == true: $(jqb '.services.models.detail // ""')"
+    fi
     api GET "${API_PREFIX}/health"; expect 200
     ev "GET ${API_PREFIX}/health -> 200"
+    api GET /live; expect 200
+    ev "GET /live -> 200"
+    api GET /; expect 200
+    ev "GET / -> 200"
 }
 
 ph_resource_links() {
@@ -137,8 +152,9 @@ ph_cluster() {
     }
     poll "$PHASE_TIMEOUT" _clustered || fail "auto_label never finished"
     [[ "$(jqb '.status')" != error && "$(jqb '.status')" != failed ]] || fail "auto_label: $(jqb '.error // "error"')"
-    api GET "${PROJECT_API}/clusters?max_clusters=50"; expect 200
     ev "auto_label $(jqb '.status // "done"')"
+    check_cluster_list
+    check_cluster_facets
 }
 
 # A project calls no VLM until it activates one, so the phase opts in to the
@@ -349,6 +365,42 @@ ph_metrics() {
     ((${#warn[@]})) && ev "note: series absent (not required): ${warn[*]}"
     ((${#missing[@]} == 0)) || fail "missing metric series: ${missing[*]}"
     ev "required op_* series present, incl. per-project label"
+    check_gpu_route
+}
+
+# After ingest: when the GPU decode route took images, Triton's stage counters exist
+# and the CPU fallbacks stay under the bound. Absent counters skip this part only.
+# cpu_off and cpu_small are policy (route disabled, image under the size gate), not fallbacks.
+check_gpu_route() {
+    local gpu fb tot pct tm="$TRITON_METRICS_URL"
+    if ! grep -q '^op_ingest_decode_total' "$BODY"; then
+        ev "SKIP-PART: op_ingest_decode_total absent (build without the decode counter); GPU route checks not run"
+        return 0
+    fi
+    read -r gpu fb < <(awk '/^op_ingest_decode_total\{/ {
+        r = $0; sub(/.*route="/, "", r); sub(/".*/, "", r); v = $NF + 0
+        if (r == "gpu") g += v; else if (r != "cpu_off" && r != "cpu_small" && r ~ /^cpu_/) f += v
+    } END { printf "%d %d\n", g, f }' "$BODY")
+    if ((gpu == 0)); then
+        ev "SKIP-PART: GPU decode route took no images (gpu=0, fallbacks=${fb}); stage counters and fallback rate not checked"
+        return 0
+    fi
+    tot=$((gpu + fb))
+    pct="$(awk -v f="$fb" -v t="$tot" 'BEGIN { printf "%.3f", 100 * f / t }')"
+    ev "op_ingest_decode_total: gpu=${gpu} fallbacks=${fb} (${pct}%, bound ${DECODE_FALLBACK_MAX_PCT}%)"
+    awk -v p="$pct" -v m="$DECODE_FALLBACK_MAX_PCT" 'BEGIN { exit !(p + 0 <= m + 0) }' \
+        || fail "GPU decode fallbacks ${pct}% exceed ${DECODE_FALLBACK_MAX_PCT}%"
+    if [[ -z "$tm" ]]; then
+        ev "SKIP-PART: no --triton-metrics-url; op_gpu_prep_stage_* counters not checked"
+        return 0
+    fi
+    local out="$WORKDIR/triton.metrics" c
+    curl -sS --max-time "$HTTP_TIMEOUT" -o "$out" "$tm" 2>>"$WORKDIR/curl.err" \
+        || fail "cannot read Triton metrics at ${tm}"
+    for c in op_gpu_prep_stage_seconds op_gpu_prep_stage_observations; do
+        grep -q "^${c}" "$out" || fail "${c} missing on Triton's metrics port (${tm}) although the GPU route is active"
+    done
+    ev "Triton metrics carry op_gpu_prep_stage_seconds and _observations"
 }
 
 ph_log_noise() {
