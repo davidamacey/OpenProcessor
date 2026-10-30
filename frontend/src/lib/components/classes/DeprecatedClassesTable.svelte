@@ -37,7 +37,7 @@
               <th class="px-3 py-2 font-medium">ID</th>
               <th class="px-3 py-2 font-medium">Name</th>
               <th class="px-3 py-2 font-medium">Group</th>
-              <th class="px-3 py-2"></th>
+              <th class="px-3 py-2"><span class="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>

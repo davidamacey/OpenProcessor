@@ -168,6 +168,10 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
       // server — not this optimistic write — owns. Re-fetch it instead
       // of trying to derive the new count client-side.
       void classesStore.refresh();
+      // The crops just labeled may have left this cluster. The served first
+      // page carries the cluster's real members and count; counting them down
+      // here left the footer reading "60 / 3 listed" once a later page loaded.
+      void loadFirst();
     } catch (e) {
       toastStore.error(`Label failed: ${apiErrorText(e)}`);
       for (const prior of priors) revertLocalLabel(prior);

@@ -4,7 +4,7 @@ cluster cards. Leaf module.
 Two purities use these cut points:
 
 * the auto-promote gate's *label purity*: the top class's share of a
-  cluster's labelled members (served on cards as ``label_purity``);
+  cluster's labelled members (served on cards as ``label_agreement``);
 * a card's ``purity`` / ``purity_tier``: the share of measured
   members whose nearest cluster centroid is their own cluster's
   (``src/services/curation/clustering/cluster_geometry.py``). Label purity

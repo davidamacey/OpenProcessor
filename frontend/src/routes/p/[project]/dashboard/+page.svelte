@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatTimestamp } from '$lib/format/date';
   import { apiErrorText } from '$lib/api_errors';
   /*
    * Pipeline dashboard route — the app's single home page.
@@ -257,7 +258,9 @@
         {/if}
         {#if exportResult.finished_at}
           <dt class="text-zinc-500">Finished</dt>
-          <dd class="font-mono text-zinc-200">{exportResult.finished_at}</dd>
+          <dd class="font-mono text-zinc-200">
+            {formatTimestamp(exportResult.finished_at)}
+          </dd>
         {/if}
       </dl>
     {/if}

@@ -107,7 +107,12 @@ describe('selectionActionController', () => {
   it('label records the served updated_ids as one label undo entry', async () => {
     vi.mocked(bulkLabelSelection)
       .mockResolvedValueOnce({ dry_run: true, selected: 3 })
-      .mockResolvedValueOnce({ updated: 3, updated_ids: ['a', 'b', 'c'], conflicts: [] });
+      .mockResolvedValueOnce({
+        updated: 3,
+        updated_ids: ['a', 'b', 'c'],
+        conflicts: [],
+        op_id: null,
+      });
     const c = make();
     c.classId = 5;
     await c.open('label');
@@ -128,7 +133,12 @@ describe('selectionActionController', () => {
   it('move and unexclude record their served ids too', async () => {
     vi.mocked(moveSelectionToCluster)
       .mockResolvedValueOnce({ dry_run: true, selected: 1 })
-      .mockResolvedValueOnce({ updated: 1, updated_ids: ['m'], conflicts: [] });
+      .mockResolvedValueOnce({
+        updated: 1,
+        updated_ids: ['m'],
+        conflicts: [],
+        op_id: null,
+      });
     const mv = make();
     mv.clusterId = 9;
     await mv.open('move');

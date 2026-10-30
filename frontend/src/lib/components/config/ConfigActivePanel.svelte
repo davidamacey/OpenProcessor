@@ -158,7 +158,7 @@
               <th class="py-0.5 pr-3 font-normal">{copy.appliedColumn}</th>
               <th class="py-0.5 pr-3 font-normal">Config revision</th>
               <th class="py-0.5 pr-3 font-normal">Applied at</th>
-              <th class="py-0.5 font-normal"></th>
+              <th class="py-0.5 font-normal"><span class="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>

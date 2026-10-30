@@ -1,6 +1,7 @@
 <script lang="ts">
   /** /export's "Export to staging" section: options, registry downloads,
    *  and the served status of the latest export. */
+  import { formatTimestamp } from '$lib/format/date';
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
   import { getClassRegistryUrl, getDataYamlUrl, getManifestUrl } from '$lib/api_export';
@@ -117,7 +118,7 @@
     <div class="mt-3 text-xs text-zinc-400">
       Last status: <span class="font-mono text-zinc-200">{run.exportState.status}</span>
       {#if run.exportState.last_run}
-        · {new Date(run.exportState.last_run).toLocaleString()}
+        · {formatTimestamp(run.exportState.last_run)}
       {/if}
       {#if run.exportState.export_dir}
         · <span class="font-mono text-zinc-300">{run.exportState.export_dir}</span>

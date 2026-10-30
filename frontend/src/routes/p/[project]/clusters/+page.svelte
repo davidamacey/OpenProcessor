@@ -15,6 +15,8 @@
   import { createClusterListController } from '$lib/clusters/clusterListController.svelte';
   import { createClusterSearchModes } from '$lib/clusters/clusterSearchModes.svelte';
   import { createSlotInventory } from '$lib/clusters/slotInventory.svelte';
+  import { clusterFilterToUrl } from '$lib/clusters/clusterListFilter';
+  import ClusterListFilterBar from '$lib/components/clusters/ClusterListFilterBar.svelte';
   import ClustersGrid from '$lib/components/clusters/ClustersGrid.svelte';
   import ClustersStatusBar from '$lib/components/clusters/ClustersStatusBar.svelte';
   import ClustersToolbar from '$lib/components/clusters/ClustersToolbar.svelte';
@@ -26,6 +28,7 @@
   } from '$lib/itemFilter/itemFilterState.svelte';
   import type { ItemFilter, ItemFilterQuery } from '$lib/types_itemFilter';
   import type { Crop } from '$lib/types';
+  import type { ClusterListFilter, ClusterSortId } from '$lib/types_clusterList';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
@@ -43,6 +46,8 @@
     },
     slotInventory,
     gridItemFilter,
+    initialUrlParams: page.url.searchParams,
+    writeUrl: syncClusterListUrl,
   });
   const modes = createClusterSearchModes({
     clusterPager: list.clusterPager,
@@ -128,6 +133,16 @@
     return withSidebarClass(itemFilter.toBody(), 'class_names');
   }
   const gridFilterKey = $derived(JSON.stringify(gridItemFilter()));
+  // Mirrors the cluster list's sort and card filter into the URL, beside the
+  // item filter's own keys.
+  function syncClusterListUrl(sort: ClusterSortId | null, f: ClusterListFilter): void {
+    const url = new URL(page.url.href);
+    clusterFilterToUrl(url.searchParams, sort, f);
+    void goto(resolve(projectHref(`/clusters${url.search}`)), {
+      replace: true,
+      reset: false,
+    });
+  }
   function syncFilterUrl(): void {
     const url = new URL(page.url.href);
     itemFilter.toUrl(url.searchParams);
@@ -274,6 +289,10 @@
         onchange={syncFilterUrl}
       />
     </div>
+  {/if}
+
+  {#if !isSlotFilter && !matchingModeActive && !modes.ignoredModeActive && !modes.searchModeActive && !modes.itemTextModeActive}
+    <ClusterListFilterBar {list} />
   {/if}
 
   <ClustersGrid

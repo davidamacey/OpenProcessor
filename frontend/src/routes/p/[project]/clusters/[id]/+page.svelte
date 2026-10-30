@@ -1,6 +1,7 @@
 <script lang="ts">
   import CropDetailModal from '$components/CropDetailModal.svelte';
   import ClusterDetailFilters from '$lib/components/clusters/ClusterDetailFilters.svelte';
+  import ClusterFacetBar from '$lib/components/clusters/ClusterFacetBar.svelte';
   import ClusterDetailGrid from '$lib/components/clusters/ClusterDetailGrid.svelte';
   import ClusterDetailToolbar from '$lib/components/clusters/ClusterDetailToolbar.svelte';
   import MoveClusterPicker from '$lib/components/clusters/MoveClusterPicker.svelte';
@@ -32,6 +33,7 @@
 <div class="flex h-full flex-col">
   <ClusterDetailToolbar {view} {actions} {clusterAssist} />
   <ClusterDetailFilters {view} />
+  <ClusterFacetBar {view} />
   <SubClusterTabs {view} />
   {#if clusterAssist.loadError}
     <p
