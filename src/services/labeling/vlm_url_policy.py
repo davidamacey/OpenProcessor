@@ -56,6 +56,7 @@ DENIED_INTERNAL_SERVICES: frozenset[str] = frozenset(
         'curation-detection-worker',
         'curation-vlm-worker',
         'curation-auto-label-worker',
+        'curation-assist-loop-worker',
         'curation-cluster-refresh',
         'curation-evaluator',
         'curation-mlflow',

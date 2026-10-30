@@ -35,6 +35,7 @@ ordinary `pytest tests/` never touches any of this.
 | `op-verify-opensearch` | 14702 | OpenSearch 3.6, single node, 512 MB heap |
 | `op-verify-api` | 14701 | this repo's API image, `--workers=1` |
 | `op-verify-fake-vlm` | 14704 | ~200-line stdlib OpenAI-compatible chat endpoint |
+| `op-verify-assist-loop-worker` | — | the auto-label loop worker (same image, mounts and environment as the API) |
 | `op-verify-trainer` | — | shell loop implementing the trainer half of the job-file protocol |
 
 Design choices that are not arbitrary:
@@ -63,6 +64,13 @@ Design choices that are not arbitrary:
 prompt kind (classification / region verify / region visibility). It exposes a
 small control surface for tests: `POST /__control` to change a reply knob,
 `GET /__stats` for per-kind call counts, `POST /__reset`.
+
+Two test-only modes serve the auto-label loop's live test (`tests/live/test_live_assist_loop.py`):
+`class_cycle` (a list of class names; the n-th image asked about answers the n-th entry, wrapping,
+so a sampled cluster shows dissent and fails the loop's gate) and `answers` (`{sha256 of the image
+bytes: class name}`; the wire carries no crop id). `GET /__seen` lists the hash of every image
+received, so a test can learn the hash the product sends for a crop by asking about that one
+crop. `POST /__reset` clears both modes and the counters.
 
 **It proves wiring and persistence, not label quality.** Every answer is a
 constant. What the tests verify is that the router builds a well-formed

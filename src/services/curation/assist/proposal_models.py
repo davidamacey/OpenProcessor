@@ -60,7 +60,7 @@ class AssistApplyRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     class_name: str
-    label_source: Literal['human'] = 'human'
+    label_source: Literal['human', 'propagated'] = 'human'
     allow_changed_scope: bool = False
     dry_run: bool = True
 

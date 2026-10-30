@@ -145,6 +145,8 @@ _DYNAMIC_WRITES: dict[str, str | None] = {
     # The full-image open-vocabulary pass.
     'OPEN_VOCAB_CLASS_SOURCE': 'open_vocab_proposal',
     'OPEN_VOCAB_TARGET_CLASS_SOURCE': 'open_vocab_target',
+    # ItemLabel.propagated(): the auto-label loop's carried-over class.
+    'PROPAGATED_CLASS_SOURCE': 'assist_propagated',
     # Label import: caller-chosen, default 'external_label'.
     'label_source': 'external_label',
     'item.class_source': None,

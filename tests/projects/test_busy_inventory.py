@@ -514,3 +514,21 @@ def test_bulk_ingest_jobs_ignores_a_run_whose_worker_died(tmp_path) -> None:
     old = time.time() - 600
     os.utime(heartbeat, (old, old))
     assert _bulk_ingest_jobs(record) == []
+
+
+def test_a_live_auto_label_loop_makes_only_its_own_project_busy(tmp_path, monkeypatch) -> None:
+    """A loop keeps writing labels for hours; its project can be neither deleted nor archived
+    meanwhile, and another project's loop does not count."""
+    from src.config.project_context import bind_project
+    from src.services.curation.assist_loop import job
+
+    monkeypatch.setenv('OP_ASSIST_LOOP_JOBS_DIR', str(tmp_path / 'loops'))
+    alpha, beta = _record('alpha', tmp_path), _record('beta', tmp_path)
+    with bind_project(alpha):
+        live = job.create_loop(state={'status': 'queued'}, request={}).directory.name
+    with bind_project(beta):
+        done = job.create_loop(state={'status': 'queued'}, request={})
+        done.update(status='completed')
+
+    assert JobRef(kind='assist_loop', job_id=live) in running_jobs(alpha)
+    assert [j for j in running_jobs(beta) if j.kind == 'assist_loop'] == []

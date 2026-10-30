@@ -53,6 +53,18 @@ NO_WRITE: dict[tuple[str, str], str] = {
         'touches a cancel flag only for a live job; the sweep has none (the live path is '
         'covered in test_reprocess_entrypoints)'
     ),
+    ('POST', '/assist/loops'): 'a dry run plans and counts; the sweep starts no loop',
+    ('POST', '/assist/loops/{loop_id}/cancel'): (
+        'touches a cancel flag only for a live loop; the sweep has none (the live path is '
+        'covered in test_assist_loop_job)'
+    ),
+    ('POST', '/assist/loops/{loop_id}/resume'): (
+        'names a loop of the bound project; the sweep has none (covered in test_assist_loop_job)'
+    ),
+    ('POST', '/assist/loops/{loop_id}/rollback'): (
+        'names a loop of the bound project; the sweep has none (the write path is covered in '
+        'test_assist_loop_routes and test_assist_loop_rollback)'
+    ),
     ('POST', '/assist/runs'): 'a dry run plans and counts; the sweep starts no run',
     ('POST', '/assist/runs/{run_id}/cancel'): (
         'touches a cancel flag only for a live run; the sweep has none (the live path is '

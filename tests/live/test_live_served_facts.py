@@ -27,10 +27,13 @@ def test_methods_serve_dedup_range_and_diverse_limits(api_client: Any) -> None:
     assert entries['diverse']['select_max_k'] >= entries['diverse']['max_k']
 
 
-def test_settings_serve_monitoring_links(api_client: Any) -> None:
-    links = api_client.get('/settings').json()['monitoring_links']
-    assert set(links) == {'grafana', 'prometheus', 'opensearch_dashboards'}
-    assert all(v is None or v.startswith('http') for v in links.values())
+def test_settings_serve_resource_links(api_client: Any) -> None:
+    links = {link['id']: link for link in api_client.get('/settings').json()['resource_links']}
+    assert {'swagger', 'redoc', 'openapi_json', 'grafana', 'prometheus'} <= set(links)
+    assert all(
+        link['url'] is None or link['url'].startswith(('http', '/')) for link in links.values()
+    )
+    assert {link['kind'] for link in links.values()} == {'docs', 'service'}
 
 
 def test_viz_projection_distinguishes_not_built_from_unavailable(api_client: Any) -> None:

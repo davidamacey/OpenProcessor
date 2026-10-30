@@ -130,6 +130,13 @@ server's dry run (members sent, estimated VLM calls), start, and read the propos
 the `scope_changed` refusal). The guide, with the recipe and the segmenter verification
 choice: [Selective VLM and segmenter assist](../docs-site/docs/guides/selective-assist.mdx).
 
+To label a whole project this way, the **auto-label loop** samples every cluster, writes a
+class to the rest of a cluster only when an exact bound shows it homogeneous (a machine
+label, not validated, kept out of the training export until reviewed), splits what fails and
+leaves the rest for review, within a hard VLM budget, with an optional second-model audit and a
+rollback: [Auto-label loop](../docs-site/docs/guides/auto-label-loop.mdx) and
+[the routes](../docs/design/curation_api_contract.md#auto-label-loops).
+
 ## Test on a crop
 
 Try a draft pack or profile on stored crops before activating it. Read-only.
@@ -288,6 +295,7 @@ docker compose -p <project> --profile curation up -d
 | `curation-detection-worker` | Runs the region cascade and verifies boxes. Needs `triton-server`. |
 | `curation-vlm-worker` | Labels classes through each project's active VLM endpoint. |
 | `curation-auto-label-worker` | Drives the auto-label protocol. Clusters unless a caller passes `run_vlm=true`. |
+| `curation-assist-loop-worker` | Runs auto-label loops. While one runs, the cluster retrain is held. |
 | `curation-cluster-refresh` | Queues the full cluster retrain once 200 new items exist and ingest is quiet. |
 | `curation-evaluator` | Bake-off runner. Run it on demand; it reserves a GPU. |
 
@@ -297,9 +305,9 @@ Details, GPU needs and the segmenter, trainer and GPU arbiter profiles:
 
 ## Mounting your image source
 
-Ingest resolves paths under `OP_SOURCE_ROOT` (container default `/data/source`). Three
+Ingest resolves paths under `OP_SOURCE_ROOT` (container default `/data/source`). Four
 services mount the same host directory read-only at that path: `api`,
-`curation-detection-worker` and `curation-auto-label-worker`.
+`curation-detection-worker` and `curation-auto-label-worker` (and `curation-assist-loop-worker`, which reads the crops it asks about).
 
 ```yaml
 volumes:

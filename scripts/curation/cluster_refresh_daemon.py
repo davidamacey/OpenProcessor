@@ -231,6 +231,16 @@ async def _job_status(
     return result
 
 
+async def _loop_live(client: httpx.AsyncClient, api: str, api_prefix: str, slug: str) -> bool:
+    """Whether an auto-label loop is queued or running on the project. An answer the daemon
+    cannot read is an error, not "no loop": it must not retrain under one it cannot see."""
+    r = await client.get(
+        scoped_url(api, api_prefix, slug, '/assist/loops'), params={'active': 'true'}
+    )
+    r.raise_for_status()
+    return bool(r.json().get('loops'))
+
+
 async def _cancel_job(client: httpx.AsyncClient, api: str, api_prefix: str, slug: str) -> None:
     r = await client.post(scoped_url(api, api_prefix, slug, '/pipeline/auto_label/cancel'))
     r.raise_for_status()
@@ -327,6 +337,7 @@ async def _iteration(
                 await _restore_state(opensearch, sched)
             count = await _crop_count(opensearch)
             unfinished = await _unfinished_region_count(opensearch)
+        loop_live = await _loop_live(client, api, api_prefix, slug)
         busy = False
         tracked = None
         if auto_label:
@@ -342,7 +353,13 @@ async def _iteration(
         return
     action = step(
         sched,
-        Observation(count=count, unfinished=unfinished, tracked_status=tracked, busy=busy),
+        Observation(
+            count=count,
+            unfinished=unfinished,
+            tracked_status=tracked,
+            busy=busy,
+            loop_live=loop_live,
+        ),
         now,
         policy,
     )

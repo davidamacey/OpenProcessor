@@ -8,7 +8,7 @@ from typing import Any
 from compose._helpers import REPO_ROOT, _services
 
 
-# The four curation worker services. Any
+# The curation worker services. Any
 # service whose name starts with this prefix must also carry
 # `profiles: [curation]` — see the loop in
 # test_curation_services_carry_curation_profile for the general form.
@@ -16,6 +16,7 @@ _CURATION_WORKER_SERVICES = (
     'curation-detection-worker',
     'curation-vlm-worker',
     'curation-auto-label-worker',
+    'curation-assist-loop-worker',
     'curation-cluster-refresh',
 )
 
@@ -148,6 +149,7 @@ _WORKER_LIVENESS_NAMES = {
     'curation-detection-worker': 'detection_worker',
     'curation-vlm-worker': 'vlm_worker',
     'curation-auto-label-worker': 'auto_label_worker',
+    'curation-assist-loop-worker': 'assist_loop_worker',
     'curation-cluster-refresh': 'cluster_refresh',
 }
 

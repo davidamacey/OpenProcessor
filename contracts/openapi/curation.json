@@ -502,8 +502,11 @@
             "type": "boolean"
           },
           "label_source": {
-            "const": "human",
             "default": "human",
+            "enum": [
+              "human",
+              "propagated"
+            ],
             "title": "Label Source",
             "type": "string"
           }
@@ -640,6 +643,278 @@
           "cluster_id"
         ],
         "title": "AssistContext",
+        "type": "object"
+      },
+      "AssistLoopList": {
+        "properties": {
+          "loops": {
+            "items": {
+              "$ref": "#/components/schemas/AssistLoopState"
+            },
+            "title": "Loops",
+            "type": "array"
+          }
+        },
+        "required": [
+          "loops"
+        ],
+        "title": "AssistLoopList",
+        "type": "object"
+      },
+      "AssistLoopRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "acknowledge_external": {
+            "default": false,
+            "title": "Acknowledge External",
+            "type": "boolean"
+          },
+          "audit": {
+            "$ref": "#/components/schemas/LoopAudit"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoopBudget"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required to start; a dry run sizes the loop without one."
+          },
+          "dry_run": {
+            "default": true,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "gate": {
+            "$ref": "#/components/schemas/LoopGate"
+          },
+          "node_concurrency": {
+            "default": 8,
+            "maximum": 32.0,
+            "minimum": 1.0,
+            "title": "Node Concurrency",
+            "type": "integer"
+          },
+          "prompt_pack": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A prompt pack name; null = the project's effective default.",
+            "title": "Prompt Pack"
+          },
+          "recursion": {
+            "$ref": "#/components/schemas/LoopRecursion"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/LoopScope"
+          },
+          "seed": {
+            "default": 0,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "vlm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A VLM endpoint name; null = the project's active endpoint.",
+            "title": "Vlm"
+          },
+          "vlm_concurrency": {
+            "default": 16,
+            "maximum": 128.0,
+            "minimum": 1.0,
+            "title": "Vlm Concurrency",
+            "type": "integer"
+          }
+        },
+        "title": "AssistLoopRequest",
+        "type": "object"
+      },
+      "AssistLoopState": {
+        "properties": {
+          "audit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoopAuditView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoopBudgetView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "levels": {
+            "items": {
+              "$ref": "#/components/schemas/LoopLevel"
+            },
+            "title": "Levels",
+            "type": "array"
+          },
+          "loop_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null on a dry run.",
+            "title": "Loop Id"
+          },
+          "partition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoopPartition"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pause_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "'user' or 'audit'.",
+            "title": "Pause Reason"
+          },
+          "pinned": {
+            "$ref": "#/components/schemas/LoopPinned"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/LoopPlan"
+          },
+          "request": {
+            "$ref": "#/components/schemas/AssistLoopRequest"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "enum": [
+              "dry_run",
+              "queued",
+              "running",
+              "paused",
+              "completed",
+              "cancelled",
+              "failed",
+              "interrupted"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "stop_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "'done', 'budget_crops', 'budget_requests' or 'budget_time'.",
+            "title": "Stop Reason"
+          },
+          "totals": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoopTotals"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "status",
+          "request",
+          "pinned",
+          "plan"
+        ],
+        "title": "AssistLoopState",
         "type": "object"
       },
       "AssistProgress": {
@@ -6094,6 +6369,11 @@
               "invalid_request",
               "assist_too_large",
               "assist_busy",
+              "assist_loop_busy",
+              "assist_loop_running",
+              "assist_loop_not_resumable",
+              "no_roots",
+              "clustering_running",
               "scope_changed",
               "class_not_in_registry",
               "run_has_no_scope",
@@ -6185,6 +6465,17 @@
               }
             ],
             "title": "Limit"
+          },
+          "loop_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loop Id"
           },
           "message": {
             "title": "Message",
@@ -14792,6 +15083,900 @@
           "lines"
         ],
         "title": "LogTailResponse",
+        "type": "object"
+      },
+      "LoopAudit": {
+        "additionalProperties": false,
+        "description": "A second model re-checks a sample of the labels the loop propagated.",
+        "properties": {
+          "acknowledge_external": {
+            "default": false,
+            "title": "Acknowledge External",
+            "type": "boolean"
+          },
+          "floor": {
+            "default": 0.85,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Floor",
+            "type": "number"
+          },
+          "max_crops": {
+            "default": 500,
+            "description": "The audit's own crop budget.",
+            "minimum": 1.0,
+            "title": "Max Crops",
+            "type": "integer"
+          },
+          "min_per_batch": {
+            "default": 30,
+            "minimum": 1.0,
+            "title": "Min Per Batch",
+            "type": "integer"
+          },
+          "on_fail": {
+            "default": "pause",
+            "enum": [
+              "pause",
+              "rollback"
+            ],
+            "title": "On Fail",
+            "type": "string"
+          },
+          "rate": {
+            "default": 0.01,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "Rate",
+            "type": "number"
+          },
+          "vlm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The audit model's endpoint name; null = the audit is off.",
+            "title": "Vlm"
+          }
+        },
+        "title": "LoopAudit",
+        "type": "object"
+      },
+      "LoopAuditView": {
+        "properties": {
+          "agreed": {
+            "default": 0,
+            "title": "Agreed",
+            "type": "integer"
+          },
+          "agreement": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agreement"
+          },
+          "crops_spent": {
+            "default": 0,
+            "title": "Crops Spent",
+            "type": "integer"
+          },
+          "lower_bound": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lower Bound"
+          },
+          "sampled": {
+            "default": 0,
+            "title": "Sampled",
+            "type": "integer"
+          },
+          "status": {
+            "description": "'off', 'pending', 'ok', 'fail' or 'budget_exhausted'.",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "LoopAuditView",
+        "type": "object"
+      },
+      "LoopBudget": {
+        "additionalProperties": false,
+        "description": "Hard caps; the loop never goes past one. ``max_vlm_crops`` has no default.",
+        "properties": {
+          "max_vlm_crops": {
+            "minimum": 1.0,
+            "title": "Max Vlm Crops",
+            "type": "integer"
+          },
+          "max_vlm_requests": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null = crops / images per call, plus the concurrency.",
+            "title": "Max Vlm Requests"
+          },
+          "max_wall_s": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null = 6 hours.",
+            "title": "Max Wall S"
+          }
+        },
+        "required": [
+          "max_vlm_crops"
+        ],
+        "title": "LoopBudget",
+        "type": "object"
+      },
+      "LoopBudgetView": {
+        "properties": {
+          "audit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoopPoolBudget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "vlm": {
+            "$ref": "#/components/schemas/LoopPoolBudget"
+          },
+          "wall_s": {
+            "title": "Wall S",
+            "type": "number"
+          }
+        },
+        "required": [
+          "vlm",
+          "wall_s"
+        ],
+        "title": "LoopBudgetView",
+        "type": "object"
+      },
+      "LoopGate": {
+        "additionalProperties": false,
+        "description": "When a sampled cluster may pass its class to all its other members.",
+        "properties": {
+          "alpha": {
+            "default": 0.05,
+            "description": "Chance allowed of passing a cluster below theta.",
+            "maximum": 0.1,
+            "minimum": 0.001,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "max_dissent": {
+            "default": 1,
+            "description": "Sampled answers allowed to disagree with the top class.",
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Max Dissent",
+            "type": "integer"
+          },
+          "theta": {
+            "default": 0.9,
+            "description": "Homogeneity the cluster must be shown to have.",
+            "maximum": 0.99,
+            "minimum": 0.7,
+            "title": "Theta",
+            "type": "number"
+          }
+        },
+        "title": "LoopGate",
+        "type": "object"
+      },
+      "LoopLevel": {
+        "properties": {
+          "crops_spent": {
+            "title": "Crops Spent",
+            "type": "integer"
+          },
+          "items_direct": {
+            "title": "Items Direct",
+            "type": "integer"
+          },
+          "items_propagated": {
+            "title": "Items Propagated",
+            "type": "integer"
+          },
+          "level": {
+            "title": "Level",
+            "type": "integer"
+          },
+          "nodes": {
+            "title": "Nodes",
+            "type": "integer"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "integer"
+          },
+          "review_leaf": {
+            "title": "Review Leaf",
+            "type": "integer"
+          },
+          "review_small": {
+            "title": "Review Small",
+            "type": "integer"
+          },
+          "split": {
+            "title": "Split",
+            "type": "integer"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "integer"
+          },
+          "unvisited": {
+            "title": "Unvisited",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "level",
+          "nodes",
+          "passed",
+          "split",
+          "review_leaf",
+          "review_small",
+          "stale",
+          "unvisited",
+          "items_propagated",
+          "items_direct",
+          "crops_spent"
+        ],
+        "title": "LoopLevel",
+        "type": "object"
+      },
+      "LoopMembersPage": {
+        "properties": {
+          "crop_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Crop Ids",
+            "type": "array"
+          },
+          "next_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next After"
+          }
+        },
+        "required": [
+          "crop_ids"
+        ],
+        "title": "LoopMembersPage",
+        "type": "object"
+      },
+      "LoopNewClassVote": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "votes": {
+            "title": "Votes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "votes"
+        ],
+        "title": "LoopNewClassVote",
+        "type": "object"
+      },
+      "LoopNode": {
+        "properties": {
+          "agree": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agree"
+          },
+          "answered": {
+            "title": "Answered",
+            "type": "integer"
+          },
+          "bound": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bound"
+          },
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Name"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pass",
+                  "split",
+                  "review_leaf",
+                  "review_small",
+                  "stale",
+                  "unvisited"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null while the node is open.",
+            "title": "Decision"
+          },
+          "distribution": {
+            "items": {
+              "$ref": "#/components/schemas/LoopVote"
+            },
+            "title": "Distribution",
+            "type": "array"
+          },
+          "items_propagated": {
+            "default": 0,
+            "title": "Items Propagated",
+            "type": "integer"
+          },
+          "level": {
+            "title": "Level",
+            "type": "integer"
+          },
+          "n": {
+            "description": "Eligible members at the snapshot.",
+            "title": "N",
+            "type": "integer"
+          },
+          "new_class_proposals": {
+            "items": {
+              "$ref": "#/components/schemas/LoopNewClassVote"
+            },
+            "title": "New Class Proposals",
+            "type": "array"
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent"
+          },
+          "path": {
+            "description": "r<cluster_id>, then .<child index> per level.",
+            "title": "Path",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "sampled": {
+            "title": "Sampled",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "level",
+          "parent",
+          "n",
+          "sampled",
+          "answered"
+        ],
+        "title": "LoopNode",
+        "type": "object"
+      },
+      "LoopNodePage": {
+        "properties": {
+          "next_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as `after` for the next page.",
+            "title": "Next After"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/LoopNode"
+            },
+            "title": "Nodes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "nodes"
+        ],
+        "title": "LoopNodePage",
+        "type": "object"
+      },
+      "LoopPackPin": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "title": "LoopPackPin",
+        "type": "object"
+      },
+      "LoopPartition": {
+        "properties": {
+          "digest": {
+            "title": "Digest",
+            "type": "string"
+          },
+          "eligible_items": {
+            "title": "Eligible Items",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "roots": {
+            "title": "Roots",
+            "type": "integer"
+          },
+          "snapshot_at": {
+            "title": "Snapshot At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "digest",
+          "snapshot_at",
+          "roots",
+          "eligible_items"
+        ],
+        "title": "LoopPartition",
+        "type": "object"
+      },
+      "LoopPinned": {
+        "properties": {
+          "audit_vlm": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoopVlmPin"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null: the audit is off (stated, not silent)."
+          },
+          "prompt_pack": {
+            "$ref": "#/components/schemas/LoopPackPin"
+          },
+          "vlm": {
+            "$ref": "#/components/schemas/LoopVlmPin"
+          }
+        },
+        "required": [
+          "vlm",
+          "prompt_pack"
+        ],
+        "title": "LoopPinned",
+        "type": "object"
+      },
+      "LoopPlan": {
+        "properties": {
+          "eligible_items": {
+            "description": "Members it could ask about and write.",
+            "title": "Eligible Items",
+            "type": "integer"
+          },
+          "estimated_vlm_crops_root_level": {
+            "description": "VLM crops the root-level draws need if every cluster passes with no dissent.",
+            "title": "Estimated Vlm Crops Root Level",
+            "type": "integer"
+          },
+          "estimated_vlm_requests_root_level": {
+            "title": "Estimated Vlm Requests Root Level",
+            "type": "integer"
+          },
+          "fits_budget": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether that estimate fits max_vlm_crops; null without a budget.",
+            "title": "Fits Budget"
+          },
+          "required_sample_table": {
+            "description": "Per distinct cluster size (largest first, at most 25 rows).",
+            "items": {
+              "$ref": "#/components/schemas/LoopRequiredSample"
+            },
+            "title": "Required Sample Table",
+            "type": "array"
+          },
+          "roots": {
+            "description": "Clusters the loop would work on.",
+            "title": "Roots",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "roots",
+          "eligible_items",
+          "required_sample_table",
+          "estimated_vlm_crops_root_level",
+          "estimated_vlm_requests_root_level"
+        ],
+        "title": "LoopPlan",
+        "type": "object"
+      },
+      "LoopPoolBudget": {
+        "properties": {
+          "crops_reserved": {
+            "title": "Crops Reserved",
+            "type": "integer"
+          },
+          "crops_spent": {
+            "title": "Crops Spent",
+            "type": "integer"
+          },
+          "max_crops": {
+            "title": "Max Crops",
+            "type": "integer"
+          },
+          "max_requests": {
+            "title": "Max Requests",
+            "type": "integer"
+          },
+          "requests_reserved": {
+            "title": "Requests Reserved",
+            "type": "integer"
+          },
+          "requests_spent": {
+            "title": "Requests Spent",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_crops",
+          "max_requests",
+          "crops_spent",
+          "crops_reserved",
+          "requests_spent",
+          "requests_reserved"
+        ],
+        "title": "LoopPoolBudget",
+        "type": "object"
+      },
+      "LoopRecursion": {
+        "additionalProperties": false,
+        "description": "How a cluster that fails the gate is split and tried again.",
+        "properties": {
+          "branching": {
+            "default": 4,
+            "maximum": 8.0,
+            "minimum": 2.0,
+            "title": "Branching",
+            "type": "integer"
+          },
+          "max_depth": {
+            "default": 3,
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Max Depth",
+            "type": "integer"
+          },
+          "min_node_size": {
+            "default": 40,
+            "description": "Smaller failing nodes are left for review.",
+            "minimum": 2.0,
+            "title": "Min Node Size",
+            "type": "integer"
+          }
+        },
+        "title": "LoopRecursion",
+        "type": "object"
+      },
+      "LoopRequiredSample": {
+        "description": "Answers the gate needs for a cluster of ``n_members`` eligible members, by the number\nof sampled answers allowed to disagree (index = dissent).",
+        "properties": {
+          "n_members": {
+            "title": "N Members",
+            "type": "integer"
+          },
+          "required_by_dissent": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Required By Dissent",
+            "type": "array"
+          }
+        },
+        "required": [
+          "n_members",
+          "required_by_dissent"
+        ],
+        "title": "LoopRequiredSample",
+        "type": "object"
+      },
+      "LoopRollbackRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "default": true,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "node_paths": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only these nodes; null = everything the loop propagated.",
+            "title": "Node Paths"
+          }
+        },
+        "title": "LoopRollbackRequest",
+        "type": "object"
+      },
+      "LoopRollbackResponse": {
+        "properties": {
+          "conflicts": {
+            "title": "Conflicts",
+            "type": "integer"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "kept_changed": {
+            "description": "Left as they are: changed by someone since.",
+            "title": "Kept Changed",
+            "type": "integer"
+          },
+          "matched": {
+            "description": "Items the loop wrote that no rollback restored yet.",
+            "title": "Matched",
+            "type": "integer"
+          },
+          "restored": {
+            "description": "Restored, or that a dry run would restore.",
+            "title": "Restored",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dry_run",
+          "matched",
+          "restored",
+          "kept_changed",
+          "conflicts"
+        ],
+        "title": "LoopRollbackResponse",
+        "type": "object"
+      },
+      "LoopScope": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Clusters to work on; null = every candidate cluster of the project.",
+            "title": "Cluster Ids"
+          },
+          "min_root_size": {
+            "default": 40,
+            "description": "Smaller clusters are left alone (no root).",
+            "minimum": 1.0,
+            "title": "Min Root Size",
+            "type": "integer"
+          }
+        },
+        "title": "LoopScope",
+        "type": "object"
+      },
+      "LoopTotals": {
+        "properties": {
+          "clusters_left_for_review": {
+            "title": "Clusters Left For Review",
+            "type": "integer"
+          },
+          "items_direct": {
+            "title": "Items Direct",
+            "type": "integer"
+          },
+          "items_left_for_review": {
+            "title": "Items Left For Review",
+            "type": "integer"
+          },
+          "items_propagated": {
+            "title": "Items Propagated",
+            "type": "integer"
+          },
+          "skipped": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Skipped",
+            "type": "object"
+          }
+        },
+        "required": [
+          "items_propagated",
+          "items_direct",
+          "clusters_left_for_review",
+          "items_left_for_review",
+          "skipped"
+        ],
+        "title": "LoopTotals",
+        "type": "object"
+      },
+      "LoopVlmPin": {
+        "description": "An endpoint the loop is pinned to: the revision it was accepted against.",
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "title": "LoopVlmPin",
+        "type": "object"
+      },
+      "LoopVote": {
+        "properties": {
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "votes": {
+            "title": "Votes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "class_name",
+          "votes"
+        ],
+        "title": "LoopVote",
         "type": "object"
       },
       "MappingSuggestionWire": {
@@ -34324,6 +35509,563 @@
         "summary": "Archive Project",
         "tags": [
           "Projects"
+        ]
+      }
+    },
+    "/curation/projects/{project}/assist/loops": {
+      "get": {
+        "description": "The newest loops, newest first.",
+        "operationId": "list_assist_loops_curation_projects__project__assist_loops_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only queued and running loops.",
+            "in": "query",
+            "name": "active",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Only queued and running loops.",
+              "title": "Active",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistLoopList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Assist Loops",
+        "tags": [
+          "Curation"
+        ]
+      },
+      "post": {
+        "description": "Size an auto-label loop, and queue it unless ``dry_run`` (the default).\n\nThe response is the plan: the clusters and eligible items in scope, the sample each\nneeds, the VLM crops the first draws cost and whether that fits ``budget``, plus the\nendpoints and prompt pack pinned. A start needs ``budget.max_vlm_crops``. Refusals:\n409 ``assist_loop_busy``, ``vlm_not_configured``, ``clustering_running`` (an auto-label\njob is live); 422 ``invalid_request``, ``no_class_names``, ``no_roots``,\n``vlm_external_not_acknowledged`` and the other external-endpoint refusals (the main or\nthe audit endpoint). A loop never overwrites a human,\nvalidated, imported-validated, excluded or holdout item; what it propagates is a machine\nlabel (``assist_propagated``) that rollback can undo.",
+        "operationId": "create_assist_loop_curation_projects__project__assist_loops_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistLoopRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistLoopState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Assist Loop",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/assist/loops/{loop_id}": {
+      "get": {
+        "description": "One loop: its status, budget, per-level record, totals and audit. A loop whose worker\ndied reads ``interrupted`` until resumed.",
+        "operationId": "get_assist_loop_curation_projects__project__assist_loops__loop_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loop_id",
+            "required": true,
+            "schema": {
+              "title": "Loop Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistLoopState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Assist Loop",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/assist/loops/{loop_id}/cancel": {
+      "post": {
+        "description": "Stop a live loop after the requests in flight; what it wrote stays (roll it back to\nundo). A loop still waiting for the worker is cancelled at once.",
+        "operationId": "cancel_assist_loop_curation_projects__project__assist_loops__loop_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loop_id",
+            "required": true,
+            "schema": {
+              "title": "Loop Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistLoopState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Assist Loop",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/assist/loops/{loop_id}/nodes": {
+      "get": {
+        "description": "The nodes of the loop's tree by level then path, with each node's vote distribution\nand decision (`review_*`, `stale` and `unvisited` nodes are the ones left for review).",
+        "operationId": "list_assist_loop_nodes_curation_projects__project__assist_loops__loop_id__nodes_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loop_id",
+            "required": true,
+            "schema": {
+              "title": "Loop Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "level",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Level"
+            }
+          },
+          {
+            "in": "query",
+            "name": "decision",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "pass",
+                    "split",
+                    "review_leaf",
+                    "review_small",
+                    "stale",
+                    "unvisited"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Decision"
+            }
+          },
+          {
+            "description": "`next_after` of the previous page.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`next_after` of the previous page.",
+              "title": "After"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoopNodePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Assist Loop Nodes",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/assist/loops/{loop_id}/nodes/{node_path}/members": {
+      "get": {
+        "description": "The crop ids pinned in a node at the snapshot, in id order: every member, including\nones the lock rule keeps out of the loop.",
+        "operationId": "list_assist_loop_node_members_curation_projects__project__assist_loops__loop_id__nodes__node_path__members_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loop_id",
+            "required": true,
+            "schema": {
+              "title": "Loop Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "node_path",
+            "required": true,
+            "schema": {
+              "title": "Node Path",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`next_after` of the previous page.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`next_after` of the previous page.",
+              "title": "After"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "maximum": 5000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoopMembersPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Assist Loop Node Members",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/assist/loops/{loop_id}/resume": {
+      "post": {
+        "description": "Queue an `interrupted`, `paused` or `cancelled` loop again; it continues from its\nevent log. 409 `assist_loop_not_resumable` for any other status, `assist_loop_busy` while\nanother loop is live.",
+        "operationId": "resume_assist_loop_curation_projects__project__assist_loops__loop_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loop_id",
+            "required": true,
+            "schema": {
+              "title": "Loop Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistLoopState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume Assist Loop",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/assist/loops/{loop_id}/rollback": {
+      "post": {
+        "description": "Restore the items the loop propagated (only those of `node_paths` when given) to the\nclass state before it wrote them. A dry run (the default) counts. An item changed by\nanyone since the loop wrote it, or locked, validated, excluded or in the holdout, is kept\nand counted in `kept_changed`. 409 `assist_loop_running` while the loop is live: cancel it\nfirst.",
+        "operationId": "rollback_assist_loop_curation_projects__project__assist_loops__loop_id__rollback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "loop_id",
+            "required": true,
+            "schema": {
+              "title": "Loop Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LoopRollbackRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoopRollbackResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rollback Assist Loop",
+        "tags": [
+          "Curation"
         ]
       }
     },

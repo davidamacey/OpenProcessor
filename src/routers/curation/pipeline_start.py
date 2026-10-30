@@ -86,9 +86,12 @@ async def pipeline_auto_label_start(
     Only one job runs at a time; a second start request returns HTTP 409
     while a job is in flight.
     """
+    from src.services.curation.assist_loop.job import require_no_live_loop
     from src.services.curation.auto_label_run import run_auto_label
     from src.services.curation.autolabel import job as auto_label_job
 
+    if train_clusters:
+        require_no_live_loop()
     # Resolved here (422 before queueing) so the job args echo what runs.
     reject_detection_profile(detection_profile)
     # captured BEFORE

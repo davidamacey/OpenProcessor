@@ -8,6 +8,8 @@ it is tested without a stack.
 * A retrain is requested once the item count has grown by ``threshold``
   since the last one dispatched, or once a never-trained project has any item.
   An empty project requests nothing.
+* It never starts while an auto-label loop runs on the project (the loop works on a pinned
+  partition; a retrain would move its members). The request is kept and runs after.
 * It starts when ingest is quiet: the item count did not change since the
   previous poll and no region work is unfinished. While ingest runs, new
   items are already assigned to the persisted centroids at ingest time.
@@ -49,6 +51,7 @@ class Observation:
     unfinished: int  # items still waiting for the region stage
     tracked_status: str | None  # status of the job this daemon started, if any
     busy: bool  # any auto-label job (not only ours) is queued or running
+    loop_live: bool  # an auto-label loop is running: nothing may retrain under it
 
 
 @dataclass
@@ -133,7 +136,7 @@ def step(s: ProjectSchedule, o: Observation, now: float, p: Policy) -> Action:
     )
     if crossed and s.pending_since is None:
         s.pending_since = now
-    if s.pending_since is None or in_flight or o.busy or now < s.retry_not_before:
+    if s.pending_since is None or in_flight or o.busy or o.loop_live or now < s.retry_not_before:
         return Action.NONE
     if quiet or now - s.pending_since >= p.max_deferral_s:
         return Action.START

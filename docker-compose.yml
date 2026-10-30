@@ -572,6 +572,54 @@ services:
     networks:
       - triton_net
 
+  curation-assist-loop-worker:
+    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-assist-loop-worker
+    logging: *default-logging
+    # Splitting a large cluster holds hundreds of MB; the loop itself is I/O bound on the VLM.
+    mem_reservation: 2g
+    profiles:
+      - curation
+    restart: unless-stopped
+    env_file:
+      - path: ./.env
+        required: false
+    volumes:
+      # Shared with api: the trigger/state/heartbeat/event-log files POST .../assist/loops
+      # writes into (OP_ASSIST_LOOP_JOBS_DIR, default /jobs/assist_loop).
+      - openprocessor-jobs:/jobs
+      # The loop reads crops through the same source mount as api and the other in-process
+      # workers, and the project class registry from ./data; without them every crop is
+      # unreadable or the registry loads empty.
+      - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
+      - ./data:/app/data
+      # VLM API keys by reference (see api's mount): the loop builds its VLM labelers here.
+      - ./secrets/vlm:/run/secrets/op_vlm:ro
+    environment:
+      - OPENSEARCH_URL=http://opensearch:9200
+      - OP_SOURCE_ROOT=${OP_SOURCE_ROOT:-/data/source}
+    # Lets OP_VLM_URL point at http://host.docker.internal:PORT/v1 for a VLM on the host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command:
+      - python
+      - -m
+      - scripts.curation.assist_loop_worker
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python /app/src/services/curation/worker_liveness.py check assist_loop_worker --max-age 120",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    depends_on:
+      - opensearch
+    networks:
+      - triton_net
+
   curation-cluster-refresh:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
     container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-cluster-refresh

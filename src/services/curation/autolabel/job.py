@@ -19,7 +19,7 @@ had two failure modes the worker container fixes:
   per-host-PID-namespace.
 
 The worker writes a heartbeat file every ~5 s while a run is active;
-``_is_busy()`` uses the heartbeat mtime (cross-container compatible)
+``is_busy()`` uses the heartbeat mtime (cross-container compatible)
 instead of the old /proc inspection. Stale heartbeat (> 15 s) means
 the worker died — same repair path stamps 'vanished' in state.json.
 
@@ -166,7 +166,7 @@ def _read_state() -> _JobState:
     return state
 
 
-def _is_busy() -> bool:
+def is_busy() -> bool:
     """Report whether the auto-label worker has a live run in flight.
 
     Cross-container compatible: uses the heartbeat-file mtime instead of
@@ -461,7 +461,7 @@ def start_job(pipeline_fn: PipelineFn, kwargs: dict[str, Any]) -> dict[str, Any]
     Raises ``RuntimeError`` if a run is already in flight; the caller
     surfaces this as HTTP 409.
     """
-    if _is_busy():
+    if is_busy():
         raise RuntimeError('auto_label run already in progress')
 
     # Clean up any leftover sentinels from a prior aborted run so
@@ -524,7 +524,7 @@ def cancel_job() -> bool:
 
     Returns True if a run was active.
     """
-    if not _is_busy():
+    if not is_busy():
         return False
     _job().request_cancel()
     return True

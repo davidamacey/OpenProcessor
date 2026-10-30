@@ -293,6 +293,7 @@ export type ClassSourceRole =
   | 'merge'
   | 'label_import'
   | 'open_vocab'
+  | 'propagated'
   | (string & {});
 
 /** One `class_source` value this deployment can write. */

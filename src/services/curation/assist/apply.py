@@ -1,8 +1,10 @@
 """Apply a run's proposed class to the scope: the one path from a suggestion to labels.
 
-An explicit user action with a dry-run count first. The write is the human
-relabel service ``PUT /crops/batch_label`` uses (one writer), so the items become
-human-validated, as if the user had labelled them. It acts on the scope's
+An explicit user action with a dry-run count first. By default the write is the
+human relabel service ``PUT /crops/batch_label`` uses (one writer), so the items
+become human-validated, as if the user had labelled them. ``label_source:
+"propagated"`` writes the machine kind instead (unvalidated, the run id in the
+provenance), the same document the auto-label loop writes. It acts on the scope's
 *current* members, refuses when the scope is not the one the run saw
 (``scope_changed``), and leaves every member whose class is locked, validated,
 holdout or excluded alone.
@@ -10,8 +12,9 @@ holdout or excluded alone.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
+from src.services.curation.assist.apply_write import ClassWrite, write_class_to_ids
 from src.services.curation.assist.proposal_models import (
     ApplyConflict,
     AssistApplyRequest,
@@ -19,11 +22,10 @@ from src.services.curation.assist.proposal_models import (
     ScopeNow,
 )
 from src.services.curation.assist.scope_now import current_members, scope_now
-from src.services.curation.class_label import ItemLabel, class_label_update
+from src.services.curation.class_label import ItemLabel
+from src.services.curation.class_registry_names import registry_item_class
 from src.services.curation.class_write_guard import class_write_locked
-from src.services.curation.crop_bulk import occ_bulk_human_relabel
 from src.services.rejections import rejection
-from src.utils.class_names import normalize_class_name
 
 
 if TYPE_CHECKING:
@@ -37,18 +39,27 @@ WRITER = 'human:assist_apply'
 
 
 def _registry_class(class_name: str) -> tuple[int, str]:
-    from src.clients.curation_opensearch.registry import get_class_registry
-    from src.services.curation.region_class import item_classes
-
-    wanted = normalize_class_name(class_name)
-    for entry in item_classes(get_class_registry().load().classes):
-        if normalize_class_name(entry.class_name) == wanted:
-            return entry.class_id, entry.class_name
+    found = registry_item_class(class_name)
+    if found is not None:
+        return found
     raise rejection(
         409,
         'class_not_in_registry',
         f'{class_name!r} is not a class of this project; create it first',
         class_name=class_name,
+    )
+
+
+def _label(body: AssistApplyRequest, run_id: str, class_id: int, class_name: str) -> ItemLabel:
+    if body.label_source == 'propagated':
+        return ItemLabel.propagated(
+            class_id=class_id,
+            class_name=class_name,
+            run_id=run_id,
+            writer=f'assist_loop:{run_id}',
+        )
+    return ItemLabel.human(
+        class_id=class_id, class_name=class_name, label_source=body.label_source, writer=WRITER
     )
 
 
@@ -80,27 +91,12 @@ async def apply_proposal(
     skipped = len(members) - len(eligible)
     if body.dry_run or not eligible:
         return _response(body, class_name, eligible, skipped, now, written=None)
-    locked_at_write: set[str] = set()
-
-    def merge(current: dict[str, Any]) -> dict[str, Any]:
-        # A human or an import got there between the read and the write.
-        if class_write_locked(current):
-            locked_at_write.add(str(current.get('crop_id', '')))
-            return {}
-        return class_label_update(
-            current,
-            ItemLabel.human(
-                class_id=class_id,
-                class_name=class_name,
-                label_source=body.label_source,
-                writer=WRITER,
-            ),
-        )
-
-    written = await occ_bulk_human_relabel(opensearch, eligible, merge, writer_id=WRITER)
-    written['updated_ids'] = [i for i in written['updated_ids'] if i not in locked_at_write]
-    written['updated'] = len(written['updated_ids'])
-    return _response(body, class_name, eligible, skipped + len(locked_at_write), now, written)
+    written = await write_class_to_ids(
+        opensearch, eligible, _label(body, run_id, class_id, class_name)
+    )
+    return _response(
+        body, class_name, eligible, skipped + len(written.skipped_locked), now, written
+    )
 
 
 def _response(
@@ -109,17 +105,16 @@ def _response(
     eligible: list[str],
     skipped: int,
     now: ScopeNow,
-    written: dict[str, Any] | None,
+    written: ClassWrite | None,
 ) -> AssistApplyResponse:
-    written = written or {}
     return AssistApplyResponse(
         dry_run=body.dry_run,
         class_name=class_name,
         selected=len(eligible),
         skipped_locked=skipped,
-        updated=int(written.get('updated', 0)),
-        updated_ids=list(written.get('updated_ids', [])),
-        conflicts=[ApplyConflict(**c) for c in written.get('conflicts', [])],
+        updated=len(written.updated_ids) if written else 0,
+        updated_ids=list(written.updated_ids) if written else [],
+        conflicts=[ApplyConflict(**c) for c in written.conflicts] if written else [],
         scope_now=now,
     )
 

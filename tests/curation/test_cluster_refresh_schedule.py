@@ -18,7 +18,9 @@ POLICY = Policy(threshold=200, max_deferral_s=600.0, retry_backoff_s=300.0)
 
 
 def obs(count: int, *, unfinished: int = 0, tracked: str | None = None, busy: bool = False):
-    return Observation(count=count, unfinished=unfinished, tracked_status=tracked, busy=busy)
+    return Observation(
+        count=count, unfinished=unfinished, tracked_status=tracked, busy=busy, loop_live=False
+    )
 
 
 def settled(count: int = 1000) -> ProjectSchedule:
