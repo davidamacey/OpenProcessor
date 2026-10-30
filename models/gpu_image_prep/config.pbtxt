@@ -83,8 +83,14 @@ parameters { key: "LETTERBOX_FILL" value: { string_value: "114" } }
 parameters { key: "MIN_MEGAPIXELS" value: { string_value: "0" } }
 parameters { key: "MAX_MEGAPIXELS" value: { string_value: "100" } }
 parameters { key: "LANES" value: { string_value: "16" } }
-parameters { key: "WORKERS" value: { string_value: "32" } }
-parameters { key: "MAX_IN_FLIGHT" value: { string_value: "96" } }
+# WORKERS and MAX_IN_FLIGHT: more images in flight than the GPU and the allocator can interleave
+# inflate the launch-bound stages (letterbox 41 to 5 ms, embed_crops 173 to 51 ms per image at 4
+# batches) and slow ingest. Set P, 4 batches, ingest load profile, A6000, same host: WORKERS 16 gave
+# +13 to +17 percent over 32 on a quiet host, and 16 workers with 32 in flight gave +9 to +14 percent
+# over 32 and 96 in two later sessions on a busy one (38.2 to 41.8 and 35.6 to 40.5 img/s). Lower
+# values (12/12, 24/24) could not be told apart from the load of the host. No memory change.
+parameters { key: "WORKERS" value: { string_value: "16" } }
+parameters { key: "MAX_IN_FLIGHT" value: { string_value: "32" } }
 parameters { key: "ENCODE_THREADS" value: { string_value: "8" } }
 
 # Per-stage wall timing is always on (counters op_gpu_prep_stage_seconds and
