@@ -417,3 +417,60 @@ def test_export_partition_cuts_the_dendrogram_at_the_given_height(tmp_path: Path
     assert len(set().union(*by_class.values())) == 3
     with pytest.raises(SystemExit):
         export_partition.main(['--bundle', str(stem), '--arm', 'leiden', '--out', str(out)])
+
+
+# ---------------------------------------------------------------- X0: names compare by the product rule
+
+
+def _slug_project(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """Detector names in registry slug form, ground-truth labels in COCO form, same classes."""
+    stem, lab, gt = _synthetic_project(tmp_path, per_class=12)
+    names = {'car': 'traffic light', 'bus': 'fire hydrant', 'dog': 'Hot Dog'}
+    meta = [json.loads(r) for r in stem.with_suffix('.meta.jsonl').read_text().splitlines()]
+    for m in meta:
+        m['detector_class_name'] = names[m['detector_class_name']].lower().replace(' ', '_')
+    stem.with_suffix('.meta.jsonl').write_text(''.join(json.dumps(m) + '\n' for m in meta))
+    rows = [json.loads(r) for r in lab.read_text().splitlines()]
+    for r in rows:
+        r['label'] = names[r['label']]
+    lab.write_text(''.join(json.dumps(r) + '\n' for r in rows))
+    return stem, lab, gt
+
+
+def test_e5_agreement_treats_a_slug_and_its_coco_spelling_as_one_class(tmp_path: Path) -> None:
+    from scripts.research.cluster_diag import run
+
+    stem, lab, gt = _slug_project(tmp_path)
+    out = run.run_e5(_args(stem, lab, gt, tmp_path / 'o.json', confidence_cuts=[1.01]))
+    # the slug and the COCO spelling of each class name are one class
+    assert out['cuts']['detector_confidence<1.01']['detector_class_agrees_with_label'] == 1.0
+
+
+def test_diag_label_facts_use_the_same_name_rule(tmp_path: Path) -> None:
+    from scripts.research.cluster_diag import run
+
+    stem, lab, gt = _slug_project(tmp_path)
+    pool = np.random.default_rng(1).standard_normal((60, 16)).astype(np.float32)
+    np.save(tmp_path / 'pool.npy', pool)
+    out = run.run_diag(
+        _args(
+            stem,
+            lab,
+            gt,
+            tmp_path / 'o.json',
+            fit_pool=tmp_path / 'pool.npy',
+            pool_geometry_rows=60,
+        )
+    )
+    assert out['label_facts']['detector_class_agrees_with_label'] == 1.0
+
+
+def test_agreement_still_counts_a_different_class_as_a_disagreement() -> None:
+    from scripts.research.cluster_diag.dataset import class_agreement
+
+    meta = [{'detector_class_name': n} for n in ('traffic_light', 'bus', 'dog', None)]
+    # rows 0..3 vs labels: same class (spelled differently), different, same, no detector class
+    got = class_agreement(
+        meta, np.array([0, 1, 2, 3]), np.array(['traffic light', 'car', 'DOG', 'cat'])
+    )
+    assert got == pytest.approx(2 / 4)

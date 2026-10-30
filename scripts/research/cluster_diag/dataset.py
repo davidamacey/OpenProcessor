@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from scripts.research.cluster_diag.diagnostics import l2_normalize
+from src.utils.class_names import normalize_class_name
 
 
 if TYPE_CHECKING:
@@ -30,6 +31,7 @@ class Bundle:
     group: list[str]  # source image of each labelled crop
     aspect: NDArray[np.float64]  # box width / height in pixels, per labelled crop
     side: NDArray[np.float64]  # short box side in pixels, per labelled crop
+    protected: NDArray[np.bool_]  # human- or import-validated, locked or holdout, per labelled crop
 
     def strata_masks(self) -> dict[str, NDArray[np.bool_]]:
         """Boolean masks over the labelled crops: label strata plus shape and size strata."""
@@ -40,6 +42,26 @@ class Bundle:
         masks['side<32px'] = self.side < 32
         masks['side>=96px'] = self.side >= 96
         return masks
+
+
+NONE_KEY = 'none'  # partition key of a crop the detector gave no class
+
+
+def detector_keys(meta: list[dict[str, Any]]) -> NDArray[Any]:
+    """Each crop's detector class as the product's name rule writes it (``NONE_KEY`` if absent)."""
+    return np.array(
+        [normalize_class_name(str(m.get('detector_class_name') or '')) or NONE_KEY for m in meta]
+    )
+
+
+def class_agreement(meta: list[dict[str, Any]], rows: Any, truth: Any) -> float:
+    """Share of ``rows`` whose detector class names the same class as ``truth`` (same rule).
+
+    A crop with no detector class never agrees.
+    """
+    det = detector_keys([meta[int(i)] for i in rows])
+    wanted = np.array([normalize_class_name(str(t)) for t in truth])
+    return float(np.mean((det == wanted) & (det != NONE_KEY)))
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -81,4 +103,7 @@ def load_bundle(stem: Path, labels: Path, coco_gt: Path) -> Bundle:
         group=[str(label_of[meta[i]['crop_id']].get('group', meta[i]['image_id'])) for i in rows],
         aspect=np.array(aspect),
         side=np.array(side),
+        protected=np.array(
+            [bool(label_of[meta[i]['crop_id']].get('protected', False)) for i in rows], dtype=bool
+        ),
     )
