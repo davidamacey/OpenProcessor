@@ -1,0 +1,58 @@
+# Opt-in overlay: the ingest load profile. Triton preloads only the models photo ingest calls
+# (the detector, the PE image encoder and the PE text tower) instead of every model; `gpu_image_prep`
+# loads on first use as before. That leaves the GPU memory of the face, MobileCLIP and OCR models
+# (see docs-site/docs/operations/ingest-load-profile.mdx for the measured amounts) to the GPU decode.
+#
+# The endpoints that need a model this profile does not preload (/faces, /embed, /ocr, /search,
+# /analyze, the core /ingest and /detect with another detector) still answer: the API loads the model
+# the first time it is called (src/clients/model_residency.py), which takes a few seconds once and
+# keeps the model resident afterwards. A card that cannot hold it then refuses the call.
+#
+# Usage (the CLI adds this file by itself when OP_LOAD_PROFILE=ingest is in .env):
+#   docker compose -f docker-compose.yml -f docker-compose.ingest-focus.yml up -d
+#
+# The command below is docker-compose.yml's with the unused `--load-model` lines removed;
+# tests/compose/test_ingest_focus_overlay.py keeps the two in step.
+
+services:
+  triton-server:
+    command:
+      - tritonserver
+      - --model-store=/models
+      - --backend-config=default-max-batch-size=128
+      - --strict-model-config=false
+      # The API and workers ping every 30 s while idle
+      # (src/clients/triton_pool_core.py); Triton's defaults refuse idle pings
+      # and pings under 5 minutes apart, so every client got a GOAWAY
+      # ("too_many_pings") and reconnected.
+      - --grpc-keepalive-permit-without-calls=true
+      - --grpc-http2-min-recv-ping-interval-without-data=20000
+      - --model-control-mode=explicit
+      # Serve whatever exported: a missing/failed engine (e.g. the minimal
+      # setup profile skips OCR) leaves that model unloaded instead of
+      # killing the server. The API reports per-model status.
+      - --exit-on-error=false
+      - --strict-readiness=false
+      # ===================================================================
+      # Visual Search Models
+      # ===================================================================
+      - --load-model=yolov11_small_trt_end2end
+      # G-07: pe_image_encoder backs curation semantic search and the
+      # near-dup/uniqueness item scorers -- CURATION.md calls it required,
+      # not optional, so it belongs in the default load list.
+      - --load-model=pe_image_encoder
+      # F-07 remainder (fresh-start E2E findings 2026-09-25): serving the
+      # text tower here means every uvicorn worker shares ONE CPU instance
+      # instead of each loading its own ~1.4 GB ONNX Runtime session --
+      # src/clients/pe_encoder.py's auto backend selection prefers this
+      # over the in-process path whenever Triton reports it ready.
+      - --load-model=pe_text_encoder
+      # ===================================================================
+      - --log-verbose=0
+      - --log-info=true
+  api: &profile_env
+    environment:
+      - OP_LOAD_PROFILE=ingest
+  curation-detection-worker: *profile_env
+  curation-auto-label-worker: *profile_env
+  curation-evaluator: *profile_env
