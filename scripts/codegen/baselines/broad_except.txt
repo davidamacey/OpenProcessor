@@ -129,7 +129,7 @@ src/services/curation/clustering/methods/ahc.py	2	triage every return-empty hand
 src/services/curation/clustering/methods/hdbscan.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/clustering/methods/ivf.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/clustering/methods/ivf_store.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/clustering/orchestrator.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/orchestrator.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/clustering/pit_pages.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/clustering/region_box_rows.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/clustering/region_cluster_jobs.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
