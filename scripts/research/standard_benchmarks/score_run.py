@@ -197,6 +197,28 @@ def score_dataset(args: argparse.Namespace) -> None:
     (out / f'scores_{args.dataset}.json').write_text(json.dumps(result, indent=1))
 
 
+def score_ahc(args: argparse.Namespace) -> None:
+    """The average-linkage readings alone (CPU), for runs where the GPU part was scored with ``--skip-ahc``."""
+    cache = env_path('WB2_CACHE') / args.dataset
+    rows = [json.loads(x) for x in (cache / 'rows.jsonl').read_text().splitlines() if x]
+    labels = np.array([r['label'] for r in rows])
+    prows = [protocol.Row(r['path'], r['label'], r['part']) for r in rows]
+    sub_test = np.array(protocol.cluster_subset(prows, args.dataset, 'test'))
+    sub_calib = np.array(protocol.cluster_subset(prows, args.dataset, 'calib'))
+    out: dict[str, Any] = {**run_info(), 'dataset': args.dataset, 'combos': {}}
+    for name, vecs in load_combos(cache).items():
+        out['combos'][name] = ahc_reading(
+            vecs[sub_calib], labels[sub_calib], vecs[sub_test], labels[sub_test]
+        )
+        if name == f'{bars.PRODUCTION}__centre':
+            out['combos'][name]['dendrogram_seconds'] = timed(
+                functools.partial(dendrogram, vecs[sub_test])
+            )
+        print(args.dataset, name, 'ahc', out['combos'][name]['verdict_b3'], flush=True)
+    Path(args.out).mkdir(parents=True, exist_ok=True)
+    (Path(args.out) / f'ahc_{args.dataset}.json').write_text(json.dumps(out, indent=1))
+
+
 def split_name(combo: str) -> tuple[str, str]:
     model, variant = combo.rsplit('__', 1)
     return model, variant
@@ -214,6 +236,11 @@ def decide(args: argparse.Namespace) -> None:
     scores = {
         p.stem.removeprefix('scores_'): json.loads(p.read_text()) for p in out.glob('scores_*.json')
     }
+    for d in scores:
+        extra = out / f'ahc_{d}.json'
+        if extra.exists():
+            for name, reading in json.loads(extra.read_text())['combos'].items():
+                scores[d]['combos'][name]['ahc'] = reading
     hits = {
         d: dict(zip(scores[d]['hit_columns'], np.load(out / f'hits_{d}.npy').T, strict=True))
         for d in scores
@@ -297,6 +324,10 @@ def main() -> None:
     s.add_argument('--device', default='cuda')
     s.add_argument('--skip-ahc', action='store_true')
     s.set_defaults(fn=score_dataset)
+    a = sub.add_parser('ahc')
+    a.add_argument('--dataset', required=True, choices=sorted(protocol.SETS))
+    a.add_argument('--out', required=True)
+    a.set_defaults(fn=score_ahc)
     d = sub.add_parser('decide')
     d.add_argument('--out', required=True)
     d.set_defaults(fn=decide)

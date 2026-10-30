@@ -337,3 +337,40 @@ def test_file_groups_reads_manifest_hashes(tmp_path: Path, monkeypatch: pytest.M
 def test_top1_similarity_finds_the_nearest_other_row() -> None:
     x = np.array([[1.0, 0], [1.0, 0], [0, 1.0]], dtype=np.float32)
     assert metrics.top1_similarity(x).tolist() == [1.0, 1.0, 0.0]
+
+
+def _combo(r1: float, cal: float) -> dict[str, object]:
+    return {
+        'recall': {'1': r1, '2': r1, '4': r1, '8': r1},
+        'calibration_recall1': cal,
+        'control': {'recall1': 0.01, 'nmi': 0.01},
+        'kmeans': {'nmi_mean': 0.5},
+    }
+
+
+def test_decide_end_to_end_on_synthetic_scores(tmp_path: Path) -> None:
+    import argparse
+
+    rng = np.random.default_rng(0)
+    models = list(bars.SETC_P10)
+    cols = [f'{m}__{v}' for m in models for v in ('centre', 'letterbox')]
+    for ds in ('cars196', 'cub200'):
+        hits = np.stack(
+            [rng.random(20000) < (0.95 if c.startswith('siglip2') else 0.70) for c in cols], axis=1
+        )
+        np.save(tmp_path / f'hits_{ds}.npy', hits)
+        combos = {c: _combo(0.9, 0.9 if c.endswith('letterbox') else 0.8) for c in cols}
+        (tmp_path / f'scores_{ds}.json').write_text(
+            json.dumps({'rows': 8131, 'expected_rows': 8131, 'combos': combos, 'hit_columns': cols})
+        )
+    (tmp_path / 'ahc_cub200.json').write_text(
+        json.dumps({'combos': {c: {'verdict_b3': 'PASS'} for c in cols}})
+    )
+    score_run.decide(argparse.Namespace(out=str(tmp_path)))
+    dec = json.loads((tmp_path / 'decisions.json').read_text())
+    assert set(dec['selected_variant'].values()) == {'letterbox'}
+    assert dec['B1']['siglip2_so400m_p16_256']['verdict'] == bars.PASS
+    assert dec['B1']['dinov2_l14']['verdict'] == bars.FAIL
+    assert dec['B1']['dinov2_l14']['text_tower'] is False
+    assert dec['B2']['dinov2_l14']['verdict'] == bars.FAIL  # no gain between two random columns
+    assert 'pe_core_l14_336' not in dec['B1']
