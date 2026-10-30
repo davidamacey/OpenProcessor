@@ -76,6 +76,24 @@ read the upgrade notes in [`CHANGELOG.md`](CHANGELOG.md) (new projects start
 with the VLM off, `CROPWRIGHT_*` env names are now `OP_CROPWRIGHT_*`, the
 evaluator has its own `evaluator` profile).
 
+**What is new in 0.7.0.**
+
+- **Label operations and undo.** Bulk label and move are recorded; undo any of
+  them from the server, item by item, dry run first. Later human edits are
+  never reverted ([guide](docs-site/docs/guides/label-operations-and-undo.mdx)).
+- **Cluster list sort, filters and flags.** The server sorts and filters the
+  cluster cards, serves `label_agreement` and quality flags, and counts one
+  cluster's members by facet ([guide](docs-site/docs/guides/cluster-list-and-filters.mdx)).
+- **Ingest stage timing.** Per-stage counters inside `gpu_image_prep` and a
+  profile driver ([operations page](docs-site/docs/operations/ingest-stage-timing.mdx)).
+- **Cluster research outcome.** Nothing new ships from the clustering
+  experiments; IVF and PE-Core-L stay
+  ([outcome](docs/research/cluster_program_outcome.md)). What to do next:
+  [`docs/design/improvement_backlog.md`](docs/design/improvement_backlog.md).
+- Also: typed `GET /clusters`, detector filters in the item filter, content-hash
+  image ids, per-project crop cache, semantic text search on by default.
+  Full list and upgrade notes in [`CHANGELOG.md`](CHANGELOG.md).
+
 The whole curation surface is in
 [`contracts/openapi/curation.json`](contracts/openapi/curation.json); the
 guides are under [`docs-site/docs/guides/`](docs-site/docs/guides/).
