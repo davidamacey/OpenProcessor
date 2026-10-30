@@ -30,7 +30,11 @@ GPU and pick one from its VRAM.
 The installer picks `full` only when the Triton card has **40 GB or more free**: the profile's
 models take 17,408 MiB and its two `gpu_image_prep` instances take 2 x 8,704 MiB more, 34,816 MiB
 in all. A 24 or 32 GB Triton card gets `standard` with the GPU decode off (the Triton models
-alone take 12,288 MiB). You can still set `GPU_PROFILE=full` by hand; `./openprocessor gpu plan`
+alone take 12,288 MiB). **Measured on an RTX A6000, Triton holds 36.5 GB with the default load
+list, not 17.4 GB**, so two `gpu_image_prep` instances do not fit a 48 GB card next to it: photos
+fall back to the CPU decode (counted as `cpu_gpu_memory`). On such a card use one instance, or set
+`OP_LOAD_PROFILE=ingest` to preload only what ingest calls and free 27.7 GB
+([Ingest load profile and GPU memory](../operations/ingest-load-profile.mdx)). You can still set `GPU_PROFILE=full` by hand; `./openprocessor gpu plan`
 warns when the card cannot hold it.
 
 The values are in `config_templates/profiles/*.json`. We have not measured a throughput
@@ -47,7 +51,7 @@ What a profile changes, and what it does not:
   `scripts/setup.sh` when there is no `.env` yet, `./openprocessor profile` into the existing one. The installer uses `GPU_PROFILE` for its model setup, and the API reads
   `OP_INGEST_GPU_DECODE`.
 - **It does not change the model list.** The Triton load list is fixed in
-  `docker-compose.yml`. A model that was never exported stays unloaded and the server
+  `docker-compose.yml` (the opt-in `OP_LOAD_PROFILE=ingest` replaces it, see above). A model that was never exported stays unloaded and the server
   keeps running (`--exit-on-error=false`). `scripts/setup.sh --profile=minimal` exports the
   essential models only, with no OCR.
 - **It does not set the API worker count or `shm_size`.** The API runs 32 uvicorn workers and

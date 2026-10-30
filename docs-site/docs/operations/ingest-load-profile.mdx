@@ -10,13 +10,33 @@ search) the PE text tower. By default Triton also preloads the face, MobileCLIP 
 On a 48 GB card they take 27.7 GB, and `gpu_image_prep` (the GPU decode, about 2.3 GB per
 instance plus working memory) then competes for what is left.
 
+## What each model costs
+
+Measured on an RTX A6000 (GPU memory after loading each model on top of the ingest profile's
+8.8 GB; unloading returned every byte):
+
+| Model | Used by | GPU memory |
+|---|---|---|
+| `scrfd_10g_bnkps` | `/faces/*`, `/analyze`, core `/ingest`, `/search/face` | 6,846 MiB |
+| `arcface_w600k_r50` | same as above | 2,754 MiB |
+| `mobileclip2_s2_image_encoder` | `/embed/image`, `/embed/batch`, `/embed/boxes`, `/search/image`, `/search/object`, `/analyze`, core `/ingest` | 3,454 MiB |
+| `mobileclip2_s2_text_encoder` | `/embed/text`, `/search/text` | 1,430 MiB |
+| `paddleocr_det_trt` | `/ocr/*`, `/search/ocr`, `/analyze`, curation text reading | 1,642 MiB |
+| `paddleocr_rec_trt` | same as above | 11,572 MiB |
+| `ocr_pipeline` (calls the two OCR models) | `/ocr/*` | 0 MiB (the two above load with it) |
+| Total | | 27,698 MiB |
+
+The detector, `pe_image_encoder` and `pe_text_encoder` (curation ingest, search and clustering)
+and `gpu_image_prep` are the same in both profiles. Face and OCR models are loaded on the first
+call under the ingest profile, so those calls pay a few seconds once.
+
 ## What happens when the card is short of memory
 
 `gpu_image_prep` keeps a byte budget (`DEVICE_BUDGET_MIB`, default 2048). A photo reserves
 its decoded frame from it before decoding and waits its turn (at most `BUDGET_WAIT_SECONDS`)
 instead of failing a CUDA allocation. The budget is reserved when the model loads: an
 instance that cannot hold it fails to load, Triton shows the model unavailable and ingest
-decodes on the CPU, which `GET /health` and the route counters show. A photo that still hits a
+decodes on the CPU; the route counters (`op_ingest_decode_total`) show it. A photo that still hits a
 failed allocation, a wait that times out, or a photo larger than the budget is answered with a
 status and decoded on the CPU, counted in `op_ingest_decode_total` as `cpu_gpu_memory` or
 `cpu_over_budget` (embed pass: `op_reprocess_decode_total`). The stage counter

@@ -1,0 +1,15 @@
+base 8813
+scrfd_10g_bnkps 15659
+arcface_w600k_r50 18413
+mobileclip2_s2_image_encoder 21867
+mobileclip2_s2_text_encoder 23297
+paddleocr_det_trt 24939
+paddleocr_rec_trt 36511
+ocr_pipeline 36511
+unloaded ocr_pipeline 36511
+unloaded paddleocr_rec_trt 24943
+unloaded paddleocr_det_trt 23303
+unloaded mobileclip2_s2_text_encoder 21877
+unloaded mobileclip2_s2_image_encoder 18425
+unloaded arcface_w600k_r50 15675
+unloaded scrfd_10g_bnkps 8831

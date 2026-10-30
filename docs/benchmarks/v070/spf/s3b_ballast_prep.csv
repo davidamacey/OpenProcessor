@@ -1,0 +1,2 @@
+00000000:03:00.0, 2443738, tritonserver, 8788 MiB
+00000000:03:00.0, 2449759, /opt/tritonserver/backends/python/triton_python_backend_stub, 2316 MiB

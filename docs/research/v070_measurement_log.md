@@ -29,6 +29,7 @@ file behind any number in this log.
 | G2 (worker region-stage cost) | none | **No raw data.** The stdout of the two stage runs (86 against 220 ms per item, CPU 0.077 against 0.212 s) was not saved; only the GPU sample file `lx/out/samples_wk_lx-p2_branch.csv` and the input list `lx/wk_in.json` remain. The CPU ratio is 2.7; the wall ratio is 2.57 (220 / 85.6). Re-run `lx/wk.py` against the stage before quoting these as a baseline for #362. |
 | G3 to G5 (tuning, final configuration) | `live_g/exp1.jsonl` (`gpu500_mean` is the 500 ms mean), `live_g/final.log`, `live_g/g500_*.log` (500 ms samples, one value per line), `live_g/tune*.log`, `live_g/cpu_run.log` | `lx/out/samples_exp1_*.csv` |
 | SP0.7 (why throughput fell past 4 batches) | `sp0/gpu_prep_concurrency/<row>/` (per-repetition reports with the route counters and stage counters, summaries), `*.call_failed.txt`, `*.triton_errors.txt`, `e1_per_process_peaks.md`, `threads/`; tables `sp0/sp0_tables_headroom.md` | 500 ms per-process memory and route-counter series `artifacts_local/bench/v070/sp0/e1/*.apps.log`, `*.routes.log`; set B rows `artifacts_local/bench/v070/sp0/exp/` (main checkout) |
+| SPF (ingest-speed fixes: memory budget, config, load profile, acceptance) | `spf/<row>/` per-repetition reports (`metrics.api.counters` cut to `op_ingest_*`), `spf/<row>.stages.prom`, `*.call_failed.txt`, `*.triton_errors.txt`, `spf/model_memory.txt`, `spf/parity.txt`, `spf/endpoints_*.txt` | 500 ms per-process memory and route series `artifacts_local/bench/v070/sp0/spf/*.apps.log`, `*.routes.log`; parity captures `par_*.npz` (same directory, main checkout) |
 
 Where a table in this log disagrees with the file named here, the file is right; the corrections made on
 2026-10-28 (memory table statistic, GPU and Triton CPU columns of A to C, the section D count) are noted at
@@ -1139,3 +1140,109 @@ with `MAX_IN_FLIGHT` or `WORKERS` 16); not met on the full default stack (30.7, 
   gave 39.2 and 39.9.
 - All Triton restarts used `docker compose -p optest2 restart` or `up -d` (no `pkill`).
 
+
+
+### SPF Ingest-speed fixes: memory budget, config, load profile (issues #392, #393; run 2026-10-30, GPU 0)
+
+Same stack and protocol as SP0.7 (`optest2`, GPU 0 only, release 0.6.0 images, this branch's `gpu_image_prep` and API code mounted,
+set P 3,000 sample copies, 3 repetitions unless noted, page cache dropped, 500 ms GPU samples, load average recorded). The host was
+never quiet: the 1-minute load was 13 to 138 (other sessions' test suites), so every repetition is marked noisy by the harness's
+load-16 rule and the same configuration varied by up to 40 percent between sessions (32/96: 38.2, 35.6 and 21.2 img/s at load 43, 73 and
+138). Rows are therefore compared only inside one session. Fallback % = `cpu_decoder` + `cpu_call_failed` + `cpu_gpu_memory` +
+`cpu_over_budget` over the photos sent to the model. Raw files: `docs/benchmarks/v070/spf/`.
+
+#### SPF.1 C1: byte budget, new statuses, fail at load
+
+Offline tests (fail first against the SP0.7 model: 18 of 27 stage-metrics tests failed): budget FIFO and no deadlock with 64 threads,
+`gpu_memory` at every allocating stage including stored-box mode, `over_budget`, the wait and its timeout, no output change under a tight
+budget, reservation at load and the load refusal. Live parity of the whole model (200 public images, set A and set B, direct
+`gpu_image_prep` captures, `scripts/bench/gpu_prep_parity.py`): old model against old model at concurrency 1 differs in 8 of 193 images
+(the detector's run-to-run variation), old against new differs in 11; in every one of those images the detector boxes differ, and where the
+boxes are equal every output (sizes, letterbox, classes, blur sums, crop JPEG bytes) is byte-identical. Whole-frame embedding cosine at least
+0.99999999 at concurrency 1. Concurrency 8: old against old 11 differing images, old against new 8. The arithmetic is unchanged
+(`spf/parity.txt`).
+
+Default model set (36.5 GB resident), shipped config of SP0.7 (32 workers, 96 in flight), two instances:
+
+| Row | img/s median (min to max) | GPU % | Fallback % per rep | API CPU-s/img | Card peak GiB |
+|---|---|---|---|---|---|
+| 8 batches | 23.5 (23.2 to 24.0) | 59 | 2.5 / 8.2 / 9.4 | 0.133 | 47.4 |
+| 4 batches | 25.5 (18.5 to 27.6) | 57 | 1.9 / 6.5 / 23.2 | 0.159 | 47.4 |
+| 4 batches, one instance | 32.8 (30.8 to 34.4) | 75 | 0 / 0 / 0 | 0.058 | 45.0 |
+
+On the default stack the budget does not remove the fallbacks, it names them: the card has 12.6 GB left after Triton's 36.5 GB, two
+instances reserve 2 x 2.3 GB at load and need about 6 to 7 GB more each under load (nvJPEG buffers, CuPy scratch, BLS tensors), which is
+more than is left. The failures now arrive as `cpu_gpu_memory` (2.5 to 9 percent) instead of `cpu_decoder` and `cpu_call_failed`, still
+decaying with session age. Both instances loaded, so the load-time refusal did not fire: the reservation covers the frames, not the
+nvJPEG buffers. One instance fits (32.8 img/s, GPU 75 percent, no fallback).
+
+Ingest load profile (SPF.3), two instances, same config:
+
+| Row | img/s median (min to max) | GPU % | Fallback % | API CPU-s/img | Card peak GiB |
+|---|---|---|---|---|---|
+| 8 batches | 47.9 (47.5 to 48.4) | 96 | 0 | 0.053 | 25.6 |
+| 4 batches | 42.0 (41.3 to 42.7) | 88 | 0 | 0.057 | 25.7 |
+
+The wait for the budget is not binding there: `op_gpu_prep_stage_seconds{stage="budget"}` is 0.2 s over 8,976 photos at 16 workers
+(13.8 s over 8,978 at 32 workers on the full card).
+
+#### SPF.2 Config: WORKERS and MAX_IN_FLIGHT (ingest profile, set P, 4 batches)
+
+| Session | Row (workers/in flight) | img/s median (min to max) | GPU % | Load max |
+|---|---|---|---|---|
+| screening, 2 reps | 32/96 | 38.2 (37.9 to 38.5) | 80 | 43 |
+| | 24/96 | 40.5 (40.4 to 40.6) | 83 | 53 |
+| | 16/96 | 40.4 (37.5 to 43.3) | 86 | 62 |
+| | 12/96 | 42.0 (41.1 to 43.0) | 86 | 54 |
+| | 16/32 | 41.8 (38.4 to 45.3) | 87 | 59 |
+| | 16/16 | 37.5 (36.4 to 38.6) | 80 | 52 |
+| | 24/24 | 43.5 (42.8 to 44.3) | 89 | 99 |
+| | 12/12 (1 rep) | 44.2 | 90 | 28 |
+| confirmation, 3 reps | 32/96 | 35.6 (34.6 to 38.2) | 80 | 73 |
+| | 16/32 | 40.5 (37.0 to 41.3) | 86 | 63 |
+| | 24/24, 12/12, 32/96 repeat | 31.9, 30.7, 21.2 | 70, 70, 49 | 120, 110, 138 (unusable) |
+
+16/32 beat 32/96 in all three comparisons that ran at similar load (+9, +14 percent here, +13 to +17 percent for 16/96 in SP0.7.4); the
+lower values (12/12, 24/24) sometimes looked better and sometimes collapsed with the host load, so no ranking among them is claimed.
+Default set to 16 workers, 32 in flight (no memory change: card peak 23.4 to 25.8 GiB in every row).
+
+#### SPF.3 The load list (issue #393): memory per model and the profile
+
+GPU 0 memory after loading each model on top of the three-model ingest profile (8,813 MiB; unloading each returned it to within 18 MiB):
+
+| Model | Used by | Delta MiB |
+|---|---|---|
+| `scrfd_10g_bnkps` | /faces, /analyze, core /ingest, /search/face | 6,846 |
+| `arcface_w600k_r50` | same | 2,754 |
+| `mobileclip2_s2_image_encoder` | /embed image routes, /search image and object, /analyze, core /ingest | 3,454 |
+| `mobileclip2_s2_text_encoder` | /embed/text, /search/text | 1,430 |
+| `paddleocr_det_trt` | /ocr, /search/ocr, /analyze, curation text reading | 1,642 |
+| `paddleocr_rec_trt` | same | 11,572 |
+| `ocr_pipeline` | /ocr (calls the two above) | 0 |
+| total | | 27,698 |
+
+The 36.5 GB of the default list is therefore the three needed models (8.8 GB) plus 27.7 GB, of which the OCR recognizer alone is 11.6 GB
+(its dynamic-shape engine). This answers #393's 36.5 against 23.1 GB: optest1 holds fewer of these.
+
+Profile check: every public endpoint of the core API (38 routes with a body or no path parameter, `spf/endpoints_*.txt`) was called with
+three public COCO images on the default list and on the profile. The status codes are identical (200, except the face routes' 400 "no face
+detected" on photos without faces) with one difference, and it is the card, not the profile: on the default list with two instances the
+card is full and `/ocr/predict` fails with "Failed to open the cudaIpcHandle: out of memory"; on the profile it answers 200. The first run
+of the sweep found a real bug in this work (`ocr_pipeline` loaded without the OCR models it calls, `/ocr/predict` 502), fixed in
+`efe067ca`. First calls on the profile cost 2.3 s (`/embed/text`) and 17.8 s (`/analyze`, five models) once.
+
+#### SPF.4 Acceptance, set P (config 16/32, `--clients` 4 and 8, 3 reps, host load 13 to 35 during these rows)
+
+| Stack | Clients | img/s median (min to max) | GPU % | Fallback % per rep | API CPU-s/img | Card peak GiB |
+|---|---|---|---|---|---|---|
+| ingest profile, 2 instances | 4 | 48.3 (45.3 to 49.0) | 94 | 0 / 0 / 0 | 0.052 | 25.4 |
+| ingest profile, 2 instances | 8 | 48.3 (40.8 to 48.8) | 93 | 0 / 0 / 0 | 0.056 | 25.8 |
+| default list, 1 instance | 4 | 38.9 (32.9 to 39.4) | 83 | 0 / 0 / 0 | 0.060 | 45.3 |
+| default list, 1 instance | 8 | 38.6 (38.4 to 40.2) | 86 | 0 / 0 / 0 | 0.059 | 44.9 |
+| default list, 2 instances | 4 | 35.9 (32.4 to 39.3) | 72 | 0.6 / 2.2 / 5.6 | 0.081 | 47.4 |
+| 24 GiB emulation (ballast 24.8 GiB), ingest profile, 1 instance | 4 | 38.1 (35.1 to 39.1) | 84 | 0 / 0 / 0 | 0.059 | 42.1 total with ballast |
+
+Bars (SP4: at least 29 img/s with GPU above 75 percent at 4 clients; fallbacks at most 0.5 percent; API CPU at most 0.08; no drop at 8):
+met on the ingest profile with two instances, and on the default list with one instance. Not met on the default list with two instances
+(fallbacks up to 5.6 percent, GPU 72, card at 47.4 of 48.0 GiB, i.e. full): that is the shipped `full` profile, see the review. The 24 GB case
+passes with the ingest profile and one instance. C2 (batched kernels) is deferred: the bar is met without it.

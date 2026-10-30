@@ -1,0 +1,2 @@
+      2 gpu_image_prep: device memory failure in decode (NvJpegError: TransferToDevice returned nvjpegStatus 5); event 1, budget in use N of N bytes
+      1 gpu_image_prep: device memory failure in decode (NvJpegError: TransferToDevice returned nvjpegStatus 5); event N budget in use N of N bytes

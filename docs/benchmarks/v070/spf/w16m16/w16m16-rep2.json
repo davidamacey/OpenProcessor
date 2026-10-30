@@ -1,0 +1,253 @@
+{
+ "config": {
+  "batch_size": 32,
+  "policy": "all",
+  "project": "sp0-w16m16-r2-1030134757",
+  "stages": [
+   "ingest"
+  ],
+  "warmup": 100
+ },
+ "gpu": {
+  "0": {
+   "mem_peak_mb": 25426.0,
+   "samples": 107,
+   "util_mean_pct": 79.78504672897196,
+   "util_p50_pct": 100.0
+  },
+  "1": {
+   "mem_peak_mb": 3859.0,
+   "samples": 107,
+   "util_mean_pct": 0.04672897196261682,
+   "util_p50_pct": 0.0
+  },
+  "2": {
+   "mem_peak_mb": 29192.0,
+   "samples": 107,
+   "util_mean_pct": 0.0,
+   "util_p50_pct": 0.0
+  }
+ },
+ "gpu_prep_stages": {
+  "blur": {
+   "mean_s": 0.021332260761268356,
+   "observations": 2893.0,
+   "seconds": 61.714230382349356,
+   "share": 0.02692667515224477
+  },
+  "budget": {
+   "mean_s": 4.4915689679549676e-05,
+   "observations": 2893.0,
+   "seconds": 0.1299410902429372,
+   "share": 5.6694890371683123e-05
+  },
+  "crop_copy": {
+   "mean_s": 0.04360273501956,
+   "observations": 2893.0,
+   "seconds": 126.1427124115871,
+   "share": 0.05503761156683385
+  },
+  "crop_jpeg": {
+   "mean_s": 0.09856312263028559,
+   "observations": 2893.0,
+   "seconds": 285.14311376941623,
+   "share": 0.12441143556032394
+  },
+  "decode": {
+   "mean_s": 0.11174246201110116,
+   "observations": 2893.0,
+   "seconds": 323.27094259811565,
+   "share": 0.14104707461423674
+  },
+  "detect": {
+   "mean_s": 0.10850018563506836,
+   "observations": 2893.0,
+   "seconds": 313.8910370422528,
+   "share": 0.13695450684993563
+  },
+  "embed_crops": {
+   "mean_s": 0.13619710475353577,
+   "observations": 2893.0,
+   "seconds": 394.01822405197896,
+   "share": 0.1719149806678371
+  },
+  "embed_frame": {
+   "mean_s": 0.010820653249396638,
+   "observations": 2893.0,
+   "seconds": 31.304149850504476,
+   "share": 0.013658384277328765
+  },
+  "embed_pe": {
+   "mean_s": 0.2200187751054152,
+   "observations": 2893.0,
+   "seconds": 636.5143163799662,
+   "share": 0.27771899804519673
+  },
+  "letterbox": {
+   "mean_s": 0.013464809197732422,
+   "observations": 2893.0,
+   "seconds": 38.953693009039895,
+   "share": 0.016995973718480904
+  },
+  "queue": {
+   "mean_s": 0.02794820887693021,
+   "observations": 2893.0,
+   "seconds": 80.8541682809591,
+   "share": 0.03527766465720995
+  }
+ },
+ "host": {
+  "api_cpu_s": 169.61344199999985,
+  "loadavg_end": [
+   88.79,
+   57.59,
+   44.93
+  ],
+  "loadavg_start": [
+   52.49,
+   46.67,
+   40.63
+  ],
+  "noisy": true,
+  "triton_cpu_pct_mean": 485.11586206896555,
+  "triton_cpu_samples": 29.0
+ },
+ "ingest": {
+  "batch_s_p50": 3.328407477005385,
+  "batch_s_p99": 6.537625973072132,
+  "duplicates": 2,
+  "embedded": 6986,
+  "failed": 0,
+  "images": 2900,
+  "images_per_s": 36.36371176076475,
+  "input_bytes": 19471285850,
+  "input_mb_per_s": 244.15456077960596,
+  "items": 6986,
+  "items_per_s": 87.59892771058709,
+  "ok": 2898,
+  "wall_s": 79.74983464501565
+ },
+ "manifest": {
+  "bytes": 20157359916,
+  "count": 3000,
+  "name": "setP3000.txt",
+  "sha256": "e1f4fd36d11ceba5a139a8c7b6d8d9cf601b4ba2c0081aa99aee89b3aaf389b2"
+ },
+ "metrics": {
+  "api": {
+   "counters": {
+    "op_ingest_decode_total{route=cpu_small}": 6.0,
+    "op_ingest_decode_total{route=gpu}": 2892.0,
+    "op_ingest_images_total{outcome=ok,project=sp0-w12m96-r1-1030133759}": 0.0,
+    "op_ingest_images_total{outcome=ok,project=sp0-w12m96-r2-1030133937}": 0.0,
+    "op_ingest_images_total{outcome=ok,project=sp0-w16m16-r1-1030134612}": 0.0,
+    "op_ingest_images_total{outcome=ok,project=sp0-w16m16-r2-1030134757}": 2898.0,
+    "op_ingest_images_total{outcome=ok,project=sp0-w16m32-r1-1030134203}": 0.0,
+    "op_ingest_images_total{outcome=ok,project=sp0-w16m32-r2-1030134342}": 0.0,
+    "op_ingest_images_total{outcome=ok,project=sp0-w16m96-r1-1030133350}": 0.0,
+    "op_ingest_images_total{outcome=ok,project=sp0-w16m96-r2-1030133535}": 0.0,
+    "op_ingest_images_total{outcome=ok,project=sp0-w24m96-r1-1030132942}": 0.0,
+    "op_ingest_images_total{outcome=ok,project=sp0-w24m96-r2-1030133126}": 0.0,
+    "op_ingest_images_total{outcome=ok,project=sp0-w32m96-r1-1030132529}": 0.0,
+    "op_ingest_images_total{outcome=ok,project=sp0-w32m96-r2-1030132715}": 0.0,
+    "op_ingest_images_total{outcome=skipped,project=sp0-w12m96-r1-1030133759}": 0.0,
+    "op_ingest_images_total{outcome=skipped,project=sp0-w12m96-r2-1030133937}": 0.0,
+    "op_ingest_images_total{outcome=skipped,project=sp0-w16m16-r1-1030134612}": 0.0,
+    "op_ingest_images_total{outcome=skipped,project=sp0-w16m16-r2-1030134757}": 2.0,
+    "op_ingest_images_total{outcome=skipped,project=sp0-w16m32-r1-1030134203}": 0.0,
+    "op_ingest_images_total{outcome=skipped,project=sp0-w16m32-r2-1030134342}": 0.0,
+    "op_ingest_images_total{outcome=skipped,project=sp0-w16m96-r1-1030133350}": 0.0,
+    "op_ingest_images_total{outcome=skipped,project=sp0-w16m96-r2-1030133535}": 0.0,
+    "op_ingest_images_total{outcome=skipped,project=sp0-w24m96-r1-1030132942}": 0.0,
+    "op_ingest_images_total{outcome=skipped,project=sp0-w24m96-r2-1030133126}": 0.0,
+    "op_ingest_images_total{outcome=skipped,project=sp0-w32m96-r1-1030132529}": 0.0,
+    "op_ingest_images_total{outcome=skipped,project=sp0-w32m96-r2-1030132715}": 0.0,
+    "op_ingest_items_total{project=sp0-w12m96-r1-1030133759}": 0.0,
+    "op_ingest_items_total{project=sp0-w12m96-r2-1030133937}": 0.0,
+    "op_ingest_items_total{project=sp0-w16m16-r1-1030134612}": 0.0,
+    "op_ingest_items_total{project=sp0-w16m16-r2-1030134757}": 6986.0,
+    "op_ingest_items_total{project=sp0-w16m32-r1-1030134203}": 0.0,
+    "op_ingest_items_total{project=sp0-w16m32-r2-1030134342}": 0.0,
+    "op_ingest_items_total{project=sp0-w16m96-r1-1030133350}": 0.0,
+    "op_ingest_items_total{project=sp0-w16m96-r2-1030133535}": 0.0,
+    "op_ingest_items_total{project=sp0-w24m96-r1-1030132942}": 0.0,
+    "op_ingest_items_total{project=sp0-w24m96-r2-1030133126}": 0.0,
+    "op_ingest_items_total{project=sp0-w32m96-r1-1030132529}": 0.0,
+    "op_ingest_items_total{project=sp0-w32m96-r2-1030132715}": 0.0,
+    "op_ingest_occ_final_conflict_total": 0.0
+   }
+  },
+  "triton": {
+   "counters": {
+    "nv_inference_compute_infer_duration_us_total{gpu_uuid=GPU-2ca96ee7-c611-0ddb-8797-36b18f42f6d5,model=gpu_image_prep,version=1}": 104370435.0,
+    "nv_inference_compute_infer_duration_us_total{gpu_uuid=GPU-2ca96ee7-c611-0ddb-8797-36b18f42f6d5,model=model-demo-owner__model_demo_car,version=1}": 0.0,
+    "nv_inference_compute_infer_duration_us_total{model=gpu_image_prep,version=1}": 0.0,
+    "nv_inference_compute_infer_duration_us_total{model=model-demo-owner__model_demo_car,version=1}": 0.0,
+    "nv_inference_compute_infer_duration_us_total{model=pe_image_encoder,version=1}": 242890427.0,
+    "nv_inference_compute_infer_duration_us_total{model=pe_text_encoder,version=1}": 0.0,
+    "nv_inference_compute_infer_duration_us_total{model=yolov11_small_trt_end2end,version=1}": 120992754.0,
+    "nv_inference_compute_input_duration_us_total{gpu_uuid=GPU-2ca96ee7-c611-0ddb-8797-36b18f42f6d5,model=gpu_image_prep,version=1}": 5083494.0,
+    "nv_inference_compute_input_duration_us_total{gpu_uuid=GPU-2ca96ee7-c611-0ddb-8797-36b18f42f6d5,model=model-demo-owner__model_demo_car,version=1}": 0.0,
+    "nv_inference_compute_input_duration_us_total{model=gpu_image_prep,version=1}": 0.0,
+    "nv_inference_compute_input_duration_us_total{model=model-demo-owner__model_demo_car,version=1}": 0.0,
+    "nv_inference_compute_input_duration_us_total{model=pe_image_encoder,version=1}": 119717.0,
+    "nv_inference_compute_input_duration_us_total{model=pe_text_encoder,version=1}": 0.0,
+    "nv_inference_compute_input_duration_us_total{model=yolov11_small_trt_end2end,version=1}": 3699246.0,
+    "nv_inference_compute_output_duration_us_total{gpu_uuid=GPU-2ca96ee7-c611-0ddb-8797-36b18f42f6d5,model=gpu_image_prep,version=1}": 499016.0,
+    "nv_inference_compute_output_duration_us_total{gpu_uuid=GPU-2ca96ee7-c611-0ddb-8797-36b18f42f6d5,model=model-demo-owner__model_demo_car,version=1}": 0.0,
+    "nv_inference_compute_output_duration_us_total{model=gpu_image_prep,version=1}": 0.0,
+    "nv_inference_compute_output_duration_us_total{model=model-demo-owner__model_demo_car,version=1}": 0.0,
+    "nv_inference_compute_output_duration_us_total{model=pe_image_encoder,version=1}": 160645264.0,
+    "nv_inference_compute_output_duration_us_total{model=pe_text_encoder,version=1}": 0.0,
+    "nv_inference_compute_output_duration_us_total{model=yolov11_small_trt_end2end,version=1}": 6020668.0,
+    "nv_inference_count_total{gpu_uuid=GPU-2ca96ee7-c611-0ddb-8797-36b18f42f6d5,model=gpu_image_prep,version=1}": 2892.0,
+    "nv_inference_count_total{gpu_uuid=GPU-2ca96ee7-c611-0ddb-8797-36b18f42f6d5,model=model-demo-owner__model_demo_car,version=1}": 0.0,
+    "nv_inference_count_total{model=gpu_image_prep,version=1}": 0.0,
+    "nv_inference_count_total{model=model-demo-owner__model_demo_car,version=1}": 0.0,
+    "nv_inference_count_total{model=pe_image_encoder,version=1}": 9884.0,
+    "nv_inference_count_total{model=pe_text_encoder,version=1}": 0.0,
+    "nv_inference_count_total{model=yolov11_small_trt_end2end,version=1}": 2898.0,
+    "nv_inference_exec_count_total{gpu_uuid=GPU-2ca96ee7-c611-0ddb-8797-36b18f42f6d5,model=gpu_image_prep,version=1}": 2892.0,
+    "nv_inference_exec_count_total{gpu_uuid=GPU-2ca96ee7-c611-0ddb-8797-36b18f42f6d5,model=model-demo-owner__model_demo_car,version=1}": 0.0,
+    "nv_inference_exec_count_total{model=gpu_image_prep,version=1}": 0.0,
+    "nv_inference_exec_count_total{model=model-demo-owner__model_demo_car,version=1}": 0.0,
+    "nv_inference_exec_count_total{model=pe_image_encoder,version=1}": 1123.0,
+    "nv_inference_exec_count_total{model=pe_text_encoder,version=1}": 0.0,
+    "nv_inference_exec_count_total{model=yolov11_small_trt_end2end,version=1}": 1235.0,
+    "nv_inference_queue_duration_us_total{gpu_uuid=GPU-2ca96ee7-c611-0ddb-8797-36b18f42f6d5,model=gpu_image_prep,version=1}": 1097503130.0,
+    "nv_inference_queue_duration_us_total{gpu_uuid=GPU-2ca96ee7-c611-0ddb-8797-36b18f42f6d5,model=model-demo-owner__model_demo_car,version=1}": 0.0,
+    "nv_inference_queue_duration_us_total{model=gpu_image_prep,version=1}": 0.0,
+    "nv_inference_queue_duration_us_total{model=model-demo-owner__model_demo_car,version=1}": 0.0,
+    "nv_inference_queue_duration_us_total{model=pe_image_encoder,version=1}": 155113472.0,
+    "nv_inference_queue_duration_us_total{model=pe_text_encoder,version=1}": 0.0,
+    "nv_inference_queue_duration_us_total{model=yolov11_small_trt_end2end,version=1}": 55331723.0,
+    "op_gpu_prep_stage_observations_total{stage=blur}": 2893.0,
+    "op_gpu_prep_stage_observations_total{stage=budget}": 2893.0,
+    "op_gpu_prep_stage_observations_total{stage=crop_copy}": 2893.0,
+    "op_gpu_prep_stage_observations_total{stage=crop_jpeg}": 2893.0,
+    "op_gpu_prep_stage_observations_total{stage=decode}": 2893.0,
+    "op_gpu_prep_stage_observations_total{stage=detect}": 2893.0,
+    "op_gpu_prep_stage_observations_total{stage=embed_crops}": 2893.0,
+    "op_gpu_prep_stage_observations_total{stage=embed_frame}": 2893.0,
+    "op_gpu_prep_stage_observations_total{stage=embed_pe}": 2893.0,
+    "op_gpu_prep_stage_observations_total{stage=letterbox}": 2893.0,
+    "op_gpu_prep_stage_observations_total{stage=queue}": 2893.0,
+    "op_gpu_prep_stage_seconds_total{stage=blur}": 61.714230382349356,
+    "op_gpu_prep_stage_seconds_total{stage=budget}": 0.1299410902429372,
+    "op_gpu_prep_stage_seconds_total{stage=crop_copy}": 126.1427124115871,
+    "op_gpu_prep_stage_seconds_total{stage=crop_jpeg}": 285.14311376941623,
+    "op_gpu_prep_stage_seconds_total{stage=decode}": 323.27094259811565,
+    "op_gpu_prep_stage_seconds_total{stage=detect}": 313.8910370422528,
+    "op_gpu_prep_stage_seconds_total{stage=embed_crops}": 394.01822405197896,
+    "op_gpu_prep_stage_seconds_total{stage=embed_frame}": 31.304149850504476,
+    "op_gpu_prep_stage_seconds_total{stage=embed_pe}": 636.5143163799662,
+    "op_gpu_prep_stage_seconds_total{stage=letterbox}": 38.953693009039895,
+    "op_gpu_prep_stage_seconds_total{stage=queue}": 80.8541682809591
+   },
+   "histograms": {}
+  }
+ },
+ "schema": 1,
+ "stages": {},
+ "storage": {}
+}

@@ -3806,6 +3806,24 @@ python scripts/bench/ingest_profile.py table "set B=<dir>/setB"
 ```
 
 
+### GPU memory and the ingest load profile (0.7.0)
+
+With every default model loaded, `gpu_image_prep` shares a 48 GB card with 36.5 GB of other models, and two instances do not fit: photos then
+decode on the API's CPU (counted as `cpu_gpu_memory`, `cpu_decoder`, `cpu_call_failed` in `op_ingest_decode_total`) and throughput falls with
+session age. Two ways out, both measured on one RTX A6000 with a private set of 3,000 photos of about 21 MP (ratios, not public data):
+
+| Stack | Instances | 4 batches at once | 8 batches at once | Fallbacks |
+|---|---|---|---|---|
+| Default load list | 2 | 35.9 img/s, GPU 72 % | 23.5 img/s (older config) | 0.6 to 23 % |
+| Default load list | 1 | 38.9 img/s, GPU 83 % | 38.6 img/s | 0 |
+| Ingest load profile (`OP_LOAD_PROFILE=ingest`) | 2 | 48.3 img/s, GPU 94 % | 48.3 img/s | 0 |
+| Ingest load profile, card limited to 24 GiB | 1 | 38.1 img/s, GPU 84 % | | 0 |
+
+The profile preloads only the detector and the PE encoders and frees 27.7 GB; the other models load on their first call. Per-model memory and
+the endpoint check: [Ingest load profile and GPU memory](../docs-site/docs/operations/ingest-load-profile.mdx); raw rows:
+`docs/benchmarks/v070/spf/`. Host load was 13 to 35 during these rows. The public set A/B rows above were not re-run for this change.
+
+
 ## Benchmarking
 
 ### Using the Go Benchmark Tool

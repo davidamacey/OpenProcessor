@@ -1,0 +1,26 @@
+# HELP op_gpu_prep_stage_seconds gpu_image_prep stage wall seconds
+# TYPE op_gpu_prep_stage_seconds counter
+op_gpu_prep_stage_seconds{stage="blur"} 481.0801582633285
+op_gpu_prep_stage_seconds{stage="crop_copy"} 1520.861774771416
+op_gpu_prep_stage_seconds{stage="embed_pe"} 1566.450635382731
+op_gpu_prep_stage_seconds{stage="embed_crops"} 3329.059146331507
+op_gpu_prep_stage_seconds{stage="letterbox"} 1914.270855514565
+op_gpu_prep_stage_seconds{stage="crop_jpeg"} 695.1639745233115
+op_gpu_prep_stage_seconds{stage="decode"} 1370.550627183984
+op_gpu_prep_stage_seconds{stage="embed_frame"} 826.3958951507811
+op_gpu_prep_stage_seconds{stage="detect"} 690.0940368653974
+op_gpu_prep_stage_seconds{stage="budget"} 5.637225972488523
+op_gpu_prep_stage_seconds{stage="queue"} 2496.750680853846
+# HELP op_gpu_prep_stage_observations images that ran a gpu_image_prep stage
+# TYPE op_gpu_prep_stage_observations counter
+op_gpu_prep_stage_observations{stage="blur"} 8051
+op_gpu_prep_stage_observations{stage="crop_copy"} 8226
+op_gpu_prep_stage_observations{stage="embed_pe"} 8051
+op_gpu_prep_stage_observations{stage="embed_crops"} 8060
+op_gpu_prep_stage_observations{stage="letterbox"} 8632
+op_gpu_prep_stage_observations{stage="crop_jpeg"} 8051
+op_gpu_prep_stage_observations{stage="decode"} 8976
+op_gpu_prep_stage_observations{stage="embed_frame"} 8102
+op_gpu_prep_stage_observations{stage="detect"} 8226
+op_gpu_prep_stage_observations{stage="budget"} 8976
+op_gpu_prep_stage_observations{stage="queue"} 8976
