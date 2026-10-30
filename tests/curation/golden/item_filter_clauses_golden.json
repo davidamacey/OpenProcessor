@@ -934,5 +934,109 @@
     ]
    }
   }
+ ],
+ "detector_class_names": [
+  {
+   "bool": {
+    "should": [
+     {
+      "term": {
+       "detector_class_name": {
+        "value": "car",
+        "case_insensitive": true
+       }
+      }
+     },
+     {
+      "term": {
+       "detector_class_name": {
+        "value": "hot dog",
+        "case_insensitive": true
+       }
+      }
+     },
+     {
+      "term": {
+       "detector_class_name": {
+        "value": "hot-dog",
+        "case_insensitive": true
+       }
+      }
+     },
+     {
+      "term": {
+       "detector_class_name": {
+        "value": "hot_dog",
+        "case_insensitive": true
+       }
+      }
+     }
+    ],
+    "minimum_should_match": 1
+   }
+  }
+ ],
+ "detector_conf_min": [
+  {
+   "range": {
+    "detector_confidence": {
+     "gte": 0.3
+    }
+   }
+  }
+ ],
+ "detector_conf_max": [
+  {
+   "range": {
+    "detector_confidence": {
+     "lt": 0.8
+    }
+   }
+  }
+ ],
+ "detector_conf_band": [
+  {
+   "range": {
+    "detector_confidence": {
+     "gte": 0.3,
+     "lt": 0.8
+    }
+   }
+  }
+ ],
+ "review_tab": [
+  {
+   "bool": {
+    "must": [
+     {
+      "exists": {
+       "field": "probe_pred_entropy"
+      }
+     }
+    ],
+    "must_not": [
+     {
+      "term": {
+       "class_validated": true
+      }
+     },
+     {
+      "exists": {
+       "field": "review_dismissed_at"
+      }
+     },
+     {
+      "term": {
+       "class_excluded": true
+      }
+     },
+     {
+      "term": {
+       "test_holdout": true
+      }
+     }
+    ]
+   }
+  }
  ]
 }
