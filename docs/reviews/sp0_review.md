@@ -1,8 +1,11 @@
 # SP0: stage-by-stage ingest profile (code half) and the measurement runbook
 
-Branch `perf/v070-ingest-speed` (worktree `OpenProcessor-wt-sp`), merge base `0e2d3fe7` (`origin/main`).
-Plan: ship-track plan sections 3 (protocol) and 5 (SP0). The measurement half has **not** run: it needs
-GPU 0, which another session holds. Nothing in this file is a measured number.
+Branch `perf/v070-ingest-speed` (worktree `OpenProcessor-wt-sp`), merge base `0e2d3fe7` (`origin/main`),
+merged with `origin/main` at `d46dadc2`. Plan: ship-track plan sections 3 (protocol) and 5 (SP0).
+**Status: the code half and the measurement half have both run** (2026-10-30, GPU 0). The numbers, the per-stage
+tables and the findings are in "Measurement results" below and in
+[`../research/v070_measurement_log.md`](../research/v070_measurement_log.md), section "SP0: stage profile". The text
+under "What changed" to "Risks" was written before the run; where the run changed it, "Measurement results" says so.
 
 ## What changed
 
@@ -11,7 +14,11 @@ GPU 0, which another session holds. Nothing in this file is a measured number.
 | `1421df53` | perf(gpu-prep): time every gpu_image_prep stage as Triton counters |
 | `aff19e82` | feat(bench): repetitions, cache drop, load average and gpu_image_prep stages in run_baseline |
 | `016e47b6` | feat(bench): ingest profile driver, sample copy and per-stage table |
-| this commit | docs(reviews): SP0 review and measurement runbook, changelog entry |
+| `fee457e5` | docs(reviews): SP0 review and measurement runbook, changelog entry |
+| `77500a12` | fix(gpu-prep): make the stage counters work on Triton 2.70 without crashing it (found by the run) |
+| `553ade23` | fix(bench): lower-case, short project slugs for the SP0 rows |
+| `6224897f` | fix(bench): stage tables read the stack GPU and Triton `_total` series, add `--clients` |
+| this commit | docs: SP0 results (log section, PERFORMANCE heading, committed rows) |
 
 Design points:
 
@@ -28,7 +35,7 @@ Design points:
   one image's crops (host threads, concurrent), not a wait.
 - **Asynchronous kernels.** CUDA launches return early, so by default a kernel stage ends when its
   launches are queued and the GPU time lands in the next stage that waits (`detect`, `embed_pe`).
-  `STAGE_SYNC=1` (model parameter, default `"0"`) waits for the stream at the end of `letterbox`,
+  STAGE_SYNC set to 1 (model parameter, default `"0"`) waits for the stream at the end of `letterbox`,
   `embed_frame`, `embed_crops` and `blur` so the time is attributed where the work ran. It removes
   overlap inside one image, so those runs are reported as attribution, never as throughput.
 - **Stored-box mode and CPU fallbacks** publish only the stages they ran (`queue`, `decode`,
@@ -45,15 +52,50 @@ Design points:
 - Prometheus parsing: `prometheus_client` appends `_total` to counter names that Triton emits
   without it; `gpu_prep_stages` accepts both. A test with a realistic exposition text pins this.
 
-## Acceptance
+## Measurement results
 
-SP0's acceptance is the three measured tables. None exists yet.
+Full detail: log section "SP0: stage profile" (tables SP0.1 and SP0.2, findings SP0.3, limits SP0.5). Raw JSON:
+`artifacts_local/bench/v070/sp0/<row>/` in the main checkout, committed copies in `docs/benchmarks/v070/sp0/`.
+Stack: GPU 0, Triton 2.70.0, release 0.6.0 images, two `gpu_image_prep` instances, host load 10 to 59 (most rows
+contain noisy repetitions, not repeated).
+
+| Row | img/s median (min to max) | GPU 0 util mean % | Binding stage |
+|---|---|---|---|
+| A, COCO 1,846 images, CPU route, 1 batch | 13.14 (13.12 to 13.47) | 45 | PE crop embed 54.5% of API stage time, OpenSearch write 42.1% |
+| B, 400 photos, GPU route, 1 batch | 9.88 (9.63 to 9.96) | 15 | `decode` 39.5% of the model's stage time |
+| P, 2,900 photos, GPU route, 1 batch | 14.80 (11.92 to 16.47) | 35 | `embed_pe` 27.6%, `decode` 19.3% |
+| B, 4 batches at once | 26.64 (25.21 to 29.00) | 49 | CUDA-call stages (`letterbox`, `embed_*`, `crop_copy`) |
+| P, 4 batches at once | 24.98 (23.50 to 33.08) | 58 | `embed_crops` 21.3%, `queue` 14.0%, `letterbox`, `crop_copy` 11% each |
+| P, 8 batches at once | 20.13 (19.20 to 21.91) | 39 | same, grown 5 to 33 times; queue 1,080 ms |
+
+Acceptance:
 
 | Bar | Measured | Met | Raw data |
 |---|---|---|---|
-| Three tables (set A, set B, set P 3,000), every stage named with its share | not run | not yet | `artifacts_local/bench/v070/sp0/<row>/` (after the runbook) |
-| The bounding stage named per route | not run | not yet | same |
-| Stage timing adds no per-image cost that matters | not run; see the check at the end of the runbook (set B with and without the counters) | not yet | same |
+| Three tables (set A, set B, set P 3,000), every stage named with its share | `docs/benchmarks/v070/sp0/sp0_tables.md` (1 batch), `sp0_tables_clients.md` (4 and 8 batches), `sp0_tables_sync.md` | yes | `docs/benchmarks/v070/sp0/<row>/` |
+| The bounding stage named per route | CPU route: PE crop embed (then OpenSearch write). GPU route: at one batch `decode` (B) and `embed_pe` (P); at saturation the CUDA-call stages inside `gpu_image_prep` | yes; the GPU-route answer depends on the load (see below) | same |
+| Stage timing adds no per-image cost that matters | counters on/off, set B: 1 batch ratio 0.978, 4 batches 0.977 (9 runs with, 3 without); inside the run-to-run spread | yes, loosely: the 1-batch ranges do not overlap (9.63 to 9.96 against 10.06 to 10.59) and 2 of the 3 "without" runs were noisy | `setB`, `setB-nometrics`, `setB-c4*` |
+
+What the run changed:
+
+- **Counters did not work as committed.** They never appeared on the metrics port (runbook step 1 check failed) and,
+  once visible, crashed Triton 2.70. Fixed in `77500a12`; issue #390. The runbook check passes after the fix: all ten
+  stages are listed at 0 after the load and count up under traffic.
+- **The driver under-drove the stack.** `run_baseline.py` sent batches one after another (at most 16 photos in
+  flight). The headline throughput rows therefore use `--clients 4`; the one-batch rows are the latency profile. SP4 and SP5
+  must use `--clients` (or `scale_run.py`) for any bar.
+- **Ranking.** GPU route: (1) CUDA-call and serialisation overhead inside the `gpu_image_prep` process under concurrency
+  (issue #392), (2) nvJPEG decode, (3) PE embedding wait, (4) crop JPEG encode and copy (SP3's target: 9.5 to 21.6 percent of the
+  model's stage time, so SP3's gain is bounded to about that). CPU route: PE crop embed, then OpenSearch writes.
+- **Does the ranking agree with SP1, SP2, SP3?** Partly. SP3 is supported (crop stages above the plan's 10 percent
+  threshold at one batch, 9.5 to 15.6 percent at 4). SP1 (cluster pass) does not touch ingest. SP2 is a measurement. The data
+  adds an item ahead of SP3: reduce small CUDA calls per image in `gpu_image_prep` and test CUDA MPS and the instance
+  count at 4 batches, then re-run set P at `--clients 4` against the SP4 bar (29 img/s, GPU above 75 percent).
+  The owner decides the order (gate: the SP review package).
+- **Not reproduced:** the earlier set P rates (45 to 49 img/s, E4 and F1). Best repetition here 33.1, median 25.0 at 4 batches.
+
+Issues filed (milestone v0.7.0): #390 (counter constraints, fixed on the branch), #391 (`/health` ready with a startup
+model failed to load), #392 (throughput falls past 4 batches, API CPU growth).
 
 ## How it was tested
 
@@ -65,8 +107,8 @@ seen failing):
   tensors are the real code). Revert checks: removing `publish` fails 4 tests, removing the
   `crop_jpeg` accounting fails `test_every_stage_is_observed_once_per_image`. Covered: every stage once
   per image in the full mode, only the ran stages in stored-box and CPU-fallback modes, the queue
-  stage under `MAX_IN_FLIGHT=1`, outputs equal with metrics, without metrics and with `STAGE_SYNC=1`,
-  no stream wait by default, an unknown stage name refused, `STAGE_SYNC` declared in `config.pbtxt`.
+  stage under a `MAX_IN_FLIGHT` of 1, outputs equal with metrics, without metrics and with STAGE_SYNC set to 1,
+  no stream wait by default, an unknown stage name refused, STAGE_SYNC declared in `config.pbtxt`.
 - `tests/bench/test_run_baseline_reps.py` (12), `tests/bench/test_baseline_report.py` (GPU median),
   `tests/bench/test_ingest_profile_report.py` (6), `tests/bench/test_ingest_profile.py` (5),
   `tests/bench/test_sample_copy.py` (5; reverting the copy to a hard link fails 2). Revert check on the
@@ -74,17 +116,20 @@ seen failing):
 - `tests/bench` and `tests/models` together: 399 passed. `.venv/bin/pre-commit run --all-files`
   clean at each commit (no `--no-verify`).
 - Not done on the CPU side: the real `pb_utils.MetricFamily`, the real CUDA stream and the real
-  nvJPEG lanes. Those are first exercised by step 3 of the runbook.
+  nvJPEG lanes. The live run exercised them and found the counter defects (#390); the stand-in now models
+  Triton's family lifetime, its deletion order and its one-thread-at-a-time rule, and three new tests fail without the
+  fix (the model hung or `increment` raised).
+- After the run: `tests/bench` and `tests/models` pass; each fix commit ran `pre-commit` on its files.
 
 ## Risks and what was not done
 
-- **Not run:** every GPU step. No number in this review is a measurement.
+- **Run:** every GPU step of the runbook, plus the `--clients` rows. See "Measurement results".
 - **Not done: the `scale_run.py` latency probe and its 500 ms GPU series** (the third SP0 code item).
   The brief for this pass named the stage profile and the driver, and the probe belongs to SP6 (#356):
   it needs a decision on which k-NN route a "stored-vector k-NN" calls (the curation OpenAPI has
   `GET {P}/search/text` and the clusters list, no vector query route) and the plan's `GET /search/text`
   is a `POST` on the core API. Open as part of SP5/SP6, not forgotten.
-- `STAGE_SYNC` runs change the overlap inside one image; the runbook keeps them in separate rows.
+- STAGE_SYNC runs change the overlap inside one image; the runbook keeps them in separate rows.
 - The Triton metrics port serves the counters only for models that loaded: the model is loaded on
   first use, so the warm-up images of every row (default 100) also load it.
 - The runbook reuses the stopped agent's install (`optest2`, ports 5700 to 5712). Its `.env` still
@@ -106,15 +151,28 @@ $VPY -m pytest tests/models/test_gpu_image_prep_stage_metrics.py \
 ```
 
 Expected: all pass. Then read `models/gpu_image_prep/1/stage_metrics.py` (the stage list and the
-`STAGE_SYNC` note) and the table below it.
+STAGE_SYNC note) and the table below it.
 
 ---
 
 # Runbook: SP0 measurement (needs GPU 0 for about 1.5 to 2 hours under the lock)
 
+Corrections found by running it on 2026-10-30 (the steps below are otherwise unchanged):
+
+- Run a 30-photo probe first and check `curl .../metrics | rg op_gpu_prep` after traffic, not only after the load.
+- Set P 3,000 is 20 GB (6.7 MB per photo), not 28 GB. Set A keeps 1,946 of the 2,000 pinned images. Set B's 500 downloads
+  hit the host's rate limit (HTTP 429) and take about 25 minutes.
+- Row names become project slugs (`sp0-<row lower case>-r<i>-<stamp>`, at most 32 characters): keep `setB-nometrics` as the
+  longest. Add `--clients 4` (and `--clients 8` for the saturation row) to every throughput row; without it only 16
+  photos are ever in flight. `ingest_profile.py table` reads GPU 0 unless `--gpu N` says otherwise.
+- The `optest2` install lacked `models/pe_image_encoder/1/model.plan`; copy it from another install of the same release
+  (read-only source) and check `curl .../v2/models/pe_image_encoder/ready` before the first row (issue #391).
+- A Triton restart needs about 60 s before `/v2/health/ready` and the API's `/health` agree; wait for both.
+- Never `pkill -x tritonserver` inside the Triton container (it is also the server): kill a recorded pid.
+
 Expected duration: stack start and model load 5 to 10 min; warm-up plus 3 repetitions of set A (2,000
 COCO images) about 5 min, set B (500 photos) about 3 min, set P 3,000 about 12 min (cold page cache, 28 GB
-read); the `STAGE_SYNC` rows about 15 min; data preparation (CPU and NVMe only, no lock) about 20 min. Image
+read); the STAGE_SYNC rows about 15 min; data preparation (CPU and NVMe only, no lock) about 20 min. Image
 rates are from the existing log (one instance: 37 to 39 img/s; two: 32 to 48), so a repetition of
 3,000 photos takes about 1 to 2 minutes plus cold reads.
 
@@ -137,7 +195,7 @@ INST=$SCRATCH/op-install-2/openprocessor          # compose project optest2, por
 VPY=$MAIN/.venv/bin/python
 ART=$MAIN/artifacts_local/bench/v070/sp0          # raw JSON, gitignored, survives worktree removal
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
-cd "$WT"
+cd "$WT" && mkdir -p "$ART" && "$VPY" --version
 ```
 
 ## 0. Data (no GPU, no lock)
@@ -281,7 +339,7 @@ $VPY scripts/bench/ingest_profile.py table "set B, STAGE_SYNC=1=$ART/setB-sync" 
   with `crop_jpeg` growing with crops per image; the PE crop embed on the CPU route) and say whether the
   ranking agrees with the order SP1, SP2, SP3. If it does not, say so in the next review package.
 - Stage seconds are sums over concurrent work: compare them across rows, never add them to wall time.
-  The `queue` stage includes the wait for a free slot (`MAX_IN_FLIGHT` 96), so a large `queue` share means
+  The `queue` stage includes the wait for a free slot (MAX_IN_FLIGHT 96), so a large `queue` share means
   the callers outrun the model, not that the model is slow.
 - Teardown: `$COMPOSE down` (no `-v`); delete only the throw-away projects named `sp0-*` through
   `DELETE {P}` for each slug (never a bulk delete, never another prefix); keep the raw JSON; release the lock by

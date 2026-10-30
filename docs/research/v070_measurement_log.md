@@ -839,3 +839,148 @@ average 13 to 18, other users): 42.12, 47.74, 51.48 img/s, API CPU 0.0262, 0.025
 #259 acceptance bars on this stack (set P, 21 MP): at least 20 img/s (51, met), API CPU at most 0.047 (0.025,
 met), vectors against ingest p01 at least 0.995 (0.9999, F2) and the encoder busy above 80 percent (85 to 92
 percent, met). #360: region parity p01 0.997, worker and CPU pass agree at 0.999997.
+
+## SP0: stage profile (ship-track plan section 5; `perf/v070-ingest-speed`)
+
+Measured 2026-10-30 at commit `6224897f` (branch `perf/v070-ingest-speed`, merged with `origin/main` at `d46dadc2`),
+one RTX A6000 (GPU 0, PCI 03:00) shared by Triton and the API, driver 615.71.10 (CUDA 13.4), Triton 2.70.0
+(release 26.06), TensorRT 11.1.0.106, release 0.6.0 images with this worktree's `src/`, `scripts/` and `gpu_image_prep`
+mounted over them, `gpu_image_prep` with two instances (`count: 2`, the full profile), `OP_CROP_CACHE_MAX_BYTES=0`,
+policy `all`, stage `ingest`, 100 warm-up images per repetition excluded, input page cache dropped before every
+repetition, GPU sampled every 500 ms, 3 repetitions per row, batches of 32 photos through `POST .../ingest/batch`.
+Host: 48 logical CPUs shared with other sessions; the 1-minute load average at the start of each repetition is in the
+JSON (above 16 is marked noisy; most rows contain noisy repetitions, see SP0.5). Sets: A = 1,946 of the pinned 2,000
+COCO images (the selector keeps 1,946; 1,846 measured), B = 500 public high-resolution photos (400 measured, 10.35 MB
+each), P = 3,000 seeded NVMe copies of the private photo set (2,900 measured, 6.71 MB each; numbers only).
+Reproduce: `docs/reviews/sp0_review.md`, "Runbook: SP0 measurement", plus `--clients N` for the concurrent rows.
+Raw per-repetition JSON: `artifacts_local/bench/v070/sp0/<row>/` in the main checkout; the same files and the rendered
+tables are committed in `docs/benchmarks/v070/sp0/`.
+
+**Driver finding that shapes everything below.** `run_baseline.py` posted its batches one after another, so the API never
+had more than its per-batch limit of 16 photos in flight (`OP_MAX_INGEST_CONCURRENCY`). The rows named "1 batch" are
+that driver; the rows named "4 batches" and "8 batches" use the new `--clients N` (N batches at once). The 1-batch rows
+describe per-image latency; they under-drive the stack (GPU 15 to 35 percent) and must not be quoted as throughput.
+
+### SP0.1 Headline
+
+| Row | img/s median (min to max) | Crops / image | GPU 0 util mean / p50 % | Triton cores | API CPU-s / image | Load at start (max) | Noisy reps |
+|---|---|---|---|---|---|---|---|
+| A, COCO, 1 batch (CPU route) | 13.14 (13.12 to 13.47) | 6.42 | 45 / 30 | 0.23 | 0.078 | 27.0 | 1, 2 |
+| B, 1 batch (GPU route) | 9.88 (9.63 to 9.96) | 1.65 | 15 / 0 | 1.90 | 0.262 | 10.2 | none |
+| P, 1 batch (GPU route) | 14.80 (11.92 to 16.47) | 2.41 | 35 / 0 | 2.53 | 0.078 | 20.2 | 2, 3 |
+| B, 4 batches | 26.64 (25.21 to 29.00) | 1.65 | 49 / 43 | 2.54 | 0.303 | 21.0 | 2, 3 |
+| P, 4 batches | 24.98 (23.50 to 33.08) | 2.41 | 58 / 60 | 4.36 | 0.200 | 26.4 | 1 |
+| P, 8 batches | 20.13 (19.20 to 21.91) | 2.41 | 39 / 19 | 2.87 | 0.701 | 23.0 | 2, 3 |
+| B, 1 batch, STAGE_SYNC set to 1 (attribution) | 10.61 (9.76 to 10.86) | 1.65 | 21 / 0 | 1.83 | 0.252 | 17.3 | 3 |
+| P, 1 batch, STAGE_SYNC set to 1 (attribution) | 15.47 (14.82 to 16.15) | 2.41 | 35 / 0 | 2.92 | 0.079 | 17.9 | 1, 2 |
+
+Route counts (`op_ingest_decode_total`, one repetition): set A 1,846 `cpu_small` (all below the 3 MP gate); set B 351
+`gpu`, 47 `cpu_progressive`, 2 `cpu_truncated`; set P 2,882 `gpu`, 10 `cpu_decoder`, 6 `cpu_small`. The 49 CPU-decoded
+photos of set B explain its API CPU of 0.25 to 0.30 CPU-s per image against 0.07 to 0.08 for set P at one batch.
+No row had a failed image.
+
+### SP0.2 Per-stage tables
+
+Stage times are sums over concurrent work divided by images, compared across rows, never added to wall time. The share
+column is the median of the per-repetition shares, so a column of shares need not add to exactly 100.
+
+`gpu_image_prep` internal stages, host wall ms per image that ran the stage:
+
+| Stage | B, 1 batch | P, 1 batch | B, 4 | P, 4 | P, 8 | P, 1 batch, SYNC |
+|---|---|---|---|---|---|---|
+| decode (nvJPEG, EXIF) | 86.8 (39.5%) | 89.9 (19.3%) | 121.2 (26.2%) | 159.7 (10.8%) | 469.5 (30.5%) | 91.8 (19.2%) |
+| embed_pe (wait for the PE calls) | 56.4 (22.3%) | 126.2 (27.6%) | 79.2 (15.4%) | 203.2 (11.3%) | 196.1 (4.3%) | 125.3 (26.1%) |
+| letterbox (detector canvas) | 5.4 (2.2%) | 21.5 (4.5%) | 97.6 (17.9%) | 183.5 (11.2%) | 475.2 (14.3%) | 24.2 (5.1%) |
+| embed_crops (crop squares) | 4.9 (2.0%) | 53.3 (12.0%) | 29.4 (5.0%) | 325.2 (21.3%) | 683.0 (14.2%) | 61.4 (12.9%) |
+| crop_copy (device to host) | 6.5 (2.6%) | 28.8 (5.8%) | 24.7 (4.4%) | 186.5 (10.8%) | 382.2 (9.1%) | 28.9 (6.1%) |
+| crop_jpeg (sum over the crops) | 29.7 (12.0%) | 70.6 (15.8%) | 31.1 (5.1%) | 81.0 (4.8%) | 94.7 (2.0%) | 74.1 (15.5%) |
+| detect (detector call) | 39.7 (15.5%) | 52.1 (11.5%) | 50.4 (8.9%) | 68.3 (4.2%) | 111.5 (2.6%) | 50.7 (10.6%) |
+| embed_frame (whole-frame square) | 5.2 (2.1%) | 6.8 (1.4%) | 45.7 (7.8%) | 96.3 (5.7%) | 227.7 (4.9%) | 9.1 (1.9%) |
+| blur | 4.6 (1.9%) | 10.6 (2.2%) | 20.4 (3.6%) | 49.6 (3.0%) | 122.3 (2.5%) | 11.3 (2.4%) |
+| queue (wait for a slot and a thread) | 0.35 (0.2%) | 0.80 (0.2%) | 21.8 (4.3%) | 180.8 (14.0%) | 328.7 (18.6%) | 0.71 (0.1%) |
+
+API stages (`op_pipeline_stage_seconds`, ms per image, share of the API stage total):
+
+| Stage | A, 1 batch | B, 1 batch | P, 1 batch | B, 4 | P, 4 |
+|---|---|---|---|---|---|
+| embed (PE crop embedding, CPU route) | 434.3 (54.5%) | 6.7 (0.5%) | 0.2 (0.0%) | 16.8 (1.0%) | 29.6 (1.3%) |
+| gpu_decode (the call into `gpu_image_prep`) | 0 | 929.9 (70.0%) | 818.0 (72.1%) | 1150.0 (70.4%) | 1757.8 (77.4%) |
+| opensearch_write | 335.3 (42.1%) | 276.4 (20.8%) | 312.3 (27.5%) | 269.2 (16.5%) | 332.6 (14.7%) |
+| decode (CPU decode, fallback or small) | 4.7 (0.6%) | 70.9 (5.3%) | 0.4 (0.0%) | 105.4 (6.5%) | 49.5 (2.2%) |
+| everything else | 2.8% | 3.4% | 0.4% | 5.6% | 4.4% |
+
+Triton per model, ms per request (queue / compute): set A `pe_image_encoder` 16.79 / 17.96, detector 0.03 / 0.62;
+B, 1 batch: PE 4.83 / 11.85, detector 16.43 / 12.02; P, 1 batch: PE 7.39 / 16.98, detector 17.35 / 17.62; P, 4 batches:
+PE 17.37 / 21.80, detector 15.35 / 16.11, `gpu_image_prep` queue 74.9; P, 8 batches: PE 38.80 / 35.75, detector
+7.30 / 10.85, `gpu_image_prep` queue 1079.8. The `gpu_image_prep` compute column (6 to 34 ms) covers only the hand-off:
+the model is decoupled and works after `execute` returns.
+
+### SP0.3 Findings
+
+1. **The one-batch driver under-drives the stack.** At one batch the API holds on average 12 (set P) and 9 (set B)
+   photos in flight (rate times `gpu_decode` wait: 14.8 x 0.818 and 9.9 x 0.930) out of 16. Posting 4 batches at once
+   raises set B from 9.9 to 26.6 img/s and set P from 14.8 to 25.0 img/s (GPU 15 to 49 and 35 to 58 percent). The 100 MB/s
+   input rate that both one-batch rows share (99.7 to 103.1 on B, 80.0 to 110.6 on P) was therefore the driver's, not a
+   stack ceiling; at 4 batches it is 261 to 300 (B) and 158 to 222 (P).
+2. **Past about 4 batches the stack gets slower.** Set P at 8 batches: 20.1 img/s (19.2 to 21.9), GPU 39 percent,
+   `gpu_image_prep` queue 1,080 ms per request, API CPU 0.70 CPU-s per image (0.07 to 0.25 at 4 batches). The stages that
+   only issue CUDA launches and copies from the model's worker threads grow with the load: letterbox 21 / 183 / 475 ms,
+   embed_crops 53 / 325 / 683, crop_copy 29 / 186 / 382, embed_frame 7 / 96 / 228, blur 11 / 50 / 122 (set P at 1 / 4 / 8
+   batches), 11 to 33 times for the same work; nvJPEG decode grows 5 times (90 / 160 / 470). The stages that wait on another
+   model or encode JPEG on host threads grow 1.3 to 2 times (embed_pe 126 / 203 / 196, detect 52 / 68 / 111, crop_jpeg
+   71 / 81 / 95). STAGE_SYNC set to 1 moved only 1 to 8 ms per image into the launch stages, so those stages are host-side
+   launch and serialisation time, not kernel time. Candidate causes, not isolated here: the GIL and per-call overhead of
+   32 worker threads in one Python process, or two instances time-slicing one GPU without MPS.
+3. **Bottleneck on the GPU route (ranked by evidence).** (1) The Python process hosting `gpu_image_prep` under concurrency:
+   CUDA-call stages (letterbox, embed_crops, embed_frame, crop_copy, blur) are 52 percent of the model's stage time at 4
+   batches on set P (66 with the queue), against 26 percent at one batch, and the GPU is at 39 to 58 percent. (2) nvJPEG decode: 10.8 to 39.5 percent of the stage time in every GPU row, part of it host-side work inside nvJPEG; it grows 5 times
+   at 8 batches. (3) The PE embedding wait `embed_pe`: 4 to 28 percent, a hop into `pe_image_encoder` (17 to 36 ms compute and
+   7 to 39 ms queue per request). (4) Crop JPEG encode and copy: 14.6 to 21.6 percent at one batch, 9.5 to 15.6 percent at 4
+   batches on set P. OpenSearch writes (14.7 to 27.5 percent of the API stage time) overlap the model's work. At one batch
+   44 percent (P) to 74 percent (B) of the API's `gpu_decode` wait lies outside the model's stage clock (stages add to 461 and 240
+   ms against 818 and 930 ms); the clock starts at `execute`, and Triton's request duration for the model was not captured.
+4. **CPU route (set A).** The PE crop embedding is first (54.5 percent of the API stage time at 6.4 crops per image, PE
+   queue 16.8 ms plus compute 18.0 ms per request), OpenSearch writes second (42.1 percent). 13.1 img/s at one batch with the
+   GPU at 45 percent and 0.23 Triton cores; not re-run at 4 batches.
+5. **The counters cost nothing measurable.** Set B at one batch: 9.88 img/s (9.63 to 9.96) with, 10.10 (10.06 to 10.59)
+   without (merge-base `model.py`), median ratio 0.978. At 4 batches: with 28.5 (25.2 to 31.8, nine runs in three groups) against
+   without 29.2 (25.6 to 30.3, three runs), ratio 0.977, well inside the run-to-run spread (host load 10 to 59 across
+   these runs). Keep the counters. STAGE_SYNC set to 1 did not lower throughput either (B 10.61 against 9.88, P 15.47
+   against 14.80, one batch).
+6. **Not reproduced: the earlier set P rates.** Log E4 and F1 recorded 45 to 49 img/s of set P ingest with two instances
+   (E4: concurrency 16, batch 16; GPU 78 to 87 percent, Triton CPU about 8.5 cores). The best repetition here is 33.1 img/s
+   (4 batches, first repetition), the median 25.0, GPU 73 and 58 percent, Triton 4.4 cores, under host load of 14 to 26. The
+   repetitions fall within a session (33.1, 25.0, 23.5; API CPU 0.07, 0.20, 0.25), so a state that builds up in the API or
+   the shared host is possible; it was not isolated. Compare stage shares across rows, not these img/s with the old log.
+   Set A (13.1 img/s at one batch) is likewise below log F3 (16.2) and E1's 16.6 for the same reason (one batch, load 27).
+
+### SP0.4 Ranking for the ingest lane (SP1 and later)
+
+The data ranks, by measured share on the GPU route: (1) host-side CUDA-call overhead and serialisation inside
+`gpu_image_prep` under concurrency (SP-new, below); (2) nvJPEG decode; (3) the PE embedding wait; (4) crop JPEG encode and copy
+(the item SP3 targets, whose planned gain is bounded by its 9.5 to 21.6 percent of the model's stage time); then OpenSearch writes.
+On the CPU route: the PE crop embedding, then OpenSearch writes. SP1 (cluster pass) does not touch ingest throughput; SP2 (region
+stage and embed-pass measurements) and SP3 follow the data only partly. The plan's order is not contradicted for SP3, but a
+new first item ahead of it is: cut the number of small CUDA calls per image in `gpu_image_prep` (one fused letterbox and
+square kernel set, one device-to-host copy for all of an image's crops) and measure CUDA MPS and the instance count at 4
+batches, gated by the SP4 bar (set P at least 29 img/s, GPU above 75 percent) at `--clients 4`. See `docs/reviews/sp0_review.md`.
+
+### SP0.5 What the numbers do not say
+
+- Every row ran under foreign load. Noisy repetitions (load above 16 at the start) were not repeated: set A repetitions 1
+  and 2, set P (1 batch) 2 and 3, set B (4 batches) 2 and 3, set P (4 batches) 1, set P (8 batches) 2 and 3. The conclusions use
+  shares, the 4-versus-8 batch reversal and the counters on/off ratio, which hold across quiet and noisy repetitions; the
+  absolute img/s are not release numbers.
+- Four batches is one setting; 2, 3 and 6 batches were not measured, so the peak is somewhere between 4 and 8.
+- The STAGE_SYNC rows are attribution only, at one batch only. Sync rows at 4 batches and the CPU route at 4 batches were not run.
+- Set A selects 1,946 of 2,000 pinned images (`select_baseline_set.py local` keeps what decodes above its minimum size).
+
+### SP0.6 Bugs found by this run (all in the SP0 code, fixed on the branch except the two issues)
+
+1. The stage counters never reached Triton's metrics port and could stall the model: issue #390 (three Triton 2.70
+   Python-backend facts, each reproduced on a toy model; fix `77500a12`).
+2. `ingest_profile.py table` took the median GPU utilisation over every sampled GPU and missed Triton's `_total` series
+   names (GPU row 0, empty Triton table); the row names made project slugs the API refuses; `run_baseline.py` posted
+   batches one after another (fixes `553ade23`, `6224897f`).
+3. The reused install had an empty `pe_image_encoder/1/` and `/health` still answered `ready`: issue #391.
+4. The throughput fall past 4 batches and the API CPU growth: issue #392.

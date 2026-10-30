@@ -13,3 +13,4 @@ index; `MANIFEST.sha256` has the checksums of the vector dumps.
 | `live_e/` | E1 to E4 (embed pass, concurrent duplicates, text search restart, instance count) |
 | `live_f/` | F1 to F4 (embed pass on the GPU decode) |
 | `live_g/` | G1 to G5 (region parity, chunk window tuning, final configuration) |
+| `sp0/` | SP0 stage profile: per-repetition reports and summaries of every row, the two rendered tables (log "SP0: stage profile", PERFORMANCE "0.7.0 stage profile"); set P rows hold numbers only |
