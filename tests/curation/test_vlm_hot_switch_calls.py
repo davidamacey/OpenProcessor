@@ -60,6 +60,9 @@ def stack(vlm_api, tmp_path, monkeypatch: pytest.MonkeyPatch, reference_region_p
         return await upstream.handle(request)
 
     monkeypatch.setattr(httpx.AsyncHTTPTransport, 'handle_async_request', serve)
+    monkeypatch.setattr(
+        'src.services.labeling.vlm_pinning.PinnedTransport.handle_async_request', serve
+    )
 
     vlm_api.dns['a.vlm.test'] = ['10.0.0.1']
     vlm_api.dns['b.vlm.test'] = ['10.0.0.2']

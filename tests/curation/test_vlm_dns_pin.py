@@ -8,6 +8,7 @@ layer to open."""
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import httpcore
@@ -188,23 +189,93 @@ async def test_the_probe_refuses_a_host_that_now_resolves_to_a_denied_address(
     assert any('Refused' in i['message'] for i in record.issues)
 
 
+class _Server:
+    """A real TCP listener on 127.0.0.1 that records each request's Host
+    header and answers per ``mode``."""
+
+    def __init__(self, mode: str = 'ok') -> None:
+        self.mode = mode
+        self.hosts: list[str] = []
+        self.port = 0
+        self._server: asyncio.AbstractServer | None = None
+
+    async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        head = await reader.readuntil(b'\r\n\r\n')
+        lines = head.decode().split('\r\n')
+        headers = {k.lower(): v for k, _, v in (ln.partition(': ') for ln in lines[1:] if ln)}
+        self.hosts.append(headers.get('host', ''))
+        await reader.readexactly(int(headers.get('content-length', '0')))
+        if self.mode == 'ok':
+            body = b'{"choices": [{"message": {"content": "OK"}}]}'
+            writer.write(
+                b'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n'
+                + f'Content-Length: {len(body)}\r\n\r\n'.encode()
+                + body
+            )
+            await writer.drain()
+        elif self.mode == 'hang':
+            await asyncio.sleep(1)
+        elif self.mode == 'garbage':
+            writer.write(b'not http at all\r\n\r\n')
+            await writer.drain()
+        writer.close()
+
+    async def __aenter__(self) -> _Server:
+        self._server = await asyncio.start_server(self._handle, '127.0.0.1', 0)
+        self.port = self._server.sockets[0].getsockname()[1]
+        return self
+
+    async def __aexit__(self, *_exc: object) -> None:
+        assert self._server is not None
+        self._server.close()
+        await self._server.wait_closed()
+
+
 @pytest.mark.asyncio
-async def test_the_request_keeps_the_endpoint_name_as_url_and_host_header(
-    connects: list[tuple[str, int]], monkeypatch: pytest.MonkeyPatch
+async def test_the_real_labeler_client_reaches_the_pinned_address_with_the_endpoint_host(
+    dns: _Dns,
 ) -> None:
-    seen: list[httpx.Request] = []
+    """Guard against the pin being bypassed: 'vlm.corp.example' does not
+    resolve in the OS, so the request can only arrive if the transport dialled
+    the vetted 127.0.0.1 -- even though the name was rebound afterwards."""
+    async with _Server() as server:
+        dns.answer['vlm.corp.example'] = ['127.0.0.1']
+        labeler = labeler_for(
+            _endpoint(f'http://vlm.corp.example:{server.port}/v1'), GENERIC_ITEM_PACK
+        )
+        dns.answer['vlm.corp.example'] = [EVIL]
+        reply = await labeler._post_chat({'x': 1}, attempts=1)
+        await labeler.aclose()
+    assert reply['choices'][0]['message']['content'] == 'OK'
+    assert server.hosts == [f'vlm.corp.example:{server.port}']
 
-    async def serve(_self: Any, request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200)
 
-    monkeypatch.setattr(httpx.AsyncHTTPTransport, 'handle_async_request', serve)
-    pin = AddressPin('vlm.corp.example', [GOOD])
-    async with httpx.AsyncClient(transport=PinnedTransport(pin)) as client:
-        await client.post('https://vlm.corp.example:8443/v1/chat/completions', json={})
-    (req,) = seen
-    assert req.url.host == 'vlm.corp.example'
-    assert req.headers['host'] == 'vlm.corp.example:8443'
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ('mode', 'expected'),
+    [('hang', httpx.ReadTimeout), ('garbage', httpx.RemoteProtocolError)],
+)
+async def test_transport_errors_surface_as_the_httpx_types_the_retry_code_matches(
+    mode: str, expected: type[Exception]
+) -> None:
+    from src.services.labeling.vlm_client import _RETRYABLE_HTTPX_EXCEPTIONS
+
+    async with _Server(mode) as server:
+        pin = AddressPin('vlm.corp.example', ['127.0.0.1'])
+        async with httpx.AsyncClient(transport=PinnedTransport(pin), timeout=0.3) as client:
+            with pytest.raises(expected) as caught:
+                await client.post(f'http://vlm.corp.example:{server.port}/x', json={})
+    assert isinstance(caught.value, _RETRYABLE_HTTPX_EXCEPTIONS)
+
+
+@pytest.mark.asyncio
+async def test_a_refused_connection_is_an_httpx_connect_error_and_aclose_is_idempotent() -> None:
+    pin = AddressPin('vlm.corp.example', ['127.0.0.1'])
+    transport = PinnedTransport(pin)
+    async with httpx.AsyncClient(transport=transport) as client:
+        with pytest.raises(httpx.ConnectError):
+            await client.get('http://vlm.corp.example:1/')  # nothing listens on port 1
+    await transport.aclose()
 
 
 @pytest.mark.asyncio
