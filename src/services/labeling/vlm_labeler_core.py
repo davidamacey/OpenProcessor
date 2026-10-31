@@ -39,6 +39,8 @@ if TYPE_CHECKING:
 
     import httpx
 
+    from src.services.labeling.vlm_pinning import AddressPin
+
 
 logger = get_logger(__name__)
 
@@ -79,6 +81,7 @@ class VlmLabelerCore:
         open_images_per_call: int | None = None,
         identity: VlmIdentity | None = None,
         egress_check: Callable[[], Awaitable[None]] | None = None,
+        pin: AddressPin | None = None,
     ) -> None:
         if base_url and not model:
             raise ValueError(
@@ -130,7 +133,7 @@ class VlmLabelerCore:
         self.name_to_id: dict[str, int] = {}
 
         self._bucket = _TokenBucket(rate=requests_per_second)
-        self._client = client or build_http_client(timeout_s)
+        self._client = client or build_http_client(timeout_s, pin=pin)
         self._owns_client = client is None
 
     # ----- lifecycle -----

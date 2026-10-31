@@ -15,6 +15,10 @@ Every labeler also re-checks its endpoint before sending, at most once per
 :data:`_RECHECK_S` (:func:`_assert_may_connect`): a host's DNS can change
 after the endpoint was validated, and a worker's or a cached labeler is long
 lived. A refusal is sticky until the host is acceptable again (fail closed).
+The check resolves the host once and the labeler's HTTP client is pinned to
+that vetted answer (``vlm_pinning.py``): it never resolves the name itself, so
+a DNS change between the check and the connect cannot redirect a request; a
+re-check that passes re-pins to its own fresh answer.
 A labeler the cache dropped keeps its HTTP client open for as long as anything
 still references it (a long job, a call in flight) and is closed once the last
 reference is gone, so a call is never cut off mid-request.
@@ -38,12 +42,19 @@ from src.core.logging import get_logger
 from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError, resolve_api_key
 from src.services.labeling.vlm_labeler import VlmLabeler
-from src.services.labeling.vlm_url_policy import compute_locality, url_denial
+from src.services.labeling.vlm_pinning import AddressPin
+from src.services.labeling.vlm_url_policy import (
+    compute_locality,
+    parse_endpoint_url,
+    resolve_addresses,
+    url_denial,
+)
 
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from src.services.labeling.vlm_endpoint_body import VlmEndpointBody
     from src.services.labeling.vlm_endpoints import VlmEndpoint
     from src.services.labeling.vlm_prompts import PromptPack
 
@@ -54,7 +65,7 @@ _RECHECK_S = 30.0
 #: How long an async pre-check vouches for the endpoint, so the synchronous
 #: build that follows it does not resolve DNS again on the event loop.
 _PRECHECK_FRESH_S = 5.0
-_PRECHECKED: dict[str, float] = {}
+_PRECHECKED: dict[str, tuple[float, tuple[str, ...] | None]] = {}
 _LABELERS: OrderedDict[tuple[Any, ...], VlmLabeler] = OrderedDict()
 _CLOSING: set[asyncio.Task[None]] = set()
 
@@ -113,54 +124,72 @@ def _retire(labeler: VlmLabeler) -> None:
     finalizer.atexit = False
 
 
-def _assert_may_connect(endpoint: VlmEndpoint) -> None:
-    """Raise :class:`VlmEndpointDeniedError` unless the endpoint's host is,
-    NOW, one this deployment may send crops to: not a never-allowed address,
-    and (when it resolves outside the deployment) permitted by
+def vet_endpoint_body(body: VlmEndpointBody, *, is_env: bool) -> tuple[str, ...] | None:
+    """Raise :class:`VlmEndpointDeniedError` unless ``body``'s host is, NOW,
+    one this deployment may send crops to: not a never-allowed address, and
+    (when it resolves outside the deployment) permitted by
     ``OP_VLM_EXTERNAL_POLICY`` and acknowledged on the endpoint. The same
     :func:`check_external` the validator runs; the ``env`` built-in is the
-    operator's own choice and is not re-checked."""
+    operator's own choice and is not re-checked.
+
+    Resolves the host ONCE and returns that answer: the addresses the
+    connection must be pinned to (``None``: a literal IP, an alias or the env
+    built-in, nothing to pin)."""
     from src.services.config_store.vlm_validation import check_external
 
-    if endpoint.source == 'env':
-        return
-    body = endpoint.body
-    denial = url_denial(body.base_url)
+    if is_env:
+        return None
+    addresses = resolve_addresses(body.base_url)
+    denial = url_denial(body.base_url, addresses=addresses)
     if denial is not None:
         raise VlmEndpointDeniedError(denial.reason)
-    refusals = check_external(body, compute_locality(body.base_url), is_env=False)
+    locality = compute_locality(body.base_url, addresses=addresses)
+    refusals = check_external(body, locality, is_env=False)
     if refusals:
         raise VlmEndpointDeniedError(refusals[0].message)
+    return addresses
 
 
-async def assert_may_connect(endpoint: VlmEndpoint) -> None:
+def _assert_may_connect(endpoint: VlmEndpoint) -> tuple[str, ...] | None:
+    return vet_endpoint_body(endpoint.body, is_env=endpoint.source == 'env')
+
+
+async def assert_may_connect(endpoint: VlmEndpoint) -> tuple[str, ...] | None:
     """:func:`_assert_may_connect` with its DNS lookups in a worker thread.
-    A pass is remembered for :data:`_PRECHECK_FRESH_S`, so the synchronous
-    :func:`labeler_for` an async caller makes next does not resolve again on
-    the event loop."""
+    A pass is remembered, with the vetted addresses, for
+    :data:`_PRECHECK_FRESH_S`, so the synchronous :func:`labeler_for` an async
+    caller makes next does not resolve again on the event loop (and pins to
+    the very answer that was checked)."""
     if endpoint.source == 'env':
-        return
-    await asyncio.to_thread(_assert_may_connect, endpoint)
+        return None
+    addresses = await asyncio.to_thread(_assert_may_connect, endpoint)
     if len(_PRECHECKED) > 256:
         _PRECHECKED.clear()
-    _PRECHECKED[endpoint.ref] = time.monotonic()
+    _PRECHECKED[endpoint.ref] = (time.monotonic(), addresses)
+    return addresses
 
 
-def _prechecked(endpoint: VlmEndpoint) -> bool:
-    at = _PRECHECKED.get(endpoint.ref)
-    return at is not None and time.monotonic() - at < _PRECHECK_FRESH_S
+def _prechecked(endpoint: VlmEndpoint) -> tuple[bool, tuple[str, ...] | None]:
+    hit = _PRECHECKED.get(endpoint.ref)
+    if hit is None or time.monotonic() - hit[0] >= _PRECHECK_FRESH_S:
+        return False, None
+    return True, hit[1]
 
 
-def _egress_check(endpoint: VlmEndpoint) -> Callable[[], Awaitable[None]]:
+def _egress_check(endpoint: VlmEndpoint, pin: AddressPin | None) -> Callable[[], Awaitable[None]]:
     """The labeler's pre-send check: :func:`assert_may_connect`, throttled to
-    once per :data:`_RECHECK_S` while it keeps passing."""
+    once per :data:`_RECHECK_S` while it keeps passing. A pass re-pins the
+    connection to the fresh vetted answer (a restarted container moves); a
+    refusal leaves the pin as it was and keeps refusing."""
     checked_at = time.monotonic()
 
     async def check() -> None:
         nonlocal checked_at
         if time.monotonic() - checked_at < _RECHECK_S:
             return
-        await assert_may_connect(endpoint)
+        addresses = await assert_may_connect(endpoint)
+        if pin is not None and addresses is not None:
+            pin.update(addresses)
         checked_at = time.monotonic()
 
     return check
@@ -169,8 +198,12 @@ def _egress_check(endpoint: VlmEndpoint) -> Callable[[], Awaitable[None]]:
 def _build(endpoint: VlmEndpoint, pack: PromptPack) -> VlmLabeler:
     body = endpoint.body
     is_env = endpoint.source == 'env'
-    if not _prechecked(endpoint):
-        _assert_may_connect(endpoint)
+    fresh, addresses = _prechecked(endpoint)
+    if not fresh:
+        addresses = _assert_may_connect(endpoint)
+    pin = (
+        None if addresses is None else AddressPin(parse_endpoint_url(body.base_url).host, addresses)
+    )
     key = resolve_api_key(body.api_key_ref, is_env_builtin=is_env)
     if key is None and body.api_key_ref is not None and not is_env:
         msg = f'endpoint {endpoint.name!r}: the secret {body.api_key_ref!r} is missing or empty'
@@ -189,7 +222,8 @@ def _build(endpoint: VlmEndpoint, pack: PromptPack) -> VlmLabeler:
         json_mode=endpoint.json_mode_on,
         open_images_per_call=body.effective_open_images,
         identity=VlmIdentity(endpoint_ref=endpoint.ref, model=endpoint.model_id),
-        egress_check=_egress_check(endpoint),
+        egress_check=_egress_check(endpoint, pin),
+        pin=pin,
     )
 
 
@@ -226,4 +260,5 @@ __all__ = [
     'build_uncached_labeler',
     'labeler_for',
     'reset_labeler_cache',
+    'vet_endpoint_body',
 ]
