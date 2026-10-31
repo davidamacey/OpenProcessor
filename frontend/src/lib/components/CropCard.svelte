@@ -242,19 +242,21 @@
       aria-label="Select crop {crop.id}"
       onclick={(e) => onclick?.(crop, e)}
     >
-      <img
-        src={getThumbUrl(crop.id)}
-        alt=""
-        loading="lazy"
-        draggable="false"
-        class="h-full w-full object-contain [-webkit-user-drag:none]"
-        onload={onImgLoad}
-        onerror={(e) => {
-          const t = e.currentTarget as HTMLImageElement;
-          t.style.opacity = '0.2';
-          void fetchSourceMissing(t.src).then((m) => (sourceMissing = m));
-        }}
-      />
+      {#if !sourceMissing}
+        <img
+          src={getThumbUrl(crop.id)}
+          alt=""
+          loading="lazy"
+          draggable="false"
+          class="h-full w-full object-contain [-webkit-user-drag:none]"
+          onload={onImgLoad}
+          onerror={(e) => {
+            const t = e.currentTarget as HTMLImageElement;
+            t.style.opacity = '0.2';
+            void fetchSourceMissing(t.src).then((m) => (sourceMissing = m));
+          }}
+        />
+      {/if}
     </button>
     {#if sourceMissing}
       <SourceMissingBadge missing={sourceMissing} compact />

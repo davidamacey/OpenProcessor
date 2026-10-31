@@ -184,21 +184,23 @@
            when that room is generous. Empty until the image has
            loaded (natural size unknown), during which `h-full
            w-full` still applies as the pre-p9 fallback. -->
-      <img
-        src={getThumbUrl(current.id, 384)}
-        alt="crop"
-        loading="lazy"
-        decoding="async"
-        bind:naturalWidth={edit.cropNaturalWidth}
-        bind:naturalHeight={edit.cropNaturalHeight}
-        style={cropDisplayStyle}
-        class="h-full w-full object-contain"
-        onerror={(e) => {
-          void fetchSourceMissing((e.currentTarget as HTMLImageElement).src).then(
-            (m) => (sourceMissing = m),
-          );
-        }}
-      />
+      {#if !sourceMissing}
+        <img
+          src={getThumbUrl(current.id, 384)}
+          alt="crop"
+          loading="lazy"
+          decoding="async"
+          bind:naturalWidth={edit.cropNaturalWidth}
+          bind:naturalHeight={edit.cropNaturalHeight}
+          style={cropDisplayStyle}
+          class="h-full w-full object-contain"
+          onerror={(e) => {
+            void fetchSourceMissing((e.currentTarget as HTMLImageElement).src).then(
+              (m) => (sourceMissing = m),
+            );
+          }}
+        />
+      {/if}
       {#if sourceMissing}
         <SourceMissingBadge missing={sourceMissing} />
       {/if}

@@ -33,6 +33,7 @@ SIZES = {"desktop-1440": {"width": 1440, "height": 900}, "narrow-430": {"width":
 
 def serve_missing_thumbnails(stub) -> None:
     stub.on("GET", r"/crops/[^/]+/thumbnail(\?|$)", (404, SOURCE_MISSING))
+    stub.on("GET", r"/crops/[^/]+/image(\?|$)", (404, SOURCE_MISSING))
 
 
 def serve_cluster_grid(stub) -> None:
@@ -53,6 +54,11 @@ def serve_review_pane(stub) -> None:
     serve_missing_thumbnails(stub)
 
 
+def _no_visible_image(page) -> None:
+    """No `<img>` is left in the DOM for a source that is known to be missing."""
+    expect(page.locator("main img, [data-testid='review-source-panel'] img")).to_have_count(0)
+
+
 def _shot(page, name: str, size: str) -> None:
     out = os.environ.get("OP_E2E_SHOT_DIR")
     if out:
@@ -70,6 +76,7 @@ def test_crop_card_shows_source_not_mounted(stub, page, app_url, size):
     expect(badges).to_have_count(3)
     expect(badges.first).to_contain_text("archive")
     assert badges.first.get_attribute("title") == MESSAGE
+    _no_visible_image(page)
     _shot(page, "cluster-grid", size)
     assert stub.unhandled == [], stub.unhandled
 
@@ -83,5 +90,10 @@ def test_review_pane_shows_source_not_mounted(stub, page, app_url, size):
     expect(badge.first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(badge.first).to_contain_text("archive")
     expect(badge.first).to_contain_text("not mounted or reachable")
+    panel = page.get_by_test_id("review-source-panel")
+    expect(panel.get_by_role("status")).to_contain_text("Source not mounted")
+    expect(panel.get_by_role("button", name="hide boxes")).to_have_count(0)
+    expect(page.get_by_role("status").filter(has_text="Source not mounted")).to_have_count(2)
+    _no_visible_image(page)
     _shot(page, "review-pane", size)
     assert stub.unhandled == [], stub.unhandled
