@@ -13,7 +13,11 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Upgrade notes / behaviour changes
 
-- **The unused `backbone_embedding` field is removed** (#410): the items-mapping field, the ingest writer, `OP_BACKBONE_EMBEDDING_DIM` (now a retired env var that fails startup if set), the `feature_output` field of detection and region profiles, `make export-dual-head` and the `export/export_detector_dual_head.*` scripts. Existing project indexes keep the dead mapping (OpenSearch cannot unmap a field) and nothing reads or writes it.
+- **Breaking: the unused `backbone_embedding` field is removed** (#410).
+  - Removed: the `backbone_embedding` item field, its ingest writer, the dual-head detector export (`export/export_detector_dual_head.*`), `make export-dual-head` and the region-profile field `feature_output`.
+  - A stored region profile that still has `feature_output` now fails to load with "unknown field". Remove the key, or re-save the profile from its template.
+  - `OP_BACKBONE_EMBEDDING_DIM` and the `OP_INGEST_PRIMARY_`, `OP_INGEST_SECONDARY_` and `OP_REGION_DETECTION_` `FEATURE_OUTPUT` variables are rejected at startup.
+  - Existing indexes keep the stored vectors and the dead mapping until the project is re-ingested. Nothing reads them.
 - **A running auto-label loop holds the cluster retrain** (#286): `POST /pipeline/auto_label/start` and `POST /pipeline/auto_label` with `train_clusters=true` answer `409 assist_loop_running`, and the cluster-refresh daemon and the auto-label worker's idle retrain skip that project, until the loop ends or is cancelled.
 - **The compose stack has a new service**, `curation-assist-loop-worker` (profile `curation`); `./openprocessor curation up` and `make curation-up` start it. The cluster-refresh daemon now needs the loops route of the same API version.
 
