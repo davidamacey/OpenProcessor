@@ -103,8 +103,8 @@ describe('docker-entrypoint.sh input validation', () => {
     const blocks = [...conf.matchAll(/location ([^{]+)\{([^}]*)\}/g)].filter((m) =>
       m[2]!.includes('proxy_pass $api_upstream'),
     );
-    // ingest, dataset uploads, general API, five docs paths
-    expect(blocks.length).toBe(8);
+    // ingest, label ops, dataset uploads, general API, five docs paths
+    expect(blocks.length).toBe(9);
     for (const [, loc, body] of blocks) {
       for (const h of headers) expect(body, `${loc} lacks ${h}`).toContain(h);
     }

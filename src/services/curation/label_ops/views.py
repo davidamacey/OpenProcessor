@@ -7,13 +7,14 @@ from itertools import islice
 from typing import TYPE_CHECKING, Any
 
 from src.config.curation_accessors import items_index
-from src.domain.label_ops import current_query
+from src.domain.label_ops import LABEL_OP_ID_RE, current_query
 from src.services.curation.label_ops.store import (
     LABEL_OPS_KEEP,
     LabelOpRecord,
     iter_ops,
     served_status,
 )
+from src.services.rejections import rejection
 
 
 if TYPE_CHECKING:
@@ -72,25 +73,37 @@ def label_op_wire(record: LabelOpRecord, current: int) -> dict[str, Any]:
     }
 
 
-async def list_label_ops(opensearch: Any, *, limit: int, undoable_only: bool) -> dict[str, Any]:
-    """Newest first. With ``undoable_only`` the newest ``limit`` undoable operations."""
+async def list_label_ops(
+    opensearch: Any, *, limit: int, undoable_only: bool, after: str | None
+) -> dict[str, Any]:
+    """Newest first by ``op_id``, older than ``after`` (exclusive). With
+    ``undoable_only`` the next ``limit`` undoable operations. ``next_after`` is
+    the page's last ``op_id`` only when a further operation exists."""
+    if after is not None and not LABEL_OP_ID_RE.fullmatch(after):
+        raise rejection(422, 'invalid_request', f'{after!r} is not a label operation id')
     if not undoable_only:
-        page = list(islice(iter_ops(), limit))
+        window = list(islice(iter_ops(after=after), limit + 1))
+        page = window[:limit]
         counts = await current_counts(opensearch, page)
-        return _list_body([label_op_wire(r, counts[r.op_id]) for r in page], limit)
+        return _list_body(
+            [label_op_wire(r, counts[r.op_id]) for r in page],
+            limit,
+            page[-1].op_id if len(window) > limit else None,
+        )
     served: list[dict[str, Any]] = []
-    source = iter_ops()
-    while len(served) < limit:
+    source = iter_ops(after=after)
+    while len(served) <= limit:
         chunk = list(islice(source, _COUNT_CHUNK))
         if not chunk:
             break
         counts = await current_counts(opensearch, chunk)
         for record in chunk:
             wire = label_op_wire(record, counts[record.op_id])
-            if wire['undoable'] and len(served) < limit:
+            if wire['undoable'] and len(served) <= limit:
                 served.append(wire)
-    return _list_body(served, limit)
+    page_items = served[:limit]
+    return _list_body(page_items, limit, page_items[-1]['op_id'] if len(served) > limit else None)
 
 
-def _list_body(items: list[dict[str, Any]], limit: int) -> dict[str, Any]:
-    return {'items': items, 'limit': limit, 'retention': LABEL_OPS_KEEP}
+def _list_body(items: list[dict[str, Any]], limit: int, next_after: str | None) -> dict[str, Any]:
+    return {'items': items, 'limit': limit, 'retention': LABEL_OPS_KEEP, 'next_after': next_after}

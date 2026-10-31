@@ -33,6 +33,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - The installer's tier prompt is a numbered menu; `--tiers` is unchanged.
 
 ### Added
+- `GET /curation/projects/{project}/label_ops` pages with `after` and serves `next_after` (newest first by `op_id`; a malformed `after` is 422) (#419).
 - `gpu_image_prep` waits for device memory instead of failing into the CPU fallback (#392): each photo reserves its decoded frame from `DEVICE_BUDGET_MIB` (default 2048) and waits at most `BUDGET_WAIT_SECONDS` (20); the budget is reserved at load, so an instance that cannot hold it fails to load (ingest then decodes on the CPU, visibly); a failed allocation, a timed-out wait and an over-sized photo are the counted routes `cpu_gpu_memory` and `cpu_over_budget` in `op_ingest_decode_total` and `op_reprocess_decode_total`; a `budget` stage counter shows the wait.
 - Opt-in ingest load profile (#393): `OP_LOAD_PROFILE=ingest` (overlay `docker-compose.ingest-focus.yml`, added by the CLI) preloads only the detector and the PE encoders, which frees 27.7 GB on a 48 GB card; the face, MobileCLIP and OCR models load on their first call, so every endpoint still answers. Per-model memory and the endpoint check: `docs-site/docs/operations/ingest-load-profile.mdx`. The default (`full`) is unchanged.
 - `scripts/bench/gpu_prep_parity.py`: captures and compares `gpu_image_prep` answers before and after a change.

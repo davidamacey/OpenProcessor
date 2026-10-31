@@ -367,6 +367,7 @@ class LabelOpList(BaseModel):
     items: list[LabelOp]                    # newest first
     limit: int
     retention: int                          # LABEL_OPS_KEEP (200)
+    next_after: str | None = None           # last op_id of the page while older ops exist (#419)
 
 class LabelOpUndoRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -398,7 +399,7 @@ Routes:
 
 | Route | Change |
 |---|---|
-| `{P}/label_ops` (GET) | New. Query `limit` 1 to 50 (default 20; 51 is a 422), `undoable` (bool, optional: only undoable ops, so the UI takes `items[0]` without filtering). Reads at most 200 small files and runs one `filters` aggregation (one filter per op on the page) for `current`. Unreadable record: skipped and logged |
+| `{P}/label_ops` (GET) | New. Query `limit` 1 to 50 (default 20; 51 is a 422), `undoable` (bool, optional: only undoable ops, so the UI takes `items[0]` without filtering), `after` (an `op_id`, exclusive: serves older ops; a malformed one is `422 invalid_request`; paging is keyed on `op_id` alone, which sorts in creation order, #419). Reads at most 200 small files and runs one `filters` aggregation (one filter per op on the page) for `current`. Unreadable record: skipped and logged |
 | `{P}/label_ops/{op_id}/undo` (POST) | New. Body `LabelOpUndoRequest`. 200 `LabelOpUndoResponse`; 404 `label_op_not_found`; 409 `already_undone`, `label_op_busy`, `label_op_in_progress` |
 | `PUT /crops/batch_label`, `POST /crops/move` | `BatchRelabelResponse` (`src/routers/curation/_selection_write_models.py`) gains `op_id: str \| None` (null for a dry run or an empty selection, where no op is recorded) |
 | `POST /crops/label/undo_batch` | `response_model=CropUndoBatchResponse`; leaves `LEGACY_DICT` in `tests/test_contract_typed_responses.py` in the same commit |
@@ -498,6 +499,8 @@ operations" section and `docs/opensearch_schema_design.md` the `label_op_id` row
 | D-CQ3-6 | Scope: ops for batch label and move (both forms). Discard and exclude keep their own undo (`undo_batch`, `batch_unexclude`) | yes; folding discard in is a later wave if wanted |
 | D-CQ3-7 | Undo request defaults to `dry_run: true` | yes, like the loop rollback |
 | D-CQ3-8 | Synchronous undo (up to 20,000 items, bar 90 s) with a 600 s proxy location for `label_ops/`, rather than a background job now | yes; a job only if the bar is missed |
+
+Paging (#419): `after` and `next_after` are keyed on `op_id`, newest first. `next_after` is null when no further (undoable) op exists, so a client never fetches a trailing empty page; a pruned cursor still pages.
 
 ## 13. Tests that must fail first
 

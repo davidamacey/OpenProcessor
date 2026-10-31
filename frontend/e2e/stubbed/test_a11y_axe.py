@@ -25,6 +25,7 @@ from test_curation_settings import METHODS_TODAY, SETTINGS_EMPTY
 from test_open_vocab import serve_open_vocab
 from test_prompt_packs import serve_packs
 from test_review_crop_viewport import review_item
+from test_label_ops import serve as serve_label_ops
 
 AXE_JS = Path(__file__).resolve().parents[2] / "node_modules" / "axe-core" / "axe.min.js"
 API_PREFIX = "/curation"
@@ -93,6 +94,12 @@ def serve_cluster_with_facets(stub) -> None:
     serve_cluster(stub, [])
 
 
+def show_label_op_dry_run(page) -> None:
+    page.get_by_role("button", name="Details for Label to widget_a at 2026-10-30 10:00:00 UTC").click()
+    page.get_by_test_id("label-op-undo").click()
+    expect(page.get_by_test_id("label-op-confirm")).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+
+
 # (id, path, stub setup, selector that proves the data loaded[, step that opens a panel])
 PAGES = [
     ("projects", "/projects", serve_projects_page, '[data-testid="project-row-widgets-a"]'),
@@ -118,6 +125,14 @@ PAGES = [
     ("review", "/p/default/review", serve_review, "main"),
     ("classes", "/p/default/classes", serve_classes, "main"),
     ("settings", "/p/default/settings", serve_settings, "main"),
+    ("label-ops", "/p/default/label-ops", serve_label_ops, '[data-testid="label-op-row"]'),
+    (
+        "label-ops-dry-run",
+        "/p/default/label-ops",
+        serve_label_ops,
+        '[data-testid="label-op-row"]',
+        show_label_op_dry_run,
+    ),
     ("settings-prompt-packs", "/p/default/settings/prompt-packs", serve_prompt_packs, "table"),
     ("settings-open-vocab", "/p/default/settings/open-vocab", serve_open_vocab_list, "table"),
 ]
