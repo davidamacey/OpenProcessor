@@ -112,7 +112,6 @@ PyTorch encoder.
 |---|---|
 | `make export-custom MODEL=/app/pytorch_models/my.pt [NAME=...] [BATCH=32]` | Export your own YOLO checkpoint |
 | `make export-config CONFIG=/path/to/config.yaml` | Batch export from a YAML config |
-| `make export-dual-head MODEL=... NAME=...` | Export a detector with an extra `sppf_feat` feature-map output, pooled per detection into the curation `backbone_embedding` |
 | `POST /models/upload`, `POST /models/{name}/export` | Upload and export through the API instead of the CLI |
 
 A training run you promote from the curation subsystem is written into

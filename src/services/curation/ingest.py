@@ -147,7 +147,6 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
             registry=registry,
             profile=profile,
             secondary_profile=secondary_profile,
-            backbone_embedding_dim=self.config.backbone_embedding_dim,
         )
         self.region_seed_status = region_seed_status()
         # The project's detect filter and embedding policy; defaults = today's behaviour.

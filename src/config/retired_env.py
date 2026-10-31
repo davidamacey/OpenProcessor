@@ -49,6 +49,8 @@ RETIRED_ENV: dict[str, str] = {
     'SAM_WORKER_METRICS_PORT': 'OP_REGION_WORKER_METRICS_PORT',
     'OP_REGION_DETECTION_SAM_TEXT_PROMPT': 'OP_REGION_DETECTION_SEGMENTER_TEXT_PROMPT',
     'GEMMA_CROP_CACHE_DIR': 'OP_CROP_CACHE_DIR',
+    # The backbone embedding field and its dual-head export were removed.
+    'OP_BACKBONE_EMBEDDING_DIM': f'{_REMOVED} the backbone_embedding field no longer exists',
     # Profiles lost the single target class.
     'OP_BAKEOFF_PROFILE_TARGET_CLASS_ID': _BAKEOFF_TARGET_REMOVED,
     'OP_BAKEOFF_PROFILE_TARGET_CLASS_NAME': _BAKEOFF_TARGET_REMOVED,
