@@ -143,6 +143,39 @@ else
     "$GATEWAY_SNIPPET" > "$GATEWAY_DIR/gateway-subpaths.conf"
 fi
 
+# Optional HTTP basic auth for the whole origin (the SPA, the API proxy, the docs and the
+# gateway sub-paths; only /nginx-health stays open for the healthcheck). The credential is a
+# htpasswd file mounted read-only at HTPASSWD_SRC, never an env value, so no password or
+# hash passes through the environment or the image. Fail closed: when enabled, a missing,
+# empty or malformed file stops the container rather than serving without a login.
+AUTH_DIR=/etc/nginx/auth.d
+HTPASSWD_SRC=/run/secrets/cropwright_htpasswd
+AUTH_ON=0
+case "$(printf '%s' "${OP_CROPWRIGHT_BASIC_AUTH:-}" | tr 'A-Z' 'a-z')" in
+  1|true|yes|on) AUTH_ON=1 ;;
+  ''|0|false|no|off) ;;
+  *)
+    echo "[entrypoint] OP_CROPWRIGHT_BASIC_AUTH must be true/false (1, true, yes, on / 0, false, no, off), got: ${OP_CROPWRIGHT_BASIC_AUTH}" >&2
+    exit 1
+    ;;
+esac
+mkdir -p "$AUTH_DIR"
+rm -f "$AUTH_DIR/htpasswd" "$AUTH_DIR/basic-auth.conf"
+if [ "$AUTH_ON" = 1 ]; then
+  if [ ! -f "$HTPASSWD_SRC" ] || ! grep -Eq '[^[:space:]]' "$HTPASSWD_SRC"; then
+    echo "[entrypoint] OP_CROPWRIGHT_BASIC_AUTH is on but no login is set (OP_CROPWRIGHT_BASIC_AUTH_FILE is empty or missing). Run: ./openprocessor cropwright password" >&2
+    exit 1
+  fi
+  # Every non-blank line must be user:<apr1 or bcrypt hash>; never plaintext. The
+  # offending content is not echoed.
+  if grep -Ev '^[[:space:]]*$' "$HTPASSWD_SRC" | grep -Evq '^[^:[:space:]]+:(\$apr1\$[./0-9A-Za-z]{1,8}\$[./0-9A-Za-z]{22}|\$2[aby]\$[0-9]{2}\$[./0-9A-Za-z]{53})$'; then
+    echo "[entrypoint] OP_CROPWRIGHT_BASIC_AUTH_FILE has a line that is not user:<apr1 or bcrypt hash>. Regenerate it: ./openprocessor cropwright password" >&2
+    exit 1
+  fi
+  ( umask 077; grep -Ev '^[[:space:]]*$' "$HTPASSWD_SRC" > "$AUTH_DIR/htpasswd" )
+  printf 'auth_basic "Cropwright";\nauth_basic_user_file %s/htpasswd;\n' "$AUTH_DIR" > "$AUTH_DIR/basic-auth.conf"
+fi
+
 find /usr/share/nginx/html -type f \( -name '*.js' -o -name '*.html' \) \
     -exec sed -i "s|__RUNTIME__|${TARGET_URL}|g; s|__API_PREFIX__|${API_PREFIX}|g; s|__INGEST_MAX_REQUEST_MB__|${INGEST_MAX_REQUEST_MB}|g; s|__DATASET_UPLOAD_MAX_MB__|${DATASET_UPLOAD_MAX_MB}|g" {} +
 
@@ -157,4 +190,5 @@ echo "[entrypoint] API_UPSTREAM=${API_UPSTREAM}"
 echo "[entrypoint] DOCS_UPSTREAM=${DOCS_UPSTREAM}"
 echo "[entrypoint] OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB=${INGEST_MAX_REQUEST_MB}"
 echo "[entrypoint] OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB=${DATASET_UPLOAD_MAX_MB}"
+echo "[entrypoint] OP_CROPWRIGHT_BASIC_AUTH=${AUTH_ON} (1 = every route needs the htpasswd login except /nginx-health)"
 echo "[entrypoint] OP_GATEWAY_SUBPATHS=${GATEWAY_ON} (1 = monitoring UIs proxied under /grafana/, /prometheus/, /dashboards/, /mlflow/)"

@@ -36,11 +36,11 @@ COPY docker-entrypoint.sh /docker-entrypoint.d/40-runtime-config.sh
 # The runtime-config script rewrites placeholders in the bundle and in
 # default.conf with `sed -i` at container start, as uid 101.
 RUN chmod 0755 /docker-entrypoint.d/40-runtime-config.sh \
-    && mkdir -p /etc/nginx/gateway.d \
-    && chown -R 101:0 /usr/share/nginx/html /etc/nginx/conf.d /etc/nginx/gateway.d \
-    && chmod -R g+w /usr/share/nginx/html /etc/nginx/conf.d /etc/nginx/gateway.d
+    && mkdir -p /etc/nginx/gateway.d /etc/nginx/auth.d \
+    && chown -R 101:0 /usr/share/nginx/html /etc/nginx/conf.d /etc/nginx/gateway.d /etc/nginx/auth.d \
+    && chmod -R g+w /usr/share/nginx/html /etc/nginx/conf.d /etc/nginx/gateway.d /etc/nginx/auth.d
 USER 101
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["sh", "-c", "wget -q --spider http://127.0.0.1:8080/ || exit 1"]
+    CMD ["sh", "-c", "wget -q --spider http://127.0.0.1:8080/nginx-health || exit 1"]

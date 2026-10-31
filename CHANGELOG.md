@@ -13,6 +13,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Upgrade notes / behaviour changes
 
+- **Cropwright gets optional HTTP basic auth** (#351). The installer turns it on when Cropwright is published beyond loopback (`OP_CROPWRIGHT_BASIC_AUTH`, `OP_CROPWRIGHT_BASIC_AUTH_FILE`); `./openprocessor cropwright password` changes the login. The container healthcheck moved to `/nginx-health`, which stays open. See SECURITY.md.
 - **Breaking: the unused `backbone_embedding` field is removed** (#410).
   - Removed: the `backbone_embedding` item field, its ingest writer, the dual-head detector export (`export/export_detector_dual_head.*`), `make export-dual-head` and the region-profile field `feature_output`.
   - A stored region profile that still has `feature_output` now fails to load with "unknown field". Remove the key, or re-save the profile from its template.

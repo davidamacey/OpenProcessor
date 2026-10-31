@@ -38,8 +38,10 @@ origin and the top-bar **Resources** menu links to it.
 
 **The curation API has no request authentication.** Anyone who can
 reach Cropwright's nginx origin can label, discard, ingest, export and
-train — there is no login and no token, by design (the backend owns
-that decision; see its own docs). **Never expose Cropwright or the
+train — the app has no user accounts or tokens, by design (the backend
+owns that decision). The nginx container can add one shared HTTP basic-auth
+login (`OP_CROPWRIGHT_BASIC_AUTH`; the installer turns it on for a LAN bind),
+which is not a user system: see the repository `SECURITY.md`. **Never expose Cropwright or the
 OpenProcessor API it proxies to the public internet.** Run it only on a
 trusted LAN/VPN, or put it behind an authenticating reverse proxy
 (`oauth2-proxy`, nginx basic auth). See [SECURITY.md](../SECURITY.md).
