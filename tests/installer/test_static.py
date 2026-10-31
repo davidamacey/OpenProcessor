@@ -178,6 +178,7 @@ def test_installer_sources_only_verified_install_files() -> None:
         'source "${OP_DIR}/scripts/lib/image_keys.sh"',
         'source "${OP_DIR}/scripts/lib/opensearch_heap.sh"',
         'source "${OP_DIR}/scripts/lib/retired_env.sh"',
+        'source "${OP_DIR}/scripts/lib/cropwright_auth.sh"',
         'source "${OP_DIR}/scripts/lib/install_summary.sh"',
     }
     body = text[text.index('\ndo_install() {') :]
@@ -252,7 +253,7 @@ def test_committed_images_lock_has_a_digest_on_every_line_and_no_latest() -> Non
 _LAN_SENTENCES = (
     'Cropwright is reachable on your LAN by default, for homelab or\nsmall-business use.',
     'The API itself stays bound to 127.0.0.1.',
-    'There is no login\non Cropwright',
+    'On a LAN bind the\ninstaller puts a shared HTTP basic-auth login in front of Cropwright',
     'Pass `--local-only` to opt out and keep\neverything on 127.0.0.1.',
 )
 

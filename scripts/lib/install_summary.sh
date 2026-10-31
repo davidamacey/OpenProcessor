@@ -42,9 +42,16 @@ print_summary() {
             local lan="$OP_CROPWRIGHT_BIND"
             [[ "$lan" == 0.0.0.0 ]] && lan="$(hostname -I 2>/dev/null | awk '{ print $1 }' || true)"
             echo "    Cropwright on your LAN: http://${lan:-<this-computer-ip>}:${OP_CROPWRIGHT_PORT}"
-            log_warn "Cropwright is reachable from your LAN and has NO login: use it only on a trusted network,"
-            log_warn "never port-forward it to the internet, and put a reverse proxy with authentication in front"
-            log_warn "for anything wider (SECURITY.md). Re-run with --local-only to keep it on this computer."
+            if [[ "${OP_CROPWRIGHT_AUTH_ON:-0}" == 1 ]]; then
+                echo "    Cropwright login: user '${CROPWRIGHT_AUTH_USER}', password in ${OP_DIR}/secrets/cropwright/password"
+                echo "                      (change it: ./openprocessor cropwright password)"
+                log_warn "Cropwright is reachable from your LAN behind one shared basic-auth login over plain HTTP:"
+                log_warn "use it only on a trusted network, never port-forward it to the internet (SECURITY.md)."
+            else
+                log_warn "Cropwright is reachable from your LAN and has NO login: use it only on a trusted network,"
+                log_warn "never port-forward it to the internet, and put a reverse proxy with authentication in front"
+                log_warn "for anything wider (SECURITY.md). Re-run with --local-only to keep it on this computer."
+            fi
         fi
     fi
     if [[ "$OP_WITH_MONITORING" == 1 ]]; then

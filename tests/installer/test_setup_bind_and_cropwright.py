@@ -99,11 +99,53 @@ def test_cropwright_is_reachable_from_the_lan_by_default_with_a_warning(shimmed:
     assert not (shimmed.root / 'inst' / 'cropwright').exists()
     # The backend stays on loopback; only Cropwright is on the LAN.
     assert env_file(shimmed)['OP_BIND_ADDRESS'] == '127.0.0.1'
-    assert 'reachable from your LAN and has NO login' in result.stderr
+    assert 'behind one shared basic-auth login' in result.stderr
     assert 'never port-forward' in result.stderr
     dry_run = dry(shimmed, tiers='cropwright')
     assert dry_run.returncode == 0, dry_run.stderr
     assert not [ln for ln in dry_run.stdout.splitlines() if f'-p {PROJECT}-cw' in ln]
+
+
+def test_lan_cropwright_gets_a_basic_auth_login_that_is_never_printed(shimmed: Shimmed) -> None:
+    result = configure(shimmed, tiers='cropwright')
+    assert result.returncode == 0, result.stderr
+    inst = shimmed.root / 'inst'
+    env = env_file(shimmed)
+    assert env['OP_CROPWRIGHT_BASIC_AUTH'] == 'true'
+    assert env['OP_CROPWRIGHT_BASIC_AUTH_FILE'] == './secrets/cropwright/htpasswd'
+    secrets = inst / 'secrets' / 'cropwright'
+    password = (secrets / 'password').read_text()
+    assert len(password) == 24
+    assert stat.S_IMODE((secrets / 'password').stat().st_mode) == 0o600
+    assert stat.S_IMODE(secrets.stat().st_mode) == 0o700
+    assert (secrets / 'htpasswd').read_text().startswith('cropwright:$apr1$')
+    assert 'secrets/cropwright/password' in result.stdout
+    for text in (
+        _cw_env(shimmed),
+        result.stdout,
+        result.stderr,
+        (inst / '.install' / 'install.log').read_text(),
+        shimmed.log.read_text(),
+    ):
+        assert password not in text
+    # A re-run keeps the login instead of rotating it.
+    assert configure(shimmed, tiers='cropwright').returncode == 0
+    assert (secrets / 'password').read_text() == password
+
+
+def test_basic_auth_can_be_turned_off_and_is_off_for_local_only(shimmed: Shimmed) -> None:
+    off = configure(shimmed, tiers='cropwright', OP_CROPWRIGHT_BASIC_AUTH='false')
+    assert off.returncode == 0, off.stderr
+    assert env_file(shimmed)['OP_CROPWRIGHT_BASIC_AUTH'] == 'false'
+    assert not (shimmed.root / 'inst' / 'secrets' / 'cropwright').exists()
+    assert 'reachable from your LAN and has NO login' in off.stderr
+
+
+def test_local_only_has_no_basic_auth(shimmed: Shimmed) -> None:
+    result = configure(shimmed, '--local-only', tiers='cropwright')
+    assert result.returncode == 0, result.stderr
+    assert env_file(shimmed)['OP_CROPWRIGHT_BASIC_AUTH'] == 'false'
+    assert not (shimmed.root / 'inst' / 'secrets' / 'cropwright').exists()
 
 
 def test_local_only_keeps_cropwright_on_this_computer(shimmed: Shimmed) -> None:
@@ -154,7 +196,7 @@ def test_specific_bind_address_also_applies_to_cropwright(shimmed: Shimmed) -> N
     assert result.returncode == 0, result.stderr
     assert 'OP_CROPWRIGHT_BIND_ADDRESS=10.10.10.20' in _cw_env(shimmed)
     assert 'Cropwright on your LAN: http://10.10.10.20:' in result.stdout
-    assert 'reachable from your LAN and has NO login' in result.stderr
+    assert 'behind one shared basic-auth login' in result.stderr
 
 
 def test_rerun_without_bind_keeps_a_specific_cropwright_bind(shimmed: Shimmed) -> None:

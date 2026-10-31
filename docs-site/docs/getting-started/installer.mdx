@@ -125,12 +125,18 @@ The `/OpenProcessor/` route of Cropwright's nginx proxies to the docs container
 :::warning[Cropwright on your LAN]
 
 Cropwright is reachable on your LAN by default, for homelab or small-business
-use. The API itself stays bound to 127.0.0.1. There is no login on
-Cropwright — a warning is shown. Pass `--local-only` to opt out and keep
-everything on 127.0.0.1.
+use. The API itself stays bound to 127.0.0.1. On a LAN bind the installer
+puts a shared HTTP basic-auth login (user `cropwright`) in front of Cropwright;
+the generated password is in `secrets/cropwright/password` and is never
+printed. Pass `--local-only` to keep everything on 127.0.0.1.
 
 :::
 
+- Basic auth is on by default when Cropwright is published beyond loopback.
+  Set `OP_CROPWRIGHT_BASIC_AUTH=false` to skip it (an unattended run reads it
+  from the environment), or change the password with
+  `./openprocessor cropwright password` and restart Cropwright. It is plain
+  HTTP, so the password is not encrypted on the LAN.
 - Do not port-forward Cropwright, or any OpenProcessor port, to the public
   internet. For access beyond a trusted network, put a reverse proxy with
   authentication in front.

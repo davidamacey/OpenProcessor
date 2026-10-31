@@ -361,6 +361,8 @@ services:
       # Gateway mode: also serve the monitoring UIs under /grafana/, /prometheus/,
       # /dashboards/ and /mlflow/ of this one origin (see x-gateway-wrap below).
       - OP_GATEWAY_SUBPATHS=${OP_GATEWAY_SUBPATHS:-false}
+      # Optional HTTP basic auth on every route; the htpasswd login is the file mounted below.
+      - OP_CROPWRIGHT_BASIC_AUTH=${OP_CROPWRIGHT_BASIC_AUTH:-false}
       # Retired names (renamed to OP_CROPWRIGHT_*): passed through only so the entrypoint
       # can refuse to start while a .env still sets one.
       - CROPWRIGHT_IMAGE=${CROPWRIGHT_IMAGE:-}
@@ -372,9 +374,13 @@ services:
       # A UI: OP_CROPWRIGHT_BIND_ADDRESS opens just this one to a LAN (the installer's default for
       # homelabs), OP_UI_BIND_ADDRESS opens it with the other UIs, and the API stays on loopback.
       - '${OP_CROPWRIGHT_BIND_ADDRESS:-${OP_UI_BIND_ADDRESS:-${OP_BIND_ADDRESS:-127.0.0.1}}}:${OP_CROPWRIGHT_PORT:-5184}:8080'
+    volumes:
+      # The htpasswd login, read-only. /dev/null (an empty file) while basic auth is off.
+      - ${OP_CROPWRIGHT_BASIC_AUTH_FILE:-/dev/null}:/run/secrets/cropwright_htpasswd:ro
     healthcheck:
       # 127.0.0.1, not localhost: localhost resolves to ::1 and nginx listens on IPv4 only.
-      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/']
+      # /nginx-health is the one route that stays open behind basic auth.
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/nginx-health']
       interval: 30s
       timeout: 5s
       retries: 3
