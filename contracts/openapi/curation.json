@@ -21830,11 +21830,6 @@
             "title": "Display Name Singular",
             "type": "string"
           },
-          "feature_output": {
-            "default": "sppf_feat",
-            "title": "Feature Output",
-            "type": "string"
-          },
           "gate_hit_miss_threshold": {
             "default": 15,
             "title": "Gate Hit Miss Threshold",

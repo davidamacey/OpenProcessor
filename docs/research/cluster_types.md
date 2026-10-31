@@ -35,7 +35,7 @@ The curation routes are project-scoped (`/curation/projects/{project}/...`) and 
 Data flow:
 
 1. `POST /clusters/train/{index}` (`index` is `global`, `vehicles`, `people` or `faces`) reads every embedding from the OpenSearch index (`max_samples` caps it), trains a FAISS IVF index on the GPU when one is available, assigns every document to its nearest centroid and writes `cluster_id` and `cluster_distance` back.
-2. The trained index is saved to `faiss_indexes/<index>.index` plus `<index>.meta.npy` (relative to the API working directory; the directory is git-ignored).
+2. The trained index is saved atomically to `data/faiss_indexes/<index>.index` plus `<index>.meta.npy` (relative to the API working directory, `/app` in the container, where `./data` is a bind mount, so the indexes survive a container recreate; the directory is git-ignored).
 3. At ingest, a document whose index is trained gets `cluster_id`, `cluster_distance` and `clustered_at` from a nearest-centroid lookup (`src/clients/opensearch/ingest.py`, `bulk.py`). A failing assigner is logged and skipped; ingest never fails on clustering.
 4. `POST /clusters/assign/{index}` assigns documents that have no `cluster_id` yet. `GET /clusters/stats/{index}`, `GET /clusters/balance/{index}`, `POST /clusters/rebalance/{index}` (a retrain), `GET /clusters/{index}/{cluster_id}` (members) and `GET /clusters/albums` (global-index clusters of at least `min_size` images, default 5, as "albums") complete the surface.
 
@@ -45,7 +45,7 @@ Known limits:
 
 - This is a partition, not identity or near-duplicate detection. Near duplicates are `duplicate_group_id` and the `/query/duplicates` routes, a different mechanism.
 - `ClusteringService` is built with a fixed 512 dimension for every index, so only 512-d vectors can be trained.
-- Trained indexes are loaded from disk lazily (`_get_index`), but the ingest-time check `is_trained` looks only at the in-memory cache. After an API restart, ingest does not assign clusters until something loads the index (a stats, balance or assign call). The compose files mount no volume for `faiss_indexes/`, so a recreated container loses the trained indexes.
+- Trained indexes are loaded from disk on first use, including by the ingest-time `is_trained` check, so ingest assigns clusters right after an API restart. A corrupt, untrained or wrong-dimension index file is logged and treated as untrained (fail closed) until the index is retrained.
 - Cluster ids are cell numbers of a k-means partition; a retrain renumbers them.
 
 Tests: `tests/test_clustering_singleton.py` (singleton and `load_index` branches), `tests/test_cluster_route_order.py` (route order). No offline test trains an index or exercises `check_balance`, and there is no offline test for the album listing. Those paths are covered only by the live stack.

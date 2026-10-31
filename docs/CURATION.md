@@ -274,7 +274,6 @@ Nothing here ships a pretrained region detector, VLM or trainer weights.
 - **An item detector for ingest**, named by `OP_INGEST_PRIMARY_DETECTOR_MODEL`.
   Ingest returns 503 until one is configured and loaded.
 - **A segmenter and a region profile**, if you want regions (`OP_SEGMENTER_URL`).
-- **A dual-head detector**, only if you want `backbone_embedding`.
 - **An OCR model**, if your region has readable text.
 - **A VLM**: see [Choosing a VLM](#choosing-a-vlm).
 - **A dataset and base weights** for training.

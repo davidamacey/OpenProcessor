@@ -112,7 +112,6 @@ def _group(name: str) -> str:
         'region_nms_iou',
         'max_regions_per_item',
         'letterbox_fill',
-        'feature_output',
         'secondary_shape_groups',
     ):
         return 'detector'

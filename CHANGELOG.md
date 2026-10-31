@@ -13,6 +13,12 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Upgrade notes / behaviour changes
 
+- **Breaking: the unused `backbone_embedding` field is removed** (#410).
+  - Removed: the `backbone_embedding` item field, its ingest writer, the dual-head detector export (`export/export_detector_dual_head.*`), `make export-dual-head` and the region-profile field `feature_output`.
+  - A stored region profile that still has `feature_output` now fails to load with "unknown field". Remove the key, or re-save the profile from its template.
+  - `OP_BACKBONE_EMBEDDING_DIM` and the `OP_INGEST_PRIMARY_`, `OP_INGEST_SECONDARY_` and `OP_REGION_DETECTION_` `FEATURE_OUTPUT` variables are rejected at startup.
+  - Existing indexes keep the stored vectors and the dead mapping until the project is re-ingested. Nothing reads them.
+- **Every engine group now carries a build stamp** (#415, follows #209): the yolo, mobileclip, faces and ocr engines are stamped in `.install/precision.tsv` like the PE engine (precision, TensorRT version, GPU compute capability, ONNX sha256, flags). An install without stamps rebuilds those groups once on the next `./openprocessor models install` or `repair`; after that a missing stamp, another GPU architecture, a re-exported ONNX or a recorded fallback precision makes the group rebuild instead of being skipped. The precision ledger now lists only `*_fallback` rows as degraded, since FP32 is the designed precision of the OCR and MobileCLIP text engines.
 - **A running auto-label loop holds the cluster retrain** (#286): `POST /pipeline/auto_label/start` and `POST /pipeline/auto_label` with `train_clusters=true` answer `409 assist_loop_running`, and the cluster-refresh daemon and the auto-label worker's idle retrain skip that project, until the loop ends or is cancelled.
 - **The compose stack has a new service**, `curation-assist-loop-worker` (profile `curation`); `./openprocessor curation up` and `make curation-up` start it. The cluster-refresh daemon now needs the loops route of the same API version.
 
