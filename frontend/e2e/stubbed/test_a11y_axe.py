@@ -26,6 +26,7 @@ from test_open_vocab import serve_open_vocab
 from test_prompt_packs import serve_packs
 from test_review_crop_viewport import review_item
 from test_label_ops import serve as serve_label_ops
+from test_source_missing import serve_cluster_grid, serve_review_pane
 
 AXE_JS = Path(__file__).resolve().parents[2] / "node_modules" / "axe-core" / "axe.min.js"
 API_PREFIX = "/curation"
@@ -123,6 +124,8 @@ PAGES = [
     ("cluster-detail", "/p/default/clusters/1", serve_clusters, '[data-testid="class-name"]'),
     ("cluster-detail-facets", "/p/default/clusters/2", serve_cluster_with_facets, '[data-testid="cluster-facets"]'),
     ("review", "/p/default/review", serve_review, "main"),
+    ("cluster-detail-source-missing", "/p/default/clusters/1", serve_cluster_grid, '[role="status"]'),
+    ("review-source-missing", "/p/default/review", serve_review_pane, '[role="status"]'),
     ("classes", "/p/default/classes", serve_classes, "main"),
     ("settings", "/p/default/settings", serve_settings, "main"),
     ("label-ops", "/p/default/label-ops", serve_label_ops, '[data-testid="label-op-row"]'),
