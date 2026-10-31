@@ -240,7 +240,7 @@ VLM or trained dataset. A deployment provides:
 |---|---|---|
 | PE-Core-L14-336 image and text encoders | Yes | `make export-pe`; the Triton names `pe_image_encoder` / `pe_text_encoder` are fixed |
 | Item detector | Yes, for ingest | Any end2end Triton model via `OP_INGEST_PRIMARY_DETECTOR_MODEL` |
-| Secondary detector | No | Raw-output model via `OP_INGEST_SECONDARY_DETECTOR_MODEL`; also the source of `backbone_embedding` when exported with `make export-dual-head` |
+| Secondary detector | No | Raw-output model via `OP_INGEST_SECONDARY_DETECTOR_MODEL` |
 | Region profile + region detector | No | A stored profile activated per project ([Region profiles](../guides/region-profiles.mdx)), or the deployment default from `OP_REGION_PROFILE_PATH` / `OP_REGION_PROFILE`; see [advanced configuration](../configuration/advanced.mdx#region-detection-profile) |
 | OCR recognition model | Only if regions carry text | The profile's `ocr_rec_model` |
 | Segmenter | No | `--profile segmenter` (SAM 3, needs `HF_TOKEN`) or any service speaking the same protocol at `OP_SEGMENTER_URL` |

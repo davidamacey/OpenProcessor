@@ -147,23 +147,12 @@ class IngestItemsMixin:
                     )
             if secondary is not None:
                 sec_scale, sec_pad = letterbox_params(img, target=self.secondary_profile.input_size)
-                # Class override and embedding pooling fail independently —
-                # an NMS failure must not also drop the embeddings.
                 try:
                     self.detector.resolve_with_secondary(items, secondary.raw, sec_scale, sec_pad)
                 except Exception as exc:
                     logger.warning(
                         'ingest_secondary_resolve_failed', path=image_path, error=str(exc)
                     )
-                if secondary.feature_map is not None:
-                    try:
-                        self.detector.attach_backbone_embeddings(
-                            items, secondary.feature_map, sec_scale, sec_pad
-                        )
-                    except Exception as exc:
-                        logger.warning(
-                            'ingest_backbone_embedding_failed', path=image_path, error=str(exc)
-                        )
         return self.filter_detections(items, img.width, img.height, secondary_detector_error)
 
     def filter_detections(

@@ -12,8 +12,6 @@ The export process transforms PyTorch models into optimized TensorRT engines for
 |--------|---------|--------|
 | `export_models.py` | YOLO11 object detection with end2end NMS | TensorRT engine |
 | `export_yolo26.py` | YOLO26 (NMS-free, single output tensor), stock Ultralytics toolchain | ONNX + TensorRT engine |
-| `export_detector_dual_head.py` | Any YOLO-family detector, re-exported with a backbone feature-map output | ONNX + TensorRT engine |
-| `export_detector_dual_head.sh` | `trtexec` engine build + model-repo install for the above | TensorRT engine |
 | `export_scrfd.py` | SCRFD-10G face detection + landmarks | TensorRT engine |
 | `export_face_recognition.py` | ArcFace face embeddings | TensorRT engine |
 | `export_mobileclip_image_encoder.py` | MobileCLIP image encoder | TensorRT engine |
@@ -94,63 +92,6 @@ docker compose exec api python /app/export/export_models.py \
     --formats trt trt_end2end \
     --normalize-boxes
 ```
-
-### Dual-Head Detector (detections + backbone embedding source)
-
-The curation subsystem stores a per-item **backbone embedding**
-(`backbone_embedding`, dimension `CurationConfig.backbone_embedding_dim`) and
-consumes it in residual clustering, the embedding visualization, item
-scores and the OCC conflict handler. It is produced by RoI-pooling a
-detector's backbone feature map over each detection box
-(`src.services.detection.geometry.roi_pool_sppf`) — which requires the
-feature map to be on the wire. A stock detector export emits only the
-detection tensor, so the detector has to be re-exported with a second
-output:
-
-| Output | Shape | Meaning |
-|--------|-------|---------|
-| `output0` | family-specific (YOLOv5 `[B, N, 5 + nc]`, Ultralytics v8+ `[B, 4 + nc, N]`) | Detection tensor, unchanged from a single-head export |
-| `sppf_feat` | `[B, C, H, W]` where `H = W = imgsz / 32` | Backbone bottleneck (SPPF) feature map |
-
-```bash
-# ONNX only (CPU-friendly; validates via onnxruntime round-trip)
-docker compose exec api python /app/export/export_detector_dual_head.py \
-    --weights /app/pytorch_models/my_detector.pt \
-    --triton-name my_detector_dual_head --imgsz 640
-
-# ONNX + TensorRT engine + config.pbtxt + labels.txt into the model repo
-docker compose exec api python /app/export/export_detector_dual_head.py \
-    --weights /app/pytorch_models/my_detector.pt \
-    --triton-name my_detector_dual_head \
-    --imgsz 1280 --max-batch 16 --formats onnx trt
-
-# Legacy YOLOv5-fork checkpoint (the fork is only needed to load its checkpoints)
-docker compose exec api python /app/export/export_detector_dual_head.py \
-    --weights /app/pytorch_models/legacy_v5.pt --loader yolov5 \
-    --yolov5-fork /app/external/yolov5 \
-    --imgsz 1280 --triton-name legacy_v5_dual_head
-```
-
-Nothing is hardcoded to one model: checkpoint, Triton name, input size,
-tapped module (`--feature-module`/`--feature-index`) and both output
-names are CLI arguments. The tapped module is found by **class name**
-(`SPPF` by default), not by a fixed layer index, so architecture drift
-cannot silently tap the wrong layer.
-
-Where `trtexec` is available but the TensorRT Python bindings are not
-(e.g. inside the triton-server container), build the engine with the
-shell companion instead of `--formats trt`:
-
-```bash
-export/export_detector_dual_head.sh \
-    --onnx pytorch_models/my_detector_dual_head.onnx \
-    --name my_detector_dual_head --input-size 1280 --max-batch 16
-```
-
-Whichever path builds the engine, the model's `config.pbtxt` must declare
-**both** outputs — Triton serves only the tensors its config names, so
-omitting `sppf_feat` silently drops the feature map even though the
-engine produces it. `--formats trt` writes that file for you.
 
 ### SCRFD Face Detection
 

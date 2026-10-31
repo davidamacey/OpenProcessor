@@ -4,7 +4,7 @@ Configuration module for the YOLO inference service.
 Provides centralized configuration using Pydantic Settings with environment variable support.
 """
 
-from src.config.curation import BACKBONE_EMBEDDING_FIELD, ITEM_EMBEDDING_FIELD, CurationConfig
+from src.config.curation import ITEM_EMBEDDING_FIELD, CurationConfig
 from src.config.curation_accessors import get_curation_config
 from src.config.curation_roles import IndexRole, index_name
 from src.config.detection_profile import DetectionProfile
@@ -15,7 +15,6 @@ from src.config.settings import Settings, get_settings
 
 
 __all__ = [
-    'BACKBONE_EMBEDDING_FIELD',
     'ITEM_EMBEDDING_FIELD',
     'PENDING_STATUSES',
     'TERMINAL_STATUSES',

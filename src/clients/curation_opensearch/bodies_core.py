@@ -12,7 +12,6 @@ from src.clients.curation_opensearch.open_vocab_fields import (
     OPEN_VOCAB_IMAGE_MAPPING,
     OPEN_VOCAB_ITEM_MAPPING,
 )
-from src.config import BACKBONE_EMBEDDING_FIELD
 from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPT_MAPPING
 from src.domain.item_text import ITEM_TEXT_MAPPING
 
@@ -417,12 +416,6 @@ def _items_body() -> dict[str, Any]:
                 # Secondary image-encoder embedding for semantic search
                 # (e.g. "white RV", "ford f150").
                 'pe_embedding': _knn_field(dim=config.encoder_embedding_dim),
-                # Backbone RoI-pool embedding written at ingest when a dual-head
-                # detector is the secondary model (export/export_detector_dual_head.py).
-                # No clustering path reads it: residual clustering reads
-                # pe_embedding (clustering/residual_fetch.py). Kept as the stored
-                # output of that documented export, not as a clustering input.
-                BACKBONE_EMBEDDING_FIELD: _knn_field(dim=config.backbone_embedding_dim),
                 **_region_boxes_mapping(),
                 # History: nested array recording every class write so
                 # operators can answer "who labeled this and when" after a

@@ -36,33 +36,47 @@ class IndexPersistenceMixin:
     """Save and load one index and its training metadata under ``index_dir``."""
 
     index_dir: Path
+    embedding_dim: int
     faiss: Any
+    _unloadable: set[ClusterIndex]
     _indexes: dict[ClusterIndex, FaissIvfIndex]
     _training_metadata: dict[ClusterIndex, dict]
 
     def _save_index(self, index_name: ClusterIndex) -> None:
-        """Save index to disk."""
+        """Save index and metadata; each file is written to a temp name, then renamed."""
         index = self._indexes.get(index_name)
         if index is None:
             return
 
         index_path = self.index_dir / f'{index_name.value}.index'
-        self.faiss.write_index(index, str(index_path))
-
-        # Save metadata
         metadata_path = self.index_dir / f'{index_name.value}.meta.npy'
-        np.save(
-            metadata_path, np.asarray(self._training_metadata.get(index_name, {}), dtype=object)
-        )
+        tmp_index = index_path.with_name(index_path.name + '.tmp')
+        tmp_meta = metadata_path.with_name(f'{index_name.value}.meta.tmp.npy')
 
+        np.save(tmp_meta, np.asarray(self._training_metadata.get(index_name, {}), dtype=object))
+        self.faiss.write_index(index, str(tmp_index))
+        tmp_meta.replace(metadata_path)
+        tmp_index.replace(index_path)
+
+        self._unloadable.discard(index_name)
         logger.info(f'Saved {index_name} index to {index_path}')
+
+    def has_saved_index(self, index_name: ClusterIndex) -> bool:
+        """True when a persisted index file exists and has not already failed to load."""
+        return (
+            index_name not in self._unloadable
+            and (self.index_dir / f'{index_name.value}.index').exists()
+        )
 
     def load_index(self, index_name: ClusterIndex) -> bool:
         """
         Load index from disk.
 
+        Fails closed: a corrupt, untrained or dimension-mismatched file is logged, kept out of
+        the cache and remembered as unloadable, so callers see an untrained index.
+
         Returns:
-            True if loaded successfully, False if not found
+            True if loaded successfully, False if not found or unusable
         """
         index_path = self.index_dir / f'{index_name.value}.index'
         metadata_path = self.index_dir / f'{index_name.value}.meta.npy'
@@ -73,15 +87,20 @@ class IndexPersistenceMixin:
 
         try:
             index = self.faiss.read_index(str(index_path))
-            self._indexes[index_name] = index
-
+            if getattr(index, 'd', None) != self.embedding_dim or not index.is_trained:
+                raise ValueError(
+                    f'index d={getattr(index, "d", None)} trained={index.is_trained}, '
+                    f'expected d={self.embedding_dim} trained'
+                )
+            metadata: dict = {}
             if metadata_path.exists():
-                self._training_metadata[index_name] = np.load(
-                    metadata_path, allow_pickle=True
-                ).item()
-
-            logger.info(f'Loaded {index_name} index from {index_path}')
-            return True
+                metadata = np.load(metadata_path, allow_pickle=True).item()
         except Exception as e:
-            logger.error(f'Failed to load {index_name} index: {e}')
+            logger.error(f'Failed to load {index_name} index from {index_path}: {e}')
+            self._unloadable.add(index_name)
             return False
+
+        self._indexes[index_name] = index
+        self._training_metadata[index_name] = metadata
+        logger.info(f'Loaded {index_name} index from {index_path}')
+        return True

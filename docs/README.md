@@ -55,7 +55,7 @@ Build the site with `make docs-build`.
 |---|---|
 | [OCR.md](OCR.md) | PP-OCRv5 detection and recognition setup |
 | [FACE_RECOGNITION_IMPLEMENTATION.md](FACE_RECOGNITION_IMPLEMENTATION.md) | SCRFD and ArcFace |
-| [../export/README.md](../export/README.md) | Exporting models to TensorRT, PE-Core encoders, dual-head detectors |
+| [../export/README.md](../export/README.md) | Exporting models to TensorRT, PE-Core encoders |
 | [MIGRATION_TRITON_26.md](MIGRATION_TRITON_26.md) | Re-exporting engines for Triton 26.06 and TensorRT 11 |
 | [Technical/TRITON_BEST_PRACTICES.md](Technical/TRITON_BEST_PRACTICES.md) | Triton batching, instance groups, tuning |
 | [security/triton_cve_hardening.md](security/triton_cve_hardening.md) | Triton image CVE posture |

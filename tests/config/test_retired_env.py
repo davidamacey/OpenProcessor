@@ -104,3 +104,16 @@ def test_bakeoff_evaluator_entry_point_rejects_retired_env(
     monkeypatch.setattr(sys, 'argv', ['bakeoff_runner', '--job', str(tmp_path / 'none.json')])
     with pytest.raises(RuntimeError, match='OP_BAKEOFF_PROFILE_TARGET_CLASS_ID'):
         bakeoff_runner.main()
+
+
+@pytest.mark.parametrize(
+    'prefix', ['OP_INGEST_PRIMARY_', 'OP_INGEST_SECONDARY_', 'OP_REGION_DETECTION_']
+)
+def test_every_profile_feature_output_override_is_retired(
+    prefix: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    name = f'{prefix}FEATURE_OUTPUT'
+    assert name in RETIRED_ENV
+    monkeypatch.setenv(name, 'sppf_feat')
+    with pytest.raises(RuntimeError, match=name):
+        reject_retired_env()

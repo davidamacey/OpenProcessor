@@ -23,8 +23,8 @@
 # OpenAPI contract (contracts/openapi/curation.json) is generated from them and
 # schema naming/shape changes between releases; bump together with
 # `make contracts`.
-fastapi==0.143.0
-pydantic==2.14.0
+fastapi==0.143.3
+pydantic==2.14.1
 uvicorn[standard]
 python-multipart
 orjson
@@ -87,7 +87,7 @@ pytest-timeout>=2.4.0
 # types are real; ruff and vulture are the versions scripts/codegen/check_ruff_ratchet.py
 # and check_vulture.py run (keep ruff equal to the rev in .pre-commit-config.yaml).
 mypy==2.4.0
-ruff==0.17.0
+ruff==0.17.1
 vulture==2.16
 types-PyYAML
 types-requests

@@ -38,9 +38,8 @@ logger = get_logger(__name__)
 # Embedding field to reduce. ``pe_embedding`` is PE-Core-L14-336's
 # foundation visual encoder (1024-d), trained on broad web imagery —
 # better at grouping out-of-distribution items by semantic similarity
-# than ``backbone_embedding`` (the secondary classifier's penultimate layer, which
-# clusters by framing/lighting outside its confident range). A visual
-# audit picked pe_embedding as the residual default.
+# than a detector-backbone vector, which clusters by framing/lighting. A
+# visual audit picked pe_embedding as the residual default.
 RESIDUAL_EMBEDDING_FIELD = env_str('OP_RESIDUAL_EMBEDDING_FIELD', 'pe_embedding')
 
 # Crops with these class_source values are *confidently* labeled and

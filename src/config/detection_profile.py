@@ -58,10 +58,6 @@ class DetectionProfile:
     region_nms_iou: float = 0.5
     max_regions_per_item: int = 1
     letterbox_fill: tuple[int, int, int] = (114, 114, 114)
-    # Optional backbone feature-map output of a raw-output (secondary)
-    # detector, requested only when Triton reports the model has it.
-    # Empty disables the request entirely.
-    feature_output: str = 'sppf_feat'
     text_hint_aspect_min: float = 1.5
     text_hint_aspect_max: float = 7.0
     text_hint_rec_floor: float = 0.70

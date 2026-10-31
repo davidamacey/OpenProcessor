@@ -97,17 +97,16 @@ def test_items_has_required_fields() -> None:
         'created_at',
         'updated_at',
         'pe_embedding',
-        'backbone_embedding',
         # Primary-subject rank + blur quality.
         'crop_rank_in_image',
         'crop_area_norm',
         'blur_lap_ratio',
     }
     assert required_keys.issubset(props.keys()), f'missing: {required_keys - props.keys()}'
-    # PE + backbone embeddings are k-NN vectors.
+    # The PE embedding is a k-NN vector; the retired backbone vector is gone.
     assert props['pe_embedding']['type'] == 'knn_vector'
     assert props['pe_embedding']['dimension'] == config.encoder_embedding_dim
-    assert props['backbone_embedding']['type'] == 'knn_vector'
+    assert 'backbone_embedding' not in props
     assert 'v6_embedding' not in props
 
 

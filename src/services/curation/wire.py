@@ -20,7 +20,7 @@ from dataclasses import fields as dataclass_fields
 from typing import TYPE_CHECKING, Any
 
 from src.clients.occ_locks import is_locked_box, is_locked_item
-from src.config.curation import BACKBONE_EMBEDDING_FIELD, ITEM_EMBEDDING_FIELD
+from src.config.curation import ITEM_EMBEDDING_FIELD
 from src.config.region_fields import RegionFields, get_region_fields
 from src.domain.audit_math import AUDIT_FIELDS
 from src.domain.item_text import ITEM_TEXT_LINES_FIELD, item_text_lines_to_wire
@@ -82,7 +82,7 @@ REGION_WIRE_KEYS: tuple[str, ...] = tuple(region_wire_key(a) for a in REGION_WIR
 
 # Heavy vectors never shipped to a client. Callers pass the storage
 # instance so an overridden embedding key is excluded too.
-_EMBEDDING_SOURCE_EXCLUDES = (ITEM_EMBEDDING_FIELD, BACKBONE_EMBEDDING_FIELD)
+_EMBEDDING_SOURCE_EXCLUDES = (ITEM_EMBEDDING_FIELD,)
 
 
 def item_source_excludes(storage: RegionFields | None = None) -> list[str]:

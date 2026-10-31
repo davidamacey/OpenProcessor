@@ -1940,8 +1940,8 @@ rounds to FP16 once, which is where the 0.9999 and the 98 percent box identity c
 - Core routes (`/detect`, `/embed`, `/analyze`) send uint8 to the detector through the same engine
   and were exercised by the 200-image probe of `parity.py capture`; MobileCLIP, SCRFD, ArcFace and
   the OCR models still receive FP32 (they are separate packages if they show up in the profile).
-- The dual-head detector export and the YOLO26 export follow the same prefix and are covered by unit
-  tests only; no engine of either was built or served in this run.
+- The YOLO26 export follows the same prefix and is covered by unit tests only; no engine of it was
+  built or served in this run.
 - The `DELETE /curation/projects/{project}` 409 seen once at the end of a batch series is not
   diagnosed here.
 

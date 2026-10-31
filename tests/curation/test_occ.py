@@ -178,7 +178,8 @@ class TestMgetPayload:
         (doc,) = client.mget.await_args.kwargs['body']['docs']
         excludes = doc['_source']['excludes']
         assert get_region_fields().box_embeddings in excludes
-        assert {'pe_embedding', 'backbone_embedding'} <= set(excludes)
+        assert 'pe_embedding' in excludes
+        assert 'backbone_embedding' not in excludes
 
 
 if __name__ == '__main__':

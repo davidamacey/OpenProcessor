@@ -12,7 +12,6 @@ from src.services.detection.geometry import (
     crop_to_jpeg,
     iou,
     letterbox_to_square,
-    roi_pool_sppf,
     undo_letterbox,
 )
 
@@ -111,22 +110,6 @@ class TestCropToJpeg:
         assert isinstance(data, bytes)
         assert len(data) > 0
         assert data[:2] == b'\xff\xd8'  # JPEG SOI marker
-
-
-class TestRoiPoolSppf:
-    def test_shape_and_normalization(self) -> None:
-        sppf = np.random.default_rng(0).normal(size=(768, 40, 40)).astype(np.float32)
-        pooled = roi_pool_sppf(sppf, (100.0, 100.0, 300.0, 300.0), input_size=1280, target_dim=1024)
-        assert pooled.shape == (1024,)
-        assert pooled.dtype == np.float32
-        norm = float(np.linalg.norm(pooled))
-        assert norm == pytest.approx(1.0, abs=1e-4)
-
-    def test_degenerate_bbox_falls_back_to_single_cell(self) -> None:
-        sppf = np.ones((16, 10, 10), dtype=np.float32)
-        pooled = roi_pool_sppf(sppf, (5.0, 5.0, 5.0, 5.0), input_size=320, target_dim=16)
-        assert pooled.shape == (16,)
-        assert np.isfinite(pooled).all()
 
 
 def _expected_letterbox_pixels(img, target: int, fill=(114, 114, 114)) -> np.ndarray:

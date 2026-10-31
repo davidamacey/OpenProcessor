@@ -265,10 +265,12 @@ _ms_pe_trtexec() {
 # Per-model precision ledger (.install/precision.tsv, tab separated:
 # model, precision, reason, tensorrt, compute_cap, onnx_sha256, flags). It is
 # also the engine build stamp: what was actually built, with which TensorRT,
-# for which GPU architecture, from which ONNX. "fp16" is a clean build;
-# anything else is a recorded fallback that model_setup_run_group reports
-# loudly and `openprocessor models status` lists, so a silent FP32 engine can
-# never pass as the FP16 default. A stamp that no longer matches the host
+# for which GPU architecture, from which ONNX. Every engine of every group
+# carries one (model_setup_group_engines). "fp16" and "fp32" are clean builds
+# at the precision the model is designed for; "*_fallback" is a recorded
+# fallback that model_setup_run_group reports loudly and `openprocessor
+# models status` lists, so a silent FP32 engine can never pass as the FP16
+# default. A stamp that no longer matches the host
 # (another architecture, a re-exported ONNX, no row at all) makes the group
 # rebuild instead of being skipped as up to date.
 _ms_precision_file() {
@@ -320,12 +322,12 @@ _ms_record_precision() {
 }
 
 # model_setup_precision_report: one line per model whose engine is not the
-# clean FP16 build ("model<TAB>precision<TAB>reason"); empty when all clean.
+# designed-precision build ("model<TAB>precision<TAB>reason"); empty when all clean.
 model_setup_precision_report() {
     local f
     f="$(_ms_precision_file)"
     [[ -f "$f" ]] || return 0
-    awk -F'\t' -v OFS='\t' '$2 != "fp16" { print $1, $2, $3 }' "$f"
+    awk -F'\t' -v OFS='\t' '$2 ~ /_fallback$/ { print $1, $2, $3 }' "$f"
 }
 
 # model_setup_stamp_report: every recorded engine stamp, one line per model
@@ -350,7 +352,7 @@ model_setup_stamp_stale() {
     precision="$(cut -f2 <<< "$row")"
     cc="$(cut -f5 <<< "$row")"
     sha="$(cut -f6 <<< "$row")"
-    if [[ "$precision" != fp16 ]]; then echo "built as ${precision}"; return 0; fi
+    if [[ "$precision" == *_fallback ]]; then echo "built as ${precision}"; return 0; fi
     want="$(_ms_config_input_dtype "$model")"
     if [[ -n "$want" && " $(cut -f7 <<< "$row") " != *" input=${want,,} "* ]]; then
         echo "engine input datatype is not the config's ${want}"
@@ -367,16 +369,33 @@ model_setup_stamp_stale() {
     return 1
 }
 
-# _ms_group_stamp_stale GROUP: logs and returns 0 when a stamped engine of the
-# group must be rebuilt. Only the PE engine carries a stamp today.
+# _ms_group_stamp_stale GROUP: logs and returns 0 when any engine of the group
+# has a stamp that no longer matches, so the group is rebuilt instead of
+# skipped (a skipped group is what lets its models stay READY).
 _ms_group_stamp_stale() {
-    local why
-    [[ "$1" == pe ]] || return 1
-    if why="$(model_setup_stamp_stale pe_image_encoder "$_MS_PE_ONNX_REL")"; then
-        log_info "group $1: engine stamp is stale (${why}), rebuilding"
-        return 0
-    fi
-    return 1
+    local model onnx_rel _prec why stale=1
+    while IFS=$'\t' read -r model onnx_rel _prec; do
+        [[ -n "$model" ]] || continue
+        if why="$(model_setup_stamp_stale "$model" "$onnx_rel")"; then
+            log_info "group $1: engine stamp is stale (${why}; ${model}), rebuilding"
+            stale=0
+        fi
+    done < <(model_setup_group_engines "$1")
+    return "$stale"
+}
+
+# _ms_record_group_stamps GROUP: stamps every engine of a group whose build
+# runs inside the export scripts (all but pe, whose _ms_pe_build_engine
+# records its own precision, FP32 fallback included). The input datatype is
+# taken from the config the engine was just built for.
+_ms_record_group_stamps() {
+    local model onnx_rel precision dtype
+    while IFS=$'\t' read -r model onnx_rel precision; do
+        [[ -n "$model" ]] || continue
+        dtype="$(_ms_config_input_dtype "$model")"
+        _ms_record_precision "$model" "$precision" "" "$onnx_rel" \
+            "trt-python-api ${precision}${dtype:+ input=${dtype,,}}"
+    done < <(model_setup_group_engines "$1")
 }
 
 # _ms_warn_if_degraded GROUP: prints a warning per fallback-precision model of
@@ -461,20 +480,24 @@ _ms_run_group_steps() {
         yolo)
             "$runner" yolo_export _ms_api python /app/export/export_models.py --models small \
                 --formats trt_end2end --normalize-boxes --save-labels --generate-config || return 1
+            "$runner" yolo_stamp _ms_record_group_stamps yolo || return 1
             ;;
         mobileclip)
             "$runner" mobileclip_image _ms_api python /app/export/export_mobileclip_image_encoder.py || return 1
             "$runner" mobileclip_text _ms_api python /app/export/export_mobileclip_text_encoder.py || return 1
+            "$runner" mobileclip_stamp _ms_record_group_stamps mobileclip || return 1
             ;;
         faces)
             "$runner" faces_download _ms_api python /app/export/download_face_models.py || return 1
             "$runner" faces_arcface _ms_api python /app/export/export_face_recognition.py || return 1
             "$runner" faces_scrfd _ms_api python /app/export/export_scrfd.py || return 1
+            "$runner" faces_stamp _ms_record_group_stamps faces || return 1
             ;;
         ocr)
             "$runner" ocr_download _ms_api python /app/export/download_paddleocr.py || return 1
             "$runner" ocr_det _ms_api python /app/export/export_paddleocr_det.py || return 1
             "$runner" ocr_rec _ms_api python /app/export/export_paddleocr_rec.py || return 1
+            "$runner" ocr_stamp _ms_record_group_stamps ocr || return 1
             ;;
         pe)
             "$runner" pe_weights _ms_api python /app/export/download_pe_weights.py || return 1

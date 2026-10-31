@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.registry import ClassRegistry
 from src.config import IndexRole
-from src.config.curation import BACKBONE_EMBEDDING_FIELD
 from src.config.project_context import bind_project
 from src.services.curation.dataset_import.issues import IssueCollector
 from src.services.curation.dataset_import.scan import (
@@ -35,7 +34,7 @@ if TYPE_CHECKING:
 
 PAGE_SIZE = 200
 _ITEM_PAGE = 1000
-_VECTOR_FIELDS = ('pe_embedding', BACKBONE_EMBEDDING_FIELD)
+_VECTOR_FIELDS = ('pe_embedding',)
 
 
 @dataclass

@@ -204,49 +204,6 @@ def crop_to_jpeg(crop: Image.Image, quality: int = 90) -> bytes:
     return buf.getvalue()
 
 
-def roi_pool_sppf(
-    sppf: np.ndarray,
-    bbox_letterbox: tuple[float, float, float, float],
-    *,
-    input_size: int = 1280,
-    target_dim: int = 1024,
-) -> np.ndarray:
-    """Average-pool a backbone feature map over a single detection bbox.
-
-    ``sppf`` shape: ``(C, H, W)`` where ``H == W == input_size // stride``.
-    ``bbox_letterbox`` is in letterboxed input coords (the same space the
-    model saw). Projection: divide by stride, clamp to the grid, take the
-    cells overlapping the bbox, mean across them -> ``C``-d vector, then
-    zero-pad/truncate to ``target_dim`` and L2-normalize.
-
-    Returns a ``(target_dim,)`` ``float32`` array. Safe for degenerate
-    bboxes (falls back to the single grid cell containing the bbox center).
-    """
-    c, h, w = sppf.shape
-    stride = input_size / float(h)
-    x1, y1, x2, y2 = bbox_letterbox
-    gx1 = max(0, min(w - 1, int(x1 / stride)))
-    gy1 = max(0, min(h - 1, int(y1 / stride)))
-    gx2 = max(gx1, min(w, int(np.ceil(x2 / stride))))
-    gy2 = max(gy1, min(h, int(np.ceil(y2 / stride))))
-    if gx2 <= gx1:
-        gx2 = gx1 + 1
-    if gy2 <= gy1:
-        gy2 = gy1 + 1
-    region = sppf[:, gy1:gy2, gx1:gx2]
-    pooled = region.reshape(c, -1).mean(axis=1).astype(np.float32, copy=False)
-    if c < target_dim:
-        padded = np.zeros(target_dim, dtype=np.float32)
-        padded[:c] = pooled
-        pooled = padded
-    elif c > target_dim:
-        pooled = pooled[:target_dim]
-    norm = float(np.linalg.norm(pooled))
-    if norm > 0:
-        pooled = pooled / norm
-    return pooled.astype(np.float32, copy=False)
-
-
 __all__ = [
     'bbox_norm',
     'crop_id',
@@ -254,6 +211,5 @@ __all__ = [
     'iou',
     'letterbox_params',
     'letterbox_to_square',
-    'roi_pool_sppf',
     'undo_letterbox',
 ]
