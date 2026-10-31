@@ -6,9 +6,16 @@
 import { apiFetch, qs, scoped } from '$lib/api';
 import type { LabelOpList, LabelOpUndoResponse } from '$lib/types_labelOps';
 
-/** `GET /label_ops`, newest first. */
-export function getLabelOps(limit?: number, signal?: AbortSignal): Promise<LabelOpList> {
-  return apiFetch<LabelOpList>(`${scoped()}/label_ops${qs({ limit })}`, {}, signal);
+/** `GET /label_ops`, newest first; `after` is the previous page's `next_after`. */
+export function getLabelOps(
+  params: { limit: number; after?: string | null },
+  signal?: AbortSignal,
+): Promise<LabelOpList> {
+  return apiFetch<LabelOpList>(
+    `${scoped()}/label_ops${qs({ limit: params.limit, after: params.after })}`,
+    {},
+    signal,
+  );
 }
 
 /** `POST /label_ops/{op_id}/undo`. The body always names `dry_run`: true

@@ -6,10 +6,10 @@
 import { describe, expect, it } from 'vitest';
 import spec from '$contracts/openapi/curation.json';
 import type * as T from '$lib/types_labelOps';
-import { LABEL_OP_STATUSES, LABEL_OPS_MAX_LIMIT } from '$lib/types_labelOps';
+import { LABEL_OP_STATUSES, LABEL_OPS_PAGE_SIZE } from '$lib/types_labelOps';
 
 type Schema = { properties?: Record<string, { enum?: string[] }> };
-type Param = { name: string; schema: { maximum?: number } };
+type Param = { name: string; schema: { minimum?: number; maximum?: number } };
 const doc = spec as unknown as {
   components: { schemas: Record<string, Schema> };
   paths: Record<string, Record<string, { parameters?: Param[] }>>;
@@ -43,7 +43,12 @@ const CASES: [string, string[]][] = [
   ],
   [
     'LabelOpList',
-    keys<keyof T.LabelOpList>({ items: true, limit: true, retention: true }),
+    keys<keyof T.LabelOpList>({
+      items: true,
+      limit: true,
+      retention: true,
+      next_after: true,
+    }),
   ],
   [
     'LabelOpUndoPass',
@@ -90,9 +95,15 @@ describe('label operations contract', () => {
     expect(schemas.LabelOp!.properties!.status!.enum).toEqual([...LABEL_OP_STATUSES]);
   });
 
-  it('the list limit maximum is the served one', () => {
+  it('the page size is within the served limit range', () => {
     const get = doc.paths['/curation/projects/{project}/label_ops']!.get!;
     const limit = get.parameters!.find((p) => p.name === 'limit')!;
-    expect(limit.schema.maximum).toBe(LABEL_OPS_MAX_LIMIT);
+    expect(LABEL_OPS_PAGE_SIZE).toBeGreaterThanOrEqual(limit.schema.minimum!);
+    expect(LABEL_OPS_PAGE_SIZE).toBeLessThanOrEqual(limit.schema.maximum!);
+  });
+
+  it('the list route takes the after cursor', () => {
+    const get = doc.paths['/curation/projects/{project}/label_ops']!.get!;
+    expect(get.parameters!.map((p) => p.name)).toContain('after');
   });
 });

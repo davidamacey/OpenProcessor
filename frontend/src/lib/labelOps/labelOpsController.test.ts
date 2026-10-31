@@ -50,7 +50,12 @@ function undoResult(
 
 function make(over: Partial<LabelOpsDeps> = {}) {
   const deps: LabelOpsDeps = {
-    list: vi.fn().mockResolvedValue({ items: [op('a')], limit: 20, retention: 200 }),
+    list: vi.fn().mockResolvedValue({
+      items: [op('a')],
+      limit: 20,
+      retention: 200,
+      next_after: null,
+    }),
     undo: vi.fn((_id: string, dry: boolean) => Promise.resolve(undoResult(dry))),
     ...over,
   };
@@ -74,23 +79,141 @@ describe('LabelOpsController', () => {
     expect(ctl.loadError).toBe('index down');
   });
 
-  it('offers Show more only while the page is full and below the maximum', async () => {
-    const full = Array.from({ length: 20 }, (_, i) => op(`o${i}`));
-    const list = vi.fn().mockResolvedValue({ items: full, limit: 20, retention: 200 });
+  it('loads the first page without a cursor and follows next_after', async () => {
+    const list = vi.fn().mockResolvedValue({
+      items: [op('a')],
+      limit: 20,
+      retention: 200,
+      next_after: 'a',
+    });
     const { ctl } = make({ list });
-    await ctl.load();
-    expect(ctl.canShowMore).toBe(true);
-    await ctl.showMore();
-    expect(list).toHaveBeenLastCalledWith(40, undefined);
-    await ctl.showMore();
-    expect(list).toHaveBeenLastCalledWith(50, undefined);
-    expect(ctl.canShowMore).toBe(false);
+    const signal = new AbortController().signal;
+    await ctl.load(signal);
+    expect(list).toHaveBeenCalledWith({ limit: 20 }, signal);
+    expect(ctl.nextAfter).toBe('a');
+    expect(ctl.canLoadOlder).toBe(true);
   });
 
-  it('does not offer Show more when the list is short', async () => {
-    const { ctl } = make();
+  it('loadOlder sends the cursor, appends, and stops at the end', async () => {
+    const full = Array.from({ length: 20 }, (_, i) => op(`o${i}`));
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: full,
+        limit: 20,
+        retention: 200,
+        next_after: 'o19',
+      })
+      .mockResolvedValueOnce({
+        items: [op('p0')],
+        limit: 20,
+        retention: 200,
+        next_after: null,
+      });
+    const { ctl } = make({ list });
     await ctl.load();
-    expect(ctl.canShowMore).toBe(false);
+    await ctl.loadOlder();
+    expect(list).toHaveBeenLastCalledWith({ limit: 20, after: 'o19' });
+    expect(ctl.items).toHaveLength(21);
+    expect(ctl.canLoadOlder).toBe(false);
+    await ctl.loadOlder();
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  it('a failed loadOlder keeps the list and cursor, and a retry succeeds', async () => {
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: [op('a')],
+        limit: 20,
+        retention: 200,
+        next_after: 'a',
+      })
+      .mockRejectedValueOnce(new ApiError(500, '/x', { detail: 'index down' }))
+      .mockResolvedValueOnce({
+        items: [op('b')],
+        limit: 20,
+        retention: 200,
+        next_after: null,
+      });
+    const { ctl } = make({ list });
+    await ctl.load();
+    await ctl.loadOlder();
+    expect(ctl.olderError).toBe('index down');
+    expect(ctl.items.map((o) => o.op_id)).toEqual(['a']);
+    expect(ctl.nextAfter).toBe('a');
+    await ctl.loadOlder();
+    expect(ctl.olderError).toBeNull();
+    expect(ctl.items.map((o) => o.op_id)).toEqual(['a', 'b']);
+  });
+
+  it('drops an older page that lands after a reload', async () => {
+    let release!: (v: unknown) => void;
+    const slow = new Promise((r) => (release = r));
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: [op('a')],
+        limit: 20,
+        retention: 200,
+        next_after: 'a',
+      })
+      .mockReturnValueOnce(slow)
+      .mockResolvedValueOnce({
+        items: [op('n')],
+        limit: 20,
+        retention: 200,
+        next_after: null,
+      });
+    const { ctl } = make({ list });
+    await ctl.load();
+    const pending = ctl.loadOlder();
+    await ctl.load();
+    release({ items: [op('stale')], limit: 20, retention: 200, next_after: 'stale' });
+    await pending;
+    expect(ctl.items.map((o) => o.op_id)).toEqual(['n']);
+    expect(ctl.nextAfter).toBeNull();
+    expect(ctl.loadingOlder).toBe(false);
+  });
+
+  it('after an undo the shown pages are re-served', async () => {
+    const page1 = Array.from({ length: 20 }, (_, i) => op(`o${i}`));
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: page1,
+        limit: 20,
+        retention: 200,
+        next_after: 'o19',
+      })
+      .mockResolvedValueOnce({
+        items: [op('p0')],
+        limit: 20,
+        retention: 200,
+        next_after: null,
+      })
+      .mockResolvedValueOnce({
+        items: page1,
+        limit: 20,
+        retention: 200,
+        next_after: 'o19',
+      })
+      .mockResolvedValueOnce({
+        items: [op('p0')],
+        limit: 20,
+        retention: 200,
+        next_after: null,
+      });
+    const { ctl } = make({ list });
+    await ctl.load();
+    await ctl.loadOlder();
+    ctl.open('o0');
+    await ctl.startUndo();
+    await ctl.confirmUndo();
+    expect(list).toHaveBeenNthCalledWith(3, { limit: 20 });
+    expect(list).toHaveBeenNthCalledWith(4, { limit: 20, after: 'o19' });
+    expect(ctl.items).toHaveLength(21);
+    expect(ctl.canLoadOlder).toBe(false);
   });
 
   it('the first undo call is always a dry run and writes nothing', async () => {
@@ -150,9 +273,12 @@ describe('LabelOpsController', () => {
 
   it('opening another operation clears the previous dry run', async () => {
     const { ctl } = make({
-      list: vi
-        .fn()
-        .mockResolvedValue({ items: [op('a'), op('b')], limit: 20, retention: 5 }),
+      list: vi.fn().mockResolvedValue({
+        items: [op('a'), op('b')],
+        limit: 20,
+        retention: 5,
+        next_after: null,
+      }),
     });
     await ctl.load();
     ctl.open('a');

@@ -54,14 +54,28 @@
     </section>
   {:else}
     <LabelOpsList items={ctl.items} onopen={(id) => ctl.open(id)} />
-    {#if ctl.canShowMore}
+    {#if ctl.olderError}
+      <p
+        role="alert"
+        data-testid="label-ops-older-error"
+        class="text-sm text-red-300 self-center"
+      >
+        {ctl.olderError}
+      </p>
+    {/if}
+    {#if ctl.canLoadOlder}
       <button
         type="button"
         class="btn w-fit self-center"
-        disabled={ctl.loading}
-        data-testid="label-ops-more"
-        onclick={() => void ctl.showMore()}>Show more</button
+        disabled={ctl.loadingOlder}
+        data-testid="label-ops-older"
+        onclick={() => void ctl.loadOlder()}
+        >{ctl.loadingOlder ? 'Loading…' : 'Load older'}</button
       >
+    {:else}
+      <p data-testid="label-ops-end" class="text-xs text-zinc-500 self-center">
+        No older operations.
+      </p>
     {/if}
   {/if}
 

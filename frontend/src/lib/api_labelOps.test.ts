@@ -31,9 +31,19 @@ function capture(body: unknown = {}) {
 describe('label ops wrappers', () => {
   it('lists with the limit as a query parameter', async () => {
     setScopedPrefix(PROJECT);
-    const last = capture({ items: [], limit: 40, retention: 200 });
-    await getLabelOps(40);
-    expect(last()).toMatchObject({ url: `${PROJECT}/label_ops?limit=40`, method: 'GET' });
+    const last = capture({ items: [], limit: 20, retention: 200, next_after: null });
+    await getLabelOps({ limit: 20 });
+    expect(last()).toMatchObject({ url: `${PROJECT}/label_ops?limit=20`, method: 'GET' });
+  });
+
+  it('pages with the previous next_after as after', async () => {
+    setScopedPrefix(PROJECT);
+    const last = capture({ items: [], limit: 20, retention: 200, next_after: null });
+    await getLabelOps({ limit: 20, after: 'lop_20261031T000000000000_00000a' });
+    expect(last()).toMatchObject({
+      url: `${PROJECT}/label_ops?limit=20&after=lop_20261031T000000000000_00000a`,
+      method: 'GET',
+    });
   });
 
   it('sends dry_run explicitly, true then false', async () => {

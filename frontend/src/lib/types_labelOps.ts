@@ -49,6 +49,7 @@ export interface LabelOpList {
   items: LabelOp[];
   limit: number;
   retention: number;
+  next_after: string | null;
 }
 
 /** `LabelOpUndoRequest`. */
@@ -72,5 +73,5 @@ export interface LabelOpUndoResponse {
   conflict_ids: string[];
 }
 
-/** The server's `limit` maximum on `GET /label_ops` (pinned to the contract). */
-export const LABEL_OPS_MAX_LIMIT = 50;
+/** Operations per `GET /label_ops` page (within the served `limit` range, pinned by the contract test). */
+export const LABEL_OPS_PAGE_SIZE = 20;

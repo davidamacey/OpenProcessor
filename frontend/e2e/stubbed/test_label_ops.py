@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+from urllib.parse import parse_qs, urlparse
 
 from harness.constants import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
@@ -76,12 +77,38 @@ DRY = {
 }
 
 
-def serve(stub, ops=None):
-    """Register the list and undo routes; return the recorded undo bodies."""
+def many_ops(n):
+    """``n`` undoable operations, ids op-00 (oldest) upward, each with its own time and class."""
+    return [
+        {**OPS[0], "op_id": f"op-{i:02d}", "at": f"2026-10-{1 + i:02d}T10:00:00+00:00", "class_name": f"widget_{i:02d}"}
+        for i in range(n)
+    ]
+
+
+def list_page(rows, request):
+    """The served page: ``op_id`` descending, exclusive ``after``, ``next_after`` only when more remain."""
+    q = parse_qs(urlparse(request.url).query)
+    limit = int(q.get("limit", ["20"])[0])
+    after = q.get("after", [None])[0]
+    older = sorted((r for r in rows if after is None or r["op_id"] < after), key=lambda r: r["op_id"], reverse=True)
+    page = older[:limit]
+    more = len(older) > limit
+    return {"items": page, "limit": limit, "retention": 200, "next_after": page[-1]["op_id"] if more else None}
+
+
+def serve(stub, ops=None, queries=None):
+    """Register the list and undo routes; return the recorded undo bodies.
+    ``queries`` (a list) collects each list request's query string."""
     bodies: list[dict] = []
     rows = list(OPS if ops is None else ops)
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": []})
-    stub.on("GET", r"/label_ops(\?|$)", lambda _r, _m: {"items": rows, "limit": 20, "retention": 200})
+
+    def listing(request, _m):
+        if queries is not None:
+            queries.append(urlparse(request.url).query)
+        return list_page(rows, request)
+
+    stub.on("GET", r"/label_ops(\?|$)", listing)
 
     def undo(request, _m):
         body = json.loads(request.post_data)
@@ -106,6 +133,7 @@ def _open_history(page, app_url):
     page.goto(f"{app_url}/p/default/label-ops")
     expect(page.get_by_test_id("label-op-row")).to_have_count(2, timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id("label-op-row").first).to_contain_text("UTC · by Human")
+    expect(page.get_by_test_id("label-ops-end")).to_be_visible()
     if page.viewport_size["width"] >= 640:
         expect(page.get_by_test_id("breadcrumb")).to_contain_text("Label ops")
 
@@ -197,3 +225,47 @@ def test_empty_and_error_states(stub, page, app_url):
     expect(page.get_by_test_id("label-ops-error")).to_contain_text(
         "index unavailable", timeout=ACTION_TIMEOUT_MS
     )
+
+
+def test_load_older_pages_to_the_end(stub, page, app_url):
+    queries: list[str] = []
+    serve(stub, ops=many_ops(25), queries=queries)
+    for tag, size in (("1440", {"width": 1440, "height": 900}), ("430", {"width": 430, "height": 900})):
+        queries.clear()
+        page.set_viewport_size(size)
+        page.goto(f"{app_url}/p/default/label-ops")
+        rows = page.get_by_test_id("label-op-row")
+        expect(rows).to_have_count(20, timeout=ACTION_TIMEOUT_MS)
+        expect(page.get_by_test_id("label-ops-end")).to_have_count(0)
+        page.get_by_test_id("label-ops-older").scroll_into_view_if_needed()
+        _shot(page, f"older-before-{tag}")
+
+        page.get_by_test_id("label-ops-older").click()
+        expect(rows).to_have_count(25, timeout=ACTION_TIMEOUT_MS)
+        assert "after=op-05" in queries[-1]
+        expect(page.get_by_test_id("label-ops-older")).to_have_count(0)
+        end = page.get_by_test_id("label-ops-end")
+        expect(end).to_be_visible()
+        end.scroll_into_view_if_needed()
+        box = end.bounding_box()
+        assert box is not None and box["x"] >= 0 and box["x"] + box["width"] <= size["width"]
+        _shot(page, f"older-{tag}")
+
+
+def test_load_older_failure_is_shown_and_retries(stub, page, app_url):
+    rows = many_ops(25)
+    serve(stub, ops=rows)
+    page.goto(f"{app_url}/p/default/label-ops")
+    expect(page.get_by_test_id("label-op-row")).to_have_count(20, timeout=ACTION_TIMEOUT_MS)
+
+    stub.on("GET", r"/label_ops(\?|$)", (500, {"detail": "index unavailable"}))
+    page.get_by_test_id("label-ops-older").click()
+    expect(page.get_by_test_id("label-ops-older-error")).to_have_text(
+        "index unavailable", timeout=ACTION_TIMEOUT_MS
+    )
+    expect(page.get_by_test_id("label-op-row")).to_have_count(20)
+
+    stub.on("GET", r"/label_ops(\?|$)", lambda request, _m: list_page(rows, request))
+    page.get_by_test_id("label-ops-older").click()
+    expect(page.get_by_test_id("label-op-row")).to_have_count(25, timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id("label-ops-older-error")).to_have_count(0)
