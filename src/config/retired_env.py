@@ -24,6 +24,7 @@ _REMOVED = 'removed:'
 _BAKEOFF_TARGET_REMOVED = (
     f'{_REMOVED} bake-offs score every class; restrict with OP_BAKEOFF_PROFILE_CLASS_FILTER'
 )
+_FEATURE_OUTPUT_REMOVED = f'{_REMOVED} the profile feature_output field was removed'
 RETIRED_ENV: dict[str, str] = {
     'VLM_URL': 'OP_VLM_URL',
     'GEMMA_URL': 'OP_VLM_URL',
@@ -51,6 +52,10 @@ RETIRED_ENV: dict[str, str] = {
     'GEMMA_CROP_CACHE_DIR': 'OP_CROP_CACHE_DIR',
     # The backbone embedding field and its dual-head export were removed.
     'OP_BACKBONE_EMBEDDING_DIM': f'{_REMOVED} the backbone_embedding field no longer exists',
+    # DetectionProfile.feature_output went with the backbone embedding.
+    'OP_INGEST_PRIMARY_FEATURE_OUTPUT': _FEATURE_OUTPUT_REMOVED,
+    'OP_INGEST_SECONDARY_FEATURE_OUTPUT': _FEATURE_OUTPUT_REMOVED,
+    'OP_REGION_DETECTION_FEATURE_OUTPUT': _FEATURE_OUTPUT_REMOVED,
     # Profiles lost the single target class.
     'OP_BAKEOFF_PROFILE_TARGET_CLASS_ID': _BAKEOFF_TARGET_REMOVED,
     'OP_BAKEOFF_PROFILE_TARGET_CLASS_NAME': _BAKEOFF_TARGET_REMOVED,
