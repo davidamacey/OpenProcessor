@@ -89,7 +89,6 @@ def test_documents_carry_vectors_as_python_floats() -> None:
 
     vector = np.random.default_rng(3).normal(size=1024).astype(np.float32)
     item = DetectedItem(bbox_pixel=(0.0, 0.0, 10.0, 10.0), score=0.5, pe_embedding=vector)
-    item.backbone_embedding = vector[:16]
     doc = build_item_doc(
         crop_id='c',
         image_id='i',
@@ -119,4 +118,4 @@ def test_documents_carry_vectors_as_python_floats() -> None:
         assert type(stored) is list
         assert all(type(v) is float for v in stored)
         assert stored == [float(v) for v in vector]
-    assert all(type(v) is float for v in doc['backbone_embedding'])
+    assert 'backbone_embedding' not in doc

@@ -37,12 +37,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 
-# Items-index field holding the per-item backbone embedding (a detector's
-# feature map RoI-pooled over the item bbox, ``CurationConfig.
-# backbone_embedding_dim`` wide). The mapping and the ingest writer both
-# read this constant so they cannot drift.
-BACKBONE_EMBEDDING_FIELD = 'backbone_embedding'
-
 # Items-index field holding the per-item encoder embedding
 # (``CurationConfig.encoder_embedding_dim`` wide). Queues that gate on "the
 # item has been embedded" must use this name -- the items index has no
@@ -155,7 +149,6 @@ class CurationConfig:
 
     embedding_dim: int = 512
     encoder_embedding_dim: int = 1024
-    backbone_embedding_dim: int = 1024
 
     hnsw_ef_construction: int = 128
     hnsw_m: int = 16
@@ -381,7 +374,6 @@ class CurationConfig:
             gateway_subpaths=_bool('GATEWAY_SUBPATHS', defaults.gateway_subpaths),
             embedding_dim=_int('EMBEDDING_DIM', defaults.embedding_dim),
             encoder_embedding_dim=_int('ENCODER_EMBEDDING_DIM', defaults.encoder_embedding_dim),
-            backbone_embedding_dim=_int('BACKBONE_EMBEDDING_DIM', defaults.backbone_embedding_dim),
             hnsw_ef_construction=_int('HNSW_EF_CONSTRUCTION', defaults.hnsw_ef_construction),
             hnsw_m=_int('HNSW_M', defaults.hnsw_m),
             item_text_enabled=_bool('ITEM_TEXT_ENABLED', defaults.item_text_enabled),

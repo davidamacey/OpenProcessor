@@ -11,7 +11,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from src.config.curation import BACKBONE_EMBEDDING_FIELD
 from src.config.region_fields import get_region_fields
 from src.config.region_state import RegionStatus
 from src.domain.embedding_state import EMBEDDED
@@ -76,7 +75,6 @@ class DetectedItem:
     detector_class_id: int | None = None
     detector_confidence: float | None = None
     pe_embedding: Any | None = None  # np.ndarray | None, kept loose to avoid a numpy import here
-    backbone_embedding: Any | None = None  # np.ndarray | None — BACKBONE_EMBEDDING_FIELD
     # Why there is no ``pe_embedding``; ignored when the vector is present.
     embedding_state: str | None = None
     cluster_id: int | None = None
@@ -224,8 +222,6 @@ def build_item_doc(
         doc['embedding_state'] = EMBEDDED
     elif item.embedding_state is not None:
         doc['embedding_state'] = item.embedding_state
-    if item.backbone_embedding is not None:
-        doc[BACKBONE_EMBEDDING_FIELD] = float_list(item.backbone_embedding)
     if item.class_detector:
         doc.update(
             class_provenance(

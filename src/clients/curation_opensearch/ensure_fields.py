@@ -20,7 +20,6 @@ from src.clients.curation_opensearch.bodies_core import (
     _region_boxes_mapping,
 )
 from src.clients.curation_opensearch.bodies_other import LABELS_CONFIRMED_EXTRA_MAPPING
-from src.config import BACKBONE_EMBEDDING_FIELD
 from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPT_MAPPING
 from src.domain.item_text import ITEM_TEXT_MAPPING
 
@@ -431,7 +430,7 @@ async def ensure_items_text_fields(
 async def ensure_items_embedding_fields(
     client: AsyncOpenSearch,
 ) -> dict[str, Any]:
-    """PUT the secondary + backbone embedding fields onto an existing items
+    """PUT the secondary embedding field onto an existing items
     mapping.
 
     Additive ``PUT <index>/_mapping`` — idempotent.
@@ -440,7 +439,6 @@ async def ensure_items_embedding_fields(
     body = {
         'properties': {
             'pe_embedding': _knn_field(dim=config.encoder_embedding_dim),
-            BACKBONE_EMBEDDING_FIELD: _knn_field(dim=config.backbone_embedding_dim),
         }
     }
     try:
@@ -449,13 +447,13 @@ async def ensure_items_embedding_fields(
         logger.info(
             'curation_mapping_migration',
             index=index,
-            fields=['pe_embedding', BACKBONE_EMBEDDING_FIELD],
+            fields=['pe_embedding'],
             acknowledged=ack,
         )
         return {
             'acknowledged': ack,
             'index': index,
-            'fields_added': ['pe_embedding', BACKBONE_EMBEDDING_FIELD],
+            'fields_added': ['pe_embedding'],
         }
     except Exception as exc:
         msg = str(exc)
@@ -470,7 +468,7 @@ async def ensure_items_embedding_fields(
         return {
             'acknowledged': False,
             'index': index,
-            'fields_added': ['pe_embedding', BACKBONE_EMBEDDING_FIELD],
+            'fields_added': ['pe_embedding'],
             'error': msg,
         }
 

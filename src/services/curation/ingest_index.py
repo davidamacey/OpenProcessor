@@ -183,7 +183,6 @@ async def embed_items(
         else:
             items[i].embedding_state = state
             items[i].pe_embedding = None
-            items[i].backbone_embedding = None
     try:
         if isinstance(crops, GpuDecodeFrame):
             for i in wanted:

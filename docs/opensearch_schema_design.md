@@ -137,8 +137,13 @@ first time it serves a project. After a full run every index's mapping `_meta` h
 the markers in one request and skips the migrations when all are current. A new body
 field or migration changes the fingerprint, so every project migrates once more.
 
-Embedding dimensions: `embedding` 512, `pe_embedding` 1024 (PE-Core),
-`backbone_embedding` 1024. HNSW on the Lucene engine (new projects; earlier projects keep faiss), defaults `ef_construction` 128 and `m` 16
+A removed field is dropped from the bodies and the writers only; OpenSearch cannot unmap a
+field, so an index created earlier keeps the dead mapping (and any stored values) until it is
+rebuilt. Nothing reads or writes it. `backbone_embedding` (retired in 0.7.0) is the example:
+its mapping stays on older indexes, new indexes never get it, and `OP_BACKBONE_EMBEDDING_DIM`
+is a retired env var.
+
+Embedding dimensions: `embedding` 512, `pe_embedding` 1024 (PE-Core). HNSW on the Lucene engine (new projects; earlier projects keep faiss), defaults `ef_construction` 128 and `m` 16
 (`OP_HNSW_EF_CONSTRUCTION`, `OP_HNSW_M`).
 
 ### `images`
@@ -174,7 +179,7 @@ One document per crop. Field groups:
 | Class | `class_id`, `class_name`, `class_source`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeler`, `class_labeled_at`, `confidence`, `proposal_name`, `detector_class_name` (keyword), `detector_class_id` (integer), `detector_confidence` (float), `label_source`, `label_op_id` (keyword: the bulk label or move operation that wrote the current label), `class_id_history` (stored, not indexed; entries carry `op_id`) |
 | VLM | `vlm_endpoint`, `vlm_model`, `vlm_prompt_pack`, `vlm_confidence`, `vlm_raw_class`, `vlm_proposed_class`, `needs_new_class`, `vlm_raw_label*`, label-cluster fields |
 | Clusters | `cluster_id`, `cluster_subid`, `cluster_distance`, `cluster_nearest_id`, `cluster_auto_suggest` |
-| Embeddings | `pe_embedding` (1024-d), `backbone_embedding` (1024-d), `embedding_state` (keyword: `embedded`, `not_selected`, `deferred`, `failed`; absent on older items, so "has a vector" is always the `exists` test on the vector field) |
+| Embeddings | `pe_embedding` (1024-d), `embedding_state` (keyword: `embedded`, `not_selected`, `deferred`, `failed`; absent on older items, so "has a vector" is always the `exists` test on the vector field) |
 | Region summary | `region_status`, `region_reason`, `region_validated`, `region_auto_confirmed`, `region_verified`, `region_verifier`, `region_verifier_version`, `region_verified_at`, `region_visible`, `region_detector_chain`, `region_detected_at`, `region_profile`, `region_profile_revision`, `region_class_id`, `region_label_source`, `region_pairing`, `region_skip_verify`, `region_rejection_reason` |
 | Region boxes | `region_boxes` (nested), `region_box_embeddings` (nested), `region_count`, `region_rejected_count`, `region_max_score`, `region_set_complete`, `region_revision`, `region_box_seq` |
 | Item text | OCR lines read on the crop and their search tokens (`item_text_lines`) |
