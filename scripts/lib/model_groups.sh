@@ -47,6 +47,29 @@ model_setup_group_outputs() {
     esac
 }
 
+# model_setup_group_engines NAME -> one line per TensorRT engine the group builds, tab
+# separated: model, the ONNX (relative to OP_DIR) it is built from, the precision the
+# build is designed for. These are the engines that carry a build stamp
+# (.install/precision.tsv, see model_setup.sh); ocr_pipeline is a Python backend and
+# the PE text tower an ONNX, so neither has one.
+model_setup_group_engines() {
+    local t=$'\t'
+    case "$1" in
+        yolo) echo "yolov11_small_trt_end2end${t}models/yolov11_small_end2end/1/model.onnx${t}fp16" ;;
+        mobileclip)
+            echo "mobileclip2_s2_image_encoder${t}pytorch_models/mobileclip2_s2_image_encoder.onnx${t}fp16"
+            echo "mobileclip2_s2_text_encoder${t}pytorch_models/mobileclip2_s2_text_encoder.onnx${t}fp32" ;;
+        faces)
+            echo "scrfd_10g_bnkps${t}pytorch_models/scrfd_10g_bnkps.onnx${t}fp16"
+            echo "arcface_w600k_r50${t}pytorch_models/arcface_w600k_r50.onnx${t}fp16" ;;
+        ocr)
+            echo "paddleocr_det_trt${t}pytorch_models/paddleocr/ppocr_det_v5_mobile.onnx${t}fp32"
+            echo "paddleocr_rec_trt${t}pytorch_models/paddleocr/ppocr_rec_v5_mobile.onnx${t}fp32" ;;
+        pe) echo "pe_image_encoder${t}${_MS_PE_ONNX_REL}${t}fp16" ;;
+        *) return 0 ;;
+    esac
+}
+
 # model_setup_required_models "core curation ..." -> comma list for OP_REQUIRED_MODELS, the
 # models the API's /health waits on. OCR is skipped by the minimal profile and the PE text
 # tower has a CPU fallback, so neither gates readiness; the PE image encoder has none.

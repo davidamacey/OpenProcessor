@@ -247,7 +247,7 @@ directory created. Run `./openprocessor help` for the list.
 | `status` | containers, then API, Triton, OpenSearch and Grafana health on this install's ports, then GPU memory |
 | `health` | print the API `/health` JSON |
 | `models [status]` | Triton model repository index and each model's state |
-| `models install [--only GROUP]` / `models repair` | export and load model groups (`preflight`, `base`, `yolo`, `mobileclip`, `faces`, `ocr`, `pe`); skips groups that are up to date and re-runs failed ones |
+| `models install [--only GROUP]` / `models repair` | export and load model groups (`preflight`, `base`, `yolo`, `mobileclip`, `faces`, `ocr`, `pe`); skips groups that are up to date (every engine stamp in `.install/precision.tsv` must match the GPU architecture and the exported ONNX) and re-runs failed ones |
 | `export <model>` / `download <model>` | export to TensorRT / download weights. Targets include `all`, `essential`, `status`; `export` also takes `yolo`, `scrfd`, `arcface`, `clip-image`, `clip-text`, `ocr`; `download` also takes `ocr` |
 | `curation [up\|down\|logs\|status]` | start, stop, follow or list the curation workers (`status` is the default) |
 | `sample coco [--full]` | fetch the public COCO sample into `data/samples/` using the API image |

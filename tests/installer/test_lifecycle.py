@@ -7,6 +7,7 @@ what the installer actually tells Docker to do, in order.
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import json
 import os
 import shutil
@@ -68,11 +69,35 @@ def index_of(lines: list[str], needle: str) -> int:
     raise AssertionError(f'{needle!r} never happened:\n' + '\n'.join(lines))
 
 
+# What the shimmed nvidia-smi answers to the compute_cap query (the stamp must match it).
+SHIM_COMPUTE_CAP = '0,NVIDIARTXA6000,49140,0,8.6'
+
+# engine model -> the ONNX its build stamp hashes
+ONNX_OF_ENGINE = {
+    'yolov11_small_trt_end2end': 'models/yolov11_small_end2end/1/model.onnx',
+    'mobileclip2_s2_image_encoder': 'pytorch_models/mobileclip2_s2_image_encoder.onnx',
+    'mobileclip2_s2_text_encoder': 'pytorch_models/mobileclip2_s2_text_encoder.onnx',
+    'scrfd_10g_bnkps': 'pytorch_models/scrfd_10g_bnkps.onnx',
+    'arcface_w600k_r50': 'pytorch_models/arcface_w600k_r50.onnx',
+    'paddleocr_det_trt': 'pytorch_models/paddleocr/ppocr_det_v5_mobile.onnx',
+    'paddleocr_rec_trt': 'pytorch_models/paddleocr/ppocr_rec_v5_mobile.onnx',
+}
+
+
 def fake_engines(inst: Path) -> None:
+    """Engines plus the build stamps and ONNX files a real build leaves (shimmed docker builds none)."""
     for rel in PLAN_FILES:
         p = inst / 'models' / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text('engine')
+    rows = []
+    for model, rel in ONNX_OF_ENGINE.items():
+        onnx = inst / rel
+        onnx.parent.mkdir(parents=True, exist_ok=True)
+        onnx.write_bytes(b'onnx')
+        sha = hashlib.sha256(b'onnx').hexdigest()
+        rows.append(f'{model}\tfp16\t\tv110100\t{SHIM_COMPUTE_CAP}\t{sha}\ttrt-python-api\n')
+    (inst / '.install' / 'precision.tsv').write_text(''.join(rows))
 
 
 def test_install_performs_every_step_in_order(shimmed: Shimmed) -> None:
