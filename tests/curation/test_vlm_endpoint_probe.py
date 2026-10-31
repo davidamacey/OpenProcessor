@@ -235,8 +235,13 @@ async def test_the_default_client_does_not_follow_redirects(
 
     def spy(*args: Any, **kwargs: Any) -> httpx.AsyncClient:
         seen.update(kwargs)
-        return real(*args, transport=httpx.MockTransport(Server(redirect=True)), **kwargs)
+        kwargs['transport'] = httpx.MockTransport(Server(redirect=True))
+        return real(*args, **kwargs)
 
+    import src.services.labeling.vlm_url_policy as policy
+
+    monkeypatch.setattr(policy, '_resolve', lambda host: ['10.0.0.9'] if host == 'vlm.test' else [])
+    policy.reset_policy_caches()
     monkeypatch.setattr(probe_mod.httpx, 'AsyncClient', spy)
     record = await probe_endpoint(_body(), api_key=None)
     assert seen.get('follow_redirects') is False

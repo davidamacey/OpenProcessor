@@ -34,10 +34,13 @@ from tenacity import (
 
 from src.config.env import env_int, env_str
 from src.core.logging import get_logger
+from src.services.labeling.vlm_pinning import PinnedTransport
 
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+    from src.services.labeling.vlm_pinning import AddressPin
 
 logger = get_logger(__name__)
 
@@ -148,6 +151,7 @@ def build_http_client(
     *,
     max_connections: int | None = None,
     max_keepalive_connections: int | None = None,
+    pin: AddressPin | None = None,
 ) -> httpx.AsyncClient:
     """Build a default ``httpx.AsyncClient`` sized for high-concurrency callers.
 
@@ -155,6 +159,10 @@ def build_http_client(
     high-concurrency worker; callers that need more than the default
     should size it via env (``OP_VLM_HTTPX_MAX_CONNECTIONS`` /
     ``OP_VLM_HTTPX_KEEPALIVE``) or pass explicit values.
+
+    ``pin`` connects only to the addresses that passed the URL policy (see
+    ``vlm_pinning.py``). A pinned client ignores proxy environment variables:
+    a proxy resolves the name itself, which would defeat the pin.
     """
 
     max_conn = max_connections or env_int('OP_VLM_HTTPX_MAX_CONNECTIONS', 512, minimum=1)
@@ -162,6 +170,13 @@ def build_http_client(
     limits = httpx.Limits(max_connections=max_conn, max_keepalive_connections=keepalive)
     # Never follow a redirect: an endpoint answering 3xx must not be able to
     # steer this client (and its bearer token) to another host (SSRF).
+    if pin is not None:
+        return httpx.AsyncClient(
+            timeout=timeout_s,
+            follow_redirects=False,
+            transport=PinnedTransport(pin, limits=limits),
+            trust_env=False,
+        )
     return httpx.AsyncClient(timeout=timeout_s, limits=limits, follow_redirects=False)
 
 

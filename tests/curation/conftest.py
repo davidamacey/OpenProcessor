@@ -138,7 +138,9 @@ def vlm_api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> VlmApi:
         dns=dns,
     )
 
-    async def scripted_probe(body: Any, *, api_key: Any, client: Any = None) -> VlmProbeRecord:
+    async def scripted_probe(
+        body: Any, *, api_key: Any, client: Any = None, is_env: bool = False
+    ) -> VlmProbeRecord:
         api.probe_keys.append(api_key)
         return api.probe_record[0]
 

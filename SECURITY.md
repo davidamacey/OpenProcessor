@@ -108,12 +108,16 @@ VLM endpoint as far as the API can tell, so a caller who can reach the API
 can make it send synthetic probe requests and OpenAI-shaped chat requests
 there. DNS is checked when an endpoint is saved, tested, activated and
 built, and again by every labeler before it sends, at most every 30 seconds
-(a refusal is immediate and stays until the host is acceptable again). So a
-name that changes its answer is caught within about 30 seconds, but a
-request already sent, or sent inside that window, goes to whatever the name
-resolved to then; the connection itself is not pinned to the checked
-address. The probe of an endpoint outside the deployment is only made once
-the endpoint carries `allow_external`, because the probe sends its key. A
+(a refusal is immediate and stays until the host is acceptable again). The
+connection is pinned to what was checked: the check resolves the host once,
+and the HTTP client connects only to those addresses (the `Host` header and,
+for https, the TLS server name and certificate check stay the endpoint's
+name), so a name that is rebound after the check cannot redirect a request.
+A re-check that passes re-pins to its own fresh answer, which is how an
+endpoint whose container restarted at a new address keeps working. A literal
+IP has nothing to re-resolve and is not pinned. A pinned client does not use
+proxy environment variables, since a proxy would resolve the name itself. The probe of an endpoint outside the
+deployment is only made once the endpoint carries `allow_external`, because the probe sends its key. A
 credential written into `OP_VLM_URL` is dropped, never served or logged.
 Put the API behind your own network controls, as the rest of this document
 already says.
