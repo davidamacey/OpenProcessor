@@ -407,6 +407,11 @@
           aria-current={navCurrent('bakeoff')}>Bake-off</a
         >
         <a
+          href={resolve(projectHref('/label-ops'))}
+          class={navLinkClass('label-ops')}
+          aria-current={navCurrent('label-ops')}>Label ops</a
+        >
+        <a
           href={resolve(projectHref('/settings'))}
           class={navLinkClass('settings')}
           aria-current={navCurrent('settings')}>Settings</a

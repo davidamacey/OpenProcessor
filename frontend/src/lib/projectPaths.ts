@@ -24,6 +24,7 @@ const PROJECT_SECTIONS = [
   'models',
   'train',
   'bakeoff',
+  'label-ops',
   'settings',
 ] as const;
 export type ProjectSection = (typeof PROJECT_SECTIONS)[number];
