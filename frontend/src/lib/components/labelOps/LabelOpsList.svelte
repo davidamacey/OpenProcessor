@@ -14,6 +14,11 @@
   }
   let { items, onopen }: Props = $props();
 
+  function when(op: LabelOp): string {
+    const at = formatTimestamp(op.at);
+    return op.label_source ? `${at} · by ${humanizeId(op.label_source)}` : at;
+  }
+
   function title(op: LabelOp): string {
     const verb = op.kind === 'label' ? 'Label' : 'Move';
     return op.class_name ? `${verb} to ${op.class_name}` : verb;
@@ -29,9 +34,7 @@
       <div class="flex min-w-0 grow flex-col gap-0.5">
         <span class="truncate font-medium" data-testid="label-op-title">{title(op)}</span>
         <span class="text-xs text-zinc-400" title={op.at}>
-          {formatTimestamp(op.at)}{#if op.label_source}&nbsp; · by {humanizeId(
-              op.label_source,
-            )}{/if}
+          {when(op)}
         </span>
       </div>
       <span class="text-xs text-zinc-300" data-testid="label-op-count">

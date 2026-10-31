@@ -29,6 +29,11 @@ const PROJECT_SECTIONS = [
 ] as const;
 export type ProjectSection = (typeof PROJECT_SECTIONS)[number];
 
+/** Breadcrumb text for a section whose own id does not read as a label. */
+export const SECTION_LABELS: Partial<Record<ProjectSection, string>> = {
+  'label-ops': 'Label ops',
+};
+
 /** A path inside a project: a known section, plus any sub-path, query
  *  or hash (`/review?tab=all`, `/clusters/12`, `/settings#keyboard`). */
 export type ProjectSubPath = `/${ProjectSection}${string}`;

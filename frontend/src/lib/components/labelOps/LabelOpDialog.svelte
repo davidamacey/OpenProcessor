@@ -108,7 +108,7 @@
       <p class="mt-1 text-xs text-zinc-400">
         Matched <span class="font-mono" data-testid="label-op-matched">{r.matched}</span> items.
       </p>
-      <ul class="mt-2 grid grid-cols-1 gap-0.5 text-xs sm:grid-cols-2">
+      <ul class="mt-2 flex flex-col gap-0.5 text-xs">
         {#each OUTCOMES as [key, label] (key)}
           <li
             class="flex justify-between gap-3 text-zinc-300"

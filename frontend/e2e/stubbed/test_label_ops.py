@@ -105,6 +105,9 @@ def _shot(page, name):
 def _open_history(page, app_url):
     page.goto(f"{app_url}/p/default/label-ops")
     expect(page.get_by_test_id("label-op-row")).to_have_count(2, timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id("label-op-row").first).to_contain_text("UTC · by Human")
+    if page.viewport_size["width"] >= 640:
+        expect(page.get_by_test_id("breadcrumb")).to_contain_text("Label ops")
 
 
 def test_history_list_dry_run_then_confirm(stub, page, app_url):
