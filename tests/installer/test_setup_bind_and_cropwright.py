@@ -101,6 +101,8 @@ def test_cropwright_is_reachable_from_the_lan_by_default_with_a_warning(shimmed:
     assert env_file(shimmed)['OP_BIND_ADDRESS'] == '127.0.0.1'
     assert 'behind one shared basic-auth login' in result.stderr
     assert 'never port-forward' in result.stderr
+    assert 'secrets/cropwright/password' in result.stdout
+    assert './openprocessor cropwright password' in result.stdout
     dry_run = dry(shimmed, tiers='cropwright')
     assert dry_run.returncode == 0, dry_run.stderr
     assert not [ln for ln in dry_run.stdout.splitlines() if f'-p {PROJECT}-cw' in ln]
