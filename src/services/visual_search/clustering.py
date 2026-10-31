@@ -48,7 +48,7 @@ class ClusteringService(IndexPersistenceMixin):
 
     def __init__(
         self,
-        index_dir: str | Path = 'faiss_indexes',
+        index_dir: str | Path = 'data/faiss_indexes',
         embedding_dim: int = 512,
         use_gpu: bool = True,
     ):
@@ -72,6 +72,7 @@ class ClusteringService(IndexPersistenceMixin):
         # In-memory index cache
         self._indexes: dict[ClusterIndex, FaissIvfIndex] = {}
         self._training_metadata: dict[ClusterIndex, dict] = {}
+        self._unloadable: set[ClusterIndex] = set()
 
         # Ensure index directory exists
         self.index_dir.mkdir(parents=True, exist_ok=True)
@@ -406,7 +407,9 @@ class ClusteringService(IndexPersistenceMixin):
         return self._compute_stats(index_name)
 
     def is_trained(self, index_name: ClusterIndex) -> bool:
-        """Check if an index has been trained."""
+        """Check if an index is trained, loading a persisted one after a restart."""
+        if index_name not in self._indexes and self.has_saved_index(index_name):
+            self.load_index(index_name)
         return index_name in self._indexes and self._indexes[index_name].is_trained
 
     # =========================================================================
@@ -436,7 +439,7 @@ _clustering_service: ClusteringService | None = None
 
 
 def get_clustering_service(
-    index_dir: str | Path = 'faiss_indexes',
+    index_dir: str | Path = 'data/faiss_indexes',
     use_gpu: bool = True,
 ) -> ClusteringService:
     """Get or create the global ClusteringService instance."""
