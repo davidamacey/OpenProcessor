@@ -25,8 +25,12 @@ describe('sourceMissing', () => {
   });
 
   it('reads the answer from a 404 response', async () => {
-    const f = vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 404 }));
-    expect((await fetchSourceMissing('/x', f as unknown as typeof fetch))?.alias).toBe('archive');
+    const f = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify(body), { status: 404 }));
+    expect((await fetchSourceMissing('/x', f as unknown as typeof fetch))?.alias).toBe(
+      'archive',
+    );
   });
 
   it('is null on a non-404 or a network failure', async () => {

@@ -194,7 +194,9 @@
         style={cropDisplayStyle}
         class="h-full w-full object-contain"
         onerror={(e) => {
-          void fetchSourceMissing((e.currentTarget as HTMLImageElement).src).then((m) => (sourceMissing = m));
+          void fetchSourceMissing((e.currentTarget as HTMLImageElement).src).then(
+            (m) => (sourceMissing = m),
+          );
         }}
       />
       {#if sourceMissing}
