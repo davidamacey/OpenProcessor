@@ -13,6 +13,8 @@
   import ReviewSlotPanel from '$lib/components/review/ReviewSlotPanel.svelte';
   import VectorRefreshNotice from '$lib/components/review/VectorRefreshNotice.svelte';
   import { getThumbUrl } from '$lib/api_cropRead';
+  import { fetchSourceMissing, type SourceMissing } from '$lib/sourceMissing';
+  import SourceMissingBadge from '$lib/components/SourceMissingBadge.svelte';
   import { slotOf } from '$lib/annotations/cropSlots';
   import type { ReviewClassPicker } from '$lib/review/reviewClassPicker.svelte';
   import type { ReviewItemActions } from '$lib/review/reviewItemActions.svelte';
@@ -45,6 +47,12 @@
     slot,
     detailsOpen = $bindable(),
   }: Props = $props();
+
+  let sourceMissing = $state<SourceMissing | null>(null);
+  $effect(() => {
+    void current.id;
+    sourceMissing = null;
+  });
 
   const tab = $derived(tabs.tab);
   const activeSlot = $derived(tabs.activeSlot);
@@ -122,7 +130,7 @@
   <!-- F8 D4: overflow-hidden so a region canvas never paints over the
        first metadata row (the Reason row read half-clipped). -->
   <div
-    class="flex h-[210px] shrink-0 items-center justify-center overflow-hidden bg-zinc-950 lg:h-auto lg:max-h-[40%] lg:min-h-[210px]"
+    class="relative flex h-[210px] shrink-0 items-center justify-center overflow-hidden bg-zinc-950 lg:h-auto lg:max-h-[40%] lg:min-h-[210px]"
   >
     {#if isMultiBoxSlot && activeSlot}
       <!-- Multi-box:
@@ -185,7 +193,13 @@
         bind:naturalHeight={edit.cropNaturalHeight}
         style={cropDisplayStyle}
         class="h-full w-full object-contain"
+        onerror={(e) => {
+          void fetchSourceMissing((e.currentTarget as HTMLImageElement).src).then((m) => (sourceMissing = m));
+        }}
       />
+      {#if sourceMissing}
+        <SourceMissingBadge missing={sourceMissing} />
+      {/if}
     {/if}
   </div>
 
