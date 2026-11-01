@@ -76,8 +76,9 @@ RUN actual="$(dpkg-query -W -f='${Version}' libnvinfer-bin)" \
 #   is dev tooling unused at inference — drop it (also shrinks the image).
 # - starlette and anyio in the image's python env lag their security fixes
 #   (anyio >=4.14.2 clears CVE-2026-63374; starlette 1.x accepts any anyio >=3.6).
+# - certifi lags too (>=2026.10.18 clears GHSA-6q48-6c7w-9gw2, a CRITICAL the release gate fails on).
 RUN rm -rf /usr/local/cuda-*/NsightSystems-cli-* \
-    && pip install --no-cache-dir --upgrade 'starlette>=1.3.1' 'anyio>=4.14.2'
+    && pip install --no-cache-dir --upgrade 'starlette>=1.3.1' 'anyio>=4.14.2' 'certifi>=2026.10.18'
 
 # Install PyTorch and TorchVision (CUDA 13.x wheels)
 # Required for Python backend models (ROI align, per-box embeddings, OCR pipeline).

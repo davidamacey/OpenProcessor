@@ -98,3 +98,12 @@ def test_dockerfile_triton_drops_unused_dev_packages_before_the_upgrade_rewrites
     # trtexec (libnvinfer-bin) and the runtime libraries stay
     assert 'libnvinfer-bin' not in removed
     assert 'libcublas-13-3' not in removed
+
+
+def test_dockerfile_triton_upgrades_the_python_packages_the_scan_flags() -> None:
+    """The NGC image's python env lags its security fixes; the release gate fails on a fixable
+    CRITICAL, so certifi (GHSA-6q48-6c7w-9gw2) is raised with starlette and anyio."""
+    text = (REPO_ROOT / 'Dockerfile.triton').read_text()
+    upgrade = text[text.index("pip install --no-cache-dir --upgrade 'starlette") :].splitlines()[0]
+    for requirement in ("'starlette>=1.3.1'", "'anyio>=4.14.2'", "'certifi>=2026.10.18'"):
+        assert requirement in upgrade
