@@ -1,14 +1,18 @@
 """Auto-clustering of faces into persons and person merge/rename/delete."""
 
+import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from src.clients.occ_bulk import occ_bulk_rounds
 from src.clients.opensearch.names import IndexName
 from src.config.settings import Settings
+from src.domain.person_identity import FaceState, PersonWrite, assign_person_ids, is_person_locked
+from src.services.face_identity.person_grouping import similarity_components
 from src.services.inference import InferenceService
 
 
@@ -35,194 +39,173 @@ class PersonManagementMixin:
     # Auto-Clustering and Person Management
     # =========================================================================
 
+    async def _scan_faces(self) -> tuple[list[FaceState], np.ndarray, list[int]]:
+        """Page every face: states, the embedding matrix and the face index of each row."""
+        states: list[FaceState] = []
+        row_face: list[int] = []
+        chunks: list[np.ndarray] = []
+        search_after = None
+        while True:
+            query: dict[str, Any] = {
+                'size': 1000,
+                'query': {'match_all': {}},
+                '_source': [
+                    'face_id',
+                    'embedding',
+                    'person_id',
+                    'person_name',
+                    'named_at',
+                    'merged_at',
+                ],
+                'sort': [{'_id': 'asc'}],
+            }
+            if search_after:
+                query['search_after'] = search_after
+            response = await self.opensearch.client.search(index=IndexName.FACES.value, body=query)
+            hits = response['hits']['hits']
+            if not hits:
+                break
+            vectors = []
+            for hit in hits:
+                source = hit['_source']
+                if source.get('embedding'):
+                    row_face.append(len(states))
+                    vectors.append(source['embedding'])
+                states.append(
+                    FaceState(
+                        face_id=source.get('face_id') or hit['_id'],
+                        person_id=source.get('person_id'),
+                        person_name=source.get('person_name'),
+                        locked=is_person_locked(source),
+                    )
+                )
+            if vectors:
+                chunks.append(np.asarray(vectors, dtype=np.float32))
+            search_after = hits[-1]['sort']
+        matrix = np.concatenate(chunks) if chunks else np.zeros((0, 1), dtype=np.float32)
+        return states, matrix, row_face
+
+    async def _write_assignments(
+        self, writes: list[PersonWrite], scanned: dict[str, FaceState]
+    ) -> tuple[int, int, int]:
+        """Write person ids with OCC; a face changed since the scan is skipped, not overwritten.
+
+        Returns ``(updated, skipped, failed)``.
+        """
+        by_id = {w.face_id: w for w in writes}
+        timestamp = datetime.now(UTC).isoformat()
+        counts = {'updated': 0, 'skipped': 0, 'failed': 0}
+
+        def prepare(face_id: str, doc: dict[str, Any] | None) -> dict[str, Any] | None:
+            seen = scanned[face_id]
+            current = (doc or {}).get('_source') or {}
+            if (
+                doc is None
+                or is_person_locked(current)
+                or current.get('person_id') != seen.person_id
+                or current.get('person_name') != seen.person_name
+            ):
+                counts['skipped'] += 1
+                return None
+            w = by_id[face_id]
+            return {
+                'person_id': w.person_id,
+                'person_name': w.person_name,
+                'cluster_assigned_at': timestamp,
+            }
+
+        def on_written(_face_id: str) -> None:
+            counts['updated'] += 1
+
+        def on_failed(_face_id: str, _doc: dict[str, Any] | None, _why: str) -> None:
+            counts['failed'] += 1
+
+        await occ_bulk_rounds(
+            self.opensearch.client,
+            index=IndexName.FACES.value,
+            ids=list(by_id),
+            prepare=prepare,
+            on_written=on_written,
+            on_failed=on_failed,
+            max_retries=2,
+            refresh=True,
+            source_includes=['person_id', 'person_name', 'named_at', 'merged_at'],
+        )
+        return counts['updated'], counts['skipped'], counts['failed']
+
     async def auto_cluster_faces(
         self,
         similarity_threshold: float = 0.7,
         min_faces_per_person: int = 2,
-        max_persons: int = 1000,
     ) -> dict:
         """
-        Automatically cluster all faces into person groups using embedding similarity.
+        Group every face into a person, keeping ids stable across runs.
 
-        Algorithm: Connected Components via Union-Find
-        - Computes pairwise cosine similarity between all ArcFace embeddings
-        - Groups faces where similarity >= threshold into connected components
-        - Each connected component becomes a person group
+        Faces with cosine similarity >= threshold are linked and each connected
+        component is a person (exact search, see ``person_grouping``). A component
+        below ``min_faces_per_person`` splits into one-face persons, so every face
+        has a person_id; faces without an embedding are one-face persons too.
+        A group keeps the stored id it overlaps most (``domain.person_identity``).
+        A face whose person was named or merged is locked: it is never written,
+        but still votes, and new matching faces join that person.
 
-        This is suitable for small to medium datasets (< 100k faces).
-        For larger datasets, use POST /clusters/train/faces which uses
-        FAISS IVF (Inverted File Index) for GPU-accelerated clustering.
-
-        ArcFace Similarity Thresholds (cosine similarity):
-        - 0.5: Loose matching (may include similar-looking different people)
-        - 0.6: Moderate matching (good for photo albums)
-        - 0.7: Strict matching (same person verification, recommended default)
-        - 0.8: Very strict (may miss some matches due to pose/lighting)
-
-        Args:
-            similarity_threshold: Minimum cosine similarity to group faces (default 0.7)
-            min_faces_per_person: Minimum faces to form a person group
-            max_persons: Maximum number of persons to create
+        Memory: the embedding matrix twice (array and index), O(n) state and one
+        batch of matches. Compute is O(n^2); there is no face-count cap.
 
         Returns:
-            dict with:
-                - status: 'success' or 'error'
-                - total_faces: Total faces processed
-                - persons_created: Number of unique persons
-                - faces_assigned: Faces assigned to persons
-                - singletons: Faces without matches (own person)
+            dict with status, total_faces, persons_total, persons_kept, persons_new,
+            persons_retired, singletons, faces_updated, faces_locked, faces_skipped
+            (changed or locked since the scan) and similarity_threshold. status is
+            'error' when a write failed.
         """
         try:
-            # 1. Fetch all faces with embeddings
-            all_faces = []
-            search_after = None
-
-            while True:
-                query = {
-                    'size': 1000,
-                    'query': {'match_all': {}},
-                    '_source': ['face_id', 'embedding', 'person_id'],
-                    'sort': [{'_id': 'asc'}],
-                }
-                if search_after:
-                    query['search_after'] = search_after
-
-                response = await self.opensearch.client.search(
-                    index=IndexName.FACES.value,
-                    body=query,
+            states, matrix, row_face = await self._scan_faces()
+            components: list[list[int]] = []
+            if row_face:
+                groups = await asyncio.to_thread(
+                    similarity_components, matrix, similarity_threshold
                 )
+                components = [[row_face[r] for r in g] for g in groups]
+            embedded = set(row_face)
+            components.extend([i] for i in range(len(states)) if i not in embedded)
 
-                hits = response['hits']['hits']
-                if not hits:
-                    break
-
-                for hit in hits:
-                    source = hit['_source']
-                    if source.get('embedding'):
-                        all_faces.append(
-                            {
-                                'face_id': source['face_id'],
-                                'embedding': np.array(source['embedding'], dtype=np.float32),
-                                'current_person_id': source.get('person_id'),
-                            }
-                        )
-
-                search_after = hits[-1]['sort']
-
-                if len(all_faces) >= 100000:  # Safety limit
-                    break
-
-            if len(all_faces) < 2:
-                return {
-                    'status': 'success',
-                    'total_faces': len(all_faces),
-                    'persons_created': len(all_faces),
-                    'faces_assigned': 0,
-                    'singletons': len(all_faces),
-                    'message': 'Not enough faces to cluster',
-                }
-
-            # 2. Build embedding matrix
-            embeddings = np.array([f['embedding'] for f in all_faces])
-            n_faces = len(embeddings)
-
-            # 3. Compute similarity matrix (cosine similarity since embeddings are L2-normalized)
-            similarity_matrix = embeddings @ embeddings.T
-
-            # 4. Greedy clustering using Union-Find
-            parent = list(range(n_faces))
-
-            def find(x: int) -> int:
-                if parent[x] != x:
-                    parent[x] = find(parent[x])
-                return parent[x]
-
-            def union(x: int, y: int) -> None:
-                px, py = find(x), find(y)
-                if px != py:
-                    parent[px] = py
-
-            # Group faces by similarity
-            for i in range(n_faces):
-                for j in range(i + 1, n_faces):
-                    if similarity_matrix[i, j] >= similarity_threshold:
-                        union(i, j)
-
-            # 5. Collect clusters
-            clusters: dict[int, list[int]] = {}
-            for i in range(n_faces):
-                root = find(i)
-                if root not in clusters:
-                    clusters[root] = []
-                clusters[root].append(i)
-
-            # 6. Assign person_ids and update documents
-            timestamp = datetime.now(UTC).isoformat()
-            persons_created = 0
-            faces_assigned = 0
-            singletons = 0
-
-            for face_indices in clusters.values():
-                if len(face_indices) >= min_faces_per_person:
-                    # Create a person group
-                    person_id = f'person_{uuid.uuid4().hex[:12]}'
-                    persons_created += 1
-
-                    if persons_created > max_persons:
-                        break
-
-                    # Update all faces in this cluster
-                    for idx in face_indices:
-                        face = all_faces[idx]
-                        try:
-                            await self.opensearch.client.update(
-                                index=IndexName.FACES.value,
-                                id=face['face_id'],
-                                body={
-                                    'doc': {
-                                        'person_id': person_id,
-                                        'cluster_assigned_at': timestamp,
-                                    }
-                                },
-                                refresh=False,
-                            )
-                            faces_assigned += 1
-                        except Exception as e:
-                            logger.warning(f'Failed to update face {face["face_id"]}: {e}')
-                else:
-                    # Singleton faces keep their own unique person_id
-                    singletons += len(face_indices)
-
-            # Refresh index
-            await self.opensearch.client.indices.refresh(index=IndexName.FACES.value)
-
-            logger.info(
-                f'Auto-clustering complete: {persons_created} persons, '
-                f'{faces_assigned} faces assigned, {singletons} singletons'
+            assignment = assign_person_ids(
+                states,
+                components,
+                min_faces=min_faces_per_person,
+                mint=lambda: f'person_{uuid.uuid4().hex[:12]}',
             )
-
-            return {
-                'status': 'success',
-                'total_faces': n_faces,
-                'persons_created': persons_created,
-                'faces_assigned': faces_assigned,
-                'singletons': singletons,
+            updated, skipped, failed = await self._write_assignments(
+                assignment.writes, {s.face_id: s for s in states}
+            )
+            result = {
+                'status': 'error' if failed else 'success',
+                'total_faces': len(states),
+                'persons_total': assignment.persons_total,
+                'persons_kept': assignment.persons_kept,
+                'persons_new': assignment.persons_new,
+                'persons_retired': assignment.persons_retired,
+                'singletons': assignment.singletons,
+                'faces_updated': updated,
+                'faces_locked': assignment.faces_locked,
+                'faces_skipped': skipped,
                 'similarity_threshold': similarity_threshold,
             }
+            if failed:
+                result['error'] = f'{failed} face writes failed'
+            logger.info(f'Auto-clustering complete: {result}')
+            return result
 
         except Exception as e:
             logger.error(f'Auto-clustering failed: {e}')
-            return {
-                'status': 'error',
-                'total_faces': 0,
-                'persons_created': 0,
-                'faces_assigned': 0,
-                'error': str(e),
-            }
+            return {'status': 'error', 'total_faces': 0, 'error': str(e)}
 
     async def merge_persons(self, source_person_id: str, target_person_id: str) -> dict:
         """
         Merge two persons into one (move all faces from source to target).
+
+        Both sides are stamped ``merged_at`` (the clusterer will not split them) and
+        the union gets one name: the target's, else the source's.
 
         Args:
             source_person_id: Person ID to merge from (will be dissolved)
@@ -232,17 +215,32 @@ class PersonManagementMixin:
             dict with merge result
         """
         try:
-            # Update all faces from source to target
             timestamp = datetime.now(UTC).isoformat()
+            name = None
+            for pid in (target_person_id, source_person_id):
+                faces = await self.get_person_faces(pid)
+                name = next((f['person_name'] for f in faces if f.get('person_name')), None)
+                if name:
+                    break
             response = await self.opensearch.client.update_by_query(
                 index=IndexName.FACES.value,
                 body={
-                    'query': {'term': {'person_id': source_person_id}},
+                    'query': {'terms': {'person_id': [source_person_id, target_person_id]}},
                     'script': {
-                        'source': f"ctx._source.person_id = '{target_person_id}'; "
-                        f"ctx._source.merged_from = '{source_person_id}'; "
-                        f"ctx._source.merged_at = '{timestamp}'",
+                        'source': (
+                            'if (ctx._source.person_id == params.source) '
+                            '{ ctx._source.merged_from = params.source; } '
+                            'ctx._source.person_id = params.target; '
+                            'ctx._source.person_name = params.name; '
+                            'ctx._source.merged_at = params.ts'
+                        ),
                         'lang': 'painless',
+                        'params': {
+                            'source': source_person_id,
+                            'target': target_person_id,
+                            'name': name,
+                            'ts': timestamp,
+                        },
                     },
                 },
                 refresh=True,
@@ -269,7 +267,7 @@ class PersonManagementMixin:
 
     async def rename_person(self, person_id: str, name: str) -> dict:
         """
-        Set a friendly name for a person.
+        Set a friendly name for a person; naming locks its current faces.
 
         Args:
             person_id: Person ID to rename
@@ -285,9 +283,12 @@ class PersonManagementMixin:
                 body={
                     'query': {'term': {'person_id': person_id}},
                     'script': {
-                        'source': f"ctx._source.person_name = '{name}'; "
-                        f"ctx._source.named_at = '{timestamp}'",
+                        'source': (
+                            'ctx._source.person_name = params.name; '
+                            'ctx._source.named_at = params.ts'
+                        ),
                         'lang': 'painless',
+                        'params': {'name': name, 'ts': timestamp},
                     },
                 },
                 refresh=True,
@@ -337,7 +338,7 @@ class PersonManagementMixin:
                     'person_id': person_id,
                     'faces_deleted': deleted,
                 }
-            # Unassign faces (set person_id to unique face-based IDs)
+            # Unassign faces (unique face-based ids) and clear the lock so they can re-cluster
             faces = await self.get_person_faces(person_id)
             unassigned = 0
 
@@ -346,7 +347,15 @@ class PersonManagementMixin:
                 await self.opensearch.client.update(
                     index=IndexName.FACES.value,
                     id=face.get('_id') or face.get('face_id'),
-                    body={'doc': {'person_id': new_person_id, 'person_name': None}},
+                    body={
+                        'doc': {
+                            'person_id': new_person_id,
+                            'person_name': None,
+                            'named_at': None,
+                            'merged_at': None,
+                            'merged_from': None,
+                        }
+                    },
                     refresh=False,
                 )
                 unassigned += 1

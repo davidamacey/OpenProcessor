@@ -189,7 +189,7 @@ src/services/detection/segmenter_gate.py	1	triage every return-empty handler in 
 src/services/duplicate_detection/service.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/face_identity/face_records.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/face_identity/identification.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/face_identity/person_management.py	5	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/face_identity/person_management.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/inference.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/labeling/region_overlay.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/labeling/vlm_factory.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
