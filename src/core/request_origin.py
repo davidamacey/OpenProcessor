@@ -1,8 +1,8 @@
 """The host the current client used to reach the API, as a ContextVar.
 
 Served links to sibling services (Grafana, MLflow, ...) must point at the
-host the BROWSER used (a LAN client opening ``http://10.10.10.20:5184`` needs
-``http://10.10.10.20:<service port>``, never ``localhost``). One middleware
+host the BROWSER used (a LAN client opening ``http://192.0.2.10:5184`` needs
+``http://192.0.2.10:<service port>``, never ``localhost``). One middleware
 captures ``(scheme, host-without-port)`` per request; every consumer reads it
 through :func:`current_origin`. ``X-Forwarded-Host`` / ``X-Forwarded-Proto``
 (first value) win over ``Host`` / the connection scheme -- they are only

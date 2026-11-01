@@ -2,7 +2,7 @@
 """Pre-commit guard: no private-company or domain-vendor vocabulary leaks
 into the public tree.
 
-Three independent scans, each a single ``git grep -n -I -P`` pass over the
+Four independent scans, each a single ``git grep -n -I -P`` pass over the
 whole tracked tree:
 
 * **Scan A** — hard leak scan, zero tolerance (no directory-prefix exemptions). Company/product initials and
@@ -18,6 +18,9 @@ whole tracked tree:
   "license plate" used outside the public reference example).
 * **Scan C** — private class-registry vocabulary (private vehicle class
   names that must not leak into generic code or test fixtures).
+* **Scan D** -- the owner's real LAN host address. Examples use the RFC 5737
+  documentation ranges; only this exact address is banned, not private
+  ranges in general (CIDR and classification code legitimately use those).
 
 Each scan's raw hits are filtered through the allowlist
 (``scripts/codegen/naming_leak_allowlist.txt``): every hit either matches an
@@ -61,7 +64,9 @@ SCAN_B = (
 )
 SCAN_C = r'(?i)sportbike|cruiserbike|dirtbike|touring-adventurebikes|harley|\bhonda\b'
 
-SCANS: dict[str, str] = {'A': SCAN_A, 'B': SCAN_B, 'C': SCAN_C}
+SCAN_D = r'(?<![0-9.])10\.10\.10\.20(?![0-9])'
+
+SCANS: dict[str, str] = {'A': SCAN_A, 'B': SCAN_B, 'C': SCAN_C, 'D': SCAN_D}
 
 
 class AllowlistEntry:

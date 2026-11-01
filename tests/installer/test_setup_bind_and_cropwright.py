@@ -191,31 +191,29 @@ def test_summary_security_line_is_plain_when_everything_is_local(shimmed: Shimme
 
 
 def test_specific_bind_address_also_applies_to_cropwright(shimmed: Shimmed) -> None:
-    # Review s2: --bind 10.10.10.20 must not leave Cropwright on 0.0.0.0.
+    # Review s2: --bind 192.0.2.10 must not leave Cropwright on 0.0.0.0.
     result = configure(
-        shimmed, '--bind', '10.10.10.20', tiers='cropwright', OP_ALLOW_PUBLIC_BIND='1'
+        shimmed, '--bind', '192.0.2.10', tiers='cropwright', OP_ALLOW_PUBLIC_BIND='1'
     )
     assert result.returncode == 0, result.stderr
-    assert 'OP_CROPWRIGHT_BIND_ADDRESS=10.10.10.20' in _cw_env(shimmed)
-    assert 'Cropwright on your LAN: http://10.10.10.20:' in result.stdout
+    assert 'OP_CROPWRIGHT_BIND_ADDRESS=192.0.2.10' in _cw_env(shimmed)
+    assert 'Cropwright on your LAN: http://192.0.2.10:' in result.stdout
     assert 'behind one shared basic-auth login' in result.stderr
 
 
 def test_rerun_without_bind_keeps_a_specific_cropwright_bind(shimmed: Shimmed) -> None:
-    first = configure(
-        shimmed, '--bind', '10.10.10.20', tiers='cropwright', OP_ALLOW_PUBLIC_BIND='1'
-    )
+    first = configure(shimmed, '--bind', '192.0.2.10', tiers='cropwright', OP_ALLOW_PUBLIC_BIND='1')
     assert first.returncode == 0, first.stderr
     again = configure(shimmed, tiers='cropwright')
     assert again.returncode == 0, again.stderr
-    assert 'OP_CROPWRIGHT_BIND_ADDRESS=10.10.10.20' in _cw_env(shimmed)
+    assert 'OP_CROPWRIGHT_BIND_ADDRESS=192.0.2.10' in _cw_env(shimmed)
 
 
 def test_local_only_wins_over_a_specific_bind_for_cropwright(shimmed: Shimmed) -> None:
     result = configure(
         shimmed,
         '--bind',
-        '10.10.10.20',
+        '192.0.2.10',
         '--local-only',
         tiers='cropwright',
         OP_ALLOW_PUBLIC_BIND='1',
