@@ -12,7 +12,9 @@
   import ReviewItemMeta from '$lib/components/review/ReviewItemMeta.svelte';
   import ReviewSlotPanel from '$lib/components/review/ReviewSlotPanel.svelte';
   import VectorRefreshNotice from '$lib/components/review/VectorRefreshNotice.svelte';
+  import { resolve } from '$app/paths';
   import { getThumbUrl } from '$lib/api_cropRead';
+  import { similarHref } from '$lib/projectPaths';
   import { slotOf } from '$lib/annotations/cropSlots';
   import type { ReviewClassPicker } from '$lib/review/reviewClassPicker.svelte';
   import type { ReviewItemActions } from '$lib/review/reviewItemActions.svelte';
@@ -250,6 +252,15 @@
       searchScores={loader.searchScores}
       acceptModelClass={actions.acceptModelClass}
     />
+
+    {#if loader.semanticSearchAvailable}
+      <!-- A link, not a button: it navigates and opens in a new tab. -->
+      <a
+        class="btn-sm mt-2 inline-block border border-zinc-700 bg-zinc-900 text-xs text-zinc-200 hover:bg-zinc-800"
+        href={resolve(similarHref(current.id))}
+        data-testid="review-similar">More like this</a
+      >
+    {/if}
 
     {#if activeSlot && slotLabels}
       <ReviewSlotPanel {current} {activeSlot} {slotLabels} {edit} {slot} {skip} />

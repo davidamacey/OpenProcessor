@@ -35,6 +35,7 @@
      *  badge) — a snippet so the caller controls its own data lookups. */
     cornerBadge?: import('svelte').Snippet<[Crop]>;
     ondetail?: (crop: Crop) => void;
+    onsimilar?: (crop: Crop) => void;
     onacceptVlm?: (crop: Crop) => void;
     onrejectVlm?: (crop: Crop) => void;
     /** Fired whenever the in-flight drag's captured id set changes
@@ -48,6 +49,7 @@
     scoreOf,
     cornerBadge,
     ondetail,
+    onsimilar,
     onacceptVlm,
     onrejectVlm,
     ondragidschange,
@@ -126,6 +128,7 @@
         onacceptVlm={(c) => onacceptVlm?.(c)}
         onrejectVlm={(c) => onrejectVlm?.(c)}
         ondetail={(c) => ondetail?.(c)}
+        {onsimilar}
       />
       {#if scoreOf?.(crop) != null || cornerBadge}
         <!-- p7 (2026-09-24 interactive pass): the MATCH/cluster chips sit

@@ -61,7 +61,7 @@
     <SemanticSearchBox
       pageSize={200}
       filter={{ ...gridItemFilter() }}
-      initialQuery={page.url.searchParams.get('q')}
+      initialQuery={modes.similarTo ? null : page.url.searchParams.get('q')}
       onQueryChange={(q) => (modes.searchQuery = q)}
       onResults={(res) => {
         modes.searchModeActive = true;

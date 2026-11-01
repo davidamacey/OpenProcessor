@@ -14,6 +14,7 @@
   import SourceImageOverlay from './SourceImageOverlay.svelte';
   import ReprocessControl from './datasets/ReprocessControl.svelte';
   import EmbeddingStateBadge from './embedding/EmbeddingStateBadge.svelte';
+  import { noVectorCopy } from './embedding/embeddingCopy';
   import DetectorClass from './labelConfirmation/DetectorClass.svelte';
   import Modal from '$components/Modal.svelte';
   import AssistSuggestions from './assistRun/AssistSuggestions.svelte';
@@ -40,6 +41,9 @@
      * same provenance metadata the review page does.
      */
     ondetail?: (crop: Crop) => void;
+    /** "More like this": rank the dataset by similarity to this crop. Absent where the
+     *  deployment does not serve semantic search. */
+    onsimilar?: (crop: Crop) => void;
     /**
      * The served post-write items after an image Reprocess from the
      * expanded view (every item of that image). The host adopts them.
@@ -56,6 +60,7 @@
     onrejectVlm,
     onslotsaved,
     ondetail,
+    onsimilar,
     onreprocessed,
   }: Props = $props();
 
@@ -325,6 +330,26 @@
           title="Details (provenance + metadata)"
         >
           ⓘ
+        </button>
+      {/if}
+
+      {#if onsimilar}
+        {@const noVector = noVectorCopy(crop.embedding_state)}
+        <button
+          type="button"
+          class="rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white disabled:opacity-50"
+          onclick={(e) => {
+            e.stopPropagation();
+            onsimilar?.(crop);
+          }}
+          disabled={noVector != null}
+          aria-label="More like this"
+          title={noVector
+            ? `No vector to compare: ${noVector.label}. ${noVector.tooltip}`
+            : 'More like this (similar crops)'}
+          data-testid="crop-similar"
+        >
+          similar
         </button>
       {/if}
 

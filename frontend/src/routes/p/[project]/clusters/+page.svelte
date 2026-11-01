@@ -58,6 +58,7 @@
     set showEmbeddingViz(v: boolean) {
       showEmbeddingViz = v;
     },
+    gridItemFilter,
   });
   let detailSearchCrop = $state<Crop | null>(null);
 
