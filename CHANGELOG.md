@@ -13,6 +13,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Security
 
+- **Examples no longer use a real LAN address.** Docs, docstrings and tests now use the RFC 5737 documentation address `192.0.2.10`, and the naming-leak scan rejects the old host address anywhere in the tracked tree.
 - **The 0.6.0 API image shipped local, untracked model files.** `davidamacey/openprocessor:0.6.0` contained 24 files (about 1.55 GB) under `/opt/openprocessor/model_repo_seed`: a promoted throwaway project model, ONNX exports, TensorRT engine leftovers and bytecode from the build host's `models/` directory. The 0.6.0 tag is re-published clean. The release script now builds every image (including the segmenter and frontend contexts) from an archive of the committed revision, never from the working directory, refuses an uncommitted revision, and audits every built image against the committed tree (and for model artifacts) before anything is pushed. The `.dockerignore` files also exclude model artifacts and caches at any depth, so local builds stay clean.
 
 ### Upgrade notes / behaviour changes
