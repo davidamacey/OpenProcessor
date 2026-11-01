@@ -51,7 +51,9 @@ def test_crowd_skipped(tmp_path: Path) -> None:
     scan = scan_coco([CocoAnnotationFile(path=ann_path, images_dir=tmp_path)])
     codes = {i.code for i in scan.issues.issues()}
     assert 'coco_crowd_skipped' in codes
-    assert scan.entries[0].label_state == 'negative'
+    # The image contains objects (only crowd regions), so it is not a verified empty image.
+    assert scan.entries[0].label_state == 'unlabeled'
+    assert scan.entries[0].boxes == []
 
 
 def test_duplicate_category_names_blocking(tmp_path: Path) -> None:
