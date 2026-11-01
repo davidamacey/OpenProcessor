@@ -257,3 +257,23 @@ def test_unknown_target_is_a_clear_error() -> None:
     audit = _load()
     with pytest.raises(audit.ContextMismatchError, match='no stage'):
         audit.directory_copy_roots(MULTI_TARGET, '.', {'src/main.py'}, target='nope')
+
+
+INHERITED_WORKDIR = """\
+FROM python:3.13 AS base
+WORKDIR /app
+FROM base AS runtime-base
+FROM runtime-base AS export
+COPY --chown=u:u export/ ./export/
+FROM runtime-base AS api
+COPY --chown=u:u src/ ./src/
+"""
+
+
+def test_a_stage_inherits_the_workdir_of_the_stage_it_builds_on() -> None:
+    audit = _load()
+    tracked = {'src/main.py', 'export/a.py'}
+    assert audit.directory_copy_roots(INHERITED_WORKDIR, '.', tracked) == ['/app/src']
+    assert audit.directory_copy_roots(INHERITED_WORKDIR, '.', tracked, target='export') == [
+        '/app/export'
+    ]

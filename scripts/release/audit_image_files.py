@@ -65,19 +65,25 @@ def _final_stage_copies(
     dockerfile_text: str, target: str | None = None
 ) -> list[tuple[list[str], str]]:
     """Return [(sources, absolute_dest)] for the COPYs of the final stage, or of the stage named
-    `target` (a `docker build --target` build ends there)."""
+    `target` (a `docker build --target` build ends there). A stage built `FROM` an earlier stage
+    starts in that stage's working directory."""
     copies: list[tuple[list[str], str]] = []
     workdir = '/'
+    workdirs: dict[str, str] = {}
+    name: str | None = None
     found = target is None
     for line in _logical_lines(dockerfile_text):
         word, _, rest = line.partition(' ')
         word = word.upper()
         if word == 'FROM':
+            if name is not None:
+                workdirs[name] = workdir
             if target is not None:
                 if found:
                     break
                 found = _stage_name(rest) == target
-            copies, workdir = [], '/'
+            parent = next(w for w in rest.split() if not w.startswith('--'))
+            copies, workdir, name = [], workdirs.get(parent, '/'), _stage_name(rest)
         elif word == 'WORKDIR':
             workdir = posixpath.normpath(posixpath.join(workdir, rest.strip()))
         elif word == 'COPY':
