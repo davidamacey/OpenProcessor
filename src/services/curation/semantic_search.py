@@ -257,18 +257,23 @@ async def semantic_text_search(
         # old client-side hit filtering without changing semantics.
         body['min_score'] = min_score
 
-    resp = await opensearch.search(index=cfg.items_index, body=body)
+    # The unembedded count shares only the filter with the kNN search, so the two run together:
+    # on a filtered query the count is a full filter pass (4-8 ms at 91k items) and used to be
+    # paid on top of the search (#384).
+    # kNN only sees items with a vector, so "no results" must not read as "no
+    # matches": say how many in-scope items it could not search.
+    resp, unembedded = await asyncio.gather(
+        opensearch.search(index=cfg.items_index, body=body),
+        opensearch.count(
+            index=cfg.items_index,
+            body={'query': {'bool': {'filter': [*filter_clause, not_embedded_clause()]}}},
+        ),
+    )
     hits = (resp.get('hits') or {}).get('hits') or []
     total = int(((resp.get('hits') or {}).get('total') or {}).get('value', len(hits)))
 
     items = [_hydrate_item(h, region_fields, project_api_base()) for h in hits]
 
-    # kNN only sees items with a vector, so "no results" must not read as "no
-    # matches": say how many in-scope items it could not search.
-    unembedded = await opensearch.count(
-        index=cfg.items_index,
-        body={'query': {'bool': {'filter': [*filter_clause, not_embedded_clause()]}}},
-    )
     return {
         'items': items,
         'total': total,
