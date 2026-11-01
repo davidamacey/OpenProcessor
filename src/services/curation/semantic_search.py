@@ -1,6 +1,7 @@
-"""Semantic text search over the curation items index.
+"""Semantic search over the curation items index: by text and by a stored crop vector.
 
-``GET /curation/search/text`` (``src.routers.curation.search``) encodes a
+``GET /curation/search/similar`` ranks items by similarity to the stored ``pe_embedding``
+of one crop (no encoder). ``GET /curation/search/text`` (``src.routers.curation.search``) encodes a
 free-text query through the PE-Core-L14-336 **text** tower
 (:class:`src.clients.pe_encoder.PEEncoder`), builds an OpenSearch ``knn``
 query against the item's PE-Core **image**-tower embedding
@@ -21,7 +22,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from src.config import CurationConfig, get_curation_config
+from src.config import ITEM_EMBEDDING_FIELD, CurationConfig, get_curation_config
 from src.config.project_context import project_api_base, run_in_executor_bound
 from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
@@ -29,6 +30,7 @@ from src.domain.embedding_state import not_embedded_clause
 from src.services.curation import review_queries
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 from src.services.curation.wire import item_list_source_excludes, serialize_item
+from src.services.rejections import rejection
 
 
 logger = get_logger(__name__)
@@ -332,9 +334,82 @@ async def semantic_text_search(
     )
 
 
+async def semantic_similar_search(
+    *,
+    opensearch: Any,
+    crop_id: str,
+    page: int,
+    page_size: int,
+    exclude_self: bool = True,
+    cluster_id: int | None = None,
+    tab: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    max_rank: int | None = None,
+    min_blur_ratio: float | None = None,
+    hide_near_duplicates: bool = False,
+    min_score: float | None = None,
+    include_test: bool = False,
+    item_filter: ItemFilter | None = None,
+    config: CurationConfig | None = None,
+    fields: RegionFields | None = None,
+) -> dict[str, Any]:
+    """Rank items by similarity to the stored vector of ``crop_id`` (same page and filters
+    as :func:`semantic_text_search`; nothing is encoded).
+
+    Refuses 404 ``not_found`` for a crop the bound project's items index lacks and 409
+    ``crop_not_embedded`` for one without a vector, so a missing source never reads as "no
+    neighbours".
+    """
+    cfg = config or get_curation_config()
+    region_fields = fields or get_region_fields()
+
+    resp = await opensearch.search(
+        index=cfg.items_index,
+        body={
+            'size': 1,
+            'query': {'ids': {'values': [crop_id]}},
+            '_source': {'includes': [ITEM_EMBEDDING_FIELD, 'embedding_state']},
+        },
+    )
+    hits = (resp.get('hits') or {}).get('hits') or []
+    if not hits:
+        raise rejection(404, 'not_found', f"no crop '{crop_id}' in this project")
+    source = hits[0].get('_source') or {}
+    vector = source.get(ITEM_EMBEDDING_FIELD)
+    if not isinstance(vector, list) or not vector:
+        state = source.get('embedding_state') or 'unknown'
+        raise rejection(409, 'crop_not_embedded', f'crop {crop_id} has no vector ({state})')
+
+    filter_clause = _filter_for(
+        item_filter=item_filter,
+        tab=tab,
+        cluster_id=cluster_id,
+        date_from=date_from,
+        date_to=date_to,
+        max_rank=max_rank,
+        min_blur_ratio=min_blur_ratio,
+        hide_near_duplicates=hide_near_duplicates,
+        include_test=include_test,
+    )
+    if exclude_self:
+        filter_clause.append({'bool': {'must_not': [{'ids': {'values': [crop_id]}}]}})
+    return await _knn_page(
+        opensearch=opensearch,
+        vector=vector,
+        filter_clause=filter_clause,
+        page=page,
+        page_size=page_size,
+        min_score=min_score,
+        cfg=cfg,
+        fields=region_fields,
+    )
+
+
 __all__ = [
     'DEFAULT_KNN_FIELD',
     'SemanticSearchDisabledError',
     'build_knn_query',
+    'semantic_similar_search',
     'semantic_text_search',
 ]

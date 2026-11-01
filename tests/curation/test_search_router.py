@@ -209,3 +209,93 @@ def test_search_text_inverted_confidence_band_is_400(app_client: TestClient):
     )
     assert resp.status_code == 400
     assert 'conf_min' in resp.text
+
+
+# =============================================================================
+# GET /search/similar
+# =============================================================================
+
+SIMILAR = '/curation/projects/default/search/similar'
+
+
+def _similar_os(app_client: TestClient, *, source: list[dict], knn: list[dict] | None = None):
+    async def _search(*, index: str, body: dict) -> dict:
+        if 'ids' in body.get('query', {}):
+            return {'hits': {'hits': source, 'total': {'value': len(source)}}}
+        hits = knn or []
+        return {'hits': {'hits': hits, 'total': {'value': len(hits)}}}
+
+    app_client.fake_os.search = AsyncMock(side_effect=_search)
+
+
+_SOURCE = [{'_id': 'src', '_source': {'pe_embedding': [0.5] * 4}}]
+_NEIGHBOR = {
+    '_id': 'crop_1',
+    '_score': 0.9,
+    '_source': {
+        'crop_id': 'crop_1',
+        'image_path': '/data/foo.jpg',
+        'class_id': 3,
+        'class_name': 'pickup',
+    },
+}
+
+
+def test_search_similar_disabled_returns_400(
+    monkeypatch: pytest.MonkeyPatch, app_client: TestClient
+):
+    monkeypatch.setenv('OP_SEMANTIC_SEARCH_ENABLED', 'false')
+    resp = app_client.get(SIMILAR, params={'crop_id': 'src'})
+    assert resp.status_code == 400
+    assert 'OP_SEMANTIC_SEARCH_ENABLED' in resp.json()['detail']
+
+
+def test_search_similar_needs_no_encoder(app_client: TestClient):
+    app_client.app.state.pe_encoder = None
+    _similar_os(app_client, source=_SOURCE, knn=[_NEIGHBOR])
+    assert app_client.get(SIMILAR, params={'crop_id': 'src'}).status_code == 200
+
+
+def test_search_similar_happy_path(app_client: TestClient):
+    _similar_os(app_client, source=_SOURCE, knn=[_NEIGHBOR])
+    resp = app_client.get(SIMILAR, params={'crop_id': 'src'})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {'items', 'total', 'page', 'page_size', 'unembedded_in_scope'}
+    assert body['items'][0]['semantic_score'] == 0.9
+    app_client.fake_os.search = AsyncMock(
+        return_value={'hits': {'hits': [_NEIGHBOR], 'total': {'value': 1}}}
+    )
+    text = app_client.get('/curation/projects/default/search/text', params={'q': 'truck'}).json()
+    assert set(body['items'][0]) == set(text['items'][0])
+
+
+def test_search_similar_unknown_crop_404(app_client: TestClient):
+    _similar_os(app_client, source=[])
+    resp = app_client.get(SIMILAR, params={'crop_id': 'nope'})
+    assert resp.status_code == 404
+    assert resp.json()['detail']['error'] == 'not_found'
+
+
+def test_search_similar_unembedded_409(app_client: TestClient):
+    _similar_os(app_client, source=[{'_id': 'src', '_source': {'embedding_state': 'deferred'}}])
+    resp = app_client.get(SIMILAR, params={'crop_id': 'src'})
+    assert resp.status_code == 409
+    assert resp.json()['detail']['error'] == 'crop_not_embedded'
+    assert 'deferred' in resp.json()['detail']['message']
+
+
+def test_search_similar_unknown_project_404(app_client: TestClient):
+    resp = app_client.get('/curation/projects/nope/search/similar', params={'crop_id': 'src'})
+    assert resp.status_code == 404
+    assert resp.json()['detail']['error'] == 'project_not_found'
+
+
+def test_search_similar_opensearch_outage_is_503(app_client: TestClient):
+    app_client.fake_os.search = AsyncMock(side_effect=ConnectionError('down'))
+    resp = app_client.get(SIMILAR, params={'crop_id': 'src'})
+    assert resp.status_code == 503
+
+
+def test_search_similar_requires_crop_id(app_client: TestClient):
+    assert app_client.get(SIMILAR).status_code == 422
