@@ -17,6 +17,7 @@ ONE_ENTRY_PER_DOC = {
     '/crops',
     '/crops/{crop_id}/context',
     '/review/{tab}',
+    '/search/similar',
     '/search/text',
     '/viz/projection',
 }
