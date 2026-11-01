@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LabelOpUndoPass(BaseModel):
@@ -45,6 +45,7 @@ class LabelOpList(BaseModel):
     items: list[LabelOp]
     limit: int
     retention: int
+    next_after: str | None = Field(default=None, description='Pass as `after` for the next page.')
 
 
 class LabelOpUndoRequest(BaseModel):

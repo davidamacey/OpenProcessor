@@ -185,8 +185,9 @@ and is covered by `SHA256SUMS`). Signed releases are follow-up work.
 ### Network access: Cropwright on your LAN
 
 **Cropwright is reachable on your LAN by default, for homelab or
-small-business use. The API itself stays bound to 127.0.0.1. There is no login
-on Cropwright — a warning is shown. Pass `--local-only` to opt out and keep
+small-business use. The API itself stays bound to 127.0.0.1. On a LAN bind the
+installer puts a shared HTTP basic-auth login in front of Cropwright (password
+in `secrets/cropwright/password`). Pass `--local-only` to opt out and keep
 everything on 127.0.0.1.**
 
 Do not port-forward Cropwright (or any OpenProcessor port) to the public

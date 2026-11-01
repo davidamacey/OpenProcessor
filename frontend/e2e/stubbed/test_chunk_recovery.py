@@ -28,12 +28,28 @@ def dashboard_node_pattern() -> re.Pattern[str]:
     return re.compile(rf"/_app/immutable/nodes/{match.group(1)}\.[^/]+\.js$")
 
 
-def fail_chunk(page, pattern, times):
-    """Abort the matching chunk request `times` times (None = always)."""
-    state = {"aborted": 0}
+def fail_chunk(page, pattern, until_loads):
+    """Abort every request for the matching chunk while fewer than `until_loads`
+    document loads of the dashboard have started (None = always).
+
+    Failing per document load, not a fixed number of requests, matters: the
+    chunk is requested twice per load (Vite's `<link rel=modulepreload>`, then
+    the dynamic `import()`). Chromium 1.64 no longer lets a failed preload
+    poison the import, so aborting only the first request is absorbed by the
+    browser and the app never sees a failure.
+    """
+    state = {"aborted": 0, "loads": 0}
+
+    def on_request(request):
+        if request.is_navigation_request() and request.url.endswith(DASHBOARD):
+            state["loads"] += 1
+
+    page.on("request", on_request)
 
     def handler(route):
-        if pattern.search(route.request.url) and (times is None or state["aborted"] < times):
+        if pattern.search(route.request.url) and (
+            until_loads is None or state["loads"] < until_loads
+        ):
             state["aborted"] += 1
             route.abort("failed")
         else:
@@ -56,20 +72,23 @@ def count_document_loads(page, app_url):
 
 def test_chunk_failure_recovers_after_one_reload(stub, page, app_url):
     register_base(stub)
-    state = fail_chunk(page, dashboard_node_pattern(), times=1)
+    state = fail_chunk(page, dashboard_node_pattern(), until_loads=2)
     loads = count_document_loads(page, app_url)
 
     page.goto(f"{app_url}{DASHBOARD}")
     page.locator("main").first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
-    assert state["aborted"] == 1
+    assert state["aborted"] >= 1
     assert len(loads) == 2, f"expected exactly one automatic reload, saw {loads}"
     assert page.get_by_test_id("app-error").count() == 0
+    # Stays recovered: no second reload follows once the page has settled.
+    page.wait_for_load_state("networkidle", timeout=ACTION_TIMEOUT_MS)
+    assert len(loads) == 2, f"reload loop after recovery: {loads}"
 
 
 def test_repeated_chunk_failure_shows_error_page_without_looping(stub, page, app_url):
     register_base(stub)
-    state = fail_chunk(page, dashboard_node_pattern(), times=None)
+    state = fail_chunk(page, dashboard_node_pattern(), until_loads=None)
     loads = count_document_loads(page, app_url)
 
     page.goto(f"{app_url}{DASHBOARD}")

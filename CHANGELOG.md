@@ -17,6 +17,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Upgrade notes / behaviour changes
 
+- **Cropwright gets optional HTTP basic auth** (#351). The installer turns it on when Cropwright is published beyond loopback (`OP_CROPWRIGHT_BASIC_AUTH`, `OP_CROPWRIGHT_BASIC_AUTH_FILE`); `./openprocessor cropwright password` changes the login. The container healthcheck moved to `/nginx-health`, which stays open. See SECURITY.md.
 - **Breaking: the unused `backbone_embedding` field is removed** (#410).
   - Removed: the `backbone_embedding` item field, its ingest writer, the dual-head detector export (`export/export_detector_dual_head.*`), `make export-dual-head` and the region-profile field `feature_output`.
   - A stored region profile that still has `feature_output` now fails to load with "unknown field". Remove the key, or re-save the profile from its template.
@@ -37,6 +38,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - The installer's tier prompt is a numbered menu; `--tiers` is unchanged.
 
 ### Added
+- `GET /curation/projects/{project}/label_ops` pages with `after` and serves `next_after` (newest first by `op_id`; a malformed `after` is 422) (#419).
 - `gpu_image_prep` waits for device memory instead of failing into the CPU fallback (#392): each photo reserves its decoded frame from `DEVICE_BUDGET_MIB` (default 2048) and waits at most `BUDGET_WAIT_SECONDS` (20); the budget is reserved at load, so an instance that cannot hold it fails to load (ingest then decodes on the CPU, visibly); a failed allocation, a timed-out wait and an over-sized photo are the counted routes `cpu_gpu_memory` and `cpu_over_budget` in `op_ingest_decode_total` and `op_reprocess_decode_total`; a `budget` stage counter shows the wait.
 - Opt-in ingest load profile (#393): `OP_LOAD_PROFILE=ingest` (overlay `docker-compose.ingest-focus.yml`, added by the CLI) preloads only the detector and the PE encoders, which frees 27.7 GB on a 48 GB card; the face, MobileCLIP and OCR models load on their first call, so every endpoint still answers. Per-model memory and the endpoint check: `docs-site/docs/operations/ingest-load-profile.mdx`. The default (`full`) is unchanged.
 - `scripts/bench/gpu_prep_parity.py`: captures and compares `gpu_image_prep` answers before and after a change.
@@ -64,6 +66,8 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - Docs: the published site is linked from the README and the repository homepage; first-run steps corrected after a new-user review.
 
 ### Fixed
+
+- **The VLM connection is pinned to the validated address** (#101): the URL policy resolves the endpoint host once and the labeler and the endpoint probe connect only to those addresses (Host header, TLS server name and certificate check unchanged), closing the DNS-rebinding window between the check and the connect. A pinned client ignores proxy environment variables.
 - **`/health` and `/ready` report not ready when a required Triton model failed to load** (#391). Triton runs with `--exit-on-error=false`, so a missing engine (an empty `models/pe_image_encoder/1/`) used to leave `/health` at `status: ready`. The probe now reads the repository index and answers `503`, naming each model that is not `READY` in `services.models.not_ready`. Required models default to YOLO, SCRFD, ArcFace, MobileCLIP and the PE image encoder; `OP_REQUIRED_MODELS` replaces the list; the installer writes it from the installed tiers, so a core-only install is not held back by the PE encoder. `/live` and `GET /` are unchanged, and a control-plane-only install (no Triton) keeps its OpenSearch-only wait.
 - A refresh-daemon (assign-only) cluster pass that read under 99 percent of the pool it counted at its start, or whose write-back failed, reported `success`; it now reports `partial` with `expected_pool` and `coverage` and records no last run (#357). The whole-index cluster reset runs as a polled task: 250,000 rows reset in 592 to 799 s instead of failing after 34 minutes.
 - Undo and discard of many items ran one conditional update per id with no concurrency limit (`undo_batch`, `discard_batch`, and the region `undo_batch` now bounded at 32 in flight).

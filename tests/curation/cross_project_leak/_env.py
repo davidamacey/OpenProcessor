@@ -246,6 +246,9 @@ def leak_env(
         return _no_network()
 
     monkeypatch.setattr(httpx.AsyncHTTPTransport, 'handle_async_request', _only_the_fake_vlm)
+    monkeypatch.setattr(
+        'src.services.labeling.vlm_pinning.PinnedTransport.handle_async_request', _only_the_fake_vlm
+    )
     monkeypatch.setattr(httpx.HTTPTransport, 'handle_request', _no_network)
     # Every VLM route talks to the in-process fake VLM (a real
     # OpenAI-shaped reply), so the labeling/verify routes really write.

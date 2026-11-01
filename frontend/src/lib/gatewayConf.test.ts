@@ -30,6 +30,7 @@ function render(env: Record<string, string>) {
     .replaceAll('/usr/share/nginx/html', html)
     .replaceAll('/etc/nginx/conf.d/default.conf', conf)
     .replaceAll('/etc/nginx/gateway.d', gatewayDir)
+    .replaceAll('/etc/nginx/auth.d', path.join(dir, 'auth.d'))
     .replaceAll(
       '/etc/nginx/snippets/gateway-subpaths.conf',
       path.join(snippets, 'gateway-subpaths.conf'),

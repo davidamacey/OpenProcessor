@@ -112,6 +112,8 @@ _TEMPLATE_SIDE_ALLOWLIST = {
     'OP_CROPWRIGHT_PORT',
     'OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB',
     'OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB',
+    'OP_CROPWRIGHT_BASIC_AUTH',
+    'OP_CROPWRIGHT_BASIC_AUTH_FILE',
     # `openprocessor vlm use` waits for the VLM; read by scripts/lib/vlm_switch.sh (bash).
     'OP_VLM_WAIT_S',
     'OP_VLM_POLL_S',

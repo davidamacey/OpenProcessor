@@ -37,8 +37,9 @@ interface.**
 ### LAN access from the one-line installer
 
 **Cropwright is reachable on your LAN by default, for homelab or
-small-business use. The API itself stays bound to 127.0.0.1. There is no login
-on Cropwright — a warning is shown. Pass `--local-only` to opt out and keep
+small-business use. The API itself stays bound to 127.0.0.1. On a LAN bind the
+installer puts a shared HTTP basic-auth login in front of Cropwright (see
+below). Pass `--local-only` to opt out and keep
 everything on 127.0.0.1.**
 
 `setup-openprocessor.sh` targets one computer **and** its local network
@@ -50,11 +51,34 @@ bound to `127.0.0.1` unless you pass `--bind` and confirm it. A specific
 `--bind` address (say `10.0.0.5`) also narrows Cropwright to that one
 interface; `--local-only` always keeps it on `127.0.0.1`.
 
-The UI has **no login**, and it can reach every API route above. Use it only
-on a network you trust, never port-forward it to the public internet, and put
-a reverse proxy with authentication in front for anything wider. Install with
-`--local-only` (or answer "no" to the LAN question) to keep it on this
-computer.
+#### Optional basic auth in front of Cropwright
+
+When Cropwright is published beyond loopback, the installer enables HTTP basic
+auth on the whole Cropwright origin by default (unattended runs included): the
+app, the API proxy, the docs and the gateway sub-paths all answer 401 without
+the login. Only `/nginx-health` (a constant, used by the container healthcheck)
+is open. It is a single shared account named `cropwright`, not a user system;
+accounts, roles, tokens and OIDC are out of scope (#65).
+
+- The installer generates a random password into `secrets/cropwright/password`
+  (mode 600) and an apr1 hash into `secrets/cropwright/htpasswd`. The password
+  is never printed, logged, put in `.env` or baked into the image; only the
+  hash file is mounted read-only into the container. The hash file is mode 644
+  inside a 700 directory because the container user must read it.
+- Change it with `./openprocessor cropwright password` (an empty answer
+  generates one), then `./openprocessor restart cropwright`.
+- Enable or disable it with `OP_CROPWRIGHT_BASIC_AUTH=true|false` (installer
+  environment or `.env`). On a loopback bind it is off unless you set it.
+- Fail closed: with it enabled, a missing, empty or malformed htpasswd file
+  stops the container instead of serving without a login.
+- Basic auth over plain HTTP sends the password in clear text on the LAN.
+  It keeps casual and accidental access out; it is not a substitute for TLS.
+  Use a TLS-terminating reverse proxy for anything beyond a trusted network.
+- The API and the other UIs keep **no authentication of their own**; they
+  stay on loopback behind Cropwright's proxy. With `OP_CROPWRIGHT_BASIC_AUTH`
+  off, Cropwright has no login at all: use it only on a network you trust, and
+  never port-forward it to the public internet, and put a reverse proxy
+  with authentication in front for anything wider.
 
 ### Release checksums are integrity, not authenticity
 
@@ -108,12 +132,16 @@ VLM endpoint as far as the API can tell, so a caller who can reach the API
 can make it send synthetic probe requests and OpenAI-shaped chat requests
 there. DNS is checked when an endpoint is saved, tested, activated and
 built, and again by every labeler before it sends, at most every 30 seconds
-(a refusal is immediate and stays until the host is acceptable again). So a
-name that changes its answer is caught within about 30 seconds, but a
-request already sent, or sent inside that window, goes to whatever the name
-resolved to then; the connection itself is not pinned to the checked
-address. The probe of an endpoint outside the deployment is only made once
-the endpoint carries `allow_external`, because the probe sends its key. A
+(a refusal is immediate and stays until the host is acceptable again). The
+connection is pinned to what was checked: the check resolves the host once,
+and the HTTP client connects only to those addresses (the `Host` header and,
+for https, the TLS server name and certificate check stay the endpoint's
+name), so a name that is rebound after the check cannot redirect a request.
+A re-check that passes re-pins to its own fresh answer, which is how an
+endpoint whose container restarted at a new address keeps working. A literal
+IP has nothing to re-resolve and is not pinned. A pinned client does not use
+proxy environment variables, since a proxy would resolve the name itself. The probe of an endpoint outside the
+deployment is only made once the endpoint carries `allow_external`, because the probe sends its key. A
 credential written into `OP_VLM_URL` is dropped, never served or logged.
 Put the API behind your own network controls, as the rest of this document
 already says.

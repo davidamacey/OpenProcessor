@@ -68,6 +68,7 @@ prometheus-client>=0.20
 # src/services/labeling/vlm_client.py -- reached via curation router imports
 tenacity>=8.2
 httpx
+httpcore
 
 # src/services/curation/bulk_ingest/object_store.py (S3 and S3-compatible ingest sources)
 boto3
