@@ -37,6 +37,7 @@ scipy
 requests
 aiohttp
 httpx
+httpcore  # imported directly by src/services/labeling/vlm_pinning.py (pinned VLM transport)
 
 # src/services/curation/bulk_ingest/object_store.py (S3 and S3-compatible ingest sources)
 boto3

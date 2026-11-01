@@ -14,7 +14,7 @@
   import ProjectSwitcher from '$components/ProjectSwitcher.svelte';
   import ProjectUnavailable from '$components/ProjectUnavailable.svelte';
   import ResourcesMenu from '$components/ResourcesMenu.svelte';
-  import { projectHref, sectionOf } from '$lib/projectPaths';
+  import { projectHref, sectionOf, SECTION_LABELS } from '$lib/projectPaths';
   import type { ProjectResolution } from '$stores/projects.svelte';
   import AboutModal from '$components/AboutModal.svelte';
   import ClassSidebar from '$components/ClassSidebar.svelte';
@@ -248,7 +248,7 @@
     // title/nav; a redundant lowercase "dashboard" crumb added nothing.
     if (!section || section === 'dashboard') return [];
     const out: Array<{ label: string; href: ReturnType<typeof projectHref> }> = [
-      { label: section, href: projectHref(`/${section}`) },
+      { label: SECTION_LABELS[section] ?? section, href: projectHref(`/${section}`) },
     ];
     const rest = path.split('/').filter(Boolean).slice(3);
     if (section === 'clusters' && rest[0]) {
@@ -405,6 +405,11 @@
           href={resolve(projectHref('/bakeoff'))}
           class={navLinkClass('bakeoff')}
           aria-current={navCurrent('bakeoff')}>Bake-off</a
+        >
+        <a
+          href={resolve(projectHref('/label-ops'))}
+          class={navLinkClass('label-ops')}
+          aria-current={navCurrent('label-ops')}>Label ops</a
         >
         <a
           href={resolve(projectHref('/settings'))}

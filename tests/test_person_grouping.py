@@ -77,7 +77,7 @@ def test_empty_input():
 
 
 _CHILD = """
-import importlib.util, json, resource, time
+import importlib.util, json, time
 import numpy as np
 # Load the module by path: importing it through its package would pull the whole
 # service (torch, ultralytics, ...) into the child and measure that, not the grouping.
@@ -90,14 +90,21 @@ n, d, k = 200000, 64, 50000
 c = rng.standard_normal((k, d), dtype=np.float32)
 x = c[rng.integers(0, k, n)] + 0.05 * rng.standard_normal((n, d), dtype=np.float32)
 x /= np.linalg.norm(x, axis=1, keepdims=True)
-before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+def hwm_mb():
+    # VmHWM is this process's own peak and resets on exec; ru_maxrss would carry over
+    # the forking parent's high-water mark (about 3 GB under CI coverage).
+    for line in open('/proc/self/status'):
+        if line.startswith('VmHWM:'):
+            return int(line.split()[1]) / 1024
+    raise RuntimeError('VmHWM missing')
+before = hwm_mb()
 t0 = time.time()
 groups = similarity_components(x, 0.7)
 el = time.time() - t0
 print(json.dumps({'covered': sum(len(g) for g in groups),
   'unique': len({i for g in groups for i in g}),
   'groups': len(groups), 'elapsed': el, 'rss_before_mb': before,
-  'rss_mb': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024}))
+  'rss_mb': hwm_mb()}))
 """
 
 

@@ -149,6 +149,9 @@ def build_stack(vlm_api: VlmApi, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         return await upstream.handle(request)
 
     monkeypatch.setattr(httpx.AsyncHTTPTransport, 'handle_async_request', serve)
+    monkeypatch.setattr(
+        'src.services.labeling.vlm_pinning.PinnedTransport.handle_async_request', serve
+    )
     monkeypatch.setenv('OP_SEGMENTER_URL', SEGMENTER_URL)
     vlm_api.dns['a.vlm.test'] = ['10.0.0.1']
 

@@ -155,6 +155,7 @@ const API_DOMAINS = [
   'errors',
   'export',
   'ingest',
+  'labelOps',
   'models',
   'packs',
   'profiles',

@@ -14801,6 +14801,18 @@
             "title": "Limit",
             "type": "integer"
           },
+          "next_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as `after` for the next page.",
+            "title": "Next After"
+          },
           "retention": {
             "title": "Retention",
             "type": "integer"
@@ -44867,7 +44879,7 @@
     },
     "/curation/projects/{project}/label_ops": {
       "get": {
-        "description": "The project's recorded bulk label and move operations, newest first.\n\n``current`` is how many items still carry the operation's label; an\noperation is ``undoable`` while that is above zero and it is not being\nwritten or undone. Class ids are never served: identity is the name.",
+        "description": "The project's recorded bulk label and move operations, newest first.\n\n``current`` is how many items still carry the operation's label; an\noperation is ``undoable`` while that is above zero and it is not being\nwritten or undone. Class ids are never served: identity is the name.\nPage with ``after`` (the previous page's ``next_after``); ``next_after`` is\nnull at the end. A malformed ``after`` is 422 ``invalid_request``.",
         "operationId": "get_label_ops_curation_projects__project__label_ops_get",
         "parameters": [
           {
@@ -44907,6 +44919,24 @@
               ],
               "description": "true: only undoable operations.",
               "title": "Undoable"
+            }
+          },
+          {
+            "description": "`next_after` of the previous page.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`next_after` of the previous page.",
+              "title": "After"
             }
           }
         ],

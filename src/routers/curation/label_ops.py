@@ -17,14 +17,17 @@ async def get_label_ops(
     opensearch: OpenSearchDep,
     limit: int = Query(default=20, ge=1, le=50),
     undoable: bool | None = Query(default=None, description='true: only undoable operations.'),
+    after: str | None = Query(default=None, description='`next_after` of the previous page.'),
 ) -> dict[str, Any]:
     """The project's recorded bulk label and move operations, newest first.
 
     ``current`` is how many items still carry the operation's label; an
     operation is ``undoable`` while that is above zero and it is not being
     written or undone. Class ids are never served: identity is the name.
+    Page with ``after`` (the previous page's ``next_after``); ``next_after`` is
+    null at the end. A malformed ``after`` is 422 ``invalid_request``.
     """
-    return await list_label_ops(opensearch, limit=limit, undoable_only=bool(undoable))
+    return await list_label_ops(opensearch, limit=limit, undoable_only=bool(undoable), after=after)
 
 
 @router.post(

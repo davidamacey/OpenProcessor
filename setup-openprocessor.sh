@@ -1835,27 +1835,6 @@ _version_ge() {
     [[ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" == "$2" ]]
 }
 
-# choose_cropwright_bind -> OP_CROPWRIGHT_BIND: the web UI serves this computer AND the local LAN
-# (0.0.0.0) unless --local-only, or "no" at the prompt, keeps it on 127.0.0.1. Backend ports stay on
-# OP_BIND_ADDRESS; LAN browsers reach the API through Cropwright's nginx on the docker network. A
-# specific non-loopback --bind (say 10.0.0.5) narrows Cropwright to that interface too.
-choose_cropwright_bind() {
-    local reply prev
-    prev="$(read_env_var "${OP_DIR}/.env" OP_CROPWRIGHT_BIND_ADDRESS 2>/dev/null || true)"
-    if [[ "$OP_LOCAL_ONLY" == 1 ]]; then
-        OP_CROPWRIGHT_BIND=127.0.0.1
-    elif [[ "$OP_BIND_ADDRESS" != 0.0.0.0 ]] && ! is_loopback_ipv4 "$OP_BIND_ADDRESS"; then
-        OP_CROPWRIGHT_BIND="$OP_BIND_ADDRESS"
-    elif [[ -n "$prev" ]] && is_ipv4 "$prev"; then
-        OP_CROPWRIGHT_BIND="$prev"
-    elif [[ "$OP_UNATTENDED" != 1 ]] && tty_usable; then
-        prompt_line reply "Let other computers on your LAN open the Cropwright web UI? [Y/n]: " "--local-only"
-        if [[ -z "$reply" || "${reply,,}" == y* ]]; then OP_CROPWRIGHT_BIND=0.0.0.0; else OP_CROPWRIGHT_BIND=127.0.0.1; fi
-    else
-        OP_CROPWRIGHT_BIND=0.0.0.0
-    fi
-}
-
 setup_cropwright() {
     local port
     port="$(read_env_var "${OP_DIR}/.env" OP_CROPWRIGHT_PORT || true)"
@@ -1876,7 +1855,7 @@ setup_cropwright() {
         die "the cropwright service would publish on '${hosts}', not ${OP_CROPWRIGHT_BIND} (its compose entry must honour OP_CROPWRIGHT_BIND_ADDRESS)" "$EXIT_VERIFY"
     fi
     assert_container_names_free "${OP_PROJECT}-cropwright"
-    log_success "Cropwright configured on ${OP_CROPWRIGHT_BIND}:${port}"
+    log_success "Cropwright configured on ${OP_CROPWRIGHT_BIND}:${OP_CROPWRIGHT_PORT}"
 }
 
 # --- 6.1 Health ---
@@ -1886,11 +1865,13 @@ _health_host() {
 
 # wait_http URL SECONDS [GREP_FIXED [CURL_FLAGS]] -- until 200 (and body contains GREP); -sS accepts any status
 wait_http() {
-    local url="$1" secs="$2" want="${3:-}" waited=0 body curlf="${4:--fsS}"
+    local url="$1" secs="$2" want="${3:-}" waited=0 body curlf="${4:--fsS}" cfg="${5:-}"
+    local -a extra=()
+    [[ -n "$cfg" ]] && extra=(-K "$cfg")
     local cap="${OP_HEALTH_TIMEOUT:-}"
     [[ -n "$cap" ]] && (( cap < secs )) && secs=$cap
     while :; do
-        if body="$(curl "$curlf" --max-time 10 "$url" 2>/dev/null)"; then
+        if body="$(curl "$curlf" ${extra[@]+"${extra[@]}"} --max-time 10 "$url" 2>/dev/null)"; then
             body="${body//[[:space:]]/}"
             if [[ -z "$want" || "$body" == *"$want"* ]]; then
                 return 0
@@ -2005,8 +1986,7 @@ run_health() {
         wait_http "http://${h}:${p}/health" 180 || fails+=("mlflow not healthy: ./openprocessor logs curation-mlflow")
     fi
     if _has_tier cropwright; then
-        wait_http "http://${h}:${OP_CROPWRIGHT_PORT}/" 120 || fails+=("cropwright / not 200")
-        wait_http "http://${h}:${OP_CROPWRIGHT_PORT}/curation/health" 60 || fails+=("cropwright cannot reach the API through its proxy (network ${OP_PROJECT}_triton_net)")
+        verify_cropwright "$h"
     fi
     if [[ "$OP_WITH_MONITORING" == 1 ]]; then
         local unreadable
@@ -2381,6 +2361,7 @@ parse_args() {
     local yes=0
 
     while [[ $# -gt 0 ]]; do
+        # shellcheck disable=SC2034 # OP_LOCAL_ONLY is read by choose_cropwright_bind (scripts/lib/cropwright_auth.sh)
         case "$1" in
             --dir) need_arg "$@"; OP_INSTALL_DIR="$2"; shift 2 ;;
             --project) need_arg "$@"; _OP_PROJECT_FLAG="$2"; shift 2 ;;
@@ -2696,6 +2677,8 @@ do_install() {
     source "${OP_DIR}/scripts/lib/opensearch_heap.sh"
     # shellcheck source=scripts/lib/retired_env.sh
     source "${OP_DIR}/scripts/lib/retired_env.sh"
+    # shellcheck source=scripts/lib/cropwright_auth.sh
+    source "${OP_DIR}/scripts/lib/cropwright_auth.sh"
     # shellcheck source=scripts/lib/install_summary.sh
     source "${OP_DIR}/scripts/lib/install_summary.sh"
     refuse_retired_env "$ENV_FILE"
@@ -2901,7 +2884,7 @@ YAML
     plan_ports
     apply_image_pins
     if _has_tier cropwright; then
-        choose_cropwright_bind
+        choose_cropwright_access
         setup_cropwright
     fi
 

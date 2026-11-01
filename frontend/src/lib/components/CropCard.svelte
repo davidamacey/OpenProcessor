@@ -4,6 +4,8 @@
   import { vlmEmptyReasonText } from '$lib/review/reviewCopy';
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { getThumbUrl } from '$lib/api_cropRead';
+  import { fetchSourceMissing, type SourceMissing } from '$lib/sourceMissing';
+  import SourceMissingBadge from './SourceMissingBadge.svelte';
   import { reprocessVocabularyStore } from '$lib/stores/reprocessVocabulary.svelte';
   import type { BBoxNorm, Crop } from '$lib/types';
   import { slotOf, subBoxSlotFor } from '$lib/annotations/cropSlots';
@@ -75,6 +77,7 @@
   const activeSlot = $derived(slot ?? subBoxSlotFor(crop, slotRegistry.all));
 
   let expanded = $state<boolean>(false);
+  let sourceMissing = $state<SourceMissing | null>(null);
   let editorOpen = $state<boolean>(false);
 
   // Track the natural pixel size of the rendered thumbnail so we can
@@ -248,19 +251,25 @@
       aria-label="Select crop {crop.id}"
       onclick={(e) => onclick?.(crop, e)}
     >
-      <img
-        src={getThumbUrl(crop.id)}
-        alt=""
-        loading="lazy"
-        draggable="false"
-        class="h-full w-full object-contain [-webkit-user-drag:none]"
-        onload={onImgLoad}
-        onerror={(e) => {
-          const t = e.currentTarget as HTMLImageElement;
-          t.style.opacity = '0.2';
-        }}
-      />
+      {#if !sourceMissing}
+        <img
+          src={getThumbUrl(crop.id)}
+          alt=""
+          loading="lazy"
+          draggable="false"
+          class="h-full w-full object-contain [-webkit-user-drag:none]"
+          onload={onImgLoad}
+          onerror={(e) => {
+            const t = e.currentTarget as HTMLImageElement;
+            t.style.opacity = '0.2';
+            void fetchSourceMissing(t.src).then((m) => (sourceMissing = m));
+          }}
+        />
+      {/if}
     </button>
+    {#if sourceMissing}
+      <SourceMissingBadge missing={sourceMissing} compact />
+    {/if}
 
     {#if noSlot}
       <span

@@ -595,3 +595,45 @@ def resolve_crop_root(image_path: str, config: CurationConfig | None = None) -> 
         if head == alias_lower or head.startswith(alias_lower):
             return alias_root
     return cfg.source_root
+
+
+SOURCE_MISSING = 'source_missing'
+
+
+def source_root_name(root: Path, config: CurationConfig | None = None) -> str:
+    """The operator-facing name of a configured root: its ``source_path_aliases``
+    key, ``upload_root`` or ``source_root``. Names only; host paths stay out of
+    the answer."""
+    cfg = config or get_curation_config()
+    for alias, alias_root in cfg.source_path_aliases.items():
+        if alias_root == root:
+            return alias
+    if root == cfg.upload_root:
+        return 'upload_root'
+    return 'source_root'
+
+
+def source_missing_detail(
+    root: Path, rel_path: str, config: CurationConfig | None = None
+) -> dict[str, Any]:
+    """Typed 404 body for an image whose file is not reachable.
+
+    ``root_mounted`` separates "the whole source root is gone (dataset moved,
+    volume not mounted)" from "this one file is gone under a reachable root".
+    """
+    name = source_root_name(root, config)
+    mounted = root.is_dir()
+    if mounted:
+        message = f'image file not found under source root {name!r}'
+    else:
+        message = (
+            f'source root {name!r} is not mounted or reachable; '
+            'mount the dataset again or point the root at its new location'
+        )
+    return {
+        'error': SOURCE_MISSING,
+        'alias': name,
+        'root_mounted': mounted,
+        'image_path': rel_path,
+        'message': message,
+    }

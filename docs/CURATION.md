@@ -323,6 +323,22 @@ the mount, ingest succeeds but later worker reads fail with
 accepted source roots. Because the mount is read-only, run dataset fetch scripts on the
 host. More: [Basic configuration](../docs-site/docs/configuration/basic.mdx).
 
+### When the source images are not reachable
+
+Thumbnail and image routes answer `404` with a typed body instead of a bare string:
+`{"detail": {"error": "source_missing", "alias": "<root name>", "root_mounted": false,
+"image_path": "...", "message": "..."}}`. `alias` is the `OP_SOURCE_PATH_ALIASES` key,
+`source_root` or `upload_root` that owns the stored path. `root_mounted: false` means the
+whole root is gone (volume not mounted, dataset moved); `true` means only that file is
+missing. Cropwright shows the alias and message on the tile and in the review pane.
+
+Source roots are deployment-wide settings (`OP_SOURCE_ROOT`, `OP_SOURCE_PATH_ALIASES`), not
+per-project records, and items store the container path, so a moved dataset needs no
+re-ingest. To relocate: change `OP_SOURCE_ROOT_HOST` (or the alias bind mount) to the new
+host directory so it appears at the same container path, recreate the services that mount
+it, and reload the page. Moving the dataset to a different layout under the root does
+require re-ingesting, since the stored paths no longer resolve.
+
 ## Wiring up Cropwright
 
 Cropwright, or any frontend that consumes `/curation`, needs `API_UPSTREAM`

@@ -48,6 +48,7 @@ dependencies = [
     "requests",
     "aiohttp",
     "httpx",
+    "httpcore",
     "boto3",
     "botocore",
     "matplotlib",

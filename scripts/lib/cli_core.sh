@@ -356,6 +356,7 @@ Deploy:
   sample coco [--full]  Fetch the public COCO sample (inside the API image)
   config show           Print .env with every secret redacted
   gpu plan              Show the GPU placement from .env
+  cropwright password   Set the Cropwright basic-auth login (an empty answer generates one)
   vlm list|status|use <id> [--force] [--yes]|apply|probe|key set <slug>
   train-mode on|off     Stop/start the VLM (and a co-located segmenter) for training
 
@@ -392,6 +393,31 @@ cmd_sample() {
             return 1
             ;;
     esac
+}
+
+# cropwright password: set the basic-auth login in front of Cropwright (an empty answer
+# generates one). The password goes to secrets/cropwright/ only, never to the terminal log.
+cmd_cropwright() {
+    local sub="${1:-}" pw=""
+    if [[ "$sub" != "password" ]]; then
+        log_error "usage: openprocessor cropwright password"
+        return 2
+    fi
+    [[ -f "${PROJECT_DIR}/.env" ]] || { log_error "no .env at ${PROJECT_DIR}/.env"; return 1; }
+    if { : </dev/tty; } 2>/dev/null; then
+        printf "New Cropwright password (input hidden, empty = generate one): " >/dev/tty
+        IFS= read -rs pw </dev/tty || true
+        printf '\n' >/dev/tty
+    fi
+    if [[ -z "$pw" ]]; then
+        pw="$(cropwright_generate_password)" || { log_error "cannot generate a password (is openssl installed?)"; return 1; }
+    fi
+    cropwright_write_login "$PROJECT_DIR" "$pw" || return 1
+    pw=""
+    _vlm_env_set OP_CROPWRIGHT_BASIC_AUTH true \
+        && _vlm_env_set OP_CROPWRIGHT_BASIC_AUTH_FILE ./secrets/cropwright/htpasswd || return 1
+    log_success "Cropwright login '${CROPWRIGHT_AUTH_USER}' stored (password in secrets/cropwright/password, mode 600)"
+    log_info "apply it: ./openprocessor restart cropwright"
 }
 
 cmd_config() {
