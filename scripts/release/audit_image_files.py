@@ -6,9 +6,17 @@ Two checks, both fail-closed:
 1. Every file inside a directory the final stage of the Dockerfile COPYs from the
    build context must map back to a file tracked in git at the release revision.
    (`__pycache__` is accepted only when the Dockerfile compiles bytecode itself.)
-2. No file anywhere in the image may be a model artifact (*.onnx, *.plan, *.engine,
-   *.pt, *.pth, *.safetensors) or a `<project>__<model>` directory, unless it
-   matches scripts/release/image_audit_allowlist.txt.
+2. No model artifact may be in the image, unless the path matches
+   scripts/release/image_audit_allowlist.txt:
+   - Extension rule: *.onnx, *.plan, *.engine, *.pt, *.pth, *.safetensors are forbidden
+     everywhere outside installed-package trees (*/site-packages/*, */dist-packages/*,
+     /usr/lib/*, /usr/local/lib/*, /opt/tritonserver/*). Inside those trees they are
+     forbidden only when larger than 1 MiB: real weights are MBs to GBs, while path-config
+     .pth files and library test fixtures are tiny.
+   - Project-model rule: a `<a>__<b>` directory is forbidden only as a direct child of a
+     Triton model-repository root: /opt/openprocessor/model_repo_seed and every
+     destination of a final-stage Dockerfile `COPY models/`. Elsewhere `__` is ordinary
+     (scipy test__numdiff.py, torch linalg__powsum.h).
 
 The 0.6.0 API image shipped 24 untracked files under model_repo_seed; this is the
 guard that would have stopped it. Standard library only.
@@ -125,12 +133,44 @@ def untracked_files(
     return bad
 
 
-def forbidden_files(paths: list[str] | set[str], allowlist: list[str]) -> list[str]:
-    """Model artifacts and `<project>__<model>` directories not on the allowlist."""
+LIBRARY_TREES = ('/usr/lib/', '/usr/local/lib/', '/opt/tritonserver/')
+LIBRARY_PARTS = ('/site-packages/', '/dist-packages/')
+LARGE_FILE_BYTES = 1024 * 1024
+SEED_ROOT = '/opt/openprocessor/model_repo_seed'
+
+
+def model_roots(dockerfile_text: str) -> list[str]:
+    """Model-repository roots: the seed dir plus every final-stage `COPY models/` destination."""
+    roots = {SEED_ROOT}
+    for sources, dest in _final_stage_copies(dockerfile_text)[0]:
+        if any(posixpath.basename(posixpath.normpath(src)) == 'models' for src in sources):
+            roots.add(dest.rstrip('/'))
+    return sorted(roots)
+
+
+def _in_library_tree(path: str) -> bool:
+    return path.startswith(LIBRARY_TREES) or any(part in path for part in LIBRARY_PARTS)
+
+
+def forbidden_files(
+    paths: list[str] | set[str],
+    allowlist: list[str],
+    large: set[str] | frozenset[str] = frozenset(),
+    model_roots: list[str] | tuple[str, ...] = (SEED_ROOT,),
+) -> list[str]:
+    """Model artifacts and `<project>__<model>` directories not on the allowlist.
+
+    `large` holds the paths known to exceed LARGE_FILE_BYTES; it only matters inside
+    installed-package trees.
+    """
     bad: list[str] = []
     for path in sorted(set(paths)):
         name = posixpath.basename(path.rstrip('/'))
-        hit = name.endswith(FORBIDDEN_SUFFIXES) or bool(PROJECT_MODEL_DIR.match(name))
+        if name.endswith(FORBIDDEN_SUFFIXES):
+            hit = path in large if _in_library_tree(path) else True
+        else:
+            parent = posixpath.dirname(path.rstrip('/'))
+            hit = parent in model_roots and bool(PROJECT_MODEL_DIR.match(name))
         if hit and not any(fnmatch.fnmatchcase(path, pat) for pat in allowlist):
             bad.append(path)
     return bad
@@ -208,10 +248,17 @@ def _audit() -> int:
         r'/ -xdev \( -path /proc -o -path /sys -o -path /dev \) -prune -o '
         r'\( -type f -o -type d \) -print',
     )
+    large = set(
+        _image_listing(
+            args.docker_bin,
+            args.image,
+            r'/ -xdev \( -path /proc -o -path /sys -o -path /dev \) -prune -o '
+            f'-type f -size +{LARGE_FILE_BYTES}c -print',
+        )
+    )
     allowlist = load_allowlist(Path(args.allowlist))
-    problems += [
-        f'forbidden model artifact in image: {p}' for p in forbidden_files(everything, allowlist)
-    ]
+    forbidden = forbidden_files(everything, allowlist, large, model_roots(text))
+    problems += [f'forbidden model artifact in image: {p}' for p in forbidden]
 
     for p in problems:
         print(p, file=sys.stderr)

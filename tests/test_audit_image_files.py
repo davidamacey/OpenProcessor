@@ -109,19 +109,71 @@ def test_subcontext_sources_map_to_the_context_directory() -> None:
         '/a/w.pth',
         '/a/w.safetensors',
         f'{SEED}/proj__car',
+        f'{SEED}/proj__model/1/model.onnx',
     ],
 )
 def test_forbidden_artifacts_fail_unless_allowlisted(path: str) -> None:
     audit = _load()
-    assert audit.forbidden_files([path], []) == [path]
-    assert audit.forbidden_files([path], [path]) == []
-    assert audit.forbidden_files([path], ['/opt/*', '/a/*']) == []
+    assert audit.forbidden_files([path], [], model_roots=[SEED]) == [path]
+    assert audit.forbidden_files([path], [path], model_roots=[SEED]) == []
+    assert audit.forbidden_files([path], ['/opt/*', '/a/*'], model_roots=[SEED]) == []
 
 
-def test_ordinary_files_and_dunder_dirs_are_not_forbidden() -> None:
+SITE = '/usr/local/lib/python3.13/site-packages'
+
+
+def test_dunder_names_inside_library_trees_are_not_project_models() -> None:
     audit = _load()
-    paths = ['/app/src/main.py', '/usr/lib/python3/__pycache__', '/app/models/yolo/config.pbtxt']
-    assert audit.forbidden_files(paths, []) == []
+    paths = [
+        f'{SITE}/scipy/optimize/tests/test__numdiff.py',
+        f'{SITE}/torch/include/ATen/ops/linalg__powsum.h',
+        f'{SITE}/scipy/spatial/tests/test__procrustes.py',
+        '/app/foo__bar/x.txt',
+        '/app/foo__bar',
+        '/usr/lib/python3/__pycache__',
+    ]
+    assert audit.forbidden_files(paths, [], model_roots=[SEED, '/app/models']) == []
+
+
+def test_project_model_dir_is_forbidden_only_as_a_direct_child_of_a_model_root() -> None:
+    audit = _load()
+    roots = [SEED]
+    assert audit.forbidden_files([f'{SEED}/proj__model'], [], model_roots=roots)
+    assert audit.forbidden_files([f'{SEED}/proj__model/1/model.onnx'], [], model_roots=roots)
+    assert audit.forbidden_files([f'{SEED}/deep/proj__model'], [], model_roots=roots) == []
+    assert audit.forbidden_files(['/app/foo__bar/x.txt'], [], model_roots=roots) == []
+
+
+def test_small_extension_matches_in_library_trees_pass_but_large_ones_fail() -> None:
+    audit = _load()
+    pth = f'{SITE}/_pynvml_redirector.pth'
+    fixture = f'{SITE}/torch/bin/test_interpreter_async.pt'
+    weights = f'{SITE}/somepkg/weights.pt'
+    assert audit.forbidden_files([pth, fixture, weights], [], large=set()) == []
+    assert audit.forbidden_files([pth, fixture, weights], [], large={weights}) == [weights]
+
+
+def test_library_tree_prefixes_cover_the_known_install_locations() -> None:
+    audit = _load()
+    for tree in (
+        '/usr/lib/python3/dist-packages',
+        '/usr/local/lib/python3.12/site-packages',
+        '/opt/tritonserver/backends/x',
+        '/opt/venv/lib/python3.13/site-packages',
+        '/home/appuser/.local/lib/python3.13/site-packages',
+    ):
+        path = f'{tree}/small.pt'
+        assert audit.forbidden_files([path], [], large=set()) == [], tree
+        assert audit.forbidden_files([path], [], large={path}) == [path], tree
+
+
+def test_model_roots_come_from_the_dockerfile_models_copy() -> None:
+    audit = _load()
+    roots = audit.model_roots(DOCKERFILE)
+    assert SEED in roots
+    assert '/app/src' not in roots
+    other = 'FROM a\nWORKDIR /srv\nCOPY models/ ./model_repo/\n'
+    assert '/srv/model_repo' in audit.model_roots(other)
 
 
 def test_the_checked_in_allowlist_is_empty() -> None:
