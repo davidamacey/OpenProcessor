@@ -108,7 +108,7 @@ From `filters_r1.json` (ten classes, 30 queries each; ten clusters; 20 paginatio
 ### Filtered kNN latency (#384)
 
 Method: a throw-away OpenSearch 3.6.0 container (security off, 4 GB heap) holding a copy of a
-91,184-item project index built from the repo's own items mapping (Lucene HNSW, cosine, m 16,
+91,184-item index of a non-public photo set (latency only: no content, labels or images are reported; to be re-measured on public data under #414) built from the repo's own items mapping (Lucene HNSW, cosine, m 16,
 ef_construction 128, one segment). Queries were built by the service's own `_build_filter` and
 `build_knn_query` (`k` 10, page of 10), 100 per cell, with text-like query vectors (the mean image
 vector plus noise, which sit far from every item like a real text embedding) and server-side
