@@ -50,8 +50,10 @@ normalized), `class_id`, `class_name`, `confidence`, `metadata`, `indexed_at`,
 `person_detection_id`, `embedding`, `cluster_id`, `cluster_distance`, `box`,
 `landmarks` (object with `left_eye`, `right_eye`, `nose`, `left_mouth`,
 `right_mouth`), `confidence`, `quality_score`, `person_id`, `person_name`,
-`is_reference`, `metadata`, `indexed_at`, `clustered_at`, `thumbnail_b64`
-(stored, not indexed).
+`is_reference`, `metadata`, `indexed_at`, `clustered_at`, `named_at`,
+`merged_at`, `merged_from`, `cluster_assigned_at`, `thumbnail_b64` (stored, not
+indexed). A face with `named_at` or `merged_at` is locked: person clustering
+never rewrites its `person_id` or `person_name`.
 
 **`visual_search_ocr`**: `ocr_id`, `image_id`, `image_path`, `text` (text with a
 2-4 character n-gram analyzer for fuzzy matching, standard search analyzer),
