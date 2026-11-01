@@ -100,7 +100,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'About',
-      items: ['about/vision-and-goals'],
+      items: ['about/vision-and-goals', 'about/whitepaper'],
     },
     {
       type: 'category',

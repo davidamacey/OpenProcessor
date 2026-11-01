@@ -1,0 +1,38 @@
+---
+sidebar_position: 2
+title: Systems whitepaper (0.7.0)
+---
+
+# Systems whitepaper (0.7.0)
+
+The full text is
+[`docs/WHITEPAPER.md`](https://github.com/davidamacey/OpenProcessor/blob/main/docs/WHITEPAPER.md)
+in the repository. Every number in it comes from public data (COCO, Open Images, the pinned Commons
+photo set, CARS196, CUB-200-2011, Stanford Online Products) and cites the measurement note it was
+copied from. This page lists what it covers.
+
+## What it covers
+
+- **System overview.** The Triton inference API, the curation subsystem and Cropwright.
+- **GPU image preparation.** The 0.7.0 stage profile, and the finding that throughput under load fell
+  because GPU memory ran out and photos fell back to the CPU decode, not because of CUDA-call overhead.
+  It covers the device-memory budget, the opt-in ingest load profile (27.7 GB freed on a 48 GB card)
+  and why the `full` profile ships one `gpu_image_prep` instance.
+- **The embedding choice.** PE-Core-L stays. No challenger passed the registered gain on CARS196, CUB
+  and SOP; the larger PE-Core-G was better on all three but costs about eight times the encode time.
+- **The clustering program.** IVF k-means stays, and the fit now runs one restart instead of five.
+  Every other arm was parked or killed against bars written before scoring. Detector-class roots with a
+  hold-back guard are the lead, and their open-set test is still to run (#398).
+- **The auto-label loop.** An exact sample gate on cluster homogeneity, machine labels kept apart from
+  human ones, budgets, an audit and a rollback. Its label quality with a real VLM is not yet measured.
+  A visual-judge study found that a hosted judge's "same" is reliable on COCO crops and a small local
+  VLM is near chance on pairs.
+- **Data isolation and safety.** The per-project OpenSearch guard, the lock rule, class identity by
+  name, and the 0.7.0 fail-closed changes.
+- **Limitations, future work (with issue numbers) and how to reproduce every result.**
+
+The measurement sources are the
+[0.7.0 measurement log](https://github.com/davidamacey/OpenProcessor/blob/main/docs/research/v070_measurement_log.md)
+and the
+[cluster program outcome](https://github.com/davidamacey/OpenProcessor/blob/main/docs/research/cluster_program_outcome.md).
+For operating the load profile, see [Ingest load profile](../operations/ingest-load-profile.mdx).
