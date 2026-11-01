@@ -11,18 +11,15 @@ from src.config.env import env_bool
 from src.config.settings import TritonModelConfig
 
 
-FACES_ENV = 'OP_FACES_ENABLED'
-
-
 class FacesDisabledError(RuntimeError):
     """A face operation was asked for while OP_FACES_ENABLED=false."""
 
     def __init__(self) -> None:
-        super().__init__(f'face models are off in this deployment ({FACES_ENV}=false)')
+        super().__init__('face models are off in this deployment (OP_FACES_ENABLED=false)')
 
 
 def faces_enabled() -> bool:
-    return env_bool(FACES_ENV, default=True)
+    return env_bool('OP_FACES_ENABLED', default=True)
 
 
 def require_faces() -> None:
