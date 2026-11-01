@@ -8,11 +8,10 @@ Two checks, both fail-closed:
    (`__pycache__` is accepted only when the Dockerfile compiles bytecode itself.)
 2. No model artifact may be in the image, unless the path matches
    scripts/release/image_audit_allowlist.txt:
-   - Extension rule: *.onnx, *.plan, *.engine, *.pt, *.pth, *.safetensors are forbidden
-     everywhere outside installed-package trees (*/site-packages/*, */dist-packages/*,
-     /usr/lib/*, /usr/local/lib/*, /opt/tritonserver/*). Inside those trees they are
-     forbidden only when larger than 1 MiB: real weights are MBs to GBs, while path-config
-     .pth files and library test fixtures are tiny.
+   - Extension rule: a file named *.onnx, *.plan, *.engine, *.pt, *.pth or *.safetensors
+     is forbidden anywhere in the image when it is larger than 1 MiB. Real weights are MBs
+     to GBs; path-config .pth files and library test fixtures (vim's tutor.pt) are tiny.
+     Inside a model-repo root any untracked file is already caught by check 1.
    - Project-model rule: a `<a>__<b>` directory is forbidden only as a direct child of a
      Triton model-repository root: /opt/openprocessor/model_repo_seed and every
      destination of a final-stage Dockerfile `COPY models/`. Elsewhere `__` is ordinary
@@ -99,7 +98,13 @@ def _expected_and_roots(
                 else prefix.rstrip('/') or '.'
             )
             below = f'{clean}/'
-            if any(t.startswith(below) for t in tracked) or src.endswith('/') or src in ('.', './'):
+            is_dir = src.endswith('/') or src in ('.', './')
+            if is_dir and not any(clean == '.' or t.startswith(below) for t in tracked):
+                raise ContextMismatchError(
+                    f'COPY source {src!r} has no tracked files under context {context!r}; '
+                    '--context must be the build context directory relative to the repo root'
+                )
+            if is_dir or any(t.startswith(below) for t in tracked):
                 roots.add(dest_dir)
                 for t in tracked:
                     if clean == '.' or t.startswith(below):
@@ -133,10 +138,12 @@ def untracked_files(
     return bad
 
 
-LIBRARY_TREES = ('/usr/lib/', '/usr/local/lib/', '/opt/tritonserver/')
-LIBRARY_PARTS = ('/site-packages/', '/dist-packages/')
 LARGE_FILE_BYTES = 1024 * 1024
 SEED_ROOT = '/opt/openprocessor/model_repo_seed'
+
+
+class ContextMismatchError(ValueError):
+    """A directory COPY source has no tracked files: --context is not repo-relative."""
 
 
 def model_roots(dockerfile_text: str) -> list[str]:
@@ -148,10 +155,6 @@ def model_roots(dockerfile_text: str) -> list[str]:
     return sorted(roots)
 
 
-def _in_library_tree(path: str) -> bool:
-    return path.startswith(LIBRARY_TREES) or any(part in path for part in LIBRARY_PARTS)
-
-
 def forbidden_files(
     paths: list[str] | set[str],
     allowlist: list[str],
@@ -160,14 +163,14 @@ def forbidden_files(
 ) -> list[str]:
     """Model artifacts and `<project>__<model>` directories not on the allowlist.
 
-    `large` holds the paths known to exceed LARGE_FILE_BYTES; it only matters inside
-    installed-package trees.
+    `large` holds the paths known to exceed LARGE_FILE_BYTES; a model extension is
+    forbidden only for those.
     """
     bad: list[str] = []
     for path in sorted(set(paths)):
         name = posixpath.basename(path.rstrip('/'))
         if name.endswith(FORBIDDEN_SUFFIXES):
-            hit = path in large if _in_library_tree(path) else True
+            hit = path in large
         else:
             parent = posixpath.dirname(path.rstrip('/'))
             hit = parent in model_roots and bool(PROJECT_MODEL_DIR.match(name))
@@ -213,7 +216,7 @@ def _image_listing(docker: str, image: str, find_expr: str) -> list[str]:
 def main() -> int:
     try:
         return _audit()
-    except ListingError as exc:
+    except (ListingError, ContextMismatchError) as exc:
         print(f'image audit cannot complete: {exc}', file=sys.stderr)
         return 1
 

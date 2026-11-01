@@ -114,9 +114,10 @@ def test_subcontext_sources_map_to_the_context_directory() -> None:
 )
 def test_forbidden_artifacts_fail_unless_allowlisted(path: str) -> None:
     audit = _load()
-    assert audit.forbidden_files([path], [], model_roots=[SEED]) == [path]
-    assert audit.forbidden_files([path], [path], model_roots=[SEED]) == []
-    assert audit.forbidden_files([path], ['/opt/*', '/a/*'], model_roots=[SEED]) == []
+    kw = {'large': {path}, 'model_roots': [SEED]}
+    assert audit.forbidden_files([path], [], **kw) == [path]
+    assert audit.forbidden_files([path], [path], **kw) == []
+    assert audit.forbidden_files([path], ['/opt/*', '/a/*'], **kw) == []
 
 
 SITE = '/usr/local/lib/python3.13/site-packages'
@@ -139,32 +140,20 @@ def test_project_model_dir_is_forbidden_only_as_a_direct_child_of_a_model_root()
     audit = _load()
     roots = [SEED]
     assert audit.forbidden_files([f'{SEED}/proj__model'], [], model_roots=roots)
-    assert audit.forbidden_files([f'{SEED}/proj__model/1/model.onnx'], [], model_roots=roots)
+    onnx = f'{SEED}/proj__model/1/model.onnx'
+    assert audit.forbidden_files([onnx], [], large={onnx}, model_roots=roots)
     assert audit.forbidden_files([f'{SEED}/deep/proj__model'], [], model_roots=roots) == []
     assert audit.forbidden_files(['/app/foo__bar/x.txt'], [], model_roots=roots) == []
 
 
-def test_small_extension_matches_in_library_trees_pass_but_large_ones_fail() -> None:
+def test_model_extension_is_size_gated_everywhere() -> None:
     audit = _load()
+    tutor = '/usr/share/x/tutor.pt'
+    weights = '/opt/foo/model.pt'
     pth = f'{SITE}/_pynvml_redirector.pth'
-    fixture = f'{SITE}/torch/bin/test_interpreter_async.pt'
-    weights = f'{SITE}/somepkg/weights.pt'
-    assert audit.forbidden_files([pth, fixture, weights], [], large=set()) == []
-    assert audit.forbidden_files([pth, fixture, weights], [], large={weights}) == [weights]
-
-
-def test_library_tree_prefixes_cover_the_known_install_locations() -> None:
-    audit = _load()
-    for tree in (
-        '/usr/lib/python3/dist-packages',
-        '/usr/local/lib/python3.12/site-packages',
-        '/opt/tritonserver/backends/x',
-        '/opt/venv/lib/python3.13/site-packages',
-        '/home/appuser/.local/lib/python3.13/site-packages',
-    ):
-        path = f'{tree}/small.pt'
-        assert audit.forbidden_files([path], [], large=set()) == [], tree
-        assert audit.forbidden_files([path], [], large={path}) == [path], tree
+    assert audit.forbidden_files([tutor, weights, pth], [], large=set()) == []
+    assert audit.forbidden_files([tutor, weights, pth], [], large={weights}) == [weights]
+    assert audit.forbidden_files([pth], [], large={pth}) == [pth]
 
 
 def test_model_roots_come_from_the_dockerfile_models_copy() -> None:
@@ -180,3 +169,49 @@ def test_the_checked_in_allowlist_is_empty() -> None:
     audit = _load()
     allowlist = REPO_ROOT / 'scripts' / 'release' / 'image_audit_allowlist.txt'
     assert audit.load_allowlist(allowlist) == []
+
+
+# The exact lines the 0.6.0 API and evaluator Dockerfiles use.
+REAL_LINES = """\
+FROM python:3.13-slim-trixie
+WORKDIR /app
+COPY --chown=appuser:appuser src/ ./src/
+COPY --chown=appuser:appuser models/   /opt/openprocessor/model_repo_seed/
+"""
+REAL_TRACKED = {
+    'src/utils/cpu_pool.py',
+    'src/utils/retry.py',
+    'src/utils/vectors.py',
+    'models/ocr_pipeline/config.pbtxt',
+    'models/pe_image_encoder/config.pbtxt',
+    'models/paddleocr_rec_trt/ppocrv5_dict.txt',
+    'models/yolo26_small_trt/labels.txt',
+}
+
+
+def _image_listing_for(tracked: set[str]) -> set[str]:
+    out = set()
+    for t in tracked:
+        if t.startswith('src/'):
+            out.add(f'/app/{t}')
+        else:
+            out.add(f'{SEED}/{t.removeprefix("models/")}')
+    return out
+
+
+def test_real_dockerfile_lines_report_zero_untracked_for_tracked_files() -> None:
+    audit = _load()
+    listing = _image_listing_for(REAL_TRACKED)
+    assert audit.untracked_files(REAL_LINES, '.', REAL_TRACKED, listing) == []
+    extra = f'{SEED}/x__y/1/model.onnx'
+    assert audit.untracked_files(REAL_LINES, '.', REAL_TRACKED, listing | {extra}) == [extra]
+
+
+def test_context_that_is_not_a_repo_relative_directory_is_a_clear_error() -> None:
+    """An absolute or wrong --context maps every source to nothing; that must not read as
+    "every file is untracked"."""
+    audit = _load()
+    with pytest.raises(audit.ContextMismatchError, match='no tracked files'):
+        audit.untracked_files(REAL_LINES, '/tmp/export', REAL_TRACKED, set())
+    with pytest.raises(audit.ContextMismatchError, match='no tracked files'):
+        audit.directory_copy_roots(REAL_LINES, 'docker/segmenter', REAL_TRACKED)
