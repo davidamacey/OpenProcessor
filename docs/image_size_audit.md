@@ -1,9 +1,9 @@
 # Docker image size audit
 
-Status: audit and plan only. No Dockerfile has been changed and no image
-rebuilt on this branch. Measured 2026-09-26 against the published
-`davidamacey/openprocessor*:latest` images (same layer layout as the
-`cutover-local` builds of main `1ecdef8d`).
+Status: audit (sections 1 to 6, measured 2026-09-26 against the published
+`davidamacey/openprocessor*:latest` images, the `cutover-local` builds of main
+`1ecdef8d`) and the result of executing it (sections 7 and 8, issue #41). The
+sections before 7 describe the images as they were.
 
 ## 1. Current sizes
 
@@ -296,3 +296,41 @@ To evaluate when the task resumes: use an upstream image as the export base inst
 - digest pinning.
 
 Also: make torch a lazy import on /health and ingest where possible, so the runtime image can drop more.
+
+## 7. Triton image layer audit (#41)
+
+Measured 2026-11-01 on `openprocessor-triton:0.6.0` against its base
+`nvcr.io/nvidia/tritonserver:26.06-py3` (14.5 GB), by diffing
+`dpkg-query -W` of the two images and `du` of the Python packages.
+
+| Layer | Size | What it is |
+|---|---:|---|
+| base `tritonserver:26.06-py3` | 14.5 GB | NGC image |
+| TensorRT pin plus `apt-get upgrade` | 12.5 GB | rewrites 146 installed packages (11.2 GB in the base, 12.2 GB after); nothing is added or removed |
+| torch 2.12.1 (cu130), cv2, cupy | 5.15 GB | `torch` 1.2 GB, `triton` 0.7 GB, the CUDA 13 wheels bundled by torch 2.7 GB under `dist-packages/nvidia` |
+| everything else | ~0.2 GB | |
+
+The 12.5 GB layer is large because a package that is upgraded is written again in
+full: the old copy stays in the base layer. The largest rewrites:
+
+| Package | Base | After | Installed size |
+|---|---|---|---:|
+| `libnvinfer11` (TensorRT runtime, needed) | 11.0.0.114 | 11.1.0.106 | 2.5 GB |
+| `libnvinfer-win-builder-resource11` (Windows builder PTX, unused on Linux) | 11.0.0.114 | 11.1.0.106 | 1.9 GB |
+| `libcublas-dev-13-3` (headers, static library) | 13.5.1.27 | 13.6.0.2 | 0.9 GB |
+| `libcudnn9-cuda-13` (needed) | 9.23.0.39 | 9.27.0.42 | 0.9 GB |
+| `libnvshmem3-dev-cuda-13` and `libnvshmem3-static-cuda-13` | 3.6.5 | 3.8.0 | 1.0 GB |
+| `libnccl-dev` | 2.30.4 | 2.32.3 | 0.5 GB |
+| `libcusparselt0-dev`, `libcusolver-dev`, `libcusparse-dev`, `libnpp-dev` | various | various | 1.0 GB |
+
+**Cut applied (no behaviour change):** `Dockerfile.triton` removes the unused `-dev` packages
+above, and `tensorrt-dev` (an empty meta package that depends on the Windows resource), in the
+same `RUN`, before the TensorRT install and the upgrade. They are never rewritten, which keeps
+about 5.3 GB out of the image; the base layer still holds the old files, so nothing else
+shrinks. `trtexec` (`libnvinfer-bin`), every runtime library, the CUDA headers `cupy` compiles
+against and the Python backend stay. The lockstep check still asserts TensorRT 11.1.0.106.
+
+**Not cut:** the 2.7 GB of CUDA 13 wheels that torch bundles duplicate the system CUDA
+libraries in the base. Loading the system copies instead (a changed `LD_LIBRARY_PATH` and
+RPATH) alters which cuBLAS and cuDNN torch runs, so it needs its own validation. Changing the
+Triton base or the TensorRT version is out of scope: serialized engines are tied to both.

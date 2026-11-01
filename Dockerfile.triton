@@ -26,9 +26,27 @@ LABEL org.opencontainers.image.title="OpenProcessor Inference Server" \
 # drift past nor fall behind the lockstep check below (reproducible digest).
 # The pin must stay available in NVIDIA's apt repo (the build fails loudly if
 # it is not).
+#
+# Size: the apt upgrade below rewrites every package it touches into a new layer (146 packages,
+# ~12 GB, docs/image_size_audit.md). The -dev packages below (headers and static libraries for
+# compiling against cuBLAS, cuSOLVER, cuSPARSE, cuSPARSELt, NPP, NCCL and NVSHMEM, plus the
+# TensorRT Windows builder resource) are unused at inference and at engine build (trtexec is in
+# libnvinfer-bin), so they are removed first, in this RUN, and their rewritten copies never
+# exist. The base layer still holds the old files.
 ARG TRT_VERSION=11.1.0.106
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN apt-get update \
+    && apt-get remove -y --purge \
+         tensorrt-dev \
+         libnvinfer-win-builder-resource11 \
+         libcublas-dev-13-3 \
+         libcusolver-dev-13-3 \
+         libcusparse-dev-13-3 \
+         libcusparselt0-dev-cuda-13 \
+         libnpp-dev-13-3 \
+         libnccl-dev \
+         libnvshmem3-dev-cuda-13 \
+         libnvshmem3-static-cuda-13 \
     && pkgs="$({ dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 'libnvinfer*' 'libnvonnxparsers*' 'libnvparsers*' 'tensorrt*' 2>/dev/null || true; } | awk '$1 == "ii" {print $2}' | sort -u)" \
     && spec="" \
     && for p in $pkgs; do \
@@ -44,7 +62,7 @@ RUN apt-get update \
 SHELL ["/bin/sh", "-c"]
 
 # Lockstep assertion: serialized engines are TRT-version-locked, so the
-# server's TRT and the client-side tensorrt-cu13 pip pin (requirements.txt,
+# server's TRT and the client-side tensorrt-cu13 pip pin (requirements-export.txt,
 # requirements-export-y11.txt) MUST move together. When apt brings a newer
 # TRT, this fails the build until the pip pins and this check are bumped in
 # the same commit — drift can never ship silently.

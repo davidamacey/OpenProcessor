@@ -45,9 +45,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ \
 
 COPY --from=sam3-src /src/sam3 /opt/sam3
 
-# hadolint ignore=DL3013
-RUN pip install --user --no-cache-dir --upgrade pip \
-    && pip install --user --no-cache-dir --no-warn-script-location /opt/sam3 \
+RUN pip install --user --no-cache-dir --no-warn-script-location /opt/sam3 \
     && pip install --user --no-cache-dir --no-warn-script-location \
         'fastapi==0.115.4' \
         'uvicorn[standard]==0.32.0' \
@@ -58,7 +56,10 @@ RUN pip install --user --no-cache-dir --upgrade pip \
         'scikit-image>=0.24' \
         'huggingface-hub>=0.24' \
         'einops>=0.8' \
-        'pycocotools>=2.0.7'
+        'pycocotools>=2.0.7' \
+    && rm -rf /root/.local/lib/python3.12/site-packages/pip \
+        /root/.local/lib/python3.12/site-packages/pip-*.dist-info \
+        /root/.local/bin/pip /root/.local/bin/pip3 /root/.local/bin/pip3.12
 
 # -- Stage 3: runtime --------------------------------------------------------
 # No -slim base is available for a CUDA + cuDNN + PyTorch runtime; this
@@ -81,9 +82,17 @@ RUN apt-get update && apt-get upgrade -y \
     g++ \
     libgl1 \
     libglib2.0-0 \
-    wget \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+# No package manager at run time: the base's /usr/local copy and the Debian python3-pip copy
+# beneath it (the user-site copy is stripped in the builder stage).
+RUN rm -rf /usr/local/lib/python3.12/dist-packages/pip \
+        /usr/local/lib/python3.12/dist-packages/pip-*.dist-info \
+        /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.12 \
+        /usr/lib/python3/dist-packages/pip \
+        /usr/lib/python3/dist-packages/pip-*.dist-info \
+        /usr/bin/pip /usr/bin/pip3
 
 # Ubuntu 24.04 bases ship an `ubuntu` user at uid 1000; appuser must own that
 # uid to read the host-owned HF cache bind mount. No-op on bases without it.
@@ -114,6 +123,6 @@ EXPOSE 8000
 # processor pool. /health answers 200 with loaded=false while that runs,
 # so probe the flag, not just the socket.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=600s --retries=3 \
-    CMD ["sh", "-c", "wget -qO- http://127.0.0.1:8000/health | grep -q '\"loaded\":true' || exit 1"]
+    CMD ["python", "-c", "import sys, urllib.request; sys.exit(0 if b'\"loaded\":true' in urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read() else 1)"]
 
 CMD ["python", "main.py"]

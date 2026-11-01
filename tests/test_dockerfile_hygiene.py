@@ -300,3 +300,32 @@ def test_evaluator_image_copies_every_scripts_file_it_imports() -> None:
     needed = _scripts_modules_imported(['src', 'scripts/curation/bakeoff'])
     missing = sorted(n for n in needed if not _covered(n, dirs, files))
     assert missing == [], f'evaluator target does not COPY: {missing}'
+
+
+def test_trainer_sets_its_build_identity_after_the_big_layers() -> None:
+    stage = _stages('docker/trainer/Dockerfile')[-1]
+    sha_at = next(
+        i for i, (k, r) in enumerate(stage) if k == 'ARG' and r.startswith('OP_BUILD_SHA')
+    )
+    sha_pin = next(
+        i for i, (k, r) in enumerate(stage) if k == 'ARG' and r.startswith('ULTRALYTICS_SHA')
+    )
+    last_copy = max(i for i, (k, _) in enumerate(stage) if k == 'COPY')
+    assert sha_at > last_copy
+    assert sha_pin > last_copy
+
+
+@pytest.mark.parametrize('rel', ['docker/trainer/Dockerfile', 'docker/segmenter/Dockerfile'])
+def test_runtime_stage_strips_the_base_images_pip(rel: str) -> None:
+    runs = ' '.join(r for k, r in _stages(rel)[-1] if k == 'RUN')
+    assert re.search(r'rm -rf /usr/local/lib/python3\.12/(site|dist)-packages/pip\b', runs)
+
+
+def test_segmenter_has_no_wget_probe_or_package() -> None:
+    """The probe is Python (urllib), in the Dockerfile and in the compose override alike."""
+    assert 'wget' not in (REPO_ROOT / 'docker' / 'segmenter' / 'Dockerfile').read_text().replace(
+        '`wget`', ''
+    ).replace('# wget', '')
+    compose = (REPO_ROOT / 'docker-compose.yml').read_text()
+    segmenter = compose[compose.index('\n  segmenter:') :].split('\n  curation-trainer:')[0]
+    assert 'wget' not in segmenter

@@ -75,3 +75,26 @@ def test_dockerfile_triton_holds_tensorrt_before_upgrade() -> None:
     upgrade = text.find('apt-get upgrade')
     # the base image's stock TensorRT is older than the pin: install the pin, then hold it
     assert 0 <= install < hold < upgrade
+
+
+def test_dockerfile_triton_drops_unused_dev_packages_before_the_upgrade_rewrites_them() -> None:
+    """The base image's -dev packages (cuBLAS/NCCL/NVSHMEM headers and static libraries, the
+    TensorRT Windows builder resource) are unused at inference. The upgrade layer rewrites every
+    installed package, so removing them first, in the same RUN, keeps ~5 GB out of the image."""
+    text = (REPO_ROOT / 'Dockerfile.triton').read_text()
+    remove = text.find('apt-get remove')
+    install = text.find('apt-get install -y --no-install-recommends --allow-downgrades $spec')
+    upgrade = text.find('apt-get upgrade')
+    assert 0 <= remove < install < upgrade
+    removed = text[remove:install]
+    for package in (
+        'libnvinfer-win-builder-resource11',
+        'tensorrt-dev',
+        'libcublas-dev-13-3',
+        'libnccl-dev',
+        'libnvshmem3-dev-cuda-13',
+    ):
+        assert package in removed
+    # trtexec (libnvinfer-bin) and the runtime libraries stay
+    assert 'libnvinfer-bin' not in removed
+    assert 'libcublas-13-3' not in removed
