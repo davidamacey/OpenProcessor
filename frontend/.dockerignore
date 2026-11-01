@@ -14,3 +14,10 @@ test-results
 .stryker-tmp
 coverage
 .vscode
+**/__pycache__
+**/*.pyc
+**/*.onnx
+**/*.plan
+**/*.engine
+**/*.safetensors
+**/*.pt

@@ -567,7 +567,8 @@ deployment fact) and activation is per project.
   outside the deployment needs an explicit acknowledgement recorded per
   `name@revision` (`OP_VLM_EXTERNAL_POLICY=deny` refuses them). DNS can change
   after validation, so each labeler re-checks at most every 30 seconds and
-  fails closed. The residual risk is recorded in `SECURITY.md`.
+  fails closed, and its connection is pinned to the addresses that passed
+  the check (the probe likewise), so a rebound name cannot redirect a request. The residual risk is recorded in `SECURITY.md`.
 - **Pairing.** A model that cannot read the prompt size, handle the image
   count, return JSON or verify several boxes is a bad pairing for the active
   profile and pack, so activation of any of the three runs the same check.

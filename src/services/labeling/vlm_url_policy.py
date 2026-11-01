@@ -12,6 +12,9 @@ whether a ``base_url`` may be used and where it points:
   non-VLM services (by name, by container name and by the addresses those
   names resolve to), link-local / cloud-metadata / unspecified addresses,
   for the literal host AND for every address the name resolves to.
+- :func:`resolve_addresses` -- the single DNS answer a caller judges with the
+  two functions above and then pins the connection to
+  (``vlm_pinning.py``), so the address checked is the address connected to.
 - :func:`compute_locality` -- ``compose`` / ``host`` / ``private`` /
   ``external`` / ``unknown`` (unresolvable is treated as external, fail
   closed) for the external-images acknowledgement.
@@ -31,10 +34,14 @@ import time
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from urllib.parse import urlsplit, urlunsplit
 
 from src.config.env import env_str
+
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 Locality = Literal['compose', 'host', 'private', 'external', 'unknown']
@@ -111,6 +118,19 @@ def _resolve(host: str) -> list[str]:
     except (OSError, UnicodeError):
         return []
     return [str(info[4][0]).split('%', 1)[0] for info in infos]
+
+
+def resolve_addresses(base_url: str) -> tuple[str, ...] | None:
+    """The addresses ``base_url``'s host name resolves to right now, as the
+    resolver spelled them (de-duplicated, in order; empty when it does not
+    resolve). ``None`` for a literal IP or a Docker-host alias: nothing to
+    re-resolve, so nothing to pin. Resolve ONCE and hand the result to :func:`url_denial` and
+    :func:`compute_locality` (``addresses=``), then pin the connection to it:
+    that is what closes the window between the check and the connect."""
+    host = parse_endpoint_url(base_url).host
+    if _literal_ip(host) is not None or host in _HOST_ALIASES:
+        return None
+    return tuple(dict.fromkeys(_resolve(host)))
 
 
 def strip_userinfo(url: str) -> str:
@@ -287,13 +307,14 @@ class UrlDenial:
         return self.reason
 
 
-def url_denial(base_url: str) -> UrlDenial | None:
+def url_denial(base_url: str, *, addresses: Sequence[str] | None = None) -> UrlDenial | None:
     """Why this URL must never be used, or ``None``. Syntax errors are
     :func:`parse_endpoint_url`'s job; call it first.
 
     Checked for the literal host and for every address a name resolves to
     (a name pointing at the metadata service or at one of this stack's
-    services is refused however it is spelled)."""
+    services is refused however it is spelled). ``addresses`` is an answer
+    from :func:`resolve_addresses` to judge instead of resolving again."""
     parsed = parse_endpoint_url(base_url)
     host = parsed.host
     service_code: Literal['vlm_url_denied_internal_service'] = 'vlm_url_denied_internal_service'
@@ -302,13 +323,14 @@ def url_denial(base_url: str) -> UrlDenial | None:
             service_code, f"{host!r} is one of this deployment's own services, not a VLM"
         )
     literal = _literal_ip(host)
-    addresses: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+    resolved: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
     if literal is not None:
-        addresses.append(literal)
+        resolved.append(literal)
     elif host not in _HOST_ALIASES:
-        addresses.extend(ip for a in _resolve(host) if (ip := _ip_of(a)) is not None)
+        answer = _resolve(host) if addresses is None else addresses
+        resolved.extend(ip for a in answer if (ip := _ip_of(a)) is not None)
     denied_ips = _denied_service_addresses()
-    for ip in addresses:
+    for ip in resolved:
         if _never_reachable(ip):
             return UrlDenial(
                 'vlm_url_denied_address',
@@ -322,14 +344,16 @@ def url_denial(base_url: str) -> UrlDenial | None:
     return None
 
 
-def compute_locality(base_url: str) -> Locality:
+def compute_locality(base_url: str, *, addresses: Sequence[str] | None = None) -> Locality:
     """Where the endpoint lives, for the external-images acknowledgement.
 
     ``compose``: a bare service name on the stack network. ``host``: the
     Docker host. ``private``: loopback / RFC 1918 / ULA / CGNAT. ``external``:
     anything else, including a name that ALSO resolves to a public address
     (a DNS answer mixing private and public addresses is external). ``unknown``:
-    the name does not resolve -- treated as external by callers.
+    the name does not resolve -- treated as external by callers. ``addresses``
+    is an answer from :func:`resolve_addresses` to judge instead of resolving
+    again.
     """
     host = parse_endpoint_url(base_url).host
     if host in _HOST_ALIASES:
@@ -339,12 +363,13 @@ def compute_locality(base_url: str) -> Locality:
         if str(literal) in _docker_gateway_addresses():
             return 'host'
         return 'private' if _is_private(literal) else 'external'
-    addresses = [ip for a in _resolve(host) if (ip := _ip_of(a)) is not None]
-    if not addresses:
+    answer = _resolve(host) if addresses is None else addresses
+    ips = [ip for a in answer if (ip := _ip_of(a)) is not None]
+    if not ips:
         return 'unknown'
-    if not all(_is_private(ip) for ip in addresses):
+    if not all(_is_private(ip) for ip in ips):
         return 'external'
-    if any(str(ip) in _docker_gateway_addresses() for ip in addresses):
+    if any(str(ip) in _docker_gateway_addresses() for ip in ips):
         return 'host'
     if '.' not in host and host != 'localhost':
         return 'compose'
@@ -405,6 +430,7 @@ __all__ = [
     'external_warning',
     'parse_endpoint_url',
     'reset_policy_caches',
+    'resolve_addresses',
     'sends_images_externally',
     'strip_userinfo',
     'url_denial',

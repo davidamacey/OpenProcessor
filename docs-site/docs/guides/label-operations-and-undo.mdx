@@ -32,6 +32,9 @@ same `op_id`.
 
 ```bash
 curl -s "$API/curation/projects/cars/label_ops?limit=20&undoable=true"
+
+# The next older page: pass the previous response's next_after.
+curl -s "$API/curation/projects/cars/label_ops?limit=50&after=$NEXT"
 ```
 
 `GET /curation/projects/{project}/label_ops` returns newest first
@@ -40,6 +43,11 @@ Per operation: `kind` (`label` or `move`), `class_name`, `selected`, `count`,
 `conflicts`, `current` (items that still carry this operation's label),
 `status`, `undone`, `undoable` and `last_undo`. An operation is undoable
 while `current` is above zero and it is not being written or undone.
+
+The list pages with `after`: the response's `next_after` is the last `op_id` of
+the page while older operations exist, and `null` at the end. Pass it back as
+`after` for the next page (exclusive, newest first). A malformed `after` is a
+`422 invalid_request`.
 
 ## Undo (dry run first)
 

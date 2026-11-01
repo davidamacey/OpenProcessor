@@ -42,6 +42,8 @@
    * matching registered `SlotSpec`, never a hardcoded noun.
    */
   import { getCropContext, getSourceImageScaled } from '$lib/api_cropRead';
+  import { fetchSourceMissing, type SourceMissing } from '$lib/sourceMissing';
+  import SourceMissingBadge from './SourceMissingBadge.svelte';
   import type { OverlayShape } from '$lib/configTest/overlayShapes';
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import { slotOf, subBoxSlotFor } from '$lib/annotations/cropSlots';
@@ -87,6 +89,7 @@
   let error = $state<string | null>(null);
   let loading = $state(false);
   let showBoxes = $state(true);
+  let sourceMissing = $state<SourceMissing | null>(null);
   let naturalW = $state<number | null>(null);
   let naturalH = $state<number | null>(null);
 
@@ -96,6 +99,7 @@
     if (providedContext) return;
     const id = cropId;
     fetchedContext = null;
+    sourceMissing = null;
     error = null;
     loading = true;
     const controller = new AbortController();
@@ -264,6 +268,10 @@
     <p class="text-xs text-zinc-500">Loading…</p>
   {:else if error}
     <p class="text-xs text-red-300">Source image unavailable: {error}</p>
+  {:else if sourceMissing}
+    <div class="relative h-full min-h-40 w-full">
+      <SourceMissingBadge missing={sourceMissing} />
+    </div>
   {:else}
     <div
       class="relative max-h-full max-w-full"
@@ -279,6 +287,11 @@
           const el = e.currentTarget as HTMLImageElement;
           naturalW = el.naturalWidth || naturalW;
           naturalH = el.naturalHeight || naturalH;
+        }}
+        onerror={(e) => {
+          void fetchSourceMissing((e.currentTarget as HTMLImageElement).src).then(
+            (m) => (sourceMissing = m),
+          );
         }}
       />
       {#if showBoxes && context}

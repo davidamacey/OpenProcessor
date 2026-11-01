@@ -111,9 +111,17 @@ Other variables: `OP_GH_REPO` (the GitHub `org/repo` to install from),
 ### Network access
 
 **Cropwright is reachable on your LAN by default, for homelab or
-small-business use. The API itself stays bound to 127.0.0.1. There is no login
-on Cropwright — a warning is shown. Pass `--local-only` to opt out and keep
+small-business use. The API itself stays bound to 127.0.0.1. On a LAN bind the
+installer puts a shared HTTP basic-auth login in front of Cropwright (user
+`cropwright`, password in `secrets/cropwright/password`, never printed).
+Pass `--local-only` to opt out and keep
 everything on 127.0.0.1.**
+
+- Basic auth is on by default when Cropwright is published beyond loopback and
+  off otherwise. Override with `OP_CROPWRIGHT_BASIC_AUTH=true|false` in the
+  installer's environment (for an unattended run) or in `.env`; the interactive
+  installer asks. Change the password with `./openprocessor cropwright password`
+  and `./openprocessor restart cropwright`. Details: [SECURITY.md](SECURITY.md).
 
 - Cropwright's nginx reaches the API over the Docker network, so LAN browsers
   never need the API port.

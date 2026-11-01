@@ -3,7 +3,8 @@
 SvelteKit + TypeScript app for labeling image crops at scale (product name
 **Cropwright**, package `cropwright`), the human-in-the-loop frontend for
 [OpenProcessor](https://github.com/davidamacey/OpenProcessor). It is a pure consumer
-of the OpenProcessor curation API: no database of its own, no authentication.
+of the OpenProcessor curation API: no database of its own, no authentication of its own
+(optional nginx basic auth only, see Security).
 
 This file holds the conventions, layout, commands and rules an agent needs. What a
 page does is in the code and its tests; what changed and when is in `CHANGELOG.md`.
@@ -90,6 +91,7 @@ redirect to the same path under the default project. Links and `goto()` are buil
 | `/models`                                                                               | Model registry browser, shared models from other projects, VLM endpoint rows                                                                                                                                                                                             |
 | `/train`                                                                                | Training cockpit: preflight, launch, progress, runs, promote, reproduce, cohorts                                                                                                                                                                                         |
 | `/bakeoff`                                                                              | Model comparison on the served bake-off wire                                                                                                                                                                                                                             |
+| `/label-ops`                                                                            | Recorded bulk label and move operations, paged with Load older, detail dialog, undo with a served dry run before Confirm                                                                                                                                                 |
 | `/settings`, `/settings/{prompt-packs,region-profiles,models,open-vocab,ingest-policy}` | Deployment defaults, scores, keymap editor and the config-store editors; each sub-page absent until the backend serves it                                                                                                                                                |
 | `/projects`                                                                             | The one global page: project lifecycle, capacity, pipeline pause                                                                                                                                                                                                         |
 
@@ -223,7 +225,9 @@ through CSS variables. Never fetch full-resolution images in grids; use
 The curation API has no request authentication. Every write is reachable by anyone who can
 reach the nginx origin. Never expose Cropwright or the API it proxies to the public
 internet; run it on a trusted LAN/VPN or behind an authenticating reverse proxy.
-See the repository `SECURITY.md`.
+The container can put one shared HTTP basic-auth login in front of every route
+(`OP_CROPWRIGHT_BASIC_AUTH`, htpasswd file mounted read-only; `/nginx-health` stays open); the
+installer enables it on a LAN bind. It is not a user system. See the repository `SECURITY.md`.
 
 ## API contract
 

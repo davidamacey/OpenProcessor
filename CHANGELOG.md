@@ -11,6 +11,10 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ## [Unreleased]
 
+### Security
+
+- **The 0.6.0 API image shipped local, untracked model files.** `davidamacey/openprocessor:0.6.0` contained 24 files (about 1.55 GB) under `/opt/openprocessor/model_repo_seed`: a promoted throwaway project model, ONNX exports, TensorRT engine leftovers and bytecode from the build host's `models/` directory. The 0.6.0 tag is re-published clean. The release script now builds every image (including the segmenter and frontend contexts) from an archive of the committed revision, never from the working directory, refuses an uncommitted revision, and audits every built image against the committed tree (and for model artifacts) before anything is pushed. The `.dockerignore` files also exclude model artifacts and caches at any depth, so local builds stay clean.
+
 ### Upgrade notes / behaviour changes
 
 - **Breaking: `POST /persons/cluster` gives every face a person and keeps ids stable** (#354).
@@ -20,6 +24,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
   - A person that was named (`named_at`) or merged (`merged_at`) is locked: the clusterer never moves its faces, and new matching faces join it and take its name. Merges made before this change stamped only the moved faces, so the target side of an old merge is protected only if named. There is no migration.
   - The similarity matrix is replaced by an exact range search (same partition as before, no n x n matrix).
   - Fixed: rename and merge built their script by string interpolation, so a name containing `'` failed and could inject script code; they now pass parameters. Merge stamps both sides and gives the union one name; dissolving a person (`DELETE /persons/{id}`) clears its lock stamps.
+- **Cropwright gets optional HTTP basic auth** (#351). The installer turns it on when Cropwright is published beyond loopback (`OP_CROPWRIGHT_BASIC_AUTH`, `OP_CROPWRIGHT_BASIC_AUTH_FILE`); `./openprocessor cropwright password` changes the login. The container healthcheck moved to `/nginx-health`, which stays open. See SECURITY.md.
 - **Breaking: the unused `backbone_embedding` field is removed** (#410).
   - Removed: the `backbone_embedding` item field, its ingest writer, the dual-head detector export (`export/export_detector_dual_head.*`), `make export-dual-head` and the region-profile field `feature_output`.
   - A stored region profile that still has `feature_output` now fails to load with "unknown field". Remove the key, or re-save the profile from its template.
@@ -42,6 +47,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 ### Added
 - Deployment-wide face switch (#379): `OP_FACES_ENABLED=false` (installer flag `--no-faces`) turns the face models off everywhere. The face, person and `/search/face` routes and the `faces` cluster index answer `400 faces_disabled`; ingest and analyze skip faces and report `faces_enabled: false` (new field on the ingest and analyze responses); the opt-in overlay `docker-compose.faces-off.yml` (added by the CLI and the Makefile) stops Triton preloading SCRFD and ArcFace; the installer skips the `faces` model group.
 - `./openprocessor faces purge [--dry-run] [--yes]` (#379): deletes the face index, the face FAISS files and the face link on people documents, and writes a counts-only record to `data/audit/faces_purge.jsonl`. `--yes` requires faces to be off first. Command line only, no API route.
+- `GET /curation/projects/{project}/label_ops` pages with `after` and serves `next_after` (newest first by `op_id`; a malformed `after` is 422) (#419).
 - `gpu_image_prep` waits for device memory instead of failing into the CPU fallback (#392): each photo reserves its decoded frame from `DEVICE_BUDGET_MIB` (default 2048) and waits at most `BUDGET_WAIT_SECONDS` (20); the budget is reserved at load, so an instance that cannot hold it fails to load (ingest then decodes on the CPU, visibly); a failed allocation, a timed-out wait and an over-sized photo are the counted routes `cpu_gpu_memory` and `cpu_over_budget` in `op_ingest_decode_total` and `op_reprocess_decode_total`; a `budget` stage counter shows the wait.
 - Opt-in ingest load profile (#393): `OP_LOAD_PROFILE=ingest` (overlay `docker-compose.ingest-focus.yml`, added by the CLI) preloads only the detector and the PE encoders, which frees 27.7 GB on a 48 GB card; the face, MobileCLIP and OCR models load on their first call, so every endpoint still answers. Per-model memory and the endpoint check: `docs-site/docs/operations/ingest-load-profile.mdx`. The default (`full`) is unchanged.
 - `scripts/bench/gpu_prep_parity.py`: captures and compares `gpu_image_prep` answers before and after a change.
@@ -73,6 +79,8 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - The unused `ingest_faces` service and OpenSearch client methods, which nothing in production called (#379).
 
 ### Fixed
+
+- **The VLM connection is pinned to the validated address** (#101): the URL policy resolves the endpoint host once and the labeler and the endpoint probe connect only to those addresses (Host header, TLS server name and certificate check unchanged), closing the DNS-rebinding window between the check and the connect. A pinned client ignores proxy environment variables.
 - **`/health` and `/ready` report not ready when a required Triton model failed to load** (#391). Triton runs with `--exit-on-error=false`, so a missing engine (an empty `models/pe_image_encoder/1/`) used to leave `/health` at `status: ready`. The probe now reads the repository index and answers `503`, naming each model that is not `READY` in `services.models.not_ready`. Required models default to YOLO, SCRFD, ArcFace, MobileCLIP and the PE image encoder; `OP_REQUIRED_MODELS` replaces the list; the installer writes it from the installed tiers, so a core-only install is not held back by the PE encoder. `/live` and `GET /` are unchanged, and a control-plane-only install (no Triton) keeps its OpenSearch-only wait.
 - A refresh-daemon (assign-only) cluster pass that read under 99 percent of the pool it counted at its start, or whose write-back failed, reported `success`; it now reports `partial` with `expected_pool` and `coverage` and records no last run (#357). The whole-index cluster reset runs as a polled task: 250,000 rows reset in 592 to 799 s instead of failing after 34 minutes.
 - Undo and discard of many items ran one conditional update per id with no concurrency limit (`undo_batch`, `discard_batch`, and the region `undo_batch` now bounded at 32 in flight).

@@ -12,6 +12,7 @@ happens to contain the key has it masked).
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import time
@@ -24,10 +25,13 @@ from PIL import Image
 from src.core.logging import get_logger
 from src.services.labeling.vlm_client import (
     build_auth_headers,
+    build_http_client,
     extract_message_content,
     extract_reasoning_content,
 )
 from src.services.labeling.vlm_endpoint_body import FIELD_RANGES, VlmEndpointBody, VlmProbeRecord
+from src.services.labeling.vlm_pinning import AddressPin
+from src.services.labeling.vlm_url_policy import parse_endpoint_url
 
 
 logger = get_logger(__name__)
@@ -96,11 +100,11 @@ def _has_json_object(text: str) -> bool:
 
 class _Probe:
     def __init__(
-        self, body: VlmEndpointBody, *, api_key: str | None, client: httpx.AsyncClient
+        self, body: VlmEndpointBody, *, api_key: str | None, client: httpx.AsyncClient | None
     ) -> None:
         self.body = body
         self.key = api_key
-        self.client = client
+        self.client: httpx.AsyncClient = client  # type: ignore[assignment]  # set before any send
         self.headers = build_auth_headers(api_key or 'EMPTY')
         self.issues: list[dict[str, Any]] = []
         self.result: dict[str, Any] = {}
@@ -302,30 +306,49 @@ class _Probe:
 
 
 async def probe_endpoint(
-    body: VlmEndpointBody, *, api_key: str | None, client: httpx.AsyncClient | None = None
+    body: VlmEndpointBody,
+    *,
+    api_key: str | None,
+    client: httpx.AsyncClient | None = None,
+    is_env: bool = False,
 ) -> VlmProbeRecord:
     """Probe ``body`` and return the record (never raises for an endpoint
     that misbehaves: that is what the record's ``issues`` say). Raises
-    :class:`ProbeBusyError` when the per-process cap is reached."""
+    :class:`ProbeBusyError` when the per-process cap is reached.
+
+    The probe sends the endpoint's key, so it vets the host itself (the same
+    policy as the labeler) and connects only to the addresses it vetted: a
+    host that now resolves somewhere the policy refuses yields an error
+    record and no connection. An injected ``client`` (tests) is the caller's
+    own and is used as given."""
+    from src.services.labeling.vlm_factory import VlmEndpointDeniedError, vet_endpoint_body
+
     global _ACTIVE_PROBES  # noqa: PLW0603 - per-process concurrency cap
     if _ACTIVE_PROBES >= MAX_CONCURRENT_PROBES:
         raise ProbeBusyError
     _ACTIVE_PROBES += 1
-    owned = client is None
-    http = client or httpx.AsyncClient(follow_redirects=False)
-    probe = _Probe(body, api_key=api_key, client=http)
     started = time.monotonic()
+    owned = client is None
+    http = client
+    probe = _Probe(body, api_key=api_key, client=client)
     try:
         try:
+            if http is None:
+                addresses = await asyncio.to_thread(vet_endpoint_body, body, is_env=is_env)
+                host = parse_endpoint_url(body.base_url).host
+                pin = None if addresses is None else AddressPin(host, addresses)
+                http = probe.client = build_http_client(STEP_TIMEOUT_S, pin=pin)
             await probe.list_models()
             baseline = await probe.text_baseline()
             await probe.one_image(baseline)
             await probe.many_images()
+        except VlmEndpointDeniedError as exc:
+            probe.issue('vlm_unreachable', severity='error', message=f'Refused: {exc}')
         except _Stop:
             pass
     finally:
         _ACTIVE_PROBES -= 1
-        if owned:
+        if owned and http is not None:
             await http.aclose()
     total_ms = round((time.monotonic() - started) * 1000, 1)
     ok = not any(i['severity'] == 'error' for i in probe.issues)

@@ -164,12 +164,18 @@ def read_op(op_id: str) -> LabelOpRecord:
     return record
 
 
-def iter_ops() -> Iterator[LabelOpRecord]:
-    """Readable records, newest first (ids sort in creation order). An unreadable one is skipped and logged."""
+def iter_ops(*, after: str | None = None) -> Iterator[LabelOpRecord]:
+    """Readable records, newest first (ids sort in creation order), older than
+    ``after`` (exclusive) when given. An unreadable one is skipped and logged."""
     root = label_ops_root()
     try:
         names = sorted(
-            (p.name for p in root.iterdir() if LABEL_OP_ID_RE.fullmatch(p.name)), reverse=True
+            (
+                p.name
+                for p in root.iterdir()
+                if LABEL_OP_ID_RE.fullmatch(p.name) and (after is None or p.name < after)
+            ),
+            reverse=True,
         )
     except FileNotFoundError:
         return

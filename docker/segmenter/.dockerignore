@@ -1,0 +1,9 @@
+# The segmenter Dockerfile copies main.py and sam3_backend.py only; keep local artifacts out.
+**/__pycache__
+**/*.pyc
+**/*.onnx
+**/*.plan
+**/*.engine
+**/*.safetensors
+**/*.pt
+**/*.pth

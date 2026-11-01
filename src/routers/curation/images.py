@@ -24,6 +24,7 @@ from fastapi.responses import FileResponse, Response
 
 from src.config import get_curation_config, get_region_fields
 from src.core.dependencies import get_curation_opensearch as _raw_opensearch_dep
+from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
 from src.domain.region_boxes import read_boxes
 from src.services.curation.image_serving import (
@@ -33,6 +34,7 @@ from src.services.curation.image_serving import (
     resolve_crop_root,
     resolve_safe_path,
     source_media_type,
+    source_missing_detail,
 )
 
 
@@ -69,10 +71,21 @@ def _region_thumbnail_headers(image_path: Any, bbox: Any, size: int) -> dict[str
     return {'Cache-Control': 'no-cache', 'ETag': f'"{tag}"'}
 
 
+def _resolve_or_source_missing(path: str, root: Path) -> Path:
+    """``resolve_safe_path`` with a not-found answer turned into the typed
+    ``source_missing`` body so the frontend can name the unreachable root."""
+    try:
+        return resolve_safe_path(path, root)
+    except RequestRejectedError as exc:
+        if exc.status_code == 404:
+            raise HTTPException(status_code=404, detail=source_missing_detail(root, path)) from exc
+        raise
+
+
 async def serve_source_image(path: str, root: Path) -> FileResponse:
     """Stream a source image under ``root`` via ``FileResponse`` (zero-copy), with
     its media type and a 1h Cache-Control."""
-    safe_path = resolve_safe_path(path, root)
+    safe_path = _resolve_or_source_missing(path, root)
     media_type = source_media_type(safe_path)
     logger.debug('serve_source_image', path=path, resolved=str(safe_path), media_type=media_type)
     return FileResponse(
@@ -142,7 +155,16 @@ def _resolve_image_for_crop(crop_doc: dict[str, Any]) -> Path:
     if not image_path:
         raise HTTPException(status_code=500, detail='crop is missing image_path')
     root = resolve_crop_root(image_path)
-    return resolve_safe_path(image_path, root)
+    return _resolve_or_source_missing(image_path, root)
+
+
+def _source_missing_error(crop_doc: dict[str, Any]) -> HTTPException:
+    """The typed 404 for a file that vanished between resolve and render."""
+    image_path = str(crop_doc.get('image_path', ''))
+    return HTTPException(
+        status_code=404,
+        detail=source_missing_detail(resolve_crop_root(image_path), image_path),
+    )
 
 
 @crops_router.get('/{crop_id}/thumbnail')
@@ -166,7 +188,7 @@ async def crop_thumbnail(
         logger.warning('crop_thumbnail_invalid_bbox', crop_id=crop_id, error=str(exc))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=f'image missing: {exc}') from exc
+        raise _source_missing_error(crop) from exc
     except Exception as exc:
         logger.error('crop_thumbnail_failed', crop_id=crop_id, error=str(exc))
         raise HTTPException(status_code=500, detail=f'thumbnail render failed: {exc}') from exc
@@ -208,6 +230,8 @@ async def crop_full_image(
 
     try:
         jpeg = await render_source_image(image_path, max_dim=max_dim)
+    except FileNotFoundError as exc:
+        raise _source_missing_error(crop) from exc
     except Exception as exc:
         logger.error('crop_full_image_failed', crop_id=crop_id, error=str(exc))
         raise HTTPException(status_code=500, detail=f'image render failed: {exc}') from exc
@@ -258,7 +282,7 @@ async def crop_region_thumbnail(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=f'image missing: {exc}') from exc
+        raise _source_missing_error(crop) from exc
     except Exception as exc:
         logger.error('region_thumbnail_failed', crop_id=crop_id, error=str(exc))
         raise HTTPException(

@@ -4,6 +4,7 @@ the list route and retention."""
 from __future__ import annotations
 
 import json
+import shutil
 from typing import TYPE_CHECKING, Any
 
 from curation.label_ops_env import build_env, proposal
@@ -139,6 +140,7 @@ def test_label_ops_list_newest_first_counts_and_limits(
     only = env.list_ops(undoable='true', limit=5).json()['items']
     assert [o['op_id'] for o in only] == [second]
     assert env.list_ops(undoable='true', limit=1).json()['items'][0]['op_id'] == second
+    assert body['next_after'] is None
 
 
 def test_interrupted_and_writing_operations_are_served_and_not_undoable(
@@ -187,3 +189,109 @@ def test_retention_keeps_the_newest_200_and_never_prunes_a_live_op(
     assert len(kept) == 5
     ids = [o['op_id'] for o in env.list_ops(limit=50).json()['items']]
     assert ids == sorted(ids, reverse=True)
+
+
+def _ops(env: OpsEnv, n: int) -> list[str]:
+    """``n`` operations on distinct crops, oldest first."""
+    return [env.label('widget', crop_ids=[f'c{i}'])['op_id'] for i in range(n)]
+
+
+def _page(env: OpsEnv, **params: Any) -> dict[str, Any]:
+    resp = env.list_ops(**params)
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+def test_label_ops_list_pages_with_after_to_the_end(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    env = _env(monkeypatch, tmp_path)
+    _ops(env, 5)
+    full = [o['op_id'] for o in _page(env, limit=50)['items']]
+    one = _page(env, limit=2)
+    assert [o['op_id'] for o in one['items']] == full[:2]
+    assert one['next_after'] == full[1]
+    two = _page(env, limit=2, after=one['next_after'])
+    assert [o['op_id'] for o in two['items']] == full[2:4]
+    assert two['next_after'] == full[3]
+    three = _page(env, limit=2, after=two['next_after'])
+    assert [o['op_id'] for o in three['items']] == full[4:]
+    assert three['next_after'] is None
+    paged = [o['op_id'] for pg in (one, two, three) for o in pg['items']]
+    assert paged == full
+    assert len(set(paged)) == 5
+
+
+def test_label_ops_last_full_page_has_no_next_after(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    env = _env(monkeypatch, tmp_path)
+    ids = _ops(env, 4)
+    first = _page(env, limit=2)
+    assert first['next_after'] is not None
+    last = _page(env, limit=2, after=first['next_after'])
+    assert len(last['items']) == 2
+    assert last['next_after'] is None
+    past = _page(env, after=ids[0])
+    assert past['items'] == []
+    assert past['next_after'] is None
+
+
+def test_label_ops_same_timestamp_is_ordered_by_id(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    env = _env(monkeypatch, tmp_path)
+    ids = iter(['lop_20261031T000000000000_00000a', 'lop_20261031T000000000000_00000b'])
+    monkeypatch.setattr(store, 'new_label_op_id', lambda _now: next(ids))
+    monkeypatch.setattr(store, 'now_iso', lambda: '2026-10-31T00:00:00+00:00')
+    a, b = _ops(env, 2)
+    assert [o['op_id'] for o in _page(env)['items']] == [b, a]
+    assert {o['at'] for o in _page(env)['items']} == {'2026-10-31T00:00:00+00:00'}
+    first = _page(env, limit=1)
+    assert ([o['op_id'] for o in first['items']], first['next_after']) == ([b], b)
+    rest = _page(env, limit=1, after=b)
+    assert ([o['op_id'] for o in rest['items']], rest['next_after']) == ([a], None)
+
+
+def test_label_ops_malformed_after_is_422(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    env = _env(monkeypatch, tmp_path)
+    _ops(env, 1)
+    for bad in ('x', '../decoy', 'lop_2026'):
+        resp = env.list_ops(after=bad)
+        assert (resp.status_code, resp.json()['detail']['error']) == (422, 'invalid_request'), bad
+
+
+def test_label_ops_pruned_cursor_still_pages(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    env = _env(monkeypatch, tmp_path)
+    oldest, middle, _newest = _ops(env, 3)
+    shutil.rmtree(env.state() / middle)
+    body = _page(env, after=middle)
+    assert [o['op_id'] for o in body['items']] == [oldest]
+    assert body['next_after'] is None
+
+
+def test_label_ops_undoable_paging_skips_non_undoable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    env = _env(monkeypatch, tmp_path)
+    ids = _ops(env, 4)  # oldest first; take over c0 and c2 so those two ops have nothing left
+    for crop in ('c0', 'c2'):
+        resp = env.client.put(
+            f'{env.prefix}/crops/{crop}/label', json={'class_id': env.class_ids['gizmo']}
+        )
+        assert resp.status_code == 200, resp.text
+    served: list[str] = []
+    after: str | None = None
+    for _ in range(5):
+        params: dict[str, Any] = {'undoable': 'true', 'limit': 1}
+        if after:
+            params['after'] = after
+        body = _page(env, **params)
+        served += [o['op_id'] for o in body['items']]
+        after = body['next_after']
+        if after is None:
+            break
+    assert served == [ids[3], ids[1]]
+    assert after is None

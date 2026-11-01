@@ -30,6 +30,7 @@ source "${SCRIPT_DIR}/lib/bind_dirs.sh"
 source "${SCRIPT_DIR}/lib/vlm_catalog.sh"
 source "${SCRIPT_DIR}/lib/vlm_switch.sh"
 source "${SCRIPT_DIR}/lib/retired_env.sh"
+source "${SCRIPT_DIR}/lib/cropwright_auth.sh"
 
 # Installer plan section 5.1: every compose call goes through dc(), which
 # always passes -p, --env-file and --project-directory. Section 5.5:
@@ -438,6 +439,10 @@ main() {
         config)
             load_cli_core_lib
             cmd_config "$@"
+            ;;
+        cropwright)
+            load_cli_core_lib
+            cmd_cropwright "$@"
             ;;
         gpu)
             load_cli_gpu_lib
