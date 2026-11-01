@@ -334,3 +334,68 @@ against and the Python backend stay. The lockstep check still asserts TensorRT 1
 libraries in the base. Loading the system copies instead (a changed `LD_LIBRARY_PATH` and
 RPATH) alters which cuBLAS and cuDNN torch runs, so it needs its own validation. Changing the
 Triton base or the TensorRT version is out of scope: serialized engines are tied to both.
+
+## 8. Result (#41)
+
+Measured 2026-11-01. "Before" is `main` at `4dec81a5` rebuilt locally (`-base` tags; the
+layers are cached from the published 0.6.0, so the sizes equal it); "after" is the same
+commit with the changes of #41 built with `docker build --target` from one cache. Sizes are
+`docker image ls`; "unique" is the unshared size from `docker system df -v` among the images
+listed. Trivy: `--scanners vuln --severity CRITICAL,HIGH --ignore-unfixed` with the CVEs of
+`scripts/release/trivy-allowlist.txt` ignored (the reports are in
+`artifacts_local/b6_plans/41_results/`).
+
+| Image | Before | After | Target | Unique |
+|---|---:|---:|---|---:|
+| `openprocessor` (API and workers) | 21.2 GB | **9.37 GB** | <= 10.7 GB | 23 MB over the shared runtime layers |
+| `openprocessor-export` (new) | n/a | **14.9 GB** | <= 16 GB | **5.58 GB** over the API (target <= 6.5) |
+| `openprocessor-evaluator` | 14.3 GB | **9.61 GB** | <= 10.7 GB | **268 MB** over the API (target <= 1 GB) |
+| `openprocessor-trainer` | 7.61 GB | 7.60 GB | no growth | |
+| `openprocessor-segmenter` | 8.16 GB | 8.17 GB | no growth | |
+| `openprocessor-triton` | 32.1 GB | **26.7 GB** | no growth | |
+| `cropwright` | 69 MB | 69 MB | no growth | |
+| core and curation pull (API, export, evaluator, Triton) | 67.6 GB | **41.9 GB** | about 48 GB | |
+| API model-repo seed layer | 201 kB | none (the seed is in the export image, 201 kB) | < 1 MB | |
+
+The API was 22.8 GB in the issue and in the first measurement of this audit: that build still
+carried the untracked local model files (a 1.62 GB seed layer), fixed in the release script
+before #41 (`git archive`, recursive `.dockerignore`, `scripts/release/audit_image_files.py`).
+
+What changed the API image: no `/opt/venv-y11` (7.14 GB, of which the duplicates are now
+symlinks in the export image: its venv is 0.93 GB), no TensorRT (4.3 GB), no ModelOpt or ONNX
+graph tooling, no model seed. The segmenter grew by 11 MB: its
+`apt-get upgrade` layer pulled today's package versions (314 MB against 303 MB cached); the
+changes of #41 shrink that image only by the `wget` package and the pip copies.
+
+Verified on the built images (GPU 0 where a GPU line is listed):
+
+- API: `import src.main, src.clients.pe_encoder` passes; `import tensorrt` fails; no `/opt/venv-y11`,
+  `/app/export` or model seed; `torch.cuda`, `cupy`, `faiss` work (GPU).
+- Export: `python -m export.preflight` passes (GPU); the venv imports `ultralytics 8.3.253`, torch,
+  `tensorrt 11.1.0.106`, `onnxruntime` and `modelopt.onnx`; the shared objects it maps are the
+  same 166 (by name) as in the old API image; a job queued like `POST /models/upload` is claimed
+  by `export_worker` and builds a YOLO11n `trt_end2end` engine in 300 s (GPU).
+- Evaluator: `bakeoff_runner --help`, `pycocotools`, `mlflow`, `tritonclient` import.
+- Package sets (`importlib.metadata` of each image): API is the old API set minus exactly the
+  19 export distributions, with no version changed; export is the old API set, same versions;
+  evaluator is the API set plus 39 distributions, with no version changed.
+- Triton: `torch` and `cupy` use the GPU, an NVRTC kernel compiles, `tritonserver` reaches
+  ready, and `trtexec` builds an engine from a YOLO11n end2end ONNX (EfficientNMS plugin).
+- `scripts/release/audit_image_files.py --target` passes for `api`, `export` and `evaluator`.
+
+| Image | Trivy CRITICAL / HIGH before | after |
+|---|---:|---:|
+| `openprocessor` | 0 / 0 | 0 / 0 |
+| `openprocessor-export` | n/a | 0 / 0 |
+| `openprocessor-evaluator` | 1 / 5 | 0 / 0 |
+| `openprocessor-trainer` | 0 / 5 | 0 / 0 |
+| `openprocessor-segmenter` | 15 / 162 | 12 / 51 |
+| `openprocessor-triton` | 13 / 164 | 0 / 11 |
+| `cropwright` | 0 / 0 | unchanged |
+
+Triton's last CRITICAL was `certifi` in the NGC python environment, now raised in `Dockerfile.triton`. Most of the drop is rebuild freshness (the "before" images are cached layers with an older
+`apt-get upgrade`), not the size changes. The segmenter's remaining CRITICAL findings are not
+from #41 and were there before: `certifi` 2026.7.22, `pillow` 12.3.0 (five CVEs, fixed in 13.0.0)
+and `uv` 0.12.20, all in or on top of the PyTorch base image. They fail the release script's
+CRITICAL gate, which runs without `--ignore-unfixed`, for that image until the base or the pins
+move.

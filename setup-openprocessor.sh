@@ -2897,8 +2897,8 @@ YAML
     state_write
 
     # --- disk -----------------------------------------------------------------
-    local need=58 free_kib root
-    _has_tier curation && need=$((need + 19))
+    local need=47 free_kib root
+    _has_tier curation && need=$((need + 5))
     _has_tier segmenter && need=$((need + 11))
     _has_tier vlm && need=$((need + 34))
     _has_tier trainer && need=$((need + 29))
