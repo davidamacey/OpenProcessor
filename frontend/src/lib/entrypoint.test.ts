@@ -27,7 +27,8 @@ function run(env: Record<string, string>) {
   const patched = script
     .replaceAll('/usr/share/nginx/html', html)
     .replaceAll('/etc/nginx/conf.d/default.conf', conf)
-    .replaceAll('/etc/nginx/gateway.d', path.join(dir, 'gateway.d'));
+    .replaceAll('/etc/nginx/gateway.d', path.join(dir, 'gateway.d'))
+    .replaceAll('/etc/nginx/auth.d', path.join(dir, 'auth.d'));
   const r = spawnSync('sh', ['-c', patched], {
     env: { PATH: process.env.PATH ?? '', ...env },
     encoding: 'utf-8',
