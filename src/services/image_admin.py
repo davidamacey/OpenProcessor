@@ -6,6 +6,7 @@ from opensearchpy import AsyncOpenSearch
 from opensearchpy.exceptions import NotFoundError
 
 from src.clients.opensearch.names import IndexName
+from src.config.faces import faces_enabled
 from src.schemas.query import DeleteImageResponse, ImageMetadata, ImageQueryResponse
 
 
@@ -79,18 +80,20 @@ async def fetch_image_data(
         logger.debug('Could not check people index: %s', e)
 
     # Count faces for this image
+    # (skipped when faces are off: stored face data is not read, only deleted)
     faces_count = 0
-    try:
-        faces_resp = await client.count(
-            index=IndexName.FACES.value,
-            body={'query': {'term': {'image_id': image_id}}},
-        )
-        faces_count = faces_resp.get('count', 0)
-        if faces_count > 0:
-            indexed_in.append('faces')
-    except NotFoundError as e:
-        # Index may not exist - continue checking other indexes
-        logger.debug('Could not check faces index: %s', e)
+    if faces_enabled():
+        try:
+            faces_resp = await client.count(
+                index=IndexName.FACES.value,
+                body={'query': {'term': {'image_id': image_id}}},
+            )
+            faces_count = faces_resp.get('count', 0)
+            if faces_count > 0:
+                indexed_in.append('faces')
+        except NotFoundError as e:
+            # Index may not exist - continue checking other indexes
+            logger.debug('Could not check faces index: %s', e)
 
     # Check OCR
     has_ocr = False

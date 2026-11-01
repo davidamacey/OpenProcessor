@@ -8,6 +8,7 @@ rather than guessing: an unreadable privacy switch must not default to on.
 from __future__ import annotations
 
 from src.config.env import env_bool
+from src.config.settings import TritonModelConfig
 
 
 FACES_ENV = 'OP_FACES_ENABLED'
@@ -29,3 +30,7 @@ def require_faces() -> None:
     a router can use it as a FastAPI dependency while this module stays free of fastapi."""
     if not faces_enabled():
         raise FacesDisabledError
+
+
+def face_model_names() -> frozenset[str]:
+    return frozenset({TritonModelConfig.FACE_DETECT_MODEL, TritonModelConfig.ARCFACE_MODEL})

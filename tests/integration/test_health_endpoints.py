@@ -209,3 +209,81 @@ def test_models_are_not_checked_when_triton_is_down(
     assert response.status_code == 503
     assert '"opensearch":{"ok":true' in response.text.replace(' ', '')
     assert 'models' not in response.json()['services']
+
+
+def _stub_face_counts(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.routers import health as health_module
+    from src.services.face_privacy import FaceDataCounts
+
+    counts = FaceDataCounts(
+        face_index_exists=True,
+        face_docs=3,
+        persons=2,
+        named_persons=1,
+        thumbnails=0,
+        people_face_links=0,
+        faiss_files=['faces.index'],
+    )
+
+    async def _stub() -> FaceDataCounts:
+        return counts
+
+    monkeypatch.setattr(health_module, '_face_data_counts', _stub)
+
+
+def _triton_index_without_face_models(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.services import triton_control
+
+    names = [
+        'yolov11_small_trt_end2end',
+        'mobileclip2_s2_image_encoder',
+        'mobileclip2_s2_text_encoder',
+        'pe_image_encoder',
+    ]
+
+    async def _index(_self: object) -> list[dict[str, str]]:
+        return [{'name': n, 'version': '1', 'state': 'READY', 'reason': ''} for n in names]
+
+    monkeypatch.setattr(triton_control.TritonControlService, 'get_repository_index', _index)
+
+
+def _patch_infra_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.routers import health as health_module
+
+    async def _live() -> tuple[bool, str]:
+        return True, 'is_server_live OK'
+
+    async def _http(_url: str) -> tuple[bool, str]:
+        return True, 'HTTP 200'
+
+    monkeypatch.setattr(health_module, '_probe_triton', _live)
+    monkeypatch.setattr(health_module, '_probe_http', _http)
+
+
+def test_ready_ignores_face_models_and_reports_stored_data_when_faces_off(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv('OP_REQUIRED_MODELS', raising=False)
+    monkeypatch.setenv('OP_FACES_ENABLED', 'false')
+    _patch_infra_only(monkeypatch)
+    _triton_index_without_face_models(monkeypatch)
+    _stub_face_counts(monkeypatch)
+    response = client.get('/ready')
+    assert response.status_code == 200
+    faces = response.json()['services']['faces']
+    assert faces['enabled'] is False
+    assert faces['stored']['face_docs'] == 3
+    assert 'faces purge' in faces['detail']
+
+
+def test_ready_requires_face_models_when_faces_on(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv('OP_REQUIRED_MODELS', raising=False)
+    monkeypatch.delenv('OP_FACES_ENABLED', raising=False)
+    _patch_infra_only(monkeypatch)
+    _triton_index_without_face_models(monkeypatch)
+    response = client.get('/ready')
+    assert response.status_code == 503
+    assert 'scrfd_10g_bnkps' in response.json()['services']['models']['detail']
+    assert response.json()['services']['faces'] == {'enabled': True}

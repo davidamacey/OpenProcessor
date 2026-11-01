@@ -13,6 +13,7 @@ statistics.
 import asyncio
 import logging
 import os
+from dataclasses import asdict
 from typing import Any
 
 import httpx
@@ -20,10 +21,13 @@ import psutil
 import torch
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
+from opensearchpy import OpenSearchException
 
 from src.clients.triton_client_manager import get_async_triton_client, get_client_pool_stats
 from src.config import get_settings
+from src.config.faces import faces_enabled
 from src.core.metrics import render_metrics
+from src.services.face_privacy import FaceDataCounts, stored_face_counts, stored_summary
 from src.services.model_readiness import models_not_ready, required_model_names
 from src.services.triton_control import TritonControlService
 
@@ -38,6 +42,8 @@ router = APIRouter(
 # Readiness-probe timeout. Kept short so a degraded dep does not stall
 # the probe past a typical k8s readiness-check window.
 _READY_PROBE_TIMEOUT_S = 2.0
+_FACES_OFF = 'disabled (OP_FACES_ENABLED=false)'
+_FACE_STATE_ERRORS = (TimeoutError, OSError, RuntimeError, OpenSearchException)
 
 
 async def _probe_http(url: str) -> tuple[bool, str]:
@@ -119,6 +125,29 @@ async def _probe_required_models() -> tuple[bool, str, list[dict[str, str]]]:
     return True, f'{len(required)} required models READY', []
 
 
+async def _face_data_counts() -> FaceDataCounts:
+    return await asyncio.wait_for(stored_face_counts(), timeout=_READY_PROBE_TIMEOUT_S)
+
+
+async def _faces_entry() -> dict[str, Any]:
+    """The ``services.faces`` report. Informational: it never changes readiness, because
+    stored face data is refused by every route and 503 would take the API down for it."""
+    if faces_enabled():
+        return {'enabled': True}
+    try:
+        counts = await _face_data_counts()
+    except _FACE_STATE_ERRORS as exc:
+        return {
+            'enabled': False,
+            'stored': None,
+            'detail': f'face data state unknown: {type(exc).__name__}',
+        }
+    stored = asdict(counts)
+    if counts.is_empty():
+        return {'enabled': False, 'stored': stored, 'detail': 'faces are off; no face data stored'}
+    return {'enabled': False, 'stored': stored, 'detail': stored_summary(counts)}
+
+
 async def _readiness_payload() -> tuple[int, dict[str, Any]]:
     """Probe Triton and OpenSearch concurrently; build the payload.
 
@@ -148,6 +177,7 @@ async def _readiness_payload() -> tuple[int, dict[str, Any]]:
         models_ok, models_detail, not_ready = await _probe_required_models()
         services['models'] = {'ok': models_ok, 'detail': models_detail, 'not_ready': not_ready}
         all_ok = all_ok and models_ok
+    services['faces'] = await _faces_entry()
     payload: dict[str, Any] = {
         'status': 'ready' if all_ok else 'not_ready',
         'version': settings.api_version,
@@ -165,6 +195,7 @@ def root() -> dict[str, Any]:
     Returns available endpoints, models, and backend configuration.
     """
     settings = get_settings()
+    faces_on = faces_enabled()
 
     return {
         'service': 'Visual AI API',
@@ -177,7 +208,7 @@ def root() -> dict[str, Any]:
         'status': 'running',
         'endpoints': {
             'detection': '/detect (or /v1/detect)',
-            'faces': '/faces (or /v1/faces)',
+            'faces': '/faces (or /v1/faces)' if faces_on else _FACES_OFF,
             'embed': '/embed (or /v1/embed)',
             'search': '/search (or /v1/search)',
             'ingest': '/ingest (or /v1/ingest)',
@@ -185,12 +216,12 @@ def root() -> dict[str, Any]:
             'ocr': '/ocr (or /v1/ocr)',
             'clusters': '/clusters (or /v1/clusters)',
             'query': '/query (or /v1/query)',
-            'persons': '/persons (or /v1/persons)',
+            'persons': '/persons (or /v1/persons)' if faces_on else _FACES_OFF,
         },
         'models': {
             'detection': settings.models.YOLO_MODEL,
-            'face_detection': settings.models.FACE_DETECT_MODEL,
-            'face_embedding': settings.models.ARCFACE_MODEL,
+            'face_detection': settings.models.FACE_DETECT_MODEL if faces_on else None,
+            'face_embedding': settings.models.ARCFACE_MODEL if faces_on else None,
             'clip_image': settings.models.CLIP_IMAGE_MODEL,
             'clip_text': settings.models.CLIP_TEXT_MODEL,
             'ocr_detection': settings.models.OCR_DET_MODEL,
