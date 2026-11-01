@@ -351,6 +351,10 @@ class IndexesMixin:
                     'metadata': {'type': 'object', 'enabled': True},
                     'indexed_at': {'type': 'date'},
                     'clustered_at': {'type': 'date'},
+                    'named_at': {'type': 'date'},
+                    'merged_at': {'type': 'date'},
+                    'merged_from': {'type': 'keyword'},
+                    'cluster_assigned_at': {'type': 'date'},
                     'thumbnail_b64': {
                         'type': 'text',
                         'index': False,  # Don't index the base64 string for search

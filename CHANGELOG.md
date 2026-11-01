@@ -13,6 +13,13 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Upgrade notes / behaviour changes
 
+- **Breaking: `POST /persons/cluster` gives every face a person and keeps ids stable** (#354).
+  - Removed: the `max_persons` query parameter and the `persons_created` and `faces_assigned` response fields. A cap cannot hold when every face gets a person. The 100000-face read cap is gone too (it truncated silently).
+  - New response fields: `persons_total`, `persons_kept`, `persons_new`, `persons_retired`, `singletons`, `faces_updated`, `faces_locked`, `faces_skipped`.
+  - A group smaller than `min_faces_per_person` becomes one person per face. A re-run keeps each id by member overlap and writes nothing when nothing changed.
+  - A person that was named (`named_at`) or merged (`merged_at`) is locked: the clusterer never moves its faces, and new matching faces join it and take its name. Merges made before this change stamped only the moved faces, so the target side of an old merge is protected only if named. There is no migration.
+  - The similarity matrix is replaced by an exact range search (same partition as before, no n x n matrix).
+  - Fixed: rename and merge built their script by string interpolation, so a name containing `'` failed and could inject script code; they now pass parameters. Merge stamps both sides and gives the union one name; dissolving a person (`DELETE /persons/{id}`) clears its lock stamps.
 - **Breaking: the unused `backbone_embedding` field is removed** (#410).
   - Removed: the `backbone_embedding` item field, its ingest writer, the dual-head detector export (`export/export_detector_dual_head.*`), `make export-dual-head` and the region-profile field `feature_output`.
   - A stored region profile that still has `feature_output` now fails to load with "unknown field". Remove the key, or re-save the profile from its template.
