@@ -129,6 +129,7 @@
         onrejectVlm={(c) => onrejectVlm?.(c)}
         ondetail={(c) => ondetail?.(c)}
         {onsimilar}
+        chipsAbove={scoreOf?.(crop) != null || !!cornerBadge}
       />
       {#if scoreOf?.(crop) != null || cornerBadge}
         <!-- p7 (2026-09-24 interactive pass): the MATCH/cluster chips sit

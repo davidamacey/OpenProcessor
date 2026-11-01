@@ -44,6 +44,9 @@
     /** "More like this": rank the dataset by similarity to this crop. Absent where the
      *  deployment does not serve semantic search. */
     onsimilar?: (crop: Crop) => void;
+    /** The host overlays match or cluster chips along the top edge; the hover controls sit
+     *  below them instead of under them. */
+    chipsAbove?: boolean;
     /**
      * The served post-write items after an image Reprocess from the
      * expanded view (every item of that image). The host adopts them.
@@ -61,6 +64,7 @@
     onslotsaved,
     ondetail,
     onsimilar,
+    chipsAbove = false,
     onreprocessed,
   }: Props = $props();
 
@@ -315,7 +319,9 @@
     <!-- One flex row for the hover controls: absolutely-positioned siblings at
          fixed right offsets overlapped (the pencil sat under "view"). -->
     <div
-      class="absolute top-1 right-1 flex items-center gap-1 opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100"
+      class="absolute right-1 flex items-center gap-1 opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100 {chipsAbove
+        ? 'top-8'
+        : 'top-1'}"
       data-testid="card-hover-controls"
     >
       {#if ondetail}

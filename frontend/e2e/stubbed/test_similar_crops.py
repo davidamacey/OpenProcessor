@@ -53,10 +53,13 @@ def serve_similar(stub, methods: dict = SEMANTIC_ON, similar=None) -> list[str]:
     return seen
 
 
-def shoot(page, name: str) -> None:
+def shoot(page, name: str, frame=None) -> None:
+    """Both widths; `frame` re-frames the page after each resize (hover, scroll)."""
     SHOTS.mkdir(parents=True, exist_ok=True)
     for width, height in ((1440, 900), (430, 932)):
         page.set_viewport_size({"width": width, "height": height})
+        if frame is not None:
+            frame()
         wait_for_paint(page)
         page.screenshot(path=str(SHOTS / f"similar-{name}-{width}.png"), full_page=True)
 
@@ -80,7 +83,7 @@ def test_more_like_this_from_cluster_card(stub, page, app_url):
     card.click()
 
     assert_results(page, seen)
-    shoot(page, "results")
+    shoot(page, "results", lambda: page.get_by_test_id("card-hover-controls").first.hover())
     page.set_viewport_size({"width": 1440, "height": 900})
     page.get_by_role("button", name="Back to clusters").click()
     page.wait_for_url(lambda url: "similar_to" not in url, timeout=ACTION_TIMEOUT_MS)
@@ -96,7 +99,7 @@ def test_more_like_this_from_review_pane(stub, page, app_url):
     page.goto(f"{app_url}/p/default/review")
     link = page.get_by_test_id("review-similar")
     expect(link).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    shoot(page, "review")
+    shoot(page, "review", lambda: link.scroll_into_view_if_needed())
     page.set_viewport_size({"width": 1440, "height": 900})
     link.click()
     assert_results(page, seen)
