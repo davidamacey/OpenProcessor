@@ -79,6 +79,8 @@ export class AssistRunController {
 
   /** The server's dry run for the current request, or null while unknown. */
   preview = $state<AssistRunState | null>(null);
+  /** The request the shown preview answers; Start needs it to be the current one. */
+  #previewKey = $state('');
   planning = $state(false);
   planError = $state<string | null>(null);
   planErrorCode = $state<string | null>(null);
@@ -152,7 +154,11 @@ export class AssistRunController {
 
   get canStart(): boolean {
     return (
-      this.preview !== null && !this.planning && !this.running && this.planError === null
+      this.preview !== null &&
+      this.#previewKey === this.requestKey &&
+      !this.planning &&
+      !this.running &&
+      this.planError === null
     );
   }
 
@@ -224,10 +230,12 @@ export class AssistRunController {
     const ctl = new AbortController();
     this.#planAbort = ctl;
     this.planning = true;
+    const key = this.requestKey;
     try {
       const res = await this.#deps.create(this.request, ctl.signal);
       if (seq !== this.#planSeq) return;
       this.preview = res;
+      this.#previewKey = key;
       this.planError = null;
       this.planErrorCode = null;
     } catch (e) {

@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The assist-run dialog and the auto-label loop panel kept Start enabled for a moment after the form changed, while the shown dry run still answered the old settings. Start now waits until the dry run for the current settings has arrived.
 - An unknown URL shows a not-found page instead of the "Something went wrong / Reload" prompt.
 - A thumbnail the server cannot serve shows a dimmed empty tile instead of spilling its alt text across the cluster grid.
 - On search results the cluster badge no longer runs under the MATCH chip.
