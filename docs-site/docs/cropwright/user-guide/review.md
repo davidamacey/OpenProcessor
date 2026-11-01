@@ -27,6 +27,12 @@ The shared item filter (class, area, origin, embedding and review state) and
 the backend's per-tab filters are described in
 [Item filter and Matching items](./item-filter.md).
 
+## More like this
+
+A **More like this** link under the item's details (shown when semantic search is enabled) opens the
+Clusters page with the crops nearest to the current one, so you can label look-alikes together.
+A crop without a vector shows the server's message there. It is a link, so it also opens in a new tab.
+
 ## Empty queues
 
 An empty queue shows the served reason (e.g. "no probe predictions — run a

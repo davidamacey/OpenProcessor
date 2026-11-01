@@ -25,6 +25,7 @@ from test_curation_settings import METHODS_TODAY, SETTINGS_EMPTY
 from test_open_vocab import serve_open_vocab
 from test_prompt_packs import serve_packs
 from test_review_crop_viewport import review_item
+from test_similar_crops import serve_similar
 from test_label_ops import serve as serve_label_ops
 from test_source_missing import serve_cluster_grid, serve_review_pane
 
@@ -59,6 +60,11 @@ def serve_review(stub) -> None:
         r"/crops/[^/]+/image$",
         (200, {"image": {"path": "/img.jpg", "width": 640, "height": 480}, "items": [review_item(0)]}),
     )
+
+
+def serve_review_similar(stub) -> None:
+    serve_review(stub)
+    serve_similar(stub)
 
 
 def serve_classes(stub) -> None:
@@ -124,6 +130,9 @@ PAGES = [
     ("cluster-detail", "/p/default/clusters/1", serve_clusters, '[data-testid="class-name"]'),
     ("cluster-detail-facets", "/p/default/clusters/2", serve_cluster_with_facets, '[data-testid="cluster-facets"]'),
     ("review", "/p/default/review", serve_review, "main"),
+    ("review-similar", "/p/default/review", serve_review_similar, '[data-testid="review-similar"]'),
+    ("clusters-similar", "/p/default/clusters?similar_to=crop-0", serve_similar, '[data-testid="search-summary"]'),
+    ("cluster-detail-similar", "/p/default/clusters/1", serve_similar, '[data-testid="crop-similar"]'),
     ("cluster-detail-source-missing", "/p/default/clusters/1", serve_cluster_grid, '[role="status"]'),
     ("review-source-missing", "/p/default/review", serve_review_pane, '[role="status"]'),
     ("classes", "/p/default/classes", serve_classes, "main"),

@@ -8,13 +8,17 @@ stubbed PEEncoder, same stubbing style ``test_pe_encoder.py`` uses.
 from __future__ import annotations
 
 import asyncio
+import inspect
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
 
+from src.config import CurationConfig
+from src.core.exceptions import RequestRejectedError
 from src.services.curation import semantic_search
+from src.services.curation.item_filter import ItemFilter
 
 
 PE_DIM = 1024
@@ -470,3 +474,153 @@ async def test_semantic_text_search_class_filter_is_the_knn_filter_and_the_count
     assert all(next(iter(c['term'].values()))['value'] == 'car' for c in name_should)
     count_body = fake_os.count.await_args.kwargs['body']
     assert count_body == {'query': {'bool': {'filter': [*clauses, not_embedded_clause()]}}}
+
+
+# =============================================================================
+# Similar search: the stored vector of one crop as the query (GET /search/similar)
+# =============================================================================
+
+STORED_VECTOR = [0.25] * 4
+SELF_EXCLUSION = {'bool': {'must_not': [{'ids': {'values': ['c1']}}]}}
+
+
+def _fake_os_similar(
+    *,
+    source_hits: list[dict] | None = None,
+    knn_hits: list[dict] | None = None,
+    unembedded: int = 0,
+) -> AsyncMock:
+    """Answers the ``ids`` read of the source crop, then the kNN page."""
+    if source_hits is None:
+        source_hits = [{'_id': 'c1', '_source': {'pe_embedding': STORED_VECTOR}}]
+    knn_hits = knn_hits or []
+    fake = AsyncMock()
+
+    async def _search(*, index: str, body: dict) -> dict:
+        if 'ids' in body.get('query', {}):
+            return {'hits': {'hits': source_hits, 'total': {'value': len(source_hits)}}}
+        return {'hits': {'hits': knn_hits, 'total': {'value': len(knn_hits)}}}
+
+    fake.search = AsyncMock(side_effect=_search)
+    fake.count = AsyncMock(return_value={'count': unembedded})
+    return fake
+
+
+def _knn_body(fake: AsyncMock) -> dict:
+    bodies = [c.kwargs['body'] for c in fake.search.call_args_list]
+    return next(b for b in bodies if 'knn' in b['query'])
+
+
+def _knn_filter(fake: AsyncMock) -> list[dict]:
+    return _knn_body(fake)['query']['knn']['pe_embedding']['filter']['bool']['filter']
+
+
+@pytest.mark.asyncio
+async def test_similar_uses_the_stored_vector_as_the_knn_query():
+    fake = _fake_os_similar()
+    await semantic_search.semantic_similar_search(
+        opensearch=fake, crop_id='c1', page=2, page_size=10
+    )
+    knn = _knn_body(fake)['query']['knn']['pe_embedding']
+    assert knn['vector'] == STORED_VECTOR
+    assert knn['k'] == 20
+    params = inspect.signature(semantic_search.semantic_similar_search).parameters
+    assert 'pe_encoder' not in params
+
+
+@pytest.mark.asyncio
+async def test_similar_excludes_self_by_default():
+    fake = _fake_os_similar()
+    await semantic_search.semantic_similar_search(
+        opensearch=fake, crop_id='c1', page=1, page_size=10
+    )
+    assert SELF_EXCLUSION in _knn_filter(fake)
+
+
+@pytest.mark.asyncio
+async def test_similar_keeps_self_when_exclude_self_false():
+    fake = _fake_os_similar()
+    await semantic_search.semantic_similar_search(
+        opensearch=fake, crop_id='c1', exclude_self=False, page=1, page_size=10
+    )
+    assert SELF_EXCLUSION not in _knn_filter(fake)
+
+
+@pytest.mark.asyncio
+async def test_similar_applies_the_text_search_filters():
+    item_filter = ItemFilter(class_names=['car'])
+    kwargs = {'cluster_id': 7, 'include_test': False, 'item_filter': item_filter}
+    fake = _fake_os_similar()
+    await semantic_search.semantic_similar_search(
+        opensearch=fake, crop_id='c1', page=1, page_size=10, **kwargs
+    )
+    text_fake = _fake_os_paged([])
+    await semantic_search.semantic_text_search(
+        opensearch=text_fake,
+        pe_encoder=_fake_encoder(),
+        executor=None,
+        query='x',
+        page=1,
+        page_size=10,
+        **kwargs,
+    )
+    text = text_fake.search.call_args.kwargs['body']['query']['knn']['pe_embedding']['filter'][
+        'bool'
+    ]['filter']
+    assert _knn_filter(fake) == [*text, SELF_EXCLUSION]
+    assert {'term': {'cluster_id': 7}} in text
+
+
+@pytest.mark.asyncio
+async def test_similar_unknown_crop_is_404_not_found():
+    fake = _fake_os_similar(source_hits=[])
+    with pytest.raises(RequestRejectedError) as ei:
+        await semantic_search.semantic_similar_search(
+            opensearch=fake, crop_id='nope', page=1, page_size=10
+        )
+    assert ei.value.status_code == 404
+    assert ei.value.detail['error'] == 'not_found'
+    assert all('knn' not in c.kwargs['body']['query'] for c in fake.search.call_args_list)
+
+
+@pytest.mark.asyncio
+async def test_similar_crop_without_vector_is_409():
+    fake = _fake_os_similar(source_hits=[{'_id': 'c1', '_source': {'embedding_state': 'deferred'}}])
+    with pytest.raises(RequestRejectedError) as ei:
+        await semantic_search.semantic_similar_search(
+            opensearch=fake, crop_id='c1', page=1, page_size=10
+        )
+    assert ei.value.status_code == 409
+    assert ei.value.detail['error'] == 'crop_not_embedded'
+    assert 'deferred' in ei.value.detail['message']
+
+
+@pytest.mark.asyncio
+async def test_similar_reads_only_the_bound_project_index():
+    cfg = CurationConfig(items_index='op_a__items')
+    fake = AsyncMock()
+    seen: list[str] = []
+
+    async def _search(*, index: str, body: dict) -> dict:
+        seen.append(index)
+        if index == 'op_b__items':  # another project's index would know the crop
+            return {'hits': {'hits': [{'_id': 'c1', '_source': {'pe_embedding': STORED_VECTOR}}]}}
+        return {'hits': {'hits': [], 'total': {'value': 0}}}
+
+    fake.search = AsyncMock(side_effect=_search)
+    fake.count = AsyncMock(return_value={'count': 0})
+    with pytest.raises(RequestRejectedError) as ei:
+        await semantic_search.semantic_similar_search(
+            opensearch=fake, crop_id='c1', page=1, page_size=10, config=cfg
+        )
+    assert ei.value.status_code == 404
+    assert set(seen) == {'op_a__items'}
+
+
+@pytest.mark.asyncio
+async def test_similar_reports_unembedded_in_scope():
+    fake = _fake_os_similar(unembedded=5)
+    out = await semantic_search.semantic_similar_search(
+        opensearch=fake, crop_id='c1', page=1, page_size=10
+    )
+    assert out['unembedded_in_scope'] == 5

@@ -7,7 +7,7 @@ from __future__ import annotations
 import io
 import time
 import zipfile
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, get_args
 
 import pytest
 from curation.dataset_import.harness import write_yolo
@@ -285,11 +285,13 @@ def test_upload_rejections(client: TestClient, tmp_path: Path, monkeypatch) -> N
 
 def test_formats_serves_the_catalog(client: TestClient) -> None:
     from src.services.curation.dataset_import.issues import ISSUE_CATALOG
+    from src.services.curation.dataset_import.options import SourceFormat
 
     body = client.get(f'{BASE}/formats').json()
     assert {i['code'] for i in body['issues']} == set(ISSUE_CATALOG)
     assert {c['value'] for c in body['mapping_actions']} == {'map', 'create', 'skip', 'region'}
     assert body['upload_limits']['max_bytes'] > 0
+    assert {f['format'] for f in body['formats']} == set(get_args(SourceFormat))
 
 
 def test_upload_accepts_a_zip_without_file_type_bits(client: TestClient, tmp_path: Path) -> None:

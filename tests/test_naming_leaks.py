@@ -34,6 +34,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 LEAK = codecs.decode('xo_', 'rot13')
 
 
+# Built from parts so this test file does not itself spell the banned address.
+OWNER_LAN_HOST = '.'.join(['10', '10', '10', '20'])
+
+
 def test_real_repo_passes_the_guard() -> None:
     """The actual hook, run against the actual repo: exit 0."""
     exit_code = leaks.main()
@@ -190,3 +194,15 @@ def test_missing_allowlist_file_means_no_exemptions(tmp_path: Path) -> None:
     )
     assert entries == []
     assert any(f'{LEAK}stuff' in h for h in hits['A'])
+
+
+def test_scan_d_bans_the_owner_lan_address_but_not_other_private_addresses(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _write_and_track(repo, 'docs/a.md', f'open http://{OWNER_LAN_HOST}:5184\n')
+    _write_and_track(repo, 'src/net.py', "PRIVATE = ['10.0.0.0/8', '10.0.0.5', '10.10.10.200']\n")
+    allowlist = _allowlist(repo, '')
+    hits, _ = leaks.run_scans(repo, allowlist, scans={'D': leaks.SCAN_D})
+    assert len(hits['D']) == 1
+    assert hits['D'][0].startswith('docs/a.md:')

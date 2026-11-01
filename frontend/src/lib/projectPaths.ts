@@ -56,6 +56,11 @@ export function projectHref<P extends ProjectSubPath>(path: P, slug?: string): s
   return `/p/${encodeURIComponent(s)}${path}`;
 }
 
+/** The /clusters results for the crops nearest to `cropId` ("More like this"). */
+export function similarHref(cropId: string, slug?: string): string {
+  return projectHref(`/clusters?similar_to=${encodeURIComponent(cropId)}`, slug);
+}
+
 /** Query params that name something inside ONE project (a crop, a
  *  class id) and so never carry over to another project. */
 const PROJECT_LOCAL_PARAMS = ['crop_id', 'class'];

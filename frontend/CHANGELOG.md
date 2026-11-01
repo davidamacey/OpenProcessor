@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- "More like this": a crop card action (cluster and search grids) and a link in the review pane open `/clusters?similar_to=<crop id>`, which lists the crops nearest to that crop through `GET /search/similar`. A crop with no vector shows the served refusal; the control is absent when semantic search is not served. The axe check covers the results page, the cluster page action and the review link.
 - Label operations page (`/label-ops`): the project's recorded bulk labels and moves from `GET /label_ops` (newest first, Load older pages through the served `next_after` to the end of the kept history), a detail dialog with the served fields and last undo pass, and undo as a served dry run first (restored, kept, conflicts) with Confirm as a separate step. Served refusals show verbatim; empty and error states have Retry. nginx gives `label_ops` routes a 600 s read timeout.
 - Thumbnail tiles and the review crop pane show a "Source not mounted" or "Image file missing" state with the served source root alias and message when the backend answers `source_missing`, instead of only dimming the tile.
 - Optional HTTP basic auth in the nginx container (`OP_CROPWRIGHT_BASIC_AUTH`, htpasswd file mounted read-only; `/nginx-health` stays open). The entrypoint-sandbox tests now map the new `auth.d` directory like `gateway.d`.
@@ -23,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The assist-run dialog and the auto-label loop panel kept Start enabled for a moment after the form changed, while the shown dry run still answered the old settings. Start now waits until the dry run for the current settings has arrived.
 - An unknown URL shows a not-found page instead of the "Something went wrong / Reload" prompt.
 - A thumbnail the server cannot serve shows a dimmed empty tile instead of spilling its alt text across the cluster grid.
 - On search results the cluster badge no longer runs under the MATCH chip.

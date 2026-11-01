@@ -165,7 +165,8 @@ audit passes. (issue #280). See
 - **Keyboard.** Each project has its own [keymap](../guides/keymaps.mdx).
 - **Semantic search** (`GET /search/text`, on by
   default; `OP_SEMANTIC_SEARCH_ENABLED=0` turns it off) finds items by description, e.g. "blurry
-  close-up".
+  close-up". `GET /search/similar?crop_id=...` ranks items by similarity to a crop's stored vector
+  instead (no encoder).
 
 ## 6. Regions of interest (optional)
 

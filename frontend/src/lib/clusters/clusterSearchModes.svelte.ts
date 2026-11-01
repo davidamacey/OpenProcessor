@@ -9,7 +9,7 @@ import { resolve } from '$app/paths';
 import { page } from '$app/state';
 import { SvelteMap } from 'svelte/reactivity';
 import { getClusters } from '$lib/api_clusters';
-import { getCrops } from '$lib/api_cropRead';
+import { getCrops, searchSimilarCrops } from '$lib/api_cropRead';
 import { bulkLabel, excludeCrops, unexcludeCrops } from '$lib/api_cropWrites';
 import { ApiError, apiErrorText } from '$lib/api_errors';
 import type { Pager } from '$lib/pager.svelte';
@@ -18,6 +18,7 @@ import { createSelection } from '$lib/selection.svelte';
 import { isSemanticSearchAvailable } from '$lib/strategies';
 import type { Cluster, Crop } from '$lib/types';
 import type { RegistryClass } from '$lib/types_classes';
+import type { ItemFilterQuery } from '$lib/types_itemFilter';
 import { dropOnClassStore } from '$stores/dropOnClass.svelte';
 import { keyboardStore } from '$stores/keyboard.svelte';
 import { strategiesStore } from '$stores/strategies.svelte';
@@ -28,6 +29,8 @@ import { undoStore } from '$stores/undo.svelte';
 export interface ClusterSearchModesState {
   readonly clusterPager: Pager<Cluster>;
   showEmbeddingViz: boolean;
+  /** The grid's item filter, which "More like this" is scoped by as text search is. */
+  gridItemFilter(): ItemFilterQuery;
 }
 
 export function createClusterSearchModes(s: ClusterSearchModesState) {
@@ -48,6 +51,54 @@ export function createClusterSearchModes(s: ClusterSearchModesState) {
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- replaced wholesale on every search, never mutated in place
   let searchScores = $state(new Map<string, number>());
   const searchSel = createSelection({ plainClick: 'replace' });
+  // "More like this": the source crop of the results on show, and the served refusal.
+  let similarTo = $state<string | null>(null);
+  let similarError = $state<string | null>(null);
+  let searchUnembedded = $state<number | null>(null);
+
+  async function runSimilar(cropId: string): Promise<void> {
+    searchModeActive = true;
+    similarTo = cropId;
+    similarError = null;
+    searchQuery = '';
+    searchResults = [];
+    try {
+      const res = await searchSimilarCrops(cropId, 1, 200, { ...s.gridItemFilter() });
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- replaced wholesale, never mutated in place
+      searchScores = new Map(res.items.map((it) => [it.id, it.similarity_score]));
+      searchResults = res.items;
+      searchTotal = res.total;
+      searchUnembedded = res.unembedded_in_scope ?? null;
+      void ensureClusterMeta([
+        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local dedupe consumed synchronously
+        ...new Set(
+          res.items.map((it) => it.cluster_id).filter((id): id is number => id != null),
+        ),
+      ]);
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 404 || e.status === 409)) {
+        similarError = apiErrorText(e);
+      } else {
+        toastStore.error(`Similar search failed: ${apiErrorText(e)}`);
+      }
+    }
+  }
+
+  // The `?similar_to=` link (a card's or the review pane's "More like this") runs the search.
+  // Tracks the URL's own value (not `similarTo`) so leaving the mode, while the URL is still
+  // being rewritten, cannot start the same search again.
+  let handledSimilar: string | null = null;
+  $effect(() => {
+    const id = page.url.searchParams.get('similar_to');
+    if (!id) {
+      handledSimilar = null;
+      return;
+    }
+    if (semanticSearchAvailable && id !== handledSimilar) {
+      handledSimilar = id;
+      void runSimilar(id);
+    }
+  });
 
   // ---------------- Ignored bucket (G7) ----------------
   // Excluded crops (`class_excluded=true`, cluster_id=-2) — a mode swap
@@ -178,6 +229,7 @@ export function createClusterSearchModes(s: ClusterSearchModesState) {
     const url = new URL(page.url.href);
     if (q) url.searchParams.set('q', q);
     else url.searchParams.delete('q');
+    url.searchParams.delete('similar_to');
     void goto(resolve(projectHref(`/clusters${url.search}`)), {
       replace: true,
       reset: false,
@@ -190,6 +242,9 @@ export function createClusterSearchModes(s: ClusterSearchModesState) {
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- replaced wholesale, never mutated in place
     searchScores = new Map();
     searchSel.clear();
+    similarTo = null;
+    similarError = null;
+    searchUnembedded = null;
     syncSearchUrl(null);
   }
 
@@ -332,6 +387,15 @@ export function createClusterSearchModes(s: ClusterSearchModesState) {
     set searchScores(v: Map<string, number>) {
       searchScores = v;
     },
+    get similarTo() {
+      return similarTo;
+    },
+    get similarError() {
+      return similarError;
+    },
+    get searchUnembedded() {
+      return searchUnembedded;
+    },
     get searchSel() {
       return searchSel;
     },
@@ -378,6 +442,7 @@ export function createClusterSearchModes(s: ClusterSearchModesState) {
       return clusterMetaMap;
     },
     loadIgnored,
+    runSimilar,
     exitIgnoredMode,
     restoreIgnored,
     runItemTextSearch,

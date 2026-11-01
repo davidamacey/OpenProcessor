@@ -104,7 +104,7 @@ deduplicated within a batch as well as against the index.
 
 ## Dataset import
 
-Bring a labeled YOLO or COCO dataset, or an OpenProcessor export, into a
+Bring a labeled YOLO, COCO, Pascal VOC or Open Images dataset, or an OpenProcessor export, into a
 project. Classes map **by name**. The import is chunked, resumable and
 undoable. See [Dataset import](../guides/dataset-import.mdx).
 
@@ -264,6 +264,7 @@ See [Keymaps](../guides/keymaps.mdx).
 | POST | `/select/diverse` | k-center-greedy diverse sampling (`OP_SELECT_DIVERSE_ENABLED`) |
 | GET | `/select/status` | Status of a backgrounded selection. `/select/cancel` stops it |
 | GET | `/search/text` | PE-Core text-to-image semantic search (`OP_SEMANTIC_SEARCH_ENABLED`) |
+| GET | `/search/similar` | Crops nearest to the stored vector of `crop_id` ("More like this"), no encoder needed |
 
 ## Review queues and holdout
 

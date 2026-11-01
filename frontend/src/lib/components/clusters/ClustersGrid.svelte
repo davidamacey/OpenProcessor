@@ -6,6 +6,9 @@
   import EmbeddingPlot from '$lib/components/EmbeddingPlot.svelte';
   import MatchingItemsView from '$lib/components/itemFilter/MatchingItemsView.svelte';
   import SlotGallery from '$lib/components/slots/SlotGallery.svelte';
+  import UnembeddedBanner from '$components/embedding/UnembeddedBanner.svelte';
+  import { getThumbUrl } from '$lib/api_cropRead';
+  import { similarAction } from '$lib/clusters/similarAction';
   import type { ClusterListController } from '$lib/clusters/clusterListController.svelte';
   import type { ClusterSearchModes } from '$lib/clusters/clusterSearchModes.svelte';
   import type { SlotGalleryController } from '$lib/slots/slotGalleryController.svelte';
@@ -42,6 +45,8 @@
     slotGallery: SlotGalleryController | null;
     ondetail: (c: Crop) => void;
   } = $props();
+
+  const onsimilar = $derived(similarAction());
 </script>
 
 <!-- Grid -->
@@ -52,12 +57,25 @@
          above). Infinite scroll is not offered: {API_PREFIX}/search/text isn't
          paginated the way the cluster grid's sentinel expects. -->
     <div class="mb-3 flex items-center gap-2 text-xs">
-      <span class="text-zinc-300">
+      <span class="flex items-center gap-2 text-zinc-300" data-testid="search-summary">
         <strong class="text-zinc-100">{modes.searchTotal.toLocaleString()}</strong>
-        result{modes.searchTotal === 1 ? '' : 's'} for
-        <span class="font-medium text-blue-200">"{modes.searchQuery}"</span>
-        across the dataset
+        {#if modes.similarTo}
+          result{modes.searchTotal === 1 ? '' : 's'} like
+          <img
+            src={getThumbUrl(modes.similarTo, 64)}
+            alt="The source crop"
+            class="h-8 w-8 rounded-sm border border-zinc-700 object-cover"
+          />
+          <span class="font-medium text-blue-200">{modes.similarTo}</span>
+        {:else}
+          result{modes.searchTotal === 1 ? '' : 's'} for
+          <span class="font-medium text-blue-200">"{modes.searchQuery}"</span>
+          across the dataset
+        {/if}
       </span>
+      {#if modes.similarTo}
+        <UnembeddedBanner count={modes.searchUnembedded} context="search" />
+      {/if}
       <span class="grow"></span>
       <button
         type="button"
@@ -67,14 +85,23 @@
         ← Back to clusters
       </button>
     </div>
-    {#if modes.searchResults.length === 0}
-      <p class="text-sm text-zinc-500">No crops matched that search.</p>
+    {#if modes.similarError}
+      <p class="text-sm text-amber-200" role="status" data-testid="similar-error">
+        {modes.similarError}
+      </p>
+    {:else if modes.searchResults.length === 0}
+      <p class="text-sm text-zinc-500">
+        {modes.similarTo
+          ? 'No similar crops in this scope.'
+          : 'No crops matched that search.'}
+      </p>
     {:else}
       <CropResultGrid
         items={modes.searchResults}
         sel={modes.searchSel}
         scoreOf={(c) => modes.searchScores.get(c.id) ?? null}
         {ondetail}
+        {onsimilar}
       >
         {#snippet cornerBadge(crop)}
           {#if crop.cluster_id != null}
@@ -117,7 +144,12 @@
     {:else if modes.ignoredItems.length === 0}
       <p class="text-sm text-zinc-500">Nothing ignored.</p>
     {:else}
-      <CropResultGrid items={modes.ignoredItems} sel={modes.ignoredSel} {ondetail}>
+      <CropResultGrid
+        items={modes.ignoredItems}
+        sel={modes.ignoredSel}
+        {ondetail}
+        {onsimilar}
+      >
         {#snippet cornerBadge(crop)}
           {#if crop.excluded_reason}
             <span
@@ -156,7 +188,12 @@
     {:else if modes.itemTextItems.length === 0}
       <p class="text-sm text-zinc-500">No crops matched that text.</p>
     {:else}
-      <CropResultGrid items={modes.itemTextItems} sel={modes.itemTextSel} {ondetail} />
+      <CropResultGrid
+        items={modes.itemTextItems}
+        sel={modes.itemTextSel}
+        {ondetail}
+        {onsimilar}
+      />
     {/if}
   {:else if matchingModeActive}
     <MatchingItemsView

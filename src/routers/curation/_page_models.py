@@ -71,4 +71,15 @@ class SearchTextResponse(BaseModel):
     )
 
 
-__all__ = ['ReviewItemDoc', 'ReviewLocateResponse', 'ReviewQueuePage', 'SearchTextResponse']
+class SearchSimilarResponse(SearchTextResponse):
+    """``GET /search/similar``: the ``/search/text`` page; ``semantic_score`` is the
+    kNN similarity to the source crop's stored vector."""
+
+
+__all__ = [
+    'ReviewItemDoc',
+    'ReviewLocateResponse',
+    'ReviewQueuePage',
+    'SearchSimilarResponse',
+    'SearchTextResponse',
+]

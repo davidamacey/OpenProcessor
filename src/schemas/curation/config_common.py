@@ -46,6 +46,8 @@ ErrorCode = Literal[
     'internal_isolation_error',
     'revision_conflict',
     'not_found',
+    # GET /search/similar: the source crop exists but has no stored vector.
+    'crop_not_embedded',
     'unknown_revision',
     'active_conflict',
     'no_previous',

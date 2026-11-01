@@ -108,6 +108,8 @@ export class AssistLoopController {
 
   #deps: AssistLoopDeps;
   #planSeq = 0;
+  /** The request the shown preview answers; a start needs it to be the current one. */
+  #previewKey = $state('');
   #planAbort: AbortController | null = null;
   #planTimer: ReturnType<typeof setTimeout> | undefined;
   #pollTimer: ReturnType<typeof setTimeout> | undefined;
@@ -157,6 +159,7 @@ export class AssistLoopController {
   get canStart(): boolean {
     return (
       this.preview !== null &&
+      this.#previewKey === this.requestKey &&
       this.maxVlmCrops !== null &&
       !this.planning &&
       !this.busy &&
@@ -202,10 +205,12 @@ export class AssistLoopController {
     const ctl = new AbortController();
     this.#planAbort = ctl;
     this.planning = true;
+    const key = this.requestKey;
     try {
       const res = await this.#deps.create(this.request, ctl.signal);
       if (seq !== this.#planSeq) return;
       this.preview = res;
+      this.#previewKey = key;
       this.planError = null;
     } catch (e) {
       if (seq !== this.#planSeq || (e as Error)?.name === 'AbortError') return;

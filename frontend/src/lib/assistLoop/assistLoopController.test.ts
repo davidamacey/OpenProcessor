@@ -32,6 +32,16 @@ describe('AssistLoopController', () => {
     expect(ctl.canStart).toBe(false);
   });
 
+  it('blocks the start once the form changes until the new request is planned', async () => {
+    ctl = new AssistLoopController(loopDeps());
+    await ctl.plan();
+    expect(ctl.canStart).toBe(true);
+    ctl.maxDepth = ctl.maxDepth + 1;
+    expect(ctl.canStart).toBe(false);
+    await ctl.plan();
+    expect(ctl.canStart).toBe(true);
+  });
+
   it('refuses a start without a budget', async () => {
     ctl = new AssistLoopController(loopDeps());
     await ctl.plan();

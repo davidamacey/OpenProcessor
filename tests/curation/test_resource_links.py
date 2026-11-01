@@ -77,9 +77,9 @@ def test_no_request_context_means_not_configured_never_localhost(
 
 def test_lan_host_gets_its_own_host_and_service_port(monkeypatch: pytest.MonkeyPatch) -> None:
     _cfg(monkeypatch, grafana_port=4955, mlflow_port=4959)
-    body = _app().get('/links', headers={'Host': '10.10.10.20:5184'}).json()
-    assert body['grafana'] == 'http://10.10.10.20:4955'
-    assert body['mlflow'] == 'http://10.10.10.20:4959'
+    body = _app().get('/links', headers={'Host': '192.0.2.10:5184'}).json()
+    assert body['grafana'] == 'http://192.0.2.10:4955'
+    assert body['mlflow'] == 'http://192.0.2.10:4959'
     assert body['swagger'] == '/docs'
 
 
@@ -104,16 +104,16 @@ def test_explicit_override_is_verbatim_and_beats_request_host(
 ) -> None:
     _cfg(monkeypatch, grafana_url='https://grafana.example.com/g', mlflow_public_url='http://m:4')
     client = _app()
-    assert client.get('/links', headers={'Host': '10.10.10.20:5184'}).json()['grafana'] == (
+    assert client.get('/links', headers={'Host': '192.0.2.10:5184'}).json()['grafana'] == (
         'https://grafana.example.com/g'
     )
-    assert client.get('/mlflow', headers={'Host': '10.10.10.20'}).json() == {'url': 'http://m:4'}
+    assert client.get('/mlflow', headers={'Host': '192.0.2.10'}).json() == {'url': 'http://m:4'}
 
 
 def test_mlflow_service_url_derives_from_request_host(monkeypatch: pytest.MonkeyPatch) -> None:
     _cfg(monkeypatch, mlflow_port=4959)
-    assert _app().get('/mlflow', headers={'Host': '10.10.10.20:5184'}).json() == {
-        'url': 'http://10.10.10.20:4959'
+    assert _app().get('/mlflow', headers={'Host': '192.0.2.10:5184'}).json() == {
+        'url': 'http://192.0.2.10:4959'
     }
 
 
@@ -214,7 +214,7 @@ _GATEWAY_PATHS = {
 
 def test_gateway_mode_serves_path_relative_links(monkeypatch: pytest.MonkeyPatch) -> None:
     _cfg(monkeypatch, gateway_subpaths=True)
-    body = _app().get('/links', headers={'Host': '10.10.10.20:5184'}).json()
+    body = _app().get('/links', headers={'Host': '192.0.2.10:5184'}).json()
     assert {k: body[k] for k in _GATEWAY_PATHS} == _GATEWAY_PATHS
     assert body['swagger'] == '/docs'
 
@@ -229,8 +229,8 @@ def test_gateway_mode_needs_no_request_context(monkeypatch: pytest.MonkeyPatch) 
 
 def test_gateway_off_keeps_host_port_derivation(monkeypatch: pytest.MonkeyPatch) -> None:
     _cfg(monkeypatch, gateway_subpaths=False)
-    assert _app().get('/links', headers={'Host': '10.10.10.20:5184'}).json()['grafana'] == (
-        'http://10.10.10.20:4605'
+    assert _app().get('/links', headers={'Host': '192.0.2.10:5184'}).json()['grafana'] == (
+        'http://192.0.2.10:4605'
     )
     assert rl.service_url('grafana') is None
 
