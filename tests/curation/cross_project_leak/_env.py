@@ -113,8 +113,11 @@ def leak_env(
     monkeypatch.setenv('OP_REGION_FIELD_EMBEDDING', 'pe_embedding')
     monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'fake_item_detector')
     # The seed-from-detector route reads the detector's label list.
-    (tmp_path / 'detector_labels.txt').write_text('seed probe\n')
-    monkeypatch.setenv('OP_INGEST_PRIMARY_LABELS_PATH', str(tmp_path / 'detector_labels.txt'))
+    # It must live inside the model repository (OP_TRITON_MODEL_REPO above).
+    labels = tmp_path / 'models' / 'fake_item_detector' / 'labels.txt'
+    labels.parent.mkdir(parents=True, exist_ok=True)
+    labels.write_text('seed probe\n')
+    monkeypatch.setenv('OP_INGEST_PRIMARY_LABELS_PATH', str(labels))
     # so a segmenter-only region-profile body (_region_profile_body())
     # never trips no_candidate_source in the sweep -- the segmenter health
     # probe itself still fails closed (network is disabled here), which is
