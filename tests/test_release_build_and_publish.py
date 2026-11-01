@@ -35,12 +35,14 @@ def sandbox(tmp_path: Path) -> Path:
     (repo / 'docker' / 'evaluator').mkdir(parents=True)
     (repo / 'docker' / 'segmenter').mkdir(parents=True)
     (repo / 'docker' / 'trainer').mkdir(parents=True)
+    (repo / 'frontend').mkdir()
     for df in [
         'Dockerfile',
         'Dockerfile.triton',
         'docker/evaluator/Dockerfile',
         'docker/segmenter/Dockerfile',
         'docker/trainer/Dockerfile',
+        'frontend/Dockerfile',
     ]:
         (repo / df).write_text('FROM scratch\n')
     (repo / 'VERSION').write_text('1.2.3\n')
@@ -62,6 +64,8 @@ def sandbox(tmp_path: Path) -> Path:
     shutil.copy(SCRIPT, release_dir / 'build_and_publish.sh')
     (release_dir / 'build_and_publish.sh').chmod(0o755)
     (release_dir / 'trivy-allowlist.txt').write_text('# no waivers\n')
+    for name in ('audit_image_files.py', 'image_audit_allowlist.txt'):
+        shutil.copy(REPO_ROOT / 'scripts' / 'release' / name, release_dir / name)
 
     subprocess.run(['git', 'add', '-A'], cwd=repo, check=True)
     subprocess.run(['git', 'commit', '-q', '-m', 'add release script'], cwd=repo, check=True)
@@ -256,9 +260,9 @@ def test_segmenter_builds_with_its_own_directory_as_context(
         if ln.startswith('build ')
     ]
     seg = next(ln for ln in builds if 'docker/segmenter/Dockerfile' in ln)
-    api = next(ln for ln in builds if '--file Dockerfile ' in ln)
-    assert seg.endswith(' docker/segmenter')
-    assert api.endswith(' .')
+    api = next(ln for ln in builds if '/Dockerfile ' in ln and 'docker/' not in ln)
+    assert seg.endswith('/docker/segmenter')
+    assert api.endswith('/.')
 
 
 def test_trivy_critical_finding_fails_the_gate(sandbox: Path, fake_bin: Path) -> None:
@@ -396,3 +400,102 @@ def test_prerelease_version_is_refused_so_latest_is_stable_only(
     assert 'plain X.Y.Z semver' in result.stderr
     log = fake_bin.parent / 'docker_calls.log'
     assert not log.exists() or not any(c.startswith('push') for c in log.read_text().splitlines())
+
+
+def _context_listing_shim(fake_bin: Path, tmp_path: Path) -> Path:
+    """A docker shim that records the file listing of the build context at build time."""
+    listing = tmp_path / 'context_listing.txt'
+    _write_shim(
+        fake_bin / 'docker',
+        f"""case "$1" in
+    build) ctx="${{@: -1}}"; (cd "$ctx" && find . -type f | sort) >> "{listing}"; exit 0 ;;
+esac
+exit 0""",
+    )
+    return listing
+
+
+def test_build_context_is_the_git_tree_not_the_working_directory(
+    sandbox: Path, fake_bin: Path, tmp_path: Path
+) -> None:
+    models = sandbox / 'models' / 'x__y' / '1'
+    models.mkdir(parents=True)
+    (models / 'model.onnx').write_text('local')
+    (sandbox / 'models' / 'x__y' / '1' / '__pycache__').mkdir()
+    (sandbox / 'models' / 'x__y' / '1' / '__pycache__' / 'm.pyc').write_text('x')
+    listing = _context_listing_shim(fake_bin, tmp_path)
+    result = _run(sandbox, fake_bin, ['--dry-run', '--allow-dirty', '--only', 'api,segmenter'])
+    assert result.returncode == 0, result.stderr
+    seen = listing.read_text()
+    assert './Dockerfile' in seen
+    assert 'model.onnx' not in seen
+    assert '.pyc' not in seen
+
+
+def test_uncommitted_tracked_edits_are_not_in_the_context(
+    sandbox: Path, fake_bin: Path, tmp_path: Path
+) -> None:
+    (sandbox / 'VERSION').write_text('1.2.3\n')
+    (sandbox / 'Dockerfile').write_text('FROM scratch\nRUN echo local-edit\n')
+    seen_file = tmp_path / 'dockerfile_seen.txt'
+    _write_shim(
+        fake_bin / 'docker',
+        f"""case "$1" in
+    build) cat "${{@: -1}}/Dockerfile" >> "{seen_file}"; exit 0 ;;
+esac
+exit 0""",
+    )
+    result = _run(sandbox, fake_bin, ['--dry-run', '--allow-dirty', '--only', 'api'])
+    assert result.returncode == 0, result.stderr
+    assert 'local-edit' not in seen_file.read_text()
+
+
+def test_unknown_rev_is_refused_before_any_build(
+    sandbox: Path, fake_bin: Path, tmp_path: Path
+) -> None:
+    result = _run(sandbox, fake_bin, ['--dry-run', '--rev', 'no-such-rev', '--only', 'api'])
+    assert result.returncode == 1
+    assert 'not a committed revision' in result.stderr
+    log = tmp_path / 'docker_calls.log'
+    assert not log.exists() or 'build ' not in log.read_text()
+
+
+def test_image_audit_blocks_a_release_before_any_push(
+    sandbox: Path, fake_bin: Path, tmp_path: Path
+) -> None:
+    calls = tmp_path / 'docker_calls.log'
+    _write_shim(
+        fake_bin / 'docker',
+        f'echo "$@" >> "{calls}"\n'
+        'case "$1" in run) echo /opt/openprocessor/model_repo_seed/x__y/1/model.onnx ;; esac\n'
+        'exit 0',
+    )
+    result = _run(sandbox, fake_bin, ['--push', '--only', 'api'])
+    assert result.returncode == 1
+    assert 'model.onnx' in result.stderr
+    text = calls.read_text()
+    assert 'run --rm --network none' in text
+    assert 'push ' not in text
+
+
+def test_image_audit_listing_failure_fails_clearly_and_runs_as_root(
+    sandbox: Path, fake_bin: Path, tmp_path: Path
+) -> None:
+    calls = tmp_path / 'docker_calls.log'
+    _write_shim(
+        fake_bin / 'docker',
+        f'echo "$@" >> "{calls}"\n'
+        'case "$1" in run) echo "find: /root: Permission denied" >&2; '
+        'echo /app/partial; exit 1 ;; esac\n'
+        'exit 0',
+    )
+    result = _run(sandbox, fake_bin, ['--push', '--only', 'api'])
+    assert result.returncode == 1
+    assert 'image audit cannot complete' in result.stderr
+    assert 'exit 1' in result.stderr
+    assert 'Permission denied' in result.stderr
+    assert 'Traceback' not in result.stderr
+    text = calls.read_text()
+    assert '--user 0:0' in text
+    assert '--network none' in text
+    assert 'push ' not in text
