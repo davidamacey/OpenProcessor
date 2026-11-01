@@ -93,6 +93,21 @@ class VlmApi:
         return response.json()
 
 
+@pytest.fixture(autouse=True)
+def _no_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No curation test dials out. A pinned VLM client connects to the vetted
+    (fake) address instead of failing on an unresolvable name, so without this
+    a stub address such as 10.0.0.7 would be a real TCP attempt: instant on a
+    host that rejects it, minutes on one that drops the packets. Tests that
+    exercise the connect path override this fixture."""
+    import httpcore
+
+    async def refuse(self: Any, host: str, port: int, **_kw: Any) -> Any:
+        raise httpcore.ConnectError(f'no network in tests ({host}:{port})')
+
+    monkeypatch.setattr('httpcore.AnyIOBackend.connect_tcp', refuse)
+
+
 @pytest.fixture
 def vlm_api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> VlmApi:
     from _curation_app import API as _API

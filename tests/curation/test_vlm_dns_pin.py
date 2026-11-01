@@ -9,6 +9,7 @@ layer to open."""
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 
 import httpcore
@@ -38,6 +39,12 @@ class _Dns:
     def __call__(self, host: str) -> list[str]:
         self.calls.append(host)
         return list(self.answer.get(host, []))
+
+
+@pytest.fixture(autouse=True)
+def _no_network() -> None:
+    """Override the suite-wide stub: these tests install their own connect
+    recorders or talk to a real loopback listener."""
 
 
 @pytest.fixture
@@ -339,3 +346,66 @@ async def test_https_handshake_uses_the_original_name_for_sni(
             await client.get('https://vlm.corp.example/v1/models')
     assert seen == [GOOD]
     assert tls == ['vlm.corp.example']
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    'error',
+    [
+        ValueError('second argument (exceptions) must be a non-empty sequence'),
+        OSError('unreachable'),
+    ],
+)
+async def test_an_unmapped_connect_failure_is_a_connect_error(
+    error: Exception, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """anyio raises a bare ValueError (an empty ExceptionGroup) when every
+    attempt was cancelled; it must become the retryable ConnectError."""
+
+    async def boom(self: Any, host: str, port: int, **_kw: Any) -> Any:
+        raise error
+
+    monkeypatch.setattr('httpcore._backends.anyio.AnyIOBackend.connect_tcp', boom)
+    pin = AddressPin('vlm.corp.example', [GOOD])
+    async with httpx.AsyncClient(transport=PinnedTransport(pin)) as client:
+        with pytest.raises(httpx.ConnectError):
+            await client.get('http://vlm.corp.example/')
+
+
+@pytest.mark.parametrize('mode', ['gaierror', 'empty'])
+def test_the_selection_routes_answer_promptly_with_dns_failing(mode: str) -> None:
+    """The whole selection-path file, run with ``socket.getaddrinfo`` failing
+    (or returning nothing), must finish fast: a refusal is a status, never a
+    retry loop against an address that cannot be reached."""
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    here = Path(__file__).resolve().parent
+    env = {**os.environ, 'NODNS': mode, 'PYTHONPATH': str(here)}
+    started = time.monotonic()
+    done = subprocess.run(
+        [
+            sys.executable,
+            '-m',
+            'pytest',
+            '-p',
+            'nodns_plugin',
+            '-q',
+            '--no-cov',
+            '--timeout',
+            '30',
+            '-p',
+            'no:cacheprovider',
+            str(here / 'test_vlm_selection_paths.py'),
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=240,
+        check=False,
+        cwd=here.parent.parent,
+    )
+    assert done.returncode == 0, done.stdout[-3000:] + done.stderr[-1000:]
+    assert time.monotonic() - started < 120
