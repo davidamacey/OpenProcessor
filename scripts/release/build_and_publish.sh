@@ -128,6 +128,11 @@ while (( $# > 0 )); do
 done
 
 [[ -n "$MODE" ]] || { err "one of --dry-run or --push is required"; exit "$EXIT_MISUSE"; }
+# --scan-severity may widen the gate for a push, never drop CRITICAL from it.
+if [[ "$MODE" == push && ",${SCAN_SEVERITY}," != *",CRITICAL,"* ]]; then
+    err "--push needs CRITICAL in --scan-severity (got '$SCAN_SEVERITY')"
+    exit "$EXIT_MISUSE"
+fi
 
 if [[ -n "$ONLY" ]]; then
     IFS=',' read -r -a SERVICES <<< "$ONLY"
@@ -302,7 +307,7 @@ scan_image() {
         --timeout "$TRIVY_TIMEOUT" --ignorefile "$ignorefile" "$tag" || rc=$?
     case "$rc" in
         0) ok "$tag -- no un-allowlisted $SCAN_SEVERITY findings"; return 0 ;;
-        10) err "$tag has a CRITICAL finding ($SCAN_SEVERITY gate) not in $ALLOWLIST_FILE"; return 1 ;;
+        10) err "$tag has a $SCAN_SEVERITY finding not in $ALLOWLIST_FILE"; return 1 ;;
         *) err "$tag: Trivy scan ERROR (exit $rc, e.g. timeout or DB failure) -- the image was NOT assessed; raise TRIVY_TIMEOUT or fix the scanner"; return 1 ;;
     esac
 }
@@ -316,7 +321,7 @@ report_image() {
     local ignorefile
     ignorefile="$(mktemp)"
     trap 'rm -f "$ignorefile"' RETURN
-    build_trivy_ignorefile "$ignorefile" || return 1
+    build_trivy_ignorefile "$ignorefile" || { warn "no report for $svc: the allowlist did not parse"; return 0; }
     log "writing the CRITICAL,HIGH report for $svc -> $REPORT_DIR/${image_name}.json"
     "$TRIVY_BIN" image --scanners vuln --severity CRITICAL,HIGH --ignore-unfixed \
         --timeout "$TRIVY_TIMEOUT" --ignorefile "$ignorefile" --format json \

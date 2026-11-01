@@ -576,3 +576,26 @@ def test_scan_severity_changes_the_gate(sandbox: Path, fake_bin: Path, tmp_path:
     result = _run(sandbox, fake_bin, ['--dry-run', '--only', 'api', '--scan-severity', 'HIGH'])
     assert result.returncode == 0, result.stderr
     assert '--severity HIGH' in log.read_text()
+
+
+@pytest.mark.parametrize('severity', ['HIGH', 'UNKNOWN', 'LOW,MEDIUM'])
+def test_push_refuses_a_scan_gate_without_critical(
+    sandbox: Path, fake_bin: Path, severity: str
+) -> None:
+    result = _run(sandbox, fake_bin, ['--push', '--only', 'api', '--scan-severity', severity])
+    assert result.returncode == 2, result.stderr
+    assert 'CRITICAL' in result.stderr
+    calls = fake_bin.parent / 'docker_calls.log'
+    assert not calls.exists() or 'push' not in calls.read_text(errors='replace')
+
+
+def test_push_accepts_a_wider_gate_that_keeps_critical(
+    sandbox: Path, fake_bin: Path, tmp_path: Path
+) -> None:
+    log = tmp_path / 'trivy.calls'
+    _write_shim(fake_bin / 'trivy', f'echo "$@" >> {log}; exit 0')
+    result = _run(
+        sandbox, fake_bin, ['--push', '--only', 'api', '--scan-severity', 'HIGH,CRITICAL']
+    )
+    assert result.returncode == 0, result.stderr
+    assert '--severity HIGH,CRITICAL' in log.read_text()
