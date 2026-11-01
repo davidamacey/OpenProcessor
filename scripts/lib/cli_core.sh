@@ -114,6 +114,50 @@ cmd_models_install() {
     fi
 }
 
+# faces purge [--dry-run] [--yes]: forwards exactly the flags given to the purge script. A real
+# purge is refused unless faces are off in .env AND in the running api (an edited .env that was
+# never applied would let the api keep writing face data while it is deleted).
+cmd_faces() {
+    local sub="${1:-}" flag
+    if [[ "$sub" != purge ]]; then
+        log_error "usage: openprocessor faces purge [--dry-run] [--yes]"
+        return 2
+    fi
+    shift
+    local -a flags=()
+    for flag in "$@"; do
+        case "$flag" in
+            --dry-run|--yes) flags+=("$flag") ;;
+            *)
+                log_error "unknown option '${flag}'; usage: openprocessor faces purge [--dry-run] [--yes]"
+                return 2
+                ;;
+        esac
+    done
+    if [[ " ${flags[*]} " == *" --yes "* ]]; then
+        local configured running
+        configured="$(_env_value OP_FACES_ENABLED | tr '[:upper:]' '[:lower:]')"
+        case "$configured" in
+            0|false|no|off) ;;
+            *)
+                log_error "refusing to purge while faces are on: set OP_FACES_ENABLED=false in ${PROJECT_DIR}/.env and restart the api first"
+                return 2
+                ;;
+        esac
+        if [[ -n "$(dc ps --status running -q api 2>/dev/null)" ]]; then
+            running="$(dc exec -T api printenv OP_FACES_ENABLED 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -d '\r')"
+            case "$running" in
+                0|false|no|off) ;;
+                *)
+                    log_error "the running api still has faces on: ./openprocessor restart api, then purge again"
+                    return 2
+                    ;;
+            esac
+        fi
+    fi
+    dc run --rm --no-deps -T -w /app api python -m scripts.purge_face_data "${flags[@]}"
+}
+
 cmd_export() {
     local model="${1:-all}"
 
@@ -290,6 +334,11 @@ Testing:
                       Options: quick (default), full, visual
   bench [mode]        Run benchmarks
                       Options: quick (default), full
+
+Face data (OP_FACES_ENABLED):
+  faces purge [--dry-run] [--yes]
+                      Report (default, or --dry-run) or delete (--yes) every stored face
+                      record, person id and name; --yes needs OP_FACES_ENABLED=false first
 
 Curation (experimental, opt-in compose profile):
   curation [action]   Manage the curation worker services

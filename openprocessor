@@ -412,6 +412,10 @@ main() {
             load_cli_core_lib
             cmd_curation "$@"
             ;;
+        faces)
+            load_cli_core_lib
+            cmd_faces "$@"
+            ;;
         bench)
             load_cli_dev_lib
             require_checkout "bench" && cmd_bench "$@"

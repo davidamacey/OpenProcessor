@@ -22,6 +22,14 @@ if TYPE_CHECKING:
 _PAGE = 1000
 
 
+class FacePurgeIncompleteError(RuntimeError):
+    """Face data was still stored after the purge ran."""
+
+    def __init__(self, after: FaceDataCounts) -> None:
+        super().__init__('face data is still stored after the purge')
+        self.after = after
+
+
 @dataclass(frozen=True)
 class FaceDataCounts:
     face_index_exists: bool
@@ -132,3 +140,36 @@ async def stored_face_counts() -> FaceDataCounts:
     from src.core.dependencies import get_opensearch
 
     return await face_data_counts((await get_opensearch()).client, FAISS_INDEX_DIR)
+
+
+async def purge_face_data(client: Any, index_dir: Path) -> tuple[FaceDataCounts, FaceDataCounts]:
+    """Remove every stored face record, person id and name, and the face FAISS files; return
+    ``(before, after)``. Idempotent: an empty state does nothing.
+
+    The face index is deleted, not emptied: delete-by-query leaves the vectors in segments
+    until a merge, while an index delete removes the files, the HNSW graph and the native
+    k-NN cache entries. ``visual_search_people`` documents stay; only their face link goes.
+    Raises :class:`FacePurgeIncompleteError` when anything is left afterwards.
+    """
+    before = await face_data_counts(client, index_dir)
+    if before.people_face_links:
+        await client.update_by_query(
+            index=IndexName.PEOPLE.value,
+            body={
+                'query': PEOPLE_FACE_LINK_QUERY,
+                'script': {
+                    'source': "ctx._source.remove('face_id'); ctx._source.has_face = false",
+                    'lang': 'painless',
+                },
+            },
+            refresh=True,
+            conflicts='proceed',
+        )
+    if before.face_index_exists:
+        await client.indices.delete(index=IndexName.FACES.value)
+    for path in index_files(index_dir, ClusterIndex.FACES):
+        path.unlink(missing_ok=True)
+    after = await face_data_counts(client, index_dir)
+    if not after.is_empty():
+        raise FacePurgeIncompleteError(after)
+    return before, after
