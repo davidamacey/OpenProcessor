@@ -57,6 +57,15 @@ _env_value() {
 if [[ -f "$PROJECT_DIR/docker-compose.ingest-focus.yml" && "$(_env_value OP_LOAD_PROFILE)" == "ingest" ]]; then
     DC_FILES+=(-f "$PROJECT_DIR/docker-compose.ingest-focus.yml")
 fi
+# Faces off (OP_FACES_ENABLED=false in .env): Triton does not preload the face models. The
+# ingest-focus overlay already omits them and both replace `command`, so never add both.
+case "$(_env_value OP_FACES_ENABLED | tr '[:upper:]' '[:lower:]')" in
+    0|false|no|off)
+        if [[ -f "$PROJECT_DIR/docker-compose.faces-off.yml" && "$(_env_value OP_LOAD_PROFILE)" != "ingest" ]]; then
+            DC_FILES+=(-f "$PROJECT_DIR/docker-compose.faces-off.yml")
+        fi
+        ;;
+esac
 # The user's own overrides (extra bind mounts, a second source root), last so
 # they win. docker-compose.override.yml is not read: the file name is yours.
 if [[ -f "$PROJECT_DIR/docker-compose.local.yml" ]]; then

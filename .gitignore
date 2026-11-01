@@ -178,6 +178,8 @@ docker-compose.*.yml
 !docker-compose.gpu-clustering.yml
 # Opt-in ingest load profile overlay shipped with the repo (OP_LOAD_PROFILE=ingest).
 !docker-compose.ingest-focus.yml
+# Opt-in faces-off overlay shipped with the repo (OP_FACES_ENABLED=false).
+!docker-compose.faces-off.yml
 # Installer plan §1: build:/source-mount overlay shipped with the repo
 # (not generated) -- restores the checkout hot-reload workflow that the
 # now deploy-safe docker-compose.yml no longer carries by default.

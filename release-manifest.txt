@@ -29,3 +29,4 @@ scripts/lib/install_summary.sh
 examples/vlm/catalog.tsv
 export/build_pe_trt.sh	exec
 monitoring/**	optional
+docker-compose.faces-off.yml	optional

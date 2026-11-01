@@ -79,6 +79,7 @@ Every flag also has an environment variable (the flag wins).
 | `--port-base N` | `OP_PORT_BASE` | move the whole 46xx port block to `N..N+12` |
 | `--with-monitoring` | `OP_WITH_MONITORING` | add Prometheus, Grafana, Loki and Alloy (default-open dashboards) |
 | `--sample-data` | `OP_SAMPLE_DATA` | fetch the public COCO sample after the install |
+| `--no-faces` | `OP_FACES_ENABLED=false` | turn the face models off: no face detection or embedding, the `faces` model group is skipped (written to `.env`) |
 | `--skip-models` | | do not export or load models (run `./openprocessor models install` later) |
 | `--no-start` | | configure and pull only; start nothing |
 | `--unattended` | `OP_UNATTENDED` | never prompt (automatic when there is no terminal) |

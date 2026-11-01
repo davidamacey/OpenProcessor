@@ -124,3 +124,41 @@ def test_curation_up_refuses_a_name_that_is_not_a_curation_service(
     assert done.returncode != 0
     assert bad in done.stderr + done.stdout
     assert shimmed.mutating_docker_calls() == []
+
+
+def _faces_off_env(inst: Path, profile: str | None = None) -> None:
+    with (inst / '.env').open('a') as fh:
+        fh.write('\nOP_FACES_ENABLED=false\n')
+        if profile:
+            fh.write(f'OP_LOAD_PROFILE={profile}\n')
+
+
+def test_faces_off_adds_its_overlay_before_the_local_file(shimmed: Shimmed, inst: Path) -> None:
+    shimmed.flag('allow_mutations')
+    (inst / 'docker-compose.faces-off.yml').write_text('services: {}\n')
+    (inst / 'docker-compose.local.yml').write_text('services: {}\n')
+    _faces_off_env(inst)
+    line = _stop_line(shimmed, inst)
+    assert f'-f {inst}/docker-compose.faces-off.yml' in line
+    assert line.index('docker-compose.faces-off.yml') < line.index('docker-compose.local.yml')
+
+
+def test_faces_off_with_the_ingest_profile_does_not_add_a_second_command_overlay(
+    shimmed: Shimmed, inst: Path
+) -> None:
+    shimmed.flag('allow_mutations')
+    (inst / 'docker-compose.faces-off.yml').write_text('services: {}\n')
+    (inst / 'docker-compose.ingest-focus.yml').write_text('services: {}\n')
+    _faces_off_env(inst, 'ingest')
+    line = _stop_line(shimmed, inst)
+    assert 'docker-compose.ingest-focus.yml' in line
+    assert 'faces-off' not in line
+
+
+@pytest.mark.parametrize('env_line', ['', 'OP_FACES_ENABLED=true'])
+def test_faces_on_does_not_load_the_overlay(shimmed: Shimmed, inst: Path, env_line: str) -> None:
+    shimmed.flag('allow_mutations')
+    (inst / 'docker-compose.faces-off.yml').write_text('services: {}\n')
+    with (inst / '.env').open('a') as fh:
+        fh.write(f'\n{env_line}\n')
+    assert 'faces-off' not in _stop_line(shimmed, inst)

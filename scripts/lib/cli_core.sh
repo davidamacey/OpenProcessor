@@ -92,6 +92,7 @@ cmd_models_install() {
     profiles="$(_env_value COMPOSE_PROFILES)"
     [[ ",${profiles}," == *",curation,"* ]] && tiers="core curation"
     OP_DIR="$PROJECT_DIR"
+    OP_FACES_ENABLED="$(_env_value OP_FACES_ENABLED)"
     OP_HEALTH_HOST=127.0.0.1
     GPU_PROFILE="$(_env_value GPU_PROFILE)"
     MODEL_SETUP_TRITON_DIGEST=""
@@ -100,7 +101,7 @@ cmd_models_install() {
     else
         log_info "no .install/state.json (a checkout, not an installed directory): every model group is built"
     fi
-    export OP_DIR OP_HEALTH_HOST GPU_PROFILE MODEL_SETUP_TRITON_DIGEST
+    export OP_DIR OP_FACES_ENABLED OP_HEALTH_HOST GPU_PROFILE MODEL_SETUP_TRITON_DIGEST
     dc up -d triton-server
     if model_setup_run_groups "$tiers" "$only"; then
         log_success "model groups done"
@@ -117,6 +118,8 @@ cmd_export() {
     local model="${1:-all}"
 
     load_export_lib
+    OP_FACES_ENABLED="$(_env_value OP_FACES_ENABLED)"
+    export OP_FACES_ENABLED
 
     case "$model" in
         all)

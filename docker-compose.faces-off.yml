@@ -1,0 +1,53 @@
+# Opt-in overlay: faces off (OP_FACES_ENABLED=false in .env). Triton does not preload the face
+# detector (SCRFD) or the face embedder (ArcFace), so neither model is ever resident.
+# The CLI and the Makefile add this file by themselves when OP_FACES_ENABLED is false;
+# with OP_LOAD_PROFILE=ingest the ingest-focus overlay already omits the face models, so
+# only one of the two is ever added (both replace `command`).
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.faces-off.yml up -d
+#
+# The command below is docker-compose.yml's with the two face `--load-model` lines removed;
+# tests/compose/test_faces_off_overlay.py keeps the two in step.
+
+services:
+  triton-server:
+    command:
+      - tritonserver
+      - --model-store=/models
+      - --backend-config=default-max-batch-size=128
+      - --strict-model-config=false
+      # The API and workers ping every 30 s while idle
+      # (src/clients/triton_pool_core.py); Triton's defaults refuse idle pings
+      # and pings under 5 minutes apart, so every client got a GOAWAY
+      # ("too_many_pings") and reconnected.
+      - --grpc-keepalive-permit-without-calls=true
+      - --grpc-http2-min-recv-ping-interval-without-data=20000
+      - --model-control-mode=explicit
+      # Serve whatever exported: a missing/failed engine (e.g. the minimal
+      # setup profile skips OCR) leaves that model unloaded instead of
+      # killing the server. The API reports per-model status.
+      - --exit-on-error=false
+      - --strict-readiness=false
+      # ===================================================================
+      # Visual Search Models
+      # ===================================================================
+      - --load-model=yolov11_small_trt_end2end
+      - --load-model=mobileclip2_s2_image_encoder
+      - --load-model=mobileclip2_s2_text_encoder
+      - --load-model=paddleocr_det_trt
+      - --load-model=paddleocr_rec_trt
+      - --load-model=ocr_pipeline
+      # G-07: pe_image_encoder backs curation semantic search and the
+      # near-dup/uniqueness item scorers -- CURATION.md calls it required,
+      # not optional, so it belongs in the default load list.
+      - --load-model=pe_image_encoder
+      # F-07 remainder (fresh-start E2E findings 2026-09-25): serving the
+      # text tower here means every uvicorn worker shares ONE CPU instance
+      # instead of each loading its own ~1.4 GB ONNX Runtime session --
+      # src/clients/pe_encoder.py's auto backend selection prefers this
+      # over the in-process path whenever Triton reports it ready.
+      - --load-model=pe_text_encoder
+      # ===================================================================
+      - --log-verbose=0
+      - --log-info=true

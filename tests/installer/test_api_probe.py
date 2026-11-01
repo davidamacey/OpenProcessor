@@ -35,7 +35,13 @@ def _probe_source() -> str:
     return m.group(1)
 
 
-def _run_probe(health: dict, curation: str = '1', vlm: str = '1') -> subprocess.CompletedProcess:
+def _run_probe(
+    health: dict,
+    curation: str = '1',
+    vlm: str = '1',
+    faces: str = '1',
+    posted: list[str] | None = None,
+) -> subprocess.CompletedProcess:
     class H(BaseHTTPRequestHandler):
         def _send(self, body: dict) -> None:
             raw = json.dumps(body).encode()
@@ -48,6 +54,8 @@ def _run_probe(health: dict, curation: str = '1', vlm: str = '1') -> subprocess.
             self._send(health)
 
         def do_POST(self) -> None:
+            if posted is not None:
+                posted.append(self.path)
             self.rfile.read(int(self.headers.get('Content-Length', 0)))
             self._send({'embedding': [0.0] * 512})
 
@@ -61,7 +69,7 @@ def _run_probe(health: dict, curation: str = '1', vlm: str = '1') -> subprocess.
             'http://127.0.0.1:8000', f'http://127.0.0.1:{srv.server_port}'
         )
         return subprocess.run(
-            [sys.executable, '-c', src, curation, vlm],
+            [sys.executable, '-c', src, curation, vlm, faces],
             check=False,
             capture_output=True,
             text=True,
@@ -78,6 +86,16 @@ def test_probe_passes_on_real_ok_health_shape() -> None:
     r = _run_probe(HEALTH_OK)
     assert r.returncode == 0, r.stdout + r.stderr
     assert 'registry' not in r.stdout
+
+
+def test_probe_calls_the_face_route_only_when_faces_are_on() -> None:
+    on: list[str] = []
+    off: list[str] = []
+    assert _run_probe(HEALTH_OK, faces='1', posted=on).returncode == 0
+    assert _run_probe(HEALTH_OK, faces='0', posted=off).returncode == 0
+    assert '/faces/detect' in on
+    assert '/faces/detect' not in off
+    assert '/detect' in off
 
 
 def test_probe_degraded_without_vlm_fails_cleanly_not_keyerror() -> None:

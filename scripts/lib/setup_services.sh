@@ -8,6 +8,19 @@
 [[ -n "${_SETUP_SERVICES_SH_LOADED:-}" ]] && return 0
 _SETUP_SERVICES_SH_LOADED=1
 
+# shellcheck source=model_groups.sh
+source "$(dirname "${BASH_SOURCE[0]}")/model_groups.sh"
+
+# _setup_faces_on: 0 when the face models are part of this deployment. OP_FACES_ENABLED comes
+# from the environment, else from the checkout's .env (the one place the switch is set).
+_setup_faces_on() {
+    if [[ -z "${OP_FACES_ENABLED:-}" && -f "$PROJECT_DIR/.env" ]]; then
+        OP_FACES_ENABLED="$(sed -n 's/^OP_FACES_ENABLED=//p' "$PROJECT_DIR/.env" | tail -n1)"
+        export OP_FACES_ENABLED
+    fi
+    model_setup_faces_enabled
+}
+
 # =============================================================================
 # Service Start
 # =============================================================================
@@ -75,6 +88,11 @@ wait_for_services() {
     # Wait for required models to load
     log_info "Waiting for TensorRT models to load..."
     local required_models=("yolov11_small_trt_end2end" "scrfd_10g_bnkps" "arcface_w600k_r50" "mobileclip2_s2_image_encoder" "mobileclip2_s2_text_encoder" "paddleocr_det_trt" "paddleocr_rec_trt")
+    if ! _setup_faces_on; then
+        required_models=("${required_models[@]/scrfd_10g_bnkps}")
+        required_models=("${required_models[@]/arcface_w600k_r50}")
+        mapfile -t required_models < <(printf '%s\n' "${required_models[@]}" | sed '/^$/d')
+    fi
     local all_loaded=false
 
     for i in {1..90}; do  # Wait up to 3 minutes for models
@@ -196,7 +214,9 @@ run_smoke_test() {
     fi
 
     # Test 3: Face detection
-    if [[ -f "$face_image" ]]; then
+    if ! _setup_faces_on; then
+        log_info "[3/8] Face detection - SKIPPED (OP_FACES_ENABLED=false)"
+    elif [[ -f "$face_image" ]]; then
         log_info "Testing face detection..."
         local face_result
         face_result=$(curl -s -X POST localhost:${API_PORT}/faces/recognize -F "image=@$face_image" 2>/dev/null)
