@@ -174,6 +174,95 @@ def _hydrate_item(hit: dict[str, Any], fields: RegionFields, api_prefix: str) ->
     return item
 
 
+def _filter_for(
+    *,
+    item_filter: ItemFilter | None,
+    tab: str | None,
+    cluster_id: int | None,
+    date_from: str | None,
+    date_to: str | None,
+    max_rank: int | None,
+    min_blur_ratio: float | None,
+    hide_near_duplicates: bool,
+    include_test: bool,
+) -> list[dict[str, Any]]:
+    """The kNN ``filter`` clause both search routes share (one place, so they cannot drift)."""
+    item_filter = item_filter or ItemFilter()
+    return _build_filter(
+        item_filter=item_filter.model_copy(update={'max_rank': None}),
+        tab=tab,
+        cluster_id=cluster_id,
+        date_from=date_from,
+        date_to=date_to,
+        max_rank=max_rank if max_rank is not None else item_filter.max_rank,
+        min_blur_ratio=min_blur_ratio,
+        hide_near_duplicates=hide_near_duplicates,
+        include_test=include_test,
+    )
+
+
+async def _knn_page(
+    *,
+    opensearch: Any,
+    vector: list[float],
+    filter_clause: list[dict[str, Any]],
+    page: int,
+    page_size: int,
+    min_score: float | None,
+    cfg: CurationConfig,
+    fields: RegionFields,
+) -> dict[str, Any]:
+    """Run one filtered kNN page for ``vector`` and hydrate it into the wire page."""
+    # `k` is the ANN candidate depth (how many nearest neighbors the
+    # kNN plugin considers) — it must cover through the end of the
+    # requested page, so it stays `page * page_size` (capped at _MAX_K).
+    # `from`/`size` are a *separate* concern: which slice of those k
+    # candidates the response actually carries. The old code conflated
+    # them — it asked OpenSearch for all k hits (up to 2000) and sliced
+    # to one page in Python, paying the network/JSON cost for every
+    # candidate on every page request. `from`/`size` let OpenSearch do
+    # that slicing server-side; only `page_size` hits cross the wire.
+    k = min(_MAX_K, page * page_size)
+    knn_query = build_knn_query(vector, k=k, filter_clause=filter_clause)
+
+    body: dict[str, Any] = {
+        'size': page_size,
+        'from': (page - 1) * page_size,
+        'query': knn_query,
+        '_source': {'excludes': _source_excludes(fields)},
+    }
+    if min_score is not None:
+        # Top-level min_score is a generic post-scoring filter — applies
+        # the same way regardless of query type, so this replaces the
+        # old client-side hit filtering without changing semantics.
+        body['min_score'] = min_score
+
+    # The unembedded count shares only the filter with the kNN search, so the two run together:
+    # on a filtered query the count is a full filter pass (4-8 ms at 91k items) and used to be
+    # paid on top of the search (#384).
+    # kNN only sees items with a vector, so "no results" must not read as "no
+    # matches": say how many in-scope items it could not search.
+    resp, unembedded = await asyncio.gather(
+        opensearch.search(index=cfg.items_index, body=body),
+        opensearch.count(
+            index=cfg.items_index,
+            body={'query': {'bool': {'filter': [*filter_clause, not_embedded_clause()]}}},
+        ),
+    )
+    hits = (resp.get('hits') or {}).get('hits') or []
+    total = int(((resp.get('hits') or {}).get('total') or {}).get('value', len(hits)))
+
+    items = [_hydrate_item(h, fields, project_api_base()) for h in hits]
+
+    return {
+        'items': items,
+        'total': total,
+        'page': page,
+        'page_size': page_size,
+        'unembedded_in_scope': int((unembedded or {}).get('count', 0)),
+    }
+
+
 async def semantic_text_search(
     *,
     opensearch: Any,
@@ -220,67 +309,27 @@ async def semantic_text_search(
     vectors = await run_in_executor_bound(loop, executor, pe_encoder.encode_text, [query])
     vector = vectors[0].tolist()
 
-    item_filter = item_filter or ItemFilter()
-    filter_clause = _build_filter(
-        item_filter=item_filter.model_copy(update={'max_rank': None}),
+    filter_clause = _filter_for(
+        item_filter=item_filter,
         tab=tab,
         cluster_id=cluster_id,
         date_from=date_from,
         date_to=date_to,
-        max_rank=max_rank if max_rank is not None else item_filter.max_rank,
+        max_rank=max_rank,
         min_blur_ratio=min_blur_ratio,
         hide_near_duplicates=hide_near_duplicates,
         include_test=include_test,
     )
-
-    # `k` is the ANN candidate depth (how many nearest neighbors the
-    # kNN plugin considers) — it must cover through the end of the
-    # requested page, so it stays `page * page_size` (capped at _MAX_K).
-    # `from`/`size` are a *separate* concern: which slice of those k
-    # candidates the response actually carries. The old code conflated
-    # them — it asked OpenSearch for all k hits (up to 2000) and sliced
-    # to one page in Python, paying the network/JSON cost for every
-    # candidate on every page request. `from`/`size` let OpenSearch do
-    # that slicing server-side; only `page_size` hits cross the wire.
-    k = min(_MAX_K, page * page_size)
-    knn_query = build_knn_query(vector, k=k, filter_clause=filter_clause)
-
-    body: dict[str, Any] = {
-        'size': page_size,
-        'from': (page - 1) * page_size,
-        'query': knn_query,
-        '_source': {'excludes': _source_excludes(region_fields)},
-    }
-    if min_score is not None:
-        # Top-level min_score is a generic post-scoring filter — applies
-        # the same way regardless of query type, so this replaces the
-        # old client-side hit filtering without changing semantics.
-        body['min_score'] = min_score
-
-    # The unembedded count shares only the filter with the kNN search, so the two run together:
-    # on a filtered query the count is a full filter pass (4-8 ms at 91k items) and used to be
-    # paid on top of the search (#384).
-    # kNN only sees items with a vector, so "no results" must not read as "no
-    # matches": say how many in-scope items it could not search.
-    resp, unembedded = await asyncio.gather(
-        opensearch.search(index=cfg.items_index, body=body),
-        opensearch.count(
-            index=cfg.items_index,
-            body={'query': {'bool': {'filter': [*filter_clause, not_embedded_clause()]}}},
-        ),
+    return await _knn_page(
+        opensearch=opensearch,
+        vector=vector,
+        filter_clause=filter_clause,
+        page=page,
+        page_size=page_size,
+        min_score=min_score,
+        cfg=cfg,
+        fields=region_fields,
     )
-    hits = (resp.get('hits') or {}).get('hits') or []
-    total = int(((resp.get('hits') or {}).get('total') or {}).get('value', len(hits)))
-
-    items = [_hydrate_item(h, region_fields, project_api_base()) for h in hits]
-
-    return {
-        'items': items,
-        'total': total,
-        'page': page,
-        'page_size': page_size,
-        'unembedded_in_scope': int((unembedded or {}).get('count', 0)),
-    }
 
 
 __all__ = [
