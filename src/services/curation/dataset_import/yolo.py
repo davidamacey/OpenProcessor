@@ -21,6 +21,7 @@ from typing import Any
 
 import yaml
 
+from src.services.curation.dataset_import.capped_io import read_text_capped
 from src.services.curation.dataset_import.issues import IssueCollector
 from src.services.curation.dataset_import.limits import (
     MAX_LABEL_FILE_BYTES,
@@ -84,25 +85,12 @@ def _find_yaml(root: Path) -> Path | None:
     return None
 
 
-def _read_text_capped(path: Path, cap: int) -> str | None:
-    """The file's text, or ``None`` when it is over ``cap`` bytes or
-    unreadable. Never reads more than ``cap + 1`` bytes."""
-    try:
-        with path.open('rb') as fh:
-            raw = fh.read(cap + 1)
-    except OSError:
-        return None
-    if len(raw) > cap:
-        return None
-    return raw.decode('utf-8', errors='replace')
-
-
 def _images_under(entry: Path, base: Path) -> list[Path]:
     if entry.is_dir():
         return sorted(
             p for p in entry.rglob('*') if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
         )
-    text = _read_text_capped(entry, MAX_LABEL_FILE_BYTES)
+    text = read_text_capped(entry, MAX_LABEL_FILE_BYTES)
     if text is None:
         return []
     out = []
@@ -131,7 +119,7 @@ def _resolve_entry(entry: str, yaml_dir: Path, root_field: str | None) -> Path |
 def _load_data_yaml(yaml_path: Path, issues: IssueCollector) -> dict[str, Any] | None:
     """The parsed ``data.yaml`` mapping, or ``None`` after recording why not."""
     name = yaml_path.name
-    text = _read_text_capped(yaml_path, MAX_YAML_BYTES)
+    text = read_text_capped(yaml_path, MAX_YAML_BYTES)
     if text is None:
         issues.add('data_yaml_invalid', file=name, detail={'reason': 'unreadable or too large'})
         return None
@@ -266,7 +254,7 @@ def read_yolo_labels(
         return [], False
 
     boxes: list[LabelBox] = []
-    text = _read_text_capped(txt_path, MAX_LABEL_FILE_BYTES)
+    text = read_text_capped(txt_path, MAX_LABEL_FILE_BYTES)
     if text is None:
         issues.add('dataset_file_too_large', file=rel_file)
         return [], True

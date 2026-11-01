@@ -39,7 +39,7 @@ import logging
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import httpx
 
@@ -50,6 +50,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from src.config.curation_accessors import base_curation_config as get_curation_config
+from src.services.curation.dataset_import.options import SourceFormat
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
@@ -74,9 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument('--dataset', required=True, help='Dataset path on the server')
     p.add_argument('--path-map', default=None, help='LOCAL=SERVER prefix rewrite for --dataset')
-    p.add_argument(
-        '--format', default='auto', choices=['auto', 'yolo', 'coco', 'openprocessor_export']
-    )
+    p.add_argument('--format', default='auto', choices=list(get_args(SourceFormat)))
     p.add_argument('--accept-suggestions', action='store_true')
     p.add_argument('--map', action='append', default=[], metavar='CLASS=ID')
     p.add_argument('--create', action='append', default=[], metavar='CLASS[=NAME]')

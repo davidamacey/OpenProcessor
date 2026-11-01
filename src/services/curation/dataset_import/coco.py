@@ -183,12 +183,12 @@ def read_coco(
                     )
                     continue
             boxes: list[LabelBox] = []
-            has_non_crowd = False
+            has_objects = False
             for ann in anns_by_image.get(img.get('id'), []):
+                has_objects = True
                 if ann.get('iscrowd'):
                     issues.add('coco_crowd_skipped', file=file_name)
                     continue
-                has_non_crowd = True
                 box = _annotation_box(ann, categories, width, height)
                 if box is None:
                     issues.add('coco_bbox_out_of_image', file=file_name)
@@ -196,7 +196,7 @@ def read_coco(
                 boxes.append(box)
 
             label_state: LabelState
-            if not has_non_crowd:
+            if not has_objects:
                 label_state = 'negative'
             elif boxes:
                 label_state = 'labeled'

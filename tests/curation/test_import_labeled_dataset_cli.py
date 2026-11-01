@@ -126,6 +126,12 @@ def test_mapping_flags_become_entries_and_the_path_map_rewrites_the_dataset() ->
     assert body['accept_suggestions'] is True
 
 
+@pytest.mark.parametrize('fmt', ['voc', 'openimages'])
+def test_the_native_formats_are_accepted(fmt: str) -> None:
+    args = cli.build_parser().parse_args(['--dataset', '/x', '--format', fmt])
+    assert args.format == fmt
+
+
 def test_dry_run_only_previews() -> None:
     api = _Api()
     assert _run(['--dataset', '/data/ds', '--dry-run'], api) == 0

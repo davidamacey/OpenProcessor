@@ -60,7 +60,7 @@ ISSUE_CATALOG: dict[str, IssueSpec] = {
     'coco_crowd_skipped': IssueSpec('info', False, False, 'COCO crowd annotation skipped'),
     'coco_bbox_out_of_image': IssueSpec('warning', False, False, 'COCO bbox outside the image'),
     'image_size_mismatch': IssueSpec(
-        'warning', False, False, 'COCO image size does not match the decoded image'
+        'warning', False, False, 'Declared image size does not match the decoded image'
     ),
     'image_path_not_servable': IssueSpec('warning', False, False, 'Image path is not servable'),
     'image_duplicate_in_dataset': IssueSpec(
@@ -118,6 +118,26 @@ ISSUE_CATALOG: dict[str, IssueSpec] = {
         'info', False, False, 'Export stems resolved to images already in this project'
     ),
     'image_unreadable': IssueSpec('warning', False, False, 'Image could not be decoded'),
+    'voc_xml_invalid': IssueSpec('warning', False, False, 'Pascal VOC annotation file is invalid'),
+    'voc_size_missing': IssueSpec(
+        'info', False, False, 'VOC file has no usable image size; read from the image'
+    ),
+    'voc_difficult_skipped': IssueSpec('info', False, False, 'VOC object marked difficult skipped'),
+    'openimages_csv_invalid': IssueSpec('error', True, False, 'Open Images CSV is invalid'),
+    'openimages_class_unknown': IssueSpec(
+        'warning', False, False, 'Open Images row names a MID with no class description'
+    ),
+    'openimages_class_duplicate_name': IssueSpec(
+        'error', True, False, 'Two Open Images MIDs share one display name'
+    ),
+    'openimages_group_skipped': IssueSpec('info', False, False, 'Open Images group box skipped'),
+    'openimages_image_split_conflict': IssueSpec(
+        'warning', False, False, 'Open Images image listed in two splits'
+    ),
+    'openimages_image_unreferenced': IssueSpec(
+        'info', False, False, 'Image file has no Open Images box row (not imported)'
+    ),
+    'image_file_missing': IssueSpec('warning', False, False, 'Referenced image file not found'),
 }
 
 

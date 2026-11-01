@@ -128,7 +128,7 @@ failures of a request body are the standard FastAPI `422` list.
 |---|---|
 | `404` | `project_not_found`, `not_found`, `unknown_revision`, `model_not_found`, `crop_not_found`, `image_not_found`, `import_not_found`, `combine_not_found`, an export artifact that is not whitelisted or not present, `unknown_box_id` |
 | `403` | `read_only` (a non-stored pack, profile or endpoint), region-detector models in `DELETE /models/{model_name}` |
-| `409` | `project_archived`, `project_read_only`, `project_building`, `project_deleting`, `project_failed`, `project_busy`, `project_protected`, `slug_taken`, `slug_retired`, `last_active_project`, `shard_budget_exceeded`, `invalid_transition`, `target_not_empty`, `clone_source_not_ready`, `in_use`, `name_conflict`, `revision_conflict`, `active_conflict`, `no_previous`, `previous_deleted`, `no_active_profile`, `preview_stale`, `combine_not_resumable`, `import_busy`, `import_resumable`, `import_not_resumable`, `import_not_undoable`, `dataset_changed`, `reprocess_busy`, `class_hotkey_conflict`, `hotkey_taken`, `region_conflict`, `vlm_not_configured`, `vlm_endpoint_unavailable`, `no_local_vlm`, `finish_in_progress`, `no_classes` |
+| `409` | `crop_not_embedded` (`GET /search/similar`), `project_archived`, `project_read_only`, `project_building`, `project_deleting`, `project_failed`, `project_busy`, `project_protected`, `slug_taken`, `slug_retired`, `last_active_project`, `shard_budget_exceeded`, `invalid_transition`, `target_not_empty`, `clone_source_not_ready`, `in_use`, `name_conflict`, `revision_conflict`, `active_conflict`, `no_previous`, `previous_deleted`, `no_active_profile`, `preview_stale`, `combine_not_resumable`, `import_busy`, `import_resumable`, `import_not_resumable`, `import_not_undoable`, `dataset_changed`, `reprocess_busy`, `class_hotkey_conflict`, `hotkey_taken`, `region_conflict`, `vlm_not_configured`, `vlm_endpoint_unavailable`, `no_local_vlm`, `finish_in_progress`, `no_classes` |
 | `413` | `upload_too_large`, an upload or batch over its per-request limit |
 | `422` | `validation_failed`, `slug_invalid`, `confirm_mismatch`, `combine_invalid`, `class_mapping_incomplete`, `class_mapping_invalid`, `import_blocked`, `format_undetected`, `dataset_path_not_allowed`, `archive_invalid`, `reprocess_targets_invalid`, `region_profile_required`, `unknown_pack`, `unknown_profile`, `unknown_vlm`, `vlm_external_not_acknowledged`, `unknown_catalog_id`, `vlm_catalog_does_not_fit`, `export_outside_project`, `pack_invalid`, `profile_invalid`, `no_box_to_verify`, `too_many_crops`, `too_many_crop_ids`, `too_many_boxes`, `region_text_disabled`, `box_id_in_batch`, `box_id_required` |
 | `429` | `probe_busy` (VLM endpoint probe), `test_busy` (test-on-crop) |
@@ -689,6 +689,7 @@ Endpoint-specific extra keys on top of the item:
 | `GET /regions/training_candidates` | `items[]` | `region_box_id`, `selection_reason` |
 | `GET /regions/suspected_false_positives` | `items[]` | `region_box_id`, `suspected_fp_distance`, `nearest_fp_subid` |
 | `GET /search/text` | `items[]` | `semantic_score` |
+| `GET /search/similar` | `items[]` | `semantic_score` |
 
 ### Derived and special keys
 
@@ -1806,7 +1807,7 @@ cluster.
 
 ## Dataset import
 
-Import an already-labeled dataset (YOLO, COCO or an OpenProcessor export)
+Import an already-labeled dataset (YOLO, COCO, Pascal VOC, Open Images or an OpenProcessor export)
 into a project. The importer is chunked, persisted, resumable and runs on the
 shared jobs volume. Labels are written through the same single class writer
 that human labels use, so the lock rule holds. A human edit made between
@@ -1826,11 +1827,13 @@ planning and writing wins.
 | POST | `/datasets/imports/{import_id}/resume` | | `202 DatasetImportJob` | `409 import_not_resumable` (only `interrupted`, `failed` or `cancelled`), `409 import_busy`, `409 dataset_changed` |
 | POST | `/datasets/imports/{import_id}/undo` | `DatasetUndoRequest` | `200 DatasetUndoReportWire` for a dry run, else `202 DatasetImportJob` | `409 import_not_undoable`, `409 import_busy` |
 
-`DatasetSource`: `path`, `format` (`auto`, `yolo`, `coco`,
-`openprocessor_export`) and `coco_annotations[]` (`{path, images_dir,
+`DatasetSource`: `path`, `format` (`auto`, `yolo`, `coco`, `voc`,
+`openimages`, `openprocessor_export`) and `coco_annotations[]` (`{path, images_dir,
 split}`). Auto-detection tries an OpenProcessor export, then YOLO (a data
 YAML), then COCO (`annotations/*.json` with no `labels/` directory, so
-`images/` next to `annotations/` is COCO), then YOLO (an `images/` directory,
+`images/` next to `annotations/` is COCO), then Pascal VOC (`Annotations/*.xml`
+with no JSON), then Open Images (a boxes CSV and a class-descriptions CSV in the
+root), then YOLO (an `images/` directory,
 or a child with one). The path must lie under a source root, the project's
 upload root or the project's export root, after symlinks are resolved
 (`422 dataset_path_not_allowed`). References inside a dataset must stay
@@ -2263,6 +2266,7 @@ classes are reported.
 | GET | `/probe/status` | `ProbeStatusResponse` (`status`, `job_id`, `train_job_id`, `model_path`, `gpu`, `updated_count`, `error`, `actionable_min_confidence`) |
 | POST | `/probe/cancel` | |
 | GET | `/search/text` | `q` (required), `page`, `page_size`, `cluster_id`, `tab`, `date_from`, `date_to`, `max_rank`, `min_blur_ratio`, `hide_near_duplicates`, `min_score`, `include_test`. Items plus `semantic_score`. `400` when `OP_SEMANTIC_SEARCH_ENABLED` is set off (it is on by default), `503` while the text encoder is not ready |
+| GET | `/search/similar` | `crop_id` (required), `exclude_self` (default true), `page`, `page_size` and the `/search/text` filters. kNN over items from the stored `pe_embedding` of `crop_id`; no encode. Items plus `semantic_score`, `unembedded_in_scope`. `400` when `OP_SEMANTIC_SEARCH_ENABLED` is set off, `404 not_found` for a crop that is not in this project, `409 crop_not_embedded` for a crop without a vector. Hides validated, dismissed, excluded and holdout items, like text search |
 | GET | `/stats` | project counts, indexes, disk, jobs |
 | GET | `/stats/classes` | per-class counts with `thresholds`, `adequacy`, `trainable`, `trainable_gap`, `aug_target`, `aug_gap` |
 | GET | `/stats/dataset` | the dashboard roll-up |

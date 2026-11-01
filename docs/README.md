@@ -30,6 +30,7 @@ Build the site with `make docs-build`.
 |---|---|
 | [VISION_AND_GOALS.md](VISION_AND_GOALS.md) | What the project is for, the v0.6.0 scope and the standards the code is held to (canonical) |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Services, project isolation, data model, the multi-box region cascade, config store, workers |
+| [WHITEPAPER.md](WHITEPAPER.md) | Public systems whitepaper for the 0.7.0 work: GPU image prep, embedding and clustering research, auto-label loop, isolation; public-data numbers only |
 | [opensearch_schema_design.md](opensearch_schema_design.md) | Global and per-project index schemas, `region_boxes`, clustering |
 | [design/curation_api_contract.md](design/curation_api_contract.md) | Route table and wire models for `/curation` |
 | [design/curation_design_rationale.md](design/curation_design_rationale.md) | Why the subsystem is built the way it is |

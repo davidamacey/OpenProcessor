@@ -7,6 +7,7 @@ import { API_PREFIX, ProjectNotSelectedError } from '$lib/api';
 import {
   legacyRedirectTarget,
   projectHref,
+  similarHref,
   sectionOf,
   switchProjectHref,
 } from '$lib/projectPaths';
@@ -91,5 +92,11 @@ describe('sectionOf', () => {
     expect(sectionOf('/p/alpha')).toBeNull();
     expect(sectionOf('/review')).toBeNull();
     expect(sectionOf('/p/alpha/unknown')).toBeNull();
+  });
+});
+
+describe('similarHref', () => {
+  it('encodes the crop id into the clusters query', () => {
+    expect(similarHref('a/b c', 'alpha')).toBe('/p/alpha/clusters?similar_to=a%2Fb%20c');
   });
 });

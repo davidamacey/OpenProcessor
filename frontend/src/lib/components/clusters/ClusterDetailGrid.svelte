@@ -5,6 +5,7 @@
   import ScoreChip from '$components/ScoreChip.svelte';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import { firstLoadHint, listedText, statusBarText } from '$lib/clusters/firstLoad';
+  import { similarAction } from '$lib/clusters/similarAction';
   import type { Crop } from '$lib/types';
   import type { ClusterDetailController } from '$lib/clusters/clusterDetailController.svelte';
   import type { ClusterDetailActions } from '$lib/clusters/clusterDetailActions.svelte';
@@ -23,6 +24,8 @@
     live: ClusterDetailLive;
     ondetail: (c: Crop) => void;
   } = $props();
+
+  const onsimilar = $derived(similarAction());
 </script>
 
 <!-- Grid container. The class-list left sidebar is the layout-level
@@ -110,6 +113,7 @@
                 onacceptVlm={(c) => void actions.controller.acceptVlmForCrop(c)}
                 onrejectVlm={(c) => void actions.controller.rejectVlmForCrop(c)}
                 {ondetail}
+                {onsimilar}
                 onreprocessed={(items) => actions.controller.adoptItems(items)}
               />
               {#if view.searchModeActive && view.searchScores.has(crop.id)}

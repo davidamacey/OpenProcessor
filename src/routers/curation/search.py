@@ -1,8 +1,8 @@
-"""Semantic text search over curation items.
+"""Semantic search over curation items.
 
-``GET /curation/search/text`` is the one pre-blessed exact path for
-curation semantic search. No other ``/search/*`` prefix is used
-anywhere in this module.
+``GET /curation/search/text`` (free text) and ``GET /curation/search/similar`` (from a stored
+crop vector) are the two paths for curation semantic search. No other ``/search/*`` prefix is
+used anywhere in this module.
 
 Gated end-to-end by ``OP_SEMANTIC_SEARCH_ENABLED`` (default on since #371; set
 ``0`` to turn it off, read with ``env_bool``): disabled returns ``400`` with a message telling
@@ -16,9 +16,11 @@ from typing import Annotated, Any
 from fastapi import HTTPException, Query, Request
 
 from src.config.env import env_bool
+from src.core.exceptions import RequestRejectedError
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
-from src.routers.curation._page_models import SearchTextResponse
+from src.routers.curation._page_models import SearchSimilarResponse, SearchTextResponse
+from src.schemas.curation.config_common import ApiErrorResponse
 from src.services.curation import semantic_search
 from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.item_filter import item_filter_clauses
@@ -138,3 +140,73 @@ async def search_text(
         raise
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'semantic search failed: {exc}') from exc
+
+
+@router.get(
+    '/search/similar',
+    response_model=None,
+    responses={
+        200: {'model': SearchSimilarResponse},
+        404: {'model': ApiErrorResponse, 'description': 'not_found (crop not in this project)'},
+        409: {'model': ApiErrorResponse, 'description': 'crop_not_embedded'},
+    },
+)
+async def search_similar(
+    opensearch: OpenSearchDep,
+    item_filter: ItemFilterQuery,
+    crop_id: Annotated[
+        str, Query(min_length=1, description='The source crop in this project ("More like this").')
+    ],
+    exclude_self: bool = True,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(30, ge=1, le=200),
+    cluster_id: int | None = Query(None),
+    tab: str | None = Query(None, description='Optional review-tab cohort id, as /search/text.'),
+    date_from: str | None = Query(None, description='ISO date/datetime lower bound on created_at.'),
+    date_to: str | None = Query(None, description='ISO date/datetime upper bound on created_at.'),
+    min_blur_ratio: float | None = Query(None, ge=0.0),
+    hide_near_duplicates: bool = False,
+    min_score: float | None = Query(
+        None, ge=0.0, le=1.0, description='Drop hits below this cosine-similarity score.'
+    ),
+    include_test: bool = False,
+) -> dict[str, Any]:
+    """kNN over ``pe_embedding`` using the stored vector of ``crop_id`` as the query.
+
+    No encoder is involved. Same filters, default exclusions and page shape as
+    ``GET /search/text``; ``semantic_score`` is the similarity to the source crop.
+    """
+    if not _semantic_search_enabled():
+        raise HTTPException(
+            status_code=400,
+            detail='semantic search is disabled (OP_SEMANTIC_SEARCH_ENABLED is set off; unset it or set 1 to enable)',
+        )
+
+    try:
+        item_filter_clauses(item_filter)  # a malformed band is the caller's 400, not an outage
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    await ensure_indexes(opensearch)
+
+    try:
+        return await semantic_search.semantic_similar_search(
+            opensearch=opensearch,
+            crop_id=crop_id,
+            exclude_self=exclude_self,
+            page=page,
+            page_size=page_size,
+            cluster_id=cluster_id,
+            tab=tab,
+            date_from=date_from,
+            date_to=date_to,
+            item_filter=item_filter,
+            min_blur_ratio=min_blur_ratio,
+            hide_near_duplicates=hide_near_duplicates,
+            min_score=min_score,
+            include_test=include_test,
+        )
+    except (HTTPException, RequestRejectedError):
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f'similar search failed: {exc}') from exc

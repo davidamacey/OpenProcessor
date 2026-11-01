@@ -163,6 +163,17 @@ describe('AssistRunController dry run', () => {
     expect(c.canStart).toBe(false);
   });
 
+  it('blocks Start once the form changes until the new request is planned', async () => {
+    const c = new AssistRunController(deps());
+    c.open(CLUSTER_OPENER);
+    await c.plan();
+    expect(c.canStart).toBe(true);
+    c.setChoice('representative');
+    expect(c.canStart).toBe(false);
+    await c.plan();
+    expect(c.canStart).toBe(true);
+  });
+
   it('keeps only the newest plan when answers arrive out of order', async () => {
     let release!: (s: AssistRunState) => void;
     const slow = new Promise<AssistRunState>((r) => (release = r));
