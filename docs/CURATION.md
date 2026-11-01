@@ -211,24 +211,26 @@ watcher, a cron schedule or an S3 event webhook. Covers the allow-list
 
 ## Dataset import
 
-Bring a labeled YOLO or COCO dataset, or an OpenProcessor export, into a project.
+Bring a labeled YOLO, COCO, Pascal VOC or Open Images dataset, or an OpenProcessor
+export, into a project.
 Preview, decide each class by name (`map`, `create`, `skip`, `region`), import, undo.
 [Dataset import](../docs-site/docs/guides/dataset-import.mdx).
 
 ### Importing other formats
 
-The importer reads YOLO, COCO and OpenProcessor exports. Pascal VOC, CVAT, LabelMe,
-Label Studio and segmentation, OBB or keypoint-specific formats are not read directly.
+The importer reads YOLO, COCO, Pascal VOC (XML per image), Open Images (boxes CSV plus
+class descriptions) and OpenProcessor exports. CVAT, LabelMe, Label Studio and
+segmentation, OBB or keypoint-specific formats are not read directly.
 Convert them to YOLO or COCO first, then check the result with
 `POST /curation/projects/{project}/datasets/preview`.
 
-- Pascal VOC, CVAT, LabelMe, Label Studio: convert with a general converter such as
+- CVAT, LabelMe, Label Studio: convert with a general converter such as
   `fiftyone` (export as `fo.types.YOLOv5Dataset`) or `supervision`
   (`sv.DetectionDataset.from_pascal_voc(...)` then `.as_yolo(...)`). Keep one class
   name per class: the import decides by name.
 - Polygon, OBB or keypoint labels: YOLO rows with more than five columns are imported
   as their bounding box. The extra geometry is not kept.
-- A `format_undetected` error means no YOLO, COCO or export layout was found at the
+- A `format_undetected` error means no YOLO, COCO, Pascal VOC, Open Images or export layout was found at the
   path.
 
 ## Reprocess
