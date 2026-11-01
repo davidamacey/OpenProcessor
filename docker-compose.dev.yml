@@ -113,6 +113,17 @@ services:
       - ./scripts:/app/scripts
       - ./VERSION:/app/VERSION:ro
 
+  model-export-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: export
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
+    volumes:
+      - ./src:/app/src:ro
+      - ./export:/app/export:ro
+
   curation-evaluator:
     build:
       context: .

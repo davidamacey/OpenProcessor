@@ -42,7 +42,7 @@ def _make_task(model_export, *, task_id: str = 'abc12345', status=None) -> str:
     )
     if status is not None:
         model_export.export_tasks[tid]['status'] = status
-        model_export._persist_task(tid)
+        model_export.persist_task(tid)
     return tid
 
 
@@ -66,7 +66,7 @@ def test_task_state_survives_a_simulated_restart(tmp_path) -> None:
     task_id = _make_task(model_export)
     model_export.export_tasks[task_id]['status'] = model_export.ExportStatus.EXPORTING
     model_export.export_tasks[task_id]['progress'] = 42.0
-    model_export._persist_task(task_id)
+    model_export.persist_task(task_id)
 
     # Simulate a process restart: the in-memory cache is gone, only the
     # file on disk survives.
@@ -104,51 +104,3 @@ def test_get_export_task_missing_id_returns_none(tmp_path) -> None:
     from src.services import model_export
 
     assert model_export.get_export_task('does-not-exist') is None
-
-
-# =============================================================================
-# reconcile_orphaned_export_tasks — startup repair
-# =============================================================================
-
-
-def test_reconcile_marks_non_terminal_task_failed(tmp_path) -> None:
-    from src.schemas.models import ExportStatus
-    from src.services import model_export
-
-    task_id = _make_task(model_export, status=ExportStatus.EXPORTING)
-    model_export.export_tasks.clear()  # simulate restart before reconcile runs
-
-    n = model_export.reconcile_orphaned_export_tasks()
-    assert n == 1
-
-    task = model_export.get_export_task(task_id)
-    assert task is not None
-    assert task['status'] == ExportStatus.FAILED
-    assert 'restart' in task['error']
-
-
-@pytest.mark.parametrize('terminal_status', ['completed', 'failed'])
-def test_reconcile_leaves_terminal_tasks_alone(tmp_path, terminal_status) -> None:
-    from src.services import model_export
-
-    task_id = _make_task(model_export, status=terminal_status)
-    model_export.export_tasks.clear()
-
-    n = model_export.reconcile_orphaned_export_tasks()
-    assert n == 0
-    task = model_export.get_export_task(task_id)
-    assert task is not None
-    assert task['status'] == terminal_status
-
-
-def test_reconcile_is_idempotent(tmp_path) -> None:
-    from src.schemas.models import ExportStatus
-    from src.services import model_export
-
-    _make_task(model_export, status=ExportStatus.PENDING)
-    model_export.export_tasks.clear()
-
-    first = model_export.reconcile_orphaned_export_tasks()
-    second = model_export.reconcile_orphaned_export_tasks()
-    assert first == 1
-    assert second == 0

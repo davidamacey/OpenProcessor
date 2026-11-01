@@ -93,6 +93,7 @@ _CUSTOM_IMAGE_OVERRIDE_VARS = {
     'curation-assist-loop-worker': 'OP_API_IMAGE',
     'curation-cluster-refresh': 'OP_API_IMAGE',
     'model-export': 'OP_EXPORT_IMAGE',
+    'model-export-worker': 'OP_EXPORT_IMAGE',
     'curation-evaluator': 'OP_EVALUATOR_IMAGE',
     'segmenter': 'OP_SEGMENTER_IMAGE',
     'curation-trainer': 'OP_TRAINER_IMAGE',

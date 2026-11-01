@@ -5,19 +5,27 @@ Model upload and export routes.
 - POST /models/{name}/export - Export uploaded model to TensorRT
 - GET /models/export/{task_id} - Get export task status
 - GET /models/exports - List all export tasks
+
+The engine build runs in the model-export worker (the export image), not in the API: these
+routes queue a job file for it and answer 503 when no worker is running. See
+``src.services.model_export``.
 """
 
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
+from typing import Any
+
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from src.schemas.model_admin import ExportRequest
 from src.schemas.models import ExportFormat, ExportTaskResponse, ExportTaskStatus
 from src.services.model_export import (
     PYTORCH_MODELS_DIR,
+    ExportWorkerUnavailableError,
     create_export_task,
+    enqueue_export_job,
     generate_triton_name,
     get_export_task,
     list_export_tasks,
-    run_export,
+    require_export_worker,
     save_uploaded_file,
     validate_pytorch_model,
 )
@@ -29,15 +37,25 @@ router = APIRouter()
 MAX_FILE_SIZE_MB = 500
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
+_WORKER_DOWN: dict[int | str, dict[str, Any]] = {
+    503: {'description': 'The model-export worker service is not running'}
+}
+
+
+def _require_worker() -> None:
+    try:
+        require_export_worker()
+    except ExportWorkerUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
 
 # =============================================================================
 # Upload Endpoint
 # =============================================================================
 
 
-@router.post('/upload', response_model=ExportTaskResponse)
+@router.post('/upload', response_model=ExportTaskResponse, responses=_WORKER_DOWN)
 async def upload_model(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description='YOLO11 .pt model file'),
     triton_name: str | None = Form(default=None, description='Custom Triton model name'),
     max_batch: int = Form(default=32, ge=1, le=128, description='Max batch size'),
@@ -48,7 +66,8 @@ async def upload_model(
     """
     Upload a YOLO11 model and start export to TensorRT.
 
-    The export runs in the background. Use /models/export/{task_id} to check status.
+    The export runs in the model-export worker. Use /models/export/{task_id} to check status.
+    Answers 503 when that worker service is not running.
 
     **File Requirements:**
     - Must be a .pt file (PyTorch checkpoint)
@@ -58,8 +77,8 @@ async def upload_model(
     **Export Process:**
     1. File is validated as a valid YOLO detection model
     2. Saved to pytorch_models/ directory
-    3. Export task starts in background
-    4. Model is automatically loaded into Triton (if auto_load=True)
+    3. The export job is queued for the model-export worker
+    4. The worker loads the model into Triton (if auto_load=True)
 
     Returns task_id for status polling.
     """
@@ -80,6 +99,9 @@ async def upload_model(
     if len(content) < 1000:
         raise HTTPException(status_code=400, detail='File too small to be a valid model')
 
+    # Before anything is saved or queued: nothing would ever run the job.
+    _require_worker()
+
     # Generate Triton-compatible name
     name = triton_name or generate_triton_name(file.filename)
 
@@ -96,8 +118,14 @@ async def upload_model(
 
     task_id = create_export_task(file.filename, name, model_info, format_strs)
 
-    background_tasks.add_task(
-        run_export, task_id, pt_file, name, max_batch, format_strs, normalize_boxes, auto_load
+    enqueue_export_job(
+        task_id,
+        pt_file=pt_file,
+        triton_name=name,
+        max_batch=max_batch,
+        formats=format_strs,
+        normalize_boxes=normalize_boxes,
+        auto_load=auto_load,
     )
 
     task = get_export_task(task_id)
@@ -119,11 +147,10 @@ async def upload_model(
 # =============================================================================
 
 
-@router.post('/{model_name}/export', response_model=ExportTaskResponse)
+@router.post('/{model_name}/export', response_model=ExportTaskResponse, responses=_WORKER_DOWN)
 async def export_model(
     model_name: str,
     request: ExportRequest,
-    background_tasks: BackgroundTasks,
 ) -> ExportTaskResponse:
     """
     Export an uploaded PyTorch model to TensorRT.
@@ -138,8 +165,11 @@ async def export_model(
     - `onnx_end2end`: ONNX with NMS (intermediate for trt_end2end)
     - `all`: All formats
 
-    Export runs in background. Returns task_id for status polling.
+    The export runs in the model-export worker (503 when it is not running). Returns task_id
+    for status polling.
     """
+    _require_worker()
+
     # Find the PyTorch model file
     pt_file = PYTORCH_MODELS_DIR / f'{model_name}.pt'
 
@@ -167,15 +197,14 @@ async def export_model(
 
     task_id = create_export_task(pt_file.name, model_name, model_info, format_strs)
 
-    background_tasks.add_task(
-        run_export,
+    enqueue_export_job(
         task_id,
-        pt_file,
-        model_name,
-        request.max_batch,
-        format_strs,
-        request.normalize_boxes,
-        request.auto_load,
+        pt_file=pt_file,
+        triton_name=model_name,
+        max_batch=request.max_batch,
+        formats=format_strs,
+        normalize_boxes=request.normalize_boxes,
+        auto_load=request.auto_load,
     )
 
     task = get_export_task(task_id)

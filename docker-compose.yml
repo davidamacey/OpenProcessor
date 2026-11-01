@@ -362,6 +362,52 @@ services:
       - triton_net
 
   # ===================================================================
+  # model-export-worker: runs the engine builds the API queues for POST /models/upload and
+  # POST /models/{model_name}/export (job files on the shared jobs volume; the API answers 503
+  # naming this service while it is down). Opt in with `--profile export`.
+  # ===================================================================
+  model-export-worker:
+    image: ${OP_EXPORT_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-export:${OP_IMAGE_TAG:-0.6.0}}
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-model-export-worker
+    logging: *default-logging
+    profiles:
+      - export
+    restart: unless-stopped
+    command: ["python", "-m", "export.export_worker", "--watch", "/jobs/model_export"]
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      - HF_HOME=/home/appuser/.cache/huggingface
+      - HF_HUB_CACHE=/home/appuser/.cache/huggingface/hub
+    volumes:
+      - ./models:/app/models
+      - ./pytorch_models:/app/pytorch_models
+      - openprocessor-jobs:/jobs
+      - ./cache/huggingface:/home/appuser/.cache/huggingface
+    shm_size: 8g
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    healthcheck:
+      test: ["CMD-SHELL", "test -n \"$$(find /jobs/model_export/worker.heartbeat -mmin -1 2>/dev/null)\""]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    deploy:
+      resources:
+        reservations:
+          memory: 2g
+          devices:
+            - driver: nvidia
+              device_ids: [ '${API_GPU_ID:-0}' ]
+              capabilities:
+                - gpu
+    networks:
+      - triton_net
+
+  # ===================================================================
   # Cropwright: the labeling frontend, opt-in via `--profile cropwright`. It is
   # also the gateway (OP_GATEWAY_SUBPATHS=true): the one published port for the
   # app, the API docs and the monitoring UIs, which then stay on loopback.

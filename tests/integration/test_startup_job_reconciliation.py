@@ -1,14 +1,13 @@
 """Proves the FastAPI startup lifespan actually invokes orphaned-job
-reconciliation for all five affected modules plus the model-export task
-directory (persistence-hardening Gap 1 + Gap 2; probe_job added in the
-2026-09-25 multi-worker-state fix).
+reconciliation for all five affected modules (persistence-hardening Gap 1;
+probe_job added in the 2026-09-25 multi-worker-state fix). Model-export
+tasks are not reconciled here: the model-export worker owns them
+(``tests/test_model_export_worker.py``).
 
-Monkeypatches each module's ``reconcile_orphaned_jobs`` /
-``reconcile_orphaned_export_tasks`` before constructing the app so this
-never touches a real job state dir or export directory; it only proves
-the lifespan wiring calls them, not their internal correctness (covered
-by ``tests/curation/test_job_reconcile.py`` and
-``tests/test_model_export_persistence.py``).
+Monkeypatches each module's ``reconcile_orphaned_jobs`` before constructing
+the app so this never touches a real job state dir; it only proves the
+lifespan wiring calls them, not their internal correctness (covered by
+``tests/curation/test_job_reconcile.py``).
 """
 
 from __future__ import annotations
@@ -21,7 +20,6 @@ pytestmark = pytest.mark.integration
 
 
 def test_lifespan_calls_reconcile_for_all_job_modules(monkeypatch: pytest.MonkeyPatch) -> None:
-    from src.services import model_export
     from src.services.curation import embedding_viz, probe_job
     from src.services.curation.autolabel import job as autolabel_job
     from src.services.curation.item_scores import job as item_scores_job
@@ -41,7 +39,6 @@ def test_lifespan_calls_reconcile_for_all_job_modules(monkeypatch: pytest.Monkey
     monkeypatch.setattr(embedding_viz, 'reconcile_orphaned_jobs', _tracker('embedding_viz'))
     monkeypatch.setattr(autolabel_job, 'reconcile_orphaned_jobs', _tracker('autolabel'))
     monkeypatch.setattr(probe_job, 'reconcile_orphaned_jobs', _tracker('probe'))
-    monkeypatch.setattr(model_export, 'reconcile_orphaned_export_tasks', _tracker('model_export'))
 
     from src.main import app
 
@@ -54,7 +51,6 @@ def test_lifespan_calls_reconcile_for_all_job_modules(monkeypatch: pytest.Monkey
         'embedding_viz',
         'autolabel',
         'probe',
-        'model_export',
     }
 
 
