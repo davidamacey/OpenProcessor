@@ -150,12 +150,35 @@ def _run(cmd: list[str]) -> str:
     return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout  # nosec B603
 
 
-def _image_listing(docker: str, image: str, find_args: list[str]) -> list[str]:
-    cmd = [docker, 'run', '--rm', '--network', 'none', '--entrypoint', 'sh', image, '-c']
-    return [ln for ln in _run([*cmd, 'find ' + ' '.join(find_args)]).splitlines() if ln]
+class ListingError(RuntimeError):
+    """The in-image file listing failed; a partial listing is never treated as a pass."""
+
+
+def _image_listing(docker: str, image: str, find_expr: str) -> list[str]:
+    # Root, so a non-root image user cannot hide unreadable directories from the audit.
+    cmd = [
+        docker, 'run', '--rm', '--network', 'none', '--user', '0:0',
+        '--entrypoint', 'sh', image, '-c', f'find {find_expr}',
+    ]  # fmt: skip
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)  # nosec B603
+    if proc.returncode != 0:
+        tail = '\n'.join(proc.stderr.strip().splitlines()[-10:])
+        raise ListingError(
+            f'listing {image} failed (exit {proc.returncode}); command: {" ".join(cmd)}\n'
+            f'stderr tail:\n{tail}'
+        )
+    return [ln for ln in proc.stdout.splitlines() if ln]
 
 
 def main() -> int:
+    try:
+        return _audit()
+    except ListingError as exc:
+        print(f'image audit cannot complete: {exc}', file=sys.stderr)
+        return 1
+
+
+def _audit() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--image', required=True)
     ap.add_argument('--dockerfile', required=True, help='path of the Dockerfile on disk')
@@ -173,14 +196,17 @@ def main() -> int:
     problems: list[str] = []
 
     for root in directory_copy_roots(text, args.context, tracked):
-        listing = _image_listing(args.docker_bin, args.image, [root, '-type', 'f'])
+        listing = _image_listing(args.docker_bin, args.image, f'{root} -type f')
         problems += [
             f'untracked in image (not in git at {args.rev}): {p}'
             for p in untracked_files(text, args.context, tracked, listing)
         ]
 
     everything = _image_listing(
-        args.docker_bin, args.image, ['/', '-xdev', r'\(', '-type', 'f', '-o', '-type', 'd', r'\)']
+        args.docker_bin,
+        args.image,
+        r'/ -xdev \( -path /proc -o -path /sys -o -path /dev \) -prune -o '
+        r'\( -type f -o -type d \) -print',
     )
     allowlist = load_allowlist(Path(args.allowlist))
     problems += [

@@ -476,3 +476,26 @@ def test_image_audit_blocks_a_release_before_any_push(
     text = calls.read_text()
     assert 'run --rm --network none' in text
     assert 'push ' not in text
+
+
+def test_image_audit_listing_failure_fails_clearly_and_runs_as_root(
+    sandbox: Path, fake_bin: Path, tmp_path: Path
+) -> None:
+    calls = tmp_path / 'docker_calls.log'
+    _write_shim(
+        fake_bin / 'docker',
+        f'echo "$@" >> "{calls}"\n'
+        'case "$1" in run) echo "find: /root: Permission denied" >&2; '
+        'echo /app/partial; exit 1 ;; esac\n'
+        'exit 0',
+    )
+    result = _run(sandbox, fake_bin, ['--push', '--only', 'api'])
+    assert result.returncode == 1
+    assert 'image audit cannot complete' in result.stderr
+    assert 'exit 1' in result.stderr
+    assert 'Permission denied' in result.stderr
+    assert 'Traceback' not in result.stderr
+    text = calls.read_text()
+    assert '--user 0:0' in text
+    assert '--network none' in text
+    assert 'push ' not in text
