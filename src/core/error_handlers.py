@@ -19,6 +19,7 @@ from src.core.logging import get_logger, get_request_id
 if TYPE_CHECKING:
     from fastapi import Request
 
+    from src.config.faces import FacesDisabledError
     from src.core.exceptions import RequestRejectedError
     from src.utils.retry import RetryExhaustedError
     from src.utils.upstream_errors import UpstreamError
@@ -92,3 +93,17 @@ async def request_rejected_response(_request: Request, exc: RequestRejectedError
     """A service refused the request -> the status and ``{"detail": ...}`` body it
     carries, the same response an ``HTTPException`` with that status and detail gives."""
     return JSONResponse(status_code=exc.status_code, content={'detail': exc.detail})
+
+
+async def faces_disabled_response(request: Request, exc: FacesDisabledError) -> JSONResponse:
+    """A face route was called while ``OP_FACES_ENABLED=false`` -> 400, the status every
+    other switched-off feature answers (``OP_SCORES_ENABLED``, ``OP_SEMANTIC_SEARCH_ENABLED``,
+    ``OP_VIZ_PROJECTION_ENABLED``). The body is the ``detail`` they send plus a stable
+    ``error`` code and the ``request_id`` the other core handlers carry."""
+    req_id = get_request_id()
+    logger.info('faces_disabled_refused', method=request.method, path=request.url.path)
+    return JSONResponse(
+        status_code=400,
+        content={'detail': str(exc), 'error': 'faces_disabled', 'request_id': req_id},
+        headers={'X-Request-ID': req_id},
+    )

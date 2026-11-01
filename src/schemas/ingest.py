@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.config.faces import faces_enabled
+
 
 class IndexedCounts(BaseModel):
     """Counts of documents indexed per category."""
@@ -69,6 +71,10 @@ class IngestResponse(BaseModel):
     error: str | None = Field(default=None, description='Error message (if status is error)')
     errors: list[str] | None = Field(default=None, description='List of non-fatal errors')
     total_time_ms: float | None = Field(default=None, description='Processing time in milliseconds')
+    faces_enabled: bool = Field(
+        default_factory=faces_enabled,
+        description='False when the deployment has face models off (OP_FACES_ENABLED=false): no face was detected or indexed',
+    )
 
 
 class BatchIndexedCounts(BaseModel):
@@ -140,6 +146,10 @@ class BatchIngestResponse(BaseModel):
         default=None, description='Details of near-duplicate assignments'
     )
     total_time_ms: float | None = Field(default=None, description='Total batch processing time')
+    faces_enabled: bool = Field(
+        default_factory=faces_enabled,
+        description='False when the deployment has face models off (OP_FACES_ENABLED=false): no face was detected or indexed',
+    )
 
 
 class DirectoryIngestResponse(BaseModel):
@@ -166,4 +176,8 @@ class DirectoryIngestResponse(BaseModel):
         default=None, description='File extensions that were skipped'
     )
     total_time_ms: float | None = Field(default=None, description='Total processing time')
+    faces_enabled: bool = Field(
+        default_factory=faces_enabled,
+        description='False when the deployment has face models off (OP_FACES_ENABLED=false): no face was detected or indexed',
+    )
     error: str | None = Field(default=None, description='Error message if status is error')

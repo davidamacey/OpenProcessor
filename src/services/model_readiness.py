@@ -11,6 +11,7 @@ from typing import Any
 
 from src.config import get_settings
 from src.config.env import env_str
+from src.config.faces import face_model_names, faces_enabled
 
 
 def required_model_names() -> list[str]:
@@ -19,7 +20,17 @@ def required_model_names() -> list[str]:
     ``OP_REQUIRED_MODELS`` (comma list) replaces the default. The default is
     the always-exported inference set plus the PE image encoder that curation
     search and scoring need; OCR is left out because the minimal profile skips it.
+    With ``OP_FACES_ENABLED=false`` the face models are dropped from either list, so a
+    list written before faces were switched off cannot hold readiness hostage.
     """
+    names = _configured_or_default()
+    if faces_enabled():
+        return names
+    face_models = face_model_names()
+    return [n for n in names if n not in face_models]
+
+
+def _configured_or_default() -> list[str]:
     configured = [n.strip() for n in env_str('OP_REQUIRED_MODELS').split(',') if n.strip()]
     if configured:
         return configured

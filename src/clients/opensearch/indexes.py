@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from opensearchpy.exceptions import RequestError
 
 from src.clients.opensearch.names import IndexName
+from src.config.faces import faces_enabled
 
 
 if TYPE_CHECKING:
@@ -79,7 +80,9 @@ class IndexesMixin:
         results[IndexName.GLOBAL.value] = await self.create_global_index(force_recreate)
         results[IndexName.VEHICLES.value] = await self.create_vehicles_index(force_recreate)
         results[IndexName.PEOPLE.value] = await self.create_people_index(force_recreate)
-        results[IndexName.FACES.value] = await self.create_faces_index(force_recreate)
+        # Faces off: do not recreate a purged index empty on every boot (#379).
+        if faces_enabled():
+            results[IndexName.FACES.value] = await self.create_faces_index(force_recreate)
         results[IndexName.OCR.value] = await self.create_ocr_index(force_recreate)
         return results
 

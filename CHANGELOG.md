@@ -40,6 +40,8 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - The installer's tier prompt is a numbered menu; `--tiers` is unchanged.
 
 ### Added
+- Deployment-wide face switch (#379): `OP_FACES_ENABLED=false` (installer flag `--no-faces`) turns the face models off everywhere. The face, person and `/search/face` routes and the `faces` cluster index answer `400 faces_disabled`; ingest and analyze skip faces and report `faces_enabled: false` (new field on the ingest and analyze responses); the opt-in overlay `docker-compose.faces-off.yml` (added by the CLI and the Makefile) stops Triton preloading SCRFD and ArcFace; the installer skips the `faces` model group.
+- `./openprocessor faces purge [--dry-run] [--yes]` (#379): deletes the face index, the face FAISS files and the face link on people documents, and writes a counts-only record to `data/audit/faces_purge.jsonl`. `--yes` requires faces to be off first. Command line only, no API route.
 - `gpu_image_prep` waits for device memory instead of failing into the CPU fallback (#392): each photo reserves its decoded frame from `DEVICE_BUDGET_MIB` (default 2048) and waits at most `BUDGET_WAIT_SECONDS` (20); the budget is reserved at load, so an instance that cannot hold it fails to load (ingest then decodes on the CPU, visibly); a failed allocation, a timed-out wait and an over-sized photo are the counted routes `cpu_gpu_memory` and `cpu_over_budget` in `op_ingest_decode_total` and `op_reprocess_decode_total`; a `budget` stage counter shows the wait.
 - Opt-in ingest load profile (#393): `OP_LOAD_PROFILE=ingest` (overlay `docker-compose.ingest-focus.yml`, added by the CLI) preloads only the detector and the PE encoders, which frees 27.7 GB on a 48 GB card; the face, MobileCLIP and OCR models load on their first call, so every endpoint still answers. Per-model memory and the endpoint check: `docs-site/docs/operations/ingest-load-profile.mdx`. The default (`full`) is unchanged.
 - `scripts/bench/gpu_prep_parity.py`: captures and compares `gpu_image_prep` answers before and after a change.
@@ -61,10 +63,14 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - `/health/pe_text` reports `pid` and `cache_scope`.
 
 ### Changed
+- `/health` leaves the face models out of the required list when faces are off (also from an explicit `OP_REQUIRED_MODELS`) and reports `services.faces` with the counts of face data still stored; it never makes `/ready` fail (#379).
 - The IVF cluster fit runs one k-means restart instead of five (#337): the fit is about eight times cheaper (50 s against 388 s on 91,184 real photo crops, host load about 100) and on real vectors the clusters are as pure and as compact (public COCO set, 7 seeds: purity 0.7962 against 0.7963, false-merge rate 0.3008 against 0.3009). Cluster ids move on the next full recluster, as they do after any retrain.
 - `POST /crops/label/undo_batch` is typed (`CropUndoBatchResponse`) and writes in paged conditional bulks instead of one update per id; `POST /crops/discard_batch` does the same.
 - `GET /clusters` no longer serves `label_purity`; read `label_agreement` (same value). Test-holdout items are no longer counted in cluster cards.
 - Docs: the published site is linked from the README and the repository homepage; first-run steps corrected after a new-user review.
+
+### Removed
+- The unused `ingest_faces` service and OpenSearch client methods, which nothing in production called (#379).
 
 ### Fixed
 - **`/health` and `/ready` report not ready when a required Triton model failed to load** (#391). Triton runs with `--exit-on-error=false`, so a missing engine (an empty `models/pe_image_encoder/1/`) used to leave `/health` at `status: ready`. The probe now reads the repository index and answers `503`, naming each model that is not `READY` in `services.models.not_ready`. Required models default to YOLO, SCRFD, ArcFace, MobileCLIP and the PE image encoder; `OP_REQUIRED_MODELS` replaces the list; the installer writes it from the installed tiers, so a core-only install is not held back by the PE encoder. `/live` and `GET /` are unchanged, and a control-plane-only install (no Triton) keeps its OpenSearch-only wait.
@@ -85,6 +91,9 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - Ingest and the embed pass embed the stored, image-clamped box instead of an unclamped one (#259).
 - Region vectors no longer depend on a JPEG round trip, so CPU and GPU routes agree (#360).
 - Project delete leaves no crop-cache files behind (#359).
+
+### Security
+- Renaming a person no longer logs the name (#379).
 
 ## [0.6.0] - 2026-10-16
 

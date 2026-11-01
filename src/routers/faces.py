@@ -15,9 +15,10 @@ Endpoints:
 import logging
 
 import numpy as np
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
+from src.config.faces import require_faces
 from src.core.dependencies import VisualSearchDep
 from src.schemas.detection import ImageMetadata
 from src.services.inference import InferenceService
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix='/faces',
     tags=['Face Recognition'],
+    dependencies=[Depends(require_faces)],
 )
 
 

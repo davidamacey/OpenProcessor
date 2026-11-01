@@ -345,3 +345,18 @@ def test_install_creates_every_bind_mount_source_as_the_user(shimmed: Shimmed) -
     assert (inst / 'secrets' / 'vlm').is_dir()
     assert oct((inst / 'secrets').stat().st_mode & 0o777) == '0o700'
     assert (inst / 'data' / 'source').is_dir()
+
+
+def test_no_faces_writes_the_switch_and_drops_the_face_models(shimmed: Shimmed) -> None:
+    result = configure(shimmed, '--no-faces')
+    assert result.returncode == 0, result.stderr
+    env = env_file(shimmed)
+    assert env['OP_FACES_ENABLED'] == 'false'
+    required = env['OP_REQUIRED_MODELS'].split(',')
+    assert 'yolov11_small_trt_end2end' in required
+    assert not {'scrfd_10g_bnkps', 'arcface_w600k_r50'} & set(required)
+
+
+def test_without_no_faces_the_env_does_not_carry_the_switch(shimmed: Shimmed) -> None:
+    assert configure(shimmed).returncode == 0
+    assert 'OP_FACES_ENABLED' not in env_file(shimmed)

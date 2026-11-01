@@ -1919,7 +1919,7 @@ def upload(path):
     body = (f"--{b}\r\nContent-Disposition: form-data; name=\"image\"; filename=\"p.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n").encode() + jpg + f"\r\n--{b}--\r\n".encode()
     return call(path, body, f"multipart/form-data; boundary={b}")
 fails = []
-for path in ("/detect", "/faces/detect", "/embed/image", "/ocr/predict"):
+for path in ["/detect", "/embed/image", "/ocr/predict"] + (["/faces/detect"] if sys.argv[3] == "1" else []):
     try:
         upload(path)
     except Exception as e:
@@ -1946,7 +1946,7 @@ sys.exit(1 if fails else 0)
 
 # run_health -- every check in plan 6.1 for the selected tiers
 run_health() {
-    local h p vp m fails=() vlm_repo
+    local h p vp m fails=() vlm_repo models
     h="$(_health_host)"
     HEALTH_RESULT="not-run"
     if [[ "$OP_DRY_RUN" == 1 || "$OP_NO_START" == 1 ]]; then
@@ -1959,10 +1959,7 @@ run_health() {
         local tp
         tp="$(read_env_var "$ENV_FILE" TRITON_HTTP_PORT)"
         if wait_http "http://${h}:${tp}/v2/health/ready" 180; then
-            local models=(yolov11_small_trt_end2end scrfd_10g_bnkps arcface_w600k_r50
-                mobileclip2_s2_image_encoder mobileclip2_s2_text_encoder
-                paddleocr_det_trt paddleocr_rec_trt ocr_pipeline)
-            _has_tier curation && models+=(pe_image_encoder pe_text_encoder)
+            read -ra models <<< "$(model_setup_all_models "$SELECTED_TIERS")"
             for m in "${models[@]}"; do
                 curl -fsS --max-time 5 "http://${h}:${tp}/v2/models/${m}/ready" >/dev/null 2>&1 \
                     || fails+=("triton model ${m} not READY: ./openprocessor models install")
@@ -1992,10 +1989,10 @@ run_health() {
     elif ! wait_http "http://${h}:${p}/health" 240 '"status":"ready"'; then
         fails+=("API /health not ready: ./openprocessor logs api")
     else
-        local cur=0 vlm_on=0
-        _has_tier curation && cur=1
+        local cur=0 vlm_on=0 faces_on=1
+        _has_tier curation && cur=1; model_setup_faces_enabled || faces_on=0
         { _has_tier vlm || [[ -n "${OP_VLM_URL:-}" ]]; } && vlm_on=1
-        if ! dc exec -T api python -c "$_API_PROBE_PY" "$cur" "$vlm_on"; then
+        if ! dc exec -T api python -c "$_API_PROBE_PY" "$cur" "$vlm_on" "$faces_on"; then
             fails+=("API functional probes failed: ./openprocessor logs api")
         fi
     fi
@@ -2330,6 +2327,7 @@ Usage: setup-openprocessor.sh [options]
   --port-base N           shift the 46xx port block to N..N+12
   --with-monitoring       add Prometheus/Grafana/Loki (default-open dashboards)
   --sample-data           fetch the public COCO sample after install
+  --no-faces              face models off (OP_FACES_ENABLED=false): no face detection, no faces group
   --skip-models           do not export/load models
   --no-start              configure and pull only; start nothing
   --unattended            never prompt (automatic when there is no terminal)
@@ -2402,6 +2400,7 @@ parse_args() {
             --port-base) need_arg "$@"; OP_PORT_BASE="$2"; shift 2 ;;
             --with-monitoring) mon=1; shift ;;
             --sample-data) sample=1; shift ;;
+            --no-faces) OP_FACES_ENABLED=false; shift ;;
             --skip-models) OP_SKIP_MODELS=1; shift ;;
             --no-start) OP_NO_START=1; shift ;;
             --unattended) unattended=1; shift ;;
@@ -2839,6 +2838,7 @@ YAML
                 env_set_default "$key" "$val"
             fi
         done
+        [[ -n "${OP_FACES_ENABLED:-}" ]] && env_set OP_FACES_ENABLED "$OP_FACES_ENABLED"; OP_FACES_ENABLED="$(read_env_var "$ENV_FILE" OP_FACES_ENABLED || true)"; export OP_FACES_ENABLED
         env_set OP_GPU_LABELS "$(printf '%s\n' "$raw_gpus" | gpu_labels)"; env_set OP_REQUIRED_MODELS "$(model_setup_required_models "$SELECTED_TIERS")"
         GPU_PROFILE="$(read_env_var "$ENV_FILE" GPU_PROFILE)"
         GPU_PLAN_SUMMARY="triton=$(read_env_var "$ENV_FILE" TRITON_GPU_ID),segmenter=$(read_env_var "$ENV_FILE" SEGMENTER_GPU_ID),vlm=$(read_env_var "$ENV_FILE" VLM_GPU_ID),trainer=$(read_env_var "$ENV_FILE" OP_TRAIN_GPU_ORDER),profile=${GPU_PROFILE}"

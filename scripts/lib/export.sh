@@ -18,6 +18,8 @@ _EXPORT_SH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [[ -z "${NC:-}" ]] && source "${_EXPORT_SH_DIR}/colors.sh"
 # shellcheck source=export_steps.sh
 source "${_EXPORT_SH_DIR}/export_steps.sh"
+# shellcheck source=model_groups.sh
+source "${_EXPORT_SH_DIR}/model_groups.sh"
 
 # =============================================================================
 # Configuration
@@ -122,7 +124,8 @@ export_all_models() {
     unload_models_for_export
 
     local failed=0
-    local total=7
+    local total=7 step_no=0
+    model_setup_faces_enabled || total=$((total - 2))
     local export_start step_start elapsed
     export_start=$SECONDS
 
@@ -132,7 +135,7 @@ export_all_models() {
     local -a model_status=()
 
     # Export each model with timing
-    log_step "Exporting model 1/$total: YOLO detection"
+    log_step "Exporting model $((++step_no))/$total: YOLO detection"
     step_start=$SECONDS
     if export_yolo_detection; then
         model_status+=("OK")
@@ -145,33 +148,35 @@ export_all_models() {
     model_times+=("$elapsed")
     log_info "  Elapsed: $(format_elapsed $elapsed)"
 
-    log_step "Exporting model 2/$total: SCRFD face detection"
-    step_start=$SECONDS
-    if export_scrfd; then
-        model_status+=("OK")
-    else
-        failed=$((failed + 1))
-        model_status+=("FAIL")
-    fi
-    elapsed=$((SECONDS - step_start))
-    model_names+=("SCRFD face detection")
-    model_times+=("$elapsed")
-    log_info "  Elapsed: $(format_elapsed $elapsed)"
+    if model_setup_faces_enabled; then
+        log_step "Exporting model $((++step_no))/$total: SCRFD face detection"
+        step_start=$SECONDS
+        if export_scrfd; then
+            model_status+=("OK")
+        else
+            failed=$((failed + 1))
+            model_status+=("FAIL")
+        fi
+        elapsed=$((SECONDS - step_start))
+        model_names+=("SCRFD face detection")
+        model_times+=("$elapsed")
+        log_info "  Elapsed: $(format_elapsed $elapsed)"
 
-    log_step "Exporting model 3/$total: ArcFace"
-    step_start=$SECONDS
-    if export_arcface; then
-        model_status+=("OK")
-    else
-        failed=$((failed + 1))
-        model_status+=("FAIL")
+        log_step "Exporting model $((++step_no))/$total: ArcFace"
+        step_start=$SECONDS
+        if export_arcface; then
+            model_status+=("OK")
+        else
+            failed=$((failed + 1))
+            model_status+=("FAIL")
+        fi
+        elapsed=$((SECONDS - step_start))
+        model_names+=("ArcFace embedding")
+        model_times+=("$elapsed")
+        log_info "  Elapsed: $(format_elapsed $elapsed)"
     fi
-    elapsed=$((SECONDS - step_start))
-    model_names+=("ArcFace embedding")
-    model_times+=("$elapsed")
-    log_info "  Elapsed: $(format_elapsed $elapsed)"
 
-    log_step "Exporting model 4/$total: MobileCLIP image"
+    log_step "Exporting model $((++step_no))/$total: MobileCLIP image"
     step_start=$SECONDS
     if export_mobileclip_image; then
         model_status+=("OK")
@@ -184,7 +189,7 @@ export_all_models() {
     model_times+=("$elapsed")
     log_info "  Elapsed: $(format_elapsed $elapsed)"
 
-    log_step "Exporting model 5/$total: MobileCLIP text"
+    log_step "Exporting model $((++step_no))/$total: MobileCLIP text"
     step_start=$SECONDS
     if export_mobileclip_text; then
         model_status+=("OK")
@@ -197,7 +202,7 @@ export_all_models() {
     model_times+=("$elapsed")
     log_info "  Elapsed: $(format_elapsed $elapsed)"
 
-    log_step "Exporting model 6/$total: PaddleOCR"
+    log_step "Exporting model $((++step_no))/$total: PaddleOCR"
     step_start=$SECONDS
     if export_paddleocr; then
         model_status+=("OK")
@@ -210,7 +215,7 @@ export_all_models() {
     model_times+=("$elapsed")
     log_info "  Elapsed: $(format_elapsed $elapsed)"
 
-    log_step "Exporting model 7/$total: PE-Core image encoder"
+    log_step "Exporting model $((++step_no))/$total: PE-Core image encoder"
     step_start=$SECONDS
     if export_pe; then
         model_status+=("OK")
@@ -259,7 +264,8 @@ export_essential_models() {
     unload_models_for_export
 
     local failed=0
-    local total=6
+    local total=6 step_no=0
+    model_setup_faces_enabled || total=$((total - 2))
     local export_start step_start elapsed
     export_start=$SECONDS
 
@@ -267,7 +273,7 @@ export_essential_models() {
     local -a model_times=()
     local -a model_status=()
 
-    log_step "Exporting model 1/$total: YOLO detection"
+    log_step "Exporting model $((++step_no))/$total: YOLO detection"
     step_start=$SECONDS
     if export_yolo_detection; then model_status+=("OK"); else failed=$((failed + 1)); model_status+=("FAIL"); fi
     elapsed=$((SECONDS - step_start))
@@ -275,23 +281,25 @@ export_essential_models() {
     model_times+=("$elapsed")
     log_info "  Elapsed: $(format_elapsed $elapsed)"
 
-    log_step "Exporting model 2/$total: SCRFD face detection"
-    step_start=$SECONDS
-    if export_scrfd; then model_status+=("OK"); else failed=$((failed + 1)); model_status+=("FAIL"); fi
-    elapsed=$((SECONDS - step_start))
-    model_names+=("SCRFD face detection")
-    model_times+=("$elapsed")
-    log_info "  Elapsed: $(format_elapsed $elapsed)"
+    if model_setup_faces_enabled; then
+        log_step "Exporting model $((++step_no))/$total: SCRFD face detection"
+        step_start=$SECONDS
+        if export_scrfd; then model_status+=("OK"); else failed=$((failed + 1)); model_status+=("FAIL"); fi
+        elapsed=$((SECONDS - step_start))
+        model_names+=("SCRFD face detection")
+        model_times+=("$elapsed")
+        log_info "  Elapsed: $(format_elapsed $elapsed)"
 
-    log_step "Exporting model 3/$total: ArcFace"
-    step_start=$SECONDS
-    if export_arcface; then model_status+=("OK"); else failed=$((failed + 1)); model_status+=("FAIL"); fi
-    elapsed=$((SECONDS - step_start))
-    model_names+=("ArcFace embedding")
-    model_times+=("$elapsed")
-    log_info "  Elapsed: $(format_elapsed $elapsed)"
+        log_step "Exporting model $((++step_no))/$total: ArcFace"
+        step_start=$SECONDS
+        if export_arcface; then model_status+=("OK"); else failed=$((failed + 1)); model_status+=("FAIL"); fi
+        elapsed=$((SECONDS - step_start))
+        model_names+=("ArcFace embedding")
+        model_times+=("$elapsed")
+        log_info "  Elapsed: $(format_elapsed $elapsed)"
+    fi
 
-    log_step "Exporting model 4/$total: MobileCLIP image"
+    log_step "Exporting model $((++step_no))/$total: MobileCLIP image"
     step_start=$SECONDS
     if export_mobileclip_image; then model_status+=("OK"); else failed=$((failed + 1)); model_status+=("FAIL"); fi
     elapsed=$((SECONDS - step_start))
@@ -299,7 +307,7 @@ export_essential_models() {
     model_times+=("$elapsed")
     log_info "  Elapsed: $(format_elapsed $elapsed)"
 
-    log_step "Exporting model 5/$total: MobileCLIP text"
+    log_step "Exporting model $((++step_no))/$total: MobileCLIP text"
     step_start=$SECONDS
     if export_mobileclip_text; then model_status+=("OK"); else failed=$((failed + 1)); model_status+=("FAIL"); fi
     elapsed=$((SECONDS - step_start))
@@ -308,7 +316,7 @@ export_essential_models() {
     log_info "  Elapsed: $(format_elapsed $elapsed)"
 
     # PE-Core backs curation ingest embeddings, search and item scores.
-    log_step "Exporting model 6/$total: PE-Core image encoder"
+    log_step "Exporting model $((++step_no))/$total: PE-Core image encoder"
     step_start=$SECONDS
     if export_pe; then model_status+=("OK"); else failed=$((failed + 1)); model_status+=("FAIL"); fi
     elapsed=$((SECONDS - step_start))
@@ -349,11 +357,12 @@ export_model() {
         yolo|yolov11|detection)
             export_yolo_detection
             ;;
-        face|scrfd)
-            export_scrfd
-            ;;
-        arcface)
-            export_arcface
+        face|scrfd|arcface)
+            if ! model_setup_faces_enabled; then
+                log_error "the face models are off (OP_FACES_ENABLED=false in .env)"
+                return 1
+            fi
+            if [[ "$model_name" == arcface ]]; then export_arcface; else export_scrfd; fi
             ;;
         clip-image|mobileclip-image)
             export_mobileclip_image
@@ -426,6 +435,10 @@ all_models_exported() {
     )
 
     for model in "${required[@]}"; do
+        if [[ "$model" == scrfd_10g_bnkps || "$model" == arcface_w600k_r50 ]] \
+            && ! model_setup_faces_enabled; then
+            continue
+        fi
         local plan_path="$MODELS_DIR/$model/1/model.plan"
         if [[ ! -f "$plan_path" ]] || [[ ! -s "$plan_path" ]]; then
             return 1

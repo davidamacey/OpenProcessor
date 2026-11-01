@@ -295,7 +295,7 @@ class PersonManagementMixin:
             )
 
             updated = response.get('updated', 0)
-            logger.info(f'Renamed person {person_id} to "{name}" ({updated} faces)')
+            logger.info(f'Renamed person {person_id} ({updated} faces)')
 
             return {
                 'status': 'success',
