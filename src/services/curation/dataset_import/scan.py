@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 
 LabelState = Literal['labeled', 'negative', 'unlabeled']
-DatasetFormat = Literal['yolo', 'coco', 'voc', 'openprocessor_export', 'project']
+DatasetFormat = Literal['yolo', 'coco', 'voc', 'openimages', 'openprocessor_export', 'project']
 
 
 class FormatUndetectedError(Exception):
@@ -118,6 +118,7 @@ def _child_has_images(root: Path) -> bool:
 def detect_format(root: Path) -> DatasetFormat:
     """First match wins; the order is the documented precedence."""
     from src.services.curation.dataset_import.op_export import is_op_export
+    from src.services.curation.dataset_import.openimages import is_openimages
     from src.services.curation.dataset_import.voc import is_voc
 
     rules: tuple[tuple[DatasetFormat, Callable[[Path], bool]], ...] = (
@@ -128,6 +129,7 @@ def detect_format(root: Path) -> DatasetFormat:
         # directory is what marks `images/` as YOLO's.
         ('coco', lambda r: _has_coco_json(r) and not (r / 'labels').is_dir()),
         ('voc', is_voc),
+        ('openimages', is_openimages),
         ('yolo', lambda r: (r / 'images').is_dir()),
         ('yolo', _child_has_images),
         ('coco', _has_coco_json),
@@ -209,6 +211,7 @@ def scan_dataset(
     written and no image is decoded beyond the COCO size spot-check.
     """
     from src.services.curation.dataset_import.coco import scan_coco
+    from src.services.curation.dataset_import.openimages import scan_openimages
     from src.services.curation.dataset_import.voc import scan_voc
     from src.services.curation.dataset_import.yolo import scan_yolo
 
@@ -226,6 +229,8 @@ def scan_dataset(
         return scan_coco(files, path_guard=path_guard)
     if fmt == 'voc':
         return scan_voc(root, path_guard=path_guard)
+    if fmt == 'openimages':
+        return scan_openimages(root, path_guard=path_guard)
     from src.services.curation.dataset_import.op_export import read_op_export
 
     return read_op_export(root, path_guard=path_guard)

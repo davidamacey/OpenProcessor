@@ -123,6 +123,20 @@ ISSUE_CATALOG: dict[str, IssueSpec] = {
         'info', False, False, 'VOC file has no usable image size; read from the image'
     ),
     'voc_difficult_skipped': IssueSpec('info', False, False, 'VOC object marked difficult skipped'),
+    'openimages_csv_invalid': IssueSpec('error', True, False, 'Open Images CSV is invalid'),
+    'openimages_class_unknown': IssueSpec(
+        'warning', False, False, 'Open Images row names a MID with no class description'
+    ),
+    'openimages_class_duplicate_name': IssueSpec(
+        'error', True, False, 'Two Open Images MIDs share one display name'
+    ),
+    'openimages_group_skipped': IssueSpec('info', False, False, 'Open Images group box skipped'),
+    'openimages_image_split_conflict': IssueSpec(
+        'warning', False, False, 'Open Images image listed in two splits'
+    ),
+    'openimages_image_unreferenced': IssueSpec(
+        'info', False, False, 'Image file has no Open Images box row (not imported)'
+    ),
     'image_file_missing': IssueSpec('warning', False, False, 'Referenced image file not found'),
 }
 

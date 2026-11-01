@@ -59,6 +59,12 @@ DatasetIssueCode = Literal[
     'voc_xml_invalid',
     'voc_size_missing',
     'voc_difficult_skipped',
+    'openimages_csv_invalid',
+    'openimages_class_unknown',
+    'openimages_class_duplicate_name',
+    'openimages_group_skipped',
+    'openimages_image_split_conflict',
+    'openimages_image_unreferenced',
     'image_file_missing',
 ]
 

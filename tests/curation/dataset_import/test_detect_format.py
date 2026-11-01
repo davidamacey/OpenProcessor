@@ -32,6 +32,11 @@ _CASES = [
         id='labels-dir-keeps-yolo',
     ),
     pytest.param(('images/',), 'yolo', id='images-only'),
+    pytest.param(_OI, 'openimages', id='oi'),
+    pytest.param((*_OI, 'images/'), 'openimages', id='oi-with-images'),
+    pytest.param((*_OI, 'data.yaml'), 'yolo', id='data-yaml-beats-oi'),
+    pytest.param((*_OI, 'Annotations/a.xml'), 'voc', id='voc-beats-oi'),
+    pytest.param(('train-annotations-bbox.csv',), None, id='oi-without-descriptions'),
     pytest.param(('Annotations/',), None, id='annotations-without-xml'),
 ]
 
@@ -56,7 +61,7 @@ def test_detect_format_table(tmp_path: Path, layout: tuple[str, ...], expected: 
         assert detect_format(tmp_path) == expected
 
 
-@pytest.mark.parametrize('fmt', ['voc'])
+@pytest.mark.parametrize('fmt', ['voc', 'openimages'])
 def test_an_explicit_format_dispatches_to_its_own_reader(tmp_path: Path, fmt: str) -> None:
     if fmt == 'voc':
         _build(tmp_path, ('Annotations/', 'JPEGImages/'))

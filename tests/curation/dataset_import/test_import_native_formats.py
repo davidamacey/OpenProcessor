@@ -7,7 +7,15 @@ from typing import TYPE_CHECKING
 import pytest
 
 from curation.dataset_import.harness import Harness, map_all
-from curation.dataset_import.native_fixtures import voc_object, write_voc
+from curation.dataset_import.native_fixtures import (
+    CAR,
+    DOG,
+    PERSON,
+    oi_row,
+    voc_object,
+    write_openimages,
+    write_voc,
+)
 
 
 if TYPE_CHECKING:
@@ -88,6 +96,74 @@ async def test_voc_lock_rule(tmp_path: Path, monkeypatch) -> None:
     root2 = tmp_path / 'ds2'
     write_voc(root2, {'a': [voc_object('dog', (1, 1, 40, 40))], 'b': []})
     (root2 / 'JPEGImages/a.jpg').write_bytes((root / 'JPEGImages/a.jpg').read_bytes())
+    store2, _ = await h.run(h.request(root2, mapping, name='v2'))
+    after = h.items[cid]
+    assert (after['class_id'], after['class_name'], after['class_source']) == (99, 'bus', 'human')
+    assert store2.job.read()['report']['label_conflicts_locked'] == 1
+
+
+@pytest.mark.asyncio
+async def test_openimages_import_maps_display_name(tmp_path: Path, monkeypatch) -> None:
+    h = Harness(tmp_path, monkeypatch)
+    h.registry.add_class('Car')
+    h.registry.add_class('Dog')
+    root = tmp_path / 'ds'
+    write_openimages(
+        root,
+        {
+            'train': [
+                oi_row('000002b66c9c498e', DOG, 0.1, 0.4, 0.1, 0.4),
+                oi_row('000002b66c9c498e', CAR, 0.5, 0.9, 0.5, 0.9),
+            ]
+        },
+    )
+    store, _ = await h.run(h.request(root, map_all(h.registry, 'Dog', 'Car')))
+    assert store.job.read()['status'] == 'completed'
+    dog = _items_of(h, 'Dog')[0]
+    car = _items_of(h, 'Car')[0]
+    assert (dog['class_id'], car['class_id']) == (1, 0)
+    assert not [d for d in h.items.values() if str(d['class_name']).startswith('/m/')]
+    assert all(d['label_source'] == 'import' for d in h.items.values())
+
+
+@pytest.mark.asyncio
+async def test_openimages_preview_writes_nothing_and_lists_names(
+    tmp_path: Path, monkeypatch
+) -> None:
+    h = Harness(tmp_path, monkeypatch)
+    root = tmp_path / 'ds'
+    write_openimages(root, {'validation': [oi_row('0000048549557964', PERSON, 0.1, 0.4, 0.1, 0.4)]})
+    prepared = h.prepare(h.request(root))
+    assert prepared.scan.format == 'openimages'
+    assert set(prepared.scan.class_box_counts) == {'Person'}
+    assert h.items == {}
+    assert h.images == {}
+
+
+@pytest.mark.asyncio
+async def test_openimages_lock_rule(tmp_path: Path, monkeypatch) -> None:
+    h = Harness(tmp_path, monkeypatch)
+    h.registry.add_class('Dog')
+    root = tmp_path / 'ds'
+    write_openimages(root, {'train': [oi_row('000002b66c9c498e', DOG, 0.1, 0.4, 0.1, 0.4)]})
+    mapping = map_all(h.registry, 'Dog')
+    await h.run(h.request(root, mapping))
+    cid = _items_of(h, 'Dog')[0]['crop_id']
+    h.items[cid].update(
+        {'class_id': 99, 'class_name': 'bus', 'class_source': 'human', 'label_source': 'human'}
+    )
+    root2 = tmp_path / 'ds2'
+    write_openimages(
+        root2,
+        {
+            'train': [
+                oi_row('000002b66c9c498e', DOG, 0.1, 0.4, 0.1, 0.4),
+                oi_row('0000048549557964', DOG, 0.1, 0.4, 0.1, 0.4),
+            ]
+        },
+    )
+    same = root / 'images/train/000002b66c9c498e.jpg'
+    (root2 / 'images/train/000002b66c9c498e.jpg').write_bytes(same.read_bytes())
     store2, _ = await h.run(h.request(root2, mapping, name='v2'))
     after = h.items[cid]
     assert (after['class_id'], after['class_name'], after['class_source']) == (99, 'bus', 'human')

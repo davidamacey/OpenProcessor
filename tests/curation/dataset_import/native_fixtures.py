@@ -63,3 +63,61 @@ def write_voc(
         (root / 'ImageSets/Main').mkdir(parents=True, exist_ok=True)
         for split, stems in splits.items():
             (root / f'ImageSets/Main/{split}.txt').write_text(''.join(f'{s}\n' for s in stems))
+
+
+OI_CLASSES = '/m/0bt9lr,Dog\n/m/01g317,Person\n/m/0k4j,Car\n'
+OI_CLASSES_V7 = 'LabelName,DisplayName\n' + OI_CLASSES
+OI_HEADER = (
+    'ImageID,Source,LabelName,Confidence,XMin,XMax,YMin,YMax,'
+    'IsOccluded,IsTruncated,IsGroupOf,IsDepiction,IsInside\n'
+)
+DOG = '/m/0bt9lr'
+PERSON = '/m/01g317'
+CAR = '/m/0k4j'
+
+
+def oi_row(
+    image_id: str,
+    mid: str,
+    xmin: float | str,
+    xmax: float | str,
+    ymin: float | str,
+    ymax: float | str,
+    *,
+    group: int = 0,
+    depiction: int = 0,
+) -> str:
+    return f'{image_id},xclick,{mid},1,{xmin},{xmax},{ymin},{ymax},0,0,{group},{depiction},0\n'
+
+
+def _image_dir(root: Path, split: str, layout: str) -> Path:
+    return {
+        'images/<split>': root / 'images' / split,
+        '<split>': root / split,
+        'images': root / 'images',
+        'root': root,
+    }[layout]
+
+
+def write_openimages(
+    root: Path,
+    rows_by_split: dict[str, list[str]],
+    *,
+    classes: str = OI_CLASSES,
+    layout: str = 'images/<split>',
+) -> None:
+    """Writes ``class-descriptions-boxable.csv``, ``<split>-annotations-bbox.csv``
+    (split in train/validation/test) and one JPEG per distinct ImageID under the
+    chosen layout (``images/<split>``, ``<split>``, ``images`` or ``root``)."""
+    root.mkdir(parents=True, exist_ok=True)
+    (root / 'class-descriptions-boxable.csv').write_text(classes)
+    index = 0
+    for split, rows in rows_by_split.items():
+        (root / f'{split}-annotations-bbox.csv').write_text(OI_HEADER + ''.join(rows))
+        for image_id in dict.fromkeys(r.split(',', 1)[0] for r in rows):
+            write_image(
+                _image_dir(root, split, layout) / f'{image_id}.jpg',
+                size=(100 + index, 100),
+                color=['red', 'green', 'blue', 'white'][index % 4],
+            )
+            index += 1
