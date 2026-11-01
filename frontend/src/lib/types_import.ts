@@ -57,7 +57,8 @@ export interface DatasetFormatsResponse {
   status_labels: Record<string, string>;
 }
 
-export type DatasetFormat = 'auto' | 'yolo' | 'coco' | 'openprocessor_export';
+export type DatasetFormat =
+  'auto' | 'yolo' | 'coco' | 'voc' | 'openimages' | 'openprocessor_export';
 export type MappingAction = 'map' | 'create' | 'skip' | 'region';
 export type MapTargetKind = 'item' | 'region' | 'skip';
 

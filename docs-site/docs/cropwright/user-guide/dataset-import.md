@@ -17,7 +17,7 @@ Compare with [Ingest](./ingest.md), which brings in unlabeled images.
 
 The backend decides which formats it can read and serves the list. A typical
 backend serves **Detect automatically**, **YOLO** (a `data.yaml` layout),
-**COCO JSON** and an **OpenProcessor export** (the dataset the app's own
+**COCO JSON**, **Pascal VOC**, **Open Images** and an **OpenProcessor export** (the dataset the app's own
 [Export](./export.md) page writes). The wizard only offers what the backend
 serves.
 

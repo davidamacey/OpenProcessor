@@ -1807,7 +1807,7 @@ cluster.
 
 ## Dataset import
 
-Import an already-labeled dataset (YOLO, COCO or an OpenProcessor export)
+Import an already-labeled dataset (YOLO, COCO, Pascal VOC, Open Images or an OpenProcessor export)
 into a project. The importer is chunked, persisted, resumable and runs on the
 shared jobs volume. Labels are written through the same single class writer
 that human labels use, so the lock rule holds. A human edit made between
@@ -1827,11 +1827,13 @@ planning and writing wins.
 | POST | `/datasets/imports/{import_id}/resume` | | `202 DatasetImportJob` | `409 import_not_resumable` (only `interrupted`, `failed` or `cancelled`), `409 import_busy`, `409 dataset_changed` |
 | POST | `/datasets/imports/{import_id}/undo` | `DatasetUndoRequest` | `200 DatasetUndoReportWire` for a dry run, else `202 DatasetImportJob` | `409 import_not_undoable`, `409 import_busy` |
 
-`DatasetSource`: `path`, `format` (`auto`, `yolo`, `coco`,
-`openprocessor_export`) and `coco_annotations[]` (`{path, images_dir,
+`DatasetSource`: `path`, `format` (`auto`, `yolo`, `coco`, `voc`,
+`openimages`, `openprocessor_export`) and `coco_annotations[]` (`{path, images_dir,
 split}`). Auto-detection tries an OpenProcessor export, then YOLO (a data
 YAML), then COCO (`annotations/*.json` with no `labels/` directory, so
-`images/` next to `annotations/` is COCO), then YOLO (an `images/` directory,
+`images/` next to `annotations/` is COCO), then Pascal VOC (`Annotations/*.xml`
+with no JSON), then Open Images (a boxes CSV and a class-descriptions CSV in the
+root), then YOLO (an `images/` directory,
 or a child with one). The path must lie under a source root, the project's
 upload root or the project's export root, after symlinks are resolved
 (`422 dataset_path_not_allowed`). References inside a dataset must stay

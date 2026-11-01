@@ -20,6 +20,8 @@ export function formatsFixture(
       { format: 'auto', label: 'Detect automatically' },
       { format: 'yolo', label: 'YOLO (data.yaml)' },
       { format: 'coco', label: 'COCO JSON' },
+      { format: 'voc', label: 'Pascal VOC (XML per image)' },
+      { format: 'openimages', label: 'Open Images (boxes CSV + class descriptions)' },
       { format: 'openprocessor_export', label: 'OpenProcessor export' },
     ],
     processing_modes: [
