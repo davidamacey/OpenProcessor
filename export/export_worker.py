@@ -42,6 +42,16 @@ EXPORT_SCRIPT = EXPORT_DIR / 'export_models.py'
 EXPORT_SCRIPT_Y26 = EXPORT_DIR / 'export_yolo26.py'
 POLL_INTERVAL_S = 2.0
 HEARTBEAT_INTERVAL_S = 2.0
+# A TensorRT build of a large detector takes minutes; hours means the build is hung.
+EXPORT_TIMEOUT_S = 4 * 3600.0
+# A task file the API wrote this recently may still be waiting for its job file.
+ORPHAN_GRACE_S = 300.0
+_NON_TERMINAL = {
+    ExportStatus.PENDING.value,
+    ExportStatus.VALIDATING.value,
+    ExportStatus.EXPORTING.value,
+    ExportStatus.LOADING.value,
+}
 
 
 def write_heartbeat() -> None:
@@ -82,17 +92,33 @@ def claim_next() -> dict[str, Any] | None:
 
 
 def reconcile_claimed() -> int:
-    """Startup repair: a job still in ``claimed/`` belongs to a worker that died mid-export."""
+    """Startup repair. A job still in ``claimed/`` belongs to a worker that died mid-export. A task
+    left running with no job file at all (for example one an older, in-API export left behind
+    at an upgrade) can never finish either, once it is older than the API's create-then-queue
+    window."""
     claimed = store.claimed_dir()
-    if not claimed.is_dir():
-        return 0
     reconciled = 0
-    for path in sorted(claimed.glob('*.job.json')):
-        _fail(
-            path.name.removesuffix('.job.json'),
-            'the model-export worker stopped while this export was running',
-        )
-        path.unlink(missing_ok=True)
+    if claimed.is_dir():
+        for path in sorted(claimed.glob('*.job.json')):
+            _fail(
+                path.name.removesuffix('.job.json'),
+                'the model-export worker stopped while this export was running',
+            )
+            path.unlink(missing_ok=True)
+            reconciled += 1
+    store.load_tasks_from_disk()
+    queued = store.queue_dir()
+    now = datetime.now(UTC)
+    for task_id, task in list(store.export_tasks.items()):
+        status = getattr(task.get('status'), 'value', task.get('status'))
+        if status not in _NON_TERMINAL or (queued / f'{task_id}.job.json').exists():
+            continue
+        created = task.get('created_at')
+        if isinstance(created, str):
+            created = datetime.fromisoformat(created)
+        if isinstance(created, datetime) and (now - created).total_seconds() < ORPHAN_GRACE_S:
+            continue
+        _fail(task_id, 'no model-export job exists for this task; start the export again')
         reconciled += 1
     return reconciled
 
@@ -223,6 +249,16 @@ def _export(task_id: str, task: dict[str, Any], job: dict[str, Any], started: fl
         env={**os.environ, 'PYTHONPATH': str(APP_DIR)},
     ) as proc:
         assert proc.stdout is not None  # PIPE was requested above
+        # A hung build would hold the only worker forever while the heartbeat says it is alive.
+        timed_out = threading.Event()
+
+        def _kill() -> None:
+            timed_out.set()
+            proc.kill()
+
+        watchdog = threading.Timer(EXPORT_TIMEOUT_S, _kill)
+        watchdog.daemon = True
+        watchdog.start()
         for raw in proc.stdout:
             line = raw.strip()
             output.append(line)
@@ -235,8 +271,11 @@ def _export(task_id: str, task: dict[str, Any], job: dict[str, Any], started: fl
             task['step_times'] = step_times
             store.persist_task(task_id)
         returncode = proc.wait()
+        watchdog.cancel()
     step_times[phase] = round(perf_counter() - phase_start, 2)
 
+    if timed_out.is_set():
+        raise RuntimeError(f'Export timed out after {EXPORT_TIMEOUT_S:.0f}s and was stopped')
     if returncode != 0:
         tail = '\n'.join(output[-20:])
         raise RuntimeError(f'Export failed (exit {returncode}):\n{tail}')

@@ -258,3 +258,109 @@ def test_heartbeat_makes_the_api_see_a_live_worker(task_dir: Path) -> None:
     assert model_export.export_worker_alive()
     _heartbeat(task_dir, model_export.HEARTBEAT_MAX_AGE_S + 5)
     assert not model_export.export_worker_alive()
+
+
+@pytest.mark.parametrize('bad', ['../../x', 'a:b', 'x/y', 'c*', '', '_lead', 'a' * 65])
+def test_upload_refuses_a_triton_name_that_is_not_a_slug(
+    client: TestClient, task_dir: Path, bad: str
+) -> None:
+    """The name becomes a file under pytorch_models/, a model dir and the worker's pt:name:batch
+    argument, so anything but a slug is a 400 before a byte is saved or a job is queued."""
+    _heartbeat(task_dir)
+    resp = client.post('/models/upload', files=_pt(), data={'triton_name': bad})
+    if bad == '':
+        # An empty form field means "not given": the name comes from the file name.
+        assert resp.status_code != 400 or 'name' not in resp.json()['detail']
+        return
+    assert resp.status_code == 400, resp.text
+    assert 'name' in resp.json()['detail']
+    assert _no_files(task_dir)
+    assert not model_export.PYTORCH_MODELS_DIR.exists()
+
+
+def test_upload_refuses_a_file_name_that_does_not_make_a_slug(
+    client: TestClient, task_dir: Path
+) -> None:
+    _heartbeat(task_dir)
+    files = {'file': ('a:b.pt', b'x' * 2000, 'application/octet-stream')}
+    resp = client.post('/models/upload', files=files)
+    assert resp.status_code == 400, resp.text
+    assert _no_files(task_dir)
+
+
+@pytest.mark.parametrize('bad', ['c*', 'a:b', 'car[1]'])
+def test_export_route_refuses_a_model_name_that_is_not_a_slug(
+    client: TestClient, task_dir: Path, bad: str
+) -> None:
+    _heartbeat(task_dir)
+    model_export.PYTORCH_MODELS_DIR.mkdir(parents=True)
+    (model_export.PYTORCH_MODELS_DIR / 'car.pt').write_bytes(b'x' * 2000)
+    resp = client.post(f'/models/{bad}/export', json={})
+    assert resp.status_code == 400, resp.text
+    assert _no_files(task_dir)
+
+
+def test_triton_names_are_normalised_then_checked() -> None:
+    assert model_export.generate_triton_name('My-Model best.pt') == 'my_model'
+    assert model_export.generate_triton_name('car_best.pt') == 'car'
+    assert model_export.generate_triton_name('x.pt', 'Shop-Cam 2') == 'shop_cam_2'
+    with pytest.raises(ValueError, match='name'):
+        model_export.generate_triton_name('x.pt', '../x')
+
+
+def test_a_job_with_a_bad_name_is_never_queued(task_dir: Path) -> None:
+    model_export.export_tasks['t1'] = {'task_id': 't1'}
+    with pytest.raises(ValueError, match='name'):
+        model_export.enqueue_export_job(
+            't1',
+            pt_file=Path('/x.pt'),
+            triton_name='a:b',
+            max_batch=1,
+            formats=['trt'],
+            normalize_boxes=True,
+            auto_load=False,
+        )
+    assert not model_export.queue_dir().exists()
+
+
+def test_a_hung_export_is_killed_and_failed_after_the_timeout(
+    task_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _stub_export_script(
+        tmp_path, monkeypatch, 'import time\nprint("start", flush=True)\ntime.sleep(60)\n'
+    )
+    monkeypatch.setattr(export_worker, 'EXPORT_TIMEOUT_S', 1.0)
+    monkeypatch.setattr(
+        export_worker, 'load_into_triton', lambda _n: pytest.fail('must not load a killed export')
+    )
+    monkeypatch.setattr(export_worker, 'APP_DIR', tmp_path)
+    task_id = _enqueue(task_dir, auto_load=True)
+    t0 = time.monotonic()
+    export_worker.run_job(export_worker.claim_next())
+    assert time.monotonic() - t0 < 30
+    task = model_export.get_export_task(task_id)
+    assert task['status'] == ExportStatus.FAILED.value
+    assert 'timed out' in task['error']
+
+
+def test_startup_fails_tasks_left_running_with_no_job_but_spares_a_fresh_one(
+    task_dir: Path,
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    old = model_export.create_export_task('old.pt', 'old', {}, ['trt'])
+    model_export.export_tasks[old]['status'] = ExportStatus.EXPORTING
+    model_export.export_tasks[old]['created_at'] = datetime.now(UTC) - timedelta(hours=1)
+    model_export.persist_task(old)
+    fresh = model_export.create_export_task('new.pt', 'new', {}, ['trt'])
+    model_export.persist_task(fresh)
+    done = model_export.create_export_task('done.pt', 'done', {}, ['trt'])
+    model_export.export_tasks[done]['status'] = ExportStatus.COMPLETED
+    model_export.export_tasks[done]['created_at'] = datetime.now(UTC) - timedelta(hours=1)
+    model_export.persist_task(done)
+    model_export.export_tasks.clear()
+
+    assert export_worker.reconcile_claimed() == 1
+    assert model_export.get_export_task(old)['status'] == ExportStatus.FAILED.value
+    assert model_export.get_export_task(fresh)['status'] == ExportStatus.PENDING.value
+    assert model_export.get_export_task(done)['status'] == ExportStatus.COMPLETED.value

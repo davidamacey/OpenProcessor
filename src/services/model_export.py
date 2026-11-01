@@ -23,6 +23,7 @@ curation-specific, so its directory setting lives on the base ``Settings`` class
 
 import json
 import logging
+import re
 import shutil
 import tempfile
 import time
@@ -161,10 +162,26 @@ def validate_pytorch_model(file_path: Path) -> tuple[bool, str, dict[str, Any]]:
         return False, f'Validation error: {e}', {}
 
 
+TRITON_NAME_RE = re.compile(r'^[a-z0-9][a-z0-9_]{0,63}$')
+"""The name becomes a file under pytorch_models/, a model directory and the worker's
+``pt:name:batch`` argument, so it is a slug or nothing."""
+
+
+def check_triton_name(name: str) -> str:
+    """Return ``name`` if it is a Triton model slug, else raise ValueError."""
+    if not TRITON_NAME_RE.fullmatch(name):
+        msg = (
+            f'Invalid model name {name!r}: use 1-64 lowercase letters, digits or underscores, '
+            'starting with a letter or digit'
+        )
+        raise ValueError(msg)
+    return name
+
+
 def generate_triton_name(filename: str, custom_name: str | None = None) -> str:
-    """Generate Triton-compatible model name from filename."""
+    """Triton model name from ``custom_name`` or the file name, normalised then checked."""
     if custom_name:
-        return custom_name.lower().replace('-', '_').replace(' ', '_')
+        return check_triton_name(custom_name.lower().replace('-', '_').replace(' ', '_'))
 
     stem = Path(filename).stem.lower().replace('-', '_').replace(' ', '_')
 
@@ -173,7 +190,7 @@ def generate_triton_name(filename: str, custom_name: str | None = None) -> str:
         if stem.endswith(suffix):
             stem = stem[: -len(suffix)]
 
-    return stem
+    return check_triton_name(stem)
 
 
 def create_export_task(
@@ -277,6 +294,7 @@ def enqueue_export_job(
     auto_load: bool,
 ) -> None:
     """Queue the job file for the worker (atomic temp+rename into ``queue/``)."""
+    check_triton_name(triton_name)
     task = export_tasks[task_id]
     job = {
         'task_id': task_id,

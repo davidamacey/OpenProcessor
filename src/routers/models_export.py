@@ -20,6 +20,7 @@ from src.schemas.models import ExportFormat, ExportTaskResponse, ExportTaskStatu
 from src.services.model_export import (
     PYTORCH_MODELS_DIR,
     ExportWorkerUnavailableError,
+    check_triton_name,
     create_export_task,
     enqueue_export_job,
     generate_triton_name,
@@ -102,8 +103,10 @@ async def upload_model(
     # Before anything is saved or queued: nothing would ever run the job.
     _require_worker()
 
-    # Generate Triton-compatible name
-    name = triton_name or generate_triton_name(file.filename)
+    try:
+        name = generate_triton_name(file.filename, triton_name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     try:
         pt_file, model_info = await save_uploaded_file(content, name)
@@ -168,6 +171,10 @@ async def export_model(
     The export runs in the model-export worker (503 when it is not running). Returns task_id
     for status polling.
     """
+    try:
+        check_triton_name(model_name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     _require_worker()
 
     # Find the PyTorch model file
