@@ -25,7 +25,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: build -- resolve every wheel into a relocatable --user tree
 # -----------------------------------------------------------------------------
-FROM python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f AS builder
+FROM python:3.15-slim-trixie@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913 AS builder
 
 WORKDIR /build
 
@@ -52,7 +52,7 @@ RUN pip install --user --no-cache-dir --upgrade pip \
 # -----------------------------------------------------------------------------
 # Stage 2: runtime
 # -----------------------------------------------------------------------------
-FROM python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f
+FROM python:3.15-slim-trixie@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913
 
 LABEL org.opencontainers.image.title="OpenProcessor Curation Evaluator" \
       org.opencontainers.image.description="On-demand detector bake-off harness runner" \

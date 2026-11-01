@@ -20,7 +20,7 @@
 # Isolated so neither git nor the clone's history reaches the runtime
 # image. Pin to a known-good upstream SHA for reproducible rebuilds;
 # `main` is the default only because upstream publishes no releases.
-FROM alpine/git:v2.54.0@sha256:ce84fd6a057b4dc5cf5009da2dd832f1c6d096c1984bf50496cf3c256402264d AS sam3-src
+FROM alpine/git:v2.54.0@sha256:e8ceedc73bd80992ae8d58a7d24c58b8322146c354f1d2e81a97db4452068ec0 AS sam3-src
 
 ARG SAM3_SHA=main
 WORKDIR /src
