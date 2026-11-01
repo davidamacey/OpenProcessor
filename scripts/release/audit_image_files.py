@@ -5,7 +5,9 @@ Two checks, both fail-closed:
 
 1. Every file inside a directory the final stage of the Dockerfile COPYs from the
    build context must map back to a file tracked in git at the release revision.
-   (`__pycache__` is accepted only when the Dockerfile compiles bytecode itself.)
+   A `<dir>/__pycache__/<stem>.<tag>.pyc` is accepted only when `<dir>/<stem>.py` is itself
+   a tracked file of the same COPY'd tree (build-time imports compile the shipped sources);
+   a .pyc without its tracked source, or a __pycache__ with no tracked source dir, fails.
 2. No model artifact may be in the image, unless the path matches
    scripts/release/image_audit_allowlist.txt:
    - Extension rule: a file named *.onnx, *.plan, *.engine, *.pt, *.pth or *.safetensors
@@ -35,7 +37,6 @@ from pathlib import Path
 FORBIDDEN_SUFFIXES = ('.onnx', '.plan', '.engine', '.pt', '.pth', '.safetensors')
 # `<project>__<model>`: a name with an interior double underscore, not a dunder name.
 PROJECT_MODEL_DIR = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*__[A-Za-z0-9][A-Za-z0-9._-]*$')
-COMPILES_BYTECODE = re.compile(r'\b(compileall|py_compile)\b')
 
 
 def _logical_lines(text: str) -> list[str]:
@@ -55,20 +56,17 @@ def _logical_lines(text: str) -> list[str]:
     return lines
 
 
-def _final_stage_copies(dockerfile_text: str) -> tuple[list[tuple[list[str], str]], bool]:
-    """Return ([(sources, absolute_dest)], compiles_bytecode) for the final stage."""
+def _final_stage_copies(dockerfile_text: str) -> list[tuple[list[str], str]]:
+    """Return [(sources, absolute_dest)] for the COPYs of the final stage."""
     copies: list[tuple[list[str], str]] = []
     workdir = '/'
-    compiles = False
     for line in _logical_lines(dockerfile_text):
         word, _, rest = line.partition(' ')
         word = word.upper()
         if word == 'FROM':
-            copies, workdir, compiles = [], '/', False
+            copies, workdir = [], '/'
         elif word == 'WORKDIR':
             workdir = posixpath.normpath(posixpath.join(workdir, rest.strip()))
-        elif word == 'RUN' and COMPILES_BYTECODE.search(rest):
-            compiles = True
         elif word == 'COPY':
             args = rest.split()
             if any(a.startswith('--from=') for a in args):
@@ -78,13 +76,13 @@ def _final_stage_copies(dockerfile_text: str) -> tuple[list[tuple[list[str], str
                 continue
             dest = posixpath.normpath(posixpath.join(workdir, args[-1]))
             copies.append((args[:-1], dest + ('/' if args[-1].endswith('/') else '')))
-    return copies, compiles
+    return copies
 
 
 def _expected_and_roots(
     dockerfile_text: str, context: str, tracked: set[str]
-) -> tuple[set[str], set[str], bool]:
-    copies, compiles = _final_stage_copies(dockerfile_text)
+) -> tuple[set[str], set[str]]:
+    copies = _final_stage_copies(dockerfile_text)
     prefix = '' if context in ('', '.') else context.rstrip('/') + '/'
     expected: set[str] = set()
     roots: set[str] = set()
@@ -115,7 +113,7 @@ def _expected_and_roots(
                 if fnmatch.fnmatchcase(t, clean):
                     name = posixpath.basename(t)
                     expected.add(f'{dest_dir}/{name}' if dest_is_dir else dest_dir)
-    return expected, roots, compiles
+    return expected, roots
 
 
 def directory_copy_roots(dockerfile_text: str, context: str, tracked: set[str]) -> list[str]:
@@ -123,16 +121,25 @@ def directory_copy_roots(dockerfile_text: str, context: str, tracked: set[str]) 
     return sorted(_expected_and_roots(dockerfile_text, context, tracked)[1])
 
 
+def _pyc_has_tracked_source(path: str, expected: set[str]) -> bool:
+    directory, name = posixpath.split(path)
+    parent, cache = posixpath.split(directory)
+    if cache != '__pycache__' or not name.endswith('.pyc'):
+        return False
+    stem = name.removesuffix('.pyc').split('.')[0]
+    return f'{parent}/{stem}.py' in expected
+
+
 def untracked_files(
     dockerfile_text: str, context: str, tracked: set[str], listing: set[str] | list[str]
 ) -> list[str]:
     """Files of `listing` under a directory-COPY destination that git does not track."""
-    expected, roots, compiles = _expected_and_roots(dockerfile_text, context, tracked)
+    expected, roots = _expected_and_roots(dockerfile_text, context, tracked)
     bad: list[str] = []
     for path in sorted(set(listing)):
         if not any(path.startswith(f'{r}/') for r in roots) or path in expected:
             continue
-        if compiles and '/__pycache__/' in path and path.endswith('.pyc'):
+        if _pyc_has_tracked_source(path, expected):
             continue
         bad.append(path)
     return bad
@@ -149,7 +156,7 @@ class ContextMismatchError(ValueError):
 def model_roots(dockerfile_text: str) -> list[str]:
     """Model-repository roots: the seed dir plus every final-stage `COPY models/` destination."""
     roots = {SEED_ROOT}
-    for sources, dest in _final_stage_copies(dockerfile_text)[0]:
+    for sources, dest in _final_stage_copies(dockerfile_text):
         if any(posixpath.basename(posixpath.normpath(src)) == 'models' for src in sources):
             roots.add(dest.rstrip('/'))
     return sorted(roots)

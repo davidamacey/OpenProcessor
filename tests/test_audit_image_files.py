@@ -67,21 +67,32 @@ def test_untracked_model_in_the_seed_fails() -> None:
         f'{SEED}/yolo/config.pbtxt',
         f'{SEED}/x__y/1/model.onnx',
         f'{SEED}/x__y/promote.json',
-        f'{SEED}/ocr/1/__pycache__/model.cpython-312.pyc',
+        f'{SEED}/ocr/1/__pycache__/generated.cpython-312.pyc',
     }
     bad = audit.untracked_files(DOCKERFILE, '.', TRACKED, listing)
     assert f'{SEED}/x__y/1/model.onnx' in bad
     assert f'{SEED}/x__y/promote.json' in bad
-    assert f'{SEED}/ocr/1/__pycache__/model.cpython-312.pyc' in bad
+    assert f'{SEED}/ocr/1/__pycache__/generated.cpython-312.pyc' in bad
     assert f'{SEED}/yolo/config.pbtxt' not in bad
 
 
-def test_pycache_allowed_only_when_the_dockerfile_compiles_it() -> None:
+def test_pyc_is_accepted_only_next_to_its_tracked_source() -> None:
     audit = _load()
-    listing = {'/app/src/__pycache__/main.cpython-312.pyc'}
-    assert audit.untracked_files(DOCKERFILE, '.', TRACKED, listing)
-    compiled = DOCKERFILE + 'RUN python -m compileall /app/src\n'
-    assert audit.untracked_files(compiled, '.', TRACKED, listing) == []
+    tracked = TRACKED | {'src/utils/retry.py', 'models/gpu_image_prep/1/model.py'}
+    ok = '/app/src/utils/__pycache__/retry.cpython-312.pyc'
+    assert audit.untracked_files(DOCKERFILE, '.', tracked, {ok}) == []
+    no_source = f'{SEED}/gpu_image_prep/1/__pycache__/foo.cpython-312.pyc'
+    orphan = '/app/src/__pycache__/ghost.cpython-312.pyc'
+    assert audit.untracked_files(DOCKERFILE, '.', tracked, {no_source, orphan}) == [
+        orphan,
+        no_source,
+    ]
+    # the source must be in the same directory as the __pycache__, not just somewhere
+    wrong_dir = '/app/src/__pycache__/retry.cpython-312.pyc'
+    assert audit.untracked_files(DOCKERFILE, '.', tracked, {wrong_dir}) == [wrong_dir]
+    # a non-.pyc file in __pycache__ is never accepted
+    junk = '/app/src/utils/__pycache__/retry.txt'
+    assert audit.untracked_files(DOCKERFILE, '.', tracked, {junk}) == [junk]
 
 
 def test_non_final_stage_copies_are_not_expected_in_the_image() -> None:
