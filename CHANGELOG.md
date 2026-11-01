@@ -11,6 +11,10 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ## [Unreleased]
 
+### Security
+
+- **The 0.6.0 API image shipped local, untracked model files.** `davidamacey/openprocessor:0.6.0` contained 24 files (about 1.55 GB) under `/opt/openprocessor/model_repo_seed`: a promoted throwaway project model, ONNX exports, TensorRT engine leftovers and bytecode from the build host's `models/` directory. The 0.6.0 tag is re-published clean. The release script now builds every image (including the segmenter and frontend contexts) from an archive of the committed revision, never from the working directory, and refuses an uncommitted revision. The `.dockerignore` files also exclude model artifacts and caches at any depth, so local builds stay clean.
+
 ### Upgrade notes / behaviour changes
 
 - **Breaking: the unused `backbone_embedding` field is removed** (#410).

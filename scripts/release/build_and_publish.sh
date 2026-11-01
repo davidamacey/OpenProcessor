@@ -24,6 +24,9 @@
 #   scripts/release/build_and_publish.sh --push --only api,triton
 #   scripts/release/build_and_publish.sh --dry-run --allow-dirty   (local dev/test only)
 #
+# Every image is built from a clean export of the committed tree (--rev, default HEAD),
+# never from the working directory, so untracked local files cannot reach an image.
+#
 # Exit codes: 0 ok · 1 a gate failed (build/scan/push) · 2 misuse · 3 precondition unmet
 
 set -euo pipefail
@@ -82,11 +85,12 @@ ONLY=""
 VERSION_OVERRIDE=""
 ALLOW_DIRTY=false
 LOCAL_TAG_SUFFIX=""
+BUILD_REV="HEAD"
 
 usage() {
     cat >&2 <<'EOF'
 Usage: build_and_publish.sh (--dry-run|--push) [--only svc1,svc2] [--version vX.Y.Z]
-                             [--namespace NAME] [--allow-dirty] [--local-tag-suffix SUF]
+                             [--namespace NAME] [--allow-dirty] [--local-tag-suffix SUF] [--rev REV]
 
   --dry-run           build + scan every selected image, never push
   --push              build + scan + push, resolve third-party digests, write images.lock
@@ -94,6 +98,7 @@ Usage: build_and_publish.sh (--dry-run|--push) [--only svc1,svc2] [--version vX.
   --version vX.Y.Z    override the VERSION file (must equal it unless --allow-dirty)
   --namespace NAME    override OP_IMAGE_NAMESPACE (default: davidamacey)
   --allow-dirty       skip the clean-worktree / VERSION-tag gate (local testing only)
+  --rev REV           committed revision to build from (default HEAD); never the working tree
   --local-tag-suffix  append -SUF to every local tag, for a throwaway proof build
 EOF
 }
@@ -108,6 +113,7 @@ while (( $# > 0 )); do
         --version) VERSION_OVERRIDE="$2"; shift 2 ;;
         --namespace) OP_IMAGE_NAMESPACE="$2"; shift 2 ;;
         --allow-dirty) ALLOW_DIRTY=true; shift ;;
+        --rev) BUILD_REV="$2"; shift 2 ;;
         --local-tag-suffix) LOCAL_TAG_SUFFIX="$2"; shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) err "unknown option: $1"; usage; exit "$EXIT_MISUSE" ;;
@@ -162,11 +168,26 @@ if [[ "$MODE" == "push" && "$ALLOW_DIRTY" != true ]]; then
     fi
 fi
 
-REVISION="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+# The build context is the committed tree at BUILD_REV, never the working directory.
+BUILD_COMMIT="$(git -C "$REPO_ROOT" rev-parse --verify --quiet "${BUILD_REV}^{commit}" 2>/dev/null || true)"
+if [[ -z "$BUILD_COMMIT" ]]; then
+    err "'$BUILD_REV' is not a committed revision; refusing to build"
+    exit "$EXIT_GATE"
+fi
+REVISION="${BUILD_COMMIT:0:7}"
 
 log "version=$VERSION namespace=$OP_IMAGE_NAMESPACE mode=$MODE services=${SERVICES[*]}"
 
 command -v "$DOCKER_BIN" >/dev/null 2>&1 || { err "$DOCKER_BIN not found"; exit "$EXIT_PRECONDITION"; }
+
+EXPORT_DIR="$(mktemp -d)"
+trap 'rm -rf "$EXPORT_DIR"' EXIT
+git -C "$REPO_ROOT" archive --format=tar "$BUILD_COMMIT" | tar -x -C "$EXPORT_DIR" \
+    || { err "could not export $BUILD_REV from the repository"; exit "$EXIT_GATE"; }
+log "build context: committed tree ${BUILD_COMMIT:0:12} exported to $EXPORT_DIR"
+if [[ -n "$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null)" ]]; then
+    warn "worktree has uncommitted or untracked changes; they are NOT in the build context"
+fi
 
 HAVE_TRIVY=true
 command -v "$TRIVY_BIN" >/dev/null 2>&1 || { warn "$TRIVY_BIN not found -- scan gate skipped (install trivy to enforce it)"; HAVE_TRIVY=false; }
@@ -215,13 +236,13 @@ build_image() {
 
     log "building $svc -> $version_tag (cache on, $dockerfile)"
     "$DOCKER_BIN" build \
-        --file "$dockerfile" \
+        --file "$EXPORT_DIR/$dockerfile" \
         --tag "$version_tag" \
         --tag "$latest_tag" \
         "${build_args[@]}" \
         --label "org.opencontainers.image.revision=${REVISION}" \
         --label "org.opencontainers.image.version=${VERSION}" \
-        "$context" || return 1
+        "$EXPORT_DIR/$context" || return 1
     ok "built $version_tag"
     echo "$version_tag"
 }

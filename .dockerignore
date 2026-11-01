@@ -16,9 +16,9 @@ env/
 ENV/
 
 # Python cache and bytecode
-__pycache__/
-*.py[cod]
-*$py.class
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
 *.so
 .Python
 .eggs/
@@ -70,13 +70,23 @@ benchmarks/
 
 # Large model files (mounted at runtime)
 pytorch_models/
-models/*/1/*.plan
-models/*/1/*.engine
-*.pt
-*.onnx
-*.safetensors
-*.weights
-*.pth
+# Every pattern matches at any depth: a bare "*.onnx" only matches at the context root.
+**/*.plan
+**/*.plan.old
+**/*.engine
+**/*.profile
+**/*.onnx
+**/*.pt
+**/*.safetensors
+**/*.weights
+**/*.pth
+**/*.generated
+**/*.lock
+**/.lock
+
+# Promoted project models and their promote records (models/<project>__<model>/).
+# The release builds from the committed tree, so this only protects local dev builds.
+models/*__*/
 
 # Model configs (keep in Docker for Triton)
 # Note: config.pbtxt files ARE included
@@ -85,7 +95,7 @@ models/*/1/*.engine
 reference_repos/
 
 # TensorRT cache
-trt_cache/
+**/trt_cache/
 
 # Cache directories
 cache/
