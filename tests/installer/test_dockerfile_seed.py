@@ -107,3 +107,18 @@ def test_dockerfile_triton_upgrades_the_python_packages_the_scan_flags() -> None
     upgrade = text[text.index("pip install --no-cache-dir --upgrade 'starlette") :].splitlines()[0]
     for requirement in ("'starlette>=1.3.1'", "'anyio>=4.14.2'", "'certifi>=2026.10.18'"):
         assert requirement in upgrade
+
+
+def test_dockerfile_segmenter_raises_the_base_python_packages_the_scan_flags() -> None:
+    """The PyTorch base's system python ships certifi, pillow and uv with fixable CRITICALs that
+    fail the release gate. The runtime stage raises certifi and pillow before pip is stripped and
+    removes uv, which nothing in the service runs."""
+    text = (REPO_ROOT / 'docker' / 'segmenter' / 'Dockerfile').read_text()
+    runtime = text[text.rindex('FROM pytorch/pytorch') :]
+    upgrade = runtime[runtime.index('pip install --no-cache-dir --upgrade') :].splitlines()[0]
+    for requirement in ("'pillow>=13.0.0'", "'certifi>=2026.10.18'"):
+        assert requirement in upgrade
+    assert 'pip uninstall -y uv' in runtime
+    assert runtime.index('pip install --no-cache-dir --upgrade') < runtime.index(
+        'dist-packages/pip \\'
+    )

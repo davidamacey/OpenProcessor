@@ -85,9 +85,13 @@ RUN apt-get update && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# No package manager at run time: the base's /usr/local copy and the Debian python3-pip copy
-# beneath it (the user-site copy is stripped in the builder stage).
-RUN rm -rf /usr/local/lib/python3.12/dist-packages/pip \
+# The base's system python lags security fixes the release gate fails on: certifi
+# (GHSA-6q48-6c7w-9gw2) and pillow (fixed in 13.0.0) are raised, and uv, which nothing here
+# runs, is removed. Then no package manager at run time: the base's /usr/local copy and the
+# Debian python3-pip copy beneath it (the user-site copy is stripped in the builder stage).
+RUN PIP_BREAK_SYSTEM_PACKAGES=1 pip install --no-cache-dir --upgrade 'pillow>=13.0.0' 'certifi>=2026.10.18' \
+    && PIP_BREAK_SYSTEM_PACKAGES=1 pip uninstall -y uv \
+    && rm -rf /usr/local/lib/python3.12/dist-packages/pip \
         /usr/local/lib/python3.12/dist-packages/pip-*.dist-info \
         /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.12 \
         /usr/lib/python3/dist-packages/pip \
