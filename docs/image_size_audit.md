@@ -389,13 +389,18 @@ Verified on the built images (GPU 0 where a GPU line is listed):
 | `openprocessor-export` | n/a | 0 / 0 |
 | `openprocessor-evaluator` | 1 / 5 | 0 / 0 |
 | `openprocessor-trainer` | 0 / 5 | 0 / 0 |
-| `openprocessor-segmenter` | 15 / 162 | 12 / 51 |
+| `openprocessor-segmenter` | 15 / 162 | 0 / 5 |
 | `openprocessor-triton` | 13 / 164 | 0 / 11 |
 | `cropwright` | 0 / 0 | unchanged |
 
 Triton's last CRITICAL was `certifi` in the NGC python environment, now raised in `Dockerfile.triton`. Most of the drop is rebuild freshness (the "before" images are cached layers with an older
-`apt-get upgrade`), not the size changes. The segmenter's remaining CRITICAL findings are not
-from #41 and were there before: `certifi` 2026.7.22, `pillow` 12.3.0 (five CVEs, fixed in 13.0.0)
-and `uv` 0.12.20, all in or on top of the PyTorch base image. They fail the release script's
-CRITICAL gate, which runs without `--ignore-unfixed`, for that image until the base or the pins
-move.
+`apt-get upgrade`), not the size changes. The segmenter's last CRITICAL findings were in the
+PyTorch base image's system python (`certifi` 2026.7.22, `pillow` 12.3.0, `uv` 0.12.20); its
+runtime stage now raises certifi and pillow and removes uv. "After" is the release candidate
+built from the final tree.
+
+All counts are fixable findings (`--ignore-unfixed`), the same rule the release gate and the CI
+scan use. Triton and the segmenter also carry 14 CRITICAL findings in `linux-libc-dev` (kernel
+headers that `libc6-dev`, and so gcc, depends on) with no upstream fix yet; the 0.6.0 images
+carry them too. The gate does not block on a finding nothing can fix; the per-image report
+(`--report-dir`) lists them.

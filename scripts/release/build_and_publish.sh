@@ -103,7 +103,7 @@ Usage: build_and_publish.sh (--dry-run|--push) [--only svc1,svc2] [--version vX.
   --allow-dirty       skip the clean-worktree / VERSION-tag gate (local testing only)
   --rev REV           committed revision to build from (default HEAD); never the working tree
   --local-tag-suffix  append -SUF to every local tag, for a throwaway proof build
-  --scan-severity L   Trivy severities that fail the gate (default CRITICAL)
+  --scan-severity L   Trivy severities whose fixable findings fail the gate (default CRITICAL; --push needs CRITICAL)
   --report-dir DIR    also write a CRITICAL,HIGH Trivy JSON report per image (never gates)
 EOF
 }
@@ -301,18 +301,20 @@ scan_image() {
     # --exit-code 10 is reserved for "findings": any other non-zero exit
     # (timeout, DB download failure, ...) is a scanner error, not a finding.
     # Vuln scanner only: the secret scanner walks the baked model seed.
-    log "scanning $svc ($tag) -- fail on $SCAN_SEVERITY (timeout $TRIVY_TIMEOUT)"
+    log "scanning $svc ($tag) -- fail on a fixable $SCAN_SEVERITY (timeout $TRIVY_TIMEOUT)"
     local rc=0
-    "$TRIVY_BIN" image --scanners vuln --severity "$SCAN_SEVERITY" --exit-code 10 \
+    # --ignore-unfixed, as in the CI scan: the gate blocks what a rebuild or a pin can fix. A
+    # finding with no upstream fix yet cannot be acted on here; the report below still lists it.
+    "$TRIVY_BIN" image --scanners vuln --severity "$SCAN_SEVERITY" --ignore-unfixed --exit-code 10 \
         --timeout "$TRIVY_TIMEOUT" --ignorefile "$ignorefile" "$tag" || rc=$?
     case "$rc" in
-        0) ok "$tag -- no un-allowlisted $SCAN_SEVERITY findings"; return 0 ;;
-        10) err "$tag has a $SCAN_SEVERITY finding not in $ALLOWLIST_FILE"; return 1 ;;
+        0) ok "$tag -- no fixable un-allowlisted $SCAN_SEVERITY findings"; return 0 ;;
+        10) err "$tag has a fixable $SCAN_SEVERITY finding not in $ALLOWLIST_FILE"; return 1 ;;
         *) err "$tag: Trivy scan ERROR (exit $rc, e.g. timeout or DB failure) -- the image was NOT assessed; raise TRIVY_TIMEOUT or fix the scanner"; return 1 ;;
     esac
 }
 
-# report_image SVC TAG: CRITICAL+HIGH JSON report for the size/security record; never gates.
+# report_image SVC TAG: CRITICAL+HIGH JSON report (fixed and unfixed) for the record; never gates.
 report_image() {
     local svc="$1" tag="$2" image_name
     [[ -n "$REPORT_DIR" && "$HAVE_TRIVY" == true ]] || return 0
@@ -323,7 +325,7 @@ report_image() {
     trap 'rm -f "$ignorefile"' RETURN
     build_trivy_ignorefile "$ignorefile" || { warn "no report for $svc: the allowlist did not parse"; return 0; }
     log "writing the CRITICAL,HIGH report for $svc -> $REPORT_DIR/${image_name}.json"
-    "$TRIVY_BIN" image --scanners vuln --severity CRITICAL,HIGH --ignore-unfixed \
+    "$TRIVY_BIN" image --scanners vuln --severity CRITICAL,HIGH \
         --timeout "$TRIVY_TIMEOUT" --ignorefile "$ignorefile" --format json \
         -o "$REPORT_DIR/${image_name}.json" "$tag" \
         || warn "report for $svc failed (the gate is unaffected)"

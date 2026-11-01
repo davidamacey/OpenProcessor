@@ -565,6 +565,9 @@ def test_report_dir_writes_a_critical_and_high_json_report_per_image(
     assert len(gate) == 2
     assert len(reports) == 2
     assert all('--severity CRITICAL ' in c or c.endswith('--severity CRITICAL') for c in gate)
+    # Like the CI scan, the gate blocks what has a fix; unfixed findings stay in the report.
+    assert all('--ignore-unfixed' in c for c in gate)
+    assert not any('--ignore-unfixed' in c for c in reports)
     assert all('--severity CRITICAL,HIGH' in c and '--exit-code' not in c for c in reports)
     assert (report / 'openprocessor-export.json').parent.is_dir()
     assert any('-o ' + str(report / 'openprocessor-export.json') in c for c in reports)
