@@ -121,7 +121,7 @@ The recognition model uses `ppocrv5_dict.txt` with 18383 characters:
 
 ```bash
 # From the api container:
-docker compose exec api python /app/export/download_paddleocr.py
+docker compose run --rm model-export python /app/export/download_paddleocr.py
 
 # Or run the convenience script:
 ./scripts/export_paddleocr.sh download

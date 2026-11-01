@@ -292,6 +292,8 @@ cmd_update() {
     # Rebuild if needed
     log_info "Rebuilding containers..."
     dc build
+    # The one-shot export image sits in the `setup` profile, which a plain build skips.
+    dc --profile setup build model-export
 
     log_success "Update complete"
     log_info "Restart to apply: ./scripts/openprocessor.sh restart"

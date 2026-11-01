@@ -6,6 +6,10 @@ This folder contains scripts for exporting models to TensorRT format for NVIDIA 
 
 The export process transforms PyTorch models into optimized TensorRT engines for high-performance GPU inference.
 
+## Where these scripts run
+
+In the `model-export` image (the `export` target of the root `Dockerfile`), never in the API image: it carries TensorRT, ModelOpt and the isolated YOLO11 venv. `./openprocessor models install|repair` and `export`, and the `make` export targets, start it as a one-shot container (`docker compose run --rm model-export ...`; profile `setup`). The API's own upload and export routes are served by the long-running `model-export-worker` service of the same image (profile `export`: `docker compose --profile export up -d model-export-worker`); they answer 503 naming it while it is down.
+
 ## Export Scripts
 
 | Script | Purpose | Output |
@@ -26,6 +30,7 @@ The export process transforms PyTorch models into optimized TensorRT engines for
 | `download_face_models.py` | Download pre-trained face models | PyTorch weights |
 | `download_paddleocr.py` | Download PP-OCRv5 models | ONNX models |
 | `download_pytorch_models.py` | Download YOLO11 PyTorch models | PyTorch weights |
+| `export_worker.py` | The `model-export-worker` service: runs the builds `POST /models/upload` and `POST /models/{model_name}/export` queue as job files under `/jobs/model_export`, then loads the engines into Triton | task status files |
 
 ## Model Directory Structure
 
@@ -87,7 +92,7 @@ models/
 make export-models
 
 # Or directly:
-docker compose exec api python /app/export/export_models.py \
+docker compose run --rm model-export python /app/export/export_models.py \
     --models small \
     --formats trt trt_end2end \
     --normalize-boxes
@@ -96,17 +101,17 @@ docker compose exec api python /app/export/export_models.py \
 ### SCRFD Face Detection
 
 ```bash
-docker compose exec api python /app/export/export_scrfd.py
+docker compose run --rm model-export python /app/export/export_scrfd.py
 ```
 
 ### Face Recognition (ArcFace)
 
 ```bash
 # Download pre-trained model
-docker compose exec api python /app/export/download_face_models.py
+docker compose run --rm model-export python /app/export/download_face_models.py
 
 # Export to TensorRT
-docker compose exec api python /app/export/export_face_recognition.py
+docker compose run --rm model-export python /app/export/export_face_recognition.py
 ```
 
 ### MobileCLIP (Visual Search)
@@ -116,8 +121,8 @@ docker compose exec api python /app/export/export_face_recognition.py
 make export-mobileclip
 
 # Or individually:
-docker compose exec api python /app/export/export_mobileclip_image_encoder.py
-docker compose exec api python /app/export/export_mobileclip_text_encoder.py
+docker compose run --rm model-export python /app/export/export_mobileclip_image_encoder.py
+docker compose run --rm model-export python /app/export/export_mobileclip_text_encoder.py
 ```
 
 ### PE-Core Encoders (Curation Embeddings)
@@ -134,8 +139,8 @@ Both embeddings come out L2-normalized. See
 [`docs/CURATION.md`](../docs/CURATION.md#models-you-must-supply) for what
 depends on them.
 
-**Fresh deployment, end to end** (API container = `api`; it has torch,
-`perception_models` and the HF cache mounted from `./cache/huggingface`):
+**Fresh deployment, end to end** (export container = `model-export`; it has torch,
+`perception_models`, TensorRT and the HF cache mounted from `./cache/huggingface`):
 
 ```bash
 make pe-download        # 0. weights: pinned commit + SHA-256 into the HF cache
@@ -171,11 +176,11 @@ offline. The API's PyTorch fallback loads through `perception_models`' own
 
 #### 1–2. Image tower — `export_pe_image_encoder.py` + `build_pe_trt.sh` / `build_pe_ort_fallback.sh`
 
-The ONNX export runs in the API container, the TensorRT build in the Triton
+The ONNX export runs in the model-export container, the TensorRT build in the Triton
 image (that's where `trtexec` lives):
 
 ```bash
-docker compose exec api python /app/export/export_pe_image_encoder.py
+docker compose run --rm model-export python /app/export/export_pe_image_encoder.py
 ONNX_PATH=./pytorch_models/pe_image_encoder.onnx bash export/build_pe_trt.sh          # Path 1
 ONNX_PATH=./pytorch_models/pe_image_encoder.onnx bash export/build_pe_ort_fallback.sh # Path 2
 ```
@@ -215,7 +220,7 @@ OUT.onnx`, then rebuild the engine. A graph that is not PE-Core's is left as exp
 #### 3. Text tower — `export_pe_text_encoder.py`
 
 ```bash
-docker compose exec api python /app/export/export_pe_text_encoder.py [--benchmark]
+docker compose run --rm model-export python /app/export/export_pe_text_encoder.py [--benchmark]
 ```
 
 Exports `clip.encode_text(tokens, normalize=True)` — causal transformer,
@@ -274,7 +279,7 @@ Optional Triton serving (onnxruntime backend, CPU instances by default so it
 takes no VRAM; `--kind gpu --gpus N` for GPU):
 
 ```bash
-docker compose exec api python /app/export/export_pe_text_encoder.py \
+docker compose run --rm model-export python /app/export/export_pe_text_encoder.py \
     --install-triton --models-dir /app/models      # = make pe-export-text-triton
 # pe_text_encoder is already in the default --load-model list of docker-compose.yml
 ```
@@ -317,11 +322,11 @@ configured or `OP_PE_TEXT_BACKEND=triton`.
 
 ```bash
 # Download PP-OCRv5 models
-docker compose exec api python /app/export/download_paddleocr.py
+docker compose run --rm model-export python /app/export/download_paddleocr.py
 
 # Export detection and recognition
-docker compose exec api python /app/export/export_paddleocr_det.py
-docker compose exec api python /app/export/export_paddleocr_rec.py
+docker compose run --rm model-export python /app/export/export_paddleocr_det.py
+docker compose run --rm model-export python /app/export/export_paddleocr_rec.py
 ```
 
 ## Model Specifications

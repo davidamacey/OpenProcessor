@@ -56,11 +56,11 @@ declare -gA EXPORT_TIMES=(
 # Container Helpers
 # =============================================================================
 
-# Run a command in a temporary api container (no dependencies needed).
+# Run a command in a temporary model-export container (no dependencies needed).
 # Uses 'docker compose run --rm --no-deps -T' so the export works without
-# Triton running and without the api container already up.
-run_in_api_container() {
-    dc run --rm --no-deps -T api "$@"
+# Triton or the API running. The API image carries no export toolchain.
+run_in_export_container() {
+    dc run --rm --no-deps -T model-export "$@"
 }
 
 check_triton_container() {

@@ -17,7 +17,7 @@ Key steps:
 5. Validate output matches PyTorch
 
 Run from: api container
-    docker compose exec api python /app/export/export_mobileclip_text_encoder.py --model S2
+    docker compose run --rm model-export python /app/export/export_mobileclip_text_encoder.py --model S2
 """
 
 import argparse

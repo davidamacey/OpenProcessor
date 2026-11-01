@@ -2,7 +2,8 @@
 # GPU-less CI runner. Traced from `import src.main`'s real import graph plus
 # every top-level (non-lazy) third-party import reachable from `tests/`.
 #
-# NOT included here: tensorrt, nvidia-modelopt, pandas, matplotlib, seaborn,
+# NOT included here: the engine-build toolchain (requirements-export.txt, image-only),
+# pandas, matplotlib, seaborn,
 # open-clip-torch, ftfy, timm, huggingface_hub (lazy-imported, and no
 # not-live test calls them -- see requirements.txt for their call sites).
 # faiss-cpu, umap-learn, hdbscan, imohash, onnxruntime, pycocotools and docker

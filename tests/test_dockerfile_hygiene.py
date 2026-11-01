@@ -14,7 +14,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # `COPY` instructions with a trailing backslash continuation are joined before parsing.
-_INSTRUCTION_RE = re.compile(r'^(FROM|COPY|USER|RUN)\s+(.*)$', re.M)
+_INSTRUCTION_RE = re.compile(r'^(FROM|COPY|USER|RUN|ARG)\s+(.*)$', re.M)
 _PINNED_RE = re.compile(r'@sha256:[0-9a-f]{64}\b')
 
 # A final stage that sets no USER inherits one from its base: nginx-unprivileged runs as 101.
@@ -24,7 +24,6 @@ _USER_FROM_BASE = {'docs-site/Dockerfile': 'nginx-unprivileged sets USER 101'}
 _ROOT_CONTEXT = (
     'Dockerfile',
     'Dockerfile.triton',
-    'docker/evaluator/Dockerfile',
     'docker/trainer/Dockerfile',
 )
 
@@ -50,7 +49,8 @@ def _stages(rel: str) -> list[list[tuple[str, str]]]:
     for kind, rest in _instructions(rel):
         if kind == 'FROM':
             stages.append([])
-        stages[-1].append((kind, rest))
+        if stages:  # a global ARG may precede the first FROM
+            stages[-1].append((kind, rest))
     return stages
 
 
@@ -83,12 +83,107 @@ def test_final_stage_runs_as_a_non_root_user(rel: str) -> None:
     assert users[-1] not in {'root', '0'}, f'{rel}: the final stage ends as root'
 
 
-@pytest.mark.parametrize('rel', ['docker/evaluator/Dockerfile', 'docker/segmenter/Dockerfile'])
+@pytest.mark.parametrize('rel', ['docker/segmenter/Dockerfile'])
 def test_image_builds_dependencies_in_a_separate_stage(rel: str) -> None:
     stages = _stages(rel)
-    assert len(stages) >= 3 if 'segmenter' in rel else len(stages) >= 2
+    assert len(stages) >= 3
     installs = [rest for kind, rest in stages[-1] if kind == 'RUN' and 'pip install' in rest]
     assert installs == [], f'{rel}: the runtime stage runs pip install'
+
+
+# --- the root Dockerfile: one build graph, three published targets --------------------------
+_STAGE_ORDER = [
+    'base',
+    'builder',
+    'builder-export',
+    'builder-eval',
+    'runtime-base',
+    'export',
+    'evaluator',
+    'api',
+]
+_TARGETS = ['api', 'export', 'evaluator']
+_RUNTIME_STAGES = ['base', 'runtime-base', 'export', 'evaluator', 'api']
+
+
+def _named_stages(rel: str = 'Dockerfile') -> dict[str, list[tuple[str, str]]]:
+    named: dict[str, list[tuple[str, str]]] = {}
+    current: list[tuple[str, str]] = []
+    for kind, rest in _instructions(rel):
+        if kind == 'FROM':
+            words = [w for w in rest.split() if not w.startswith('--')]
+            assert len(words) == 3, f'{rel}: unnamed stage: {rest}'
+            assert words[1].upper() == 'AS', f'{rel}: unnamed stage: {rest}'
+            current = named.setdefault(words[2], [])
+        current.append((kind, rest))
+    return named
+
+
+def test_root_dockerfile_stage_graph() -> None:
+    assert list(_named_stages()) == _STAGE_ORDER, 'api must stay the last stage (untargeted builds)'
+
+
+@pytest.mark.parametrize('target', _TARGETS)
+def test_every_published_target_ends_as_a_non_root_user(target: str) -> None:
+    users = [rest.split()[0] for kind, rest in _named_stages()[target] if kind == 'USER']
+    assert users, f'target {target} never sets USER'
+    assert users[-1] not in {'root', '0'}, f'target {target} does not end non-root'
+
+
+@pytest.mark.parametrize('stage', _RUNTIME_STAGES)
+def test_no_runtime_stage_installs_packages_with_pip(stage: str) -> None:
+    installs = [r for kind, r in _named_stages()[stage] if kind == 'RUN' and 'pip install' in r]
+    assert installs == [], f'stage {stage} runs pip install; installs belong in builder stages'
+
+
+@pytest.mark.parametrize('target', _TARGETS)
+def test_build_sha_is_set_after_the_big_layers(target: str) -> None:
+    """OP_BUILD_SHA changes every commit; declared early it would invalidate the cache of every
+    layer below it (the multi-GB dependency copies) on each build."""
+    stage = _named_stages()[target]
+    sha_at = next(
+        i for i, (k, r) in enumerate(stage) if k == 'ARG' and r.startswith('OP_BUILD_SHA')
+    )
+    last_copy = max(i for i, (k, _) in enumerate(stage) if k == 'COPY')
+    assert sha_at > last_copy, f'target {target}: ARG OP_BUILD_SHA precedes a COPY'
+    runtime_base = _named_stages()['runtime-base'] + _named_stages()['base']
+    assert not [1 for k, r in runtime_base if k == 'ARG' and r.startswith('OP_BUILD_SHA')]
+
+
+def test_api_target_carries_no_export_toolchain_models_or_venv() -> None:
+    for kind, rest in _named_stages()['api']:
+        if kind != 'COPY':
+            continue
+        assert '--from=builder-export' not in rest, rest
+        assert '--from=builder-eval' not in rest, rest
+        sources = [w for w in rest.split() if not w.startswith('--')][:-1]
+        assert not [s for s in sources if s.startswith(('export/', 'models/'))], rest
+    assert not [1 for k, r in _named_stages()['api'] if '/opt/venv' in r]
+
+
+def test_export_target_carries_the_toolchain_and_the_seed() -> None:
+    stage = ' '.join(r for _, r in _named_stages()['export'])
+    assert '--from=builder-export' in stage
+    assert 'export/' in stage
+    assert 'models/' in stage
+    assert '/opt/venv-y11' in stage
+
+
+def test_evaluator_target_takes_only_the_evaluator_delta() -> None:
+    stage = ' '.join(r for _, r in _named_stages()['evaluator'])
+    assert '--from=builder-eval' in stage
+    assert '--from=builder-export' not in stage
+
+
+def test_extra_dependency_stages_install_under_the_runtime_freeze() -> None:
+    for name in ('builder-export', 'builder-eval'):
+        installs = [r for k, r in _named_stages()[name] if k == 'RUN' and 'pip install --user' in r]
+        assert installs, name
+        assert all('-c /tmp/runtime.freeze' in r for r in installs), name
+
+
+def test_evaluator_dockerfile_is_gone() -> None:
+    assert not (REPO_ROOT / 'docker' / 'evaluator').exists()
 
 
 def test_root_dockerignore_excludes_trees_no_build_needs() -> None:
@@ -107,11 +202,12 @@ def test_root_dockerignore_excludes_trees_no_build_needs() -> None:
                 assert src.split('/')[0] not in ignored, f'{rel}: COPY {src} is dockerignored'
 
 
-def _copied_scripts(rel: str) -> tuple[set[str], set[str]]:
-    """(directories, files) under scripts/ that the Dockerfile copies into the image."""
+def _copied_scripts(rel: str, target: str | None = None) -> tuple[set[str], set[str]]:
+    """(directories, files) under scripts/ that the Dockerfile (or one stage of it) copies."""
     dirs: set[str] = set()
     files: set[str] = set()
-    for kind, rest in _instructions(rel):
+    instructions = _named_stages(rel)[target] if target else _instructions(rel)
+    for kind, rest in instructions:
         if kind != 'COPY' or '--from=' in rest:
             continue
         words = [w for w in rest.split() if not w.startswith('--')]
@@ -156,34 +252,51 @@ def _scripts_modules_imported(roots: list[str]) -> set[str]:
     return needed
 
 
-def test_api_image_copies_every_scripts_file_it_imports_or_sources() -> None:
-    dirs, files = _copied_scripts('Dockerfile')
-    assert 'scripts' not in dirs, 'the api image must copy a runtime subset of scripts/'
-    roots = ['src', 'export', 'models', 'config_templates', 'scripts/curation']
-    needed = _scripts_modules_imported(roots)
-    # `openprocessor models install` and `sample coco` run these inside the container
-    # (scripts/lib/model_setup.sh).
-    needed |= _scripts_modules_imported(['scripts/datasets'])
-    needed |= {
-        'scripts/datasets/fetch_coco_subset.py',
-        'scripts/datasets/manifests/coco_va_200.json',
-        'scripts/datasets/manifests/coco_va_800.json',
-        'scripts/lib/config.sh',
-        'scripts/lib/download.sh',
-    }
+_SHELL_LIBS = {'scripts/lib/config.sh', 'scripts/lib/download.sh'}
+_COCO_SAMPLE = {
+    'scripts/datasets/fetch_coco_subset.py',
+    'scripts/datasets/manifests/coco_va_200.json',
+    'scripts/datasets/manifests/coco_va_800.json',
+}
+
+
+def _with_sourced_libs(needed: set[str]) -> set[str]:
     for lib in sorted(needed):
         if lib.endswith('.sh'):
             text = (REPO_ROOT / lib).read_text()
             needed |= {
                 f'scripts/lib/{m}' for m in re.findall(r'source "\$\{\w+\}/(\w+\.sh)"', text)
             }
-    missing = sorted(n for n in needed if not _covered(n, dirs, files))
-    assert missing == [], f'Dockerfile does not COPY: {missing}'
+    return needed
+
+
+def test_api_image_copies_every_scripts_file_it_imports_or_sources() -> None:
+    dirs, files = _copied_scripts('Dockerfile', 'api')
+    assert 'scripts' not in dirs, 'the api image must copy a runtime subset of scripts/'
+    needed = _scripts_modules_imported(['src', 'config_templates', 'scripts/curation'])
+    needed |= _scripts_modules_imported(['scripts/datasets'])
+    needed |= _COCO_SAMPLE | _SHELL_LIBS
+    missing = sorted(n for n in _with_sourced_libs(needed) if not _covered(n, dirs, files))
+    assert missing == [], f'api target does not COPY: {missing}'
+
+
+def test_export_image_copies_every_scripts_file_it_imports_or_sources() -> None:
+    """`openprocessor models install` and `sample coco` run in this image
+    (scripts/lib/model_setup.sh)."""
+    dirs, files = _copied_scripts('Dockerfile', 'export')
+    assert 'scripts' not in dirs
+    needed = _scripts_modules_imported(
+        ['export', 'models', 'config_templates', 'src/ultralytics_patches']
+    )
+    needed |= _scripts_modules_imported(['scripts/datasets'])
+    needed |= _COCO_SAMPLE | _SHELL_LIBS
+    missing = sorted(n for n in _with_sourced_libs(needed) if not _covered(n, dirs, files))
+    assert missing == [], f'export target does not COPY: {missing}'
 
 
 def test_evaluator_image_copies_every_scripts_file_it_imports() -> None:
-    dirs, files = _copied_scripts('docker/evaluator/Dockerfile')
+    dirs, files = _copied_scripts('Dockerfile', 'evaluator')
     assert 'scripts' not in dirs
     needed = _scripts_modules_imported(['src', 'scripts/curation/bakeoff'])
     missing = sorted(n for n in needed if not _covered(n, dirs, files))
-    assert missing == [], f'evaluator Dockerfile does not COPY: {missing}'
+    assert missing == [], f'evaluator target does not COPY: {missing}'

@@ -373,7 +373,7 @@ YOLO26.
   (`export/export_yolo26.py`, natively NMS-free engines):
 
   ```bash
-  docker compose -p openprocessor exec api python /app/export/export_yolo26.py --models small
+  docker compose -p openprocessor run --rm model-export python /app/export/export_yolo26.py --models small
   curl -X POST http://localhost:4603/models/yolo26_small_trt/load
   ```
 
@@ -382,6 +382,11 @@ YOLO26.
   interchangeably. Set `YOLO_MODEL=yolo26_small_trt` to change the default
   detector. Models load and unload at runtime with `POST /models/{name}/load`
   and `POST /models/{name}/unload`.
+- `POST /models/upload` and `POST /models/{model_name}/export` queue the
+  TensorRT build for the `model-export-worker` service (the export image; the
+  API image has no TensorRT). Start it with
+  `docker compose --profile export up -d model-export-worker`; while it is down
+  both routes answer 503 naming it.
 
 ---
 

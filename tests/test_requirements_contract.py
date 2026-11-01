@@ -45,3 +45,35 @@ def test_the_image_pins_fastapi_as_the_tests_do() -> None:
     test_lines = (ROOT / 'requirements-test.txt').read_text(encoding='utf-8').splitlines()
     (tested,) = [ln.split('#', 1)[0].strip() for ln in test_lines if ln.startswith('fastapi')]
     assert tested in _requirement_lines()
+
+
+_EXPORT_ONLY = (
+    'tensorrt',
+    'nvidia-modelopt',
+    'onnxsim',
+    'onnxslim',
+    'onnx-graphsurgeon',
+    'onnxscript',
+)
+
+
+def _pinned_trt(path: str) -> str:
+    text = (ROOT / path).read_text(encoding='utf-8')
+    (pin,) = re.findall(r'^tensorrt-cu13==(\S+)', text, re.M)
+    return pin.split('#')[0]
+
+
+def test_runtime_requirements_carry_no_export_toolchain() -> None:
+    """The slim runtime image (API + workers) must not install the engine-build toolchain;
+    it lives in requirements-export.txt and ships only in the export image."""
+    names = {re.split(r'[<>=\[ ;@]', ln, maxsplit=1)[0].lower() for ln in _requirement_lines()}
+    leaked = sorted(n for n in names if n.startswith(_EXPORT_ONLY))
+    assert leaked == []
+    assert {'onnx', 'onnxruntime-gpu', 'cupy-cuda12x'} <= names
+
+
+def test_tensorrt_pin_matches_the_triton_image_everywhere() -> None:
+    triton = (ROOT / 'Dockerfile.triton').read_text(encoding='utf-8')
+    (version,) = re.findall(r'^ARG TRT_VERSION=(\S+)', triton, re.M)
+    assert _pinned_trt('requirements-export.txt') == version
+    assert _pinned_trt('requirements-export-y11.txt') == version

@@ -9,15 +9,10 @@ pydantic-settings  # Pydantic v2 settings management
 ultralytics>=8.4.82,<8.5  # 8.4.x = YOLO26 support (native NMS-free export + .pt loading). The legacy YOLO11 EfficientNMS export toolchain is isolated in /opt/venv-y11 (requirements-export-y11.txt) because its patch requires <8.4.
 tritonclient[all]
 
-# Model Export Dependencies
-onnx>=1.12.0,<1.22  # upper bound tracks nvidia-modelopt; venv-y11 keeps its own tighter pin
-onnxslim>=0.1.71
-onnxsim>=0.4.33
-onnxscript
-onnxruntime-gpu
-onnx-graphsurgeon  # Required for End2End TensorRT NMS graph manipulation
-tensorrt-cu13==11.1.0.106  # MUST match the Triton image TensorRT (11.1.0.106 — asserted at image build) for engine compatibility — bump only together with the Dockerfile.triton TRT_VERSION assertion
-nvidia-modelopt[onnx]  # TRT 11 is strongly-typed: FP16 is baked into ONNX via ModelOpt AutoCast at export time
+# ONNX runtime stack. The engine-build toolchain (TensorRT, ModelOpt, onnxsim, ...) is NOT here:
+# it ships only in the export image (requirements-export.txt).
+onnx>=1.12.0,<1.22  # scripts/curation/seed_class_registry.py; upper bound tracks nvidia-modelopt in the export image
+onnxruntime-gpu>=1.24.2,<1.25  # nvidia-modelopt (export image) requires ~=1.24.2; the runtime and export images must resolve one version
 
 # PyTorch
 torch
@@ -75,6 +70,10 @@ ftfy  # Text cleaning for CLIP tokenizer (required by open_clip)
 # support landed in 3.2.0. Floor bumped so a fresh build can't regress to
 # a pre-3.2 release; requires an image rebuild to take effect.
 open-clip-torch>=3.2.0  # OpenCLIP with native MobileCLIP2-S2 support
+
+# GPU clustering backend (src/services/curation/clustering/backend.py); it used to arrive only
+# through nvidia-modelopt, which the runtime image no longer installs.
+cupy-cuda12x>=14.2,<15
 
 # FAISS Clustering (GPU-accelerated vector clustering)
 faiss-gpu-cu12>=1.10.0  # FAISS GPU for billion-scale clustering (CUDA 12)

@@ -12,6 +12,8 @@ exactly Triton, the API and OpenSearch. Everything else is opt-in.
 | Profile | Services | Needs a GPU | Start with |
 |---|---|---|---|
 | *(none)* | `triton-server`, `api`, `opensearch` | Triton, and the API for torch fallbacks | `docker compose up -d` / `make up` |
+| `setup` | `model-export` (TensorRT and ModelOpt export toolchain, one-shot) | yes | never started by `up`; `./openprocessor models install` and `export` run it with `docker compose run --rm model-export ...` |
+| `export` | `model-export-worker` (runs the engine builds queued by `POST /models/upload` and `POST /models/{model_name}/export`) | yes | `docker compose --profile export up -d model-export-worker` |
 | `curation` | `curation-detection-worker`, `curation-vlm-worker`, `curation-auto-label-worker`, `curation-cluster-refresh` | no | `docker compose --profile curation up -d` / `make curation-up` |
 | `evaluator` | `curation-evaluator` (bake-off runner, on demand) | yes | `./openprocessor curation up curation-evaluator` / `docker compose run --rm curation-evaluator` |
 | `segmenter` | `segmenter` (SAM 3 behind the generic segment protocol) | yes, plus `HF_TOKEN` for the gated weights | `docker compose --profile curation --profile segmenter up -d` |

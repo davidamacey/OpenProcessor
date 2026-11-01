@@ -1694,7 +1694,7 @@ image_repo_digests() {
 # pull_images -- pull every image of the active services that is missing
 pull_images() {
     local images=() img missing=() out
-    out="$(dc config --images)" || die "compose config --images failed"
+    out="$(compose_image_refs)" || die "compose config --images failed"
     mapfile -t images <<< "$out"
     ACTIVE_IMAGES=("${images[@]}")
     for img in "${images[@]}"; do
@@ -1754,7 +1754,7 @@ verify_image_digests() {
     else
         local img
         TRITON_DIGEST=""
-        for img in openprocessor openprocessor-triton; do
+        for img in openprocessor openprocessor-export openprocessor-triton; do
             ref="${OP_IMAGE_REPO}/${img}:${OP_IMAGE_TAG}"
             digest="$(docker image inspect --format '{{.Id}}' "$ref" 2>/dev/null || true)"
             [[ -n "$digest" ]] && IMAGE_DIGESTS+=("${ref}=${digest}")

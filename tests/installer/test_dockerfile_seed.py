@@ -9,11 +9,25 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_dockerfile_copies_export_examples_and_model_seed() -> None:
+def _stage(name: str) -> str:
     text = (REPO_ROOT / 'Dockerfile').read_text()
-    assert re.search(r'COPY\s+(--chown=\S+\s+)?export/\s+\./export/', text)
-    assert re.search(r'COPY\s+(--chown=\S+\s+)?examples/\s+\./examples/', text)
-    assert re.search(r'COPY\s+(--chown=\S+\s+)?models/\s+/opt/openprocessor/model_repo_seed/', text)
+    match = re.search(rf'^FROM \S+ AS {name}\n(.*?)(?=^FROM |\Z)', text, re.M | re.S)
+    assert match, f'no stage {name}'
+    return match.group(1)
+
+
+def test_export_image_carries_export_scripts_and_the_model_seed() -> None:
+    export = _stage('export')
+    assert re.search(r'COPY\s+(--chown=\S+\s+)?export/\s+\./export/', export)
+    assert re.search(
+        r'COPY\s+(--chown=\S+\s+)?models/\s+/opt/openprocessor/model_repo_seed/', export
+    )
+
+
+def test_api_image_carries_examples_but_neither_export_scripts_nor_the_seed() -> None:
+    api = _stage('api')
+    assert re.search(r'COPY\s+(--chown=\S+\s+)?examples/\s+\./examples/', api)
+    assert not re.search(r'COPY\s+(--chown=\S+\s+)?(export|models)/', api)
 
 
 def test_every_tracked_config_pbtxt_would_land_in_the_seed() -> None:
@@ -46,7 +60,7 @@ def test_every_tracked_config_pbtxt_would_land_in_the_seed() -> None:
 def test_dockerfile_copies_config_templates_for_preflight_profile() -> None:
     """preflight_profile runs generate_all_configs inside the API image with
     PROJECT_DIR=/app, which reads /app/config_templates/profiles/*.json."""
-    text = (REPO_ROOT / 'Dockerfile').read_text()
+    text = _stage('export')
     assert re.search(r'COPY\s+(--chown=\S+\s+)?config_templates/\s+\./config_templates/', text)
     assert (REPO_ROOT / 'config_templates' / 'profiles' / 'minimal.json').is_file()
     for line in (REPO_ROOT / '.dockerignore').read_text().splitlines():

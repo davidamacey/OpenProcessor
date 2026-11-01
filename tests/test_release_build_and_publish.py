@@ -32,19 +32,21 @@ def _write_shim(path: Path, body: str) -> None:
 def sandbox(tmp_path: Path) -> Path:
     """A minimal repo: VERSION, one Dockerfile per image spec, git-initted."""
     repo = tmp_path / 'repo'
-    (repo / 'docker' / 'evaluator').mkdir(parents=True)
     (repo / 'docker' / 'segmenter').mkdir(parents=True)
     (repo / 'docker' / 'trainer').mkdir(parents=True)
     (repo / 'frontend').mkdir()
     for df in [
         'Dockerfile',
         'Dockerfile.triton',
-        'docker/evaluator/Dockerfile',
         'docker/segmenter/Dockerfile',
         'docker/trainer/Dockerfile',
         'frontend/Dockerfile',
     ]:
         (repo / df).write_text('FROM scratch\n')
+    # the root Dockerfile is multi-target
+    (repo / 'Dockerfile').write_text(
+        ''.join(f'FROM scratch AS {t}\n' for t in ('export', 'evaluator', 'api'))
+    )
     (repo / 'VERSION').write_text('1.2.3\n')
 
     subprocess.run(['git', 'init', '-q'], cwd=repo, check=True)
@@ -499,3 +501,78 @@ def test_image_audit_listing_failure_fails_clearly_and_runs_as_root(
     assert '--user 0:0' in text
     assert '--network none' in text
     assert 'push ' not in text
+
+
+def _builds(fake_bin: Path) -> list[str]:
+    return [c for c in _docker_calls(fake_bin) if c.startswith('build ')]
+
+
+def test_one_dockerfile_builds_three_targets_in_cache_friendly_order(
+    sandbox: Path, fake_bin: Path
+) -> None:
+    result = _run(sandbox, fake_bin, ['--dry-run'])
+    assert result.returncode == 0, result.stderr
+    root = [b for b in _builds(fake_bin) if '--target' in b]
+    targets = [b.split('--target ')[1].split()[0] for b in root]
+    assert targets == ['api', 'export', 'evaluator']
+    assert all('/Dockerfile ' in b and 'docker/' not in b for b in root)
+    names = [b.split('--tag ')[1].split()[0].split('/')[1] for b in root]
+    assert names == [
+        'openprocessor:1.2.3',
+        'openprocessor-export:1.2.3',
+        'openprocessor-evaluator:1.2.3',
+    ]
+    # single-stage Dockerfiles are built without --target
+    others = [b for b in _builds(fake_bin) if '--target' not in b]
+    assert len(others) == 4
+
+
+def test_only_accepts_export_and_lock_records_it(sandbox: Path, fake_bin: Path) -> None:
+    result = _run(sandbox, fake_bin, ['--push', '--only', 'export'])
+    assert result.returncode == 0, result.stderr
+    lock = (sandbox / 'images.lock').read_text()
+    assert 'export=davidamacey/openprocessor-export:1.2.3@sha256:' in lock
+
+
+def test_every_target_image_is_audited_against_its_own_stage(
+    sandbox: Path, fake_bin: Path, tmp_path: Path
+) -> None:
+    audit_args = tmp_path / 'audit.args'
+    release = sandbox / 'scripts' / 'release'
+    (release / 'audit_image_files.py').write_text(
+        f'import sys\nopen("{audit_args}", "a").write(" ".join(sys.argv[1:]) + "\\n")\n'
+    )
+    subprocess.run(['git', 'commit', '-q', '-am', 'stub audit'], cwd=sandbox, check=True)
+    result = _run(sandbox, fake_bin, ['--dry-run', '--only', 'api,export,evaluator'])
+    assert result.returncode == 0, result.stderr
+    lines = audit_args.read_text().splitlines()
+    assert [ln.split('--target ')[1].split()[0] for ln in lines] == ['api', 'export', 'evaluator']
+
+
+def test_report_dir_writes_a_critical_and_high_json_report_per_image(
+    sandbox: Path, fake_bin: Path, tmp_path: Path
+) -> None:
+    log = tmp_path / 'trivy.calls'
+    _write_shim(fake_bin / 'trivy', f'echo "$@" >> {log}; exit 0')
+    report = tmp_path / 'reports'
+    result = _run(
+        sandbox, fake_bin, ['--dry-run', '--only', 'api,export', '--report-dir', str(report)]
+    )
+    assert result.returncode == 0, result.stderr
+    calls = log.read_text().splitlines()
+    gate = [c for c in calls if '--exit-code 10' in c]
+    reports = [c for c in calls if '--format json' in c]
+    assert len(gate) == 2
+    assert len(reports) == 2
+    assert all('--severity CRITICAL ' in c or c.endswith('--severity CRITICAL') for c in gate)
+    assert all('--severity CRITICAL,HIGH' in c and '--exit-code' not in c for c in reports)
+    assert (report / 'openprocessor-export.json').parent.is_dir()
+    assert any('-o ' + str(report / 'openprocessor-export.json') in c for c in reports)
+
+
+def test_scan_severity_changes_the_gate(sandbox: Path, fake_bin: Path, tmp_path: Path) -> None:
+    log = tmp_path / 'trivy.calls'
+    _write_shim(fake_bin / 'trivy', f'echo "$@" >> {log}; exit 0')
+    result = _run(sandbox, fake_bin, ['--dry-run', '--only', 'api', '--scan-severity', 'HIGH'])
+    assert result.returncode == 0, result.stderr
+    assert '--severity HIGH' in log.read_text()

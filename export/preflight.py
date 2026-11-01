@@ -1,10 +1,10 @@
 """Image self-check run once, right after pull, before any export step.
 
 Installer plan (the installer design
-section 3.2): a stale ``:latest`` API image once shipped without
+section 3.2): a stale ``:latest`` image once shipped without
 ``perception_models`` importable. This script is invoked as
 
-    docker compose run --rm --no-deps -T api python -m export.preflight
+    docker compose run --rm --no-deps -T model-export python -m export.preflight
 
 and exits non-zero with a specific message per failing check, instead of
 failing deep inside the first export step with a confusing traceback.

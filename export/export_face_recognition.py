@@ -20,7 +20,7 @@ Usage:
     python export/export_face_recognition.py
 
     # From api container:
-    docker compose exec api python /app/export/export_face_recognition.py
+    docker compose run --rm model-export python /app/export/export_face_recognition.py
 """
 
 import argparse

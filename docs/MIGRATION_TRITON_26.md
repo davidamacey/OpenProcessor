@@ -18,13 +18,13 @@ docker compose build
 docker compose up -d triton-server api
 
 # Re-export every model (runs inside the API container)
-docker compose exec api python /app/export/export_models.py --formats onnx_end2end trt_end2end
-docker compose exec api python /app/export/export_scrfd.py
-docker compose exec api python /app/export/export_face_recognition.py
-docker compose exec api python /app/export/export_mobileclip_image_encoder.py
-docker compose exec api python /app/export/export_mobileclip_text_encoder.py
-docker compose exec api python /app/export/export_paddleocr_det.py
-docker compose exec api python /app/export/export_paddleocr_rec.py
+docker compose run --rm model-export python /app/export/export_models.py --formats onnx_end2end trt_end2end
+docker compose run --rm model-export python /app/export/export_scrfd.py
+docker compose run --rm model-export python /app/export/export_face_recognition.py
+docker compose run --rm model-export python /app/export/export_mobileclip_image_encoder.py
+docker compose run --rm model-export python /app/export/export_mobileclip_text_encoder.py
+docker compose run --rm model-export python /app/export/export_paddleocr_det.py
+docker compose run --rm model-export python /app/export/export_paddleocr_rec.py
 
 # Restart Triton to load the new engines
 docker compose restart triton-server
@@ -76,7 +76,7 @@ automatically, so existing export commands are unchanged.
 To serve YOLO26 alongside YOLO11:
 
 ```bash
-docker compose exec api python /app/export/export_yolo26.py --models small
+docker compose run --rm model-export python /app/export/export_yolo26.py --models small
 curl -X POST http://localhost:4603/models/yolo26_small_trt/load
 curl -F image=@test.jpg 'http://localhost:4603/detect?model_name=yolo26_small_trt'
 ```

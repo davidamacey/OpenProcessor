@@ -16,16 +16,16 @@ Formats:
 Usage:
 ------
 # Export all formats (default)
-docker compose exec api python /app/export/export_models.py
+docker compose run --rm model-export python /app/export/export_models.py
 
 # Export only end2end models
-docker compose exec api python /app/export/export_models.py --formats onnx_end2end trt_end2end
+docker compose run --rm model-export python /app/export/export_models.py --formats onnx_end2end trt_end2end
 
 # Export specific models
-docker compose exec api python /app/export/export_models.py --models nano small
+docker compose run --rm model-export python /app/export/export_models.py --models nano small
 
 # Export everything
-docker compose exec api python /app/export/export_models.py --formats all
+docker compose run --rm model-export python /app/export/export_models.py --formats all
 """
 
 import os

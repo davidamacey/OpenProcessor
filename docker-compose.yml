@@ -322,6 +322,46 @@ services:
           - op-api
 
   # ===================================================================
+  # model-export: the engine-build toolchain (TensorRT, ModelOpt, the YOLO11 venv, the
+  # model-repo seed). One-shot: `openprocessor models install|repair` and `export` run it with
+  # `docker compose run --rm --no-deps -T model-export ...`; `up` never starts it (profile
+  # `setup`). The API image carries none of this.
+  # ===================================================================
+  model-export:
+    image: ${OP_EXPORT_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-export:${OP_IMAGE_TAG:-0.6.0}}
+    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-model-export
+    logging: *default-logging
+    profiles:
+      - setup
+    restart: "no"
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      - HF_HOME=/home/appuser/.cache/huggingface
+      - HF_HUB_CACHE=/home/appuser/.cache/huggingface/hub
+    volumes:
+      - ./models:/app/models
+      - ./pytorch_models:/app/pytorch_models
+      - ./data:/app/data
+      - ./cache/huggingface:/home/appuser/.cache/huggingface
+    shm_size: 8g
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    deploy:
+      resources:
+        reservations:
+          memory: 2g
+          devices:
+            - driver: nvidia
+              device_ids: [ '${API_GPU_ID:-0}' ]
+              capabilities:
+                - gpu
+    networks:
+      - triton_net
+
+  # ===================================================================
   # Cropwright: the labeling frontend, opt-in via `--profile cropwright`. It is
   # also the gateway (OP_GATEWAY_SUBPATHS=true): the one published port for the
   # app, the API docs and the monitoring UIs, which then stay on loopback.
@@ -660,7 +700,7 @@ services:
     networks:
       - triton_net
 
-  # On-demand only (no `restart:` — see docker/evaluator/Dockerfile): its own
+  # On-demand only (no `restart:`, see the `evaluator` target of the root Dockerfile): its own
   # profile, so `--profile curation up -d` does not reserve a GPU for it.
   # `docker compose run --rm curation-evaluator`.
   curation-evaluator:

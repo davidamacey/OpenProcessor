@@ -24,6 +24,11 @@ print_summary() {
     [[ "$per_gb" =~ ^[0-9]+$ ]] || per_gb=20
     budget="$(opensearch_shard_budget "$heap" "$per_gb" || echo unknown)"
     echo "  OpenSearch  : heap ${heap:-unset}, soft shard budget ${budget} (${per_gb} shards per heap GB)"
+    local export_ref
+    export_ref="$(read_env_var "$ENV_FILE" OP_EXPORT_IMAGE || true)"
+    [[ -n "$export_ref" ]] || export_ref="${OP_IMAGE_REPO}/openprocessor-export:${OP_IMAGE_TAG}"
+    echo "  export image: ${export_ref}"
+    echo "                kept for re-exports (models repair, export); to reclaim its disk space: docker image rm ${export_ref}"
     echo ""
     echo "  URLs:"
     echo "    API docs    http://${h}:${api}/docs"

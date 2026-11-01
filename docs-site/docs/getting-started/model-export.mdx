@@ -12,12 +12,13 @@ Triton loads the cached `.plan` files on every later start.
 it by hand with the Makefile targets, and the models `setup.sh` does not
 build (PE-Core for curation).
 
-Every target below runs inside the running `api` container
-(`docker compose -p <project> exec api ...`), so start the core stack first
-(`make up`). On an installed directory, use
+Every target below runs in a one-shot `model-export` container
+(`docker compose -p <project> run --rm model-export ...`): the export image
+holds TensorRT, ModelOpt and the export scripts, and the API image holds none
+of them. It needs no running stack. On an installed directory, use
 `./openprocessor models install [--only GROUP]` instead of these targets
 (groups: `preflight`, `base`, `yolo`, `mobileclip`, `faces`, `ocr`, `pe`).
-Weights you download land in `pytorch_models/`, which the API container mounts.
+Weights you download land in `pytorch_models/`, which both the export and the API containers mount.
 
 ## What Triton loads by default
 
@@ -65,7 +66,7 @@ both families; the API reads each model's output format from Triton
 metadata.
 
 ```bash
-docker compose -p openprocessor exec api python /app/export/export_yolo26.py --models small
+docker compose -p openprocessor run --rm model-export python /app/export/export_yolo26.py --models small
 curl -X POST http://localhost:4603/models/yolo26_small_trt/load
 curl -X POST "http://localhost:4603/detect?model_name=yolo26_small_trt" -F "image=@photo.jpg"
 ```

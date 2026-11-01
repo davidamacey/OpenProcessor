@@ -61,7 +61,7 @@ Export methods
 Usage
 -----
     # ONNX + config.pbtxt (default: perception-models method)
-    docker compose exec api python /app/export/export_pe_image_encoder.py
+    docker compose run --rm model-export python /app/export/export_pe_image_encoder.py
 
     # ONNX only, custom destination, no config.pbtxt
     python export/export_pe_image_encoder.py \\

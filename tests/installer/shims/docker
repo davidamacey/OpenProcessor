@@ -105,12 +105,13 @@ env_val() {
 }
 
 cmd_compose() {
-    local project="" envfile="" sub="" args=()
+    local project="" envfile="" sub="" args=() cli_profiles=","
     while (( $# > 0 )); do
         case "$1" in
             -p) project="$2"; shift 2 ;;
             --env-file) envfile="$2"; shift 2 ;;
-            --project-directory|-f|--profile) shift 2 ;;
+            --profile) cli_profiles+="$2,"; shift 2 ;;
+            --project-directory|-f) shift 2 ;;
             -*) args+=("$1"); shift ;;
             *) if [[ -z "$sub" ]]; then sub="$1"; else args+=("$1"); fi; shift ;;
         esac
@@ -134,6 +135,7 @@ cmd_compose() {
                 local profiles wanted
                 profiles=",$(env_val "$envfile" COMPOSE_PROFILES),"
                 wanted="OP_API_IMAGE:openprocessor OP_TRITON_IMAGE:openprocessor-triton"
+                [[ "$cli_profiles" == *,setup,* ]] && wanted+=" OP_EXPORT_IMAGE:openprocessor-export"
                 [[ "$profiles" == *,curation,* ]] && wanted+=" OP_EVALUATOR_IMAGE:openprocessor-evaluator"
                 [[ "$profiles" == *,segmenter,* ]] && wanted+=" OP_SEGMENTER_IMAGE:openprocessor-segmenter"
                 [[ "$profiles" == *,training,* ]] && wanted+=" OP_TRAINER_IMAGE:openprocessor-trainer"
