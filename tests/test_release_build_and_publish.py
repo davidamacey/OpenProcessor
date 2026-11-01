@@ -35,12 +35,14 @@ def sandbox(tmp_path: Path) -> Path:
     (repo / 'docker' / 'evaluator').mkdir(parents=True)
     (repo / 'docker' / 'segmenter').mkdir(parents=True)
     (repo / 'docker' / 'trainer').mkdir(parents=True)
+    (repo / 'frontend').mkdir()
     for df in [
         'Dockerfile',
         'Dockerfile.triton',
         'docker/evaluator/Dockerfile',
         'docker/segmenter/Dockerfile',
         'docker/trainer/Dockerfile',
+        'frontend/Dockerfile',
     ]:
         (repo / df).write_text('FROM scratch\n')
     (repo / 'VERSION').write_text('1.2.3\n')
@@ -62,6 +64,8 @@ def sandbox(tmp_path: Path) -> Path:
     shutil.copy(SCRIPT, release_dir / 'build_and_publish.sh')
     (release_dir / 'build_and_publish.sh').chmod(0o755)
     (release_dir / 'trivy-allowlist.txt').write_text('# no waivers\n')
+    for name in ('audit_image_files.py', 'image_audit_allowlist.txt'):
+        shutil.copy(REPO_ROOT / 'scripts' / 'release' / name, release_dir / name)
 
     subprocess.run(['git', 'add', '-A'], cwd=repo, check=True)
     subprocess.run(['git', 'commit', '-q', '-m', 'add release script'], cwd=repo, check=True)
@@ -454,3 +458,21 @@ def test_unknown_rev_is_refused_before_any_build(
     assert 'not a committed revision' in result.stderr
     log = tmp_path / 'docker_calls.log'
     assert not log.exists() or 'build ' not in log.read_text()
+
+
+def test_image_audit_blocks_a_release_before_any_push(
+    sandbox: Path, fake_bin: Path, tmp_path: Path
+) -> None:
+    calls = tmp_path / 'docker_calls.log'
+    _write_shim(
+        fake_bin / 'docker',
+        f'echo "$@" >> "{calls}"\n'
+        'case "$1" in run) echo /opt/openprocessor/model_repo_seed/x__y/1/model.onnx ;; esac\n'
+        'exit 0',
+    )
+    result = _run(sandbox, fake_bin, ['--push', '--only', 'api'])
+    assert result.returncode == 1
+    assert 'model.onnx' in result.stderr
+    text = calls.read_text()
+    assert 'run --rm --network none' in text
+    assert 'push ' not in text

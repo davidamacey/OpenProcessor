@@ -1,0 +1,3 @@
+# Paths (fnmatch globs) allowed to match the pre-publish image audit despite being model
+# artifacts (*.onnx, *.plan, *.engine, *.pt, *.pth, *.safetensors, <project>__<model> dirs).
+# Empty on purpose: every entry needs a reason on the line above it.

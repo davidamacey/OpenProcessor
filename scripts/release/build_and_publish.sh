@@ -247,6 +247,25 @@ build_image() {
     echo "$version_tag"
 }
 
+# ── pre-publish audit ───────────────────────────────────────────────────────
+
+# audit_image SVC TAG: the files inside the built image must be tracked in git at BUILD_COMMIT
+# and carry no model artifacts (third guard behind the git-tree context and .dockerignore).
+audit_image() {
+    local svc="$1" tag="$2" dockerfile context
+    IFS='|' read -r dockerfile context _ <<< "${IMAGE_SPECS[$svc]}"
+    log "auditing $svc ($tag) against the committed tree"
+    python3 "$SCRIPT_DIR/audit_image_files.py" \
+        --image "$tag" \
+        --dockerfile "$EXPORT_DIR/$dockerfile" \
+        --context "$context" \
+        --repo "$REPO_ROOT" \
+        --rev "$BUILD_COMMIT" \
+        --docker-bin "$DOCKER_BIN" \
+        --allowlist "$SCRIPT_DIR/image_audit_allowlist.txt" || { err "image audit failed for $svc; nothing will be pushed"; return 1; }
+    ok "audit clean: $svc"
+}
+
 # ── scan ─────────────────────────────────────────────────────────────────────
 
 scan_image() {
@@ -340,6 +359,7 @@ FAILED=false
 for svc in "${SERVICES[@]}"; do
     tag="$(build_image "$svc")" || { FAILED=true; continue; }
     BUILT_TAGS["$svc"]="$tag"
+    audit_image "$svc" "$tag" || FAILED=true
 done
 
 $FAILED && { err "one or more builds failed"; exit "$EXIT_GATE"; }
