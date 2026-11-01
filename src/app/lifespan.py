@@ -35,6 +35,11 @@ def _preflight() -> None:
 
     reject_retired_env()
 
+    # A malformed OP_FACES_ENABLED refuses startup instead of guessing a privacy switch.
+    from src.config.faces import faces_enabled
+
+    faces_enabled()
+
     # A global config index name inside the project namespace is a
     # misconfiguration: refuse to start rather than serve a broken store.
     from src.services.config_store.global_store import global_configs_index

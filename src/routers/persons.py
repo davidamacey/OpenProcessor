@@ -18,9 +18,10 @@ Endpoints:
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 
+from src.config.faces import require_faces
 from src.services.face_identity import get_face_identity_service
 
 
@@ -29,6 +30,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix='/persons',
     tags=['Person Management'],
+    dependencies=[Depends(require_faces)],
 )
 
 
