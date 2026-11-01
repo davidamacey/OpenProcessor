@@ -77,20 +77,26 @@ def test_empty_input():
 
 
 _CHILD = """
-import json, resource, time
+import importlib.util, json, resource, time
 import numpy as np
-from src.services.face_identity.person_grouping import similarity_components
+# Load the module by path: importing it through its package would pull the whole
+# service (torch, ultralytics, ...) into the child and measure that, not the grouping.
+spec = importlib.util.spec_from_file_location('person_grouping', 'src/services/face_identity/person_grouping.py')
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+similarity_components = mod.similarity_components
 rng = np.random.default_rng(354)
 n, d, k = 200000, 64, 50000
 c = rng.standard_normal((k, d), dtype=np.float32)
 x = c[rng.integers(0, k, n)] + 0.05 * rng.standard_normal((n, d), dtype=np.float32)
 x /= np.linalg.norm(x, axis=1, keepdims=True)
+before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
 t0 = time.time()
 groups = similarity_components(x, 0.7)
 el = time.time() - t0
 print(json.dumps({'covered': sum(len(g) for g in groups),
   'unique': len({i for g in groups for i in g}),
-  'groups': len(groups), 'elapsed': el,
+  'groups': len(groups), 'elapsed': el, 'rss_before_mb': before,
   'rss_mb': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024}))
 """
 
@@ -99,7 +105,7 @@ def test_200k_vectors_fit_without_dense_matrix():
     proc = subprocess.run(
         [sys.executable, '-c', _CHILD],
         cwd=REPO,
-        env={**os.environ, 'OMP_NUM_THREADS': '8'},
+        env=os.environ.copy(),  # threads are capped by the code under test, not pinned here
         capture_output=True,
         text=True,
         check=True,
