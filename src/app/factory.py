@@ -13,8 +13,13 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from src.app.lifespan import lifespan
 from src.clients.occ import OCCFinalConflictError
 from src.config import get_settings
+from src.config.faces import FacesDisabledError
 from src.core.cors import add_lan_cors
-from src.core.error_handlers import triton_unavailable_response, upstream_unavailable_response
+from src.core.error_handlers import (
+    faces_disabled_response,
+    triton_unavailable_response,
+    upstream_unavailable_response,
+)
 from src.core.logging import bind_request_id, get_logger, get_request_id
 from src.core.request_origin import RequestOriginMiddleware
 from src.core.upload_limits import (
@@ -206,6 +211,7 @@ def create_app() -> FastAPI:
 
     application.exception_handler(RetryExhaustedError)(triton_unavailable_response)
     application.exception_handler(UpstreamError)(upstream_unavailable_response)
+    application.exception_handler(FacesDisabledError)(faces_disabled_response)
 
     # Global Exception Handler - include request ID for debugging
     @application.exception_handler(Exception)

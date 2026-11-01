@@ -6,22 +6,14 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-import numpy as np
 from opensearchpy.helpers import async_bulk
 
-from src.clients.opensearch.names import (
-    DetectionCategory,
-    IndexName,
-    get_category,
-    get_class_name,
-    get_cluster_index_name,
-)
+from src.clients.opensearch.names import DetectionCategory, IndexName, get_category, get_class_name
 
 
 if TYPE_CHECKING:
+    import numpy as np
     from opensearchpy import AsyncOpenSearch
-
-    from src.clients.opensearch.cluster_assigner import ClusterAssigner
 
 
 logger = logging.getLogger(__name__)
@@ -84,104 +76,6 @@ class BulkMixin:
 
     client: AsyncOpenSearch
     embedding_dim: int
-
-    async def ingest_faces(
-        self,
-        image_id: str,
-        image_path: str,
-        faces: list[dict[str, Any]],
-        embeddings: list[list[float]] | np.ndarray,
-        person_name: str | None = None,
-        metadata: dict[str, Any] | None = None,
-        clustering_service: ClusterAssigner | None = None,
-    ) -> dict[str, Any]:
-        """
-        Ingest face detections with ArcFace embeddings.
-
-        Args:
-            image_id: Unique identifier for the source image
-            image_path: File path or URL to the image
-            faces: List of face detections with box, landmarks, score
-            embeddings: [N, 512] ArcFace embeddings
-            person_name: Optional name/label for all faces in image
-            metadata: Optional metadata dictionary
-            clustering_service: Optional cluster assigner (the clustering service) for cluster assignment
-
-        Returns:
-            Dict with face ingestion results
-        """
-        results: dict[str, Any] = {
-            'faces': 0,
-            'clustered': 0,
-            'errors': [],
-        }
-        timestamp = datetime.now(UTC).isoformat()
-
-        if isinstance(embeddings, np.ndarray):
-            embeddings = embeddings.tolist()
-
-        for i, (face, embedding) in enumerate(zip(faces, embeddings, strict=False)):
-            face_id = f'{image_id}_face_{i}'
-
-            try:
-                # Convert flat landmarks list to named object
-                raw_landmarks = face.get('landmarks', [])
-                if len(raw_landmarks) >= 10:
-                    landmarks = {
-                        'left_eye': [float(raw_landmarks[0]), float(raw_landmarks[1])],
-                        'right_eye': [float(raw_landmarks[2]), float(raw_landmarks[3])],
-                        'nose': [float(raw_landmarks[4]), float(raw_landmarks[5])],
-                        'left_mouth': [float(raw_landmarks[6]), float(raw_landmarks[7])],
-                        'right_mouth': [float(raw_landmarks[8]), float(raw_landmarks[9])],
-                    }
-                else:
-                    landmarks = {}
-
-                face_doc = {
-                    'face_id': face_id,
-                    'image_id': image_id,
-                    'image_path': image_path,
-                    'embedding': embedding,
-                    'box': face.get('box', [0, 0, 1, 1]),
-                    'landmarks': landmarks,
-                    'confidence': face.get('score', 0.0),
-                    'quality': face.get('quality', 0.0),
-                    'indexed_at': timestamp,
-                }
-
-                if person_name:
-                    face_doc['person_name'] = person_name
-
-                # Assign to face cluster
-                if clustering_service is not None:
-                    try:
-                        cluster_idx = get_cluster_index_name(IndexName.FACES)
-                        if clustering_service.is_trained(cluster_idx):
-                            emb_array = np.array(embedding, dtype=np.float32)
-                            assignment = clustering_service.assign_cluster(cluster_idx, emb_array)
-                            face_doc['cluster_id'] = assignment.cluster_id
-                            face_doc['cluster_distance'] = assignment.distance
-                            face_doc['clustered_at'] = timestamp
-                            results['clustered'] += 1
-                    except Exception as e:
-                        logger.warning(f'Cluster assignment failed for face: {e}')
-
-                if metadata:
-                    face_doc['metadata'] = metadata
-
-                await self.client.index(
-                    index=IndexName.FACES.value,
-                    id=face_id,
-                    body=face_doc,
-                    refresh=False,
-                )
-                results['faces'] += 1
-
-            except Exception as e:
-                results['errors'].append(f'{face_id}: {e!s}')
-
-        logger.info(f'Face ingestion: faces={results["faces"]}, clustered={results["clustered"]}')
-        return results
 
     async def index_face(
         self,

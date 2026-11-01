@@ -461,3 +461,39 @@ def test_stamp_report_lists_every_stamped_engine(tmp_path: Path, bash) -> None:
     (tmp_path / '.install' / 'precision.tsv').write_text(_stamp_row())
     out = bash(f'source {LIB}; OP_DIR="{tmp_path}" model_setup_stamp_report').stdout
     assert out.strip() == f'pe_image_encoder\tfp16\tv110100\t8.6\t{ONNX_SHA[:12]}'
+
+
+def _faces_off(extra: str) -> str:
+    return _source(f'export OP_FACES_ENABLED=false; {extra}')
+
+
+def test_faces_off_skips_the_faces_group(bash) -> None:
+    got = bash(_faces_off('model_setup_groups_for_tiers "core"')).stdout.split()
+    assert got == ['preflight', 'base', 'yolo', 'mobileclip', 'ocr']
+
+
+def test_faces_off_leaves_the_face_models_out_of_the_required_list(bash) -> None:
+    required = bash(_faces_off('model_setup_required_models "core"')).stdout.strip().split(',')
+    assert 'yolov11_small_trt_end2end' in required
+    assert not {'scrfd_10g_bnkps', 'arcface_w600k_r50'} & set(required)
+
+
+def test_a_malformed_faces_switch_fails_the_group_list(bash) -> None:
+    result = bash(_source('OP_FACES_ENABLED=maybe model_setup_groups_for_tiers "core"'))
+    assert result.returncode != 0
+    assert 'OP_FACES_ENABLED=maybe: not a boolean' in result.stderr
+
+
+def test_running_only_the_faces_group_with_faces_off_fails_without_touching_docker(
+    tmp_path: Path, bash
+) -> None:
+    script = (
+        f'source {LIB}; OP_DIR="{tmp_path}"; mkdir -p "{tmp_path}/.install"; '
+        f'dc() {{ echo "DC $*" >> "{tmp_path}/dc.log"; return 0; }}; '
+        'export OP_FACES_ENABLED=false; '
+        'model_setup_run_groups "core" faces; echo "rc=$?"'
+    )
+    result = bash(script)
+    assert 'failed_groups=faces' in result.stdout
+    assert 'rc=1' in result.stdout
+    assert not (tmp_path / 'dc.log').exists()

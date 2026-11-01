@@ -33,7 +33,7 @@ curl -X POST "http://localhost:4603/detect?confidence=0.3" -F "image=@photo.jpg"
 | POST | `/faces/verify` | `image1`, `image2`; `threshold`, `confidence` | 1:1 comparison |
 | POST | `/faces/search` | `image`; `face_index`, `top_k`, `min_score` | Similar faces in the index |
 | POST | `/faces/identify` | `image`; `top_k`, `threshold` | 1:N identification |
-| POST | `/persons/cluster` | `similarity_threshold`, `min_faces_per_person`, `max_persons` | Group indexed faces into persons |
+| POST | `/persons/cluster` | `similarity_threshold`, `min_faces_per_person` | Group indexed faces into persons |
 | GET | `/persons`, `/persons/{person_id}` | `limit` | List / get persons |
 | PUT | `/persons/{person_id}/name` | | Name a person |
 | POST | `/persons/merge` | | Merge persons |

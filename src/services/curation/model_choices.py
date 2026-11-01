@@ -14,6 +14,7 @@ from typing import Any
 
 from src.config import get_curation_config
 from src.config.env import env_optional_str, env_str
+from src.config.faces import faces_enabled
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.config.settings import TritonModelConfig
 
@@ -201,9 +202,13 @@ def build_model_choices(
             'face_models',
             'Face models',
             'deployment',
-            f'{TritonModelConfig.FACE_DETECT_MODEL} + {TritonModelConfig.ARCFACE_MODEL}',
+            f'{TritonModelConfig.FACE_DETECT_MODEL} + {TritonModelConfig.ARCFACE_MODEL}'
+            if faces_enabled()
+            else None,
             settable=False,
-            reason='Faces run a fixed detection + recognition pipeline.',
+            reason='Faces run a fixed detection + recognition pipeline.'
+            if faces_enabled()
+            else 'Face models are off (OP_FACES_ENABLED=false).',
         ),
         _row(
             'training_size',

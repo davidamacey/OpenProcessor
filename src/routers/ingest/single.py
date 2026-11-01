@@ -91,7 +91,8 @@ async def ingest_image(
     ),
     enable_faces: bool = Form(
         True,
-        description='Run face detection (SCRFD) and embedding (ArcFace) extraction.',
+        description='Run face detection (SCRFD) and embedding (ArcFace) extraction. '
+        'Ignored (always off) when OP_FACES_ENABLED=false.',
     ),
     enable_clip: bool = Form(
         True,

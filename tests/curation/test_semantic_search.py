@@ -413,3 +413,60 @@ async def test_semantic_text_search_excludes_embedding_fields_from_source():
         'class_id_history',
         'mask_polygon',
     }
+
+
+@pytest.mark.asyncio
+async def test_semantic_text_search_runs_search_and_unembedded_count_together():
+    """The count must not wait for the kNN search (#384): each call blocks until the
+    other has started, so a sequential implementation times out."""
+    search_started = asyncio.Event()
+    count_started = asyncio.Event()
+    fake_os = _fake_os([])
+
+    async def _search(*, index: str, body: dict) -> dict:
+        search_started.set()
+        await asyncio.wait_for(count_started.wait(), timeout=2)
+        return {'hits': {'hits': [], 'total': {'value': 0}}}
+
+    async def _count(*, index: str, body: dict) -> dict:
+        count_started.set()
+        await asyncio.wait_for(search_started.wait(), timeout=2)
+        return {'count': 7}
+
+    fake_os.search = AsyncMock(side_effect=_search)
+    fake_os.count = AsyncMock(side_effect=_count)
+    result = await semantic_search.semantic_text_search(
+        opensearch=fake_os,
+        pe_encoder=_fake_encoder(),
+        executor=None,
+        query='q',
+        page=1,
+        page_size=10,
+    )
+    assert result['unembedded_in_scope'] == 7
+
+
+@pytest.mark.asyncio
+async def test_semantic_text_search_class_filter_is_the_knn_filter_and_the_count_scope():
+    """The class filter reaches the kNN `filter` clause and the count with the same
+    clauses; the count adds only the not-embedded clause."""
+    from src.domain.embedding_state import not_embedded_clause
+    from src.services.curation.item_filter import ItemFilter
+
+    fake_os = _fake_os([])
+    await semantic_search.semantic_text_search(
+        opensearch=fake_os,
+        pe_encoder=_fake_encoder(),
+        executor=None,
+        query='q',
+        page=1,
+        page_size=10,
+        item_filter=ItemFilter(class_names=['car']),
+    )
+    knn = fake_os.search.await_args.kwargs['body']['query']['knn']['pe_embedding']
+    clauses = knn['filter']['bool']['filter']
+    name_should = clauses[0]['bool']['should']
+    assert {tuple(c['term']) for c in name_should} == {('class_name',), ('proposal_name',)}
+    assert all(next(iter(c['term'].values()))['value'] == 'car' for c in name_should)
+    count_body = fake_os.count.await_args.kwargs['body']
+    assert count_body == {'query': {'bool': {'filter': [*clauses, not_embedded_clause()]}}}

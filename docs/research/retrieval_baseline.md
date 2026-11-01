@@ -103,8 +103,48 @@ From `filters_r1.json` (ten classes, 30 queries each; ten clusters; 20 paginatio
   `class_name`, an unknown `cluster_id` and a page past the retrieval depth return 200 with no items.
 - Latency finding: filtered searches took p50 of roughly 80-94 ms for eight classes versus about
   18 ms unfiltered, while `bottle` and `bowl` filtered took about 23 ms and cluster-filtered
-  searches about 17-21 ms. The cause was not investigated (a single rep under load); it is worth a
-  separate look at how the class filter is applied in the kNN query.
+  searches about 17-21 ms (a single rep under load). Investigated in #384, next section.
+
+### Filtered kNN latency (#384)
+
+Method: a throw-away OpenSearch 3.6.0 container (security off, 4 GB heap) holding a copy of a
+91,184-item index of a non-public photo set (latency only: no content, labels or images are reported; to be re-measured on public data under #414) built from the repo's own items mapping (Lucene HNSW, cosine, m 16,
+ef_construction 128, one segment). Queries were built by the service's own `_build_filter` and
+`build_knn_query` (`k` 10, page of 10), 100 per cell, with text-like query vectors (the mean image
+vector plus noise, which sit far from every item like a real text embedding) and server-side
+`took` in ms (p50/p95). The host was shared and loaded, so absolute numbers are indicative; only the
+ratios are the finding. Filtered fractions: person 44%, motorcycle 35%, car 15%, truck 3%, dog 0.2%.
+
+| Filter | p50 / p95 ms |
+|---|---|
+| none | 4 / 7 |
+| `class_name=person` | 7 / 11 |
+| `class_name=car` | 22 / 30 |
+| `class_name=truck` | 8 / 12 |
+| `class_name=dog` (rare) | 4 / 7 |
+| `cluster_id` (0.5%) | 4 / 7 |
+
+Findings:
+
+- The cost is not the filter's form. Replacing the case-insensitive `class_name`/`proposal_name` OR
+  with exact `terms`, with one field, or dropping the `must_not` block moved `car` by 1-3 ms
+  (about 26 -> 23 ms). The filter is applied inside the HNSW traversal on both engines; nothing falls
+  back to a script score.
+- The cost is filtered HNSW itself at mid selectivity when the query is far from the filtered
+  class: Lucene explores up to the filter's cardinality in nodes and then scans the matches exactly.
+  The same `car` filter with queries taken from car items takes 4 ms; with a query whose top-1000
+  contains no car, a post-filter returns nothing, and an exact `knn_score` scan costs 37 ms, so
+  the filtered HNSW (22 ms) is already the cheaper path. Raising `m` to 32 gave 19 ms for `car`
+  (not adopted: a mapping change and a rebuild for 3 ms). Rare classes (exact path) and large
+  fractions (easy traversal) are cheap, which is the bottle/bowl/cluster pattern.
+- At the baseline's size (about 1.4k-2k items) the same filters cost the same as unfiltered on both
+  Lucene and faiss (3-6 ms each), so the 80-94 ms was load on the baseline host, not the query.
+- The unembedded-scope `count` ran after the search; it is a full filter pass (4-8 ms) and now runs
+  concurrently with it. End to end through `semantic_text_search` (search, count and hydration, wall
+  clock, p50/p95 ms, before -> after): none 23.8/35.7 -> 18.1/30.3, `car` 40.1/52.4 -> 37.5/49.2,
+  `person` 26.0/40.3 -> 24.3/38.0, `truck` 27.3/41.2 -> 24.0/37.8, `dog` 21.5/30.0 -> 17.1/27.9.
+- Result sets are unchanged: the query bodies are the same, and the top-10 ids of the filtered kNN
+  matched exact `knn_score` top-10 on 100 of 100 queries for `car` and `truck` (99 of 100 for `person`).
 
 ## Near-duplicate grouping at ingest
 

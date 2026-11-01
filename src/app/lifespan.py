@@ -35,6 +35,11 @@ def _preflight() -> None:
 
     reject_retired_env()
 
+    # A malformed OP_FACES_ENABLED refuses startup instead of guessing a privacy switch.
+    from src.config.faces import faces_enabled
+
+    faces_enabled()
+
     # A global config index name inside the project namespace is a
     # misconfiguration: refuse to start rather than serve a broken store.
     from src.services.config_store.global_store import global_configs_index
@@ -69,6 +74,27 @@ async def _start_pools(settings: Settings) -> None:
     logger.info('triton_pool_initialized', channels=4, max_concurrent=64)
 
 
+async def _report_stored_face_data() -> None:
+    """Faces off: say at startup whether face data is still stored (counts only)."""
+    from src.config.faces import faces_enabled
+
+    if faces_enabled():
+        return
+    from opensearchpy import OpenSearchException
+
+    from src.services.face_privacy import stored_face_counts, stored_summary
+
+    try:
+        counts = await stored_face_counts()
+    except (TimeoutError, OSError, RuntimeError, OpenSearchException) as exc:
+        logger.warning('faces_disabled_state_unknown', error_type=type(exc).__name__)
+        return
+    if counts.is_empty():
+        logger.info('faces_disabled')
+    else:
+        logger.warning('faces_disabled_with_stored_data', detail=stored_summary(counts))
+
+
 async def _start_background_tasks() -> None:
     """Project registry, ops gauges, curation indexes and the config store poll."""
     # Projects foundation (P1): default record + poll loop, best-effort.
@@ -85,6 +111,7 @@ async def _start_background_tasks() -> None:
     from src.core.dependencies import bootstrap_opensearch_indexes
 
     AppResources.curation_knn_warmup_task = await bootstrap_opensearch_indexes()
+    await _report_stored_face_data()
 
     # Config store poll task: fans out per active project, not `default`.
     from src.services.config_store import startup_bootstrap_config_store_safe

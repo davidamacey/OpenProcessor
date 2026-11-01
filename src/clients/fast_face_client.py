@@ -23,6 +23,7 @@ from tritonclient.grpc import InferInput, InferRequestedOutput
 
 from src.clients.model_residency import ensure_loaded_sync
 from src.clients.triton_client_manager import TritonClientManager
+from src.config.faces import require_faces
 from src.config.settings import TritonModelConfig
 from src.utils.face_align import align_faces_batch, preprocess_for_arcface
 from src.utils.retry import retry_sync
@@ -234,6 +235,12 @@ class FastFaceClient:
 
 
 @lru_cache(maxsize=4)
-def get_fast_face_client(triton_url: str = 'triton-server:8001') -> FastFaceClient:
-    """Get a cached FastFaceClient instance."""
+def _cached_face_client(triton_url: str) -> FastFaceClient:
     return FastFaceClient(triton_url=triton_url)
+
+
+def get_fast_face_client(triton_url: str = 'triton-server:8001') -> FastFaceClient:
+    """The cached FastFaceClient. The one entry to SCRFD and ArcFace, so it refuses when
+    faces are off (#379)."""
+    require_faces()
+    return _cached_face_client(triton_url)
