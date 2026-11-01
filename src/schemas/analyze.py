@@ -60,6 +60,10 @@ class AnalyzeResponse(BaseModel):
     """Response for combined analysis endpoint."""
 
     status: str = Field(default='success', description="'success' or 'error'")
+    faces_enabled: bool = Field(
+        default=True,
+        description='False when the deployment has face models off (OP_FACES_ENABLED=false): no face was detected',
+    )
     image: ImageMetadata | None = Field(default=None, description='Original image dimensions')
 
     # YOLO object detection
@@ -120,6 +124,10 @@ class BatchAnalyzeResponse(BaseModel):
     """Response for batch combined analysis."""
 
     status: str = Field(default='success', description='Overall status')
+    faces_enabled: bool = Field(
+        default=True,
+        description='False when the deployment has face models off (OP_FACES_ENABLED=false): no face was detected',
+    )
     total_images: int = Field(..., description='Total images in request')
     processed_images: int = Field(..., description='Successfully processed images')
     failed_images: int = Field(..., description='Failed images count')

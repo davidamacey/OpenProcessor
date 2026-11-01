@@ -9,7 +9,6 @@ from src.clients.opensearch.client import OpenSearchClient
 from src.services.inference import InferenceService
 from src.services.visual_search.batch_documents import build_documents
 from src.services.visual_search.batch_inference import infer_batch
-from src.utils.face_response import face_landmark_mismatch
 
 
 if TYPE_CHECKING:
@@ -135,6 +134,9 @@ class IngestBatchMixin:
         from src.clients.fast_face_client import get_fast_face_client
         from src.clients.triton_client import get_sync_triton_client
         from src.config import get_settings
+        from src.config.faces import faces_enabled
+
+        enable_faces = enable_faces and faces_enabled()
 
         if not images_data:
             return _summary(total=0, processed=0, duplicates=0)
@@ -142,7 +144,7 @@ class IngestBatchMixin:
         total = len(images_data)
         settings = get_settings()
         client = get_sync_triton_client(settings.triton_url)
-        face_client = get_fast_face_client(settings.triton_url)
+        face_client = get_fast_face_client(settings.triton_url) if enable_faces else None
 
         ocr_service = None
         if enable_ocr:
@@ -339,91 +341,3 @@ class IngestBatchMixin:
             return_exceptions=True,
         )
         return [r for r in dup_results if isinstance(r, dict) and r]
-
-    async def ingest_faces(
-        self,
-        image_bytes: bytes,
-        image_id: str,
-        image_path: str | None = None,
-        person_name: str | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """
-        Detect faces in image and ingest with ArcFace embeddings.
-
-        Pipeline:
-        1. Run SCRFD face detection
-        2. Extract ArcFace embeddings for each face
-        3. Index faces to visual_search_faces
-
-        Args:
-            image_bytes: Raw JPEG/PNG bytes
-            image_id: Unique identifier for the image
-            image_path: Optional file path (for retrieval)
-            person_name: Optional name/label for faces
-            metadata: Optional metadata dictionary
-
-        Returns:
-            dict with status and face count
-        """
-        try:
-            from src.clients.fast_face_client import get_fast_face_client
-            from src.config import get_settings
-
-            settings = get_settings()
-            face_client = get_fast_face_client(settings.triton_url)
-
-            # Run SCRFD face detection + Umeyama alignment + ArcFace embedding
-            result = face_client.recognize(image_bytes, confidence=0.5)
-
-            if result.get('num_faces', 0) == 0:
-                return {
-                    'status': 'success',
-                    'image_id': image_id,
-                    'num_faces': 0,
-                    'indexed': 0,
-                    'message': 'No faces detected',
-                }
-
-            if reason := face_landmark_mismatch(result):
-                return {'status': 'error', 'image_id': image_id, 'error': reason}
-
-            num_faces = result['num_faces']
-            faces = [
-                {
-                    'box': list(result['face_boxes'][i]),
-                    'landmarks': list(result['face_landmarks'][i])
-                    if result['face_landmarks']
-                    else [0.0] * 10,
-                    'score': float(result['face_scores'][i]),
-                    'quality': float(result['face_quality'][i]) if result['face_quality'] else 0.0,
-                }
-                for i in range(num_faces)
-            ]
-            embeddings = result['face_embeddings']
-
-            # Ingest to OpenSearch
-            ingest_result = await self.opensearch.ingest_faces(
-                image_id=image_id,
-                image_path=image_path or image_id,
-                faces=faces,
-                embeddings=embeddings,
-                person_name=person_name,
-                metadata=metadata,
-            )
-
-            return {
-                'status': 'success' if ingest_result['faces'] > 0 else 'failed',
-                'image_id': image_id,
-                'num_faces': result['num_faces'],
-                'indexed': ingest_result['faces'],
-                'errors': ingest_result.get('errors', []),
-            }
-
-        except Exception as e:
-            logger.error(f'Failed to ingest faces from {image_id}: {e}')
-            return {
-                'status': 'error',
-                'image_id': image_id,
-                'error': str(e),
-            }

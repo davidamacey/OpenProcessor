@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
+from src.config.faces import faces_enabled
 from src.config.settings import TritonModelConfig
 from src.schemas.analyze import (
     AnalyzeResponse,
@@ -242,13 +243,18 @@ def analyze_single_image(
     timing: dict[str, float] = {}
     service = get_inference_service()
     ocr_service = get_ocr_service()
+    faces_on = faces_enabled()
 
     # Phase 1: Submit YOLO+CLIP, faces, OCR in parallel
     # Phase 2: As soon as YOLO returns boxes, submit batched crop embeddings
     #          (overlaps with faces/OCR still running)
     with ThreadPoolExecutor(max_workers=4) as executor:
         yolo_clip_future = executor.submit(_run_yolo_and_clip, image_bytes, timing)
-        faces_future = executor.submit(_run_faces, service, image_bytes, face_confidence, timing)
+        faces_future = (
+            executor.submit(_run_faces, service, image_bytes, face_confidence, timing)
+            if faces_on
+            else None
+        )
         ocr_future = executor.submit(_run_ocr, ocr_service, image_bytes, enable_ocr, timing)
 
         # Wait for YOLO+CLIP first (needed for detection boxes)
@@ -265,7 +271,7 @@ def analyze_single_image(
             )
 
         # Wait for faces and OCR (may already be done)
-        faces_result = faces_future.result()
+        faces_result = faces_future.result() if faces_future else {'num_faces': 0}
         ocr_result = ocr_future.result()
 
         _attach_crop_embeddings(detections, crop_future)
@@ -288,6 +294,7 @@ def analyze_single_image(
         ocr=ocr_from_result(ocr_result),
         ocr_error=ocr_failure(ocr_result),
         timing=timing if timing else None,
+        faces_enabled=faces_on,
     )
 
 
@@ -377,7 +384,9 @@ def analyze_batch_item(
     yolo_clip_result = client.infer_yolo_clip_cpu(image_bytes)
 
     # Run face detection
-    faces_result = service.detect_faces(image_bytes, confidence=0.5)
+    faces_result = (
+        service.detect_faces(image_bytes, confidence=0.5) if faces_enabled() else {'num_faces': 0}
+    )
 
     # Run OCR if enabled
     ocr_result = None

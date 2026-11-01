@@ -88,7 +88,8 @@ async def ingest_directory(
     ),
     enable_faces: bool = Query(
         True,
-        description='Run face detection and embedding extraction',
+        description='Run face detection and embedding extraction. '
+        'Ignored (always off) when OP_FACES_ENABLED=false.',
     ),
     enable_clip: bool = Query(
         True,

@@ -14,6 +14,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
+from src.config.faces import faces_enabled
 from src.schemas.analyze import AnalyzeResponse, BatchAnalyzeResponse
 from src.services.analyze_pipeline import (
     BatchTotals,
@@ -154,6 +155,7 @@ def analyze_batch(
             processed_images=0,
             failed_images=0,
             results=[],
+            faces_enabled=faces_enabled(),
         )
 
     results = []
@@ -215,4 +217,5 @@ def analyze_batch(
         total_detections=totals.detections,
         total_faces=totals.faces,
         images_with_text=totals.images_with_text,
+        faces_enabled=faces_enabled(),
     )

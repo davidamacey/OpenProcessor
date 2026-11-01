@@ -62,7 +62,7 @@ src/clients/curation_opensearch/settings_doc.py	1	triage every return-empty hand
 src/clients/occ.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/clients/occ_bulk.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/clients/occ_upsert.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/clients/opensearch/bulk.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
+src/clients/opensearch/bulk.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/clients/opensearch/client.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/clients/opensearch/indexes.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/clients/opensearch/ingest.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
@@ -220,7 +220,7 @@ src/services/training/trainer_reachability.py	1	triage every return-empty handle
 src/services/training/triton_reload.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/triton_control.py	5	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/visual_search/batch_documents.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/visual_search/ingest_batch.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/visual_search/ingest_batch.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/visual_search/ingest_single.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
 src/utils/cpu_pool.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/utils/image_processing.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
