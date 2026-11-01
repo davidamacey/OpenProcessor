@@ -18,9 +18,10 @@ Endpoints:
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 
+from src.config.faces import require_faces
 from src.services.face_identity import get_face_identity_service
 
 
@@ -29,6 +30,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix='/persons',
     tags=['Person Management'],
+    dependencies=[Depends(require_faces)],
 )
 
 
@@ -42,9 +44,14 @@ class ClusterResponse(BaseModel):
 
     status: str = Field(..., description="'success' or 'error'")
     total_faces: int = Field(..., description='Total faces processed')
-    persons_created: int = Field(..., description='Number of persons created')
-    faces_assigned: int = Field(..., description='Faces assigned to persons')
-    singletons: int = Field(..., description='Faces without matches (individual persons)')
+    persons_total: int = Field(..., description='Persons after the run (every face has one)')
+    persons_kept: int = Field(..., description='Existing person ids that still have faces')
+    persons_new: int = Field(..., description='Person ids minted in this run')
+    persons_retired: int = Field(..., description='Existing person ids left with no face')
+    singletons: int = Field(..., description='Persons with exactly one face')
+    faces_updated: int = Field(..., description='Faces whose person_id or name was written')
+    faces_locked: int = Field(..., description='Faces left alone (person named or merged)')
+    faces_skipped: int = Field(..., description='Faces changed by someone else since the scan')
     similarity_threshold: float | None = Field(
         default=None, description='Similarity threshold used'
     )
@@ -169,24 +176,19 @@ async def cluster_faces(
         int,
         Query(ge=1, le=100, description='Minimum faces to form a person group'),
     ] = 2,
-    max_persons: Annotated[
-        int,
-        Query(ge=1, le=10000, description='Maximum number of persons to create'),
-    ] = 1000,
 ) -> ClusterResponse:
     """
     Auto-cluster all indexed faces into person groups.
 
-    Uses ArcFace embedding similarity to group faces belonging to the same person.
-    This is useful for organizing a photo library into people albums.
+    Faces with ArcFace cosine similarity >= the threshold are linked (exact
+    range search) and each connected component is a person. Every face gets a
+    person_id: a component smaller than `min_faces_per_person` splits into
+    one-face persons. Re-runs keep ids: a group keeps the stored id it shares
+    the most faces with (ties by id). A person that was named or merged is
+    locked: its faces are never rewritten, and new matching faces join it.
 
-    Algorithm: Connected Components via Union-Find
-    - Computes pairwise cosine similarity between all ArcFace embeddings
-    - Groups faces where similarity >= threshold into connected components
-    - Each connected component becomes a person group with unique person_id
-
-    Note: For large-scale datasets (>100k faces), use POST /clusters/train/faces
-    which uses GPU-accelerated FAISS IVF clustering.
+    No face-count cap. Memory is the embedding matrix twice plus one batch of
+    matches; compute is O(n^2), about 4 minutes at 200k faces on 8 threads.
 
     Args:
         similarity_threshold: ArcFace cosine similarity threshold.
@@ -194,37 +196,46 @@ async def cluster_faces(
             - 0.6: Moderate matching (good for casual photo albums)
             - 0.7: Strict matching (same person verification, recommended)
             - 0.8: Very strict (may miss some matches due to pose/lighting)
-        min_faces_per_person: Minimum faces required to form a person group.
-            Faces below this threshold become singletons with unique person_id.
-        max_persons: Maximum number of persons to create (safety limit).
+        min_faces_per_person: Faces needed for a shared person; smaller groups
+            become one person per face.
 
     Returns:
-        Clustering statistics including persons created and faces assigned.
+        Counts of persons kept, new and retired, singletons, and faces written,
+        locked or skipped.
     """
     service = get_face_identity_service()
     try:
         result = await service.auto_cluster_faces(
             similarity_threshold=similarity_threshold,
             min_faces_per_person=min_faces_per_person,
-            max_persons=max_persons,
         )
 
         if result.get('status') == 'error':
             return ClusterResponse(
                 status='error',
                 total_faces=result.get('total_faces', 0),
-                persons_created=0,
-                faces_assigned=0,
+                persons_total=0,
+                persons_kept=0,
+                persons_new=0,
+                persons_retired=0,
                 singletons=0,
+                faces_updated=0,
+                faces_locked=0,
+                faces_skipped=0,
                 error=result.get('error'),
             )
 
         return ClusterResponse(
             status='success',
             total_faces=result.get('total_faces', 0),
-            persons_created=result.get('persons_created', 0),
-            faces_assigned=result.get('faces_assigned', 0),
-            singletons=result.get('singletons', 0),
+            persons_total=result['persons_total'],
+            persons_kept=result['persons_kept'],
+            persons_new=result['persons_new'],
+            persons_retired=result['persons_retired'],
+            singletons=result['singletons'],
+            faces_updated=result['faces_updated'],
+            faces_locked=result['faces_locked'],
+            faces_skipped=result['faces_skipped'],
             similarity_threshold=result.get('similarity_threshold'),
         )
 

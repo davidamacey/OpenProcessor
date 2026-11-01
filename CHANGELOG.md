@@ -17,6 +17,13 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Upgrade notes / behaviour changes
 
+- **Breaking: `POST /persons/cluster` gives every face a person and keeps ids stable** (#354).
+  - Removed: the `max_persons` query parameter and the `persons_created` and `faces_assigned` response fields. A cap cannot hold when every face gets a person. The 100000-face read cap is gone too (it truncated silently).
+  - New response fields: `persons_total`, `persons_kept`, `persons_new`, `persons_retired`, `singletons`, `faces_updated`, `faces_locked`, `faces_skipped`.
+  - A group smaller than `min_faces_per_person` becomes one person per face. A re-run keeps each id by member overlap and writes nothing when nothing changed.
+  - A person that was named (`named_at`) or merged (`merged_at`) is locked: the clusterer never moves its faces, and new matching faces join it and take its name. Merges made before this change stamped only the moved faces, so the target side of an old merge is protected only if named. There is no migration.
+  - The similarity matrix is replaced by an exact range search (same partition as before, no n x n matrix).
+  - Fixed: rename and merge built their script by string interpolation, so a name containing `'` failed and could inject script code; they now pass parameters. Merge stamps both sides and gives the union one name; dissolving a person (`DELETE /persons/{id}`) clears its lock stamps.
 - **Cropwright gets optional HTTP basic auth** (#351). The installer turns it on when Cropwright is published beyond loopback (`OP_CROPWRIGHT_BASIC_AUTH`, `OP_CROPWRIGHT_BASIC_AUTH_FILE`); `./openprocessor cropwright password` changes the login. The container healthcheck moved to `/nginx-health`, which stays open. See SECURITY.md.
 - **Breaking: the unused `backbone_embedding` field is removed** (#410).
   - Removed: the `backbone_embedding` item field, its ingest writer, the dual-head detector export (`export/export_detector_dual_head.*`), `make export-dual-head` and the region-profile field `feature_output`.
@@ -38,6 +45,8 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - The installer's tier prompt is a numbered menu; `--tiers` is unchanged.
 
 ### Added
+- Deployment-wide face switch (#379): `OP_FACES_ENABLED=false` (installer flag `--no-faces`) turns the face models off everywhere. The face, person and `/search/face` routes and the `faces` cluster index answer `400 faces_disabled`; ingest and analyze skip faces and report `faces_enabled: false` (new field on the ingest and analyze responses); the opt-in overlay `docker-compose.faces-off.yml` (added by the CLI and the Makefile) stops Triton preloading SCRFD and ArcFace; the installer skips the `faces` model group.
+- `./openprocessor faces purge [--dry-run] [--yes]` (#379): deletes the face index, the face FAISS files and the face link on people documents, and writes a counts-only record to `data/audit/faces_purge.jsonl`. `--yes` requires faces to be off first. Command line only, no API route.
 - `GET /curation/projects/{project}/label_ops` pages with `after` and serves `next_after` (newest first by `op_id`; a malformed `after` is 422) (#419).
 - `gpu_image_prep` waits for device memory instead of failing into the CPU fallback (#392): each photo reserves its decoded frame from `DEVICE_BUDGET_MIB` (default 2048) and waits at most `BUDGET_WAIT_SECONDS` (20); the budget is reserved at load, so an instance that cannot hold it fails to load (ingest then decodes on the CPU, visibly); a failed allocation, a timed-out wait and an over-sized photo are the counted routes `cpu_gpu_memory` and `cpu_over_budget` in `op_ingest_decode_total` and `op_reprocess_decode_total`; a `budget` stage counter shows the wait.
 - Opt-in ingest load profile (#393): `OP_LOAD_PROFILE=ingest` (overlay `docker-compose.ingest-focus.yml`, added by the CLI) preloads only the detector and the PE encoders, which frees 27.7 GB on a 48 GB card; the face, MobileCLIP and OCR models load on their first call, so every endpoint still answers. Per-model memory and the endpoint check: `docs-site/docs/operations/ingest-load-profile.mdx`. The default (`full`) is unchanged.
@@ -60,10 +69,14 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - `/health/pe_text` reports `pid` and `cache_scope`.
 
 ### Changed
+- `/health` leaves the face models out of the required list when faces are off (also from an explicit `OP_REQUIRED_MODELS`) and reports `services.faces` with the counts of face data still stored; it never makes `/ready` fail (#379).
 - The IVF cluster fit runs one k-means restart instead of five (#337): the fit is about eight times cheaper (50 s against 388 s on 91,184 real photo crops, host load about 100) and on real vectors the clusters are as pure and as compact (public COCO set, 7 seeds: purity 0.7962 against 0.7963, false-merge rate 0.3008 against 0.3009). Cluster ids move on the next full recluster, as they do after any retrain.
 - `POST /crops/label/undo_batch` is typed (`CropUndoBatchResponse`) and writes in paged conditional bulks instead of one update per id; `POST /crops/discard_batch` does the same.
 - `GET /clusters` no longer serves `label_purity`; read `label_agreement` (same value). Test-holdout items are no longer counted in cluster cards.
 - Docs: the published site is linked from the README and the repository homepage; first-run steps corrected after a new-user review.
+
+### Removed
+- The unused `ingest_faces` service and OpenSearch client methods, which nothing in production called (#379).
 
 ### Fixed
 
@@ -86,6 +99,9 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 - Ingest and the embed pass embed the stored, image-clamped box instead of an unclamped one (#259).
 - Region vectors no longer depend on a JPEG round trip, so CPU and GPU routes agree (#360).
 - Project delete leaves no crop-cache files behind (#359).
+
+### Security
+- Renaming a person no longer logs the name (#379).
 
 ## [0.6.0] - 2026-10-16
 

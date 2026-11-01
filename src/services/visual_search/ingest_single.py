@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 
 from src.clients.opensearch.client import OpenSearchClient
+from src.config.faces import faces_enabled
 from src.services.inference import InferenceService
 from src.services.visual_search.batch_documents import landmarks_for
 
@@ -112,6 +113,7 @@ class IngestSingleMixin:
         Returns:
             dict with status, routing info, and counts per category
         """
+        enable_faces = enable_faces and faces_enabled()
         try:
             # 1. Compute imohash for duplicate detection
             image_hash = _imohash(image_bytes)

@@ -624,8 +624,15 @@ model_setup_run_groups() {
     local groups=()
     if [[ -n "$only" ]]; then
         groups=("$only")
+        if [[ "$only" == faces ]] && ! model_setup_faces_enabled; then
+            log_error "the faces group is off (OP_FACES_ENABLED=false in .env)"
+            echo "failed_groups=faces"
+            return 1
+        fi
     else
         mapfile -t groups < <(model_setup_groups_for_tiers "$tiers")
+        # mapfile hides the substitution's status; a malformed switch must stop the run.
+        model_setup_faces_enabled || (( $? == 1 )) || return 2
     fi
     for g in "${groups[@]}"; do
         if model_setup_run_group "$g"; then

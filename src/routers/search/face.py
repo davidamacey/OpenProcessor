@@ -3,8 +3,9 @@
 import logging
 import time
 
-from fastapi import File, HTTPException, Query, UploadFile, status
+from fastapi import Depends, File, HTTPException, Query, UploadFile, status
 
+from src.config.faces import require_faces
 from src.core.dependencies import VisualSearchDep
 from src.routers.search._router import router
 from src.routers.search.models import FaceSearchResponse, FaceSearchResult
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 @router.post(
     '/face',
+    dependencies=[Depends(require_faces)],
     response_model=FaceSearchResponse,
     status_code=status.HTTP_200_OK,
     summary='Face similarity search',

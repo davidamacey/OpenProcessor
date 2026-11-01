@@ -10,10 +10,25 @@ _MODEL_GROUPS_SH_LOADED=1
 
 MODEL_SETUP_ALL_GROUPS=(preflight base yolo mobileclip faces ocr pe)
 
+# model_setup_faces_enabled -> 0 faces on, 1 faces off (OP_FACES_ENABLED), 2 not a boolean.
+# The same vocabulary as src/config/env.py: a malformed value is an error, never a guess.
+model_setup_faces_enabled() {
+    local v="${OP_FACES_ENABLED:-true}"
+    case "${v,,}" in
+        1|true|yes|on) return 0 ;;
+        0|false|no|off) return 1 ;;
+        *) echo "OP_FACES_ENABLED=${v}: not a boolean (use true or false)" >&2; return 2 ;;
+    esac
+}
+
 # model_setup_groups_for_tiers "core curation ..." -> ordered group names
+# (the faces group is left out when OP_FACES_ENABLED is false)
 model_setup_groups_for_tiers() {
-    local tiers=" $1 " g
+    local tiers=" $1 " g faces_rc=0
+    model_setup_faces_enabled || faces_rc=$?
+    (( faces_rc == 2 )) && return 2
     for g in "${MODEL_SETUP_ALL_GROUPS[@]}"; do
+        [[ "$g" == faces && $faces_rc -eq 1 ]] && continue
         case "$g" in
             pe) [[ "$tiers" == *" curation "* ]] && echo "$g" ;;
             *) [[ "$tiers" == *" core "* ]] && echo "$g" ;;
@@ -70,12 +85,29 @@ model_setup_group_engines() {
     esac
 }
 
+# model_setup_all_models "core curation ..." -> every Triton model of the tiers' groups (the
+# list the installer's health check waits on); the faces group's models drop out when faces are off.
+model_setup_all_models() {
+    local g groups
+    groups="$(model_setup_groups_for_tiers "$1")" || return 2
+    for g in $groups; do model_setup_group_models "$g"; done
+}
+
+# model_setup_all_models "core curation ..." -> every Triton model of the tiers' groups (the
+# list the installer's health check waits on); the faces group's models drop out when faces are off.
+model_setup_all_models() {
+    local g groups
+    groups="$(model_setup_groups_for_tiers "$1")" || return 2
+    for g in $groups; do model_setup_group_models "$g"; done
+}
+
 # model_setup_required_models "core curation ..." -> comma list for OP_REQUIRED_MODELS, the
 # models the API's /health waits on. OCR is skipped by the minimal profile and the PE text
 # tower has a CPU fallback, so neither gates readiness; the PE image encoder has none.
 model_setup_required_models() {
-    local g m out=()
-    for g in $(model_setup_groups_for_tiers "$1"); do
+    local g m out=() groups
+    groups="$(model_setup_groups_for_tiers "$1")" || return 2
+    for g in $groups; do
         [[ "$g" == ocr ]] && continue
         for m in $(model_setup_group_models "$g"); do
             [[ "$m" == pe_text_encoder ]] || out+=("$m")

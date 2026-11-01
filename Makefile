@@ -18,7 +18,8 @@ SHELL := /bin/bash
 DEV_DEV_COMPOSE := docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.gpu-arbiter.yml --profile curation --profile segmenter --profile vlm --profile training
 # The curation services `curation-up SERVICES=...` accepts (the evaluator is on demand).
 CURATION_SERVICES := curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-assist-loop-worker curation-cluster-refresh curation-evaluator
-COMPOSE := docker compose $(if $(wildcard src/main.py),-f docker-compose.yml -f docker-compose.dev.yml,-f docker-compose.yml)$(if $(wildcard docker-compose.local.yml), -f docker-compose.local.yml)
+# Recursive (=): OP_FACES_ENABLED comes from the `-include .env` further down.
+COMPOSE = docker compose $(if $(wildcard src/main.py),-f docker-compose.yml -f docker-compose.dev.yml,-f docker-compose.yml)$(if $(filter 0 false no off False FALSE,$(OP_FACES_ENABLED)), -f docker-compose.faces-off.yml)$(if $(wildcard docker-compose.local.yml), -f docker-compose.local.yml)
 V := .venv/bin
 # Prefer the project venv's interpreter when it exists; fall back to
 # system python3 for a fresh checkout that hasn't created .venv yet.

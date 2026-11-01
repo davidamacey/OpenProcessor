@@ -16,9 +16,10 @@ Endpoints:
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 
+from src.config.faces import require_faces
 from src.core.dependencies import VisualSearchDep
 from src.utils.upstream_errors import UpstreamError
 
@@ -160,12 +161,21 @@ def validate_index_name(index: str) -> str:
     return index_lower
 
 
+def refuse_faces_index(index: Annotated[str, Path()]) -> None:
+    """Route dependency (runs before the search-service dependency connects anywhere): the
+    faces cluster index is off with the face models (#379)."""
+    if index.lower() == 'faces':
+        require_faces()
+
+
 # =============================================================================
 # Endpoints
 # =============================================================================
 
 
-@router.post('/train/{index}', response_model=TrainResponse)
+@router.post(
+    '/train/{index}', response_model=TrainResponse, dependencies=[Depends(refuse_faces_index)]
+)
 async def train_clusters(
     search_service: VisualSearchDep,
     index: Annotated[str, Path(description='Index to train: global, vehicles, people, or faces')],
@@ -237,7 +247,9 @@ async def train_clusters(
         raise HTTPException(status_code=500, detail=f'Training failed: {e!s}') from e
 
 
-@router.post('/assign/{index}', response_model=AssignResponse)
+@router.post(
+    '/assign/{index}', response_model=AssignResponse, dependencies=[Depends(refuse_faces_index)]
+)
 async def assign_unclustered(
     search_service: VisualSearchDep,
     index: Annotated[str, Path(description='Index to process: global, vehicles, people, or faces')],
@@ -284,7 +296,11 @@ async def assign_unclustered(
         raise HTTPException(status_code=500, detail=f'Assignment failed: {e!s}') from e
 
 
-@router.get('/stats/{index}', response_model=ClusterStatsResponse)
+@router.get(
+    '/stats/{index}',
+    response_model=ClusterStatsResponse,
+    dependencies=[Depends(refuse_faces_index)],
+)
 async def get_cluster_stats(
     search_service: VisualSearchDep,
     index: Annotated[str, Path(description='Index to query: global, vehicles, people, or faces')],
@@ -344,7 +360,9 @@ async def get_cluster_stats(
         raise HTTPException(status_code=500, detail=f'Stats retrieval failed: {e!s}') from e
 
 
-@router.post('/rebalance/{index}', response_model=TrainResponse)
+@router.post(
+    '/rebalance/{index}', response_model=TrainResponse, dependencies=[Depends(refuse_faces_index)]
+)
 async def rebalance_clusters(
     search_service: VisualSearchDep,
     index: Annotated[
@@ -403,7 +421,11 @@ async def rebalance_clusters(
         raise HTTPException(status_code=500, detail=f'Rebalancing failed: {e!s}') from e
 
 
-@router.get('/balance/{index}', response_model=BalanceCheckResponse)
+@router.get(
+    '/balance/{index}',
+    response_model=BalanceCheckResponse,
+    dependencies=[Depends(refuse_faces_index)],
+)
 async def check_cluster_balance(
     search_service: VisualSearchDep,
     index: Annotated[str, Path(description='Index to check: global, vehicles, people, or faces')],
@@ -501,7 +523,11 @@ async def list_albums(
 # Declared last: `/{index}/{cluster_id}` is two free path segments, so any
 # literal two-segment route registered after it (`/balance/{index}`) would be
 # captured by it.
-@router.get('/{index}/{cluster_id}', response_model=ClusterMembersResponse)
+@router.get(
+    '/{index}/{cluster_id}',
+    response_model=ClusterMembersResponse,
+    dependencies=[Depends(refuse_faces_index)],
+)
 async def get_cluster_members(
     search_service: VisualSearchDep,
     index: Annotated[str, Path(description='Index to query: global, vehicles, people, or faces')],

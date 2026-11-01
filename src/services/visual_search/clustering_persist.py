@@ -32,6 +32,18 @@ class FaissIvfIndex(Protocol):
     def add(self, x: np.ndarray) -> None: ...
 
 
+def index_files(index_dir: Path, index_name: ClusterIndex) -> tuple[Path, ...]:
+    """Every file one index owns on disk: the saved index and metadata, and the temp names a
+    save writes before renaming (a crash mid-save leaves them behind)."""
+    name = index_name.value
+    return (
+        index_dir / f'{name}.index',
+        index_dir / f'{name}.meta.npy',
+        index_dir / f'{name}.index.tmp',
+        index_dir / f'{name}.meta.tmp.npy',
+    )
+
+
 class IndexPersistenceMixin:
     """Save and load one index and its training metadata under ``index_dir``."""
 
@@ -48,10 +60,7 @@ class IndexPersistenceMixin:
         if index is None:
             return
 
-        index_path = self.index_dir / f'{index_name.value}.index'
-        metadata_path = self.index_dir / f'{index_name.value}.meta.npy'
-        tmp_index = index_path.with_name(index_path.name + '.tmp')
-        tmp_meta = metadata_path.with_name(f'{index_name.value}.meta.tmp.npy')
+        index_path, metadata_path, tmp_index, tmp_meta = index_files(self.index_dir, index_name)
 
         np.save(tmp_meta, np.asarray(self._training_metadata.get(index_name, {}), dtype=object))
         self.faiss.write_index(index, str(tmp_index))
@@ -65,7 +74,7 @@ class IndexPersistenceMixin:
         """True when a persisted index file exists and has not already failed to load."""
         return (
             index_name not in self._unloadable
-            and (self.index_dir / f'{index_name.value}.index').exists()
+            and index_files(self.index_dir, index_name)[0].exists()
         )
 
     def load_index(self, index_name: ClusterIndex) -> bool:
@@ -78,8 +87,7 @@ class IndexPersistenceMixin:
         Returns:
             True if loaded successfully, False if not found or unusable
         """
-        index_path = self.index_dir / f'{index_name.value}.index'
-        metadata_path = self.index_dir / f'{index_name.value}.meta.npy'
+        index_path, metadata_path = index_files(self.index_dir, index_name)[:2]
 
         if not index_path.exists():
             logger.warning(f'No saved index found for {index_name}')

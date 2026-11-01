@@ -491,3 +491,30 @@ def test_batch_an_image_failing_while_parsing_full_results_still_counts_in_the_t
     assert body['total_detections'] == 3
     assert body['total_faces'] == 1
     assert body['images_with_text'] == 1
+
+
+# ---------------------------------------------------------------------------
+# OP_FACES_ENABLED=false (#379): analyze keeps working and reports no faces
+# ---------------------------------------------------------------------------
+
+
+def test_single_with_faces_off_never_runs_face_detection(
+    client: TestClient, jpeg: bytes, backends: Backends, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv('OP_FACES_ENABLED', 'false')
+    body = _post(client, jpeg).json()
+    assert body['faces'] == []
+    assert body['num_faces'] == 0
+    assert body['faces_enabled'] is False
+    assert backends.faces.confidences == []
+    assert body['num_detections'] == 2
+
+
+def test_batch_with_faces_off_never_runs_face_detection(
+    client: TestClient, jpeg: bytes, backends: Backends, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv('OP_FACES_ENABLED', 'false')
+    body = _batch(client, jpeg, count=2).json()
+    assert body['faces_enabled'] is False
+    assert backends.faces.confidences == []
+    assert all(r['num_faces'] == 0 for r in body['results'])

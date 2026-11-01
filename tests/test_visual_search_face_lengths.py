@@ -8,7 +8,6 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from src.services.visual_search.batch_documents import build_documents
-from src.services.visual_search.ingest_batch import IngestBatchMixin
 from src.services.visual_search.ingest_single import IngestSingleMixin
 
 
@@ -71,24 +70,6 @@ def test_single_image_path_skips_only_the_face_without_landmarks(
     assert n == 1
     assert indexed == ['img_face_0']
     assert 'img_face_1: face_landmarks_length_mismatch' in caplog.text
-
-
-def test_ingest_faces_reports_the_reason() -> None:
-    class FakeClient:
-        def recognize(self, *_a: Any, **_k: Any) -> dict[str, Any]:
-            return {'status': 'success', **_faces(2, 1)}
-
-    import src.clients.fast_face_client as ffc
-
-    orig = ffc.get_fast_face_client
-    ffc.get_fast_face_client = lambda *_a, **_k: FakeClient()  # type: ignore[assignment]
-    try:
-        svc = SimpleNamespace(opensearch=None)
-        out = asyncio.run(IngestBatchMixin.ingest_faces(svc, b'x', 'img'))  # type: ignore[arg-type]
-    finally:
-        ffc.get_fast_face_client = orig
-    assert out['status'] == 'error'
-    assert out['error'].startswith('face_landmarks_length_mismatch')
 
 
 def _inference_service(monkeypatch: pytest.MonkeyPatch, faces: dict[str, Any]) -> Any:

@@ -21,7 +21,7 @@ from typing import Any
 
 import numpy as np
 
-from src.config.cluster_index import ClusterIndex
+from src.config.cluster_index import FAISS_INDEX_DIR, ClusterIndex
 from src.services.visual_search.clustering_models import (
     DEFAULT_CONFIGS,
     ClusterAssignment,
@@ -48,7 +48,7 @@ class ClusteringService(IndexPersistenceMixin):
 
     def __init__(
         self,
-        index_dir: str | Path = 'data/faiss_indexes',
+        index_dir: str | Path = FAISS_INDEX_DIR,
         embedding_dim: int = 512,
         use_gpu: bool = True,
     ):
@@ -439,7 +439,7 @@ _clustering_service: ClusteringService | None = None
 
 
 def get_clustering_service(
-    index_dir: str | Path = 'data/faiss_indexes',
+    index_dir: str | Path = FAISS_INDEX_DIR,
     use_gpu: bool = True,
 ) -> ClusteringService:
     """Get or create the global ClusteringService instance."""

@@ -406,6 +406,8 @@ All endpoints are on port **4603**. The routes below are also under `/v1`.
 | `/faces/search` | POST | Find similar faces in index |
 | `/faces/identify` | POST | 1:N face identification |
 
+With `OP_FACES_ENABLED=false` the face and person routes answer `400` with `error: faces_disabled`; see [SECURITY.md](SECURITY.md#privacy-face-data).
+
 ### Embeddings
 
 | Endpoint | Method | Description |
