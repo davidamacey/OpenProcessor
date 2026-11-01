@@ -41,7 +41,10 @@ def test_normalize_class_name(raw: str, slug: str) -> None:
     assert normalize_class_name(raw) == slug
 
 
-def test_coco_vocabulary_slugifies_all_fifteen_spaced_labels() -> None:
+def test_coco_vocabulary_slugifies_all_fifteen_spaced_labels(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv('OP_TRITON_MODEL_REPO', str(REPO_ROOT / 'models'))
     profile = DetectionProfile(name='item', detector_model='m', labels_path=str(COCO_LABELS))
     labels = detector_labels(profile)
     assert len(labels) == 80

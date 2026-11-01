@@ -60,6 +60,22 @@ def _triton_models_dir() -> Path:
     return env_path('OP_TRITON_MODEL_REPO', _DEFAULT_TRITON_MODELS_DIR)
 
 
+def confine_labels_path(path: str) -> Path:
+    """Resolve a configured ``labels_path`` and require it to be a ``.txt``
+    regular file inside the Triton model repository (symlinks followed, so a
+    link out of the repository is refused too). Raises ``ValueError`` before
+    anything is read."""
+    root = _triton_models_dir().resolve()
+    resolved = Path(path).resolve()
+    if not resolved.is_relative_to(root):
+        msg = 'labels_path must name a file inside the model repository'
+        raise ValueError(msg)
+    if resolved.suffix != '.txt' or not resolved.is_file():
+        msg = 'labels_path must name an existing .txt labels file in the model repository'
+        raise ValueError(msg)
+    return resolved
+
+
 def _read_labels_file(path: Path) -> dict[int, str] | None:
     """Parse a ``labels.txt``: one name per line, line index = class id.
 

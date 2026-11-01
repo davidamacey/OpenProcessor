@@ -22,6 +22,11 @@ from src.services.curation.ingest import CurationIngestService
 from src.services.curation.ingest_policy import DetectFilter, IngestPolicy
 
 
+@pytest.fixture(autouse=True)
+def _labels_inside_the_model_repository(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('OP_TRITON_MODEL_REPO', str(tmp_path))
+
+
 if TYPE_CHECKING:
     from pathlib import Path
 

@@ -47,15 +47,18 @@ async def test_a_model_that_is_not_loaded_or_lacks_the_outputs_is_refused() -> N
     assert 'end2end outputs' in (await detector_problems(fused, override))[0]
 
 
-def test_the_override_is_laid_over_the_env_profile_and_never_assigns_by_id() -> None:
+def test_the_override_is_laid_over_the_env_profile_and_never_assigns_by_id(
+    labels: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    monkeypatch.setenv('OP_TRITON_MODEL_REPO', str(tmp_path))
     base = DetectionProfile(
         name='item', detector_model='env_model', assigns_class=True, input_size=640
     )
     out = effective_profile(
-        base, DetectorOverride(model='mine', version='3', input_size=1280, labels_path='/l.txt')
+        base, DetectorOverride(model='mine', version='3', input_size=1280, labels_path=labels)
     )
     assert (out.detector_model, out.detector_version, out.input_size) == ('mine', '3', 1280)
-    assert (out.labels_path, out.assigns_class, out.name) == ('/l.txt', False, 'item')
+    assert (out.labels_path, out.assigns_class, out.name) == (labels, False, 'item')
     assert effective_profile(base, None) is base
 
 
@@ -71,6 +74,7 @@ def world(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> Any:
     fake = SettingsFakeOpenSearch()
     registry = ClassRegistry(path=tmp_path / 'class_registry.json')
     monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'env_model')
+    monkeypatch.setenv('OP_TRITON_MODEL_REPO', str(tmp_path))
     monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', {'default'})
     monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: registry)
     monkeypatch.setattr('src.routers.curation.class_seed.get_class_registry', lambda: registry)

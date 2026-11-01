@@ -23,6 +23,11 @@ from src.services.curation.ingest_policy import (
 from src.services.curation.item_doc import DetectedItem
 
 
+@pytest.fixture(autouse=True)
+def _labels_inside_the_model_repository(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('OP_TRITON_MODEL_REPO', str(tmp_path))
+
+
 @dataclass
 class _Entry:
     class_id: int
