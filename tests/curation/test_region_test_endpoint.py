@@ -269,6 +269,9 @@ class _DetectorPool:
         self.anchors = anchors
         self.calls: list[str] = []
 
+    async def get_model_input_datatype(self, model_name: str) -> str:  # noqa: ARG002
+        return 'UINT8'
+
     async def infer(
         self,
         model_name: str,

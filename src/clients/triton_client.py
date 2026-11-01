@@ -39,7 +39,7 @@ from src.clients.model_adapters import DetectionAdapter, resolve_adapter
 from src.clients.model_residency import ensure_loaded_sync
 from src.clients.triton_client_manager import TritonClientManager
 from src.clients.triton_ocr import infer_ocr
-from src.clients.triton_pool_core import uint8_images_input
+from src.clients.triton_pool_core import MODEL_INFO_TTL_S, images_input
 from src.clients.triton_preprocess import (
     preprocess_clip_cpu,
     preprocess_for_mobileclip,
@@ -51,8 +51,6 @@ from src.utils.retry import retry_sync
 
 
 logger = logging.getLogger(__name__)
-
-_MODEL_INFO_TTL_S = 30.0
 
 
 class TritonClient:
@@ -82,11 +80,11 @@ class TritonClient:
         self.retry_base_delay = retry_base_delay
         self.retry_max_delay = retry_max_delay
         # Per-model serving facts (output adapter + input size) from Triton
-        # metadata, re-read after ``_MODEL_INFO_TTL_S``: a model re-promoted or
+        # metadata, re-read after ``MODEL_INFO_TTL_S``: a model re-promoted or
         # replaced under the same name must not keep its old size, and the API
         # runs many worker processes, so an in-process invalidation could not
         # reach them all.
-        self._model_info: dict[str, tuple[float, DetectionAdapter, int]] = {}
+        self._model_info: dict[str, tuple[float, DetectionAdapter, int, str]] = {}
         logger.info(f'Unified Triton client initialized (sync, retries={max_retries})')
 
     def _infer_with_retry(self, model_name: str, inputs: list, outputs: list) -> Any:
@@ -102,32 +100,40 @@ class TritonClient:
             max_delay=self.retry_max_delay,
         )
 
-    def _read_model_info(self, model_name: str) -> tuple[DetectionAdapter, int]:
+    def _read_model_info(self, model_name: str) -> tuple[DetectionAdapter, int, str]:
         """Output adapter (YOLO11 end2end 4-tensor or YOLO26 fused) and the
         square input size ``model_name`` was exported at (``images`` is
-        ``[N, 3, H, W]``; 640 when dynamic or absent), cached for
-        ``_MODEL_INFO_TTL_S``. A model promoted at another size would otherwise
+        ``[N, 3, H, W]``; 640 when dynamic or absent) and the datatype of its
+        ``images`` input (UINT8 or FP32), cached for
+        ``MODEL_INFO_TTL_S``. A model promoted at another size would otherwise
         fail with a shape error."""
         now = time.monotonic()
         cached = self._model_info.get(model_name)
         if cached is not None and cached[0] > now:
-            return cached[1], cached[2]
+            return cached[1], cached[2], cached[3]
         ensure_loaded_sync(self.client, model_name)
         metadata = self.client.get_model_metadata(model_name)
         adapter = resolve_adapter(metadata)
         size = self.input_size
+        datatype = ''
         for tensor in metadata.inputs:
+            if tensor.name != 'images':
+                continue
+            datatype = str(tensor.datatype)
             dims = [int(d) for d in tensor.shape]
-            if tensor.name == 'images' and len(dims) == 4 and dims[2] > 0:
+            if len(dims) == 4 and dims[2] > 0:
                 size = dims[2]
-        self._model_info[model_name] = (now + _MODEL_INFO_TTL_S, adapter, size)
-        return adapter, size
+        self._model_info[model_name] = (now + MODEL_INFO_TTL_S, adapter, size, datatype)
+        return adapter, size, datatype
 
     def _get_detection_adapter(self, model_name: str) -> DetectionAdapter:
         return self._read_model_info(model_name)[0]
 
     def _model_input_size(self, model_name: str) -> int:
         return self._read_model_info(model_name)[1]
+
+    def _model_input_datatype(self, model_name: str) -> str:
+        return self._read_model_info(model_name)[2]
 
     # =========================================================================
     # YOLO End2End: CPU Preprocessing + TensorRT + GPU NMS
@@ -188,7 +194,7 @@ class TritonClient:
         input_data = np.stack(preprocessed, axis=0)
         batch_size = input_data.shape[0]
 
-        inputs = [uint8_images_input(input_data)]
+        inputs = [images_input(input_data, self._model_input_datatype(model_name))]
 
         adapter = self._get_detection_adapter(model_name)
         outputs = [InferRequestedOutput(name) for name in adapter.requested_outputs]
@@ -242,7 +248,7 @@ class TritonClient:
         # Run YOLO TRT inference (default detector; adapter handles either
         # the end2end 4-tensor or the fused single-tensor contract)
         adapter = self._get_detection_adapter(yolo_model)
-        yolo_inputs = [uint8_images_input(yolo_input)]
+        yolo_inputs = [images_input(yolo_input, self._model_input_datatype(yolo_model))]
         yolo_outputs = [InferRequestedOutput(name) for name in adapter.requested_outputs]
         yolo_response = self._infer_with_retry(yolo_model, yolo_inputs, yolo_outputs)
 
