@@ -125,6 +125,33 @@ local tool meant to run on a trusted machine or private network behind
 your own reverse proxy / auth layer, not to be exposed to a network you
 don't trust.
 
+## Privacy: face data
+
+Face embeddings, person ids and person names are biometric and personal data. They are
+stored deployment-wide, outside project isolation: the `visual_search_faces` OpenSearch
+index (person ids and names are fields on its documents), a face link on
+`visual_search_people` documents, and the face cluster files `data/faiss_indexes/faces.*`.
+
+- **Switch the face models off.** `OP_FACES_ENABLED=false` in `.env` (or `--no-faces` at
+  install) stops all face detection and embedding: the `/faces`, `/persons` and `/search/face`
+  routes and the `faces` cluster index answer `400` with `error: faces_disabled`, ingest and
+  analyze skip faces and report `faces_enabled: false`, Triton does not preload SCRFD and
+  ArcFace (the CLI adds `docker-compose.faces-off.yml`), and `/health` stops requiring them.
+  A malformed value refuses startup.
+- **See what is still stored.** Switching off does not delete anything. While face data is
+  stored, the API logs `faces_disabled_with_stored_data` at startup and `/health`
+  `services.faces` reports the counts (never ids, names or vectors). `/ready` stays ready.
+- **Delete it.** `./openprocessor faces purge --dry-run` prints the counts;
+  `./openprocessor faces purge --yes` deletes the face index (embeddings, person ids and
+  names), the face FAISS files and the face link on people documents, and appends a counts-only
+  record to `data/audit/faces_purge.jsonl`. The purge refuses to run while faces are on, so
+  nothing writes new face data meanwhile. It is a command line action only: the API has no
+  authentication, so it has no purge route. The `visual_search_people` documents themselves
+  (whole-body crops) are not deleted.
+- **What the purge does not reach:** OpenSearch snapshots you took yourself, backups of
+  `data/`, container or Loki logs written before this release (a person rename used to log the
+  name), and copies a client already downloaded.
+
 ## Reporting a vulnerability
 
 If you find a security issue that is **not** one of the known gaps
