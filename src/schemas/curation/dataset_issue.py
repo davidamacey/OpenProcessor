@@ -56,6 +56,10 @@ DatasetIssueCode = Literal[
     'item_crop_export_imported_as_frames',
     'images_reused_by_stem',
     'image_unreadable',
+    'voc_xml_invalid',
+    'voc_size_missing',
+    'voc_difficult_skipped',
+    'image_file_missing',
 ]
 
 

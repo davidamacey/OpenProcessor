@@ -60,7 +60,7 @@ ISSUE_CATALOG: dict[str, IssueSpec] = {
     'coco_crowd_skipped': IssueSpec('info', False, False, 'COCO crowd annotation skipped'),
     'coco_bbox_out_of_image': IssueSpec('warning', False, False, 'COCO bbox outside the image'),
     'image_size_mismatch': IssueSpec(
-        'warning', False, False, 'COCO image size does not match the decoded image'
+        'warning', False, False, 'Declared image size does not match the decoded image'
     ),
     'image_path_not_servable': IssueSpec('warning', False, False, 'Image path is not servable'),
     'image_duplicate_in_dataset': IssueSpec(
@@ -118,6 +118,12 @@ ISSUE_CATALOG: dict[str, IssueSpec] = {
         'info', False, False, 'Export stems resolved to images already in this project'
     ),
     'image_unreadable': IssueSpec('warning', False, False, 'Image could not be decoded'),
+    'voc_xml_invalid': IssueSpec('warning', False, False, 'Pascal VOC annotation file is invalid'),
+    'voc_size_missing': IssueSpec(
+        'info', False, False, 'VOC file has no usable image size; read from the image'
+    ),
+    'voc_difficult_skipped': IssueSpec('info', False, False, 'VOC object marked difficult skipped'),
+    'image_file_missing': IssueSpec('warning', False, False, 'Referenced image file not found'),
 }
 
 

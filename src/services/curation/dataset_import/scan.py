@@ -1,4 +1,4 @@
-"""Dataset scanning: read a directory (YOLO or COCO
+"""Dataset scanning: read a directory (YOLO, COCO, Pascal VOC or Open Images
 format) into an ordered, format-neutral :class:`DatasetScan` — no writes,
 no OpenSearch, no Triton. ``POST /datasets/preview`` and the import job
 both call :func:`scan_dataset`; the job re-runs the same scan so preview
@@ -19,6 +19,8 @@ from src.services.curation.dataset_import.paths import DatasetPathNotAllowedErro
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from src.services.curation.dataset_import.coco import CocoAnnotationFile
     from src.services.curation.dataset_import.issues import IssueCollector
     from src.services.curation.dataset_import.op_export import OpExportInfo
@@ -27,7 +29,7 @@ if TYPE_CHECKING:
 
 
 LabelState = Literal['labeled', 'negative', 'unlabeled']
-DatasetFormat = Literal['yolo', 'coco', 'openprocessor_export', 'project']
+DatasetFormat = Literal['yolo', 'coco', 'voc', 'openprocessor_export', 'project']
 
 
 class FormatUndetectedError(Exception):
@@ -95,30 +97,44 @@ def exif_transposed_size(path: Path) -> tuple[int, int] | None:
     return (height, width) if orientation in (5, 6, 7, 8) else (width, height)
 
 
-def detect_format(root: Path) -> DatasetFormat:
-    """First match wins."""
-    from src.services.curation.dataset_import.op_export import is_op_export
+def _is_yaml_file(root: Path) -> bool:
+    return root.is_file() and root.suffix in ('.yaml', '.yml')
 
-    if is_op_export(root):
-        return 'openprocessor_export'
-    if root.is_file() and root.suffix in ('.yaml', '.yml'):
-        return 'yolo'
-    for name in ('data.yaml', 'data.yml', 'dataset.yaml'):
-        if (root / name).is_file():
-            return 'yolo'
+
+def _has_data_yaml(root: Path) -> bool:
+    return any((root / name).is_file() for name in ('data.yaml', 'data.yml', 'dataset.yaml'))
+
+
+def _has_coco_json(root: Path) -> bool:
     annotations_dir = root / 'annotations'
-    has_coco_json = annotations_dir.is_dir() and any(annotations_dir.glob('*.json'))
-    # `images/` + `annotations/*.json` is the usual COCO layout; a `labels/`
-    # directory is what marks `images/` as YOLO's.
-    if has_coco_json and not (root / 'labels').is_dir():
-        return 'coco'
-    if (root / 'images').is_dir():
-        return 'yolo'
-    for child in sorted(root.iterdir()) if root.is_dir() else ():
-        if child.is_dir() and (child / 'images').is_dir():
-            return 'yolo'
-    if has_coco_json:
-        return 'coco'
+    return annotations_dir.is_dir() and any(annotations_dir.glob('*.json'))
+
+
+def _child_has_images(root: Path) -> bool:
+    children = sorted(root.iterdir()) if root.is_dir() else ()
+    return any(child.is_dir() and (child / 'images').is_dir() for child in children)
+
+
+def detect_format(root: Path) -> DatasetFormat:
+    """First match wins; the order is the documented precedence."""
+    from src.services.curation.dataset_import.op_export import is_op_export
+    from src.services.curation.dataset_import.voc import is_voc
+
+    rules: tuple[tuple[DatasetFormat, Callable[[Path], bool]], ...] = (
+        ('openprocessor_export', is_op_export),
+        ('yolo', _is_yaml_file),
+        ('yolo', _has_data_yaml),
+        # `images/` + `annotations/*.json` is the usual COCO layout; a `labels/`
+        # directory is what marks `images/` as YOLO's.
+        ('coco', lambda r: _has_coco_json(r) and not (r / 'labels').is_dir()),
+        ('voc', is_voc),
+        ('yolo', lambda r: (r / 'images').is_dir()),
+        ('yolo', _child_has_images),
+        ('coco', _has_coco_json),
+    )
+    for fmt, matches in rules:
+        if matches(root):
+            return fmt
     raise FormatUndetectedError(str(root))
 
 
@@ -185,7 +201,7 @@ def scan_dataset(
     path_guard: PathGuard,
     missing_label: str = 'unlabeled',
 ) -> DatasetScan:
-    """Scan ``source`` (any supported format) into a :class:`DatasetScan`.
+    """Scan ``source`` (YOLO, COCO, Pascal VOC, Open Images or an OpenProcessor export) into a :class:`DatasetScan`.
 
     Raises :class:`DatasetPathNotAllowedError` when the root (or an explicit
     COCO annotation/images path) fails ``path_guard``, and
@@ -193,6 +209,7 @@ def scan_dataset(
     written and no image is decoded beyond the COCO size spot-check.
     """
     from src.services.curation.dataset_import.coco import scan_coco
+    from src.services.curation.dataset_import.voc import scan_voc
     from src.services.curation.dataset_import.yolo import scan_yolo
 
     root = Path(source.path)
@@ -207,6 +224,8 @@ def scan_dataset(
             if not path_guard(f.path):
                 raise DatasetPathNotAllowedError(str(f.path))
         return scan_coco(files, path_guard=path_guard)
+    if fmt == 'voc':
+        return scan_voc(root, path_guard=path_guard)
     from src.services.curation.dataset_import.op_export import read_op_export
 
     return read_op_export(root, path_guard=path_guard)

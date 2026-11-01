@@ -1,12 +1,12 @@
-"""Dataset import: bring an already-labeled dataset (YOLO or COCO
-format) into a project, mapping its classes onto the registry by name
+"""Dataset import: bring an already-labeled dataset (YOLO, COCO, Pascal VOC or
+Open Images format) into a project, mapping its classes onto the registry by name
 (never by index — see the class-identity invariant in
 the any-domain design).
 
 Submodules:
 
 * ``scan.py`` — directory scanning, format detection.
-* ``yolo.py`` / ``coco.py`` — format readers, each emitting ``ScanEntry``.
+* ``yolo.py`` / ``coco.py`` / ``voc.py`` — format readers, each emitting ``ScanEntry``.
 * ``mapping.py`` — class-name mapping (exported for P4's combine-projects
   wave to reuse).
 * ``regions.py`` — attach region-class label boxes to parent items.

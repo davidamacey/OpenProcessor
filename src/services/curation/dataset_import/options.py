@@ -14,7 +14,7 @@ Processing = Literal['none', 'propose']
 LabelTrust = Literal['validated', 'suggestion']
 ParentsMode = Literal['auto', 'labels', 'detect']
 MissingLabel = Literal['unlabeled', 'negative']
-SourceFormat = Literal['auto', 'yolo', 'coco', 'openprocessor_export']
+SourceFormat = Literal['auto', 'yolo', 'coco', 'voc', 'openprocessor_export']
 
 
 class CocoAnnotationFileSpec(BaseModel):

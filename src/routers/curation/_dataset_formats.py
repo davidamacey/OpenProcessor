@@ -26,6 +26,7 @@ def formats_response() -> DatasetFormatsResponse:
             DatasetFormatInfo(format='auto', label='Detect automatically'),
             DatasetFormatInfo(format='yolo', label='YOLO (data.yaml + images/labels)'),
             DatasetFormatInfo(format='coco', label='COCO (instances JSON)'),
+            DatasetFormatInfo(format='voc', label='Pascal VOC (XML per image)'),
             DatasetFormatInfo(format='openprocessor_export', label='OpenProcessor export'),
         ],
         issues=[

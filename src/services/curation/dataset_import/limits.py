@@ -79,6 +79,8 @@ MAX_LABEL_FILE_BYTES = 8 * 1024**2
 # million annotations).
 MAX_COCO_JSON_BYTES = 128 * 1024**2
 MAX_MANIFEST_BYTES = 16 * 1024**2
+# A VOC annotation is a few KiB; one over 1 MiB is not an annotation.
+MAX_VOC_XML_BYTES = 1 * 1024**2
 # A real ``data.yaml`` is a few thousand nodes and a few levels deep.
 MAX_YAML_NODES = 50_000
 MAX_YAML_DEPTH = 32
@@ -88,6 +90,7 @@ __all__ = [
     'MAX_COCO_JSON_BYTES',
     'MAX_LABEL_FILE_BYTES',
     'MAX_MANIFEST_BYTES',
+    'MAX_VOC_XML_BYTES',
     'MAX_YAML_BYTES',
     'MAX_YAML_DEPTH',
     'MAX_YAML_NODES',
