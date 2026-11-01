@@ -73,8 +73,11 @@ class _PinnedBackend(httpcore.AsyncNetworkBackend):
     ) -> httpcore.AsyncNetworkStream:
         if host != self._pin.host:
             raise httpcore.ConnectError(f'refused: {host!r} is not the pinned endpoint host')
+        addresses = self._pin.addresses
+        if not addresses:
+            raise httpcore.ConnectError(f'refused: no vetted address for {host!r}')
         failure: Exception | None = None
-        for address in self._pin.addresses:
+        for address in addresses:
             try:
                 return await self._inner.connect_tcp(
                     address,
@@ -85,6 +88,12 @@ class _PinnedBackend(httpcore.AsyncNetworkBackend):
                 )
             except (httpcore.ConnectError, httpcore.ConnectTimeout) as exc:
                 failure = exc  # try the next vetted address; never another one
+            except (OSError, ValueError) as exc:
+                # anyio raises a bare ValueError when every attempt was
+                # cancelled before recording an error (it builds an empty
+                # ExceptionGroup); an unmapped error would escape the retry
+                # code's httpx types.
+                failure = httpcore.ConnectError(f'could not connect to {address}: {exc}')
         raise failure or httpcore.ConnectError(f'refused: no vetted address for {host!r}')
 
     async def connect_unix_socket(
