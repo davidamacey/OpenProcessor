@@ -14,6 +14,10 @@ representative crops.
 
 - Filter by cohesion band or class; search by embedding similarity
   (semantic search, when enabled) or literal OCR text.
+- **More like this** (the `similar` action on a crop card, shown when semantic search is
+  enabled) lists the crops nearest to that crop, with their match scores, on the Clusters page
+  (`?similar_to=<crop id>`). A crop without a vector shows the server's message instead. Choosing
+  it on a result re-runs the search from that crop; "Back to clusters" leaves it.
 - An **Ignored** toggle lists the excluded bucket with a restore action.
 - When the backend serves an embedding projection, an overlay lets you
   lasso a set of points on a 2-D plot and preview them side by side —

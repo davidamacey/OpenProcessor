@@ -119,19 +119,48 @@ export async function searchCrops(
   filter: Record<string, unknown> = {},
   signal?: AbortSignal,
 ): Promise<PaginatedResponse<SearchCrop>> {
-  type RawSearchItem = RawCrop & { semantic_score: number | null };
-  type RawPage = {
-    total: number;
-    page: number;
-    page_size: number;
-    items: RawSearchItem[];
-    unembedded_in_scope?: number | null;
-  };
-  const raw = await apiFetch<RawPage>(
+  const raw = await apiFetch<RawSearchPage>(
     `${scoped()}/search/text${qs({ q, page, page_size: pageSize, ...filter })}`,
     {},
     signal,
   );
+  return mapSearchPage(raw, page, pageSize);
+}
+
+/**
+ * "More like this": crops nearest to the stored vector of `cropId`. Backend:
+ * `GET {API_PREFIX}/search/similar` (same gate and page shape as `searchCrops`).
+ * A crop that is unknown or has no vector is refused 404/409 with a served message.
+ */
+export async function searchSimilarCrops(
+  cropId: string,
+  page = 1,
+  pageSize = 30,
+  filter: Record<string, unknown> = {},
+  signal?: AbortSignal,
+): Promise<PaginatedResponse<SearchCrop>> {
+  const raw = await apiFetch<RawSearchPage>(
+    `${scoped()}/search/similar${qs({ crop_id: cropId, page, page_size: pageSize, ...filter })}`,
+    {},
+    signal,
+  );
+  return mapSearchPage(raw, page, pageSize);
+}
+
+type RawSearchItem = RawCrop & { semantic_score: number | null };
+type RawSearchPage = {
+  total: number;
+  page: number;
+  page_size: number;
+  items: RawSearchItem[];
+  unembedded_in_scope?: number | null;
+};
+
+function mapSearchPage(
+  raw: RawSearchPage,
+  page: number,
+  pageSize: number,
+): PaginatedResponse<SearchCrop> {
   // A crop can be served once per matching box; the result grids key by
   // crop id, so keep the first (best-ranked) hit per id.
   const seen = new Set<string>();

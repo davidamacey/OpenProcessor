@@ -250,7 +250,8 @@ Build a new project from 1 to 8 existing ones, with class mapping by name.
 ## Review, search and clustering
 
 Review queues, semantic search, item clustering, the auto-label job, the shared item
-filter and bulk actions on a selection.
+filter and bulk actions on a selection. "More like this" ranks items by similarity to a crop's
+stored vector (`GET /search/similar`), no encoder needed.
 [Cropwright review](../docs-site/docs/cropwright/user-guide/review.md),
 [clusters](../docs-site/docs/cropwright/user-guide/clusters.md),
 [item filter](../docs-site/docs/cropwright/user-guide/item-filter.md). Which worker

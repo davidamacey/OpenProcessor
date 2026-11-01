@@ -22,10 +22,10 @@ NEW_FILES = [
 # Any '/search/...' occurrence that ISN'T one of the pre-blessed suffixes.
 # The curation router is mounted with a configurable prefix elsewhere (not
 # visible in these files individually), so what actually appears in source
-# is bare '/search/text' / '/search/image' — check the suffix, not a full
+# is bare '/search/text' / '/search/similar' / '/search/image' — check the suffix, not a full
 # '/curation/search/...' string.
 _SEARCH_PATH_RE = re.compile(r'/search/([A-Za-z0-9_]+)')
-_ALLOWED_SEARCH_SUFFIXES = {'text', 'image'}
+_ALLOWED_SEARCH_SUFFIXES = {'text', 'image', 'similar'}
 
 
 def _repo_root() -> Path:
