@@ -36,6 +36,12 @@ _CASES = [
     pytest.param((*_OI, 'images/'), 'openimages', id='oi-with-images'),
     pytest.param((*_OI, 'data.yaml'), 'yolo', id='data-yaml-beats-oi'),
     pytest.param((*_OI, 'Annotations/a.xml'), 'voc', id='voc-beats-oi'),
+    pytest.param(('annotations.xml', 'images/'), 'yolo', id='empty-annotations-xml-is-not-cvat'),
+    pytest.param(('annotations.xml', 'data.yaml'), 'yolo', id='data-yaml-beats-cvat'),
+    pytest.param(('label_2/a.txt', 'image_2/'), 'kitti', id='kitti'),
+    pytest.param(('training/label_2/a.txt',), 'kitti', id='kitti-training-dir'),
+    pytest.param(('label_2/a.txt', 'data.yaml'), 'yolo', id='data-yaml-beats-kitti'),
+    pytest.param(('classes.txt', 'images/'), 'yolo', id='classes-txt-layout'),
     pytest.param(('train-annotations-bbox.csv',), None, id='oi-without-descriptions'),
     pytest.param(('Annotations/',), None, id='annotations-without-xml'),
 ]

@@ -65,6 +65,13 @@ DatasetIssueCode = Literal[
     'openimages_group_skipped',
     'openimages_image_split_conflict',
     'openimages_image_unreferenced',
+    'cvat_xml_invalid',
+    'yolo_names_file_invalid',
+    'labelstudio_json_invalid',
+    'labelstudio_task_skipped',
+    'createml_json_invalid',
+    'labelme_json_invalid',
+    'shape_not_box_skipped',
     'image_file_missing',
 ]
 

@@ -58,7 +58,7 @@ export interface DatasetFormatsResponse {
 }
 
 export type DatasetFormat =
-  'auto' | 'yolo' | 'coco' | 'voc' | 'openimages' | 'openprocessor_export';
+  'auto' | 'yolo' | 'coco' | 'voc' | 'openimages' | 'cvat' | 'labelstudio' | 'kitti' | 'createml' | 'labelme' | 'openprocessor_export';
 export type MappingAction = 'map' | 'create' | 'skip' | 'region';
 export type MapTargetKind = 'item' | 'region' | 'skip';
 

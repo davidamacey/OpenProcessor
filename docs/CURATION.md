@@ -211,27 +211,51 @@ watcher, a cron schedule or an S3 event webhook. Covers the allow-list
 
 ## Dataset import
 
-Bring a labeled YOLO, COCO, Pascal VOC or Open Images dataset, or an OpenProcessor
-export, into a project.
+Bring a labeled YOLO, COCO, Pascal VOC, Open Images, CVAT, Label Studio, KITTI,
+CreateML or LabelMe dataset, or an OpenProcessor export, into a project.
 Preview, decide each class by name (`map`, `create`, `skip`, `region`), import, undo.
 [Dataset import](../docs-site/docs/guides/dataset-import.mdx).
 
 ### Importing other formats
 
-The importer reads YOLO, COCO, Pascal VOC (XML per image), Open Images (boxes CSV plus
-class descriptions) and OpenProcessor exports. CVAT, LabelMe, Label Studio and
-segmentation, OBB or keypoint-specific formats are not read directly.
-Convert them to YOLO or COCO first, then check the result with
-`POST /curation/projects/{project}/datasets/preview`.
+The importer reads these layouts and detects them from the files in the dataset
+directory (first match wins; `source.format` forces one):
 
-- CVAT, LabelMe, Label Studio: convert with a general converter such as
-  `fiftyone` (export as `fo.types.YOLOv5Dataset`) or `supervision`
-  (`sv.DetectionDataset.from_pascal_voc(...)` then `.as_yolo(...)`). Keep one class
-  name per class: the import decides by name.
-- Polygon, OBB or keypoint labels: YOLO rows with more than five columns are imported
-  as their bounding box. The extra geometry is not kept.
-- A `format_undetected` error means no YOLO, COCO, Pascal VOC, Open Images or export layout was found at the
-  path.
+| Format | Layout | Classes come from |
+|---|---|---|
+| YOLO | `data.yaml` with `names`; or `classes.txt` / `obj.names` / `names.txt` beside `images/` and `labels/` (optionally `images/<split>/`) | the names, by line (or YAML index) |
+| COCO | `annotations/*.json` | category names |
+| Pascal VOC | `Annotations/*.xml`, `JPEGImages/`, optional `ImageSets/Main/*.txt` | `<name>` |
+| Open Images | `*annotations-bbox*.csv` plus `class-descriptions*.csv` | the display name |
+| CVAT for images 1.1 | `annotations.xml`, `images/` | the `label` attribute |
+| Label Studio | the full JSON export (a list of tasks) with `rectanglelabels` results | the rectangle label |
+| KITTI | `label_2/*.txt` and `image_2/` (or under `training/`), optional `ImageSets/*.txt` | the object type |
+| CreateML | `_annotations.createml.json` (or any CreateML JSON), at the root or in `train`/`valid`/`test` directories | `label` |
+| LabelMe | one JSON per image, beside the image, at the root or in split directories | `label` |
+
+Class identity is always the name. A YOLO dataset with no names (no `data.yaml`
+`names`, no names file) is refused as `format_undetected`; a names file with a blank
+or repeated name is a blocking `yolo_names_file_invalid`.
+
+How each format maps to boxes:
+
+- An image with no object at all is a reviewed negative (VOC, CVAT, KITTI, CreateML,
+  LabelMe). An image whose objects were all skipped is unlabeled. A Label Studio task
+  with no annotation is unlabeled; one annotation with no box is a negative; a task
+  with several annotations is skipped (`labelstudio_task_skipped`).
+- Only axis-aligned boxes are boxes. Rotated boxes, polygons, points, masks, `DontCare`
+  regions and (Label Studio) other result types are skipped with the info issue
+  `shape_not_box_skipped`. YOLO rows with more than five columns (segmentation, OBB)
+  are imported as their bounding box.
+- Pixel formats (CVAT, KITTI, CreateML, LabelMe) read the image size from the image;
+  a declared size that disagrees with the image skips the image
+  (`image_size_mismatch`). Label Studio coordinates are percentages.
+- An image reference that leaves the dataset (`..`, an absolute path, a link out) or
+  names a remote URL is never followed (`image_file_missing`).
+- Auto-detection of the JSON formats looks at the first 64 KiB of each file. The
+  Label Studio `JSON_MIN` export, CVAT video (track) exports and COCO
+  segmentation-only files are not read directly: convert them or export the full JSON.
+- A `format_undetected` error means none of these layouts was found at the path.
 
 ## Reprocess
 
