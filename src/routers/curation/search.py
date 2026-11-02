@@ -17,6 +17,7 @@ from fastapi import HTTPException, Query, Request
 
 from src.config.env import env_bool
 from src.core.exceptions import RequestRejectedError
+from src.core.logging import get_logger
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._page_models import SearchSimilarResponse, SearchTextResponse
@@ -24,6 +25,9 @@ from src.schemas.curation.config_common import ApiErrorResponse
 from src.services.curation import semantic_search
 from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.item_filter import item_filter_clauses
+
+
+logger = get_logger(__name__)
 
 
 def _semantic_search_enabled() -> bool:
@@ -139,7 +143,8 @@ async def search_text(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'semantic search failed: {exc}') from exc
+        logger.exception('semantic_search_failed')
+        raise HTTPException(status_code=503, detail='semantic search unavailable') from exc
 
 
 @router.get(
@@ -209,4 +214,5 @@ async def search_similar(
     except (HTTPException, RequestRejectedError):
         raise
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'similar search failed: {exc}') from exc
+        logger.exception('similar_search_failed')
+        raise HTTPException(status_code=503, detail='similar search unavailable') from exc

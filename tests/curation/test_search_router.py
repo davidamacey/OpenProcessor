@@ -297,5 +297,19 @@ def test_search_similar_opensearch_outage_is_503(app_client: TestClient):
     assert resp.status_code == 503
 
 
+def test_search_text_503_hides_the_exception_text(app_client: TestClient):
+    app_client.fake_os.search = AsyncMock(side_effect=RuntimeError('secret-host:9200 refused'))
+    resp = app_client.get('/curation/projects/default/search/text', params={'q': 'truck'})
+    assert resp.status_code == 503
+    assert 'secret-host' not in resp.text
+
+
+def test_search_similar_503_hides_the_exception_text(app_client: TestClient):
+    app_client.fake_os.search = AsyncMock(side_effect=RuntimeError('secret-host:9200 refused'))
+    resp = app_client.get(SIMILAR, params={'crop_id': 'src'})
+    assert resp.status_code == 503
+    assert 'secret-host' not in resp.text
+
+
 def test_search_similar_requires_crop_id(app_client: TestClient):
     assert app_client.get(SIMILAR).status_code == 422
