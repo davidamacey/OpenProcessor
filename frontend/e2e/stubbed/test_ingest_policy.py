@@ -48,8 +48,18 @@ POLICY = {
         "classes": [],
     },
     "clustering": {"automatic": True},
-    "detector": None,
     "revision": 4,
+}
+
+ACTIVE_PROFILE = {
+    "axis": "ingest_profile",
+    "active": {"name": "yolo-primary", "revision": 3},
+    "source": "stored",
+    "activated_at": None,
+    "previous": None,
+    "config_revision": 9,
+    "stale": False,
+    "applied": [],
 }
 
 PREVIEW = {
@@ -94,6 +104,7 @@ def _stub_policy(stub, put_handler):
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": []})
     stub.on("GET", r"/ingest/config(\?|$)", _ingest_config(POLICY))
     stub.on("GET", r"/ingest/policy(\?|$)", POLICY)
+    stub.on("GET", r"/ingest_profiles/active(\?|$)", ACTIVE_PROFILE)
     stub.on("POST", r"/ingest/policy/preview(\?|$)", PREVIEW)
     stub.on("PUT", r"/ingest/policy(\?|$)", put_handler)
 
@@ -106,6 +117,9 @@ def test_load_edit_preview_and_save_behind_a_confirm(stub, page, app_url):
     page.goto(f"{app_url}/p/default/settings/ingest-policy")
     page.get_by_test_id("ingest-policy-form").wait_for(timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id("policy-mode")).to_have_value("all")
+    expect(page.get_by_test_id("active-ingest-profile-name")).to_contain_text(
+        "yolo-primary"
+    )
 
     page.get_by_test_id("policy-mode").select_option("selected")
     expect(page.get_by_test_id("policy-preview-summary")).to_contain_text(

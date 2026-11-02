@@ -9,6 +9,7 @@
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
   import ConfirmDialog from '$components/ConfirmDialog.svelte';
+  import ActiveIngestProfileCard from '$lib/components/detector/ActiveIngestProfileCard.svelte';
   import IngestPolicyForm from '$lib/components/detector/IngestPolicyForm.svelte';
   import IngestPolicyPreviewPanel from '$lib/components/detector/IngestPolicyPreviewPanel.svelte';
   import { IngestPolicyEditor } from '$lib/detector/ingestPolicyController.svelte';
@@ -67,6 +68,7 @@
   {:else if editor.loading}
     <p class="text-sm text-zinc-500">Loading...</p>
   {:else}
+    <ActiveIngestProfileCard profile={editor.activeProfile} error={editor.profileError} />
     <IngestPolicyForm {editor} />
     <IngestPolicyPreviewPanel {editor} />
 

@@ -56,7 +56,8 @@ export type ConfigSource =
 export type ActiveSource = 'stored' | 'env' | 'off';
 
 /** `ActiveConfigResponse.axis`. */
-export type ConfigAxis = 'prompt_pack' | 'detection_profile' | 'vlm' | 'open_vocab';
+export type ConfigAxis =
+  'prompt_pack' | 'detection_profile' | 'vlm' | 'open_vocab' | 'ingest_profile';
 
 /** One `applied[]` entry (§7.3 `AppliedRuntime`). */
 export interface AppliedRuntime {

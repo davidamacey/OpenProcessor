@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '$lib/api_errors';
+import type { ActiveConfigResponse } from '$lib/types_config';
 import type {
   IngestPolicy,
   IngestPolicyPreview,
@@ -13,8 +14,18 @@ import {
 const POLICY: IngestPolicy = {
   detect: { class_resolution: 'proposal', classes: null, exclude_classes: [] },
   embedding: { mode: 'all', classes: [] },
-  detector: null,
   revision: 4,
+};
+
+const ACTIVE_PROFILE: ActiveConfigResponse = {
+  axis: 'ingest_profile',
+  active: { name: 'yolo-primary', revision: 3 },
+  source: 'stored',
+  activated_at: '2026-11-01T00:00:00Z',
+  previous: null,
+  config_revision: 9,
+  stale: false,
+  applied: [],
 };
 
 const PREVIEW: IngestPolicyPreview = {
@@ -31,6 +42,7 @@ const PREVIEW: IngestPolicyPreview = {
 function deps(over: Partial<IngestPolicyDeps> = {}): IngestPolicyDeps {
   return {
     getPolicy: vi.fn(async () => structuredClone(POLICY)),
+    getActiveProfile: vi.fn(async () => ACTIVE_PROFILE),
     getConfig: vi.fn(async () => ({
       detector: {
         model: 'm',
@@ -66,9 +78,26 @@ describe('IngestPolicyEditor', () => {
     await ed.load();
     expect(ed.revision).toBe(4);
     expect(ed.labelNames).toEqual(['widget', 'tag']);
+    expect(ed.activeProfile?.active.name).toBe('yolo-primary');
+    expect(ed.profileError).toBeNull();
     expect(ed.draft.embedding?.mode).toBe('all');
     expect('revision' in ed.draft).toBe(false);
     expect(ed.dirty).toBe(false);
+  });
+
+  it('shows a failed active-profile read without blocking the policy editor', async () => {
+    const ed = new IngestPolicyEditor(
+      deps({
+        getActiveProfile: vi.fn(async () => {
+          throw new ApiError(404, 'u', { detail: 'no ingest profile' });
+        }),
+      }),
+    );
+    await ed.load();
+    expect(ed.loadError).toBeNull();
+    expect(ed.revision).toBe(4);
+    expect(ed.activeProfile).toBeNull();
+    expect(ed.profileError).toBe('no ingest profile');
   });
 
   it('shows the served error when the load fails', async () => {
