@@ -117,12 +117,16 @@ model_setup_stamp_report() {
 
 # _ms_flags_stale MODEL FLAGS: prints why and returns 0 when the build target or
 # workspace recorded in FLAGS is not what this host would build now. A stamp without
-# the fields (written before #42) is stale once, never matched as "default".
+# the fields (written before #42) was built with the default target and workspace, so it
+# stays current under those and is never rebuilt just for lacking them.
 _ms_flags_stale() {
     local model="$1" flags=" $2 " want_target want_ws have
     want_target="$(trt_target)" || { echo "invalid OP_TRT_BUILD_TARGET"; return 0; }
     want_ws="$(trt_workspace_gb "$model")" || { echo "invalid OP_TRT_WORKSPACE_GB"; return 0; }
-    if [[ "$flags" != *" target="* ]]; then echo "stamp predates the build target field"; return 0; fi
+    if [[ "$flags" != *" target="* ]]; then
+        # Written before #42: built with the default target and that model's default workspace.
+        flags="${flags}target=default workspace=$(OP_TRT_BUILD_TARGET=default GPU_PROFILE='' OP_TRT_WORKSPACE_GB='' trt_workspace_gb "$model")G "
+    fi
     if [[ "$flags" != *" target=${want_target} "* ]]; then
         have="$(sed -n -E 's/.* target=([a-z]+) .*/\1/p' <<< "$flags")"
         echo "built for target ${have:-unknown}, now ${want_target}"

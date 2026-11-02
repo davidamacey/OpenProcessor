@@ -14,7 +14,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 ### Added
 
 - **A `small` GPU profile for 12 GB cards** (#42). The installer and `setup.sh` pick it for a Triton card with 12 to 15 GB free (`standard` is now 16 GB and up, `minimal` under 12 GB): all models, one instance each, max batch 16. It builds engines with the new small TensorRT target (2 GB workspace, engine max batch halved, floor 16). `./openprocessor models install|repair` take `--build-target default|small` and `--workspace GB`; `.env` keys `OP_TRT_BUILD_TARGET` and `OP_TRT_WORKSPACE_GB`. `standard` is unchanged. See INSTALLATION.md, "12 GB cards".
-- Engine build stamps record the build target and workspace, so a changed target rebuilds only the affected engines and a switch between `standard` and `full` rebuilds nothing. Stamps written before this release are rebuilt once.
+- Engine build stamps record the build target and workspace, so a changed target rebuilds only the affected engines and a switch between `standard` and `full` rebuilds nothing. Stamps written before this release count as the default target and workspace, so an upgrade rebuilds nothing.
 
 ### Changed
 

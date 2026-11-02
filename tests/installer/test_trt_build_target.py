@@ -136,10 +136,36 @@ def test_a_changed_workspace_override_is_stale(bash, tmp_path: Path) -> None:
     assert 'built with workspace 4G, now 3G' in out
 
 
-def test_a_stamp_from_before_the_field_is_stale_once(bash, tmp_path: Path) -> None:
+def test_an_old_format_stamp_is_current_under_the_default_target(bash, tmp_path: Path) -> None:
+    """Stamps written before #42 were built with the default target and workspace."""
     stale, out = _stale(bash, tmp_path, 'trt-python-api fp16')
+    assert not stale, out
+
+
+def test_an_old_format_stamp_is_stale_for_the_small_target(bash, tmp_path: Path) -> None:
+    stale, out = _stale(bash, tmp_path, 'trt-python-api fp16', env='OP_TRT_BUILD_TARGET=small')
     assert stale
-    assert 'predates the build target field' in out
+    assert 'built for target default, now small' in out
+
+
+def test_an_old_format_stamp_is_stale_for_another_workspace(bash, tmp_path: Path) -> None:
+    stale, out = _stale(bash, tmp_path, 'trt-python-api fp16', env='OP_TRT_WORKSPACE_GB=3')
+    assert stale
+    assert 'built with workspace 4G, now 3G' in out
+
+
+def test_an_old_format_pe_stamp_keeps_its_8g_default(bash, tmp_path: Path) -> None:
+    (tmp_path / '.install').mkdir()
+    (tmp_path / 'pytorch_models').mkdir()
+    (tmp_path / 'pytorch_models' / 'pe_image_encoder.onnx').write_bytes(ONNX_BYTES)
+    row = f'pe_image_encoder\tfp16\t\tv110100\t8.6\t{SHA}\tmin1/opt8/max32 336x336 workspace8G strongly-typed\n'
+    (tmp_path / '.install' / 'precision.tsv').write_text(row)
+    out = bash(
+        f'source {LIB}; OP_DIR="{tmp_path}"; {STAMP_STUBS} '
+        'if model_setup_stamp_stale pe_image_encoder pytorch_models/pe_image_encoder.onnx; '
+        'then echo STALE; else echo CURRENT; fi'
+    ).stdout
+    assert 'CURRENT' in out
 
 
 def test_the_recorded_stamp_carries_target_and_workspace(bash, tmp_path: Path) -> None:
