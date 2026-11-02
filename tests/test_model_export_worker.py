@@ -364,3 +364,37 @@ def test_startup_fails_tasks_left_running_with_no_job_but_spares_a_fresh_one(
     assert model_export.get_export_task(old)['status'] == ExportStatus.FAILED.value
     assert model_export.get_export_task(fresh)['status'] == ExportStatus.PENDING.value
     assert model_export.get_export_task(done)['status'] == ExportStatus.COMPLETED.value
+
+
+def test_a_worker_that_exits_removes_its_heartbeat(task_dir: Path) -> None:
+    assert export_worker.main(['--once']) == 0
+    assert not model_export.heartbeat_path().exists()
+    assert not model_export.export_worker_alive()
+
+
+def test_sigterm_stops_the_loop_and_removes_the_heartbeat(
+    task_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import signal
+    import threading
+
+    monkeypatch.setattr(export_worker, 'POLL_INTERVAL_S', 0.05)
+    previous = signal.getsignal(signal.SIGTERM)
+    beat_seen = threading.Event()
+
+    def term_once_alive() -> None:
+        for _ in range(200):
+            if model_export.export_worker_alive():
+                beat_seen.set()
+                break
+            time.sleep(0.05)
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    sender = threading.Thread(target=term_once_alive, daemon=True)
+    sender.start()
+    assert export_worker.main([]) == 0
+    sender.join(5)
+    assert beat_seen.is_set()
+    assert not model_export.heartbeat_path().exists()
+    assert not model_export.export_worker_alive()
+    assert signal.getsignal(signal.SIGTERM) == previous

@@ -18,6 +18,7 @@ import contextlib
 import json
 import logging
 import os
+import signal
 import subprocess  # nosec B404 - runs the repo's own export scripts, never a user-supplied command
 import sys
 import threading
@@ -314,21 +315,32 @@ def main(argv: list[str] | None = None) -> int:
         os.environ['EXPORT_TASK_DIR'] = str(args.watch)
 
     stop = threading.Event()
-    threading.Thread(target=_heartbeat_loop, args=(stop,), daemon=True).start()
+    beat = threading.Thread(target=_heartbeat_loop, args=(stop,), daemon=True)
+    beat.start()
+    # `docker compose stop` sends SIGTERM: leave the loop cleanly (a running export
+    # finishes or is failed by the next start's reconcile) so the heartbeat can be removed.
+    previous = signal.signal(signal.SIGTERM, lambda _sig, _frame: stop.set())
     try:
         failed = reconcile_claimed()
         if failed:
             logger.warning('failed %d export(s) a previous worker left running', failed)
-        while True:
+        while not stop.is_set():
             job = claim_next()
             if job is not None:
                 run_job(job)
             elif args.once:
-                return 0
+                break
             else:
-                time.sleep(POLL_INTERVAL_S)
+                stop.wait(POLL_INTERVAL_S)
+        return 0
     finally:
         stop.set()
+        # Joined first so the heartbeat thread cannot rewrite the file after it is removed;
+        # without this the API keeps queueing jobs nobody runs until the beat ages out.
+        beat.join(HEARTBEAT_INTERVAL_S + 5)
+        with contextlib.suppress(OSError):
+            store.heartbeat_path().unlink()
+        signal.signal(signal.SIGTERM, previous)
 
 
 if __name__ == '__main__':
