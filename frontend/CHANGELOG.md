@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Auto-label loop run view: a loop that stopped because every VLM call of a node failed shows the served `vlm_failed` reason and error, and offers Resume for that case only (other failed loops stay non-resumable) (#286).
+
 ### Changed
 
 - Ingest policy page (`/settings/ingest-policy`): the per-project "Detector override" section is removed, because the backend no longer serves `IngestPolicy.detector` (#366). The page shows the project's active ingest profile read-only (`GET /ingest_profiles/active`) with a pointer to the ingest-profile docs; the detector is now chosen by activating an ingest profile through the API. `ConfigAxis` gains `ingest_profile`, and the detector contract tests are pinned to the new `IngestPolicy` shapes.
