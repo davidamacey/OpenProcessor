@@ -1,8 +1,8 @@
 """Semantic search over curation items.
 
-``GET /curation/search/text`` (free text) and ``GET /curation/search/similar`` (from a stored
-crop vector) are the two paths for curation semantic search. No other ``/search/*`` prefix is
-used anywhere in this module.
+``GET /curation/projects/{project}/search/text`` (free text), ``.../search/similar`` (from a
+stored crop or box vector) and ``POST .../search/image`` (from an uploaded or stored image) are
+the paths for curation semantic search. No other ``/search/*`` prefix is used in this module.
 
 Gated end-to-end by ``OP_SEMANTIC_SEARCH_ENABLED`` (default on since #371; set
 ``0`` to turn it off, read with ``env_bool``): disabled returns ``400`` with a message telling
@@ -21,6 +21,7 @@ from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._page_models import SearchSimilarResponse, SearchTextResponse
 from src.schemas.curation.config_common import ApiErrorResponse
+from src.schemas.curation.search_target import SearchTarget
 from src.services.curation import semantic_search
 from src.services.curation.index_bootstrap import ensure_indexes
 from src.services.curation.item_filter import item_filter_clauses
@@ -69,6 +70,15 @@ async def search_text(
     min_score: float | None = Query(
         None, ge=0.0, le=1.0, description='Drop hits below this cosine-similarity score.'
     ),
+    target: Annotated[
+        SearchTarget,
+        Query(
+            description=(
+                '`item` ranks the crop vectors; `box` ranks the per-box vectors and returns the '
+                'parent item with `matched_box_id`.'
+            )
+        ),
+    ] = SearchTarget.ITEM,
     include_test: bool = False,
 ) -> dict[str, Any]:
     """Semantic kNN search over the items index's ``pe_embedding`` field.
@@ -135,6 +145,7 @@ async def search_text(
             hide_near_duplicates=hide_near_duplicates,
             min_score=min_score,
             include_test=include_test,
+            target=target,
         )
     except HTTPException:
         raise
@@ -147,8 +158,11 @@ async def search_text(
     response_model=None,
     responses={
         200: {'model': SearchSimilarResponse},
-        404: {'model': ApiErrorResponse, 'description': 'not_found (crop not in this project)'},
-        409: {'model': ApiErrorResponse, 'description': 'crop_not_embedded'},
+        404: {
+            'model': ApiErrorResponse,
+            'description': 'not_found (crop not in this project) or box_not_found',
+        },
+        409: {'model': ApiErrorResponse, 'description': 'crop_not_embedded or box_not_embedded'},
     },
 )
 async def search_similar(
@@ -157,6 +171,12 @@ async def search_similar(
     crop_id: Annotated[
         str, Query(min_length=1, description='The source crop in this project ("More like this").')
     ],
+    box_id: Annotated[
+        str | None,
+        Query(
+            min_length=1, description='Use this box of `crop_id` as the query instead of the crop.'
+        ),
+    ] = None,
     exclude_self: bool = True,
     page: int = Query(1, ge=1),
     page_size: int = Query(30, ge=1, le=200),
@@ -169,12 +189,22 @@ async def search_similar(
     min_score: float | None = Query(
         None, ge=0.0, le=1.0, description='Drop hits below this cosine-similarity score.'
     ),
+    target: Annotated[
+        SearchTarget,
+        Query(
+            description=(
+                '`item` ranks the crop vectors; `box` ranks the per-box vectors and returns the '
+                'parent item with `matched_box_id`.'
+            )
+        ),
+    ] = SearchTarget.ITEM,
     include_test: bool = False,
 ) -> dict[str, Any]:
     """kNN over ``pe_embedding`` using the stored vector of ``crop_id`` as the query.
 
     No encoder is involved. Same filters, default exclusions and page shape as
-    ``GET /search/text``; ``semantic_score`` is the similarity to the source crop.
+    ``GET /search/text``; ``semantic_score`` is the similarity to the source crop (or box,
+    with ``box_id``).
     """
     if not _semantic_search_enabled():
         raise HTTPException(
@@ -193,6 +223,8 @@ async def search_similar(
         return await semantic_search.semantic_similar_search(
             opensearch=opensearch,
             crop_id=crop_id,
+            box_id=box_id,
+            target=target,
             exclude_self=exclude_self,
             page=page,
             page_size=page_size,

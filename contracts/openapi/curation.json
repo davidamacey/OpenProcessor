@@ -6292,6 +6292,11 @@
               "revision_conflict",
               "not_found",
               "crop_not_embedded",
+              "box_not_found",
+              "box_not_embedded",
+              "image_unreadable",
+              "bad_box",
+              "image_encoder_unavailable",
               "unknown_revision",
               "active_conflict",
               "no_previous",
@@ -28754,6 +28759,30 @@
             ],
             "title": "Mask Polygon"
           },
+          "matched_box_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`target=box` only: the box of this item whose vector matched best.",
+            "title": "Matched Box Id"
+          },
+          "matched_box_stale": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`target=box` only: true when the matched vector was computed from geometry the box no longer has (or the box is gone).",
+            "title": "Matched Box Stale"
+          },
           "mistakenness_method": {
             "anyOf": [
               {
@@ -29463,6 +29492,15 @@
         ],
         "title": "SearchSimilarResponse",
         "type": "object"
+      },
+      "SearchTarget": {
+        "description": "``item``: the crop's own vector (``pe_embedding``). ``box``: the per-box vectors inside\nan item (``region_box_embeddings``); the page is still one card per item.",
+        "enum": [
+          "item",
+          "box"
+        ],
+        "title": "SearchTarget",
+        "type": "string"
       },
       "SearchTextResponse": {
         "description": "``GET /search/text``.",
@@ -52645,7 +52683,7 @@
     },
     "/curation/projects/{project}/search/similar": {
       "get": {
-        "description": "kNN over ``pe_embedding`` using the stored vector of ``crop_id`` as the query.\n\nNo encoder is involved. Same filters, default exclusions and page shape as\n``GET /search/text``; ``semantic_score`` is the similarity to the source crop.",
+        "description": "kNN over ``pe_embedding`` using the stored vector of ``crop_id`` as the query.\n\nNo encoder is involved. Same filters, default exclusions and page shape as\n``GET /search/text``; ``semantic_score`` is the similarity to the source crop (or box,\nwith ``box_id``).",
         "operationId": "search_similar_curation_projects__project__search_similar_get",
         "parameters": [
           {
@@ -52667,6 +52705,25 @@
               "minLength": 1,
               "title": "Crop Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Use this box of `crop_id` as the query instead of the crop.",
+            "in": "query",
+            "name": "box_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Use this box of `crop_id` as the query instead of the crop.",
+              "title": "Box Id"
             }
           },
           {
@@ -52817,6 +52874,17 @@
               ],
               "description": "Drop hits below this cosine-similarity score.",
               "title": "Min Score"
+            }
+          },
+          {
+            "description": "`item` ranks the crop vectors; `box` ranks the per-box vectors and returns the parent item with `matched_box_id`.",
+            "in": "query",
+            "name": "target",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SearchTarget",
+              "default": "item",
+              "description": "`item` ranks the crop vectors; `box` ranks the per-box vectors and returns the parent item with `matched_box_id`."
             }
           },
           {
@@ -53150,7 +53218,7 @@
                 }
               }
             },
-            "description": "not_found (crop not in this project)"
+            "description": "not_found (crop not in this project) or box_not_found"
           },
           "409": {
             "content": {
@@ -53160,7 +53228,7 @@
                 }
               }
             },
-            "description": "crop_not_embedded"
+            "description": "crop_not_embedded or box_not_embedded"
           },
           "422": {
             "content": {
@@ -53343,6 +53411,17 @@
               ],
               "description": "Drop hits below this cosine-similarity score.",
               "title": "Min Score"
+            }
+          },
+          {
+            "description": "`item` ranks the crop vectors; `box` ranks the per-box vectors and returns the parent item with `matched_box_id`.",
+            "in": "query",
+            "name": "target",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SearchTarget",
+              "default": "item",
+              "description": "`item` ranks the crop vectors; `box` ranks the per-box vectors and returns the parent item with `matched_box_id`."
             }
           },
           {
