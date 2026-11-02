@@ -473,7 +473,7 @@ ph_installer_rerun() {
     need_install_dir
     local before after
     before="$(stack_ids)"
-    op_cli upgrade --yes >> "$WORKDIR/installer.log" 2>&1 \
+    op_cli upgrade --yes "${INSTALLER_ARGS_ARR[@]}" >> "$WORKDIR/installer.log" 2>&1 \
         || fail "re-run failed: $(tail -c 300 "$WORKDIR/installer.log")"
     after="$(stack_ids)"
     [[ "$before" == "$after" ]] || fail "re-run recreated containers (before: ${before} after: ${after})"
@@ -482,7 +482,7 @@ ph_installer_rerun() {
 
 ph_installer_repair() {
     need_install_dir
-    op_cli repair --yes >> "$WORKDIR/installer.log" 2>&1 \
+    op_cli repair --yes "${INSTALLER_ARGS_ARR[@]}" >> "$WORKDIR/installer.log" 2>&1 \
         || fail "repair failed: $(tail -c 300 "$WORKDIR/installer.log")"
     api GET /health; expect 200
     ev "repair exited 0; API healthy"
@@ -491,7 +491,7 @@ ph_installer_repair() {
 ph_installer_upgrade() {
     need_install_dir
     [[ -n "$UPGRADE_VERSION" ]] || skip "pass --upgrade-version vX.Y.Z to enable upgrade/rollback"
-    op_cli upgrade --version "$UPGRADE_VERSION" --yes >> "$WORKDIR/installer.log" 2>&1 \
+    op_cli upgrade --version "$UPGRADE_VERSION" --yes "${INSTALLER_ARGS_ARR[@]}" >> "$WORKDIR/installer.log" 2>&1 \
         || fail "upgrade to ${UPGRADE_VERSION} failed: $(tail -c 300 "$WORKDIR/installer.log")"
     api GET /health; expect 200
     ev "upgraded to ${UPGRADE_VERSION}; API healthy"

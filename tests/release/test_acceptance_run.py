@@ -284,6 +284,29 @@ def test_installer_phases_skip_without_install_dir(fake, tmp_path):
     assert 'install-dir' in ph['installer_rerun']['message']
 
 
+def test_installer_phases_pass_the_installer_args_through(fake, tmp_path):
+    # a stack installed from a local bundle must re-run from that bundle: without the
+    # arguments the installer downloads the published release over it
+    inst = tmp_path / 'inst'
+    inst.mkdir()
+    argv_log = tmp_path / 'argv.log'
+    cli = inst / 'openprocessor'
+    cli.write_text(f'#!/bin/bash\necho "$@" >> {argv_log}\n')
+    cli.chmod(0o755)
+    proc, data = run(
+        fake(), tmp_path, '--only', 'installer_rerun,installer_repair',
+        '--install-dir', str(inst),
+        '--installer-args', '--release-dir /b --version v1.2.3 --image-tag t',
+    )  # fmt: skip
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert by_name(data)['installer_rerun']['status'] == 'pass', data
+    lines = argv_log.read_text().splitlines()
+    assert lines == [
+        'upgrade --yes --release-dir /b --version v1.2.3 --image-tag t',
+        'repair --yes --release-dir /b --version v1.2.3 --image-tag t',
+    ]
+
+
 def test_list_prints_every_phase():
     out = subprocess.run(
         ['bash', str(SCRIPT), '--list'], capture_output=True, text=True, check=True
