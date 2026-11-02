@@ -70,7 +70,9 @@ def _put_onnx(tmp_path: Path, group: str) -> None:
 
 
 def _row(model: str, precision: str, *, cc: str = '8.6', sha: str | None = None) -> str:
-    return f'{model}\t{precision}\t\tv110100\t{cc}\t{sha or _sha(model)}\ttrt-python-api\n'
+    ws = 8 if model == 'paddleocr_rec_trt' else 4
+    flags = f'trt-python-api target=default workspace={ws}G'
+    return f'{model}\t{precision}\t\tv110100\t{cc}\t{sha or _sha(model)}\t{flags}\n'
 
 
 def _good_stamps(group: str) -> dict[str, str]:

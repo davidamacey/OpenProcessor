@@ -9,22 +9,22 @@ from pathlib import Path
 
 import tensorrt as trt
 import torch
+from trt_build_settings import workspace_bytes
 from trt_utils import bake_fp16_onnx, create_explicit_network, enable_fp16
 from uint8_input import add_uint8_input
-from yolo_export_settings import IMG_SIZE, WORKSPACE_GB
+from yolo_export_settings import IMG_SIZE
 
 
 logger = logging.getLogger(__name__)
 
 
-def setup_trt_builder(
-    workspace_gb: int = WORKSPACE_GB,
-) -> tuple[trt.Builder, trt.IBuilderConfig, trt.INetworkDefinition, trt.Logger]:
+def setup_trt_builder() -> tuple[
+    trt.Builder, trt.IBuilderConfig, trt.INetworkDefinition, trt.Logger
+]:
     """
     Set up TensorRT builder with common configuration.
 
-    Args:
-        workspace_gb: Workspace size in GB
+    The workspace comes from trt_build_settings.
 
     Returns:
         Tuple of (builder, config, network, logger)
@@ -56,8 +56,7 @@ def setup_trt_builder(
     config = builder.create_builder_config()
 
     # Set workspace size (TRT >= 10 memory-pool API; requirements pin TRT 11)
-    workspace_bytes = int(workspace_gb * (1 << 30))
-    config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, workspace_bytes)
+    config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, workspace_bytes('yolo'))
 
     network = create_explicit_network(builder)
 

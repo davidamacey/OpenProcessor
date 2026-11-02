@@ -30,15 +30,16 @@ cmd_profile() {
         echo ""
         echo "Available profiles:"
         echo "  minimal   - 6-8GB VRAM (RTX 3060, RTX 4060)"
-        echo "  standard  - 12-24GB VRAM (RTX 3080, RTX 4090)"
+        echo "  small     - 12-15GB VRAM (RTX 3080 Ti, RTX 3060 12GB)"
+        echo "  standard  - 16-24GB VRAM (RTX 4080, RTX 4090)"
         echo "  full      - 40GB+ VRAM (A6000, A100)"
         return 0
     fi
 
     # Validate profile
-    if [[ ! "$profile" =~ ^(minimal|standard|full)$ ]]; then
+    if [[ ! "$profile" =~ ^(minimal|small|standard|full)$ ]]; then
         log_error "Invalid profile: $profile"
-        echo "Valid profiles: minimal, standard, full"
+        echo "Valid profiles: minimal, small, standard, full"
         return 1
     fi
 

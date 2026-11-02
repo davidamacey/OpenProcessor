@@ -88,7 +88,9 @@ check_gpu_memory() {
 
 # Profiles based on VRAM
 # minimal:  <10GB  (6-8GB GPUs like RTX 3060, RTX 4060)
-# standard: 10-40GB (12-24GB GPUs like RTX 3080, RTX 4090)
+# small:    10-16GB (12GB GPUs like RTX 3080 Ti, RTX 3060 12GB): all models, one instance
+#           each, engines built with the small TensorRT target (2 GB workspace, half max batch)
+# standard: 16-40GB (16-24GB GPUs like RTX 4080, RTX 4090)
 # full:     >=40GB (A6000, A100, etc.)
 
 # Auto-select profile based on detected GPU VRAM
@@ -97,6 +99,8 @@ select_profile() {
 
     if [[ "$GPU_VRAM_MB" -lt 10000 ]]; then
         SELECTED_PROFILE="minimal"
+    elif [[ "$GPU_VRAM_MB" -lt 16000 ]]; then
+        SELECTED_PROFILE="small"
     elif [[ "$GPU_VRAM_MB" -lt 40000 ]]; then
         SELECTED_PROFILE="standard"
     else
@@ -115,8 +119,11 @@ get_profile_description() {
         minimal)
             echo "6-8GB VRAM (RTX 3060, RTX 4060) - Core models only"
             ;;
+        small)
+            echo "12-15GB VRAM (RTX 3080 Ti, RTX 3060 12GB) - All models, smaller engines, one instance each"
+            ;;
         standard)
-            echo "12-24GB VRAM (RTX 3080, RTX 4090) - All models"
+            echo "16-24GB VRAM (RTX 4080, RTX 4090) - All models"
             ;;
         full)
             echo "40GB+ VRAM (A6000, A100) - All models, max parallelism"

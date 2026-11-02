@@ -5,6 +5,8 @@ The tensor and model names are a hard contract with ``src/clients/pe_encoder.py`
 
 from pathlib import Path
 
+from trt_build_settings import max_batch
+
 
 # Triton model name + tensor names are a hard contract with
 # src/clients/pe_encoder.py — do not rename one side without the other.
@@ -24,7 +26,7 @@ ONNX_OPSET_VERSION = 17
 # Batch 32 at 336x336 is the profile the reference deployment ships:
 # min=1 / opt=8 / max=32. Larger batches mostly buy queueing, not
 # throughput, for a ViT-L at this resolution.
-DEFAULT_MAX_BATCH = 32
+DEFAULT_MAX_BATCH = max_batch('pe_image_encoder', 32)
 # GPU memory of one warm instance at max batch, with headroom (gpu plan and the installer read it).
 PE_GPU_MIB_PER_INSTANCE = 1536
 

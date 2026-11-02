@@ -36,6 +36,7 @@ from typing import Any
 import onnx
 import tensorrt as trt
 import torch
+from trt_build_settings import max_batch, workspace_bytes
 from trt_utils import create_explicit_network
 from uint8_input import add_uint8_input
 from ultralytics import YOLO
@@ -86,7 +87,6 @@ DEFAULT_MODELS: dict[str, dict[str, Any]] = {
 }
 
 IMG_SIZE = 640
-WORKSPACE_GB = 4
 MODELS_DIR = Path('/app/models')
 EXPORT_DIR = Path('/app/pytorch_models')
 
@@ -191,7 +191,7 @@ def build_engine(onnx_path: Path, plan_path: Path, max_batch: int) -> bool:
 
     builder = trt.Builder(trt_logger)
     config = builder.create_builder_config()
-    config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, WORKSPACE_GB << 30)
+    config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, workspace_bytes('yolo'))
     network = create_explicit_network(builder)
     parser = trt.OnnxParser(network, trt_logger)
 
@@ -306,10 +306,11 @@ def export_model(size: str, config: dict[str, Any], formats: list[str]) -> dict[
         triton_model = f'{config["triton_name"]}_trt'
         model_dir = MODELS_DIR / triton_model
         plan_path = model_dir / '1' / 'model.plan'
-        if not build_engine(onnx_path, plan_path, config['max_batch']):
+        engine_batch = max_batch('yolo', config['max_batch'])
+        if not build_engine(onnx_path, plan_path, engine_batch):
             result['status'] = 'failed'
             return result
-        write_triton_config(model_dir, triton_model, config['max_batch'], output_name, output_dims)
+        write_triton_config(model_dir, triton_model, engine_batch, output_name, output_dims)
         write_labels(model, model_dir)
         result['trt'] = str(plan_path)
 

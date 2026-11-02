@@ -30,6 +30,7 @@ from pathlib import Path
 
 import numpy as np
 from onnx import ModelProto
+from trt_build_settings import max_batch, workspace_bytes
 
 
 # =============================================================================
@@ -39,13 +40,11 @@ from onnx import ModelProto
 # ArcFace configuration
 INPUT_SIZE = 112  # Standard ArcFace aligned face size
 EMBEDDING_DIM = 512  # Output embedding dimension
-MAX_BATCH_SIZE = 128  # Max batch for TensorRT (faces per image)
+MAX_BATCH_SIZE = max_batch('arcface_w600k_r50', 128)  # Max batch for TensorRT (faces per image)
 
 # Paths
 ONNX_PATH = Path('pytorch_models/arcface_w600k_r50.onnx')
 PLAN_PATH = Path('models/arcface_w600k_r50/1/model.plan')
-
-WORKSPACE_GB = 4
 
 
 # =============================================================================
@@ -336,7 +335,9 @@ def convert_to_tensorrt(
 
         # Builder config
         config = builder.create_builder_config()
-        config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, WORKSPACE_GB << 30)
+        config.set_memory_pool_limit(
+            trt.MemoryPoolType.WORKSPACE, workspace_bytes('arcface_w600k_r50')
+        )
 
         if fp16 and enable_fp16(builder, config):
             print('  ✓ FP16 mode enabled')

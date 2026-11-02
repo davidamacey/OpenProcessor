@@ -97,7 +97,9 @@ def fake_engines(inst: Path) -> None:
         onnx.parent.mkdir(parents=True, exist_ok=True)
         onnx.write_bytes(b'onnx')
         sha = hashlib.sha256(b'onnx').hexdigest()
-        rows.append(f'{model}\tfp16\t\tv110100\t{SHIM_COMPUTE_CAP}\t{sha}\ttrt-python-api\n')
+        ws = 8 if model in {'paddleocr_rec_trt', 'pe_image_encoder'} else 4
+        flags = f'trt-python-api target=default workspace={ws}G'
+        rows.append(f'{model}\tfp16\t\tv110100\t{SHIM_COMPUTE_CAP}\t{sha}\t{flags}\n')
     (inst / '.install' / 'precision.tsv').write_text(''.join(rows))
 
 

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 NORMALIZE = '--mean 0.5 0.5 0.5 --std 0.5 0.5 0.5'
-FLAGS_OK = 'min1/opt8/max32 336x336 workspace8G strongly-typed input=uint8'
+FLAGS_OK = 'min1/opt8/max32 336x336 target=default workspace=8G strongly-typed input=uint8'
 
 
 def _build_script(tmp_path: Path, *, fp16_fails: bool, check_fails: bool = False) -> str:
@@ -118,7 +118,7 @@ def test_a_stamp_without_the_config_datatype_is_stale(tmp_path: Path, bash) -> N
 
 
 def test_a_stamp_with_the_config_datatype_is_current(tmp_path: Path, bash) -> None:
-    stamp = _stamp_row().replace('\tflags\n', f'\t{FLAGS_OK}\n')
+    stamp = _stamp_row().replace('\tflags target=default workspace=8G\n', f'\t{FLAGS_OK}\n')
     prelude = _installed_pe(tmp_path, stamp=stamp)
     _with_config(tmp_path)
     result = bash(

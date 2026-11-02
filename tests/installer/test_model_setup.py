@@ -433,7 +433,7 @@ def _installed_pe(tmp_path: Path, *, stamp: str | None) -> str:
 
 
 def _stamp_row(*, precision: str = 'fp16', cc: str = '8.6', sha: str = ONNX_SHA) -> str:
-    return f'pe_image_encoder\t{precision}\t\tv110100\t{cc}\t{sha}\tflags\n'
+    return f'pe_image_encoder\t{precision}\t\tv110100\t{cc}\t{sha}\tflags target=default workspace=8G\n'
 
 
 def test_a_current_stamp_lets_the_group_skip(tmp_path: Path, bash) -> None:

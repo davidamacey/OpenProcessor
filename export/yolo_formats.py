@@ -10,9 +10,10 @@ from typing import TYPE_CHECKING, Any
 import onnx
 import tensorrt as trt
 import torch
+from trt_build_settings import workspace_gb
 from ultralytics.cfg import get_cfg
 from ultralytics.engine.exporter import Exporter
-from yolo_export_settings import CONF_THRESHOLD, DEVICE, HALF, IMG_SIZE, IOU_THRESHOLD, WORKSPACE_GB
+from yolo_export_settings import CONF_THRESHOLD, DEVICE, HALF, IMG_SIZE, IOU_THRESHOLD
 from yolo_trt_build import (
     add_optimization_profile,
     build_and_save_engine,
@@ -33,11 +34,14 @@ def check_gpu_memory(required_gb: float = 4.0) -> bool:
     """Check if sufficient GPU memory is available."""
     try:
         if torch.cuda.is_available():
-            free_memory = torch.cuda.get_device_properties(DEVICE).total_memory
+            free_memory, total_memory = torch.cuda.mem_get_info(DEVICE)
             free_memory_gb = free_memory / (1024**3)
+            logger.info(
+                f'GPU memory: {free_memory_gb:.1f}GB free of {total_memory / (1024**3):.1f}GB'
+            )
             if free_memory_gb < required_gb:
                 logger.warning(
-                    f'Low GPU memory: {free_memory_gb:.1f}GB available, {required_gb}GB recommended'
+                    f'Low GPU memory: {free_memory_gb:.1f}GB free, {required_gb}GB recommended'
                 )
             return True
         logger.warning('CUDA not available to PyTorch, but continuing (TensorRT may still work)')
@@ -139,10 +143,10 @@ def export_trt_standard(model: YOLO, config: dict[str, Any]) -> dict[str, Any]:
 
         logger.info(f'Using standard ONNX: {onnx_path}')
         logger.info(f'Dynamic batch: min=1, opt={max_batch // 2}, max={max_batch}')
-        logger.info(f'Workspace: {WORKSPACE_GB}GB, Precision: {"FP16" if HALF else "FP32"}')
+        logger.info(f'Workspace: {workspace_gb("yolo")}GB, Precision: {"FP16" if HALF else "FP32"}')
 
         # Check GPU memory
-        check_gpu_memory(WORKSPACE_GB)
+        check_gpu_memory(workspace_gb('yolo'))
 
         # Setup TensorRT builder using helper
         builder, config_trt, network, trt_logger = setup_trt_builder()
@@ -319,10 +323,10 @@ def export_trt_end2end(config: dict[str, Any]) -> dict[str, Any]:
 
         logger.info(f'Using end2end ONNX: {onnx_end2end_path}')
         logger.info(f'Dynamic batch: min=1, opt={max_batch // 2}, max={max_batch}')
-        logger.info(f'Workspace: {WORKSPACE_GB}GB, Precision: {"FP16" if HALF else "FP32"}')
+        logger.info(f'Workspace: {workspace_gb("yolo")}GB, Precision: {"FP16" if HALF else "FP32"}')
 
         # Check GPU memory
-        check_gpu_memory(WORKSPACE_GB)
+        check_gpu_memory(workspace_gb('yolo'))
 
         # Setup TensorRT builder using helper
         builder, config_trt, network, trt_logger = setup_trt_builder()

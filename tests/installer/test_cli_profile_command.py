@@ -95,7 +95,7 @@ def test_generated_env_and_template_carry_no_dead_profile_keys(tmp_path: Path) -
     assert not dead.search((proj / '.env').read_text())
     assert not dead.search((REPO_ROOT / 'env.template').read_text())
     assert 'generate_compose_override' not in (REPO_ROOT / 'scripts/lib/config.sh').read_text()
-    for name in ('minimal', 'standard', 'full'):
+    for name in ('minimal', 'small', 'standard', 'full'):
         text = (REPO_ROOT / f'config_templates/profiles/{name}.json').read_text()
         assert '"workers"' not in text
         assert '"shm_size"' not in text

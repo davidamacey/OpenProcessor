@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+from trt_build_settings import max_batch, workspace_bytes
 
 
 # Model configuration
@@ -146,7 +147,9 @@ def convert_to_tensorrt(
 
         # Builder config
         config = builder.create_builder_config()
-        config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 4 << 30)  # 4GB workspace
+        config.set_memory_pool_limit(
+            trt.MemoryPoolType.WORKSPACE, workspace_bytes('paddleocr_det_trt')
+        )
 
         if fp16 and enable_fp16(builder, config):
             print('  FP16 mode enabled')
@@ -291,7 +294,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--max-batch-size',
         type=int,
-        default=4,
+        default=max_batch('paddleocr_det_trt', 4),
         help='Maximum batch size for TensorRT engine',
     )
     parser.add_argument('--skip-tensorrt', action='store_true', help='Skip TensorRT conversion')

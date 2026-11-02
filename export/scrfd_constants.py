@@ -2,15 +2,16 @@
 
 from pathlib import Path
 
+from trt_build_settings import max_batch
 
+
+TRITON_MODEL_NAME = 'scrfd_10g_bnkps'
 INPUT_SIZE = 640
-MAX_BATCH_SIZE = 64  # Must match max profile's max_batch_size
-WORKSPACE_GB = 4
+MAX_BATCH_SIZE = max_batch(TRITON_MODEL_NAME, 64)  # Must match the max profile's max_batch_size
 
 # Paths
 ONNX_DIR = Path('/app/pytorch_models') if Path('/app').exists() else Path('pytorch_models')
 ONNX_FILENAME = 'scrfd_10g_bnkps.onnx'
-TRITON_MODEL_NAME = 'scrfd_10g_bnkps'
 OUTPUT_DIR = Path('/app/models') if Path('/app').exists() else Path('models')
 
 # Download URLs (in priority order)
