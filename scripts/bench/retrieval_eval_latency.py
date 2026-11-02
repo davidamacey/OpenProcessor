@@ -129,7 +129,7 @@ def opensearch_facts(os_url: str, index: str) -> dict[str, Any]:
 def run_condition(
     client: httpx.Client, url: str, queries: list[str], extra: dict[str, str], a: argparse.Namespace
 ) -> dict[str, Any]:
-    warm, measured = queries[: a.warmup], queries[a.warmup : a.warmup + a.n]
+    warm, measured = queries[: a.warmup], queries[a.warmup : a.warmup + a.measured]
     cold = [one_request(client, url, q, extra, a.page_size) for q in warm]
     rows = [one_request(client, url, q, extra, a.page_size) for q in measured]
     slow = [r for r in rows if r['total_ms'] > a.slow_ms]
@@ -146,7 +146,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     url = f'{a.api}/curation/projects/{a.project}/search/text'
     facts = opensearch_facts(a.opensearch_url, a.index)
     bands = pick_bands(facts['class_counts'], facts['embedded_items'])
-    need = (a.warmup + a.n) * (1 + len(bands)) + a.repeat
+    need = (a.warmup + a.measured) * (1 + len(bands)) + a.repeat
     queries = load_captions(Path(a.captions_file), need, a.seed)
     if len(queries) < need:
         raise SystemExit(f'only {len(queries)} distinct captions, need {need}')
@@ -154,7 +154,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     conditions: dict[str, Any] = {}
     with httpx.Client(timeout=120.0) as client:
         offset = 0
-        step = a.warmup + a.n
+        step = a.warmup + a.measured
         conditions['unfiltered'] = run_condition(
             client, url, queries[offset : offset + step], {}, a
         )
@@ -172,7 +172,12 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         'project': a.project,
         'opensearch': {k: v for k, v in facts.items() if k != 'class_counts'},
         'captions': {'source': Path(a.captions_file).name, 'seed': a.seed},
-        'params': {'warmup': a.warmup, 'n': a.n, 'page_size': a.page_size, 'slow_ms': a.slow_ms},
+        'params': {
+            'warmup': a.warmup,
+            'n': a.measured,
+            'page_size': a.page_size,
+            'slow_ms': a.slow_ms,
+        },
         'host_load_start': load0,
         'host_load_end': os.getloadavg(),
         'conditions': conditions,
@@ -185,7 +190,7 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument('--index', default='', help='the project items index (read only)')
     p.add_argument('--captions-file', default='', help='COCO captions_*2017.json')
     p.add_argument('--warmup', type=int, default=128, help='discarded; keep above the worker count')
-    p.add_argument('--n', type=int, default=300, help='measured requests per condition')
+    p.add_argument('--measured', type=int, default=300, help='measured requests per condition')
     p.add_argument('--repeat', type=int, default=100)
     p.add_argument('--page-size', type=int, default=20)
     p.add_argument('--slow-ms', type=float, default=300.0)

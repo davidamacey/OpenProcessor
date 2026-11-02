@@ -29,10 +29,11 @@ import orjson
 
 
 FIELD = 'pe_embedding'
+JSON = {'Content-Type': 'application/json'}
 
 
 def copy_doc(
-    doc_id: str, source: dict[str, Any], rep: int, noise: np.ndarray, sigma: float
+    doc_id: str, source: dict[str, Any], rep: int | str, noise: np.ndarray, sigma: float
 ) -> tuple[str, dict[str, Any]]:
     """One replica of ``source``: new id, jittered and re-normalised vector."""
     vec = np.asarray(source[FIELD], dtype=np.float32) + noise * sigma
@@ -75,7 +76,7 @@ def read_originals(http: httpx.Client, index: str, limit: int) -> list[tuple[str
 
 
 def send(url: str, index: str, payload: bytes) -> int:
-    with httpx.Client(base_url=url, timeout=600) as http:
+    with httpx.Client(base_url=url, timeout=600, headers=JSON) as http:
         reply = orjson.loads(
             http.post(
                 f'/{index}/_bulk',
@@ -91,7 +92,7 @@ def send(url: str, index: str, payload: bytes) -> int:
 
 def replicate(a: argparse.Namespace) -> dict[str, Any]:
     t0 = time.perf_counter()
-    with httpx.Client(base_url=a.opensearch_url, timeout=600) as http:
+    with httpx.Client(base_url=a.opensearch_url, timeout=600, headers=JSON) as http:
         originals = read_originals(http, a.index, a.source_count)
         count = http.get(f'/{a.index}/_count').json()['count']
         http.put(f'/{a.index}/_settings', json={'index': {'refresh_interval': '-1'}})
@@ -108,7 +109,10 @@ def replicate(a: argparse.Namespace) -> dict[str, Any]:
             chunk = originals[lo : lo + a.batch][: missing - made]
             noise = rng.standard_normal((len(chunk), len(originals[0][1][FIELD])), np.float32)
             batches.append(
-                [copy_doc(i, s, rep, n, a.sigma) for (i, s), n in zip(chunk, noise, strict=True)]
+                [
+                    copy_doc(i, s, f'{a.seed}.{rep}', n, a.sigma)
+                    for (i, s), n in zip(chunk, noise, strict=True)
+                ]
             )
             made += len(chunk)
             if len(batches) >= a.workers * 2:
@@ -120,7 +124,7 @@ def replicate(a: argparse.Namespace) -> dict[str, Any]:
     if batches:
         with ThreadPoolExecutor(a.workers) as pool:
             list(pool.map(lambda b: send(a.opensearch_url, a.index, bulk_body(b)), batches))
-    with httpx.Client(base_url=a.opensearch_url, timeout=3600) as http:
+    with httpx.Client(base_url=a.opensearch_url, timeout=3600, headers=JSON) as http:
         http.put(f'/{a.index}/_settings', json={'index': {'refresh_interval': '1s'}})
         http.post(f'/{a.index}/_refresh')
         final = http.get(f'/{a.index}/_count').json()['count']
